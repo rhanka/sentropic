@@ -14,7 +14,9 @@ export function workflowTests(check, load) {
   const materialize = workloadSteps.find(s => s.env?.IMMO_MCP_WORKLOAD_CLIENT_SECRET);
   check('workload Secret workflow is dispatch-only, protected, main-only and always cleans up', () => {
     assert.deepEqual(Object.keys(workload.on), ['workflow_dispatch']);
-    assert.deepEqual(Object.keys(workload.jobs), ['materialize-preprod-workload-secret']);
+    assert.deepEqual(Object.keys(workload.jobs), ['selftest', 'materialize-preprod-workload-secret']);
+    assert.deepEqual(workload.jobs.selftest, workflow.jobs.selftest);
+    assert.deepEqual(workload.jobs['materialize-preprod-workload-secret'].needs, ['selftest']);
     assert.equal(workload.jobs['materialize-preprod-workload-secret'].environment, 'sentropic-idp-run');
     assert.equal(workload.jobs['materialize-preprod-workload-secret'].if, "github.ref == 'refs/heads/main'");
     assert.deepEqual(workload.permissions, { contents: 'read' });
@@ -41,7 +43,8 @@ export function workflowTests(check, load) {
       writeFileSync(join(directory, 'kubectl'), `#!${process.execPath}
         const fs = require('node:fs'), assert = require('node:assert/strict');
         const args = process.argv.slice(2), file = args.at(-1);
-        assert.deepEqual(args.slice(0, -1), ['--kubeconfig', process.env.IDP_SYNC_WORKDIR + '/kubeconfig', '-n', 'sentropic-preprod', 'apply', '-f']);
+        assert.ok(args.includes('--server-side'), 'client-side Secret apply is forbidden');
+        assert.deepEqual(args.slice(0, -1), ['--kubeconfig', process.env.IDP_SYNC_WORKDIR + '/kubeconfig', '-n', 'sentropic-preprod', 'apply', '--server-side', '--field-manager=idp-workload-secret', '-f']);
         assert.equal(fs.statSync(file).mode & 0o777, 0o600);
         fs.writeFileSync(process.env.RECEIPT, fs.readFileSync(file));
         if (process.env.APPLY_STATUS === 'failed') { console.error(process.env.IMMO_MCP_WORKLOAD_CLIENT_SECRET); process.exit(1); }
@@ -57,11 +60,11 @@ export function workflowTests(check, load) {
         assert.deepEqual(readdirSync(workdir), [], 'temporary manifests must be removed');
         return result;
       };
-      for (const status of ['created', 'configured', 'unchanged']) {
+      for (const status of ['serverside-applied']) {
         const result = execute(value, status);
         assert.equal(result.status, 0); assert.equal(result.stderr, '');
         assert.deepEqual(JSON.parse(result.stdout), { name: 'immo-mcp-workload', namespace: 'sentropic-preprod',
-          status: status === 'unchanged' ? 'configured' : status,
+          status: 'configured',
           fingerprint: createHash('sha256').update(value).digest('hex').slice(0, 8) });
         assert.deepEqual(JSON.parse(readFileSync(receipt, 'utf8')), { apiVersion: 'v1', kind: 'Secret',
           metadata: { name: 'immo-mcp-workload', namespace: 'sentropic-preprod' }, type: 'Opaque',
@@ -73,7 +76,7 @@ export function workflowTests(check, load) {
         assert.equal(result.stderr, 'workload_credential_invalid\n');
         assert.throws(() => readFileSync(receipt), { code: 'ENOENT' });
       }
-      for (const status of ['failed', 'unexpected']) {
+      for (const status of ['failed', 'unexpected', 'created', 'configured', 'unchanged']) {
         const result = execute(value, status);
         assert.equal(result.status, 1); assert.equal(result.stdout, '');
         assert.equal(result.stderr, 'workload_secret_apply_failed\n');
@@ -120,6 +123,7 @@ export function workflowTests(check, load) {
   check('CI gates SQL and bundles for deployment changes', () => {
     const filter = parse(ci.jobs.changes.steps.find(s => s.with?.filters).with.filters);
     assert.ok(filter.idp_sync.includes('deploy/**'));
+    assert.ok(filter.idp_sync.includes('.github/workflows/idp-workload-secret.yml'));
     assert.ok(filter.idp_sync.includes('packages/auth-hono/src/**'));
     assert.ok(filter.idp_sync.includes('packages/auth-hono/package.json'));
     assert.deepEqual(ci.jobs['validate-idp-sync'].steps.filter(s => s.run).map(s => s.run), ['make test-idp-sync-selftest ENV=test-idp-sync', 'make test-idp-sync-sql ENV=test-idp-sync']);

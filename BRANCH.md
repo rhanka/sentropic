@@ -4,7 +4,7 @@
 - [x] Deliver the protected manual workflow for materializing `sentropic-preprod/immo-mcp-workload` before named-Secret identity sync; execution stays owner-operated.
 
 ## Scope / Guardrails
-- [x] Scope limited to the workload Secret workflow, its selftests and credential-cycle documentation.
+- [x] Scope limited to the workload Secret workflow, its selftests, CI path filter and credential-cycle documentation.
 - [x] Make-only workflow; no Docker, Python, dispatch or merge.
 - [x] Root workspace `~/src/sentropic` remains reserved for user dev (`ENV=dev`).
 - [x] Branch development happens in `tmp/worktrees/idp-workload-secret` on `feat/idp-workload-secret-workflow` from `origin/main`.
@@ -29,6 +29,7 @@
   - [x] Declare exceptions before editing, with rationale, impact and rollback in `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] BR800-EX2 / acknowledge: owner authorizes `.github/workflows/ci.yml`. Rationale: workflow-only PRs must run the workload Secret guard selftest. Impact: add only the workload workflow to the existing `idp_sync` path filter. Rollback: remove that filter entry.
 - [x] IDP-EX1 / acknowledge: owner explicitly authorizes `.github/workflows/idp-workload-secret.yml`. Rationale: the cluster is reachable only through protected CI. Impact: a main-only manual job can create/update only the intended workload Secret in this workflow; it uses the existing delegated preprod identity. Rollback: remove the workflow; restore prior credential through the same governed channel and named-Secret sync if material was changed.
 - [x] No-Docker gate: `test-idp-sync-selftest` starts containers; defer runtime selftests to existing CI `validate-idp-sync`.
 - [x] Conductor clarification: reuse `configure preprod` unchanged; no preprod apiserver-host assertion in this lot.
@@ -52,15 +53,18 @@
   - [x] Create isolated worktree and pass mechanical `harness check branch`.
   - [x] Confirm `sentropic-idp-run` permits only `main` and inspect existing make targets.
 - [x] **Lot 1 — Protected materialization**
-  - [x] Add `.github/workflows/idp-workload-secret.yml`: dispatch only, single main-only job, Node 24, matching kubectl pin, existing configure and always-cleanup actions.
+  - [x] Add `.github/workflows/idp-workload-secret.yml`: dispatch only, selftest-gated main-only materialization job, Node 24, matching kubectl pin, existing configure and always-cleanup actions.
   - [x] Validate exactly 64 lowercase hex without newline; apply a 0600 temporary Opaque manifest without leaking values or kubectl diagnostics.
-  - [x] Emit only name, namespace, created/configured and an eight-hex SHA-256 fingerprint.
+  - [x] Emit only name, namespace, configured status and an eight-hex SHA-256 fingerprint.
   - [x] Lot gate: mechanical host harness scope check through `make scope-check ENV=test-861-int`; this existing host-only target avoids Docker.
 - [x] **Lot 2 — Selftests and documentation**
   - [x] Extend `deploy/ci/idp-identity-sync/workflow.selftest.mjs` for dispatch-only wiring, protected environment, no secret echo and always cleanup.
   - [x] Add CI execution of real Node materialization with synthetic fixtures and stubbed kubectl; reject malformed credentials without invoking kubectl.
   - [x] Update `deploy/ci/idp-identity-sync/CRED_CYCLE.md`: `.env` → `sentropic-idp-run` environment secret → protected workflow → named-Secret sync.
   - [x] Lot gate: runtime selftests delegated to CI `make test-idp-sync-selftest ENV=test-idp-sync` because the existing target starts containers.
+- [x] **Lot 3 — Opus r1 corrections**
+  - [x] P2-1: use server-side apply with field manager `idp-workload-secret`; assert kubectl arguments exclude client-side Secret apply.
+  - [x] P2-2: add the workload workflow to CI `idp_sync`; require its selftest job before materialization and assert both gates.
 - [ ] **Lot N — Final validation**
   - [x] Review every hunk and record independent-review availability above.
   - [x] Validate scope before each `make commit`; selectively stage, no AI trailers.
