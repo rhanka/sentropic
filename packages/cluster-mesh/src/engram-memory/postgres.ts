@@ -6,6 +6,7 @@
 // validation, recovery or ownership through the storage factory.
 
 import type { InjectedPgDriver, PostgresStorageOptions } from '../storage/postgres/protocol.js';
+import { createPostgresKernel } from '../storage/postgres/index.js';
 import { loadPgAssets } from '../storage/postgres/migrations.js';
 import { decodePgText } from '../storage/postgres/codec.js';
 import { StorageInvalidCommandError, StorageUnavailableError } from '../storage/errors.js';
@@ -239,22 +240,47 @@ export const verifyMemoryPostgresProvider = async (
 };
 
 /**
- * Postgres storage composition. FAILS CLOSED in this increment: the public
- * raw factory installed no G1b stateful projection, so admitting any write
- * lane would let a higher-version update replace a frozen first proof
- * (the generic kernel accepts higher aggregate versions). The K7/K8
- * transition core is enforced through `validateMemoryEffects` with a
- * current-state resolver; the factory itself refuses until G1b wires a
- * backend-backed resolver and transactional projection.
+ * Postgres storage composition, opened from the checked host provider
+ * (r2 P1-B). The factory checks the provider (identity, floor, live pool),
+ * fills the E6 stateful pieces (module assets, descriptor, effects
+ * validation, projection, queries, limits) from the memory registration and
+ * opens the kernel on the provider's own pool: installed calls run through
+ * the exact pool the provider describes, never a separately wired driver.
+ * The host applies migrations (E2 owns the migration writer); without the
+ * provider no backend is reachable and the factory refuses with
+ * `unavailable`. Engram never calls this factory: it receives the neutral
+ * grant only.
  */
 export const createMemoryPostgresStorage = async (
   options: Omit<
     PostgresStorageOptions,
-    'moduleId' | 'assets' | 'descriptor' | 'projection' | 'validateEffects' | 'queries' | 'operations'
-  >,
-): Promise<never> => {
-  void options;
-  throw new StorageUnavailableError(
-    'memory Postgres composition requires the G1b stateful projection with backend reads',
-  );
+    | 'moduleId'
+    | 'driver'
+    | 'assets'
+    | 'descriptor'
+    | 'projection'
+    | 'validateEffects'
+    | 'queries'
+    | 'operations'
+    | 'limits'
+  > & {
+    readonly provider: MemoryPostgresDriverProvider;
+  },
+): Promise<Awaited<ReturnType<typeof createPostgresKernel>>> => {
+  const { provider, ...rest } = (options ?? {}) as Partial<PostgresStorageOptions> & {
+    readonly provider?: unknown;
+  };
+  if (typeof provider !== 'object' || provider === null) {
+    throw new StorageUnavailableError(
+      'memory Postgres composition requires the checked host provider for the G1b stateful projection: no backend reachable',
+    );
+  }
+  const checked = checkMemoryPostgresDriver(provider);
+  const registration = await createMemoryPostgresRegistration();
+  return createPostgresKernel({
+    ...registration,
+    ...rest,
+    moduleId: 'engram-memory',
+    driver: checked.pool,
+  });
 };
