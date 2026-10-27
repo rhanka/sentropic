@@ -12,6 +12,8 @@ APP-P1 selects exactly `artifacts_ensure`, `artifacts_publish`, `artifacts_list`
 
 ## Executed evidence
 
+- [API startup and transport qualification](runtime-qualification-2026-10-27.md): real API listener, HTTP 200/readiness ready, healthy Compose container, and 85/85 transport/credentials/MCP/resource tests; isolated stack removed afterwards.
+
 - [Published fit](published-fit-2026-10-27.json): strict exact-version install with zero source links; actual Comments/gateway loads; one cluster-mesh and shared llm-mesh; API/mesh physical artifacts path equality; selected builtin compilation without invoking host ports. **No upstream cluster-mesh bump is needed.**
 - [Payload receipt](payload-equivalence-2026-10-27.json): npm metadata and downloaded archive SHA-512 SRI checked; archive SHA-256; complete normalized path/byte SHA-256 maps for both published and clean-built source payloads, including manifests/exports/declarations/SQL/examples.
 - [Complete workspace resolution](workspace-resolved-2026-10-27.json): all **1699** root lock entries, full installed development tree and full installed runtime tree. Strict `npm ci --strict-peer-deps --ignore-scripts` succeeds; `npm ls --omit=dev --all --json` succeeds; root/API lock bytes remain unchanged. Tools: Node 24.21.0, npm 11.19.0, lock-pinned TypeScript 5.4.5. Native install scripts are excluded from this package/registry probe; W3 retains image qualification.
