@@ -16,6 +16,8 @@ import {
   ListObjectsV2Command,
 } from '@aws-sdk/client-s3';
 import { createS3BlobStore } from '../src/adapters/s3.js';
+import { createMemoryBlobStore } from '../src/server/publication.js';
+import { ArtifactOperationError } from '../src/server/failures.js';
 
 function s3Env(name: string): string {
   const value = process.env[name];
@@ -94,5 +96,34 @@ describe('s3 blob store', () => {
     }
     await expect(blobs.listKeys('')).rejects.toThrow(/prefix/);
     await expect(blobs.listKeys('../x')).rejects.toThrow(/prefix/);
+  });
+});
+
+describe.each([
+  ['memory', createMemoryBlobStore()],
+  ['S3', blobs],
+] as const)('%s listKeys prefix parity', (_name, store) => {
+  it.each(['', '..', '../x', 'artifacts/../scope-1/', 'artifacts/scope..1/', 'artifacts/scope-1/..'])
+    ('should reject invalid prefix %j with a stable typed error', async (prefix) => {
+      await store.putBlob(KEY_A, owe([1]));
+      const result = Promise.resolve().then(() => store.listKeys(prefix));
+      await expect(result).rejects.toBeInstanceOf(ArtifactOperationError);
+      await expect(result).rejects.toMatchObject({
+        message: `invalid blob prefix: ${prefix}`, kind: 'invalid_request', code: 'invalid_blob_prefix',
+      });
+    });
+
+  it.each([
+    ['artifacts/scope-1/blobs/', [KEY_A, KEY_B]],
+    ['artifacts/scope-9/blobs/', [KEY_OTHER]],
+    ['artifacts/', [KEY_A, KEY_B, KEY_OTHER]],
+    [KEY_A, [KEY_A]],
+    ['artifacts/missing/', []],
+    ['artifacts/scope.1/', []],
+  ] as const)('should return sorted matching keys for valid prefix %j', async (prefix, expected) => {
+    await store.putBlob(KEY_OTHER, owe([3]));
+    await store.putBlob(KEY_B, owe([2]));
+    await store.putBlob(KEY_A, owe([1]));
+    expect(await store.listKeys(prefix)).toEqual(expected);
   });
 });
