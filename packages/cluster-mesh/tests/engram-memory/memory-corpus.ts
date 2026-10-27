@@ -3,6 +3,7 @@ import type { CanonicalMemoryStorePort, Result } from '@sentropic/engram/memory-
 import { memoryJcs } from '../../src/engram-memory/codec.js';
 import { MEMORY_PINNED_PROFILES } from '../../src/engram-memory/manifest.js';
 import type { MemoryCampaignHost } from './memory-pg-host.js';
+import { DEADLINE, DIGEST, memoryCaptureRequest, memoryEngine } from './memory-engine.js';
 
 export const MEMORY_STAGE_B_PROFILES = [
   'atomic-units-v1', 'immutable-chains-v1', 'immutable-boundaries-v1', 'scope-outbox-v1', 'fenced-writers-v1',
@@ -91,6 +92,35 @@ export const runMemoryCorpus = (open: () => Promise<MemoryCampaignHost>): void =
       expect(cursors).toEqual(['1', '2', '3']);
       await expect(h.handle.query('memory-journal-page', memoryJcs({ after: '0', limit: 2001 }), h.binding.memoryGrant))
         .rejects.toMatchObject({ code: 'invalid-schema' });
+    });
+    for (const decision of ['accept', 'reject'] as const) scenario(`immutable-chains-v1/destruction-replay/${decision}: should retain K7 and K8 after admission destroys the envelope`, async (h) => {
+      const host = memoryEngine(h, decision);
+      const captured = valueOf(await host.engine.capture(memoryCaptureRequest()));
+      expect(captured.status).toBe('committed_pending');
+      const candidate = { candidate_id: captured.candidate_id! };
+      const captureProof = valueOf(await h.store.readCaptureIdempotency!(candidate));
+      expect(captureProof.record_digest).toBeDefined();
+      const admitted = valueOf(await host.engine.requestAdmission({ ...candidate,
+        authorization: { credential: 'credential-memory' }, deadline_at: DEADLINE }));
+      expect(admitted.status).toBe(decision === 'accept' ? 'accepted' : 'rejected');
+      expect(host.destroyed).toBe(1);
+      expect(host.plaintextCount).toBe(0);
+      expect(await h.store.readPending({ ...candidate, authorization_receipt_digest: DIGEST }))
+        .toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } });
+      const first = valueOf(await h.store.readAdmissionOutcome!(candidate));
+      const journal = valueOf(await h.store.readJournal({ after: '0', limit: 10 }));
+      expect(journal).toHaveLength(2);
+      const original = await h.handle.readCommitResult!(journal.at(-1)!.event_id, h.binding.memoryGrant);
+      expect(JSON.parse(original!.data).receipt_digest).toBe(admitted.transaction_receipt_digest);
+      if (decision === 'accept') {
+        const record = valueOf(await h.store.readRecord({ record_id: first.record_id!, system_as_of: '2', authorization_receipt_digest: DIGEST }));
+        expect(record.scope_ref).toBe('memory-stage-b-scope');
+      }
+      await h.reopen();
+      expect(valueOf(await h.store.readCaptureIdempotency!(candidate))).toEqual(captureProof);
+      expect(valueOf(await h.store.readAdmissionOutcome!(candidate))).toEqual(first);
+      expect(await h.handle.readCommitResult!(journal.at(-1)!.event_id, h.binding.memoryGrant)).toEqual(original);
+      expect(valueOf(await h.store.readJournal({ after: '0', limit: 10 }))).toEqual(journal);
     });
   });
 };
