@@ -144,26 +144,33 @@ test('should capture only selected delivery endpoints and reject cross-head rece
   assert.throws(() => capacityCapture(workflow, { ...run, head_sha: 'wrong' }, [], manifest), /identity/);
 });
 
-test('should capture every page of the current attempt at the actual gate and fail on API errors', async () => {
+test('should capture the complete current attempt through the authenticated client and fail on API errors', async () => {
   const script = workflow.jobs['ci-gate'].steps.find((step) => step.name === 'Capture the current attempt for the final verdict').with.script;
-  const execute = new (Object.getPrototypeOf(async function () {}).constructor)('require', 'context', 'fetch', 'process', script);
+  const execute = new (Object.getPrototypeOf(async function () {}).constructor)('require', 'context', 'github', 'process', script);
   const requests = [];
   let captured;
   const files = { writeFileSync: (_file, value) => { captured = JSON.parse(value); } };
   const context = { repo: { owner: 'rhanka', repo: 'sentropic' }, runId: 7 };
-  const fetch = async (url) => {
-    requests.push(url);
-    return { ok: true, json: async () => url.includes('/jobs?')
-      ? { jobs: [{ id: requests.length, run_id: 7, run_attempt: 3 }], total_count: 2 }
-      : { id: 7, run_attempt: 3, head_sha: 'abc' } };
+  const listJobsForWorkflowRunAttempt = () => {};
+  const github = {
+    rest: { actions: { listJobsForWorkflowRunAttempt, getWorkflowRunAttempt: async params => {
+      requests.push(params);
+      return { data: { id: 7, run_attempt: 3, head_sha: 'abc' } };
+    } } },
+    paginate: async (method, params) => {
+      assert.equal(method, listJobsForWorkflowRunAttempt);
+      requests.push(params);
+      return [{ id: 1, run_id: 7, run_attempt: 3 }, { id: 2, run_id: 7, run_attempt: 3 }];
+    },
   };
-  await execute(() => files, context, fetch, { env: { GITHUB_RUN_ATTEMPT: '3' } });
+  await execute(() => files, context, github, { env: { GITHUB_RUN_ATTEMPT: '3' } });
   assert.equal(captured.jobs.length, 2);
   assert.equal(captured.run.run_attempt, 3);
-  assert.match(requests[0], /\/attempts\/3$/);
-  assert.match(requests[1], /\/attempts\/3\/jobs\?per_page=100&page=1$/);
-  assert.match(requests[2], /page=2$/);
-  await assert.rejects(execute(() => files, context, async () => ({ ok: false, status: 503 }),
+  assert.deepEqual(requests[0], { owner: 'rhanka', repo: 'sentropic', run_id: 7, attempt_number: 3 });
+  assert.deepEqual(requests[1], { ...requests[0], per_page: 100 });
+  assert.equal(workflow.jobs['ci-gate'].permissions.actions, 'read');
+  const failing = { ...github, paginate: async () => { throw new Error('HTTP 503'); } };
+  await assert.rejects(execute(() => files, context, failing,
     { env: { GITHUB_RUN_ATTEMPT: '3' } }), /HTTP 503/);
 });
 

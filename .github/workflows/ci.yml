@@ -2695,6 +2695,7 @@ jobs:
     if: always()
     permissions:
       contents: read
+      actions: read
     needs:
       - enforce-package-bump
       - qualify-engram-e2
@@ -2751,20 +2752,11 @@ jobs:
         with:
           script: |
             const fs = require('node:fs');
-            // This repository's run/job receipts are public; no additional token permissions.
-            const base = `https://api.github.com/repos/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const get = async url => {
-              const response = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
-              if (!response.ok) throw new Error(`Receipt capture failed: HTTP ${response.status}`);
-              return response.json();
-            };
-            const run = await get(`${base}/attempts/${process.env.GITHUB_RUN_ATTEMPT}`);
-            const jobs = [];
-            for (let page = 1; ; page++) {
-              const result = await get(`${base}/attempts/${process.env.GITHUB_RUN_ATTEMPT}/jobs?per_page=100&page=${page}`);
-              jobs.push(...result.jobs);
-              if (jobs.length >= result.total_count) break;
-            }
+            const params = { ...context.repo, run_id: context.runId };
+            const { data: run } = await github.rest.actions.getWorkflowRunAttempt(
+              { ...params, attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT) });
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
+              { ...params, attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT), per_page: 100 });
             fs.writeFileSync('tmp/ci-capacity/capture.json', JSON.stringify({ run, jobs,
               sourceSha: run.head_sha, workflowSha: process.env.GITHUB_WORKFLOW_SHA ?? null }, null, 2));
       - name: Check required CI results
