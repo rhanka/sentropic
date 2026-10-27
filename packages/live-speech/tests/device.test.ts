@@ -1,7 +1,64 @@
-// Device-port tests, part 1 (r3 L4): pure argv/list parsers and the fail-closed
-// backend path. Streaming (open/frames/loss) lands with the frame pump.
+// Device-port tests, part 1 (r3 L4): pure argv/list parsers, the fail-closed
+// backend path, and the scripted fake device. Streaming (open/frames/loss)
+// lands with the frame pump.
 import { describe, expect, it } from 'vitest';
-import { ArecordDevice, buildArecordArgs, DeviceUnavailableError, parseArecordList } from '../src/node/device.js';
+import {
+  ArecordDevice,
+  buildArecordArgs,
+  DeviceLostError,
+  DeviceOpenError,
+  DeviceUnavailableError,
+  parseArecordList,
+} from '../src/node/device.js';
+import { FakeDevice } from './fixtures/fake-device.js';
+import { silence, tone } from './helpers.js';
+
+describe('fake device', () => {
+  it('should list the scripted input devices', async () => {
+    const device = new FakeDevice();
+    await expect(device.listDevices()).resolves.toEqual([
+      { id: 'fake-default', name: 'Fake microphone', backend: 'fake' },
+    ]);
+  });
+
+  it('should yield scripted frames in order, one script per open', async () => {
+    const device = new FakeDevice([[tone(0.1)], [silence(0.1)]]);
+    const first = await device.open('fake-default');
+    const frames: Float32Array[] = [];
+    for await (const frame of first.frames()) frames.push(frame);
+    expect(frames).toHaveLength(1);
+    expect(frames[0]).toHaveLength(Math.floor(0.1 * 16000));
+    expect(first.closed).toBe(true);
+    const second = await device.open('fake-default');
+    const more: Float32Array[] = [];
+    for await (const frame of second.frames()) more.push(frame);
+    expect(more).toHaveLength(1);
+    expect(device.opened).toEqual(['fake-default', 'fake-default']);
+  });
+
+  it('should fail open with DeviceOpenError and never yield', async () => {
+    const device = new FakeDevice([], { failOpen: 'no such device' });
+    await expect(device.open('missing')).rejects.toThrow(DeviceOpenError);
+  });
+
+  it('should surface a mid-stream loss as DeviceLostError and close the stream', async () => {
+    const device = new FakeDevice([[tone(0.05), { lost: 'device unplugged' }]]);
+    const stream = await device.open('fake-default');
+    const frames: Float32Array[] = [];
+    await expect(
+      (async () => {
+        for await (const frame of stream.frames()) frames.push(frame);
+      })(),
+    ).rejects.toThrow(DeviceLostError);
+    expect(frames).toHaveLength(1);
+    expect(stream.closed).toBe(true);
+  });
+
+  it('should fail listing with DeviceUnavailableError when the backend is down', async () => {
+    const device = new FakeDevice([], { failList: 'backend gone' });
+    await expect(device.listDevices()).rejects.toThrow(DeviceUnavailableError);
+  });
+});
 
 describe('arecord backend', () => {
   it('should fail closed with DeviceUnavailableError when the binary is missing', async () => {
