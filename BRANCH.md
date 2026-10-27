@@ -83,6 +83,8 @@
 - [x] Lot 3 durable test: HTTP session ensure and OAuth MCP replay, MCP publish and HTTP replay; assert one artifact/release and two receipts.
 - [x] Current-reader vectors include matching/wrong DPoP proof, revocation during artifact-row waits and expiry during quota waits for both credential kinds.
 - [x] Credential red /tmp/app-w2b-credential-final-red.log: session expiry after credential-row wait and revoked required scope with a remaining read scope; 3 failures/20 passes before repair.
+- [x] Reader rechecks session expiry after locking and intersects the request-required MCP scopes on every current credential check.
+- [x] Current credential/transport/profile suites: 51/51, no errors or skips; /tmp/app-w2b-focused-green.log.
 - [x] Lot 4 core: compiled exact-name dispatch and bounded APP-P1 HTTP adapter delegate to W1 host.
 - [x] Lot 4 singleton: one durable PG host with dedicated private S3, explicit quota and default-closed activation.
 - [x] Lot 4 mount: verified credential tuples, shared MCP supervisor guard, resources author and /resources/artifacts/*; 28 namespaces retained.
