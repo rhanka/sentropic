@@ -254,6 +254,7 @@ jobs:
               - 'api/drizzle/*.sql'
               - 'Makefile'
               - '.github/workflows/idp-identity-sync.yml'
+              - '.github/workflows/idp-workload-secret.yml'
               - '.github/workflows/ci.yml'
             global:
               - 'Makefile'
