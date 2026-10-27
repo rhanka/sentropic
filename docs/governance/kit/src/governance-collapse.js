@@ -2,7 +2,6 @@ import { aggregateTopLevel, packTopLevel } from './governance-summary.js';
 import { routeScene } from './architecture-routing.js';
 import { packGovernanceScene } from './governance-layout.js';
 import { packStudyScene } from './study-layout.js';
-import preparedRoutes from './governance-routes.json' with { type: 'json' };
 
 // Revisited mixed folds reuse exact geometry, without any eager route work.
 const runtimeRoutes = new Map();
@@ -47,16 +46,17 @@ export function collapseGovernanceScene(scene, collapsedIds = [], usePrepared = 
     [...visibleGroups, ...nodes].map(entry => [entry.id, entry.parentId, entry.position.x, entry.position.y, entry.width, entry.height, entry.headerTextHeight, entry.collapsed]),
     edges.map(edge => [edge.id, edge.source, edge.target, edge.label, edge.class, edge.data.labelFontSize, edge.data.marker, edge.data.relations, edge.data.pillLabel]),
   ]);
-  const prepared = usePrepared && ((scene.preparedFolds ?? (preparedRoutes[scene.language ?? 'fr'] ?? preparedRoutes).folded)?.find(entry => entry.signature === routingSignature)
-    ?? runtimeRoutes.get(routingSignature));
+  const cacheKey = JSON.stringify([scene.id, scene.language, scene.routingVersion ?? 'orthogonal-v1', routingSignature]);
+  const prepared = usePrepared && (scene.preparedFolds?.find(entry => entry.signature === routingSignature)
+    ?? runtimeRoutes.get(cacheKey));
   const mask = scene.groups.reduce((value,g,i)=>value | (visibleGroups.some(v=>v.id===g.id&&v.collapsed) ? 1<<i : 0),0);
   const plan = planHint ?? (usePrepared && scene.id === 'central' && scene.projectionKey === 'overview'
-    ? preparedRoutes[scene.language ?? 'fr'].plans?.[mask] : undefined);
+    ? scene.preparedPlans?.[mask] : undefined);
   const routed = summary ? {...routeInput, edges:packed.edges}
     : prepared ? { ...routeInput, edges: prepared.edges } : routeScene(routeInput,plan);
   if (usePrepared && !summary && !prepared) {
     if (runtimeRoutes.size === 32) runtimeRoutes.delete(runtimeRoutes.keys().next().value);
-    runtimeRoutes.set(routingSignature, { edges: routed.edges });
+    runtimeRoutes.set(cacheKey, { edges: routed.edges });
   }
   return { ...routed, nodes, edges: routed.edges.map(edge => ({ ...edge,
     data: { ...edge.data, obstacleDetour: edge.type !== 'straight' } })), collapsedIds, routingSignature };
