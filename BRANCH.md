@@ -64,7 +64,7 @@
   - [ ] Run focused Node tests, full-governance geometry/routing checks and offline browser interactions for the typical fixture.
   - [ ] UAT: both diagrams/folds, light/dark, mobile/desktop, zoom, option state, inventory totals and JSON downloads.
 - [ ] **W4 — Artifact size budget**
-  - [ ] Add deterministic fixture build and Vite module/chunk manifest reporting, without mutating tracked source.
+  - [x] Add deterministic fixture build and Vite module/chunk manifest reporting, without mutating tracked source.
   - [ ] Add `scripts/artifact-budget.mjs` and `scripts/artifact-budget.test.mjs`: raw/gzip/Brotli/SHA-256, initial/static/startup/full closures, per-chunk limits and agent read cost.
   - [x] Negative tests: corpus reimport, oversized startup data, deferred JS excess, missing/unreferenced assets and portable dynamic imports.
   - [ ] Add `make check-artifact-budget` and CI step in `validate-artifacts` with `docs/governance/kit/**` filter and output report artifact.
