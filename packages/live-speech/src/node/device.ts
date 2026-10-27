@@ -185,8 +185,11 @@ class ArecordAudioStream implements AudioStream {
   private readonly queue: Float32Array[] = [];
   private waiter: (() => void) | null = null;
   private failure: DeviceLostError | DeviceOpenError | DeviceUnavailableError | null = null;
-  private spawned: (() => void) | null = null;
+  private readyResolve: ((
+    failure: DeviceLostError | DeviceOpenError | DeviceUnavailableError | null,
+  ) => void) | null = null;
   private readonly readyPromise: Promise<DeviceLostError | DeviceOpenError | DeviceUnavailableError | null>;
+  private readyTimer: ReturnType<typeof setTimeout> | null = null;
   private leftover = Buffer.alloc(0);
   private stderrTail = '';
   private settled = false;
@@ -196,7 +199,7 @@ class ArecordAudioStream implements AudioStream {
     private readonly options: OpenDeviceOptions,
   ) {
     this.readyPromise = new Promise((resolve) => {
-      this.spawned = () => resolve(this.failure);
+      this.readyResolve = resolve;
     });
     child.on('error', () => {
       this.fail(new DeviceUnavailableError('arecord is not installed or not executable'));
@@ -215,9 +218,24 @@ class ArecordAudioStream implements AudioStream {
         this.fail(new DeviceLostError(message));
       }
     });
-    // First bytes (or first tick) prove the child spawned: resolve ready then.
-    const probe = setTimeout(() => this.spawned?.(), 50);
-    probe.unref?.();
+    // Silence is failure, not success: only first bytes prove the child is
+    // streaming. A blind ready probe would win the race against a fast exit
+    // (exit-early helper) and wrongly report a healthy open.
+    this.readyTimer = setTimeout(() => {
+      this.fail(new DeviceOpenError('arecord produced no audio within 2000 ms'));
+    }, 2000);
+    this.readyTimer.unref?.();
+  }
+
+  /** Settle ready exactly once (success carries the null failure). */
+  private settleReady(): void {
+    if (this.readyTimer !== null) {
+      clearTimeout(this.readyTimer);
+      this.readyTimer = null;
+    }
+    const resolve = this.readyResolve;
+    this.readyResolve = null;
+    resolve?.(this.failure);
   }
 
   get closed(): boolean {
@@ -233,7 +251,7 @@ class ArecordAudioStream implements AudioStream {
   }
 
   private onBytes(chunk: Buffer): void {
-    this.spawned?.();
+    this.settleReady();
     this.leftover = Buffer.concat([this.leftover, chunk]);
     const frameBytes = Math.floor((this.options.frameMs / 1000) * this.options.sampleRateHz) * 2;
     while (this.leftover.length >= frameBytes) {
@@ -251,7 +269,7 @@ class ArecordAudioStream implements AudioStream {
   private fail(error: DeviceLostError | DeviceOpenError | DeviceUnavailableError): void {
     if (this.failure !== null || this._closed) return;
     this.failure = error;
-    this.spawned?.();
+    this.settleReady();
     this.waiter?.();
   }
 
@@ -280,6 +298,7 @@ class ArecordAudioStream implements AudioStream {
   close(): void {
     if (this._closed) return;
     this._closed = true;
+    this.settleReady();
     this.waiter?.();
     try {
       this.child.kill('SIGTERM');
