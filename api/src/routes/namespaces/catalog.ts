@@ -84,7 +84,7 @@ export const createCatalogTransportRouter = (ports: CatalogNamespacePorts): Hono
     return context.json({ items: ports.catalog.list(parsed.data, authority) });
   }));
   router.get('/catalog/entries/:name', ports.authenticate, trusted((context, authority) => {
-    const entry = ports.catalog.get(context.req.param('name'), authority);
+    const entry = ports.catalog.get(context.req.param('name') ?? '', authority);
     return entry
       ? context.json({ item: entry })
       : context.json({ error: 'catalog_entry_not_found' }, 404);
