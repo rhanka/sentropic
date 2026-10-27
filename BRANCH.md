@@ -56,6 +56,7 @@
 - [ ] Lot 4: pass turn context through model selection, search and execution; handled denials never fall through.
   - [x] Handler context travels separately from arguments; seam refreshes authority and dispatches only through the winning entry's source.
   - [x] Search and model tools use the same request-local catalog view; public identifiers pass through unchanged.
+  - [x] The effective turn allowlist also governs search_skills/search_catalog advertisement.
   - [x] Foundation executor resolves verified conversation authority, checks caller binding/effective turn allowlist and returns handled denials.
   - [x] Bounded chat caller resolves context from server-owned conversation inputs before model tool selection.
 - [ ] Lot 5: focused suites, API typecheck/lint, runtime logs and locked make down.
