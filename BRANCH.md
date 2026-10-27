@@ -1,7 +1,8 @@
-# Feature: Live STT L8 gateway speech and usage
+# Feature: Live STT L8a gateway speech policy and usage
 
 ## Objective
 - [ ] Bind bounded speech admission, usage and settlement to the gateway ledger owner.
+- [ ] L8 acceptance is conditional: this PR delivers L8a policy/contracts only, not M1-ready cloud activation.
 
 ## Scope / Guardrails
 - [x] Base origin/feat/live-stt-l2; branch feat/live-stt-l8; worktree tmp/worktrees/stt-l8.
@@ -38,7 +39,8 @@
 ## Feedback Loop
 - [x] R1 P1/P2-1: build incremental totals through a mutable dimension map; require llm-mesh >=0.28.0 for speech contracts.
 - [x] R1 manifests: registry latest gateway 0.21.3 / cluster-mesh 0.22.4 on 2026-10-27; gateway feature 0.22.0 and cluster peer-range patch 0.23.1 remain unpublished BLOCK candidates. Mirror versions/ranges in package-lock.json; retain full pack gates.
-- [ ] G-LEDGER: existing host sink supports monthly text budgets only; ledger owner must supply atomic speech admission and adjustments before cloud activation.
+- [ ] G-LEDGER (open, 2026-10-27): L8b durable owner-adapter sub-lot, gateway/ledger owner + Sol; outside this PR's api/** scope. Bind SpeechLedgerPort to control.budgets/budget_holds/cost_ledger, allocator receipts and leases; qualify real DB restart, replica concurrency, UTC rollover, crash/replay and unavailable-store refusal before L8 acceptance or cloud activation.
+- [x] R1 P2-2: expose reconcileSpeech on speech/settlement for L7: operation/attempt rows join holds, allocator receipts and usage entries; report duplicate, uncounted and orphan evidence without a new store.
 - [x] Docker reservation takes precedence over the container-backed scope target; temporary host Make adapter invokes the same installed harness C2 check before every commit.
 - [x] Registry latest is 0.21.3 (2026-10-27); feature version will be 0.22.0, without publication.
 - [x] BRL8-EX1: gateway 0.22.0 requires widening cluster-mesh's optional gateway peer upper bound from 0.22 to 0.23 and mirroring workspace metadata in package-lock.json. Impact: manifest-only compatibility for the additive subpaths; rollback restores those three version/range fields. No cluster-mesh source changes.
@@ -83,6 +85,10 @@
   - [x] Document ledger-owner binding, dispatch bounds, limitations and G-LEDGER acceptance in README.md.
   - [x] Export speech subpath and bump package to 0.22.0; keep all shared owner source files unchanged.
   - [ ] Reconcile independent correctness and accounting/security reviews; no self-certification of durable host acceptance.
+- [ ] **L8b — Durable owner adapter (gateway/ledger owner + Sol; dated 2026-10-27; separate lot)**
+  - [ ] Supply the real DB SpeechLedgerPort adapter and one trusted cross-provider campaign identity; no production adapter is provided by L8a.
+  - [ ] Pass real DB crash/restart, multi-replica reservations, rollover, adjustment dedupe and store-outage tests; attach evidence to G-LEDGER before accepting L8/M1.
+  - [ ] Keep L9/L13 fixture-only and L8 acceptance conditional until this gate passes; scheduling/owner acknowledgement remains pending.
 - [ ] **Lot 5 — Draft delivery and validation**
   - [x] Prepare .tmp/live-stt/l8/local-gate.sh: 21:00 UTC guard, exact-head/clean-worktree checks, one package run, locked cleanup and persisted exit receipts.
   - [x] Push feat/live-stt-l8; open draft PR798 against feat/live-stt-l2 with this plan as body and post implementation plan.
