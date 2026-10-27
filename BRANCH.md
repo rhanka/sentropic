@@ -95,6 +95,7 @@
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
   - [x] Static: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity` must parse/import the changed scripts and reject invalid result sets.
   - [x] Review r1 local qualification: 35 metrics + 21 expected-results and 90 publication tests pass (includes 24 wiring checks). Static PR/main bounds 15/17; final-policy timing acceptance remains open.
+  - [x] Final conflict-resolution rebase on main 55431a99c73ae72bcf9404c8de5b1c8375f9e39b preserved the workflow/scripts from a251dbfa5; the sole BRANCH.md conflict is resolved. Harness C1/C2 and all 35 + 21 + 90 tests pass again; 37 replayed commits remain below 150 changed lines.
   - [ ] Timing rejected: completed PR 40402395319 on frozen policy source 1b5ef536885cf1f8533e88fc54dc40dbbf8c7223 succeeded with 62 executions / 27 skips, but wall-clock 18224s exceeds 2288s. Aggregate critical-path scheduling is 17227s; strict proof command rejects it. Require qualifying new PR/main receipts before acceptance.
   - [ ] Build: no image/package build recipe changes; retain the final concurrent PR/main runs' existing build and artifact receipts.
   - [ ] API regression: no API source/test edits; verify every selected API result from the concurrent runs is present and successful.
