@@ -2,8 +2,12 @@
 // Neutral contract: no sqlite, no pg, no engram imports. Versioned and
 // digest-carrying, distinct from task fencing: the epoch is allocated by
 // the registry, never supplied by the caller.
+// E1: the internal epoch representation is exact u64 (BigInt end to end,
+// never Number). The public storageEpoch stays a decimal string, the
+// contract name/version/meaning/digest and error codes stay unchanged.
 
 import { createHash, randomUUID } from 'node:crypto';
+import { compareU64Counter, isPositiveU64Counter, nextU64Counter } from './u64.js';
 
 const CONTRACT_NAME = 'CanonicalInstanceOwnershipV1';
 const CONTRACT_VERSION = '1';
@@ -44,15 +48,14 @@ export class CanonicalOwnershipError extends Error {
 
 interface RegistryEntry {
   instanceId: string;
-  epoch: number;
+  epoch: string;
   live: boolean;
   terminal: boolean;
 }
 
-const epochOf = (epoch: string): number => {
-  const parsed = Number(epoch);
-  if (!Number.isSafeInteger(parsed) || parsed < 1) throw new CanonicalOwnershipError('stale-epoch', `invalid storage epoch: ${epoch}`);
-  return parsed;
+const epochOf = (epoch: string): string => {
+  if (!isPositiveU64Counter(epoch)) throw new CanonicalOwnershipError('stale-epoch', `invalid storage epoch: ${epoch}`);
+  return epoch;
 };
 
 /** Single-process holder registry. Durable backends persist the winning
@@ -63,13 +66,26 @@ export class CanonicalInstanceRegistry {
   acquire(storeKey: string, epoch?: string): CanonicalInstanceHandle {
     const current = this.entries.get(storeKey);
     if (current?.live) throw new CanonicalOwnershipError('instance-busy', `store ${storeKey} already has a live holder`);
-    const next = epoch === undefined ? (current?.epoch ?? 0) + 1 : epochOf(epoch);
-    if (current && next <= current.epoch) {
+    let next: string;
+    if (epoch === undefined) {
+      if (current === undefined) {
+        next = '1';
+      } else {
+        const successor = nextU64Counter(current.epoch);
+        if (successor === undefined) {
+          throw new CanonicalOwnershipError('stale-epoch', `epoch allocation exhausted at ${current.epoch}`);
+        }
+        next = successor;
+      }
+    } else {
+      next = epochOf(epoch);
+    }
+    if (current && compareU64Counter(next, current.epoch) <= 0) {
       throw new CanonicalOwnershipError('stale-epoch', `epoch ${next} does not supersede ${current.epoch}`);
     }
     const entry: RegistryEntry = { instanceId: current?.instanceId ?? `instance-${randomUUID()}`, epoch: next, live: true, terminal: false };
     this.entries.set(storeKey, entry);
-    return Object.freeze({ instanceId: entry.instanceId, storageEpoch: String(entry.epoch), storeKey });
+    return Object.freeze({ instanceId: entry.instanceId, storageEpoch: entry.epoch, storeKey });
   }
 
   verify(handle: CanonicalInstanceHandle): void {
@@ -101,7 +117,7 @@ export class CanonicalInstanceRegistry {
   current(storeKey: string): CanonicalInstanceHandle | null {
     const current = this.entries.get(storeKey);
     if (!current || !current.live || current.terminal) return null;
-    return Object.freeze({ instanceId: current.instanceId, storageEpoch: String(current.epoch), storeKey });
+    return Object.freeze({ instanceId: current.instanceId, storageEpoch: current.epoch, storeKey });
   }
 }
 

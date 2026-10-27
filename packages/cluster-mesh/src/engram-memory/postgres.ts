@@ -5,13 +5,18 @@
 // migration execution in registration. A host cannot override mandatory
 // validation, recovery or ownership through the storage factory.
 
-import type { PostgresStorageOptions } from '../storage/postgres/protocol.js';
+import type { InjectedPgDriver, PostgresStorageOptions } from '../storage/postgres/protocol.js';
+import { createPostgresKernel } from '../storage/postgres/index.js';
 import { loadPgAssets } from '../storage/postgres/migrations.js';
-import { StorageInvalidCommandError, StorageUnavailableError } from '../storage/errors.js';
+import { decodePgText } from '../storage/postgres/codec.js';
+import { StorageDeniedError, StorageInvalidCommandError, StorageUnavailableError } from '../storage/errors.js';
+import { MemoryHostDriverRequiredError } from './sqlite.js';
 import type { AtomicUnit } from '../storage/atomic.js';
 import { MEMORY_DESCRIPTOR } from './manifest.js';
 import { MEMORY_PG_QUERIES } from './postgres-queries.js';
 import { MEMORY_STORAGE_LIMITS } from './limits.js';
+import { projectMemoryPgEffects, validateMemoryPgEffects } from './projection.js';
+import type { PgRegisteredProjection } from '../storage/postgres/protocol.js';
 import {
   isMemoryAdmissionOutcome,
   isMemoryCaptureProof,
@@ -22,7 +27,8 @@ import {
 export interface MemoryPostgresRegistration {
   readonly assets: Awaited<ReturnType<typeof loadPgAssets>>;
   readonly descriptor: typeof MEMORY_DESCRIPTOR;
-  readonly validateEffects: (effects: AtomicUnit, context: unknown) => Promise<void>;
+  readonly validateEffects: PgRegisteredProjection;
+  readonly projection: PgRegisteredProjection;
   readonly queries: typeof MEMORY_PG_QUERIES;
   readonly limits: typeof MEMORY_STORAGE_LIMITS;
 }
@@ -89,16 +95,16 @@ export const validateMemoryEffects = async (
   effects: AtomicUnit,
   resolveCurrent?: MemoryCurrentStateResolver,
 ): Promise<void> => {
-  let touchesCapture = false;
+  let completesCapture = false;
   for (const update of effects.updates) {
     const kind = updateKind(update.key);
     if (kind === null) throw new StorageInvalidCommandError('memory aggregate update requires a compound key');
     const value = decodeUpdateValue(update.value);
     if (kind === 'memory-capture-idempotency-v1') {
-      touchesCapture = true;
       if (!isMemoryCaptureProof(value)) {
         throw new StorageInvalidCommandError('memory capture update requires a capture proof value');
       }
+      completesCapture ||= value.revision !== 1;
       if (resolveCurrent !== undefined) {
         const current = await resolveCurrent(update.key);
         const transition = validateCaptureTransition(current ?? null, value);
@@ -123,39 +129,187 @@ export const validateMemoryEffects = async (
       }
     }
   }
-  if (touchesCapture && effects.appends.length !== 0) {
+  if (completesCapture && effects.appends.length !== 0) {
     throw new StorageInvalidCommandError('memory capture completion carries strictly zero appends');
   }
 };
 
 export const createMemoryPostgresRegistration = async (): Promise<MemoryPostgresRegistration> =>
   Object.freeze({
-    assets: await loadPgAssets(),
+    assets: await loadPgAssets({ memory: true }),
     descriptor: MEMORY_DESCRIPTOR,
-    validateEffects: async (effects: AtomicUnit) => {
-      await validateMemoryEffects(effects);
-    },
+    validateEffects: validateMemoryPgEffects,
+    projection: projectMemoryPgEffects,
     queries: MEMORY_PG_QUERIES,
     limits: MEMORY_STORAGE_LIMITS,
   });
 
+/** Host-owned PG driver identity: named versioned artifact, hex digest. */
+export interface MemoryPostgresDriverIdentity {
+  readonly name: string;
+  readonly version: string;
+  readonly artifactDigest: string;
+}
+
 /**
- * Postgres storage composition. FAILS CLOSED in this increment: the public
- * raw factory installed no G1b stateful projection, so admitting any write
- * lane would let a higher-version update replace a frozen first proof
- * (the generic kernel accepts higher aggregate versions). The K7/K8
- * transition core is enforced through `validateMemoryEffects` with a
- * current-state resolver; the factory itself refuses until G1b wires a
- * backend-backed resolver and transactional projection.
+ * Qualified host-owned PG driver/pool provider. The host composition owns
+ * the pool lifecycle and passes the provider explicitly — including the
+ * live pool, so installed calls run through the exact pool the provider
+ * describes. Engram receives the neutral binding only, never the pool,
+ * raw SQL access or this provider.
+ */
+export interface MemoryPostgresDriverProvider {
+  readonly identity: MemoryPostgresDriverIdentity;
+  readonly serverFloor: string;
+  readonly pool: InjectedPgDriver;
+}
+
+/** Pinned server floor (the qualification stack runs postgres:17); kept literal. */
+export const MEMORY_PG_SERVER_FLOOR = '17.0.0' as const;
+
+const HEX64 = /^[a-f0-9]{64}$/;
+
+const parseServer = (version: string): [number, number, number] => {
+  const match = /^(\d+)(?:\.(\d+))?(?:\.(\d+))?/.exec(version);
+  if (!match) throw new StorageUnavailableError(`unreadable memory PG server version: ${version}`);
+  return [Number(match[1]), Number(match[2] ?? 0), Number(match[3] ?? 0)];
+};
+
+const serverAtLeast = (version: string, floor: string): boolean => {
+  const [a, b, c] = parseServer(version);
+  const [x, y, z] = parseServer(floor);
+  return a !== x ? a > x : b !== y ? b > y : c >= z;
+};
+
+/** Object-level provider check: explicit host provider with a qualified identity, floor and live pool. */
+export const checkMemoryPostgresDriver = (driver: unknown): MemoryPostgresDriverProvider => {
+  if (typeof driver !== 'object' || driver === null) {
+    throw new MemoryHostDriverRequiredError(
+      'memory Postgres storage requires an explicit host-injected driver provider',
+    );
+  }
+  const pool = (driver as { readonly pool?: unknown }).pool;
+  if (
+    typeof pool !== 'object' ||
+    pool === null ||
+    typeof (pool as { readonly transaction?: unknown }).transaction !== 'function'
+  ) {
+    throw new MemoryHostDriverRequiredError('memory driver provider requires the live host pool');
+  }
+  const candidate = (driver as { readonly identity?: unknown }).identity;
+  const floor = (driver as { readonly serverFloor?: unknown }).serverFloor;
+  if (
+    typeof candidate !== 'object' ||
+    candidate === null ||
+    typeof (candidate as Record<string, unknown>)['name'] !== 'string' ||
+    ((candidate as Record<string, unknown>)['name'] as string).length === 0 ||
+    typeof (candidate as Record<string, unknown>)['version'] !== 'string' ||
+    ((candidate as Record<string, unknown>)['version'] as string).length === 0 ||
+    typeof (candidate as Record<string, unknown>)['artifactDigest'] !== 'string' ||
+    !HEX64.test((candidate as Record<string, unknown>)['artifactDigest'] as string)
+  ) {
+    throw new MemoryHostDriverRequiredError('memory driver provider requires a named versioned artifact identity');
+  }
+  if (typeof floor !== 'string' || !serverAtLeast(floor, MEMORY_PG_SERVER_FLOOR)) {
+    throw new StorageUnavailableError('memory PG server is below the qualified floor');
+  }
+  return driver as MemoryPostgresDriverProvider;
+};
+
+/**
+ * Live provider verification: run `SHOW server_version` through the
+ * provider's own pool and require it to meet the declared floor. This
+ * proves the pool is the installed one, not a metadata-only record.
+ */
+export const verifyMemoryPostgresProvider = async (
+  driver: unknown,
+): Promise<MemoryPostgresDriverProvider> => {
+  const provider = checkMemoryPostgresDriver(driver);
+  const version = await provider.pool.transaction(
+    { isolation: 'serializable', readOnly: true, deadlineMs: 5000 },
+    (session) =>
+      session.execute({ text: 'SHOW server_version', values: [] }).then((result) => {
+        const row = result.rows[0] as Record<string, unknown> | undefined;
+        return decodePgText(row?.['server_version']);
+      }),
+  );
+  if (!serverAtLeast(version, provider.serverFloor)) {
+    throw new StorageUnavailableError('memory PG server is below the provider floor');
+  }
+  return provider;
+};
+
+/**
+ * Postgres storage composition, opened from the checked host provider
+ * (r2 P1-B). The factory checks the provider (identity, floor, live pool),
+ * fills the E6 stateful pieces (module assets, descriptor, effects
+ * validation, projection, queries, limits) from the memory registration and
+ * opens the kernel on the provider's own pool: installed calls run through
+ * the exact pool the provider describes, never a separately wired driver.
+ * The host applies migrations (E2 owns the migration writer); without the
+ * provider no backend is reachable and the factory refuses with
+ * `unavailable`. Engram never calls this factory: it receives the neutral
+ * grant only.
+ * Runtime pin (r2 P1-B'/r5): the caller owns exactly layout, history and
+ * cursorSecret. Factory-owned keys are dropped (the E6 registration always
+ * wins); any other key — notably an injected `operations` object, which the
+ * kernel would install as custom operations bypassing validateEffects — is
+ * refused with a denial, never ignored and never forwarded.
  */
 export const createMemoryPostgresStorage = async (
   options: Omit<
     PostgresStorageOptions,
-    'moduleId' | 'assets' | 'descriptor' | 'projection' | 'validateEffects' | 'queries' | 'operations'
-  >,
-): Promise<never> => {
-  void options;
-  throw new StorageUnavailableError(
-    'memory Postgres composition requires the G1b stateful projection with backend reads',
-  );
+    | 'moduleId'
+    | 'driver'
+    | 'assets'
+    | 'descriptor'
+    | 'projection'
+    | 'validateEffects'
+    | 'queries'
+    | 'operations'
+    | 'limits'
+  > & {
+    readonly provider: MemoryPostgresDriverProvider;
+  },
+): Promise<Awaited<ReturnType<typeof createPostgresKernel>>> => {
+  const { provider, layout, history, cursorSecret, ...rest } = (options ?? {}) as Partial<PostgresStorageOptions> & {
+    readonly provider?: unknown;
+  };
+  // Allowlist (r2 P1-B'' / r5): the caller owns exactly layout, history
+  // and cursorSecret. Factory-owned keys (moduleId, driver, assets,
+  // descriptor, projection, validateEffects, queries, limits) are dropped —
+  // the E6 registration below always wins. Anything else — notably an
+  // injected `operations` object, which the kernel would install as custom
+  // operations bypassing validateEffects — is refused, never ignored.
+  const dropped = new Set([
+    'moduleId', 'driver', 'assets', 'descriptor',
+    'projection', 'validateEffects', 'queries', 'limits',
+  ]);
+  const smuggled = Object.keys(rest).filter((key) => !dropped.has(key));
+  if (smuggled.length > 0) {
+    throw new StorageDeniedError(
+      `memory Postgres composition refuses caller-owned kernel keys: ${smuggled.sort().join(', ')}`,
+    );
+  }
+  if (typeof provider !== 'object' || provider === null) {
+    throw new StorageUnavailableError(
+      'memory Postgres composition requires the checked host provider for the G1b stateful projection: no backend reachable',
+    );
+  }
+  if (typeof layout !== 'object' || layout === null || typeof history !== 'object' || history === null) {
+    throw new StorageUnavailableError('memory Postgres composition requires the host layout and history');
+  }
+  if (typeof cursorSecret !== 'string' || cursorSecret.length === 0) {
+    throw new StorageUnavailableError('memory Postgres composition requires the host cursor secret');
+  }
+  const checked = checkMemoryPostgresDriver(provider);
+  const registration = await createMemoryPostgresRegistration();
+  return createPostgresKernel({
+    ...registration,
+    moduleId: 'engram-memory',
+    driver: checked.pool,
+    layout,
+    history,
+    cursorSecret,
+  });
 };

@@ -76,6 +76,32 @@
         "cluster-mesh-pg/005-cleanup@1"
       ],
       "checksum": "82b4f485399fd195eaf5178144e23f6d6b26dd36010d78b05816b8e96079d75f"
+    },
+    {
+      "id": "cluster-mesh-pg/007-consumed-counters@1",
+      "file": "007-consumed-counters.sql",
+      "order": 7,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 6,
+      "toVersion": 7,
+      "requires": [
+        "cluster-mesh-pg/006-staged-coverage@1"
+      ],
+      "checksum": "545e6f9290cb7076717fc74c7f0d361d4f06241fbb23be702d6796b382b2c85f"
+    },
+    {
+      "id": "cluster-mesh-pg/008-instance-ownership@1",
+      "file": "008-instance-ownership.sql",
+      "order": 8,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 7,
+      "toVersion": 8,
+      "requires": [
+        "cluster-mesh-pg/007-consumed-counters@1"
+      ],
+      "checksum": "d6a45b8760eaf783da6561f9b40d3bfff80807e6381cd0df3ebfe36c830c6554"
     }
   ]
 }

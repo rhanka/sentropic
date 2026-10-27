@@ -7,6 +7,7 @@ import type { AtomicUnit } from '../atomic.js';
 import type { PgInstalledOperation, PgPurgeFinalizer } from './installed-contracts.js';
 import type { PgStagedModule } from './staged-module.js';
 import type { ScopeGrant } from '../authority.js';
+import type { CanonicalInstanceRegistry } from '../instance-ownership.js';
 
 export type SqlValue = string | number | boolean | bigint | Uint8Array | null | readonly SqlValue[];
 export interface SqlStatement {
@@ -110,6 +111,19 @@ export interface PostgresStorageOptions extends Omit<KernelOptions, 'backend' | 
    * admission with a deferred COMMIT guard (G-P0a/G-P0b) is still required
    * for qualification. */
   readonly onCommitPossession?: () => void | Promise<void>;
+  /** Opt-in canonical single-holder ownership (intended for the memory
+   * kernel; any caller may set it, so composition owns the allow-list).
+   * When absent, open performs no acquisition and installs no guard, so
+   * Comments and M2 usage keeps its behavior and errors. leaseMs is the
+   * retained session TTL (default 5 minutes); the holder renews it on
+   * every read-write transaction only — a read-only or idle holder past
+   * TTL may be taken over and then reads as stale-epoch/terminal-loss.
+   * registry is the shared in-process live-holder registry (default fresh
+   * per open, so the durable lease row arbitrates across processes). */
+  readonly canonicalOwnership?: {
+    readonly leaseMs?: number;
+    readonly registry?: CanonicalInstanceRegistry;
+  };
   readonly stagedModules?: Readonly<Record<string, PgStagedModule>>;
   readonly pgPredicates?: Readonly<
     Record<
