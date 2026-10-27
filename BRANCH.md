@@ -1,69 +1,66 @@
-# Feature: W1.c compose the shared PostgreSQL activation store
+# Feature: Refresh W0-close.d published workspace tuple
 
 ## Objective
-- [ ] Compose the upstream activation adapter with the trusted app pool, opaque scope, at-most-60-second ticket/flow policy and W1.a migration receipt.
+- [ ] Freeze artifacts 0.2.3 / cluster-mesh 0.22.4 and qualify APP-P1 at the reconciled workspace head.
 
 ## Scope / Guardrails
-- [x] Owner dispatch: W1.c of `.tmp/app-switch-week/plan-v2.md`; draft delivery, green CI, no merge or live activation.
-- [x] Worktree `tmp/worktrees/app-w1c`, branch `feat/app-cm-w1c`; merge W1.d `8729aff22` and W2.b `d0ce8aeb0` as assigned; no rebase.
-- [x] Owner supersedes the old pin: consume published `@sentropic/artifacts` 0.2.3; UP-T owns implementation, SQL and conformance vectors.
-- [x] No host PostgreSQL activation algorithm, duplicate SQL, app authority proof, route mounting or live activation; W3.a retains current-authority proof.
-- [x] Make-only development; lock every build/test/start with `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock`, release between steps and run matching down.
-- [x] Dedicated `ENV=test-app-w1c` last in every make command; API/UI/Maildev UI ports 8793/5179/1086; check ownership before starting services.
-- [x] Tests first; atomic commits below 150 lines via `make commit MSG="..."`; selective staging and scope-check before each commit; no attribution trailers.
+- [x] Author codex gpt-6.1-sol high; owner deliverable 2; plan-v2 W0-close.d refresh.
+- [x] Base feat/app-cm-w2b d0ce8aeb0; merge ancestry only; worktree tmp/worktrees/app-w0d-refresh.
+- [x] Draft targets feat/app-cm-integration; no merge or production activation.
+- [x] Tests first; make-only; Docker flock; ENV=test-app-w0d last; no Python.
+- [x] Existing Compose qualification service has no listeners; reserved API/UI/Maildev ports 9730/5930/1830 if needed.
+- [x] Selective staging; scope-check before make commit; authored commits under 150 lines; no trailers.
+- [x] Stop if cluster-mesh needs an upstream release to consume artifacts 0.2.3.
+- [x] Preserve historical receipts; dedicated environment teardown after each runtime step.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `api/src/services/artifacts/activation-storage.ts`
-  - `api/tests/api/artifacts-host-activation-store.test.ts`
-  - `api/package.json`
-  - `api/package-lock.json`
+  - `docs/baselines/app-cm-w0/**`
+  - `api/src/services/mcp/cluster-registry.ts`
+  - `api/tests/api/app-mcp-registry.test.ts`
+  - `api/tests/api/app-mcp-installed.test.ts`
   - `package-lock.json`
-  - `api/src/services/artifacts/host-storage.ts`
-  - `api/tests/api/artifacts-host-migrations.test.ts`
-- **Forbidden Paths (must not change in this branch)**:
+  - `api/package-lock.json`
+  - `.h2a/owner-questions-w0.md`
+  - `docs/runbooks/app-cm-baseline-restore/receipts/TEMPLATE.md`
   - `Makefile`
+  - `packages/artifacts/**`
+  - `api/src/scripts/oauth-provision-exchange-client.ts`
+  - `api/tests/api/auth/oauth-token-exchange.test.ts`
+  - `deploy/**`
+  - `spec/evidence/memory-mcp-l5/**`
+  - `tools/memory-mcp-l5/**`
+- **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `packages/**`
-  - `api/src/db/run-migrations.ts`
-  - `api/drizzle/**`
-  - `package.json`
-  - `plan/**`
   - `.track/**`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `plan/**`
+- **Conditional Paths (allowed only with explicit exception)**:
   - `.github/workflows/**`
-- [x] Exception process: record BR-W1C-EXn, rationale, impact and rollback before any scope expansion.
+- [x] BR00D-EXn records reason, impact and rollback before expansion.
 
 ## Feedback Loop
-- [x] BR-W1C-EX1 — owner-authorized dependency bump and required registration: pin 0.2.3 in API/root locks, append upstream activation asset and required relations to W1.a's executor configuration, update migration regression counts. No executor algorithm or SQL changes; rollback is reverting W1.c registration and dependency delta before activation.
-- [x] Base-only merges imported W1.d/W2.b unchanged; scope-check reported inherited paths outside W1.c. Authored commits are checked separately after both merges.
-- [ ] UP-T-2 — registry 0.2.3 archive has the PG adapter/SQL/hash, but no activation conformance export or vector files among 122 entries. Host tests can run; imported activation vectors require an upstream publication. Do not claim that gate passed.
-- [ ] PIN-1 — `/tmp/w1c-runtime.log`: the 0.2.3 API pin changes the APP-P1 manifest while the mesh builtin resolves workspace artifacts 0.2.1. Startup refuses the stale receipt. Requested owner choice: merge published UP-T source and qualify the new APP-P1 receipt, or retain a blocked draft; no package-source authoring or runtime bypass.
-- [x] Local core: 17/17 activation cases and 16/16 migration regressions pass in `/tmp/w1c-receipt-red.log`; API typecheck passes; lint reports 0 errors/219 warnings in `/tmp/w1c-quality.log`. Registry qualification fails 19/21 cases on PIN-1; runtime refuses the stale APP-P1 receipt. No live activation.
-- [x] UP-T-1 — adapter/flow/SQL/hash availability resolved by published 0.2.3 and the owner-requested API pin; imported activation vectors remain UP-T-2.
-- [x] Evidence: registry exact-version metadata and all 117 tarball entries inspected on 26 October 2026; archive retained at root `.tmp/app-switch-week/artifacts-0.2.1-w1c.tgz`, SHA-256 `fb2887d206bcaf7d5e4d85ad14173ffd3cce700e239dabf540150383c7bfe28f`. Package `testing.d.ts` exports publication barriers and purge helpers, with no activation vectors; `content/grants.d.ts` supplies TicketStore and an in-memory double, with no durable browser-flow port.
-- [x] UP-T-1 closure: package adapter uses `createPostgresActivationStore`, SQL asset `@sentropic/artifacts/sql/0001_activation.sql`, SHA-256 `13767c826a62aa5f880809ca2ebc60bdc638b2e59f983e195d4351356b282d8b`; host only composes those contracts.
-- [ ] After UP-T-1 closure, freeze actual upstream export names and consume them unchanged; demonstrate exported adapter availability and run imported vectors on the host executor before claiming W1.c ready.
-- [x] PR routing: owner requests feat/app-cm-integration; inherited W1.a records main as its CI-trigger-only PR base. Verify the available CI trigger when delivery becomes executable; no merge authorized to either base.
+- [x] BR00D-EX2: merge main 72bb2da3d to consume already-published UP-T; listed inherited paths are merge-only, no author edits. Impact is existing upstream ancestry; rollback reverts the merge.
+- [x] BR00D-EX1: merge #702 evidence and its owner question/restore template; retained evidence only; rollback reverts merge. No author edits outside scope.
+- [ ] Independent reviews and remote CI remain separate from code authorship.
 
 ## AI Flaky tests
-- [x] No AI tests or accepted flakes in this lot; no timeout increases.
+- [x] No AI calls, accepted flakes or timeout increases.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch: one author for W1.c; package ownership remains upstream.
+- [x] Mono-branch; one author; external independent review.
 
 ## UAT Management (in orchestration context)
-- [x] Backend storage composition only; no web, Chrome or VSCode surface change. No root-dev UAT or live activation.
+- [x] Package/registry qualification only; browser and production acceptance remain downstream.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 0 — Read Docker lock first, full owner plan, MASTER/workflow/testing, template and W1.a; create worktree on the assigned base; `harness check branch` passes.
-- [x] Lot 1 — Host tests first in `api/tests/api/artifacts-host-activation-store.test.ts`: namespace/TTL/receipt, authority delegation, expiry, restore and uncertain commit. Scoped red on missing `activation-storage` import, `/tmp/w1c-red-2.log`, before implementation. Imported vectors remain UP-T-2.
-- [x] Lot 2 — `activation-storage.ts` composes the published package, explicit trusted namespace and integer ticket/flow TTLs in 1..60 seconds (flow <= ticket). `issue` derives both deadlines from PostgreSQL issuance time; raw package ports preserve maintenance and authority/commit-error semantics. W1.a registers the unchanged SQL and checks required activation relations.
-- [x] Lot 3 — Execute activation/migration suites (33/33 pass), API typecheck/lint; inspect runtime logs and down after each step. Additional `app-mcp-registry.test.ts` and `app-mcp-installed.test.ts` expose PIN-1. No UI/E2E/AI tests apply to this unmounted composition.
-- [x] W3.a handoff: await `createArtifactHostActivationStorage({ pool, namespace, ticketTtlSeconds, flowTtlSeconds })` after the sole migration executor; namespace comes from the verified opaque workspace mapping. Use `issue(binding)` for database-time deadlines; `consume(input, authorize)` must lock/recheck current session, ACL, release/channel/origin and stable-pointer policy on the supplied client through COMMIT. Sign/set cookies only after acknowledged success; `ActivationCommitUnknownError` requires a fresh flow. Supply package `cleanup`/`invalidate` to W1.d; fence serving and retire signing authority before reopening after restore. PIN-1 and imported vectors remain required before activation qualification.
-- [ ] Lot 4 — Review the exact implementation diff, reconcile findings, scope-check each selective commit, push, create draft PR with this file as body and verify green exact-head CI. Report PR number, head SHA and CI URL; do not merge.
+- [x] Lot 0: read Docker lock, rules, plan-v2, template and receiving contracts; harness branch check passed.
+- [x] Lot 1: merge #702; published strict consumer first; cluster-mesh resolves artifacts 0.2.3 with Comments/gateway.
+- [ ] Lot 2: normalized published payload hashes, clean source equivalence, complete workspace resolution; merge published UP-T ancestry without package author edits.
+- [ ] Lot 3: recompute APP-P1 with mcp:tools:invoke; observe old-pin refusal, then update registry and api/tests/api/{app-mcp-registry,app-mcp-installed}.test.ts.
+- [ ] Lot 4: refresh reservations.md, host-fit.md, catalog-context.md and published-tuple.json; dated evidence and exact base/lock hashes.
+- [ ] Lot 5: installed/profile tests, scope/branch gates, locked make down, empty stack, draft PR and head.
 
 ## Inherited main qualification record
 
