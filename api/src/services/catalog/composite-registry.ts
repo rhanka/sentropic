@@ -23,6 +23,7 @@
 
 import type { CatalogSource } from './source.js';
 import type { CatalogEntry } from './types.js';
+import { isTrustedCatalogContext, type CatalogRequestContext } from './request-context.js';
 
 // ---------------------------------------------------------------------------
 // Tokenizer — same logic as InMemorySkillRegistry for consistency
@@ -92,8 +93,30 @@ export class CompositeCatalogRegistry {
   /**
    * Return registered sources (in registration order).
    */
-  getSources(): ReadonlyArray<CatalogSource> {
-    return this.sources;
+  getSources(context?: CatalogRequestContext): ReadonlyArray<CatalogSource> {
+    return this.sources.filter(source => context === undefined
+      ? !source.requiresContext : this.entries(source, context).length > 0);
+  }
+
+  private entries(source: CatalogSource, context?: CatalogRequestContext): readonly CatalogEntry[] {
+    if ((context !== undefined || source.requiresContext) && !isTrustedCatalogContext(context)) return [];
+    return source.snapshot(context).flatMap(entry => {
+      if (!context) return [entry];
+      const { contextFilter, authzRequirements } = entry.metadata;
+      if (contextFilter?.workspaceTypes?.length &&
+        (!context.workspaceType || !contextFilter.workspaceTypes.includes(context.workspaceType))) return [];
+      if (contextFilter?.roles?.length && !contextFilter.roles.some(role => context.roles?.includes(role))) return [];
+      if (authzRequirements?.permissions?.length) return []; // No permission grant is inferred from a role.
+      const permitted = (name: string, sideEffect?: boolean) => context.allowedTools.includes(name)
+        && (!context.readOnly || sideEffect === false);
+      if (entry.kind === 'tool') return permitted(entry.metadata.name, entry.tool.sideEffect) ? [entry] : [];
+      if (entry.kind === 'skill') {
+        const tools = entry.skill.tools.filter(tool => permitted(tool.name, tool.sideEffect ?? false));
+        return tools.length ? [{ ...entry, skill: { ...entry.skill, tools,
+          metadata: { ...entry.skill.metadata, toolNames: tools.map(tool => tool.name) } } }] : [];
+      }
+      return [entry];
+    });
   }
 
   /**
@@ -103,11 +126,11 @@ export class CompositeCatalogRegistry {
    *
    * This method is synchronous and consumes each source's `snapshot()`.
    */
-  list(): ReadonlyArray<CatalogEntry> {
+  list(context?: CatalogRequestContext): ReadonlyArray<CatalogEntry> {
     const seen = new Set<string>();
     const result: CatalogEntry[] = [];
     for (const source of this.sources) {
-      for (const entry of source.snapshot()) {
+      for (const entry of this.entries(source, context)) {
         const name = entry.metadata.name;
         if (seen.has(name)) continue; // collision: first source wins
         seen.add(name);
@@ -124,9 +147,9 @@ export class CompositeCatalogRegistry {
    *
    * This method is synchronous and consumes each source's `snapshot()`.
    */
-  get(name: string): CatalogEntry | null {
+  get(name: string, context?: CatalogRequestContext): CatalogEntry | null {
     for (const source of this.sources) {
-      for (const entry of source.snapshot()) {
+      for (const entry of this.entries(source, context)) {
         if (entry.metadata.name === name) {
           return entry;
         }
@@ -145,7 +168,7 @@ export class CompositeCatalogRegistry {
    *
    * This method is synchronous and consumes each source's `snapshot()`.
    */
-  search(query: string, options?: CatalogSearchOptions): ReadonlyArray<CatalogSearchHit> {
+  search(query: string, options?: CatalogSearchOptions, context?: CatalogRequestContext): ReadonlyArray<CatalogSearchHit> {
     const queryTokens = tokenize(query);
     if (queryTokens.length === 0) return [];
 
@@ -158,7 +181,7 @@ export class CompositeCatalogRegistry {
     const hits: CatalogSearchHit[] = [];
 
     for (const source of this.sources) {
-      for (const entry of source.snapshot()) {
+      for (const entry of this.entries(source, context)) {
         const name = entry.metadata.name;
         if (seen.has(name)) continue;
         seen.add(name);
