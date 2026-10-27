@@ -43,12 +43,15 @@ export const assertMaintainGrantLive = (grant: unknown, nowIso: string = new Dat
 };
 
 /**
- * Host-issued maintain grant: exactly `['maintain']`, never combined with
- * read/write. A combined grant is refused at runtime and rejected at
- * compile time (not assignable to this type).
+ * Host-only maintenance runner grant: exactly `['read', 'maintain']` (r2
+ * P1-C). The kernel needs read-coupled authority for consumer delivery
+ * (poison/retry) and snapshot reads, so a maintain-only runner cannot
+ * carry the live ports. This grant is never handed to Engram and never
+ * carries `write`: a combined read/write/maintain grant is refused at
+ * runtime and rejected at compile time (not assignable to this type).
  */
 export type MemoryMaintainGrant = ScopeGrant<unknown> & {
-  readonly operations: readonly ['maintain'];
+  readonly operations: readonly ['read', 'maintain'];
 };
 
 /**
@@ -86,14 +89,18 @@ export interface MemoryAuthorityCheck {
 }
 
 const isExactMaintain = (grant: ScopeGrant<unknown>): grant is MemoryMaintainGrant =>
-  Array.isArray(grant.operations) && grant.operations.length === 1 && grant.operations[0] === 'maintain';
+  Array.isArray(grant.operations) &&
+  grant.operations.length === 2 &&
+  grant.operations[0] === 'read' &&
+  grant.operations[1] === 'maintain';
 
 /**
  * Assemble the host binding: checked PG provider, a host-issued grant with
- * exactly the maintain operation (a combined read/write/maintain grant is
- * refused — it would leak maintain authority into the write path), and the
- * derived neutral grant (exactly read/write) for the same scope. The two
- * grants are separate objects; Engram receives only the neutral one.
+ * exactly the `['read', 'maintain']` runner operations (a combined
+ * read/write/maintain grant is refused — it would leak maintain authority
+ * into the write path), and the derived neutral grant (exactly read/write)
+ * for the same scope. The two grants are separate objects; Engram receives
+ * only the neutral one.
  */
 export const assembleMemoryHostBinding = (input: MemoryHostBindingInput): MemoryHostBinding => {
   const provider = checkMemoryPostgresDriver(input?.driver);
