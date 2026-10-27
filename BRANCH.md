@@ -31,7 +31,8 @@
 ## Feedback Loop
 - [x] IDP-EX1 / acknowledge: owner explicitly authorizes `.github/workflows/idp-workload-secret.yml`. Rationale: the cluster is reachable only through protected CI. Impact: a main-only manual job can create/update only the intended workload Secret in this workflow; it uses the existing delegated preprod identity. Rollback: remove the workflow; restore prior credential through the same governed channel and named-Secret sync if material was changed.
 - [x] No-Docker gate: `test-idp-sync-selftest` starts containers; defer runtime selftests to existing CI `validate-idp-sync`.
-- [ ] Confirm the requested apiserver assertion: existing `configure preprod` has no host assertion; only prod currently checks its expected host.
+- [x] Conductor clarification: reuse `configure preprod` unchanged; no preprod apiserver-host assertion in this lot.
+- [x] The workload credential already exists in GitHub environment `sentropic-idp-run`; consume its environment secret, not a repository secret.
 
 ## AI Flaky tests
 - [x] No AI-dependent tests; do not accept failed deterministic checks as flaky.
@@ -49,15 +50,15 @@
   - [x] Read rules, template, existing workflow, runner, selftests and credential cycle.
   - [x] Create isolated worktree and pass mechanical `harness check branch`.
   - [x] Confirm `sentropic-idp-run` permits only `main` and inspect existing make targets.
-- [ ] **Lot 1 — Protected materialization**
-  - [ ] Add `.github/workflows/idp-workload-secret.yml`: dispatch only, single main-only job, Node 24, matching kubectl pin, existing configure and always-cleanup actions.
-  - [ ] Validate exactly 64 lowercase hex without newline; apply a 0600 temporary Opaque manifest without leaking values or kubectl diagnostics.
-  - [ ] Emit only name, namespace, created/configured and an eight-hex SHA-256 fingerprint.
-  - [ ] Lot gate: mechanical host harness scope check through make; no containers.
+- [x] **Lot 1 — Protected materialization**
+  - [x] Add `.github/workflows/idp-workload-secret.yml`: dispatch only, single main-only job, Node 24, matching kubectl pin, existing configure and always-cleanup actions.
+  - [x] Validate exactly 64 lowercase hex without newline; apply a 0600 temporary Opaque manifest without leaking values or kubectl diagnostics.
+  - [x] Emit only name, namespace, created/configured and an eight-hex SHA-256 fingerprint.
+  - [x] Lot gate: mechanical host harness scope check through `make scope-check ENV=test-861-int`; this existing host-only target avoids Docker.
 - [ ] **Lot 2 — Selftests and documentation**
   - [ ] Extend `deploy/ci/idp-identity-sync/workflow.selftest.mjs` for dispatch-only wiring, protected environment, no secret echo and always cleanup.
   - [ ] Exercise real Node materialization with synthetic fixtures and stubbed kubectl in CI; reject malformed credentials without invoking kubectl.
-  - [ ] Update `deploy/ci/idp-identity-sync/CRED_CYCLE.md`: `.env` → repository secret → protected workflow → named-Secret sync.
+  - [ ] Update `deploy/ci/idp-identity-sync/CRED_CYCLE.md`: `.env` → `sentropic-idp-run` environment secret → protected workflow → named-Secret sync.
   - [ ] Lot gate: run existing `make test-idp-sync-selftest ENV=test-idp-sync` only in CI because it starts containers.
 - [ ] **Lot N — Final validation**
   - [ ] Review every hunk and reconcile independent review where available.
