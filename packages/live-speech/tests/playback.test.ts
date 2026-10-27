@@ -54,6 +54,20 @@ async function withEnv<T>(vars: Record<string, string>, run: () => Promise<T>): 
 const STUB = Buffer.from([82, 73, 70, 70, 36, 0, 0, 0, 87, 65, 86, 69]);
 const STUB_HEX = STUB.toString('hex');
 
+/** Wait until the fixture child has booted (pidfile written), then proceed. */
+async function waitForBoot(pidFile: string, timeoutMs = 10000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      readFileSync(pidFile, 'utf8');
+      return;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  throw new Error(`fixture child never booted: ${pidFile}`);
+}
+
 describe('playback', () => {
   it('should build an exact stdin aplay argv with no shell metacharacters', () => {
     expect(buildAplayArgs({})).toEqual([]);
@@ -112,6 +126,9 @@ describe('playback', () => {
             await new Promise((resolve) => setTimeout(resolve, 10));
           }
           expect(playback.playing).toBe(true);
+          // Wait for boot: cancelling a child that has not exec'd yet would
+          // reap it before it writes the pidfile, making the proof vacuous.
+          await waitForBoot(pidFile);
           const start = Date.now();
           playback.cancel();
           await expect(pending).rejects.toThrow(PlaybackCancelledError);
@@ -141,6 +158,7 @@ describe('playback', () => {
             await new Promise((resolve) => setTimeout(resolve, 10));
           }
           expect(playback.playing).toBe(true);
+          await waitForBoot(pidFile);
           const start = Date.now();
           playback.cancel();
           await expect(pending).rejects.toThrow(PlaybackCancelledError);
@@ -182,11 +200,13 @@ describe('playback', () => {
             await new Promise((resolve) => setTimeout(resolve, 10));
           }
           expect(playback.playing).toBe(true);
+          await waitForBoot(pidFile);
           const pid = Number(readFileSync(pidFile, 'utf8').trim());
           expect(Number.isInteger(pid) && pid > 0).toBe(true);
           playback.cancel();
           await expect(second).rejects.toThrow(PlaybackCancelledError);
         });
+      });
       });
     } finally {
       rmSync(pidFile, { force: true });
