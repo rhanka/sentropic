@@ -61,7 +61,7 @@
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, `rules/security.md`, the Docker lock and approved spec r4 sections 3/4/9.
   - [x] Verify the S1 dependency head, `harness check branch`, scope boundaries and SECDAILY-EX1 before editing.
   - [x] Inventory existing Make scan/parser entrypoints; reuse S1 schema/inventory helpers without changing their safety contract.
-  - [ ] Capture source/register byte identities and the source SHA for unchanged-main assertions.
+  - [x] Capture source/register byte identities and the source SHA for unchanged-main assertions.
 - [ ] **Lot 1 — Raw scan orchestration, `scan.mjs` and `scan.test.mjs`**
   - [x] Enumerate three images explicitly, root/workspace and independent UI/kit lockfiles including dev dependencies, and discovered source/hash consumers.
   - [x] Capture raw output before compliance; run audit/scan commands without repair or publication and preserve accepted exceptions in the public queue.
@@ -70,12 +70,12 @@
   - [x] In `scan.test.mjs`, assert source/register bytes remain unchanged, registered findings remain queued, explicit toolbox/locks coverage and independent locks include dev dependencies.
   - [x] In `scan.test.mjs`, reject empty/malformed/partial/error reports and verify missing surfaces or SAST qualification prevent complete-clean receipts.
   - [x] In `scan.test.mjs`, assert identical scan flags and bounded credential-free command invocation through injected fixture runners.
-  - [ ] Register the suite in the existing required `scripts/ci/publishable-ci-wiring.test.mjs` entrypoint without editing workflow filters or permissions.
+  - [x] Register the suite in the existing required `scripts/ci/publishable-ci-wiring.test.mjs` entrypoint without editing workflow filters or permissions.
   - [ ] Lot gate: scoped scan regression tests through the existing `make test-publishable-manifests SCOPE=scripts/security/daily/scan.test.mjs ENV=test-sec-s2a`, locked, followed by scoped teardown.
 - [ ] **Lot 2 — Make adapter and parser compatibility**
-  - [ ] Add only the thin `security-daily-scan` and `test-security-daily` targets under SECDAILY-EX1; use existing removable container tooling.
-  - [ ] Keep scanner/DB/provenance qualification explicitly pending S2b and native SAST pending S2c; do not reuse Python SAST in the daily lane.
-  - [ ] In `scan.test.mjs`, assert Make recipe wiring, fail-closed exit behavior and explicit coverage; do not start live scan stacks as fixture assertions.
+  - [x] Add only the thin `security-daily-scan` and `test-security-daily` targets under SECDAILY-EX1; use existing removable container tooling.
+  - [x] Keep scanner/DB/provenance qualification explicitly pending S2b and native SAST pending S2c; do not reuse Python SAST in the daily lane.
+  - [x] In `scan.test.mjs`, assert Make recipe wiring, fail-closed exit behavior and explicit coverage; do not start live scan stacks as fixture assertions.
   - [ ] Run locked `make test-security-daily ENV=test-sec-s2a` and existing `make test-security-parser ENV=test-sec-s2a`, with locked teardown after each.
   - [ ] API/UI/E2E tests: not applicable to this adapter-only change; no app service stack required.
 - [ ] **Lot N-1 — Docs consolidation**

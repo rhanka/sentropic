@@ -134,3 +134,46 @@ test('should run bounded credential-free audits on isolated metadata, including 
   assert.throws(() => readFileSync(join(scratch, 'package-lock.json')));
   assert.throws(() => run(plan.tasks.find((item) => item.kind === 'image')), /S2b/);
 });
+
+test('should bind input bytes and detect source or register mutation without treating it as a fix', async (t) => {
+  const root = fixture(t);
+  mkdirSync(join(root, '.security'), { recursive: true });
+  const register = join(root, '.security/vulnerability-register.yaml');
+  writeFileSync(register, 'unchanged-register');
+  const report = await scanRepository(options(root));
+  assert.match(report.inputHashes['package-lock.json'], /^sha256:[a-f0-9]{64}$/);
+  assert.match(report.inputHashes['.security/vulnerability-register.yaml'], /^sha256:[a-f0-9]{64}$/);
+  assert.equal(readFileSync(register, 'utf8'), 'unchanged-register');
+  const changed = await scanRepository(options(root, { run: (task) => {
+    if (task.target === 'package-lock.json') writeFileSync(register, 'unexpected mutation');
+    return runner(task);
+  } }));
+  assert.equal(changed.status, 'incomplete-scan');
+  assert.ok(changed.coverageBlocked.includes('source bytes changed: .security/vulnerability-register.yaml'));
+});
+
+test('should reject inconsistent audit exit codes and reports exceeding the byte bound', async (t) => {
+  const root = fixture(t);
+  for (const [status, stdout] of [[1, JSON.stringify(clean())],
+    [0, JSON.stringify(clean()) + ' '.repeat(16 * 1024 * 1024)]]) {
+    const report = await scanRepository(options(root, { run: () => ({ status, stdout,
+      scannerIdentity: 'npm:fixture', databaseIdentity: 'fixture-db' }) }));
+    assert.equal(report.surfaces.find((surface) => surface.target === 'package-lock.json').state, 'error');
+  }
+});
+
+test('should wire removable pinned Make targets without existing gate, socket or SAST fallback', () => {
+  const makefile = readFileSync('Makefile', 'utf8');
+  const scan = makefile.match(/^security-daily-scan:[^\n]*\n((?:\t[^\n]*\n?)+)/m)?.[1];
+  const tests = makefile.match(/^test-security-daily:[^\n]*\n((?:\t[^\n]*\n?)+)/m)?.[1];
+  assert.ok(scan);
+  assert.match(scan, /docker run --rm --read-only/);
+  assert.match(scan, /\$\(MEMORY_L5_NODE_IMAGE\)/);
+  assert.match(scan, /:\/workspace:ro/);
+  assert.match(scan, /SECURITY_DAILY_SOURCE_SHA/);
+  assert.match(scan, /node scripts\/security\/daily\/scan.mjs/);
+  assert.doesNotMatch(scan, /docker.sock|semgrep|aquasec|audit-fix|compliance|--env-file|TOKEN/);
+  assert.match(tests, /test-publishable-manifests/);
+  assert.match(tests, /scan.test.mjs/);
+  assert.match(tests, /ENV=\$\(ENV\)\s*$/);
+});
