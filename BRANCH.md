@@ -53,7 +53,7 @@
   - [x] Inspect existing CostContext, pool/budget admission and durable host ledger; no new accounting store.
   - [x] Reserve ENV=test-stt-l8; package fixtures need no listening ports (reserved API/UI/mail: 9040/5240/1140).
 - [ ] **Lot 1 — Typed usage and pricing**
-  - [ ] src/speech/usage.ts: duration/token/character dimensions, revision normalization and pinned USD pricing.
+  - [x] src/speech/usage.ts: duration/token/character dimensions, revision normalization and pinned USD pricing.
   - [ ] tests/speech-metering.test.ts: cumulative/incremental updates, duplicate/conflicting revisions, absent dimensions and invalid prices.
 - [ ] **Lot 2 — Admission binding**
   - [ ] src/speech/admission.ts: trusted campaign identity, UTC daily and campaign caps, authoritative allocator links, bounded holds and fail-closed host port.
