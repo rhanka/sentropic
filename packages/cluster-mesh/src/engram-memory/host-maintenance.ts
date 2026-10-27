@@ -7,7 +7,8 @@
 // maintain authority cannot produce live ports.
 
 import { StorageDeniedError, StorageUnavailableError } from '../storage/errors.js';
-import type { MemoryHostBinding } from './binding.js';
+import { assertMaintainGrantLive, type MemoryHostBinding } from './binding.js';
+import { checkMemoryPostgresDriver } from './postgres.js';
 
 export interface MemoryMaintenancePorts {
   readonly checkFence: (fenceId: string, epoch: string) => Promise<never>;
@@ -21,14 +22,17 @@ const closed = (port: string): (() => Promise<never>) => async () => {
   throw new StorageUnavailableError(`memory maintenance ${port} requires the G1b stateful projection`);
 };
 
-/** Open the host-only maintenance ports from an assembled host binding. */
+/**
+ * Open the host-only maintenance ports from an assembled binding. The
+ * binding is re-validated (checked provider plus live maintain grant), so
+ * an ad-hoc object shaped like a binding cannot open ports.
+ */
 export const openMemoryMaintenance = (binding: MemoryHostBinding): MemoryMaintenancePorts => {
   if (typeof binding !== 'object' || binding === null) {
-    throw new StorageDeniedError('memory maintenance requires an assembled host binding');
+    throw new StorageDeniedError('memory maintenance requires an assembled binding');
   }
-  if (!binding.maintainGrant.operations.includes('maintain')) {
-    throw new StorageDeniedError('memory maintenance requires a grant carrying the maintain operation');
-  }
+  checkMemoryPostgresDriver((binding as { readonly provider?: unknown }).provider);
+  assertMaintainGrantLive(binding.maintainGrant);
   return Object.freeze({
     checkFence: closed('checkFence'),
     checkpoint: closed('checkpoint'),
