@@ -71,7 +71,7 @@
   - [x] tests/fixtures/speech-ledger.ts: deterministic owner transaction fixture; never exported or used as a production ledger.
 - [ ] **Lot 4 — Contract review and integration documentation**
   - [ ] Document ledger-owner binding, dispatch bounds, limitations and G-LEDGER acceptance in README.md.
-  - [ ] Export speech subpath and bump package to 0.22.0; keep all shared owner source files unchanged.
+  - [x] Export speech subpath and bump package to 0.22.0; keep all shared owner source files unchanged.
   - [ ] Reconcile independent correctness and accounting/security reviews; no self-certification of durable host acceptance.
 - [ ] **Lot 5 — Draft delivery and validation**
   - [ ] Push feat/live-stt-l8; open draft PR against feat/live-stt-l2 with this plan as body and post implementation plan.
