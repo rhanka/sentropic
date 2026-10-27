@@ -113,12 +113,12 @@ export const projectMemoryPgEffects: PgRegisteredProjection = async (effects, co
   }
   for (const update of effects.updates) await save('aggregate', update.key, String(update.version), decodeMemoryValue(update.value));
   for (const append of effects.appends) {
-    const head = await memoryPgMap<{ count: number }>(context, context.root, 'chain', append.chainId);
+    const head = await memoryPgMap<{ count: number | string }>(context, context.root, 'chain', append.chainId);
     if (!head) throw new StorageUnavailableError('memory journal head is unavailable');
     const event = decodeMemoryValue({ format: 'utf8', data: append.record.bytes });
     // The immutable map sequence is physical; the event cursor remains exact u64.
-    const index = head.count - effects.appends.filter((item) => item.chainId === append.chainId).length
-      + effects.appends.indexOf(append);
+    const index = (BigInt(head.count) - BigInt(effects.appends.filter((item) => item.chainId === append.chainId).length)
+      + BigInt(effects.appends.indexOf(append))).toString();
     await save('chain-record', chainRecordKey(append.chainId, index), String(event.cursor), event, append.record.id);
   }
 };
