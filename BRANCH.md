@@ -34,6 +34,7 @@
   - `api/tests/api/app-artifacts-transport.test.ts`
   - `api/tests/api/artifacts-host-credentials.test.ts`
   - `api/tests/api/artifacts-host-publication.test.ts`
+  - `api/tests/api/cluster-mesh-resources.test.ts`
   - `api/tests/api/app-mcp-registry.test.ts`
   - `api/tests/api/app-mcp-installed.test.ts`
   - `api/package.json`
@@ -55,6 +56,7 @@
 - [x] Exception process: BR02B-EXn records reason, impact and rollback before expansion.
 
 ## Feedback Loop
+- [x] BR02B-EX1: extend the existing resources inventory regression for the additive APP-P1 paths; impact is test expectations only; rollback with the artifact route mount.
 - [ ] W1.b P2: verify OAuth tuple, scopes, expiry and revocation with DB time after waits.
 - [x] W2.a P2 reconciliation: API artifacts uses file workspace; root lock removes private registry copy; TS/Vitest artifacts aliases removed.
 - [x] W2.a P2 installed proof: native Node/tsx uses ESM import resolution from API/mesh and matches physical artifacts paths; production-settings bundle also compiles; 2/2 in /tmp/app-w2b-installed-final.log.
@@ -89,10 +91,12 @@
 - [x] Lot 4 singleton: one durable PG host with dedicated private S3, explicit quota and default-closed activation.
 - [x] Lot 4 mount: verified credential tuples, shared MCP supervisor guard, resources author and /resources/artifacts/*; 28 namespaces retained.
 - [x] MCP transport is acquired through the cluster-mesh loader; Drive/Gmail ports and original URLs remain mounted.
-- [ ] Lot 5: focused tests, relevant regressions, API typecheck/lint/build.
-  - [ ] api/tests/api/{app-mcp-registry,artifacts-host-publication,artifacts-host-recovery,artifacts-host-migrations,mcp-resource-server,cluster-mesh-mcp-singleton,cluster-mesh-namespace-inventory}.test.ts.
-  - [ ] Resource/gateway/D1/auth suites selected from actual filenames.
-  - [ ] Strict install and physical package-resolution inventory without aliases.
+- [x] Lot 5: focused 51/51; API typecheck; lint 0 errors/219 warnings; API production bundle build; no AI calls/skips.
+  - [x] api/tests/api/{app-mcp-registry,artifacts-host-publication,artifacts-host-recovery,artifacts-host-migrations,mcp-resource-server,cluster-mesh-mcp-singleton,cluster-mesh-namespace-inventory}.test.ts.
+  - [x] 14-file regression run: 164/165 initially; only resource inventory expectation evolved, then that file passed 9/9. /tmp/app-w2b-regressions.log and /tmp/app-w2b-resources-green.log.
+  - [x] Exact remaining regression files: cluster-mesh-{resources,gw,gw-native,auth-roots,oauth-roots}.test.ts, session-adoption.test.ts and auth/{session,oauth-revoke-introspect}.test.ts.
+  - [x] Strict install and physical package-resolution inventory without aliases; npm ls --omit=dev --all succeeds, /tmp/app-w2b-runtime-tree.json.
+  - [x] Full development tree inventory retained in /tmp/app-w2b-workspace-tree.json; diagnostics concern @types/node, Vitest/UI and minimatch development requirements; no runtime dependency errors.
   - [ ] Runtime logs and locked make down ENV=test-app-w2b; no remaining services.
 - [ ] Lot 6: exact-head evidence and W3 handoff; scope check; push; draft PR using this body.
 
