@@ -72,13 +72,22 @@ Mesh `speech/openai-transcription.ts` with two independently configured OpenAI s
   - [ ] Metering: admission receipt required at open (operationId, ceiling, hold ref; refuse without); usage sink gets estimate/final `SpeechUsageUpdate` (connectedSeconds, admittedAudioSeconds) + settlement outcome completed/cancelled/failed; abort counts as cancelled.
   - [ ] TTS exclusion: no synthesis model field, no speech-to-speech path, no implicit OpenAI voice.
   - [ ] Lot gate: `make typecheck-llm-mesh` green on the lot head.
-- [ ] **Lot 2 — Fixtures + gate tests**
-  - [ ] `tests/fixtures/openai-transcription-frames.ts`: recorded delta/completed/invalid/out-of-order frame scripts per profile, no live call.
-  - [ ] `tests/speech-openai-transcription.test.ts`: per-model VAD/commit config, partial/final order + revisions, invalid format handling, abort/cancel, usage emission vs ceiling, independent profile config, TTS-absence, no-key-leakage, no-audio-persisted.
+- [x] **Lot 1 — Adapter `speech/openai-transcription.ts`**
+  - [x] Profile configs `gpt-live-transcribe` / `gpt-realtime-whisper`: model pin, delay, language, format pcm16/24k mono, placement cloud-relay; independent selection, no shared mutable state.
+  - [x] `SpeechCapabilities` per profile: streamingStt + partialTranscript + clientVad + manualCommit supported; serverVad + nativeDuplex + tts unsupported; languages/regions selectors; usageUnits session-seconds + audio-seconds.
+  - [x] `session.update` builder: `type transcription`, `turn_detection` null refused otherwise, unsupported VAD options rejected at open (fail-closed).
+  - [x] Transport port (injectable WS): append base64 pcm16, commit per client-VAD turn, abort closes, no audio persisted, no key in logs/errors.
+  - [x] Event mapping: delta keyed by item_id to `transcript.partial` (monotonic revision, replaces-append), completed to `transcript.final` (full text, audioInterval, language); out-of-order finals kept per utterance; invalid frames to `session.error` without payload, stream continues.
+  - [x] Metering: admission receipt required at open (operationId, ceiling, hold ref; refuse without), usage sink gets estimate/final `SpeechUsageUpdate` (connectedSeconds, admittedAudioSeconds) + settlement outcome completed/cancelled/failed; abort counts as cancelled.
+  - [x] TTS exclusion: no synthesis model field, no speech-to-speech path, no implicit OpenAI voice.
+  - [x] Lot gate: `make typecheck-llm-mesh` green on the lot head.
+- [x] **Lot 2 — Fixtures + gate tests**
+  - [x] `tests/fixtures/openai-transcription-frames.ts`: recorded delta/completed/invalid/out-of-order frame scripts per profile, no live call.
+  - [x] `tests/speech-openai-transcription.test.ts`: per-model VAD/commit config, partial/final order + revisions, invalid format handling, abort/cancel, usage emission vs ceiling, independent profile config, TTS-absence, no-key-leakage, no-audio-persisted.
   - [ ] Lot gate: `make test-llm-mesh` green (SCOPE=file then full) on the lot head.
-- [ ] **Lot 3 — Receipt + version**
-  - [ ] `bench/l9-openai-stt.receipt.json`: status blocked, exact missing G-CLOUD/§10 items, price revision unpinned, no live evidence claimed.
-  - [ ] Bump `packages/llm-mesh/package.json` minor (feature) strictly above npm published version (check `npm view` first).
+- [x] **Lot 3 — Receipt + version**
+  - [x] `bench/l9-openai-stt.receipt.json`: status blocked, exact missing G-CLOUD/§10 items, price revision unpinned, no live evidence claimed.
+  - [x] Bump `packages/llm-mesh/package.json` to 0.30.0 (minor, strictly above published 0.29.0).
   - [ ] Lot gate: receipt present and blocked, version bumped, `make build-llm-mesh` green.
 - [ ] **Lot N — Final validation**
   - [ ] `make scope-check` (harness) green.

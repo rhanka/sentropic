@@ -1,0 +1,35 @@
+{
+  "createdAt": "2026-10-28T00:00:00Z",
+  "kind": "l9-g-cloud-receipt",
+  "lot": "L9",
+  "spec": "r3 §7 (L9 row: OpenAI streaming STT profiles), §10 tuples C/D",
+  "status": "blocked",
+  "note": "L9 adds two mesh STT profiles (gpt-live-transcribe, gpt-realtime-whisper) with recorded fixtures only. No live provider call exists in tests or CI, no credential is stored, and no audio payload is persisted by the adapter. Until every item below is real — measured against the pinned provider/region with authorized credentials inside the Q3 budget — this receipt stays blocked, never claimed.",
+  "profiles": {
+    "gpt-live-transcribe": {
+      "modelId": "gpt-live-transcribe",
+      "modelRevision": "unpinned — blocked: pin the served snapshot at admission, never latest",
+      "placement": "cloud-relay",
+      "wire": "wss://api.openai.com/v1/realtime?intent=transcription, session.update type transcription, turn_detection null (client VAD only)"
+    },
+    "gpt-realtime-whisper": {
+      "modelId": "gpt-realtime-whisper",
+      "modelRevision": "unpinned — blocked: same pinning rule",
+      "placement": "cloud-relay",
+      "wire": "same transcription session shape, model swapped"
+    }
+  },
+  "price": {
+    "observation": "USD 0.017/min per live model (spec-plan §2.1, list observation 2026-10-23, not a contractual quote)",
+    "pinnedRevision": "missing — blocked: price() must be pinned at admission via the L8 gateway before any cloud call"
+  },
+  "missing": [
+    { "item": "provider credentials and entitlement for the OpenAI account", "status": "blocked" },
+    { "item": "served model snapshot (revision) for each profile", "status": "blocked" },
+    { "item": "region for the transcription sessions", "status": "blocked" },
+    { "item": "retention terms for the selected endpoint/account (abuse-monitoring window, ZDR eligibility)", "status": "blocked" },
+    { "item": "live partial/final measurement against representative audio (never synthetic-only)", "status": "blocked" },
+    { "item": "durable accounting of the qualification spend inside the 5 USD/day, 20 USD total ceiling", "status": "blocked" },
+    { "item": "separate §10 qualification per tuple C (live-transcribe + local eSpeak NG) and D (realtime-whisper + local eSpeak NG)", "status": "blocked" }
+  ]
+}
