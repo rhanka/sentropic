@@ -88,6 +88,7 @@
   - [x] Update this plan, the study, and `spec/ci-cd-ten-minutes/capacity.md` with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
   - [x] Review r2 local workflow qualification: 22 expected-results tests pass; no capacity mutexes, unchanged matrix members, independent package publication, E2E parallel to API quality with retained image promotion barriers.
+  - [x] Rebase on main 72bb2da3d00b036e35c6dc56137aa936b7853673 to resolve the plan conflict blocking PR CI. Workflow/Make/scripts bytes equal 90432ee2f; no package delta against main. Initial dry-run 40475602504 cancelled before qualification and excluded from acceptance.
   - [ ] P1 timing acceptance: previous slot-policy PR 40460101167 took 3661s and main-like dry-run 40460107095 took 3928s; both exceed 2288s. Review r2 removes mutexes and shortens E2E dependencies; require two new completed measurements before accepting. PR stays draft.
   - [x] Final measurement source: merge dd2737fa486985ecfa756261b26ba2323e73289f incorporates origin/main 2d6643692389ecbb7e5ac410e7b31a3cfbaa732a. Harness C1/C2 and all 35 + 21 + 90 tooling tests passed before push; both attempt-1 runs completed successfully without interruption.
   - [x] PR receipt: 06:16:16–07:17:17 UTC, 62 executions / 27 skips; qualification 3660s = 2582s scheduling + 1078s execution, then 1s finalization. E2E D job 122046116611 queued 2571s and executed 357s. Full receipts and hotspots are in capacity.md.
