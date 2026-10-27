@@ -12,6 +12,12 @@
     "package-lock.json": "9f8454d2352554a194537c6303e1dd97dc5a28b1b804396600557cff607d9a3d"
   },
   "currentLockSha256": "f061d485fee9496727bcb6fdc6f7944b8d26cccbf7ac648cdc8bb43958aa1700",
+  "canonicalInputSha256": {
+    "rule": "jq -cS output including final newline; matches original and committed compacted values",
+    "dossier.json": "8dc96dda67f201d8974e071e7aa1080d39f26de60a59f933f8dd7e6a93806532",
+    "harness-scenes.json": "bcf5af8d633ca53243e4d6e8a4a7211e91540270c11d63f111c9a57dc5090b0f",
+    "harness-content.json": "3d7afbada7d66372690eff0039721aedd1e6ee29d679469f5bc8ddcce5cc99d6"
+  },
   "toolchain": {
     "nodeImage": "node:24-bookworm-slim",
     "svelte": "5.56.4",
