@@ -100,7 +100,6 @@ const ESCALATE_MS = 100;
 export class AplayPlayback implements PlaybackPort {
   private child: ReturnType<typeof spawn> | null = null;
   private settlePlay: ((error: Error | null) => void) | null = null;
-  private playGen = -1;
   private runGen = 0;
   private _playing = false;
   private _closed = false;
@@ -147,7 +146,6 @@ export class AplayPlayback implements PlaybackPort {
         stdio: ['pipe', 'pipe', 'pipe'],
       });
       this.child = child;
-      this.playGen = myGen;
       this._playing = true;
       let stderr = '';
       child.on('error', () => this.settle(new PlaybackError(`${binary} is not installed or not executable`)));
