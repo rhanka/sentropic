@@ -68,7 +68,9 @@ export {
   boundNarration,
 } from './voice-loop.js';
 export type {
+  BargeOptions,
   BargeSource,
+  SpeakOptions,
   VoiceLoopDiagnostics,
   VoiceLoopEvent,
   VoiceLoopOptions,
