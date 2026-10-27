@@ -61,8 +61,8 @@
 - [x] BR00D-EX5: merge published artifacts 0.2.4 source 60affbaf6, including its existing packed-vector CI gate; package/packaging/workflow paths are inherited only. Impact is source/published byte alignment and upstream gate coverage; rollback reverts this merge with the tuple refresh. No package release is authored here.
 - [x] BR00D-EX4: owner-requested merge of integration ca3239295 brings W1/W2/W4 catalog and chat ancestry; these paths are merge-only. Impact is the integrated app baseline; rollback reverts the merge. Preserve this PR's BRANCH.md; inherited merge diff is outside the authored 150-line limit.
 - [x] BR00D-EX3: transport.ts carries the frozen APP-P1 digest refreshed by this lot. Share the registry constant and add a transport-readiness regression; impact is startup acceptance of qualified artifacts 0.2.4, with exact compatibility checks retained. Rollback restores the prior qualified tuple, registry pin and transport together.
-- [ ] Opus r1 P1: prove transport/MCP/resource suites and real API startup on the refreshed tuple.
-- [ ] Opus r1 P2: regenerate current tuple vectors, preserve historical checks, push and dispatch CI on the corrected head.
+- [x] Opus r1 P1: 85/85 transport/credentials/MCP/resource tests; real API listener, HTTP 200/readiness ready and healthy container; locked teardown completed. See runtime-qualification-2026-10-27.md.
+- [x] Opus r1 P2: regenerate 0.2.4 tuple vectors; historical/current w0-record-check passes without weakening. Final-head push/CI evidence is reported in PR #796.
 - [x] BR00D-EX2: merge main 72bb2da3d to consume already-published UP-T; listed inherited paths are merge-only, no author edits. Impact is existing upstream ancestry; rollback reverts the merge.
 - [x] BR00D-EX1: merge #702 evidence and its owner question/restore template; retained evidence only; rollback reverts merge. No author edits outside scope.
 - [ ] Independent reviews and remote CI remain separate from code authorship.
@@ -77,7 +77,7 @@
 - [x] Mono-branch; one author; external independent review.
 
 ## UAT Management (in orchestration context)
-- [x] Package/registry qualification only; browser and production acceptance remain downstream.
+- [x] Package/registry and real API startup qualification; browser and production acceptance remain downstream.
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read Docker lock, rules, plan-v2, template and receiving contracts; harness branch check passed.
@@ -86,5 +86,5 @@
 - [x] Lot 3: recompute APP-P1 with mcp:tools:invoke; observe old-pin refusal, then update registry and api/tests/api/{app-mcp-registry,app-mcp-installed}.test.ts.
 - [x] Lot 4: refresh reservations.md, host-fit.md, catalog-context.md and published-tuple.json; dated evidence and exact base/lock hashes.
 - [x] Lot 5: installed/profile tests, scope/branch gates, locked make down, empty stack, draft PR and head.
-- [ ] Lot 6: resolve Opus r1 startup and record-check findings; document #794's workspace-source handoff in PR #796 without editing #794.
+- [x] Lot 6: resolve Opus r1 startup and record-check findings; #794 must drop its registry pin after #796 lands and retain the qualified workspace source; no #794 edits.
 - [x] Lot 6a: retain all historical signature/source checks; add regenerated current-tuple vectors and exact receipt/lock/source consistency checks for artifacts 0.2.4.
