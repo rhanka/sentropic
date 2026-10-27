@@ -735,6 +735,10 @@ pack-publishable-manifest: ## Real npm pack + packed-manifest guard for an alrea
 	@printf '%s' "$(PACKAGE)" | grep -Eq '^[a-z0-9][a-z0-9-]*$$' || { echo "ERROR: PACKAGE=<slug> is required"; exit 1; }
 	$(call manifest_guard_pack,$(PACKAGE))
 
+.PHONY: pack-live-speech
+pack-live-speech: ## Build and guard the L2 archive in transient container storage
+	$(call manifest_guard_pack,live-speech,. /workspace/packages/live-speech/pack.sh;)
+
 check-publishable-manifest: ## Strictly inspect one real archive TARBALL=<path> [SOURCE_MANIFEST=<path>]
 	@test -f "$(TARBALL)" || { echo "ERROR: TARBALL=<path> must be an existing file"; exit 1; }
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
@@ -4308,3 +4312,5 @@ memory-l5-gate: memory-l5-runtime ## L5 lot gate aggregate: lint, tooling, LOT t
 .PHONY: smoke-mcp-broker-github
 smoke-mcp-broker-github: ## Run the REAL live-network github-through-the-generic-broker smoke (BR-72 DEPTH Lot 2, BR72-EX1) — hits https://api.github.com, not hermetic
 	@docker run --rm -e GITHUB_TOKEN -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund tsx@4.19.2 >/dev/null; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsx" scripts/smoke-broker-github.mjs'
+
+-include packages/live-speech/verify.mk
