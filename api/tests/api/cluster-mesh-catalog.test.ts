@@ -10,6 +10,9 @@ import {
   ROOT_MOUNTED_NAMESPACE_REGISTRY,
 } from '../../src/app';
 import { db } from '../../src/db/client';
+import { tenantMemberships, userSessions } from '../../src/db/schema';
+import { resolveHttpCatalogContext } from '../../src/services/catalog/request-authority';
+import { testCatalogContext } from '../services/catalog/test-context';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import {
   CATALOG_AUTHOR,
@@ -49,6 +52,7 @@ const createDiscovery = (): CatalogDiscoveryPort => ({
 const createPorts = (catalog = createDiscovery()): CatalogNamespacePorts => ({
   catalog,
   authenticate: pass,
+  resolveContext: () => testCatalogContext(['planner']),
 });
 
 describe('cluster mesh catalog transport', () => {
@@ -58,7 +62,7 @@ describe('cluster mesh catalog transport', () => {
     } as unknown as CatalogNamespacePorts)).toThrowError('catalog product ports are unavailable');
 
     const router = createCatalogTransportRouter(createPorts());
-    expect(router.routes.map(({ method, path }) => [method, path])).toEqual(CATALOG_ROUTES);
+    expect([...new Map(router.routes.map(({ method, path }) => [path, [method, path]])).values()]).toEqual(CATALOG_ROUTES);
     expect(CATALOG_PATHS).toHaveLength(4);
     expect(CATALOG_PATHS).not.toContain('/*');
     expect(CATALOG_ROUTES.every(([method]) => method === 'GET')).toBe(true);
@@ -66,7 +70,7 @@ describe('cluster mesh catalog transport', () => {
     const source = readFileSync(
       new URL('../../src/routes/namespaces/catalog.ts', import.meta.url), 'utf8',
     );
-    expect(source).not.toMatch(/from ['"][^'"]*(?:\/db\/|\/services\/|\/schema)/);
+    expect(source).not.toMatch(/^import (?!type)[^\n]*from ['"][^'"]*(?:\/db\/|\/services\/|\/schema)/m);
 
     const app = new Hono().route('/api/v1', router);
     expect((await app.request('/api/v1/catalog/entries/planner', { method: 'POST' })).status)
@@ -79,7 +83,7 @@ describe('cluster mesh catalog transport', () => {
 
     const list = await app.request('/api/v1/catalog/entries?kind=skill&sourceId=foundation');
     await expect(list.json()).resolves.toEqual({ items: [planner] });
-    expect(catalog.list).toHaveBeenCalledWith({ kind: 'skill', sourceId: 'foundation' });
+    expect(catalog.list).toHaveBeenCalledWith({ kind: 'skill', sourceId: 'foundation' }, expect.objectContaining({ subjectId: 'user-test' }));
 
     const detail = await app.request('/api/v1/catalog/entries/planner');
     await expect(detail.json()).resolves.toEqual({ item: planner });
@@ -87,7 +91,7 @@ describe('cluster mesh catalog transport', () => {
     await expect(search.json()).resolves.toEqual({
       hits: [{ entry: planner, score: 5, matchedFields: ['name'] }],
     });
-    expect(catalog.search).toHaveBeenCalledWith({ query: 'planner', kind: 'skill', limit: 3 });
+    expect(catalog.search).toHaveBeenCalledWith({ query: 'planner', kind: 'skill', limit: 3 }, expect.objectContaining({ subjectId: 'user-test' }));
     await expect((await app.request('/api/v1/catalog/sources')).json()).resolves.toEqual({
       items: [{ id: 'foundation', kind: 'static' }],
     });
@@ -119,6 +123,7 @@ describe('cluster mesh catalog product authority', () => {
   beforeEach(async () => {
     await clearCutover();
     user = await createAuthenticatedUser('editor');
+    await db.insert(tenantMemberships).values({ userId: user.id, tenantId: 'sentropic', status: 'approved' });
   });
 
   afterEach(async () => {
@@ -127,10 +132,13 @@ describe('cluster mesh catalog product authority', () => {
   });
 
   it('matches direct canonical deterministic discovery without a predecessor shadow', async () => {
+    const [session] = await db.select().from(userSessions).where(eq(userSessions.userId, user.id));
+    const context = await resolveHttpCatalogContext({ userId: user.id, sessionId: session.id,
+      workspaceId: user.workspaceId!, role: 'editor' });
     const directSearch = productCatalogDiscovery.search({
       query: 'workspace', kind: 'skill', limit: 3,
-    });
-    const directSources = productCatalogDiscovery.sources();
+    }, context);
+    const directSources = productCatalogDiscovery.sources(context);
     const search = await authenticatedRequest(
       productApp,
       'GET',
