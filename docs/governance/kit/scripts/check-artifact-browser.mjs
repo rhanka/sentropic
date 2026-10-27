@@ -20,7 +20,7 @@ try {
   for (const config of [{ width: 1920, height: 1080, colorScheme: 'light' }, { width: 1440, height: 1000, colorScheme: 'dark' }, { width: 390, height: 844, colorScheme: 'light', isMobile: true, hasTouch: true }, { width: 390, height: 844, colorScheme: 'dark', isMobile: true, hasTouch: true }]) {
     const context = await browser.newContext({ viewport: { width: config.width, height: config.height }, ...config, offline: true, reducedMotion: 'reduce' });
     const page = await context.newPage();
-    const errors = [], network = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); }); page.on('request', (r) => { if (/^https?:/.test(r.url())) network.push(r.url()); });
+    const errors = [], network = []; page.on('pageerror', (e) => errors.push(e.stack ?? e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); }); page.on('request', (r) => { if (/^https?:/.test(r.url())) network.push(r.url()); });
     await page.goto(`file://${path.resolve(portable)}`);
     try {
       assert.deepEqual(errors, [], 'Portable initialization errors');
