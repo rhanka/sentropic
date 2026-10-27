@@ -221,7 +221,7 @@ export const productMcpModule: ClusterMeshHonoNamespaceModule = {
             ?? await resolveDefaultWorkspaceId(verified.sub) ?? '';
           return { workspaceId, scopes: verified.scopes, identity: {
             subject: verified.sub, tenantId: verified.tid, clientId: verified.clientId,
-            credentialId: artifactCredential('oauth', jti, verified.jkt),
+            credentialId: artifactCredential('oauth', jti, verified.jkt, scopes),
           } };
         } catch (error) { return auth.challenge(error); }
       },
