@@ -15,7 +15,7 @@ export const ARTIFACTS_PACKAGE = '@sentropic/artifacts';
 /** Artifacts 0.1.3 admits the platform 0.4 family used by native wrapping. */
 export const ARTIFACTS_RANGE = '>=0.2.0 <0.3.0';
 export const LLM_MESH_RANGE = '0.19.2 || >=0.22.0 <0.30.0';
-export const LLM_MESH_SPEECH_RANGE = '>=0.28.0 <0.29.0';
+export const LLM_MESH_SPEECH_RANGE = '>=0.28.0 <0.30.0';
 export const LLM_GATEWAY_RANGE = '>=0.19.0 <0.22.0';
 export const MCP_AUTH_RANGE = '>=0.2.1 <0.3.0';
 export const JOSE_RANGE = '^5.10.0';
