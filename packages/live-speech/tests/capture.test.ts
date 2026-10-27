@@ -119,3 +119,54 @@ describe('capture session bounds and loss', () => {
     await capture.close();
   });
 });
+
+describe('open-mic mode', () => {
+  it('should forward frames with no key press once open-mic is set', async () => {
+    const device = new FakeDevice([[tone(0.1), silence(0.1)]]);
+    const capture = new CaptureSession(device, { ...opts, maxMailboxFrames: 8 });
+    capture.setMicMode('open-mic');
+    await capture.open('fake-default');
+    await flush(10);
+    const frames = capture.drain();
+    // No key was ever pressed (micOn false): the explicit open-mic choice flows.
+    expect(capture.diagnostics()).toMatchObject({ micMode: 'open-mic', micOn: false });
+    expect(frames).toHaveLength(2);
+    expect(frames[0]).toMatchObject({ speech: true });
+    expect(frames[1]).toMatchObject({ speech: false });
+    await capture.close();
+  });
+
+  it('should emit VAD onset and offset for barge-in, independent of keys', async () => {
+    const started: number[] = [];
+    const ended: number[] = [];
+    const device = new FakeDevice([[silence(0.05), tone(0.05), tone(0.05), silence(0.05)]]);
+    const capture = new CaptureSession(
+      device,
+      { ...opts, maxMailboxFrames: 8 },
+      {
+        onSpeechStart: (frame) => started.push(frame.seq),
+        onSpeechEnd: (frame) => ended.push(frame.seq),
+      },
+    );
+    capture.setMicMode('open-mic');
+    await capture.open('fake-default');
+    await flush(10);
+    expect(started).toEqual([1]);
+    expect(ended).toEqual([3]);
+    await capture.close();
+  });
+
+  it('should still honor mute and close in open-mic', async () => {
+    const device = new FakeDevice([[tone(0.1)]]);
+    const capture = new CaptureSession(device, { ...opts, maxMailboxFrames: 8 });
+    capture.setMicMode('open-mic');
+    capture.setMuted(true);
+    await capture.open('fake-default');
+    await flush(10);
+    expect(capture.drain()).toEqual([]);
+    expect(capture.levelDb).toBeGreaterThan(-45);
+    await capture.close();
+    // Close resets the explicit choice: mic starts off in key mode again.
+    expect(capture.diagnostics()).toMatchObject({ micMode: 'key', open: false });
+  });
+});
