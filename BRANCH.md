@@ -83,6 +83,11 @@
 - [x] **Lot 4 — Docs consolidation**
   - [x] Update this plan, the study, and `spec/ci-cd-ten-minutes/capacity.md` with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
+  - [ ] P1 (Opus r1) timing acceptance: completed final-policy PR 40460101167 took 3661s and main-like dry-run 40460107095 took 3928s on 2026-10-27; both exceed 2288s. Policy unchanged; PR stays draft.
+  - [x] Final measurement source: merge dd2737fa486985ecfa756261b26ba2323e73289f incorporates origin/main 2d6643692389ecbb7e5ac410e7b31a3cfbaa732a. Harness C1/C2 and all 35 + 21 + 90 tooling tests passed before push; both attempt-1 runs completed successfully without interruption.
+  - [x] PR receipt: 06:16:16–07:17:17 UTC, 62 executions / 27 skips; qualification 3660s = 2582s scheduling + 1078s execution, then 1s finalization. E2E D job 122046116611 queued 2571s and executed 357s. Full receipts and hotspots are in capacity.md.
+  - [x] Main-like dry-run receipt: 06:16:20–07:21:48 UTC, 82 executions / 7 skips; qualification 3927s = 2965s scheduling + 962s execution, then 1s finalization. All 21 guarded-pack steps passed; registry writers skipped. Package endpoint 3304s = 3205s scheduling + 99s execution.
+  - [x] Retained manifests attest the same policy digest and fresh executions; strict CI_REQUIRE_CAPACITY_PROOF=1 rejects both timing regressions. Combined observed execution peak is 15. A branch workflow_dispatch remains a main-like dry-run, not actual main release evidence; no broader acceptance ticked.
   - [ ] Review r1: tests first for queued capacity groups, independent validators/publishers; require completed final-policy PR/main receipts <=2288s; no receipt, no acceptance.
   - [x] Review r1 publication qualification: branch dry-run 40408883195 completed successfully on source 1b5ef5368, 82 executions / 7 skips. All 21 publisher jobs completed real guarded packs; identified archive receipts and skipped registry writers/post-publication checks verified individually. This is a branch wiring receipt, not main delivery or timing acceptance.
   - [x] Use the capacity Make entry points for dispatch/status/capture. Final-source PR 40402395319 and branch dry-run 40408883195 both completed; no intermediate push interrupted these two receipts.
