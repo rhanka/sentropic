@@ -138,11 +138,13 @@ export {
 } from './host-maintenance.js';
 export {
   createMemoryHostLedger,
+  createMemoryHostLedgerAsync,
   openMemoryPostgresHostLedger,
   proveForRecovery,
   type HostLedgerEntry,
   type HostLedgerState,
   type HostRecoveryProof,
+  type MemoryAuthorityLedger,
   type MemoryHostLedger,
   type MemoryPostgresHostLedger,
 } from './ledger.js';

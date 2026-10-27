@@ -201,6 +201,27 @@ export interface MemoryPostgresHostLedger {
   readonly snapshot: () => Promise<readonly HostLedgerEntry[]>;
 }
 
+/**
+ * Authority ledger port: the async surface the host authority functions
+ * run on (r2 P1-E). The PG ledger implements it durably; the in-memory
+ * adapter below implements it for composition and tests. Single-threaded
+ * memory updates are inherently atomic; PG updates guard in the statement.
+ */
+export type MemoryAuthorityLedger = MemoryPostgresHostLedger;
+
+/** In-memory implementation of the authority ledger port (composition/tests). */
+export const createMemoryHostLedgerAsync = (): MemoryAuthorityLedger => {
+  const memory = createMemoryHostLedger();
+  return {
+    record: async (entry) => memory.record(entry),
+    read: async (candidateId) => memory.read(candidateId),
+    recordContinuation: async (candidateId, invocationId) => memory.recordContinuation(candidateId, invocationId),
+    markTerminal: async (candidateId, receipt, cursor) => memory.markTerminal(candidateId, receipt, cursor),
+    drainInvocation: async (invocationId) => memory.drainInvocation(invocationId),
+    snapshot: async () => memory.snapshot(),
+  };
+};
+
 const LEDGER_TX = Object.freeze({ isolation: 'serializable' as const, readOnly: false, deadlineMs: 5000 });
 
 const rowToEntry = (row: Readonly<Record<string, unknown>>): HostLedgerEntry => {

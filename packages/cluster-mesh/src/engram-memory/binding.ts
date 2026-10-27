@@ -10,13 +10,9 @@
 import { randomUUID } from 'node:crypto';
 import { validateScopeGrant, type ScopeGrant } from '../storage/authority.js';
 import { StorageDeniedError } from '../storage/errors.js';
-import type { StorageScope } from '../storage/contracts.js';
+import { validateStorageScope, type StorageScope } from '../storage/contracts.js';
 import { checkMemoryPostgresDriver, type MemoryPostgresDriverProvider } from './postgres.js';
-import {
-  proveForRecovery,
-  type HostRecoveryProof,
-  type MemoryHostLedger,
-} from './ledger.js';
+import type { HostRecoveryProof, MemoryAuthorityLedger } from './ledger.js';
 
 /** The only operations Engram's neutral memory handle ever carries. */
 export const MEMORY_HANDLE_OPERATIONS = ['read', 'write'] as const;
@@ -169,13 +165,13 @@ export interface MemoryContinuation {
  * only the neutral operations with the new invocation lifetime, bound to
  * the retained candidate and scope.
  */
-export const issueContinuationGrant = (
-  ledger: MemoryHostLedger,
+export const issueContinuationGrant = async (
+  ledger: MemoryAuthorityLedger,
   binding: MemoryHostBinding,
   candidateId: string,
   attestation: MemoryContinuationAttestation,
-): MemoryContinuation => {
-  const retained = ledger.read(candidateId);
+): Promise<MemoryContinuation> => {
+  const retained = await ledger.read(candidateId);
   if (!retained) throw new StorageDeniedError('no retained authority for this candidate');
   if (retained.state === 'terminal') {
     throw new StorageDeniedError('completed candidates cannot continue');
@@ -198,7 +194,7 @@ export const issueContinuationGrant = (
   if (binding.maintainGrant.principalId !== retained.hostPrincipal) {
     throw new StorageDeniedError('continuation binding serves a different host principal');
   }
-  const updated = ledger.recordContinuation(candidateId, attestation.invocationId);
+  const updated = await ledger.recordContinuation(candidateId, attestation.invocationId);
   const grant: MemoryNeutralGrant = Object.freeze({
     token: `memory-continuation-${randomUUID()}`,
     moduleId: 'engram-memory',
@@ -242,15 +238,15 @@ const checkBindingScope = (binding: MemoryHostBinding, scope: StorageScope, what
  * surfaces NOT_FOUND (never a refusal and never a fresh reservation). A
  * foreign scope is refused; an expired maintain grant cannot reattach.
  */
-export const reattachMemoryMaintenance = (
+export const reattachMemoryMaintenance = async (
   binding: MemoryHostBinding,
-  ledger: MemoryHostLedger,
+  ledger: MemoryAuthorityLedger,
   candidateId: string,
-): MemoryMaintainGrant => {
+): Promise<MemoryMaintainGrant> => {
   if (typeof binding !== 'object' || binding === null) {
     throw new StorageDeniedError('memory reattach requires an assembled binding');
   }
-  const retained = ledger.read(candidateId);
+  const retained = await ledger.read(candidateId);
   if (!retained) throw new MemoryMaintenanceNotFoundError(candidateId);
   checkBindingScope(binding, retained.scope, 'reattach');
   assertMaintainGrantLive(binding.maintainGrant);
@@ -264,18 +260,32 @@ export const reattachMemoryMaintenance = (
  * are refused; use reattach to distinguish the spent (NOT_FOUND) case.
  * By construction this path cannot write.
  */
-export const proveForRecoveryAuthorized = (
-  ledger: MemoryHostLedger,
+export const proveForRecoveryAuthorized = async (
+  ledger: MemoryAuthorityLedger,
   binding: MemoryHostBinding,
   candidateId: string,
   scope?: StorageScope,
-): HostRecoveryProof => {
+): Promise<HostRecoveryProof> => {
   if (typeof binding !== 'object' || binding === null) {
     throw new StorageDeniedError('authorized recovery requires an assembled binding');
   }
   assertMaintainGrantLive(binding.maintainGrant);
-  const retained = ledger.read(candidateId);
+  const retained = await ledger.read(candidateId);
   if (!retained) throw new StorageDeniedError('no retained evidence for this candidate');
   checkBindingScope(binding, retained.scope, 'recovery');
-  return proveForRecovery(ledger, candidateId, scope);
+  if (scope !== undefined) {
+    if (!validateStorageScope(scope).ok) throw new StorageDeniedError('recovery scope must be valid');
+    if (scope.tenantId !== retained.scope.tenantId || scope.workspaceId !== retained.scope.workspaceId) {
+      throw new StorageDeniedError('recovery scope does not match the retained evidence');
+    }
+  }
+  return Object.freeze({
+    candidateId: retained.candidateId,
+    storeId: retained.storeId,
+    scope: retained.scope,
+    envelopeDigest: retained.envelopeDigest,
+    state: retained.state,
+    receipt: retained.receipt,
+    cursor: retained.cursor,
+  });
 };
