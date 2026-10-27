@@ -73,6 +73,10 @@
     "sineFixtureTeardownAbort": {
       "status": "recorded",
       "detail": "1 s sine deterministically aborts the native binding at process teardown (koffi FATAL after valid stdout JSON, 3/3); espeak/silence children exit clean. Sine fixture excluded from the bench; silence retained as the negative case."
+    },
+    "multiWindowTeardownRace": {
+      "status": "recorded and mitigated",
+      "detail": "Paced multi-window base fixture: terminating the worker while a superseded window decode is still in flight aborts the child mid-native-call (koffi FATAL after valid stdout JSON, exit 134). profile-run.mjs quiesces 5 s after the final so terminate hits an idle worker; all four bench children exit clean."
     }
   },
   "networkPosture": {
