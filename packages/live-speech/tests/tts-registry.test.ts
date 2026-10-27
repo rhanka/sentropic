@@ -41,6 +41,14 @@ function digestOf(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
+/** Pids the fixture logged at spawn time, one per line. Throws ENOENT when nothing spawned. */
+function readSpawnLog(path: string): number[] {
+  return readFileSync(path, 'utf8')
+    .split('\n')
+    .filter((line) => line.length > 0)
+    .map(Number);
+}
+
 function withRunner(runner: EspeakRunner): EspeakNgEngine {
   return new EspeakNgEngine('/nonexistent-espeak', [], runner);
 }
@@ -181,12 +189,16 @@ describe('tts registry', () => {
 
   it('should not spawn when the barge lands during binary verification', async () => {
     const pidFile = join(tmpdir(), `fake-espeak-prespawn-${process.pid}.pid`);
+    const spawnLog = join(tmpdir(), `fake-espeak-prespawn-${process.pid}.log`);
     rmSync(pidFile, { force: true });
+    rmSync(spawnLog, { force: true });
     const priorMode = process.env.FAKE_APLAY_MODE;
     const priorPid = process.env.FAKE_APLAY_PIDFILE;
+    const priorLog = process.env.FAKE_APLAY_SPAWNLOG;
     try {
       process.env.FAKE_APLAY_MODE = 'hang';
       process.env.FAKE_APLAY_PIDFILE = pidFile;
+      process.env.FAKE_APLAY_SPAWNLOG = spawnLog;
       const engine = new EspeakNgEngine(FAKE_BIN, [digestOf(FAKE_BIN)]);
       const controller = new AbortController();
       // Abort synchronously: synthesize() is parked in verifiedBinary()'s
@@ -196,10 +208,15 @@ describe('tts registry', () => {
       });
       controller.abort();
       await expect(pending).rejects.toThrow(/aborted/);
-      // No child was ever spawned: with the pre-spawn fence the fixture
-      // never reaches its pidfile write.
+      // No child was ever spawned: the fixture logs every spawn before
+      // reading stdin, so a stdin-held orphan would still show up here.
       expect(() => readFileSync(pidFile, 'utf8')).toThrow(/ENOENT/);
+      expect(() => readSpawnLog(spawnLog)).toThrow(/ENOENT/);
       // Positive control: the same setup without an early barge does spawn.
+      // The control child boots after any orphan would have, and it logs at
+      // spawn time while the pidfile needs stdin EOF: once the pidfile is
+      // present, every earlier spawn is already in the log. Exactly one
+      // line — the control pid — proves the barged attempt spawned nothing.
       const secondController = new AbortController();
       const second = engine.synthesize('a narration that does spawn', {
         signal: secondController.signal,
@@ -217,13 +234,17 @@ describe('tts registry', () => {
       await expect(second).rejects.toThrow(/aborted by barge-in/);
       const pid = Number(readFileSync(pidFile, 'utf8').trim());
       expect(Number.isInteger(pid) && pid > 0).toBe(true);
+      expect(readSpawnLog(spawnLog)).toEqual([pid]);
       expect(() => process.kill(pid, 0)).toThrow(/ESRCH/);
     } finally {
       if (priorMode === undefined) delete process.env.FAKE_APLAY_MODE;
       else process.env.FAKE_APLAY_MODE = priorMode;
       if (priorPid === undefined) delete process.env.FAKE_APLAY_PIDFILE;
       else process.env.FAKE_APLAY_PIDFILE = priorPid;
+      if (priorLog === undefined) delete process.env.FAKE_APLAY_SPAWNLOG;
+      else process.env.FAKE_APLAY_SPAWNLOG = priorLog;
       rmSync(pidFile, { force: true });
+      rmSync(spawnLog, { force: true });
     }
   });
 });
