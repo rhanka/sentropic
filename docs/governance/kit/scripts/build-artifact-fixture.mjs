@@ -19,6 +19,7 @@ rmSync(scratch, { recursive: true, force: true });
 mkdirSync(scratch, { recursive: true });
 cpSync(join(root, 'src'), join(scratch, 'src'), { recursive: true });
 cpSync(join(root, 'dossier.json'), join(scratch, 'dossier.json'));
+cpSync(join(root, 'raw-spec.md'), join(scratch, 'raw-spec.md'));
 cpSync(join(root, 'index.html'), join(scratch, 'index.html'));
 const inputs = {};
 if (profile !== 'governance') {
