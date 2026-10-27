@@ -150,6 +150,19 @@ export class NodeWorkerClient implements WorkerPort {
     if (this._terminated) return;
     this._terminated = true;
     this.failAll(new SessionClosedError());
-    void this.worker.terminate();
+    // Graceful close first: the worker drains an in-flight decode before freeing
+    // the engine, so a native decode is never torn down mid-call (koffi FATAL).
+    // Force-terminate only as a fallback for a hung engine; the timer never
+    // holds the event loop open.
+    try {
+      this.worker.postMessage({ type: 'close' });
+    } catch {
+      // Worker already gone.
+    }
+    const timer = setTimeout(() => {
+      void this.worker.terminate();
+    }, 2000);
+    timer.unref();
+    this.worker.once('exit', () => clearTimeout(timer));
   }
 }

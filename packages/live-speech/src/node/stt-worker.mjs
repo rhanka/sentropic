@@ -4,7 +4,8 @@
 //     -> { type: 'ready', engineId }
 //   { type: 'transcribe', id, pcm: ArrayBuffer (transferred), sampleRateHz, language? }
 //     -> { type: 'result', id, segments, language } | { type: 'error', id, message }
-//   { type: 'close' } -> { type: 'closed' } then exit(0).
+//   { type: 'close' } -> { type: 'closed' } then exit(0). Close waits for an
+//   in-flight decode first: a native decode torn down mid-call aborts the host.
 // The engine module must export a `createEngine(options, modelPath)` factory returning
 // `{ engineId, transcribe(Float32Array, {sampleRateHz, language?}), close(), preload?() }`.
 // When `preload` exists, init awaits it before reporting ready, so ready means loaded.
@@ -14,6 +15,7 @@ import { parentPort } from 'node:worker_threads';
 if (!parentPort) throw new Error('stt-worker must run inside a worker thread');
 
 let engine = null;
+let inflight = 0;
 
 const fail = (id, message) => {
   parentPort.postMessage({ type: 'error', id, message: String(message).slice(0, 500) });
@@ -37,26 +39,37 @@ parentPort.on('message', async (message) => {
         fail(message.id, 'transcribe before init');
         return;
       }
-      const pcm = new Float32Array(message.pcm);
-      const result = await engine.transcribe(pcm, {
-        sampleRateHz: message.sampleRateHz,
-        language: message.language,
-      });
-      parentPort.postMessage({
-        type: 'result',
-        id: message.id,
-        segments: (result.segments ?? []).map((segment) => ({
-          startSec: segment.startSec,
-          endSec: segment.endSec,
-          text: String(segment.text ?? ''),
-          noSpeechProb: segment.noSpeechProb ?? 0,
-        })),
-        language: result.language,
-      });
+      // Count the in-flight decode so close() can wait for it: killing the worker
+      // mid-native-call aborts the process (koffi FATAL), waiting is the only safe
+      // shutdown. Errors propagate to the shared handler, which fails the call.
+      inflight += 1;
+      try {
+        const pcm = new Float32Array(message.pcm);
+        const result = await engine.transcribe(pcm, {
+          sampleRateHz: message.sampleRateHz,
+          language: message.language,
+        });
+        parentPort.postMessage({
+          type: 'result',
+          id: message.id,
+          segments: (result.segments ?? []).map((segment) => ({
+            startSec: segment.startSec,
+            endSec: segment.endSec,
+            text: String(segment.text ?? ''),
+            noSpeechProb: segment.noSpeechProb ?? 0,
+          })),
+          language: result.language,
+        });
+      } finally {
+        inflight -= 1;
+      }
       return;
     }
     if (message.type === 'close') {
       try {
+        // Drain the in-flight decode before freeing the engine: a native decode
+        // torn down mid-call aborts the process instead of settling.
+        while (inflight > 0) await new Promise((resolve) => setTimeout(resolve, 10));
         await engine?.close();
       } finally {
         engine = null;
