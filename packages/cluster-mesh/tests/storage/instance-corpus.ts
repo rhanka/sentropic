@@ -115,6 +115,10 @@ export const registryDriver = (registry = new CanonicalInstanceRegistry()): Owne
   verify: async (handle) => registry.verify(handle as CanonicalInstanceHandle),
   release: async (handle) => registry.release(handle as CanonicalInstanceHandle),
   markTerminal: async (handle) => registry.markTerminal(handle as CanonicalInstanceHandle),
-  guard: (handle) => () => commitPossessionGuard(registry, handle as CanonicalInstanceHandle)(),
+  // Async so a synchronous registry refusal surfaces as a rejection that
+  // `assert.rejects` can match, like the async PG commit guard.
+  guard: (handle) => async () => {
+    commitPossessionGuard(registry, handle as CanonicalInstanceHandle)();
+  },
   current: async (storeKey) => registry.current(storeKey),
 });
