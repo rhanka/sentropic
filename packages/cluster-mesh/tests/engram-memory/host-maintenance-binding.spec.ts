@@ -13,9 +13,12 @@ import { describe, expect, it } from 'vitest';
 import {
   assembleMemoryHostBinding,
   issueContinuationGrant,
+  verifyHostBinding,
   type MemoryMaintainGrant,
   type MemoryNeutralGrant,
 } from '../../src/engram-memory/binding.js';
+import { pgEnabled } from '../storage/pg-driver.js';
+import { memoryHostComposed, memoryPgHost } from './pg-host.js';
 import {
   openMemoryMaintenance,
   type MemoryMaintenanceRunner,
@@ -161,6 +164,41 @@ describe('host maintenance binding', () => {
     expect(() =>
       openMemoryMaintenance({ provider: qualifiedProvider(), maintainGrant: expired } as never, undefined as never),
     ).toThrow(/lease has expired/);
+  });
+
+  it('refuses a foreign scope even with a live grant', async () => {
+    const binding = assembleMemoryHostBinding({
+      driver: qualifiedProvider(),
+      maintainGrant: maintainGrant(),
+      invocationId: 'inv-host-1',
+    });
+    await expect(
+      verifyHostBinding({ bind: async () => ({}) }, binding, { tenantId: 'tenant-a', workspaceId: 'workspace-a' }),
+    ).resolves.toBeUndefined();
+    await expect(
+      verifyHostBinding({ bind: async () => ({}) }, binding, { tenantId: 'elsewhere', workspaceId: 'workspace-a' }),
+    ).rejects.toThrow(/scope does not match/);
+    await expect(verifyHostBinding({ bind: async () => ({}) }, null as never)).rejects.toThrow(
+      StorageDeniedError,
+    );
+  });
+
+  describe.skipIf(!pgEnabled)('host binding authoritative verification', () => {
+    it('checks the maintain grant against the live grants table', async () => {
+      const host = await memoryPgHost();
+      const { binding } = memoryHostComposed(host.options.driver, 'inv-verify-1');
+      const root = await host.open();
+      try {
+        // Never-issued grant: the store refuses.
+        await expect(verifyHostBinding(root.adapter(), binding)).rejects.toThrow(StorageDeniedError);
+        await root.bindNew(binding.maintainGrant);
+        await verifyHostBinding(root.adapter(), binding);
+        await root.revoke(binding.maintainGrant.token);
+        await expect(verifyHostBinding(root.adapter(), binding)).rejects.toThrow(StorageDeniedError);
+      } finally {
+        await host.close();
+      }
+    });
   });
 
   it('refuses ad-hoc objects shaped like a binding', () => {
