@@ -179,9 +179,9 @@ describe('structured backend discrimination (P23)', () => {
     const scalarResult = await service.decide(decisionRequest({ evaluator }));
     expect(scalarResult.ok).toBe(true);
     expect(send).toHaveBeenCalledTimes(1);
-    if (!scalarResult.ok || scalarResult.kind !== 'verdict') throw new Error('valid service scalar unexpectedly refused');
+    if (!scalarResult.ok || scalarResult.kind !== 'experimental-verdict') throw new Error('valid service scalar unexpectedly refused');
     expect(scalarResult.receipt.budget).toMatchObject({ state: 'settled' });
-    expect(scalarResult.receipt.cost).toMatchObject({ amountMicroUsd: '6', source: 'reported-usage-times-rate' });
+    expect(scalarResult.receipt.cost).toMatchObject({ amountMicroUsd: '5', source: 'reported-usage-times-rate' });
     expect(scalarResult.receipt.servedModelId).toBe('synthetic-structured-model');
     const labelService = serviceWith(structuredEvidenceBody({ label: 'a' }));
     const labelResult = await labelService.service.decide(decisionRequest({ evaluator,
