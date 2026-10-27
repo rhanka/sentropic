@@ -390,6 +390,8 @@ export interface GuardedPublishInput extends PublishInput {
   readonly identity: CommandIdentity;
   readonly actorId: string;
   readonly policyRevision: string;
+  /** Request-bound host approval guard; defaults to participant.checkApproval. */
+  readonly authorizeCommit?: AuthorizeCommit;
   readonly callerKey?: string;
   readonly attemptId?: string;
   readonly invocationId?: string;
@@ -420,26 +422,13 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
   const limits = publicationLimits(deps.limits);
   const cleanupWindowMs = deps.cleanupWindowMs ?? DEFAULT_CLEANUP_WINDOW_MS;
   if (!Number.isSafeInteger(cleanupWindowMs) || cleanupWindowMs < 1) throw new Error('invalid preparation lifetime');
-  const guard = (client: () => FinalizeTxClient): AuthorizeCommit => async (context, transaction) => {
+  const guard = (client: () => FinalizeTxClient, authorizeCommit?: AuthorizeCommit): AuthorizeCommit => async (context, transaction) => {
     const { state, acl } = await deps.createUnitWriter(client()).readAuthorization(context.artifactId);
     const verdict = decidePublishAuthorization({ lifecycleState: state, acl, actorId: context.actorId });
     if (!verdict.allowed) {
       return {
         allowed: false,
         reason: verdict.reason,
-        publicCode: 'access_denied',
-        status: 403,
-        retriable: false,
-      };
-    }
-    const approval = await transaction.participant.checkApproval({
-      actorId: context.actorId,
-      operation: context.operation,
-    });
-    if (!approval.approved) {
-      return {
-        allowed: false,
-        reason: approval.reason ?? 'denied',
         publicCode: 'access_denied',
         status: 403,
         retriable: false,
@@ -454,6 +443,11 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
         status: 403,
         retriable: false,
       };
+    }
+    if (authorizeCommit !== undefined) return authorizeCommit(context, transaction);
+    const approval = await transaction.participant.checkApproval({ actorId: context.actorId, operation: context.operation });
+    if (!approval.approved) {
+      return { allowed: false, reason: approval.reason ?? 'denied', publicCode: 'access_denied', status: 403, retriable: false };
     }
     return { allowed: true, fence: transaction.participant.mintFence(revision, context.invocationId) };
   };
@@ -537,7 +531,7 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
         guard: guard(() => {
           if (finalizationClient === undefined) throw new Error('publication guard needs the finalization client');
           return finalizationClient;
-        }),
+        }, input.authorizeCommit),
         finishIntents: async (client) => {
           await deps.createUnitWriter(client).completeIntent(intent.intentId);
         },

@@ -1,64 +1,67 @@
-# Feature: #861 final artifacts 0.2.0 candidate integration
+# Feature: W1.b app artifact composition and current authority
 
 ## Objective
-- [ ] Build the final artifacts 0.2.0 / cluster-mesh 0.22.0 candidate, requalify L8d, and obtain green PR #739 CI.
+- [x] Compose APP-P1 with durable app policy, opaque workspace scopes and one guarded HTTP/MCP effect path.
 
 ## Scope / Guardrails
-- [x] Worktree tmp/worktrees/861-integration; branch feat/immo-861-integration; merge-only integration.
-- [x] ENV=test-861-int last; shared Docker lock; matching make down after each Docker step.
-- [x] No main merge or publication; the conductor owns publication.
-- [x] Selective staging, make commit, fewer than 150 changed lines per new commit, no attribution trailers.
+- [x] Owner dispatch: W1.b, plan-v2 lines 128–147; tests first, draft PR only, no merge or deployment.
+- [x] Worktree `tmp/worktrees/app-w1b`, branch `feat/app-cm-w1b`; base W1.a #773 `139729e9935c29112c7827d4684c79135404994f` (Opus APPROVE r2).
+- [x] Main `ab981b16d` merged without rebase in `6ea8798a0`; artifacts 0.2.1 / mesh 0.22.4 inherited, no package/lock authoring.
+- [x] Make-only; shared Docker flock for build/start/test, matching down after every step; `ENV=test-app-w1b` last.
+- [x] API/UI/Maildev UI ports 8792/5178/1085 checked free before startup; no owner stacks touched.
+- [x] Preserve W1.a migration authority and SQL hashes; W2.b alone reconciles final locks and physical image resolution.
+- [x] Atomic authored commits below 150 lines, selective staging, scope-check and make commit; no attribution trailers.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/artifacts/**`
-  - `packages/cluster-mesh/**`
-  - `scripts/ci/immo-861-*`
-  - `Makefile`
-  - `docker-compose.immo-861.yml`
-  - `.track/**`
-  - `.github/workflows/ci.yml`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
+  - `api/src/services/artifacts/composition.ts`
+  - `api/src/services/artifacts/authorization.ts`
+  - `api/tests/api/artifacts-host-publication.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `ui/**`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `packages/**`
+  - `plan/**`
+  - `.track/**`
+  - `api/src/db/**`
+  - `api/drizzle/**`
+  - `api/package.json`
+  - `api/package-lock.json`
   - `package-lock.json`
-  - `packages/llm-mesh/**`
-  - `api/**`
-  - `e2e/**`
-- **Exception process**:
-  - [x] BR861-EX1: retain existing isolated Compose qualification wiring; new release targets use that same service and environment.
-  - [x] BR861-EX2: preserve approved incoming history and Track bytes without new edits outside qualification scope.
-  - [x] BR861-EX3: retain reserved candidate manifest/lock versions artifacts 0.2.0 and cluster-mesh 0.22.0.
-  - [x] BR861-EX4: retain artifacts 0.2.0 qualification pins and guarded sibling receipts.
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `.github/workflows/**`
+- [x] Exception process: declare BR01-EXn with reason, impact and rollback before expansion.
 
 ## Feedback Loop
-- [x] INT-18: pull --no-rebase reached 464581fb813b2fbfb6b4691b250162e0dfd942e9, including #750 public executor, packed example, A6 and A4.
-- [x] INT-19: #750 replaced the integration plan with its topic plan; restore this integration scope while retaining all approved implementation bytes.
-- [x] L0 freeze and previous integration decisions remain in the retained merge history.
+- [x] BR01-EX1: owner requires merge of main after W1.a, never rebase. The ancestry-only merge inherits 247 upstream paths; no authored merge resolution except retaining W1.a BRANCH.md. Its scope-check reported inherited paths; subsequent authored changes use the four-path scope above. Atomic limit applies to authored deltas; upstream history stays intact.
+- [x] PR targets `feat/app-cm-integration` as dispatched. Deviation: #773 currently targets main for CI; W1.b retains the integration destination and uses workflow_dispatch if its base does not trigger PR CI.
+- [ ] W0-close.e acceptance and W1.c/UP-T activation remain external gates; this lot activates no route or reader.
+- [ ] W2 binds verified transport identity and a current credential check on the coordinator transaction; credential verification must never come from tool/body arguments.
+- [ ] Independent review: automatic approval review rejected the Claude/h2a launch because private source would reach an unverified gateway without destination/payload authorization. No reviewer verdict exists; dossier `.tmp/app-w1b-review/dossier.md` at the root checkout. Owner approval is required before external review; no retry through another execution path.
+- [x] HTTP-1: the focused red test returned HTTP 201 for a caller body scope equal to the verified scope, while MCP returned 400. Root cause: the upstream trusted HTTP app permits that field. Validate selected public POST bodies through the same compiled profile before authority/storage; map typed profile errors safely. Red `/tmp/app-w1b-closed-input-red.log`; final 16/16 green plus typecheck/lint `/tmp/app-w1b-closed-input-green.log`.
+- [x] Superseded CI https://github.com/rhanka/sentropic/actions/runs/40411129496 on `7a6e6138a` was cancelled only after HTTP-1 reproduction; the corrected pushed head requires a new exact-head run. No successful CI receipt is claimed for that attempt.
+- [x] CI-1: run https://github.com/rhanka/sentropic/actions/runs/40414043957 on `8fca05df3` passed all 355 endpoint-shard assertions but failed on two unhandled PostgreSQL shutdown errors. `Pool.end()` completed before physical socket shutdown; fixture `DROP DATABASE ... FORCE` raced it. A deterministic deferred-close test reproduced the ordering failure (`/tmp/app-w1b-close-red.log`). Await every client's end event and drop without FORCE; the complete failing shard now passes 33 files / 356 tests, including 17 host cases, without unhandled errors (`/tmp/app-w1b-close-green.log`). Production code is unchanged by this repair; a new exact-head CI is required.
 
 ## AI Flaky tests
-- [x] No flaky acceptance, timeout increase or skipped required case.
+- [x] No AI tests, accepted flakes or increased timeouts.
 
 ## Orchestration Mode (AI-selected)
-- [x] Multi-branch; one release integrator; L8d owns packed Radar qualification evidence.
+- [x] Mono-branch: one code author on the app integration train; upstream changes integrated by merge only.
 
 ## UAT Management (in orchestration context)
-- [x] Package qualification only; no production activation claim.
+- [x] Backend-only composition; web, Chrome and VSCode remain for W2/W4/W5; no root UAT stack.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 0 — pull integration with a merge; verify branch mechanically.
-- [x] Lot 1a — artifacts unit gate: 440 tests / 35 files passed at product source 464581fb8.
-- [x] Lot 2a — add reproducible guarded packing through the existing qualification Compose service.
-- [x] Lot 2b — guard all three sibling identities and qualify the exact packed mesh archive.
-- [x] Lot 2c — prepare ownership only on this worktree's candidate output and sibling archive directories.
-- [x] Lot 2d — retain prior sibling archives outside the guarded destination before regenerating final receipts.
-- [x] Lot 1b — real PostgreSQL/MinIO integration and E2E: 172 tests / 12 files passed.
-- [x] Lot 1 — artifacts 440/35 files, real integration/E2E 172/12, lint and freeze-types pass; mesh surface 21/1, full packaging 97/15 with no skips (artifacts tuple 7, tuple skew 15, strict tuple 3, MCP tuple 2, types/bundlers 17).
-- [x] Lot 2 — guarded pack source deca5422c; artifacts SHA-256 6122ed8d2adea53be6366918f7df83238e8a7bd0596fdd48b0be752497f2ae82; mesh d01a2c7669b7e18e1597d2407790bd64a865a6fe258b6bd61f7f6fba4a6452ab; SHA-512 integrity and toolchain recorded in packages/artifacts/probe/l8d/CANDIDATE-0.2.0.md and the requested root .tmp report.
-- [x] Lot 3 — merged candidate source into L8d; strict full-Radar install, packed smoke and 19 runner tests pass against dde9f4c85 with listKeys 8d6aabb0a. E3 local branch has the same head; no newer head at pin selection.
-- [x] Lot 3 result — L8d NO-GO: Q1 0/31, Q2 0/31, acceptance 0/6; required totals 73 pass / 72 fail / 5 setup skips; full host 152 pass / 1 fail. Per-case evidence classifies 71 Radar failures and 2 H3 coverage gaps across all invoked tests; image smoke and final matching L8a/b/c shards remain uncovered.
-- [x] Lot 4a — push L8d evidence and merge its history without product, frozen-contract or Track changes; retain this integration plan.
-- [ ] Lot 4b — push final integration head and monitor PR #739 until CI passes; final CI state belongs in the external candidate receipt to avoid a metadata-only CI loop.
+- [x] Lot 0: read Docker lock, whole plan, APP-P1 freeze, MASTER/workflow/testing/API rules and template; mechanical branch check.
+- [x] Lot 1: `api/tests/api/artifacts-host-publication.test.ts` first: HTTP/MCP identity and replay parity, ensure/publish, foreign authority, APP-P1 refusal. Red run failed on the missing composition module before implementation; `/tmp/app-w1b-red.log`.
+- [x] Lot 2: `authorization.ts`: current tenant/workspace/account/credential participants, post-wait rechecks and transactional quota; `composition.ts`: scoped PG store/KV/coordinator and shared transports.
+  - [x] Implement transaction-bound current authority, explicit read/write credential permissions, provisional cumulative byte quota and request fences in `authorization.ts`.
+- [x] Lot 3: same test file covers revocation after lock waits, DB-time expiry after quota/receipt waits, quota contention/rollback, guarded replay, version witness and no new durable success on denial; first full run 10/10 passed.
+  - [x] Add independent read/write credential permissions, viewer downgrade, disabled/forged identity, foreign artifact metadata denial and frozen APP-P1 digest/file-limit cases.
+- [x] Lot 4: API typecheck passed, lint 0 errors/219 warnings; final 16 publication + 16 host migration + 16 cluster migration + 11 tenant resolver cases passed, no final skips; healthy HTTP 200 logs and empty Compose ps after down. Every authored hunk reviewed by the author; no independent approval is claimed.
+  - [x] Receipts: `/tmp/app-w1b-final-checks.log` (45 tests including 13 host cases), `/tmp/app-w1b-authority-regressions.log` (final 15 host + 11 tenant cases), `/tmp/app-w1b-runtime-scope-cleanup.log` (PASS C2, healthy logs, cleanup/empty ps). Optional multi-path readlink probe failed on BusyBox's single-file usage; physical dependency qualification remains W2's gate.
+- [ ] Lot 5: exact BRANCH.md draft PR body, push, green exact-head CI and W1.d/W2 handoff; do not merge. External review remains the explicitly blocked gate above.
+- [x] W1.d handoff: consume durable preparation intents, blob pins/references and upstream bounded cleanup/GC through separate host-maintenance authority; add recovery/restore proof. This lot starts no jobs or activation and uses no production memory fallback.
+- [x] W2 handoff: validate selected transport inputs before `bind` provisions scope metadata; bind one verified subject/tenant/client/credential tuple across HTTP/MCP; supply the current transaction-bound credential reader with independent read/write scope permissions and explicit initial quota; compile/mount one registry path; reconcile API/root workspace locks and physical artifacts instances; retain existing MCP/resource/namespace/gateway/D1 regressions.
