@@ -65,7 +65,7 @@ fi
 frozen_pin="$(grep -o 'sentropic-cluster-mesh-[0-9][0-9.]*\.tgz' tests/packaging/fixtures/selected/package.json | head -n 1)"
 if [ ! -f "$work/$frozen_pin" ]; then
   frozen_version="${frozen_pin%.tgz}"; frozen_version="${frozen_version#sentropic-cluster-mesh-}"
-  (cd "$work" && npm pack --silent "@sentropic/cluster-mesh@$frozen_version" >/dev/null)
+  npm pack --silent --pack-destination "$work" "@sentropic/cluster-mesh@$frozen_version" >/dev/null
 fi
 
 # Artifacts is an unpublished candidate, also exercised by the dedicated consumer below.
