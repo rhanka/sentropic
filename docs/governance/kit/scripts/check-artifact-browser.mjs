@@ -98,5 +98,6 @@ try {
   }
 } finally { await browser.close(); fs.writeFileSync(`${output}/browser.json`, `${JSON.stringify({
   portableSha256: createHash('sha256').update(fs.readFileSync(portable)).digest('hex'),
+  browserVersion: browser.version(),
   dossierSha256: createHash('sha256').update(JSON.stringify(source)).digest('hex'), results,
 }, null, 2)}\n`); }
