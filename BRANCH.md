@@ -23,6 +23,10 @@
   - `api/tests/api/app-artifacts-transport.test.ts`
   - `api/tests/api/app-mcp-registry.test.ts`
   - `api/tests/api/app-mcp-installed.test.ts`
+  - `api/tests/smoke/api-health.test.ts`
+  - `api/tests/utils/seed-test-data.ts`
+  - `api/tests/api/root-mount-fence-completeness.test.ts`
+  - `api/tests/api/artifacts-host-recovery.test.ts`
   - `package-lock.json`
   - `api/package-lock.json`
   - `.h2a/owner-questions-w0.md`
@@ -58,6 +62,9 @@
 - [x] BR00D-EXn records reason, impact and rollback before expansion.
 
 ## Feedback Loop
+- [x] BR00D-EX8: CI endpoints shard 4 passes 263 assertions but forced recovery-test database deletion emits unhandled PostgreSQL 57P01 while a pooled connection closes. Authorize api/tests/api/artifacts-host-recovery.test.ts to use normal DROP DATABASE after pool.end, matching the other Artifacts fixtures. Impact: graceful cleanup preserves leak/error visibility; no assertion or runtime change. Rollback: restore WITH (FORCE) and its observed connection-termination race.
+- [x] BR00D-EX7: CI endpoints shard 2 proves the immutable Resources fence expectation omits W2.b's Artifacts paths. Authorize api/tests/api/root-mount-fence-completeness.test.ts to enumerate the four artifact routes and their guarded prefix. Impact: retain exact path equality and require authentication/author guards on the artifact prefix; no runtime or authorization change. Rollback: restore the outdated expectation and its deterministic CI failure.
+- [x] BR00D-EX6: exact-head CI exposed smoke and E2E fixtures missing approved tenant membership, causing catalog 403 and chat catalog unavailable/zero tools. Authorize api/tests/smoke/api-health.test.ts to reuse its approved user and api/tests/utils/seed-test-data.ts to approve the four active fixture accounts. Impact: restore expected discovery/tool authority without changing production authorization, assertions or timeouts. Rollback: restore the incomplete fixtures and their reproducible authorization failures.
 - [x] BR00D-EX5: merge published artifacts 0.2.4 source 60affbaf6, including its existing packed-vector CI gate; package/packaging/workflow paths are inherited only. Impact is source/published byte alignment and upstream gate coverage; rollback reverts this merge with the tuple refresh. No package release is authored here.
 - [x] BR00D-EX4: owner-requested merge of integration ca3239295 brings W1/W2/W4 catalog and chat ancestry; these paths are merge-only. Impact is the integrated app baseline; rollback reverts the merge. Preserve this PR's BRANCH.md; inherited merge diff is outside the authored 150-line limit.
 - [x] BR00D-EX4 extension (Opus r2 P1): authorize the Makefile prerequisite for build-artifacts in prepare-node-workspace because clean API typecheck/startup needs its dist exports. Impact: canonical dev/test/CI preparation builds artifacts idempotently after mcp-platform; frozen tuple and activation remain unchanged. Rollback: remove this prerequisite; clean consumers then require an explicit artifacts build again.
@@ -90,3 +97,4 @@
 - [x] Lot 6: resolve Opus r1 startup and record-check findings; #794 must drop its registry pin after #796 lands and retain the qualified workspace source; no #794 edits.
 - [x] Lot 6a: retain all historical signature/source checks; add regenerated current-tuple vectors and exact receipt/lock/source consistency checks for artifacts 0.2.4.
 - [x] Lot 7: resolve Opus r2 P1; clean-worktree canonical API typecheck/lint/startup without manual build-artifacts, repeat preparation and locked teardown. See clean-workspace-qualification-2026-10-27.md; exact-head CI evidence follows in PR #796.
+- [x] Lot 8: reconcile CI tenant fixtures, immutable Resources fences and graceful recovery teardown; smoke, fence/recovery/chat-turn suites and four seeded HTTP/turn approval-revocation-recovery probes pass; locked teardown complete. See ci-fixture-qualification-2026-10-27.md; exact-head CI evidence follows in PR #796.
