@@ -4,13 +4,30 @@ import { grantFor } from '../storage/authority-corpus.js';
 import { PgTransactions } from '../../src/storage/postgres/transactions.js';
 import { createPostgresKernel } from '../../src/storage/postgres/index.js';
 import { applyPgMigrations, type PgHostHistory, type PgMigrationReceipt } from '../../src/storage/postgres/migrations.js';
-import { createMemoryPostgresRegistration } from '../../src/engram-memory/postgres.js';
+import { checkMemoryPostgresDriver, createMemoryPostgresRegistration } from '../../src/engram-memory/postgres.js';
+import { assembleMemoryHostBinding } from '../../src/engram-memory/binding.js';
 import type { AtomicUnit } from '../../src/storage/atomic.js';
 
 export const memoryGrant = (workspaceId = 'workspace-a') => grantFor({
   token: `memory-${workspaceId}`, moduleId: 'engram-memory',
   scope: { tenantId: 'tenant-a', workspaceId }, operations: ['read', 'write', 'maintain'],
 });
+/** Qualified host-owned PG driver/pool provider for the qualification stack (postgres:17). */
+export const memoryHostProvider = () => ({
+  identity: { name: 'node-pg-owner', version: '8.16.3', artifactDigest: 'c'.repeat(64) },
+  serverFloor: '17.0.0',
+});
+/**
+ * Host composition over an opened host: the provider is checked, then the
+ * distinct host-issued maintain binding is assembled. Callers run fence and
+ * storage calls through `binding.maintainGrant`, never the neutral handle.
+ */
+export const memoryHostComposed = () => {
+  const driver = memoryHostProvider();
+  checkMemoryPostgresDriver(driver);
+  const binding = assembleMemoryHostBinding({ driver, maintainGrant: memoryGrant() });
+  return { provider: driver, binding, grant: binding.maintainGrant };
+};
 export const memoryUnit = (extra: Partial<AtomicUnit> = {}): AtomicUnit => ({
   guards: [], records: [], appends: [], updates: [], relationships: [], barriers: [], purgeIntents: [], indexWrites: [], ...extra,
 });
