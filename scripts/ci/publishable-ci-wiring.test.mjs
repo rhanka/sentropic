@@ -202,7 +202,16 @@ test('every validation pack step receives the CI context and an explicit ENV', (
       assert.match(step.run, / ENV=test-ci-[a-z-]+$/);
     }
   }
-  assert.equal(count, PACK_TARGETS.length);
+  // Live speech uses the shared inventory's BLOCK pack and a separate deterministic workflow.
+  assert.equal(count, PACK_TARGETS.filter((slug) => slug !== 'live-speech').length);
+  assert.ok(PACK_TARGETS.includes('live-speech'));
+  assert.ok(jobs['validate-publishable-manifests'].steps.some((step) =>
+    step.run === 'make check-publishable-manifests ENV=test-ci-manifests'));
+  const speech = YAML.parse(fs.readFileSync(path.join(root, '.github/workflows/live-speech.yml'), 'utf8'));
+  const speechRuns = speech.jobs['validate-live-speech'].steps.map((step) => step.run);
+  for (const gate of ['typecheck', 'lint', 'test', 'build']) {
+    assert.ok(speechRuns.includes(`make ${gate}-live-speech ENV=test-stt-l2`));
+  }
 });
 
 test('lint wiring follows baseline evidence, independently per package, before typecheck', () => {
