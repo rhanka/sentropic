@@ -215,8 +215,12 @@ const neutralUnitToPg = (unit) => {
       : guard.kind === 'chain-head' ? { kind: 'head', chainId: guard.chain, hash: guard.hash }
         : { kind: 'absent', chainId: guard.chain }),
     records: unit.records.map((row) => ({ key: row.key, bytes: row.value, contentHash: row.contentHash })),
-    appends: unit.appends.map((row) => ({ chainId: row.chain,
-      record: { id: row.id, hash: row.hash, bytes: row.value.data }, expectation: row.expectation })),
+    appends: unit.appends.map((row) => {
+      const event = JSON.parse(row.value.data);
+      const bytes = typeof event.intent_hash === 'string' ? row.value.data
+        : memoryJcs({ ...event, intent_hash: event.event_digest ?? row.hash }).data;
+      return { chainId: row.chain, record: { id: row.id, hash: row.hash, bytes }, expectation: row.expectation };
+    }),
     updates: unit.updates.map((row) => { const translated = translateUpdateWrite(row);
       return { key: translated.key, version: translated.version, value: translated.value }; }),
     indexWrites: unit.indexWrites.map((row) => ({ key: row.key,
@@ -243,7 +247,11 @@ const neutralTransaction = (tx, units, identity) => ({
     }
     const after = BigInt(afterAllocation);
     const records = all
-      .map((row) => ({ id: row.id, hash: row.hash, value: { format: 'utf8', data: row.bytes } }))
+      .map((row) => {
+        const event = JSON.parse(row.bytes);
+        delete event.intent_hash;
+        return { id: row.id, hash: row.hash, value: memoryJcs(event) };
+      })
       .filter((row) => {
         try {
           const value = JSON.parse(row.value.data).cursor;
@@ -272,8 +280,10 @@ const neutralQueryResult = (name, records) => {
     return memoryJcs(row ? { chain: row.chainId, head: row.headHash, allocation: row.allocation }
       : { chain: 'memory-journal', head: `sha256:${'0'.repeat(64)}`, allocation: '0' });
   }
-  if (name === 'memory-journal-page') return memoryJcs(records.map((event) => ({
-    id: event.event_id, hash: event.event_hash, value: memoryJcs(event) })));
+  if (name === 'memory-journal-page') return memoryJcs(records.map((event) => {
+    const { intent_hash: _intentHash, ...rest } = event;
+    return { id: event.event_id, hash: event.event_hash, value: memoryJcs(rest) };
+  }));
   if (name === 'memory-record-by-id') return memoryJcs(records.length ? { found: true, value: memoryJcs(records[0]) } : { found: false });
   return memoryJcs(records);
 };
