@@ -12,6 +12,18 @@
       "toVersion": 1,
       "requires": ["cluster-mesh-pg/006-staged-coverage@1"],
       "checksum": "3f4b201966668fd08a4aaa0f3a19dfc4498ecfe8bda9f4c5ca9b33db8e1351a1"
+    },
+    {
+      "schemaRole": "engram-memory",
+      "id": "cluster-mesh-pg/engram-memory/002-host-ledger@1",
+      "file": "engram-memory/002-host-ledger.sql",
+      "order": 2,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 1,
+      "toVersion": 2,
+      "requires": ["cluster-mesh-pg/engram-memory/001-projections@1"],
+      "checksum": "e4dc0805c266f04e06b9f99f37d0234f0db8d466c422e606838c8af4c0636d9b"
     }
   ]
 }

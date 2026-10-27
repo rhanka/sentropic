@@ -9,13 +9,13 @@ describe.skipIf(!pgEnabled)('memory PostgreSQL registration', () => {
     const host = await memoryPgHost();
     try {
       const assets = host.registration.assets;
-      expect(assets.at(-1)).toMatchObject({ schemaRole: 'engram-memory', order: 1, fromVersion: 0, toVersion: 1 });
+      expect(assets.at(-1)).toMatchObject({ schemaRole: 'engram-memory', order: 2, fromVersion: 1, toVersion: 2 });
       await host.tx.run(false, async (session) => {
         const before = await host.history.read(session);
         await verifyPgInstallation(session, host.layout, assets, host.history);
         await applyPgMigrations(session, host.layout, assets, host.history, { id: 'again', checksum: 'b'.repeat(64) });
         expect(await host.history.read(session)).toEqual(before);
-        expect(before.at(-1)?.id).toBe('cluster-mesh-pg/engram-memory/001-projections@1');
+        expect(before.at(-1)?.id).toBe('cluster-mesh-pg/engram-memory/002-host-ledger@1');
       });
       await host.open();
       await host.open();
