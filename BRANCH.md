@@ -11,7 +11,7 @@
 - [x] Docker yielded to radar until 2026-10-27 21:00 UTC; author code/tests first.
 - [x] Every Docker build/test uses `/home/antoinefa/.cache-tmp/sentropic-docker.lock`; release between steps; finish each step with `make down` under the lock.
 - [x] Atomic commits under 150 changed lines; selective staging; `make commit`; no AI trailers.
-- [x] Preserve full governance geometry, languages and runtime routing behavior; no unrelated cleanup.
+- [x] Preserve full governance geometry, languages and runtime routing behavior, and exact embedded-font notices; no unrelated cleanup.
 - [x] Typical fixture limits: portable/initial closure 409600 B, initial JS 307200 B, optional chunk 131072 B, release 524288 B.
 
 ## Branch Scope Boundaries (MANDATORY)

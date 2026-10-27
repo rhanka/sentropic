@@ -64,7 +64,7 @@
           </div>
           { diagramTabs()}
           <ArchitectureFigure scene={scenes[diagram]} title="Deux parcours indépendants" label={scenes[diagram].shortCaption}  />
-          
+
           <div class="capitalization-note"><div><span class="editorial-kicker">CAPITALISER LES CORRECTIONS</span><p><strong>8 conventions restent à transmettre au harnais.</strong> Le titre discret et les questions courtes sont déjà prescrits ; les cartes, les zones et leurs interactions vivent encore dans les kits.</p></div><Button size="sm" variant="secondary" onclick={()=>go(3)}>Voir les écarts</Button></div>
         </section>
       {:else if current === 1 || current === 2}
