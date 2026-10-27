@@ -51,6 +51,10 @@
     "runtimeDownloads": "none — audio helpers are preinstalled system binaries or refused when absent; no npm TTS dependency added",
     "audioInTests": "synthetic PCM and byte-stub WAVs only via FakeDevice, FakePort and node fixtures; no audio files written, no audio payload in events or logs (counts, ids, chunk indexes and text length only)"
   },
+  "latencyBounds": {
+    "fenceCancel": "150 ms or less from barge to reaped child on the SIGTERM path (asserted in playback and voice-loop tests against the §9 gate)",
+    "sigkillEscalation": "bounded 500 ms for children that ignore SIGTERM (100 ms escalation plus CI margin; exceeds the 150 ms gate for hung children only)"
+  },
   "trustBoundary": {
     "hashThenExec": "digest verified immediately before spawn, executed by path (TOCTOU inherited from the L4 arecord pattern and accepted there); ESPEAK_DIGESTS/APLAY_DIGESTS/APLAY_BIN/ESPEAK_BIN env overrides allow operator-chosen binaries and are therefore trusted operator input, recorded here",
     "narrationText": "text travels on espeak stdin (never argv, never /proc cmdline); WAV bytes travel espeak-stdout to aplay-stdin with no filesystem copy; RAM buffers are dropped after close"
