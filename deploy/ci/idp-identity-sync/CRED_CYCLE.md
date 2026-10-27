@@ -113,7 +113,7 @@ line `IMMO_MCP_WORKLOAD_CLIENT_SECRET` (the source of truth), update the same-na
 GitHub environment secret in `sentropic-idp-run`, then run the protected
 `idp-workload-secret.yml` workflow on `main`. It idempotently applies Secret
 `immo-mcp-workload`, key `IMMO_MCP_WORKLOAD_CLIENT_SECRET`, in `sentropic-preprod`.
-Verify only its name, namespace, created/configured status and eight-hex SHA-256
+Verify only its name, namespace, configured status and eight-hex SHA-256
 fingerprint in the output; never print the value. Then run the protected sync
 dry-run and committing import. The sync hashes locally and rekeys the active
 row transactionally: the new credential works and the old credential stops
