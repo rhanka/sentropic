@@ -108,6 +108,16 @@ export const ESPEAK_MAX_CHARS = 2000;
 export const ESPEAK_MAX_WAV_BYTES = 8 * 1024 * 1024;
 
 /**
+ * Fresh abort read through a call boundary. The entry fence narrows
+ * `options.signal.aborted` to false and AbortSignal.aborted is readonly, so
+ * a repeated `=== true` on the same reference reads as dead code to tsc
+ * even though a barge can land during the awaited verification.
+ */
+function isAborted(signal?: AbortSignal): boolean {
+  return signal?.aborted === true;
+}
+
+/**
  * Exact espeak-ng argv for piped synthesis (man page: --stdin reads text to
  * the end of stream, --stdout writes speech output). No text in argv. Pure.
  */
@@ -195,6 +205,10 @@ export class EspeakNgEngine implements TtsEnginePort {
     }
     // Pins first: no helper exists yet, so nothing can leak on mismatch.
     const binary = await this.verifiedBinary();
+    // A barge may have landed during verification: never spawn past the fence.
+    if (isAborted(options.signal)) {
+      throw new TtsSynthesisError('synthesis aborted before spawn');
+    }
     const wav = await runEspeak(binary, buildEspeakArgs({ voice, speedWpm }), text, options.signal);
     return { wav, voice, chars: text.length };
   }
@@ -206,6 +220,11 @@ export class EspeakNgEngine implements TtsEnginePort {
 
 function runEspeak(binary: string, argv: string[], text: string, signal?: AbortSignal): Promise<Buffer> {
   return new Promise<Buffer>((resolve, reject) => {
+    if (signal?.aborted === true) {
+      // Before spawn: no child exists, nothing to reap, settle at once.
+      reject(new TtsSynthesisError('synthesis aborted by barge-in'));
+      return;
+    }
     const child = spawn(binary, argv, { shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
     const chunks: Buffer[] = [];
     let stdoutBytes = 0;
@@ -265,11 +284,6 @@ function runEspeak(binary: string, argv: string[], text: string, signal?: AbortS
         settle(new TtsSynthesisError(`espeak-ng exited ${String(code)}: ${stderr}`));
       }
     });
-    if (signal?.aborted === true) {
-      // No child exists yet: nothing to reap, settle at once.
-      settle(new TtsSynthesisError('synthesis aborted by barge-in'));
-      return;
-    }
     signal?.addEventListener('abort', onAbort, { once: true });
     try {
       child.stdin?.write(text, 'utf8');

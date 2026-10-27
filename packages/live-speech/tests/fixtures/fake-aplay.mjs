@@ -10,7 +10,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 const mode = process.env.FAKE_APLAY_MODE ?? 'ok';
 const pidFile = process.env.FAKE_APLAY_PIDFILE;
-if (pidFile) writeFileSync(pidFile, `${process.pid}\n`);
 
 if (mode === 'fail') {
   process.exit(3);
@@ -25,6 +24,13 @@ if (expectHex !== undefined && input.toString('hex') !== expectHex) {
 if (mode === 'hang' || mode === 'hang-ignore-term') {
   if (mode === 'hang') process.on('SIGTERM', () => process.exit(0));
   else process.on('SIGTERM', () => {});
+}
+// The pidfile is a readiness marker: it is written only after the SIGTERM
+// handler above is installed, so a booted pid proves the escalation path
+// is armed (a SIGTERM arriving at a booted pid cannot take the default
+// action anymore).
+if (pidFile) writeFileSync(pidFile, `${process.pid}\n`);
+if (mode === 'hang' || mode === 'hang-ignore-term') {
   setInterval(() => {}, 1000);
 } else {
   process.exit(0);
