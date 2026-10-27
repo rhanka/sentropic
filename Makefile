@@ -825,12 +825,47 @@ check-eradicated-packages: ## Fail if cli, build-cli or focus return as sentropi
 .PHONY: ci-run-metrics ci-expected-results ci-expected-manifest test-ci-run-metrics test-ci-expected-results
 CI_METRICS_DIR ?= tmp/ci-capacity
 CI_EXPECTED_TOOLS = tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund yaml@2.8.1 >/dev/null; export CI_EXPECTED_TOOL_DIR="$$tool_dir"
+# BR77-EX2: check per-run dispatch shape; measured timing is a separate proof.
+.PHONY: ci-capacity-policy
+ci-capacity-policy: ## Check independent dispatch and matrix widths (account admission requires live evidence)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file .github/workflows/ci.yml --capacity-policy $(if $(filter 1,$(CI_REQUIRE_CAPACITY_PROOF)),--require-proof) $(foreach file,$(CI_POLICY_RUN_FILES),--proof-file $(file))'
+CI_RUN_ATTEMPT ?= 1
+CI_CAPACITY_REF ?= $(shell git branch --show-current)
+.PHONY: ci-capacity-dispatch ci-capacity-runs ci-capacity-status
+ci-capacity-dispatch: ## Dispatch this branch's package publication dry-run (never main)
+	@test -n "$(CI_CAPACITY_REF)" && test "$(CI_CAPACITY_REF)" != main
+	@gh workflow run ci.yml --repo rhanka/sentropic --ref "$(CI_CAPACITY_REF)" -f bootstrap_publish_target=none -f capacity_publish_dry_run=true
+ci-capacity-runs: ## List identified policy runs on the qualification branch
+	@gh run list --repo rhanka/sentropic --workflow ci.yml --branch "$(CI_CAPACITY_REF)" --limit 5 --json databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url
+ci-capacity-status: ## Inspect CI_RUN_ID without cancelling or retrying any job
+	@printf '%s\n' '$(CI_RUN_ID)' | awk '!/^[1-9][0-9]*$$/ { bad=1 } END { exit bad }'
+	@gh run view $(CI_RUN_ID) --repo rhanka/sentropic --json databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,jobs --jq '{databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,pendingOrFailed: [.jobs[] | select(.conclusion != "success" and .conclusion != "skipped") | {databaseId,name,status,conclusion,startedAt,completedAt}]}'
+.PHONY: ci-capacity-publish-dry-run
+ci-capacity-publish-dry-run: ## Exercise a publisher's real guarded pack without registry writes
+	@case '$(PACKAGE)' in llm-mesh|llm-gateway|cluster-mesh|chat-ui|cited-source-viewer|cowork-bridge|cowork-desktop|oauth-verify|mcp-auth|mcp-platform|artifacts|auth-hono|auth-client|auth-ui|contracts|events|chat-core|chat-server|comments|flow|harness) ;; *) echo 'Invalid dry-run package'; exit 1;; esac
+	@$(MAKE) --no-print-directory pack-$(PACKAGE) MANIFEST_REPORT_DIR=tmp/ci-capacity/publish-$(PACKAGE) ENV=$(ENV)
+	@jq -n --arg package '$(PACKAGE)' --arg run "$$GITHUB_RUN_ID" --arg sha "$$GITHUB_SHA" '{package: $$package, runId: $$run, headSha: $$sha, mode: "guarded-pack-no-publication", completed: true}' | tee tmp/ci-capacity/publish-$(PACKAGE)/dry-run.json
+CI_EXPECTED_ATTEMPT ?= $(CI_RUN_ATTEMPT)
+CI_CAPTURE_DIR ?= tmp/ci-capacity/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)
+.PHONY: ci-capacity-capture
+ci-capacity-capture: ## Capture identified completed run/attempt CI_RUN_ID=<id> and emit BR-76-format metrics
+	@printf '%s\n' '$(CI_RUN_ID)' '$(CI_RUN_ATTEMPT)' '$(CI_EXPECTED_ATTEMPT)' | awk '!/^[1-9][0-9]*$$/ { bad=1 } END { exit bad }'
+	@mkdir -p "$(CI_CAPTURE_DIR)"
+	@gh api repos/rhanka/sentropic/actions/runs/$(CI_RUN_ID)/attempts/$(CI_RUN_ATTEMPT) > "$(CI_CAPTURE_DIR)/run.json"
+	@gh api --paginate 'repos/rhanka/sentropic/actions/runs/$(CI_RUN_ID)/attempts/$(CI_RUN_ATTEMPT)/jobs?per_page=100' > "$(CI_CAPTURE_DIR)/job-pages.json"
+	@jq -s '[.[].jobs[]]' "$(CI_CAPTURE_DIR)/job-pages.json" > "$(CI_CAPTURE_DIR)/jobs.json"
+	@gh api "repos/rhanka/sentropic/contents/.github/workflows/ci.yml?ref=$$(jq -r .head_sha '$(CI_CAPTURE_DIR)/run.json')" --jq .content | base64 -d > "$(CI_CAPTURE_DIR)/workflow.yml"
+	@rm -f "$(CI_CAPTURE_DIR)/expected.json"
+	@gh run download $(CI_RUN_ID) --name ci-expected-$(CI_RUN_ID)-$(CI_EXPECTED_ATTEMPT) --dir "$(CI_CAPTURE_DIR)"
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -v "$(abspath $(CI_CAPTURE_DIR)):/receipts" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file /receipts/workflow.yml --capture-dir /receipts'
+	@$(MAKE) --no-print-directory ci-run-metrics RUN_FILE=$(CI_CAPTURE_DIR)/capture.json ENV=$(ENV) > "$(CI_CAPTURE_DIR)/metrics.json"
+	@echo "Capacity receipts: $(CI_CAPTURE_DIR)/metrics.json"
 ci-expected-manifest: ## Retain the selected workflow/member manifest before dispatch (BR76-EX2)
 	@mkdir -p "$(CI_METRICS_DIR)"
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e CI_SELECTION_CONTEXT -v "$(CURDIR):/workspace:ro" -v "$(abspath $(CI_METRICS_DIR)):/receipts" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file .github/workflows/ci.yml --manifest-file /receipts/expected.json'
 	@if [ -n "$$GITHUB_OUTPUT" ]; then printf 'attempt=%s\n' "$$GITHUB_RUN_ATTEMPT" >> "$$GITHUB_OUTPUT"; fi
 ci-run-metrics: ## Summarize one captured CI run file RUN_FILE=<path> (BR76-EX2)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-run-metrics.mjs $(if $(RUN_FILE),--run-file $(RUN_FILE),--help)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-run-metrics.mjs $(if $(RUN_FILE),--run-file $(RUN_FILE),--help) $(foreach file,$(CI_COMPETING_FILES),--competing-file $(file))
 ci-expected-results: ## Evaluate expected vs executed results EXPECTED_FILE=<json> EXECUTED_FILE=<json> (BR76-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e CI_GATE_NEEDS -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-expected-results.mjs $(if $(EXPECTED_FILE),--expected-file $(EXPECTED_FILE),--help) $(if $(EXECUTED_FILE),--executed-file $(EXECUTED_FILE),)
 test-ci-run-metrics: ## Run ci-run-metrics fixture tests in Docker (BR76-EX2)
