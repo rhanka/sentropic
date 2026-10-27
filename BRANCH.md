@@ -49,10 +49,10 @@
   - [x] Read Docker lock, rules, template, package adapter/tests and Opus P1-1 evidence.
   - [x] Create isolated branch from fetched `origin/main`; mechanical harness branch check passes.
   - [x] Capture existing package targets and lazy-package consumer harness.
-- [ ] **Lot 1 — Test first**
-  - [ ] Add `packages/cluster-mesh/tests/packaging/activation-vectors.spec.ts`: native consumer import, complete execution on PostgreSQL, negative executor witness, counts.
-  - [ ] Reuse lazy-package preparation with an activation-only consumer and disposable Compose PostgreSQL.
-  - [ ] Observe missing-export failure before adding implementation.
+- [x] **Lot 1 — Test first**
+  - [x] Add `packages/cluster-mesh/tests/packaging/activation-vectors.spec.ts`: native consumer import, complete execution on PostgreSQL, negative executor witness, counts.
+  - [x] Reuse lazy-package preparation with an activation-only consumer and disposable Compose PostgreSQL.
+  - [x] RED: installed 0.2.3 fails with `ERR_PACKAGE_PATH_NOT_EXPORTED` for `./adapters/postgres-activation/vectors` (`/tmp/artifacts-upt2-red.log`).
 - [ ] **Lot 2 — Package vectors**
   - [ ] Export framework-independent executable vectors; run against the supplied host stores and DB-time wait.
   - [ ] Cover exact bindings, denial/outage, replay/race, namespace isolation, immutable records, expiry, cleanup, invalidation and recovery.

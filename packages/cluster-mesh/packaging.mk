@@ -30,6 +30,21 @@ LAZY_PACKAGE_RUN = docker compose -p $(ENV) -f docker-compose.immo-861.yml run -
 endif
 
 .PHONY: test-lazy-package refresh-lazy-package-lock check-train-lock-integrity
+# UP-T-2: the same packed-consumer harness, limited to activation and a disposable DB.
+.PHONY: test-lazy-package-activation
+test-lazy-package-activation:
+	@case "$(ENV)" in test-*) ;; *) echo 'A dedicated test ENV is required'; exit 1 ;; esac
+	@$(MAKE) --no-print-directory -f Makefile build-artifacts ENV=$(ENV)
+	@docker compose -p $(ENV) -f docker-compose.immo-861.yml up -d --wait postgres
+	@docker compose -p $(ENV) -f docker-compose.immo-861.yml run --rm --no-deps \
+		-u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-e DATABASE_URL=postgres://app:app@postgres:5432/app \
+		-w /workspace/packages/cluster-mesh qualification sh -lc 'set -eu; work=/tmp/lazy-activation; \
+		CLUSTER_MESH_PREPARE_ONLY=activation sh tests/packaging/prepare.sh "$$work"; \
+		cp vitest.config.ts "$$work/tools/vitest.config.ts"; \
+		CLUSTER_MESH_PACKAGING_DIR="$$work" "$$work/tools/node_modules/.bin/vitest" \
+		run tests/packaging/activation-vectors.spec.ts --config "$$work/tools/vitest.config.ts" --environment node --maxWorkers=1'
+
 test-lazy-package:
 	$(LAZY_SIBLING_CHECK)
 	@$(MAKE) --no-print-directory -f Makefile build-cluster-mesh ENV=$(ENV)
