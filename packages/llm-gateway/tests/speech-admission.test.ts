@@ -130,6 +130,8 @@ describe('speech admission', () => {
 
   it('should refuse payloads in operational metadata and pin price identity and all priced ceilings', async () => {
     const ledger = new SpeechLedgerFixture();
+    await expect(admitSpeech(ledger.options(), { ...operation(), cost: { ...operation().cost, workspaceId: undefined } }))
+      .rejects.toMatchObject({ code: 'invalid' });
     await expect(admitSpeech(ledger.options(), { ...operation(), audio: new Uint8Array(8) } as never))
       .rejects.toMatchObject({ code: 'invalid' });
     await expect(admitSpeech(ledger.options(), { ...operation(), binding: { ...operation().binding, transcript: 'private' } } as never))
