@@ -27,6 +27,7 @@ describe('foundation discovery to execution context', () => {
     const select = (context: typeof alice) => resolveFoundationChatTools({ userId: context.subjectId,
       workspaceId: context.workspaceId, allowedTools: context.allowedTools, context }).map(t => t.function.name);
     expect(select(alice)).toContain('artifacts_publish');
+    expect(select(alice)).not.toContain('search_skills');
     expect(select(bob)).not.toContain('artifacts_publish');
     expect(executeFoundationSearchCatalog({ payload: { query: 'Private publication' }, context: bob }).hits).toEqual([]);
     const invoke = (context = alice, args = {}) => executeFoundationSkillTool({
