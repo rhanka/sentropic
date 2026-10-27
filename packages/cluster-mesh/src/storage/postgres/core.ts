@@ -31,7 +31,7 @@ import { StorageDeniedError, StorageInvalidCommandError } from '../errors.js';
 import { createStaticAuthorityPort } from '../kernel.js';
 import { HmacExactHeadBoundaryProvider, type ChainBoundaryProvider } from '../tokens.js';
 import { PgRoots, pgJsonBytes, type PgRoot } from './roots.js';
-import { PgTransactions } from './transactions.js';
+import { DEFAULT_PG_BUDGETS, PgTransactions, withPgTxTimeouts } from './transactions.js';
 import { decodePgUtf8 } from './codec.js';
 import { PostgresStorageError } from './errors.js';
 import { loadPgAssets, verifyPgInstallation } from './migrations.js';
@@ -257,7 +257,11 @@ export const openPgCore = async (options: PostgresStorageOptions): Promise<PgCor
   // its own session. Without opt-in the driver passes through untouched.
   const optIn = options.canonicalOwnership;
   const cell = optIn ? createOwnershipCell('', options.moduleId, optIn.leaseMs ?? DEFAULT_LEASE_MS) : null;
-  const wrapped = cell ? wrapDriverWithOwnership(options.driver, cell) : null;
+  // Timeout-first driver (G-P1): wait timeouts apply right after BEGIN, so
+  // the ownership retained-session renew/verify stacked above also runs
+  // bounded. `run` re-applies the same values afterwards (idempotent).
+  const timed = withPgTxTimeouts(options.driver, Object.freeze({ ...DEFAULT_PG_BUDGETS, ...options.budgets }));
+  const wrapped = cell ? wrapDriverWithOwnership(timed, cell) : null;
   const provisional = new PgCore(
     wrapped ? { ...options, driver: wrapped.driver } : options,
     options.incarnation ?? `store:${randomUUID()}`,
@@ -304,6 +308,9 @@ export const openPgCore = async (options: PostgresStorageOptions): Promise<PgCor
         verify: (verifySession) =>
           verifyPgInstanceOwnership(verifySession, cell.schema, cell.moduleId, won.handle, cell.released),
         release: async () => {
+          // Idempotent like the neutral registry: a repeated or stale
+          // release is a no-op and must never clear a successor row.
+          if (cell.released) return;
           await provisional.tx.run(false, (releaseSession) =>
             expirePgInstanceLease(releaseSession, cell.schema, cell.moduleId, won.handle),
           );
