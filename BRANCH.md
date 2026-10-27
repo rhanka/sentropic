@@ -67,11 +67,11 @@ Deliver approved r3 L4: `live-speech/src/node/{capture,device,terminal-control}.
   - [x] `src/node/capture.ts`: mic-off default, mute independent of VAD, level meter (dBFS only), bounded downstream queue with drop counter, device-loss event, idempotent close.
   - [x] `tests/capture.test.ts`: starts muted/off, toggle, mute/VAD independence, meter values, bounded drops, loss propagation, cleanup.
   - [x] Lot gate: `make test-live-speech SCOPE=tests/capture.test.ts ENV=test-stt-l4` green (7/7).
-- [ ] **Lot 3 — Terminal control + wiring**
-  - [ ] `src/node/terminal-control.ts`: toggle + explicit start/end keys on its own TTY stream, no hold without qualified hotkey (fail closed), documented defaults, TTY restore on close, never forwards keys.
-  - [ ] `tests/terminal-control.test.ts`: toggle/stop keys, unknown keys ignored, no leakage, raw-mode restore, hold-without-hotkey throws.
-  - [ ] `tests/capture-control.test.ts`: FakeDevice tone through capture into the L3 session; toggle on yields a final, toggle off yields silence; stop closes everything.
-  - [ ] Lot gate: `make test-live-speech ENV=test-stt-l4` green (full package).
+- [x] **Lot 3 — Terminal control + wiring**
+  - [x] `src/node/terminal-control.ts`: toggle + explicit start/end keys on its own TTY stream, no hold without qualified hotkey (fail closed), documented defaults, TTY restore on close, never forwards keys.
+  - [x] `tests/terminal-control.test.ts`: toggle/stop keys, unknown keys ignored, no leakage, raw-mode restore, hold-without-hotkey throws.
+  - [x] `tests/capture-control.test.ts`: FakeDevice tone through capture into the L3 session; toggle on yields a final, toggle off yields silence; stop closes everything.
+  - [x] Lot gate: `make test-live-speech ENV=test-stt-l4` green (full package, 56/56 over 11 files).
 - [ ] **Lot N-1 — Docs + receipts**
   - [ ] `packages/live-speech/README.md`: L4 layout (device/capture/control).
   - [ ] `packages/live-speech/bench/l4-g-native.receipt.json` (§8.1/G-NATIVE: image, toolchain, helper digests/licenses, no-interpreter evidence, blocked live-mic/speaker-AEC/hold-hotkey).
