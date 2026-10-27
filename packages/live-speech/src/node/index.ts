@@ -12,6 +12,7 @@ export { HypothesisTracker, usableText } from './reconciler.js';
 export type { ReconciledPartial } from './reconciler.js';
 export {
   ArecordDevice,
+  ARECORD_SHA256_PINS,
   buildArecordArgs,
   DeviceLostError,
   DeviceOpenError,
