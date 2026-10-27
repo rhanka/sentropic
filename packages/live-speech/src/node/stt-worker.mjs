@@ -6,7 +6,8 @@
 //     -> { type: 'result', id, segments, language } | { type: 'error', id, message }
 //   { type: 'close' } -> { type: 'closed' } then exit(0).
 // The engine module must export a `createEngine(options, modelPath)` factory returning
-// `{ engineId, transcribe(Float32Array, {sampleRateHz, language?}), close() }`.
+// `{ engineId, transcribe(Float32Array, {sampleRateHz, language?}), close(), preload?() }`.
+// When `preload` exists, init awaits it before reporting ready, so ready means loaded.
 // Audio buffers are consumed, never retained; logs carry byte counts only, never payload.
 import { parentPort } from 'node:worker_threads';
 
@@ -27,6 +28,7 @@ parentPort.on('message', async (message) => {
         return;
       }
       engine = await module.createEngine(message.engineOptions ?? {}, message.modelPath);
+      if (engine && typeof engine.preload === 'function') await engine.preload();
       parentPort.postMessage({ type: 'ready', id: message.id ?? 'init', engineId: engine.engineId });
       return;
     }
