@@ -4,10 +4,12 @@ import { memoryJcs } from '../../src/engram-memory/codec.js';
 import type { NeutralAtomicUnit, NeutralCommitOptions } from '../../src/engram-memory/neutral-contract.js';
 import type { MemoryCampaignHost } from './memory-pg-host.js';
 import { DIGEST, hostReceiptDigest, NOW } from './memory-engine.js';
+import { registerMemoryCase } from './memory-corpus.js';
 
 const MAX = '18446744073709551615';
 export const runMemoryU64Corpus = (open: () => Promise<MemoryCampaignHost>) => {
   for (const previous of ['9007199254740991', '9223372036854775807', '18446744073709551614']) {
+    registerMemoryCase(`atomic-units-v1/C5/${previous}`);
     it(`atomic-units-v1/C5/${previous}: should cross with exact K3 K5 K8 guards chain positions and publication counters`, async () => {
       const h = await open();
       try {
