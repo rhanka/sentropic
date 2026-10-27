@@ -9,6 +9,7 @@ export type TerminalControlEvent =
   | { readonly kind: 'mic-toggle' }
   | { readonly kind: 'mic-on' }
   | { readonly kind: 'mic-off' }
+  | { readonly kind: 'mic-mode' }
   | { readonly kind: 'stop' };
 
 export interface TerminalKeyBindings {
@@ -18,11 +19,13 @@ export interface TerminalKeyBindings {
   readonly on: string;
   /** Push-mode explicit mic-off key (default ']'). */
   readonly off: string;
-  /** Immediate-stop key in both modes (default 's'). */
+  /** Open-mic request key in every mode (default 'o'). */
+  readonly micMode: string;
+  /** Immediate-stop key in every mode (default 's'). */
   readonly stop: string;
 }
 
-const DEFAULT_BINDINGS: TerminalKeyBindings = { toggle: 'm', on: '[', off: ']', stop: 's' };
+const DEFAULT_BINDINGS: TerminalKeyBindings = { toggle: 'm', on: '[', off: ']', micMode: 'o', stop: 's' };
 
 export type TerminalKeyMode = 'toggle' | 'push';
 
@@ -96,6 +99,10 @@ export class TerminalController {
   private onKey(key: string): void {
     if (key === this.bindings.stop) {
       this.emit({ kind: 'stop' });
+      return;
+    }
+    if (key === this.bindings.micMode) {
+      this.emit({ kind: 'mic-mode' });
       return;
     }
     if (this.mode === 'toggle') {
