@@ -8,6 +8,7 @@ import { compileArtifactsProfile, createArtifactsToolExecutor, createRadarKeyDer
   ArtifactProfileInputError, RADAR_ARTIFACTS_PROFILE } from '@sentropic/artifacts/mcp-core';
 import { ArtifactOperationError, classifyArtifactFailure, projectArtifactHttpOutcome } from '@sentropic/artifacts/server/outcome-contract';
 import { createLifecycleService } from '@sentropic/artifacts/server/lifecycle';
+import { createPostgresClaimGuardedRefs } from '@sentropic/artifacts/server/gc';
 import { createPostgresPublicationUnitWriter, type PublicationBlobStore } from '@sentropic/artifacts/server/publication';
 import { createArtifactHostKv } from './host-storage';
 import { createArtifactAuthorization, type ArtifactHostIdentity, type CurrentArtifactIdentity } from './authorization';
@@ -66,7 +67,8 @@ export function createArtifactHost(options: ArtifactHostOptions) {
         async abandonAttempt() {},
         readPolicyRevision: async () => (await authorization.current()).revision,
       },
-      publication: { blobs, intents: store, refs: store, createUnitWriter: createPostgresPublicationUnitWriter,
+      publication: { blobs, intents: store, refs: createPostgresClaimGuardedRefs(store, createPostgresCommitExecutor(pool)),
+        createUnitWriter: createPostgresPublicationUnitWriter,
         locks: { 'artifact-lifecycle': [async (client) => {
           await client.query('SELECT id FROM artifacts.artifacts WHERE id = $1 AND storage_scope_id = $2 FOR UPDATE',
             [artifactId, storageScopeId]);
