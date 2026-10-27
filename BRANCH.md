@@ -54,7 +54,8 @@
 
 ## Feedback Loop
 - [ ] W1.b P2: verify OAuth tuple, scopes, expiry and revocation with DB time after waits.
-- [ ] W2.a P2: eliminate duplicate artifacts and masking aliases; prove physical compilation.
+- [x] W2.a P2 reconciliation: API artifacts uses file workspace; root lock removes private registry copy; TS/Vitest artifacts aliases removed.
+- [ ] W2.a P2 installed proof: api/tests/api/app-mcp-installed.test.ts runs Node/tsx outside Vitest resolution; final strict install pending.
 - [ ] Retry failed pushes every ten minutes; draft PR after push; no merge.
 - [ ] Independent final-head reviews and remote CI remain separate receipts.
 
@@ -72,7 +73,8 @@
 - [x] Lot 1 tests authored first in api/tests/api/artifacts-host-credentials.test.ts; current OAuth/session authority.
 - [x] Lot 1 reader: locked session/OAuth tuple, consent, audience, proof key and DB-time expiry; validation pending.
 - [x] Test fixture uses allowed id_token substitution and waits for physical PG connection closure before drop.
-- [ ] Lot 2: strict workspace reconciliation; remove aliases; api/tests/api/app-mcp-installed.test.ts.
+- [x] Lot 2 manifests/locks regenerated strictly without peer overrides; API leaf metadata refreshed to source versions.
+- [ ] Lot 2 strict install/physical compilation final receipt.
 - [x] Lot 3 tests authored in api/tests/api/app-artifacts-transport.test.ts; exact dispatch, denial, HTTP and MCP routing.
 - [ ] Lot 3 real HTTP/MCP same-effect receipt.
 - [ ] Lot 4: mount registry dispatch and artifact HTTP with existing auth/supervisor and W1 host.
