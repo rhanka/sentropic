@@ -53,6 +53,16 @@ describe('speech admission', () => {
       .rejects.toMatchObject({ code: 'conflict' });
   });
 
+  it('should allow a reserved allocator turn before its native acknowledgement supplies an ID', async () => {
+    const ledger = new SpeechLedgerFixture();
+    const op = { ...operation(), nativeTurnRef: undefined };
+    ledger.state.allocator = { ...ledger.state.allocator, nativeTurnRef: undefined };
+    await admitSpeech(ledger.options(), op);
+    expect(await markSpeechDispatched(ledger.options(), op.operationId)).toBe(true);
+    expect(ledger.state.campaign.reservedMicroUsd).toBe(1_000_000);
+    expect(ledger.state.allocator.countedUnits).toBe(1);
+  });
+
   it('should refuse missing, foreign or mismatched allocator admissions', async () => {
     for (const patch of [{ receiptRef: 'other' }, { tenantId: 'other' }, { principalId: 'other' },
       { workspaceId: 'other' }, { targetSessionId: 'other' }, { nativeTurnRef: 'other' },

@@ -28,6 +28,8 @@ The host must provide:
   redacted account/seat reference, and authoritative allocator/native-turn/backend-operation links.
   The native backend is already counted by its allocator; speech entries always add zero native
   counted units and link its billing operation. Speech authorization never grants extra agent quota.
+  A reserved turn may have no native turn ID until its acknowledgement arrives, as in the L2 journal;
+  the stable submit key, backend operation and allocator receipt still have to match.
 - Current region-specific USD price revisions with native duration/token/character rates, all fees
   included, and ceilings for every priced dimension. The price is pinned for settlement. Unknown
   dimensions remain absent; captured seconds and local compute time are observational, not tokens.
