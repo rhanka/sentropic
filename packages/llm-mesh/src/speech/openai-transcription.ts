@@ -413,3 +413,118 @@ export class TranscriptionSession implements SpeechSession {
       await this.socket.close();
     } finally {
       const connectedSeconds = Math.max(0, (monotonicNow(this.nowMs) - this.openedAtMs) / 1000);
+      const totals = { connectedSeconds, admittedAudioSeconds: this.audioSeconds };
+      await this.usage.settle({
+        operationId: this.admission.operationId,
+        outcome: this.outcome,
+        usage: totals,
+      });
+      const waiter = this.waiters.shift();
+      if (waiter) waiter();
+      await this.pump.catch(() => undefined);
+    }
+  }
+
+  private pushError(reason: string, retryable: boolean): void {
+    this.sequence += 1;
+    this.emit(errorEvent(
+      { speechSessionId: this.receipt.speechSessionId, connectionEpoch: this.receipt.connectionEpoch, clock: this.clock() },
+      this.nextId(), this.sequence, reason, retryable,
+    ));
+  }
+
+  private onDelta(itemId: string, contentIndex: number, delta: string): void {
+    if (contentIndex !== 0) {
+      this.pushError('invalid-format', true);
+      return;
+    }
+    let item = this.items.get(itemId);
+    if (!item) {
+      item = {
+        text: '', revision: 0, audioStartMs: this.turnAudioStartMs ?? 0, audioEndMs: this.lastCapturedAtMs,
+        finalized: false,
+        speechSessionId: this.receipt.speechSessionId,
+        connectionEpoch: this.receipt.connectionEpoch,
+        binding: this.binding,
+      };
+      this.items.set(itemId, item);
+    }
+    if (item.finalized) return;
+    const start = item.text.length;
+    item.text += delta;
+    item.revision += 1;
+    this.sequence += 1;
+    const partial: SpeechTranscriptPartial = {
+      schemaVersion: 1,
+      speechSessionId: item.speechSessionId,
+      connectionEpoch: item.connectionEpoch,
+      eventId: this.nextId(),
+      sequence: this.sequence,
+      clock: this.clock(),
+      type: 'transcript.partial',
+      binding: this.binding,
+      utteranceId: itemId,
+      revision: item.revision,
+      replaces: { start, end: start },
+      text: delta,
+    };
+    this.emit(partial);
+  }
+
+  private onCompleted(itemId: string, transcript: string, languages: unknown): void {
+    const item = this.items.get(itemId);
+    if (!item) {
+      this.pushError('invalid-format', true);
+      return;
+    }
+    if (item.finalized) {
+      this.pushError('invalid-format', true);
+      return;
+    }
+    item.finalized = true;
+    item.revision += 1;
+    item.audioEndMs = Math.max(item.audioEndMs, this.lastCapturedAtMs);
+    this.sequence += 1;
+    let language = this.binding.language;
+    if (!language && Array.isArray(languages)) {
+      const first = languages[0] as { code?: unknown } | undefined;
+      if (first && typeof first.code === 'string' && first.code) language = first.code;
+    }
+    const final: SpeechTranscriptFinal = {
+      schemaVersion: 1,
+      speechSessionId: item.speechSessionId,
+      connectionEpoch: item.connectionEpoch,
+      eventId: this.nextId(),
+      sequence: this.sequence,
+      clock: this.clock(),
+      type: 'transcript.final',
+      binding: this.binding,
+      utteranceId: itemId,
+      revision: item.revision,
+      text: transcript,
+      language: language ?? 'und',
+      audioInterval: { startMs: item.audioStartMs, endMs: item.audioEndMs },
+    };
+    // Partials are ephemeral: the hypothesis buffer is released with the final.
+    this.items.delete(itemId);
+    this.emit(final);
+  }
+
+  private onFrame(raw: string): void {
+    let frame: unknown;
+    try {
+      frame = JSON.parse(raw) as unknown;
+    } catch {
+      this.pushError('invalid-format', true);
+      return;
+    }
+    if (!frame || typeof frame !== 'object') {
+      this.pushError('invalid-format', true);
+      return;
+    }
+    const type = (frame as Record<string, unknown>).type;
+    if (type === 'conversation.item.input_audio_transcription.delta') {
+      const record = frame as Record<string, unknown>;
+      if (!isNonEmptyString(record.item_id) || typeof record.delta !== 'string'
+        || typeof record.content_index !== 'number') {
+        this.pushError('invalid-format', true);
