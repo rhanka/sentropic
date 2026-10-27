@@ -1,7 +1,7 @@
 // Canonical product adapter for the injected Cluster Mesh business transport.
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { zValidator } from '@hono/zod-validator';
+import { zValidator } from '../../utils/zod-validator';
 import { productService } from '../../services/context-product';
 import { requireEditor } from '../../middleware/rbac';
 import { requireWorkspaceEditorRole } from '../../middleware/workspace-rbac';
@@ -10,13 +10,13 @@ const createProductSchema = z.object({
   initiativeId: z.string().min(1),
   solutionId: z.string().optional(),
   status: z.enum(['draft', 'active', 'delivered', 'archived']).optional(),
-  data: z.record(z.unknown()).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 });
 
 const updateProductSchema = z.object({
   status: z.enum(['draft', 'active', 'delivered', 'archived']).optional(),
   solutionId: z.string().nullable().optional(),
-  data: z.record(z.unknown()).optional(),
+  data: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const productsRouter = new Hono();

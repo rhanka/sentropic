@@ -5,6 +5,21 @@ import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import { artifactsCompatible } from './helpers.js';
 
+it('should keep the frozen selected fixture aligned with the candidate release tuple', () => {
+  const fixture = JSON.parse(readFileSync(new URL('./fixtures/selected/package.json', import.meta.url), 'utf8'));
+  const lock = JSON.parse(readFileSync(new URL('./fixtures/selected/package-lock.json', import.meta.url), 'utf8'));
+  expect(lock.packages[''].dependencies).toEqual(fixture.dependencies);
+  for (const slug of ['cluster-mesh', 'llm-mesh', 'llm-gateway']) {
+    const candidate = JSON.parse(readFileSync(new URL(`../../../${slug}/package.json`, import.meta.url), 'utf8'));
+    const spec = slug === 'cluster-mesh' ? `file:../sentropic-${slug}-${candidate.version}.tgz` : candidate.version;
+    expect(fixture.dependencies[candidate.name]).toBe(spec);
+    const entry = lock.packages[`node_modules/${candidate.name}`];
+    expect(entry.version).toBe(candidate.version);
+    expect(entry.dependencies).toEqual(candidate.dependencies);
+    expect(entry.peerDependencies).toEqual(candidate.peerDependencies);
+  }
+});
+
 it('should install only compatible packed artifacts and exclude an incompatible optional tuple without registry access', () => {
   const root = mkdtempSync(join(tmpdir(), 'prepare-artifacts-'));
   const work = join(root, 'work');

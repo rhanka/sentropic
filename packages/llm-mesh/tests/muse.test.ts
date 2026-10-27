@@ -17,9 +17,9 @@ const MUSE_CATALOG_KEYS = [
 ] as const;
 
 describe('muse provider package surface', () => {
-  it('adds muse to the provider set (7 -> 8) without disturbing the existing seven', () => {
+  it('keeps muse in the ordered provider catalog including the decision-only provider', () => {
     expect(providerIds).toContain('muse');
-    expect(providerIds).toHaveLength(8);
+    expect(providerIds).toHaveLength(9);
     expect([...providerIds]).toEqual([
       'openai',
       'gemini',
@@ -29,6 +29,7 @@ describe('muse provider package surface', () => {
       'gcp',
       'local',
       'muse',
+      'typesafe',
     ]);
   });
 

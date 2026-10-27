@@ -1,4 +1,4 @@
-import { zValidator } from '@hono/zod-validator';
+import { zValidator } from '../../utils/zod-validator';
 import type { ClusterMeshHonoNamespaceModule } from '@sentropic/cluster-mesh';
 import {
   createConnectorAdminRouter,

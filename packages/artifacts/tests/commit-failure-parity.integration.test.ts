@@ -77,7 +77,9 @@ const executor = {
     return client;
   },
 };
-const coordinator = createArtifactCommitCoordinator({ executor, policy: {
+const mapHostError = error => ['artifact_s3_timeout', 'host_connection_timeout'].includes(error?.code)
+  ? new ArtifactOperationError('provider_unavailable', { cause: error }) : undefined;
+const coordinator = createArtifactCommitCoordinator({ mapHostError, executor, policy: {
   createParticipant: (client, transactionId) => ({
     async readRevision() { return 'rev-1'; }, async checkApproval() { return { approved: true }; },
     async reserveQuota() { return { reserved: true }; },
@@ -96,7 +98,7 @@ const blobs = createS3BlobStore({ bucket: 'l8c-private-bucket', client: {
     return { Body: { async transformToByteArray() { injections++; throw cause; } } };
   },
 } });
-const app = createHttpArtifactApp({ profile, coordinator: {
+const app = createHttpArtifactApp({ mapHostError, profile, coordinator: {
   async finalizePrepared(request) {
     dispatches++;
     if (input.point === 'command') {
@@ -174,6 +176,8 @@ interface Fault {
 }
 const unavailable = (label: string, point: string, code?: string): Fault => ({ label, point, code });
 const faults: Fault[] = [
+  unavailable('host S3 timeout mapper', 's3-put', 'artifact_s3_timeout'),
+  unavailable('host connection timeout mapper', 'acquire', 'host_connection_timeout'),
   ...['57P06', '08006', 'artifact_connection_lost', 'ECONNRESET', 'ETIMEDOUT'].map(code => unavailable(code, 'acquire', code)),
   ...['40001', '40P01', '57014'].map(code => unavailable(code, 'non-key', code)),
   ...['binding-identity', 'artifact-lifecycle', 'acl', 'current-pointer', 'authority-revision', 'quota', 'blob-reference-deletion-claim']
