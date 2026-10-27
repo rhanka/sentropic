@@ -141,6 +141,7 @@ const path = require('node:path');
 const args = process.argv.slice(2);
 if (args[0] === 'pack') {
   const dest = args[args.indexOf('--pack-destination') + 1];
+  fs.appendFileSync(path.join(dest, 'pack-requests.txt'), JSON.stringify(args) + '\\n');
   const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
   fs.writeFileSync(path.join(dest, pkg.name.replace('@', '').replace('/', '-') + '-' + pkg.version + '.tgz'), JSON.stringify(pkg));
 } else if (['install', 'ci'].includes(args[0]) && !args.includes('--prefix')) {
@@ -153,6 +154,8 @@ if (args[0] === 'pack') {
       encoding: 'utf8',
     });
     expect(result.status, result.stderr).toBe(0);
+    expect(readFileSync(join(work, 'pack-requests.txt'), 'utf8'))
+      .not.toContain('@sentropic/cluster-mesh@');
     const dependency = (fixture: string) => JSON.parse(readFileSync(join(work, fixture, 'package.json'), 'utf8'))
       .dependencies['@sentropic/artifacts'] as string;
     if (!artifactsCompatible) {
