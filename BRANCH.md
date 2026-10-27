@@ -1,4 +1,4 @@
-# Feature: Durable memory acceptance (E9)
+# Test: Durable memory acceptance corpus (E9; blocked on E7)
 
 ## Objective
 
@@ -8,7 +8,7 @@
 ## Scope / Guardrails
 
 - MUST reuse the neutral memory contract and `CanonicalOwnershipError` codes (frozen files, import only). NO new ownership contract, NO second PG ownership contract.
-- Production scope: `src/engram-memory/{binding,postgres,host-maintenance}.ts` only (postgres.ts: host driver/pool injection; binding.ts: public host assembly; host-maintenance.ts: host-only maintenance ports). Neither the `maintain` grant nor the maintenance ports escape through Engram's neutral `['read','write']` handle (runtime/type denial).
+- E9 authors acceptance tests only. The source paths declared below are inherited E7 scope; all E9 production changes have been reverted. Fenced-writer and maintain-read bindings belong to E7; CI PG wiring and P3 re-pin belong to the integration lane.
 - E8-answers obligations: durable host-issued evidence (candidate→store/scope/invocation-or-continuation mapping, envelope binding, reservation/terminal/ambiguous state, receipt/cursor reconciliation); continuation grant needs fresh host authn/authz checked against retained authority (copied fields never grant); proof-only recovery path (authorized capture-proof reads, admission-outcome recovery, journal replay) that refuses unknown/foreign access and any second effect. Refusing on an empty ledger is correct until rehydration.
 - Existing `binding-compatibility`/`binding-errors` keep passing; shared corpus semantics unchanged (additive cases only).
 - Tests first; `ENV=test-e2-int` as the last make argument; `make commit MSG="type: …"` (<150 lines, `git add` specific files, no AI trailers). Never `ENV=dev`. 0 Python.
@@ -136,6 +136,7 @@
 
 ## Plan / Todo (lot-based)
 
+- [x] r1 status: checked pre-r1 campaign steps below are historical fixture-run provenance only. Current acceptance is blocked as specified in Objective and Feedback Loop; none of these runs qualifies the shipped host assembly.
 - [x] Lot E9-0 — read approved plan and binding sections 7–10; mechanically check branch; merge E8 into E7; retain inherited scope declarations; freeze Engram/P3 bytes.
 - [x] Lot E9-1a — initial tests first: `memory-corpus.ts`, `durable-memory.spec.ts`; real PostgreSQL required, initial run fails because the campaign fixture is not implemented yet. This is a scaffolding failure, not an invariant proof.
 - [x] Lot E9-1b — complete explicit profile/case inventory, zero skip/todo; failure controls assert the intended invariant.
@@ -176,6 +177,7 @@
 
 ## Feedback Loop
 
+- [x] r1 source verification at committed clean `a25bc3dfb`: memory 18 files / 150 passed / 23 explicitly blocked (Vitest skipped), total 173. Qualification correctly exits 2 and cleanup exits 0; receipt `tmp/memory-e9-r1/final-memory/`. Final head is rerun after this report-only commit, with its exact SHA/tree retained in `tmp/memory-e9-r1/head-memory/`.
 - [x] r1 corpus disposition: preserve all 23 behavioral cases and the inventory case; every behavioral case depends on the fixture handle and is explicitly `blocked: E7-fenced-writers`. The three host maintenance cases additionally carry `blocked: E7` for snapshot/journal reads. Skips represent unmet source dependencies, never accepted profile evidence; the zero-skip qualification gate remains open.
 - [x] P2-2: remove the fixture-issued `memory-host-reader` token entirely. Snapshot and journal reads bind only `binding.maintainGrant`; current E7 cannot authorize those reads. Retain the positive corpus and extend its revoked-authority probe to journal replay; enable it only against E7's shipped host assembly.
 - [x] r1 receipt guard: refuse any dirty tree, record exact HEAD/tree, verify both remain unchanged after the campaign, and fail qualification if the inventory reports blocked cases. A successful inventory check cannot turn the 23 blocked scenarios into accepted evidence.
