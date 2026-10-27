@@ -65,14 +65,19 @@ export const normalizeSpeechUsage = (state: SpeechUsageState | undefined, update
     || !['cumulative', 'incremental'].includes(update.mode) || (state && state.mode !== update.mode)) {
     throw new Error('Invalid speech usage revision');
   }
-  const previous = state?.events[update.eventId];
+  const previous = state && Object.hasOwn(state.events, update.eventId) ? state.events[update.eventId] : undefined;
   if (previous && update.revision <= previous.revision) {
     if (update.revision === previous.revision && canonical(previous.usage) !== canonical(update.usage)) {
       throw new Error('Speech usage revision conflict');
     }
     return structuredClone(state!);
   }
-  if (state && update.mode === 'cumulative' && update.revision <= state.revision) return structuredClone(state);
+  if (state && update.mode === 'cumulative' && update.revision <= state.revision) {
+    if (update.revision === state.revision && canonical(state.totals) !== canonical(update.usage)) {
+      throw new Error('Speech cumulative revision conflict');
+    }
+    return structuredClone(state);
+  }
   const next: SpeechUsageState = structuredClone(state ?? { mode: update.mode, revision: -1, totals: {}, events: {} });
   if (!previous && Object.keys(next.events).length >= 4096) throw new Error('Speech usage event limit reached');
   if (update.mode === 'cumulative') next.totals = structuredClone(update.usage);
