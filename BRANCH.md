@@ -1,96 +1,70 @@
-# Feature: W2.b app registry dispatch and artifact HTTP
+# Feature: W1.b app artifact composition and current authority
 
 ## Objective
-- [ ] Mount the compiled cluster-mesh registry and APP-P1 HTTP on one durable artifact host.
+- [x] Compose APP-P1 with durable app policy, opaque workspace scopes and one guarded HTTP/MCP effect path.
 
 ## Scope / Guardrails
-- [x] Base W2.a `247015eba` merged with W1.d `8729aff22`; merge commits only.
-- [x] Worktree `tmp/worktrees/app-w2b`; branch `feat/app-cm-w2b`; draft base `feat/app-cm-integration`.
-- [x] Read Docker lock, complete plan-v2 and W0-close.d reservations; sole root/API lock writer.
-- [x] Make-only; builds, tests and starts take shared Docker flock; teardown after each step.
-- [x] Tests first; ENV=test-app-w2b last; API/UI/Maildev ports 8796/5182/1089; no dev.
-- [x] Selective staging; scope-check before make commit; authored commits under 150 lines; no trailers.
-- [x] Preserve MCP auth, connectors/resources, supervisor and single author/generation.
-- [x] Activation stays closed; W3 owns activation/content/image/infrastructure.
+- [x] Owner dispatch: W1.b, plan-v2 lines 128–147; tests first, draft PR only, no merge or deployment.
+- [x] Worktree `tmp/worktrees/app-w1b`, branch `feat/app-cm-w1b`; base W1.a #773 `139729e9935c29112c7827d4684c79135404994f` (Opus APPROVE r2).
+- [x] Main `ab981b16d` merged without rebase in `6ea8798a0`; artifacts 0.2.1 / mesh 0.22.4 inherited, no package/lock authoring.
+- [x] Make-only; shared Docker flock for build/start/test, matching down after every step; `ENV=test-app-w1b` last.
+- [x] API/UI/Maildev UI ports 8792/5178/1085 checked free before startup; no owner stacks touched.
+- [x] Preserve W1.a migration authority and SQL hashes; W2.b alone reconciles final locks and physical image resolution.
+- [x] Atomic authored commits below 150 lines, selective staging, scope-check and make commit; no attribution trailers.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `api/src/app.ts`
-  - `api/src/routes/namespaces/mcp.ts`
-  - `api/src/routes/namespaces/resources.ts`
-  - `api/src/routes/namespaces/resources-module.ts`
-  - `api/src/routes/namespaces/artifacts.ts`
-  - `api/src/services/artifacts/transport.ts`
-  - `api/src/services/artifacts/credentials.ts`
-  - `api/src/services/artifacts/instance.ts`
   - `api/src/services/artifacts/composition.ts`
-  - `api/src/services/artifacts/lifecycle.ts`
-  - `api/tests/api/artifacts-host-recovery.test.ts`
-  - `api/src/services/mcp/cluster-registry.ts`
-  - `api/src/services/mcp/registry-dispatch.ts`
-  - `api/src/services/cluster-mesh-adapter.ts`
-  - `api/tests/api/app-artifacts-transport.test.ts`
-  - `api/tests/api/artifacts-host-credentials.test.ts`
+  - `api/src/services/artifacts/authorization.ts`
   - `api/tests/api/artifacts-host-publication.test.ts`
-  - `api/tests/api/app-mcp-registry.test.ts`
-  - `api/tests/api/app-mcp-installed.test.ts`
-  - `api/package.json`
-  - `api/package-lock.json`
-  - `package.json`
-  - `package-lock.json`
-  - `api/vitest.config.ts`
-  - `api/tsconfig.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `packages/**`
-  - `.track/**`
   - `plan/**`
-  - `deploy/**`
-- **Conditional Paths (allowed only with explicit exception)**:
+  - `.track/**`
+  - `api/src/db/**`
+  - `api/drizzle/**`
+  - `api/package.json`
+  - `api/package-lock.json`
+  - `package-lock.json`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
-- [x] Exception process: BR02B-EXn records reason, impact and rollback before expansion.
+- [x] Exception process: declare BR01-EXn with reason, impact and rollback before expansion.
 
 ## Feedback Loop
-- [ ] W1.b P2: verify OAuth tuple, scopes, expiry and revocation with DB time after waits.
-- [x] W2.a P2 reconciliation: API artifacts uses file workspace; root lock removes private registry copy; TS/Vitest artifacts aliases removed.
-- [ ] W2.a P2 installed proof: api/tests/api/app-mcp-installed.test.ts runs Node/tsx outside Vitest resolution; final strict install pending.
-- [x] Bundle red: production esbuild settings refused the loaded profile with invalid compiled artifacts profile; /tmp/app-w2b-focused1.log.
-- [x] API build keeps artifacts and cluster-mesh external, preserving physical runtime instances and package topology guards.
-- [ ] Retry failed pushes every ten minutes; draft PR after push; no merge.
-- [ ] Independent final-head reviews and remote CI remain separate receipts.
+- [x] BR01-EX1: owner requires merge of main after W1.a, never rebase. The ancestry-only merge inherits 247 upstream paths; no authored merge resolution except retaining W1.a BRANCH.md. Its scope-check reported inherited paths; subsequent authored changes use the four-path scope above. Atomic limit applies to authored deltas; upstream history stays intact.
+- [x] PR targets `feat/app-cm-integration` as dispatched. Deviation: #773 currently targets main for CI; W1.b retains the integration destination and uses workflow_dispatch if its base does not trigger PR CI.
+- [ ] W0-close.e acceptance and W1.c/UP-T activation remain external gates; this lot activates no route or reader.
+- [ ] W2 binds verified transport identity and a current credential check on the coordinator transaction; credential verification must never come from tool/body arguments.
+- [ ] Independent review: automatic approval review rejected the Claude/h2a launch because private source would reach an unverified gateway without destination/payload authorization. No reviewer verdict exists; dossier `.tmp/app-w1b-review/dossier.md` at the root checkout. Owner approval is required before external review; no retry through another execution path.
+- [x] HTTP-1: the focused red test returned HTTP 201 for a caller body scope equal to the verified scope, while MCP returned 400. Root cause: the upstream trusted HTTP app permits that field. Validate selected public POST bodies through the same compiled profile before authority/storage; map typed profile errors safely. Red `/tmp/app-w1b-closed-input-red.log`; final 16/16 green plus typecheck/lint `/tmp/app-w1b-closed-input-green.log`.
+- [x] Superseded CI https://github.com/rhanka/sentropic/actions/runs/40411129496 on `7a6e6138a` was cancelled only after HTTP-1 reproduction; the corrected pushed head requires a new exact-head run. No successful CI receipt is claimed for that attempt.
+- [x] CI-1: run https://github.com/rhanka/sentropic/actions/runs/40414043957 on `8fca05df3` passed all 355 endpoint-shard assertions but failed on two unhandled PostgreSQL shutdown errors. `Pool.end()` completed before physical socket shutdown; fixture `DROP DATABASE ... FORCE` raced it. A deterministic deferred-close test reproduced the ordering failure (`/tmp/app-w1b-close-red.log`). Await every client's end event and drop without FORCE; the complete failing shard now passes 33 files / 356 tests, including 17 host cases, without unhandled errors (`/tmp/app-w1b-close-green.log`). Production code is unchanged by this repair; a new exact-head CI is required.
 
 ## AI Flaky tests
-- [x] No AI calls or timeout increases planned; no accepted flakes.
+- [x] No AI tests, accepted flakes or increased timeouts.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch, one author; independent final-head review.
+- [x] Mono-branch: one code author on the app integration train; upstream changes integrated by merge only.
 
 ## UAT Management (in orchestration context)
-- [x] API-only; browser/Chrome/VSCode acceptance remains W3/W4/W5.
+- [x] Backend-only composition; web, Chrome and VSCode remain for W2/W4/W5; no root UAT stack.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 0: mechanical branch check and merge W1.d; freeze scope and environment.
-- [x] Lot 1 tests authored first in api/tests/api/artifacts-host-credentials.test.ts; current OAuth/session authority.
-- [x] Lot 1 reader: locked session/OAuth tuple, consent, audience, proof key and DB-time expiry; validation pending.
-- [x] Test fixture uses allowed id_token substitution and waits for physical PG connection closure before drop.
-- [x] Lot 2 manifests/locks regenerated strictly without peer overrides; API leaf metadata refreshed to source versions.
-- [ ] Lot 2 strict install/physical compilation final receipt.
-- [x] Lot 3 tests authored in api/tests/api/app-artifacts-transport.test.ts; exact dispatch, denial, HTTP and MCP routing.
-- [x] Lot 3 durable test: HTTP session ensure and OAuth MCP replay, MCP publish and HTTP replay; assert one artifact/release and two receipts.
-- [x] Current-reader vectors include matching/wrong DPoP proof, revocation during artifact-row waits and expiry during quota waits for both credential kinds.
-- [x] Lot 4 core: compiled exact-name dispatch and bounded APP-P1 HTTP adapter delegate to W1 host.
-- [x] Lot 4 singleton: one durable PG host with dedicated private S3, explicit quota and default-closed activation.
-- [x] Lot 4 mount: verified credential tuples, shared MCP supervisor guard, resources author and /resources/artifacts/*; 28 namespaces retained.
-- [x] MCP transport is acquired through the cluster-mesh loader; Drive/Gmail ports and original URLs remain mounted.
-- [ ] Lot 5: focused tests, relevant regressions, API typecheck/lint/build.
-  - [ ] api/tests/api/{app-mcp-registry,artifacts-host-publication,artifacts-host-recovery,artifacts-host-migrations,mcp-resource-server,cluster-mesh-mcp-singleton,cluster-mesh-namespace-inventory}.test.ts.
-  - [ ] Resource/gateway/D1/auth suites selected from actual filenames.
-  - [ ] Strict install and physical package-resolution inventory without aliases.
-  - [ ] Runtime logs and locked make down ENV=test-app-w2b; no remaining services.
-- [ ] Lot 6: exact-head evidence and W3 handoff; scope check; push; draft PR using this body.
+- [x] Lot 0: read Docker lock, whole plan, APP-P1 freeze, MASTER/workflow/testing/API rules and template; mechanical branch check.
+- [x] Lot 1: `api/tests/api/artifacts-host-publication.test.ts` first: HTTP/MCP identity and replay parity, ensure/publish, foreign authority, APP-P1 refusal. Red run failed on the missing composition module before implementation; `/tmp/app-w1b-red.log`.
+- [x] Lot 2: `authorization.ts`: current tenant/workspace/account/credential participants, post-wait rechecks and transactional quota; `composition.ts`: scoped PG store/KV/coordinator and shared transports.
+  - [x] Implement transaction-bound current authority, explicit read/write credential permissions, provisional cumulative byte quota and request fences in `authorization.ts`.
+- [x] Lot 3: same test file covers revocation after lock waits, DB-time expiry after quota/receipt waits, quota contention/rollback, guarded replay, version witness and no new durable success on denial; first full run 10/10 passed.
+  - [x] Add independent read/write credential permissions, viewer downgrade, disabled/forged identity, foreign artifact metadata denial and frozen APP-P1 digest/file-limit cases.
+- [x] Lot 4: API typecheck passed, lint 0 errors/219 warnings; final 16 publication + 16 host migration + 16 cluster migration + 11 tenant resolver cases passed, no final skips; healthy HTTP 200 logs and empty Compose ps after down. Every authored hunk reviewed by the author; no independent approval is claimed.
+  - [x] Receipts: `/tmp/app-w1b-final-checks.log` (45 tests including 13 host cases), `/tmp/app-w1b-authority-regressions.log` (final 15 host + 11 tenant cases), `/tmp/app-w1b-runtime-scope-cleanup.log` (PASS C2, healthy logs, cleanup/empty ps). Optional multi-path readlink probe failed on BusyBox's single-file usage; physical dependency qualification remains W2's gate.
+- [ ] Lot 5: exact BRANCH.md draft PR body, push, green exact-head CI and W1.d/W2 handoff; do not merge. External review remains the explicitly blocked gate above.
+- [x] W1.d handoff: consume durable preparation intents, blob pins/references and upstream bounded cleanup/GC through separate host-maintenance authority; add recovery/restore proof. This lot starts no jobs or activation and uses no production memory fallback.
+- [x] W2 handoff: validate selected transport inputs before `bind` provisions scope metadata; bind one verified subject/tenant/client/credential tuple across HTTP/MCP; supply the current transaction-bound credential reader with independent read/write scope permissions and explicit initial quota; compile/mount one registry path; reconcile API/root workspace locks and physical artifacts instances; retain existing MCP/resource/namespace/gateway/D1 regressions.
 
 ## Inherited main qualification record
 

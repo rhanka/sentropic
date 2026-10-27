@@ -7,6 +7,7 @@ import { createArtifactHost } from '../../src/services/artifacts/composition';
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL });
 let pool: Pool;
+let connectionEnds: Promise<void>[];
 let databaseName: string;
 let host: ReturnType<typeof createArtifactHost>;
 const identity = { subject: 'alice', tenantId: 'tenant-a', clientId: 'app', credentialId: 'session-a' };
@@ -17,6 +18,10 @@ beforeEach(async () => {
   const url = new URL(process.env.DATABASE_URL!);
   url.pathname = `/${databaseName}`;
   pool = new Pool({ connectionString: url.toString() });
+  connectionEnds = [];
+  pool.on('connect', (client) => {
+    connectionEnds.push(new Promise<void>((resolve) => client.once('end', resolve)));
+  });
   await runMigrations(pool);
   await pool.query(`INSERT INTO users (id, role, account_status) VALUES ('alice', 'editor', 'active'), ('bob', 'editor', 'active');
     INSERT INTO tenants (id, name) VALUES ('tenant-a', 'A'), ('tenant-b', 'B');
@@ -36,7 +41,8 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await pool.end();
-  await admin.query(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
+  await Promise.all(connectionEnds);
+  await admin.query(`DROP DATABASE "${databaseName}"`);
 });
 afterAll(() => admin.end());
 
@@ -314,5 +320,31 @@ describe('app artifact host publication', () => {
     expect((await bound.mcp({ tool: 'artifacts_ensure', args })).status).toBe(400);
     expect((await bound.http({ method: 'POST', path: '/ensure', body: args })).status).toBe(400);
     expect(await durable()).toEqual(before);
+  });
+
+  it('should await physical connection shutdown before fixture database deletion', async () => {
+    const client = await pool.connect();
+    const ended = new Promise<void>((resolve) => client.once('end', resolve));
+    let disconnected = false;
+    client.once('end', () => { disconnected = true; });
+    const end = client.end.bind(client);
+    // Pool removal completes before this deliberately deferred socket shutdown.
+    vi.spyOn(client, 'end').mockImplementation((() => { setImmediate(() => { void end(); }); }) as typeof client.end);
+    client.release();
+    const query = admin.query.bind(admin);
+    const observer = vi.spyOn(admin, 'query').mockImplementation(((...args: unknown[]) => {
+      if (typeof args[0] !== 'string' || !args[0].startsWith('DROP DATABASE')) {
+        return (query as (...values: unknown[]) => unknown)(...args);
+      }
+      const closedBeforeDrop = disconnected;
+      return (async () => {
+        // Clean up even on the red path, then report the ordering violation.
+        await ended;
+        observer.mockRestore();
+        const result = await (query as (...values: unknown[]) => Promise<unknown>)(...args);
+        expect(closedBeforeDrop).toBe(true);
+        return result;
+      })();
+    }) as typeof admin.query);
   });
 });
