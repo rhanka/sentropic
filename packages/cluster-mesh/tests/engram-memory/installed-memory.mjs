@@ -315,3 +315,131 @@ const refusedOpen = await substrate.openModuleStorageCanonicalMemoryStoreV1({ ha
 assert.equal(refusedOpen.ok, false, 'missing profile must refuse');
 assert.equal(refusedOpen.error.code, 'CAPABILITY_UNAVAILABLE');
 refusals['missing-profile'] = `${refusedOpen.error.code}: ${refusedOpen.error.message}`;
+
+// Real durable memory operations through the installed memory port.
+const NOW = '2026-10-27T00:00:00.000Z';
+const DEADLINE = '2026-10-27T01:00:00.000Z';
+const DIGEST = `sha256:${'a'.repeat(64)}`;
+let destroyedTotal = 0;
+const makeEngine = () => {
+  const plaintext = new Map();
+  const crypto = {
+    version: 1,
+    seal: async (input) => {
+      plaintext.set(input.candidate_id, input.plaintext);
+      const body = { candidate_id: input.candidate_id, envelope_ref: `envelope-${input.candidate_id}`,
+        key_ref: `key-${input.candidate_id}`, ciphertext: `ciphertext-${input.candidate_id}` };
+      return { ok: true, value: { ...body, envelope_digest: receiptDigest('sealed-candidate', body) } };
+    },
+    open: async ({ sealed }) => {
+      const value = plaintext.get(sealed.candidate_id);
+      return value === undefined
+        ? { ok: false, error: { code: 'UNAUTHORIZED', operation: 'inspect_candidate', retryable: false, message: 'key destroyed' } }
+        : { ok: true, value: { plaintext: value } };
+    },
+    destroy: async ({ key_ref }) => {
+      plaintext.delete(key_ref.slice(4));
+      destroyedTotal += 1;
+      return { ok: true, value: { destroyed: true,
+        receipt_digest: receiptDigest('key-destruction', { destroyed: true, key_ref }) } };
+    },
+  };
+  return substrate.createMemoryPortV2({
+    canonical_store: store, crypto, activity_sources: [], clock: { now: () => NOW },
+    authorization: {
+      version: 1,
+      authorize: async (request) => {
+        const body = { allowed: true, decision_id: 'decision-installed', policy_version: '1',
+          operation: request.operation, resource_digest: request.resource_digest,
+          scope_ref: 'installed-memory-scope', not_before: NOW, expires_at: DEADLINE, revocation_epoch: '0',
+          redaction: { mode: 'field-allowlist', allowed_fields: [], allow_derivation_lineage: false, max_packet_bytes: 4096 },
+          authentication_receipt_digest: DIGEST };
+        return { ok: true, value: { ...body, receipt_digest: receiptDigest('authorization-allowed', body) } };
+      },
+      revalidate: async (digest, checked_at) => {
+        const body = { receipt_digest: digest, checked_at, valid: true, current_revocation_epoch: '0', reason: 'valid' };
+        return { ok: true, value: { ...body,
+          revalidation_receipt_digest: receiptDigest('authorization-revalidation', body, 'revalidation_receipt_digest') } };
+      },
+      redact: async () => { throw new Error('unused redaction'); },
+    },
+    admission_policy: { policy_id: 'policy-installed', policy_version: '1',
+      decide: async ({ record_digest }) => {
+        const body = { policy_id: 'policy-installed', policy_version: '1', record_digest, decision: 'accept', issued_at: NOW };
+        return { ok: true, value: { ...body, receipt_digest: receiptDigest('admission-decision', body) } };
+      } },
+  });
+};
+const valueOf = (result) => {
+  assert.ok(result.ok, `installed operation refused: ${result.ok ? '' : `${result.error.code}: ${result.error.message}`}`);
+  return result.value;
+};
+const captureRequest = {
+  schema_version: 2, idempotency_key: 'installed-idempotency-1',
+  payload: { schema_version: 2, scope_ref: 'installed-memory-scope', purpose_ref: 'purpose-installed',
+    valid_time: { t: 1 },
+    components: [{ component_id: 'component-installed', kind: 'context', text: 'installed memory body',
+      citation_ids: ['citation-installed'] }],
+    primary_component_id: 'component-installed',
+    primary_event: { at: 1, type_ref: 'event-installed', citation_id: 'citation-installed' },
+    citations: [{ citation_id: 'citation-installed', source_ref: 'source-installed',
+      locator: { scheme: 'document', value: 'installed#one' }, content_digest: DIGEST }],
+    retention: { derivative_rule: 'retain' }, reconciliation: { family_refs: [] } },
+  evidence: { evidence_ref: 'evidence-installed', evidence_digest: DIGEST, citation_ids: ['citation-installed'] },
+  authorization: { credential: 'credential-installed' },
+  source_order: { source_ref: 'source-installed', sequence: '1' },
+  deadline_at: DEADLINE, cancellation_ref: 'cancel-installed-1',
+};
+
+const operations = {};
+try {
+  await openStore();
+  let engine = makeEngine();
+  const captured = valueOf(await engine.capture(captureRequest));
+  assert.equal(captured.status, 'committed_pending');
+  const candidate = { candidate_id: captured.candidate_id };
+  const captureProof = valueOf(await store.readCaptureIdempotency(candidate));
+  assert.ok(captureProof.record_digest, 'capture proof retained');
+  const admitted = valueOf(await engine.requestAdmission({ ...candidate,
+    authorization: { credential: 'credential-installed' }, deadline_at: DEADLINE }));
+  assert.equal(admitted.status, 'accepted');
+  assert.equal(destroyedTotal, 1, 'admission destroys the sealed envelope key');
+  const firstOutcome = valueOf(await store.readAdmissionOutcome(candidate));
+  const record = valueOf(await store.readRecord({ record_id: firstOutcome.record_id,
+    system_as_of: '2', authorization_receipt_digest: DIGEST }));
+  assert.equal(record.scope_ref, 'installed-memory-scope');
+  const journalBefore = valueOf(await store.readJournal({ after: '0', limit: 10 }));
+  assert.equal(journalBefore.length, 2);
+  const original = await handle.readCommitResult(journalBefore.at(-1).event_id, binding.memoryGrant);
+  assert.equal(JSON.parse(original.data).receipt_digest, admitted.transaction_receipt_digest);
+  operations.capture = { candidate_id: captured.candidate_id, record_digest: captureProof.record_digest,
+    transaction_receipt_digest: captured.transaction_receipt_digest };
+  operations.admission = { status: admitted.status, record_id: firstOutcome.record_id,
+    transaction_receipt_digest: admitted.transaction_receipt_digest };
+  operations.journal = { events: journalBefore.length, last_event: journalBefore.at(-1).event_id };
+
+  // Restart: close the store, reopen a new kernel and store on the same
+  // PostgreSQL schema, then read the retained proofs and replay exactly.
+  await store.close();
+  clockNow = '2026-10-27T00:30:00.000Z';
+  await openStore();
+  assert.deepEqual(valueOf(await store.readCaptureIdempotency(candidate)), captureProof);
+  assert.deepEqual(valueOf(await store.readAdmissionOutcome(candidate)), firstOutcome);
+  assert.deepEqual(valueOf(await store.readJournal({ after: '0', limit: 10 })), journalBefore);
+  assert.deepEqual(await handle.readCommitResult(journalBefore.at(-1).event_id, binding.memoryGrant), original);
+  engine = makeEngine();
+  const replay = valueOf(await engine.capture(captureRequest));
+  assert.equal(replay.status, 'duplicate_exact');
+  assert.equal(replay.transaction_receipt_digest, captured.transaction_receipt_digest);
+  assert.deepEqual(valueOf(await engine.requestAdmission({ ...candidate,
+    authorization: { credential: 'credential-installed' }, deadline_at: DEADLINE })), admitted);
+  assert.equal(destroyedTotal, 1, 'restart replay must not destroy a second key');
+  operations.restart = { capture_replay: replay.status, record_id: firstOutcome.record_id,
+    journal_events: journalBefore.length };
+  await store.close();
+} finally {
+  await hostDriver.transaction({ readOnly: false, deadlineMs: 30000 }, (session) =>
+    session.execute({ text: `DROP SCHEMA "${schemaName}_projection" CASCADE; DROP SCHEMA "${schemaName}" CASCADE`, values: [] }))
+    .catch(() => undefined);
+  await pool.end();
+}
