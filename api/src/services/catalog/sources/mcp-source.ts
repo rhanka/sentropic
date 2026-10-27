@@ -118,6 +118,7 @@ export interface McpSourceConfig {
  * allowing the seam to dispatch to either source type.
  */
 export interface ToolHandlerSource {
+  readonly id: string;
   getHandler(name: string): StandaloneToolHandler | undefined;
 }
 

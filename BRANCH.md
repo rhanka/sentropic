@@ -32,6 +32,17 @@
   - `deploy/**`
   - `spec/evidence/memory-mcp-l5/**`
   - `tools/memory-mcp-l5/**`
+  - `api/src/routes/namespaces/catalog*.ts`
+  - `api/src/services/catalog/**`
+  - `api/src/services/chat-service.ts`
+  - `api/src/services/skills/**`
+  - `api/tests/ai/chat-tools.test.ts`
+  - `api/tests/ai/comment-assistant.test.ts`
+  - `api/tests/api/catalog-auth-context.test.ts`
+  - `api/tests/api/cluster-mesh-catalog.test.ts`
+  - `api/tests/services/catalog*/**`
+  - `api/tests/services/catalog-characterization.spec.ts`
+  - `api/tests/unit/chat-service-*.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -42,6 +53,7 @@
 - [x] BR00D-EXn records reason, impact and rollback before expansion.
 
 ## Feedback Loop
+- [x] BR00D-EX4: owner-requested merge of integration ca3239295 brings W1/W2/W4 catalog and chat ancestry; these paths are merge-only. Impact is the integrated app baseline; rollback reverts the merge. Preserve this PR's BRANCH.md; inherited merge diff is outside the authored 150-line limit.
 - [x] BR00D-EX2: merge main 72bb2da3d to consume already-published UP-T; listed inherited paths are merge-only, no author edits. Impact is existing upstream ancestry; rollback reverts the merge.
 - [x] BR00D-EX1: merge #702 evidence and its owner question/restore template; retained evidence only; rollback reverts merge. No author edits outside scope.
 - [ ] Independent reviews and remote CI remain separate from code authorship.

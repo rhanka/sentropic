@@ -6,6 +6,7 @@ import {
   chatStreamEvents,
   folders,
   jobQueue,
+  tenantMemberships,
   users,
   workspaces,
   workspaceMemberships,
@@ -80,6 +81,7 @@ describe('ChatService - document_generate tool (unit, mocked OpenAI)', () => {
     });
 
     ({ workspaceId } = await ensureWorkspaceForUser(userId));
+    await db.insert(tenantMemberships).values({ userId, tenantId: 'sentropic', status: 'approved' });
 
     // Default workspace from ensureWorkspaceForUser is neutral; set to ai-priorities for tests
     await db.update(workspaces).set({ type: 'ai-priorities' }).where(eq(workspaces.id, workspaceId));
