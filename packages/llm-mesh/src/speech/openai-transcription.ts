@@ -2,7 +2,7 @@
 // `gpt-realtime-whisper` behind the mesh speech contract. Wire facts are
 // grounded in the Realtime transcription guide [O7]
 // (https://developers.openai.com/api/docs/guides/realtime-transcription,
-// fetched 2026-10-23, verified 2026-10-28):
+// fetched 2026-10-23, re-verified live 2026-10-27):
 // server-side WebSocket `wss://api.openai.com/v1/realtime?intent=transcription`
 // (no `model` in the URL), `session.update` with `type: "transcription"`,
 // PCM audio via `input_audio_buffer.append`, per-turn
@@ -186,16 +186,27 @@ export interface OpenAiTranscriptionUsageTotals {
  * pricing stays pinned at admission.
  */
 export interface OpenAiTranscriptionUsageSink {
+  /**
+   * Maps to the L8 `recordSpeechUsage` call: operational evidence on the hold,
+   * never a charge. The adapter sends `cumulative` totals under a stable
+   * eventId so restarts and retries cannot double-count measured seconds.
+   */
   record(update: {
     readonly eventId: string;
     readonly revision: number;
     readonly mode: 'cumulative' | 'incremental';
     readonly usage: Partial<OpenAiTranscriptionUsageTotals>;
   }): void | Promise<void>;
+  /**
+   * Maps to the L8 `settleSpeech` call. Usage stays absent unless provider-
+   * reported (with a monotonic providerRevision): locally measured seconds
+   * are estimates, and a usage covering every priced dimension without a
+   * providerRevision is rejected by `settleSpeech` as invalid.
+   */
   settle(request: {
     readonly operationId: string;
     readonly outcome: 'completed' | 'cancelled' | 'failed';
-    readonly usage: OpenAiTranscriptionUsageTotals;
+    readonly usage?: OpenAiTranscriptionUsageTotals;
     readonly providerRevision?: number;
   }): void | Promise<void>;
 }
@@ -220,7 +231,16 @@ export interface OpenAiTranscriptionOpenOptions {
   readonly usage: OpenAiTranscriptionUsageSink;
   readonly originator?: string;
   readonly nowMs?: () => number;
+  /** Injectable expiry scheduler (tests advance it manually); defaults to setTimeout. */
+  readonly schedule?: (delayMs: number, fn: () => void) => () => void;
   readonly signal?: AbortSignal;
+}
+
+/** Client turn pushed at `input.commit`; consumed by the provider `committed` frame. */
+interface PendingTurn {
+  readonly utteranceId: string;
+  readonly startMs: number;
+  readonly endMs: number;
 }
 
 const assertAdmission = (admission: OpenAiTranscriptionAdmission): void => {
@@ -235,6 +255,7 @@ const assertAdmission = (admission: OpenAiTranscriptionAdmission): void => {
 interface PendingItem {
   text: string;
   revision: number;
+  utteranceId?: string;
   audioStartMs: number;
   audioEndMs: number;
   finalized: boolean;
@@ -281,15 +302,24 @@ export class TranscriptionSession implements SpeechSession {
   private readonly waiters: Array<() => void> = [];
   private sequence = 0;
   private eventId = 0;
-  private revision = 0;
   private audioSeconds = 0;
   private settled = false;
   private outcome: 'completed' | 'cancelled' | 'failed' = 'completed';
   private readonly pump: Promise<void>;
   private readonly signal?: AbortSignal;
+  private readonly effectiveMaxMs: number;
   private abortHandler?: () => void;
+  private expiryCancel?: () => void;
+  private inPump = false;
   private turnAudioStartMs?: number;
   private lastCapturedAtMs = 0;
+  private openTurnUtteranceId?: string;
+  private readonly turns: PendingTurn[] = [];
+  private readonly bindings = new Map<string, PendingTurn>();
+  /** Item ids that must never emit again (finalized or cleared). */
+  private readonly tombstones = new Set<string>();
+  private committedAudioSeconds = 0;
+  private usageRevision = 0;
 
   constructor(
     receipt: SpeechSessionReceipt,
@@ -299,6 +329,8 @@ export class TranscriptionSession implements SpeechSession {
     usage: OpenAiTranscriptionUsageSink,
     nowMs: (() => number) | undefined,
     signal: AbortSignal | undefined,
+    schedule: ((delayMs: number, fn: () => void) => () => void) | undefined,
+    maxDurationMs: number,
   ) {
     this.receipt = receipt;
     this.socket = socket;
@@ -308,8 +340,18 @@ export class TranscriptionSession implements SpeechSession {
     this.nowMs = nowMs;
     this.signal = signal;
     this.openedAtMs = monotonicNow(nowMs);
+    this.effectiveMaxMs = Math.min(admission.maxDurationMs, maxDurationMs);
     this.events = this.stream();
     this.pump = this.run(signal);
+    const arm = schedule ?? ((delayMs: number, fn: () => void): (() => void) => {
+      const timer = setTimeout(fn, delayMs);
+      return () => clearTimeout(timer);
+    });
+    this.expiryCancel = arm(this.effectiveMaxMs, () => {
+      this.pushError('ceiling', false);
+      this.outcome = 'cancelled';
+      void this.close();
+    });
     if (signal) {
       if (signal.aborted) {
         this.outcome = 'cancelled';
@@ -346,7 +388,13 @@ export class TranscriptionSession implements SpeechSession {
         if (this.settled) return;
         await new Promise<void>((resolve) => this.waiters.push(resolve));
       }
-      yield this.queue[index++] as SpeechEvent;
+      const event = this.queue[index++] as SpeechEvent;
+      // Bound the queue for long sessions: consumed events are dropped.
+      if (index > 1024) {
+        this.queue.splice(0, index);
+        index = 0;
+      }
+      yield event;
     }
   }
 
@@ -360,11 +408,15 @@ export class TranscriptionSession implements SpeechSession {
       || frame.format.channels !== TRANSCRIPTION_FORMAT.channels) {
       throw new OpenAiTranscriptionError('invalid-format', 'only pcm16-le 24kHz mono is admitted');
     }
+    if (monotonicNow(this.nowMs) - this.openedAtMs >= this.effectiveMaxMs) {
+      throw new OpenAiTranscriptionError('ceiling', 'session duration bound reached');
+    }
     const seconds = frame.sampleCount / frame.format.sampleRateHz;
     if (!(seconds > 0) || this.audioSeconds + seconds > this.admission.ceiling.admittedAudioSeconds) {
       throw new OpenAiTranscriptionError('ceiling', 'admitted audio ceiling reached');
     }
     this.audioSeconds += seconds;
+    this.openTurnUtteranceId = frame.utteranceId;
     // Capture-domain turn window for the final's audioInterval (approximation
     // for sequential client turns; dispatch ordering stays with L2).
     if (Number.isFinite(frame.capturedAtMs) && frame.capturedAtMs >= 0) {
@@ -381,20 +433,38 @@ export class TranscriptionSession implements SpeechSession {
       throw new OpenAiTranscriptionError('closed', 'session is closed');
     }
     switch (command.type) {
-      case 'input.commit':
+      case 'input.commit': {
+        if (monotonicNow(this.nowMs) - this.openedAtMs >= this.effectiveMaxMs) {
+          throw new OpenAiTranscriptionError('ceiling', 'session duration bound reached');
+        }
         this.socket.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
         this.turnAudioStartMs = undefined;
+        this.openTurnUtteranceId = undefined;
+        // Cumulative operational totals (L8 sums incremental events per eventId,
+        // so a per-turn total would double-count); the composition settles from these.
+        this.committedAudioSeconds = this.audioSeconds;
         await this.usage.record({
-          eventId: command.utteranceId,
-          revision: this.revision++,
-          mode: 'incremental',
-          usage: { admittedAudioSeconds: this.audioSeconds },
+          eventId: `${this.admission.operationId}:audio`,
+          revision: this.usageRevision++,
+          mode: 'cumulative',
+          usage: {
+            admittedAudioSeconds: this.committedAudioSeconds,
+            connectedSeconds: Math.max(0, (monotonicNow(this.nowMs) - this.openedAtMs) / 1000),
+          },
         });
         return;
+      }
       case 'input.clear':
-        for (const [id, item] of this.items) {
-          if (!item.finalized && id === command.utteranceId) this.items.delete(id);
+        // Clear the uncommitted provider buffer, then drop every local trace
+        // of the client utterance so late provider frames cannot resurrect it.
+        this.socket.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+        for (const [itemId, item] of this.items) {
+          if (item.utteranceId !== undefined && item.utteranceId === command.utteranceId) {
+            this.tombstones.add(itemId);
+            this.items.delete(itemId);
+          }
         }
+        if (this.openTurnUtteranceId === command.utteranceId) this.openTurnUtteranceId = undefined;
         return;
       case 'session.mute':
         // Mute is enforced by capture (no audio written); the cloud adapter holds no gate.
@@ -410,20 +480,22 @@ export class TranscriptionSession implements SpeechSession {
   async close(): Promise<void> {
     if (this.settled) return;
     this.settled = true;
+    this.expiryCancel?.();
+    this.expiryCancel = undefined;
     if (this.signal && this.abortHandler) this.signal.removeEventListener('abort', this.abortHandler);
     try {
       await this.socket.close();
     } finally {
-      const connectedSeconds = Math.max(0, (monotonicNow(this.nowMs) - this.openedAtMs) / 1000);
-      const totals = { connectedSeconds, admittedAudioSeconds: this.audioSeconds };
+      // No usage attached: locally measured seconds are operational estimates,
+      // not provider-attested finals. The composition settles from the recorded
+      // cumulative totals (or provider-reported usage with a revision), so an
+      // L8 `settleSpeech` missing-dimension estimate stays valid.
       await this.usage.settle({
         operationId: this.admission.operationId,
         outcome: this.outcome,
-        usage: totals,
       });
-      const waiter = this.waiters.shift();
-      if (waiter) waiter();
-      await this.pump.catch(() => undefined);
+      while (this.waiters.length > 0) this.waiters.shift()?.();
+      if (!this.inPump) await this.pump.catch(() => undefined);
     }
   }
 
@@ -440,10 +512,12 @@ export class TranscriptionSession implements SpeechSession {
       this.pushError('invalid-format', true);
       return;
     }
+    if (this.tombstones.has(itemId)) return;
     let item = this.items.get(itemId);
     if (!item) {
       item = {
-        text: '', revision: 0, audioStartMs: this.turnAudioStartMs ?? 0, audioEndMs: this.lastCapturedAtMs,
+        text: '', revision: 0,
+        audioStartMs: this.turnAudioStartMs ?? 0, audioEndMs: this.lastCapturedAtMs,
         finalized: false,
         speechSessionId: this.receipt.speechSessionId,
         connectionEpoch: this.receipt.connectionEpoch,
@@ -474,6 +548,7 @@ export class TranscriptionSession implements SpeechSession {
   }
 
   private onCompleted(itemId: string, transcript: string, languages: unknown): void {
+    if (this.tombstones.has(itemId)) return;
     const item = this.items.get(itemId);
     if (!item) {
       this.pushError('invalid-format', true);
@@ -484,6 +559,7 @@ export class TranscriptionSession implements SpeechSession {
       return;
     }
     item.finalized = true;
+    this.tombstones.add(itemId);
     item.revision += 1;
     item.audioEndMs = Math.max(item.audioEndMs, this.lastCapturedAtMs);
     this.sequence += 1;
@@ -513,6 +589,7 @@ export class TranscriptionSession implements SpeechSession {
   }
 
   private onFrame(raw: string): void {
+    if (this.settled) return;
     let frame: unknown;
     try {
       frame = JSON.parse(raw) as unknown;
@@ -552,8 +629,10 @@ export class TranscriptionSession implements SpeechSession {
   }
 
   private async run(signal: AbortSignal | undefined): Promise<void> {
+    this.inPump = true;
     try {
       for await (const raw of this.socket.messages()) {
+        if (this.settled) break;
         if (signal?.aborted) {
           this.outcome = 'cancelled';
           break;
@@ -566,10 +645,21 @@ export class TranscriptionSession implements SpeechSession {
         this.pushError('transport', false);
       }
     } finally {
+      this.inPump = false;
       if (!this.settled) await this.close();
     }
   }
 }
+
+/**
+ * Redact the bearer material from any message before it reaches an error.
+ * A provider that echoes the Authorization header must never leak it through
+ * session events or thrown errors.
+ */
+const redactBearer = (message: string, token: string): string => {
+  if (!token) return message;
+  return message.split(`Bearer ${token}`).join('Bearer [REDACTED]').split(token).join('[REDACTED]');
+};
 
 /**
  * Open an admitted transcription session. The bearer token travels only into
@@ -592,6 +682,8 @@ export const openTranscriptionSession = async (
     throw new OpenAiTranscriptionError('invalid-config', 'bearer token is required');
   }
   const { request } = options;
+  // TTS bindings are refused here (fail-closed): a later duplex composition
+  // may split them onto a synthesis adapter, but this module never synthesizes.
   if (request.pipeline !== 'chained' || request.bindings.stt === undefined
     || request.bindings.stt.providerId !== binding.providerId
     || request.bindings.stt.modelId !== binding.modelId
@@ -625,17 +717,19 @@ export const openTranscriptionSession = async (
       originator: options.originator ?? 'sentropic-llm-mesh',
     });
   } catch (error) {
-    // The handshake failure carries status only; the credential never enters the error.
-    throw new OpenAiTranscriptionError('transport', `provider connect failed: ${error instanceof Error ? error.message : 'unknown'}`);
+    const detail = error instanceof Error ? error.message : 'unknown';
+    throw new OpenAiTranscriptionError('transport', `provider connect failed: ${redactBearer(detail, options.bearerToken)}`);
   }
   const session = new TranscriptionSession(
     receipt, socket, binding, options.admission, options.usage, options.nowMs, options.signal,
+    options.schedule, request.maxDurationMs,
   );
   try {
     socket.send(JSON.stringify(buildTranscriptionSessionUpdate(config)));
   } catch (error) {
     await session.close();
-    throw new OpenAiTranscriptionError('transport', `session update failed: ${error instanceof Error ? error.message : 'unknown'}`);
+    const detail = error instanceof Error ? error.message : 'unknown';
+    throw new OpenAiTranscriptionError('transport', `session update failed: ${redactBearer(detail, options.bearerToken)}`);
   }
   return session;
 };
