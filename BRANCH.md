@@ -98,7 +98,7 @@ Mesh `speech/openai-transcription.ts` with two independently configured OpenAI s
   - [x] P1-3: cumulative usage records under `${operationId}:audio`, monotonic revisions; settle without usage/providerRevision.
   - [x] P1-4: client-utterance binding via committed FIFO; per-turn windows; input.clear sends provider clear + tombstones.
   - [x] P2: settled guards + tombstones; bearer redaction proven; completed-only; Allowed Paths fixed; Lot 1 text updated; commits ≤150 with feat:/test:/docs: subjects (two pre-r1 violations stand, no rewrite).
-  - [ ] Lot gate: `make test-llm-mesh` green on the R1 head.
+  - [x] Lot gate: `make test-llm-mesh` green on the R1 head (SCOPE=file 26/26, full 87 files / 1527 tests), build + pack 0.31.0 green.
 - [ ] **Lot N — Final validation**
   - [ ] `make scope-check` (harness) green.
   - [ ] Push, draft PR against `feat/live-stt-l8`, CI `validate-llm-mesh` + `ci-gate` green on the exact head.
