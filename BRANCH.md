@@ -144,6 +144,7 @@
   - [x] Initial five-case real-PG run passes after the two evidenced wire fixes; add engine acceptance/rejection traces through E8's authoritative candidate liaison and actual key destruction.
   - [x] Engine traces pass (7/7); add host checkpoint/resync/snapshot and poison/retry with independent maintain checks, plus host read/maintain grant without write. No read/write/maintain grant enters the campaign.
   - [x] Host maintenance positive cases pass (9/9); add independent-process contention and real SIGKILL before/after COMMIT, own peer TCP pool and elapsed durable lease, original-result lookup in a new epoch.
+  - [x] Actual SIGKILL paths and process contention execute; correct two test-carrier errors (canonical source sequence and frozen `created_cursor` name). Add C5 sparse high-water cases at safe/signed/u64 boundaries through the same neutral PG handle.
 - [ ] Lot E9-4 — `test-cluster-mesh` scoped memory and PostgreSQL lanes; typecheck/lint; mechanical scope gate before each `make commit`; every authored commit under 150 lines; no AI trailers.
 - [ ] Lot E9-5 — retain campaign facts and counts per profile; push retry every ten minutes until successful; draft PR from this file; record CI; do not merge or publish.
 
