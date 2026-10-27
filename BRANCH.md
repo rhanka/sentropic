@@ -1,7 +1,7 @@
 # Feature: W4.a trusted catalog context
 
 ## Objective
-- [ ] Carry trusted request and turn authority through discovery, model selection and execution.
+- [x] Carry trusted request and turn authority through discovery, model selection and execution.
 
 ## Scope / Guardrails
 - [x] Base W2.b d0ce8aeb0; merge commits only; worktree tmp/worktrees/app-w4a.
@@ -33,27 +33,27 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read Docker lock, full plan-v2, W0 context contract; mechanical branch check.
-- [ ] Lot 1: freeze file-level tests and implementation plan before code.
+- [x] Lot 1: freeze file-level tests and implementation plan before code.
   - [x] api/tests/services/catalog/request-context.spec.ts: freeze, forged context, current authority, allowlists and revocation.
   - [x] api/tests/api/catalog-auth-context.test.ts: authenticated list/get/search/sources with interleaved subjects and missing authority.
   - [x] api/tests/services/catalog/chat-context.integration.test.ts: model selection/search through real executor and seam, zero denied effects.
-  - [ ] Update api/tests/services/catalog/{composite-registry,execution-seam,search-catalog-tool,mcp-source,standalone-tool-source}.spec.ts as signatures evolve.
+  - [x] Evolve execution-seam/search-catalog-tool/mcp-source/standalone-tool-source regressions; existing composite-registry suite passes unchanged.
   - [x] Regression inventory also covers existing agent/canvas/workflow source suites; source fixtures use the current ai-priorities workspace type.
   - [x] BR04A-EX1: adapt catalog-characterization.spec.ts direct product discovery to required context; test-only impact; rollback with the HTTP port contract.
-  - [ ] Update api/tests/api/cluster-mesh-catalog.test.ts and api/tests/unit/foundation-executor.test.ts.
+  - [x] Extend api/tests/api/cluster-mesh-catalog.test.ts; preserve existing api/tests/unit/foundation-executor.test.ts (2/2).
   - [x] Product catalog fixture grants a real approved tenant membership; direct comparisons use the resolved HTTP session context.
   - [x] Product regressions cover revoked tenant membership on every mounted path, foreign workspace selectors and session revocation after discovery.
   - [x] Session activity touches and conversation title updates do not invalidate an unchanged policy snapshot.
   - [x] Product chat-service regression uses a real scoped conversation and message, the real foundation executor and seam; revoked membership permits no second handler call.
-- [ ] Lot 2: frozen server-only context resolver and fresh product session/turn authority.
+- [x] Lot 2: frozen server-only context resolver and fresh product session/turn authority.
   - [x] Server inputs and allowlists frozen; provenance checked by identity; dispatch rechecks current grants and policy references.
   - [x] Product resolver rechecks session/conversation ownership, authoritative tenant and active account/memberships; consumes W2 compiled names directly.
-- [ ] Lot 3: require context at every HTTP product port; filter before ranking and serialization.
+- [x] Lot 3: require context at every HTTP product port; filter before ranking and serialization.
   - [x] Every HTTP transport path authenticates, resolves authority and disables caching; product ports require context.
   - [x] Direct product discovery ports reject missing or copied context at runtime.
   - [x] Context-view tests authored before filtering: interleaved users, ranking, source absence and read-only mutations.
   - [x] Synchronous request-local snapshots filter tools/skills before collision resolution, ranking and limiting; private sources absent globally.
-- [ ] Lot 4: pass turn context through model selection, search and execution; handled denials never fall through.
+- [x] Lot 4: pass turn context through model selection, search and execution; handled denials never fall through.
   - [x] Handler context travels separately from arguments; seam refreshes authority and dispatches only through the winning entry's source.
   - [x] Negative regressions explicitly deny missing context and read-only mutations with zero handler effects.
   - [x] Search and model tools use the same request-local catalog view; public identifiers pass through unchanged.
@@ -63,12 +63,17 @@
 - [ ] Lot 5: focused suites, API typecheck/lint, runtime logs and locked make down.
   - [x] 18-file catalog/foundation/W2 regression pass: 334/334; final 5-file negative-vector pass: 28/28, no skips or AI calls.
   - [x] Typecheck identified the OpenAI custom-tool union; filter narrows to the function tools produced by this catalog.
+  - [x] Final function-tool narrowing verified by chat-context integration (1/1), API typecheck and lint (0 errors, 219 warnings); startup logs contain no runtime errors.
+  - [x] Local receipts: /tmp/app-w4a-{product,final,quality}.log; same package/lock tree as W2.b; reused local image d0928e and matching package outputs without rebuilding.
 - [ ] Lot 6: draft against feat/app-cm-integration with BRANCH.md body, publication-disabled CI and W4.b handoff.
 
 ## Feedback Loop
 - [x] W4.b owns host-registry-source.ts and its registration; W4.a prepares the context and execution contracts.
 - [x] Preserve W2.b registry public names and same transport/service; no copied name map or mutation dispatcher.
 - [x] W4.b must distinguish sessionKind=http (login credential) from sessionKind=turn (conversation authority); never use a conversation ID as a W1 session credential.
+- [x] W4.b source must require context and return no unscoped snapshot; consume productArtifactTransport.ready tools/resolveTool and exact compiled names, then register that same source for discovery and execution.
+- [x] W4.b must bind current provider/resource authority before projection, carry the verified credential to productArtifactTransport.invoke, and retain W1 finalization guards; do not introduce another effect dispatcher.
+- [x] W4.b must complete the turn-to-host credential binding using server evidence, extend the effective server turn allowlist with authorized compiled names, and prove one persisted host effect plus denial after revocation.
 - [x] No package, schema, lock, build or deployment changes; no Track writer turn in this lot.
 
 ## AI Flaky tests
