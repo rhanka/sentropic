@@ -42,6 +42,7 @@
   - [x] BR04A-EX1: adapt catalog-characterization.spec.ts direct product discovery to required context; test-only impact; rollback with the HTTP port contract.
   - [ ] Update api/tests/api/cluster-mesh-catalog.test.ts and api/tests/unit/foundation-executor.test.ts.
   - [x] Product catalog fixture grants a real approved tenant membership; direct comparisons use the resolved HTTP session context.
+  - [x] Product regressions cover revoked tenant membership on every mounted path, foreign workspace selectors and session revocation after discovery.
 - [ ] Lot 2: frozen server-only context resolver and fresh product session/turn authority.
   - [x] Server inputs and allowlists frozen; provenance checked by identity; dispatch rechecks current grants and policy references.
   - [x] Product resolver rechecks session/conversation ownership, authoritative tenant and active account/memberships; consumes W2 compiled names directly.
