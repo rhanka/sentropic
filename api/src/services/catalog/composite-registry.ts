@@ -111,7 +111,7 @@ export class CompositeCatalogRegistry {
         && (!context.readOnly || sideEffect === false);
       if (entry.kind === 'tool') return permitted(entry.metadata.name, entry.tool.sideEffect) ? [entry] : [];
       if (entry.kind === 'skill') {
-        const tools = entry.skill.tools.filter(tool => permitted(tool.name, tool.sideEffect));
+        const tools = entry.skill.tools.filter(tool => permitted(tool.name, tool.sideEffect ?? false));
         return tools.length ? [{ ...entry, skill: { ...entry.skill, tools,
           metadata: { ...entry.skill.metadata, toolNames: tools.map(tool => tool.name) } } }] : [];
       }
