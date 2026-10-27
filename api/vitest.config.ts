@@ -13,8 +13,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '#mcp-platform-hono': pkgSrc('mcp-platform', 'hono.ts'),
-      // Registry fixtures use the same artifacts instance as the mesh module loader.
-      '@sentropic/artifacts': fileURLToPath(new URL('../packages/artifacts/dist', import.meta.url)),
       '@sentropic/comments/hono': pkgSrc('comments', 'hono.ts'),
       '@sentropic/connector-host/hono': pkgSrc('connector-host', 'hono.ts'),
       '@sentropic/flow/hono': pkgSrc('flow', 'hono.ts'),
@@ -23,11 +21,13 @@ export default defineConfig({
       '@sentropic/mcp-platform/hono': pkgSrc('mcp-platform', 'hono.ts'),
       '@sentropic/mcp-platform/registry': pkgSrc('mcp-platform', 'registry.ts'),
       '@sentropic/mcp-platform/tool-configuration': pkgSrc('mcp-platform', 'tool-configuration.ts'),
+      '@sentropic/mcp-platform/transport/dispatch': pkgSrc('mcp-platform', 'transport/dispatch.ts'),
       '@sentropic/auth-client': pkgSrc('auth-client'),
       '@sentropic/auth-hono': pkgSrc('auth-hono'),
       '@sentropic/chat-core': pkgSrc('chat-core'),
       '@sentropic/chat-server': pkgSrc('chat-server'),
       '@sentropic/cluster-mesh/compose/gateway': pkgSrc('cluster-mesh', 'compose/gateway.ts'),
+      '@sentropic/cluster-mesh/loaders/mcp': pkgSrc('cluster-mesh', 'loaders/mcp/index.ts'),
       '@sentropic/cluster-mesh/mcp/registry': pkgSrc('cluster-mesh', 'mcp/registry.ts'),
       '@sentropic/cluster-mesh/mcp/artifacts': pkgSrc('cluster-mesh', 'integrations/mcp/artifacts.ts'),
       '@sentropic/cluster-mesh': pkgSrc('cluster-mesh'),
