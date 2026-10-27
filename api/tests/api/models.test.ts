@@ -131,6 +131,29 @@ describe('llm-mesh model projections', () => {
     expect(data.defaults.model_id).toBe('gemini-3.1-flash-lite');
   });
 
+  it('migrates the retired OpenAI nano default to its registered successor', async () => {
+    const updateResponse = await authenticatedRequest(
+      app,
+      'PUT',
+      '/api/v1/me/ai-settings',
+      user.sessionToken!,
+      { defaultModel: 'gpt-4.1-nano' }
+    );
+    expect(updateResponse.status).toBe(200);
+
+    const response = await authenticatedRequest(
+      app,
+      'GET',
+      '/api/v1/models/catalog',
+      user.sessionToken!
+    );
+
+    expect(response.status).toBe(200);
+    const data = await response.json();
+    expect(data.defaults.provider_id).toBe('openai');
+    expect(data.defaults.model_id).toBe('gpt-5.4-nano');
+  });
+
   it('migrates legacy Gemini Pro defaults to Gemini 3.5 Flash', async () => {
     const updateResponse = await authenticatedRequest(
       app,

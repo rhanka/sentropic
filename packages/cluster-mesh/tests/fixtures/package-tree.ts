@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { HISTORICAL_FAKE_GATEWAY_VERSION, HISTORICAL_FAKE_MESH_VERSION } from './train.js';
 
 /** Evaluation log shared by fixture provider modules. */
 export function evaluations(): string[] {
@@ -77,7 +78,7 @@ export class PackageTree {
 
 export const MESH_MEMBERS = ['createLlmMesh', 'createProviderRegistry'] as const;
 
-export function fakeMesh(label: string, version = '0.22.0'): FakePackage {
+export function fakeMesh(label: string, version = HISTORICAL_FAKE_MESH_VERSION): FakePackage {
   return {
     name: '@sentropic/llm-mesh',
     version,
@@ -91,7 +92,7 @@ export function fakeMesh(label: string, version = '0.22.0'): FakePackage {
   };
 }
 
-export function fakeGateway(label: string, version = '0.19.0', authSource?: { service?: string; session?: string }): FakePackage {
+export function fakeGateway(label: string, version = HISTORICAL_FAKE_GATEWAY_VERSION, authSource?: { service?: string; session?: string }): FakePackage {
   return {
     name: '@sentropic/llm-gateway',
     version,

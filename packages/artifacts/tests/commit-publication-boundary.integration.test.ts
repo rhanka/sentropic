@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
@@ -15,6 +15,7 @@ import { createArtifactCommand, createRadarKeyDerivation } from '../src/server/c
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
 import { createArtifactCommitBarrier, type CommitBarrierObserver, type CommitBarrierPoint } from '../src/testing.js';
 import type { PublicationBlobStore } from '../src/server/publication.js';
+import type { AuthorizeCommit } from '../src/server/commit/types.js';
 
 if (!process.env['DATABASE_URL'] || !process.env['ARTIFACTS_S3_ENDPOINT']) {
   throw new Error('L8a requires make test-artifacts-integration with PostgreSQL and MinIO');
@@ -67,7 +68,7 @@ function world(db: Pool, store: PublicationBlobStore, observer?: CommitBarrierOb
   });
   return { service, refs, coordinator };
 }
-const publish = (w: ReturnType<typeof world>, input: ReturnType<typeof inputFor>) => {
+const publish = (w: ReturnType<typeof world>, input: ReturnType<typeof inputFor> & { authorizeCommit?: AuthorizeCommit }) => {
   const command = createArtifactCommand(profile, 'artifacts_publish', {
     artifactId: input.artifactId, idempotencyKey: input.callerKey, profile: input.profile,
     files: input.files.map((file) => ({ ...file, bytes: [...file.bytes] })),
@@ -119,6 +120,25 @@ const publishPoints: CommitBarrierPoint[] = ['before_blob_put', 'after_blob_put_
   'before_finalization_row_lock', 'after_finalization_locks_before_guard', 'before_commit'];
 
 describe('publication authorization after every applicable wait', () => {
+  it.each([false, true])('should deny direct unapproved publication with host guard: %s', async (useHostGuard) => {
+    const input = inputFor(await artifact());
+    await pool.query('UPDATE l8a_policy SET approved=false WHERE id=1');
+    const before = await snapshot();
+    const authorizeCommit = vi.fn<AuthorizeCommit>(async (context, transaction) => {
+      expect(await transaction.participant.checkApproval({ actorId: context.actorId, operation: context.operation }))
+        .toMatchObject({ approved: false });
+      return { allowed: false, reason: 'denied', publicCode: 'account_not_approved', status: 403, retriable: false };
+    });
+    const outcome = await publish(world(pool, blobs), { ...input,
+      authorizeCommit: useHostGuard ? authorizeCommit : undefined });
+    expect(outcome).toMatchObject({ ok: false, failure: {
+      category: 'unauthorized_at_commit', commitState: 'not_committed', httpStatus: 403,
+      publicCode: useHostGuard ? 'account_not_approved' : 'access_denied',
+    } });
+    expect(authorizeCommit).toHaveBeenCalledTimes(useHostGuard ? 1 : 0);
+    expect(await snapshot()).toEqual(before);
+  });
+
   it.each(publishPoints)('should roll back expired authority after %s and permit a fresh same-key retry', async (point) => {
     const input = inputFor(await artifact());
     const before = await snapshot();
