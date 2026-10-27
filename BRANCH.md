@@ -88,6 +88,11 @@ Deliver approved r3 L4: `live-speech/src/node/{capture,device,terminal-control}.
   - [x] P2-4: null stream on loss (reconnect works) + non-loss pump errors recorded with `onError`.
   - [x] P2-5: wiring asserts the transcript stays free of pressed key bytes.
   - [ ] P2-6: retarget PR base to the L3 branch, push, CI green, report without merging.
+- [x] **Lot R2 — Opus r2 review fixes (G-NATIVE receipt)**
+  - [x] Digest check enforced at `listDevices` too, with a mismatch test (no exec before verify).
+  - [x] pw-record entry removed (prior digest was a corrupted transcription; unverified hashes are dropped, not carried).
+  - [x] `arecord -l` trace recaptured verbatim with locale and timestamp provenance.
+  - [x] Receipt status set to `blocked` with the exact missing §8.1 items; reopen-after-loss test hardened (loss reported, second stream opened, stale reuse impossible).
   - [x] `src/node/index.ts`: export L4 modules.
 - [ ] **Lot N — Final validation**
   - [x] Typecheck (via `test-live-speech` tsc --noEmit) & Lint (n/a: no lint lane for this package)
