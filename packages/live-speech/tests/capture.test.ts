@@ -120,19 +120,29 @@ describe('capture session bounds and loss', () => {
   });
 
   it('should reopen cleanly after a device loss', async () => {
+    const lost: string[] = [];
     const device = new FakeDevice([
       [tone(0.05), { lost: 'unplugged' }],
       [tone(0.05), { hang: true }],
     ]);
-    const capture = new CaptureSession(device, { ...opts, maxMailboxFrames: 8 });
+    const capture = new CaptureSession(
+      device,
+      { ...opts, maxMailboxFrames: 8 },
+      { onDeviceLost: (error) => lost.push(error.message) },
+    );
     capture.setMicOn(true);
     await capture.open('fake-default');
     await flush(10);
     expect(capture.drain()).toHaveLength(1);
     expect(capture.diagnostics()).toMatchObject({ open: false });
-    // The loss parked the session closed (no open stream to leak): reopen flows.
+    // The loss was reported (not swallowed) and parked the session closed.
+    expect(lost).toHaveLength(1);
+    expect(capture.diagnostics().lost).toMatch(/unplugged/);
     await capture.close();
     await capture.open('fake-default');
+    // Reopen consumed the second script: a new device stream was opened,
+    // not the stale lost one reused.
+    expect(device.opened).toEqual(['fake-default', 'fake-default']);
     capture.setMicOn(true);
     await flush(10);
     expect(capture.drain()).toHaveLength(1);
