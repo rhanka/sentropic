@@ -57,7 +57,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0 — Read Docker lock first, full owner plan, MASTER/workflow/testing, template and W1.a; create worktree on the assigned base; `harness check branch` passes.
-- [ ] Lot 1 — First add `api/tests/api/artifacts-host-activation-store.test.ts`: trusted pool/opaque scope composition, explicit ticket and flow expiry at most 60 seconds, invalid policy refusal, installed asset hash/receipt refusal, and imported UP-T conformance vectors through the W1.a executor. Run the scoped red tests before service implementation.
+- [x] Lot 1 — Host tests first in `api/tests/api/artifacts-host-activation-store.test.ts`: namespace/TTL/receipt, authority delegation, expiry, restore and uncertain commit. Scoped red on missing `activation-storage` import, `/tmp/w1c-red-2.log`, before implementation. Imported vectors remain UP-T-2.
 - [ ] Lot 2 — Add `api/src/services/artifacts/activation-storage.ts`, consuming only frozen package ports and W1.a receipt; no SQL algorithm, migrations, request authority, cookie or live activation.
 - [ ] Lot 3 — Run scoped activation tests and `api/tests/api/artifacts-host-migrations.test.ts` regressions on test-app-w1c, API typecheck/lint; inspect logs and down after each step. No UI/E2E/AI tests apply to this unmounted composition.
 - [ ] Lot 4 — Review the exact implementation diff, reconcile findings, scope-check each selective commit, push, create draft PR with this file as body and verify green exact-head CI. Report PR number, head SHA and CI URL; do not merge.
