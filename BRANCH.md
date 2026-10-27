@@ -56,15 +56,15 @@ Deliver L6a: `live-speech/src/node/{tts-registry,voice-loop,playback}.ts`, a loc
 - [x] No UI change; no UAT required (no microphone path exercised by a human in this lot; narration proven with fake ports + qualified host aplay binary).
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 1 — TTS registry**
-  - [ ] `src/node/tts-registry.ts`: `TtsEnginePort`, espeak-ng entry (argv-pinned spawn, digest-verify with empty built-in pins + `ESPEAK_DIGESTS` allowlist, injected runner for tests), `TtsRegistry` config-only selection, fail-closed unknown engines.
-  - [ ] `tests/tts-registry.test.ts`: selection/switch, capability differences, unpinned refusal, unknown refusal, argv exactness, temp-file hygiene.
-- [ ] **Lot 2 — Playback driver**
-  - [ ] `src/node/playback.ts` + `tests/fixtures/fake-aplay.mjs`: aplay backend (digest pin = vetted alsa-utils bytes, cancellable SIGTERM/SIGKILL + reap, temp-file hygiene).
-  - [ ] `tests/playback.test.ts`: natural end, cancel reap (pid proven dead), nonzero exit, digest refusal.
-- [ ] **Lot 3 — Voice loop**
-  - [ ] `src/node/voice-loop.ts`: bounded narration (clause cut), VAD/key/stop barge-in with mic-mode gating, speak/played/cancelled outcomes, hygiene (no retained audio).
-  - [ ] `tests/voice-loop.test.ts`: fence-cancel, both mic modes, muted, stop, busy, leakage, receipt blocked.
+- [x] **Lot 1 — TTS registry**
+  - [x] `src/node/tts-registry.ts`: `TtsEnginePort`, espeak-ng entry (argv-pinned spawn, digest-verify with empty built-in pins + `ESPEAK_DIGESTS` allowlist, injected runner for tests), `TtsRegistry` config-only selection, fail-closed unknown engines.
+  - [x] `tests/tts-registry.test.ts`: selection/switch, capability differences, unpinned refusal, unknown refusal, argv exactness, temp-file hygiene.
+- [x] **Lot 2 — Playback driver**
+  - [x] `src/node/playback.ts` + `tests/fixtures/fake-aplay.mjs`: aplay backend (digest pin = vetted alsa-utils bytes, cancellable SIGTERM/SIGKILL + reap, temp-file hygiene).
+  - [x] `tests/playback.test.ts`: natural end, cancel reap (pid proven dead), nonzero exit, digest refusal.
+- [x] **Lot 3 — Voice loop**
+  - [x] `src/node/voice-loop.ts`: bounded narration (clause cut), VAD/key/stop barge-in with mic-mode gating, speak/played/cancelled/error outcomes, hygiene (no retained audio).
+  - [x] `tests/voice-loop.test.ts`: fence-cancel, both mic modes, muted, stop, busy, leakage, real capture-VAD wiring, receipt blocked.
 - [ ] **Lot 4 — Receipts + wiring**
-  - [ ] `bench/l6a-g-native.receipt.json` (status blocked, exact missing §8.1 items), README section, `src/node/index.ts` exports.
+  - [x] `bench/l6a-g-native.receipt.json` (status blocked, exact missing §8.1 items), README section, `src/node/index.ts` exports.
   - [ ] Retest green, push, draft PR against `feat/live-stt-l4`, CI green, report without merging.
