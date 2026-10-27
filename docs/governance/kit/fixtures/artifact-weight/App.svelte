@@ -62,7 +62,7 @@
           <div class="overview-cards">
             {#each questions as q,index}<Card><div class="overview-card"><svg viewBox="0 0 70 70" aria-hidden="true">{@html diagramIcon(index===0 ? 'people':'shield',0,0,70)}</svg><div><span class="editorial-kicker">QUESTION {index+1}</span><h3>{index===0?'Adopter le texte testé':'Choisir le défaut du garde'}</h3><p>{index===0?'Deux revues finales restent nécessaires.':'Le parcours complet reste à qualifier.'}</p><Button size="sm" variant="secondary" onclick={()=>go(index+1)}>Lire les trois options</Button></div></div></Card>{/each}
           </div>
-          { diagramTabs()}
+          {@render diagramTabs()}
           <ArchitectureFigure scene={scenes[diagram]} title="Deux parcours indépendants" label={scenes[diagram].shortCaption}  />
 
           <div class="capitalization-note"><div><span class="editorial-kicker">CAPITALISER LES CORRECTIONS</span><p><strong>8 conventions restent à transmettre au harnais.</strong> Le titre discret et les questions courtes sont déjà prescrits ; les cartes, les zones et leurs interactions vivent encore dans les kits.</p></div><Button size="sm" variant="secondary" onclick={()=>go(3)}>Voir les écarts</Button></div>
