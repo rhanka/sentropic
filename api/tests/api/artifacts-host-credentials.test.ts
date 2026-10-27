@@ -9,6 +9,7 @@ import { createArtifactCredentialReader } from '../../src/services/artifacts/cre
 const admin = new Pool({ connectionString: process.env.DATABASE_URL });
 const resource = 'https://app.example/api/v1/mcp';
 let pool: Pool;
+let connectionEnds: Promise<void>[];
 let database: string;
 beforeEach(async () => {
   database = `w2b_${randomUUID().replaceAll('-', '')}`;
@@ -16,6 +17,10 @@ beforeEach(async () => {
   const url = new URL(process.env.DATABASE_URL!);
   url.pathname = `/${database}`;
   pool = new Pool({ connectionString: url.toString() });
+  connectionEnds = [];
+  pool.on('connect', client => {
+    connectionEnds.push(new Promise<void>(resolve => client.once('end', resolve)));
+  });
   await runMigrations(pool);
   await pool.query(`INSERT INTO users (id, role, account_status) VALUES ('alice', 'editor', 'active');
     INSERT INTO tenants (id, name) VALUES ('tenant-a', 'A');
@@ -34,7 +39,8 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await pool.end();
-  await admin.query(`DROP DATABASE "${database}" WITH (FORCE)`);
+  await Promise.all(connectionEnds);
+  await admin.query(`DROP DATABASE "${database}"`);
 });
 afterAll(() => admin.end());
 
@@ -64,7 +70,7 @@ describe.each(['session', 'oauth'] as const)('current artifact %s credential', (
   });
   if (kind === 'oauth') {
     it.each([
-      `UPDATE oauth_tokens SET token_type = 'refresh_token'`,
+      `UPDATE oauth_tokens SET token_type = 'id_token'`,
       `UPDATE oauth_tokens SET tenant_id = 'other'`,
       `UPDATE oauth_tokens SET audience = 'https://other.example/mcp'`,
       `UPDATE oauth_tokens SET scope = 'openid'`,
