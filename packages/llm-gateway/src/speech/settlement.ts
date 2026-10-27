@@ -33,6 +33,9 @@ export const reconcileSpeech = (admissions: readonly SpeechHold[], allocatorRece
   });
   const turnKey = (r: SpeechAllocatorReceipt | Omit<SpeechAllocatorReceipt, 'countedUnits'>): string =>
     JSON.stringify([r.tenantId, r.workspaceId, r.principalId, r.targetSessionId, r.submitKey, r.coordinatorEpoch]);
+  const nativeKey = (r: SpeechAllocatorReceipt | Omit<SpeechAllocatorReceipt, 'countedUnits'>): string | undefined =>
+    r.nativeTurnRef === undefined ? undefined
+      : JSON.stringify([r.tenantId, r.workspaceId, r.principalId, r.targetSessionId, r.nativeTurnRef]);
   const groups = new Map<string, { operation: SpeechOperation; admission?: SpeechHold; entries: SpeechSettlementEntry[] }>();
   for (const admission of admissions) {
     groups.set(operationKey(admission.operation), { operation: admission.operation, admission, entries: [] });
@@ -53,7 +56,8 @@ export const reconcileSpeech = (admissions: readonly SpeechHold[], allocatorRece
     if (!admission) issues.push('orphan-usage');
     if (receipts.length !== 1 || !sameSpeechIdentity({ ...expected, countedUnits: receipts[0]?.countedUnits }, receipts[0])
       || entries.some(e => !sameSpeechIdentity(e.operation, op))) issues.push('allocator-mismatch');
-    if (allocatorReceipts.filter(r => turnKey(r) === turnKey(expected)).length > 1) {
+    if (allocatorReceipts.filter(r => turnKey(r) === turnKey(expected)
+      || (nativeKey(expected) !== undefined && nativeKey(r) === nativeKey(expected))).length > 1) {
       issues.push('duplicate-allocator-receipt');
     }
     if (receipts.some(r => r.countedUnits === 0) && (admission?.dispatched || entries.length > 0)) {
