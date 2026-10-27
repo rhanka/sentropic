@@ -64,6 +64,9 @@ describe('arecord backend', () => {
   it('should fail closed with DeviceUnavailableError when the binary is missing', async () => {
     const device = new ArecordDevice('/nonexistent/arecord');
     await expect(device.listDevices()).rejects.toThrow(DeviceUnavailableError);
+    await expect(
+      device.open('hw:0,0', { sampleRateHz: 16000, channels: 1, frameMs: 20 }),
+    ).rejects.toThrow(DeviceUnavailableError);
   });
 
   it('should parse `arecord -l` card/device lines without running anything', () => {
