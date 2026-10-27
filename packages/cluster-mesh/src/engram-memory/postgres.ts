@@ -8,6 +8,7 @@
 import type { PostgresStorageOptions } from '../storage/postgres/protocol.js';
 import { loadPgAssets } from '../storage/postgres/migrations.js';
 import { StorageInvalidCommandError, StorageUnavailableError } from '../storage/errors.js';
+import { MemoryHostDriverRequiredError } from './sqlite.js';
 import type { AtomicUnit } from '../storage/atomic.js';
 import { MEMORY_DESCRIPTOR } from './manifest.js';
 import { MEMORY_PG_QUERIES } from './postgres-queries.js';
@@ -140,6 +141,69 @@ export const createMemoryPostgresRegistration = async (): Promise<MemoryPostgres
     queries: MEMORY_PG_QUERIES,
     limits: MEMORY_STORAGE_LIMITS,
   });
+
+/** Host-owned PG driver identity: named versioned artifact, hex digest. */
+export interface MemoryPostgresDriverIdentity {
+  readonly name: string;
+  readonly version: string;
+  readonly artifactDigest: string;
+}
+
+/**
+ * Qualified host-owned PG driver/pool provider. The host composition owns
+ * the pool lifecycle and passes the provider explicitly; Engram receives
+ * the neutral binding only, never the pool, raw SQL access or this
+ * provider. Live server probing belongs to the open path, not to this
+ * object check.
+ */
+export interface MemoryPostgresDriverProvider {
+  readonly identity: MemoryPostgresDriverIdentity;
+  readonly serverFloor: string;
+}
+
+/** Pinned server floor (the qualification stack runs postgres:17); kept literal. */
+export const MEMORY_PG_SERVER_FLOOR = '17.0.0' as const;
+
+const HEX64 = /^[a-f0-9]{64}$/;
+
+const parseServer = (version: string): [number, number, number] => {
+  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
+  if (!match) throw new StorageUnavailableError(`unreadable memory PG server version: ${version}`);
+  return [Number(match[1]), Number(match[2]), Number(match[3])];
+};
+
+const serverAtLeast = (version: string, floor: string): boolean => {
+  const [a, b, c] = parseServer(version);
+  const [x, y, z] = parseServer(floor);
+  return a !== x ? a > x : b !== y ? b > y : c >= z;
+};
+
+/** Object-level provider check: explicit host provider with a qualified identity and floor. */
+export const checkMemoryPostgresDriver = (driver: unknown): MemoryPostgresDriverProvider => {
+  if (typeof driver !== 'object' || driver === null) {
+    throw new MemoryHostDriverRequiredError(
+      'memory Postgres storage requires an explicit host-injected driver provider',
+    );
+  }
+  const candidate = (driver as { readonly identity?: unknown }).identity;
+  const floor = (driver as { readonly serverFloor?: unknown }).serverFloor;
+  if (
+    typeof candidate !== 'object' ||
+    candidate === null ||
+    typeof (candidate as Record<string, unknown>)['name'] !== 'string' ||
+    ((candidate as Record<string, unknown>)['name'] as string).length === 0 ||
+    typeof (candidate as Record<string, unknown>)['version'] !== 'string' ||
+    ((candidate as Record<string, unknown>)['version'] as string).length === 0 ||
+    typeof (candidate as Record<string, unknown>)['artifactDigest'] !== 'string' ||
+    !HEX64.test((candidate as Record<string, unknown>)['artifactDigest'] as string)
+  ) {
+    throw new MemoryHostDriverRequiredError('memory driver provider requires a named versioned artifact identity');
+  }
+  if (typeof floor !== 'string' || !serverAtLeast(floor, MEMORY_PG_SERVER_FLOOR)) {
+    throw new StorageUnavailableError('memory PG server is below the qualified floor');
+  }
+  return driver as MemoryPostgresDriverProvider;
+};
 
 /**
  * Postgres storage composition. FAILS CLOSED in this increment: the public
