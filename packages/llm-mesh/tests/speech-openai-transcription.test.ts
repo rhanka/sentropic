@@ -145,3 +145,85 @@ const frame = (utteranceId: string, capturedAtMs: number, samples = 480): Speech
   format: { codec: 'pcm16-le', sampleRateHz: 24000, channels: 1 },
   payload: new Uint8Array(samples * 2),
 });
+
+describe('openai transcription profiles', () => {
+  it.each([liveConfig, whisperConfig])('should expose independent capabilities for $modelId', (config) => {
+    const caps = openAiTranscriptionCapabilities(config);
+    expect(caps.binding).toMatchObject({
+      providerId: 'openai', modelId: config.modelId, adapterId: 'openai-transcription', placement: 'cloud-relay',
+    });
+    expect(caps.features).toMatchObject({
+      streamingStt: 'supported', partialTranscript: 'supported', clientVad: 'supported', manualCommit: 'supported',
+      serverVad: 'unsupported', nativeDuplex: 'unsupported', tts: 'unsupported',
+    });
+    expect(caps.inputFormats).toEqual([{ codec: 'pcm16-le', sampleRateHz: 24000, channels: 1 }]);
+    expect(caps.usageUnits).toEqual(expect.arrayContaining(['audio-seconds', 'session-seconds']));
+  });
+
+  it('should refuse TTS selection without an implicit synthesis voice', () => {
+    for (const config of [liveConfig, whisperConfig]) {
+      const caps: SpeechCapabilities = {
+        ...openAiTranscriptionCapabilities(config),
+        languages: ['fr', 'en'],
+        voices: undefined,
+        regions: undefined,
+      };
+      expect(negotiateSpeech(caps, {
+        binding: { ...caps.binding },
+        required: ['tts'],
+      })).toEqual({ ok: false, reason: 'capability', capability: 'tts', support: 'unsupported' });
+      expect('voice' in caps.binding).toBe(false);
+    }
+  });
+
+  it('should pin server VAD off and keep per-profile delay independent', () => {
+    const live = buildTranscriptionSessionUpdate(liveConfig) as { session: { audio: { input: Record<string, unknown> } } };
+    const whisper = buildTranscriptionSessionUpdate({ ...whisperConfig, delay: 'high' });
+    expect(live.session.audio.input.turn_detection).toBeNull();
+    expect(live.session.audio.input).not.toHaveProperty('server_vad');
+    expect(live.session.audio.input).not.toHaveProperty('semantic_vad');
+    expect((live.session.audio.input.transcription as { delay: string }).delay).toBe('low');
+    expect(((whisper as typeof live).session.audio.input.transcription as { delay: string }).delay).toBe('high');
+    expect((whisper as typeof live).session.audio.input).toMatchObject({
+      format: { type: 'audio/pcm', rate: 24000 },
+      transcription: { model: 'gpt-realtime-whisper' },
+    });
+  });
+
+  it.each([
+    [{ ...liveConfig, modelId: 'gpt-unknown' }, 'unknown-model'],
+    [{ ...liveConfig, modelRevision: '' }, 'invalid-config'],
+    [{ ...liveConfig, delay: 'turbo' }, 'invalid-config'],
+    [{ ...liveConfig, turnDetection: 'server' }, 'invalid-config'],
+  ])('should refuse unvalidated profile %j', (config, code) => {
+    expect(() => openAiTranscriptionCapabilities(config as never)).toThrowError(OpenAiTranscriptionError);
+    try {
+      openAiTranscriptionCapabilities(config as never);
+      expect.unreachable();
+    } catch (error) {
+      expect((error as OpenAiTranscriptionError).code).toBe(code);
+    }
+  });
+
+  it('should refuse to open without admission, credential, or STT-only chained binding', async () => {
+    const socket = new ScriptSocket();
+    const connect: OpenAiTranscriptionConnect = async () => socket;
+    const base = {
+      request: sessionRequest('gpt-live-transcribe'),
+      bearerToken: 'bearer-fixture',
+      connect,
+      usage: new RecordingSink(),
+      nowMs: () => 1_000,
+    };
+    await expect(openTranscriptionSession(liveConfig, { ...base, admission: undefined as never }))
+      .rejects.toMatchObject({ code: 'admission' });
+    await expect(openTranscriptionSession(liveConfig, { ...base, admission: admission(), bearerToken: '' }))
+      .rejects.toMatchObject({ code: 'invalid-config' });
+    await expect(openTranscriptionSession(liveConfig, {
+      ...base,
+      admission: admission(),
+      request: { ...base.request, bindings: { tts: { ...sttBinding('x'), modelId: 'tts' } } },
+    })).rejects.toMatchObject({ code: 'invalid-config' });
+    expect(socket.sent).toHaveLength(0);
+  });
+});
