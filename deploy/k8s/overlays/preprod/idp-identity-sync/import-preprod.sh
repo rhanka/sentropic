@@ -49,6 +49,8 @@ snapshot_epoch=$(date -u -d "${snap_ts%%.*}" +%s 2>/work/date.log) || fail inval
 age=$(( $(date -u +%s) - snapshot_epoch ))
 [ "$age" -ge 0 ] && [ "$age" -le "$MAX_SNAPSHOT_AGE_S" ] || fail stale_snapshot
 # SQL errors can contain row values: never forward raw stderr or unfiltered rows.
+. /sql/workload-credential.sh
+prepare_workload_credential || fail workload_credential_invalid
 psql -XAtq -v ON_ERROR_STOP=1 -v dry_run="$DRY_RUN" -v allowed_rekey="${ALLOWED_REKEY:-}" \
   -v expected_users="$nu" -v expected_webauthn="$nw" -v expected_consents="$nc" -v expected_clients="$nclients" \
   -v allowed_clients="${ALLOWED_CLIENTS:-}" \
