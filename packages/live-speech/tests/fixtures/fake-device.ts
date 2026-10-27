@@ -4,11 +4,12 @@
 import type { AudioDeviceInfo, AudioStream, DevicePort } from '../../src/node/device.js';
 import { DeviceLostError, DeviceOpenError, DeviceUnavailableError } from '../../src/node/device.js';
 
-export type FakeDeviceStep = Float32Array | { lost: string } | { hang: true };
+export type FakeDeviceStep = Float32Array | { lost: string } | { error: string } | { hang: true };
 
 export class FakeAudioStream implements AudioStream {
   private consumed = false;
   private _closed = false;
+  private unpark: (() => void) | null = null;
   constructor(private readonly steps: FakeDeviceStep[]) {}
 
   get closed(): boolean { return this._closed; }
@@ -23,8 +24,13 @@ export class FakeAudioStream implements AudioStream {
           yield step.slice();
         } else if ('lost' in step) {
           throw new DeviceLostError(step.lost);
+        } else if ('error' in step) {
+          throw new Error(step.error);
         } else {
-          await new Promise<never>(() => {});
+          await new Promise<void>((resolve) => {
+            this.unpark = resolve;
+          });
+          this.unpark = null;
         }
       }
     } finally {
@@ -34,6 +40,8 @@ export class FakeAudioStream implements AudioStream {
 
   close(): void {
     this._closed = true;
+    this.unpark?.();
+    this.unpark = null;
   }
 }
 
