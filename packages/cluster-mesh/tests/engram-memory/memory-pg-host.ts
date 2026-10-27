@@ -107,7 +107,7 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
     await open();
   } catch (error) { await kernel!?.ownership?.release(); await pg.close(); throw error; }
   return { pg, binding, handle, units, scopeBinding, get kernel() { return kernel; }, get store() { return store; },
-    get maintenance() { return maintenance; }, hostReader,
+    get maintenance() { return maintenance; }, get fence() { return fence; }, hostReader,
     hostReplay: async (after: string, limit: number, consumer: string) => (await hostRead()).journalRead(after, limit, consumer),
     reopen: async () => { await store.close(); await open(); },
     close: async () => { try { await store.close(); } finally { await pg.close(); } },
