@@ -30,6 +30,47 @@ export interface MemoryHostLedger {
   readonly markTerminal: (candidateId: string, receipt: unknown, cursor: string | null) => HostLedgerEntry;
 }
 
+/** Read-only recovery evidence: envelope binding, state, receipt and cursor. */
+export interface HostRecoveryProof {
+  readonly candidateId: string;
+  readonly storeId: string;
+  readonly scope: StorageScope;
+  readonly envelopeDigest: string;
+  readonly state: HostLedgerState;
+  readonly receipt: unknown;
+  readonly cursor: string | null;
+}
+
+/**
+ * Proof-only recovery (E8 answer 4): return the retained evidence for
+ * admission-outcome recovery and journal-replay decisions without applying
+ * any effect. Unknown candidates and foreign scopes are refused; an empty
+ * ledger refuses. By construction this path cannot write.
+ */
+export const proveForRecovery = (
+  ledger: MemoryHostLedger,
+  candidateId: string,
+  scope?: StorageScope,
+): HostRecoveryProof => {
+  const retained = ledger.read(candidateId);
+  if (!retained) throw new StorageDeniedError('no retained evidence for this candidate');
+  if (scope !== undefined) {
+    if (!validateStorageScope(scope).ok) throw new StorageDeniedError('recovery scope must be valid');
+    if (scope.tenantId !== retained.scope.tenantId || scope.workspaceId !== retained.scope.workspaceId) {
+      throw new StorageDeniedError('recovery scope does not match the retained evidence');
+    }
+  }
+  return Object.freeze({
+    candidateId: retained.candidateId,
+    storeId: retained.storeId,
+    scope: retained.scope,
+    envelopeDigest: retained.envelopeDigest,
+    state: retained.state,
+    receipt: retained.receipt,
+    cursor: retained.cursor,
+  });
+};
+
 const nonEmpty = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
 
 const checkEntry = (entry: HostLedgerEntry): void => {
