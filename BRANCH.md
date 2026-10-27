@@ -5,7 +5,7 @@
 
 ## Scope / Guardrails
 - [x] Scope limited to the workload Secret workflow, its selftests, CI path filter and credential-cycle documentation.
-- [x] Make-only workflow; no Docker, Python, dispatch or merge.
+- [x] Make-only workflow; no Docker, Python, dispatch or PR merge; owner authorizes merging origin/main.
 - [x] Root workspace `~/src/sentropic` remains reserved for user dev (`ENV=dev`).
 - [x] Branch development happens in `tmp/worktrees/idp-workload-secret` on `feat/idp-workload-secret-workflow` from `origin/main`.
 - [x] Automated tests use `ENV=test-idp-workload-secret`; no services or ports are allocated.
@@ -29,6 +29,7 @@
   - [x] Declare exceptions before editing, with rationale, impact and rollback in `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] Main integration: merge origin/main at `fbf00d2e24cc781831358cc505ce9034b760deb8` without rebasing; retain this PR's active plan, the `idp_sync` filter entry and workload selftest job. Opus r2 APPROVE received; exact-head CI follows the merge push.
 - [x] BR800-EX2 / acknowledge: owner authorizes `.github/workflows/ci.yml`. Rationale: workflow-only PRs must run the workload Secret guard selftest. Impact: add only the workload workflow to the existing `idp_sync` path filter. Rollback: remove that filter entry.
 - [x] IDP-EX1 / acknowledge: owner explicitly authorizes `.github/workflows/idp-workload-secret.yml`. Rationale: the cluster is reachable only through protected CI. Impact: a main-only manual job can create/update only the intended workload Secret in this workflow; it uses the existing delegated preprod identity. Rollback: remove the workflow; restore prior credential through the same governed channel and named-Secret sync if material was changed.
 - [x] No-Docker gate: `test-idp-sync-selftest` starts containers; defer runtime selftests to existing CI `validate-idp-sync`.
