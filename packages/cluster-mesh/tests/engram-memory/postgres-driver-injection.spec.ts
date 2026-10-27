@@ -6,7 +6,8 @@
 import { describe, expect, it } from 'vitest';
 import { MemoryHostDriverRequiredError } from '../../src/engram-memory/sqlite.js';
 import { checkMemoryPostgresDriver, createMemoryPostgresStorage } from '../../src/engram-memory/postgres.js';
-import { StorageUnavailableError } from '../../src/storage/errors.js';
+import { openMemoryMaintenance } from '../../src/engram-memory/host-maintenance.js';
+import { StorageDeniedError, StorageUnavailableError } from '../../src/storage/errors.js';
 import { pgEnabled } from '../storage/pg-driver.js';
 import { memoryAppend, memoryHostComposed, memoryPgHost, memoryUnit } from './pg-host.js';
 
@@ -50,20 +51,50 @@ describe('memory PG driver injection', () => {
 });
 
 describe.skipIf(!pgEnabled)('memory PG positive installed calls', () => {
-  it('runs installed calls through the injected pool', async () => {
+  it('runs the write path on the neutral grant and maintenance on the maintain grant', async () => {
     const { binding } = memoryHostComposed();
     const host = await memoryPgHost();
     try {
       const root = await host.open();
-      const bound = await root.bindNew(binding.maintainGrant);
-      await bound.configureLifecycle('optional');
+      // Write path (neutral grant only): provision, commit, read. No
+      // lifecycle configuration: that is a maintain-gated operation.
+      const bound = await root.bindNew(binding.memoryGrant);
       const fence = {
         fenceId: 'host-fence', epoch: '1', incarnation: root.incarnation,
-        ownerId: binding.maintainGrant.principalId,
+        ownerId: binding.memoryGrant.principalId,
       };
-      await root.provisionFence(binding.maintainGrant, fence);
+      await root.provisionFence(binding.memoryGrant, fence);
       await bound.commitAtomic(memoryUnit({ appends: [memoryAppend('7')] }));
       expect(await bound.readHead('memory-journal')).toBe('hash-7');
+      // Maintenance path (maintain grant only): the host configures
+      // lifecycle, then fence check and checkpoint run through the
+      // host-only ports. Poison/retry/resync/snapshot stay kernel-coupled
+      // (consumer reads need read+maintain): ports delegate, live use
+      // waits on the G1b composition, kernel unchanged per E7 scope.
+      // Note: lifecycle configuration runs through runPgTransaction, whose
+      // entry check requires write, so it stays outside the strict split
+      // (E6 combined-grant coverage owns it).
+      const boundM = await root.bindNew(binding.maintainGrant);
+      const ports = openMemoryMaintenance(binding, {
+        grant: binding.maintainGrant,
+        currentFence: () => boundM.journalFence(),
+        checkpoint: (consumer, expected, next, check) =>
+          boundM.journalCheckpoint(consumer, expected, next, check),
+        poison: (consumer, event, reason) => boundM.journalPoison(consumer, event, reason),
+        retry: (consumer, expected, check) => boundM.journalRetry(consumer, expected, check),
+        resync: (consumer, check) => boundM.journalResync(consumer, check),
+        snapshot: (token, after, limit) => boundM.snapshotRead(token, after, limit),
+      });
+      const current = await boundM.journalFence();
+      expect(await ports.checkFence(current)).toEqual(current);
+      await expect(ports.checkFence({ ...current, epoch: '999' })).rejects.toThrow(
+        /not current/,
+      );
+      await ports.checkpoint('host-consumer', '0', '0', current);
+      // The neutral handle cannot reach maintain authority at the kernel.
+      await expect(bound.journalCheckpoint('host-consumer', '0', '0', current)).rejects.toThrow(
+        StorageDeniedError,
+      );
     } finally {
       await host.close();
     }

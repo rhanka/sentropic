@@ -10,8 +10,16 @@
 // refused, empty ledger refuses) are covered here.
 
 import { describe, expect, it } from 'vitest';
-import { assembleMemoryHostBinding, issueContinuationGrant } from '../../src/engram-memory/binding.js';
-import { openMemoryMaintenance } from '../../src/engram-memory/host-maintenance.js';
+import {
+  assembleMemoryHostBinding,
+  issueContinuationGrant,
+  type MemoryMaintainGrant,
+  type MemoryNeutralGrant,
+} from '../../src/engram-memory/binding.js';
+import {
+  openMemoryMaintenance,
+  type MemoryMaintenanceRunner,
+} from '../../src/engram-memory/host-maintenance.js';
 import { createMemoryHostLedger, proveForRecovery } from '../../src/engram-memory/ledger.js';
 import { MemoryHostDriverRequiredError } from '../../src/engram-memory/sqlite.js';
 import { StorageDeniedError, StorageUnavailableError } from '../../src/storage/errors.js';
@@ -32,6 +40,27 @@ const maintainGrant = () =>
   });
 
 describe('host maintenance binding', () => {
+  const stubRunner = (grant: unknown): MemoryMaintenanceRunner => ({
+    grant: grant as MemoryMaintenanceRunner['grant'],
+    currentFence: async () => {
+      throw new StorageUnavailableError('no backend');
+    },
+    checkpoint: async () => {
+      throw new StorageUnavailableError('no backend');
+    },
+    poison: async () => {
+      throw new StorageUnavailableError('no backend');
+    },
+    retry: async () => {
+      throw new StorageUnavailableError('no backend');
+    },
+    resync: async () => {
+      throw new StorageUnavailableError('no backend');
+    },
+    snapshot: async () => {
+      throw new StorageUnavailableError('no backend');
+    },
+  });
   const entryFor = (candidateId: string) => ({
     candidateId,
     storeId: 'store-1',
@@ -45,7 +74,7 @@ describe('host maintenance binding', () => {
   });
 
   it('issues a host-only maintain binding separate from the memory handle', () => {
-    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant() });
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1' });
     expect(binding.memoryOperations).toEqual(['read', 'write']);
     expect(binding.maintainGrant.operations).toContain('maintain');
     expect(binding.provider).toEqual(qualifiedProvider());
@@ -59,32 +88,51 @@ describe('host maintenance binding', () => {
       assembleMemoryHostBinding({
         driver: qualifiedProvider(),
         maintainGrant: grantFor({ moduleId: 'engram-memory', operations: ['read', 'write'] }),
+        invocationId: 'inv-host-1',
       }),
     ).toThrow(StorageDeniedError);
     expect(() =>
-      assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: null }),
+      assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: null, invocationId: 'inv-host-1' }),
     ).toThrow(StorageDeniedError);
   });
 
-  it('opens host-only ports from the binding and fails closed until G1b', async () => {
-    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant() });
-    const ports = openMemoryMaintenance(binding);
-    await expect(ports.checkFence('lane', '1')).rejects.toBeInstanceOf(StorageUnavailableError);
-    await expect(ports.checkpoint('consumer', 'cursor')).rejects.toThrow(/G1b stateful projection/);
+  it('opens host-only ports that delegate to the bound runner', async () => {
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1' });
+    const ports = openMemoryMaintenance(binding, stubRunner(binding.maintainGrant));
+    // The stub runner refuses everything: the ports delegate 1:1 instead of
+    // stubbing success. Live backend calls are covered PG-side.
+    await expect(ports.checkFence({} as never)).rejects.toThrow('no backend');
+    await expect(ports.checkpoint('consumer', '0', '0', {} as never)).rejects.toThrow('no backend');
     await expect(ports.poison('consumer', 'reason')).rejects.toBeInstanceOf(StorageUnavailableError);
-    await expect(ports.resync('scope')).rejects.toBeInstanceOf(StorageUnavailableError);
-    await expect(ports.snapshot('scope')).rejects.toBeInstanceOf(StorageUnavailableError);
-    expect(() => openMemoryMaintenance(null as never)).toThrow(StorageDeniedError);
+    await expect(ports.resync('scope', {} as never)).rejects.toBeInstanceOf(StorageUnavailableError);
+    await expect(ports.snapshot('token', 0, 10)).rejects.toBeInstanceOf(StorageUnavailableError);
+    expect(() => openMemoryMaintenance(null as never, undefined as never)).toThrow(StorageDeniedError);
   });
   it('denies maintenance operations through the neutral memory handle', () => {
     const provider = qualifiedProvider();
     // The neutral handle grant carries only read/write: it cannot assemble
     // a binding and cannot open maintenance ports.
     expect(() =>
-      assembleMemoryHostBinding({ driver: provider, maintainGrant: g1Grant() }),
+      assembleMemoryHostBinding({ driver: provider, maintainGrant: g1Grant(), invocationId: 'inv-host-1' }),
     ).toThrow(StorageDeniedError);
     expect(() =>
-      openMemoryMaintenance({ provider, maintainGrant: g1Grant() } as never),
+      openMemoryMaintenance({ provider, maintainGrant: g1Grant() } as never, undefined as never),
+    ).toThrow(StorageDeniedError);
+    // Type-level: a combined grant is not a maintain-only grant, and the
+    // neutral grant cannot open maintenance.
+    const combined = grantFor({ moduleId: 'engram-memory', operations: ['read', 'write', 'maintain'] });
+    // @ts-expect-error combined grants are not maintain-only
+    const rejected: MemoryMaintainGrant = combined;
+    expect(rejected).toBe(combined);
+    const neutral: MemoryNeutralGrant = assembleMemoryHostBinding({
+      driver: provider,
+      maintainGrant: maintainGrant(),
+      invocationId: 'inv-host-1',
+    }).memoryGrant;
+    expect([...neutral.operations]).toEqual(['read', 'write']);
+    expect(() =>
+      // @ts-expect-error the neutral grant carries no maintain authority
+      openMemoryMaintenance({ provider, maintainGrant: neutral }),
     ).toThrow(StorageDeniedError);
   });
   it('refuses expired maintain grants at assembly and at open', () => {
@@ -96,7 +144,7 @@ describe('host maintenance binding', () => {
       lifetime: { kind: 'lease', expiresAt: '2000-01-01T00:00:00.000Z' },
     });
     expect(() =>
-      assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: expired }),
+      assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: expired, invocationId: 'inv-host-1' }),
     ).toThrow(/lease has expired/);
     const live = grantFor({
       token: 'memory-maintain-leased',
@@ -105,39 +153,43 @@ describe('host maintenance binding', () => {
       operations: ['maintain'],
       lifetime: { kind: 'lease', expiresAt: '2999-01-01T00:00:00.000Z' },
     });
-    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: live });
-    expect(() => openMemoryMaintenance(binding)).not.toThrow();
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: live, invocationId: 'inv-host-1' });
+    expect(() => openMemoryMaintenance(binding, stubRunner(binding.maintainGrant))).not.toThrow();
     expect(() =>
-      openMemoryMaintenance({ provider: qualifiedProvider(), maintainGrant: expired } as never),
+      openMemoryMaintenance({ provider: qualifiedProvider(), maintainGrant: expired } as never, undefined as never),
     ).toThrow(/lease has expired/);
   });
 
   it('refuses ad-hoc objects shaped like a binding', () => {
+    // No provider at all: the provider check fires first.
     expect(() =>
-      openMemoryMaintenance({ maintainGrant: maintainGrant() } as never),
+      openMemoryMaintenance({ maintainGrant: maintainGrant() } as never, undefined as never),
     ).toThrow(MemoryHostDriverRequiredError);
+    // Runner bound to another grant: identity mismatch, even with live ports.
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1' });
+    expect(() =>
+      openMemoryMaintenance(binding, stubRunner(maintainGrant())),
+    ).toThrow(/runner bound to this binding/);
   });
   it('routes fence checks and checkpoints through the host-only binding', async () => {
-    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant() });
-    const ports = openMemoryMaintenance(binding);
-    // Until G1b wires the backend, every port refuses with the same typed
-    // closure error: the routing is host-only, the backend is absent.
-    await expect(ports.checkFence('lane', '1')).rejects.toThrow(/G1b stateful projection/);
-    await expect(ports.checkpoint('consumer', 'cursor')).rejects.toThrow(/G1b stateful projection/);
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1' });
+    const ports = openMemoryMaintenance(binding, stubRunner(binding.maintainGrant));
+    await expect(ports.checkFence({} as never)).rejects.toThrow('no backend');
+    await expect(ports.checkpoint('consumer', '0', '0', {} as never)).rejects.toThrow('no backend');
   });
 
   it('retries and poisons consumers without a second effect', async () => {
-    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant() });
-    const ports = openMemoryMaintenance(binding);
-    await expect(ports.checkpoint('consumer', 'cursor-9')).rejects.toBeInstanceOf(StorageUnavailableError);
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1' });
+    const ports = openMemoryMaintenance(binding, stubRunner(binding.maintainGrant));
+    await expect(ports.checkpoint('consumer', '0', '0', {} as never)).rejects.toBeInstanceOf(StorageUnavailableError);
     await expect(ports.poison('consumer', 'poisoned')).rejects.toBeInstanceOf(StorageUnavailableError);
   });
 
   it('resyncs scope-chain-index and snapshots through maintenance ports', async () => {
-    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant() });
-    const ports = openMemoryMaintenance(binding);
-    await expect(ports.resync('tenant-a/workspace-a')).rejects.toBeInstanceOf(StorageUnavailableError);
-    await expect(ports.snapshot('tenant-a/workspace-a')).rejects.toBeInstanceOf(StorageUnavailableError);
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1' });
+    const ports = openMemoryMaintenance(binding, stubRunner(binding.maintainGrant));
+    await expect(ports.resync('tenant-a/workspace-a', {} as never)).rejects.toBeInstanceOf(StorageUnavailableError);
+    await expect(ports.snapshot('token', 0, 10)).rejects.toBeInstanceOf(StorageUnavailableError);
   });
   it('keeps the durable ledger across reopen (rehydration re-establishes authority)', () => {
       const first = createMemoryHostLedger();
