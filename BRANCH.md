@@ -22,6 +22,11 @@
   - `api/tests/api/cluster-mesh-catalog.test.ts`
   - `api/tests/unit/foundation-executor.test.ts`
   - `api/tests/services/catalog-characterization.spec.ts`
+  - `api/tests/unit/chat-service-tools.test.ts`
+  - `api/tests/unit/chat-service-batch-create-orgs.test.ts`
+  - `api/tests/unit/chat-service-document-generate.test.ts`
+  - `api/tests/ai/chat-tools.test.ts`
+  - `api/tests/ai/comment-assistant.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -71,11 +76,15 @@
 - [x] Lot 6: draft #795 against feat/app-cm-integration with BRANCH.md body and W4.b handoff; submit CI on the final documentation head with bootstrap_publish_target=none.
   - [ ] Remote CI outcome and independent receiving reviews remain separate gates before integration; no merge or deployment in this lot.
 - [ ] Lot 7: address Opus R1 without making catalog authority a chat prerequisite.
-  - [ ] chat-turn.integration.test.ts: real-store missing/requested tenant membership, NULL session workspace, hidden workspace, non-member and failed transport; completed generation, no catalog tools, explicit unavailable context and fixed PII-free warning.
-  - [ ] Real-store interleaved chat turns and mounted HTTP discovery for two users in two workspaces; assert each model tool list and revocation isolation.
-  - [ ] Run existing chat-service, chat-summary, chat-tools and comment-assistant suites, catalog regressions, API typecheck/lint; push and inspect CI on the exact head; make down.
+  - [x] BR04A-EX2: grant approved tenant membership only in the five existing tool-availability fixtures listed in scope; requested chat regression coverage requires their authorized path; test-only impact; rollback removes those grants.
+  - [x] chat-turn.integration.test.ts: real-store missing/requested tenant membership, NULL session workspace, hidden workspace, non-member and failed transport; completed generation, no catalog tools, explicit unavailable context and fixed PII-free warning.
+  - [x] Real-store interleaved chat turns and mounted HTTP discovery for two users in two workspaces; assert each model tool list and revocation isolation; focused pass 17/17 in /tmp/app-w4a-r1-context-green.log.
+  - [x] Existing ten chat-service/chat-summary/chat-tools/comment-assistant suites: 60/60 across the unchanged five suites (17 tests) and five fixture-adjusted suites (43 tests); /tmp/app-w4a-r1-{existing,fixtures}.log.
+  - [x] Catalog/foundation/HTTP regressions: 317/317 across 17 files; API lint: 0 errors, 220 warnings; /tmp/app-w4a-r1-catalog-lint.log. Startup runtime log contains no errors.
+  - [x] Locked make down completed; isolated containers and network removed; /tmp/app-w4a-r1-down.log.
 
 ## Feedback Loop
+- [ ] R1 typecheck gate; owner: integration/W3.c for build preparation, auth owner to be assigned for jose typing. Local make typecheck-api fails at auth/federation/apple-provider.ts:2 (jose exports no CryptoKey); old-head CI job 122119554375 fails on missing @sentropic/artifacts subpath declarations. Receipts: /tmp/app-w4a-r1-{quality,ci-old}.log. Acceptance: canonical API typecheck and CI chat lanes pass on the integration head; no W4.a scope expansion into auth/build/packages.
 - [x] W4.b owns host-registry-source.ts and its registration; W4.a prepares the context and execution contracts.
 - [x] Preserve W2.b registry public names and same transport/service; no copied name map or mutation dispatcher.
 - [x] W4.b must distinguish sessionKind=http (login credential) from sessionKind=turn (conversation authority); never use a conversation ID as a W1 session credential.
