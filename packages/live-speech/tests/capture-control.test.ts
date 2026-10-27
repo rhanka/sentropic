@@ -72,6 +72,10 @@ async function pushDrained(h: Harness): Promise<void> {
 describe('capture/control wiring', () => {
   it('should flow gated frames into the session after toggle-on', async () => {
     const h = await harness([[tone(1.2), silence(0.7)]], ['m']);
+    // Unknown keys pressed while frames flow must reach neither session nor
+    // transcript: the controller never forwards key bytes anywhere.
+    h.press('x');
+    h.press('q');
     await flush(10);
     await pushDrained(h);
     await flush(40);
@@ -79,6 +83,11 @@ describe('capture/control wiring', () => {
     expect(finals).toHaveLength(1);
     expect(finals[0]).toMatchObject({ utteranceId: 'u1', text: 'hello world' });
     expect(h.controlEvents).toEqual([{ kind: 'mic-toggle' }]);
+    const transcript = h.events
+      .filter((event) => event.type === 'partial' || event.type === 'final')
+      .map((event) => (event as { text: string }).text)
+      .join(' ');
+    expect(transcript).not.toMatch(/[xq]/);
     await h.capture.close();
     h.session.close();
   });

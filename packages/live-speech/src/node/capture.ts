@@ -34,6 +34,7 @@ export interface CaptureDiagnostics {
   readonly buffered: number;
   readonly dropped: number;
   readonly lost: string | null;
+  readonly error: string | null;
 }
 
 export interface CaptureSessionEvents {
@@ -42,6 +43,8 @@ export interface CaptureSessionEvents {
   /** VAD onset/offset for barge-in. Fires on the VAD path, independent of mic/mute. */
   readonly onSpeechStart?: (frame: CaptureFrame) => void;
   readonly onSpeechEnd?: (frame: CaptureFrame) => void;
+  /** Non-loss pump failure (engine bug, never a device loss). Session closes. */
+  readonly onError?: (error: Error) => void;
 }
 
 /** Mic capture over a DevicePort with independent control and VAD paths. */
@@ -57,6 +60,7 @@ export class CaptureSession {
   private speaking = false;
   private lastLevelDb = -Infinity;
   private lost: string | null = null;
+  private fatal: string | null = null;
 
   constructor(
     private readonly device: DevicePort,
@@ -109,6 +113,7 @@ export class CaptureSession {
       buffered: this.mailbox.length,
       dropped: this.dropped,
       lost: this.lost,
+      error: this.fatal,
     };
   }
 
@@ -118,6 +123,7 @@ export class CaptureSession {
     this.micOn = false;
     this.muted = false;
     this.speaking = false;
+    this.fatal = null;
     this.mailbox = [];
     const stream = this.stream;
     this.stream = null;
@@ -159,11 +165,16 @@ export class CaptureSession {
     } catch (error) {
       if (error instanceof DeviceLostError) {
         this.lost = error.message;
-        stream.close();
         this.events.onDeviceLost?.(error);
       } else {
-        throw error;
+        // A non-loss pump failure must never reject unobserved: record it,
+        // report it, and park the session closed so reopen starts clean.
+        const failure = error instanceof Error ? error : new Error(String(error));
+        this.fatal = failure.message;
+        this.events.onError?.(failure);
       }
+      stream.close();
+      this.stream = null;
     }
   }
 }

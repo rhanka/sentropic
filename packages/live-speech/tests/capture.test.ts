@@ -118,6 +118,44 @@ describe('capture session bounds and loss', () => {
     await expect(capture.open('fake-default')).rejects.toThrow('already open');
     await capture.close();
   });
+
+  it('should reopen cleanly after a device loss', async () => {
+    const device = new FakeDevice([
+      [tone(0.05), { lost: 'unplugged' }],
+      [tone(0.05), { hang: true }],
+    ]);
+    const capture = new CaptureSession(device, { ...opts, maxMailboxFrames: 8 });
+    capture.setMicOn(true);
+    await capture.open('fake-default');
+    await flush(10);
+    expect(capture.drain()).toHaveLength(1);
+    expect(capture.diagnostics()).toMatchObject({ open: false });
+    // The loss parked the session closed (no open stream to leak): reopen flows.
+    await capture.close();
+    await capture.open('fake-default');
+    capture.setMicOn(true);
+    await flush(10);
+    expect(capture.drain()).toHaveLength(1);
+    expect(capture.diagnostics()).toMatchObject({ open: true, lost: null });
+    await capture.close();
+  });
+
+  it('should record a non-loss pump failure instead of rejecting unobserved', async () => {
+    const seen: string[] = [];
+    const device = new FakeDevice([[{ error: 'engine boom' }]]);
+    const capture = new CaptureSession(
+      device,
+      { ...opts, maxMailboxFrames: 8 },
+      { onError: (error) => seen.push(error.message) },
+    );
+    await capture.open('fake-default');
+    await flush(10);
+    expect(seen).toEqual(['engine boom']);
+    expect(capture.diagnostics()).toMatchObject({ open: false, error: 'engine boom' });
+    // Parked closed: close is safe and reopen starts clean.
+    await capture.close();
+    expect(capture.diagnostics()).toMatchObject({ error: null });
+  });
 });
 
 describe('open-mic mode', () => {
