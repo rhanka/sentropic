@@ -64,6 +64,7 @@
 ## Feedback Loop
 - [x] W4.b owns host-registry-source.ts and its registration; W4.a prepares the context and execution contracts.
 - [x] Preserve W2.b registry public names and same transport/service; no copied name map or mutation dispatcher.
+- [x] W4.b must distinguish sessionKind=http (login credential) from sessionKind=turn (conversation authority); never use a conversation ID as a W1 session credential.
 - [x] No package, schema, lock, build or deployment changes; no Track writer turn in this lot.
 
 ## AI Flaky tests
