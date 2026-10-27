@@ -64,6 +64,11 @@ report.build = { commit: process.env.ARTIFACT_COMMIT ?? 'unknown', fixture: prof
     .map(name => [name, lock.packages[`node_modules/${name}`].version])),
   configuration: { target: 'es2022', minifier: 'esbuild', manifest: true, sourcemap: false } };
 report.attribution = json(join(directory, '.vite/module-attribution.json'));
+if (profile === 'typical') {
+  const globalModules = report.attribution.chunks.flatMap(chunk => chunk.modules)
+    .filter(module => /^(?:governance-routes|governance-summary-layouts|presentation-scenes|i18n-en)\.json$/.test(module.id));
+  for (const module of globalModules) report.violations.push(`Unrelated governance corpus in typical render: ${module.id}`);
+}
 report.build.rendererInputs = Object.fromEntries(readdirSync(join(root, 'src')).sort()
   .map(file => [file, fileReceipt(readFileSync(join(root, 'src', file))).sha256]));
 report.inputDigest = createHash('sha256').update(JSON.stringify(inputs)).digest('hex');
