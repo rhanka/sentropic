@@ -16,6 +16,7 @@ export interface HostLedgerEntry {
   readonly storeId: string;
   readonly scope: StorageScope;
   readonly invocationId: string;
+  readonly continuationIds: readonly string[];
   readonly envelopeDigest: string;
   readonly state: HostLedgerState;
   readonly receipt: unknown;
@@ -25,6 +26,7 @@ export interface HostLedgerEntry {
 export interface MemoryHostLedger {
   readonly record: (entry: HostLedgerEntry) => HostLedgerEntry;
   readonly read: (candidateId: string) => HostLedgerEntry | null;
+  readonly recordContinuation: (candidateId: string, invocationId: string) => HostLedgerEntry;
   readonly markTerminal: (candidateId: string, receipt: unknown, cursor: string | null) => HostLedgerEntry;
 }
 
@@ -50,11 +52,29 @@ export const createMemoryHostLedger = (): MemoryHostLedger => {
       checkEntry(entry);
       const existing = entries.get(entry.candidateId);
       if (existing) return existing;
-      const stored = Object.freeze({ ...entry, scope: Object.freeze({ ...entry.scope }) });
+      const stored = Object.freeze({
+        ...entry,
+        continuationIds: Object.freeze([...(entry.continuationIds ?? [])]),
+        scope: Object.freeze({ ...entry.scope }),
+      });
       entries.set(entry.candidateId, stored);
       return stored;
     },
     read: (candidateId) => entries.get(candidateId) ?? null,
+    recordContinuation: (candidateId, invocationId) => {
+      const existing = entries.get(candidateId);
+      if (!existing) throw new StorageDeniedError('cannot continue an unknown ledger entry');
+      if (!nonEmpty(invocationId)) throw new StorageDeniedError('continuation requires a fresh invocation identity');
+      if (invocationId === existing.invocationId || existing.continuationIds.includes(invocationId)) {
+        throw new StorageDeniedError('copied invocation fields never grant a continuation');
+      }
+      const stored = Object.freeze({
+        ...existing,
+        continuationIds: Object.freeze([...existing.continuationIds, invocationId]),
+      });
+      entries.set(candidateId, stored);
+      return stored;
+    },
     markTerminal: (candidateId, receipt, cursor) => {
       const existing = entries.get(candidateId);
       if (!existing) throw new StorageDeniedError('cannot complete an unknown ledger entry');
