@@ -6,16 +6,22 @@ import { createPostgresKernel } from '../../src/storage/postgres/index.js';
 import { applyPgMigrations, type PgHostHistory, type PgMigrationReceipt } from '../../src/storage/postgres/migrations.js';
 import { checkMemoryPostgresDriver, createMemoryPostgresRegistration } from '../../src/engram-memory/postgres.js';
 import { assembleMemoryHostBinding } from '../../src/engram-memory/binding.js';
+import type { InjectedPgDriver } from '../../src/storage/postgres/protocol.js';
 import type { AtomicUnit } from '../../src/storage/atomic.js';
 
 export const memoryGrant = (workspaceId = 'workspace-a') => grantFor({
   token: `memory-${workspaceId}`, moduleId: 'engram-memory',
   scope: { tenantId: 'tenant-a', workspaceId }, operations: ['read', 'write', 'maintain'],
 });
-/** Qualified host-owned PG driver/pool provider for the qualification stack (postgres:17). */
-export const memoryHostProvider = () => ({
+/**
+ * Qualified host-owned PG driver/pool provider for the qualification stack
+ * (postgres:17). The live pool is part of the provider: installed calls
+ * run through this exact pool, never a separately wired driver.
+ */
+export const memoryHostProvider = (pool: InjectedPgDriver) => ({
   identity: { name: 'node-pg-owner', version: '8.16.3', artifactDigest: 'c'.repeat(64) },
   serverFloor: '17.0.0',
+  pool,
 });
 /** Host-issued maintain grant: exactly `['maintain']`, never combined. */
 export const memoryMaintainGrant = (workspaceId = 'workspace-a') => grantFor({
@@ -34,8 +40,8 @@ export const memoryNeutralGrant = (workspaceId = 'workspace-a') => grantFor({
  * `binding.maintainGrant`. The combined `memoryGrant()` is legacy E6
  * coverage only and never enters the host binding.
  */
-export const memoryHostComposed = (invocationId = 'inv-host-1') => {
-  const driver = memoryHostProvider();
+export const memoryHostComposed = (pool: InjectedPgDriver, invocationId = 'inv-host-1') => {
+  const driver = memoryHostProvider(pool);
   checkMemoryPostgresDriver(driver);
   const binding = assembleMemoryHostBinding({ driver, maintainGrant: memoryMaintainGrant(), invocationId });
   return { provider: driver, binding };
