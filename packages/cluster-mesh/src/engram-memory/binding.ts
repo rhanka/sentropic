@@ -37,7 +37,10 @@ export const assertMaintainGrantLive = (grant: unknown, nowIso: string = new Dat
   }
   const lifetime = candidate.lifetime;
   if (typeof lifetime === 'object' && lifetime !== null && lifetime.kind === 'lease') {
-    if (typeof lifetime.expiresAt !== 'string' || lifetime.expiresAt <= nowIso) {
+    // Kernel lease semantics (contracts.ts): numeric Date.parse comparison,
+    // never lexicographic — offsets and precisions compare correctly.
+    const expiry = typeof lifetime.expiresAt === 'string' ? Date.parse(lifetime.expiresAt) : NaN;
+    if (!Number.isFinite(expiry) || expiry <= Date.parse(nowIso)) {
       throw new StorageDeniedError('host maintain grant lease has expired');
     }
   }
