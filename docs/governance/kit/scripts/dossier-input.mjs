@@ -1,4 +1,5 @@
 import { collapseGovernanceScene } from '../src/governance-collapse.js';
+import { ROUTING_VERSION } from '../src/architecture-routing.js';
 
 // Preparation is bounded. Large fold spaces retain the engine's qualified runtime path.
 export function prepareDossierScenes(scenes) {
@@ -13,7 +14,7 @@ export function prepareDossierScenes(scenes) {
       const result = collapseGovernanceScene(scene, collapsed, false);
       preparedFolds.push({ signature: result.routingSignature, edges: result.edges });
     }
-    return [key, { ...scene, routingVersion: 'orthogonal-v1', preparedFolds }];
+    return [key, { ...scene, routingVersion: ROUTING_VERSION, preparedFolds }];
   }));
 }
 
