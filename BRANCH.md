@@ -31,7 +31,7 @@ E7 after E3/E5/E6: host-owned memory bindings in `src/engram-memory/{binding,pos
   - `packages/cluster-mesh/tsconfig.test.json` (extend: include the E7 denial spec in the dedicated test tsconfig; BR7-E7A)
   - `packages/cluster-mesh/assets/storage/postgres/engram-memory/manifest.json` (extend: register the E7 002 host-ledger asset; BR7-EX3; E2 owns migration content, E7 registers its own asset row)
   - `packages/cluster-mesh/tests/engram-memory/postgres-registration.spec.ts` (extend: pin the memory chain tail at 002 instead of 001; BR7-E7B — intent unchanged, two tail assertions only)
-  - `packages/cluster-mesh/tests/storage/installed-bare.mjs` + `pack-only-dev-gate.mjs` (new, test-only) + `pack-only-dev-gate.spec.ts` (new, test-only) + `tests/storage/postgres.mk` (extend: CM_PACK_ONLY_PIN wiring only; BR7-E7D — adopts the #774 gate verbatim, product code untouched)
+  - `packages/cluster-mesh/tests/storage/installed-bare.mjs` + `packages/cluster-mesh/tests/storage/pack-only-dev-gate.mjs` (new, test-only) + `packages/cluster-mesh/tests/storage/pack-only-dev-gate.spec.ts` (new, test-only) + `packages/cluster-mesh/tests/storage/postgres.mk` (extend: CM_PACK_ONLY_PIN wiring only; BR7-E7D — adopts the #774 gate verbatim, product code untouched)
   - `packages/cluster-mesh/package.json` + `package-lock.json` (pack-only 0.23.0-dev.9 only)
   - `packages/cluster-mesh/assets/storage/engram-memory/C6-FREEZE.md` (inherited base lots E0-E6 only; BR7-EX2)
   - `packages/cluster-mesh/assets/storage/engram-memory/neutral-asset-inventory.json` (inherited base lots E0-E6 only; BR7-EX2)
