@@ -2798,7 +2798,7 @@ clean-node-modules: ## Remove workspace node_modules (root-owned cruft from cont
 # -----------------------------------------------------------------------------
 .PHONY: prepare-node-workspace
 .NOTPARALLEL: prepare-node-workspace
-prepare-node-workspace: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-llm-gateway build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-connector-host build-mcp-connector-google ## Prepare mounted workspace node_modules and package dist for dev/test runtime
+prepare-node-workspace: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-llm-gateway build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-artifacts build-connector-host build-mcp-connector-google ## Prepare mounted workspace node_modules and package dist for dev/test runtime
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml build api
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'
