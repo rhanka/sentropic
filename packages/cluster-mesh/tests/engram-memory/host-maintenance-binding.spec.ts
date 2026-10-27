@@ -13,6 +13,9 @@ import { describe, expect, it } from 'vitest';
 import {
   assembleMemoryHostBinding,
   issueContinuationGrant,
+  MemoryMaintenanceNotFoundError,
+  proveForRecoveryAuthorized,
+  reattachMemoryMaintenance,
   verifyHostBinding,
   type MemoryMaintainGrant,
   type MemoryNeutralGrant,
@@ -430,6 +433,65 @@ describe('host maintenance binding', () => {
       expect(() =>
         proveForRecovery(ledger, 'cand-1', { tenantId: 'elsewhere', workspaceId: 'workspace-a' }),
       ).toThrow(StorageDeniedError);
+    });
+
+    it('reattaches retained candidates and surfaces NOT_FOUND once spent', () => {
+      const ledger = createMemoryHostLedger();
+      const binding = hostBindingFor('user-1');
+      ledger.record(entryFor('cand-1', 'user-1'));
+      expect(reattachMemoryMaintenance(binding, ledger, 'cand-1')).toBe(binding.maintainGrant);
+      // Never tracked: NOT_FOUND with the NOT_FOUND code, never a refusal.
+      const missing = (() => {
+        try {
+          reattachMemoryMaintenance(binding, ledger, 'never-tracked');
+          return null;
+        } catch (error) {
+          return error;
+        }
+      })();
+      expect(missing).toBeInstanceOf(MemoryMaintenanceNotFoundError);
+      expect((missing as MemoryMaintenanceNotFoundError).code).toBe('NOT_FOUND');
+      // Spent invocation drained: the same candidate is now NOT_FOUND.
+      expect(ledger.drainInvocation('inv-1')).toBe(1);
+      expect(ledger.drainInvocation('inv-1')).toBe(0);
+      expect(() => reattachMemoryMaintenance(binding, ledger, 'cand-1')).toThrow(
+        MemoryMaintenanceNotFoundError,
+      );
+      expect(() => ledger.drainInvocation('')).toThrow(StorageDeniedError);
+    });
+
+    it('authorizes proof-only recovery by live maintain grant and scope', () => {
+      const ledger = createMemoryHostLedger();
+      const binding = hostBindingFor('user-1');
+      ledger.record(entryFor('cand-1', 'user-1'));
+      ledger.markTerminal('cand-1', { outcome: 'admitted' }, 'cursor-9');
+      const proof = proveForRecoveryAuthorized(ledger, binding, 'cand-1');
+      expect(proof.state).toBe('terminal');
+      expect(proof.receipt).toEqual({ outcome: 'admitted' });
+      // A live binding for a foreign scope is refused even with authority.
+      const foreign = hostBindingFor('user-1');
+      const foreignScoped = {
+        ...foreign,
+        maintainGrant: grantFor({
+          token: 'memory-maintain-foreign',
+          moduleId: 'engram-memory',
+          scope: { tenantId: 'tenant-a', workspaceId: 'workspace-b' },
+          principalId: 'user-1',
+          operations: ['maintain'],
+        }),
+      } as never;
+      expect(() => proveForRecoveryAuthorized(ledger, foreignScoped, 'cand-1')).toThrow(
+        /recovery scope does not match/,
+      );
+      expect(() => reattachMemoryMaintenance(foreignScoped, ledger, 'cand-1')).toThrow(
+        /reattach scope does not match/,
+      );
+      // Drained candidates refuse proof; reattach distinguishes the spent case.
+      ledger.drainInvocation('inv-1');
+      expect(() => proveForRecoveryAuthorized(ledger, binding, 'cand-1')).toThrow(StorageDeniedError);
+      expect(() => reattachMemoryMaintenance(binding, ledger, 'cand-1')).toThrow(
+        MemoryMaintenanceNotFoundError,
+      );
     });
 
     it('refuses malformed entries without recording', () => {
