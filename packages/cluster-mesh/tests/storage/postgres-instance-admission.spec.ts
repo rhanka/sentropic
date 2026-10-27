@@ -136,4 +136,152 @@ describe.skipIf(!pgEnabled)('postgres continuous ownership admission', () => {
       await fixture.close();
     }
   });
+
+  it('refuses a saved reader once the instance turns terminal', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const kernel = await withCanonical(fixture.options);
+      const bound = await kernel.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] }));
+      await bound.configureLifecycle('optional');
+      await bound.commitAtomic(unitFor('saved-read', 'hash-saved'));
+      assert.equal(await bound.readHead('saved-read'), 'hash-saved');
+      await fixture.tx.run(false, async (session) => {
+        await session.execute({
+          text: `DELETE FROM "${fixture.name}".instance_ownership WHERE module='comments'`,
+          values: [],
+        });
+        await session.execute({
+          text: `INSERT INTO "${fixture.name}".instance_ownership(module, instance, epoch, holder_until)
+            VALUES('comments', 'terminated', '1', clock_timestamp())`,
+          values: [],
+        });
+      });
+      await assert.rejects(
+        bound.readHead('saved-read'),
+        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'terminal-loss',
+      );
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('locks out a takeover attempted from inside the committing transaction', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const hookOutcome: string[] = [];
+      const kernel = await createPostgresKernel({
+        ...fixture.options,
+        budgets: { idleMs: 10000, statementMs: 5000 },
+        canonicalOwnership: { leaseMs: 60000 },
+        onCommitPossession: async () => {
+          // Attacker on independent connections, after the guard renewal:
+          // the committing transaction still holds the lease row lock.
+          try {
+            await expireLease(fixture, 'comments');
+          } catch (error) {
+            hookOutcome.push(`expire:${error instanceof Error ? error.constructor.name : typeof error}`);
+          }
+          try {
+            await withCanonical(fixture.options);
+            hookOutcome.push('takeover:committed');
+          } catch (error) {
+            hookOutcome.push(
+              `takeover:${error instanceof CanonicalOwnershipError ? error.code : 'unexpected'}`,
+            );
+          }
+        },
+      });
+      const retained = { ...owned(kernel).handle };
+      await commitAs(kernel, 'hook-lockout', 'hash-hook');
+      // The takeover never went through: both the expiry DELETE and the
+      // contender open hit the committing transaction's lease row lock
+      // (lock-timeout, then instance-busy), and the commit succeeded. The
+      // hook fires on every committing transaction (lifecycle included).
+      assert.ok(hookOutcome.length >= 2 && hookOutcome.length % 2 === 0);
+      assert.ok(
+        hookOutcome.every(
+          (entry) => entry === 'expire:PostgresStorageError' || entry === 'takeover:instance-busy',
+        ),
+      );
+      const row = await readLeaseRow(fixture, 'comments');
+      assert.equal(row?.epoch, retained.storageEpoch);
+      assert.equal(row?.instance, retained.instanceId);
+      assert.equal(row?.live, true);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('a stale release cannot clear its successor (full-row readback)', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const first = await withCanonical(fixture.options);
+      const stale = { ...owned(first).handle };
+      await owned(first).release();
+      const second = await withCanonical(fixture.options);
+      assert.equal(owned(second).handle.storageEpoch, '2');
+      // The durable row moved on: the stale release must leave it untouched.
+      await owned(first).release();
+      let row = await readLeaseRow(fixture, 'comments');
+      assert.equal(row?.epoch, '2');
+      assert.equal(row?.instance, stale.instanceId);
+      assert.equal(row?.live, true);
+      // A missing row must not be resurrected by a stale release.
+      await fixture.tx.run(false, (session) =>
+        session.execute({
+          text: `DELETE FROM "${fixture.name}".instance_ownership WHERE module='comments'`,
+          values: [],
+        }),
+      );
+      await owned(first).release();
+      row = await readLeaseRow(fixture, 'comments');
+      assert.equal(row, null);
+      const third = await withCanonical(fixture.options);
+      assert.equal(owned(third).handle.storageEpoch, '1');
+      assert.notEqual(owned(third).handle.instanceId, stale.instanceId);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('a commit blocked on the lease lock times out and succeeds on retry', async () => {
+    const fixture = await createPgFixture();
+    const pg = createRequire(import.meta.url)('pg') as {
+      Pool: new (options: unknown) => {
+        connect(): Promise<{
+          query(text: string, values?: readonly unknown[]): Promise<unknown>;
+          release(): void;
+        }>;
+        end(): Promise<void>;
+      };
+    };
+    const pool = new pg.Pool({ connectionString: process.env.CM_PG_URL, max: 2 });
+    try {
+      const kernel = await withCanonical(fixture.options);
+      const holder = await pool.connect();
+      try {
+        await holder.query('BEGIN ISOLATION LEVEL SERIALIZABLE READ WRITE');
+        await holder.query(
+          `SELECT * FROM "${fixture.name}".instance_ownership WHERE module='comments' FOR UPDATE`,
+          [],
+        );
+        // The renewal UPDATE waits on the held row lock: lock-timeout, no retry.
+        await assert.rejects(
+          kernel.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] })),
+          (error: unknown) => error instanceof PostgresStorageError && error.condition === 'timeout',
+        );
+        await holder.query('ROLLBACK');
+        // Manual retry on a free row admits and commits.
+        const bound = await kernel.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] }));
+        await bound.configureLifecycle('optional');
+        await bound.commitAtomic(unitFor('wait-retry', 'hash-retry'));
+        assert.equal(await bound.readHead('wait-retry'), 'hash-retry');
+      } finally {
+        holder.release();
+      }
+    } finally {
+      await pool.end();
+      await fixture.close();
+    }
+  });
 });
