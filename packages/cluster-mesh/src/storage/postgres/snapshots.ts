@@ -2,7 +2,8 @@ import type { ScopeGrant } from '../authority.js';
 import type { JournalFence } from '../staged-core.js';
 import { StorageInvalidCommandError } from '../errors.js';
 import type { PgCore } from './core.js';
-import { assertPgJournalFence, pgConsumer, pgSafeCounter, savePgConsumer } from './journal.js';
+import { assertPgJournalFence, pgConsumer, savePgConsumer } from './journal.js';
+import { decodePgCounterU64 } from './codec.js';
 import { executePgQuery, readPgBoundary, retainPgBoundary } from './queries.js';
 export const capturePgSnapshot = async (
   core: PgCore,
@@ -24,7 +25,7 @@ export const capturePgSnapshot = async (
       complete: false,
       contract: core.options.descriptor.contractDigest,
     });
-    return { snapshotRoot, journalSeq: pgSafeCounter(base.sequence) };
+    return { snapshotRoot, journalSeq: decodePgCounterU64(base.sequence) };
   });
 export const readPgSnapshot = async (
   core: PgCore,
@@ -79,8 +80,9 @@ export const readPgSnapshot = async (
     }
     if (next === null) {
       const state = await pgConsumer(core, session, grant, String(metadata.consumer));
-      state.scanned = Math.max(state.scanned, pgSafeCounter(captured.sequence));
+      const sequence = decodePgCounterU64(captured.sequence);
+      if (BigInt(sequence) > BigInt(state.scanned)) state.scanned = sequence;
       await savePgConsumer(core, session, grant, String(metadata.consumer), state);
     }
-    return { rows: page.records, watermark: pgSafeCounter(captured.sequence), next };
+    return { rows: page.records, watermark: decodePgCounterU64(captured.sequence), next };
   });

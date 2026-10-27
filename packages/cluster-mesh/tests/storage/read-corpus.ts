@@ -317,3 +317,11 @@ export const runReadResumeCorpus = async (bound: ReadCorpusStore): Promise<void>
     }
   }
 };
+
+// E1 additive: exact-u64 boundary strings stay canonical decimal transport.
+// Readers never convert them through Number; comparison uses BigInt.
+export const U64_READ_BOUNDARY_VECTORS: readonly string[] = [
+  '9007199254740991',
+  '9007199254740992',
+  '18446744073709551615',
+];

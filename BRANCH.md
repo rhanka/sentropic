@@ -35,6 +35,8 @@
   - `packages/cluster-mesh/package.json`
   - `package-lock.json`
 - **Exception process**:
+  - [x] Inherited from integration #789 at `978fb67c0`: E1/E2/E3/E5/E6/E7 PostgreSQL storage and host-memory implementation, migration assets, tests, qualification wiring and candidate manifest; E7 released-pin consumer substitution, last-receipt reattestation and frozen-pin packaging fetch. These are inherited bytes, not E0 edits. Keep the E0 plan; validate authored scope against the integration base. Rollback: revert this merge.
+  - [x] Integration version rule: max(E0 `0.23.0-dev.1`, integration `0.23.0-dev.9`) plus one dev increment is `0.23.0-dev.10`; update package manifest and root lock together. Regenerate through `make lock-root ENV=test-e2-int` after 21:00 UTC; no Docker before that time.
   - [x] BR0-EX1 (owner-authorized): serial pack-only package.json/root lock bump to unique 0.23.0-dev.1; satisfies topic bump gate, never published; rollback both version fields together.
 
 ## Feedback Loop
