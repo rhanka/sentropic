@@ -42,7 +42,7 @@ describe('publication security', () => {
       [file, { ...file, path: 'second' }],
       [file, { ...file, path: 'second' }, { ...file, path: 'third' }],
     ]) await expect(service.publish({ ...INPUT, files })).rejects.toThrow(/budget/);
-    expect(await blobs.listKeys('')).toEqual([]);
+    expect(await blobs.listKeys('artifacts/')).toEqual([]);
     expect(await intents.listPending()).toEqual([]);
     const accepted = await service.publish({ ...INPUT, files: [file,
       { ...file, path: 'nested/é.txt', bytes: new Uint8Array(1) }] });
@@ -56,7 +56,7 @@ describe('publication security', () => {
       const { service, blobs, intents } = world();
       await expect(service.publish({ ...INPUT, files: [{ ...INPUT.files[0]!, path }] }))
         .rejects.toThrow(/invalid.*path/);
-      expect(await blobs.listKeys('')).toEqual([]);
+      expect(await blobs.listKeys('artifacts/')).toEqual([]);
       expect(await intents.listPending()).toEqual([]);
       expect(await service.getCurrent(INPUT.artifactId)).toBeUndefined();
     },
@@ -66,7 +66,7 @@ describe('publication security', () => {
     const { service, blobs } = world();
     await expect(service.publish({ ...INPUT, files: [] })).rejects.toThrow(/invalid/);
     await expect(service.publish({ ...INPUT, files: [...INPUT.files, ...INPUT.files] })).rejects.toThrow(/duplicate/);
-    expect(await blobs.listKeys('')).toEqual([]);
+    expect(await blobs.listKeys('artifacts/')).toEqual([]);
   });
 
   it('should bind replay to actual bytes and metadata rather than caller hashes', async () => {
@@ -137,6 +137,6 @@ it.each([
   expect(w.guardCalls()).toBe(guardCalls);
   expect(w.receipts.size).toBe(1);
   expect(w.releases.size).toBe(0);
-  expect(await w.blobs.listKeys('')).toEqual([]);
+  expect(await w.blobs.listKeys('artifacts/')).toEqual([]);
   expect(await w.legacyRecords.get(`idempotency:${key}`)).toBe(raw);
 });

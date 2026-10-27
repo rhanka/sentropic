@@ -1,11 +1,11 @@
 // Reserved-next / latest-published contract for pack-only dev bumps.
 //
-// The E2 integration reserves `RESERVED_NEXT` (today `0.23.0`) for its release
+// The E2 integration reserves `RESERVED_NEXT` (today `0.24.0`) for its release
 // line: memory-lot workspaces carry `<reservedNext>-dev.N` by plan while the
 // frozen packaging fixture keeps pinning the latest published release
 // (`LATEST_PUBLISHED_CLUSTER_MESH`, today `0.22.4`). Both constants are
 // declared ONCE here; bump them together when the reserved version ships.
-export const RESERVED_NEXT = '0.23.0';
+export const RESERVED_NEXT = '0.24.0';
 export const LATEST_PUBLISHED_CLUSTER_MESH = '0.22.4';
 
 export const isPrerelease = (version: string): boolean => version.includes('-');
