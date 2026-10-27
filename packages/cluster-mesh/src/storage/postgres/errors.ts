@@ -20,6 +20,17 @@ export const classifyPgFailure = (error: unknown, constraints: PgConstraintMap =
   // Canonical ownership refusals surface unwrapped (registry/SQLite parity).
   if (error instanceof CanonicalOwnershipError) return error;
   const fields = typeof error === 'object' && error !== null ? error as Record<string, unknown> : {};
+  // The deferred lease trigger (008 `instance_ownership_lease`) refuses a
+  // lease that lapsed between the last renewal and COMMIT with P0001. The
+  // outcome is a known rollback of a dead retained session, so it surfaces
+  // the canonical code — never `unavailable`. The message is the trigger's
+  // own (no writer bypassing the JS guard can raise it from another path).
+  if (
+    (fields.sqlState ?? fields.code) === 'P0001' &&
+    typeof fields.message === 'string' &&
+    fields.message.includes('instance lease not live')
+  )
+    return new CanonicalOwnershipError('terminal-loss', 'retained session expired before COMMIT');
   const candidate = fields.sqlState ?? fields.code;
   const state = typeof candidate === 'string' && /^[0-9A-Z]{5}$/.test(candidate) ? candidate : undefined;
   if (fields.outcome === 'unknown') return new PostgresStorageError('outcome_unknown', false, state);
