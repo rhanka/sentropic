@@ -227,3 +227,95 @@ describe('openai transcription profiles', () => {
     expect(socket.sent).toHaveLength(0);
   });
 });
+
+describe('openai transcript mapping', () => {
+  const openScripted = async (frames: readonly string[], config = liveConfig) => {
+    const socket = new ScriptSocket(frames);
+    let clock = 1_000;
+    const sink = new RecordingSink();
+    const session = await openTranscriptionSession(config, {
+      request: sessionRequest(config.modelId),
+      admission: admission(),
+      bearerToken: 'bearer-fixture',
+      connect: async () => socket,
+      usage: sink,
+      nowMs: () => clock,
+    });
+    return {
+      session, socket, sink,
+      advance: (ms: number): void => {
+        clock += ms;
+      },
+    };
+  };
+
+  it('should emit ordered partials then a final that rebuilds through the contract', async () => {
+    const { session, socket } = await openScripted(frameScriptFr);
+    expect(sentTypes(socket)[0]).toBe('session.update');
+    const events = await collectEvents(session);
+    const partials = events.filter((event) => event.type === 'transcript.partial');
+    const finals = events.filter((event) => event.type === 'transcript.final');
+    expect(partials.map((event) => (event as { revision: number }).revision)).toEqual([1, 2, 3]);
+    expect(partials.map((event) => (event as { replaces: unknown }).replaces)).toEqual([
+      { start: 0, end: 0 }, { start: 9, end: 9 }, { start: 23, end: 23 },
+    ]);
+    expect(finals).toHaveLength(1);
+    const final = finals[0] as unknown as Record<string, unknown>;
+    expect(final.utteranceId).toBe('item_fr1');
+    expect(final.text).toBe("Bonjour, pouvez-vous m'entendre ?");
+    expect(final.language).toBe('fr');
+    expect(final.revision).toBe(4);
+    // The contract projection rebuilds the final from the partial stream.
+    let rebuilt: SpeechTranscript | undefined;
+    for (const event of events) {
+      if (event.type === 'transcript.partial' || event.type === 'transcript.final') {
+        rebuilt = reviseSpeechTranscript(rebuilt, event as SpeechTranscript) ?? rebuilt;
+      }
+    }
+    expect(rebuilt?.text).toBe(final.text);
+  });
+
+  it('should let a completion correct the accumulated hypothesis', async () => {
+    const { session } = await openScripted(frameScriptEnCorrected, whisperConfig);
+    const events = await collectEvents(session);
+    const final = events.find((event) => event.type === 'transcript.final') as unknown as Record<string, unknown>;
+    expect(final.text).toBe('Hello, world');
+    expect(final.language).toBe('en');
+  });
+
+  it('should keep out-of-order completions keyed by item', async () => {
+    const { session } = await openScripted(frameScriptOutOfOrder);
+    const events = await collectEvents(session);
+    const finals = events
+      .filter((event) => event.type === 'transcript.final')
+      .map((event) => (event as unknown as { utteranceId: string; text: string; revision: number }));
+    expect(finals).toEqual([
+      { utteranceId: 'item_b', text: 'second tour', revision: 2 },
+      { utteranceId: 'item_a', text: 'premier tour', revision: 3 },
+    ]);
+  });
+
+  it('should surface invalid frames as error events and continue the stream', async () => {
+    const { session } = await openScripted(frameScriptInvalid);
+    const events = await collectEvents(session);
+    const errors = events.filter((event) => event.type === 'error');
+    expect(errors.length).toBeGreaterThanOrEqual(4);
+    expect(errors[0]).toMatchObject({ reason: 'invalid-format', retryable: true });
+    const providerError = errors.find((event) => (event as { reason: string }).reason === 'provider-error');
+    expect(providerError).toMatchObject({ retryable: false });
+    const final = events.find((event) => event.type === 'transcript.final') as unknown as Record<string, unknown>;
+    expect(final?.utteranceId).toBe('item_ok');
+    expect(final?.text).toBe('kept going');
+  });
+
+  it('should reject a duplicate final for the same item', async () => {
+    const { session } = await openScripted([
+      frameDelta('item_1', 'hello '),
+      frameCompleted('item_1', 'hello'),
+      frameCompleted('item_1', 'hello again'),
+    ]);
+    const events = await collectEvents(session);
+    expect(events.filter((event) => event.type === 'transcript.final')).toHaveLength(1);
+    expect(events.filter((event) => event.type === 'error')).toHaveLength(1);
+  });
+});
