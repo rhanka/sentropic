@@ -89,7 +89,7 @@ Deliver L6a: `live-speech/src/node/{tts-registry,voice-loop,playback}.ts`, a loc
   - [x] P1-R3: abort checked before spawn in both `synthesize()` (post-verify fence) and `runEspeak()` (pre-spawn, settle without spawning); `isAborted()` call-boundary read (readonly narrowing).
   - [x] P1-R3 test: barge during `verifiedBinary()` asserts reject + no pidfile (ENOENT) with a positive control (same setup spawns, barge reaps, ESRCH). Mutation-checked: fails on the spawn-first shape.
   - [x] P2-B: fixture writes the pidfile only after the SIGTERM handler is installed, so a booted pid proves the escalation path is armed.
-  - [ ] Lot gate: lane `validate-live-speech` green on the R3 head (lane `make` runs post-21:00 UTC). Host replica: tsc clean + 120/120.
+  - [x] Lot gate: lane `validate-live-speech` green on the R3 head 46f5be6a (CI run 40565062747). Host replica: tsc clean + 120/120.
 - [ ] **Lot 4 — Receipts + wiring**
   - [x] `bench/l6a-g-native.receipt.json` (status blocked, exact missing §8.1 items), README section, `src/node/index.ts` exports.
   - [ ] Retest green, push, draft PR against `feat/live-stt-l4`, CI green, report without merging.
