@@ -80,8 +80,8 @@ Mesh `speech/openai-transcription.ts` with two independently configured OpenAI s
   - [x] `SpeechCapabilities` per profile: streamingStt + partialTranscript + clientVad + manualCommit supported; serverVad + nativeDuplex + tts unsupported; languages/regions selectors; usageUnits session-seconds + audio-seconds.
   - [x] `session.update` builder: `type transcription`, `turn_detection` null refused otherwise, unsupported VAD options rejected at open (fail-closed).
   - [x] Transport port (injectable WS): append base64 pcm16, commit per client-VAD turn, abort closes, no audio persisted, no key in logs/errors.
-  - [x] Event mapping: delta keyed by item_id to `transcript.partial` (monotonic revision, replaces-append), completed to `transcript.final` (full text, audioInterval, language); out-of-order finals kept per utterance; invalid frames to `session.error` without payload, stream continues.
-  - [x] Metering: admission receipt required at open (operationId, ceiling, hold ref; refuse without), usage sink gets estimate/final `SpeechUsageUpdate` (connectedSeconds, admittedAudioSeconds) + settlement outcome completed/cancelled/failed; abort counts as cancelled.
+  - [x] Event mapping (r1 rework): `input.commit` pushes the client turn on a FIFO; provider `input_audio_buffer.committed` binds item_id to `{utteranceId, window}`; transcripts emit the client utteranceId and bound window; unbound completions create the item (revision 1); finalized/cleared tombstones drop late frames (second final errors); invalid frames to `session.error` without payload, stream continues.
+  - [x] Metering (r1 rework): admission receipt required at open; injectable expiry timer at min(admission, request maxDurationMs) closes with ceiling-error + cancelled settle; usage records are cumulative under a stable eventId; settle carries no usage without a providerRevision; abort counts as cancelled.
   - [x] TTS exclusion: no synthesis model field, no speech-to-speech path, no implicit OpenAI voice.
   - [x] Lot gate: `make typecheck-llm-mesh` green on the lot head.
 - [x] **Lot 2 — Fixtures + gate tests**
@@ -92,6 +92,13 @@ Mesh `speech/openai-transcription.ts` with two independently configured OpenAI s
   - [x] `bench/l9-openai-stt.receipt.json`: status blocked, exact missing G-CLOUD/§10 items, price revision unpinned, no live evidence claimed.
   - [x] Bump `packages/llm-mesh/package.json` to 0.31.0 (minor, strictly above published 0.30.0; 0.30.0 was already taken by main).
   - [x] Lot gate: receipt present and blocked, version bumped, `make build-llm-mesh` + `make pack-llm-mesh` green.
+- [x] **Lot R1 — Opus r1 review fixes**
+  - [x] P1-1: merged origin/main (54c7dcbe4), mesh 0.30.0 → 0.31.0 (above published), tuple ranges admit 0.31.x, root lockfile refreshed via `make lock-root`.
+  - [x] P1-2: duration bound enforced (injectable scheduler + write/commit refusal + ceiling-error settle).
+  - [x] P1-3: cumulative usage records under `${operationId}:audio`, monotonic revisions; settle without usage/providerRevision.
+  - [x] P1-4: client-utterance binding via committed FIFO; per-turn windows; input.clear sends provider clear + tombstones.
+  - [x] P2: settled guards + tombstones; bearer redaction proven; completed-only; Allowed Paths fixed; Lot 1 text updated; commits ≤150 with feat:/test:/docs: subjects (two pre-r1 violations stand, no rewrite).
+  - [ ] Lot gate: `make test-llm-mesh` green on the R1 head.
 - [ ] **Lot N — Final validation**
   - [ ] `make scope-check` (harness) green.
   - [ ] Push, draft PR against `feat/live-stt-l8`, CI `validate-llm-mesh` + `ci-gate` green on the exact head.
