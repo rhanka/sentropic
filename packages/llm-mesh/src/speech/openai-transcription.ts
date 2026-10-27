@@ -266,3 +266,150 @@ const errorEvent = (
   reason,
   retryable,
 });
+
+export class TranscriptionSession implements SpeechSession {
+  readonly receipt: SpeechSessionReceipt;
+  private readonly socket: OpenAiTranscriptionSocket;
+  private readonly binding: SpeechBinding;
+  private readonly admission: OpenAiTranscriptionAdmission;
+  private readonly usage: OpenAiTranscriptionUsageSink;
+  private readonly nowMs?: () => number;
+  private readonly openedAtMs: number;
+  private readonly items = new Map<string, PendingItem>();
+  private readonly queue: SpeechEvent[] = [];
+  private readonly waiters: Array<() => void> = [];
+  private sequence = 0;
+  private eventId = 0;
+  private revision = 0;
+  private audioSeconds = 0;
+  private settled = false;
+  private outcome: 'completed' | 'cancelled' | 'failed' = 'completed';
+  private readonly pump: Promise<void>;
+  private readonly signal?: AbortSignal;
+  private abortHandler?: () => void;
+  private turnAudioStartMs?: number;
+  private lastCapturedAtMs = 0;
+
+  constructor(
+    receipt: SpeechSessionReceipt,
+    socket: OpenAiTranscriptionSocket,
+    binding: SpeechBinding,
+    admission: OpenAiTranscriptionAdmission,
+    usage: OpenAiTranscriptionUsageSink,
+    nowMs: (() => number) | undefined,
+    signal: AbortSignal | undefined,
+  ) {
+    this.receipt = receipt;
+    this.socket = socket;
+    this.binding = binding;
+    this.admission = admission;
+    this.usage = usage;
+    this.nowMs = nowMs;
+    this.signal = signal;
+    this.openedAtMs = monotonicNow(nowMs);
+    this.pump = this.run(signal);
+    if (signal) {
+      if (signal.aborted) {
+        this.outcome = 'cancelled';
+        void this.close();
+      } else {
+        this.abortHandler = (): void => {
+          this.outcome = 'cancelled';
+          void this.close();
+        };
+        signal.addEventListener('abort', this.abortHandler, { once: true });
+      }
+    }
+  }
+
+  private nextId(): string {
+    this.eventId += 1;
+    return `evt-${this.eventId}`;
+  }
+
+  private emit(event: SpeechEvent): void {
+    this.queue.push(event);
+    const waiter = this.waiters.shift();
+    if (waiter) waiter();
+  }
+
+  private clock(): { readonly id: string; readonly monotonicMs: number } {
+    return { id: 'openai-transcription', monotonicMs: monotonicNow(this.nowMs) };
+  }
+
+  async *events(): AsyncIterable<SpeechEvent> {
+    let index = 0;
+    for (;;) {
+      while (index >= this.queue.length) {
+        if (this.settled) return;
+        await new Promise<void>((resolve) => this.waiters.push(resolve));
+      }
+      yield this.queue[index++] as SpeechEvent;
+    }
+  }
+
+  async write(frame: SpeechInputFrame): Promise<void> {
+    if (this.settled) throw new OpenAiTranscriptionError('closed', 'session is closed');
+    if (!isValidSpeechAudioFrame(frame) || frame.type !== 'audio.input') {
+      throw new OpenAiTranscriptionError('invalid-format', 'audio.input frame failed validation');
+    }
+    if (frame.format.codec !== TRANSCRIPTION_FORMAT.codec
+      || frame.format.sampleRateHz !== TRANSCRIPTION_FORMAT.sampleRateHz
+      || frame.format.channels !== TRANSCRIPTION_FORMAT.channels) {
+      throw new OpenAiTranscriptionError('invalid-format', 'only pcm16-le 24kHz mono is admitted');
+    }
+    const seconds = frame.sampleCount / frame.format.sampleRateHz;
+    if (!(seconds > 0) || this.audioSeconds + seconds > this.admission.ceiling.admittedAudioSeconds) {
+      throw new OpenAiTranscriptionError('ceiling', 'admitted audio ceiling reached');
+    }
+    this.audioSeconds += seconds;
+    // Capture-domain turn window for the final's audioInterval (approximation
+    // for sequential client turns; dispatch ordering stays with L2).
+    if (Number.isFinite(frame.capturedAtMs) && frame.capturedAtMs >= 0) {
+      this.turnAudioStartMs ??= frame.capturedAtMs;
+      this.lastCapturedAtMs = Math.max(this.lastCapturedAtMs, frame.capturedAtMs);
+    }
+    // The payload is encoded and released here; the adapter retains only counters.
+    const audio = base64Of(frame.payload);
+    this.socket.send(JSON.stringify({ type: 'input_audio_buffer.append', audio }));
+  }
+
+  async command(command: Parameters<SpeechSession['command']>[0]): Promise<void> {
+    if (this.settled && command.type !== 'session.close') {
+      throw new OpenAiTranscriptionError('closed', 'session is closed');
+    }
+    switch (command.type) {
+      case 'input.commit':
+        this.socket.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+        this.turnAudioStartMs = undefined;
+        await this.usage.record({
+          eventId: command.utteranceId,
+          revision: this.revision++,
+          mode: 'incremental',
+          usage: { admittedAudioSeconds: this.audioSeconds },
+        });
+        return;
+      case 'input.clear':
+        for (const [id, item] of this.items) {
+          if (!item.finalized && id === command.utteranceId) this.items.delete(id);
+        }
+        return;
+      case 'session.mute':
+        // Mute is enforced by capture (no audio written); the cloud adapter holds no gate.
+        return;
+      case 'session.close':
+        await this.close();
+        return;
+      default:
+        throw new OpenAiTranscriptionError('unsupported-command', `not applicable to STT-only transcription: ${command.type}`);
+    }
+  }
+
+  async close(): Promise<void> {
+    if (this.settled) return;
+    this.settled = true;
+    if (this.signal && this.abortHandler) this.signal.removeEventListener('abort', this.abortHandler);
+    try {
+      await this.socket.close();
+    } finally {
+      const connectedSeconds = Math.max(0, (monotonicNow(this.nowMs) - this.openedAtMs) / 1000);
