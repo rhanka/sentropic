@@ -50,12 +50,8 @@ export interface PgChainRef {
   readonly hash: string;
   readonly payload: string;
 }
-export const chainRecordKey = (chain: string, seq: number | string): string =>
+export const chainRecordKey = (chain: string, seq: number): string =>
   JSON.stringify([chain, String(seq).padStart(16, '0')]);
-// The existing numeric module interfaces stay unchanged. Only the frozen
-// memory binding consumes this additive exact stored representation.
-export type PgStoredChain = Omit<PgChain, 'count'> & { readonly count: number | string };
-export type PgStoredChainRef = Omit<PgChainRef, 'seq'> & { readonly seq: number | string };
 export const applyPgEffects = async (
   core: PgCore,
   session: PgSession,
@@ -123,19 +119,14 @@ export const applyPgEffects = async (
     created.push(record);
   }
   for (const append of unit.appends) {
-    const previous = await store.get<PgStoredChain>(session, root, 'chain', append.chainId);
+    const previous = await store.get<PgChain>(session, root, 'chain', append.chainId);
     if (previous?.disposed) throw new StorageInvalidCommandError('chain disposed');
     if (append.expectation.kind === 'absent') {
       if (append.expectation.allocation !== '0') throw new StorageInvalidCommandError('unexpected creation allocation');
       if (previous) throw new StorageIdempotencyConflictError('chain already exists');
     } else if (previous?.head !== append.expectation.hash) throw new StorageCasConflictError('stale chain head');
-    const exact = core.options.moduleId === 'engram-memory';
-    const seq = exact ? String(previous?.count ?? '0') : Number(previous?.count ?? 0);
-    const next = exact ? (BigInt(seq) + 1n).toString() : Number(seq) + 1;
-    if (exact ? !isU64Counter(next) : !Number.isSafeInteger(next))
-      throw new StorageInvalidCommandError('chain sequence exhausted');
-    const allocation = (BigInt(previous?.allocation ?? '0') + 1n).toString();
-    if (!isU64Counter(allocation)) throw new StorageInvalidCommandError('chain allocation exhausted');
+    const seq = previous?.count ?? 0;
+    if (!Number.isSafeInteger(seq + 1)) throw new StorageInvalidCommandError('chain sequence exhausted');
     const payload = await store.payload(
       session,
       scope,
@@ -151,8 +142,8 @@ export const applyPgEffects = async (
     });
     root = await store.put(session, root, 'chain', append.chainId, {
       head: append.record.hash,
-      allocation,
-      count: next,
+      allocation: (BigInt(previous?.allocation ?? '0') + 1n).toString(),
+      count: seq + 1,
       disposed: false,
     });
     records += 1;
