@@ -180,6 +180,34 @@ test('should wire removable pinned Make targets without existing gate, socket or
   assert.match(tests, /ENV=\$\(ENV\)\s*$/);
 });
 
+test('should refuse tracked or untracked changes and Git errors before starting the scan', (t) => {
+  const root = fixture(t);
+  writeFileSync(join(root, 'git'), `#!/bin/sh
+case "$*" in
+  'rev-parse --verify HEAD') printf '%s' "$FIXTURE_SHA"; exit "$FIXTURE_HEAD_EXIT" ;;
+  'status --porcelain --untracked-files=normal') printf '%s' "$FIXTURE_DIRTY"; exit "$FIXTURE_STATUS_EXIT" ;;
+  *) exit 2 ;;
+esac
+`, { mode: 0o755 });
+  const recipe = readFileSync('Makefile', 'utf8').match(/^security-daily-scan:[^\n]*\n((?:\t[^\n]*\n?)+)/m)[1];
+  const guard = recipe.split('docker run')[0].replace(/^\t@/, '').replace(/\$\$/g, '$');
+  const env = { PATH: root, FIXTURE_SHA: sourceSha, FIXTURE_HEAD_EXIT: '0', FIXTURE_STATUS_EXIT: '0', FIXTURE_DIRTY: '' };
+  const run = (extra) => spawnSync('/bin/sh', ['-ec', `${guard}printf '%s' "$source_sha"`],
+    { env: { ...env, ...extra }, encoding: 'utf8' });
+  const cleanTree = run({});
+  assert.equal(cleanTree.status, 0, cleanTree.stderr);
+  assert.equal(cleanTree.stdout, sourceSha);
+  for (const dirty of [' M package-lock.json', 'M  package-lock.json', '?? extra/package-lock.json']) {
+    const rejected = run({ FIXTURE_DIRTY: dirty });
+    assert.notEqual(rejected.status, 0);
+    assert.match(rejected.stderr, /clean source tree required/);
+    assert.equal(rejected.stdout, '');
+  }
+  assert.notEqual(run({ FIXTURE_HEAD_EXIT: '1' }).status, 0);
+  assert.notEqual(run({ FIXTURE_STATUS_EXIT: '1' }).status, 0);
+  assert.match(recipe, /SECURITY_DAILY_SOURCE_SHA="\$\$source_sha"/);
+});
+
 test('should resolve the real npm binary with the isolated scanner configuration', (t) => {
   const root = fixture(t);
   const plan = planScan(root, loadContract());
