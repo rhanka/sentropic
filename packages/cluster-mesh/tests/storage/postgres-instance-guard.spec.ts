@@ -14,7 +14,7 @@ import {
 import { resolvePgStoreKey } from '../../src/storage/postgres/instance-ownership.js';
 import type { PgInstanceOwnershipSession } from '../../src/storage/postgres/instance-ownership.js';
 import { PostgresStorageError } from '../../src/storage/postgres/errors.js';
-import type { InjectedPgDriver } from '../../src/storage/postgres/protocol.js';
+import type { InjectedPgDriver, PgSession, SqlResult } from '../../src/storage/postgres/protocol.js';
 import { loadPgAssets } from '../../src/storage/postgres/migrations.js';
 import { createPostgresKernel } from '../../src/storage/postgres/index.js';
 import { decodePgText } from '../../src/storage/postgres/codec.js';
@@ -70,6 +70,72 @@ describe('pg installed asset guard', () => {
     for (const file of ['legacy.sql', 'x-backup.sql', 'tmp.sql', 'old.sql']) {
       assert.throws(() => assertNoDeprecatedAssetNames([{ file }]), (error: unknown) => error instanceof PostgresStorageError);
     }
+  });
+});
+
+/**
+ * Enablement pin for the lease backstop (no PG needed: canned catalog rows).
+ * 008 creates a plain constraint trigger, born `tgenabled='O'` (origin+local,
+ * the PostgreSQL default); `'A'` (ENABLE ALWAYS) is accepted too, `'D'` and
+ * `'R'` are refused as `open-refused`. Replica mode (`session_replication_role
+ * = replica`) skips `'O'` triggers, so the backstop only guards the primary:
+ * E4 is single-primary by design (no replicas), recorded as a qualification
+ * limit in BRANCH.md — the in-tx renewal UPDATE stays the primary guard.
+ */
+describe('pg ownership catalog enablement', () => {
+  const catalogRows = (tgenabled: string, withTrigger = true) => ({
+    columns: [
+      { column_name: 'module', data_type: 'text' },
+      { column_name: 'instance', data_type: 'text' },
+      { column_name: 'epoch', data_type: 'text' },
+      { column_name: 'holder_until', data_type: 'timestamp with time zone' },
+    ],
+    checks: [{ definition: "CHECK (epoch <= '18446744073709551615'::text)" }],
+    triggers: withTrigger
+      ? [
+          {
+            tgname: 'instance_ownership_lease',
+            tgenabled,
+            tgdeferrable: true,
+            tginitdeferred: true,
+            tgtype: 17,
+            proname: 'instance_ownership_guard',
+            lanname: 'plpgsql',
+            prosrc: 'IF NEW.holder_until IS NULL OR NEW.holder_until <= clock_timestamp() THEN RAISE',
+          },
+        ]
+      : [],
+  });
+  const catalogSession = (rows: ReturnType<typeof catalogRows>): PgSession => ({
+    execute: async ({ text }): Promise<SqlResult> => {
+      if (text.includes('information_schema')) return { rows: rows.columns, rowCount: rows.columns.length };
+      if (text.includes('pg_constraint')) return { rows: rows.checks, rowCount: rows.checks.length };
+      return { rows: rows.triggers, rowCount: rows.triggers.length };
+    },
+  });
+  it("accepts the born 'O' enablement", async () => {
+    await assertPgOwnershipCatalog(catalogSession(catalogRows('O')), 'probe');
+  });
+  it("accepts the 'A' (always) enablement", async () => {
+    await assertPgOwnershipCatalog(catalogSession(catalogRows('A')), 'probe');
+  });
+  it("refuses a 'D' (disabled) trigger as open-refused", async () => {
+    await assert.rejects(
+      assertPgOwnershipCatalog(catalogSession(catalogRows('D')), 'probe'),
+      (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'open-refused',
+    );
+  });
+  it("refuses an 'R' (replica-only) trigger as open-refused", async () => {
+    await assert.rejects(
+      assertPgOwnershipCatalog(catalogSession(catalogRows('R')), 'probe'),
+      (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'open-refused',
+    );
+  });
+  it('refuses a missing trigger as open-refused', async () => {
+    await assert.rejects(
+      assertPgOwnershipCatalog(catalogSession(catalogRows('O', false)), 'probe'),
+      (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'open-refused',
+    );
   });
 });
 
