@@ -27,25 +27,44 @@ export interface ReconciledPartial {
  * trailing `committed` words, returned as a character count. A single shared
  * character across a word boundary (e.g. 'I like it' + 'the dog' sharing 't')
  * never matches a whole word, so it can never stitch ('ithe dog' is impossible).
+ * Real engine output varies in case and punctuation across windows ('Quick' vs
+ * 'quick', 'brown,' vs 'brown'), so words compare normalized: lowercased with
+ * surrounding punctuation stripped. The returned count is measured on the raw
+ * candidate (offsets preserved), so the merge keeps the engine's own text.
  */
+function splitWords(text: string): Array<{ raw: string; start: number; end: number }> {
+  const words: Array<{ raw: string; start: number; end: number }> = [];
+  const pattern = /\S+/g;
+  let found: RegExpExecArray | null;
+  while ((found = pattern.exec(text)) !== null) {
+    words.push({ raw: found[0], start: found.index, end: found.index + found[0].length });
+  }
+  return words;
+}
+
+function normWord(word: string): string {
+  return word.toLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, '');
+}
+
 function overlapLength(committed: string, candidate: string): number {
-  const head = committed.split(/\s+/).filter((word) => word.length > 0);
-  const tail = candidate.split(/\s+/).filter((word) => word.length > 0);
+  const head = splitWords(committed).map((word) => normWord(word.raw));
+  const tail = splitWords(candidate);
   const maxWords = Math.min(head.length, tail.length);
   for (let words = maxWords; words >= 1; words--) {
     let match = true;
     for (let i = 0; i < words; i++) {
-      if (head[head.length - words + i] !== tail[i]) {
+      const expected = head[head.length - words + i];
+      const actual = normWord(tail[i].raw);
+      if (expected.length === 0 || expected !== actual) {
         match = false;
         break;
       }
     }
     if (match) {
-      // Character length of the overlapping word run plus the single separator
-      // that joins it to the remainder (the committed head carries no trailing
-      // space, so the merge re-adds exactly one).
-      const prefix = tail.slice(0, words).join(' ');
-      return candidate.length > prefix.length ? prefix.length + 1 : prefix.length;
+      // Skip the whole separator run so the merge re-adds exactly one space.
+      let end = tail[words - 1].end;
+      while (end < candidate.length && /\s/.test(candidate[end])) end += 1;
+      return end;
     }
   }
   return 0;
