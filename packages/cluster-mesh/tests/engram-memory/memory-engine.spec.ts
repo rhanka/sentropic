@@ -42,9 +42,10 @@ describe('memory engine authorized recovery', () => {
   });
 
   it('should preserve refusal when the authorized proof is not terminal', async () => {
-    const { read, refused } = setup();
+    const { read } = setup();
     recovery.prove.mockResolvedValue({ state: 'reserved' });
-    await expect(read()).resolves.toBe(refused);
+    await expect(read()).resolves.toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED',
+      message: 'host candidate authority refused' } });
   });
 
   it('should refuse recovery when asynchronous host authorization fails', async () => {
