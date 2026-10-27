@@ -99,6 +99,12 @@ their budgets; queue p50 is 3725s / max 13700s. The strict two-receipt command
 rejects this run and PR `40402395319`; both are fresh and attested, neither
 meets 2288s, and no actual final-policy main receipt exists.
 
+The final conflict-resolution rebase onto main
+`55431a99c73ae72bcf9404c8de5b1c8375f9e39b` preserves the workflow bytes used
+by these receipts. Scoped checks passed again: 35 metrics, 21 expected-results
+and 90 publication tests. The receipts retain source `1b5ef5368`; later reader
+and documentation commits do not turn the failed timing proof into acceptance.
+
 | Guarded package archive | Job | Archive SHA-256 |
 | --- | --- | --- |
 | `@sentropic/artifacts@0.2.1` | [121971804916](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121971804916) | `fb2887d206bcaf7d5e4d85ad14173ffd3cce700e239dabf540150383c7bfe28f` |
