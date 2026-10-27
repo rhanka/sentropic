@@ -14,33 +14,34 @@ GitHub CLI (no credentials retained):
 | `GET /users/rhanka/settings/billing/usage` | HTTP 404; endpoint requires `user` scope | Billed minutes, registry and transfer costs remain to-measure. |
 | `GET /repos/rhanka/sentropic/branches/main` | base SHA above | #760 is still open at inventory time; no unmerged changes are imported. |
 
-The finite policy uses the BR-76 **observed lower bound of 17 slots**, not
-the unverified 24-worker hypothesis or an account quota. Fifteen shared
-job concurrency groups cover common work; the existing npm train and API
-image publication groups account for the other two slots.
-This is a repository dispatch bound, not a provisioned runner reservation:
-other runs/repos can still consume shared hosted capacity. Concurrent-run
-admission must compare the combined measured peak against that lower bound;
-it cannot be accepted from this static per-run check alone.
+BR-76 observed at least 17 simultaneous executions; this is a lower bound,
+not an account quota or a provisioned runner reservation. Review r2 found
+that the former 15 shared job mutexes held ready work behind unrelated
+jobs even with only 2–8 active runners. The owner requested their removal.
 
-`make ci-capacity-policy` bounds the weighted antichain by the number of
-distinct execution mutexes (matrix indices share the common pool). It
-rejects PR demand above 15, main demand above 17, validator dependency
-chains, and unsafe pool queues. The expected manifest retains dependencies
-so queue waits can be summed along identified observed critical paths.
+`make ci-capacity-policy` now checks independent validators, matrix widths
+15/5, and absence of static capacity mutexes. It reports weighted DAG demand
+(52 PR / 51 main) separately from admission, which remains null until
+measured. Hosted runners schedule that demand; no repository-wide capacity
+reservation is claimed. The expected manifest retains dependencies so queue
+waits can be summed along identified observed critical paths.
 
 ## BR-77 policy and live qualification
 
-The active policy keeps 23 independent package validators ready after
-`changes`, sharing six execution mutexes. Every common job uses one of
-15 repository-wide slots; API/E2E use their reference widths 15/5 and
-matrix indices share those slots. These reference widths are not a newly
-measured optimum. Ordinary publishers depend on their own validators;
-the existing oauth → mcp-auth and mesh → gateway → cluster registry
-dependencies remain. Every common-pool mutex sets `queue: max` and
-`cancel-in-progress: false`: waiting jobs are retained, without `needs`
-chains or the default replacement of pending jobs. The two existing release
-mutexes remain separate. Other workflows/repositories remain outside this bound.
+The revised policy keeps 23 independent package validators ready after
+`changes`, without job capacity mutexes. API/E2E retain widths 15/5 and all
+members; these widths are not a newly measured optimum. Workflow cancellation
+remains PR-only. Ordinary publishers depend on their own validators; the
+existing oauth → mcp-auth and mesh → gateway → cluster registry dependencies
+and the two existing release groups remain.
+
+E2E no longer waits on the 637–656s `typecheck-lint-api` job. The API/IdP
+typecheck, IdP build and API lint steps remain intact, parallel to E2E, and
+required in receipts and `ci-gate`. Both image publishers now depend directly
+on that job to preserve the previous promotion barrier. No job, matrix member,
+assertion or timeout was removed or relaxed. Qualification of the revised
+policy requires new completed receipts; historical slot-policy timings below
+remain failed evidence.
 
 Static admission is not timing acceptance. Use `CI_REQUIRE_CAPACITY_PROOF=1`
 and `CI_POLICY_RUN_FILES='<pr>/capture.json <main>/capture.json'` with
