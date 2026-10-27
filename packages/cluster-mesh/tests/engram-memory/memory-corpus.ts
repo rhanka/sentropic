@@ -7,6 +7,7 @@ import { DEADLINE, DIGEST, memoryCaptureRequest, memoryEngine } from './memory-e
 import { assembleMemoryHostBinding, verifyHostBinding } from '../../src/engram-memory/binding.js';
 import { openMemoryMaintenance } from '../../src/engram-memory/host-maintenance.js';
 import { memoryMaintainGrant } from './pg-host.js';
+import { awaitDeadLease, memoryPeer } from './memory-process.js';
 
 export const MEMORY_STAGE_B_PROFILES = [
   'atomic-units-v1', 'immutable-chains-v1', 'immutable-boundaries-v1', 'scope-outbox-v1', 'fenced-writers-v1',
@@ -182,9 +183,9 @@ export const runMemoryCorpus = (open: () => Promise<MemoryCampaignHost>): void =
       const host = memoryEngine(h);
       expect(await h.store.commitPending(pendingCapture('unknown'))).toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED' } });
       const before = h.units.length;
-      expect(await host.engine.capture(memoryCaptureRequest('foreign', 'foreign-scope'))).toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED' } });
+      expect(await host.engine.capture(memoryCaptureRequest('2', 'foreign-scope'))).toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED' } });
       host.enter(null);
-      expect(await host.engine.capture(memoryCaptureRequest('missing'))).toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED' } });
+      expect(await host.engine.capture(memoryCaptureRequest('3'))).toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED' } });
       expect(h.units).toHaveLength(before);
       host.enter(host.original);
       const captured = valueOf(await host.engine.capture(memoryCaptureRequest()));
@@ -195,6 +196,34 @@ export const runMemoryCorpus = (open: () => Promise<MemoryCampaignHost>): void =
           authorization: { credential: 'credential-memory' }, deadline_at: DEADLINE })).toMatchObject({ ok: false, error: { code: 'UNAUTHORIZED' } });
       }
       expect(h.units).toHaveLength(count);
+    });
+    scenario('fenced-writers-v1/two-process: should refuse a separate live opener without superseding its owner', async (h) => {
+      const peer = await memoryPeer(h.pg.name, 'open');
+      expect(peer.code).toBe(3);
+      expect(JSON.parse(peer.output)).toMatchObject({ ok: false, code: 'instance-busy' });
+      expect(valueOf(await h.store.readiness()).storage_epoch).toBe('1');
+      valueOf(await h.store.commitPending(pendingCapture()));
+    });
+    for (const phase of ['crash-before', 'crash-after']) scenario(`atomic-units-v1/${phase}: should recover one original result after an actual SIGKILL`, async (h) => {
+      valueOf(await h.store.close());
+      const peer = await memoryPeer(h.pg.name, phase);
+      expect(peer.signal).toBe('SIGKILL');
+      await awaitDeadLease(h);
+      await h.reopen();
+      const journal = valueOf(await h.store.readJournal({ after: '0', limit: 10 }));
+      if (phase === 'crash-before') {
+        expect(journal).toEqual([]);
+        expect(await h.handle.readCommitResult!('capture-candidate-crash', h.binding.memoryGrant)).toBeNull();
+        expect(valueOf(await h.store.commitPending(pendingCapture())).cursor).toBe('1');
+      } else {
+        expect(journal).toHaveLength(1);
+        const original = valueOf(JSON.parse(peer.output));
+        const stored = await h.handle.readCommitResult!('capture-candidate-crash', h.binding.memoryGrant);
+        expect(JSON.parse(stored!.data)).toEqual(original);
+        expect(valueOf(await h.store.readCaptureIdempotency!({ candidate_id: 'candidate-crash' }))).toMatchObject({ created_cursor: '1' });
+        expect(valueOf(await h.store.readiness()).storage_epoch).toBe('3');
+        expect(valueOf(await h.store.readJournal({ after: '0', limit: 10 }))).toEqual(journal);
+      }
     });
   });
 };

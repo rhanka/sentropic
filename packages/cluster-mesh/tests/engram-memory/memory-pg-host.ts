@@ -9,9 +9,9 @@ import { openMemoryMaintenance, type MemoryMaintenancePorts } from '../../src/en
 import { memoryFailure, neutralQueryResult, neutralTransaction } from './memory-neutral.js';
 
 export type MemoryCampaignHost = Awaited<ReturnType<typeof memoryCampaignHost>>;
-export const memoryCampaignHost = async () => {
+export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof memoryPgHost>>, commitHook?: () => Promise<void>) => {
   if (!process.env.CM_PG_URL) throw new Error('Stage B requires CM_PG_URL and real PostgreSQL');
-  const pg = await memoryPgHost();
+  const pg = existing ?? await memoryPgHost();
   const { binding } = memoryHostComposed(pg.options.driver);
   const units: NeutralAtomicUnit[] = [];
   let kernel: Awaited<ReturnType<typeof createPostgresKernel>>;
@@ -79,7 +79,7 @@ export const memoryCampaignHost = async () => {
     }),
   });
   const open = async () => {
-    kernel = await createPostgresKernel({ ...pg.options, canonicalOwnership: {} });
+    kernel = await createPostgresKernel({ ...pg.options, canonicalOwnership: { leaseMs: 1000 }, onCommitPossession: commitHook });
     await kernel.bindNew(binding.memoryGrant);
     await kernel.bindNew(binding.maintainGrant);
     await kernel.bindNew(hostReader);
@@ -102,7 +102,7 @@ export const memoryCampaignHost = async () => {
     store = opened.value;
   };
   try {
-    await pg.tx.run(false, (session) => session.execute({ text: `CREATE TABLE "${pg.name}".host_memory_identity
+    if (!existing) await pg.tx.run(false, (session) => session.execute({ text: `CREATE TABLE "${pg.name}".host_memory_identity
       (scope text PRIMARY KEY,store_id text UNIQUE NOT NULL)`, values: [] }));
     await open();
   } catch (error) { await kernel!?.ownership?.release(); await pg.close(); throw error; }
