@@ -54,7 +54,7 @@
   - [x] Read project rules, approved analysis/review and Docker lock; verify branch mechanically.
   - [x] Pin harness r5 input/dependency hashes, renderer/toolchain and preserved before/slim/Focus output hashes in `docs/governance/kit/fixtures/artifact-weight/baseline.json`.
   - [x] Preserve the representative two-diagram, two-question/six-option, 24-row/eight-gap fixture and its source provenance.
-  - [ ] Rebuild the baseline and scoped fixture after the Docker reservation; explain differences from preserved outputs.
+  - [x] Rebuild the baseline and scoped fixture after the Docker reservation; explain differences from preserved outputs. Node 24.22.1 pinned; 12 tests pass; baseline 3734122 B / typical 291885 B HTML, JS 3691488 B / 249248 B.
   - [x] Record the read-before-publication contract, corrected source anchors and separate L1/host qualification limits in `docs/governance/kit/ARTIFACT_BUDGET.md`.
 - [ ] **W1 — Dossier data boundary**
   - [x] Remove global route/summary imports from the diagram engine; explicitly bind governance data in its consumer and preparation scripts.
@@ -76,7 +76,7 @@
   - [x] Record server-side pinned-runtime reuse as a future host qualification candidate, without claiming support.
 
 - [ ] **Final validation**
-  - [ ] Focused tests and budget build under the shared lock, after 21:00 UTC.
+  - [x] Focused tests and budget build under the shared lock, after 21:00 UTC; geometry 1758 scenes / 16740 relations, zero findings, planned routing max 73.6 ms.
   - [ ] Full-governance geometry/routing checks; typical offline/browser checks; report output digests and before/after sizes.
   - [ ] Review final diff and mechanically validate scope before every commit.
   - [ ] Run `make down ENV=test-artifact-weight` under the shared lock.
