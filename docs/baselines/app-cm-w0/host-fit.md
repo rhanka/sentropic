@@ -1,8 +1,18 @@
 # W2 host fit and selected provider contract
 
-The original 18 October assembly/prototype below is historical, frozen by [published-tuple.json](published-tuple.json). This section supersedes its release/selection/lock ownership assumptions for plan-v2. Preserve Google Drive/Gmail's local registrations and current readers; a guessed connector registry selector is not a dependency.
+The current freeze is [published-tuple.json](published-tuple.json). The original 18/26 October assembly and receipts below remain historical. Preserve Google Drive/Gmail's local registrations and current readers; a guessed connector registry selector is not a dependency.
 
-## Current published/source freeze — 26 October
+## Refreshed W0-close.d — 27 October
+
+Consume artifacts **0.2.3**, cluster-mesh **0.22.4**, llm-mesh **0.28.1**, gateway **0.21.3**, Comments **0.3.1**, platform **0.4.0**, auth-hono **0.17.0** and mcp-auth **0.2.2**. Workspace-source mode is retained: merge W2.b `d0ce8aeb0`, #702 `5dfab2cf3` and published UP-T/main `72bb2da3d`; the tuple records the exact qualified source head and root/API lock hashes. API and mesh resolve the same physical artifacts 0.2.3; no artifacts source alias or nested private peer is admitted.
+
+APP-P1's compiled profile digest remains `0de19f966eacb5b63142b525611a6210a0d4aaeefbdaad92dfb3b6227575b6ef`. The manifest, explicitly using **`mcp:tools:invoke`**, now hashes to **`80ca4b067a010690dc71036a3237a70b91d99d7c025ded7173566d0ae55b1600`**. The four public tools and internal-port boundaries below remain frozen. The old artifacts 0.2.1 manifest `ccf8a4dd…7090e9a` is refused by a regression test; profile and manifest digests are distinct inputs.
+
+The [refresh procedure and results](tuple-refresh-2026-10-27.md) bind verified published archives, clean workspace builds, normalized path/byte maps, the **entire workspace lock and installed development/runtime trees**, loaded Comments/gateway and physical/bundled API registry tests. Artifacts and llm-mesh payloads are byte-identical. Mesh/gateway each retain one generated declaration difference consisting only of string-union member order; raw bytes/hashes and the bounded semantic check are retained. This is not an assertion of full raw-byte equality for those two packages.
+
+**No cluster-mesh upstream bump is needed:** published 0.22.4 consumes published artifacts 0.2.3 and compiles the selected builtin. UP-T is delivered in published 0.2.3, including `./adapters/postgres-activation` and `sql/0001_activation.sql`; W1.c composes this adapter. Its host authority/restart/conformance qualification remains W1.c/W3, with activation default-closed. W3 still owns the canonical pruned API/IdP/content image and image-digest receipt; this refresh neither deploys nor qualifies that image.
+
+## Historical published/source freeze — 26 October
 
 Workspace-source base: `fbfe68f0e40d386e6b3429abc2ea8f868fcdd3f6`, merged without rebase at `79a4f2703ffd34ad2b66999d3daf8b7516e90735`. [Current tuple](published-tuple-2026-10-26.json) pins artifacts **0.2.0**, mesh **0.22.1**, platform **0.4.0**, Comments **0.3.0**, gateway **0.21.0**, llm-mesh **0.27.1**, auth-hono **0.16.0**, mcp-auth **0.2.2** and external peers. The complete root workspace resolution is the immutable base's entire `package-lock.json.packages` map (**1700 entries**, exact Git blob/SHA-256 in the tuple); member declarations include API/UI/apps and every package. This is lock metadata, not a claimed installed/pruned image. API's standalone lock still resolves gateway **0.19.1** and links mesh from source; **W2.b alone** reconciles both locks and final physical resolution.
 
