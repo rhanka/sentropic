@@ -23,7 +23,7 @@ export interface SpeechHold {
   operation: SpeechOperation; campaignRef: string; utcDay: string; price: SpeechPrice;
   liabilityMicroUsd: number; expiresAtMs: number; dispatched: boolean;
   state: 'reserved' | 'estimated' | 'settled'; chargedMicroUsd: number; settlementRevision: number;
-  rootEntryRef?: string; providerRevision?: number; usage?: SpeechUsageState;
+  rootEntryRef?: string; providerRevision?: number; usage?: SpeechUsageState; settledUsage?: SpeechUsage;
 }
 export interface SpeechBudgetSnapshot { readonly spentMicroUsd: number; readonly reservedMicroUsd: number }
 /** Views over existing owner tables, not a second speech ledger or quota counter. */
