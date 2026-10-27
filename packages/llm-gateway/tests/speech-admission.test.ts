@@ -56,7 +56,7 @@ describe('speech admission', () => {
   it('should refuse missing, foreign or mismatched allocator admissions', async () => {
     for (const patch of [{ receiptRef: 'other' }, { tenantId: 'other' }, { principalId: 'other' },
       { workspaceId: 'other' }, { targetSessionId: 'other' }, { nativeTurnRef: 'other' },
-      { submitKey: 'other' }, { coordinatorEpoch: 2 }]) {
+      { submitKey: 'other' }, { coordinatorEpoch: 2 }, { backendOperationRef: 'other' }]) {
       const ledger = new SpeechLedgerFixture();
       Object.assign(ledger.state.allocator, patch);
       await expect(admitSpeech(ledger.options(), operation())).rejects.toMatchObject({ code: 'allocator' });
@@ -89,5 +89,45 @@ describe('speech admission', () => {
     ledger.nowMs += 60_000;
     await expect(markSpeechDispatched(ledger.options(), 'stt-1')).rejects.toMatchObject({ code: 'expired' });
     expect(ledger.state.campaign.reservedMicroUsd).toBe(1_000_000);
+  });
+
+  it('should refuse a connection crossing UTC midnight and keep old unresolved liability on its original day', async () => {
+    const ledger = new SpeechLedgerFixture();
+    ledger.nowMs = Date.parse('2026-10-27T23:59:30Z');
+    await expect(admitSpeech(ledger.options(), operation())).rejects.toMatchObject({ code: 'invalid' });
+    const bounded = { ...operation(), maxDurationMs: 30_000,
+      ceiling: { connectedSeconds: 30, admittedAudioSeconds: 30 } };
+    await admitSpeech(ledger.options(), bounded);
+    ledger.nowMs += 30_000;
+    await expect(markSpeechDispatched(ledger.options(), 'stt-1')).rejects.toMatchObject({ code: 'expired' });
+    await admitSpeech(ledger.options(), operation('new-day'));
+    expect(ledger.state.days['2026-10-27'].reservedMicroUsd).toBe(500_000);
+    expect(ledger.state.days['2026-10-28'].reservedMicroUsd).toBe(1_000_000);
+    expect(ledger.state.campaign.reservedMicroUsd).toBe(1_500_000);
+  });
+
+  it('should snapshot the campaign and operation before awaiting storage', async () => {
+    const ledger = new SpeechLedgerFixture();
+    const options = ledger.options();
+    const op = operation();
+    const pending = admitSpeech(options, op);
+    Object.assign(options, { campaignRef: 'caller-supplied-campaign' });
+    Object.assign(op.ceiling, { connectedSeconds: 1 });
+    const hold = await pending;
+    expect(hold.campaignRef).toBe('owner-campaign');
+    expect(hold.operation.ceiling.connectedSeconds).toBe(60);
+  });
+
+  it('should refuse payloads in operational metadata and pin price identity and all priced ceilings', async () => {
+    const ledger = new SpeechLedgerFixture();
+    await expect(admitSpeech(ledger.options(), { ...operation(), audio: new Uint8Array(8) } as never))
+      .rejects.toMatchObject({ code: 'invalid' });
+    await expect(admitSpeech(ledger.options(), { ...operation(), binding: { ...operation().binding, transcript: 'private' } } as never))
+      .rejects.toMatchObject({ code: 'invalid' });
+    ledger.currentPrice = { ...price(), modelId: 'different-model' };
+    await expect(admitSpeech(ledger.options(), operation())).rejects.toMatchObject({ code: 'unavailable' });
+    ledger.currentPrice = { ...price(), rates: { ...price().rates, audioOutputTokens: { microUsd: 1, per: 1 } } };
+    await expect(admitSpeech(ledger.options(), operation())).rejects.toMatchObject({ code: 'unavailable' });
+    expect(ledger.state.campaign.reservedMicroUsd).toBe(0);
   });
 });
