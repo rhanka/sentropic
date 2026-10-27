@@ -1,8 +1,13 @@
 // S2a: read-only raw scan orchestration. Qualification stays blocked on S2b/S2c.
 import { createHash } from 'node:crypto';
-import { existsSync, readFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
-import { failClosedReport, inventoryRepository, summarizeBacklog } from './inventory.mjs';
+import { spawnSync } from 'node:child_process';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
+import { failClosedReport, inventoryRepository, normalizeRegister, summarizeBacklog } from './inventory.mjs';
+import { loadContract } from './schema.mjs';
 
 const hash = (bytes) => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const npmArgs = ['audit', '--json', '--package-lock-only', '--ignore-scripts',
@@ -12,9 +17,9 @@ const trivyArgs = ['--format', 'json', '--severity', 'UNKNOWN,LOW,MEDIUM,HIGH,CR
 export function planScan(root, contract) {
   const inventory = inventoryRepository(root, contract);
   const tasks = inventory.locks.map((lock) => {
-    const supported = /(?:^|\/)package-lock.json$/.test(lock.path) &&
-      existsSync(join(root, dirname(lock.path), 'package.json'));
-    return { kind: 'lock', scanner: 'npm', target: lock.path, args: [...npmArgs],
+    const manifest = lock.path.replace(/package-lock\.json$/, 'package.json');
+    const supported = manifest !== lock.path && existsSync(join(root, manifest));
+    return { kind: 'lock', scanner: 'npm', target: lock.path, manifest, args: [...npmArgs],
       blocked: !lock.present ? 'missing lock' : !supported ? 'unsupported lock/manifest mapping' : null };
   });
   for (const image of inventory.images) tasks.push({ kind: 'image', scanner: 'trivy', target: image.key,
@@ -94,4 +99,56 @@ export async function scanRepository({ root = '.', sourceSha, repository, contra
   }
   return { sourceSha, repository, scannedAt: new Date().toISOString(), inventory, surfaces,
     ...summarizeBacklog(findings, rows, { today, complete: coverageBlocked.length === 0, coverageBlocked }) };
+}
+
+export function npmRunner(root, inventory, execute = spawnSync) {
+  return (task) => {
+    if (task.scanner !== 'npm') throw new Error('coverage-blocked: immutable Trivy targets and DB require S2b');
+    const scratch = mkdtempSync(join(tmpdir(), 'security-daily-audit-'));
+    try {
+      // Never copy npmrc, credentials, source code or installed hooks to the scanner workspace.
+      const env = { PATH: process.env.PATH, HOME: scratch, TMPDIR: scratch,
+        npm_config_cache: join(scratch, 'cache'), npm_config_userconfig: '/dev/null',
+        npm_config_globalconfig: '/dev/null', npm_config_registry: 'https://registry.npmjs.org/',
+        npm_config_ignore_scripts: 'true', npm_config_update_notifier: 'false' };
+      const opts = { cwd: scratch, env, encoding: 'utf8', timeout: 120000, maxBuffer: 16 * 1024 * 1024, shell: false };
+      copyFileSync(join(root, task.target), join(scratch, 'package-lock.json'));
+      copyFileSync(join(root, task.manifest), join(scratch, 'package.json'));
+      const manifest = JSON.parse(readFileSync(join(scratch, 'package.json'), 'utf8'));
+      if (manifest.workspaces) {
+        for (const item of inventory.manifests.filter((item) => item.workspace && item.path !== 'package.json')) {
+          mkdirSync(join(scratch, dirname(item.path)), { recursive: true });
+          copyFileSync(join(root, item.path), join(scratch, item.path));
+        }
+      }
+      const version = execute('npm', ['--version'], opts);
+      if (version.status !== 0 || !/^\d+\.\d+\.\d+\s*$/.test(version.stdout || '')) throw new Error('npm scanner unavailable');
+      const result = execute('npm', task.args, opts);
+      return { ...result, scannerIdentity: `npm:${version.stdout.trim()};node:${process.version}`,
+        databaseIdentity: `npm-registry:unversioned;response:${hash(result.stdout || '')}` };
+    } finally { rmSync(scratch, { recursive: true, force: true }); }
+  };
+}
+
+export async function main() {
+  const root = resolve('.');
+  const contract = loadContract(join(root, '.security/security-fix.json'));
+  const requireTool = createRequire(join(process.env.MANIFEST_GUARD_TOOL_DIR, 'package.json'));
+  const register = readFileSync(join(root, '.security/vulnerability-register.yaml'));
+  const rows = normalizeRegister(requireTool('yaml').parse(register.toString()), 'rhanka/sentropic');
+  const inventory = inventoryRepository(root, contract);
+  const report = await scanRepository({ root, sourceSha: process.env.SECURITY_DAILY_SOURCE_SHA,
+    repository: 'rhanka/sentropic', contract, rows, run: npmRunner(root, inventory) });
+  report.registerHash = hash(register);
+  report.policyHash = hash(readFileSync(join(root, '.security/security-fix.json')));
+  // Local raw receipt only; S3 owns public validation/redaction, retention and publication.
+  process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  return report.status === 'complete-clean' ? 0 : 1;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
+  main().then((code) => { process.exitCode = code; }).catch((error) => {
+    process.stderr.write(`incomplete-scan: ${error.message}\n`);
+    process.exitCode = 1;
+  });
 }

@@ -6,10 +6,10 @@
 ## Scope / Guardrails
 - [x] Owner authorized implementation on 2026-10-26; draft PR to main stacked on S1 #732, no merge.
 - [x] Base: corrected S1 head `76c745d5a89eaa8362a914d07604d563489b9f67`, including the merge of main `365e8b313`; S2a changes only this plan before approval.
-- [ ] Work only in `tmp/worktrees/sec-s2a` on `feat/security-autofix-s2a`.
+- [x] Work only in `tmp/worktrees/sec-s2a` on `feat/security-autofix-s2a`.
 - [ ] Use Make targets only, zero Python, no AI commit trailers, selective staging and `make commit`; each new commit stays below 150 changed lines.
 - [ ] Use the shared Docker lock for every image build, container start and test; release it between steps and clean with locked `make down ENV=test-sec-s2a` after each step.
-- [ ] Pass `ENV=test-sec-s2a` last; run fixture targets without application services or host port bindings.
+- [x] Pass `ENV=test-sec-s2a` last; run fixture targets without application services or host port bindings.
 - [ ] Preserve the public-repository model, required PR gates, vulnerability register, disabled auto-fix and L5 class.
 - [ ] No scheduler, credentials, collector, publication, repair, merge actor or runtime activation.
 - [ ] Keep image/DB qualification in S2b and native Rust SAST qualification in S2c; unqualified surfaces remain explicit blockers.
@@ -63,8 +63,8 @@
   - [x] Inventory existing Make scan/parser entrypoints; reuse S1 schema/inventory helpers without changing their safety contract.
   - [ ] Capture source/register byte identities and the source SHA for unchanged-main assertions.
 - [ ] **Lot 1 — Raw scan orchestration, `scan.mjs` and `scan.test.mjs`**
-  - [ ] Enumerate three images explicitly, root/workspace and independent UI/kit lockfiles including dev dependencies, and discovered source/hash consumers.
-  - [ ] Capture raw output before compliance; run audit/scan commands without repair or publication and preserve accepted exceptions in the public queue.
+  - [x] Enumerate three images explicitly, root/workspace and independent UI/kit lockfiles including dev dependencies, and discovered source/hash consumers.
+  - [x] Capture raw output before compliance; run audit/scan commands without repair or publication and preserve accepted exceptions in the public queue.
   - [ ] Validate reports with S1 fail-closed checks; keep command errors, missing reports, unsupported formats, missing images and unqualified SAST as coverage gaps.
   - [ ] Record exact source, scanner/database identities, component/path, all severity flags and coverage; retain identical flags between comparable scans.
   - [x] In `scan.test.mjs`, assert source/register bytes remain unchanged, registered findings remain queued, explicit toolbox/locks coverage and independent locks include dev dependencies.
