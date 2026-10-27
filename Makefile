@@ -916,14 +916,14 @@ engram-e2-lane: ## Run one lane under the caller's shared Docker lock
 		mechanical) args=(engram-e2-mechanical); pattern=BRANCH.md ;; \
 		wiring) args=(test-publishable-manifests 'SCOPE=scripts/ci/publishable-ci-wiring.test.mjs scripts/ci/ci-expected-results.test.mjs'); pattern='scripts/ci/publishable-ci-wiring.test.mjs' ;; \
 		build|typecheck|lint) args=("$(E2_LANE)-cluster-mesh"); pattern='packages/cluster-mesh/src/*' ;; \
-		memory) args=(test-cluster-mesh SCOPE=tests/engram-memory); pattern='packages/cluster-mesh/tests/engram-memory/*.spec.ts' ;; \
+		memory) args=(test-cluster-mesh SCOPE=tests/engram-memory CM_PG_URL=postgresql://app:app@postgres:5432/app); pattern='packages/cluster-mesh/tests/engram-memory/*.spec.ts' ;; \
 		common) args=(test-cluster-mesh SCOPE=tests/storage/common-rule); pattern='packages/cluster-mesh/tests/storage/common-rule/*.spec.ts' ;; \
 		grants) args=(test-cluster-mesh SCOPE=tests/storage/scope-grant-modules.spec.ts); pattern='packages/cluster-mesh/tests/storage/scope-grant-modules.spec.ts' ;; \
 		postgres) args=(test-cluster-mesh SCOPE=tests/storage/postgres- CM_PG_URL=postgresql://app:app@postgres:5432/app); pattern='packages/cluster-mesh/tests/storage/postgres-*.spec.ts' ;; \
 		*) exit 1 ;; esac; \
 		git ls-files "$$pattern" > "$(E2_RECEIPTS)/$(E2_LANE).inventory"; \
 		if [ "$(E2_LANE)" = wiring ]; then git ls-files scripts/ci/ci-expected-results.test.mjs >> "$(E2_RECEIPTS)/$(E2_LANE).inventory"; fi; \
-		{ if [ "$(E2_LANE)" = postgres ]; then \
+		{ if [ "$(E2_LANE)" = postgres ] || [ "$(E2_LANE)" = memory ]; then \
 		  echo 'make engram-e2-postgres-up ENV=$(ENV)'; $(MAKE) engram-e2-postgres-up ENV=$(ENV); fi; \
 		printf 'make'; printf ' %q' "$${args[@]}"; printf ' ENV=$(ENV)\n'; \
 		$(MAKE) "$${args[@]}" ENV=$(ENV); } 2>&1 | tee "$(E2_RECEIPTS)/$(E2_LANE).log"
