@@ -54,10 +54,6 @@ concurrency:
 jobs:
   enforce-package-bump:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-12
-      queue: max
-      cancel-in-progress: false
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v6
@@ -121,10 +117,6 @@ jobs:
 
   qualify-engram-e2:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-13
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: github.event_name == 'pull_request' && needs.changes.outputs.engram_e2 == 'true'
     permissions:
@@ -161,10 +153,6 @@ jobs:
 
   changes:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-14
-      queue: max
-      cancel-in-progress: false
     permissions:
       contents: read
       pull-requests: read
@@ -557,10 +545,6 @@ jobs:
   # skipped `changes` cannot silently skip this required check; never a publisher dependency.
   validate-publishable-manifests:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-6
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled()
     permissions:
@@ -594,10 +578,6 @@ jobs:
   # Build E2E Docker image
   build-e2e:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-7
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     env:
       DOCKER_USERNAME: nologin
@@ -622,10 +602,6 @@ jobs:
 
   typecheck-lint-ui:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-8
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     steps:
       - uses: actions/checkout@v6
@@ -642,10 +618,6 @@ jobs:
 
   typecheck-lint-api:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-9
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     steps:
       - uses: actions/checkout@v6
@@ -671,10 +643,6 @@ jobs:
 
   validate-idp-sync:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-10
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: needs.changes.outputs.idp_sync == 'true'
     steps:
@@ -686,10 +654,6 @@ jobs:
 
   validate-llm-mesh:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-0
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.llm_mesh == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -717,10 +681,6 @@ jobs:
   # publication only after the npm trusted publisher has been attached.
   validate-cluster-mesh:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-1
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.cluster_mesh == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -807,10 +767,6 @@ jobs:
   # first publish is a manual bootstrap (see BRANCH.md), not steady-state OIDC.
   validate-llm-gateway:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-2
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.llm_gateway == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -834,10 +790,6 @@ jobs:
 
   validate-chat-ui:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-3
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: needs.changes.outputs.chat_ui == 'true' || needs.changes.outputs.global == 'true'
     steps:
@@ -861,10 +813,6 @@ jobs:
 
   validate-cited-source-viewer:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-4
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.cited_source_viewer == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -888,10 +836,6 @@ jobs:
 
   validate-cowork-bridge:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-5
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.cowork_bridge == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -913,10 +857,6 @@ jobs:
 
   validate-oauth-verify:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-0
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.oauth_verify == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -938,10 +878,6 @@ jobs:
 
   validate-mcp-auth:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-1
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.mcp_auth == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -984,10 +920,6 @@ jobs:
 
   validate-mcp-platform:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-2
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.mcp_platform == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -1011,10 +943,6 @@ jobs:
 
   memory-l5-qualification:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-3
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.memory_l5 == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -1028,10 +956,6 @@ jobs:
 
   validate-auth-hono:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-4
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.auth_hono == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -1053,10 +977,6 @@ jobs:
 
   validate-auth-client:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-5
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.auth_client == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -1078,10 +998,6 @@ jobs:
 
   validate-auth-ui:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-0
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.auth_ui == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -1103,10 +1019,6 @@ jobs:
 
   validate-cowork-desktop:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-1
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.cowork_desktop == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -1128,10 +1040,6 @@ jobs:
 
   validate-contracts:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-2
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: needs.changes.outputs.contracts == 'true' || needs.changes.outputs.global == 'true'
     steps:
@@ -1151,10 +1059,6 @@ jobs:
 
   validate-events:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-3
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.events == 'true' || needs.changes.outputs.global == 'true')
     steps:
@@ -1174,10 +1078,6 @@ jobs:
 
   validate-chat-core:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-4
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled() && (needs.changes.outputs.chat_core == 'true' || needs.changes.outputs.global == 'true')
     steps:
