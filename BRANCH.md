@@ -21,6 +21,7 @@
   - `packages/cluster-mesh/tests/engram-memory/contract-vectors.spec.ts`
   - `packages/cluster-mesh/tests/engram-memory/binding-compatibility.spec.ts`
   - `packages/cluster-mesh/tests/engram-memory/neutral-contract-types.ts`
+  - [x] Inherited from integration #767/#774 (fixture alignment and installed-comments pack-only dev gates): `packages/cluster-mesh/tests/fixtures/reserved-versions.ts`, `packages/cluster-mesh/tests/modules/registry.spec.ts`, `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts`, `packages/cluster-mesh/tests/storage/installed-bare.mjs`, `packages/cluster-mesh/tests/storage/pack-only-dev-gate.mjs`, `packages/cluster-mesh/tests/storage/pack-only-dev-gate.spec.ts`, `packages/cluster-mesh/tests/storage/postgres.mk`.
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
