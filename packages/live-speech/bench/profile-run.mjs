@@ -110,8 +110,16 @@ try {
   const session = new sessionMod.LocalSttSession({ profile, port: client, emit: (event) => events.push(event) });
   const at = performance.now();
   const chunk = 8000;
+  // Real-time pacing between chunks: without it the whole fixture lands in one
+  // synchronous burst, every cadence tick after the first skips, and the endpoint
+  // supersedes the single window decode — partials stay 0 and rolling-window
+  // stitching is never exercised. Paced pushes let window decodes resolve and
+  // commit mid-utterance, so partials count the windows actually stitched.
   for (let offset = 0; offset < fixture.pcm.length; offset += chunk) {
     session.pushFrames(fixture.pcm.subarray(offset, Math.min(offset + chunk, fixture.pcm.length)));
+    if (offset + chunk < fixture.pcm.length) {
+      await new Promise((resolve) => setTimeout(resolve, (chunk / profile.sampleRateHz) * 1000));
+    }
   }
   session.pushFrames(new Float32Array(profile.sampleRateHz));
   let finals = [];
@@ -127,11 +135,19 @@ try {
     finals = events.filter((event) => event.type === 'final');
   }
   const elapsedMs = performance.now() - at;
+  if (fixture.expectFinal) {
+    // Quiesce before teardown: with paced multi-window audio a superseded window
+    // decode may still be in flight when the final lands; killing the worker
+    // mid-native-call aborts the process (koffi FATAL at teardown). Waiting lets
+    // the straggler resolve (superseded, never emitted) so terminate hits idle.
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
   run = {
     fixture: fixtureKind,
     samples: fixture.pcm.length,
     elapsedMs: Math.round(elapsedMs * 10) / 10,
     finals: finals.length,
+    partials: events.filter((event) => event.type === 'partial').length,
     chars: finals.reduce((sum, event) => sum + event.text.length, 0),
     errors: events.filter((event) => event.type === 'error').map((event) => event.message),
   };

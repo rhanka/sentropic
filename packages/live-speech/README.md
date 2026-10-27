@@ -8,7 +8,8 @@ no audio in logs — only sample counts, revisions and text cross the seam.
 ## Layout
 
 - `src/node/local-stt.ts` — session: energy-gated endpointing, one final per
-  utterance, stable-prefix reconciliation, at most one window decode in flight.
+  utterance, word-anchored overlap stitching, bounded window decodes in flight
+  (`maxInflightWindows`, default 1).
 - `src/node/utterance-buffer.ts` — sample accumulation and rolling windows.
 - `src/node/reconciler.ts` — committed-hypothesis stitching with overlap dedupe.
 - `src/node/worker-port.ts` — `NodeWorkerClient` transport over `worker_threads`.

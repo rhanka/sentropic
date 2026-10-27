@@ -62,9 +62,11 @@ if (!modelsDir) {
 const espeakVersion = spawnSync(espeakBin, ['--version'], { encoding: 'utf8' });
 if (espeakVersion.status !== 0) pendingReceipt(out, 'espeak-ng binary not available', { ...evidence, detail: String(espeakVersion.error?.message ?? '').slice(0, 300) });
 
+// Fixture utterances deliberately exceed their profile window (tiny 4 s, base 6 s)
+// so the measured run exercises rolling-window stitching, not a single window.
 const utterances = {
-  'local-tiny': { lang: 'en', voice: 'en', speed: '175', text: 'The quick brown fox jumps over the lazy dog' },
-  'local-base': { lang: 'fr', voice: 'fr', speed: '120', text: 'Bonjour, comment allez vous ?' },
+  'local-tiny': { lang: 'en', voice: 'en', speed: '175', text: 'The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.' },
+  'local-base': { lang: 'fr', voice: 'fr', speed: '120', text: 'Bonjour, comment allez vous ? Bonjour, comment allez vous ? Bonjour, comment allez vous ?' },
 };
 const results = {};
 let provisioned = null;
