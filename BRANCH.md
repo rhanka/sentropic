@@ -1,112 +1,57 @@
-# Feature: Live STT L2 interruption core
+# Feature: BR-77 — Bound CI execution capacity and qualify contention/rollback
 
 ## Objective
-- [x] Deliver approved r3 L2 implementation: durable interruption, all-class dispatch fencing, playback invalidation and usage receipts; final qualification tracked below.
+- [ ] Enforce finite execution capacity and qualify contention/rollback on measured receipts.
+- [ ] Branch `chore/ci-capacity-policy`, step 2 of nine; train order BR-76 → BR-77; dependency: BR-76 (PR #705, metrics + expected-results) merged.
 
 ## Scope / Guardrails
-- [x] Author: codex / gpt-6.1-sol / high. Spec: `.tmp/live-stt/spec-plan.md`, r3, L2 row and sections 4/7.
-- [x] Base: origin/feat/live-stt-l1c at 581d6262a3d15e0cedde24b3debe3e3c6413e96b (#757); merge only, never rebase.
-- [x] Isolated branch feat/live-stt-l2 in tmp/worktrees/stt-l2; preserve root and other sessions.
-- [x] Make-only; ENV=test-stt-l2 last; shared Docker flock for each container/test step, followed by make down.
-- [x] No paid API, microphone, inference, audio in logs, Python, publication, deployment or merge.
-- [x] Capacity decision: A Partage normal; no extra allocation or qualification units consumed.
-- [x] Specific-file staging, make commit only, every commit under 150 changed lines, no attribution trailers.
+- [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md` and `spec/ci-cd-ten-minutes/capacity.md`; BR-76 receipts are inputs, not deliverables.
+- [ ] Work in `tmp/worktrees/ci-capacity-policy`; rebase on main after BR-76 merge; one implementation branch active on the shared workflow/Makefile.
+- [ ] Make entry points only; `ENV` last; tests on `ENV=test-ci-capacity` or `ENV=test-ci-capacity`, never `dev`; no secrets in evidence.
+- [ ] Slot 0 owner: branch author; API_PORT=9385, UI_PORT=5585, MAILDEV_UI_PORT=1485; verify availability before starting services and pass all three ports to service commands.
+- [ ] The agent inventories quotas and costs itself via the GitHub API (account/plan, billing usage with `user` scope, runner inventory); no owner-supplied inventory is assumed.
+- [ ] No migrations; keep root dev stable; no timeout inflation, removed assertions, or attribution trailers; commits ≤150 changed lines through `make commit` with scope checks.
 
 ## Branch Scope Boundaries (MANDATORY)
-- **Allowed Paths (implementation scope)**:
-  - `BRANCH.md`
-  - `packages/live-speech/**`
-  - `.tmp/live-stt/l2/**`
-  - `.github/workflows/live-speech.yml`
-  - `package-lock.json`
-  - `packages/cluster-mesh/README.md`
-  - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package*.json`
-- **Forbidden Paths (must not change in this branch)**:
-  - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - `api/**`
-  - `ui/**`
-  - `.track/**`
-  - `plan/**`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `Makefile`
-  - `.github/workflows/ci.yml`
-  - `scripts/ci/publishable-manifests.mjs`, `scripts/ci/publishable-classification.test.mjs`, `scripts/ci/publishable-ci-wiring.test.mjs` (BR757-EX6)
-- **Exception process**:
-  - [x] BR757-EX1 below permits only package Make include and dedicated CI gate.
+- [ ] **Allowed Paths (implementation scope)**:
+  - [ ] `BRANCH.md`; `plan/71-BRANCH_chore-ci-capacity-policy.md`; `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`.
+  - [ ] `scripts/ci/ci-run-metrics.mjs`
+  - [ ] `scripts/ci/ci-run-metrics.test.mjs`
+  - [ ] `scripts/ci/ci-expected-results.mjs`
+  - [ ] `scripts/ci/ci-expected-results.test.mjs`
+  - [ ] `spec/ci-cd-ten-minutes/capacity.md`
+- [ ] **Forbidden Paths (must not change in this branch)**:
+  - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
+  - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
+- [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - [ ] `.github/workflows/ci.yml` under BR77-EX1; `Makefile` under BR77-EX2.
+  - [ ] `scripts/ci/publishable-ci-wiring.test.mjs` under BR77-EX3.
+
+- [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
-- [x] PR776 inventory repair: declare live-speech in PACK_TARGETS and cover selected BLOCK classification; preserve all existing validation-pack context checks and verify the separate workflow's four deterministic gates. Local fixture commands could not acquire the shared Docker lock; require the new exact-head manifest CI result before READY.
-- [x] BR757-EX6: owner-requested repair of run 40417977042/job 121916029156. Its guarded live-speech pack passed but the static PACK_TARGETS inventory omitted the package and failed. Register the existing lane, add an inventory regression and explicitly check its inventory-only packing path without adding a publisher. Impact: live-speech BLOCK classification recognizes its existing guarded Make lane; rollback: revert these three CI script changes together.
-- [x] Integration: merge origin/main 6690b8add after #778; retain L2 BRANCH.md and main's cluster 0.23.2/mesh 0.30.0/gateway 0.21.5 tuple. No L2-specific cluster source/version change remains; root lock keeps the live-speech workspace registration. Imported history exceeds 150 lines; conflict resolutions are metadata only.
-- [x] PR776 generation lookup regression: malformed historical references resolved an inherited entry (16/17 ordering tests passed). Validate scope, numeric epoch, submit key and owned journal entry before historical lookup; retain valid old-generation settlement.
-- [x] BR757-EX5: the standard manifest gate requires a literal root pack-live-speech target for this changed public package. Add only that lane using the existing guarded pack macro and a transient L2 build; no publication. Rollback removes the lane and package pack script.
-- [x] PR776 P2-3 follow-through: late evidence on accepted effects and old terminal acknowledgements leave current approvals valid; unresolved-effect changes still invalidate grants. Add a parallel-call regression spanning both histories.
-- [x] PR776 r1 local package tests: 34/34 pass across interruption, ordering, playback and usage. All seven correction commits stay below 150 lines; head workflows are submitted and remain required for handoff.
-- [x] PR776 combined recovery: generation rotation preserves unsent queued finals with their immutable epoch/submit key; old references fail scope checks. Usage estimates without a native ID remain replayable after ACK recovery.
-- [x] PR776 local interruption run: 11/12 pass; the late-ID fixture also delayed the successor's start indefinitely. Limit its delayed mock to the original start; retain the unchanged timeout and assert successor admission.
-- [x] PR776 P2-4: deduplicate counted units by allocator admission ID across operations/restart; limit one unit per estimate and verify the admitted coordinator/native-turn link. Persisted replay and forged-link tests added.
-- [x] PR776 P2-3: bind grants to turn/call identity; admissions and active sibling results no longer invalidate parallel approvals. Stop and unresolved-effect transitions still revoke stale grants; concurrency and pending-approval Stop tests added.
-- [x] PR776 P2-2: trusted CAS generation rotation carries effects, fences, action tombstones and consumed approvals forward; persisted-byte restart tests retain the mutation barrier and query-only old-turn recovery.
-- [x] PR776 P2-1: journal queued finals while a predecessor settles; gate send by prior completion or durable fence, retaining exactly-once submission across restart/lost ACK. Covered in interrupt.test.ts.
-- [x] BR757-EX4: deterministic L2 qualification uses a dedicated read-only workflow without provider secrets. Owner's PR776 r1 instructions require rerunning cancelled head CI; retain standard global selection and monitor both workflows without cancelling the requested runs. No local inference or paid API probes.
-- [x] Final lint and build/export/pack pass; CI package commands also use the owner-requested ENV=test-stt-l2. Native qualification and publication remain separate.
-- [x] Full final package tests pass 27/27 across the four required suites; source includes durable CAS restart and immutable typed-risk verification.
-- [x] Add asynchronous authentication input-mutation regression: selected risk/evidence must remain bound to the exact request verified before the await boundary.
-- [x] Require the authenticated workspace in the durable scope and operational receipts, alongside tenant/principal/target/source/controller/consent; missing scope fields fail admission.
-- [x] Include validate-live-speech in both final CI aggregation dependencies so result capture cannot race this newly selected job.
-- [x] Add lost-start-ACK fail-closed admission, inherited class-key refusal and optional native-ID metadata type checks before final quality gates.
-- [x] Add concrete CAS-backed SessionJournal tests: persisted-byte restart, transaction rollback and contention retry. Storage durability remains an explicit host primitive; no production in-memory sink is supplied.
-- [x] BR757-EX3: merge origin/main ab981b16d to enable PR776 CI. Preserve L1c 0.23 speech, main peer releases/Decision changes and both README sections. Authored conflict resolutions are small; imported main commits retain their original history. Scope-check at merge measures resolutions against AUTO_MERGE, excluding unchanged incoming commits. Rollback uses the pre-merge parent; never rewrite/rebase.
-- [x] Add exact barrier-revision approval binding (including previously unused approvals) and explicit paired cancellation for emitted calls denied before admission.
-- [x] Each official live-speech gate now invokes cleanup via Make on exit while still under the shared lock, preserving failures. CI selects this gate only for its package/build/workflow changes.
-- [x] Add explicit tests for 2s pending Stop, disconnect/reconnect fencing, completed-epoch late Stop and typed-acceptance replay after durable restart.
-- [x] First full core run: 17/19 pass; two ordering assertions expected lowercase substrings while authority errors start Action/Stale. Match the observed identity/revision error messages; no behavior change.
-- [x] Playback uses the L1 binary header shape (session/stream identity and negotiated format); add cross-session and independent-stream ordering assertions.
-- [x] Admission review adds tests requiring an explicit non-dispatching duplicate receipt, single-use approvals and safe record keys; callers must never infer dispatch permission from an absent result.
-- [x] BR757-EX2: register the new dependency-free workspace in root lock metadata so existing npm-ci consumers see the package. Impact limited to its workspace/link entries; rollback removes those entries with the package.
-- [x] BR757-EX1: new package has no build/test entrypoint. Add package-local Make recipes using existing qualification Compose service, one root include and CI job. Impact: deterministic isolated package gate; rollback: remove include/job and package recipes. No new containers or ports outside ENV.
+- [x] BR77-EX1 — Workflow exception: bound shared runner concurrency, independent package validation/publication, branch dry-run publication qualification, keep PR-only cancellation. Impact: dispatch and required results. Rollback: revert workflow policy while preserving complete-result checks.
+- [x] Review r2 owner instruction: replace repo-wide slot mutexes with per-run matrix widths and PR cancellation; measure hosted-runner scheduling. Static demand no longer claims account admission. API quality remains required at the gate and image publishers.
+- [x] BR77-EX2 — Makefile exception: capacity-policy entry points only. Impact: named CI measurement/policy entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [x] BR77-EX2 includes the requested dry-run publication target: real existing guarded packs, per-package receipts, no registry writes; rollback removes the target and dispatch mode.
+- [x] BR77-EX3 — Permit `scripts/ci/publishable-ci-wiring.test.mjs` to assert the explicit branch dry-run alternative while preserving all production publication barriers. Rollback: restore assertions with the workflow.
+- [x] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
+- [ ] Inherited open acceptance from BR-76/Round-4: account quota/reservation/cost inventory; bounded dispatch policy; concurrent PR/current-main delivery; rollback drill; classification ≤15s, verdict ≤5s, aggregate scheduling ≤60s under declared concurrent traffic.
 
 ## AI Flaky tests
-- [x] Deterministic unit fixtures only; no flaky waiver.
+- [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch, sequential implementation; complementary review selected only from evidenced reachable capacity.
-- [ ] Multi-branch not required for this single lot.
+- [ ] **Multi-branch** — This is one independently reviewed/qualified branch of the serialized nine-branch train.
+- [ ] Rationale: preserve branch-level rollback and serialize shared workflow/Makefile edits; internal CI lanes may run concurrently.
 
 ## UAT Management (in orchestration context)
-- [x] Core-only fixture qualification; no device/UI/native-runtime acceptance claimed.
+- [ ] Run the lot UAT on the exact pushed qualification SHA; record immutable source/target SHAs for any integrated qualification workspace.
+- [ ] Use isolated automated environments; web/Chrome/VSCode UAT below is limited to affected behavior; no root-dev automated testing.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and constraints**
-  - [x] Read Docker lock first, project rules, approved spec, owner answers and PR757 base.
-  - [x] Mechanical harness branch check passes; no service ports required.
-  - [x] Add package manifest, strict TS build, Make and CI entrypoints using the existing isolated qualification service.
-- [x] **Lot 1 — Tests first**
-  - [x] interrupt.test.ts: pre-start Stop, double Stop, late native ID, completion race, all-class fence and restart fixtures authored before source.
-  - [x] ordering.test.ts: one commit/submission, pairing/dedupe, stale generations, barrier, partial/stale risk acceptance and fresh authorization fixtures authored first.
-  - [x] playback.test.ts: actual rendered samples, stale output, bounded queue and connection/turn epochs authored first.
-  - [x] usage-receipts.test.ts: estimate/true-up dedupe, dimensions, restart and payload exclusion authored first.
-  - [x] Red at 4f03beab7: scoped interrupt suite fails on missing core/session.js before source implementation.
-- [x] **Lot 2 — Implementation**
-  - [x] Snapshot command identities and typed risk bodies before asynchronous admission/authentication; opaque proofs stay transient and are never journalled.
-  - [x] Durable scopes and receipts require complete authenticated tenant/workspace identity; shared shape validation rejects omitted or extra fields.
-  - [x] Uncertain native starts install a tombstone before rethrowing; admission rejects inherited class keys and receipts validate optional identity fields.
-  - [x] SessionJournal implements durable snapshot CAS, bounded contention retry, rollback, schema/scope checks and isolated returns over host storage.
-  - [x] Fresh mutation approvals bind the barrier revision; denied emitted calls have durable cancelled-before-start results and action tombstones.
-  - [x] Expose stopping/pending/terminal separately from fence receipts; retain paired read-only outcomes and suppress Stop RPCs for completed old epochs.
-  - [x] All-class admission returns explicit dispatch/dedupe receipts with authority ordering; consumed approval IDs and exact tool/arguments bindings persist across restart.
-  - [x] core/session.ts: trusted scoped authority, atomic journal, persisted epochs/tombstones, opaque control port implemented.
-  - [x] core/interrupt.ts: all-class fence receipts, outcome pairing, effect barrier and typed authenticated risk acceptance implemented.
-  - [x] core/playback.ts: L1-compatible session/stream headers, monotonic rendered samples, bounded transient queue and stale epoch refusal implemented.
-  - [x] core/usage-receipts.ts: canonical operation identity, strict metadata fields and signed revision-deduplicated adjustments implemented.
-- [x] **Lot 3 — Documentation and local validation**
-  - [x] README: control/journal integration, authority and runtime qualification boundaries, L3 integration seam documented.
-  - [x] Strict source/test types, lint, build/exports and all 27 package tests pass through locked Make targets; each gate cleans its ENV on exit.
-  - [x] make scope-check before every commit; repeatable first-parent atomic-size, whitespace and attribution-trailer audit provided.
-  - [x] Review dossier records exact author/source and selection failure without inferred reviewer allocation or consensus; G-REVIEW remains open for merge.
-- [ ] **Lot 4 — Draft handoff**
-  - [x] Push branch and create draft PR776 to main using this plan as body; implementation plan posted as its first comment.
-  - [ ] Obtain green exact-head CI; report PR, head SHA, CI URL and L3 readiness.
-  - [x] Keep BRANCH.md and draft; no merge/publication/deployment performed.
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, relevant security/domain rules, `README.md`, `TODO.md`, the execution `PLAN.md`, the study, `spec/ci-cd-ten-minutes/capacity.md`, and `plan/BRANCH_TEMPLATE.md`.
+  - [x] Verify branch mechanically with harness; confirm BR-76 merged; inventory the actual files and existing assertions at the new base.
+  - [x] Declare exceptions above; names marked new below are deliverables to create, not existing commands or evidence.
+  - [x] Base origin/main 440599d04e91bb33e3874588f067c6a90bffd1b3; harness C1 passed; inherited suites passed 45/45. BR77 uses ENV=test-ci-capacity per owner packet.
