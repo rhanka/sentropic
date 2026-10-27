@@ -1,0 +1,96 @@
+2026-10-26T07:42:03Z
+
+NAMESPACE sentropic
+{"name":"auth-idp","uid":"4e38f2dd-7e90-4bb6-a8dd-39023856f1cb","resourceVersion":"39542830571","rules":[{"host":"auth.sent-tech.ca","paths":[{"path":"/","backend":{"service":{"name":"auth-idp","port":{"name":"http"}}}}]}],"loadBalancer":{}}
+{"name":"sentropic","uid":"db69ee59-1e59-4519-a311-3ea2a74bcfde","resourceVersion":"39542830600","rules":[{"host":"sentropic.sent-tech.ca","paths":[{"path":"/","backend":{"service":{"name":"ui","port":{"name":"http"}}}}]}],"loadBalancer":{}}
+{"name":"api","selector":{"app.kubernetes.io/component":"api","app.kubernetes.io/name":"sentropic"},"ports":[{"name":"http","port":8787,"protocol":"TCP","targetPort":8787}]}
+{"name":"auth-idp","selector":{"app.kubernetes.io/component":"auth-idp","app.kubernetes.io/name":"sentropic"},"ports":[{"name":"http","port":8787,"protocol":"TCP","targetPort":8787}]}
+{"name":"postgres","selector":{"app.kubernetes.io/component":"postgres","app.kubernetes.io/name":"sentropic"},"ports":[{"name":"pg","port":5432,"protocol":"TCP","targetPort":5432}]}
+{"name":"ui","selector":{"app.kubernetes.io/component":"ui","app.kubernetes.io/name":"sentropic"},"ports":[{"name":"http","port":5173,"protocol":"TCP","targetPort":5173}]}
+{"service":"api","ports":[{"name":"http","port":8787,"protocol":"TCP"}],"endpoints":[{"conditions":{"ready":true,"serving":true,"terminating":false},"targetRef":{"kind":"Pod","name":"api-7b4644d4fb-ffxwk","namespace":"sentropic","uid":"dd6487e6-917d-4135-8491-3a4fed830769"}}]}
+{"service":"auth-idp","ports":[{"name":"http","port":8787,"protocol":"TCP"}],"endpoints":[{"conditions":{"ready":true,"serving":true,"terminating":false},"targetRef":{"kind":"Pod","name":"auth-idp-5cd7858b5-j8hwv","namespace":"sentropic","uid":"cba4c683-5fb5-433c-86b7-418fed286394"}}]}
+{"service":"postgres","ports":[{"name":"pg","port":5432,"protocol":"TCP"}],"endpoints":[{"conditions":{"ready":true,"serving":true,"terminating":false},"targetRef":{"kind":"Pod","name":"postgres-0","namespace":"sentropic","uid":"94a03326-3ed7-4e8a-906d-f931e627e367"}}]}
+{"service":"ui","ports":[{"name":"http","port":5173,"protocol":"TCP"}],"endpoints":[{"conditions":{"ready":true,"serving":true,"terminating":false},"targetRef":{"kind":"Pod","name":"ui-777fc875b4-qf94z","namespace":"sentropic","uid":"3f8d55fd-180d-4796-8701-01f5753d7975"}}]}
+{"name":"api-7b4644d4fb-ffxwk","uid":"dd6487e6-917d-4135-8491-3a4fed830769","start":"2026-10-18T01:56:34Z","labels":{"app.kubernetes.io/component":"api","app.kubernetes.io/name":"sentropic","pod-template-hash":"7b4644d4fb"},"owners":[{"apiVersion":"apps/v1","blockOwnerDeletion":true,"controller":true,"kind":"ReplicaSet","name":"api-7b4644d4fb","uid":"3f21d2da-0c56-4438-8921-1b770e091eb1"}],"images":[{"name":"api","imageID":"rg.fr-par.scw.cloud/nc-reg/sentropic-api@sha256:f2173e9d37f525a3cef0d6148dded71765c594b775d54426486df90d82a2cbe3","ready":true}]}
+{"name":"auth-idp-5cd7858b5-j8hwv","uid":"cba4c683-5fb5-433c-86b7-418fed286394","start":"2026-10-18T01:57:03Z","labels":{"app.kubernetes.io/component":"auth-idp","app.kubernetes.io/name":"sentropic","pod-template-hash":"5cd7858b5"},"owners":[{"apiVersion":"apps/v1","blockOwnerDeletion":true,"controller":true,"kind":"ReplicaSet","name":"auth-idp-5cd7858b5","uid":"bebc55f6-9bc8-4a57-81c5-98aa0e5bde48"}],"images":[{"name":"auth-idp","imageID":"rg.fr-par.scw.cloud/nc-reg/sentropic-api@sha256:f2173e9d37f525a3cef0d6148dded71765c594b775d54426486df90d82a2cbe3","ready":true}]}
+{"name":"postgres-0","uid":"94a03326-3ed7-4e8a-906d-f931e627e367","start":"2026-10-18T01:56:33Z","labels":{"app.kubernetes.io/component":"postgres","app.kubernetes.io/name":"sentropic","apps.kubernetes.io/pod-index":"0","controller-revision-hash":"postgres-555d7675dc","statefulset.kubernetes.io/pod-name":"postgres-0"},"owners":[{"apiVersion":"apps/v1","blockOwnerDeletion":true,"controller":true,"kind":"StatefulSet","name":"postgres","uid":"39b87c7c-0cc5-4ea8-9cd8-f5a3088ae778"}],"images":[{"name":"postgres","imageID":"docker.io/library/postgres@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24","ready":true}]}
+{"name":"ui-777fc875b4-qf94z","uid":"3f8d55fd-180d-4796-8701-01f5753d7975","start":"2026-10-18T01:56:33Z","labels":{"app.kubernetes.io/component":"ui","app.kubernetes.io/name":"sentropic","pod-template-hash":"777fc875b4"},"owners":[{"apiVersion":"apps/v1","blockOwnerDeletion":true,"controller":true,"kind":"ReplicaSet","name":"ui-777fc875b4","uid":"630a428f-35b8-41af-95ce-796216af9a8a"}],"images":[{"name":"ui","imageID":"rg.fr-par.scw.cloud/nc-reg/sentropic-ui@sha256:a3b3458814a7e91aaf1b94728d51222c1b8c35c196ec980c152c9c17e684b316","ready":true}]}
+{"name":"api","uid":"6b13cb63-06ab-40ab-b3f9-72692cbf1ef1","resourceVersion":"41220239107"}
+35a69f96f133743f8698c3df9cc2c051c10b1c7750bc55b74cd78d88ec83e96e  -
+{"name":"auth-idp","uid":"1e14c4c6-0211-4463-8ecf-0abb97ea06ba","resourceVersion":"39542608449"}
+fd44d070c3d8b3d4ac1d54da848ecdd56cfd642aa0d40e734da463af4dc697cf  -
+{"name":"kube-root-ca.crt","uid":"95b244a8-669f-4de8-b970-c832b24f1fd2","resourceVersion":"39542411153"}
+5d29f19e689199bc9134c2c135c0e973e2404b46fb17680a1ecfc074d411fdea  -
+{"name":"postgres","uid":"ad795584-1153-4da6-ba34-381f146bd81d","resourceVersion":"39542608466"}
+128dc4f511234f4c434f4114d5b99a6335495b5f5f9fabcb774ed8b29f620680  -
+{"name":"sentropic-idp-identity-export-sql","uid":"375648fc-8193-42f0-915f-566a5d1e3bf2","resourceVersion":"41065204870"}
+5b6eb0705990b1ba6e933b46c3e84861bde73ef52fe675e63df9f28203338393  -
+{"name":"sentropic-idp-reader-role-sql","uid":"9d8c9a11-35aa-4643-ab2f-aa416159ca0f","resourceVersion":"41061125912"}
+8c8663464571f1e5cca9ff017c49bd0cdc7a481484a787b8a79ebce1c2ca33bd  -
+{"name":"ui","uid":"f1b91d96-8284-46a2-91d0-c212449b67cd","resourceVersion":"39542608493"}
+42a15cc3d368e487c2e620a42c50079359f794a34522a3f4887e295323ce92c5  -
+{"name":"api","uid":"99e6869f-15f8-47e1-9334-aa4f69953085","resourceVersion":"41220255471","refs":[{"name":"api","envFrom":[{"configMapRef":{"name":"api"}},{"secretRef":{"name":"sentropic-api"}}],"refs":[]}]}
+466bed33589fc1c0781c259fb81e7cd2d8e4e09680e70297cce98d4039761b43  -
+{"name":"auth-idp","uid":"1956e9b4-a3a9-4723-a111-a9310b95e321","resourceVersion":"41220256409","refs":[{"name":"auth-idp","envFrom":[{"configMapRef":{"name":"auth-idp"}},{"secretRef":{"name":"sentropic-api"}}],"refs":[]}]}
+90bab9db7f949a4642e8f3be3a9b41949a2961844d3b80db5cf628b0097da554  -
+{"name":"ui","uid":"afe35167-55c5-4e82-ae93-6c88481ec858","resourceVersion":"41270403922","refs":[{"name":"ui","envFrom":null,"refs":[]}]}
+b64f8c1568c419dbf27c031e910c43b57eb9d984ff51b3d5af495a047d328bb2  -
+auth-idp-tls                    b025acff-56e5-4217-985f-0ac20b36f4fb   40727483802
+ci-deployer-token               4ffe2c52-54ae-45be-9171-a617f5fd101f   41384075952
+sentropic-api                   9b280a50-d5df-4962-b461-7ff0b5f33eb9   39664445285
+sentropic-docs-bhs              c2ad8458-3340-48c4-bf0f-505ae5fe775f   39664140666
+sentropic-idp-identity-reader   537bfdda-a4be-4229-aee2-146060937065   40944343961
+sentropic-idp-relay-writer      b556fdae-99fd-48e9-ae68-98359ce4616e   40944343884
+sentropic-pgbackup              217928f3-7f32-42b5-a9d0-c00f1f342a34   39624468973
+sentropic-postgres              c0e402c3-0891-44d6-983e-ef5cfa0dff28   39542423077
+sentropic-registry              6e67240b-ee79-485e-b42b-e6610d4b7471   39542423383
+sentropic-tls                   6a2af630-729a-4b61-ad71-301a54db5097   40727479841
+CONTAINER_ENV_SHA256 api a0392804ce5f4346bbb96e9d1e297844adf830f96dc828677c9db9aeffadbfac
+CONTAINER_ENV_SHA256 auth-idp 60f2a2bf013100394de46f0b8da221c140687346ba8c68d7a7ca03f258cd6d9e
+993c4106fc3ca00166ca15e9d0ba0fb6f8c619314376143133c510b910909c94  /etc/nginx/conf.d/default.conf
+
+NAMESPACE sentropic-preprod
+{"name":"auth-idp","uid":"f7caf5d9-aba1-4d0e-9fb9-cefd7661ecf2","resourceVersion":"39578427628","rules":[{"host":"preprod.auth.sent-tech.ca","paths":[{"path":"/","backend":{"service":{"name":"auth-idp","port":{"name":"http"}}}}]}],"loadBalancer":{}}
+{"name":"sentropic","uid":"89fbd58d-449c-41d6-b075-708ac7faf837","resourceVersion":"39578427966","rules":[{"host":"preprod.sentropic.sent-tech.ca","paths":[{"path":"/","backend":{"service":{"name":"ui","port":{"name":"http"}}}}]}],"loadBalancer":{}}
+{"name":"api","selector":{"app.kubernetes.io/component":"api","app.kubernetes.io/name":"sentropic"},"ports":[{"name":"http","port":8787,"protocol":"TCP","targetPort":8787}]}
+{"name":"auth-idp","selector":{"app.kubernetes.io/component":"auth-idp","app.kubernetes.io/name":"sentropic"},"ports":[{"name":"http","port":8787,"protocol":"TCP","targetPort":8787}]}
+{"name":"postgres","selector":{"app.kubernetes.io/component":"postgres","app.kubernetes.io/name":"sentropic"},"ports":[{"name":"pg","port":5432,"protocol":"TCP","targetPort":5432}]}
+{"name":"ui","selector":{"app.kubernetes.io/component":"ui","app.kubernetes.io/name":"sentropic"},"ports":[{"name":"http","port":5173,"protocol":"TCP","targetPort":5173}]}
+{"service":"api","ports":[{"name":"http","port":8787,"protocol":"TCP"}],"endpoints":[{"conditions":{"ready":true,"serving":true,"terminating":false},"targetRef":{"kind":"Pod","name":"api-845746cc8c-x8lpl","namespace":"sentropic-preprod","uid":"223a9d43-1567-4978-94e3-4fea133dab9a"}}]}
+{"service":"auth-idp","ports":[{"name":"http","port":8787,"protocol":"TCP"}],"endpoints":[{"conditions":{"ready":true,"serving":true,"terminating":false},"targetRef":{"kind":"Pod","name":"auth-idp-69fd789588-mnmgk","namespace":"sentropic-preprod","uid":"6f1ac7a1-8671-4de4-bb92-c399c5827fb0"}}]}
+{"service":"postgres","ports":[{"name":"pg","port":5432,"protocol":"TCP"}],"endpoints":[{"conditions":{"ready":true,"serving":true,"terminating":false},"targetRef":{"kind":"Pod","name":"postgres-0","namespace":"sentropic-preprod","uid":"d70d8064-7f53-4668-888b-565668b88355"}}]}
+{"service":"ui","ports":[{"name":"http","port":5173,"protocol":"TCP"}],"endpoints":[{"conditions":{"ready":true,"serving":true,"terminating":false},"targetRef":{"kind":"Pod","name":"ui-5444694c77-xstnh","namespace":"sentropic-preprod","uid":"60a52e34-4747-4240-9b3f-dce531c15e0d"}}]}
+{"name":"api-845746cc8c-x8lpl","uid":"223a9d43-1567-4978-94e3-4fea133dab9a","start":"2026-10-25T23:36:43Z","labels":{"app.kubernetes.io/component":"api","app.kubernetes.io/name":"sentropic","pod-template-hash":"845746cc8c"},"owners":[{"apiVersion":"apps/v1","blockOwnerDeletion":true,"controller":true,"kind":"ReplicaSet","name":"api-845746cc8c","uid":"02e9d6a5-3497-48b8-9bea-9c675d5a8f68"}],"images":[{"name":"api","imageID":"rg.fr-par.scw.cloud/nc-reg/sentropic-api@sha256:a47fbfd8d0bb4140e15b0652e9e60b9f70c309cda1d273158c6ed64f9429b6ee","ready":true}]}
+{"name":"auth-idp-69fd789588-mnmgk","uid":"6f1ac7a1-8671-4de4-bb92-c399c5827fb0","start":"2026-10-25T23:36:43Z","labels":{"app.kubernetes.io/component":"auth-idp","app.kubernetes.io/name":"sentropic","pod-template-hash":"69fd789588"},"owners":[{"apiVersion":"apps/v1","blockOwnerDeletion":true,"controller":true,"kind":"ReplicaSet","name":"auth-idp-69fd789588","uid":"1adf8233-3bb3-4edc-9bce-30577ae5d56b"}],"images":[{"name":"auth-idp","imageID":"rg.fr-par.scw.cloud/nc-reg/sentropic-api@sha256:a47fbfd8d0bb4140e15b0652e9e60b9f70c309cda1d273158c6ed64f9429b6ee","ready":true}]}
+{"name":"postgres-0","uid":"d70d8064-7f53-4668-888b-565668b88355","start":"2026-09-20T21:28:14Z","labels":{"app.kubernetes.io/component":"postgres","app.kubernetes.io/name":"sentropic","apps.kubernetes.io/pod-index":"0","controller-revision-hash":"postgres-6dddb48b9f","statefulset.kubernetes.io/pod-name":"postgres-0"},"owners":[{"apiVersion":"apps/v1","blockOwnerDeletion":true,"controller":true,"kind":"StatefulSet","name":"postgres","uid":"cf3b6b1b-9d0f-4254-986a-ff688ff6c22b"}],"images":[{"name":"postgres","imageID":"docker.io/library/postgres@sha256:9beea1b7f176d67e49e23092c63db9e98db32b303ce1b510749379ef46a3dcdd","ready":true}]}
+{"name":"ui-5444694c77-xstnh","uid":"60a52e34-4747-4240-9b3f-dce531c15e0d","start":"2026-10-23T15:37:53Z","labels":{"app.kubernetes.io/component":"ui","app.kubernetes.io/name":"sentropic","pod-template-hash":"5444694c77"},"owners":[{"apiVersion":"apps/v1","blockOwnerDeletion":true,"controller":true,"kind":"ReplicaSet","name":"ui-5444694c77","uid":"7b41f963-a84f-4059-b928-968626f1f275"}],"images":[{"name":"ui","imageID":"rg.fr-par.scw.cloud/nc-reg/sentropic-ui@sha256:bdb995da6d046654251bd11697172b9222a00af0aed56fdcb129d819f16d2466","ready":true}]}
+{"name":"api","uid":"5b00e2ef-a508-4c2f-adff-0793eb877287","resourceVersion":"40034497621"}
+360336ebaa5f46403ad1ad0421456cd0835b94cfe8faa40c9ccc76e6692b46a2  -
+{"name":"auth-idp","uid":"b33978be-e07d-4ec4-960d-3c1a9dc2ab92","resourceVersion":"40079346299"}
+14bc619b5e2195943672efacbcdd8c81e00da6f2667761e3334cbd85b364884d  -
+{"name":"kube-root-ca.crt","uid":"aa0fdaa4-70a1-4be9-9b4f-6d771f7ad9f8","resourceVersion":"39578308988"}
+5d29f19e689199bc9134c2c135c0e973e2404b46fb17680a1ecfc074d411fdea  -
+{"name":"postgres","uid":"aa85b997-53db-43cf-b868-0594ecfa04f1","resourceVersion":"39578320237"}
+128dc4f511234f4c434f4114d5b99a6335495b5f5f9fabcb774ed8b29f620680  -
+{"name":"sentropic-idp-identity-sync-sql","uid":"6439b712-eb25-486b-934b-8f2d2f30e846","resourceVersion":"41216325350"}
+57e93d419bf5c78a41391b05a5828d0939f0550e2c4e9d06536ce08aec611783  -
+{"name":"ui","uid":"62828563-9efb-4631-9ef3-397e663ff9b7","resourceVersion":"39578320596"}
+42a15cc3d368e487c2e620a42c50079359f794a34522a3f4887e295323ce92c5  -
+{"name":"api","uid":"be9a9b37-f26d-444f-8a00-4b8eada72ddc","resourceVersion":"41383546423","refs":[{"name":"api","envFrom":[{"configMapRef":{"name":"api"}},{"secretRef":{"name":"sentropic-api"}}],"refs":[]}]}
+fad2d074477912e4fd1770eb6ae4c9f843fc08c939b45c6b311fb320240ee097  -
+{"name":"auth-idp","uid":"ca5e6a79-d4bd-4192-8a40-44f01c66d3d5","resourceVersion":"41383546399","refs":[{"name":"auth-idp","envFrom":[{"configMapRef":{"name":"auth-idp"}},{"secretRef":{"name":"sentropic-api"}}],"refs":[]}]}
+8564bfa75740d526c785573e1a58fe1fb4edcf625b8f642641d0f4d361eaa871  -
+{"name":"ui","uid":"9a06a60e-5d6b-4ad8-983e-6d0aa28b8d19","resourceVersion":"41334661319","refs":[{"name":"ui","envFrom":null,"refs":[]}]}
+edc973ea2fdae3f2fc725b72d132f87f56e5932c7817c579b783a19f6775e495  -
+auth-idp-tls                 4fa04b03-02f9-470d-9204-d36c2041b0ff   40765523214
+ci-deployer-token            518fb910-5638-44b3-a2b1-0fe514e8933d   41371522176
+sentropic-api                d6ada1c7-d2d4-4323-9e7a-febd321effc1   39678949374
+sentropic-idp-relay-reader   fc570932-98fb-46fb-a5f8-795b062fe0b1   40931480207
+sentropic-pgbackup           e2a2dcb4-3787-4a9d-8b08-d00fe0019dab   39624469110
+sentropic-postgres           05182f3c-26ee-45fd-999d-9b6f965b668f   39578317147
+sentropic-registry           4d759d55-3dba-4251-ac10-6957196c9a30   39578318152
+sentropic-tls                e8bd3dfe-dcc5-4190-a17f-a4a47cdf6509   40765528328
+CONTAINER_ENV_SHA256 api c7821ae1e9afdfba84b563d87bdfe32aaf5eb104fbaadb8fb1427df9eac5bf19
+CONTAINER_ENV_SHA256 auth-idp 24b1fa794565fd3d1875f140cf8077216cac33bdaa1b1dc7ca3abefac114c0cd
+993c4106fc3ca00166ca15e9d0ba0fb6f8c619314376143133c510b910909c94  /etc/nginx/conf.d/default.conf
+2026-10-26T07:42:21Z
