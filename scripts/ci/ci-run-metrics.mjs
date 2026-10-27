@@ -24,6 +24,15 @@ export function durationSeconds(startedAt, completedAt) {
   return (end - start) / 1000;
 }
 
+// Cancelled queue entries can have positive API intervals but runner_id=0.
+// Retain raw stamps while refusing execution/cost credit without dispatch.
+export function executionSeconds(record) {
+  return record?.dispatched === false ? null : durationSeconds(record?.startedAt, record?.completedAt);
+}
+
+const completeExecutions = records => records.length > 0 && records.every(record => record.conclusion
+  && (record.conclusion === 'skipped' || record.dispatched === false || executionSeconds(record) !== null));
+
 // True when a record cannot yield a duration: exactly one timestamp missing,
 // both missing with a non-skipped conclusion, or completion before start.
 export function isTimestampGap(record) {
@@ -43,9 +52,11 @@ export function captureRecords(captured) {
   if (!Array.isArray(captured.jobs) || !captured.run) throw new Error('Missing run/jobs capture');
   return captured.jobs.map((row) => ({
     runId: row.run_id, attempt: row.run_attempt, jobId: row.id, name: row.name,
-    conclusion: row.conclusion, queuedAt: row.created_at,
+    conclusion: row.conclusion, status: row.status, queuedAt: row.created_at,
+    dispatched: Object.hasOwn(row, 'runner_id') ? Boolean(row.runner_id) : null,
     startedAt: row.started_at, completedAt: row.completed_at, labels: row.labels,
-    headSha: row.head_sha ?? null, headBranch: row.head_branch ?? null,
+    headSha: row.head_sha ?? captured.run.head_sha ?? null,
+    headBranch: row.head_branch ?? captured.run.head_branch ?? null,
     runnerName: row.runner_name || undefined,
     steps: row.steps?.map((step) => ({ name: step.name, number: step.number,
       conclusion: step.conclusion, startedAt: step.started_at, completedAt: step.completed_at })),
@@ -83,6 +94,8 @@ export function dedupeJobs(records) {
 // readiness substitute. Skipped rows have no runner queue measurement.
 export function queueSeconds(record) {
   if (record?.conclusion === 'skipped') return null;
+  if (record?.dispatched === false) return null;
+  if (['queued', 'waiting', 'pending', 'requested'].includes(record?.status)) return null;
   const queued = toMs(record?.queuedAt ?? record?.createdAt);
   const start = toMs(record?.startedAt);
   if (queued === null || start === null || start < queued) return null;
@@ -106,6 +119,53 @@ export function queueWaits(records) {
   };
 }
 
+// Follow the last-finishing dependency at each join in the observed DAG.
+// Sum admission, readiness and handoff waits, retaining every execution ID.
+// A maximum single-job wait is not an aggregate scheduling measurement.
+export function criticalPathScheduling(records, dependencies = {}, endpoints = {}, runCreatedAt = null) {
+  const memo = new Map();
+  const visiting = new Set();
+  const visit = (name) => {
+    if (memo.has(name)) return memo.get(name);
+    if (!Array.isArray(dependencies[name]) || visiting.has(name)) return null;
+    visiting.add(name);
+    const parents = dependencies[name].map(visit);
+    const rows = records.filter(row => row.name === name || row.name?.startsWith(`${name} (`));
+    const executed = rows.filter(row => row.conclusion !== 'skipped');
+    let result = null;
+    if (rows.length && parents.every(Boolean)) {
+      const parent = parents.sort((a, b) => b.end - a.end)[0] ?? { end: 0, jobs: [] };
+      if (!executed.length) result = parent;
+      else if (executed.every(row => executionSeconds(row) !== null)) {
+        const last = executed.sort((a, b) => toMs(b.completedAt) - toMs(a.completedAt))[0];
+        const queue = queueSeconds(last);
+        const handoff = parent.end > 0 ? durationSeconds(parent.end, last.startedAt) : queue;
+        // This is a separately identified admission interval. Never use run
+        // creation as a replacement for an absent job-readiness timestamp.
+        const admissionSeconds = !parent.jobs.length
+          ? durationSeconds(runCreatedAt, last.queuedAt ?? last.createdAt) : 0;
+        const schedulingSeconds = queue === null || handoff === null || admissionSeconds === null
+          ? null : Math.max(queue, handoff) + admissionSeconds;
+        result = { end: toMs(last.completedAt), jobs: [...parent.jobs, { ...last, admissionSeconds, schedulingSeconds }] };
+      }
+    }
+    visiting.delete(name);
+    memo.set(name, result);
+    return result;
+  };
+  return Object.fromEntries(Object.entries(endpoints).map(([endpoint, names]) => {
+    const paths = names.map(visit);
+    const executed = names.every(name => records.some(row => (row.name === name || row.name?.startsWith(`${name} (`))
+      && row.conclusion !== 'skipped'));
+    const path = executed && paths.length && paths.every(Boolean) ? paths.sort((a, b) => b.end - a.end)[0] : null;
+    const jobs = path?.jobs.map(row => ({ key: jobKey(row), runId: row.runId,
+      attempt: row.attempt, jobId: row.jobId, name: row.name, queueSeconds: queueSeconds(row),
+      admissionSeconds: row.admissionSeconds, schedulingSeconds: row.schedulingSeconds })) ?? [];
+    const measured = jobs.length > 0 && jobs.every(row => row.schedulingSeconds !== null);
+    return [endpoint, { seconds: measured ? jobs.reduce((sum, row) => sum + row.schedulingSeconds, 0) : null, jobs }];
+  }));
+}
+
 // Per-step spans of one job row carrying API steps[]. Conclusions and
 // missing stamps pass through unchanged; unmeasurable steps stay null.
 export function stepSpans(record) {
@@ -125,7 +185,7 @@ export function runnerMinutes(records) {
   const byRunner = {};
   for (const record of records ?? []) {
     if (record?.conclusion === 'skipped') continue;
-    const span = durationSeconds(record?.startedAt, record?.completedAt);
+    const span = executionSeconds(record);
     if (span === null) continue;
     totalSeconds += span;
     const runner = record?.runnerName ?? record?.runner
@@ -156,7 +216,7 @@ export function deliveryElapsed(records, runCreatedAt, endpoints = {}) {
     for (const pattern of patterns) {
       const ends = (records ?? [])
         .filter((record) => matches(record, pattern))
-        .map((record) => (durationSeconds(record?.startedAt, record?.completedAt) === null
+        .map((record) => (executionSeconds(record) === null
           ? null
           : toMs(record?.completedAt)))
         .filter((end) => end !== null);
@@ -167,7 +227,7 @@ export function deliveryElapsed(records, runCreatedAt, endpoints = {}) {
       const member = Math.max(...ends);
       if (latest === null || member > latest) latest = member;
     }
-    result[endpoint] = { status, elapsedSeconds: !complete || latest === null ? null : (latest - base) / 1000 };
+    result[endpoint] = { status, elapsedSeconds: !complete || latest === null ? null : durationSeconds(base, latest) };
   }
   return result;
 }
@@ -198,6 +258,7 @@ export function overlappingSeconds(aRecords, bRecords) {
     const ends = [];
     for (const record of records ?? []) {
       if (record?.conclusion === 'skipped') continue;
+      if (record?.dispatched === false) continue;
       const start = toMs(record?.startedAt);
       const end = toMs(record?.completedAt);
       if (start === null || end === null || end < start) continue;
@@ -223,6 +284,7 @@ export function concurrencyPeak(records) {
   const events = [];
   for (const record of records ?? []) {
     if (record?.conclusion === 'skipped') continue;
+    if (record?.dispatched === false) continue;
     const start = toMs(record?.startedAt);
     const end = toMs(record?.completedAt);
     if (start === null || end === null || end <= start) continue;
@@ -240,7 +302,7 @@ export function concurrencyPeak(records) {
 }
 
 // Measured-slot admission: evaluate observed demand against declared capacity.
-// availableSlots comes from the owner-supplied quota inventory (or a measured
+// availableSlots comes from the agent's API quota inventory (or a measured
 // lower bound recorded in capacity.md); reserveSlots holds release lanes.
 // Missing inputs stay to-measure, never zero: no admission claim without them.
 export function admissionDecision({ peak, availableSlots = null, reserveSlots = 0 } = {}) {
@@ -334,7 +396,7 @@ export function cancellationOwnership(records, context = {}) {
     const run = record?.runId ?? 'unknown';
     const rerunSuperseded = latestAttempt.get(run) !== null && attempt < latestAttempt.get(run);
     const branch = branchOf(run) ?? `run:${String(run)}`;
-    const crossRunSuperseded = latestRunByBranch.get(branch)?.run !== run;
+    const crossRunSuperseded = branch !== 'main' && latestRunByBranch.get(branch)?.run !== run;
     const ownership = rerunSuperseded || crossRunSuperseded ? 'superseded' : 'current';
     if (ownership === 'superseded') superseded += 1;
     cancelled.push({ key: jobKey(record), runId: record.runId, attempt,
@@ -363,8 +425,35 @@ export function releaseContinuity(records, endpoints = {}) {
     const successful = matched.length > 0 && matched.every((record) => record?.conclusion === 'success');
     perEndpoint[endpoint] = { status: state.status, continuous: state.status === 'measured' && successful };
   }
-  return { continuous: Object.values(perEndpoint).every((entry) => entry.continuous),
+  return { continuous: Object.keys(perEndpoint).length > 0 && Object.values(perEndpoint).every((entry) => entry.continuous),
     endpoints: perEndpoint };
+}
+
+// Combined traffic is evaluated once: main's release slots are already in
+// the peak, so do not subtract the PR reserve a second time. A job-pair
+// witness proves actual execution overlap, not just overlapping run ages.
+export function contentionReceipt(captures) {
+  const sets = captures.map(capture => dedupeJobs(captureRecords(capture)).jobs);
+  const jobs = dedupeJobs(sets.flat()).jobs;
+  const complete = captures.every(capture => capture.run?.status === 'completed') && sets.every(completeExecutions);
+  const overlaps = [];
+  for (let left = 0; left < sets.length; left++) for (let right = left + 1; right < sets.length; right++) {
+    let witness = null;
+    for (const a of sets[left]) for (const b of sets[right]) {
+      if (a.conclusion === 'skipped' || b.conclusion === 'skipped') continue;
+      if (executionSeconds(a) === null || executionSeconds(b) === null) continue;
+      const seconds = (Math.min(toMs(a.completedAt), toMs(b.completedAt)) - Math.max(toMs(a.startedAt), toMs(b.startedAt))) / 1000;
+      if (seconds > (witness?.seconds ?? 0)) witness = { seconds, left: jobKey(a), right: jobKey(b) };
+    }
+    overlaps.push({ leftRun: captures[left].run?.id, rightRun: captures[right].run?.id, witness });
+  }
+  const slots = captures[0]?.capacity?.availableSlots ?? null;
+  return { complete, observedPeak: concurrencyPeak(jobs),
+    admission: admissionDecision({ peak: complete ? concurrencyPeak(jobs) : null, availableSlots: slots }),
+    overlaps, cancellation: cancellationOwnership(jobs),
+    releases: captures.filter(capture => capture.run?.head_branch === 'main').map(capture => ({
+      runId: capture.run.id, attempt: capture.run.run_attempt, sourceSha: capture.run.head_sha,
+      continuity: releaseContinuity(captureRecords(capture), capture.endpoints) })) };
 }
 
 // Summarize one captured run file. Buckets are disjoint: skipped rows are
@@ -383,7 +472,7 @@ export function summarizeRun(records, { expectedJobCount = null } = {}) {
       skipped += 1;
       continue;
     }
-    const span = durationSeconds(job?.startedAt, job?.completedAt);
+    const span = executionSeconds(job);
     if (span === null) {
       unmeasured += 1;
       if (isTimestampGap(job)) gaps += 1;
@@ -439,7 +528,7 @@ export function endpointReadiness(records, endpoints = {}) {
     }
     const withDuration = matched.filter(
       (record) => record?.conclusion !== 'skipped'
-        && durationSeconds(record?.startedAt, record?.completedAt) !== null,
+        && executionSeconds(record) !== null,
     );
     result[endpoint] = {
       status: withDuration.length === matched.length ? 'measured' : 'partial',
@@ -456,7 +545,8 @@ startedAt, completedAt, queuedAt?, steps?[{ name, conclusion, startedAt,
 completedAt }], runnerName?/runner?/labels?[], cache? }], "runCreatedAt":
 <workflow creation stamp> } plus optional "endpoints": { <name>: [<pattern>] },
 "capacity": { availableSlots?, reserveSlots? }, and "timings":
-{ classificationSeconds?, verdictSeconds? }.`;
+{ classificationSeconds?, verdictSeconds? }. Repeated --competing-file <capture.json>
+adds identified PR/main traffic for combined admission and continuity receipts.`;
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop())) {
   const args = process.argv.slice(2);
@@ -468,6 +558,9 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const expectedIndex = args.indexOf('--expected-jobs');
   const expectedJobCount = expectedIndex === -1 ? null : Number(args[expectedIndex + 1]);
   const captured = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const competitors = args.flatMap((arg, index) => arg === '--competing-file'
+    ? [JSON.parse(fs.readFileSync(args[index + 1], 'utf8'))] : []);
+  const contention = competitors.length ? contentionReceipt([captured, ...competitors]) : null;
   const records = captureRecords(captured);
   const { jobs } = dedupeJobs(records);
   const runCreatedAt = captured.runCreatedAt ?? captured.run?.created_at ?? null;
@@ -478,11 +571,17 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   const delivery = deliveryElapsed(jobs, runCreatedAt, captured.endpoints ?? {});
   const cache = cacheIdentities(jobs);
   const capacity = captured.capacity ?? {};
-  const admission = admissionDecision({ peak: summary.concurrencyPeak,
+  const measuredDemand = summary.measured > 0 && completeExecutions(jobs)
+    && (!captured.run || captured.run.status === 'completed') ? summary.concurrencyPeak : null;
+  const admission = admissionDecision({ peak: measuredDemand,
     availableSlots: capacity.availableSlots ?? null, reserveSlots: capacity.reserveSlots ?? 0 });
   const timings = captured.timings ?? {};
-  const budgets = budgetVerdict({ classificationSeconds: timings.classificationSeconds ?? null,
-    verdictSeconds: timings.verdictSeconds ?? null, schedulingSeconds: queue.maxSeconds });
+  const jobDuration = name => executionSeconds(jobs.find(row => row.name === name));
+  const scheduling = criticalPathScheduling(jobs, captured.dependencies, captured.endpoints, runCreatedAt);
+  const waits = Object.entries(scheduling).filter(([name]) => captured.endpoints[name].length > 0).map(([, row]) => row.seconds);
+  const budgets = budgetVerdict({ classificationSeconds: timings.classificationSeconds ?? jobDuration('changes'),
+    verdictSeconds: timings.verdictSeconds ?? jobDuration('ci-gate'),
+    schedulingSeconds: waits.length && waits.every(value => value !== null) ? Math.max(...waits) : null });
   const cancellation = cancellationOwnership(jobs);
   const continuity = releaseContinuity(jobs, captured.endpoints ?? {});
   const identity = { sourceSha: captured.sourceSha ?? captured.run?.head_sha ?? null,
@@ -492,9 +591,9 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
     name: record.name, conclusion: record.conclusion,
     headSha: record.headSha ?? null, headBranch: record.headBranch ?? null,
     startedAt: record.startedAt ?? null, completedAt: record.completedAt ?? null,
-    seconds: record.conclusion === 'skipped' ? null : durationSeconds(record.startedAt, record.completedAt),
+    seconds: record.conclusion === 'skipped' ? null : executionSeconds(record),
     queueSeconds: queueSeconds(record), steps: stepSpans(record),
   }));
   console.log(JSON.stringify({ file, identity, summary, readiness, queue, runnerMinutes: minutes, delivery, cache,
-    admission, budgets, cancellation, continuity, executions }, null, 2));
+    admission, budgets, scheduling, cancellation, continuity, contention, executions }, null, 2));
 }
