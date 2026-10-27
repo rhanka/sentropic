@@ -9,10 +9,47 @@
 // authority) and proof-only recovery (no second effect, unknown/foreign
 // refused, empty ledger refuses) are covered here.
 
-import { describe, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { assembleMemoryHostBinding } from '../../src/engram-memory/binding.js';
+import { MemoryHostDriverRequiredError } from '../../src/engram-memory/sqlite.js';
+import { StorageDeniedError } from '../../src/storage/errors.js';
+import { grantFor } from '../storage/authority-corpus.js';
+
+const qualifiedProvider = () => ({
+  identity: { name: 'node-pg-owner', version: '8.16.3', artifactDigest: 'b'.repeat(64) },
+  serverFloor: '17.0.0',
+});
+
+const maintainGrant = () =>
+  grantFor({
+    token: 'memory-maintain-1',
+    moduleId: 'engram-memory',
+    scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
+    operations: ['maintain'],
+  });
 
 describe('host maintenance binding', () => {
-  it.todo('issues a host-only maintain binding separate from the memory handle');
+  it('issues a host-only maintain binding separate from the memory handle', () => {
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant() });
+    expect(binding.memoryOperations).toEqual(['read', 'write']);
+    expect(binding.maintainGrant.operations).toContain('maintain');
+    expect(binding.provider).toEqual(qualifiedProvider());
+  });
+
+  it('refuses a missing driver or a grant without maintain', () => {
+    expect(() => assembleMemoryHostBinding({ driver: undefined, maintainGrant: maintainGrant() })).toThrow(
+      MemoryHostDriverRequiredError,
+    );
+    expect(() =>
+      assembleMemoryHostBinding({
+        driver: qualifiedProvider(),
+        maintainGrant: grantFor({ moduleId: 'engram-memory', operations: ['read', 'write'] }),
+      }),
+    ).toThrow(StorageDeniedError);
+    expect(() =>
+      assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: null }),
+    ).toThrow(StorageDeniedError);
+  });
   it.todo('denies maintenance operations through the neutral memory handle');
   it.todo('refuses expired, revoked or foreign-scope maintain grants');
   it.todo('checks fences and checkpoints through the host-only binding');
