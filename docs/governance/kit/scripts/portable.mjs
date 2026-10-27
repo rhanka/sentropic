@@ -1,7 +1,7 @@
 export function assertPortable(html) {
   if (/(?:src|href)\s*=\s*["'](?:\.?\.?\/|\/)?assets\//i.test(html)
-    || /\bimport\s*\(\s*["'`][^"'`]*\bassets\//.test(html)
-    || /\b(?:from|import)\s*["'][^"']*\bassets\//.test(html)
+    || /\bimport\s*\(/.test(html)
+    || /\b(?:from|import)\s*["'](?:\.?\.?\/|\/)/.test(html)
     || /url\(\s*["']?(?!data:)[^)]*\bassets\//i.test(html)) {
     throw new Error('Portable HTML still contains external dist asset references.');
   }
