@@ -62,7 +62,7 @@
 - [ ] **Lot 3 — Settlement binding**
   - [x] src/speech/settlement.ts: one billable operation, conservative missing-usage estimate, signed true-ups, replay and retained uncertainty.
   - [ ] tests/speech-settlement.test.ts: missing usage, adjustment idempotence, restart, unavailable sink and no duplicate backend counted unit.
-  - [ ] tests/fixtures/speech-ledger.ts: deterministic owner transaction fixture; never exported or used as a production ledger.
+  - [x] tests/fixtures/speech-ledger.ts: deterministic owner transaction fixture; never exported or used as a production ledger.
 - [ ] **Lot 4 — Contract review and integration documentation**
   - [ ] Document ledger-owner binding, dispatch bounds, limitations and G-LEDGER acceptance in README.md.
   - [ ] Export speech subpath and bump package to 0.22.0; keep all shared owner source files unchanged.
