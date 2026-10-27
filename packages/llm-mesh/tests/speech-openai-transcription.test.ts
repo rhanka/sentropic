@@ -319,3 +319,82 @@ describe('openai transcript mapping', () => {
     expect(events.filter((event) => event.type === 'error')).toHaveLength(1);
   });
 });
+
+describe('openai session lifecycle', () => {
+  it('should refuse to connect when the signal is already aborted', async () => {
+    let connected = 0;
+    const connect: OpenAiTranscriptionConnect = async () => {
+      connected += 1;
+      return new ScriptSocket();
+    };
+    const controller = new AbortController();
+    controller.abort();
+    await expect(openTranscriptionSession(liveConfig, {
+      request: sessionRequest('gpt-live-transcribe'),
+      admission: admission(),
+      bearerToken: 'bearer-fixture',
+      connect,
+      usage: new RecordingSink(),
+      signal: controller.signal,
+    })).rejects.toMatchObject({ code: 'aborted' });
+    expect(connected).toBe(0);
+  });
+
+  it('should close the socket and settle cancelled on abort', async () => {
+    const socket = new HangSocket();
+    const sink = new RecordingSink();
+    let clock = 5_000;
+    const controller = new AbortController();
+    const session = await openTranscriptionSession(liveConfig, {
+      request: sessionRequest('gpt-live-transcribe'),
+      admission: admission(),
+      bearerToken: 'bearer-fixture',
+      connect: async () => socket,
+      usage: sink,
+      nowMs: () => clock,
+      signal: controller.signal,
+    });
+    clock += 2_000;
+    controller.abort();
+    // The abort handler closes asynchronously; wait for the settlement.
+    const deadline = Date.now() + 10_000;
+    while (sink.settles.length === 0 && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    await session.close();
+    expect(socket.closed).toBe(true);
+    expect(sink.settles).toEqual([{
+      operationId: 'op-1',
+      outcome: 'cancelled',
+      usage: { connectedSeconds: 2, admittedAudioSeconds: 0 },
+    }]);
+    await expect(session.write(frame('u1', 10))).rejects.toMatchObject({ code: 'closed' });
+  });
+
+  it('should meter audio seconds and refuse past the admitted ceiling', async () => {
+    const socket = new ScriptSocket();
+    const sink = new RecordingSink();
+    const session = await openTranscriptionSession(liveConfig, {
+      request: sessionRequest('gpt-live-transcribe'),
+      admission: admission({ ceiling: { connectedSeconds: 60, admittedAudioSeconds: 0.03 } }),
+      bearerToken: 'bearer-fixture',
+      connect: async () => socket,
+      usage: sink,
+      nowMs: () => 1_000,
+    });
+    await session.write(frame('u1', 10, 480));
+    expect(socket.sent.filter((message) => JSON.parse(message).type === 'input_audio_buffer.append')).toHaveLength(1);
+    await expect(session.write(frame('u1', 30, 480))).rejects.toMatchObject({ code: 'ceiling' });
+    await session.command({ schemaVersion: 1, speechSessionId: 'speech-op-1', connectionEpoch: 3,
+      eventId: 'cmd-1', sequence: 1, clock: { id: 'test', monotonicMs: 1 },
+      type: 'input.commit', utteranceId: 'u1' });
+    expect(sink.records).toEqual([{
+      eventId: 'u1', revision: 0, mode: 'incremental', usage: { admittedAudioSeconds: 0.02 },
+    }]);
+    expect(JSON.stringify(sink)).not.toContain('transcript');
+    await session.close();
+  });
+
+  it('should keep profiles independent on separate sockets and sinks', async () => {
+    const liveSocket = new ScriptSocket(frameScriptFr);
+    const whisperSocket = new ScriptSocket(frameScriptEnCorrected);
