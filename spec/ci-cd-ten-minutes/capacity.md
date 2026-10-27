@@ -67,8 +67,8 @@ unqualified. A new successful PR and actual main run must each meet 2288s.
 Concurrent traffic snapshot at 2026-10-26T23:58:02Z retained 25 unfinished
 runs and 19 executing jobs, including two on these qualifications and 17
 elsewhere. The previous-policy main run `40390149749` completed successfully
-in 9728s; it is context, never a final-policy main receipt. Current main
-`365e8b313f1c4c627c87db4f6761847a1e6a5ae7` still lacks this policy.
+in 9728s; it is context, never a final-policy main receipt. Main observed at
+2026-10-27T02:04Z (`365e8b313f1c4c627c87db4f6761847a1e6a5ae7`) lacks this policy.
 
 Dispatch this branch with `capacity_publish_dry_run=true` to exercise all
 21 actual package publication jobs and their dependency guards. Each runs
@@ -82,7 +82,48 @@ On dry-run `40408883195`, cowork-desktop job `121963393513` completed its
 guarded pack after the missing-context correction, with the npm writer skipped.
 Its archive guard passed in CI/WARN mode (SHA-256
 `2f32a5346e3f87d3f02f81662197e5b5b1d226d0f8b1d1ed72f4b78f49ac2613`).
-This package receipt does not qualify the whole 21-package chain until complete.
+The full chain subsequently completed as recorded below.
+
+### Completed branch publication qualification
+
+Run `40408883195`, attempt 1, source `1b5ef536885cf1f8533e88fc54dc40dbbf8c7223`,
+completed successfully from 2026-10-26T21:59:20Z to 2026-10-27T03:49:06Z:
+82 executions / 7 skips, **20986s wall-clock**, package endpoint 19557s.
+All 21 expected publishers completed their actual guarded packs; their
+identified JSON receipts, archive guards, dry-run steps and skipped registry
+writers/post-publication checks were individually verified from job logs.
+The existing mesh → gateway → cluster and oauth → mcp-auth barriers ran.
+This qualifies branch publication wiring only. It is not a main release or
+a timing pass: classification 24s, verdict 15s and scheduling 19975s all breach
+their budgets; queue p50 is 3725s / max 13700s. The strict two-receipt command
+rejects this run and PR `40402395319`; both are fresh and attested, neither
+meets 2288s, and no actual final-policy main receipt exists.
+
+| Guarded package archive | Job | Archive SHA-256 |
+| --- | --- | --- |
+| `@sentropic/artifacts@0.2.1` | [121971804916](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121971804916) | `fb2887d206bcaf7d5e4d85ad14173ffd3cce700e239dabf540150383c7bfe28f` |
+| `@sentropic/auth-client@0.2.0` | [121941592859](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121941592859) | `d3e3e335b987c6a963ae394836a330210c332b9fb8ff291eb65c1bfce77cce4c` |
+| `@sentropic/auth-hono@0.17.0` | [121941650645](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121941650645) | `6ed1e0353c846dbb494837aa339c096587ceba65a9220a3ed555ebe641cb5db7` |
+| `@sentropic/auth-ui@0.7.7` | [121971902312](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121971902312) | `de60dd0319fbabed2d71f4083f435135112bc8f05f6d367abd48869d862aadf1` |
+| `@sentropic/chat-core@0.1.7` | [121954141074](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121954141074) | `359c4db67acf62933930cd84013f4dbb59f20854fb5c6db6dbd1b64545244a5a` |
+| `@sentropic/chat-server@0.4.0` | [121911004270](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121911004270) | `9d6f7d5e76c477a827e8adba9ae30780b2a2f4d529b1aa45864e3a2cf6de6e92` |
+| `@sentropic/chat-ui@0.34.1` | [121939426498](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121939426498) | `939a18dd701d3f8b506a2316ccf4447eecb91c6598b5a95754fe07903b6932fb` |
+| `@sentropic/cited-source-viewer@0.2.0` | [121963262445](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121963262445) | `7fb68934503927075c40d0da6c6ad2d55f4cae16325c6bcc9f17a703600fc679` |
+| `@sentropic/cluster-mesh@0.22.4` | [121987915280](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121987915280) | `c483e033f8bdc48a1504b3bf0f135564dbd1a727ba0f7519ff762c496c2f4cf0` |
+| `@sentropic/comments@0.3.1` | [121939854960](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121939854960) | `9e40d172e1e7757e617e13b78b3f112af3abe6bf0476f06258b71378e5783769` |
+| `@sentropic/contracts@0.3.0` | [121972633449](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121972633449) | `da9bf950887256c8095a8982b5d98808f26b34b170039bd49561ecfc1daf6371` |
+| `@sentropic/cowork-bridge@0.1.1` | [121926225197](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121926225197) | `2a3ce479abf6c2b740d9ff30eec262a0f15dfba4e560d3c6dfc6ae4f3225c7c8` |
+| `@sentropic/cowork-desktop@0.2.0` | [121963393513](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121963393513) | `2f32a5346e3f87d3f02f81662197e5b5b1d226d0f8b1d1ed72f4b78f49ac2613` |
+| `@sentropic/events@0.2.1` | [121952054807](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121952054807) | `3dedd1bff6ba911460d0b04843681b31b902fe5aaadc2287fc8e4cb043194d22` |
+| `@sentropic/flow@0.2.0` | [121963540197](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121963540197) | `14f0ccc9f9d2370a22b5a52c202192aeb426d8b3f7253de9ded031842bec6c8e` |
+| `@sentropic/harness@0.4.0` | [121972258266](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121972258266) | `206267e1701694c7a2f9933a528c4938464f578c84f82c983e4825b764868a5d` |
+| `@sentropic/llm-gateway@0.21.3` | [121985278488](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121985278488) | `2ca56c61c0d341e7d2bfdc8b99fe5ca29342d47371fc8c60ff8d770903103c74` |
+| `@sentropic/llm-mesh@0.28.1` | [121976490055](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121976490055) | `c4b724f19c4ba35e9a7b7eaff5f3812e1a2513df898552e03fe74a95b871779d` |
+| `@sentropic/mcp-auth@0.2.2` | [121967865997](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121967865997) | `3aa546601a3ad444bae0058c6c21038ec1d12e905e27df1abb628eadc867d926` |
+| `@sentropic/mcp-platform@0.4.0` | [121957810793](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121957810793) | `67c9ab88ae51087a21a596facfc8330dea4c43128878c261a4136b6d458885e5` |
+| `@sentropic/oauth-verify@0.1.0` | [121952524928](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121952524928) | `91dcee3a51fafec57c34e5a5f771d9b7362e3f16a0132a4d5f90056ac0f90dad` |
+
+### Baselines and historical comparisons
 
 | Receipt | Identified observation | Acceptance |
 | --- | --- | --- |

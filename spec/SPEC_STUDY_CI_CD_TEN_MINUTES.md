@@ -181,6 +181,9 @@ regain independence; explicit branch dry-run mode exercises their real packs.
 Completed replacement PR `40402395319` succeeded but took 18224s, with
 17227s of critical-path scheduling. The strict 2288s proof rejects it;
 timing acceptance remains open and no actual main receipt of this policy exists.
+Branch dry-run `40408883195` subsequently completed successfully in 20986s:
+all 21 real guarded packs and skipped registry writers have verified receipts.
+This qualifies publication wiring, while PR/main timing acceptance stays open.
 
 [Capacity receipts](ci-cd-ten-minutes/capacity.md) identify the current-base
 baseline, concurrent main rerun, obsolete PR and live conservative rollback.
