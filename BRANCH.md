@@ -1,73 +1,127 @@
-# Feature: ci(idp): materialize the preprod workload Secret from the protected GitHub secret
+# Feature: BR-77 — Bound CI execution capacity and qualify contention/rollback
 
 ## Objective
-- [x] Deliver the protected manual workflow for materializing `sentropic-preprod/immo-mcp-workload` before named-Secret identity sync; execution stays owner-operated.
+- [ ] Enforce finite execution capacity and qualify contention/rollback on measured receipts.
+- [ ] Branch `chore/ci-capacity-policy`, step 2 of nine; train order BR-76 → BR-77; dependency: BR-76 (PR #705, metrics + expected-results) merged.
 
 ## Scope / Guardrails
-- [x] Scope limited to the workload Secret workflow, its selftests, CI path filter and credential-cycle documentation.
-- [x] Make-only workflow; no Docker, Python, dispatch or PR merge; owner authorizes merging origin/main.
-- [x] Root workspace `~/src/sentropic` remains reserved for user dev (`ENV=dev`).
-- [x] Branch development happens in `tmp/worktrees/idp-workload-secret` on `feat/idp-workload-secret-workflow` from `origin/main`.
-- [x] Automated tests use `ENV=test-idp-workload-secret`; no services or ports are allocated.
-- [x] In every `make` command, `ENV=<env>` must be passed as the last argument.
-- [x] All new text in English; credentials never enter committed files or logs.
-- [x] The ignored central 0600 `.env` line is the credential source of truth.
+- [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md` and `spec/ci-cd-ten-minutes/capacity.md`; BR-76 receipts are inputs, not deliverables.
+- [ ] Work in `tmp/worktrees/ci-capacity-policy`; rebase on main after BR-76 merge; one implementation branch active on the shared workflow/Makefile.
+- [ ] Make entry points only; `ENV` last; tests on `ENV=test-ci-capacity` or `ENV=test-ci-capacity`, never `dev`; no secrets in evidence.
+- [ ] Slot 0 owner: branch author; API_PORT=9385, UI_PORT=5585, MAILDEV_UI_PORT=1485; verify availability before starting services and pass all three ports to service commands.
+- [ ] The agent inventories quotas and costs itself via the GitHub API (account/plan, billing usage with `user` scope, runner inventory); no owner-supplied inventory is assumed.
+- [ ] No migrations; keep root dev stable; no timeout inflation, removed assertions, or attribution trailers; commits ≤150 changed lines through `make commit` with scope checks.
 
 ## Branch Scope Boundaries (MANDATORY)
-- **Allowed Paths (implementation scope)**:
-  - `.github/workflows/idp-workload-secret.yml`
-  - `deploy/ci/idp-identity-sync/**`
-  - `BRANCH.md`
-- **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
-  - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/**`
-- **Exception process**:
-  - [x] Declare exceptions before editing, with rationale, impact and rollback in `## Feedback Loop`.
+- [ ] **Allowed Paths (implementation scope)**:
+  - [ ] `BRANCH.md`; `plan/71-BRANCH_chore-ci-capacity-policy.md`; `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`.
+  - [ ] `scripts/ci/ci-run-metrics.mjs`
+  - [ ] `scripts/ci/ci-run-metrics.test.mjs`
+  - [ ] `scripts/ci/ci-expected-results.mjs`
+  - [ ] `scripts/ci/ci-expected-results.test.mjs`
+  - [ ] `spec/ci-cd-ten-minutes/capacity.md`
+- [ ] **Forbidden Paths (must not change in this branch)**:
+  - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
+  - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
+- [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - [ ] `.github/workflows/ci.yml` under BR77-EX1; `Makefile` under BR77-EX2.
+  - [ ] `scripts/ci/publishable-ci-wiring.test.mjs` under BR77-EX3.
+
+- [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
-- [x] Main integration: merge origin/main at `fbf00d2e24cc781831358cc505ce9034b760deb8` without rebasing; retain this PR's active plan, the `idp_sync` filter entry and workload selftest job. Opus r2 APPROVE received; exact-head CI follows the merge push.
-- [x] BR800-EX2 / acknowledge: owner authorizes `.github/workflows/ci.yml`. Rationale: workflow-only PRs must run the workload Secret guard selftest. Impact: add only the workload workflow to the existing `idp_sync` path filter. Rollback: remove that filter entry.
-- [x] IDP-EX1 / acknowledge: owner explicitly authorizes `.github/workflows/idp-workload-secret.yml`. Rationale: the cluster is reachable only through protected CI. Impact: a main-only manual job can create/update only the intended workload Secret in this workflow; it uses the existing delegated preprod identity. Rollback: remove the workflow; restore prior credential through the same governed channel and named-Secret sync if material was changed.
-- [x] No-Docker gate: `test-idp-sync-selftest` starts containers; defer runtime selftests to existing CI `validate-idp-sync`.
-- [x] Conductor clarification: reuse `configure preprod` unchanged; no preprod apiserver-host assertion in this lot.
-- [x] The workload credential already exists in GitHub environment `sentropic-idp-run`; consume its environment secret, not a repository secret.
-- [x] Review / attention: author inspection completed; independent consensus selection unavailable because no live model catalog is configured. Evidence: ignored root `.tmp/idp-workload-secret-review.md`, target `dae48f8966a6ff4cb430f9ad387688188c509932`; no peer consensus claimed.
+- [x] BR77-EX1 — Workflow exception: bound shared runner concurrency, independent package validation/publication, branch dry-run publication qualification, keep PR-only cancellation. Impact: dispatch and required results. Rollback: revert workflow policy while preserving complete-result checks.
+- [x] Review r2 owner instruction: replace repo-wide slot mutexes with per-run matrix widths and PR cancellation; measure hosted-runner scheduling. Static demand no longer claims account admission. API quality remains required at the gate and image publishers.
+- [x] BR77-EX2 — Makefile exception: capacity-policy entry points only. Impact: named CI measurement/policy entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [x] BR77-EX2 includes the requested dry-run publication target: real existing guarded packs, per-package receipts, no registry writes; rollback removes the target and dispatch mode.
+- [x] BR77-EX3 — Permit `scripts/ci/publishable-ci-wiring.test.mjs` to assert the explicit branch dry-run alternative while preserving all production publication barriers. Rollback: restore assertions with the workflow.
+- [x] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
+- [ ] Inherited open acceptance from BR-76/Round-4: account quota/reservation/cost inventory; bounded dispatch policy; concurrent PR/current-main delivery; rollback drill; classification ≤15s, verdict ≤5s, aggregate scheduling ≤60s under declared concurrent traffic.
 
 ## AI Flaky tests
-- [x] No AI-dependent tests; do not accept failed deterministic checks as flaky.
+- [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch**: one capability, atomic commits under 150 changed lines.
-- [ ] **Multi-branch** (not required).
+- [ ] **Multi-branch** — This is one independently reviewed/qualified branch of the serialized nine-branch train.
+- [ ] Rationale: preserve branch-level rollback and serialize shared workflow/Makefile edits; internal CI lanes may run concurrently.
 
 ## UAT Management (in orchestration context)
-- [x] Web app, Chrome and VSCode UAT are not applicable to this CI-only workflow.
-- [x] Live Secret materialization is intentionally left undispatched by owner instruction.
+- [ ] Run the lot UAT on the exact pushed qualification SHA; record immutable source/target SHAs for any integrated qualification workspace.
+- [ ] Use isolated automated environments; web/Chrome/VSCode UAT below is limited to affected behavior; no root-dev automated testing.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and constraints**
-  - [x] Read rules, template, existing workflow, runner, selftests and credential cycle.
-  - [x] Create isolated worktree and pass mechanical `harness check branch`.
-  - [x] Confirm `sentropic-idp-run` permits only `main` and inspect existing make targets.
-- [x] **Lot 1 — Protected materialization**
-  - [x] Add `.github/workflows/idp-workload-secret.yml`: dispatch only, selftest-gated main-only materialization job, Node 24, matching kubectl pin, existing configure and always-cleanup actions.
-  - [x] Validate exactly 64 lowercase hex without newline; apply a 0600 temporary Opaque manifest without leaking values or kubectl diagnostics.
-  - [x] Emit only name, namespace, configured status and an eight-hex SHA-256 fingerprint.
-  - [x] Lot gate: mechanical host harness scope check through `make scope-check ENV=test-861-int`; this existing host-only target avoids Docker.
-- [x] **Lot 2 — Selftests and documentation**
-  - [x] Extend `deploy/ci/idp-identity-sync/workflow.selftest.mjs` for dispatch-only wiring, protected environment, no secret echo and always cleanup.
-  - [x] Add CI execution of real Node materialization with synthetic fixtures and stubbed kubectl; reject malformed credentials without invoking kubectl.
-  - [x] Update `deploy/ci/idp-identity-sync/CRED_CYCLE.md`: `.env` → `sentropic-idp-run` environment secret → protected workflow → named-Secret sync.
-  - [x] Lot gate: runtime selftests delegated to CI `make test-idp-sync-selftest ENV=test-idp-sync` because the existing target starts containers.
-- [x] **Lot 3 — Opus r1 corrections**
-  - [x] P2-1: use server-side apply with field manager `idp-workload-secret`; assert kubectl arguments exclude client-side Secret apply.
-  - [x] P2-2: add the workload workflow to CI `idp_sync`; require its selftest job before materialization and assert both gates.
-- [ ] **Lot N — Final validation**
-  - [x] Review every hunk and record independent-review availability above.
-  - [x] Validate scope before each `make commit`; selectively stage, no AI trailers.
-  - [x] Push branch and create PR #800 to `main` with this plan as body and the owner title.
-  - [ ] Wait for CI and report exact head SHA; no merge or dispatch.
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, relevant security/domain rules, `README.md`, `TODO.md`, the execution `PLAN.md`, the study, `spec/ci-cd-ten-minutes/capacity.md`, and `plan/BRANCH_TEMPLATE.md`.
+  - [x] Verify branch mechanically with harness; confirm BR-76 merged; inventory the actual files and existing assertions at the new base.
+  - [x] Declare exceptions above; names marked new below are deliverables to create, not existing commands or evidence.
+  - [x] Base origin/main 440599d04e91bb33e3874588f067c6a90bffd1b3; harness C1 passed; inherited suites passed 45/45. BR77 uses ENV=test-ci-capacity per owner packet.
+  - [x] Rebased on origin/main 22d8a9e68b1abae2665fedb528526d2a84c6bc4d; retire inherited integration-plan prefix in bounded commits: 233/233 lines.
+- [x] **Lot 1 — Quota, reservation, and cost inventory (GitHub API)**
+  - [x] Query account/runner/billing routes directly; retain null quota and HTTP 404 rather than inventing capacity/cost. Record observed lower-bound policy and static slot admission in capacity.md.
+  - [x] Inventory real account quotas/runner classes via the GitHub API; record reservation, scheduling priorities, cost, and peak demand in `spec/ci-cd-ten-minutes/capacity.md`.
+  - [x] Lot gate: inventory receipts attached with API routes/IDs; unknowns stay to-measure, never assumed.
+- [ ] **Lot 2 — Bounded dispatch and concurrency**
+  - [x] Review r2: begin removing static capacity mutexes (classification and validation jobs); retain PR cancellation and independent publication. Removal continues before the next push.
+  - [x] Review r2: remove the next 30 capacity mutexes, including API/E2E matrix slots; keep matrix membership and widths 15/5.
+  - [x] Review r2: remove every remaining capacity mutex. API/E2E widths stay 15/5; validators/publishers remain independent; PR cancellation and existing release groups remain.
+  - [x] Review r2: run API/IdP typecheck and lint beside E2E; retain typecheck-lint-api in receipts and ci-gate, so failures still block qualification/publication.
+  - [x] Review r1: remove the 13/10-deep validator chains; six queued capacity groups preserve 23 independent jobs and their selected-result identities.
+  - [x] Review r1: ordinary publishers depend on their own validators; preserve the existing oauth-to-mcp-auth and mesh/gateway/cluster registry dependency barriers.
+  - [ ] Lot gate: concurrent real PR/main runs prove cancellation ownership and complete current-main delivery; attach capacity and wait receipts before accepting the configuration.
+- [ ] **Lot 3 — Contention budgets and rollback drill**
+  - [x] Combine real run captures for observed-peak admission, execution-overlap witnesses, superseded PR ownership and per-main-release continuity; incomplete runs remain to-measure.
+  - [x] Reject queued API placeholder timestamps and invalid/skipped critical-path endpoints; include dependency-to-dispatch handoff delay in aggregate scheduling (34 metrics tests).
+  - [x] Real cancellation receipt exposed runner_id=0 entries with positive API intervals; preserve their identities/stamps but exclude them from execution, cost and peak credit (35 metrics tests).
+  - [x] Post-run classification/verdict timing uses that same runner-dispatch evidence; absent runners never receive duration credit. New policy qualification uses ENV=test-ci-capacity.
+  - [x] Include workflow admission before root job creation (rollback 189s; completed main 1s) in critical-path scheduling. Preserve unknown admission/readiness as null; completed main aggregate is 1559s.
+  - [x] Reject admission credit for partial/empty captures or missing execution stamps; reject release continuity without endpoint mappings. Preserve raw observed peaks separately (35 metrics tests).
+  - [x] Main 40356941217 attempt 2 is green on base 22d8a9e68: all selected endpoints continuous after retrying an artifact-download failure. Carried package endpoints completed before retry creation retain null elapsed timing; reuse durationSeconds to reject the observed negative interval.
+  - [x] Add post-run Make capture using the actual run/attempt Jobs API, exact source workflow, and retained pre-dispatch manifest. Missing artifacts fail closed; no selection reconstructed from outcomes.
+  - [x] Qualify aggregate scheduling receipts on identified critical-path executions; preserve single-job queue statistics. Main cancellations remain current across newer main runs (32 metrics tests).
+  - [x] Inspect PR qualification, images, preproduction, and package results separately; verify an obsolete PR stops and a concurrent main release continues. No application UI changes.
+  - [ ] Budget to measure: classification ≤15s, verdict ≤5s, aggregate critical-path scheduling ≤60s under declared concurrent traffic.
+  - [ ] Rollback drill: require a completed drill and record its run ID; cancelled run 40353670942 does not qualify.
+  - [x] Prepare live conservative rollback: one package validation lane and API/E2E widths 1/1; retain the pre-BR77 cancellation/release groups and every completeness/metrics check. Run beside main 40341027258 attempt 2.
+  - [ ] Rollback head 474e023163fd1be0b2f0ac7f33442c2d97dc561c started run 40353670942, cancelled before completion; a passing metrics job is not a completed drill.
+  - [x] Main 40341027258 attempt 2 completed successfully through both supersessions: all four endpoints continuous; peak 12; 210.45 runner-minutes. Classification/verdict/scheduling 19s/19s/1559s breach 15s/5s/60s; retain these failures in capacity.md. Rollback metrics job 121682975411 passed live.
+- [x] **Lot 4 — Docs consolidation**
+  - [x] Update this plan, the study, and `spec/ci-cd-ten-minutes/capacity.md` with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
+- [ ] **Lot 5 — Final validation**
+  - [x] Review r2 local workflow qualification: 22 expected-results tests pass; no capacity mutexes, unchanged matrix members, independent package publication, E2E parallel to API quality with retained image promotion barriers.
+  - [x] Rebase on main 72bb2da3d00b036e35c6dc56137aa936b7853673 to resolve the plan conflict blocking PR CI. Workflow/Make/scripts bytes equal 90432ee2f; no package delta against main. Initial dry-run 40475602504 cancelled before qualification and excluded from acceptance.
+  - [ ] P1 timing acceptance: best final-policy receipt is PR-only 40492458247 attempt 1 on 6a6da0e28, 2369s (81s above 2288s). No receipt ≤2288s or actual main-push receipt exists; strict acceptance remains open and PR stays draft pending owner GO.
+  - [x] Review r3 attribution correction: dry-run 40476084177 (6929s) already used ci.yml byte-identical to 6a6da0e28, without per-index mutexes. The 6929→2369s gap reflects concurrent account load, not a workflow fix; no measured gain is established.
+  - [x] Review r3 PR receipt: 10:57:19–11:36:48 UTC, 89 rows / 62 successes / 27 skips; 1626s critical-path scheduling + 743s execution. Path: changes → build-ui → e2e-vscode → receipts → gate. Identified job breakdown and matching policy digest are in capacity.md.
+  - [ ] Before merge: branch author records a completed same-policy PR receipt ≤2288s; none exists yet. Any owner GO to merge with this unmet condition must retain P1 as open; it is not timing acceptance.
+  - [ ] After merge: branch author captures attempt 1 of CI triggered by the push of PR #766's merge SHA to main, with the same retained policy digest; record run ID/SHA, selected delivery endpoints and wallClockSeconds (run creation to final completion), never substitute a dispatch or later quieter run.
+  - [ ] Post-merge reader: rhanka (repository owner / merge operator) reads the main receipt, job breakdown and strict two-receipt command output in capacity.md before accepting P1. Both PR and main must be successful, fresh, complete and ≤2288s; strict acceptance can only be produced after merge.
+  - [ ] Revert trigger: if that first main-push receipt exceeds 2288s, fails, is cancelled or cannot produce complete same-policy evidence, branch author prepares the bounded BR-77 policy revert and reports the run/reason to rhanka; rhanka owns executing the revert. Preserve all gates; no quiet rerun replaces the first sample.
+  - [x] Review r2 completed PR receipt: 09:21:03–10:53:23 UTC, 62 executions / 27 skips; 4765s scheduling + 774s execution + 1s finalization. Original trigger to final completion: 7508s, including the failed first attempt and retry interval.
+  - [x] Review r2 completed dry-run receipt: 08:48:23–10:43:52 UTC, 82 executions / 7 skips; 5811s scheduling + 1117s execution + 1s finalization. All 21 guarded packs succeeded; every registry writer skipped.
+  - [x] Review r2 provenance: both captures attest digest dfb44d98051d4a9a4b47bb9598d29d7db972ff8a1ccea87aa0a11e5611b5d2ff, fresh executions, zero timestamp gaps/carried copies. Strict proof rejects both durations and never treats the branch dispatch as main delivery.
+  - [x] PR attempt 1: toolbox job 122097352356 failed on npm ECONNRESET; cancelled at 09:19:44 UTC and excluded from acceptance. Reran every job on the same source; attempt 2 is entirely fresh. Initial pre-rebase dispatch 40475602504 is also excluded.
+  - [x] Review r2 live dependency proof: dry-run E2E groups became ready at 09:34:02 UTC, before API quality completed at 09:37:05. Every required job and matrix member remains; image promotion still requires API quality.
+  - [x] Previous slot-policy measurement source: merge dd2737fa486985ecfa756261b26ba2323e73289f incorporates origin/main 2d6643692389ecbb7e5ac410e7b31a3cfbaa732a. Harness C1/C2 and all 35 + 21 + 90 tooling tests passed before push; both attempt-1 runs completed successfully without interruption.
+  - [x] PR receipt: 06:16:16–07:17:17 UTC, 62 executions / 27 skips; qualification 3660s = 2582s scheduling + 1078s execution, then 1s finalization. E2E D job 122046116611 queued 2571s and executed 357s. Full receipts and hotspots are in capacity.md.
+  - [x] Main-like dry-run receipt: 06:16:20–07:21:48 UTC, 82 executions / 7 skips; qualification 3927s = 2965s scheduling + 962s execution, then 1s finalization. All 21 guarded-pack steps passed; registry writers skipped. Package endpoint 3304s = 3205s scheduling + 99s execution.
+  - [x] Retained manifests attest the same policy digest and fresh executions; strict CI_REQUIRE_CAPACITY_PROOF=1 rejects both timing regressions. Combined observed execution peak is 15. A branch workflow_dispatch remains a main-like dry-run, not actual main release evidence; no broader acceptance ticked.
+  - [ ] Review r1: tests first for queued capacity groups, independent validators/publishers; require completed final-policy PR/main receipts <=2288s; no receipt, no acceptance.
+  - [x] Review r1 publication qualification: branch dry-run 40408883195 completed successfully on source 1b5ef5368, 82 executions / 7 skips. All 21 publisher jobs completed real guarded packs; identified archive receipts and skipped registry writers/post-publication checks verified individually. This is a branch wiring receipt, not main delivery or timing acceptance.
+  - [x] Use the capacity Make entry points for dispatch/status/capture. Final-source PR 40402395319 and branch dry-run 40408883195 both completed; no intermediate push interrupted these two receipts.
+  - [x] Superseded old-policy run 40380899105 retained the PR group after automatic cancellation; verified PR 766, same-repo branch and obsolete head 773aa4283, then finished cancellation at 19:19:06 UTC. No current run or main release cancelled.
+  - [x] Dry-run 40385085415 exposed missing CI context in cowork-desktop job 121805361211. Test-first correction passes 21 fixtures and the local guarded pack; final-source dry-run 40408883195 job 121963393513 now passes the actual pack in CI/WARN mode with the registry writer skipped. Full 21-package qualification remains separate below.
+  - [x] Review r1: wall-clock proof rejects cancelled/incomplete/old-policy receipts, branch dispatches labelled as main, duplicate PRs, missing gates and 2289s regressions.
+  - [x] Receipt-reader regression: reject carried executions predating the attempt creation and missing execution stamps; observed main retry 40356941217 cannot qualify fresh delivery. All 21 expected-results tests pass; workflow unchanged.
+  - [x] Policy provenance: both completed captures retain the same pre-dispatch workflow digest and fresh first-attempt executions; strict proof rejects their elapsed times. Mismatched/unattested historical captures remain unqualified, with test-first regression coverage.
+  - [ ] Acceptance command: `make ci-capacity-policy CI_REQUIRE_CAPACITY_PROOF=1 CI_POLICY_RUN_FILES='<pr>/capture.json <main>/capture.json' ENV=test-ci-capacity`; static admission alone never qualifies timing.
+  - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
+  - [x] Static: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity` must parse/import the changed scripts and reject invalid result sets.
+  - [x] Review r1 local qualification: 35 metrics + 21 expected-results and 90 publication tests pass (includes 24 wiring checks). Static PR/main bounds 15/17; final-policy timing acceptance remains open.
+  - [x] Final conflict-resolution rebase on main 55431a99c73ae72bcf9404c8de5b1c8375f9e39b preserved the workflow/scripts from a251dbfa5; the sole BRANCH.md conflict is resolved. Harness C1/C2 and all 35 + 21 + 90 tests pass again; 37 replayed commits remain below 150 changed lines.
+  - [ ] Timing rejected: completed PR 40402395319 on frozen policy source 1b5ef536885cf1f8533e88fc54dc40dbbf8c7223 succeeded with 62 executions / 27 skips, but wall-clock 18224s exceeds 2288s. Aggregate critical-path scheduling is 17227s; strict proof command rejects it. Require qualifying new PR/main receipts before acceptance.
+  - [ ] Build: no image/package build recipe changes; retain the final concurrent PR/main runs' existing build and artifact receipts.
+  - [ ] API regression: no API source/test edits; verify every selected API result from the concurrent runs is present and successful.
+  - [ ] UI regression: no UI source/test edits; verify the unchanged UI test/build results are present in the complete verdict.
+  - [ ] E2E regression: no browser/VSCode/IdP membership change; reconcile the concurrent runs' selected and executed test identities, including cancellation ownership.
+  - [ ] Run `make scope-check ENV=test-ci-capacity` before each commit; end isolated service lots with `make down ENV=test-ci-capacity` and `make down ENV=test-ci-capacity`.
+  - [ ] Create/update the PR using `BRANCH.md`; obtain review and green CI/UAT on the same head; only then hand off to the authorized merge operator for branch-plan removal and merge.
