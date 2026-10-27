@@ -84,11 +84,11 @@ Mesh `speech/openai-transcription.ts` with two independently configured OpenAI s
 - [x] **Lot 2 — Fixtures + gate tests**
   - [x] `tests/fixtures/openai-transcription-frames.ts`: recorded delta/completed/invalid/out-of-order frame scripts per profile, no live call.
   - [x] `tests/speech-openai-transcription.test.ts`: per-model VAD/commit config, partial/final order + revisions, invalid format handling, abort/cancel, usage emission vs ceiling, independent profile config, TTS-absence, no-key-leakage, no-audio-persisted.
-  - [ ] Lot gate: `make test-llm-mesh` green (SCOPE=file then full) on the lot head.
+  - [x] Lot gate: `make test-llm-mesh` green (SCOPE=file 20/20, then full 77 files / 1401 tests) on the lot head.
 - [x] **Lot 3 — Receipt + version**
   - [x] `bench/l9-openai-stt.receipt.json`: status blocked, exact missing G-CLOUD/§10 items, price revision unpinned, no live evidence claimed.
   - [x] Bump `packages/llm-mesh/package.json` to 0.30.0 (minor, strictly above published 0.29.0).
-  - [ ] Lot gate: receipt present and blocked, version bumped, `make build-llm-mesh` green.
+  - [x] Lot gate: receipt present and blocked, version bumped, `make build-llm-mesh` + `make pack-llm-mesh` green.
 - [ ] **Lot N — Final validation**
   - [ ] `make scope-check` (harness) green.
   - [ ] Push, draft PR against `feat/live-stt-l8`, CI `validate-llm-mesh` + `ci-gate` green on the exact head.
