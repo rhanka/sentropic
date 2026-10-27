@@ -9,14 +9,16 @@ import {
 import { getMcpAuthContext, mcpAuthRoutes, requireMcpAuth } from '@sentropic/mcp-auth/hono';
 import {
   createMcpSupervisor,
+  createClusterMeshModules,
   type ClusterMeshHonoNamespaceModule,
 } from '@sentropic/cluster-mesh';
-import {
-  createMcpPlatformHono,
-  type McpConnectorPort,
-  type McpHonoOptions,
-  type McpInvocation,
+import type {
+  McpConnectorPort,
+  McpHonoOptions,
+  McpInvocation,
 } from '#mcp-platform-hono';
+import { loadMcpPlatformHono } from '@sentropic/cluster-mesh/loaders/mcp';
+import { Hono } from 'hono';
 import { fromJwksPort } from '@sentropic/oauth-verify';
 
 import { env } from '../../config/env';
@@ -26,6 +28,12 @@ import { createGoogleConnectorHost } from '../../services/connector-host/google-
 import { resolveDefaultWorkspaceId } from '../../services/workspace-access';
 import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
 import { resolveOAuthIssuer } from '../auth/oauth';
+import { artifactHostEnabled, productArtifactTransport } from '../../services/artifacts/instance';
+import { artifactCredential } from '../../services/artifacts/credentials';
+import { createRegistryDispatchRouter } from '../../services/mcp/registry-dispatch';
+
+await productArtifactTransport.ready;
+const { createMcpPlatformHono } = await loadMcpPlatformHono(createClusterMeshModules());
 
 const isEnabled = (): boolean => {
   const flag = process.env.MCP_RESOURCE_SERVER_ENABLED ?? env.MCP_RESOURCE_SERVER_ENABLED;
@@ -183,27 +191,49 @@ const ensureSupervisor = async () => {
   return supervisor.authorize(control.runtime.generation.generationId, control.supervisorRef);
 };
 
+export const authorizeProductMcpInvocation = async () => {
+  try {
+    if (!await ensureAuthor()) return { allowed: false as const, reason: 'wrong_author', status: 503 as const };
+    const registration = await ensureSupervisor();
+    return registration.ok ? { allowed: true as const }
+      : { allowed: false as const, reason: registration.reason, status: 503 as const };
+  } catch { return { allowed: false as const, reason: 'mcp_control_unavailable', status: 503 as const }; }
+};
+
 export const productMcpModule: ClusterMeshHonoNamespaceModule = {
   namespace: '/mcp',
   enabled: true,
   createRouter() {
-    return createMcpPlatformHono({
+    const router = new Hono();
+    router.route('/', createRegistryDispatchRouter({
+      transport: async () => productArtifactTransport,
+      enabled: () => isEnabled() && artifactHostEnabled(),
+      authorize: authorizeProductMcpInvocation,
+      async authenticate(context, scopes, requestedWorkspace) {
+        const auth = getMcpAuth();
+        try {
+          const verified = await auth.verify(context.req.raw, { requiredScopes: scopes });
+          const jti = verified.claims.jti;
+          if (!verified.sub || !verified.tid || typeof jti !== 'string' || !jti) {
+            return context.json({ error: 'access_denied' }, 403);
+          }
+          const workspaceId = requestedWorkspace ?? context.req.query('workspace_id')
+            ?? await resolveDefaultWorkspaceId(verified.sub) ?? '';
+          return { workspaceId, scopes: verified.scopes, identity: {
+            subject: verified.sub, tenantId: verified.tid, clientId: verified.clientId,
+            credentialId: artifactCredential('oauth', jti, verified.jkt),
+          } };
+        } catch (error) { return auth.challenge(error); }
+      },
+    }));
+    router.route('/', createMcpPlatformHono({
       auth: createAuthPort(),
       connector,
       enabled: isEnabled,
       invocation: {
-        async authorize() {
-          try {
-            if (!await ensureAuthor()) return { allowed: false, reason: 'wrong_author', status: 503 };
-            const registration = await ensureSupervisor();
-            return registration.ok
-              ? { allowed: true }
-              : { allowed: false, reason: registration.reason, status: 503 };
-          } catch {
-            return { allowed: false, reason: 'mcp_control_unavailable', status: 503 };
-          }
-        },
+        authorize: authorizeProductMcpInvocation,
       },
-    });
+    }));
+    return router;
   },
 };
