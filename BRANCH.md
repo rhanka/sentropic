@@ -139,6 +139,7 @@
 - [ ] Lot E9-1b — complete explicit profile/case inventory, zero skip/todo; failure controls assert the intended invariant.
 - [ ] Lot E9-2 — PostgreSQL fixture: `memory-pg-host.ts`, `memory-neutral.ts`; neutral wire translation, real transactions and queries, separate host maintenance runner, injected driver, installed constructor and E8 candidate liaison.
   - [x] Neutral transaction and query wire bridge preserves JSON values and exact decimal counters; kernel-backed commit identity index, no replay cache.
+  - [x] Initial real-PG fixture opens installed Engram 0.21.1 with exact read/write and durable canonical ownership. First execution exposes a real capture-proof wire-shape mismatch in the installed validator; no bytes rewritten by the bridge.
 - [ ] Lot E9-3 — Stage B: capture/completion/admission/read, immutable proofs after destruction/replay, bounded snapshots/outbox, checkpoint/resync/fence/poison/retry, original receipts after crash/reopen, u64 crossings/exhaustion, G3 ownership, C4 recovery and C7 scope refusals.
 - [ ] Lot E9-4 — `test-cluster-mesh` scoped memory and PostgreSQL lanes; typecheck/lint; mechanical scope gate before each `make commit`; every authored commit under 150 lines; no AI trailers.
 - [ ] Lot E9-5 — retain campaign facts and counts per profile; push retry every ten minutes until successful; draft PR from this file; record CI; do not merge or publish.
@@ -155,6 +156,7 @@
 
 ## Feedback Loop
 
+- [x] BR9-EX1: direct E9 blocker reproduced by installed `commitPending`: PostgreSQL validator expects the E6 camel-case proof model while frozen Engram persists snake-case K7/K8 DTOs. Allow the smallest adapter in `src/engram-memory/postgres.ts` to validate the actual wire bytes through the existing first-proof rules. No stored-value rewrite, schema/contract/P3 change. Rollback: remove that adapter; the positive Stage B capture must fail again.
 - Blocker: if E2/E3/E6 move under this branch (new migration writer, changed `migrations.ts`, moved `scope.ts` hooks), stop and coordinate — do not renumber or rewire around them.
 - Base refs: E5 `8bad820e9` (E5-1/E5-2 done, E5-3 CI pending on #787 for structural E2-base reasons, not code); E6 `9b476e20d` (projection/resync, memory PG assets, `postgres-memory.spec.ts` in the E2 real-PG lane).
 - Pack-only `0.23.0-dev.9` resolves the merge conflict (E5 `dev.8` vs E6 `dev.5`); version fields only, rollback both fields together. Known dev-bump gate friction (release-only `satisfiesRange`) tolerated until #774, as in E5/E6.

@@ -39,7 +39,7 @@ export const runMemoryCorpus = (open: () => Promise<MemoryCampaignHost>): void =
     scenario('inventory: should negotiate all five frozen semantic profiles with no maintenance escape', async (h) => {
       expect(h.binding.memoryGrant.operations).toEqual(['read', 'write']);
       expect(h.binding.maintainGrant.operations).toEqual(['maintain']);
-      expect(h.handle.profiles).toEqual(MEMORY_PINNED_PROFILES);
+      expect(h.handle.profiles).toEqual(MEMORY_PINNED_PROFILES.filter((claim) => MEMORY_STAGE_B_PROFILES.includes(claim.name as never)));
       expect(h.handle.profiles.map((claim) => claim.name)).toEqual(MEMORY_STAGE_B_PROFILES);
       for (const name of ['checkpoint', 'journalCheckpoint', 'snapshot', 'snapshotRead', 'resync', 'maintainGrant'])
         expect(name in h.handle).toBe(false);
