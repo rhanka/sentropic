@@ -1,103 +1,57 @@
-# Feature: V4-L5 qualification and calibration gates
+# Feature: BR-77 — Bound CI execution capacity and qualify contention/rollback
 
 ## Objective
-- [ ] Enforce criterion-specific production readiness and reproducible recorded assessment validation (P22/P27/P29-P31).
+- [ ] Enforce finite execution capacity and qualify contention/rollback on measured receipts.
+- [ ] Branch `chore/ci-capacity-policy`, step 2 of nine; train order BR-76 → BR-77; dependency: BR-76 (PR #705, metrics + expected-results) merged.
 
 ## Scope / Guardrails
-- [x] Base: origin/feat/decision-v4-l3; branch: feat/decision-v4-l5; worktree: tmp/worktrees/decision-v4l5.
-- [x] Make only; Docker lock on every container/test step; ENV=test-decision-v4l5 last; no Python.
-- [x] Fixtures only; no paid calls, live qualification, prompted fallback or JEV upgrade.
-- [x] Preserve receipt v1, custody, one attempt, deadlines, settlement and unqualified discovery.
-- [x] Reserved ports if needed: API_PORT=9475 UI_PORT=5675 MAILDEV_UI_PORT=1575.
-- [x] Draft PR targets main and stacks on L3 PR #772; merge updates only, never rebase; do not merge.
+- [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md` and `spec/ci-cd-ten-minutes/capacity.md`; BR-76 receipts are inputs, not deliverables.
+- [ ] Work in `tmp/worktrees/ci-capacity-policy`; rebase on main after BR-76 merge; one implementation branch active on the shared workflow/Makefile.
+- [ ] Make entry points only; `ENV` last; tests on `ENV=test-ci-capacity` or `ENV=test-ci-capacity`, never `dev`; no secrets in evidence.
+- [ ] Slot 0 owner: branch author; API_PORT=9385, UI_PORT=5585, MAILDEV_UI_PORT=1485; verify availability before starting services and pass all three ports to service commands.
+- [ ] The agent inventories quotas and costs itself via the GitHub API (account/plan, billing usage with `user` scope, runner inventory); no owner-supplied inventory is assumed.
+- [ ] No migrations; keep root dev stable; no timeout inflation, removed assertions, or attribution trailers; commits ≤150 changed lines through `make commit` with scope checks.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [x] **Allowed Paths (implementation scope)**:
-  - [x] `BRANCH.md`
-  - [x] `packages/llm-mesh/src/decision/**`
-  - [x] `packages/llm-mesh/src/transport/openai-decisions.ts`
-  - [x] `packages/llm-mesh/tests/decision-*`
-  - [x] `packages/llm-mesh/tests/fixtures/decision/**`
-  - [x] `packages/llm-mesh/package.json`
-  - [x] `packages/llm-mesh/README.md`
-  - [x] `spec/SPEC_EVOL_LLM_MESH.md`
-  - [x] `spec/decision/**`
-  - [x] `packages/cluster-mesh/src/modules/catalog.ts`
-  - [x] `packages/cluster-mesh/package.json`
-  - [x] `packages/cluster-mesh/tests/**`
-  - [x] `packages/llm-gateway/package.json`
-  - [x] `scripts/ci/publishable-ci-wiring.test.mjs`
-  - [x] `scripts/ci/ci-expected-results.test.mjs`
-  - [x] `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
-  - [x] `api/tests/unit/gateway-package-version.test.ts` (BR95-EX4, L5 release tuple regression)
-  - [x] `api/src/scripts/oauth-provision-exchange-client.ts` (BR95-EX5, unchanged main integration only)
-  - [x] `api/tests/api/auth/oauth-token-exchange.test.ts` (BR95-EX5, unchanged main integration only)
-  - [x] `deploy/ci/idp-identity-sync/**` (BR95-EX5, unchanged main integration only)
-  - [x] `deploy/k8s/README.md` (BR95-EX5, unchanged main integration only)
-  - [x] `deploy/k8s/overlays/preprod/idp-identity-sync/**` (BR95-EX5, unchanged main integration only)
-  - [x] `spec/evidence/memory-mcp-l5/**` (BR95-EX3, unchanged main integration only)
-  - [x] `tools/memory-mcp-l5/**` (BR95-EX3, unchanged main integration only)
-- [x] **Forbidden Paths (must not change in this branch)**:
-  - [x] `Makefile`
-  - [x] `docker-compose*.yml`
-  - [x] `.cursor/rules/**`
-- [x] **Conditional Paths (explicit exception required)**:
-  - [x] `package-lock.json`
-  - [x] `.github/workflows/**`
-- [x] **Exception process**: declare reason, impact and rollback below before changes.
+- [ ] **Allowed Paths (implementation scope)**:
+  - [ ] `BRANCH.md`; `plan/71-BRANCH_chore-ci-capacity-policy.md`; `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`.
+  - [ ] `scripts/ci/ci-run-metrics.mjs`
+  - [ ] `scripts/ci/ci-run-metrics.test.mjs`
+  - [ ] `scripts/ci/ci-expected-results.mjs`
+  - [ ] `scripts/ci/ci-expected-results.test.mjs`
+  - [ ] `spec/ci-cd-ten-minutes/capacity.md`
+- [ ] **Forbidden Paths (must not change in this branch)**:
+  - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
+  - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
+- [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - [ ] `.github/workflows/ci.yml` under BR77-EX1; `Makefile` under BR77-EX2.
+  - [ ] `scripts/ci/publishable-ci-wiring.test.mjs` under BR77-EX3.
+
+- [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
-- [x] BR95 integration: merge main e70c056c3 after #772; retain L5 plan and both independent CI test additions. Cluster candidate advances to 0.23.2 above main 0.23.1; synchronize workspace/fixture metadata. Registry baselines are cluster 0.23.0/mesh 0.28.1/gateway 0.21.3. Mesh speech code is unchanged from main: admit L5 mesh 0.30, retain the 0.31 refusal and missing-export controls. Rollback: revert merge; imported history exceeds 150 lines, authored resolution is bounded metadata/catalog/test edits.
-- [x] BR95-EX5: owner-requested merge of updated L3 at 6cefa7ef1, including main 55431a99c (#770). Keep L5 BRANCH.md and its already-qualified mesh 0.30.0 selected-lock integrity on the two conflicts; imported API/IdP files remain identical to main. Rollback: revert the merge. Author resolution adds eight plan lines; imported history is retained intact.
-- [x] BR95-EX4: CI 40425714034/job 121969239291 has one failing assertion: gateway-package-version.test.ts expects 0.21.3, installed L5 gateway is 0.21.5 (1310 tests passed). Reproduced after L3 integration at expected 0.21.4; aligned the existing real-instance regression to L5 0.21.5 and passed all 22 scoped tests via make test-api-unit in Docker, ENV=test-decision-v4l5 last. ci-gate job 121987283585 rejects only this unit failure. Impact: test version literal only; rollback with the L5 release tuple.
-- [x] Candidate recheck at 42df617a6: source suite passes (1145 tests); rebuild the mesh archive and refresh its selected-lock sha512 after the reviewed source changes. Gateway bytes remain identical; no fixture dependency drift. Packed gate passes all 108 tests / 15 files; both train archive integrities match.
-- [x] CI 40411377258 / job 121904126708: stale selected lock tuple and refusal regex caused three packaging failures. Align the lock with mesh 0.30.0 / gateway 0.21.5 / cluster 0.22.6 and the refusal bound <0.31.0; preserve artifacts 0.1.4. Reproduced the refusal failures locally before correction.
-- [x] BR95-EX3: merge origin/main at 365e8b313 after #756/#769; retain L5 BRANCH.md on the sole conflict. Imported memory evidence stays identical to main; rollback by reverting the merge. No memory implementation edits.
-- [x] BR95-EX1: synchronize package-lock workspace metadata and cluster/gateway compatibility with the L5 feature version; rollback the tuple together; no resolved dependency changes.
-- [x] BR95-EX2: CI edits limited to the release tuple; remove branch-name test exclusions per owner review, restoring API, browser E2E and VSCode gates. Earlier skips constrained provider/runtime work; existing CI gates must run.
-- [x] R1 P1-2: remove the branch-named CI bypass and assert selection of every API/E2E matrix member for global changes.
-- [x] R1 P1-1: distinguish experimental verdicts, mark qualification results and persisted receipts, flag provisional served identity; production validation rejects them.
-- [x] R1 P2-3: identity independently denies discovery and admission; production controls retain custody, one attempt, settlement and deadline refusal.
-- [x] R1 P2-1: snapshot readiness once per service and memoize deterministic assessments by record index and exact scope digest; price and admission remain live gates.
-- [x] R1 validation: use calibrated production fixtures for service/consumer round trips and explicit fabricated wire evidence for codec-only matrices; experimental service results never become production fixtures.
-- [x] R1 P2-2: replace P30 assertions with tuning-call selection replay, criterion revision and digest bindings, split commitment, per-call policy digest and freeze chronology; missing/corrupted evidence blocks with P30 unverified.
-- [x] R1 integration: retain experimental receipt provenance in the private assessment recorder; reject undeclared fields and contradictory evidence while production consumers continue to refuse experiments.
-- [x] R1 final sweep: remove the obsolete Decision branch selector from CI manifest context as well as job conditions; regression asserts no Decision branch literal or selector survives in the workflow.
-- [x] R1 local validation: mesh 1501 tests / 86 files, source typecheck, lint and standalone build/pack passed; scoped cluster decision-receipts.spec.ts: 4 tests passed. Restored API/browser/VSCode jobs run in CI.
-- [x] R1 final CI-selection rerun: 16 tests passed after manifest cleanup; mechanical scope checks passed before each selective commit; all test/container steps used the shared Docker lock and isolated environment cleanup.
-- [x] P22: test reproduced two rounded micro-USD for combined sub-micro input/output work; round the per-receipt sum once, preserving v1 accounting sources and conservative unknown-usage reserves.
-- [x] Final mesh: 1485 tests / 86 files, typecheck and lint passed; CI selection/wiring: 40 tests passed. Cluster fixtures explicitly use the experimental profile; next-minor refusal assertions follow the new compatibility bound.
-- [ ] REVIEW: independent complementary review availability must be recorded; no consensus without two completed eligible legs.
+- [x] BR77-EX1 — Workflow exception: bound shared runner concurrency, independent package validation/publication, branch dry-run publication qualification, keep PR-only cancellation. Impact: dispatch and required results. Rollback: revert workflow policy while preserving complete-result checks.
+- [x] Review r2 owner instruction: replace repo-wide slot mutexes with per-run matrix widths and PR cancellation; measure hosted-runner scheduling. Static demand no longer claims account admission. API quality remains required at the gate and image publishers.
+- [x] BR77-EX2 — Makefile exception: capacity-policy entry points only. Impact: named CI measurement/policy entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [x] BR77-EX2 includes the requested dry-run publication target: real existing guarded packs, per-package receipts, no registry writes; rollback removes the target and dispatch mode.
+- [x] BR77-EX3 — Permit `scripts/ci/publishable-ci-wiring.test.mjs` to assert the explicit branch dry-run alternative while preserving all production publication barriers. Rollback: restore assertions with the workflow.
+- [x] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
+- [ ] Inherited open acceptance from BR-76/Round-4: account quota/reservation/cost inventory; bounded dispatch policy; concurrent PR/current-main delivery; rollback drill; classification ≤15s, verdict ≤5s, aggregate scheduling ≤60s under declared concurrent traffic.
 
 ## AI Flaky tests
-- [x] No live provider tests or accepted flaky failures.
+- [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; author implementation followed by independent harness review.
+- [ ] **Multi-branch** — This is one independently reviewed/qualified branch of the serialized nine-branch train.
+- [ ] Rationale: preserve branch-level rollback and serialize shared workflow/Makefile edits; internal CI lanes may run concurrently.
 
 ## UAT Management (in orchestration context)
-- [x] Library-only change; fixture API and mesh integration controls replace product UI UAT.
+- [ ] Run the lot UAT on the exact pushed qualification SHA; record immutable source/target SHAs for any integrated qualification workspace.
+- [ ] Use isolated automated environments; web/Chrome/VSCode UAT below is limited to affected behavior; no root-dev automated testing.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and scope**
-  - [x] Read Docker lock, spec v4 sections 3/7/8/9, rules and branch template; retain receipt v1.
-  - [x] Run mechanical harness branch check before work.
-- [x] **Lot 1 — Discovery and isolated qualification**
-  - [x] Tests first: decision-qualification.test.ts, independent missing gates and execution/criterion/policy mutations; initial run rejects missing implementation.
-  - [x] Bind evidence to execution digest, exact criterion and operating policy; scope mutation controls pass.
-  - [x] Qualification accepts provisional expected IDs while preserving auth, finite bounds, one attempt and experimental discovery.
-  - [x] Scoped discovery/admission gates pass; source typecheck and lint pass; full mesh baseline 1472 tests passes.
-- [x] **Lot 2 — Reproducible assessment**
-  - [x] Tests first: decision-assessment.test.ts and recorded fixtures; all 10 initial assessment controls pass.
-  - [x] Deterministic assessment/report schema with distinct held-out/challenge/repeat populations and conservative attempt/cost aggregation.
-  - [x] Cap exhaustion and missing evidence produce incomplete/blocked reports; fixtures never establish semantic calibration.
-  - [x] Scoped assessment controls pass; recording tests validate receipt projections, independent work counts and pre-dispatch cap stops.
-- [x] **Lot N-1 — Docs consolidation**
-  - [x] Public exports, README, tracked mesh spec and L6 report/run-packet needs; feature tuple mesh 0.30.0 / gateway 0.21.5 / cluster 0.22.6.
-- [ ] **Lot N — Final validation**
-  - [ ] Full mesh tests, typecheck, lint, build/pack; cluster compatibility and packed consumer gates; no product UI changes.
-  - [ ] UAT: recorded production refusal and experimental qualification controls; web/Chrome/VSCode unaffected.
-  - [ ] Independent harness review; reconcile verified findings.
-  - [x] Scope-check before every selective atomic commit under 150 lines.
-  - [ ] Push and open draft PR to main, explicitly stacked on #772, BRANCH.md body and plan comment.
-  - [ ] Verify CI green at final head; do not merge.
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, relevant security/domain rules, `README.md`, `TODO.md`, the execution `PLAN.md`, the study, `spec/ci-cd-ten-minutes/capacity.md`, and `plan/BRANCH_TEMPLATE.md`.
+  - [x] Verify branch mechanically with harness; confirm BR-76 merged; inventory the actual files and existing assertions at the new base.
+  - [x] Declare exceptions above; names marked new below are deliverables to create, not existing commands or evidence.
+  - [x] Base origin/main 440599d04e91bb33e3874588f067c6a90bffd1b3; harness C1 passed; inherited suites passed 45/45. BR77 uses ENV=test-ci-capacity per owner packet.
