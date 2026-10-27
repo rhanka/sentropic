@@ -61,7 +61,8 @@
   - [ ] Run reserved-next/packaging tests and memory qualification: mechanical, wiring, build, typecheck, lint, memory, common, grants, postgres; cleanup each step.
   - [ ] Preserve 23 blocked E9 Stage B cases; no five-profile acceptance claim.
 - [ ] **Lot 3 — Handoff**
-  - [ ] Push; open draft PR against feat/engram-e2-integration with reservation history.
+  - [x] Prepare the draft PR against feat/engram-e2-integration with reservation history and exact-head CI; local completion remains gated below.
+  - [ ] Push and open the draft; overlap remote CI with the pending local qualification once all source changes are committed.
   - [ ] Require pull_request ci.yml completed/success on exact head; append READY-REPIN with PR and full SHA.
 
 ## Feedback Loop
@@ -72,6 +73,8 @@
 - [x] Full package rerun: 154 files passed, 1342 tests passed, 268 explicit skips without PG/installed fixtures, no type errors. Reserved-next gate 15/15 and selected alignment 15/15 pass; dedicated PG coverage remains in the qualification lanes.
 - [x] Dry-run regression: extracting the Comments released pin from the selected dev filename yielded an empty pin. Read the unchanged stable 0.22.4 from the existing bare-gate contract instead. Let preparation recognize the local dev filename; regression checks no registry pack request for that candidate. Production registry admission is unchanged.
 - [ ] Final focused regression: packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts; Comments make -n resolves stable 0.22.4; original pack-only-dev-gate.spec.ts and modules/registry.spec.ts passed in the full package run.
+- [x] External lock blockage observed 2026-10-27 23:19 UTC: E10 outer flock 2146785 holds the machine lock while child flock 2164873 waits on it. Repin grants/PG and focused preparation regression are queued. No foreign process/env touched; conductor disposition requested under the packet's ownership rule. Evidence: .tmp/rv/integrator-memory-repin024-docker-blocked.md.
+- [x] Stable compatibility-pin comments now distinguish the unchanged 0.22.4 probe contract from the selected 0.24.0-dev.1 candidate; no executable change in this final documentation step.
 
 ## AI Flaky tests
 - [ ] Retry failed AI/e2e jobs once only when green on main; retain evidence.
