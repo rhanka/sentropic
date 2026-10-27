@@ -34,8 +34,8 @@
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 1 — Ordered merges**
-  - [ ] Merge #758, #763, #765, #775, #779, #764, #793, #792, #790; exclude content conflicts and record them.
-  - [ ] Preserve P3 manifest and Engram 0.22.0 tarball hashes exactly.
+  - [x] Merge #758, #763, #765, #775, #779, #764, #793, #792, #790; all heads retained; no lot excluded.
+  - [x] Preserve P3 manifest 1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730 and Engram 0.22.0 tarball 26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10; both checked with sha256sum.
   - [x] Adapt E9 recovery to awaited five-argument E7 API and test terminal, nonterminal and revoked authority behavior in memory-engine.spec.ts.
 - [ ] **Lot 2 — Final qualification**
   - [ ] Final pack-only max+1 version; regenerate root lock through make after 21:00 UTC.
@@ -48,6 +48,8 @@
 - [x] Owner authorization covers all listed approved lots and the E9 API adaptation.
 - [x] BR1-EX1 implemented: existing qualification routes accept test-mem-batch1, preserve Compose cleanup and guard the exact approved P3 bytes; no Compose/workflow file changes.
 - [x] All nine lot heads are ancestors of the batch; E2/E3/E4 were already present through E7. No lot excluded for a content conflict.
+- [x] Track containment checked against every lot and integration: all 370 event IDs retained; batch makes no Track changes or acceptance claims.
+- [x] Final pack-only version 0.23.0-dev.14 (one increment above accumulated dev.13); only package manifest and workspace lock fields require synchronization. Historical freeze and gate-vector versions remain historical.
 - [ ] Stage B retains 23 explicit blocked cases from approved E9; no five-profile qualification is claimed by this batch.
 - [ ] #758 approved review filename not found locally; conductor clarification pending.
 - [ ] #793 review is included in pr792_opus_r1.md; dedicated approval filename pending clarification.
