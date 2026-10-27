@@ -4,6 +4,8 @@
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   ArecordDevice,
@@ -127,17 +129,47 @@ describe('arecord backend', () => {
     });
   });
 
-  it('should fail open with DeviceOpenError when the child exits with no bytes after 60 ms', async () => {
+  it('should fail open with DeviceOpenError when the child exits with no bytes 60 ms after start', async () => {
     await withMode('exit-early', async () => {
       const device = new ArecordDevice(FAKE_ARECORD, [digestOf(FAKE_ARECORD)]);
-      // 60 ms sits past any fixed ready probe (e.g. 50 ms): restoring one
-      // would resolve the open as healthy and fail this assertion.
+      // The 60 ms delay sits past short fixed ready probes: restoring one
+      // shorter than that (e.g. 50 ms, or an immediate resolve) would report
+      // a healthy open and fail this assertion. A longer blind delay still
+      // passes this test yet stays wrong — only a process readiness signal
+      // may settle the open.
       const error = await device.open('hw:9,9', OPEN_OPTS).then(
         () => null,
         (reason: unknown) => reason,
       );
       expect(error).toBeInstanceOf(DeviceOpenError);
       expect((error as DeviceOpenError).message).toMatch(/no such device/);
+    });
+  });
+
+  it('should reap a silent child on timeout and reject with DeviceOpenError only after close', async () => {
+    const pidFile = join(tmpdir(), `fake-arecord-silent-${process.pid}.pid`);
+    await withMode('silent', async () => {
+      process.env.FAKE_ARECORD_PIDFILE = pidFile;
+      try {
+        const device = new ArecordDevice(FAKE_ARECORD, [digestOf(FAKE_ARECORD)]);
+        const start = Date.now();
+        const error = await device.open('hw:9,9', OPEN_OPTS).then(
+          () => null,
+          (reason: unknown) => reason,
+        );
+        const elapsed = Date.now() - start;
+        expect(error).toBeInstanceOf(DeviceOpenError);
+        expect((error as DeviceOpenError).message).toMatch(/no audio within 2000 ms/);
+        // Rejected only after the timeout window (never instantly), and the
+        // reaped child leaves no orphan behind: without the SIGTERM/SIGKILL
+        // reap, the pid would still be alive here.
+        expect(elapsed).toBeGreaterThanOrEqual(1500);
+        const pid = Number(readFileSync(pidFile, 'utf8').trim());
+        expect(Number.isInteger(pid) && pid > 0).toBe(true);
+        expect(() => process.kill(pid, 0)).toThrow(/ESRCH/);
+      } finally {
+        delete process.env.FAKE_ARECORD_PIDFILE;
+      }
     });
   });
 
