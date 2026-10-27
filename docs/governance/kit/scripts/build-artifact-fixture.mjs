@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, mkdirSync, cpSync, rmSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, cpSync, rmSync, readdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { resolve, join } from 'node:path';
 import { build } from 'vite';
@@ -64,7 +64,16 @@ report.build = { commit: process.env.ARTIFACT_COMMIT ?? 'unknown', fixture: prof
     .map(name => [name, lock.packages[`node_modules/${name}`].version])),
   configuration: { target: 'es2022', minifier: 'esbuild', manifest: true, sourcemap: false } };
 report.attribution = json(join(directory, '.vite/module-attribution.json'));
+report.build.rendererInputs = Object.fromEntries(readdirSync(join(root, 'src')).sort()
+  .map(file => [file, fileReceipt(readFileSync(join(root, 'src', file))).sha256]));
 report.inputDigest = createHash('sha256').update(JSON.stringify(inputs)).digest('hex');
+if (profile === 'typical') {
+  const before = json(join(root, '.cache/artifact-weight/baseline/artifact-size-report.json'));
+  const preserved = json(join(fixture, 'preserved-renders.json')).find(item => item.bytes === 292520);
+  report.comparison = { freshBaseline: before.totals, removedBytes: before.totals.portable - report.totals.portable,
+    preservedSlim: preserved.bytes, portableGrowth: report.totals.portable / preserved.bytes - 1 };
+  report.warnings = report.comparison.portableGrowth > 0.1 ? ['Portable grew more than 10% over preserved accepted slim reference'] : [];
+}
 write(join(scratch, 'artifact-size-report.json'), JSON.stringify(report, null, 2));
 write(join(scratch, 'artifact-size-report.md'), reportTable(report));
 console.log(reportTable(report));
