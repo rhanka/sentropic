@@ -128,6 +128,15 @@ export const runMemoryCorpus = (open: () => Promise<MemoryCampaignHost>): void =
       expect(await h.store.readPending({ ...candidate, authorization_receipt_digest: DIGEST }))
         .toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } });
       const first = valueOf(await h.store.readAdmissionOutcome!(candidate));
+      const outcomeKey = JSON.stringify(['memory-admission-outcome-v1', candidate.candidate_id]);
+      const storedOutcome = (await h.handle.readAggregate('memory-admission-outcomes', outcomeKey, h.binding.memoryGrant))!;
+      await expect(h.handle.transact({ grant: h.binding.memoryGrant, fence: h.fence,
+        limits: { maxAppends: 1, maxRecords: 8, maxEncodedBytes: 1048576 } }, (tx) => tx.apply({
+        guards: [], records: [], appends: [], indexWrites: [], relationships: [], barriers: [], purgeIntents: [],
+        updates: [{ ...storedOutcome, version: (BigInt(storedOutcome.version) + 1n).toString(),
+          value: memoryJcs({ ...JSON.parse(storedOutcome.value.data), transaction_receipt_digest: `sha256:${'b'.repeat(64)}` }) }],
+      }))).rejects.toMatchObject({ code: 'invalid-schema', message: expect.stringContaining('admission first proof is immutable') });
+      expect(await h.handle.readAggregate('memory-admission-outcomes', outcomeKey, h.binding.memoryGrant)).toEqual(storedOutcome);
       const replayCapture = valueOf(await host.engine.capture(memoryCaptureRequest()));
       expect(replayCapture).toMatchObject({ status: 'duplicate_exact', candidate_id: captured.candidate_id,
         transaction_receipt_digest: captured.transaction_receipt_digest });
