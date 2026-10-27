@@ -106,6 +106,10 @@ export class CatalogExecutionSeam {
     this.handlerSources.push(source);
   }
 
+  hasTool(name: string): boolean {
+    return this.handlerSources.some(source => source.getHandler(name) !== undefined);
+  }
+
   /**
    * Attempt to dispatch a tool call through the catalog.
    *
@@ -131,7 +135,7 @@ export class CatalogExecutionSeam {
     const denied = { handled: true, result: { status: 'denied', error: 'catalog_access_denied' } };
     // Unknown non-catalog tools retain their existing dispatcher. A known denied
     // handler never falls through, including private entries absent from a view.
-    if (!this.handlerSources.some(source => source.getHandler(name))) return { handled: false };
+    if (!this.hasTool(name)) return { handled: false };
     const entry = this.registry.get(name, context);
 
     // No catalog entry for this name.
