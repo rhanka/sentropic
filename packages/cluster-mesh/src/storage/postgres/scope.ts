@@ -82,7 +82,6 @@ export class PgScoped {
       readRecord: view.readRecord.bind(view),
       readAggregate: view.readAggregate.bind(view),
       readChain: view.readChain.bind(view),
-      readMemoryChain: view.readMemoryChain.bind(view),
       findIdempotency: view.findIdempotency.bind(view),
       readRecords: view.readRecords.bind(view),
     });
@@ -127,10 +126,8 @@ export class PgScoped {
     const owned = ownPgValue({ chainId, record, expectation });
     const result = await runPgTransaction(this.#core, this.#grant, {}, async (tx) => {
       const previous = await this.#core.roots.get<PgChain>(tx.session, tx.root, 'chain', chainId);
-      const seq = Number(previous?.count ?? 0);
-      if (!Number.isSafeInteger(seq)) throw new StorageInvalidCommandError('appendChain numeric result unavailable; use exact transaction port');
       await applyPgTransaction(this.#core, this.#grant, tx, { ...emptyEffects(), appends: [owned] }, {});
-      return { seq, hash: owned.record.hash, replayed: false as const };
+      return { seq: previous?.count ?? 0, hash: owned.record.hash, replayed: false as const };
     });
     return result.value;
   }
