@@ -62,7 +62,8 @@
 - [ ] **Lot 2 — Bounded dispatch and concurrency**
   - [x] Review r2: begin removing static capacity mutexes (classification and validation jobs); retain PR cancellation and independent publication. Removal continues before the next push.
   - [x] Review r2: remove the next 30 capacity mutexes, including API/E2E matrix slots; keep matrix membership and widths 15/5.
-  - [ ] Shared groups cover every job: 15 common slots plus two existing release groups (17 observed), reference API/E2E 15/5 widths restored. Static assessment now accounts for mutexes; live receipts remain required.
+  - [x] Review r2: remove every remaining capacity mutex. API/E2E widths stay 15/5; validators/publishers remain independent; PR cancellation and existing release groups remain.
+  - [x] Review r2: run API/IdP typecheck and lint beside E2E; retain typecheck-lint-api in receipts and ci-gate, so failures still block qualification/publication.
   - [x] Review r1: remove the 13/10-deep validator chains; six queued capacity groups preserve 23 independent jobs and their selected-result identities.
   - [x] Review r1: ordinary publishers depend on their own validators; preserve the existing oauth-to-mcp-auth and mesh/gateway/cluster registry dependency barriers.
   - [ ] Lot gate: concurrent real PR/main runs prove cancellation ownership and complete current-main delivery; attach capacity and wait receipts before accepting the configuration.
