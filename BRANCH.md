@@ -1,12 +1,13 @@
 # Feature: Refresh W0-close.d published workspace tuple
 
 ## Objective
-- [ ] Freeze artifacts 0.2.3 / cluster-mesh 0.22.4 and qualify APP-P1 at the reconciled workspace head.
+- [x] Freeze artifacts 0.2.3 / cluster-mesh 0.22.4 and qualify APP-P1 at the reconciled workspace head.
 
 ## Scope / Guardrails
 - [x] Author codex gpt-6.1-sol high; owner deliverable 2; plan-v2 W0-close.d refresh.
 - [x] Base feat/app-cm-w2b d0ce8aeb0; merge ancestry only; worktree tmp/worktrees/app-w0d-refresh.
 - [x] Draft targets feat/app-cm-integration; no merge or production activation.
+- [x] Review authored refresh from source merge 2c3bf7750; integration diff includes inherited W2.b/#702/UP-T ancestry.
 - [x] Tests first; make-only; Docker flock; ENV=test-app-w0d last; no Python.
 - [x] Existing Compose qualification service has no listeners; reserved API/UI/Maildev ports 9730/5930/1830 if needed.
 - [x] Selective staging; scope-check before make commit; authored commits under 150 lines; no trailers.
@@ -44,6 +45,9 @@
 - [x] BR00D-EX2: merge main 72bb2da3d to consume already-published UP-T; listed inherited paths are merge-only, no author edits. Impact is existing upstream ancestry; rollback reverts the merge.
 - [x] BR00D-EX1: merge #702 evidence and its owner question/restore template; retained evidence only; rollback reverts merge. No author edits outside scope.
 - [ ] Independent reviews and remote CI remain separate from code authorship.
+- [x] Payload receipt preserves union-order-only declaration differences in mesh/root-facade and gateway/request-receipts; all JS/exports/SQL and full artifacts/llm-mesh payloads match bytes.
+- [x] Strict install and runtime tree pass; full development npm ls retains Vitest UI/esbuild/skills Node-types diagnostics, recorded in the complete tree.
+- [x] Qualification: 22/22 registry/installed tests; APP-P1 manifest 80ca4b067a010690dc71036a3237a70b91d99d7c025ded7173566d0ae55b1600; no upstream bump.
 
 ## AI Flaky tests
 - [x] No AI calls, accepted flakes or timeout increases.
@@ -59,8 +63,8 @@
 - [x] Lot 1: merge #702; published strict consumer first; cluster-mesh resolves artifacts 0.2.3 with Comments/gateway.
 - [x] Lot 2: normalized published payload hashes, clean source equivalence, complete workspace resolution; merge published UP-T ancestry without package author edits.
 - [x] Lot 3: recompute APP-P1 with mcp:tools:invoke; observe old-pin refusal, then update registry and api/tests/api/{app-mcp-registry,app-mcp-installed}.test.ts.
-- [ ] Lot 4: refresh reservations.md, host-fit.md, catalog-context.md and published-tuple.json; dated evidence and exact base/lock hashes.
-- [ ] Lot 5: installed/profile tests, scope/branch gates, locked make down, empty stack, draft PR and head.
+- [x] Lot 4: refresh reservations.md, host-fit.md, catalog-context.md and published-tuple.json; dated evidence and exact base/lock hashes.
+- [x] Lot 5: installed/profile tests, scope/branch gates, locked make down, empty stack, draft PR and head.
 
 ## Inherited main qualification record
 
