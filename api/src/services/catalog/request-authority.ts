@@ -13,8 +13,10 @@ const resolve = createCatalogContextResolver(async input => {
   if ('error' in tenant) throw new Error('catalog_access_denied');
   const sessionTable = input.kind === 'http' ? 'user_sessions' : 'chat_sessions';
   const sessionConstraint = input.kind === 'http' ? 's.expires_at > clock_timestamp()' : 's.workspace_id = w.id';
+  // Activity touches and conversation title updates are not policy changes.
+  const sessionRevision = input.kind === 'http' ? 's.expires_at::text' : 's.workspace_id';
   const result = await pool.query<{ role: string; type: string; revision: string }>(
-    `SELECT wm.role, w.type, concat_ws(':', s.xmin, u.xmin, w.xmin, wm.xmin, tm.xmin, t.xmin) AS revision
+    `SELECT wm.role, w.type, concat_ws(':', ${sessionRevision}, u.xmin, w.xmin, wm.xmin, tm.xmin, t.xmin) AS revision
      FROM ${sessionTable} s JOIN users u ON u.id = s.user_id
      JOIN workspace_memberships wm ON wm.user_id = u.id AND wm.workspace_id = $3
      JOIN workspaces w ON w.id = wm.workspace_id

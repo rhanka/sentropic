@@ -197,6 +197,8 @@ describe('cluster mesh catalog product authority', () => {
     const [session] = await db.select().from(userSessions).where(eq(userSessions.userId, user.id));
     const authenticated = { userId: user.id, sessionId: session.id, workspaceId: user.workspaceId!, role: 'editor' };
     const context = await resolveHttpCatalogContext(authenticated);
+    await authenticatedRequest(productApp, 'GET', '/api/v1/catalog/sources', user.sessionToken!);
+    await expect(revalidateCatalogInvocation(context, 'workspace_list', {})).resolves.toMatchObject({ subjectId: user.id });
     await expect(resolveHttpCatalogContext({ ...authenticated, workspaceId: 'foreign-workspace' }))
       .rejects.toThrow('catalog_access_denied');
     await db.delete(userSessions).where(eq(userSessions.id, session.id));
