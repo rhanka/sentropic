@@ -39,6 +39,7 @@
   - [x] Declare any additional exception with rationale, impact and rollback in this feedback loop before editing.
 
 ## Feedback Loop
+- [x] PR786 P2-4, author, resolved: eagerly materialize sorted per-row register joins with exact-match paths and pending reasons; map manifest paths only to one exact scanner/component/version node. Legacy identities and ambiguous nodes remain pending. Real-register and reversed-order regressions pass; locked daily suite passes 110 tests.
 - [x] PR786 P2-3, author, resolved: capture HEAD once and refuse tracked, staged or untracked changes before launching the scanner; Git failures also abort. Shell-guard regressions pass in the 13-test scoped scan suite.
 - [x] PR786 P2-2, author, resolved: keep the complete npm repair target as name@version plus its major-bump flag; reject malformed targets. The langium/mermaid regression preserves mermaid@11.17.2; scoped scan suite passes 12 tests.
 - [x] PR786 P2-1, author, resolved: emit only a package's own advisories at affected installed versions; retain npm carrier graph and severities as context. Langium/mermaid with two lodash-es versions is covered; locked daily suite passes 107 tests. Reuse the pinned semver tool from the existing fixture lane.
