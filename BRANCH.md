@@ -43,6 +43,7 @@
 - [x] **Exception process**: declare reason, impact and rollback below before changes.
 
 ## Feedback Loop
+- [x] BR93 integration: merge origin/main aa559f58c after PRs #732/#757/#766/#800; retain this branch plan, native Decisions range and main's separate speech range. Cluster-mesh 0.23.0 is published; use patch 0.23.1 and synchronize its workspace/fixture versions. Mesh 0.29.0 and gateway 0.21.4 remain above registry 0.28.1/0.21.3. Rollback: revert the merge. Imported history exceeds 150 lines; resolution changes are bounded metadata/catalog edits.
 - [x] BR93-EX4: owner-requested merge of origin/main at 55431a99c (#770), retaining L3 BRANCH.md on the sole conflict. Imported API/IdP files remain identical to main; no implementation edits. Rollback: revert the merge. Imported history exceeds the atomic author-change limit; this resolution adds six plan lines only.
 - [x] CI-LIVE — conductor decision B-lite (2026-10-26): open the draft PR with existing provider-backed CI under the owner's current budget. Added tests use fixtures and recorded answers only; no new live-call job or offline-CI profile is introduced.
 - [ ] REVIEW — attention: exact complementary reviewers not selected; no independent code-review consensus is claimed. Author handoff is ready for the conductor.

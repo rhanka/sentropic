@@ -4,7 +4,7 @@
  * fixtures stay inline in their specs until 1.26b centralizes them. */
 export const TRAIN_LLM_MESH_VERSION = '0.29.0';
 export const TRAIN_LLM_GATEWAY_VERSION = '0.21.4';
-export const TRAIN_CLUSTER_MESH_VERSION = '0.22.5';
+export const TRAIN_CLUSTER_MESH_VERSION = '0.23.1';
 /** Supported ranges consumed by registry/topology specs (adopted in 1.26b). */
 export const TRAIN_LLM_MESH_RANGE = '>=0.22.0 <0.30.0';
 export const TRAIN_LLM_GATEWAY_RANGE = '>=0.19.0 <0.22.0';
