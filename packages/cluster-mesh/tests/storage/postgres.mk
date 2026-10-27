@@ -102,7 +102,9 @@ CM_PACK_ONLY_PIN ?= $(shell grep -o 'sentropic-cluster-mesh-[0-9][0-9.]*\.tgz' p
 # On a pack-only dev candidate the leaf is refused by design (#767): the bare
 # probe tolerates that refusal, while the installed consumer qualifies the
 # released pin instead of the unresolvable dev leaf. Release candidates keep
-# qualifying their own tarball.
+# qualifying their own tarball. The -dev. switch is wider than the exact
+# #774 pair; this stays safe because the bare probe runs first in the same
+# set -eu recipe and fails any -dev. candidate outside the pair.
 CM_CONSUMER_MESH ?= $(if $(findstring -dev.,$(notdir $(CM_COMMENTS_TARBALL))),@sentropic/cluster-mesh@$(CM_PACK_ONLY_PIN),/candidate.tgz)
 CM_COMMENTS_REPORT ?= .h2a/build/comments-installed
 CM_COMMENTS_SIBLING_FLAGS = $(if $(SIBLING_ARCHIVES_FILE),$(if $(and $(filter 1,$(words $(SIBLING_ARCHIVES_FILE))),$(filter tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json,$(SIBLING_ARCHIVES_FILE))),-v "$(CURDIR):/workspace:ro" -e CM_COMMENTS_SIBLINGS=/workspace/$(SIBLING_ARCHIVES_FILE) -e CLUSTER_MESH_HEAD_SHA="$$(git rev-parse HEAD)",$(error SIBLING_ARCHIVES_FILE must be tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json)))
