@@ -31,3 +31,46 @@ export type {
   TerminalKeyBindings,
   TerminalKeyMode,
 } from './terminal-control.js';
+export {
+  ESPEAK_MAX_CHARS,
+  ESPEAK_SHA256_PINS,
+  EspeakNgEngine,
+  TtsRegistry,
+  TtsSynthesisError,
+  TtsUnsupportedError,
+  buildEspeakArgs,
+} from './tts-registry.js';
+export type {
+  EspeakNgOptions,
+  EspeakRunner,
+  TtsAudio,
+  TtsCapabilities,
+  TtsEngineName,
+  TtsEnginePort,
+  TtsRegistryOptions,
+  TtsSynthesizeOptions,
+} from './tts-registry.js';
+export {
+  APLAY_SHA256_PINS,
+  AplayPlayback,
+  PLAYBACK_MAX_WAV_BYTES,
+  PlaybackCancelledError,
+  PlaybackError,
+  buildAplayArgs,
+} from './playback.js';
+export type { PlaybackPort } from './playback.js';
+export {
+  DEFAULT_MAX_NARRATION_CHARS,
+  VoiceLoop,
+  VoiceLoopBusyError,
+  VoiceLoopClosedError,
+  VoiceLoopRefusedError,
+  boundNarration,
+} from './voice-loop.js';
+export type {
+  BargeSource,
+  VoiceLoopDiagnostics,
+  VoiceLoopEvent,
+  VoiceLoopOptions,
+  VoiceLoopResult,
+} from './voice-loop.js';
