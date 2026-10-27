@@ -75,3 +75,90 @@ export const sameSpeechIdentity = (a: unknown, b: unknown): boolean => {
     ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => a.localeCompare(b)).map(([k, x]) => [k, ordered(x)])) : v;
   return JSON.stringify(ordered(a)) === JSON.stringify(ordered(b));
 };
+
+const positive = (v: number): boolean => Number.isSafeInteger(v) && v > 0;
+const cap = (value: number | undefined, hard: number): number => {
+  if (value !== undefined && !positive(value)) throw new SpeechAccountingError('invalid');
+  return Math.min(value ?? hard, hard);
+};
+const validateOperation = (op: SpeechOperation): void => {
+  const strings = [op.operationId, op.sessionId, op.attemptId, op.backendOperationRef, op.nativeTurnRef,
+    op.submitKey, op.allocatorReceiptRef, op.cost?.tenantId, op.cost?.principalId, op.cost?.source,
+    op.cost?.correlationId, op.binding?.providerId, op.binding?.modelId, op.binding?.modelRevision,
+    op.binding?.adapterId, op.binding?.adapterRevision, op.binding?.placement, op.binding?.accountRef,
+    op.binding?.region, op.configuration?.profileId, op.configuration?.configRevision,
+    op.configuration?.policyRef, op.target?.sessionId, op.target?.sourceGeneration, op.target?.consentRevision];
+  if (strings.some(v => typeof v !== 'string' || !v) || !positive(op.coordinatorEpoch)
+    || !positive(op.target.controllerEpoch) || !positive(op.maxDurationMs) || !positive(op.maxConcurrent)
+    || !['stt', 'tts', 'duplex'].includes(op.stage)) throw new SpeechAccountingError('invalid');
+  try { validateSpeechUsage(op.ceiling); } catch { throw new SpeechAccountingError('invalid'); }
+  if (op.ceiling.connectedSeconds !== op.maxDurationMs / 1000) throw new SpeechAccountingError('invalid');
+};
+
+/** Called only with auth-derived CostContext and the server's selected configuration/engine bounds. */
+export const admitSpeech = async (options: SpeechAccountingOptions, input: SpeechOperation): Promise<SpeechHold> => {
+  const operation = structuredClone(input);
+  validateOperation(operation);
+  const dailyCap = cap(options.dailyCapMicroUsd, SPEECH_DAILY_MICRO_USD);
+  const campaignCap = cap(options.campaignCapMicroUsd, SPEECH_CAMPAIGN_MICRO_USD);
+  return speechTransaction(options, async (tx, nowMs) => {
+    const utcDay = utcSpeechDay(nowMs);
+    await tx.lock(options.campaignRef, operation.operationId, utcDay);
+    const previous = await tx.getHold(operation.operationId);
+    if (previous) {
+      if (previous.campaignRef !== options.campaignRef || !sameSpeechIdentity(previous.operation, operation)) {
+        throw new SpeechAccountingError('conflict');
+      }
+      // Replays recover the same hold; they never authorize a second provider connection.
+      return structuredClone(previous);
+    }
+    const receipt = await tx.allocatorReceipt(operation.allocatorReceiptRef);
+    if (!receipt || receipt.receiptRef !== operation.allocatorReceiptRef
+      || receipt.tenantId !== operation.cost.tenantId || receipt.workspaceId !== operation.cost.workspaceId
+      || receipt.principalId !== operation.cost.principalId || receipt.targetSessionId !== operation.target.sessionId
+      || receipt.nativeTurnRef !== operation.nativeTurnRef || receipt.submitKey !== operation.submitKey
+      || receipt.coordinatorEpoch !== operation.coordinatorEpoch || ![0, 1].includes(receipt.countedUnits)) {
+      throw new SpeechAccountingError('allocator');
+    }
+    const price = await tx.price(operation.binding, nowMs);
+    if (!price || price.providerId !== operation.binding.providerId || price.modelId !== operation.binding.modelId
+      || price.region !== operation.binding.region || price.effectiveAtMs > nowMs || price.expiresAtMs <= nowMs
+      || Object.keys(price.rates).some(key => operation.ceiling[key as keyof SpeechUsage] === undefined)) {
+      throw new SpeechAccountingError('unavailable');
+    }
+    const liabilityMicroUsd = priceSpeechUsage(price, operation.ceiling);
+    if (!positive(liabilityMicroUsd)) throw new SpeechAccountingError('invalid');
+    const budgets = await tx.budgets(options.campaignRef, utcDay);
+    for (const [bucket, limit] of [[budgets.daily, dailyCap], [budgets.campaign, campaignCap]] as const) {
+      if (!Number.isSafeInteger(bucket.spentMicroUsd) || bucket.spentMicroUsd < 0
+        || !Number.isSafeInteger(bucket.reservedMicroUsd) || bucket.reservedMicroUsd < 0) {
+        throw new SpeechAccountingError('unavailable');
+      }
+      if (BigInt(bucket.spentMicroUsd) + BigInt(bucket.reservedMicroUsd) + BigInt(liabilityMicroUsd) > BigInt(limit)) {
+        throw new SpeechAccountingError('cap');
+      }
+    }
+    const active = await tx.activeConnections(operation.binding.accountRef, nowMs);
+    if (!Number.isSafeInteger(active) || active < 0) throw new SpeechAccountingError('unavailable');
+    if (active >= operation.maxConcurrent) throw new SpeechAccountingError('concurrency');
+    const hold: SpeechHold = { operation, campaignRef: options.campaignRef, utcDay, price,
+      liabilityMicroUsd, expiresAtMs: nowMs + operation.maxDurationMs, dispatched: false,
+      state: 'reserved', chargedMicroUsd: 0, settlementRevision: -1 };
+    await tx.adjustBudgets(hold.campaignRef, utcDay, liabilityMicroUsd, 0);
+    await tx.putHold(hold);
+    return structuredClone(hold);
+  });
+};
+
+/** Durable, one-shot dispatch claim. An ambiguous acknowledgement never allows replay. */
+export const markSpeechDispatched = async (options: SpeechAccountingOptions, operationId: string): Promise<boolean> =>
+  speechTransaction(options, async (tx, nowMs) => {
+    await tx.lock(options.campaignRef, operationId, utcSpeechDay(nowMs));
+    const hold = await tx.getHold(operationId);
+    if (!hold || hold.campaignRef !== options.campaignRef) throw new SpeechAccountingError('invalid');
+    if (hold.dispatched || hold.state !== 'reserved') return false;
+    if (hold.expiresAtMs <= nowMs) throw new SpeechAccountingError('expired');
+    hold.dispatched = true;
+    await tx.putHold(hold);
+    return true;
+  });
