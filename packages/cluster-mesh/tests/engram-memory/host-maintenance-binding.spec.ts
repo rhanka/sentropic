@@ -11,8 +11,9 @@
 
 import { describe, expect, it } from 'vitest';
 import { assembleMemoryHostBinding } from '../../src/engram-memory/binding.js';
+import { openMemoryMaintenance } from '../../src/engram-memory/host-maintenance.js';
 import { MemoryHostDriverRequiredError } from '../../src/engram-memory/sqlite.js';
-import { StorageDeniedError } from '../../src/storage/errors.js';
+import { StorageDeniedError, StorageUnavailableError } from '../../src/storage/errors.js';
 import { grantFor } from '../storage/authority-corpus.js';
 
 const qualifiedProvider = () => ({
@@ -49,6 +50,17 @@ describe('host maintenance binding', () => {
     expect(() =>
       assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: null }),
     ).toThrow(StorageDeniedError);
+  });
+
+  it('opens host-only ports from the binding and fails closed until G1b', async () => {
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant() });
+    const ports = openMemoryMaintenance(binding);
+    await expect(ports.checkFence('lane', '1')).rejects.toBeInstanceOf(StorageUnavailableError);
+    await expect(ports.checkpoint('consumer', 'cursor')).rejects.toThrow(/G1b stateful projection/);
+    await expect(ports.poison('consumer', 'reason')).rejects.toBeInstanceOf(StorageUnavailableError);
+    await expect(ports.resync('scope')).rejects.toBeInstanceOf(StorageUnavailableError);
+    await expect(ports.snapshot('scope')).rejects.toBeInstanceOf(StorageUnavailableError);
+    expect(() => openMemoryMaintenance(null as never)).toThrow(StorageDeniedError);
   });
   it.todo('denies maintenance operations through the neutral memory handle');
   it.todo('refuses expired, revoked or foreign-scope maintain grants');
