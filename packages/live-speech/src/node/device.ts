@@ -1,7 +1,12 @@
 // OS audio-device port (r3 L4). The session never touches hardware: capture
 // consumes this port, tests inject fakes, and the arecord backend spawns the
 // vetted system binary with an explicit argv (no shell, no audio files).
+// G-NATIVE: the binary is hash-verified at open against pinned digests;
+// anything unpinned is refused before any audio flows.
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { access, readFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
 
 export interface AudioDeviceInfo {
   /** Backend device selector passed back to open(), e.g. 'hw:2,0'. */
@@ -53,6 +58,51 @@ export class DeviceLostError extends Error {
   }
 }
 
+/**
+ * Pinned SHA-256 digests of vetted arecord builds. The Ubuntu host build is
+ * measured in; the pinned CI image build is still pending (receipt: partial).
+ * Operators may allowlist a local build via ARECORD_DIGESTS (comma-separated).
+ */
+export const ARECORD_SHA256_PINS: readonly string[] = [
+  '4436d05a3f9ce9d92432ea73dd5b6233f69d6243a6cfb3b6b1b8852622cb26c5',
+];
+
+function extraPins(): string[] {
+  const raw = process.env.ARECORD_DIGESTS ?? '';
+  return raw
+    .split(',')
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => /^[0-9a-f]{64}$/.test(entry));
+}
+
+/** Resolve a binary to an absolute executable path (execvp-style PATH search). */
+async function resolveBinary(binary: string): Promise<string> {
+  if (binary.includes('/')) return binary;
+  const path = process.env.PATH ?? '';
+  for (const dir of path.split(':')) {
+    if (dir.length === 0) continue;
+    const full = `${dir}/${binary}`;
+    try {
+      await access(full, constants.X_OK);
+      return full;
+    } catch {
+      // Not here; keep searching.
+    }
+  }
+  throw new DeviceUnavailableError(`${binary} is not installed or not executable`);
+}
+
+/** SHA-256 of the binary file. A missing file fails closed, never spawns. */
+async function digestBinary(path: string): Promise<string> {
+  let bytes: Buffer;
+  try {
+    bytes = await readFile(path);
+  } catch {
+    throw new DeviceUnavailableError(`${path} is not installed or not executable`);
+  }
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
 /** Exact arecord argv for raw mono capture. Pure: unit-tested without spawning. */
 export function buildArecordArgs(deviceId: string, options: OpenDeviceOptions): string[] {
   return ['-D', deviceId, '-f', 'S16_LE', '-r', String(options.sampleRateHz), '-c', '1', '-t', 'raw'];
@@ -75,7 +125,21 @@ export function parseArecordList(output: string): AudioDeviceInfo[] {
 
 /** Backend spawning the system arecord binary (alsa-utils). Fails closed. */
 export class ArecordDevice implements DevicePort {
-  constructor(private readonly binary = process.env.ARECORD_BIN ?? 'arecord') {}
+  constructor(
+    private readonly binary = process.env.ARECORD_BIN ?? 'arecord',
+    private readonly allowPins: readonly string[] = [],
+  ) {}
+
+  /** Hash-verify the binary before use; unpinned helpers are refused. */
+  private async verifiedBinary(): Promise<string> {
+    const path = await resolveBinary(this.binary);
+    const digest = await digestBinary(path);
+    const pins = [...ARECORD_SHA256_PINS, ...this.allowPins, ...extraPins()];
+    if (!pins.includes(digest)) {
+      throw new DeviceOpenError(`digest mismatch for ${path}: refusing unpinned helper`);
+    }
+    return path;
+  }
 
   async listDevices(): Promise<AudioDeviceInfo[]> {
     return new Promise<AudioDeviceInfo[]>((resolve, reject) => {
@@ -97,7 +161,7 @@ export class ArecordDevice implements DevicePort {
   }
 
   async open(deviceId: string, options: OpenDeviceOptions): Promise<AudioStream> {
-    const child = spawn(this.binary, buildArecordArgs(deviceId, options), {
+    const child = spawn(await this.verifiedBinary(), buildArecordArgs(deviceId, options), {
       shell: false,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
