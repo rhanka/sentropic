@@ -5,8 +5,9 @@
 // migration execution in registration. A host cannot override mandatory
 // validation, recovery or ownership through the storage factory.
 
-import type { PostgresStorageOptions } from '../storage/postgres/protocol.js';
+import type { InjectedPgDriver, PostgresStorageOptions } from '../storage/postgres/protocol.js';
 import { loadPgAssets } from '../storage/postgres/migrations.js';
+import { decodePgText } from '../storage/postgres/codec.js';
 import { StorageInvalidCommandError, StorageUnavailableError } from '../storage/errors.js';
 import { MemoryHostDriverRequiredError } from './sqlite.js';
 import type { AtomicUnit } from '../storage/atomic.js';
@@ -151,14 +152,15 @@ export interface MemoryPostgresDriverIdentity {
 
 /**
  * Qualified host-owned PG driver/pool provider. The host composition owns
- * the pool lifecycle and passes the provider explicitly; Engram receives
- * the neutral binding only, never the pool, raw SQL access or this
- * provider. Live server probing belongs to the open path, not to this
- * object check.
+ * the pool lifecycle and passes the provider explicitly — including the
+ * live pool, so installed calls run through the exact pool the provider
+ * describes. Engram receives the neutral binding only, never the pool,
+ * raw SQL access or this provider.
  */
 export interface MemoryPostgresDriverProvider {
   readonly identity: MemoryPostgresDriverIdentity;
   readonly serverFloor: string;
+  readonly pool: InjectedPgDriver;
 }
 
 /** Pinned server floor (the qualification stack runs postgres:17); kept literal. */
@@ -167,9 +169,9 @@ export const MEMORY_PG_SERVER_FLOOR = '17.0.0' as const;
 const HEX64 = /^[a-f0-9]{64}$/;
 
 const parseServer = (version: string): [number, number, number] => {
-  const match = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
+  const match = /^(\d+)(?:\.(\d+))?(?:\.(\d+))?/.exec(version);
   if (!match) throw new StorageUnavailableError(`unreadable memory PG server version: ${version}`);
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
+  return [Number(match[1]), Number(match[2] ?? 0), Number(match[3] ?? 0)];
 };
 
 const serverAtLeast = (version: string, floor: string): boolean => {
@@ -178,12 +180,20 @@ const serverAtLeast = (version: string, floor: string): boolean => {
   return a !== x ? a > x : b !== y ? b > y : c >= z;
 };
 
-/** Object-level provider check: explicit host provider with a qualified identity and floor. */
+/** Object-level provider check: explicit host provider with a qualified identity, floor and live pool. */
 export const checkMemoryPostgresDriver = (driver: unknown): MemoryPostgresDriverProvider => {
   if (typeof driver !== 'object' || driver === null) {
     throw new MemoryHostDriverRequiredError(
       'memory Postgres storage requires an explicit host-injected driver provider',
     );
+  }
+  const pool = (driver as { readonly pool?: unknown }).pool;
+  if (
+    typeof pool !== 'object' ||
+    pool === null ||
+    typeof (pool as { readonly transaction?: unknown }).transaction !== 'function'
+  ) {
+    throw new MemoryHostDriverRequiredError('memory driver provider requires the live host pool');
   }
   const candidate = (driver as { readonly identity?: unknown }).identity;
   const floor = (driver as { readonly serverFloor?: unknown }).serverFloor;
@@ -203,6 +213,29 @@ export const checkMemoryPostgresDriver = (driver: unknown): MemoryPostgresDriver
     throw new StorageUnavailableError('memory PG server is below the qualified floor');
   }
   return driver as MemoryPostgresDriverProvider;
+};
+
+/**
+ * Live provider verification: run `SHOW server_version` through the
+ * provider's own pool and require it to meet the declared floor. This
+ * proves the pool is the installed one, not a metadata-only record.
+ */
+export const verifyMemoryPostgresProvider = async (
+  driver: unknown,
+): Promise<MemoryPostgresDriverProvider> => {
+  const provider = checkMemoryPostgresDriver(driver);
+  const version = await provider.pool.transaction(
+    { isolation: 'serializable', readOnly: true, deadlineMs: 5000 },
+    (session) =>
+      session.execute({ text: 'SHOW server_version', values: [] }).then((result) => {
+        const row = result.rows[0] as Record<string, unknown> | undefined;
+        return decodePgText(row?.['server_version']);
+      }),
+  );
+  if (!serverAtLeast(version, provider.serverFloor)) {
+    throw new StorageUnavailableError('memory PG server is below the provider floor');
+  }
+  return provider;
 };
 
 /**

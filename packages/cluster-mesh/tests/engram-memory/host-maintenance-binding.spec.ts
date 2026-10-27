@@ -26,9 +26,12 @@ import { StorageDeniedError, StorageUnavailableError } from '../../src/storage/e
 import { grantFor } from '../storage/authority-corpus.js';
 import { g1Grant } from './g1-host.js';
 
+const sharedStubPool = { transaction: async () => ({ rows: [] as unknown[] }) };
+
 const qualifiedProvider = () => ({
   identity: { name: 'node-pg-owner', version: '8.16.3', artifactDigest: 'b'.repeat(64) },
   serverFloor: '17.0.0',
+  pool: sharedStubPool,
 });
 
 const maintainGrant = () =>
