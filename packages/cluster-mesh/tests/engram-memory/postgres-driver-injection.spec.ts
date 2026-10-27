@@ -170,4 +170,21 @@ describe.skipIf(!pgEnabled)('memory PG positive installed calls', () => {
       await host.close();
     }
   });
+
+  it('refuses an injected operations object instead of installing it', async () => {
+    const host = await memoryPgHost();
+    try {
+      // An installed `operations` record would give the kernel a custom
+      // operation bypassing validateEffects; the allowlist refuses the key.
+      await expect(createMemoryPostgresStorage({
+        provider: memoryHostProvider(host.options.driver),
+        layout: host.layout,
+        history: host.history,
+        cursorSecret: host.options.cursorSecret,
+        operations: { rawSqlWrite: { kind: 'invoke' } },
+      } as never)).rejects.toThrow(/caller-owned kernel keys: operations/);
+    } finally {
+      await host.close();
+    }
+  });
 });
