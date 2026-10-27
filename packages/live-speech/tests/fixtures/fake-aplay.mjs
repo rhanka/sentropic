@@ -7,9 +7,15 @@
 //   fail: exit 3 immediately (nonzero-exit path).
 // $FAKE_APLAY_PIDFILE receives the pid when set, so the test can prove no
 // orphan stays. $FAKE_APLAY_EXPECT_HEX asserts the exact piped bytes.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { appendFileSync, readFileSync, writeFileSync } from 'node:fs';
 const mode = process.env.FAKE_APLAY_MODE ?? 'ok';
 const pidFile = process.env.FAKE_APLAY_PIDFILE;
+// Spawn marker, independent of stdin: appended at process start, before any
+// stdin read, so an absence proof can tell "never spawned" apart from
+// "spawned but blocked on stdin". The readiness pidfile below keeps its
+// stricter meaning (stdin EOF reached and the signal handler armed).
+const spawnLog = process.env.FAKE_APLAY_SPAWNLOG;
+if (spawnLog) appendFileSync(spawnLog, `${process.pid}\n`);
 
 if (mode === 'fail') {
   process.exit(3);
