@@ -1,4 +1,7 @@
 import { spawnSync } from 'node:child_process';
+import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
+import { resolve } from 'node:path';
+import { buildSync } from 'esbuild';
 import { describe, expect, it } from 'vitest';
 
 describe('physical app registry installation', () => {
@@ -30,5 +33,30 @@ describe('physical app registry installation', () => {
     `], { encoding: 'utf8' });
     expect(result.status, result.stderr || result.stdout).toBe(0);
     expect(JSON.parse(result.stdout).artifacts).toContain('/packages/artifacts/dist/');
+  });
+  it('should compile the bundled API registry with the production external-package settings', () => {
+    const directory = mkdtempSync(resolve('.w2b-registry-'));
+    try {
+      const script = JSON.parse(readFileSync('package.json', 'utf8')).scripts.build.split(' && ')[0] as string;
+      const external = [...script.matchAll(/--external:([^\s]+)/g)].map(match => match[1]);
+      const outfile = resolve(directory, 'probe.mjs');
+      buildSync({ stdin: { contents: `
+        import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '@sentropic/artifacts/mcp-core';
+        import { compileAppMcpRegistry } from './src/services/mcp/cluster-registry';
+        const profile = compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE);
+        const result = await compileAppMcpRegistry({
+          artifacts: { profile, app: { profileDigest: profile.profileDigest,
+            selectedCapabilities: profile.selectedCapabilities, execute: async () => { throw new Error('No effect'); } },
+            createInvocation: () => { throw new Error('No binding'); } },
+          selection: ['sentropic.artifacts'], configurations: { 'sentropic.artifacts': {} }, bindings: {},
+          compatibility: { 'sentropic.artifacts': {
+            manifestDigest: 'ccf8a4ddd9365537741eb0550efa49954d86a0c2d1ee808fb18ca81ef7090e9a' } },
+        });
+        if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
+        if (result.registry.tools.size !== 4) throw new Error('APP-P1 tool count');
+      `, resolveDir: process.cwd() }, outfile, bundle: true, platform: 'node', target: 'node20', format: 'esm', external });
+      const result = spawnSync(process.execPath, [outfile], { encoding: 'utf8' });
+      expect(result.status, result.stderr || result.stdout).toBe(0);
+    } finally { rmSync(directory, { recursive: true, force: true }); }
   });
 });
