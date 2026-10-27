@@ -2,8 +2,8 @@
 
 ## Objective
 
-- [x] Qualify approved plan row E9 after local E7 `ee654ace2` and E8 `4eaeacd85`, using merge commits only. Worktree `tmp/worktrees/mem-e9`, branch `feat/cluster-mesh-engram-e9`, draft PR targeting `feat/engram-e2-integration`.
-- [x] Run real PostgreSQL memory Stage B through installed Engram 0.21.1, its exact `['read','write']` binding and E7's separate host maintenance binding. Pack-only reservation `0.23.0-dev.10`; P3 and candidate archive `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10` stay frozen.
+- [ ] Qualify approved plan row E9 through the shipped E7 bindings; current status `blocked: E7-fenced-writers`. Worktree `tmp/worktrees/mem-e9`, branch `feat/cluster-mesh-engram-e9`, draft PR targeting `feat/engram-e2-integration`.
+- [ ] Run real PostgreSQL memory Stage B through installed Engram 0.21.1, its exact `['read','write']` binding and E7's separate host maintenance binding. Host snapshot/journal reads are `blocked: E7`. Pack-only reservation `0.23.0-dev.10`; P3 re-pin and CI PG wiring belong to the integration lane.
 
 ## Scope / Guardrails
 
@@ -176,8 +176,10 @@
 
 ## Feedback Loop
 
-- [x] BR9-EX1: direct E9 blocker reproduced by installed `commitPending`: PostgreSQL validator expects the E6 camel-case proof model while frozen Engram persists snake-case K7/K8 DTOs. Allow the smallest adapter in `src/engram-memory/postgres.ts` to validate the actual wire bytes through the existing first-proof rules. No stored-value rewrite, schema/contract/P3 change. Rollback: remove that adapter; the positive Stage B capture must fail again.
-- [x] BR9-EX2: the next real capture reaches journal validation and fails because E6 expects an `intent_hash` field absent from frozen Engram events. Derive that projection metadata from the canonical event intent in `src/engram-memory/projection.ts`; immutable event bytes remain unchanged. Rollback: remove derivation; the capture regression fails again.
+- [x] r1 disposition supersedes the historical campaign completion claims above: fixture semantics do not qualify the shipped host assembly; no five-profile or `fenced-writers-v1` qualification is claimed.
+- [x] P2-1 reproduced and corrected for the historical tree: clean committed `02c626ca471ac5d051cda9eee991ff16bcc28ab8`, memory 18 files / 173 passed, zero skip/todo; `exit=0 cleanup=0`. Receipt `tmp/memory-e9-r1/committed-173/`, campaign SHA-256 `33e39849eca323a2dc9072c243763305f05e1846bb6a0d42e16a1d83545b85d8`; this is not a receipt for subsequent revisions.
+- [x] BR9-EX1 reverted in r1: `postgres.ts` restored to E7 `ee654ace2`; E6 owner suggestion: validate frozen Engram snake-case K7/K8 proofs without rewriting stored bytes, retaining first-proof immutability. Verification: real-PG installed capture/completion/admission/replay.
+- [x] BR9-EX2 reverted in r1: `projection.ts` restored to E7 `ee654ace2` (including the E9 ordinal adaptation); E6 owner suggestion: derive journal intent metadata from the frozen event payload, whose DTO lacks `intent_hash`. Verification: real-PG capture and conflicting/original replay. Both suggestions delivered to `s-conductor` via h2a.
 - [x] BR9-EX3: all three C5 high-water cases reproduce `chain sequence exhausted` in `postgres/effects.ts:129`. Permit exact-u64 memory chain count/position arithmetic, the corresponding transactional reader and projection ordinal, with type-only adaptations in the existing generic readers/manifests/installed/scope. Other modules retain numeric transport. No published SQL or neutral contract changes. Rollback: revert this bounded chain fix; C5 must fail again.
 - Blocker: if E2/E3/E6 move under this branch (new migration writer, changed `migrations.ts`, moved `scope.ts` hooks), stop and coordinate — do not renumber or rewire around them.
 - Base refs: E5 `8bad820e9` (E5-1/E5-2 done, E5-3 CI pending on #787 for structural E2-base reasons, not code); E6 `9b476e20d` (projection/resync, memory PG assets, `postgres-memory.spec.ts` in the E2 real-PG lane).
