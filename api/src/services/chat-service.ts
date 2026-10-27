@@ -47,7 +47,6 @@ import {
 import {
   resolveFoundationChatTools,
 } from './skills/catalog';
-import { reconcileTenantId } from './tenancy/resolve-tenant';
 import { executeFoundationSkillTool } from './skills/foundation-executor';
 import { resolveTurnCatalogContext } from './catalog/request-authority';
 import { toolService } from './tool-service';
