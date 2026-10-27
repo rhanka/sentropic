@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { architectureScenes, decisionScenes, ROUTED_NEEDS, GIGOGNE_VIEWS } from '../src/architecture.js';
-import { localize } from '../src/i18n.js';
+import { localize, bindGovernanceScene } from '../src/governance-input.js';
 import { packGovernanceScene } from '../src/governance-layout.js';
 import { packStudyScene } from '../src/study-layout.js';
 import { routeScene } from '../src/architecture-routing.js';
@@ -51,7 +51,7 @@ for(const language of ['fr','en']) {
     const folds=key==='overview'?states:[all];
     for(const ids of folds){
      progress(`${language} ${key}/fold ${ids.join(',')}`);
-     const input={...packed,projectionKey:key,detailedEdges:packed.edges,edges};
+    const input={...bindGovernanceScene(packed),projectionKey:key,detailedEdges:packed.edges,edges};
      const folded=cached({input,ids},()=>collapseGovernanceScene(input,ids,false));
      if(!projections.folded.some(p=>p.signature===folded.routingSignature))projections.folded.push({signature:folded.routingSignature,edges:folded.edges});
     }
