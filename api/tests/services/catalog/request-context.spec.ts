@@ -32,6 +32,8 @@ describe('trusted catalog context', () => {
     await expect(revalidateCatalogInvocation(context, 'artifacts_publish', {})).rejects.toThrow('catalog_access_denied');
     expect(context.readOnly).toBe(true);
     expect(context.sessionKind).toBe('turn');
+    const readOnly = await resolve({ ...input, readOnly: true });
+    await expect(revalidateCatalogInvocation(readOnly, 'artifacts_publish', {}, true)).rejects.toThrow('catalog_access_denied');
   });
 
   it('should deny forged contexts and identity claims before invoking anything', async () => {
