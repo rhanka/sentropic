@@ -9,6 +9,7 @@
 
 import { validateScopeGrant, type ScopeGrant } from '../storage/authority.js';
 import { StorageDeniedError } from '../storage/errors.js';
+import type { StorageScope } from '../storage/contracts.js';
 import { checkMemoryPostgresDriver, type MemoryPostgresDriverProvider } from './postgres.js';
 import type { MemoryHostLedger } from './ledger.js';
 
@@ -107,6 +108,33 @@ export const assembleMemoryHostBinding = (input: MemoryHostBindingInput): Memory
     memoryGrant: neutral,
     memoryOperations: MEMORY_HANDLE_OPERATIONS,
   });
+};
+
+/**
+ * Verify the binding against the kernel's authoritative grants table by
+ * binding the maintain grant: a revoked or never-issued grant is refused
+ * by the store itself, not by a local copy. An optional expected scope
+ * pins the binding to one scope — a foreign scope is refused even with a
+ * live grant. The binder is the kernel's `bind` (check-only, no issue).
+ */
+export const verifyHostBinding = async (
+  binder: { bind(grant: ScopeGrant<unknown>): Promise<unknown> },
+  binding: MemoryHostBinding,
+  scope?: StorageScope,
+): Promise<void> => {
+  if (typeof binding !== 'object' || binding === null) {
+    throw new StorageDeniedError('host binding verification requires an assembled binding');
+  }
+  assertMaintainGrantLive(binding.maintainGrant);
+  if (scope !== undefined) {
+    if (
+      scope.tenantId !== binding.maintainGrant.scope.tenantId ||
+      scope.workspaceId !== binding.maintainGrant.scope.workspaceId
+    ) {
+      throw new StorageDeniedError('host binding scope does not match the maintain grant scope');
+    }
+  }
+  await binder.bind(binding.maintainGrant);
 };
 
 /** Fresh host authentication for a later invocation (E8 answer 2). */
