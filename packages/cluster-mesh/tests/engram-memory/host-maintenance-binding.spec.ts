@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest';
 import { assembleMemoryHostBinding, issueContinuationGrant } from '../../src/engram-memory/binding.js';
 import { openMemoryMaintenance } from '../../src/engram-memory/host-maintenance.js';
-import { createMemoryHostLedger } from '../../src/engram-memory/ledger.js';
+import { createMemoryHostLedger, proveForRecovery } from '../../src/engram-memory/ledger.js';
 import { MemoryHostDriverRequiredError } from '../../src/engram-memory/sqlite.js';
 import { StorageDeniedError, StorageUnavailableError } from '../../src/storage/errors.js';
 import { grantFor } from '../storage/authority-corpus.js';
@@ -144,6 +144,32 @@ describe('host maintenance binding', () => {
       );
       issueContinuationGrant(ledger, 'cand-1', attestation);
       expect(() => issueContinuationGrant(ledger, 'cand-1', attestation)).toThrow(StorageDeniedError);
+    });
+
+    it('proves recovery evidence without applying effects', () => {
+      const ledger = createMemoryHostLedger();
+      ledger.record(entryFor('cand-1'));
+      ledger.markTerminal('cand-1', { outcome: 'admitted' }, 'cursor-9');
+      const proof = proveForRecovery(ledger, 'cand-1');
+      expect(proof.state).toBe('terminal');
+      expect(proof.envelopeDigest).toBe('e'.repeat(64));
+      expect(proof.receipt).toEqual({ outcome: 'admitted' });
+      expect(proof.cursor).toBe('cursor-9');
+      expect(proveForRecovery(ledger, 'cand-1', { tenantId: 'tenant-a', workspaceId: 'workspace-a' })).toEqual(
+        proof,
+      );
+      // Nothing was written by the proof path.
+      expect(ledger.read('cand-1')).toEqual({ ...proof, invocationId: 'inv-1', continuationIds: [] });
+    });
+
+    it('refuses recovery for unknown candidates and foreign scopes', () => {
+      const ledger = createMemoryHostLedger();
+      expect(() => proveForRecovery(ledger, 'unknown')).toThrow(StorageDeniedError);
+      ledger.record(entryFor('cand-1'));
+      expect(() => proveForRecovery(ledger, 'unknown')).toThrow(StorageDeniedError);
+      expect(() =>
+        proveForRecovery(ledger, 'cand-1', { tenantId: 'elsewhere', workspaceId: 'workspace-a' }),
+      ).toThrow(StorageDeniedError);
     });
 
     it('refuses malformed entries without recording', () => {
