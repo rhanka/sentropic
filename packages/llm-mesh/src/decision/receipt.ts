@@ -35,7 +35,9 @@ export interface DecisionReceipt {
   callId: string;
   correlationId: string;
   evaluator: EvaluatorRef | null;
-  servedEvaluator: EvaluatorRef | null;
+  servedEvaluator: (EvaluatorRef & { provisional?: true }) | null;
+  /** Qualification receipts cannot satisfy the closed production v1 validator. */
+  experimental?: true;
   servedModelId: string | null;
   providerRequestId?: string;
   startedAt: string;
@@ -55,9 +57,10 @@ export interface DecisionReceipt {
   errorCode?: DecisionErrorCode;
 }
 
-export type DecisionResult =
-  | { kind: 'verdict'; ok: true; verdict: DecisionVerdict; receipt: DecisionReceipt }
-  | { kind: 'error'; ok: false; error: DecisionError; receipt: DecisionReceipt };
+export type DecisionResult = (
+  | { kind: 'verdict' | 'experimental-verdict'; ok: true; verdict: DecisionVerdict; receipt: DecisionReceipt }
+  | { kind: 'error'; ok: false; error: DecisionError; receipt: DecisionReceipt }
+) & { experimental?: true };
 
 export interface DecisionClient {
   decide(request: DecisionRequest, options?: { signal?: AbortSignal }): Promise<DecisionResult>;

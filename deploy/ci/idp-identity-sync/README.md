@@ -207,19 +207,21 @@ by that tenant during the owner-gated CD acceptance.
 The service pass runs after the client pass in the same transaction
 (`service-policy.sql`, then `sync-services.sql`). Its desired state is the static
 reviewed policy in `service-policy.sql` — the export side is untouched and no
-secret material transits. Only `service_clients.exchange_policy` on the
-pre-existing `immo-mcp-workload` row may change; ids, secret hashes and every
-other row are verified unchanged (`service post-condition failed` otherwise). A
-missing workload row is counted as `services_skipped_missing` and never created:
-its secret is created once through the protected provisioning path below. Prod
-audiences are rewritten to preprod through the same host-map as clients. Fixture
-hashes are test-only. Create the workload row (absent → created, replay no-op,
-conflict refused, public row untouched) with
-`make oauth-provision-exchange-client ENV=<env>`
-(`OAUTH_WORKLOAD_CLIENT_SECRET` via the protected channel, never committed).
-Rotate or revoke the workload credential with
-`make oauth-rotate-service-client CLIENT_ID=immo-mcp-workload ENV=<env>`
-without rotating users or the public client.
+secret material transits from prod. In preprod, the **only creation/rotation path**
+is the named-Secret identity sync, not `oauth-provision-exchange-client` or
+`oauth-rotate-service-client`. Before the policy snapshot, `register-workload.sql`
+creates only `immo-mcp-workload` or replaces its hash if the existing row is active.
+The importer validates exactly 64 lowercase hex characters (no newline), hashes
+them in its shell process, unsets the clear value, and sends only the hash to psql.
+Malformed input returns `workload_credential_invalid` without executing SQL.
+An unchanged Secret is a no-op. A changed Secret rekeys the active row on commit,
+immediately invalidating the old credential; dry-run rolls the change back.
+A revoked row stays revoked and is skipped without blocking identity sync.
+No Secret means policy-only convergence; a missing row is `services_skipped_missing`.
+The following policy pass preserves all ids/hashes and unrelated clients
+(`service post-condition failed` otherwise). Prod audiences are rewritten through
+the client host-map. See [CRED_CYCLE.md](CRED_CYCLE.md) and the
+[owner runbook](../../k8s/README.md#radar-preprod-mcp-workload-rfc-8693).
 
 ## Failure and rollback
 

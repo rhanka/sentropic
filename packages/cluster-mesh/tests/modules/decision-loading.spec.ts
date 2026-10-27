@@ -50,6 +50,10 @@ describe('decision module loading', () => {
     expect(loaded.jevDescriptor).toBe(meshDecisionHostProvider.jevDescriptor);
     const loadedByLoader = await loadLlmMeshDecisionHost(modules);
     expect(loadedByLoader.createDecisionService).toBe(meshDecisionHostProvider.createDecisionService);
+    expect(loadedByLoader.createOpenAiDecisionsAdapter).toBe(meshDecisionHostProvider.createOpenAiDecisionsAdapter);
+    expect(loadedByLoader.createOpenAiDecisionsTransport).toBe(meshDecisionHostProvider.createOpenAiDecisionsTransport);
+    expect(loadedByLoader.openAiDecisionsDescriptor.protocol).toBe('openai-decisions');
+    expect(loadedByLoader.openAiDecisionsDescriptor.qualification.servedIdentity).toBe('unqualified');
     expect(modules.snapshot()['llm-mesh/decision/host']).toMatchObject({ state: 'loaded' });
   });
 
