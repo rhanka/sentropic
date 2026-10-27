@@ -1,7 +1,7 @@
 # Feature: W2.b app registry dispatch and artifact HTTP
 
 ## Objective
-- [ ] Mount the compiled cluster-mesh registry and APP-P1 HTTP on one durable artifact host.
+- [x] Mount the compiled cluster-mesh registry and APP-P1 HTTP on one durable artifact host.
 
 ## Scope / Guardrails
 - [x] Base W2.a `247015eba` merged with W1.d `8729aff22`; merge commits only.
@@ -57,12 +57,17 @@
 
 ## Feedback Loop
 - [x] BR02B-EX1: extend the existing resources inventory regression for the additive APP-P1 paths; impact is test expectations only; rollback with the artifact route mount.
-- [ ] W1.b P2: verify OAuth tuple, scopes, expiry and revocation with DB time after waits.
+- [x] W1.b P2: real session/OAuth readers verify tuple, scopes, audience, consent, proof key, expiry and revocation after waits.
 - [x] W2.a P2 reconciliation: API artifacts uses file workspace; root lock removes private registry copy; TS/Vitest artifacts aliases removed.
 - [x] W2.a P2 installed proof: native Node/tsx uses ESM import resolution from API/mesh and matches physical artifacts paths; production-settings bundle also compiles; 2/2 in /tmp/app-w2b-installed-final.log.
 - [x] Bundle red: production esbuild settings refused the loaded profile with invalid compiled artifacts profile; /tmp/app-w2b-focused1.log.
 - [x] API build keeps artifacts and cluster-mesh external, preserving physical runtime instances and package topology guards.
-- [ ] Retry failed pushes every ten minutes; draft PR after push; no merge.
+- [x] Retried GitHub push every ten minutes until access recovered at 08:29 UTC; branch pushed; no merge.
+- [x] Physical leaf receipt /tmp/app-w2b-physical-tree.json: workspace artifacts 0.2.1, mesh 0.22.4, platform 0.4.0, Comments 0.3.1, gateway 0.21.3, llm-mesh 0.28.1; actual comments/gateway/artifacts module loads succeed.
+- [x] W3 handoff: reuse productArtifactHost and productArtifactTransport.ready (one compiled exact-name map); extend only /api/v1/resources/artifacts/* for trusted activation; keep the resources author and existing MCP supervisor.
+- [x] W3 prerequisite: UP-T artifacts 0.2.3 publication/export/SQL receipt plus W1.c composition; no copied PG algorithm or SQL. Current qualified workspace remains 0.2.1 until that integration is qualified.
+- [x] W3 configuration: APP_ARTIFACT_HOST_ENABLED=1 requires explicit APP_ARTIFACT_QUOTA_BYTES and dedicated APP_ARTIFACT_S3_{BUCKET,REGION,ACCESS_KEY_ID,SECRET_ACCESS_KEY}; optional APP_ARTIFACT_S3_ENDPOINT. No memory/filesystem storage fallback.
+- [x] W3 packaging: preserve artifacts/cluster-mesh API build externals, add the content entrypoint to the canonical image and verify the pruned physical graph. Keep activation closed until FIRST-IMMO; live origin/CSRF/content/restore qualification remains W3/W5.
 - [ ] Independent final-head reviews and remote CI remain separate receipts.
 
 ## AI Flaky tests
@@ -97,5 +102,6 @@
   - [x] Exact remaining regression files: cluster-mesh-{resources,gw,gw-native,auth-roots,oauth-roots}.test.ts, session-adoption.test.ts and auth/{session,oauth-revoke-introspect}.test.ts.
   - [x] Strict install and physical package-resolution inventory without aliases; npm ls --omit=dev --all succeeds, /tmp/app-w2b-runtime-tree.json.
   - [x] Full development tree inventory retained in /tmp/app-w2b-workspace-tree.json; diagnostics concern @types/node, Vitest/UI and minimatch development requirements; no runtime dependency errors.
-  - [ ] Runtime logs and locked make down ENV=test-app-w2b; no remaining services.
-- [ ] Lot 6: exact-head evidence and W3 handoff; scope check; push; draft PR using this body.
+  - [x] Runtime startup logs checked; locked make down and empty make ps ENV=test-app-w2b; /tmp/app-w2b-final-cleanup.log.
+- [x] Lot 6 authorship: source evidence and W3 handoff consolidated; mechanical branch/scope checks and atomic make commits.
+- [ ] Draft PR using this body against feat/app-cm-integration; publication-disabled CI on the final head.
