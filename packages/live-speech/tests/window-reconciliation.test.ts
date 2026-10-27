@@ -20,19 +20,21 @@ const textOf = (events: LocalSttEvent[]) => events.map((event) => (event.type ==
 describe('long utterances', () => {
   it('should stitch realistic non-cumulative windows without cross-boundary corruption', async () => {
     // 8 s utterance at 4 s tiny window. Window decodes cover only their own span
-    // (never the cumulative head); consecutive windows share a few words. Every
-    // partial must be a word-contiguous slice of the reference — a character-level
-    // stitch ('I like it' + 'the dog' sharing 't' -> 'I like ithe dog') fails this.
+    // (never the cumulative head); consecutive windows share a few words, with
+    // the case/punctuation wobble of real engine output ('Quick' vs 'quick',
+    // 'brown,' vs 'brown'). Every partial must be a word-contiguous slice of the
+    // reference once normalized — an exact-match stitcher holds every window
+    // after the head (only 1 partial) and fails this test.
     const full = 'the quick brown fox jumps over the lazy dog near the river bank';
     const reference = full.split(' ');
     const windows = [
       'the quick brown',
-      'quick brown fox jumps',
+      'Quick brown, FOX jumps',
       'fox jumps over the',
-      'over the lazy dog',
-      'the lazy dog near',
+      'over the LAZY dog',
+      'lazy dog near',
       'dog near the river',
-      'near the river bank',
+      'near the river bank!',
     ];
     const script = windows.map((text) => ({ segments: [SEG(text)] }));
     script.push({ segments: [SEG(full)] });
@@ -45,14 +47,19 @@ describe('long utterances', () => {
     }
     const revs = partials(events);
     expect(revs.length).toBeGreaterThanOrEqual(2);
+    const normalize = (text: string): string[] =>
+      text
+        .split(' ')
+        .filter((part) => part.length > 0)
+        .map((part) => part.toLowerCase().replace(/^[^a-z0-9]+|[^a-z0-9]+$/g, ''));
     const texts = textOf(revs);
     for (const text of texts) {
-      const words = text.split(' ').filter((part) => part.length > 0);
+      const words = normalize(text);
       const start = reference.indexOf(words[0]);
       expect(start).toBeGreaterThanOrEqual(0);
       expect(reference.slice(start, start + words.length)).toEqual(words);
     }
-    expect(texts[texts.length - 1]).toBe(full);
+    expect(normalize(texts[texts.length - 1])).toEqual(reference);
     session_.pushFrames(silence(0.7));
     await flush(40);
     const done = finals(events);
