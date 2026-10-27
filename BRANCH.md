@@ -21,6 +21,7 @@
   - `packages/cluster-mesh/package.json`
   - `package-lock.json`
   - `.tmp/live-stt/l8/**`
+  - `.github/workflows/ci.yml`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -40,6 +41,7 @@
 - [x] Registry latest is 0.21.3 (2026-10-27); feature version will be 0.22.0, without publication.
 - [x] BRL8-EX1: gateway 0.22.0 requires widening cluster-mesh's optional gateway peer upper bound from 0.22 to 0.23 and mirroring workspace metadata in package-lock.json. Impact: manifest-only compatibility for the additive subpaths; rollback restores those three version/range fields. No cluster-mesh source changes.
 - [x] BRL8-EX2: permit .tmp/live-stt/l8 review/validation receipts only; no raw media, credentials or accounting store.
+- [x] BRL8-EX3: CI ignores pull requests targeting feat/live-stt-l2. Add only that base to the existing pull_request branch filter so PR798 runs standard gates; no job, secret, permission or publication change. Rollback removes the one branch entry.
 
 ## AI Flaky tests
 - [x] Deterministic fixtures only; no provider calls or waiver.
