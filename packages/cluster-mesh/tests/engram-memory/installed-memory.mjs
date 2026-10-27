@@ -136,3 +136,92 @@ const maintainGrant = {
 const binding = meshMemory.assembleMemoryHostBinding({ driver: provider, maintainGrant, invocationId, storeId });
 assert.deepEqual([...binding.memoryGrant.operations], ['read', 'write']);
 assert.deepEqual([...binding.maintainGrant.operations], ['read', 'maintain']);
+
+// Installed PostgreSQL schema, migration history and kernel. The assets
+// load from the installed mesh package bytes, never from a checkout.
+const schemaName = `installed_${randomBytes(6).toString('hex')}`;
+const layout = { dataSchema: schemaName, projectionSchemas: { 'engram-memory': `${schemaName}_projection` },
+  outboxSchema: schemaName };
+const history = {
+  read: async (session) => (await session.execute({
+    text: `SELECT receipt FROM "${schemaName}".host_history ORDER BY ordinal`, values: [],
+  })).rows.map((row) => row.receipt),
+  complete: async (session, receipt) => {
+    await session.execute({ text: `INSERT INTO "${schemaName}".host_history
+      VALUES ((SELECT COALESCE(MAX(ordinal),0)+1 FROM "${schemaName}".host_history),$1::jsonb)`,
+    values: [JSON.stringify(receipt)] });
+  },
+};
+const registration = await meshMemory.createMemoryPostgresRegistration();
+await hostDriver.transaction({ readOnly: false, deadlineMs: 30000 }, async (session) => {
+  await session.execute({ text: `CREATE SCHEMA "${schemaName}"; CREATE SCHEMA "${schemaName}_projection";
+    CREATE TABLE "${schemaName}".host_history(ordinal integer PRIMARY KEY, receipt jsonb NOT NULL);
+    CREATE TABLE "${schemaName}".host_memory_identity(scope text PRIMARY KEY, store_id text UNIQUE NOT NULL)`, values: [] });
+  await meshPg.applyPgMigrations(session, layout, registration.assets, history,
+    { id: 'installed-memory/001', checksum: 'a'.repeat(64) });
+});
+const hostHistory = await hostDriver.transaction({ readOnly: true, deadlineMs: 5000 },
+  (session) => history.read(session));
+
+// Host wire bridge: preserve memory values and decimal strings exactly;
+// validation, allocation, durability and authority stay in the kernel.
+const memoryFailure = (error) => {
+  const source = error ?? {};
+  const codes = { denied: 'unauthorized', 'invalid-command': 'invalid-schema', unavailable: 'store-unavailable',
+    'capacity-exceeded': 'limit-exceeded', 'idempotency-conflict': 'digest-conflict',
+    'instance-busy': 'fence-conflict', 'stale-epoch': 'fence-lost', 'terminal-loss': 'fence-lost' };
+  throw Object.assign(new Error(source.message ?? String(error)), { code: codes[source.code ?? ''] ?? source.code });
+};
+const guarded = async (run) => { try { return await run(); } catch (error) { return memoryFailure(error); } };
+const commitIndexKey = (identity) => JSON.stringify(['memory-host-commit-v1', identity]);
+const neutralUnitToPg = (unit) => {
+  if (unit.relationships.length || unit.barriers.length || unit.purgeIntents.length)
+    throw Object.assign(new Error('unsupported memory effects'), { code: 'invalid-schema' });
+  return {
+    guards: unit.guards.map((guard) => guard.kind === 'aggregate-version'
+      ? { kind: 'aggregate-version', key: guard.aggregateKey, version: guard.version }
+      : guard.kind === 'chain-head' ? { kind: 'head', chainId: guard.chain, hash: guard.hash }
+        : { kind: 'absent', chainId: guard.chain }),
+    records: unit.records.map((row) => ({ key: row.key, bytes: row.value, contentHash: row.contentHash })),
+    appends: unit.appends.map((row) => ({ chainId: row.chain,
+      record: { id: row.id, hash: row.hash, bytes: row.value.data }, expectation: row.expectation })),
+    updates: unit.updates.map((row) => ({ key: row.key, version: row.version, value: row.value })),
+    indexWrites: unit.indexWrites.map((row) => ({ key: row.key,
+      digest: JSON.parse(row.value.data).record_digest ?? row.value.data, resultIds: [], resultHash: null })),
+    relationships: [], barriers: [], purgeIntents: [], moduleResult: unit.moduleResult,
+  };
+};
+const neutralTransaction = (tx, units, identity) => ({
+  readAggregate: async (kind, key) => {
+    const found = await tx.readAggregate(key);
+    return found === null ? null : { kind, key, version: String(found.version), value: found.value };
+  },
+  readRecords: async (kind, keys) => (await tx.readRecords(keys, { maxRecords: 2000, maxEncodedBytes: 1048576 }))
+    .map((row) => ({ kind, key: row.key, value: row.bytes, contentHash: row.contentHash })),
+  readChain: ({ chain, afterAllocation = '0', limit }) =>
+    tx.readMemoryChain({ chainId: chain, afterAllocation, limit }),
+  findIdempotency: async ({ commitIdentity }) => {
+    const row = await tx.findIdempotency({ key: commitIndexKey(commitIdentity) });
+    return row ? { key: commitIdentity, intentHash: row.digest, moduleResult: JSON.parse(row.resultHash) } : null;
+  },
+  apply: async (unit) => {
+    const translated = neutralUnitToPg(unit);
+    const appends = unit.appends.map((row) => row.id);
+    const commitIndex = identity ? [{ key: commitIndexKey(identity),
+      digest: memoryJcs({ appends, updates: [...appends, ...unit.updates.map((row) => row.key)] }).data,
+      resultIds: [], resultHash: JSON.stringify(unit.moduleResult ?? memoryJcs(null)) }] : [];
+    await tx.apply({ ...translated, indexWrites: [...translated.indexWrites, ...commitIndex] });
+    units.push(structuredClone(unit));
+  },
+});
+const neutralQueryResult = (name, records) => {
+  if (name === 'scope-chain-index') {
+    const row = records[0];
+    return memoryJcs(row ? { chain: row.chainId, head: row.headHash, allocation: row.allocation }
+      : { chain: 'memory-journal', head: `sha256:${'0'.repeat(64)}`, allocation: '0' });
+  }
+  if (name === 'memory-journal-page') return memoryJcs(records.map((event) => ({
+    id: event.event_id, hash: event.event_hash, value: memoryJcs(event) })));
+  if (name === 'memory-record-by-id') return memoryJcs(records.length ? { found: true, value: memoryJcs(records[0]) } : { found: false });
+  return memoryJcs(records);
+};
