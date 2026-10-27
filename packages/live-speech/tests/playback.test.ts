@@ -4,7 +4,7 @@
 // role; no speaker, no audio files, no audio payload anywhere.
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -101,31 +101,66 @@ describe('playback', () => {
 
   it('should cancel within the fence and leave no orphan behind', async () => {
     const pidFile = join(tmpdir(), `fake-aplay-${process.pid}.pid`);
-    await withEnv({ FAKE_APLAY_PIDFILE: pidFile }, async () => {
-      await withMode('hang', async () => {
-        const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
-        const pending = playback.play(STUB);
-        const deadline = Date.now() + 10000;
-        while (!playback.playing && Date.now() < deadline) {
-          await new Promise((resolve) => setTimeout(resolve, 10));
-        }
-        expect(playback.playing).toBe(true);
-        const start = Date.now();
-        playback.cancel();
-        await expect(pending).rejects.toThrow(PlaybackCancelledError);
-        // Bounded by the §9 150 ms stop-to-silence gate, with wide margin.
-        expect(Date.now() - start).toBeLessThan(1000);
-        expect(playback.playing).toBe(false);
-        const pid = Number(readFileSync(pidFile, 'utf8').trim());
-        expect(Number.isInteger(pid) && pid > 0).toBe(true);
-        expect(() => process.kill(pid, 0)).toThrow(/ESRCH/);
+    rmSync(pidFile, { force: true });
+    try {
+      await withEnv({ FAKE_APLAY_PIDFILE: pidFile }, async () => {
+        await withMode('hang', async () => {
+          const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
+          const pending = playback.play(STUB);
+          const deadline = Date.now() + 10000;
+          while (!playback.playing && Date.now() < deadline) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+          expect(playback.playing).toBe(true);
+          const start = Date.now();
+          playback.cancel();
+          await expect(pending).rejects.toThrow(PlaybackCancelledError);
+          // Bounded by the §9 150 ms stop-to-silence gate.
+          expect(Date.now() - start).toBeLessThanOrEqual(150);
+          expect(playback.playing).toBe(false);
+          const pid = Number(readFileSync(pidFile, 'utf8').trim());
+          expect(Number.isInteger(pid) && pid > 0).toBe(true);
+          expect(() => process.kill(pid, 0)).toThrow(/ESRCH/);
+        });
       });
-    });
+    } finally {
+      rmSync(pidFile, { force: true });
+    }
+  });
+
+  it('should escalate to SIGKILL for a child that ignores SIGTERM', async () => {
+    const pidFile = join(tmpdir(), `fake-aplay-sigkill-${process.pid}.pid`);
+    rmSync(pidFile, { force: true });
+    try {
+      await withEnv({ FAKE_APLAY_PIDFILE: pidFile }, async () => {
+        await withMode('hang-ignore-term', async () => {
+          const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
+          const pending = playback.play(STUB);
+          const deadline = Date.now() + 10000;
+          while (!playback.playing && Date.now() < deadline) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+          expect(playback.playing).toBe(true);
+          const start = Date.now();
+          playback.cancel();
+          await expect(pending).rejects.toThrow(PlaybackCancelledError);
+          // Escalation at 100 ms plus CI margin; recorded in the receipt as
+          // exceeding the 150 ms gate for hung children only.
+          expect(Date.now() - start).toBeLessThanOrEqual(500);
+          const pid = Number(readFileSync(pidFile, 'utf8').trim());
+          expect(() => process.kill(pid, 0)).toThrow(/ESRCH/);
+        });
+      });
+    } finally {
+      rmSync(pidFile, { force: true });
+    }
   });
 
   it('should never spawn after a cancel that lands before the spawn', async () => {
     const pidFile = join(tmpdir(), `fake-aplay-prespawn-${process.pid}.pid`);
-    await withEnv({ FAKE_APLAY_PIDFILE: pidFile }, async () => {
+    rmSync(pidFile, { force: true });
+    try {
+      await withEnv({ FAKE_APLAY_PIDFILE: pidFile }, async () => {
       await withMode('hang', async () => {
         const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
         const pending = playback.play(STUB);
@@ -138,7 +173,23 @@ describe('playback', () => {
         await expect(
           (async () => readFileSync(pidFile, 'utf8'))(),
         ).rejects.toThrow(/ENOENT/);
+        // Positive control: the same setup without the early cancel spawns
+        // and the pidfile appears, so the absence above is meaningful.
+        await withEnv({ FAKE_APLAY_PIDFILE: pidFile }, async () => {
+          const second = playback.play(STUB);
+          const deadline = Date.now() + 10000;
+          while (!playback.playing && Date.now() < deadline) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+          expect(playback.playing).toBe(true);
+          const pid = Number(readFileSync(pidFile, 'utf8').trim());
+          expect(Number.isInteger(pid) && pid > 0).toBe(true);
+          playback.cancel();
+          await expect(second).rejects.toThrow(PlaybackCancelledError);
+        });
       });
-    });
+    } finally {
+      rmSync(pidFile, { force: true });
+    }
   });
 });
