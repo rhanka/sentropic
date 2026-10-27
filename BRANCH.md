@@ -38,22 +38,22 @@
   - `packages/engram/**` (not activated)
 - **Exception process**:
   - [x] BR1-EX1: inherit #793 Makefile wiring, extend qualification environment selectors only as needed; impact limited to isolated test environment, rollback batch changes to those lines.
-  - [ ] BR10-EX2: add `test-mem-e10` to the existing ENV filters of the Compose qualification mode, `engram-e2-postgres-up` and `down` in `Makefile` so the E10 installed lane reuses the same Compose project and Node 24 qualification image as `test-mem-batch1`; no other target changes. Impact: one additional isolated test environment name; rollback: remove `test-mem-e10` from those filters.
+  - [x] BR10-EX2: add `test-mem-e10` to the existing ENV filters of the Compose qualification mode, `engram-e2-postgres-up` and `down` in `Makefile` so the E10 installed lane reuses the same Compose project and Node 24 qualification image as `test-mem-batch1`; no other target changes. Impact: one additional isolated test environment name; rollback: remove `test-mem-e10` from those filters.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot E10-0 — Baseline and constraints**
+- [x] **Lot E10-0 — Baseline and constraints**
   - [x] Read `rules/MASTER.md`, `plan/BRANCH_TEMPLATE.md` and the E10 plan line; worktree `tmp/worktrees/mem-e10` verified on `feat/cluster-mesh-engram-e10` at `4bd435349`.
-  - [ ] Verify the Engram tarball sha256 and the P3 manifest sha256 before any install.
-  - [ ] Confirm ports API 8791, UI 5191, Maildev UI 1091 and `ENV=test-mem-e10` last; validate scope boundaries.
-- [ ] **Lot E10-1 — Installed consumer**
-  - [ ] Add `packages/cluster-mesh/tests/engram-memory/installed-memory.mjs`: resolution guard rejecting checkout paths, strict installed imports, host PG driver injection, neutral constructor open, capture, admission, read, restart reopen and original-result replay.
-  - [ ] Add refusal cases in the same file: wrong driver identity, missing driver and a handle missing a required profile each refuse before durable effects.
-  - [ ] Add `packages/cluster-mesh/tests/engram-memory/installed-memory-types.ts`: type-only imports from the installed packages plus compile-time denial of the maintain grant through the neutral handle.
-  - [ ] Extend `packages/cluster-mesh/tests/engram-memory/qualification.mk` with the `installed-memory` lane: candidate pack at `0.24.0-dev.1`, clean consumer staging outside the repository, strict lock install, runtime run, strict typecheck and receipt capture.
-  - [ ] Lot gate: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make -f Makefile -f packages/cluster-mesh/tests/engram-memory/qualification.mk installed-memory API_PORT=8791 UI_PORT=5191 MAILDEV_UI_PORT=1091 ENV=test-mem-e10`, then `make down ENV=test-mem-e10`.
-- [ ] **Lot E10-2 — Receipt and handoff**
-  - [ ] Retain `packages/cluster-mesh/tests/engram-memory/installed-receipt.json` from the green run: archive hashes, runtime and type closure, engine, configuration and migration identities, five-profile equivalence and refusal outcomes.
-  - [ ] Record the receipt path and its sha256 in the PR body; list the exact E11 inputs so `e2-host-tuple/v1` can be generated from this head without new qualification.
+  - [x] Verify the Engram tarball sha256 and the P3 manifest sha256 before any install.
+  - [x] Confirm ports API 8791, UI 5191, Maildev UI 1091 and `ENV=test-mem-e10` last; validate scope boundaries.
+- [x] **Lot E10-1 — Installed consumer**
+  - [x] Add `packages/cluster-mesh/tests/engram-memory/installed-memory.mjs`: resolution guard rejecting checkout paths, strict installed imports, host PG driver injection, neutral constructor open, capture, admission, read, restart reopen and original-result replay.
+  - [x] Add refusal cases in the same file: wrong driver identity, missing driver and a handle missing a required profile each refuse before durable effects.
+  - [x] Add `packages/cluster-mesh/tests/engram-memory/installed-memory-types.ts`: type-only imports from the installed packages plus compile-time denial of the maintain grant through the neutral handle.
+  - [x] Extend `packages/cluster-mesh/tests/engram-memory/qualification.mk` with the `installed-memory` lane: candidate pack at `0.24.0-dev.1`, clean consumer staging outside the repository, strict lock install, runtime run, strict typecheck and receipt capture.
+  - [x] Lot gate: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make -f Makefile -f packages/cluster-mesh/tests/engram-memory/qualification.mk installed-memory API_PORT=8791 UI_PORT=5191 MAILDEV_UI_PORT=1091 ENV=test-mem-e10`, then `make down ENV=test-mem-e10`.
+- [x] **Lot E10-2 — Receipt and handoff**
+  - [x] Retain `packages/cluster-mesh/tests/engram-memory/installed-receipt.json` from the green run: archive hashes, runtime and type closure, engine, configuration and migration identities, five-profile equivalence and refusal outcomes.
+  - [x] Record the receipt path and its sha256 in the PR body; list the exact E11 inputs so `e2-host-tuple/v1` can be generated from this head without new qualification.
   - [ ] Push and keep the draft PR current; require CI on the exact head before marking ready.
 - [ ] **Lot 1 — Ordered merges**
   - [x] Merge #758, #763, #765, #775, #779, #764, #793, #792, #790; all heads retained; no lot excluded.
@@ -67,6 +67,8 @@
   - [ ] Require pull_request ci.yml completed/success on exact head; append READY-BATCH only afterward.
 
 ## Feedback Loop
+- [x] E10 installed lane green on `b8bb6fa6a`: exit=0, cleanup=0; capture, admission, record read, restart and exact replay pass on the injected PostgreSQL; five refusals recorded (missing driver, missing pool, wrong driver identity, storage without provider, missing profile). Receipt `packages/cluster-mesh/tests/engram-memory/installed-receipt.json` sha256 `703c39bc514881361436868b94fc417f72cce15ecf0e3e8cb2b1f2ca054955d5`; campaign receipts under `tmp/installed-memory-e10/`.
+- [x] E10 bridge finding: the frozen substrate persists K7/K8 proofs and journal events in snake-case wire form while the installed kernel validator checks the camel-case proof model and an intent hash. The installed bridge translates those values in both directions (K7/K8 aggregates, journal intent hash carried only in stored bytes, K7 receipt digest rejoined from the pending control at read). No source change; the equivalent validator-side adaptation remains with the E6/E9 owners.
 - [x] Owner authorization covers all listed approved lots and the E9 API adaptation.
 - [x] BR1-EX1 implemented: existing qualification routes accept test-mem-batch1, preserve Compose cleanup and guard the exact approved P3 bytes; no Compose/workflow file changes.
 - [x] All nine lot heads are ancestors of the batch; E2/E3/E4 were already present through E7. No lot excluded for a content conflict.
