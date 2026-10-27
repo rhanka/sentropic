@@ -8,6 +8,8 @@ import { verifyHostBinding } from '../../src/engram-memory/binding.js';
 import { openMemoryMaintenance, type MemoryMaintenancePorts } from '../../src/engram-memory/host-maintenance.js';
 import { CanonicalOwnershipError } from '../../src/storage/instance-ownership.js';
 import type { InjectedPgDriver } from '../../src/storage/postgres/protocol.js';
+import { readFile } from 'node:fs/promises';
+import { openMemoryPostgresHostLedger } from '../../src/engram-memory/ledger.js';
 import { memoryFailure, neutralQueryResult, neutralTransaction } from './memory-neutral.js';
 
 export type MemoryCampaignHost = Awaited<ReturnType<typeof memoryCampaignHost>>;
@@ -16,10 +18,11 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
   const pg = existing ?? await memoryPgHost();
   const { binding } = memoryHostComposed(pg.options.driver);
   const units: NeutralAtomicUnit[] = [];
-  let kernel: Awaited<ReturnType<typeof createPostgresKernel>>;
+  let kernel!: Awaited<ReturnType<typeof createPostgresKernel>>;
   let fence: NeutralWriterFence;
   let acquired = false;
   let expireCommit = false;
+  let clockNow = '2026-10-27T00:00:00.000Z';
   const driver: InjectedPgDriver = { transaction: (options, operation) => pg.options.driver.transaction(options, async (session) => {
     const result = await operation(session);
     if (expireCommit && !options.readOnly) {
@@ -43,7 +46,11 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
   const scope = binding.memoryGrant.scope;
   const scopeBinding = { scope, store_id: 'memory-stage-b-store',
     resolveScope: (ref: string) => ref === 'memory-stage-b-scope' ? scope : null };
-  const castGrant = (grant: Parameters<NeutralMemoryHandle['query']>[2]) => grant as ScopeGrant<unknown>;
+  const castGrant = (grant: Parameters<NeutralMemoryHandle['query']>[2]) => {
+    if (grant.moduleId !== 'engram-memory' || grant.scope.tenantId !== scope.tenantId || grant.scope.workspaceId !== scope.workspaceId)
+      throw Object.assign(new Error('grant differs from the bound memory scope'), { code: 'unauthorized' });
+    return grant as ScopeGrant<unknown>;
+  };
   const guarded = async <T,>(run: () => Promise<T>): Promise<T> => {
     try { return await run(); } catch (error) { return memoryFailure(error); }
   };
@@ -118,20 +125,28 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
       return;
     }
     const opened = await openModuleStorageCanonicalMemoryStoreV1({ handle, grant: binding.memoryGrant,
-      scope_binding: scopeBinding, clock: { now: () => '2026-10-27T00:00:00.000Z' }, deadline_at: '2026-10-27T01:00:00.000Z' });
+      scope_binding: scopeBinding, clock: { now: () => clockNow }, deadline_at: '2026-10-27T01:00:00.000Z' });
     if (!opened.ok) throw new Error(`PostgreSQL memory open: ${opened.error.code}: ${opened.error.message}`);
     store = opened.value;
   };
   try {
-    if (!existing) await pg.tx.run(false, (session) => session.execute({ text: `CREATE TABLE "${pg.name}".host_memory_identity
-      (scope text PRIMARY KEY,store_id text UNIQUE NOT NULL)`, values: [] }));
+    if (!existing) {
+      const ledgerSql = await readFile(new URL('../../assets/storage/postgres/engram-memory/002-host-ledger.sql', import.meta.url), 'utf8');
+      await pg.tx.run(false, async (session) => {
+        await session.execute({ text: `CREATE TABLE "${pg.name}".host_memory_identity
+          (scope text PRIMARY KEY,store_id text UNIQUE NOT NULL)`, values: [] });
+        // E7's existing host-ledger asset; registration remains E2-owned.
+        await session.execute({ text: ledgerSql.replaceAll('__MEMORY_SCHEMA__', `"${pg.name}_projection"`), values: [] });
+      });
+    }
     await open();
-  } catch (error) { await kernel!?.ownership?.release(); await pg.close(); throw error; }
-  return { pg, binding, handle, units, scopeBinding, get kernel() { return kernel; }, get store() { return store; },
+  } catch (error) { await kernel?.ownership?.release(); await pg.close(); throw error; }
+  const ledger = await openMemoryPostgresHostLedger(pg.options.driver, `${pg.name}_projection`);
+  return { pg, binding, handle, units, scopeBinding, ledger, get kernel() { return kernel; }, get store() { return store; },
     expireAtCommit: () => { expireCommit = true; },
     get maintenance() { return maintenance; }, get fence() { return fence; }, hostReader,
     hostReplay: async (after: string, limit: number, consumer: string) => (await hostRead()).journalRead(after, limit, consumer),
-    reopen: async () => { await store.close(); await open(); },
+    reopen: async () => { await store.close(); clockNow = '2026-10-27T00:30:00.000Z'; await open(); },
     reopenBackend: async () => { await store.close(); await open(false); },
     close: async () => { try { await store.close(); } finally { await kernel.ownership?.release(); await pg.close(); } },
   };
