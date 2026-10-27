@@ -111,6 +111,16 @@ describe.each(['session', 'oauth'] as const)('current artifact %s credential', (
     expect(await authority()).toEqual({ readable: false, writable: false });
   });
   if (kind === 'oauth') {
+    it.each(['mcp:tools:invoke', 'mcp:discover'])(
+      'should deny a revoked %s scope even when another read scope remains', async (scope) => {
+        await pool.query(`UPDATE oauth_tokens SET scope = 'mcp:resources:read';
+          UPDATE oauth_consents SET scopes = ARRAY['mcp:resources:read'];
+          UPDATE oauth_clients SET allowed_scopes = ARRAY['mcp:resources:read']`);
+        const host = createArtifactHost({ pool, blobs: createMemoryBlobStore(), quotaBytes: 262144,
+          currentIdentity: createCurrentArtifactIdentity(resource) });
+        await expect(host.bind({ ...identity(), credentialId: artifactCredential('oauth', 'token-a', null, [scope]) },
+          'workspace-a')).rejects.toThrow();
+      });
     it('should require the verified proof key for a DPoP-bound access token', async () => {
       await pool.query(`UPDATE oauth_tokens SET dpop_jkt = 'proof-a';
         UPDATE oauth_clients SET dpop_bound_access_tokens = true`);
@@ -138,6 +148,20 @@ describe.each(['session', 'oauth'] as const)('current artifact %s credential', (
       expect(await authority()).toEqual({ readable: true, writable: false });
     });
   }
+  it('should recheck DB-time expiry after waiting for the credential row itself', async () => {
+    const table = kind === 'session' ? 'user_sessions' : 'oauth_tokens';
+    await pool.query(`UPDATE ${table} SET expires_at = clock_timestamp() + interval '2 seconds'`);
+    const blocker = await pool.connect();
+    await blocker.query('BEGIN');
+    await blocker.query(`SELECT 1 FROM ${table} FOR UPDATE`);
+    const pending = authority();
+    try {
+      await vi.waitFor(async () => expect((await pool.query(`SELECT 1 FROM pg_stat_activity WHERE datname = current_database()
+        AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()`)).rowCount).toBeGreaterThan(0));
+      await blocker.query(`SELECT pg_sleep(GREATEST(0, EXTRACT(EPOCH FROM expires_at - clock_timestamp()))) FROM ${table}`);
+    } finally { await blocker.query('ROLLBACK'); blocker.release(); }
+    expect(await pending).toEqual({ readable: false, writable: false });
+  });
   it('should observe credential revocation committed during the artifact-row wait', async () => {
     const host = createArtifactHost({ pool, blobs: createMemoryBlobStore(), quotaBytes: 262144, currentIdentity: reader() });
     const bound = await host.bind(identity(), 'workspace-a');
