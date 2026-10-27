@@ -60,7 +60,7 @@ export const memoryEngine = (host: MemoryCampaignHost, decision: 'accept' | 'rej
     if (!retained || retained.hostPrincipal !== host.binding.memoryGrant.principalId
       || retained.storeId !== original.storeId || retained.invocationId !== original.invocationId) return result;
     const restored = createMemoryHostLedger(); restored.restore([retained]);
-    const proof = proveForRecoveryAuthorized(restored, host.binding, input.candidate_id, host.scopeBinding.scope);
+    const proof = await proveForRecoveryAuthorized(restored, host.binding, input.candidate_id, host.scopeBinding.scope, host.kernel);
     if (proof.state !== 'terminal') return result;
     return { ok: false, error: { code: 'NOT_FOUND', operation: 'request_admission', retryable: false,
       message: 'authorized terminal recovery has no pending envelope' } };
