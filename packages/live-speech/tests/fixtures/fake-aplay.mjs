@@ -3,6 +3,7 @@
 // stdin (proving the pipe carries exact bytes), then behaves per mode:
 //   ok (default): verify stdin, exit 0 (natural end);
 //   hang: hold stdin, sleep until SIGTERM, exit 0 (fence-cancel path);
+//   hang-ignore-term: sleep through SIGTERM, exit only on SIGKILL (escalation path);
 //   fail: exit 3 immediately (nonzero-exit path).
 // $FAKE_APLAY_PIDFILE receives the pid when set, so the test can prove no
 // orphan stays. $FAKE_APLAY_EXPECT_HEX asserts the exact piped bytes.
@@ -21,8 +22,9 @@ if (expectHex !== undefined && input.toString('hex') !== expectHex) {
   process.exit(4);
 }
 
-if (mode === 'hang') {
-  process.on('SIGTERM', () => process.exit(0));
+if (mode === 'hang' || mode === 'hang-ignore-term') {
+  if (mode === 'hang') process.on('SIGTERM', () => process.exit(0));
+  else process.on('SIGTERM', () => {});
   setInterval(() => {}, 1000);
 } else {
   process.exit(0);
