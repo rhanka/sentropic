@@ -30,6 +30,22 @@ function refusal(run: () => unknown): { code?: string; reason?: string; paths?: 
 }
 
 describe('automatic leaf guard ranges', () => {
+  it.each(['0.19.0', '0.21.3', '0.22.0', '0.22.9'])('should admit gateway %s through the leaf and strict topology', (version) => {
+    const guard = cluster('app');
+    tree.install('app', fakeMesh('mesh'));
+    tree.install('app', fakeGateway('gw', version));
+    expect(guard('gateway')).not.toThrow();
+    expect(inspectTopology({ anchorDir: tree.dir('app'), instances: [], strict: true, require: ['gateway'] })
+      .gateway?.version).toBe(version);
+  });
+
+  it.each(['0.18.0', '0.23.0', '0.22.1-rc.0'])('should refuse gateway %s outside the qualified release range', (version) => {
+    const guard = cluster('app');
+    tree.install('app', fakeMesh('mesh'));
+    tree.install('app', fakeGateway('gw', version));
+    expect(refusal(guard('gateway')).reason).toBe('incompatible_version');
+  });
+
   it.each(['0.19.2', '0.22.0', '0.27.9', '0.28.0'])('should admit %s in both leaf guards and strict gateway topology', (version) => {
     const guard = cluster('app');
     tree.install('app', fakeMesh('mesh', version));

@@ -222,7 +222,7 @@ describe('module registry', () => {
   it('should list the catalog with delivered and source-unavailable entries', () => {
     const catalog = registry().catalog();
     expect(catalog.find((entry) => entry.id === 'gateway/auth')).toMatchObject({
-      status: 'delivered', entry: '@sentropic/llm-gateway/auth', requiredRange: '>=0.19.0 <0.22.0',
+      status: 'delivered', entry: '@sentropic/llm-gateway/auth', requiredRange: '>=0.19.0 <0.23.0',
       peers: [
         { packageName: '@sentropic/mcp-auth', entry: '@sentropic/mcp-auth/hono', requiredRange: '>=0.2.1 <0.3.0' },
         { packageName: 'jose', entry: 'jose', requiredRange: '^5.10.0' },

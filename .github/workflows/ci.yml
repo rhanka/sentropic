@@ -780,7 +780,14 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-llm-gateway ENV=test-ci-llm-gateway
+        run: make pack-llm-gateway PACK_DESTINATION=tmp/ci-manifest-guard/candidate/llm-gateway ENV=test-ci-llm-gateway
+      - name: Upload verified LLM Gateway candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm-gateway-candidate
+          path: tmp/ci-manifest-guard/candidate/llm-gateway/*.tgz
+          retention-days: 7
+          if-no-files-found: error
 
   validate-chat-ui:
     runs-on: ubuntu-latest
