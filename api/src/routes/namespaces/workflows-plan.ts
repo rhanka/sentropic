@@ -1,6 +1,6 @@
 import { Hono, type Context } from "hono";
 import { z } from "zod";
-import { zValidator } from "@hono/zod-validator";
+import { zValidator } from "../../utils/zod-validator";
 import { requireWorkspaceEditorRole } from "../../middleware/workspace-rbac";
 import {
   TodoOrchestrationError,

@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.28.0
+
+- Add `@sentropic/llm-mesh/speech` and root exports for the provider-neutral
+  live speech contract, binary frames, partial revisions and duplex ports.
+- An independent `SpeechEngineCatalogue` lists every model revision, adapter
+  and placement, including STT/TTS engines outside the LLM model catalogue.
+  `getModelSpeechCapabilities(providerId, modelId, catalogue?)` returns all
+  qualified tuples; an empty array means unqualified. Provider and chat model
+  capabilities do not inherit speech claims.
+- Negotiate languages, voices and regions through supported sets. Account and
+  resource references remain opaque session selectors for gateway admission.
+- Migration: `ModalityCapabilities.output` now includes `audio`; consumers
+  with exhaustive output-modality switches must handle it. Existing text
+  models keep their output modalities and routing unchanged.
+
 ## 0.27.0 candidate
 
 - Exact provider/model identity is now the default for canonical resolution,

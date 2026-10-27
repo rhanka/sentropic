@@ -855,7 +855,7 @@ const compactConversationContext = async (input: {
     model:
       input.providerId === 'gemini'
         ? 'gemini-3.1-flash-lite'
-        : 'gpt-4.1-nano',
+        : 'gpt-5.4-nano',
     userId: input.userId,
     workspaceId: input.workspaceId,
     messages: [{ role: 'user', content: summaryPrompt }],
@@ -1666,7 +1666,7 @@ export class ChatService {
     });
     try {
       const res = await callLLM({
-        model: 'gpt-4.1-nano',
+        model: 'gpt-5.4-nano',
         messages: [{ role: 'system', content: prompt }],
         maxOutputTokens: 32
       });
@@ -2361,7 +2361,7 @@ export class ChatService {
     // Reasoning-effort evaluation (best effort):
     // - Runs for any model whose catalog entry has reasoningTier !== 'none'.
     // - Evaluator uses a cheap model from the same provider family when available,
-    //   otherwise falls back to OpenAI gpt-4.1-nano.
+    //   otherwise falls back to OpenAI gpt-5.4-nano.
     const selectedProviderId = input.selectedProviderId as ProviderId;
     const selectedModel = input.selectedModel;
     const shouldEvaluateReasoningEffort = modelSupportsReasoning(selectedModel);
@@ -2370,7 +2370,7 @@ export class ChatService {
     const evaluatorModel =
       selectedProviderId === 'gemini'
         ? 'gemini-3.1-flash-lite'
-        : 'gpt-4.1-nano';
+        : 'gpt-5.4-nano';
     if (!shouldEvaluateReasoningEffort) {
       return {
         shouldEvaluate: false,

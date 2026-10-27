@@ -156,7 +156,7 @@ const invalidInput = (c: Context, error: z.ZodError): Response =>
     {
       error: {
         code: 'invalid_input',
-        details: error.errors,
+        details: error.issues,
         message: 'Invalid request data.',
       },
     },

@@ -106,6 +106,68 @@ describe('train sibling resolver', () => {
     expect(result.out).toContain(message);
   });
 
+describe('train-spec pre-publication resolution', () => {
+  const GATEWAY: Manifest = { name: '@sentropic/llm-gateway', version: '0.19.1' };
+  const localTgz = () => {
+    const file = join(dir, 'local', 'sentropic-llm-gateway-0.19.1.tgz');
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, 'local-bytes');
+    return file;
+  };
+  const trainSpec = (out: string, version: string, local: string, published: string) =>
+    run('siblings.mjs', 'train-spec', out, GATEWAY.name, version, local, published);
+
+  it('should prefer a verified receipt over the registry and over the local tarball', () => {
+    const { receiptsPath, out } = receipts({}, [[GATEWAY, 'gw/sentropic-llm-gateway-0.19.1.tgz']]);
+    expect(run('siblings.mjs', 'verify', receiptsPath, out).status).toBe(0);
+    const archive = resolve(out, 'sentropic-llm-gateway-0.19.1.tgz');
+    const local = localTgz();
+    expect(trainSpec(out, GATEWAY.version, local, '1').out.trim()).toBe(`file:${archive}`);
+    expect(trainSpec(out, GATEWAY.version, local, '0').out.trim()).toBe(`file:${archive}`);
+  });
+
+  it('should resolve the registry version when published and no receipt covers it', () => {
+    const { receiptsPath, out } = receipts();
+    expect(run('siblings.mjs', 'verify', receiptsPath, out).status).toBe(0);
+    expect(trainSpec(out, GATEWAY.version, localTgz(), '1').out.trim()).toBe(GATEWAY.version);
+  });
+
+  it('should resolve the local tarball when unpublished and no receipt covers it', () => {
+    const { receiptsPath, out } = receipts();
+    expect(run('siblings.mjs', 'verify', receiptsPath, out).status).toBe(0);
+    const local = localTgz();
+    expect(trainSpec(out, GATEWAY.version, local, '0').out.trim()).toBe(`file:${local}`);
+  });
+
+  it('should fail when unpublished with no receipt and no local tarball (unsatisfiable)', () => {
+    const { receiptsPath, out } = receipts();
+    expect(run('siblings.mjs', 'verify', receiptsPath, out).status).toBe(0);
+    const missing = trainSpec(out, GATEWAY.version, join(dir, 'nope.tgz'), '0');
+    expect(missing.status).toBe(1);
+    expect(missing.out).toContain('no local tarball');
+  });
+
+  it('should fail on a receipt for another version instead of substituting', () => {
+    const { receiptsPath, out } = receipts({}, [[{ ...GATEWAY, version: '0.19.2' }, 'gw/sentropic-llm-gateway-0.19.2.tgz']]);
+    expect(run('siblings.mjs', 'verify', receiptsPath, out).status).toBe(0);
+    for (const published of ['0', '1']) {
+      const result = trainSpec(out, GATEWAY.version, localTgz(), published);
+      expect(result.status).toBe(1);
+      expect(result.out).toContain('receipt carries @sentropic/llm-gateway@0.19.2');
+    }
+  });
+
+  it('should fail on anything but "0"/"1" as the published flag', () => {
+    const { receiptsPath, out } = receipts();
+    expect(run('siblings.mjs', 'verify', receiptsPath, out).status).toBe(0);
+    for (const published of ['2', '']) {
+      const result = trainSpec(out, GATEWAY.version, localTgz(), published);
+      expect(result.status).toBe(1);
+      expect(result.out).toContain('must be "0" or "1"');
+    }
+  });
+});
+
   it('should refuse a packed manifest failing the guard, an unlisted archive, colliding basenames and no head sha', () => {
     const guard = receipts({}, [[{ ...MESH, dependencies: { x: 'file:../x' } }, 'llm-mesh/sentropic-llm-mesh-0.22.3.tgz']]);
     expect(run('siblings.mjs', 'verify', guard.receiptsPath, guard.out).out).toContain('fails the packed-manifest guard');
