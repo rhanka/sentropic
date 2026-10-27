@@ -55,6 +55,7 @@
   - [x] Synchronous request-local snapshots filter tools/skills before collision resolution, ranking and limiting; private sources absent globally.
 - [ ] Lot 4: pass turn context through model selection, search and execution; handled denials never fall through.
   - [x] Handler context travels separately from arguments; seam refreshes authority and dispatches only through the winning entry's source.
+  - [x] Negative regressions explicitly deny missing context and read-only mutations with zero handler effects.
   - [x] Search and model tools use the same request-local catalog view; public identifiers pass through unchanged.
   - [x] The effective turn allowlist also governs search_skills/search_catalog advertisement.
   - [x] Foundation executor resolves verified conversation authority, checks caller binding/effective turn allowlist and returns handled denials.
