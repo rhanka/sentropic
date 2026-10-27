@@ -17,7 +17,7 @@ export interface SpeechOperation {
 export interface SpeechAllocatorReceipt {
   readonly receiptRef: string; readonly tenantId: string; readonly workspaceId?: string; readonly principalId: string;
   readonly targetSessionId: string; readonly nativeTurnRef: string; readonly submitKey: string;
-  readonly coordinatorEpoch: number; readonly countedUnits: 0 | 1;
+  readonly coordinatorEpoch: number; readonly countedUnits: 0 | 1; readonly backendOperationRef: string;
 }
 export interface SpeechHold {
   operation: SpeechOperation; campaignRef: string; utcDay: string; price: SpeechPrice;
@@ -58,12 +58,13 @@ export class SpeechAccountingError extends Error {
   }
 }
 export const speechTransaction = async <T>(options: SpeechAccountingOptions,
-  change: (tx: SpeechLedgerTransaction, nowMs: number) => Promise<T>): Promise<T> => {
-  if (!options.campaignRef || options.ledger?.durability !== 'durable') throw new SpeechAccountingError('unavailable');
+  change: (tx: SpeechLedgerTransaction, nowMs: number, campaignRef: string) => Promise<T>): Promise<T> => {
+  const { campaignRef, ledger } = options;
+  if (!campaignRef || ledger?.durability !== 'durable') throw new SpeechAccountingError('unavailable');
   try {
     const nowMs = (options.now ?? Date.now)();
     if (!Number.isSafeInteger(nowMs) || nowMs < 0) throw new SpeechAccountingError('unavailable');
-    return await options.ledger.transaction(tx => change(tx, nowMs));
+    return await ledger.transaction(tx => change(tx, nowMs, campaignRef));
   } catch (error) {
     if (error instanceof SpeechAccountingError) throw error;
     throw new SpeechAccountingError('unavailable');
@@ -82,6 +83,10 @@ const cap = (value: number | undefined, hard: number): number => {
   return Math.min(value ?? hard, hard);
 };
 const validateOperation = (op: SpeechOperation): void => {
+  const keys = ['operationId', 'sessionId', 'attemptId', 'backendOperationRef', 'nativeTurnRef', 'submitKey',
+    'coordinatorEpoch', 'allocatorReceiptRef', 'stage', 'cost', 'binding', 'configuration', 'target',
+    'ceiling', 'maxDurationMs', 'maxConcurrent'];
+  if (Object.keys(op).some(key => !keys.includes(key))) throw new SpeechAccountingError('invalid');
   const strings = [op.operationId, op.sessionId, op.attemptId, op.backendOperationRef, op.nativeTurnRef,
     op.submitKey, op.allocatorReceiptRef, op.cost?.tenantId, op.cost?.principalId, op.cost?.source,
     op.cost?.correlationId, op.binding?.providerId, op.binding?.modelId, op.binding?.modelRevision,
@@ -101,23 +106,28 @@ export const admitSpeech = async (options: SpeechAccountingOptions, input: Speec
   validateOperation(operation);
   const dailyCap = cap(options.dailyCapMicroUsd, SPEECH_DAILY_MICRO_USD);
   const campaignCap = cap(options.campaignCapMicroUsd, SPEECH_CAMPAIGN_MICRO_USD);
-  return speechTransaction(options, async (tx, nowMs) => {
+  return speechTransaction(options, async (tx, nowMs, campaignRef) => {
     const utcDay = utcSpeechDay(nowMs);
-    await tx.lock(options.campaignRef, operation.operationId, utcDay);
+    await tx.lock(campaignRef, operation.operationId, utcDay);
     const previous = await tx.getHold(operation.operationId);
     if (previous) {
-      if (previous.campaignRef !== options.campaignRef || !sameSpeechIdentity(previous.operation, operation)) {
+      if (previous.campaignRef !== campaignRef || !sameSpeechIdentity(previous.operation, operation)) {
         throw new SpeechAccountingError('conflict');
       }
       // Replays recover the same hold; they never authorize a second provider connection.
       return structuredClone(previous);
+    }
+    // Each bounded connection ends in its reservation's UTC day. Renewal needs a new admitted operation.
+    if (nowMs + operation.maxDurationMs > Date.parse(`${utcDay}T00:00:00Z`) + 86_400_000) {
+      throw new SpeechAccountingError('invalid');
     }
     const receipt = await tx.allocatorReceipt(operation.allocatorReceiptRef);
     if (!receipt || receipt.receiptRef !== operation.allocatorReceiptRef
       || receipt.tenantId !== operation.cost.tenantId || receipt.workspaceId !== operation.cost.workspaceId
       || receipt.principalId !== operation.cost.principalId || receipt.targetSessionId !== operation.target.sessionId
       || receipt.nativeTurnRef !== operation.nativeTurnRef || receipt.submitKey !== operation.submitKey
-      || receipt.coordinatorEpoch !== operation.coordinatorEpoch || ![0, 1].includes(receipt.countedUnits)) {
+      || receipt.coordinatorEpoch !== operation.coordinatorEpoch || ![0, 1].includes(receipt.countedUnits)
+      || receipt.backendOperationRef !== operation.backendOperationRef) {
       throw new SpeechAccountingError('allocator');
     }
     const price = await tx.price(operation.binding, nowMs);
@@ -128,7 +138,7 @@ export const admitSpeech = async (options: SpeechAccountingOptions, input: Speec
     }
     const liabilityMicroUsd = priceSpeechUsage(price, operation.ceiling);
     if (!positive(liabilityMicroUsd)) throw new SpeechAccountingError('invalid');
-    const budgets = await tx.budgets(options.campaignRef, utcDay);
+    const budgets = await tx.budgets(campaignRef, utcDay);
     for (const [bucket, limit] of [[budgets.daily, dailyCap], [budgets.campaign, campaignCap]] as const) {
       if (!Number.isSafeInteger(bucket.spentMicroUsd) || bucket.spentMicroUsd < 0
         || !Number.isSafeInteger(bucket.reservedMicroUsd) || bucket.reservedMicroUsd < 0) {
@@ -141,7 +151,7 @@ export const admitSpeech = async (options: SpeechAccountingOptions, input: Speec
     const active = await tx.activeConnections(operation.binding.accountRef, nowMs);
     if (!Number.isSafeInteger(active) || active < 0) throw new SpeechAccountingError('unavailable');
     if (active >= operation.maxConcurrent) throw new SpeechAccountingError('concurrency');
-    const hold: SpeechHold = { operation, campaignRef: options.campaignRef, utcDay, price,
+    const hold: SpeechHold = { operation, campaignRef, utcDay, price,
       liabilityMicroUsd, expiresAtMs: nowMs + operation.maxDurationMs, dispatched: false,
       state: 'reserved', chargedMicroUsd: 0, settlementRevision: -1 };
     await tx.adjustBudgets(hold.campaignRef, utcDay, liabilityMicroUsd, 0);
@@ -152,10 +162,10 @@ export const admitSpeech = async (options: SpeechAccountingOptions, input: Speec
 
 /** Durable, one-shot dispatch claim. An ambiguous acknowledgement never allows replay. */
 export const markSpeechDispatched = async (options: SpeechAccountingOptions, operationId: string): Promise<boolean> =>
-  speechTransaction(options, async (tx, nowMs) => {
-    await tx.lock(options.campaignRef, operationId, utcSpeechDay(nowMs));
+  speechTransaction(options, async (tx, nowMs, campaignRef) => {
+    await tx.lock(campaignRef, operationId, utcSpeechDay(nowMs));
     const hold = await tx.getHold(operationId);
-    if (!hold || hold.campaignRef !== options.campaignRef) throw new SpeechAccountingError('invalid');
+    if (!hold || hold.campaignRef !== campaignRef) throw new SpeechAccountingError('invalid');
     if (hold.dispatched || hold.state !== 'reserved') return false;
     if (hold.expiresAtMs <= nowMs) throw new SpeechAccountingError('expired');
     hold.dispatched = true;

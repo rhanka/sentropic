@@ -56,6 +56,7 @@
   - [x] src/speech/usage.ts: duration/token/character dimensions, revision normalization and pinned USD pricing.
   - [x] tests/speech-metering.test.ts: cumulative/incremental updates, duplicate/conflicting revisions, absent dimensions and invalid prices.
 - [ ] **Lot 2 — Admission binding**
+  - [x] Pin the campaign across awaits and require connections to end before UTC rollover; bind the authoritative backend operation reference.
   - [x] Define transaction views over existing owner holds/buckets/allocator receipts; no production store supplied.
   - [x] src/speech/admission.ts: trusted campaign identity, UTC daily and campaign caps, authoritative allocator links, bounded holds and fail-closed host port.
   - [x] tests/speech-admission.test.ts: daily/total refusal, provider switching, concurrent reservations, restart/replay, allocator identity and ledger outage.
