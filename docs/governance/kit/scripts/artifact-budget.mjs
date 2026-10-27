@@ -13,6 +13,10 @@ export function fileReceipt(bytes) {
 }
 const filesUnder = directory => readdirSync(directory, { withFileTypes: true }).flatMap(entry =>
   entry.isDirectory() ? filesUnder(join(directory, entry.name)) : [join(directory, entry.name)]);
+const inlineJsBytes = html => [...html.matchAll(/<script\b([^>]*)>([\s\S]*?)<\/script>/gi)]
+  .filter(([, attributes]) => !/\bsrc\s*=/.test(attributes)
+    && /^(?:module|(?:text|application)\/(?:java|ecma)script)?$/i.test(/\btype=["']([^"']+)["']/i.exec(attributes)?.[1] ?? ''))
+  .reduce((total, [, , code]) => total + Buffer.byteLength(code), 0);
 
 export function measureArtifact({ directory, portablePath, startupPaths = [], profile = 'typical' }) {
   const limits = profiles[profile];
@@ -56,9 +60,12 @@ export function measureArtifact({ directory, portablePath, startupPaths = [], pr
     importers: Object.entries(manifest).filter(([, m]) => [...(m.imports ?? []), ...(m.dynamicImports ?? [])]
       .some(key => manifest[key]?.file === path)).map(([, m]) => m.file) }));
   const sum = predicate => files.filter(predicate).reduce((total, file) => total + file.raw, 0);
-  const portable = { path: portablePath, ...fileReceipt(readFileSync(portablePath)) };
+  const portableBytes = readFileSync(portablePath);
+  const portable = { path: portablePath, ...fileReceipt(portableBytes), inlineExecutableJs: inlineJsBytes(portableBytes.toString('utf8')) };
   const totals = { portable: portable.raw, initial: sum(file => file.initial),
-    js: sum(file => file.initial && file.path.endsWith('.js')), release: sum(() => true) };
+    js: sum(file => file.initial && file.path.endsWith('.js')) + inlineJsBytes(html), release: sum(() => true) };
+  if (portable.inlineExecutableJs > limits.js)
+    violations.push(`Portable executable JS: ${portable.inlineExecutableJs} > ${limits.js} bytes`);
   for (const metric of ['portable', 'initial', 'js', 'release']) {
     if (totals[metric] > limits[metric]) violations.push(`${metric}: ${totals[metric]} > ${limits[metric]} bytes`);
   }
