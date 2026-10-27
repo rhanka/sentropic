@@ -213,10 +213,11 @@ describe('cluster mesh catalog product authority', () => {
     const handler = vi.fn((_args, context) => ({ actor: context.subjectId, workspace: context.workspaceId }));
     standaloneToolSource.register({ tool: { name: 'catalog_context_probe', description: 'Context probe',
       inputSchema: {}, sideEffect: false }, handler });
+    let sequence = 0;
     const invoke = async () => (chatService as unknown as {
       executeServerToolInternal(input: unknown): Promise<unknown>;
     }).executeServerToolInternal({ toolCall: { id: 'probe', name: 'catalog_context_probe', args: '{}' }, args: {},
-      options: { userId: user.id, sessionId, assistantMessageId: messageId }, streamSeq: 0,
+      options: { userId: user.id, sessionId, assistantMessageId: messageId }, streamSeq: sequence++,
       sessionWorkspaceId: user.workspaceId, currentUserRole: 'editor', readOnly: false,
       allowedFolderIds: new Set(), allowedByType: { organization: new Set(), folder: new Set(),
         usecase: new Set(), executive_summary: new Set() }, hasContextType: () => false,
