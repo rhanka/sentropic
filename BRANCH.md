@@ -38,8 +38,8 @@
   - [x] Preserve P3 manifest 1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730 and Engram 0.22.0 tarball 26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10; both checked with sha256sum.
   - [x] Adapt E9 recovery to awaited five-argument E7 API and test terminal, nonterminal and revoked authority behavior in memory-engine.spec.ts.
 - [ ] **Lot 2 — Final qualification**
-  - [ ] Final pack-only max+1 version; regenerate root lock through make after 21:00 UTC.
-  - [ ] Run memory qualification targets once locally with cleanup; retain exact-head receipts.
+  - [x] Final pack-only max+1 version; regenerate root lock through make after 21:00 UTC.
+  - [x] Run memory qualification targets once locally with cleanup; retain source-head context and per-lane receipts.
 - [ ] **Lot 3 — Handoff**
   - [ ] Push and create one draft PR listing lot PRs and approved review files.
   - [ ] Require pull_request ci.yml completed/success on exact head; append READY-BATCH only afterward.
@@ -51,6 +51,27 @@
 - [x] Track containment checked against every lot and integration: all 370 event IDs retained; batch makes no Track changes or acceptance claims.
 - [x] Final pack-only version 0.23.0-dev.14 (one increment above accumulated dev.13); only package manifest and workspace lock fields require synchronization. Historical freeze and gate-vector versions remain historical.
 - [x] Nonterminal recovery regression asserts the candidate-scope refusal returned by the host wrapper; it does not assume the underlying store was reached.
+- [x] Local aggregate completed 2026-10-27 21:21 UTC: mechanical, wiring, build, typecheck, lint, memory, common, grants and postgres all exit=0, cleanup=0. Receipts: tmp/mem-batch1-qualification/.
+- [x] Memory: 21 files, 166 passed, 23 explicitly blocked/skipped; three async-recovery regression tests pass; no type errors. Common: 11 passed. Grants: 3 passed. PG: 37 files passed, 1 skipped; 144 tests passed, 4 skipped (dedicated campaigns), no type errors.
+- [x] Aggregate context began at ed7795b94; a test-only assertion correction and its plan entry were committed as ea251468d before the memory lane. No implementation source changed during qualification. This final docs commit records results without rerunning the same campaign.
+- [x] make lock-root succeeded after 21:00 UTC with no lock diff; generated dependencies removed; final PG container/network cleanup succeeded. Final pack-only version is 0.23.0-dev.14; no publication.
+
+## Included lots and review references
+
+| Lot | PR | Retained head | Review file under .h2a/reviews/ |
+| --- | --- | --- | --- |
+| E0 | #758 | f6baa3ec1aa1214ceb5ae3622e83323222c90c01 | Dedicated file not found; conductor standing GO in .tmp/packets/integrator-memory-batch.md |
+| E1 | #763 | c4018deffce8fbae386f7239a8ce000a4aa5abb0 | pr763_opus_r2.md |
+| E2 | #765 | 09cff1f8b243768459635b34877368a862810046 | pr765_opus_r2.md (code findings resolved; exact-head CI required) |
+| E3 | #775 | 6615fae0732a610504735d375bf0e28e8cee353b | pr775_opus_r1.md |
+| E4 | #779 | 2e929e103858b2850d808cb9953de0cd76c78c38 | pr779_opus_r4.md |
+| E8 | #764 | bc80a58127036b5a31c4c194c833f7a3bacd29fa | pr764_opus_r2.md |
+| PG | #793 | 325ffd4aa17b0fe9162168e8e9150f220b4adae3 | pr792_opus_r1.md, sibling #793 section; dedicated verdict not found |
+| P3 | #792 | 247ce78fd5aecca85a9ac252b76039098e993038 | pr792_opus_r2.md |
+| E9 | #790 | b59033039b4829c7b88f416400d3d95ba44b7fbe | pr790_opus_r2.md (conditional; Stage B remains blocked) |
+
+- [x] No lot excluded; source ancestry and Track containment verified. Full retained lot plans follow.
+- [x] Integration-specific peer reviews were not launched without the local rule's required owner authorization; no new consensus verdict is claimed. Existing lot approvals and conductor standing GO remain the integration authority.
 - [ ] Stage B retains 23 explicit blocked cases from approved E9; no five-profile qualification is claimed by this batch.
 - [ ] #758 approved review filename not found locally; conductor clarification pending.
 - [ ] #793 review is included in pr792_opus_r1.md; dedicated approval filename pending clarification.
