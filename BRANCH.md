@@ -54,7 +54,7 @@
   - [x] Pin harness r5 input/dependency hashes, renderer/toolchain and preserved before/slim/Focus output hashes in `docs/governance/kit/fixtures/artifact-weight/baseline.json`.
   - [x] Preserve the representative two-diagram, two-question/six-option, 24-row/eight-gap fixture and its source provenance.
   - [ ] Rebuild the baseline and scoped fixture after the Docker reservation; explain differences from preserved outputs.
-  - [ ] Record the read-before-publication contract, corrected source anchors and separate L1/host qualification limits in `docs/governance/kit/ARTIFACT_BUDGET.md`.
+  - [x] Record the read-before-publication contract, corrected source anchors and separate L1/host qualification limits in `docs/governance/kit/ARTIFACT_BUDGET.md`.
 - [ ] **W1 — Dossier data boundary**
   - [x] Remove global route/summary imports from the diagram engine; explicitly bind governance data in its consumer and preparation scripts.
   - [ ] Supply selected scenes, folds/plans, summary geometry and locale dictionary through dossier inputs; fail missing required projection data.
@@ -68,11 +68,11 @@
   - [x] Add `scripts/artifact-budget.mjs` and `scripts/artifact-budget.test.mjs`: raw/gzip/Brotli/SHA-256, initial/static/startup/full closures, per-chunk limits and agent read cost.
   - [x] Negative tests: corpus reimport, oversized startup data, deferred JS excess, missing/unreferenced assets and portable dynamic imports.
   - [x] Add `make check-artifact-budget` and CI step in `validate-artifacts` with `docs/governance/kit/**` filter and output report artifact.
-  - [ ] Preserve a separately bounded full-governance profile; do not claim actual A2UI L1 DS 0.36.0/chart qualification.
+  - [x] Preserve a separately bounded full-governance profile; do not claim actual A2UI L1 DS 0.36.0/chart qualification.
 
 - [ ] **Docs consolidation**
-  - [ ] Document explicit input/build contract, budget counting, baseline comparison and report reproduction.
-  - [ ] Record server-side pinned-runtime reuse as a future host qualification candidate, without claiming support.
+  - [x] Document explicit input/build contract, budget counting, baseline comparison and report reproduction.
+  - [x] Record server-side pinned-runtime reuse as a future host qualification candidate, without claiming support.
 
 - [ ] **Final validation**
   - [ ] Focused tests and budget build under the shared lock, after 21:00 UTC.
