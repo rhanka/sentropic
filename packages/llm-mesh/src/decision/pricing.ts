@@ -9,6 +9,7 @@ import { hasOnlyKeys, isCorrelationId, isRecord, snapshotBoundedJson } from './v
  * backend protocol; present cells must match the descriptor (§3.2
  * Accounting), so two authorities cannot share a revision silently. */
 export interface DecisionPrice {
+  billingMode?: 'token-rate' | 'call-rate';
   providerId: string; modelId: string; priceRevision: string;
   inputMicroUsdPerMtok: MicroUsd; outputMicroUsdPerMtok: MicroUsd; minimumMicroUsd: MicroUsd;
   identityMismatchPricing: 'requested-model' | 'requires-reconciliation';
@@ -16,35 +17,44 @@ export interface DecisionPrice {
 }
 export interface DecisionQuote { price: DecisionPrice; reservedMicroUsd: MicroUsd }
 export const isMicroUsd = (value: unknown): value is MicroUsd => typeof value === 'string' && /^(0|[1-9][0-9]*)$/.test(value);
-const ceilRate = (tokens: number, rate: string) => (BigInt(tokens) * BigInt(rate) + 999999n) / 1000000n;
+const rateNumerator = (tokens: number, rate: string) => BigInt(tokens) * BigInt(rate);
+const ceilMicroUsd = (numerator: bigint) => (numerator + 999999n) / 1000000n;
 const minimum = (value: bigint, price: DecisionPrice) => value > BigInt(price.minimumMicroUsd) ? value : BigInt(price.minimumMicroUsd);
 
 export function quoteDecision(request: DecisionRequest, descriptor: DecisionEvaluatorDescriptor, candidate: unknown,
   hostCap?: MicroUsd): { ok: true; quote: DecisionQuote } | { ok: false; code: 'PRICING_UNAVAILABLE' | 'BUDGET_BOUND_UNAVAILABLE' | 'BUDGET_EXHAUSTED' } {
   const snapshot = snapshotBoundedJson(candidate);
   const value = snapshot.ok ? snapshot.value : null;
-  if (!isRecord(value) || !hasOnlyKeys(value, ['providerId', 'modelId', 'priceRevision', 'inputMicroUsdPerMtok',
+  if (!isRecord(value) || !hasOnlyKeys(value, ['providerId', 'modelId', 'priceRevision', 'billingMode', 'inputMicroUsdPerMtok',
     'outputMicroUsdPerMtok', 'minimumMicroUsd', 'identityMismatchPricing', 'authority', 'protocol']) || value.providerId !== descriptor.evaluator.providerId
     || value.modelId !== descriptor.wireModel || value.priceRevision !== descriptor.priceProtocol.revision
     || !isCorrelationId(value.priceRevision)
     || !isMicroUsd(value.inputMicroUsdPerMtok) || !isMicroUsd(value.outputMicroUsdPerMtok) || !isMicroUsd(value.minimumMicroUsd)
     || !['requested-model', 'requires-reconciliation'].some((v) => v === value.identityMismatchPricing)
     || value.authority !== descriptor.priceProtocol.authority
-    || value.protocol !== (descriptor.protocol ?? 'jev-native')) return { ok: false, code: 'PRICING_UNAVAILABLE' };
+    || value.protocol !== (descriptor.protocol ?? 'jev-native')
+    || (value.billingMode !== undefined && value.billingMode !== 'token-rate' && value.billingMode !== 'call-rate')) return { ok: false, code: 'PRICING_UNAVAILABLE' };
   const price = freezeDecisionData(value as unknown as DecisionPrice);
   if (descriptor.qualification.billingBound !== 'qualified') return { ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' };
-  const isJev = (descriptor.protocol ?? 'jev-native') === 'jev-native';
-  // JEV has no qualified output liability bound. A nonzero output rate cannot be reserved.
-  if (isJev && price.outputMicroUsdPerMtok !== '0') return { ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' };
-  // Non-JEV protocols price output work, so quoting requires the descriptor's
-  // enforced output/reasoning bound. Without it no finite liability exists.
-  const outputBound = descriptor.maxBillableOutputTokens;
-  if (!isJev && (typeof outputBound !== 'number' || !Number.isSafeInteger(outputBound) || outputBound < 1)) {
+  if (!Number.isSafeInteger(descriptor.maxBillableInputTokens) || descriptor.maxBillableInputTokens < 1
+    || !Number.isSafeInteger(descriptor.maxBillableOutputTokens) || descriptor.maxBillableOutputTokens < 0) {
     return { ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' };
   }
-  const inputReserve = ceilRate(descriptor.maxBillableInputTokens, price.inputMicroUsdPerMtok);
-  const outputReserve = isJev ? 0n : ceilRate(descriptor.maxBillableOutputTokens, price.outputMicroUsdPerMtok);
-  const reserve = minimum(inputReserve + outputReserve, price);
+  const callRate = price.billingMode === 'call-rate';
+  if (callRate && (descriptor.protocol !== 'systemone-local' || price.inputMicroUsdPerMtok !== '0'
+    || price.outputMicroUsdPerMtok !== '0' || price.minimumMicroUsd === '0')) return { ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' };
+  const inputOnly = (descriptor.protocol ?? 'jev-native') === 'jev-native' || descriptor.protocol === 'openai-decisions';
+  // Native JEV/Decisions tariffs admit no billed output; reject a foreign output rate.
+  if (inputOnly && price.outputMicroUsdPerMtok !== '0') return { ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' };
+  // Other protocols price output work, so quoting requires the descriptor's
+  // enforced output/reasoning bound. Without it no finite liability exists.
+  const outputBound = descriptor.maxBillableOutputTokens;
+  if (!inputOnly && !callRate && (typeof outputBound !== 'number' || !Number.isSafeInteger(outputBound) || outputBound < 1)) {
+    return { ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' };
+  }
+  const inputReserve = rateNumerator(descriptor.maxBillableInputTokens, price.inputMicroUsdPerMtok);
+  const outputReserve = inputOnly ? 0n : rateNumerator(descriptor.maxBillableOutputTokens, price.outputMicroUsdPerMtok);
+  const reserve = minimum(ceilMicroUsd(inputReserve + outputReserve), price);
   const caps = [hostCap, request.policy?.budget?.maxCostMicroUsd].filter((v): v is string => v !== undefined);
   if (caps.some((cap) => !isMicroUsd(cap))) return { ok: false, code: 'PRICING_UNAVAILABLE' };
   if (caps.some((cap) => reserve > BigInt(cap))) return { ok: false, code: 'BUDGET_EXHAUSTED' };
@@ -57,6 +67,11 @@ export function quoteDecision(request: DecisionRequest, descriptor: DecisionEval
  * the unknown output liability. */
 export function priceDecisionUsage(usage: DecisionUsage, quote: DecisionQuote, identityMismatch = false):
   { cost: DecisionCost; pending: boolean; overrun: boolean } {
+  if (quote.price.billingMode === 'call-rate') {
+    const pending = identityMismatch && quote.price.identityMismatchPricing === 'requires-reconciliation';
+    return { cost: { status: 'estimated', amountMicroUsd: quote.reservedMicroUsd, source: pending ? 'reserved-liability' : 'call-rate',
+      priceRevision: quote.price.priceRevision, rounding: 'ceil-micro-usd' }, pending, overrun: false };
+  }
   const input = usage.tokens.input;
   const output = usage.tokens.output;
   const applicable = !identityMismatch || quote.price.identityMismatchPricing === 'requested-model';
@@ -65,9 +80,9 @@ export function priceDecisionUsage(usage: DecisionUsage, quote: DecisionQuote, i
   const inputPriced = quote.price.inputMicroUsdPerMtok !== '0';
   const outputPriced = quote.price.outputMicroUsdPerMtok !== '0';
   const pricedUnknown = (inputPriced && !inputKnown) || (outputPriced && !outputKnown);
-  const inputAmount = inputKnown ? ceilRate(input.value, quote.price.inputMicroUsdPerMtok) : 0n;
-  const outputAmount = outputKnown ? ceilRate(output.value, quote.price.outputMicroUsdPerMtok) : 0n;
-  const computed = inputKnown || outputKnown ? minimum(inputAmount + outputAmount, quote.price) : BigInt(quote.reservedMicroUsd);
+  const inputAmount = inputKnown ? rateNumerator(input.value, quote.price.inputMicroUsdPerMtok) : 0n;
+  const outputAmount = outputKnown ? rateNumerator(output.value, quote.price.outputMicroUsdPerMtok) : 0n;
+  const computed = inputKnown || outputKnown ? minimum(ceilMicroUsd(inputAmount + outputAmount), quote.price) : BigInt(quote.reservedMicroUsd);
   const reserved = BigInt(quote.reservedMicroUsd);
   const amount = pricedUnknown && computed < reserved ? reserved : computed;
   const fullyUnknown = !inputKnown && !outputKnown;

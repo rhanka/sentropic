@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import * as consumer from '../src/decision/index.js';
 import { validateDecisionResult } from '../src/decision/validate-result.js';
 import { parseDecisionValidationContext } from '../src/decision/validation-context.js';
-import { decisionRequest, decisionServiceFixture } from './decision-fixtures.js';
+import { productionFixture } from './decision-production-fixtures.js';
 
 describe('public pure result validator (F6)', () => {
   it('exposes the pure validator on the packed consumer surface', () => {
@@ -10,8 +10,8 @@ describe('public pure result validator (F6)', () => {
     expect(typeof consumer.validateDecisionResult).toBe('function');
   });
   it('accepts a real service envelope and rejects a raw canary with no I/O', async () => {
-    const fixture = decisionServiceFixture();
-    const request = decisionRequest({ correlationId: 'f6-pure' });
+    const fixture = productionFixture();
+    const request = { ...fixture.request, correlationId: 'f6-pure' };
     const { createDecisionService } = await import('../src/decision/service.js');
     const served = await createDecisionService(fixture.options).decide(request);
     expect(served.ok).toBe(true);
