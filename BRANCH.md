@@ -36,7 +36,7 @@
 - [ ] **Lot 1 — Ordered merges**
   - [ ] Merge #758, #763, #765, #775, #779, #764, #793, #792, #790; exclude content conflicts and record them.
   - [ ] Preserve P3 manifest and Engram 0.22.0 tarball hashes exactly.
-  - [ ] Adapt E9 recovery to awaited five-argument E7 API and test it.
+  - [x] Adapt E9 recovery to awaited five-argument E7 API and test terminal, nonterminal and revoked authority behavior in memory-engine.spec.ts.
 - [ ] **Lot 2 — Final qualification**
   - [ ] Final pack-only max+1 version; regenerate root lock through make after 21:00 UTC.
   - [ ] Run memory qualification targets once locally with cleanup; retain exact-head receipts.
