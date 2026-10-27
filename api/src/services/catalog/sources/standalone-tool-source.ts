@@ -30,6 +30,7 @@
 import type { SkillTool } from '../../../../../packages/skills/src/index.js';
 import type { CatalogSource } from '../source.js';
 import type { CatalogEntry, ToolEntry } from '../types.js';
+import type { CatalogInvocationContext } from '../request-context.js';
 
 // ---------------------------------------------------------------------------
 // Standalone tool handler type
@@ -53,6 +54,7 @@ import type { CatalogEntry, ToolEntry } from '../types.js';
  */
 export type StandaloneToolHandler = (
   args: Record<string, unknown>,
+  context: CatalogInvocationContext,
 ) => unknown | Promise<unknown>;
 
 // ---------------------------------------------------------------------------

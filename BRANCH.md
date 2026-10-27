@@ -46,6 +46,7 @@
   - [x] Context-view tests authored before filtering: interleaved users, ranking, source absence and read-only mutations.
   - [x] Synchronous request-local snapshots filter tools/skills before collision resolution, ranking and limiting; private sources absent globally.
 - [ ] Lot 4: pass turn context through model selection, search and execution; handled denials never fall through.
+  - [x] Handler context travels separately from arguments; seam refreshes authority and dispatches only through the winning entry's source.
 - [ ] Lot 5: focused suites, API typecheck/lint, runtime logs and locked make down.
 - [ ] Lot 6: draft against feat/app-cm-integration with BRANCH.md body, publication-disabled CI and W4.b handoff.
 
