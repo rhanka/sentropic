@@ -269,6 +269,7 @@ const errorEvent = (
 
 export class TranscriptionSession implements SpeechSession {
   readonly receipt: SpeechSessionReceipt;
+  readonly events: AsyncIterable<SpeechEvent>;
   private readonly socket: OpenAiTranscriptionSocket;
   private readonly binding: SpeechBinding;
   private readonly admission: OpenAiTranscriptionAdmission;
@@ -307,6 +308,7 @@ export class TranscriptionSession implements SpeechSession {
     this.nowMs = nowMs;
     this.signal = signal;
     this.openedAtMs = monotonicNow(nowMs);
+    this.events = this.stream();
     this.pump = this.run(signal);
     if (signal) {
       if (signal.aborted) {
@@ -337,7 +339,7 @@ export class TranscriptionSession implements SpeechSession {
     return { id: 'openai-transcription', monotonicMs: monotonicNow(this.nowMs) };
   }
 
-  async *events(): AsyncIterable<SpeechEvent> {
+  private async *stream(): AsyncIterable<SpeechEvent> {
     let index = 0;
     for (;;) {
       while (index >= this.queue.length) {
