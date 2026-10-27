@@ -99,7 +99,7 @@ export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, Prov
     'createArtifactsRegistryDefinition', 'createArtifactsToolExecutor',
     'ARTIFACTS_PROVIDER_ID', 'ARTIFACTS_TOOL_NAMES',
   ]),
-  comments: { id: 'comments', owner: 'comments', packageName: '@sentropic/cluster-mesh', subpath: './comments', range: '>=0.21.0 <0.23.0 || >=0.23.0-dev <0.23.0',
+  comments: { id: 'comments', owner: 'comments', packageName: '@sentropic/cluster-mesh', subpath: './comments', range: '>=0.21.0 <0.23.0',
     requiredMembers: ['createCommentsModule', 'createCommentsPostgresStorage'], namespace: '/comments', meshCoherence: false,
     authPeers: [{ packageName: '@sentropic/comments', subpath: '.', range: COMMENTS_RANGE, requiredMembers: ['createAnnotationRevision', 'validateCapacityDescriptor', 'hashRecord'] }] },
 };
