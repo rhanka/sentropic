@@ -52,8 +52,8 @@ startup dependencies and runtime source maps fail. Every file reports raw, gzip,
 Brotli and SHA-256; Rollup module attribution is explicitly before final
 minification. Module compressed sizes are not additive.
 
-The portable builder rejects remaining asset URLs and dynamic `import()` paths
-under `assets/`. The browser opens the file offline, exercises all folds on desktop
+The portable builder rejects remaining asset URLs and dynamic `import()` calls,
+including `assets/` paths and sibling chunks. The browser opens the file offline, exercises all folds on desktop
 and mobile in both themes, zoom, choices, table totals and JSON downloads.
 
 Reports live at `.cache/artifact-weight/<profile>/artifact-size-report.{json,md}`.

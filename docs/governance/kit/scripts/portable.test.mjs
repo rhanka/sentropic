@@ -10,7 +10,8 @@ test('should inline styles and entry scripts when producing an offline page', ()
 });
 test('should reject imports of assets when an entry is inlined', () => {
   for (const code of ['import("./assets/scene.js")', "import ( '/assets/scene.js')", 'import(`./assets/scene.js`)',
-    'import x from "./assets/shared.js"', 'import "./assets/shared.js"']) {
+    'import x from "./assets/shared.js"', 'import "./assets/shared.js"',
+    'import("./sibling-chunk.js")', 'import(chunkPath)']) {
     assert.throws(() => inlinePortable('<script type="module" src="/assets/a.js"></script>', () => code), /external dist asset/);
   }
   assert.throws(() => assertPortable('<style>body{background:url(./assets/a.png)}</style>'), /external dist asset/);
