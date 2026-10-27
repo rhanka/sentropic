@@ -33,3 +33,42 @@
 
 ## Feedback Loop
 - [ ] G-LEDGER: existing host sink supports monthly text budgets only; ledger owner must supply atomic speech admission and adjustments before cloud activation.
+- [x] Docker reservation takes precedence over the container-backed scope target; temporary host Make adapter invokes the same installed harness C2 check before every commit.
+- [x] Registry latest is 0.21.3 (2026-10-27); feature version will be 0.22.0, without publication.
+
+## AI Flaky tests
+- [x] Deterministic fixtures only; no provider calls or waiver.
+
+## Orchestration Mode (AI-selected)
+- [x] Mono-branch, sequential authoring; shared gateway/ledger owner files remain untouched.
+- [ ] Multi-branch not required.
+
+## UAT Management (in orchestration context)
+- [x] Library contract fixtures only; device/provider qualification belongs to L9/L13/L7.
+
+## Plan / Todo (lot-based)
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read Docker lock, project rules, L8 row, M1 receipts and G-LEDGER/G-CLOUD/G-QUOTA.
+  - [x] Fetch L2 head 3b793cb89c4a0427152907f986f9415b9c348122 and pass mechanical harness branch check.
+  - [x] Inspect existing CostContext, pool/budget admission and durable host ledger; no new accounting store.
+  - [x] Reserve ENV=test-stt-l8; package fixtures need no listening ports (reserved API/UI/mail: 9040/5240/1140).
+- [ ] **Lot 1 — Typed usage and pricing**
+  - [ ] src/speech/usage.ts: duration/token/character dimensions, revision normalization and pinned USD pricing.
+  - [ ] tests/speech-metering.test.ts: cumulative/incremental updates, duplicate/conflicting revisions, absent dimensions and invalid prices.
+- [ ] **Lot 2 — Admission binding**
+  - [ ] src/speech/admission.ts: trusted campaign identity, UTC daily and campaign caps, authoritative allocator links, bounded holds and fail-closed host port.
+  - [ ] tests/speech-admission.test.ts: daily/total refusal, provider switching, concurrent reservations, restart/replay, allocator identity and ledger outage.
+- [ ] **Lot 3 — Settlement binding**
+  - [ ] src/speech/settlement.ts: one billable operation, conservative missing-usage estimate, signed true-ups, replay and retained uncertainty.
+  - [ ] tests/speech-settlement.test.ts: missing usage, adjustment idempotence, restart, unavailable sink and no duplicate backend counted unit.
+  - [ ] tests/fixtures/speech-ledger.ts: deterministic owner transaction fixture; never exported or used as a production ledger.
+- [ ] **Lot 4 — Contract review and integration documentation**
+  - [ ] Document ledger-owner binding, dispatch bounds, limitations and G-LEDGER acceptance in README.md.
+  - [ ] Export speech subpath and bump package to 0.22.0; keep all shared owner source files unchanged.
+  - [ ] Reconcile independent correctness and accounting/security reviews; no self-certification of durable host acceptance.
+- [ ] **Lot 5 — Draft delivery and validation**
+  - [ ] Push feat/live-stt-l8; open draft PR against feat/live-stt-l2 with this plan as body and post implementation plan.
+  - [ ] Monitor exact-head GitHub CI: lint/typecheck/test/build/pack; resolve branch failures.
+  - [ ] After 21:00 UTC only: flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make test-llm-gateway ENV=test-stt-l8 once.
+  - [ ] Cleanup: flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make down ENV=test-stt-l8.
+  - [ ] Report draft PR, head, CI and any remaining G-LEDGER owner gate; preserve BRANCH.md, no merge.
