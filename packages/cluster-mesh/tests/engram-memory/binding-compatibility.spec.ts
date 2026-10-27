@@ -24,6 +24,7 @@ import {
 } from './g1-host.js';
 import { openModuleStorageCanonicalMemoryStoreV1 } from '@sentropic/engram/memory-substrate';
 import type { MemorySqliteDriverProvider } from '../../src/engram-memory/sqlite.js';
+import { MEMORY_HANDLE_OPERATIONS } from '../../src/engram-memory/binding.js';
 
 const qualifiedDriver = (): MemorySqliteDriverProvider => ({
   identity: { name: 'g1-host-sqlite-owner', version: '1', artifactDigest: 'd'.repeat(64) },
@@ -47,6 +48,11 @@ describe('G1 binding compatibility with the installed substrate', () => {
     expect(grant.scope).toEqual({ tenantId: G1_TENANT_ID, workspaceId: G1_WORKSPACE_ID });
     expect([...grant.operations].sort()).toEqual(['read', 'write']);
     expect(grant.lifetime).toEqual({ kind: 'invocation', invocationId: G1_INVOCATION_ID });
+  });
+
+  it('should keep the E7 host assembly handle at exactly the neutral read and write', () => {
+    expect([...MEMORY_HANDLE_OPERATIONS]).toEqual(['read', 'write']);
+    expect([...g1Grant().operations].sort()).toEqual([...MEMORY_HANDLE_OPERATIONS].sort());
   });
 
   it('should refuse a grant for another module without touching the backend', async () => {
