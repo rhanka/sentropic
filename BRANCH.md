@@ -37,6 +37,7 @@
   - [x] BR757-EX1 below permits only package Make include and dedicated CI gate.
 
 ## Feedback Loop
+- [x] PR776 inventory repair: declare live-speech in PACK_TARGETS and cover selected BLOCK classification; preserve all existing validation-pack context checks and verify the separate workflow's four deterministic gates. Local fixture commands could not acquire the shared Docker lock; require the new exact-head manifest CI result before READY.
 - [x] BR757-EX6: owner-requested repair of run 40417977042/job 121916029156. Its guarded live-speech pack passed but the static PACK_TARGETS inventory omitted the package and failed. Register the existing lane, add an inventory regression and explicitly check its inventory-only packing path without adding a publisher. Impact: live-speech BLOCK classification recognizes its existing guarded Make lane; rollback: revert these three CI script changes together.
 - [x] Integration: merge origin/main 6690b8add after #778; retain L2 BRANCH.md and main's cluster 0.23.2/mesh 0.30.0/gateway 0.21.5 tuple. No L2-specific cluster source/version change remains; root lock keeps the live-speech workspace registration. Imported history exceeds 150 lines; conflict resolutions are metadata only.
 - [x] PR776 generation lookup regression: malformed historical references resolved an inherited entry (16/17 ordering tests passed). Validate scope, numeric epoch, submit key and owned journal entry before historical lookup; retain valid old-generation settlement.
