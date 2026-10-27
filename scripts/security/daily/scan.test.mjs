@@ -243,6 +243,7 @@ test('should attribute langium/mermaid chain advisories only to affected package
   for (const [name, version, severity, via] of entries) {
     packages[`node_modules/${name}`] = { version };
     raw.vulnerabilities[name] = { name, severity, via, range: '*', nodes: [`node_modules/${name}`] };
+    raw.vulnerabilities[name].fixAvailable = { name: 'mermaid', version: '11.17.2', isSemVerMajor: false };
   }
   packages['node_modules/other/node_modules/lodash-es'] = { version: '4.17.24' };
   raw.vulnerabilities['lodash-es'].nodes.push('node_modules/other/node_modules/lodash-es');
@@ -256,4 +257,10 @@ test('should attribute langium/mermaid chain advisories only to affected package
   const langium = report.findings[0].dependencyContext.find((item) => item.component === 'langium');
   assert.equal(langium.severity, 'MEDIUM');
   assert.deepEqual(langium.via, ['chevrotain']);
+  assert.equal(report.findings[0].fixedTarget, 'mermaid@11.17.2');
+  assert.equal(report.findings[0].fixIsSemVerMajor, false);
+  delete raw.vulnerabilities['lodash-es'].fixAvailable.name;
+  const invalid = await scanRepository(options(root, { run: () => ({ status: 1, stdout: JSON.stringify(raw),
+    scannerIdentity: 'npm:fixture', databaseIdentity: 'fixture-db' }) }));
+  assert.equal(invalid.surfaces.find((surface) => surface.target === 'package-lock.json').error, 'invalid npm fix target');
 });
