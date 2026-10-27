@@ -38,6 +38,7 @@
   - `packages/engram/**` (not activated)
 - **Exception process**:
   - [x] BR1-EX1: inherit #793 Makefile wiring, extend qualification environment selectors only as needed; impact limited to isolated test environment, rollback batch changes to those lines.
+  - [ ] BR10-EX2: add `test-mem-e10` to the existing ENV filters of `engram-e2-postgres-up` and the Compose qualification mode in `Makefile` so the E10 installed lane reuses the same Compose project and Node 24 qualification image as `test-mem-batch1`; no other target changes. Impact: one additional isolated test environment name; rollback: remove `test-mem-e10` from both filters.
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot E10-0 — Baseline and constraints**
