@@ -3,6 +3,7 @@ export type CatalogRequestContext = Readonly<{
   subjectId: string; sessionId: string; tenantId: string; workspaceId: string;
   membershipRef: string; consentRef: string; policyVersion: string;
   readOnly: boolean; allowedTools: readonly string[];
+  roles?: readonly string[]; workspaceType?: string;
 }>;
 export type CatalogInvocationContext = CatalogRequestContext;
 
@@ -41,6 +42,7 @@ export function createCatalogContextResolver(readAuthority: CatalogAuthorityRead
           workspaceId: input.workspaceId, tenantId: authority.tenantId,
           membershipRef: authority.membershipRef, consentRef: authority.consentRef,
           policyVersion: authority.policyVersion, readOnly: input.readOnly === true || authority.readOnly,
+          roles: Object.freeze([...(authority.roles ?? [])]), workspaceType: authority.workspaceType,
           allowedTools });
         refreshers.set(context, resolve);
         return context;
