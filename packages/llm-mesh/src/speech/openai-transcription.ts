@@ -528,3 +528,112 @@ export class TranscriptionSession implements SpeechSession {
       if (!isNonEmptyString(record.item_id) || typeof record.delta !== 'string'
         || typeof record.content_index !== 'number') {
         this.pushError('invalid-format', true);
+        return;
+      }
+      this.onDelta(record.item_id, record.content_index, record.delta);
+      return;
+    }
+    if (type === 'conversation.item.input_audio_transcription.completed') {
+      const record = frame as Record<string, unknown>;
+      if (!isNonEmptyString(record.item_id) || typeof record.transcript !== 'string') {
+        this.pushError('invalid-format', true);
+        return;
+      }
+      this.onCompleted(record.item_id, record.transcript, record.languages);
+      return;
+    }
+    if (type === 'error') {
+      this.pushError('provider-error', false);
+      return;
+    }
+    // Unknown provider event types are tolerated (forward compatibility); the stream continues.
+  }
+
+  private async run(signal: AbortSignal | undefined): Promise<void> {
+    try {
+      for await (const raw of this.socket.messages()) {
+        if (signal?.aborted) {
+          this.outcome = 'cancelled';
+          break;
+        }
+        this.onFrame(raw);
+      }
+    } catch {
+      if (!this.settled) {
+        this.outcome = 'failed';
+        this.pushError('transport', false);
+      }
+    } finally {
+      if (!this.settled) await this.close();
+    }
+  }
+}
+
+/**
+ * Open an admitted transcription session. The bearer token travels only into
+ * the socket handshake; failures never echo it. The `session.update` is sent
+ * before any audio; an aborted signal refuses without connecting.
+ */
+export const openTranscriptionSession = async (
+  config: OpenAiTranscriptionProfileConfig,
+  options: OpenAiTranscriptionOpenOptions,
+): Promise<TranscriptionSession> => {
+  const capabilities = openAiTranscriptionCapabilities(config);
+  const binding: SpeechBinding = {
+    ...openAiTranscriptionIdentity(config),
+    ...(config.language ? { language: config.language } : {}),
+    ...(config.accountRef ? { accountRef: config.accountRef } : {}),
+    ...(config.region ? { region: config.region } : {}),
+  };
+  assertAdmission(options.admission);
+  if (!isNonEmptyString(options.bearerToken)) {
+    throw new OpenAiTranscriptionError('invalid-config', 'bearer token is required');
+  }
+  const { request } = options;
+  if (request.pipeline !== 'chained' || request.bindings.stt === undefined
+    || request.bindings.stt.providerId !== binding.providerId
+    || request.bindings.stt.modelId !== binding.modelId
+    || request.bindings.tts !== undefined) {
+    throw new OpenAiTranscriptionError('invalid-config', 'STT-only chained binding for this profile is required');
+  }
+  for (const format of [...(request.inputFormats ?? []), ...(request.outputFormats ?? [])]) {
+    if (format.codec !== TRANSCRIPTION_FORMAT.codec || format.sampleRateHz !== TRANSCRIPTION_FORMAT.sampleRateHz
+      || format.channels !== TRANSCRIPTION_FORMAT.channels) {
+      throw new OpenAiTranscriptionError('invalid-config', 'only pcm16-le 24kHz mono is supported');
+    }
+  }
+  if (options.signal?.aborted) {
+    throw new OpenAiTranscriptionError('aborted', 'open aborted before connect');
+  }
+  const receipt: SpeechSessionReceipt = {
+    protocolVersion: 1,
+    speechSessionId: `speech-${options.admission.operationId}`,
+    connectionEpoch: request.target.controllerEpoch,
+    configuration: request.configuration,
+    target: request.target,
+    pipeline: 'chained',
+    micMode: request.micMode,
+    stages: { stt: capabilities },
+    inputFormat: TRANSCRIPTION_FORMAT,
+  };
+  let socket: OpenAiTranscriptionSocket;
+  try {
+    socket = await options.connect(OPENAI_TRANSCRIPTION_WS_URL, {
+      authorization: `Bearer ${options.bearerToken}`,
+      originator: options.originator ?? 'sentropic-llm-mesh',
+    });
+  } catch (error) {
+    // The handshake failure carries status only; the credential never enters the error.
+    throw new OpenAiTranscriptionError('transport', `provider connect failed: ${error instanceof Error ? error.message : 'unknown'}`);
+  }
+  const session = new TranscriptionSession(
+    receipt, socket, binding, options.admission, options.usage, options.nowMs, options.signal,
+  );
+  try {
+    socket.send(JSON.stringify(buildTranscriptionSessionUpdate(config)));
+  } catch (error) {
+    await session.close();
+    throw new OpenAiTranscriptionError('transport', `session update failed: ${error instanceof Error ? error.message : 'unknown'}`);
+  }
+  return session;
+};
