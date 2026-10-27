@@ -19,7 +19,8 @@
     "harness-content.json": "3d7afbada7d66372690eff0039721aedd1e6ee29d679469f5bc8ddcce5cc99d6"
   },
   "toolchain": {
-    "nodeImage": "node:24-bookworm-slim",
+    "nodeImage": "node:24.22.1-bookworm-slim",
+    "nodeCurrent": "24.22.1",
     "svelte": "5.56.4",
     "viteBefore": "7.3.6",
     "viteCurrent": "7.3.7",
