@@ -1,9 +1,10 @@
-// Playback tests (r3 L6a): natural end, fence cancel with reap, nonzero exit,
-// digest refusal, argv exactness and temp-file hygiene. The node fixture plays
-// the aplay role; no speaker, no audio payload anywhere.
+// Playback tests (r3 L6a): natural end over a stdin pipe, exact-bytes proof,
+// fence cancel with reap, sticky pre-spawn cancel, latency bound, nonzero
+// exit, digest refusal and argv exactness. The node fixture plays the aplay
+// role; no speaker, no audio files, no audio payload anywhere.
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -21,27 +22,42 @@ function digestOf(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
-function withMode<T>(mode: string | undefined, run: () => Promise<T>): Promise<T> {
+async function withMode<T>(mode: string | undefined, run: () => Promise<T>): Promise<T> {
   const key = 'FAKE_APLAY_MODE';
   const prior = process.env[key];
   try {
     if (mode === undefined) delete process.env[key];
     else process.env[key] = mode;
-    return run();
+    return await run();
   } finally {
     if (prior === undefined) delete process.env[key];
     else process.env[key] = prior;
   }
 }
 
-function leftoverPlayFiles(): string[] {
-  return readdirSync(tmpdir()).filter((name) => name.startsWith('live-stt-play-'));
+async function withEnv<T>(vars: Record<string, string>, run: () => Promise<T>): Promise<T> {
+  const prior: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(vars)) {
+    prior[key] = process.env[key];
+    process.env[key] = value;
+  }
+  try {
+    return await run();
+  } finally {
+    for (const [key, value] of Object.entries(prior)) {
+      if (value === undefined) delete process.env[key];
+      else process.env[key] = value;
+    }
+  }
 }
 
+const STUB = Buffer.from([82, 73, 70, 70, 36, 0, 0, 0, 87, 65, 86, 69]);
+const STUB_HEX = STUB.toString('hex');
+
 describe('playback', () => {
-  it('should build an exact aplay argv with no shell metacharacters', () => {
-    expect(buildAplayArgs('/tmp/x.wav', {})).toEqual(['/tmp/x.wav']);
-    expect(buildAplayArgs('/tmp/x.wav', { device: 'hw:0,0' })).toEqual(['-D', 'hw:0,0', '/tmp/x.wav']);
+  it('should build an exact stdin aplay argv with no shell metacharacters', () => {
+    expect(buildAplayArgs({})).toEqual([]);
+    expect(buildAplayArgs({ device: 'hw:0,0' })).toEqual(['-D', 'hw:0,0']);
   });
 
   it('should pin the vetted alsa-utils bytes like the arecord backend', () => {
@@ -50,47 +66,79 @@ describe('playback', () => {
 
   it('should refuse an unpinned binary with a digest mismatch before spawning', async () => {
     const playback = new AplayPlayback(FAKE_APLAY, ['f'.repeat(64)]);
-    await expect(playback.play(Buffer.from([1, 2, 3]))).rejects.toThrow(PlaybackError);
-    await expect(playback.play(Buffer.from([1, 2, 3]))).rejects.toThrow(/digest mismatch/);
+    await expect(playback.play(STUB)).rejects.toThrow(PlaybackError);
+    await expect(playback.play(STUB)).rejects.toThrow(/digest mismatch/);
     expect(playback.playing).toBe(false);
   });
 
-  it('should play to natural end and clean the temp file', async () => {
+  it('should pipe exact bytes to natural end with no audio files', async () => {
     await withMode(undefined, async () => {
-      const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
-      const before = new Set(leftoverPlayFiles());
-      await playback.play(Buffer.from([82, 73, 70, 70]));
-      expect(playback.playing).toBe(false);
-      expect(leftoverPlayFiles().filter((name) => !before.has(name))).toEqual([]);
+      await withEnv({ FAKE_APLAY_EXPECT_HEX: STUB_HEX }, async () => {
+        const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
+        await playback.play(STUB);
+        expect(playback.playing).toBe(false);
+      });
+    });
+  });
+
+  it('should fail a byte mismatch instead of playing the wrong audio', async () => {
+    await withMode(undefined, async () => {
+      await withEnv({ FAKE_APLAY_EXPECT_HEX: 'deadbeef' }, async () => {
+        const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
+        await expect(playback.play(STUB)).rejects.toThrow(PlaybackError);
+        await expect(playback.play(STUB)).rejects.toThrow(/exited 4/);
+      });
     });
   });
 
   it('should fail a nonzero backend exit without hanging', async () => {
     await withMode('fail', async () => {
       const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
-      await expect(playback.play(Buffer.from([82, 73, 70, 70]))).rejects.toThrow(PlaybackError);
-      await expect(playback.play(Buffer.from([82, 73, 70, 70]))).rejects.toThrow(/exited 3/);
+      await expect(playback.play(STUB)).rejects.toThrow(PlaybackError);
+      await expect(playback.play(STUB)).rejects.toThrow(/exited 3/);
     });
   });
 
   it('should cancel within the fence and leave no orphan behind', async () => {
     const pidFile = join(tmpdir(), `fake-aplay-${process.pid}.pid`);
-    process.env.FAKE_APLAY_PIDFILE = pidFile;
-    try {
+    await withEnv({ FAKE_APLAY_PIDFILE: pidFile }, async () => {
       await withMode('hang', async () => {
         const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
-        const pending = playback.play(Buffer.from([82, 73, 70, 70]));
-        await new Promise((resolve) => setTimeout(resolve, 100));
+        const pending = playback.play(STUB);
+        const deadline = Date.now() + 10000;
+        while (!playback.playing && Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
         expect(playback.playing).toBe(true);
+        const start = Date.now();
         playback.cancel();
         await expect(pending).rejects.toThrow(PlaybackCancelledError);
+        // Bounded by the §9 150 ms stop-to-silence gate, with wide margin.
+        expect(Date.now() - start).toBeLessThan(1000);
         expect(playback.playing).toBe(false);
         const pid = Number(readFileSync(pidFile, 'utf8').trim());
         expect(Number.isInteger(pid) && pid > 0).toBe(true);
         expect(() => process.kill(pid, 0)).toThrow(/ESRCH/);
       });
-    } finally {
-      delete process.env.FAKE_APLAY_PIDFILE;
-    }
+    });
+  });
+
+  it('should never spawn after a cancel that lands before the spawn', async () => {
+    const pidFile = join(tmpdir(), `fake-aplay-prespawn-${process.pid}.pid`);
+    await withEnv({ FAKE_APLAY_PIDFILE: pidFile }, async () => {
+      await withMode('hang', async () => {
+        const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
+        const pending = playback.play(STUB);
+        // Cancel synchronously: the async verification has not finished, so
+        // no child can exist yet. The play must reject without ever spawning
+        // — the fixture would write its pidfile if it did.
+        playback.cancel();
+        await expect(pending).rejects.toThrow(PlaybackCancelledError);
+        expect(playback.playing).toBe(false);
+        await expect(
+          (async () => readFileSync(pidFile, 'utf8'))(),
+        ).rejects.toThrow(/ENOENT/);
+      });
+    });
   });
 });
