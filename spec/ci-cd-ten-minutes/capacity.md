@@ -296,6 +296,80 @@ they exceed 2288s by 3252s/4641s, and the branch dispatch is not main delivery.
 **P1 remains unticked; PR #766 stays draft.** No new rollback drill completed;
 its checkbox remains unticked and cancelled run `40353670942` does not qualify.
 
+## Review r3 attribution and best PR receipt — 2026-10-27
+
+Run [40492458247](https://github.com/rhanka/sentropic/actions/runs/40492458247),
+attempt 1, is a successful **PR-only** receipt on source
+`6a6da0e28e7b4e8c26ddcab3d8067c8ee4dd1b2a`: creation
+2026-10-27T10:57:19Z → final completion 2026-10-27T11:36:48Z,
+**2369s wall-clock**, 89 job rows / 62 successes / 27 skips.
+This is the best measured receipt, **81s above 2288s**. No receipt ≤2288s
+and no actual main-push receipt of this policy exists yet.
+The retained `ci-expected-40492458247-1` artifact identifies that source/run
+and attests digest `dfb44d98051d4a9a4b47bb9598d29d7db972ff8a1ccea87aa0a11e5611b5d2ff`.
+Raw run/jobs/manifest receipts are retained in
+`tmp/ci-capacity/40492458247-1/`; the table uses Jobs API timestamps.
+
+| Job | Job ID | Creation → runner wait | Execution |
+| --- | --- | ---: | ---: |
+| Classification | `122149503985` | 16s | 18s |
+| UI build | `122149750268` | 697s | 435s |
+| API quality | `122149749483` | 97s | 642s |
+| Toolbox | `122149750239` | 798s | 129s |
+| API initiative/summary member | `122156404102` | 596s | 530s |
+| E2E A | `122157892739` | 797s | 312s |
+| E2E B | `122157892827` | 911s | 234s |
+| E2E C | `122157892824` | 825s | 262s |
+| E2E D | `122157892777` | 860s | 261s |
+| E2E E | `122157892850` | 820s | 202s |
+| VSCode E2E | `122157892806` | 901s | 251s |
+| Capacity receipts | `122166044557` | 7s | 19s |
+| CI gate | `122166229913` | 3s | 20s |
+
+The qualification path is changes → build-ui → e2e-vscode → receipts → gate:
+**1626s scheduling + 743s execution = 2369s**, including two 1s dependency
+handoffs. Finalization adds 0s. Classification/verdict are 18s/20s, so the
+15s/5s budgets remain unmet; queueing still dominates the best sample.
+
+Attribution correction: dry-run `40476084177` (6929s) already ran without
+per-index mutexes. Its source `0dfeda7b4` has a `ci.yml` byte-identical to
+`6a6da0e28`; only documentation changed between those sources. The same
+policy therefore measured PR attempt 2 at 5540s, dry-run at 6929s, then PR
+at 2369s. The 6929→2369s gap comes from concurrent account load, not the fix.
+Review r3 observed about 15 other active branch runs during 08:30–10:00 UTC,
+with other branches taking 5500–6500s; comparable dispatch `40492061106`
+at 10:54 took 2359s. Removing the mutex regression is established; a timing
+gain over comparable account traffic is not. The old mutex-policy receipts
+remain 3661s/3928s. No workflow change follows from these measurements.
+
+## Strict acceptance after an owner merge GO
+
+P1 remains open. Before merge, the branch author must record a completed
+same-policy PR receipt ≤2288s; the current best is 2369s. An owner GO to
+merge with that condition unmet does not establish timing acceptance.
+The strict PR + actual-main proof can only be produced after merge:
+
+1. The BR-77 branch author captures **attempt 1 of CI on the actual push
+   of PR #766's merge SHA to `main`** using `make ci-capacity-capture
+   CI_RUN_ID=<first-main-run> CI_RUN_ATTEMPT=1 ENV=test-ci-capacity`.
+   Record run ID, merge SHA, digest, job breakdown and all selected image,
+   preproduction and package endpoint results here. Do not replace this
+   sample with a branch dispatch, later run or retry under quieter traffic.
+2. Read `wallClockSeconds`: run `created_at` to completed run `updated_at`,
+   not the sum of job durations. It must be ≤2288s, with successful, complete,
+   fresh executions and the same retained workflow policy digest as the PR.
+   Run `make ci-capacity-policy CI_REQUIRE_CAPACITY_PROOF=1
+   CI_POLICY_RUN_FILES='<pr>/capture.json <main>/capture.json' ENV=test-ci-capacity`.
+   Both receipts must independently meet the unchanged 2288s limit.
+3. **rhanka, repository owner and merge operator**, reads the main receipt,
+   job breakdown and strict command output recorded here before accepting
+   P1. A green correctness gate alone never closes timing acceptance.
+4. **Revert trigger:** the first main-push receipt exceeds 2288s, fails,
+   is cancelled, or lacks complete same-policy evidence. The branch author
+   prepares a bounded revert of BR-77's policy and reports the identified
+   run/reason to rhanka, who owns executing the revert. Preserve every gate;
+   a quiet rerun does not erase the trigger or qualify the first sample.
+
 ## BR-76 retained measurements
 
 Status: measurement record with reconciled receipts (metrics +
