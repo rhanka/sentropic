@@ -1,4 +1,5 @@
 import { labelSize, PORT_SLOT_COUNT, textWidth } from './architecture-layout.js';
+export const ROUTING_VERSION = 'orthogonal-v1';
 
 // A 21px, one-line edge pill is 38px tall and needs 6px to the next card.
 export const ROUTE_CLEARANCE = 28;
