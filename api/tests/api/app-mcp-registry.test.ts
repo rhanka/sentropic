@@ -18,7 +18,7 @@ function fixture() {
   };
   return { artifacts, execute, createInvocation, selection: ['sentropic.artifacts'],
     configurations: { 'sentropic.artifacts': {} }, bindings: {}, compatibility: {
-      'sentropic.artifacts': { manifestDigest: 'ccf8a4ddd9365537741eb0550efa49954d86a0c2d1ee808fb18ca81ef7090e9a' },
+      'sentropic.artifacts': { manifestDigest: '80ca4b067a010690dc71036a3237a70b91d99d7c025ded7173566d0ae55b1600' },
     } };
 }
 
@@ -54,6 +54,16 @@ describe('app MCP registry compilation', () => {
     expect(result.registry.resolveTool('artifacts-ensure')).toBeUndefined();
     expect(input.execute).not.toHaveBeenCalled();
     expect(input.createInvocation).not.toHaveBeenCalled();
+  });
+
+  it('should refuse the superseded artifacts 0.2.1 compatibility receipt', async () => {
+    const input = fixture();
+    input.compatibility['sentropic.artifacts'].manifestDigest =
+      'ccf8a4ddd9365537741eb0550efa49954d86a0c2d1ee808fb18ca81ef7090e9a';
+    const result = await compileAppMcpRegistry(input);
+    expect(result.ok).toBe(false);
+    expect(result).not.toHaveProperty('registry');
+    expect(input.execute).not.toHaveBeenCalled();
   });
 
   it('should refuse a missing artifacts compatibility receipt without exposing a registry', async () => {

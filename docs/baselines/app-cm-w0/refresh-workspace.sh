@@ -6,6 +6,7 @@ cd /workspace
 tar --exclude=node_modules --exclude=dist --exclude=build --exclude=.svelte-kit \
   -cf - package.json package-lock.json api ui apps packages | tar -xf - -C "$workspace"
 cd "$workspace"
+node --input-type=module -e 'import assert from "node:assert/strict"; import { readFileSync } from "node:fs"; const json = p => JSON.parse(readFileSync(p)); assert.equal(json("api/package-lock.json").packages["../packages/artifacts"].version, json("packages/artifacts/package.json").version);'
 node --version > /out/workspace-tools.txt
 npm --version >> /out/workspace-tools.txt
 sha256sum package-lock.json api/package-lock.json > /out/workspace-lock-before.txt
