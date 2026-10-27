@@ -193,6 +193,23 @@ describe('cluster mesh catalog product authority', () => {
     }
   });
 
+  it('should isolate interleaved mounted discovery for two real users and workspaces', async () => {
+    const other = await createAuthenticatedUser('guest');
+    await db.insert(tenantMemberships).values({ userId: other.id, tenantId: 'sentropic', status: 'approved' });
+    expect(other.workspaceId).not.toBe(user.workspaceId);
+    standaloneToolSource.register({ tool: { name: 'catalog_context_probe', description: 'Private mutation probe',
+      inputSchema: {}, sideEffect: true }, handler: vi.fn() });
+    const discover = (actor: TestUser) => authenticatedRequest(productApp, 'GET',
+      '/api/v1/catalog/entries/catalog_context_probe', actor.sessionToken!);
+    const responses = await Promise.all([discover(user), discover(other), discover(other), discover(user)]);
+    expect(responses.map(response => response.status)).toEqual([200, 404, 404, 200]);
+    await expect(responses[0].json()).resolves.toMatchObject({ item: { metadata: { name: 'catalog_context_probe' } } });
+    await db.delete(tenantMemberships).where(eq(tenantMemberships.userId, other.id));
+    const [denied, allowed] = await Promise.all([discover(other), discover(user)]);
+    expect(denied.status).toBe(403);
+    expect(allowed.status).toBe(200);
+  });
+
   it('should reject stale session authority and foreign workspace selectors before execution', async () => {
     const [session] = await db.select().from(userSessions).where(eq(userSessions.userId, user.id));
     const authenticated = { userId: user.id, sessionId: session.id, workspaceId: user.workspaceId!, role: 'editor' };
