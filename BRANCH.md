@@ -138,11 +138,11 @@
 
 - [x] Lot E9-0 — read approved plan and binding sections 7–10; mechanically check branch; merge E8 into E7; retain inherited scope declarations; freeze Engram/P3 bytes.
 - [x] Lot E9-1a — initial tests first: `memory-corpus.ts`, `durable-memory.spec.ts`; real PostgreSQL required, initial run fails because the campaign fixture is not implemented yet. This is a scaffolding failure, not an invariant proof.
-- [ ] Lot E9-1b — complete explicit profile/case inventory, zero skip/todo; failure controls assert the intended invariant.
-- [ ] Lot E9-2 — PostgreSQL fixture: `memory-pg-host.ts`, `memory-neutral.ts`; neutral wire translation, real transactions and queries, separate host maintenance runner, injected driver, installed constructor and E8 candidate liaison.
+- [x] Lot E9-1b — complete explicit profile/case inventory, zero skip/todo; failure controls assert the intended invariant.
+- [x] Lot E9-2 — PostgreSQL fixture: `memory-pg-host.ts`, `memory-neutral.ts`; neutral wire translation, real transactions and queries, separate host maintenance runner, injected driver, installed constructor and E8 candidate liaison.
   - [x] Neutral transaction and query wire bridge preserves JSON values and exact decimal counters; kernel-backed commit identity index, no replay cache.
   - [x] Initial real-PG fixture opens installed Engram 0.21.1 with exact read/write and durable canonical ownership. First execution exposes a real capture-proof wire-shape mismatch in the installed validator; no bytes rewritten by the bridge.
-- [ ] Lot E9-3 — Stage B: capture/completion/admission/read, immutable proofs after destruction/replay, bounded snapshots/outbox, checkpoint/resync/fence/poison/retry, original receipts after crash/reopen, u64 crossings/exhaustion, G3 ownership, C4 recovery and C7 scope refusals.
+- [x] Lot E9-3 — Stage B: capture/completion/admission/read, immutable proofs after destruction/replay, bounded snapshots/outbox, checkpoint/resync/fence/poison/retry, original receipts after crash/reopen, u64 crossings/exhaustion, G3 ownership, C4 recovery and C7 scope refusals.
   - [x] Initial five-case real-PG run passes after the two evidenced wire fixes; add engine acceptance/rejection traces through E8's authoritative candidate liaison and actual key destruction.
   - [x] Engine traces pass (7/7); add host checkpoint/resync/snapshot and poison/retry with independent maintain checks, plus host read/maintain grant without write. No read/write/maintain grant enters the campaign.
   - [x] Host maintenance positive cases pass (9/9); add independent-process contention and real SIGKILL before/after COMMIT, own peer TCP pool and elapsed durable lease, original-result lookup in a new epoch.
@@ -153,8 +153,16 @@
   - [x] Test-first expansion: 170/173 pass (18 memory files, zero skipped). Three deliberate new failures expose missing terminal-authority rehydration in the campaign liaison and foreign-scope lookup refusal precedence. Wire E7's existing durable ledger and bind-scope checks in the fixture; frozen Engram/P3 stay unchanged.
   - [x] Fixture correction: apply E7's unchanged 002 ledger asset directly (as its existing tests do), retain seal/admission evidence through its PG API, and authorize terminal proof recovery only against current host authority plus the retained store/scope/principal/invocation. Explicitly reject foreign neutral grants before fence lookup.
   - [x] All 18 memory files pass: 173/173, zero skipped/todo, including 24 Stage B cases. Profile counts: atomic 8, chains 3, boundaries 3, outbox 3, fenced writers 6; one additional inventory case. Runtime: Node 24.21.0 x64, PostgreSQL 17.11, serializable and synchronous_commit=on. Fix the lint-reported extra assertion in fixture cleanup before final quality gates.
-- [ ] Lot E9-4 — `test-cluster-mesh` scoped memory and PostgreSQL lanes; typecheck/lint; mechanical scope gate before each `make commit`; every authored commit under 150 lines; no AI trailers.
+- [x] Lot E9-4 — `test-cluster-mesh` scoped memory and PostgreSQL lanes; typecheck/lint; mechanical scope gate before each `make commit`; every authored commit under 150 lines; no AI trailers.
+- [ ] Final build and retained Stage B run on the final author head.
 - [ ] Lot E9-5 — retain campaign facts and counts per profile; push retry every ten minutes until successful; draft PR from this file; record CI; do not merge or publish.
+  - [x] Author source `68783a1f6`: memory 18 files / 173 passed; Stage B 24 passed / zero skip/todo. Atomic 8, immutable chains 3, immutable boundaries 3, scope outbox 3, fenced writers 6, plus inventory 1.
+  - [x] Supplementary storage regressions: 78 passing files / 502 passed; `postgres-crashes.spec.ts` has 4 phase-selected server-crash tests outside this invocation. E9's separate SIGKILL-before/after-COMMIT cases both execute and pass; no E9 case is skipped.
+  - [x] `make typecheck-cluster-mesh lint-cluster-mesh ENV=test-e2-int` exits 0; local and E7-base stacked mechanical scope both PASS C2. Every E9 author commit is below 150 changed lines.
+  - [x] Retained logs/status/hashes: `tmp/memory-e9-receipts/`; runtime Node 24.21.0 x64 and PostgreSQL 17.11, serializable transactions, synchronous_commit=on. Compose PG data is tmpfs: this campaign proves process death/reopen, not host power-loss durability. Native backend and Engram semantic profile digests are retained separately.
+  - [x] Reproduce: `make -f Makefile -f packages/cluster-mesh/tests/engram-memory/qualification.mk memory-stage-b ENV=test-e2-int`. This target takes the shared lock, starts only existing Compose PostgreSQL, retains source/log hashes, then tears down the owned stack and releases the lock on success or failure.
+  - [x] Engram remains pinned to 0.21.1; pack-only mesh version 0.23.0-dev.10; no P3/candidate edits. The inherited pre-candidate bytes are unchanged from E7 (`2b85ff28b6fe06bda0abcdc19255f61a1ed1e4b7cfbb40c2e881c98dd234424b`); they are historical bytes, not a newly generated P3 claim. The externally frozen candidate remains `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10`.
+  - [ ] Push and draft PR: HTTPS push at 08:06 UTC still fails with `could not read Username for https://github.com`; retry at ten-minute intervals. Target `feat/engram-e2-integration`; CI remains unobserved until pushed. No consensus review or E10 installed mesh-tarball qualification is claimed by this author report.
 
 ## Orchestration Mode (AI-selected)
 
