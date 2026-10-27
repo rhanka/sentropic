@@ -19,6 +19,7 @@
   - `api/src/app.ts`
   - `api/src/routes/namespaces/mcp.ts`
   - `api/src/routes/namespaces/resources.ts`
+  - `api/src/routes/namespaces/resources-module.ts`
   - `api/src/routes/namespaces/artifacts.ts`
   - `api/src/services/artifacts/transport.ts`
   - `api/src/services/artifacts/credentials.ts`
@@ -68,7 +69,8 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: mechanical branch check and merge W1.d; freeze scope and environment.
-- [ ] Lot 1: tests first in api/tests/api/artifacts-host-credentials.test.ts; current OAuth/session authority.
+- [x] Lot 1 tests authored first in api/tests/api/artifacts-host-credentials.test.ts; current OAuth/session authority.
+- [ ] Lot 1 implementation: real credential reader and wait/expiry evidence.
 - [ ] Lot 2: strict workspace reconciliation; remove aliases; api/tests/api/app-mcp-installed.test.ts.
 - [ ] Lot 3: tests first in api/tests/api/app-artifacts-transport.test.ts; HTTP/MCP same effect and denial.
 - [ ] Lot 4: mount registry dispatch and artifact HTTP with existing auth/supervisor and W1 host.
