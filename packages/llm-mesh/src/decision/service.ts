@@ -17,6 +17,7 @@ import { dispatchDecision } from './dispatch.js';
 import { hasOnlyKeys } from './validation.js';
 import { isMicroUsd } from './pricing.js';
 import { runWithDecisionDeadline } from './deadline.js';
+import { createDecisionReadinessCheck } from './qualification.js';
 
 export interface DecisionSelectionOptions {
   registry: ProviderRegistry;
@@ -118,32 +119,45 @@ const isEvaluatorAllowlist = (value: unknown): value is readonly EvaluatorRef[] 
 /** Trusted composition only. Construction performs no discovery, key resolution or I/O. */
 export function createDecisionService(supplied: DecisionServiceOptions): DecisionClient {
   const policy = snapshotBoundedJson(supplied.policy ?? {});
+  const readiness = snapshotBoundedJson(supplied.readiness ?? null, 16 * 1024 * 1024);
   if (!supplied.registry || ![supplied.resolveEvaluator, supplied.resolveAuth, supplied.resolvePrice, supplied.authorize,
     supplied.budget?.admit, supplied.budget?.markDispatched, supplied.budget?.release, supplied.budget?.settle,
     supplied.receipts?.persist].every((port) => typeof port === 'function')
     || !isEvaluatorAllowlist(supplied.evaluatorAllowlist)
+    || (supplied.executionProfile !== undefined && supplied.executionProfile !== 'production' && supplied.executionProfile !== 'qualification')
+    || !readiness.ok
     || !policy.ok || !isRecord(policy.value)
     || !hasOnlyKeys(policy.value, ['timeoutMs', 'maxCostMicroUsd', 'allowRaw'])
     || (policy.value.timeoutMs !== undefined && (!Number.isSafeInteger(policy.value.timeoutMs)
       || typeof policy.value.timeoutMs !== 'number' || policy.value.timeoutMs < 1 || policy.value.timeoutMs > 60000))
     || (policy.value.maxCostMicroUsd !== undefined && !isMicroUsd(policy.value.maxCostMicroUsd))
     || (policy.value.allowRaw !== undefined && typeof policy.value.allowRaw !== 'boolean')) throw new Error('Invalid decision host configuration.');
-  const options = { ...supplied, policy: freezeDecisionData(policy.value as DecisionHostPolicy),
+  const options = { ...supplied, executionProfile: supplied.executionProfile ?? 'production', policy: freezeDecisionData(policy.value as DecisionHostPolicy),
+    readiness: freezeDecisionData(readiness.value as DecisionServiceOptions['readiness']),
     evaluatorAllowlist: freezeDecisionData(supplied.evaluatorAllowlist.map((entry) => ({ ...entry }))) };
+  const productionReady = createDecisionReadinessCheck(options.readiness);
   return { async decide(candidate, callOptions) {
     const execution = beginDecisionExecution(candidate, { clock: options.clock, generateId: options.generateId,
       timeoutMs: options.policy.timeoutMs, signal: callOptions?.signal });
-    return runWithDecisionDeadline(execution, async () => {
+    if (options.executionProfile === 'qualification') execution.receipt.experimental = true;
+    const result = await runWithDecisionDeadline(execution, async () => {
       if (execution.idError) return persistDecisionResult(execution, options.receipts, createDecisionError('MESH_UNAVAILABLE', 'preflight'));
       const interrupted = decisionInterruption(execution, 'preflight');
       if (interrupted) return persistDecisionResult(execution, options.receipts, interrupted);
       const selection = await preflightDecisionRequest(candidate, options);
       if (!selection.ok) return persistDecisionResult(execution, options.receipts, createDecisionError(selection.code, 'preflight'));
+      if ((selection.descriptor.executionProfile ?? 'production') !== options.executionProfile) {
+        return persistDecisionResult(execution, options.receipts, createDecisionError('PROVIDER_UNAVAILABLE', 'preflight'));
+      }
       execution.receipt.evaluator = { ...selection.descriptor.evaluator };
       execution.receipt.retention = structuredClone(selection.descriptor.retention);
-      const admitted = await admitDecision(execution, selection, options);
+      const admitted = await admitDecision(execution, selection, options, productionReady);
       if (!admitted.ok) return persistDecisionResult(execution, options.receipts, admitted.error);
       return dispatchDecision(execution, selection, admitted, options);
     });
+    if (execution.receipt.experimental) return result.ok
+      ? { ...result, experimental: true, kind: 'experimental-verdict' }
+      : { ...result, experimental: true };
+    return result;
   } };
 }

@@ -13,6 +13,7 @@ import { encodeOpenAiDecisionsRequest, decodeOpenAiDecisionsResponse } from './o
 import { createDecisionError } from './errors.js';
 import { unreportedDecisionUsage } from './receipt.js';
 import { isRecord, snapshotBoundedJson } from './validation.js';
+import { canExecuteDecisionCandidate } from './qualification.js';
 
 export interface OpenAiDecisionsAdapterOptions { transport: OpenAiDecisionsTransport; descriptor?: DecisionEvaluatorDescriptor }
 /** Explicit native registration; ordinary OpenAI chat composition never acquires it. */
@@ -48,7 +49,7 @@ export class OpenAiDecisionsAdapter implements ProviderAdapter {
         ...(phase === 'dispatch' ? { usage: unreportedDecisionUsage('unknown') } : {}) });
     const encoded = encodeOpenAiDecisionsRequest(request, this.descriptor);
     if (!encoded.ok) return failed(encoded.code);
-    if (this.descriptor.qualification.servedIdentity !== 'qualified') return failed('PROVIDER_UNAVAILABLE');
+    if (!canExecuteDecisionCandidate(this.descriptor)) return failed('PROVIDER_UNAVAILABLE');
     const auth = getSecretAuthMaterial(context?.auth);
     if (!this.validateAuth(context?.auth).ok || auth?.type !== 'environment-token' || !auth.token) return failed('CREDENTIAL_MISSING');
     try {

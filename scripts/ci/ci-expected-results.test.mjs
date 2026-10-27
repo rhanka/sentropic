@@ -14,6 +14,17 @@ const ran = (job, conclusion) => ({ job, conclusion });
 const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
 const workflow = YAML.parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
 
+test('should select API and E2E gates for global changes on every pull request', () => {
+  assert.doesNotMatch(JSON.stringify(workflow), /decision_fixture_only|feat\/decision-v4-l5/);
+  const expected = workflowExpected(workflow, { changes: { global: 'true' }, event: 'pull_request' });
+  for (const job of ['test-api-unit-integration', 'test-e2e', 'e2e-vscode']) {
+    const members = expected.filter((row) => row.job.startsWith(job));
+    assert.ok(members.length > 0 && members.every((row) => row.selected === true));
+  }
+  assert.equal(expected.find((row) => row.job === 'validate-llm-mesh').selected, true);
+  assert.equal(expected.find((row) => row.job === 'validate-cluster-mesh').selected, true);
+});
+
 test('should require completed PR and main receipts of the same policy within the baseline', () => {
   const sample = (id, event, head_branch) => ({ policyDigest: 'final-policy', run: {
     id, event, head_branch, status: 'completed', conclusion: 'success',

@@ -30,7 +30,8 @@ export async function dispatchDecision(execution: DecisionExecution, selection: 
   const result = parseDecisionAdapterResult(candidate, request, selection.descriptor, secret);
   receipt.dispatch = result.ok || result.error.phase === 'parse' ? 'completed' : 'unknown';
   receipt.usage = result.usage;
-  receipt.servedEvaluator = result.servedEvaluator;
+  receipt.servedEvaluator = result.servedEvaluator === null ? null : { ...result.servedEvaluator,
+    ...(receipt.experimental ? { provisional: true as const } : {}) };
   receipt.servedModelId = result.servedModelId;
   if (result.providerRequestId) receipt.providerRequestId = result.providerRequestId;
   if (result.providerLatencyMs !== undefined) receipt.providerLatencyMs = result.providerLatencyMs;
