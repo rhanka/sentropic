@@ -12,6 +12,7 @@
 import { describe, expect, it } from 'vitest';
 import { assembleMemoryHostBinding } from '../../src/engram-memory/binding.js';
 import { openMemoryMaintenance } from '../../src/engram-memory/host-maintenance.js';
+import { createMemoryHostLedger } from '../../src/engram-memory/ledger.js';
 import { MemoryHostDriverRequiredError } from '../../src/engram-memory/sqlite.js';
 import { StorageDeniedError, StorageUnavailableError } from '../../src/storage/errors.js';
 import { grantFor } from '../storage/authority-corpus.js';
@@ -69,5 +70,45 @@ describe('host maintenance binding', () => {
   it.todo('resyncs scope-chain-index and snapshots through maintenance ports');
   it.todo('keeps the durable ledger across reopen (rehydration re-establishes authority)');
   it.todo('refuses on an empty ledger until rehydration');
+
+  describe('durable host-evidence ledger', () => {
+    const entryFor = (candidateId: string) => ({
+      candidateId,
+      storeId: 'store-1',
+      scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
+      invocationId: 'inv-1',
+      envelopeDigest: 'e'.repeat(64),
+      state: 'reserved' as const,
+      receipt: null,
+      cursor: null,
+    });
+
+    it('records host evidence and reads it back', () => {
+      const ledger = createMemoryHostLedger();
+      expect(ledger.read('unknown')).toBeNull();
+      const stored = ledger.record(entryFor('cand-1'));
+      expect(stored.state).toBe('reserved');
+      expect(ledger.read('cand-1')).toEqual(stored);
+    });
+
+    it('keeps the first write on replay and completes terminally', () => {
+      const ledger = createMemoryHostLedger();
+      const first = ledger.record(entryFor('cand-1'));
+      expect(ledger.record({ ...entryFor('cand-1'), invocationId: 'inv-2' })).toBe(first);
+      const done = ledger.markTerminal('cand-1', { outcome: 'admitted' }, 'cursor-9');
+      expect(done.state).toBe('terminal');
+      expect(ledger.read('cand-1')).toBe(done);
+      expect(() => ledger.markTerminal('unknown', null, null)).toThrow(StorageDeniedError);
+    });
+
+    it('refuses malformed entries without recording', () => {
+      const ledger = createMemoryHostLedger();
+      expect(() => ledger.record({ ...entryFor('cand-1'), envelopeDigest: '' })).toThrow(StorageDeniedError);
+      expect(() =>
+        ledger.record({ ...entryFor('cand-1'), scope: { tenantId: '', workspaceId: '' } }),
+      ).toThrow(StorageDeniedError);
+      expect(ledger.read('cand-1')).toBeNull();
+    });
+  });
   it.todo('recovers proof-only: authorized capture-proof reads, no second effect');
 });
