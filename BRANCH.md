@@ -56,7 +56,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read Docker lock, rules, plan-v2, template and receiving contracts; harness branch check passed.
-- [ ] Lot 1: merge #702; published strict consumer first; cluster-mesh resolves artifacts 0.2.3 with Comments/gateway.
+- [x] Lot 1: merge #702; published strict consumer first; cluster-mesh resolves artifacts 0.2.3 with Comments/gateway.
 - [ ] Lot 2: normalized published payload hashes, clean source equivalence, complete workspace resolution; merge published UP-T ancestry without package author edits.
 - [ ] Lot 3: recompute APP-P1 with mcp:tools:invoke; observe old-pin refusal, then update registry and api/tests/api/{app-mcp-registry,app-mcp-installed}.test.ts.
 - [ ] Lot 4: refresh reservations.md, host-fit.md, catalog-context.md and published-tuple.json; dated evidence and exact base/lock hashes.
