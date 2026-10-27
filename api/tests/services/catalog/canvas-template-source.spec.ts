@@ -351,7 +351,7 @@ describe('0-regression — canvas entries absent from resolveFoundationChatTools
     const tools = resolveFoundationChatTools({
       userId: 'u-lot6-test',
       workspaceId: 'ws-lot6-test',
-      workspaceType: 'ai-ideas',
+      workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
       allowedTools: ALL_FOUNDATION_TOOL_NAMES,
     });
@@ -373,7 +373,7 @@ describe('0-regression — canvas entries absent from resolveFoundationChatTools
     const tools = resolveFoundationChatTools({
       userId: 'u-lot6-test',
       workspaceId: 'ws-lot6-test',
-      workspaceType: 'ai-ideas',
+      workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
       allowedTools: ALL_FOUNDATION_TOOL_NAMES,
     });
@@ -387,7 +387,7 @@ describe('0-regression — canvas entries absent from resolveFoundationChatTools
     const tools = resolveFoundationChatTools({
       userId: 'u-lot6-test',
       workspaceId: 'ws-lot6-test',
-      workspaceType: 'ai-ideas',
+      workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
       allowedTools: ALL_FOUNDATION_TOOL_NAMES,
     });
@@ -400,7 +400,7 @@ describe('0-regression — canvas entries absent from resolveFoundationChatTools
     const tools = resolveFoundationChatTools({
       userId: 'u-lot6-test',
       workspaceId: 'ws-lot6-test',
-      workspaceType: 'ai-ideas',
+      workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
       allowedTools: ALL_FOUNDATION_TOOL_NAMES,
     });
