@@ -92,7 +92,7 @@ Deliver L6a: `live-speech/src/node/{tts-registry,voice-loop,playback}.ts`, a loc
   - [x] Lot gate: lane `validate-live-speech` green on the R3 head 46f5be6a (CI run 40565062747, lane-only; the run as a whole failed on e2e group-d). Fully green run 40568868245 on 0771178bd (BRANCH-only delta). Host replica: tsc clean + 120/120.
 - [x] **Lot R4 — Opus r4 review fix (spawn marker, mutation-sensitive absence)**
   - [x] P1-R4: fixture appends `$FAKE_APLAY_SPAWNLOG` at process start, before any stdin read; the three pre-spawn absence proofs (tts-registry, playback pre-spawn, voice-loop prespawn) assert ENOENT on the log, then a positive control and `readSpawnLog() === [controlPid]` plus ESRCH. Mutation-checked on the exact r3 shape and on spawn-then-check-without-kill: the log shows the orphan line and the test fails.
-  - [ ] Lot gate: lane `validate-live-speech` green on the R4 head (lane `make` runs post-21:00 UTC). Host replica: tsc clean + 120/120 (14 files).
+  - [x] Lot gate: lane `validate-live-speech` green on the R4 head f9d02617 (CI run 40580106410). Host replica: tsc clean + 120/120 (14 files); mutation r3-shape fails `[orphan, control] vs [control]`, each fence alone passes, playback fence removal fails.
 - [ ] **Lot 4 — Receipts + wiring**
   - [x] `bench/l6a-g-native.receipt.json` (status blocked, exact missing §8.1 items), README section, `src/node/index.ts` exports.
   - [ ] Retest green, push, draft PR against `feat/live-stt-l4`, CI green, report without merging.
