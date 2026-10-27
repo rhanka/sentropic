@@ -1,7 +1,7 @@
 # feat(security): add daily scan adapter (S2a)
 
 ## Objective
-- [ ] Deliver the credential-free `security-daily-scan` Make adapter and raw scan orchestration from approved spec r4 section 9; estimate 3–5 h, dependency S1 approval.
+- [x] Deliver the credential-free `security-daily-scan` Make adapter and raw scan orchestration from approved spec r4 section 9; estimate 3–5 h, dependency S1 approval.
 
 ## Scope / Guardrails
 - [x] Owner authorized implementation on 2026-10-26; draft PR to main stacked on S1 #732, no merge.
@@ -43,6 +43,14 @@
 - [x] S1 dependency: owner confirms Opus r2 approval of corrected #732 head `76c745d5a`.
 - [x] S2A-F1, author, resolved: native npm rejected user/global config both pointing to `/dev/null` (double-loading config); use a distinct absent global config in scratch. Native-version regression preserves credential isolation.
 - [x] S2A-F2, author, resolved: real npm reports contain cyclic dependency references; traverse without revisiting, require reachable advisory evidence and retain each advisory severity. Independent lock audits preserve repository-relative local-link metadata inside scratch; outside-repository links fail closed.
+- [x] Validation: locked `make test-security-daily ENV=test-sec-s2a` passes 106 tests, including real native npm version resolution; initial missing-module and F1/F2 regressions were observed failing before their fixes.
+- [x] Parser compatibility: locked `make test-security-parser ENV=test-sec-s2a` passes all five cases; no parser/compliance or existing gate edit.
+- [x] Runtime identity: reuse existing `MEMORY_L5_NODE_IMAGE`, `node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6`; no image build, new image, Python, Docker socket, source write or application service.
+- [x] Operator smoke: locked `make security-daily-scan ENV=test-sec-s2a` on immutable code head `2f95bb0735725f46da1efc3d97dd46f4dd3c7097` audits all seven locks successfully and retains 251 affected-path/advisory findings (12 HIGH, 196 MEDIUM, 43 LOW); 68 unresolved register rows remain (7 expired, 61 unexpired). This is an author-branch smoke, not qualified main/pilot evidence.
+- [x] Smoke receipt: ignored `tmp/security-daily/receipt.json`, SHA-256 `99d546935dcb376acd169d04f099aa6d8405994823771f8861877055bc00331e`; source/register hashes and raw reports retained. Make exits 2 from scanner exit 1 as required for `incomplete-scan`; all source input hashes remain unchanged.
+- [x] Register bytes: SHA-256 `837f27b85ed9c20b0efd9f8fde10fb30533a87558ab23d4e65fe41d96a6df787`; policy SHA-256 `cb3f56d654fc59dcd30f1cee13af372ec037df7b70483405bb610420394b0bff`; both and every lock remain identical to S1.
+- [x] Coverage handoff: S2b 4–6 h qualifies immutable Trivy/image/IaC/DB evidence; S2c 6–12 h qualifies native Rust SAST; S3 4–6 h follows S2c for the public workflow/collector. Inventory additionally exposes missing qualified locks for `apps/auth-idp/package.json`, `tools/scw-tem-mock/package.json`, `ui/vscode-ext/package.json`; no false complete-clean receipt.
+- [x] Independent S2a review remains pending: local harness selection failed because this session has no live model catalog and h2a presence lacks exact models; no peer was dispatched and no consensus is claimed. Ignored dossier: `tmp/security-daily/review.md`.
 - [x] Track import belongs to the designated writer; this worktree updates only the mergeable `BRANCH.md` source.
 
 ## AI Flaky tests
@@ -81,10 +89,10 @@
   - [x] Run locked `make test-security-daily ENV=test-sec-s2a` and existing `make test-security-parser ENV=test-sec-s2a`, with locked teardown after each.
   - [x] API/UI/E2E tests: not applicable to this adapter-only change; no app service stack required.
 - [x] **Lot N-1 — Docs consolidation**
-  - [ ] Record commands, result counts, immutable head, coverage blockers and operator fixture receipt in this plan; keep the approved spec unchanged.
+  - [x] Record commands, result counts, immutable head, coverage blockers and operator fixture receipt in this plan; keep the approved spec unchanged.
   - [x] Confirm every diff hunk serves S2a and S2b/S2c/S3 work remains deferred.
 - [ ] **Lot N — Final validation**
   - [x] Run S1 plus scan and required wiring suites through the existing pinned Node Make target, locked, then clean the scoped environment.
-  - [ ] Verify `harness check branch`, `make scope-check ENV=test-sec-s2a`, clean diff formatting and each new commit below 150 changed lines with no AI trailer.
+  - [x] Verify `harness check branch`, `make scope-check ENV=test-sec-s2a`, clean diff formatting and each new commit below 150 changed lines with no AI trailer.
   - [ ] Update the S2a PR from this plan, push the owner-authorized draft stacked on S1 #732, and verify CI on its exact head.
   - [ ] Report head SHA, CI URL and remaining S2b/S2c blockers; keep runtime activation disabled and do not merge.
