@@ -1,7 +1,7 @@
 # Feature: ci(idp): materialize the preprod workload Secret from the protected GitHub secret
 
 ## Objective
-- [ ] Materialize `sentropic-preprod/immo-mcp-workload` through a protected manual workflow before named-Secret identity sync.
+- [x] Deliver the protected manual workflow for materializing `sentropic-preprod/immo-mcp-workload` before named-Secret identity sync; execution stays owner-operated.
 
 ## Scope / Guardrails
 - [x] Scope limited to the workload Secret workflow, its selftests and credential-cycle documentation.
@@ -33,6 +33,7 @@
 - [x] No-Docker gate: `test-idp-sync-selftest` starts containers; defer runtime selftests to existing CI `validate-idp-sync`.
 - [x] Conductor clarification: reuse `configure preprod` unchanged; no preprod apiserver-host assertion in this lot.
 - [x] The workload credential already exists in GitHub environment `sentropic-idp-run`; consume its environment secret, not a repository secret.
+- [x] Review / attention: author inspection completed; independent consensus selection unavailable because no live model catalog is configured. Evidence: ignored root `.tmp/idp-workload-secret-review.md`, target `dae48f8966a6ff4cb430f9ad387688188c509932`; no peer consensus claimed.
 
 ## AI Flaky tests
 - [x] No AI-dependent tests; do not accept failed deterministic checks as flaky.
@@ -61,7 +62,7 @@
   - [x] Update `deploy/ci/idp-identity-sync/CRED_CYCLE.md`: `.env` → `sentropic-idp-run` environment secret → protected workflow → named-Secret sync.
   - [x] Lot gate: runtime selftests delegated to CI `make test-idp-sync-selftest ENV=test-idp-sync` because the existing target starts containers.
 - [ ] **Lot N — Final validation**
-  - [ ] Review every hunk and reconcile independent review where available.
-  - [ ] Validate scope before each `make commit`; selectively stage, no AI trailers.
-  - [ ] Push branch and create PR to `main` with this plan as body and the owner title.
+  - [x] Review every hunk and record independent-review availability above.
+  - [x] Validate scope before each `make commit`; selectively stage, no AI trailers.
+  - [x] Push branch and create PR #800 to `main` with this plan as body and the owner title.
   - [ ] Wait for CI and report exact head SHA; no merge or dispatch.
