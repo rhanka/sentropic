@@ -70,7 +70,8 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: mechanical branch check and merge W1.d; freeze scope and environment.
 - [x] Lot 1 tests authored first in api/tests/api/artifacts-host-credentials.test.ts; current OAuth/session authority.
-- [ ] Lot 1 implementation: real credential reader and wait/expiry evidence.
+- [x] Lot 1 reader: locked session/OAuth tuple, consent, audience, proof key and DB-time expiry; validation pending.
+- [x] Test fixture uses allowed id_token substitution and waits for physical PG connection closure before drop.
 - [ ] Lot 2: strict workspace reconciliation; remove aliases; api/tests/api/app-mcp-installed.test.ts.
 - [x] Lot 3 tests authored in api/tests/api/app-artifacts-transport.test.ts; exact dispatch, denial, HTTP and MCP routing.
 - [ ] Lot 3 real HTTP/MCP same-effect receipt.
