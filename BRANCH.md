@@ -27,6 +27,9 @@
   - `docs/runbooks/app-cm-baseline-restore/receipts/TEMPLATE.md`
   - `Makefile`
   - `packages/artifacts/**`
+  - `packages/cluster-mesh/packaging.mk`
+  - `packages/cluster-mesh/tests/packaging/**`
+  - `.github/workflows/ci.yml`
   - `api/src/scripts/oauth-provision-exchange-client.ts`
   - `api/tests/api/auth/oauth-token-exchange.test.ts`
   - `deploy/**`
@@ -53,6 +56,7 @@
 - [x] BR00D-EXn records reason, impact and rollback before expansion.
 
 ## Feedback Loop
+- [x] BR00D-EX5: merge published artifacts 0.2.4 source 60affbaf6, including its existing packed-vector CI gate; package/packaging/workflow paths are inherited only. Impact is source/published byte alignment and upstream gate coverage; rollback reverts this merge with the tuple refresh. No package release is authored here.
 - [x] BR00D-EX4: owner-requested merge of integration ca3239295 brings W1/W2/W4 catalog and chat ancestry; these paths are merge-only. Impact is the integrated app baseline; rollback reverts the merge. Preserve this PR's BRANCH.md; inherited merge diff is outside the authored 150-line limit.
 - [x] BR00D-EX2: merge main 72bb2da3d to consume already-published UP-T; listed inherited paths are merge-only, no author edits. Impact is existing upstream ancestry; rollback reverts the merge.
 - [x] BR00D-EX1: merge #702 evidence and its owner question/restore template; retained evidence only; rollback reverts merge. No author edits outside scope.
