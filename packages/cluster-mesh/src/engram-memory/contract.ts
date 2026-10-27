@@ -138,11 +138,13 @@ export {
 } from './host-maintenance.js';
 export {
   createMemoryHostLedger,
+  openMemoryPostgresHostLedger,
   proveForRecovery,
   type HostLedgerEntry,
   type HostLedgerState,
   type HostRecoveryProof,
   type MemoryHostLedger,
+  type MemoryPostgresHostLedger,
 } from './ledger.js';
 
 /** Reserved trusted-service options for the memory module. No service is required in G1a. */
