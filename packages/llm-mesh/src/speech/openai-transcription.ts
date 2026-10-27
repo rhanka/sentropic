@@ -255,7 +255,8 @@ const assertAdmission = (admission: OpenAiTranscriptionAdmission): void => {
 interface PendingItem {
   text: string;
   revision: number;
-  utteranceId?: string;
+  /** Client utterance id (attributed live, confirmed by the `committed` bind). */
+  utteranceId: string;
   audioStartMs: number;
   audioEndMs: number;
   finalized: boolean;
@@ -316,8 +317,10 @@ export class TranscriptionSession implements SpeechSession {
   private openTurnUtteranceId?: string;
   private readonly turns: PendingTurn[] = [];
   private readonly bindings = new Map<string, PendingTurn>();
-  /** Item ids that must never emit again (finalized or cleared). */
-  private readonly tombstones = new Set<string>();
+  /** Finalized items: late deltas/commits drop silently, a second final errors. */
+  private readonly finalizedIds = new Set<string>();
+  /** Cleared items: every late provider frame drops silently. */
+  private readonly clearedIds = new Set<string>();
   private committedAudioSeconds = 0;
   private usageRevision = 0;
 
@@ -438,6 +441,11 @@ export class TranscriptionSession implements SpeechSession {
           throw new OpenAiTranscriptionError('ceiling', 'session duration bound reached');
         }
         this.socket.send(JSON.stringify({ type: 'input_audio_buffer.commit' }));
+        this.turns.push({
+          utteranceId: command.utteranceId,
+          startMs: this.turnAudioStartMs ?? 0,
+          endMs: this.lastCapturedAtMs,
+        });
         this.turnAudioStartMs = undefined;
         this.openTurnUtteranceId = undefined;
         // Cumulative operational totals (L8 sums incremental events per eventId,
@@ -458,9 +466,18 @@ export class TranscriptionSession implements SpeechSession {
         // Clear the uncommitted provider buffer, then drop every local trace
         // of the client utterance so late provider frames cannot resurrect it.
         this.socket.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
+        for (let index = this.turns.length - 1; index >= 0; index--) {
+          if (this.turns[index]?.utteranceId === command.utteranceId) this.turns.splice(index, 1);
+        }
+        for (const [itemId, turn] of this.bindings) {
+          if (turn.utteranceId === command.utteranceId) {
+            this.clearedIds.add(itemId);
+            this.bindings.delete(itemId);
+          }
+        }
         for (const [itemId, item] of this.items) {
-          if (item.utteranceId !== undefined && item.utteranceId === command.utteranceId) {
-            this.tombstones.add(itemId);
+          if (item.utteranceId === command.utteranceId) {
+            this.clearedIds.add(itemId);
             this.items.delete(itemId);
           }
         }
@@ -507,23 +524,73 @@ export class TranscriptionSession implements SpeechSession {
     ));
   }
 
+  /**
+   * Resolve the client turn for a provider item. Committed binds are
+   * authoritative; before the `committed` frame arrives the oldest
+   * unconfirmed turn is used (peeked, never consumed), falling back to the
+   * turn currently being recorded. Sequential client turns make all three agree.
+   */
+  private attribute(itemId: string): PendingTurn | undefined {
+    const bound = this.bindings.get(itemId);
+    if (bound) return bound;
+    if (this.turns.length > 0) return this.turns[0];
+    if (this.openTurnUtteranceId !== undefined) {
+      return {
+        utteranceId: this.openTurnUtteranceId,
+        startMs: this.turnAudioStartMs ?? 0,
+        endMs: this.lastCapturedAtMs,
+      };
+    }
+    return undefined;
+  }
+
+  private newItem(itemId: string, turn: PendingTurn): PendingItem {
+    const item: PendingItem = {
+      text: '',
+      revision: 0,
+      utteranceId: turn.utteranceId,
+      audioStartMs: turn.startMs,
+      audioEndMs: turn.endMs,
+      finalized: false,
+      speechSessionId: this.receipt.speechSessionId,
+      connectionEpoch: this.receipt.connectionEpoch,
+      binding: this.binding,
+    };
+    this.items.set(itemId, item);
+    return item;
+  }
+
+  private onCommitted(itemId: string): void {
+    if (this.finalizedIds.has(itemId) || this.clearedIds.has(itemId)) return;
+    const turn = this.turns.shift();
+    if (!turn) {
+      this.pushError('invalid-format', true);
+      return;
+    }
+    this.bindings.set(itemId, turn);
+    // The bind is authoritative: align a live hypothesis created by early deltas.
+    const item = this.items.get(itemId);
+    if (item && !item.finalized) {
+      item.utteranceId = turn.utteranceId;
+      item.audioStartMs = turn.startMs;
+      item.audioEndMs = Math.max(turn.endMs, this.lastCapturedAtMs);
+    }
+  }
+
   private onDelta(itemId: string, contentIndex: number, delta: string): void {
     if (contentIndex !== 0) {
       this.pushError('invalid-format', true);
       return;
     }
-    if (this.tombstones.has(itemId)) return;
+    if (this.finalizedIds.has(itemId) || this.clearedIds.has(itemId)) return;
     let item = this.items.get(itemId);
     if (!item) {
-      item = {
-        text: '', revision: 0,
-        audioStartMs: this.turnAudioStartMs ?? 0, audioEndMs: this.lastCapturedAtMs,
-        finalized: false,
-        speechSessionId: this.receipt.speechSessionId,
-        connectionEpoch: this.receipt.connectionEpoch,
-        binding: this.binding,
-      };
-      this.items.set(itemId, item);
+      const turn = this.attribute(itemId);
+      if (!turn) {
+        this.pushError('invalid-format', true);
+        return;
+      }
+      item = this.newItem(itemId, turn);
     }
     if (item.finalized) return;
     const start = item.text.length;
@@ -539,7 +606,7 @@ export class TranscriptionSession implements SpeechSession {
       clock: this.clock(),
       type: 'transcript.partial',
       binding: this.binding,
-      utteranceId: itemId,
+      utteranceId: item.utteranceId,
       revision: item.revision,
       replaces: { start, end: start },
       text: delta,
@@ -548,18 +615,29 @@ export class TranscriptionSession implements SpeechSession {
   }
 
   private onCompleted(itemId: string, transcript: string, languages: unknown): void {
-    if (this.tombstones.has(itemId)) return;
-    const item = this.items.get(itemId);
-    if (!item) {
+    if (this.clearedIds.has(itemId)) return;
+    if (this.finalizedIds.has(itemId)) {
       this.pushError('invalid-format', true);
       return;
+    }
+    let item = this.items.get(itemId);
+    if (!item) {
+      // A completion without prior deltas (empty turn, unsent deltas for the
+      // model/delay) still finalizes the bound turn; otherwise it is orphaned.
+      const bound = this.bindings.get(itemId);
+      const turn = bound ?? this.attribute(itemId);
+      if (!turn) {
+        this.pushError('invalid-format', true);
+        return;
+      }
+      item = this.newItem(itemId, turn);
     }
     if (item.finalized) {
       this.pushError('invalid-format', true);
       return;
     }
     item.finalized = true;
-    this.tombstones.add(itemId);
+    this.finalizedIds.add(itemId);
     item.revision += 1;
     item.audioEndMs = Math.max(item.audioEndMs, this.lastCapturedAtMs);
     this.sequence += 1;
@@ -577,7 +655,7 @@ export class TranscriptionSession implements SpeechSession {
       clock: this.clock(),
       type: 'transcript.final',
       binding: this.binding,
-      utteranceId: itemId,
+      utteranceId: item.utteranceId,
       revision: item.revision,
       text: transcript,
       language: language ?? 'und',
@@ -619,6 +697,15 @@ export class TranscriptionSession implements SpeechSession {
         return;
       }
       this.onCompleted(record.item_id, record.transcript, record.languages);
+      return;
+    }
+    if (type === 'input_audio_buffer.committed') {
+      const record = frame as Record<string, unknown>;
+      if (!isNonEmptyString(record.item_id)) {
+        this.pushError('invalid-format', true);
+        return;
+      }
+      this.onCommitted(record.item_id);
       return;
     }
     if (type === 'error') {
