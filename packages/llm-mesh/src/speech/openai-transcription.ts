@@ -72,3 +72,92 @@ export const openAiTranscriptionIdentity = (
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0;
 
+/** Per-profile capabilities. TTS is unsupported: synthesis is selected separately (local or L13). */
+export const openAiTranscriptionCapabilities = (
+  config: OpenAiTranscriptionProfileConfig,
+): SpeechCapabilities => {
+  if (!openAiTranscriptionModels.includes(config.modelId)) {
+    throw new OpenAiTranscriptionError('unknown-model', `unknown OpenAI transcription model: ${String(config.modelId)}`);
+  }
+  if (!isNonEmptyString(config.modelRevision)) {
+    throw new OpenAiTranscriptionError('invalid-config', 'modelRevision must be a pinned non-empty revision');
+  }
+  if (!openAiTranscriptionDelays.includes(config.delay)) {
+    throw new OpenAiTranscriptionError('invalid-config', `delay must be one of ${openAiTranscriptionDelays.join(', ')}`);
+  }
+  if (config.turnDetection !== undefined && config.turnDetection !== 'client') {
+    throw new OpenAiTranscriptionError('invalid-config', 'only client turn detection is supported for this profile');
+  }
+  return {
+    binding: openAiTranscriptionIdentity(config),
+    ...(config.language ? { languages: [config.language] } : {}),
+    ...(config.region ? { regions: [config.region] } : {}),
+    features: {
+      streamingStt: 'supported',
+      partialTranscript: 'supported',
+      nativeDuplex: 'unsupported',
+      tts: 'unsupported',
+      serverVad: 'unsupported',
+      clientVad: 'supported',
+      manualCommit: 'supported',
+      playoutTruncate: 'unsupported',
+      toolCancellation: 'unsupported',
+      resume: 'unknown',
+    },
+    inputFormats: [TRANSCRIPTION_FORMAT],
+    outputFormats: [],
+    usageUnits: ['audio-seconds', 'session-seconds'],
+  };
+};
+
+/** Exact `session.update` body. `turn_detection` is always null (server VAD unsupported). */
+export const buildTranscriptionSessionUpdate = (
+  config: OpenAiTranscriptionProfileConfig,
+): Record<string, unknown> => {
+  // Reuse the capability gate so the wire can never carry an unvalidated profile.
+  openAiTranscriptionCapabilities(config);
+  return {
+    type: 'session.update',
+    session: {
+      type: 'transcription',
+      audio: {
+        input: {
+          format: { type: 'audio/pcm', rate: TRANSCRIPTION_FORMAT.sampleRateHz },
+          transcription: {
+            model: config.modelId,
+            delay: config.delay,
+            ...(config.language ? { language: config.language } : {}),
+            ...(config.prompt ? { prompt: config.prompt } : {}),
+          },
+          turn_detection: null,
+        },
+      },
+    },
+  };
+};
+
+export class OpenAiTranscriptionError extends Error {
+  readonly code: 'unknown-model' | 'invalid-config' | 'admission' | 'ceiling' | 'closed'
+    | 'aborted' | 'transport' | 'invalid-format' | 'unsupported-command';
+  constructor(code: OpenAiTranscriptionError['code'], message: string) {
+    super(message);
+    this.name = 'OpenAiTranscriptionError';
+    this.code = code;
+  }
+}
+
+/** Portable base64 for PCM payloads (no node:buffer; mesh stays runtime-agnostic). */
+const base64Of = (payload: Uint8Array): string => {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let out = '';
+  for (let i = 0; i < payload.length; i += 3) {
+    const a = payload[i] ?? 0;
+    const b = payload[i + 1] ?? 0;
+    const c = payload[i + 2] ?? 0;
+    const triple = (a << 16) | (b << 8) | c;
+    out += alphabet[(triple >> 18) & 63] + alphabet[(triple >> 12) & 63]
+      + (i + 1 < payload.length ? alphabet[(triple >> 6) & 63] : '=')
+      + (i + 2 < payload.length ? alphabet[triple & 63] : '=');
+  }
+  return out;
+};
