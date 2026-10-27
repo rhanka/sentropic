@@ -14,7 +14,6 @@ import type { AtomicUnit } from '../storage/atomic.js';
 import { MEMORY_DESCRIPTOR } from './manifest.js';
 import { MEMORY_PG_QUERIES } from './postgres-queries.js';
 import { MEMORY_STORAGE_LIMITS } from './limits.js';
-import { isCanonicalU64 } from './codec.js';
 import { projectMemoryPgEffects, validateMemoryPgEffects } from './projection.js';
 import type { PgRegisteredProjection } from '../storage/postgres/protocol.js';
 import {
@@ -83,33 +82,6 @@ export const resolveMemoryCurrentFromAggregates = (
   return decodeUpdateValue(found.value);
 };
 
-// Frozen Engram 0.21.1 registry DTOs are stored verbatim. Adapt them only
-// for the existing first-proof validators; the public validation model is
-// not the neutral storage wire representation. Preserve every proof field.
-const captureProof = (value: unknown): unknown => {
-  if (isMemoryCaptureProof(value)) return value;
-  if (!value || typeof value !== 'object') return value;
-  const row = value as Record<string, unknown>;
-  const digest = (item: unknown) => typeof item === 'string' && /^sha256:[a-f0-9]{64}$/.test(item);
-  if (typeof row.candidate_id !== 'string' || !row.candidate_id || !digest(row.content)
-    || !isCanonicalU64(row.cursor) || (row.record_digest !== undefined && !digest(row.record_digest))
-    || (row.receipt_digest !== undefined && !digest(row.receipt_digest))) return value;
-  const { record_digest, ...proof } = row;
-  return { candidateId: row.candidate_id, revision: record_digest === undefined ? 1 : 2,
-    recordDigest: record_digest ?? null, createdCursor: row.cursor, proof };
-};
-
-const admissionProof = (value: unknown): unknown => {
-  if (isMemoryAdmissionOutcome(value)) return value;
-  if (!value || typeof value !== 'object') return value;
-  const row = value as Record<string, unknown>;
-  const digest = (item: unknown) => typeof item === 'string' && /^sha256:[a-f0-9]{64}$/.test(item);
-  if (typeof row.candidate_id !== 'string' || !row.candidate_id || typeof row.scope_ref !== 'string' || !row.scope_ref
-    || !['accepted', 'rejected'].includes(String(row.status)) || !isCanonicalU64(row.cursor)
-    || !digest(row.decision_receipt_digest) || !digest(row.transaction_receipt_digest)) return value;
-  return { candidateId: row.candidate_id, outcome: row.status, proof: row };
-};
-
 /**
  * Mandatory structural validation before projection: capture and admission
  * aggregates must carry well-formed proofs, and capture completion units
@@ -126,16 +98,15 @@ export const validateMemoryEffects = async (
   for (const update of effects.updates) {
     const kind = updateKind(update.key);
     if (kind === null) throw new StorageInvalidCommandError('memory aggregate update requires a compound key');
-    const decoded = decodeUpdateValue(update.value);
+    const value = decodeUpdateValue(update.value);
     if (kind === 'memory-capture-idempotency-v1') {
-      const value = captureProof(decoded);
       if (!isMemoryCaptureProof(value)) {
         throw new StorageInvalidCommandError('memory capture update requires a capture proof value');
       }
       completesCapture ||= value.revision !== 1;
       if (resolveCurrent !== undefined) {
         const current = await resolveCurrent(update.key);
-        const transition = validateCaptureTransition(captureProof(current) ?? null, value);
+        const transition = validateCaptureTransition(current ?? null, value);
         if (!transition.ok) {
           throw new StorageInvalidCommandError(
             `memory capture first proof is immutable: ${transition.errors.join('; ')}`,
@@ -143,13 +114,12 @@ export const validateMemoryEffects = async (
         }
       }
     } else if (kind === 'memory-admission-outcome-v1') {
-      const value = admissionProof(decoded);
       if (!isMemoryAdmissionOutcome(value)) {
         throw new StorageInvalidCommandError('memory admission update requires an admission outcome value');
       }
       if (resolveCurrent !== undefined) {
         const current = await resolveCurrent(update.key);
-        const transition = validateAdmissionTransition(admissionProof(current) ?? null, value);
+        const transition = validateAdmissionTransition(current ?? null, value);
         if (!transition.ok) {
           throw new StorageInvalidCommandError(
             `memory admission first proof is immutable: ${transition.errors.join('; ')}`,
