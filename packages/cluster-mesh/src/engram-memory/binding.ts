@@ -63,6 +63,7 @@ export interface MemoryHostBindingInput {
   readonly driver: unknown;
   readonly maintainGrant: unknown;
   readonly invocationId: string;
+  readonly storeId: string;
 }
 
 export interface MemoryHostBinding {
@@ -70,6 +71,18 @@ export interface MemoryHostBinding {
   readonly maintainGrant: MemoryMaintainGrant;
   readonly memoryGrant: MemoryNeutralGrant;
   readonly memoryOperations: typeof MEMORY_HANDLE_OPERATIONS;
+  /** The store this host composition serves; pinned against ledger entries. */
+  readonly storeId: string;
+}
+
+/**
+ * Kernel check-only authority: `bind` consults the authoritative grants
+ * table, so a revoked or never-issued maintain grant is refused by the
+ * store itself. Every host authority entry point takes one and binds the
+ * maintain grant before any effect.
+ */
+export interface MemoryAuthorityCheck {
+  readonly bind: (grant: ScopeGrant<unknown>) => Promise<unknown>;
 }
 
 const isExactMaintain = (grant: ScopeGrant<unknown>): grant is MemoryMaintainGrant =>
@@ -94,6 +107,9 @@ export const assembleMemoryHostBinding = (input: MemoryHostBindingInput): Memory
   if (typeof input?.invocationId !== 'string' || input.invocationId.length === 0) {
     throw new StorageDeniedError('host binding requires a host invocation identity');
   }
+  if (typeof input?.storeId !== 'string' || input.storeId.length === 0) {
+    throw new StorageDeniedError('host binding requires the served store identity');
+  }
   const neutral: MemoryNeutralGrant = Object.freeze({
     token: `memory-neutral-${grant.scope.tenantId}-${grant.scope.workspaceId}-${input.invocationId}`,
     moduleId: grant.moduleId,
@@ -111,6 +127,7 @@ export const assembleMemoryHostBinding = (input: MemoryHostBindingInput): Memory
     maintainGrant: grant,
     memoryGrant: neutral,
     memoryOperations: MEMORY_HANDLE_OPERATIONS,
+    storeId: input.storeId,
   });
 };
 
@@ -122,14 +139,18 @@ export const assembleMemoryHostBinding = (input: MemoryHostBindingInput): Memory
  * live grant. The binder is the kernel's `bind` (check-only, no issue).
  */
 export const verifyHostBinding = async (
-  binder: { bind(grant: ScopeGrant<unknown>): Promise<unknown> },
+  binder: MemoryAuthorityCheck,
   binding: MemoryHostBinding,
   scope?: StorageScope,
+  storeId?: string,
 ): Promise<void> => {
   if (typeof binding !== 'object' || binding === null) {
     throw new StorageDeniedError('host binding verification requires an assembled binding');
   }
   assertMaintainGrantLive(binding.maintainGrant);
+  if (storeId !== undefined && storeId !== binding.storeId) {
+    throw new StorageDeniedError('host binding store does not match the served store');
+  }
   if (scope !== undefined) {
     if (
       scope.tenantId !== binding.maintainGrant.scope.tenantId ||
@@ -170,12 +191,14 @@ export const issueContinuationGrant = async (
   binding: MemoryHostBinding,
   candidateId: string,
   attestation: MemoryContinuationAttestation,
+  authority: MemoryAuthorityCheck,
 ): Promise<MemoryContinuation> => {
   const retained = await ledger.read(candidateId);
   if (!retained) throw new StorageDeniedError('no retained authority for this candidate');
   if (retained.state === 'terminal') {
     throw new StorageDeniedError('completed candidates cannot continue');
   }
+  checkBindingScope(binding, retained, 'continuation');
   if (
     typeof attestation !== 'object' ||
     attestation === null ||
@@ -194,6 +217,9 @@ export const issueContinuationGrant = async (
   if (binding.maintainGrant.principalId !== retained.hostPrincipal) {
     throw new StorageDeniedError('continuation binding serves a different host principal');
   }
+  // Revocation is checked against the grants table before any effect: a
+  // revoked maintain grant cannot mint a continuation.
+  await authority.bind(binding.maintainGrant);
   const updated = await ledger.recordContinuation(candidateId, attestation.invocationId);
   const grant: MemoryNeutralGrant = Object.freeze({
     token: `memory-continuation-${randomUUID()}`,
@@ -223,12 +249,19 @@ export class MemoryMaintenanceNotFoundError extends Error {
   }
 }
 
-const checkBindingScope = (binding: MemoryHostBinding, scope: StorageScope, what: string): void => {
+const checkBindingScope = (
+  binding: MemoryHostBinding,
+  retained: { readonly scope: StorageScope; readonly storeId: string },
+  what: string,
+): void => {
   if (
-    scope.tenantId !== binding.maintainGrant.scope.tenantId ||
-    scope.workspaceId !== binding.maintainGrant.scope.workspaceId
+    retained.scope.tenantId !== binding.maintainGrant.scope.tenantId ||
+    retained.scope.workspaceId !== binding.maintainGrant.scope.workspaceId
   ) {
     throw new StorageDeniedError(`${what} scope does not match the maintain grant scope`);
+  }
+  if (retained.storeId !== binding.storeId) {
+    throw new StorageDeniedError(`${what} store does not match the served store`);
   }
 };
 
@@ -242,14 +275,17 @@ export const reattachMemoryMaintenance = async (
   binding: MemoryHostBinding,
   ledger: MemoryAuthorityLedger,
   candidateId: string,
+  authority: MemoryAuthorityCheck,
 ): Promise<MemoryMaintainGrant> => {
   if (typeof binding !== 'object' || binding === null) {
     throw new StorageDeniedError('memory reattach requires an assembled binding');
   }
   const retained = await ledger.read(candidateId);
   if (!retained) throw new MemoryMaintenanceNotFoundError(candidateId);
-  checkBindingScope(binding, retained.scope, 'reattach');
+  checkBindingScope(binding, retained, 'reattach');
   assertMaintainGrantLive(binding.maintainGrant);
+  // A revoked maintain grant cannot reattach, even to a retained candidate.
+  await authority.bind(binding.maintainGrant);
   return binding.maintainGrant;
 };
 
@@ -264,7 +300,8 @@ export const proveForRecoveryAuthorized = async (
   ledger: MemoryAuthorityLedger,
   binding: MemoryHostBinding,
   candidateId: string,
-  scope?: StorageScope,
+  scope: StorageScope | undefined,
+  authority: MemoryAuthorityCheck,
 ): Promise<HostRecoveryProof> => {
   if (typeof binding !== 'object' || binding === null) {
     throw new StorageDeniedError('authorized recovery requires an assembled binding');
@@ -272,7 +309,9 @@ export const proveForRecoveryAuthorized = async (
   assertMaintainGrantLive(binding.maintainGrant);
   const retained = await ledger.read(candidateId);
   if (!retained) throw new StorageDeniedError('no retained evidence for this candidate');
-  checkBindingScope(binding, retained.scope, 'recovery');
+  checkBindingScope(binding, retained, 'recovery');
+  // Proof-only, but not revocation-free: a revoked grant proves nothing.
+  await authority.bind(binding.maintainGrant);
   if (scope !== undefined) {
     if (!validateStorageScope(scope).ok) throw new StorageDeniedError('recovery scope must be valid');
     if (scope.tenantId !== retained.scope.tenantId || scope.workspaceId !== retained.scope.workspaceId) {
