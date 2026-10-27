@@ -87,6 +87,17 @@ const validateOperation = (op: SpeechOperation): void => {
     'coordinatorEpoch', 'allocatorReceiptRef', 'stage', 'cost', 'binding', 'configuration', 'target',
     'ceiling', 'maxDurationMs', 'maxConcurrent'];
   if (Object.keys(op).some(key => !keys.includes(key))) throw new SpeechAccountingError('invalid');
+  const nestedKeys: readonly [object, readonly string[]][] = [
+    [op.binding, ['providerId', 'modelId', 'modelRevision', 'adapterId', 'adapterRevision', 'placement',
+      'language', 'voice', 'region', 'accountRef', 'resourceRef']],
+    [op.configuration, ['profileId', 'configRevision', 'policyRef']],
+    [op.target, ['sessionId', 'sourceGeneration', 'controllerEpoch', 'consentRevision']],
+    [op.cost, ['tenantId', 'workspaceId', 'principalId', 'source', 'correlationId', 'callSite', 'budgetScope',
+      'ownerScopeRef', 'gatewaySessionRef', 'gatewayReceiptId', 'gatewayClientSessionRef', 'launchRoutingContract']],
+  ];
+  if (nestedKeys.some(([value, allowed]) => !value || Object.keys(value).some(key => !allowed.includes(key)))) {
+    throw new SpeechAccountingError('invalid');
+  }
   const strings = [op.operationId, op.sessionId, op.attemptId, op.backendOperationRef, op.nativeTurnRef,
     op.submitKey, op.allocatorReceiptRef, op.cost?.tenantId, op.cost?.principalId, op.cost?.source,
     op.cost?.correlationId, op.binding?.providerId, op.binding?.modelId, op.binding?.modelRevision,
