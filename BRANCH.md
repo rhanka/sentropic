@@ -33,6 +33,30 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read Docker lock, full plan-v2, W0 context contract; mechanical branch check.
 - [ ] Lot 1: freeze file-level tests and implementation plan before code.
+  - [x] api/tests/services/catalog/request-context.spec.ts: freeze, forged context, current authority, allowlists and revocation.
+  - [ ] api/tests/api/catalog-auth-context.test.ts: authenticated list/get/search/sources with interleaved subjects and missing authority.
+  - [ ] api/tests/services/catalog/chat-context.integration.test.ts: model selection/search through real executor and seam, zero denied effects.
+  - [ ] Update api/tests/services/catalog/{composite-registry,execution-seam,search-catalog-tool,mcp-source,standalone-tool-source}.spec.ts as signatures evolve.
+  - [ ] Update api/tests/api/cluster-mesh-catalog.test.ts and api/tests/unit/foundation-executor.test.ts.
+- [ ] Lot 2: frozen server-only context resolver and fresh product session/turn authority.
+- [ ] Lot 3: require context at every HTTP product port; filter before ranking and serialization.
+- [ ] Lot 4: pass turn context through model selection, search and execution; handled denials never fall through.
+- [ ] Lot 5: focused suites, API typecheck/lint, runtime logs and locked make down.
+- [ ] Lot 6: draft against feat/app-cm-integration with BRANCH.md body, publication-disabled CI and W4.b handoff.
+
+## Feedback Loop
+- [x] W4.b owns host-registry-source.ts and its registration; W4.a prepares the context and execution contracts.
+- [x] Preserve W2.b registry public names and same transport/service; no copied name map or mutation dispatcher.
+- [x] No package, schema, lock, build or deployment changes; no Track writer turn in this lot.
+
+## AI Flaky tests
+- [x] No model/network calls or timeout increases; no accepted flakes.
+
+## Orchestration Mode (AI-selected)
+- [x] Mono-branch, one code author; merges only; external independent review remains separate.
+
+## UAT Management (in orchestration context)
+- [x] API context work; browser/navigation qualification belongs to W4.c/W5.
 
 ## Inherited main qualification record
 
