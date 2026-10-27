@@ -13,6 +13,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import { testCatalogContext } from './test-context';
 import {
   StandaloneToolSource,
   standaloneToolSource,
@@ -215,7 +216,7 @@ describe('StandaloneToolSource.getHandler', () => {
     const handler = source.getHandler('standalone_greet');
     expect(handler).toBeDefined();
 
-    const result = await handler!({ name: 'Alice' });
+    const result = await handler!({ name: 'Alice' }, await testCatalogContext(['standalone_greet']));
     expect(result).toEqual({ greeting: 'Hello, Alice!' });
   });
 
