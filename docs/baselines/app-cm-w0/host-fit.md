@@ -1,10 +1,20 @@
 # W2 host fit and selected provider contract
 
-The original 18 October assembly/prototype below is historical, frozen by [published-tuple.json](published-tuple.json). This section supersedes its release/selection/lock ownership assumptions for plan-v2. Preserve Google Drive/Gmail's local registrations and current readers; a guessed connector registry selector is not a dependency.
+The current freeze is [published-tuple.json](published-tuple.json). The original 18/26 October assembly and receipts below remain historical. Preserve Google Drive/Gmail's local registrations and current readers; a guessed connector registry selector is not a dependency.
 
 ## Current W0-close.d authority — 28 October reconciliation
 
 Use [#796's host fit at ea8e84431](https://github.com/rhanka/sentropic/blob/ea8e84431/docs/baselines/app-cm-w0/host-fit.md), its [tuple](https://github.com/rhanka/sentropic/blob/ea8e84431/docs/baselines/app-cm-w0/published-tuple.json) and [qualification](https://github.com/rhanka/sentropic/blob/ea8e84431/docs/baselines/app-cm-w0/tuple-refresh-2026-10-27.md). Artifacts 0.2.4 / cluster-mesh 0.22.4 replace the dated selections below; APP-P1 manifest is `020aacfec500d754b76c90d3ad4a05097e0f996b8b9282145ca458917ea6fb27`. UP-T's durable adapter/SQL is delivered in published artifacts 0.2.4; host authority/restart/conformance remains receiving qualification. No tuple or integration implementation is copied here. The following 18/26 October observations, including the then-missing UP-T handoff, remain historical.
+
+## Historical W0-close.d refresh — 27 October
+
+Consume artifacts **0.2.3**, cluster-mesh **0.22.4**, llm-mesh **0.28.1**, gateway **0.21.3**, Comments **0.3.1**, platform **0.4.0**, auth-hono **0.17.0** and mcp-auth **0.2.2**. Workspace-source mode is retained: merge W2.b `d0ce8aeb0`, #702 `5dfab2cf3` and published UP-T/main `72bb2da3d`; the tuple records the exact qualified source head and root/API lock hashes. API and mesh resolve the same physical artifacts 0.2.3; no artifacts source alias or nested private peer is admitted.
+
+APP-P1's compiled profile digest remains `0de19f966eacb5b63142b525611a6210a0d4aaeefbdaad92dfb3b6227575b6ef`. The manifest, explicitly using **`mcp:tools:invoke`**, now hashes to **`80ca4b067a010690dc71036a3237a70b91d99d7c025ded7173566d0ae55b1600`**. The four public tools and internal-port boundaries below remain frozen. The old artifacts 0.2.1 manifest `ccf8a4dd…7090e9a` is refused by a regression test; profile and manifest digests are distinct inputs.
+
+The [refresh procedure and results](tuple-refresh-2026-10-27.md) bind verified published archives, clean workspace builds, normalized path/byte maps, the **entire workspace lock and installed development/runtime trees**, loaded Comments/gateway and physical/bundled API registry tests. Artifacts and llm-mesh payloads are byte-identical. Mesh/gateway each retain one generated declaration difference consisting only of string-union member order; raw bytes/hashes and the bounded semantic check are retained. This is not an assertion of full raw-byte equality for those two packages.
+
+**No cluster-mesh upstream bump is needed:** published 0.22.4 consumes published artifacts 0.2.3 and compiles the selected builtin. UP-T is delivered in published 0.2.3, including `./adapters/postgres-activation` and `sql/0001_activation.sql`; W1.c composes this adapter. Its host authority/restart/conformance qualification remains W1.c/W3, with activation default-closed. W3 still owns the canonical pruned API/IdP/content image and image-digest receipt; this refresh neither deploys nor qualifies that image.
 
 ## Historical published/source freeze — 26 October
 
