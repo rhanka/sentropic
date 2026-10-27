@@ -79,10 +79,13 @@ export { createMemoryCommitResultRecovery, type MemoryCommitResultSource } from 
 export {
   createMemoryPostgresRegistration,
   createMemoryPostgresStorage,
+  checkMemoryPostgresDriver,
+  verifyMemoryPostgresProvider,
   resolveMemoryCurrentFromAggregates,
   validateMemoryEffects,
   type MemoryCurrentStateResolver,
   type MemoryPostgresRegistration,
+  type MemoryPostgresDriverProvider,
   type MemoryStoredAggregate,
 } from './postgres.js';
 export {
@@ -112,6 +115,35 @@ export {
   memorySqliteQuery,
   MEMORY_SQLITE_QUERY_NAMES,
 } from './sqlite-queries.js';
+export {
+  MEMORY_HANDLE_OPERATIONS,
+  assembleMemoryHostBinding,
+  assertMaintainGrantLive,
+  verifyHostBinding,
+  issueContinuationGrant,
+  reattachMemoryMaintenance,
+  proveForRecoveryAuthorized,
+  MemoryMaintenanceNotFoundError,
+  type MemoryMaintainGrant,
+  type MemoryNeutralGrant,
+  type MemoryHostBinding,
+  type MemoryHostBindingInput,
+  type MemoryContinuation,
+  type MemoryContinuationAttestation,
+} from './binding.js';
+export {
+  openMemoryMaintenance,
+  type MemoryMaintenancePorts,
+  type MemoryMaintenanceRunner,
+} from './host-maintenance.js';
+export {
+  createMemoryHostLedger,
+  proveForRecovery,
+  type HostLedgerEntry,
+  type HostLedgerState,
+  type HostRecoveryProof,
+  type MemoryHostLedger,
+} from './ledger.js';
 
 /** Reserved trusted-service options for the memory module. No service is required in G1a. */
 export interface MemoryServiceOptions {
