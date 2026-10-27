@@ -78,7 +78,8 @@
 - [x] Lot 3 tests authored in api/tests/api/app-artifacts-transport.test.ts; exact dispatch, denial, HTTP and MCP routing.
 - [ ] Lot 3 real HTTP/MCP same-effect receipt.
 - [x] Lot 4 core: compiled exact-name dispatch and bounded APP-P1 HTTP adapter delegate to W1 host.
-- [ ] Lot 4 mount: product singleton, current session/OAuth identity, existing auth/supervisor/resources author.
+- [x] Lot 4 singleton: one durable PG host with dedicated private S3, explicit quota and default-closed activation.
+- [ ] Lot 4 mount: verified credentials, existing MCP supervisor and resources author; no additional namespace.
 - [ ] Lot 5: focused tests, relevant regressions, API typecheck/lint/build.
   - [ ] api/tests/api/{app-mcp-registry,artifacts-host-publication,artifacts-host-recovery,artifacts-host-migrations,mcp-resource-server,cluster-mesh-mcp-singleton,cluster-mesh-namespace-inventory}.test.ts.
   - [ ] Resource/gateway/D1/auth suites selected from actual filenames.
