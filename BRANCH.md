@@ -7,6 +7,7 @@
 - [x] Base W2.a `247015eba` merged with W1.d `8729aff22`; merge commits only.
 - [x] Merge approved W1.b `79a6a968c` fixture-shutdown correction; no production composition override; Track log blobs identical across all three bases.
 - [x] Worktree `tmp/worktrees/app-w2b`; branch `feat/app-cm-w2b`; draft base `feat/app-cm-integration`.
+- [x] Draft #791 targets integration base 2568c25cd; inherited approved train remains in the GitHub diff until integration catches up. Review W2.b from merge baseline 691887e0c plus approved W1.b fixture merge 8baa5e276.
 - [x] Read Docker lock, complete plan-v2 and W0-close.d reservations; sole root/API lock writer.
 - [x] Make-only; builds, tests and starts take shared Docker flock; teardown after each step.
 - [x] Tests first; ENV=test-app-w2b last; API/UI/Maildev ports 8796/5182/1089; no dev.
@@ -82,7 +83,7 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: mechanical branch check and merge W1.d; freeze scope and environment.
 - [x] Lot 1 tests authored first in api/tests/api/artifacts-host-credentials.test.ts; current OAuth/session authority.
-- [x] Lot 1 reader: locked session/OAuth tuple, consent, audience, proof key and DB-time expiry; validation pending.
+- [x] Lot 1 reader: locked session/OAuth tuple, consent, audience, proof key and DB-time expiry; all 23 credential cases pass.
 - [x] Test fixture uses allowed id_token substitution and waits for physical PG connection closure before drop.
 - [x] Lot 2 manifests/locks regenerated strictly without peer overrides; API leaf metadata refreshed to source versions.
 - [x] Lot 2 strict workspace npm ci passed in the API image; physical and bundled compilation pass without artifacts aliases.
@@ -104,4 +105,5 @@
   - [x] Full development tree inventory retained in /tmp/app-w2b-workspace-tree.json; diagnostics concern @types/node, Vitest/UI and minimatch development requirements; no runtime dependency errors.
   - [x] Runtime startup logs checked; locked make down and empty make ps ENV=test-app-w2b; /tmp/app-w2b-final-cleanup.log.
 - [x] Lot 6 authorship: source evidence and W3 handoff consolidated; mechanical branch/scope checks and atomic make commits.
-- [ ] Draft PR using this body against feat/app-cm-integration; publication-disabled CI on the final head.
+- [x] Draft PR #791 against feat/app-cm-integration; this file is its exact body; no merge.
+- [ ] Publication-disabled CI on the final head; independent review remains external to code authorship.
