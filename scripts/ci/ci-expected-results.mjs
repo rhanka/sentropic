@@ -8,8 +8,118 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
+import { createHash } from 'node:crypto';
+import { captureRecords, executionSeconds, durationSeconds } from './ci-run-metrics.mjs';
+
+const policyDigest = workflow => createHash('sha256').update(JSON.stringify(workflow)).digest('hex');
+
+export function wallClockProof(captures, digest) {
+  const runs = captures.map(capture => {
+    const run = capture.run ?? {};
+    const wallClockSeconds = durationSeconds(run.created_at, run.updated_at);
+    const gate = capture.jobs?.find(job => job.name === 'ci-gate');
+    const executed = capture.jobs?.filter(job => job.conclusion !== 'skipped') ?? [];
+    const freshExecutions = executed.length > 0 && executed.every(job => job.runner_id
+      && durationSeconds(run.created_at, job.started_at) !== null
+      && durationSeconds(job.started_at, job.completed_at) !== null);
+    return { runId: run.id, event: run.event, headBranch: run.head_branch, wallClockSeconds, freshExecutions,
+      accepted: Boolean(run.id && capture.policyDigest === digest && run.status === 'completed'
+        && run.conclusion === 'success' && gate?.runner_id && gate.conclusion === 'success'
+        && freshExecutions && wallClockSeconds !== null && wallClockSeconds <= 2288) };
+  });
+  const pr = runs.find(run => run.accepted && run.event === 'pull_request');
+  const main = runs.find(run => run.accepted && run.event === 'push' && run.headBranch === 'main');
+  return { baselineSeconds: 2288, runs, accepted: Boolean(pr && main && pr.runId !== main.runId) };
+}
+
+// Complete post-run capture: the pre-dispatch manifest owns selection; the
+// exact source workflow owns dependencies. Preserve null/incomplete endpoints.
+export function capacityCapture(workflow, run, jobs, manifest) {
+  if (String(manifest.identity?.runId) !== String(run.id) || manifest.identity?.headSha !== run.head_sha) {
+    throw new Error('Capacity capture identity mismatch');
+  }
+  if (manifest.policyDigest !== undefined && manifest.policyDigest !== policyDigest(workflow)) {
+    throw new Error('Capacity capture policy mismatch');
+  }
+  const selected = manifest.expected.filter(row => row.selected).map(row => row.job);
+  const span = name => {
+    const row = jobs.find(job => job.name === name);
+    return row ? executionSeconds(captureRecords({ run, jobs: [row] })[0]) : null;
+  };
+  return { run, jobs, sourceSha: run.head_sha, workflowSha: null, policyDigest: manifest.policyDigest ?? null,
+    dependencies: Object.fromEntries(Object.entries(workflow.jobs).map(([name, job]) =>
+      [name, typeof job.needs === 'string' ? [job.needs] : job.needs ?? []])),
+    endpoints: { qualification: ['ci-gate'], images: selected.filter(name => /^publish-.*-image$/.test(name)),
+      preproduction: selected.filter(name => name === 'deploy-preprod'),
+      packages: selected.filter(name => name.startsWith('publish-') && !name.endsWith('-image')) },
+    capacity: { availableSlots: 17, reserveSlots: run.event === 'pull_request' ? 2 : 0 },
+    timings: { classificationSeconds: span('changes'), verdictSeconds: span('ci-gate') } };
+}
 
 const BLOCKING = new Set(['failed', 'cancelled', 'timed_out', 'stale']);
+
+// Maximum weighted antichain: a conservative per-run slot bound, independent
+// of job durations or selection. Matrix weights honor max-parallel. Dilworth's
+// bipartite matching counts slots that cannot share a dependency chain.
+export function capacityDemand(workflow, selectedJobs = null) {
+  const jobs = workflow.jobs;
+  const ancestors = new Map();
+  const visiting = new Set();
+  const visit = name => {
+    if (!jobs[name]) throw new Error(`Invalid capacity dependency: ${name}`);
+    if (visiting.has(name)) throw new Error(`Capacity dependency cycle: ${name}`);
+    if (ancestors.has(name)) return ancestors.get(name);
+    visiting.add(name);
+    const needs = jobs[name].needs ?? [];
+    const result = new Set();
+    for (const parent of typeof needs === 'string' ? [needs] : needs) {
+      result.add(parent);
+      for (const ancestor of visit(parent)) result.add(ancestor);
+    }
+    visiting.delete(name);
+    ancestors.set(name, result);
+    return result;
+  };
+  const slots = Object.entries(jobs).flatMap(([name, job]) => {
+    visit(name);
+    const count = job.strategy?.matrix?.include?.length ?? 1;
+    const width = Math.min(count, job.strategy?.['max-parallel'] ?? count);
+    if (!Number.isInteger(width) || width < 1) throw new Error(`Invalid capacity width: ${name}`);
+    return selectedJobs && !selectedJobs.has(name) ? [] : Array(width).fill(name);
+  });
+  const matched = new Map();
+  const augment = (left, seen) => {
+    for (let right = 0; right < slots.length; right++) {
+      if (seen.has(right) || !ancestors.get(slots[right]).has(slots[left])) continue;
+      seen.add(right);
+      if (!matched.has(right) || augment(matched.get(right), seen)) {
+        matched.set(right, left);
+        return true;
+      }
+    }
+    return false;
+  };
+  for (let left = 0; left < slots.length; left++) augment(left, new Set());
+  // Mutexes constrain execution, not readiness. Matrix indices share the same
+  // repository-wide pool as single jobs; unknown expressions fail closed.
+  const groups = new Set();
+  for (const [name, job] of Object.entries(jobs)) {
+    if (selectedJobs && !selectedJobs.has(name)) continue;
+    const group = job.concurrency?.group;
+    const count = job.strategy?.matrix?.include?.length ?? 1;
+    if (group?.startsWith('ci-capacity-') || group?.startsWith('capacity-')) {
+      if (job.concurrency.queue !== 'max' || job.concurrency['cancel-in-progress'] !== false) {
+        throw new Error(`Unsafe capacity queue: ${name}`);
+      }
+    }
+    for (let index = 0; index < count; index++) {
+      const resolved = group?.replace('${{ strategy.job-index }}', String(index));
+      if (resolved?.includes('${{')) throw new Error(`Unsupported capacity group: ${name}`);
+      groups.add(resolved ?? Symbol(`${name}-${index}`));
+    }
+  }
+  return Math.min(slots.length - matched.size, groups.size);
+}
 
 export function normalizeConclusion(conclusion) {
   return String(conclusion ?? '').trim().toLowerCase();
@@ -36,7 +146,7 @@ export function evaluateSelection(expression, lookup) {
     if (tokens[index] === '(') {
       take('('); take(')');
       if (token === 'always') return true;
-      if (token === 'cancelled') return false;
+      if (token === 'cancelled' || token === 'failure') return false;
       throw new Error(`Unsupported selection function: ${token}`);
     }
     if (!token) throw new Error(`Unexpected end: ${source}`);
@@ -233,12 +343,47 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
   if (args.includes('--workflow-file')) {
     const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
     const workflow = YAML.parse(fs.readFileSync(args[args.indexOf('--workflow-file') + 1], 'utf8'));
+    if (args.includes('--capture-dir')) {
+      const dir = args[args.indexOf('--capture-dir') + 1];
+      const read = name => JSON.parse(fs.readFileSync(path.join(dir, name), 'utf8'));
+      const capture = capacityCapture(workflow, read('run.json'), read('jobs.json'), read('expected.json'));
+      fs.writeFileSync(path.join(dir, 'capture.json'), JSON.stringify(capture, null, 2));
+      process.exit(0);
+    }
+    if (args.includes('--capacity-policy')) {
+      const changes = Object.fromEntries(Object.keys(workflow.jobs.changes.outputs).map(key => [key, key === 'engram_e2' ? 'false' : 'true']));
+      const scenarios = Object.fromEntries(['pull_request', 'push'].map(event => {
+        const context = { changes, event, ref: event === 'push' ? 'refs/heads/main' : 'refs/pull/77/merge' };
+        const expected = workflowExpected(workflow, context);
+        const selectedJobs = new Set(Object.keys(workflow.jobs).filter(name =>
+          ['ci-gate', 'ci-capacity-receipts'].includes(name) || expected.some(row => row.selected
+            && (row.job === name || row.job.startsWith(`${name} (`)))));
+        return [event, capacityDemand(workflow, selectedJobs)];
+      }));
+      const demand = Math.max(...Object.values(scenarios));
+      const validators = Object.entries(workflow.jobs).filter(([name]) =>
+        /^validate-/.test(name) && !['validate-publishable-manifests', 'validate-ci-capacity-metrics', 'validate-idp-sync'].includes(name)
+        || name === 'memory-l5-qualification');
+      const independent = validators.every(([, job]) => JSON.stringify(job.needs) === '["changes"]');
+      const noCapacityMutexes = Object.values(workflow.jobs).every(job => !job.concurrency?.group.startsWith('ci-capacity-'));
+      const matrixWidths = { api: workflow.jobs['test-api-unit-integration'].strategy['max-parallel'],
+        e2e: workflow.jobs['test-e2e'].strategy['max-parallel'] };
+      const proofs = args.flatMap((arg, i) => arg === '--proof-file' ? [JSON.parse(fs.readFileSync(args[i + 1], 'utf8'))] : []);
+      const proof = wallClockProof(proofs, policyDigest(workflow));
+      const shapeValid = independent && noCapacityMutexes && matrixWidths.api === 15 && matrixWidths.e2e === 5;
+      console.log(JSON.stringify({ perRunSlots: demand, observedSlotsLowerBound: 17, releaseGroups: 2,
+        scenarios, independentValidators: independent, noCapacityMutexes, matrixWidths, shapeValid, wallClockProof: proof,
+        source: 'Per-run DAG demand; hosted-runner admission and account quota remain to-measure', admitted: null }, null, 2));
+      process.exit(shapeValid && (!args.includes('--require-proof') || proof.accepted) ? 0 : 1);
+    }
     const context = JSON.parse(process.env.CI_SELECTION_CONTEXT);
     const expected = workflowExpected(workflow, context);
     const gateExpected = workflow.jobs['ci-gate'].needs.map((job) => ({ job,
       selected: job === 'ci-capacity-receipts' || expected.some((row) => row.selected
         && (row.job === job || row.job.startsWith(`${job} (`))) }));
-    const manifest = { identity: context.identity, expected, gateExpected };
+    const dependencies = Object.fromEntries(Object.entries(workflow.jobs).map(([name, job]) =>
+      [name, typeof job.needs === 'string' ? [job.needs] : job.needs ?? []]));
+    const manifest = { identity: context.identity, policyDigest: policyDigest(workflow), expected, gateExpected, dependencies };
     fs.writeFileSync(args[args.indexOf('--manifest-file') + 1], JSON.stringify(manifest, null, 2));
     process.exit(0);
   }
