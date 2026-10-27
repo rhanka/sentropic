@@ -1,11 +1,11 @@
 import type { ScopeGrant } from '../authority.js';
 import { StorageDeniedError, StorageInvalidCommandError } from '../errors.js';
 import type { ReadPage } from '../readers.js';
-import { isU64Counter, type EncodedValue, type PageLimits } from '../contracts.js';
+import type { EncodedValue, PageLimits } from '../contracts.js';
 import { isUnknownCursorBoundary } from '../tokens.js';
 import type { PgCore, PgTx } from './core.js';
 import type { PgSession } from './protocol.js';
-import { chainRecordKey, type PgChain, type PgStoredChain, type PgChainRef, type PgStoredChainRef, type PgRecordRef } from './effects.js';
+import { chainRecordKey, type PgChain, type PgChainRef, type PgRecordRef } from './effects.js';
 import { decodePgCounterU64, decodePgJson, decodePgUtf8 } from './codec.js';
 const pageSize = (page: ReadPage): number => Buffer.byteLength(JSON.stringify(page), 'utf8');
 export const readPgPage = async (
@@ -30,12 +30,10 @@ export const readPgPage = async (
   const verified = cursor == null ? undefined : core.provider.verify(chainId, cursor, binding);
   if (verified === null) throw new StorageInvalidCommandError('invalid cursor');
   if (isUnknownCursorBoundary(verified)) return { outcome: 'incomplete', records: [], nextCursor: null };
-  const chain = await core.roots.get<PgStoredChain>(session, root, 'chain', chainId);
+  const chain = await core.roots.get<PgChain>(session, root, 'chain', chainId);
   if (chain?.disposed) return { outcome: 'inaccessible', records: [], nextCursor: null };
   const start = verified?.position ?? 0;
-  const count = Number(chain?.count ?? 0);
-  if (!Number.isSafeInteger(count)) throw new StorageInvalidCommandError('numeric page unavailable; use exact memory chain port');
-  const seq = verified?.seq ?? count - 1;
+  const seq = verified?.seq ?? (chain?.count ?? 0) - 1;
   const head = verified?.head ?? chain?.head;
   const allocation = verified?.allocation ?? chain?.allocation;
   if (head === undefined || allocation === undefined) return { outcome: 'page', records: [], nextCursor: null };
@@ -68,7 +66,7 @@ export const readPgPage = async (
     if (!entry) return trim();
     const record = {
       id: entry.id,
-      seq: Number(entry.seq),
+      seq: entry.seq,
       hash: entry.hash,
       bytes: decodePgUtf8(await core.roots.readPayload(session, grant.scope, entry.payload)),
     };
@@ -95,33 +93,6 @@ export class PgView {
   }
   async readHead(chainId: string): Promise<string | null> {
     return (await this.core.roots.get<PgChain>(this.session, await this.root(chainId), 'chain', chainId))?.head ?? null;
-  }
-  // Additive exact-position path for the neutral memory transaction. Its
-  // captured root supplies the boundary; it never mints numeric cursors.
-  async readMemoryChain(input: { chainId: string; afterAllocation: string; limit: number }) {
-    if (this.core.options.moduleId !== 'engram-memory' || !isU64Counter(input.afterAllocation)
-      || !Number.isSafeInteger(input.limit) || input.limit < 1 || input.limit > 2000)
-      throw new StorageInvalidCommandError('invalid exact memory chain bounds');
-    const root = await this.root(input.chainId);
-    const chain = await this.core.roots.get<PgStoredChain>(this.session, root, 'chain', input.chainId);
-    if (!chain) return { chain: input.chainId, records: [] };
-    if (!isU64Counter(String(chain.count)) || String(chain.count) !== chain.allocation)
-      throw new StorageInvalidCommandError('memory chain count and allocation differ');
-    const end = BigInt(chain.count);
-    if (BigInt(input.afterAllocation) > end) throw new StorageInvalidCommandError('memory position exceeds allocation');
-    const records: { id: string; hash: string; value: { format: 'utf8'; data: string } }[] = [];
-    for (let position = BigInt(input.afterAllocation); position < end && records.length < input.limit; position++) {
-      const row = await this.core.roots.get<PgStoredChainRef>(this.session, root, 'chain-record', chainRecordKey(input.chainId, position.toString()));
-      if (!row) throw new StorageInvalidCommandError('exact memory chain boundary is unavailable');
-      records.push({ id: row.id, hash: row.hash, value: { format: 'utf8',
-        data: decodePgUtf8(await this.core.roots.readPayload(this.session, this.grant.scope, row.payload)) } });
-      if (Buffer.byteLength(JSON.stringify({ chain: input.chainId, records }), 'utf8') > 1048576) {
-        records.pop();
-        if (!records.length) throw new StorageInvalidCommandError('memory chain record exceeds byte budget');
-        break;
-      }
-    }
-    return { chain: input.chainId, records };
   }
   async readRecord(key: string): Promise<{ bytes: EncodedValue; contentHash: string } | null> {
     const ref = await this.core.roots.get<PgRecordRef>(this.session, await this.root(key), 'record', key);
