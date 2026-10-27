@@ -3,7 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
-import { planScan, scanRepository } from './scan.mjs';
+import { npmRunner, planScan, scanRepository } from './scan.mjs';
 import { loadContract } from './schema.mjs';
 
 const sourceSha = 'a'.repeat(40);
@@ -101,4 +101,36 @@ test('should preserve flags across comparisons and reject scanner absence', asyn
   assert.equal(absent.status, 'incomplete-scan');
   assert.ok(absent.coverageBlocked.some((value) => value.includes('scanner unavailable')));
   await assert.rejects(() => scanRepository(options(root, { sourceSha: 'main' })), /source SHA/);
+});
+
+test('should run bounded credential-free audits on isolated metadata, including workspace manifests', (t) => {
+  const root = fixture(t);
+  mkdirSync(join(root, 'packages/child'), { recursive: true });
+  writeFileSync(join(root, 'package.json'), '{"name":"fixture","workspaces":["packages/*"]}');
+  writeFileSync(join(root, 'packages/child/package.json'), '{"name":"child","version":"1.0.0"}');
+  writeFileSync(join(root, '.npmrc'), '//registry.npmjs.org/:_authToken=do-not-copy');
+  const plan = planScan(root, loadContract());
+  const calls = [];
+  let scratch;
+  const run = npmRunner(root, plan.inventory, (binary, args, opts) => {
+    scratch = opts.cwd;
+    calls.push({ binary, args });
+    assert.equal(binary, 'npm');
+    assert.equal(opts.shell, false);
+    assert.equal(opts.timeout, 120000);
+    assert.equal(opts.maxBuffer, 16 * 1024 * 1024);
+    assert.notEqual(opts.cwd, root);
+    assert.deepEqual(Object.keys(opts.env).sort(), ['HOME', 'PATH', 'TMPDIR', 'npm_config_cache',
+      'npm_config_globalconfig', 'npm_config_ignore_scripts', 'npm_config_registry',
+      'npm_config_update_notifier', 'npm_config_userconfig'].sort());
+    assert.equal(opts.env.npm_config_userconfig, '/dev/null');
+    assert.equal(readFileSync(join(opts.cwd, 'packages/child/package.json'), 'utf8'), '{"name":"child","version":"1.0.0"}');
+    assert.throws(() => readFileSync(join(opts.cwd, '.npmrc')));
+    return { status: 0, stdout: args[0] === '--version' ? '11.19.0\n' : JSON.stringify(clean()) };
+  });
+  const task = plan.tasks.find((item) => item.target === 'package-lock.json');
+  assert.match(run(task).scannerIdentity, /^npm:11.19.0/);
+  assert.deepEqual(calls.map((call) => call.args), [['--version'], task.args]);
+  assert.throws(() => readFileSync(join(scratch, 'package-lock.json')));
+  assert.throws(() => run(plan.tasks.find((item) => item.kind === 'image')), /S2b/);
 });
