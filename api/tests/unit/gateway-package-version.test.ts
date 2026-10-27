@@ -17,7 +17,7 @@ const fixture = (manifest: unknown = { name: GATEWAY_PACKAGE_NAME, version: '0.2
 };
 describe('running gateway version evidence', () => {
   it('resolves the real API-imported instance and its release tuple', async () => {
-    expect(await resolveGatewayPackageVersion()).toBe('0.21.3');
+    expect(await resolveGatewayPackageVersion()).toBe('0.22.0');
   });
   it('walks from the resolved entry without resolving a non-exported package.json subpath', async () => {
     const source = fixture();

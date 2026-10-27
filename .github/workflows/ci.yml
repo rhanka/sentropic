@@ -1380,6 +1380,9 @@ jobs:
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           MUSE_API_KEY: ${{ secrets.MUSE_API_KEY }} # BR75-EX4
+      - name: Test API gateway package version evidence
+        if: matrix.suite == 'unit'
+        run: make test-api-unit SCOPE=tests/unit/gateway-package-version.test.ts ENV=test-ci-api
       - name: Test API (${{ matrix.suite }})
         run: |
           if [ "${{ matrix.suite }}" = "endpoints" ]; then

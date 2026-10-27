@@ -33,11 +33,12 @@
   - `.tmp/live-stt/l8/**`
   - `.github/workflows/ci.yml`
   - `scripts/ci/publishable-ci-wiring.test.mjs`
+  - `api/tests/unit/gateway-package-version.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `api/**`
+  - `api/src/**`
   - `.track/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
@@ -47,6 +48,7 @@
   - [x] Declare BRL8-EXn with reason, impact and rollback before sensitive changes.
 
 ## Feedback Loop
+- [x] BRL8-EX7: owner authorizes updating only the API gateway release-tuple test from 0.21.3 to feature version 0.22.0. Run 40511994178 imports 0.22.0 and fails the old equality assertion; unrelated id errors are not its failure. Run the targeted test before the unchanged full API unit suite in GitHub CI; no local Docker before 21:00 UTC. Rollback restores the expectation and removes the targeted CI step with the gateway bump.
 - [x] BRL8-EX6: run 40505571158 proves the runtime gateway range and frozen selected tuple still reject gateway 0.22.0. Align only catalog/train ranges, affected test expectations and fixture package/lock; use the verified CI gateway archive's SHA-512. Cluster 0.23.1 supplies the required source bugfix bump. Rollback restores the old ranges/tuple with gateway 0.21.3.
 - [x] Frozen gateway 0.22.0 lock integrity comes from run 40507121290, llm-gateway-candidate artifact 12735344167; archive SHA-256 30529da3c0230df3787c30b108b6e7d9f2ba10479ecebd5af0b31b7f02588dc8 matches the prior successful BLOCK packs.
 - [x] Run 40509273838 passes gateway (1370 tests, including 27 speech), API/UI typecheck/lint and both BLOCK packs; align the two remaining installed-gateway version assertions via TRAIN_LLM_GATEWAY_VERSION=0.22.0.
