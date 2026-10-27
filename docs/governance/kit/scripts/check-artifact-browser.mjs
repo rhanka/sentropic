@@ -22,7 +22,15 @@ try {
     const page = await context.newPage();
     const errors = [], network = []; page.on('pageerror', (e) => errors.push(e.message)); page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); }); page.on('request', (r) => { if (/^https?:/.test(r.url())) network.push(r.url()); });
     await page.goto(`file://${path.resolve(portable)}`);
-    await page.locator('.architecture-figure').waitFor(); await page.evaluate(() => document.fonts.ready);
+    try {
+      assert.deepEqual(errors, [], 'Portable initialization errors');
+      await page.locator('.architecture-figure').waitFor();
+    } catch (error) {
+      fs.writeFileSync(`${output}/initialization.json`, JSON.stringify({ errors, network, html: await page.content() }, null, 2));
+      console.error(JSON.stringify({ errors, network }));
+      throw error;
+    }
+    await page.evaluate(() => document.fonts.ready);
     assert.equal(await page.title(), source.title);
     assert.equal(await page.locator('h1').innerText(), source.title);
     assert((await page.locator('h1').evaluate((e) => parseFloat(getComputedStyle(e).fontSize))) <= 20);
