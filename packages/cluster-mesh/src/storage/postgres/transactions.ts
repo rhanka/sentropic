@@ -12,6 +12,32 @@ export const DEFAULT_PG_BUDGETS: PgBudgets = Object.freeze({
   flushMs: 2000,
   attempts: 3,
 });
+/**
+ * Driver-level timeout guard (G-P1). `PgTransactions.run` applies its
+ * `SET LOCAL` timeouts only inside its own callback — but wrappers stacked
+ * between `driver.transaction` and that callback (the E4 ownership
+ * retained-session renew/verify) would otherwise run with the server
+ * defaults (all timeouts disabled) and hang until the flush deadline
+ * destroys the connection. Setting the three wait timeouts right after
+ * BEGIN covers every statement of the transaction, including wrapper
+ * pre-work; `run` keeps its own (idempotent) application afterwards.
+ */
+export const withPgTxTimeouts = (driver: InjectedPgDriver, budgets: PgBudgets): InjectedPgDriver => ({
+  transaction: async <T>(
+    options: Parameters<InjectedPgDriver['transaction']>[0],
+    operation: (session: PgSession) => Promise<T>,
+  ): Promise<T> =>
+    driver.transaction(options, async (session) => {
+      await session.execute({
+        text: `SELECT set_config('lock_timeout', $1, true),
+          set_config('statement_timeout', $2, true),
+          set_config('idle_in_transaction_session_timeout', $3, true)`,
+        values: [`${budgets.lockWaitMs}ms`, `${budgets.statementMs}ms`, `${budgets.idleMs}ms`],
+      });
+      return operation(session);
+    }),
+});
+
 export class PgTransactions {
   readonly budgets: PgBudgets;
   constructor(
