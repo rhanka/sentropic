@@ -42,6 +42,8 @@
 - [x] BRL8-EX1: gateway 0.22.0 requires widening cluster-mesh's optional gateway peer upper bound from 0.22 to 0.23 and mirroring workspace metadata in package-lock.json. Impact: manifest-only compatibility for the additive subpaths; rollback restores those three version/range fields. No cluster-mesh source changes.
 - [x] BRL8-EX2: permit .tmp/live-stt/l8 review/validation receipts only; no raw media, credentials or accounting store.
 - [x] BRL8-EX3: CI ignores pull requests targeting feat/live-stt-l2. Add only that base to the existing pull_request branch filter so PR798 runs standard gates; no job, secret, permission or publication change. Rollback removes the one branch entry.
+- [ ] G-REVIEW: author-complementary peer selection remains pending; .tmp/live-stt/l8/review.md records exact target, requested author tuple and selection failure. No reviewer allocation inferred; no consensus claimed.
+- [x] G-LEDGER handoff delivered through signed h2a to live s-conductor (env:send:a2aaa010-2d5d-444b-9a7f-1de14fb5d355); gateway/ledger named-session discovery returned no matches.
 
 ## AI Flaky tests
 - [x] Deterministic fixtures only; no provider calls or waiver.
