@@ -41,7 +41,11 @@ export const runMemoryU64Corpus = (open: () => Promise<MemoryCampaignHost>) => {
           aggregateKind: row.kind, aggregateKey: row.key, version: previous })),
         updates: updates.map((row) => ({ ...row, version: next })), appends: [{ chain: 'memory-journal', kind: 'memory-journal-events',
           id: event.event_id, hash: event.event_hash, value: memoryJcs(event), expectation: { kind: 'head' as const, hash: DIGEST } }] };
-        await h.handle.transact(options, (tx) => tx.apply(unit));
+        await h.handle.transact(options, async (tx) => {
+          await tx.apply(unit);
+          const exact = await tx.readChain({ chain: 'memory-journal', afterAllocation: previous, limit: 1 });
+          expect(exact.records.map((row) => JSON.parse(row.value.data).cursor)).toEqual([next]);
+        });
         for (const row of updates) expect((await h.handle.readAggregate(row.kind, row.key, h.binding.memoryGrant))?.version).toBe(next);
         const index = JSON.parse((await h.handle.query('scope-chain-index', memoryJcs({}), h.binding.memoryGrant)).data);
         expect(index).toMatchObject({ allocation: next, head: event.event_hash });
@@ -52,9 +56,13 @@ export const runMemoryU64Corpus = (open: () => Promise<MemoryCampaignHost>) => {
         expect(counters.rows).toEqual([{ version: next, sequence: next }]);
         if (next === MAX) {
           await expect(h.handle.transact(options, (tx) => tx.apply({ ...unit, guards: [], updates: [], appends: [{ ...unit.appends[0]!,
-            id: 'exhausted', expectation: { kind: 'head', hash: event.event_hash } }] }))).rejects.toBeDefined();
+            id: 'exhausted', expectation: { kind: 'head', hash: event.event_hash } }] })))
+            .rejects.toMatchObject({ code: 'invalid-schema', message: 'chain sequence exhausted' });
           expect(JSON.parse((await h.handle.query('scope-chain-index', memoryJcs({}), h.binding.memoryGrant)).data)).toEqual(index);
         }
+        await h.reopenBackend();
+        for (const row of updates) expect((await h.handle.readAggregate(row.kind, row.key, h.binding.memoryGrant))?.version).toBe(next);
+        expect(JSON.parse((await h.handle.query('scope-chain-index', memoryJcs({}), h.binding.memoryGrant)).data)).toEqual(index);
       } finally { await h.close(); }
     });
   }
