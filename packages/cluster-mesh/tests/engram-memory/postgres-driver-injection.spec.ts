@@ -8,7 +8,7 @@ import { MemoryHostDriverRequiredError } from '../../src/engram-memory/sqlite.js
 import { openMemoryMaintenance } from '../../src/engram-memory/host-maintenance.js';
 import { StorageDeniedError, StorageUnavailableError } from '../../src/storage/errors.js';
 import { testPgDriver, pgEnabled } from '../storage/pg-driver.js';
-import { memoryAppend, memoryHostComposed, memoryHostProvider, memoryLiveRunner, memoryPgHost, memoryUnit } from './pg-host.js';
+import { memoryAppend, memoryGrant, memoryHostComposed, memoryHostProvider, memoryLiveRunner, memoryPgHost, memoryUnit } from './pg-host.js';
 import {
   checkMemoryPostgresDriver,
   createMemoryPostgresStorage,
@@ -139,6 +139,33 @@ describe.skipIf(!pgEnabled)('memory PG positive installed calls', () => {
         session.execute({ text: 'SELECT 1 AS one', values: [] }),
       );
       expect(probe.rows[0]).toMatchObject({ one: 1 });
+    } finally {
+      await host.close();
+    }
+  });
+
+  it('ignores smuggled host parts: the E6 registration always wins', async () => {
+    const host = await memoryPgHost();
+    try {
+      // Runtime smuggling past the Omit type: bogus host parts that would
+      // break the open (empty assets) or the commit (lying validator) if
+      // they took effect. The factory spread order refuses every override.
+      const root = await createMemoryPostgresStorage({
+        provider: memoryHostProvider(host.options.driver),
+        layout: host.layout,
+        history: host.history,
+        cursorSecret: host.options.cursorSecret,
+        assets: [],
+        descriptor: { queryNames: [] },
+        validateEffects: () => { throw new Error('smuggled validator'); },
+        projection: {},
+        queries: {},
+        limits: { maxRecords: 1 },
+        moduleId: 'smuggled-module',
+      } as never);
+      const bound = await root.bindNew(memoryGrant());
+      await bound.commitAtomic(memoryUnit({ appends: [memoryAppend('98')] }));
+      expect(await bound.readHead('memory-journal')).toBe('hash-98');
     } finally {
       await host.close();
     }
