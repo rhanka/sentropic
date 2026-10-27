@@ -66,7 +66,7 @@
 - [ ] **W4 — Artifact size budget**
   - [ ] Add deterministic fixture build and Vite module/chunk manifest reporting, without mutating tracked source.
   - [ ] Add `scripts/artifact-budget.mjs` and `scripts/artifact-budget.test.mjs`: raw/gzip/Brotli/SHA-256, initial/static/startup/full closures, per-chunk limits and agent read cost.
-  - [ ] Negative tests: corpus reimport, oversized startup data, deferred JS excess, missing/unreferenced assets and portable dynamic imports.
+  - [x] Negative tests: corpus reimport, oversized startup data, deferred JS excess, missing/unreferenced assets and portable dynamic imports.
   - [ ] Add `make check-artifact-budget` and CI step in `validate-artifacts` with `docs/governance/kit/**` filter and output report artifact.
   - [ ] Preserve a separately bounded full-governance profile; do not claim actual A2UI L1 DS 0.36.0/chart qualification.
 
