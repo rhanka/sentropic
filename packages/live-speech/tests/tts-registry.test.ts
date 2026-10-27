@@ -178,4 +178,52 @@ describe('tts registry', () => {
       rmSync(pidFile, { force: true });
     }
   });
+
+  it('should not spawn when the barge lands during binary verification', async () => {
+    const pidFile = join(tmpdir(), `fake-espeak-prespawn-${process.pid}.pid`);
+    rmSync(pidFile, { force: true });
+    const priorMode = process.env.FAKE_APLAY_MODE;
+    const priorPid = process.env.FAKE_APLAY_PIDFILE;
+    try {
+      process.env.FAKE_APLAY_MODE = 'hang';
+      process.env.FAKE_APLAY_PIDFILE = pidFile;
+      const engine = new EspeakNgEngine(FAKE_BIN, [digestOf(FAKE_BIN)]);
+      const controller = new AbortController();
+      // Abort synchronously: synthesize() is parked in verifiedBinary()'s
+      // async digest I/O, so the barge lands before any spawn.
+      const pending = engine.synthesize('a narration barged during verification', {
+        signal: controller.signal,
+      });
+      controller.abort();
+      await expect(pending).rejects.toThrow(/aborted/);
+      // No child was ever spawned: with the pre-spawn fence the fixture
+      // never reaches its pidfile write.
+      expect(() => readFileSync(pidFile, 'utf8')).toThrow(/ENOENT/);
+      // Positive control: the same setup without an early barge does spawn.
+      const secondController = new AbortController();
+      const second = engine.synthesize('a narration that does spawn', {
+        signal: secondController.signal,
+      });
+      const deadline = Date.now() + 10000;
+      while (Date.now() < deadline) {
+        try {
+          readFileSync(pidFile, 'utf8');
+          break;
+        } catch {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+      }
+      secondController.abort();
+      await expect(second).rejects.toThrow(/aborted by barge-in/);
+      const pid = Number(readFileSync(pidFile, 'utf8').trim());
+      expect(Number.isInteger(pid) && pid > 0).toBe(true);
+      expect(() => process.kill(pid, 0)).toThrow(/ESRCH/);
+    } finally {
+      if (priorMode === undefined) delete process.env.FAKE_APLAY_MODE;
+      else process.env.FAKE_APLAY_MODE = priorMode;
+      if (priorPid === undefined) delete process.env.FAKE_APLAY_PIDFILE;
+      else process.env.FAKE_APLAY_PIDFILE = priorPid;
+      rmSync(pidFile, { force: true });
+    }
+  });
 });
