@@ -31,6 +31,11 @@ export interface CaptureDiagnostics {
   readonly lost: string | null;
 }
 
+export interface CaptureSessionEvents {
+  readonly onDeviceLost?: (error: DeviceLostError) => void;
+  readonly onDropped?: (count: number) => void;
+}
+
 /** Mic capture over a DevicePort with independent control and VAD paths. */
 export class CaptureSession {
   private stream: AudioStream | null = null;
@@ -46,6 +51,7 @@ export class CaptureSession {
   constructor(
     private readonly device: DevicePort,
     private readonly options: CaptureSessionOptions,
+    private readonly events: CaptureSessionEvents = {},
   ) {}
 
   /** Last observed frame level in dBFS, updated even when muted or mic-off. */
@@ -77,8 +83,9 @@ export class CaptureSession {
   }
 
   diagnostics(): CaptureDiagnostics {
+    const stream = this.stream;
     return {
-      open: this.stream !== null,
+      open: stream !== null && !stream.closed,
       micOn: this.micOn,
       muted: this.muted,
       buffered: this.mailbox.length,
@@ -114,6 +121,7 @@ export class CaptureSession {
         if (this.mailbox.length >= this.options.maxMailboxFrames) {
           this.mailbox.shift();
           this.dropped += 1;
+          this.events.onDropped?.(1);
         }
         this.mailbox.push(frame);
       }
@@ -121,6 +129,7 @@ export class CaptureSession {
       if (error instanceof DeviceLostError) {
         this.lost = error.message;
         stream.close();
+        this.events.onDeviceLost?.(error);
       } else {
         throw error;
       }
