@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "assets": [
+    {
+      "schemaRole": "engram-memory",
+      "id": "cluster-mesh-pg/engram-memory/001-projections@1",
+      "file": "engram-memory/001-projections.sql",
+      "order": 1,
+      "dialect": "postgresql",
+      "mode": "transactional",
+      "fromVersion": 0,
+      "toVersion": 1,
+      "requires": ["cluster-mesh-pg/006-staged-coverage@1"],
+      "checksum": "3f4b201966668fd08a4aaa0f3a19dfc4498ecfe8bda9f4c5ca9b33db8e1351a1"
+    }
+  ]
+}
