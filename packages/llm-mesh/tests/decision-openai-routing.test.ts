@@ -9,6 +9,7 @@ import { decisionRequest, decisionServiceFixture } from './decision-fixtures.js'
 const setup = () => {
   const base = decisionServiceFixture();
   const descriptor = { ...structuredClone(openAiDecisionsDescriptor), acceptedServedModelIds: ['gpt-6-luna'],
+    executionProfile: 'qualification' as const,
     qualification: { servedIdentity: 'qualified' as const, billingBound: 'qualified' as const, evidenceRefs: ['fixture:qualified'] } };
   const body = { model: 'gpt-6-luna', answers: [{ name: 'verdict', type: 'predicate', probability: 0.25 }],
     usage: { input_tokens: 1000, output_tokens: 0, total_tokens: 1000,

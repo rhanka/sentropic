@@ -42,7 +42,7 @@ beforeAll(() => {
 describe('published decision boundaries', () => {
   it('exports the Decision subpaths at the native Decisions feature version', () => {
     const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8'));
-    expect(pkg.version).toBe('0.29.0');
+    expect(pkg.version).toBe('0.30.0');
     for (const [name, path] of [['decision', 'decision/index'], ['decision/host', 'decision/host'], ['transport/jev', 'transport/jev']]) {
       expect(pkg.exports[`./${name}`]).toEqual({ types: `./dist/${path}.d.ts`, import: `./dist/${path}.js` });
     }
@@ -59,7 +59,8 @@ describe('published decision boundaries', () => {
 import type { EvaluatorRef, DecisionRequest, DecisionAdapterResult, DecisionResult } from '@sentropic/llm-mesh/decision';
 import { createRemoteDecisionClient } from '@sentropic/llm-mesh/decision';
 import { createDecisionService, createJevAdapter, createOpenAiDecisionsAdapter, createOpenAiDecisionsTransport,
-  openAiDecisionsDescriptor, openAiDecisionsPrice } from '@sentropic/llm-mesh/decision/host';
+  openAiDecisionsDescriptor, openAiDecisionsPrice, discoverDecisionEvaluator, assessDecisionCalibration,
+  decisionExecutionDigest, decisionQualificationScope } from '@sentropic/llm-mesh/decision/host';
 import { createJevTransport } from '@sentropic/llm-mesh/transport/jev';
 declare const adapter: ProviderAdapter;
 declare const result: Awaited<ReturnType<NonNullable<typeof adapter.decision>>>;
@@ -70,6 +71,7 @@ const evaluator: EvaluatorRef = argument.evaluator;
 declare const receipt: DecisionResult;
 void [evidence, evaluator, receipt, createDecisionService, createJevAdapter, createJevTransport, createRemoteDecisionClient];
 void [createOpenAiDecisionsAdapter, createOpenAiDecisionsTransport, openAiDecisionsDescriptor, openAiDecisionsPrice];
+void [discoverDecisionEvaluator, assessDecisionCalibration, decisionExecutionDigest, decisionQualificationScope];
 // @ts-expect-error Consumer contracts must not expose host custody.
 import { createDecisionService as consumerFactory } from '@sentropic/llm-mesh/decision';
 // @ts-expect-error Private decision modules must not have export-map escape hatches.

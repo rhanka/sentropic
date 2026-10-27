@@ -89,7 +89,7 @@ describe('structured host boundary (R2-F4/R2-F5)', () => {
       resolveEvaluator, resolvePrice: resolvePrice as never, evaluatorAllowlist });
     const controlResult = await control.decide(decisionRequest({ evaluator: { ...descriptor.evaluator } }));
     expect(send).toHaveBeenCalledTimes(1);
-    if (!controlResult.ok || controlResult.kind !== 'verdict') throw new Error('valid structured service unexpectedly refused');
+    if (!controlResult.ok || controlResult.kind !== 'experimental-verdict') throw new Error('valid structured service unexpectedly refused');
     // Canary: explicit per-method delegation, one method overridden. A spread
     // would drop prototype methods such as listEvaluators and dispatch nothing.
     send.mockClear();
@@ -134,7 +134,7 @@ describe('structured host boundary (R2-F4/R2-F5)', () => {
     const result = await service.decide(decisionRequest({ evaluator: { ...descriptor.evaluator } }));
     expect(result.ok).toBe(true);
     expect(send).toHaveBeenCalledTimes(1);
-    if (!result.ok || result.kind !== 'verdict') throw new Error('openai structured service unexpectedly refused');
+    if (!result.ok || result.kind !== 'experimental-verdict') throw new Error('openai structured service unexpectedly refused');
     expect(result.receipt.evaluator).toMatchObject({ providerId: 'openai' });
   });
 });
