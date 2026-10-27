@@ -27,13 +27,23 @@ export interface TerminalKeyBindings {
 
 const DEFAULT_BINDINGS: TerminalKeyBindings = { toggle: 'm', on: '[', off: ']', micMode: 'o', stop: 's' };
 
-export type TerminalKeyMode = 'toggle' | 'push';
+export type TerminalKeyMode = 'toggle' | 'start-end' | 'hold';
+
+/** Qualified hold source: delivers discrete down/up edges for true press-and-hold. */
+export interface HoldSource {
+  on(event: 'down' | 'up', listener: () => void): void;
+  off(event: 'down' | 'up', listener: () => void): void;
+}
 
 export interface TerminalControllerOptions {
   readonly bindings?: Partial<TerminalKeyBindings>;
   readonly mode?: TerminalKeyMode;
-  /** Qualified native hotkey source enabling push mode. Without it, push fails closed. */
-  readonly holdCapable?: boolean;
+  /**
+   * Real hold-source object enabling hold mode (spec §5.1: true hold needs a
+   * qualified native hotkey or browser companion). Without it, hold fails
+   * closed. A boolean cannot qualify a source, so none is accepted.
+   */
+  readonly holdSource?: HoldSource;
 }
 
 /** Minimal TTY input surface. Pass an owned stream; stdin is never implicit. */
@@ -56,10 +66,17 @@ export class ControlError extends Error {
 export class TerminalController {
   private readonly bindings: TerminalKeyBindings;
   private readonly mode: TerminalKeyMode;
+  private readonly holdSource?: HoldSource;
   private input: KeyInput | null = null;
   private attachedRaw = false;
   private readonly listener = (chunk: Buffer): void => {
     this.onKey(chunk.toString('utf8'));
+  };
+  private readonly onHoldDown = (): void => {
+    this.emit({ kind: 'mic-on' });
+  };
+  private readonly onHoldUp = (): void => {
+    this.emit({ kind: 'mic-off' });
   };
 
   constructor(
@@ -68,8 +85,9 @@ export class TerminalController {
   ) {
     this.bindings = { ...DEFAULT_BINDINGS, ...options.bindings };
     this.mode = options.mode ?? 'toggle';
-    if (this.mode === 'push' && options.holdCapable !== true) {
-      throw new ControlError('push mode needs a qualified hold source (holdCapable)');
+    this.holdSource = options.holdSource;
+    if (this.mode === 'hold' && this.holdSource === undefined) {
+      throw new ControlError('hold mode needs a real hold source object (down/up edges)');
     }
   }
 
@@ -82,21 +100,34 @@ export class TerminalController {
       this.attachedRaw = true;
     }
     input.on('data', this.listener);
+    this.holdSource?.on('down', this.onHoldDown);
+    this.holdSource?.on('up', this.onHoldUp);
   }
 
   /** Remove the listener and restore raw mode. Idempotent. */
   detach(): void {
     const input = this.input;
     this.input = null;
-    if (input === null) return;
-    input.off('data', this.listener);
-    if (this.attachedRaw && typeof input.setRawMode === 'function') {
-      input.setRawMode(false);
-      this.attachedRaw = false;
+    if (input !== null) {
+      input.off('data', this.listener);
+      if (this.attachedRaw && typeof input.setRawMode === 'function') {
+        input.setRawMode(false);
+        this.attachedRaw = false;
+      }
     }
+    this.holdSource?.off('down', this.onHoldDown);
+    this.holdSource?.off('up', this.onHoldUp);
   }
 
-  private onKey(key: string): void {
+  private onKey(chunk: string): void {
+    // Strip ANSI escape sequences, then dispatch per code point: a raw-mode
+    // chunk can coalesce several keys ('ms' from fast typing or paste), and
+    // Stop must never be lost to coalescing. Lone ESC is dropped, never a key.
+    const stripped = chunk.replace(/\x1b\[[0-9;?]*[A-Za-z]|\x1b./g, '');
+    for (const key of stripped) this.onKeyPress(key);
+  }
+
+  private onKeyPress(key: string): void {
     if (key === this.bindings.stop) {
       this.emit({ kind: 'stop' });
       return;
