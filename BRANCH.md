@@ -70,7 +70,7 @@
   - [x] tests/speech-settlement.test.ts: missing usage, adjustment idempotence, restart, unavailable sink and no duplicate backend counted unit.
   - [x] tests/fixtures/speech-ledger.ts: deterministic owner transaction fixture; never exported or used as a production ledger.
 - [ ] **Lot 4 — Contract review and integration documentation**
-  - [ ] Document ledger-owner binding, dispatch bounds, limitations and G-LEDGER acceptance in README.md.
+  - [x] Document ledger-owner binding, dispatch bounds, limitations and G-LEDGER acceptance in README.md.
   - [x] Export speech subpath and bump package to 0.22.0; keep all shared owner source files unchanged.
   - [ ] Reconcile independent correctness and accounting/security reviews; no self-certification of durable host acceptance.
 - [ ] **Lot 5 — Draft delivery and validation**
