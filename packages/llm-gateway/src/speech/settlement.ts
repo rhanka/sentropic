@@ -47,14 +47,18 @@ export const settleSpeech = async (options: SpeechAccountingOptions, input: Spee
     if (complete && (!Number.isSafeInteger(request.providerRevision) || request.providerRevision! < 0)) {
       throw new SpeechAccountingError('invalid');
     }
-    if (!complete && hold.state !== 'reserved') return false;
+    if (!complete && hold.state === 'settled') return false;
     if (complete && hold.providerRevision !== undefined && request.providerRevision! <= hold.providerRevision) {
       if (request.providerRevision === hold.providerRevision
-        && !sameSpeechIdentity(request.usage, hold.settledUsage)) throw new SpeechAccountingError('conflict');
+        && (!sameSpeechIdentity(request.usage, hold.settledUsage) || request.outcome !== hold.settledOutcome)) {
+        throw new SpeechAccountingError('conflict');
+      }
       return false;
     }
     const observedCost = request.usage ? priceSpeechUsage(hold.price, request.usage) : 0;
-    const costMicroUsd = complete ? observedCost : Math.max(hold.liabilityMicroUsd, observedCost);
+    const operationalCost = hold.usage ? priceSpeechUsage(hold.price, hold.usage.totals) : 0;
+    const costMicroUsd = complete ? observedCost : Math.max(hold.liabilityMicroUsd, observedCost, operationalCost);
+    if (!complete && hold.state === 'estimated' && costMicroUsd <= hold.chargedMicroUsd) return false;
     const revision = hold.settlementRevision + 1;
     const kind = hold.rootEntryRef ? 'adjustment' : complete ? 'final' : 'estimate';
     const entryRef = JSON.stringify([request.operationId, kind, revision]);
@@ -64,7 +68,8 @@ export const settleSpeech = async (options: SpeechAccountingOptions, input: Spee
       utcDay: hold.utcDay, kind, ...(hold.rootEntryRef ? { rootEntryRef: hold.rootEntryRef } : {}), revision,
       ...(complete ? { providerRevision: request.providerRevision } : {}), pricingRevision: hold.price.revision,
       costMicroUsd, deltaMicroUsd: costMicroUsd - hold.chargedMicroUsd, uncertain: !complete,
-      ...(request.usage ? { usage: request.usage } : {}), countedUnitDelta: 0, outcome: request.outcome, overrun };
+      ...(request.usage ?? hold.usage?.totals ? { usage: request.usage ?? hold.usage?.totals } : {}),
+      countedUnitDelta: 0, outcome: request.outcome, overrun };
     await tx.appendSettlement(entry);
     await tx.adjustBudgets(hold.campaignRef, hold.utcDay,
       hold.state === 'reserved' ? -hold.liabilityMicroUsd : 0, entry.deltaMicroUsd);
@@ -72,7 +77,9 @@ export const settleSpeech = async (options: SpeechAccountingOptions, input: Spee
     hold.chargedMicroUsd = costMicroUsd;
     hold.settlementRevision = revision;
     hold.state = complete ? 'settled' : 'estimated';
-    if (complete) { hold.providerRevision = request.providerRevision; hold.settledUsage = request.usage; }
+    if (complete) {
+      hold.providerRevision = request.providerRevision; hold.settledUsage = request.usage; hold.settledOutcome = request.outcome;
+    }
     await tx.putHold(hold);
     return true;
   });
