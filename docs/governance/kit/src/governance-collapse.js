@@ -1,5 +1,5 @@
 import { aggregateTopLevel, packTopLevel } from './governance-summary.js';
-import { routeScene } from './architecture-routing.js';
+import { routeScene, ROUTING_VERSION } from './architecture-routing.js';
 import { packGovernanceScene } from './governance-layout.js';
 import { packStudyScene } from './study-layout.js';
 
@@ -9,6 +9,8 @@ const runtimeRoutes = new Map();
 // Fold the responsibility tree, measuring visible content on both axes.
 // Relations internal to a folded box disappear; external relations reach its border.
 export function collapseGovernanceScene(scene, collapsedIds = [], usePrepared = true, planHint) {
+  if (usePrepared && scene.routingVersion && scene.routingVersion !== ROUTING_VERSION)
+    throw new Error(`Stale routing version for ${scene.id}: ${scene.routingVersion}`);
   if (!collapsedIds.length) return scene;
   const collapsed = new Set(collapsedIds);
   const originals = new Map([...scene.groups, ...scene.nodes].map(entry => [entry.id, entry]));
@@ -46,7 +48,7 @@ export function collapseGovernanceScene(scene, collapsedIds = [], usePrepared = 
     [...visibleGroups, ...nodes].map(entry => [entry.id, entry.parentId, entry.position.x, entry.position.y, entry.width, entry.height, entry.headerTextHeight, entry.collapsed]),
     edges.map(edge => [edge.id, edge.source, edge.target, edge.label, edge.class, edge.data.labelFontSize, edge.data.marker, edge.data.relations, edge.data.pillLabel]),
   ]);
-  const cacheKey = JSON.stringify([scene.id, scene.language, scene.routingVersion ?? 'orthogonal-v1', routingSignature]);
+  const cacheKey = JSON.stringify([scene.id, scene.language, ROUTING_VERSION, routingSignature]);
   const prepared = usePrepared && (scene.preparedFolds?.find(entry => entry.signature === routingSignature)
     ?? runtimeRoutes.get(cacheKey));
   const mask = scene.groups.reduce((value,g,i)=>value | (visibleGroups.some(v=>v.id===g.id&&v.collapsed) ? 1<<i : 0),0);
