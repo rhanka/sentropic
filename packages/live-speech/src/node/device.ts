@@ -190,6 +190,7 @@ class ArecordAudioStream implements AudioStream {
   ) => void) | null = null;
   private readonly readyPromise: Promise<DeviceLostError | DeviceOpenError | DeviceUnavailableError | null>;
   private readyTimer: ReturnType<typeof setTimeout> | null = null;
+  private timeoutAbort: DeviceOpenError | null = null;
   private leftover = Buffer.alloc(0);
   private stderrTail = '';
   private settled = false;
@@ -209,8 +210,15 @@ class ArecordAudioStream implements AudioStream {
       this.stderrTail = `${this.stderrTail}${chunk.toString('utf8')}`.slice(-300);
     });
     // An exit before streaming fails the open; a later exit fails the iterator.
+    // A silent-timeout reap lands here too and keeps its own message.
     child.on('close', (code) => {
       if (this._closed) return;
+      if (this.timeoutAbort !== null) {
+        const error = this.timeoutAbort;
+        this.timeoutAbort = null;
+        this.fail(error);
+        return;
+      }
       const message = `arecord exited ${String(code)}: ${this.stderrTail}`;
       if (this.queue.length === 0 && !this.settled) {
         this.fail(new DeviceOpenError(`${message} (before first frame)`));
@@ -220,9 +228,27 @@ class ArecordAudioStream implements AudioStream {
     });
     // Silence is failure, not success: only first bytes prove the child is
     // streaming. A blind ready probe would win the race against a fast exit
-    // (exit-early helper) and wrongly report a healthy open.
+    // (exit-early helper) and wrongly report a healthy open. On timeout the
+    // silent child is reaped (SIGTERM, then SIGKILL) and the open rejects
+    // only once it is gone — never orphaning arecord.
     this.readyTimer = setTimeout(() => {
-      this.fail(new DeviceOpenError('arecord produced no audio within 2000 ms'));
+      this.readyTimer = null;
+      if (this.failure !== null || this._closed || this.readyResolve === null) return;
+      this.timeoutAbort = new DeviceOpenError('arecord produced no audio within 2000 ms');
+      try {
+        this.child.kill('SIGTERM');
+      } catch {
+        // Already gone: its close event reaps it.
+      }
+      const escalate = setTimeout(() => {
+        try {
+          this.child.kill('SIGKILL');
+        } catch {
+          // Gone between the two signals.
+        }
+      }, 500);
+      escalate.unref?.();
+      this.child.once('close', () => clearTimeout(escalate));
     }, 2000);
     this.readyTimer.unref?.();
   }
