@@ -174,6 +174,38 @@ const memoryFailure = (error) => {
 };
 const guarded = async (run) => { try { return await run(); } catch (error) { return memoryFailure(error); } };
 const commitIndexKey = (identity) => JSON.stringify(['memory-host-commit-v1', identity]);
+// The frozen substrate persists K7/K8 entries in snake-case wire form
+// while the installed kernel validator checks the camel-case proof model.
+// The bridge translates those two aggregate values in both directions
+// without dropping fields: the full entry rides in `proof` for K8, and
+// for K7 the proof keeps the creation fields while recordDigest maps to
+// the model field.
+const isCaptureKey = (key) => key.startsWith('["memory-capture-idempotency-v1",');
+const isOutcomeKey = (key) => key.startsWith('["memory-admission-outcome-v1",');
+const translateUpdateWrite = (row) => {
+  if (!isCaptureKey(row.key) && !isOutcomeKey(row.key)) return row;
+  const entry = JSON.parse(row.value.data);
+  if (isCaptureKey(row.key)) {
+    if (typeof entry.candidateId === 'string') return row;
+    return { ...row, value: memoryJcs({ candidateId: entry.candidate_id,
+      revision: entry.record_digest ? 2 : 1, recordDigest: entry.record_digest ?? null,
+      createdCursor: entry.cursor,
+      proof: { candidate_id: entry.candidate_id, content: entry.content, cursor: entry.cursor } }) };
+  }
+  if (typeof entry.candidateId === 'string') return row;
+  return { ...row, value: memoryJcs({ candidateId: entry.candidate_id, outcome: entry.status, proof: entry }) };
+};
+const translateAggregateRead = (key, value) => {
+  if (!isCaptureKey(key) && !isOutcomeKey(key)) return value;
+  const parsed = JSON.parse(value.data);
+  if (isCaptureKey(key)) {
+    if (typeof parsed.candidate_id === 'string') return value;
+    return memoryJcs({ ...parsed.proof,
+      ...(parsed.recordDigest ? { record_digest: parsed.recordDigest } : {}) });
+  }
+  if (typeof parsed.candidate_id === 'string') return value;
+  return memoryJcs(parsed.proof);
+};
 const neutralUnitToPg = (unit) => {
   if (unit.relationships.length || unit.barriers.length || unit.purgeIntents.length)
     throw Object.assign(new Error('unsupported memory effects'), { code: 'invalid-schema' });
@@ -185,7 +217,8 @@ const neutralUnitToPg = (unit) => {
     records: unit.records.map((row) => ({ key: row.key, bytes: row.value, contentHash: row.contentHash })),
     appends: unit.appends.map((row) => ({ chainId: row.chain,
       record: { id: row.id, hash: row.hash, bytes: row.value.data }, expectation: row.expectation })),
-    updates: unit.updates.map((row) => ({ key: row.key, version: row.version, value: row.value })),
+    updates: unit.updates.map((row) => { const translated = translateUpdateWrite(row);
+      return { key: translated.key, version: translated.version, value: translated.value }; }),
     indexWrites: unit.indexWrites.map((row) => ({ key: row.key,
       digest: JSON.parse(row.value.data).record_digest ?? row.value.data, resultIds: [], resultHash: null })),
     relationships: [], barriers: [], purgeIntents: [], moduleResult: unit.moduleResult,
@@ -194,7 +227,8 @@ const neutralUnitToPg = (unit) => {
 const neutralTransaction = (tx, units, identity) => ({
   readAggregate: async (kind, key) => {
     const found = await tx.readAggregate(key);
-    return found === null ? null : { kind, key, version: String(found.version), value: found.value };
+    return found === null ? null
+      : { kind, key, version: String(found.version), value: translateAggregateRead(key, found.value) };
   },
   readRecords: async (kind, keys) => (await tx.readRecords(keys, { maxRecords: 2000, maxEncodedBytes: 1048576 }))
     .map((row) => ({ kind, key: row.key, value: row.bytes, contentHash: row.contentHash })),
@@ -295,7 +329,7 @@ const handle = Object.freeze({
   }),
   readAggregate: (kind, key, grant) => guarded(async () => {
     const row = await (await kernel.bind(castGrant(grant))).readAggregate(key);
-    return row ? { kind, key, version: String(row.version), value: row.value } : null;
+    return row ? { kind, key, version: String(row.version), value: translateAggregateRead(key, row.value) } : null;
   }),
   readCommitResult: (identity, grant) => guarded(async () =>
     (await (await kernel.bind(castGrant(grant)))).readCommitResult(identity, fence)),
