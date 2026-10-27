@@ -82,4 +82,14 @@ E2 = #765 core 007; E4 reserves core **008** (recorded below).
 - No deferred "final event" table: the guard's renewal UPDATE inside the commit tx is the in-tx enforcement (row-match atomicity, no TOCTOU); the deferred trigger re-checks liveness at COMMIT. No flush-code changes (E5 owns transactions).
 - Watch: `postgres-module-migrations.spec.ts` hypothetical must track the real latest core (009 while this branch owns 008).
 - Qualification limits (lease semantics): the holder renews only on read-write transactions (default TTL 5 min); a read-only or idle holder past TTL may be taken over and then reads as `stale-epoch`/`terminal-loss`. The deferred trigger rejects any UPDATE committing a dead lease, including test setup — seed/terminate rows via DELETE+INSERT, never UPDATE.
+- Qualification limits (replica mode): 008 creates a plain constraint trigger, born `tgenabled='O'` — skipped under `session_replication_role=replica`, so the backstop only guards the primary. E4 is single-primary by design (no replicas; writes never go to a standby), and the in-tx renewal UPDATE stays the primary guard. Pinned by `pg ownership catalog enablement` mock tests (`'O'`/`'A'` accept, `'D'`/`'R'`/missing refuse as `open-refused`). Requiring `'A'` (`ENABLE ALWAYS`) would change the 008 checksum — decided against; revisit if replicas ever enter scope.
 - AI CI job red-on-main is out of scope for this lot's gate (E4 gate = cluster-mesh lanes green).
+
+## Gate receipts (r3, head `d8132b821` + r3 commits)
+
+All commands run as `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make <target> ... ENV=test-e2-int` (`ENV` last, never `ENV=dev`):
+- `make test-cluster-mesh SCOPE=tests/storage CM_PG_URL=postgresql://app:app@postgres:5432/app ENV=test-e2-int` → Test Files 75 passed | 1 skipped (76); Tests 470 passed | 2 skipped (472). Includes `postgres-instance-multiprocess.spec.ts` 2/2 (real kernels, deterministic expiry injection, no sleeps), `postgres-instance-guard.spec.ts` 15/15 (incl. 5 `pg ownership catalog enablement` mock rows), `postgres-instance-ownership.spec.ts` 15/15, shared corpus neutral + PG green.
+- `make typecheck-cluster-mesh ENV=test-e2-int` → exit 0, no TS errors.
+- `make lint-cluster-mesh ENV=test-e2-int` → exit 0, clean (covers the new `tests/storage/pg-open-child.mjs`).
+- `make scope-check ENV=test-e2-int` → PASS C2 before every commit.
+- CI on the pushed head: PR #779 draft → `feat/engram-e2-integration`, do not merge.
