@@ -31,7 +31,8 @@ const host = (url, name) => {
     reattest: async (session, approval) => {
       const result = await session.execute({
         text: `UPDATE "${name}".host_history SET receipt=jsonb_set(receipt,'{schemaFingerprint}',
-          to_jsonb($1::text)) WHERE ordinal=6 AND receipt->>'schemaFingerprint'=$2`,
+          to_jsonb($1::text)) WHERE ordinal=(SELECT MAX(ordinal) FROM "${name}".host_history)
+          AND receipt->>'schemaFingerprint'=$2`,
         values: [approval.schemaFingerprint, approval.previousFingerprint],
       });
       assert.equal(result.rowCount, 1, 'host fingerprint compare-and-swap');

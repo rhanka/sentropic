@@ -503,3 +503,17 @@ export const runAtomicCorpus = async (bound: AtomicCorpusStore, profiles: Atomic
     'K2a-RED atomic: an empty unit is rejected',
   );
 };
+
+// E1 additive: exact-u64 allocation strings travel opaquely through the
+// store interface types. Old safe paths stay safe-only; new u64 helpers
+// compare/increment without Number conversion (covered in u64-corpus).
+export const U64_ATOMIC_ALLOCATION_VECTORS: readonly string[] = [
+  '9007199254740991',
+  '9007199254740992',
+  '18446744073709551615',
+];
+
+export const assertU64AllocationOpaque = (allocation: string): void => {
+  assert.equal(typeof allocation, 'string');
+  assert.ok(/^(0|[1-9][0-9]*)$/.test(allocation), 'u64 allocation stays canonical decimal');
+};
