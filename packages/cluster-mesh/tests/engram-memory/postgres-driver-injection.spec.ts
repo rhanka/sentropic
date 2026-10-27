@@ -88,7 +88,14 @@ describe.skipIf(!pgEnabled)('memory PG positive installed calls', () => {
     const host = await memoryPgHost();
     const { binding } = memoryHostComposed(host.options.driver);
     try {
-      const root = await host.open();
+      // The host assembly opens the durable store from the checked
+      // provider: the kernel runs on the provider's own pool.
+      const root = await createMemoryPostgresStorage({
+        provider: binding.provider,
+        layout: host.layout,
+        history: host.history,
+        cursorSecret: host.options.cursorSecret,
+      });
       // Write path (neutral grant only): provision, commit, read. No
       // lifecycle configuration: that is a maintain-gated operation.
       const bound = await root.bindNew(binding.memoryGrant);
