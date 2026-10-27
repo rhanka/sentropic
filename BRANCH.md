@@ -20,6 +20,7 @@
   - `api/tests/api/catalog-auth-context.test.ts`
   - `api/tests/api/cluster-mesh-catalog.test.ts`
   - `api/tests/unit/foundation-executor.test.ts`
+  - `api/tests/services/catalog-characterization.spec.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -38,6 +39,7 @@
   - [x] api/tests/services/catalog/chat-context.integration.test.ts: model selection/search through real executor and seam, zero denied effects.
   - [ ] Update api/tests/services/catalog/{composite-registry,execution-seam,search-catalog-tool,mcp-source,standalone-tool-source}.spec.ts as signatures evolve.
   - [x] Regression inventory also covers existing agent/canvas/workflow source suites; source fixtures use the current ai-priorities workspace type.
+  - [x] BR04A-EX1: adapt catalog-characterization.spec.ts direct product discovery to required context; test-only impact; rollback with the HTTP port contract.
   - [ ] Update api/tests/api/cluster-mesh-catalog.test.ts and api/tests/unit/foundation-executor.test.ts.
 - [ ] Lot 2: frozen server-only context resolver and fresh product session/turn authority.
   - [x] Server inputs and allowlists frozen; provenance checked by identity; dispatch rechecks current grants and policy references.
