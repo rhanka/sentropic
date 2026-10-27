@@ -153,7 +153,6 @@ function requiredStringArg(
 }
 
 function buildSearchAuthz(
-  input: ExecuteFoundationSkillToolInput,
   context: CatalogRequestContext,
 ): ResolveFoundationChatToolsInput {
   return {
@@ -183,7 +182,7 @@ export async function executeFoundationSkillTool(
 
   if (toolCall.name === 'search_skills') {
     const hits = executeFoundationSearchSkills({
-      authz: buildSearchAuthz(input, context!), context,
+      authz: buildSearchAuthz(context!), context,
       payload: args as { query: string; limit?: number },
     });
     const result = { status: 'completed', hits };
