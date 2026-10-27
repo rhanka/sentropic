@@ -1,5 +1,14 @@
 # PLAN - Orchestrated Roadmap
 
+## Engram E2 — E10 registration (2026-10-27)
+
+- E10: `feat/cluster-mesh-engram-e10`, targeting `feat/engram-e2-batch1` (PR #802, base `4bd435349`).
+- Worktree: `tmp/worktrees/mem-e10`; [branch plan](tmp/worktrees/mem-e10/BRANCH.md).
+- Scope: installed injection proof only — `installed-memory.mjs`, `installed-memory-types.ts`, `qualification.mk` lane and `installed-receipt.json` under `packages/cluster-mesh/tests/engram-memory/`.
+- Bindings: Engram `0.22.0` tarball sha256 `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10`; candidate mesh tarball stamped `0.24.0-dev.1` in staging; merge the integrator re-pin when it lands, never rebase.
+- Environment owner: E10 author, `ENV=test-mem-e10`, ports API 8791, UI 5191, Maildev UI 1091; shared Docker lock; `make down ENV=test-mem-e10` after each container step.
+- Downstream: E11 generates `e2-host-tuple/v1` from the E10 receipt without new qualification.
+
 ## Engram E2 — E0 registration (2026-10-26)
 
 - E0: `feat/cluster-mesh-engram-e0`, targeting `feat/engram-e2-integration`.
