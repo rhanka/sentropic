@@ -198,8 +198,26 @@ const neutralTransaction = (tx, units, identity) => ({
   },
   readRecords: async (kind, keys) => (await tx.readRecords(keys, { maxRecords: 2000, maxEncodedBytes: 1048576 }))
     .map((row) => ({ kind, key: row.key, value: row.bytes, contentHash: row.contentHash })),
-  readChain: ({ chain, afterAllocation = '0', limit }) =>
-    tx.readMemoryChain({ chainId: chain, afterAllocation, limit }),
+  readChain: async ({ chain, afterAllocation = '0', limit }) => {
+    const all = [];
+    let cursor;
+    for (;;) {
+      const page = await tx.readChain({ chainId: chain, limit: 500, cursor, maxEncodedBytes: 1048576 });
+      all.push(...page.records);
+      if (!page.nextCursor || page.records.length === 0) break;
+      cursor = page.nextCursor;
+    }
+    const after = BigInt(afterAllocation);
+    const records = all
+      .map((row) => ({ id: row.id, hash: row.hash, value: { format: 'utf8', data: row.bytes } }))
+      .filter((row) => {
+        try {
+          const value = JSON.parse(row.value.data).cursor;
+          return value === undefined || BigInt(value) > after;
+        } catch { return true; }
+      });
+    return { chain, records: records.slice(0, limit) };
+  },
   findIdempotency: async ({ commitIdentity }) => {
     const row = await tx.findIdempotency({ key: commitIndexKey(commitIdentity) });
     return row ? { key: commitIdentity, intentHash: row.digest, moduleResult: JSON.parse(row.resultHash) } : null;
