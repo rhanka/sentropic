@@ -62,6 +62,12 @@ export async function scanRepository({ root = '.', sourceSha, repository, contra
   if (!/^[a-f0-9]{40}$/.test(sourceSha || '')) throw new Error('immutable source SHA required');
   if (!repository || typeof run !== 'function') throw new Error('repository and scanner runner required');
   const { inventory, tasks } = planScan(root, contract);
+  const inputPaths = [...new Set([...inventory.locks.map((item) => item.path),
+    ...inventory.manifests.map((item) => item.path), ...inventory.images.map((item) => item.dockerfile).filter(Boolean),
+    ...inventory.sast.sourceFiles, ...inventory.derivedPinConsumers,
+    '.security/vulnerability-register.yaml', '.security/security-fix.json'])].sort();
+  const inputHashes = Object.fromEntries(inputPaths.map((path) => [path,
+    existsSync(join(root, path)) ? hash(readFileSync(join(root, path))) : null]));
   const coverageBlocked = [...inventory.coverage.blockers, 'coverage-blocked: scanner/image/DB qualification S2b'];
   const surfaces = [];
   const findings = [];
@@ -72,6 +78,7 @@ export async function scanRepository({ root = '.', sourceSha, repository, contra
     try {
       const result = await run(structuredClone(task));
       if (typeof result?.stdout === 'string') {
+        if (Buffer.byteLength(result.stdout) > 16 * 1024 * 1024) throw new Error('report byte bound exceeded');
         surface.raw = result.stdout;
         surface.rawHash = hash(result.stdout);
       }
@@ -97,7 +104,11 @@ export async function scanRepository({ root = '.', sourceSha, repository, contra
       coverageBlocked.push(`${task.target}: ${error.message}`);
     }
   }
-  return { sourceSha, repository, scannedAt: new Date().toISOString(), inventory, surfaces,
+  for (const [path, before] of Object.entries(inputHashes)) {
+    const after = existsSync(join(root, path)) ? hash(readFileSync(join(root, path))) : null;
+    if (after !== before) coverageBlocked.push(`source bytes changed: ${path}`);
+  }
+  return { sourceSha, repository, scannedAt: new Date().toISOString(), inventory, inputHashes, surfaces,
     ...summarizeBacklog(findings, rows, { today, complete: coverageBlocked.length === 0, coverageBlocked }) };
 }
 
