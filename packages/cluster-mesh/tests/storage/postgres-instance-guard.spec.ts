@@ -294,6 +294,8 @@ describe.skipIf(!pgEnabled)('postgres open/commit ownership guards', () => {
       await withCanonical(fixture.options);
       // A raw write that kills the lease cannot commit: the deferred
       // trigger re-checks liveness at COMMIT time, inside the transaction.
+      // The known-rollback refusal surfaces the canonical code (E5 contract:
+      // a COMMIT-time lease refusal is terminal-loss, never unavailable).
       await assert.rejects(
         fixture.tx.run(false, (session) =>
           session.execute({
@@ -301,7 +303,7 @@ describe.skipIf(!pgEnabled)('postgres open/commit ownership guards', () => {
             values: [],
           }),
         ),
-        (error: unknown) => error instanceof PostgresStorageError && error.sqlState === 'P0001',
+        (error: unknown) => error instanceof CanonicalOwnershipError && error.code === 'terminal-loss',
       );
     } finally {
       await fixture.close();

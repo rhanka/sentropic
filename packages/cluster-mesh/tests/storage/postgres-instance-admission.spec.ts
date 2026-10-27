@@ -3,10 +3,13 @@
 // from admission to the effective commit, a loss in any window (mid-tx,
 // hook-driven, expiry, terminal mark, revocation) must refuse, and stale
 // handles must never clear a successor. Late windows are hook-driven
-// (custom onCommitPossession on another connection), never sleeps.
+// through onCommitPossession. The only sleep in this file is a bounded
+// post-renewal lapse that resolves one way only (the deferred trigger can
+// only fire at COMMIT): no lease-timing races.
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { describe, it } from 'vitest';
+import { StorageDeniedError } from '../../src/storage/errors.js';
 import { CanonicalOwnershipError } from '../../src/storage/instance-ownership.js';
 import type { PgInstanceOwnershipSession } from '../../src/storage/postgres/instance-ownership.js';
 import type { PostgresStorageOptions } from '../../src/storage/postgres/protocol.js';
@@ -281,6 +284,117 @@ describe.skipIf(!pgEnabled)('postgres continuous ownership admission', () => {
       }
     } finally {
       await pool.end();
+      await fixture.close();
+    }
+  });
+
+  it('orders a concurrent revoke after the committing transaction', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const grant = grantFor({ operations: ['read', 'write', 'maintain'] });
+      let armed = false;
+      const hookOutcome: string[] = [];
+      const kernel = await createPostgresKernel({
+        ...fixture.options,
+        budgets: { idleMs: 10000, statementMs: 5000 },
+        canonicalOwnership: { leaseMs: 60000 },
+        onCommitPossession: async () => {
+          if (!armed) return;
+          armed = false;
+          // Revocation from a plain kernel on its own connection: the
+          // committer still holds FOR SHARE on the grant row (re-checked
+          // before publish), so the revoke waits for the commit, hits the
+          // wait timeout, and is ordered after it.
+          const plain = await createPostgresKernel({ ...fixture.options });
+          try {
+            await plain.revoke(grant.token);
+            hookOutcome.push('revoke:committed');
+          } catch (error) {
+            hookOutcome.push(
+              `revoke:${error instanceof PostgresStorageError ? error.condition : 'unexpected'}`,
+            );
+          }
+        },
+      });
+      const bound = await kernel.bindNew(grant);
+      await bound.configureLifecycle('optional');
+      armed = true;
+      await bound.commitAtomic(unitFor('revoke-window', 'hash-revoke'));
+      // The commit went through with the live grant; the in-window revoke
+      // never landed (blocked by FOR SHARE, rolled back on wait timeout).
+      assert.deepEqual(hookOutcome, ['revoke:timeout']);
+      assert.equal(await bound.readHead('revoke-window'), 'hash-revoke');
+      // Retried after the commit, the same revoke lands, and the grant is
+      // then refused at the next commit.
+      const plain = await createPostgresKernel({ ...fixture.options });
+      await plain.revoke(grant.token);
+      await assert.rejects(
+        (async () => {
+          const rebound = await kernel.bindNew(grant);
+          await rebound.commitAtomic(unitFor('revoke-after', 'hash-after'));
+        })(),
+        (error: unknown) => error instanceof StorageDeniedError,
+      );
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('refuses at COMMIT when the lease lapses after the final renewal', async () => {
+    const fixture = await createPgFixture();
+    try {
+      let armed = false;
+      const kernel = await createPostgresKernel({
+        ...fixture.options,
+        budgets: { idleMs: 10000, statementMs: 5000, flushMs: 15000 },
+        canonicalOwnership: { leaseMs: 1000 },
+        onCommitPossession: async () => {
+          if (!armed) return;
+          armed = false;
+          // The guard renewed the lease right before this hook; the
+          // bounded sleep lapses it deterministically (one-directional:
+          // only the deferred trigger can fire at COMMIT).
+          await new Promise((resolve) => setTimeout(resolve, 2500));
+        },
+      });
+      const bound = await kernel.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] }));
+      await bound.configureLifecycle('optional');
+      armed = true;
+      await assert.rejects(
+        bound.commitAtomic(unitFor('lapse-commit', 'hash-lapse')),
+        (error: unknown) =>
+          error instanceof CanonicalOwnershipError &&
+          error.code === 'terminal-loss' &&
+          /before COMMIT/.test(error.message),
+      );
+      // The commit rolled back with the refusal: a live successor sees no trace.
+      const second = await withCanonical(fixture.options);
+      const rebound = await second.bindNew(grantFor({ operations: ['read', 'write', 'maintain'] }));
+      assert.equal(await rebound.readHead('lapse-commit'), null);
+    } finally {
+      await fixture.close();
+    }
+  });
+
+  it('a taken-over handle that never released still releases as a no-op', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const first = await withCanonical(fixture.options);
+      const stale = { ...owned(first).handle };
+      // Takeover WITHOUT release: cell.released is false, so the SQL
+      // predicate runs — the short-circuit is not the proof.
+      await expireLease(fixture, 'comments');
+      const second = await withCanonical(fixture.options);
+      assert.equal(owned(second).handle.storageEpoch, '2');
+      await owned(first).release();
+      const row = await readLeaseRow(fixture, 'comments');
+      assert.equal(row?.epoch, '2');
+      assert.equal(row?.instance, stale.instanceId);
+      assert.equal(row?.live, true);
+      // The released flag stuck: a second release is still a no-op.
+      await owned(first).release();
+      assert.equal((await readLeaseRow(fixture, 'comments'))?.epoch, '2');
+    } finally {
       await fixture.close();
     }
   });
