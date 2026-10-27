@@ -106,6 +106,22 @@ export const defineOwnershipSemantics = (
       await driver.release(top);
       await rejectsCode(driver.acquire('store-top'), 'stale-epoch');
     });
+
+    it('a stale release cannot clear its successor', async () => {
+      const first = await driver.acquire('store-stale');
+      assert.equal(first.storageEpoch, '1');
+      await driver.release(first);
+      const second = await driver.acquire('store-stale');
+      assert.equal(second.storageEpoch, '2');
+      // The stale handle no longer matches the durable row: releasing it
+      // must leave the successor untouched on every backend.
+      await driver.release(first);
+      await driver.verify(second);
+      await driver.guard(second)();
+      const current = await driver.current('store-stale');
+      assert.equal(current?.storageEpoch, '2');
+      assert.equal(current?.instanceId, second.instanceId);
+    });
   });
 };
 
