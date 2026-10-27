@@ -18,6 +18,7 @@
   - `packages/artifacts/package.json`
   - `packages/artifacts/README.md`
   - `packages/artifacts/src/adapters/postgres-activation-vectors.ts`
+  - `packages/artifacts/src/mcp-core.ts`
   - `packages/cluster-mesh/packaging.mk`
   - `packages/cluster-mesh/tests/packaging/activation-vectors.spec.ts`
   - `packages/cluster-mesh/tests/packaging/prepare.sh`
@@ -32,6 +33,7 @@
   - `.github/workflows/ci.yml`
 - **Exception process**:
   - [x] BR861-EX3 authorized by the owner: package writer ships shared vectors and pack-only 0.2.4; scope includes isolated packed-consumer qualification and CI wiring. Impact: additive export/testing only. Rollback: revert these commits; keep 0.2.3 consumers unchanged.
+  - [x] BR861-EX4: exact-head green CI request covers the evidenced blocking provider-version mismatch. Impact: mcp-core.ts version metadata only, aligned to 0.2.4. Rollback: revert this metadata fix with the 0.2.4 package bump.
 
 ## Feedback Loop
 - [x] UP-T-2 / P1-1 in `pr794_opus_r1.md`: existing 0.2.3 vectors are repository tests absent from the published package; this branch supplies an executable package export.
@@ -39,6 +41,7 @@
 - [ ] REV-1: owner review on draft PR #797; harness consensus selection unavailable because live peer discovery does not provide exact model IDs (`.h2a/reviews/upt2-author.md`); no consensus claimed.
 - [x] REV-P1-1: reproduce missing db-time-skew/commit-unknown IDs on both pool sizes; add both mandatory vectors with additive host hooks (16 total).
 - [x] REV-P2: dedicated target requires packed-consumer/DB wiring and explicit disposable opt-in; refuse non-test database names before schema changes or vector stores.
+- [x] CI-1: run 40492154926 passes installed vectors but packed-consumer probe rejects provider 0.2.3 against package 0.2.4; align only the provider version metadata in mcp-core.ts to unblock the requested exact-head CI gate.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky acceptance in this package-only scope.
