@@ -1,6 +1,7 @@
 // Real faster-whisper-ts engine behind the isolated worker protocol (r3 L3).
 // createEngine(options, modelPath) mirrors the worker's expected factory shape:
-// `{ engineId, transcribe(Float32Array, { sampleRateHz, language? }), close() }`.
+// `{ engineId, transcribe(Float32Array, { sampleRateHz, language? }), close(), preload() }`.
+// `preload` loads the native model before worker ready; transcribe keeps the cached load.
 // Loaded only inside stt-worker.mjs; never imported by the session, the bench
 // driver (it goes through the worker) or unit tests (they use the fake).
 //
@@ -51,6 +52,9 @@ export function createEngine(options = {}, modelPath, loader = null) {
 
   return {
     engineId: ENGINE_ID,
+    async preload() {
+      await getModel();
+    },
     async transcribe(window, { sampleRateHz, language } = {}) {
       if (closed) throw new Error('engine is closed');
       if (!(window instanceof Float32Array)) throw new Error('engine requires Float32Array PCM');

@@ -3,6 +3,7 @@
 //   { segments: [{ startSec, endSec, text, noSpeechProb? }], language? } — resolve,
 //   { error: <message> } — reject,
 //   { hang: true } — never settle (starvation probe).
+// options.failPreload: when set, preload() rejects with that message (init probe).
 export function createEngine(options = {}, modelPath = 'unknown') {
   const script = Array.isArray(options.script) ? options.script : [];
   const tag = String(modelPath).split('/').pop();
@@ -14,6 +15,9 @@ export function createEngine(options = {}, modelPath = 'unknown') {
   }
   return {
     engineId: `fake-stt/1:${tag}`,
+    async preload() {
+      if (options.failPreload) throw new Error(options.failPreload);
+    },
     async transcribe(window, { sampleRateHz } = {}) {
       calls += 1;
       const step = script[calls - 1] ?? script[script.length - 1] ?? { segments: [] };

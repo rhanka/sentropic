@@ -35,7 +35,8 @@ Deliver approved r3 L3: `live-speech/src/node/local-stt.ts` plus an isolated wor
 ## Feedback Loop
 - [x] BR03-EX1: touch conditional `Makefile` (`test-live-speech` target only). Reason: L3 needs a runnable vitest lane mirroring `test-oauth-verify` (SCOPE support, pinned vitest/typescript). Impact: one additive target; no existing target changed. Rollback: delete the target block.
 - [x] BR04-EX1: touch conditional `.github/workflows/ci.yml` (live_speech filter + output + `validate-live-speech` job + 2 needs entries), conditional `Makefile` (`bench-live-speech` target), root `package.json` (onnxruntime-node override pin), root `package-lock.json` (workspace refresh via `make lock-root`). Reason: P1-5/P2-1 demand the CI lane, the bench lane, exact onnx pinning and lockfile refresh. Impact: additive CI job gated on live-speech paths; additive bench target; one override line; lock gains only live-speech entries. Rollback: revert the job/filter/target/override lines.
-- [ ] CI run for PR #781 (retargeted to `feat/live-stt-l1c`): `pull_request` event creates no runs (platform-side; close/reopen did not retrigger) — qualification via `workflow_dispatch` on the exact head.
+- [x] BR05-EX1: touch conditional `.github/workflows/ci.yml` (one-line `pull_request.branches` exception adding `feat/live-stt-l1c`). Reason: PR #781 targets the unmerged L1c base, so the `main`-only PR filter suppresses every automatic run; the exception restores `pull_request` CI on the exact L3 head without changing any job. Impact: one branch string; no job/filter logic changed. Rollback: remove the branch string.
+- [ ] CI run for PR #781: after BR05-EX1, expect an automatic `pull_request` run on the exact head; keep `workflow_dispatch` only as a fallback if the queue stalls.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -73,7 +74,7 @@ Deliver approved r3 L3: `live-speech/src/node/local-stt.ts` plus an isolated wor
   - [x] `tests/local-stt.test.ts` + `profiles.test.ts` + `model-pins.test.ts`: model selection, one final, commit offsets, pin verification, teardown.
   - [x] `tests/window-reconciliation.test.ts` + `ordering.test.ts`: anchored stitching over 2x window, endpoint priority, per-utterance finals.
   - [x] `tests/worker-protocol.test.ts` + `backpressure.test.ts`: profile-driven load, init-failure terminate, real-thread backpressure (final < 1500 ms vs ~2000 ms uncoalesced floor).
-  - [x] `bench/run-local-bench.mjs` + `bench/profile-run.mjs` + `bench/local-stt-bench.receipt.json`: measured through worker + session (tiny 1166 ms/43 chars, base 2025 ms/26 chars, silence 0 finals, 0 errors).
+  - [x] `bench/run-local-bench.mjs` + `bench/profile-run.mjs` + `bench/local-stt-bench.receipt.json`: measured through worker + session on multi-window paced fixtures (tiny 5.6 s/1 partial/1 final/87 chars, base 7.6 s/2 partials/1 final/26 chars, silence 0 finals, 0 errors, 4/4 children exit clean).
   - [x] `bench/l3-g-native.receipt.json` (§8.1 evidence: corrected integrity, pending items explicit).
   - [x] Lot gate: `make test-live-speech ENV=test-stt-l3` green (27/27 over 7 files, tsc clean).
 - [x] **Lot N-1 — Docs consolidation**
@@ -81,7 +82,7 @@ Deliver approved r3 L3: `live-speech/src/node/local-stt.ts` plus an isolated wor
   - [x] No `spec/BRANCH_SPEC_EVOL.md` in this branch; nothing to integrate or delete.
 - [ ] **Lot N — Final validation**
   - [x] Typecheck (via `test-live-speech` tsc --noEmit) & Lint (n/a: no lint lane for this package)
-  - [x] Retest package: 27/27 green on head
+  - [x] Retest package: 30/30 green on head (word-anchored dedupe, maxInflight bound, preload-before-ready)
   - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`. (New private package: CI skips bump check.)
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.

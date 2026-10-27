@@ -5,7 +5,7 @@ on:
     branches: [main]
   pull_request:
     # BR861-EX1 and BR-E2-EX1: integration topics qualify without publishing.
-    branches: [main, feat/immo-861-integration, feat/engram-e2-integration]
+    branches: [main, feat/immo-861-integration, feat/engram-e2-integration, feat/live-stt-l1c]
   workflow_dispatch:
     inputs:
       bootstrap_publish_target:
