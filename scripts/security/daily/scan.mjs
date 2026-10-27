@@ -44,6 +44,9 @@ function npmFindings(report, task, root, repository) {
   }
   return Object.values(entries).flatMap((entry) => {
     if (!Array.isArray(entry.nodes) || !entry.nodes.length) throw new Error('missing affected dependency paths');
+    const fix = entry.fixAvailable;
+    if (fix && typeof fix === 'object' && (typeof fix.name !== 'string' || !fix.name ||
+      !semver.valid(fix.version) || typeof fix.isSemVerMajor !== 'boolean')) throw new Error('invalid npm fix target');
     if (!advisories(entry).length) throw new Error('no reachable npm advisory');
     const resolved = entry.via.filter((via) => typeof via !== 'string' && via.name === entry.name);
     const dependencyContext = Object.values(entries).filter((carrier) => carrier.name !== entry.name &&
@@ -64,7 +67,8 @@ function npmFindings(report, task, root, repository) {
           component: entry.name, path: `${task.target}#${path}`, version,
           range: entry.range, advisoryRange: via.range, severity: npmSeverity(via.severity), dependencySeverity: npmSeverity(entry.severity),
           dependencyContext,
-          fixedTarget: typeof entry.fixAvailable === 'object' ? entry.fixAvailable.version : null };
+          fixedTarget: fix && typeof fix === 'object' ? `${fix.name}@${fix.version}` : null,
+          fixIsSemVerMajor: fix && typeof fix === 'object' ? fix.isSemVerMajor : null };
       });
     });
   });
