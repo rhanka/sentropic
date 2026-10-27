@@ -108,11 +108,16 @@ export function buildArecordArgs(deviceId: string, options: OpenDeviceOptions): 
   return ['-D', deviceId, '-f', 'S16_LE', '-r', String(options.sampleRateHz), '-c', '1', '-t', 'raw'];
 }
 
-/** Parse `arecord -l` capture-device lines. Pure: unit-tested without hardware. */
+/**
+ * Parse `arecord -l` capture-device lines in any locale. Pure: unit-tested
+ * without hardware. Both the English (`card … device …`) and French
+ * (`carte … périphérique …`) forms parse to the same canonical ids.
+ */
 export function parseArecordList(output: string): AudioDeviceInfo[] {
   const devices: AudioDeviceInfo[] = [];
+  const pattern = /^(?:card|carte)\s+(\d+)\s*:\s*(.+?),\s*(?:device|périphérique)\s+(\d+)\s*:\s*(.+)$/;
   for (const line of output.split('\n')) {
-    const match = /^card (\d+): (.+), device (\d+): (.+)$/.exec(line.trim());
+    const match = pattern.exec(line.trim());
     if (!match) continue;
     devices.push({
       id: `hw:${match[1]},${match[3]}`,

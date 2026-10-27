@@ -117,9 +117,8 @@ export class CaptureSession {
     };
   }
 
-  /** Stop the pump, close the device stream, reset control state. Idempotent. */
+  /** Stop the pump, close the device stream, reset mic/mute. The explicit micMode choice survives teardown. */
   async close(): Promise<void> {
-    this.micMode = 'key';
     this.micOn = false;
     this.muted = false;
     this.speaking = false;

@@ -164,6 +164,18 @@ describe('arecord backend', () => {
     expect(parseArecordList('no soundcards found...\n')).toEqual([]);
   });
 
+  it('should parse the French-locale `arecord -l` form to the same canonical ids', () => {
+    // Real host capture (fr_FR.UTF-8): locale words change, ids must not.
+    const output = [
+      '**** Liste des périphériques matériels CAPTURE ****',
+      'carte 1 : Generic_1 [HD-Audio Generic], périphérique 0 : ALC294 Analog [ALC294 Analog]',
+      '  Sous-périphériques : 1/1',
+    ].join('\n');
+    expect(parseArecordList(output)).toEqual([
+      { id: 'hw:1,0', name: 'Generic_1 [HD-Audio Generic], device 0: ALC294 Analog [ALC294 Analog]', backend: 'arecord' },
+    ]);
+  });
+
   it('should build an exact argv with no shell metacharacters', () => {
     expect(buildArecordArgs('hw:2,0', { sampleRateHz: 16000, channels: 1, frameMs: 20 })).toEqual([
       '-D',

@@ -138,7 +138,8 @@ describe('capture session bounds and loss', () => {
     // The loss was reported (not swallowed) and parked the session closed.
     expect(lost).toHaveLength(1);
     expect(capture.diagnostics().lost).toMatch(/unplugged/);
-    await capture.close();
+    // Reopen with NO close() in between: only the pump's own parking (null
+    // stream on loss) can make this open succeed — close() would mask it.
     await capture.open('fake-default');
     // Reopen consumed the second script: a new device stream was opened,
     // not the stale lost one reused.
@@ -214,7 +215,7 @@ describe('open-mic mode', () => {
     expect(capture.drain()).toEqual([]);
     expect(capture.levelDb).toBeGreaterThan(-45);
     await capture.close();
-    // Close resets the explicit choice: mic starts off in key mode again.
-    expect(capture.diagnostics()).toMatchObject({ micMode: 'key', open: false });
+    // Close keeps the explicit micMode choice (only mic/mute reset to safe).
+    expect(capture.diagnostics()).toMatchObject({ micMode: 'open-mic', micOn: false, open: false });
   });
 });
