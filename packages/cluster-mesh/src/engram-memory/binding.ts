@@ -7,6 +7,7 @@
 // refused until G1b wires the backend-backed resolver; this seam carries
 // authority only.
 
+import { randomUUID } from 'node:crypto';
 import { validateScopeGrant, type ScopeGrant } from '../storage/authority.js';
 import { StorageDeniedError } from '../storage/errors.js';
 import type { StorageScope } from '../storage/contracts.js';
@@ -163,11 +164,15 @@ export interface MemoryContinuation {
  */
 export const issueContinuationGrant = (
   ledger: MemoryHostLedger,
+  binding: MemoryHostBinding,
   candidateId: string,
   attestation: MemoryContinuationAttestation,
 ): MemoryContinuation => {
   const retained = ledger.read(candidateId);
   if (!retained) throw new StorageDeniedError('no retained authority for this candidate');
+  if (retained.state === 'terminal') {
+    throw new StorageDeniedError('completed candidates cannot continue');
+  }
   if (
     typeof attestation !== 'object' ||
     attestation === null ||
@@ -180,21 +185,28 @@ export const issueContinuationGrant = (
   ) {
     throw new StorageDeniedError('continuation requires fresh host authentication');
   }
+  if (attestation.hostPrincipal !== retained.hostPrincipal) {
+    throw new StorageDeniedError('continuation requires the original host principal');
+  }
+  if (binding.maintainGrant.principalId !== retained.hostPrincipal) {
+    throw new StorageDeniedError('continuation binding serves a different host principal');
+  }
   const updated = ledger.recordContinuation(candidateId, attestation.invocationId);
+  const grant: MemoryNeutralGrant = Object.freeze({
+    token: `memory-continuation-${randomUUID()}`,
+    moduleId: 'engram-memory',
+    scope: updated.scope,
+    principalId: attestation.hostPrincipal,
+    operations: MEMORY_HANDLE_OPERATIONS,
+    issuer: binding.maintainGrant.issuer,
+    authorityRevision: binding.maintainGrant.authorityRevision,
+    policyRevision: binding.maintainGrant.policyRevision,
+    moduleAuthority: null,
+    lifetime: Object.freeze({ kind: 'invocation', invocationId: attestation.invocationId }),
+  });
   return {
     candidateId: updated.candidateId,
     storeId: updated.storeId,
-    grant: Object.freeze({
-      token: `memory-continuation-${candidateId}-${attestation.invocationId}`,
-      moduleId: 'engram-memory',
-      scope: updated.scope,
-      principalId: attestation.hostPrincipal,
-      operations: Object.freeze([...MEMORY_HANDLE_OPERATIONS]),
-      issuer: 'host',
-      authorityRevision: '1',
-      policyRevision: '1',
-      moduleAuthority: null,
-      lifetime: Object.freeze({ kind: 'invocation', invocationId: attestation.invocationId }),
-    }),
+    grant,
   };
 };

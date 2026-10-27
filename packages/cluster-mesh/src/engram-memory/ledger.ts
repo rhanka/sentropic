@@ -16,6 +16,7 @@ export interface HostLedgerEntry {
   readonly storeId: string;
   readonly scope: StorageScope;
   readonly invocationId: string;
+  readonly hostPrincipal: string;
   readonly continuationIds: readonly string[];
   readonly envelopeDigest: string;
   readonly state: HostLedgerState;
@@ -79,6 +80,9 @@ const checkEntry = (entry: HostLedgerEntry): void => {
   if (typeof entry !== 'object' || entry === null) throw new StorageDeniedError('ledger entry must be an object');
   if (!nonEmpty(entry.candidateId) || !nonEmpty(entry.storeId) || !nonEmpty(entry.invocationId)) {
     throw new StorageDeniedError('ledger entry requires candidate, store and invocation identity');
+  }
+  if (!nonEmpty(entry.hostPrincipal)) {
+    throw new StorageDeniedError('ledger entry requires the host principal');
   }
   if (!validateStorageScope(entry.scope).ok) throw new StorageDeniedError('ledger entry requires a valid scope');
   if (!nonEmpty(entry.envelopeDigest)) throw new StorageDeniedError('ledger entry requires an envelope binding');
