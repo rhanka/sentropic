@@ -443,3 +443,29 @@ try {
     .catch(() => undefined);
   await pool.end();
 }
+
+const runtimeClosure = [...new Set(resolutions.filter((url) => url.startsWith('file://'))
+  .map((url) => url.slice(`file://${consumerRoot}/`.length)))].sort();
+const receipt = {
+  version: 1,
+  kind: 'engram-e10-installed-receipt',
+  head: process.env.INSTALLED_HEAD ?? null,
+  tree: process.env.INSTALLED_TREE ?? null,
+  consumer: { node: process.version, platform: process.platform, arch: process.arch,
+    root: 'clean-consumer-outside-repository', lockSha256: await sha256File(new URL('./package-lock.json', import.meta.url)) },
+  engram: { version: engramPkg.version, tarballSha256: engramSha256, integrity: await integrityOf(engramTgz) },
+  clusterMesh: { version: meshPkg.version, tarballSha256: meshSha256, integrity: await integrityOf(meshTgz) },
+  p3ManifestSha256: P3_MANIFEST_SHA256,
+  postgres: { serverVersion, image: process.env.INSTALLED_PG_IMAGE ?? null,
+    driver: provider.identity, statements, transactions },
+  migrations: registration.assets.map((asset) => ({ id: asset.id, checksum: asset.checksum })),
+  hostHistory: hostHistory.map((row) => row.id),
+  profiles: handle.profiles.map((claim) => ({ ...claim })),
+  requiredProfiles: [...MEMORY_DESCRIPTOR.requiredProfiles],
+  contractDigest: MEMORY_DESCRIPTOR.contractDigest,
+  refusals,
+  operations,
+  runtimeClosure,
+};
+await writeFile(receiptPath, `${JSON.stringify(receipt, null, 2)}\n`);
+console.log(JSON.stringify({ ok: true, receipt: receiptPath, operations, refusals }));
