@@ -7,6 +7,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
+import { createHash } from 'node:crypto';
 const require = createRequire('/tmp/artifact-probe/package.json');
 const { chromium } = require('playwright');
 const portable = process.env.PORTABLE || '.cache/artifact-weight/typical/dist/dossier-portable.html';
@@ -95,4 +96,7 @@ try {
     console.log(`PASS browser ${config.width} ${config.colorScheme}: ${folds} folds, choices, tables, downloads, offline.`);
     await context.close();
   }
-} finally { await browser.close(); fs.writeFileSync(`${output}/browser.json`, `${JSON.stringify({ results }, null, 2)}\n`); }
+} finally { await browser.close(); fs.writeFileSync(`${output}/browser.json`, `${JSON.stringify({
+  portableSha256: createHash('sha256').update(fs.readFileSync(portable)).digest('hex'),
+  dossierSha256: createHash('sha256').update(JSON.stringify(source)).digest('hex'), results,
+}, null, 2)}\n`); }
