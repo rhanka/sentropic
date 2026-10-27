@@ -79,7 +79,7 @@ describe('module registry', () => {
   });
 
   it('should refuse the next unqualified comments leaf minor before evaluation', async () => {
-    tree.install('app', { name: '@sentropic/cluster-mesh', version: '0.23.0', exports: {
+    tree.install('app', { name: '@sentropic/cluster-mesh', version: '0.24.0', exports: {
       './comments': { source: moduleSource('comments', ['createCommentsModule', 'createCommentsPostgresStorage']) },
     } });
     await expect(registry().load('comments')).rejects.toMatchObject({
@@ -114,7 +114,7 @@ describe('module registry', () => {
     const modules = registry();
     const failure = modules.load('llm-mesh/facade');
     await expect(failure).rejects.toThrow(
-      'Cluster Mesh module "llm-mesh/facade" is unavailable (not_installed). Install @sentropic/llm-mesh@"0.19.2 || >=0.22.0 <0.29.0" and restart.',
+      'Cluster Mesh module "llm-mesh/facade" is unavailable (not_installed). Install @sentropic/llm-mesh@"0.19.2 || >=0.22.0 <0.31.0" and restart.',
     );
     const error = await failure.catch((caught: unknown) => caught);
     expect(isClusterMeshModuleUnavailableError(error)).toBe(true);
@@ -134,7 +134,7 @@ describe('module registry', () => {
   });
 
   it.each([
-    ['0.29.0', '0.29.0'],
+    ['0.31.0', '0.31.0'],
     ['0.21.2', '0.21.2'],
     ['0.22.1-rc.1', '0.22.1-rc.1'],
   ])('should refuse llm-mesh %s as incompatible_version', async (version, installedVersion) => {
@@ -145,6 +145,10 @@ describe('module registry', () => {
     expect(evaluations()).toEqual([]);
   });
 
+  it('should admit the calibrated Decision mesh minor 0.30.0', async () => {
+    tree.install('app', fakeMesh('mesh', '0.30.0'));
+    await expect(registry().load('llm-mesh')).resolves.toBeDefined();
+  });
   it('should admit llm-mesh 0.26.0 inside the #662 union range', async () => {
     tree.install('app', fakeMesh('mesh', '0.26.0'));
     await expect(registry().load('llm-mesh')).resolves.toBeDefined();

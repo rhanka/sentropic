@@ -9,7 +9,16 @@ chown postgres:postgres "$PGDATA"
 su postgres -c 'initdb -D "$PGDATA" --auth=trust' >/tmp/init.log 2>&1
 printf "listen_addresses = ''\n" >> "$PGDATA/postgresql.conf"
 su postgres -c 'pg_ctl -D "$PGDATA" -l /tmp/postgres.log -o "-k /tmp" -w start' >/tmp/start.log 2>&1
-sql() { psql -XAtq -v ON_ERROR_STOP=1 "$@" > /tmp/sql.log 2>&1; }
+sql() { (
+  for arg do
+    if [ "$arg" = "$import" ]; then
+      . /workspace/deploy/k8s/overlays/preprod/idp-identity-sync/workload-credential.sh
+      prepare_workload_credential || { echo workload_credential_invalid >&2; exit 1; }
+    fi
+  done
+  unset IMMO_MCP_WORKLOAD_CLIENT_SECRET
+  psql -XAtq -v ON_ERROR_STOP=1 "$@"
+) > /tmp/sql.log 2>&1; }
 assert_sql() { sql -d preprod -c "$1"; }
 reject() {
   stage=$1; expected=$2; shift 2
@@ -65,7 +74,7 @@ IFS=, read -r snapshot users credentials consents clients < snapshot.csv
 echo 'PASS: read-only snapshot users=8 credentials=18'
 mkdir -p /sql
 cp "$map" /sql/client-map.csv
-for policy in host-map.csv client-policy.sql sync-clients.sql client-postcondition.sql service-policy.sql sync-services.sql; do
+for policy in workload-credential.sh host-map.csv client-policy.sql sync-clients.sql client-postcondition.sql service-policy.sql register-workload.sql sync-services.sql; do
   cp "/workspace/deploy/k8s/overlays/preprod/idp-identity-sync/$policy" "/sql/$policy"
 done
 pair='9f11d240-fc75-4d55-80be-1bafcd79eadb>1b9b9e15-2956-4df4-9ee1-a42273f0d096'
@@ -194,6 +203,9 @@ for code in empty_export sql_error; do
 done
 sha256sum users.csv webauthn.csv consents.csv clients.csv snapshot.csv > SHA256SUMS
 # Exercise safe classification and filtering without changing the import SQL.
+export IMMO_MCP_WORKLOAD_CLIENT_SECRET='synthetic-preprod-workload-credential-for-tests'
+reject_wrapper workload_credential_invalid
+unset IMMO_MCP_WORKLOAD_CLIENT_SECRET
 mkdir -p /tmp/mock-bin
 cat > /tmp/mock-bin/psql <<'MOCK'
 #!/bin/sh

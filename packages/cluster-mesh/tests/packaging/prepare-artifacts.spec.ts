@@ -52,15 +52,16 @@ const checkCandidateAlignment = (
 
 describe('isPackOnlyDevBump', () => {
   it.each([
-    ['0.23.0-dev.1', '0.22.4', '0.23.0', true],
-    ['0.23.0-dev.99', '0.22.4', '0.23.0', true],
-    ['0.22.1', '0.22.4', '0.23.0', false],
-    ['0.22.4', '0.22.4', '0.23.0', false],
-    ['0.24.0-dev.1', '0.22.4', '0.23.0', false],
-    ['0.23.0-dev.1', '0.22.4', '0.24.0', false],
-    ['0.23.0-dev.1', '0.22.1', '0.23.0', false],
-    ['0.23.0-dev.1', '0.23.0', '0.23.0', false],
-    ['0.23.0-rc.1', '0.22.4', '0.23.0', false],
+    ['0.24.0-dev.1', '0.22.4', '0.24.0', true],
+    ['0.24.0-dev.99', '0.22.4', '0.24.0', true],
+    ['0.22.1', '0.22.4', '0.24.0', false],
+    ['0.22.4', '0.22.4', '0.24.0', false],
+    ['0.25.0-dev.1', '0.22.4', '0.24.0', false],
+    ['0.23.0-dev.14', '0.22.4', '0.24.0', false],
+    ['0.24.0-dev.1', '0.22.4', '0.25.0', false],
+    ['0.24.0-dev.1', '0.22.1', '0.24.0', false],
+    ['0.24.0-dev.1', '0.24.0', '0.24.0', false],
+    ['0.24.0-rc.1', '0.22.4', '0.24.0', false],
   ])('isPackOnlyDevBump(%s, %s, %s) === %s', (workspaceVersion, publishedPin, reservedNext, expected) => {
     expect(isPackOnlyDevBump(workspaceVersion, publishedPin, reservedNext)).toBe(expected);
   });

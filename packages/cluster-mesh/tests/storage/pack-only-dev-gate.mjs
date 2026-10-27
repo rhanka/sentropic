@@ -1,13 +1,13 @@
 // Pack-only dev tolerance for the installed-comments bare probe.
 //
-// The E2 integration reserves `RESERVED_NEXT` (today `0.23.0`) for its release
+// The E2 integration reserves `RESERVED_NEXT` (today `0.24.0`) for its release
 // line: lot workspaces carry `<reservedNext>-dev.N` by plan while the frozen
 // packaging fixture keeps pinning the latest published release
 // (`LATEST_PUBLISHED_CLUSTER_MESH`, today `0.22.4`). This mirrors the contract
 // in tests/fixtures/reserved-versions.ts (#767), duplicated here because the
 // bare probe runs as plain node `.mjs`. Bump the two versions together here
 // and there.
-export const RESERVED_NEXT = '0.23.0';
+export const RESERVED_NEXT = '0.24.0';
 export const LATEST_PUBLISHED_CLUSTER_MESH = '0.22.4';
 export const PACK_ONLY_PACKAGE = '@sentropic/cluster-mesh';
 
