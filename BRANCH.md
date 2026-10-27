@@ -40,6 +40,7 @@
   - [ ] Update api/tests/api/cluster-mesh-catalog.test.ts and api/tests/unit/foundation-executor.test.ts.
 - [ ] Lot 2: frozen server-only context resolver and fresh product session/turn authority.
   - [x] Server inputs and allowlists frozen; provenance checked by identity; dispatch rechecks current grants and policy references.
+  - [x] Product resolver rechecks session/conversation ownership, authoritative tenant and active account/memberships; consumes W2 compiled names directly.
 - [ ] Lot 3: require context at every HTTP product port; filter before ranking and serialization.
   - [x] Context-view tests authored before filtering: interleaved users, ranking, source absence and read-only mutations.
   - [x] Synchronous request-local snapshots filter tools/skills before collision resolution, ranking and limiting; private sources absent globally.
