@@ -42,6 +42,7 @@
   - [x] Server inputs and allowlists frozen; provenance checked by identity; dispatch rechecks current grants and policy references.
 - [ ] Lot 3: require context at every HTTP product port; filter before ranking and serialization.
   - [x] Context-view tests authored before filtering: interleaved users, ranking, source absence and read-only mutations.
+  - [x] Synchronous request-local snapshots filter tools/skills before collision resolution, ranking and limiting; private sources absent globally.
 - [ ] Lot 4: pass turn context through model selection, search and execution; handled denials never fall through.
 - [ ] Lot 5: focused suites, API typecheck/lint, runtime logs and locked make down.
 - [ ] Lot 6: draft against feat/app-cm-integration with BRANCH.md body, publication-disabled CI and W4.b handoff.
