@@ -94,6 +94,10 @@ describe('speech settlement', () => {
     const { allocator, entries } = ledger.state;
     expect(reconcileSpeech(holds, [allocator, { ...allocator, receiptRef: 'allocator-duplicate', countedUnits: 0 }], entries)
       [0].issues).toEqual(['duplicate-allocator-receipt']);
+    expect(reconcileSpeech(holds, [allocator, { ...allocator, receiptRef: 'allocator-duplicate',
+      submitKey: 'different-submit', coordinatorEpoch: 2 }], entries)[0].issues).toEqual(['duplicate-allocator-receipt']);
+    expect(reconcileSpeech(holds, [allocator, { ...allocator, receiptRef: 'other-tenant', tenantId: 'other' }], entries)
+      [0].issues).toEqual([]);
     expect(reconcileSpeech(holds, [{ ...allocator, countedUnits: 0 }], entries)[0].issues).toEqual(['uncounted-admission']);
     expect(reconcileSpeech([], [allocator], entries)[0].issues).toEqual(['orphan-usage']);
     expect(reconcileSpeech(holds, [], entries)[0].issues).toEqual(['allocator-mismatch']);
