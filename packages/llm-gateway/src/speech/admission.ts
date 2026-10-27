@@ -7,7 +7,7 @@ export const SPEECH_DAILY_MICRO_USD = 5_000_000;
 export const SPEECH_CAMPAIGN_MICRO_USD = 20_000_000;
 export interface SpeechOperation {
   readonly operationId: string; readonly sessionId: string; readonly attemptId: string;
-  readonly backendOperationRef: string; readonly nativeTurnRef: string; readonly submitKey: string;
+  readonly backendOperationRef: string; readonly nativeTurnRef?: string; readonly submitKey: string;
   readonly coordinatorEpoch: number; readonly allocatorReceiptRef: string;
   readonly stage: 'stt' | 'tts' | 'duplex'; readonly cost: CostContext;
   readonly binding: SpeechBinding & { readonly accountRef: string; readonly region: string };
@@ -16,7 +16,7 @@ export interface SpeechOperation {
 }
 export interface SpeechAllocatorReceipt {
   readonly receiptRef: string; readonly tenantId: string; readonly workspaceId?: string; readonly principalId: string;
-  readonly targetSessionId: string; readonly nativeTurnRef: string; readonly submitKey: string;
+  readonly targetSessionId: string; readonly nativeTurnRef?: string; readonly submitKey: string;
   readonly coordinatorEpoch: number; readonly countedUnits: 0 | 1; readonly backendOperationRef: string;
 }
 export interface SpeechHold {
@@ -99,13 +99,14 @@ const validateOperation = (op: SpeechOperation): void => {
   if (nestedKeys.some(([value, allowed]) => !value || Object.keys(value).some(key => !allowed.includes(key)))) {
     throw new SpeechAccountingError('invalid');
   }
-  const strings = [op.operationId, op.sessionId, op.attemptId, op.backendOperationRef, op.nativeTurnRef,
+  const strings = [op.operationId, op.sessionId, op.attemptId, op.backendOperationRef,
     op.submitKey, op.allocatorReceiptRef, op.cost?.tenantId, op.cost?.principalId, op.cost?.source,
     op.cost?.correlationId, op.binding?.providerId, op.binding?.modelId, op.binding?.modelRevision,
     op.binding?.adapterId, op.binding?.adapterRevision, op.binding?.placement, op.binding?.accountRef,
     op.binding?.region, op.configuration?.profileId, op.configuration?.configRevision,
     op.configuration?.policyRef, op.target?.sessionId, op.target?.sourceGeneration, op.target?.consentRevision];
   if (strings.some(v => typeof v !== 'string' || !v) || !positive(op.coordinatorEpoch)
+    || (op.nativeTurnRef !== undefined && (typeof op.nativeTurnRef !== 'string' || !op.nativeTurnRef))
     || !positive(op.target.controllerEpoch) || !positive(op.maxDurationMs) || !positive(op.maxConcurrent)
     || !['stt', 'tts', 'duplex'].includes(op.stage)) throw new SpeechAccountingError('invalid');
   try { validateSpeechUsage(op.ceiling); } catch { throw new SpeechAccountingError('invalid'); }
