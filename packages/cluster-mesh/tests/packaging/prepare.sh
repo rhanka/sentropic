@@ -14,10 +14,10 @@ work="$1"
 if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" = activation ]; then
   mkdir -p "$work/tools" "$work/artifacts-consumer"
   npm view @sentropic/artifacts version
-  npm install --prefix "$work/tools" --no-audit --no-fund vitest@4.1.5 >/dev/null
+  npm install --prefix "$work/tools" --no-audit --no-fund vitest@4.1.5 typescript@5.9.3 @types/node@22 >/dev/null
   (cd ../artifacts && npm pack --silent --pack-destination "$work" >/dev/null)
   printf '{"type":"module","private":true}\n' > "$work/artifacts-consumer/package.json"
-  (cd "$work/artifacts-consumer" && npm install --no-audit --no-fund "$work"/sentropic-artifacts-*.tgz pg@8.22.0 >/dev/null)
+  (cd "$work/artifacts-consumer" && npm install --no-audit --no-fund "$work"/sentropic-artifacts-*.tgz pg@8.22.0 @types/pg@8.20.0 >/dev/null)
   exit 0
 fi
 here="$(pwd)/tests/packaging"
