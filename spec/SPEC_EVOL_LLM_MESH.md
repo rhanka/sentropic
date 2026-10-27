@@ -839,6 +839,19 @@ Normative detail lives in `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` §16.3/§
 
 Generic evaluation contracts, portable client execution, and trusted JEV hosting are established under `@sentropic/llm-mesh/decision`, `@sentropic/llm-mesh/decision/host`, and `@sentropic/llm-mesh/transport/jev` (pre-V4-L2 `judge` imports, §12 migration history).
 
+V4-L3 adds the separately registered `openai-decisions` backend through the existing host subpath and cluster
+Decision host loader. One mesh call emits one named native predicate/choice/score question to the fixed
+`https://api.openai.com/v1/decisions` endpoint. It never invokes Responses, Codex or a prompted fallback.
+The dated standard/no-cache tariff is $0.10/M input and no output charge, independently bound to the host's
+`control.model_pricing` protocol/revision. Explicit cache mode without breakpoints disables implicit caching;
+current GA documentation adds cache charges beyond the spec's earlier beta observation.
+Missing/duplicate/foreign answers, mismatched discriminators, typed-choice coercion, malformed usage and
+served identity mismatches refuse independently. A native refusal is a non-evaluation retaining valid usage.
+The JEV 1.13.0 discriminator correction preserves closed schemas and the pinned baseline.
+Both candidates remain unqualified; fixture conformance does not establish access, liability, identity or calibration.
+Dated source/qualification gaps live in [JEV](decision/jev-v4l3-candidate.md) and
+[OpenAI Decisions](decision/openai-v4l3-candidate.md) packets. OD-5 remains open; L4/L5/L6 remain separate lots.
+
 ### 1. Phase-Aware Retryability & Advisory Hints
 - **Literal lifecycle phases**: Errors record the exact lifecycle phase: `preflight`, `admission`, `dispatch`, or `settlement`.
 - **Retryability rules**: Failures in `settlement` or after provider result are strictly non-retryable (`retryable: false`). Unknown wire error codes or phases fail closed as non-retryable `MESH_UNAVAILABLE` or `TRANSPORT_FAILED`.
