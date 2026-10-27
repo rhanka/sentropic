@@ -75,6 +75,7 @@ export {
   type MemoryCommitIdentity,
   type MemoryReplayDecision,
 } from './replay-policy.js';
+export { createMemoryCommitResultRecovery, type MemoryCommitResultSource } from './commit-result-recovery.js';
 export {
   createMemoryPostgresRegistration,
   createMemoryPostgresStorage,

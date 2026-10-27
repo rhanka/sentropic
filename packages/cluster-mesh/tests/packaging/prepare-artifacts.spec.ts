@@ -2,8 +2,69 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { isPackOnlyDevBump, RESERVED_NEXT } from '../fixtures/reserved-versions.js';
 import { artifactsCompatible } from './helpers.js';
+
+type CandidatePackage = {
+  name: string;
+  version: string;
+  dependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+};
+
+// Frozen-pin extraction shared by the file-driven and synthetic checks: the
+// fixture must pin a stable release tarball, never a prerelease.
+const frozenBaseOf = (fixtureDependencies: Record<string, string>): string => {
+  const frozen = /^file:\.\.\/sentropic-cluster-mesh-(\d+\.\d+\.\d+)\.tgz$/.exec(
+    fixtureDependencies['@sentropic/cluster-mesh'],
+  );
+  expect(frozen, 'frozen fixture must pin a stable release tarball').not.toBeNull();
+  return frozen![1];
+};
+
+// Single-candidate alignment: the pack-only tolerance applies to the
+// cluster-mesh candidate only, and only for a `<reservedNext>-dev.N` workspace
+// version against the latest published pin; every other shape takes the strict
+// pin path (fixture spec and lock entry must equal the candidate version).
+const checkCandidateAlignment = (
+  candidate: CandidatePackage,
+  fixtureDependencies: Record<string, string>,
+  lockPackages: Record<string, { version?: string; dependencies?: unknown; peerDependencies?: unknown }>,
+): void => {
+  const entry = lockPackages[`node_modules/${candidate.name}`];
+  const frozenBase = frozenBaseOf(fixtureDependencies);
+  if (candidate.name === '@sentropic/cluster-mesh'
+    && isPackOnlyDevBump(candidate.version, frozenBase, RESERVED_NEXT)) {
+    // Pack-only topic bump: the frozen fixture keeps tracking the last release
+    // tuple instead of churning per dev version; the lock entry must match it.
+    expect(entry.version).toBe(frozenBase);
+  } else {
+    const spec = candidate.name === '@sentropic/cluster-mesh'
+      ? `file:../sentropic-cluster-mesh-${candidate.version}.tgz`
+      : candidate.version;
+    expect(fixtureDependencies[candidate.name]).toBe(spec);
+    expect(entry.version).toBe(candidate.version);
+  }
+  expect(entry.dependencies).toEqual(candidate.dependencies);
+  expect(entry.peerDependencies).toEqual(candidate.peerDependencies);
+};
+
+describe('isPackOnlyDevBump', () => {
+  it.each([
+    ['0.23.0-dev.1', '0.22.4', '0.23.0', true],
+    ['0.23.0-dev.99', '0.22.4', '0.23.0', true],
+    ['0.22.1', '0.22.4', '0.23.0', false],
+    ['0.22.4', '0.22.4', '0.23.0', false],
+    ['0.24.0-dev.1', '0.22.4', '0.23.0', false],
+    ['0.23.0-dev.1', '0.22.4', '0.24.0', false],
+    ['0.23.0-dev.1', '0.22.1', '0.23.0', false],
+    ['0.23.0-dev.1', '0.23.0', '0.23.0', false],
+    ['0.23.0-rc.1', '0.22.4', '0.23.0', false],
+  ])('isPackOnlyDevBump(%s, %s, %s) === %s', (workspaceVersion, publishedPin, reservedNext, expected) => {
+    expect(isPackOnlyDevBump(workspaceVersion, publishedPin, reservedNext)).toBe(expected);
+  });
+});
 
 it('should keep the frozen selected fixture aligned with the candidate release tuple', () => {
   const fixture = JSON.parse(readFileSync(new URL('./fixtures/selected/package.json', import.meta.url), 'utf8'));
@@ -11,13 +72,48 @@ it('should keep the frozen selected fixture aligned with the candidate release t
   expect(lock.packages[''].dependencies).toEqual(fixture.dependencies);
   for (const slug of ['cluster-mesh', 'llm-mesh', 'llm-gateway']) {
     const candidate = JSON.parse(readFileSync(new URL(`../../../${slug}/package.json`, import.meta.url), 'utf8'));
-    const spec = slug === 'cluster-mesh' ? `file:../sentropic-${slug}-${candidate.version}.tgz` : candidate.version;
-    expect(fixture.dependencies[candidate.name]).toBe(spec);
-    const entry = lock.packages[`node_modules/${candidate.name}`];
-    expect(entry.version).toBe(candidate.version);
-    expect(entry.dependencies).toEqual(candidate.dependencies);
-    expect(entry.peerDependencies).toEqual(candidate.peerDependencies);
+    checkCandidateAlignment(candidate, fixture.dependencies, lock.packages);
   }
+});
+
+describe('pack-only dev alignment', () => {
+  const files = () => ({
+    fixture: JSON.parse(readFileSync(new URL('./fixtures/selected/package.json', import.meta.url), 'utf8')),
+    lock: JSON.parse(readFileSync(new URL('./fixtures/selected/package-lock.json', import.meta.url), 'utf8')),
+    candidate: JSON.parse(readFileSync(new URL('../../../cluster-mesh/package.json', import.meta.url), 'utf8')),
+  });
+
+  it('should apply the frozen pin to a reserved-next dev candidate in CI', () => {
+    const { fixture, lock, candidate } = files();
+    expect(() => checkCandidateAlignment(
+      { ...candidate, version: `${RESERVED_NEXT}-dev.1` }, fixture.dependencies, lock.packages,
+    )).not.toThrow();
+  });
+
+  it('should keep the strict path for a stale pin under a reserved-next dev candidate', () => {
+    const { fixture, lock, candidate } = files();
+    const staleDependencies = {
+      ...fixture.dependencies,
+      '@sentropic/cluster-mesh': 'file:../sentropic-cluster-mesh-0.22.1.tgz',
+    };
+    const stalePackages = {
+      ...lock.packages,
+      'node_modules/@sentropic/cluster-mesh': {
+        ...lock.packages['node_modules/@sentropic/cluster-mesh'],
+        version: '0.22.1',
+      },
+    };
+    expect(() => checkCandidateAlignment(
+      { ...candidate, version: `${RESERVED_NEXT}-dev.1` }, staleDependencies, stalePackages,
+    )).toThrow();
+  });
+
+  it('should keep the strict path for a stable candidate that is not the pin', () => {
+    const { fixture, lock, candidate } = files();
+    expect(() => checkCandidateAlignment(
+      { ...candidate, version: '0.22.1' }, fixture.dependencies, lock.packages,
+    )).toThrow();
+  });
 });
 
 it('should install only compatible packed artifacts and exclude an incompatible optional tuple without registry access', () => {
