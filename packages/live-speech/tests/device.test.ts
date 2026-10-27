@@ -2,8 +2,12 @@
 // backend path, and the scripted fake device. Streaming (open/frames/loss)
 // lands with the frame pump.
 import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   ArecordDevice,
+  ARECORD_SHA256_PINS,
   buildArecordArgs,
   DeviceLostError,
   DeviceOpenError,
@@ -12,6 +16,24 @@ import {
 } from '../src/node/device.js';
 import { FakeDevice } from './fixtures/fake-device.js';
 import { silence, tone } from './helpers.js';
+
+const FAKE_ARECORD = fileURLToPath(new URL('./fixtures/fake-arecord.mjs', import.meta.url));
+const OPEN_OPTS = { sampleRateHz: 16000, channels: 1 as const, frameMs: 20 };
+
+function digestOf(path: string): string {
+  return createHash('sha256').update(readFileSync(path)).digest('hex');
+}
+
+async function withMode<T>(mode: string, run: () => Promise<T>): Promise<T> {
+  const prior = process.env.FAKE_ARECORD_MODE;
+  process.env.FAKE_ARECORD_MODE = mode;
+  try {
+    return await run();
+  } finally {
+    if (prior === undefined) delete process.env.FAKE_ARECORD_MODE;
+    else process.env.FAKE_ARECORD_MODE = prior;
+  }
+}
 
 describe('fake device', () => {
   it('should list the scripted input devices', async () => {
@@ -64,9 +86,62 @@ describe('arecord backend', () => {
   it('should fail closed with DeviceUnavailableError when the binary is missing', async () => {
     const device = new ArecordDevice('/nonexistent/arecord');
     await expect(device.listDevices()).rejects.toThrow(DeviceUnavailableError);
-    await expect(
-      device.open('hw:0,0', { sampleRateHz: 16000, channels: 1, frameMs: 20 }),
-    ).rejects.toThrow(DeviceUnavailableError);
+    await expect(device.open('hw:0,0', OPEN_OPTS)).rejects.toThrow(DeviceUnavailableError);
+  });
+
+  it('should refuse an unpinned binary with a digest mismatch before spawning', async () => {
+    // The node binary is executable but not a vetted helper: verification must
+    // refuse it even though it would spawn fine.
+    expect(ARECORD_SHA256_PINS).not.toContain(digestOf(process.execPath));
+    const device = new ArecordDevice(process.execPath);
+    await expect(device.open('hw:0,0', OPEN_OPTS)).rejects.toThrow(/digest mismatch/);
+  });
+
+  it('should honor the constructor allowlist for a measured binary', async () => {
+    // Same node binary, now allowlisted by its measured digest: verification
+    // passes and the failure moves to the spawn path (no arecord protocol).
+    const device = new ArecordDevice(process.execPath, [digestOf(process.execPath)]);
+    await expect(device.open('hw:0,0', OPEN_OPTS)).rejects.toThrow(/before first frame/);
+  });
+
+  it('should decode frames and surface a nonzero exit as device loss', async () => {
+    await withMode('frames-loss', async () => {
+      const device = new ArecordDevice(FAKE_ARECORD, [digestOf(FAKE_ARECORD)]);
+      const stream = await device.open('hw:9,9', OPEN_OPTS);
+      const frames: Float32Array[] = [];
+      await expect(
+        (async () => {
+          for await (const frame of stream.frames()) frames.push(frame);
+        })(),
+      ).rejects.toThrow(DeviceLostError);
+      // 4 emitted frames of 320 samples each, then exit 1.
+      expect(frames).toHaveLength(4);
+      expect(frames.every((frame) => frame.length === 320)).toBe(true);
+      expect(stream.closed).toBe(true);
+    });
+  });
+
+  it('should fail open before the first frame on an immediate exit', async () => {
+    await withMode('exit-early', async () => {
+      const device = new ArecordDevice(FAKE_ARECORD, [digestOf(FAKE_ARECORD)]);
+      await expect(device.open('hw:9,9', OPEN_OPTS)).rejects.toThrow(/no such device/);
+    });
+  });
+
+  it('should close a streaming child without hanging', async () => {
+    await withMode('infinite', async () => {
+      const device = new ArecordDevice(FAKE_ARECORD, [digestOf(FAKE_ARECORD)]);
+      const stream = await device.open('hw:9,9', OPEN_OPTS);
+      let count = 0;
+      for await (const frame of stream.frames()) {
+        void frame;
+        count += 1;
+        if (count === 2) break;
+      }
+      stream.close();
+      expect(stream.closed).toBe(true);
+      stream.close();
+    });
   });
 
   it('should parse `arecord -l` card/device lines without running anything', () => {
