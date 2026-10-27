@@ -81,7 +81,8 @@
 - [ ] Lot 3 real HTTP/MCP same-effect receipt.
 - [x] Lot 4 core: compiled exact-name dispatch and bounded APP-P1 HTTP adapter delegate to W1 host.
 - [x] Lot 4 singleton: one durable PG host with dedicated private S3, explicit quota and default-closed activation.
-- [ ] Lot 4 mount: verified credentials, existing MCP supervisor and resources author; no additional namespace.
+- [x] Lot 4 mount: verified credential tuples, shared MCP supervisor guard, resources author and /resources/artifacts/*; 28 namespaces retained.
+- [x] MCP transport is acquired through the cluster-mesh loader; Drive/Gmail ports and original URLs remain mounted.
 - [ ] Lot 5: focused tests, relevant regressions, API typecheck/lint/build.
   - [ ] api/tests/api/{app-mcp-registry,artifacts-host-publication,artifacts-host-recovery,artifacts-host-migrations,mcp-resource-server,cluster-mesh-mcp-singleton,cluster-mesh-namespace-inventory}.test.ts.
   - [ ] Resource/gateway/D1/auth suites selected from actual filenames.
