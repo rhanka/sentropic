@@ -45,8 +45,8 @@ E7 after E3/E5/E6: host-owned memory bindings in `src/engram-memory/{binding,pos
 ## Plan / Todo (lot-based)
 
 - [x] Lot E7-0 — setup: worktree `tmp/worktrees/mem-e7`, branch `feat/cluster-mesh-engram-e7`; merge E6 into E5 base (merge commit); this BRANCH.md; pack-only `0.23.0-dev.9`; draft PR to `feat/engram-e2-integration`.
-- [ ] Lot E7-1 — tests first: `postgres-driver-injection.spec.ts` (provider required, identity/floor checks, installed calls, no fallback); `host-maintenance-binding.spec.ts` (host-only ports, memory-handle denial, revoked/foreign maintain refusal); ledger/continuation/proof-only cases; extend binding-compatibility/errors + `pg-host.ts` fixture.
-- [ ] Lot E7-2 — implementation: `binding.ts` host assembly; PG driver/pool injection in `postgres.ts`; `host-maintenance.ts` ports (fence/checkpoint/poison/retry/resync/snapshot); durable ledger + continuation grant + proof-only recovery per E8 answers; no `maintain` escape through the neutral handle.
+- [x] Lot E7-1 — tests first: `postgres-driver-injection.spec.ts` (4 passed, 0 todo: provider required, identity/floor, positive installed calls, no-fallback with usable pool); `host-maintenance-binding.spec.ts` (12 passed, 7 todo: assembly, neutral-handle denial, fail-closed ports, ledger/continuation/proof-only); extended binding-compatibility (handle pinned) + `pg-host.ts` (`memoryHostComposed`). `binding-errors` (G1-sqlite-scoped) untouched: E7 typed failures live in the E7 specs, no duplication.
+- [x] Lot E7-2 — implementation: `binding.ts` assembly + continuation grants; PG provider check in `postgres.ts`; `host-maintenance.ts` fail-closed ports; `ledger.ts` (record/read/continuation/terminal/proof-only) per E8 answers; no `maintain` escape. Durable PG backing deferred to the conditional 002 asset (needs E2-writer coordination).
 - [ ] Lot E7-3 — gates: engram-memory lanes + PG storage lanes green on `ENV=test-e2-int`; typecheck green; lint green; scope-check; `make commit` per file group (<150 lines); push; draft PR; CI green; no merge.
 
 ## Feedback Loop
@@ -57,4 +57,5 @@ E7 after E3/E5/E6: host-owned memory bindings in `src/engram-memory/{binding,pos
 - Engram 0.21.1 DTOs frozen; memory files unchanged at 0.21.2, so the E8 answers hold.
 - E7 gate = engram-memory lanes + PG storage lanes green (E9 runs the five-profile acceptance later, not here).
 - AI CI job red-on-main is out of scope for this lot's gate.
-- Slices landed: PG provider check, host assembly, fail-closed maintenance ports, host-evidence ledger (`createMemoryHostLedger`: record/read/markTerminal, first-write wins, empty/unknown refuses); 8 real tests green, 11 todo. Continuation grant, proof-only recovery and PG positive-path composition remain.
+- Slices landed: PG provider check, host assembly, fail-closed maintenance ports, ledger + continuation + proof-only, positive host calls through the injected pool, neutral-handle denial; binding-compatibility pinned.
+- E7 receipts (ENV=test-e2-int, CM_PG_URL=postgresql://app:app@postgres:5432/app): `SCOPE=tests/engram-memory` 16 files 102 passed | 8 todo; `SCOPE=tests/storage` 78 files passed | 1 skipped, 502 passed | 4 skipped; typecheck/lint/scope-check exit 0 (PASS C2).
