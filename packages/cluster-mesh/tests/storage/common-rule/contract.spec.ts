@@ -11,7 +11,7 @@ import {
   validateCommonManifestBody,
   validateCommonPublicationCondition,
 } from '../../../src/storage/common-contract.js';
-import { COMMON_RULE_VECTORS, COMMON_RULE_VECTORS_BY_ID } from './vectors.js';
+import { COMMON_RULE_ABOVE_SAFE_TERMINAL_COUNT, COMMON_RULE_VECTORS, COMMON_RULE_VECTORS_BY_ID } from './vectors.js';
 
 const digestOf = (bytes: string): string => createHash('sha256').update(bytes, 'utf8').digest('hex');
 
@@ -74,6 +74,16 @@ describe('L01a common-rule vectors', () => {
     assert.equal(validateCommonManifestBody(wrongCount).ok, false);
     const incomplete = { ...parsed, terminal: { count: '1', complete: false } };
     assert.equal(validateCommonManifestBody(incomplete).ok, false);
+  });
+
+  it('should refuse an above-safe terminal count as a decimal counter', () => {
+    const v1 = COMMON_RULE_VECTORS_BY_ID['common-v1-transactional'];
+    const parsed = JSON.parse(v1.canonicalBytes) as Record<string, unknown>;
+    const aboveSafe = { ...parsed, terminal: { count: COMMON_RULE_ABOVE_SAFE_TERMINAL_COUNT, complete: true } };
+    assert.deepEqual(validateCommonManifestBody(aboveSafe), {
+      ok: false,
+      errors: ['terminal count must be a decimal counter'],
+    });
   });
 
   it('should refuse a malformed object digest', () => {
