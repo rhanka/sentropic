@@ -28,6 +28,11 @@
   - [x] `scripts/ci/publishable-ci-wiring.test.mjs`
   - [x] `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
   - [x] `api/tests/unit/gateway-package-version.test.ts`
+  - [x] `api/src/scripts/oauth-provision-exchange-client.ts` (BR93-EX4, unchanged main integration only)
+  - [x] `api/tests/api/auth/oauth-token-exchange.test.ts` (BR93-EX4, unchanged main integration only)
+  - [x] `deploy/ci/idp-identity-sync/**` (BR93-EX4, unchanged main integration only)
+  - [x] `deploy/k8s/README.md` (BR93-EX4, unchanged main integration only)
+  - [x] `deploy/k8s/overlays/preprod/idp-identity-sync/**` (BR93-EX4, unchanged main integration only)
 - [x] **Forbidden Paths (must not change in this branch)**:
   - [x] `Makefile`
   - [x] `docker-compose*.yml`
@@ -38,6 +43,7 @@
 - [x] **Exception process**: declare reason, impact and rollback below before changes.
 
 ## Feedback Loop
+- [x] BR93-EX4: owner-requested merge of origin/main at 55431a99c (#770), retaining L3 BRANCH.md on the sole conflict. Imported API/IdP files remain identical to main; no implementation edits. Rollback: revert the merge. Imported history exceeds the atomic author-change limit; this resolution adds six plan lines only.
 - [x] CI-LIVE — conductor decision B-lite (2026-10-26): open the draft PR with existing provider-backed CI under the owner's current budget. Added tests use fixtures and recorded answers only; no new live-call job or offline-CI profile is introduced.
 - [ ] REVIEW — attention: exact complementary reviewers not selected; no independent code-review consensus is claimed. Author handoff is ready for the conductor.
 - [x] P24 dated GA schema: require cache/reasoning objects; invalid usage counters remain non-billable pending reconciliation, while independently valid usage survives answer refusals.
