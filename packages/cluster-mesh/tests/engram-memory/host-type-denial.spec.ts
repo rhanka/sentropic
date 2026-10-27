@@ -55,7 +55,7 @@ describe('host type denial', () => {
     const rejected: MemoryMaintainGrant = combined;
     expect(rejected).toBe(combined);
     expect(() =>
-      assembleMemoryHostBinding({ driver: provider(), maintainGrant: combined, invocationId: 'inv-type-1' }),
+      assembleMemoryHostBinding({ driver: provider(), maintainGrant: combined, invocationId: 'inv-type-1', storeId: 'store-1' }),
     ).toThrow(StorageDeniedError);
   });
 
@@ -63,7 +63,7 @@ describe('host type denial', () => {
     const binding = assembleMemoryHostBinding({
       driver: provider(),
       maintainGrant: maintainOnly(),
-      invocationId: 'inv-type-1',
+      invocationId: 'inv-type-1', storeId: 'store-1',
     });
     // Exactly one intended error: the neutral grant where the maintain
     // grant belongs. The runner is well-typed, so nothing else can error.
@@ -82,7 +82,7 @@ describe('host type denial', () => {
     const binding = assembleMemoryHostBinding({
       driver: provider(),
       maintainGrant: maintainOnly(),
-      invocationId: 'inv-type-1',
+      invocationId: 'inv-type-1', storeId: 'store-1',
     });
     const neutral: readonly ['read', 'write'] = binding.memoryGrant.operations;
     expect([...neutral]).toEqual(['read', 'write']);
