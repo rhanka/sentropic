@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-// Fake aplay for playback tests (no speaker, no shell): verifies the WAV path
-// exists, then sleeps until SIGTERM (clean exit 0) to exercise fence cancel.
-// Mode via FAKE_APLAY_MODE:
-//   hang (default): sleep until SIGTERM, exit 0;
+// Fake aplay for playback tests (no speaker, no shell): reads the WAV from
+// stdin (proving the pipe carries exact bytes), then behaves per mode:
+//   ok (default): verify stdin, exit 0 (natural end);
+//   hang: hold stdin, sleep until SIGTERM, exit 0 (fence-cancel path);
 //   fail: exit 3 immediately (nonzero-exit path).
-// Pid goes to $FAKE_APLAY_PIDFILE when set, so the test can prove no orphan.
+// $FAKE_APLAY_PIDFILE receives the pid when set, so the test can prove no
+// orphan stays. $FAKE_APLAY_EXPECT_HEX asserts the exact piped bytes.
 import { readFileSync, writeFileSync } from 'node:fs';
-const mode = process.env.FAKE_APLAY_MODE ?? 'hang';
-const wavPath = process.argv[process.argv.length - 1];
+const mode = process.env.FAKE_APLAY_MODE ?? 'ok';
 const pidFile = process.env.FAKE_APLAY_PIDFILE;
 if (pidFile) writeFileSync(pidFile, `${process.pid}\n`);
 
@@ -15,11 +15,15 @@ if (mode === 'fail') {
   process.exit(3);
 }
 
+const input = readFileSync(0);
+const expectHex = process.env.FAKE_APLAY_EXPECT_HEX;
+if (expectHex !== undefined && input.toString('hex') !== expectHex) {
+  process.exit(4);
+}
+
 if (mode === 'hang') {
-  readFileSync(wavPath);
   process.on('SIGTERM', () => process.exit(0));
   setInterval(() => {}, 1000);
 } else {
-  readFileSync(wavPath);
   process.exit(0);
 }
