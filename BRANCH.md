@@ -51,7 +51,7 @@
 ## Plan / Todo (lot-based)
 - [ ] **W0 — Baseline receipt**
   - [x] Read project rules, approved analysis/review and Docker lock; verify branch mechanically.
-  - [ ] Pin harness r5 input/dependency hashes, renderer/toolchain and preserved before/slim/Focus output hashes in `docs/governance/kit/fixtures/artifact-weight/baseline.json`.
+  - [x] Pin harness r5 input/dependency hashes, renderer/toolchain and preserved before/slim/Focus output hashes in `docs/governance/kit/fixtures/artifact-weight/baseline.json`.
   - [ ] Preserve the representative two-diagram, two-question/six-option, 24-row/eight-gap fixture and its source provenance.
   - [ ] Rebuild the baseline and scoped fixture after the Docker reservation; explain differences from preserved outputs.
   - [ ] Record the read-before-publication contract, corrected source anchors and separate L1/host qualification limits in `docs/governance/kit/ARTIFACT_BUDGET.md`.
