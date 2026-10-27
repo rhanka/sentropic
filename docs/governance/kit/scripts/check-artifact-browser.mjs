@@ -92,7 +92,7 @@ try {
     assert((await page.locator('.local-selection').innerText()).startsWith('Aucune option choisie'));
     assert.deepEqual(network, []); assert.deepEqual(errors, []);
     results.push({ viewport: `${config.width}×${config.height}`, theme: config.colorScheme, offline: true, foldStates: folds, titleBand: true, questions: 2, options: 6, inventory: 24, gaps: 8, originalJsonDownload: true, touchPinch: !!config.hasTouch, selectionClearedOnReload: true, overflow: 0, errors, network });
-    console.log(`PASS navigateur ${config.width} ${config.colorScheme} : ${folds} replis, choix, tableaux, téléchargement, hors ligne.`);
+    console.log(`PASS browser ${config.width} ${config.colorScheme}: ${folds} folds, choices, tables, downloads, offline.`);
     await context.close();
   }
 } finally { await browser.close(); fs.writeFileSync(`${output}/browser.json`, `${JSON.stringify({ results }, null, 2)}\n`); }
