@@ -52,6 +52,13 @@ const IMMUTABLE_RESOURCE_AUTH_ROUTES = [
   ['POST', '/resources/edit'],
   ['POST', '/resources/invoke'],
 ] as const;
+const IMMUTABLE_ARTIFACT_ROUTES = [
+  ['POST', '/resources/artifacts/ensure'],
+  ['POST', '/resources/artifacts/publish'],
+  ['POST', '/resources/artifacts/list'],
+  ['GET', '/resources/artifacts/meta/:artifactId'],
+] as const;
+const IMMUTABLE_ARTIFACT_FENCE = [['ALL', '/resources/artifacts/*']] as const;
 const IMMUTABLE_ADMIN_AUTH_ROUTES = [
   ['POST', '/admin/reset'],
   ['GET', '/admin/stats'],
@@ -357,7 +364,11 @@ describe('mounted namespace fence completeness', () => {
       }
       if (namespace === '/resources') {
         const authorPaths = 'authorPaths' in registration ? registration.authorPaths : undefined;
-        const immutablePaths = IMMUTABLE_RESOURCE_AUTH_ROUTES.map(([, path]) => path);
+        const immutablePaths = [
+          ...IMMUTABLE_RESOURCE_AUTH_ROUTES.map(([, path]) => path),
+          ...IMMUTABLE_ARTIFACT_FENCE.map(([, path]) => path),
+          ...IMMUTABLE_ARTIFACT_ROUTES.map(([, path]) => path),
+        ];
         expect(authPaths).toEqual(immutablePaths);
         expect(authorPaths).toEqual(immutablePaths);
         expect(authPaths).not.toContain('/*');
@@ -367,6 +378,13 @@ describe('mounted namespace fence completeness', () => {
         assertImmutableMethodRequirement(
           namespace, router, authorPaths ?? [], resourcesAuthorFence,
           IMMUTABLE_RESOURCE_AUTH_ROUTES, 'author',
+        );
+        assertImmutableRouteRequirement(namespace, router, authPaths ?? [], IMMUTABLE_ARTIFACT_ROUTES);
+        assertImmutableMethodRequirement(
+          namespace, router, authPaths ?? [], requireAuth, IMMUTABLE_ARTIFACT_FENCE,
+        );
+        assertImmutableMethodRequirement(
+          namespace, router, authorPaths ?? [], resourcesAuthorFence, IMMUTABLE_ARTIFACT_FENCE, 'author',
         );
       }
       if (namespace === '/admin') {
@@ -634,6 +652,20 @@ describe('mounted namespace fence completeness', () => {
 
     expect(() => assertFenceComplete('/resources', router, registration.authPaths!))
       .toThrowError('/resources mounted namespace fence is missing registered paths');
+  });
+
+  it.each([
+    ['auth', requireAuth], ['author', resourcesAuthorFence],
+  ] as const)('fails when the artifact prefix loses its %s guard', (fenceName, handler) => {
+    const registration = ROOT_MOUNTED_NAMESPACE_REGISTRY.find(
+      ({ namespace }) => namespace === '/resources',
+    )!;
+    const mutation = { routes: registration.module.createRouter().routes.filter(
+      route => route.path !== '/resources/artifacts/*' || route.handler !== handler,
+    ) };
+    expect(() => assertImmutableMethodRequirement(
+      '/resources', mutation, registration.authPaths!, handler, IMMUTABLE_ARTIFACT_FENCE, fenceName,
+    )).toThrowError(`/resources immutable ${fenceName} requirement is missing method wiring`);
   });
 
   it('fails when resources routes and mutable auth/author fences shrink together', () => {
