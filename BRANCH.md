@@ -8,6 +8,7 @@
 - [x] Base `origin/main`; branch `feat/artifacts-up-t2`; worktree `tmp/worktrees/artifacts-up-t2`; merge only.
 - [x] Make-only Docker tests under the shared lock; `ENV=test-artifacts-upt2` last; no Python.
 - [x] No publication or merge; push and open a draft PR to main.
+- [x] Publication boundary: merging to main publishes 0.2.4 through CI; W1.c (#794) must then move its exact pin from 0.2.3 to 0.2.4; SQL hash/receipts stay unchanged.
 - [x] Ports: API 8799, UI 5185, Maildev 1092; qualification PostgreSQL has no host port.
 - [x] Atomic commits below 150 changed lines, selective staging, `make commit`, no attribution trailers.
 
@@ -62,7 +63,8 @@
   - [x] GREEN: all 14 vectors pass on clean-installed 0.2.4 with real PostgreSQL; broken-executor witness rejects (`/tmp/artifacts-upt2-green.log`).
   - [x] Registry `npm view` returned 0.2.3 before bumping to 0.2.4; document exact import and host fixture contract.
 - [ ] **Lot 3 — Docs consolidation & validation**
-  - [x] Packed consumer: 6/6 tests pass; 14 vectors on each of pool max 1 and 4, broken-executor refusal, NodeNext/Bundler types with skipLibCheck false/true (`/tmp/artifacts-upt2-consumer-verified.log`).
+  - [x] Packed consumer after Opus r1: 9/9 tests pass, zero skipped; 16 vectors on each of pool max 1 and 4, broken-executor/disposable-host refusal, missing-wiring failures, NodeNext/Bundler types with skipLibCheck false/true.
+  - [x] Document mandatory additive hooks, isolated-process clock skew and disposable database guard; package build and JSON execution receipt gate pass on review rerun.
   - [x] Package unit tests: 451/451 (37 files); lint passes; strict package build passed during packed-consumer qualification (`/tmp/artifacts-upt2-unit-lint.log`).
   - [x] Wire packed-vector qualification into artifacts CI under BR861-EX3.
   - [x] Run scope check before each commit; author diff inspection complete; external review tracked as REV-1.
