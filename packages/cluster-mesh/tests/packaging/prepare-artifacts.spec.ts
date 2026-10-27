@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { isPackOnlyDevBump, RESERVED_NEXT } from '../fixtures/reserved-versions.js';
+import { isPackOnlyDevBump, LATEST_PUBLISHED_CLUSTER_MESH, RESERVED_NEXT } from '../fixtures/reserved-versions.js';
 import { artifactsCompatible } from './helpers.js';
 
 type CandidatePackage = {
@@ -33,16 +33,17 @@ const checkCandidateAlignment = (
   lockPackages: Record<string, { version?: string; dependencies?: unknown; peerDependencies?: unknown }>,
 ): void => {
   const entry = lockPackages[`node_modules/${candidate.name}`];
-  const frozenBase = frozenBaseOf(fixtureDependencies);
+  const spec = candidate.name === '@sentropic/cluster-mesh'
+    ? `file:../sentropic-cluster-mesh-${candidate.version}.tgz`
+    : candidate.version;
   if (candidate.name === '@sentropic/cluster-mesh'
-    && isPackOnlyDevBump(candidate.version, frozenBase, RESERVED_NEXT)) {
+    && fixtureDependencies[candidate.name] !== spec) {
+    const frozenBase = frozenBaseOf(fixtureDependencies);
     // Pack-only topic bump: the frozen fixture keeps tracking the last release
     // tuple instead of churning per dev version; the lock entry must match it.
+    expect(isPackOnlyDevBump(candidate.version, frozenBase, RESERVED_NEXT)).toBe(true);
     expect(entry.version).toBe(frozenBase);
   } else {
-    const spec = candidate.name === '@sentropic/cluster-mesh'
-      ? `file:../sentropic-cluster-mesh-${candidate.version}.tgz`
-      : candidate.version;
     expect(fixtureDependencies[candidate.name]).toBe(spec);
     expect(entry.version).toBe(candidate.version);
   }
@@ -67,7 +68,7 @@ describe('isPackOnlyDevBump', () => {
   });
 });
 
-it('should keep the frozen selected fixture aligned with the candidate release tuple', () => {
+it('should keep the selected fixture aligned with the candidate release tuple', () => {
   const fixture = JSON.parse(readFileSync(new URL('./fixtures/selected/package.json', import.meta.url), 'utf8'));
   const lock = JSON.parse(readFileSync(new URL('./fixtures/selected/package-lock.json', import.meta.url), 'utf8'));
   expect(lock.packages[''].dependencies).toEqual(fixture.dependencies);
@@ -86,8 +87,19 @@ describe('pack-only dev alignment', () => {
 
   it('should apply the frozen pin to a reserved-next dev candidate in CI', () => {
     const { fixture, lock, candidate } = files();
+    const frozenDependencies = {
+      ...fixture.dependencies,
+      '@sentropic/cluster-mesh': `file:../sentropic-cluster-mesh-${LATEST_PUBLISHED_CLUSTER_MESH}.tgz`,
+    };
+    const frozenPackages = {
+      ...lock.packages,
+      'node_modules/@sentropic/cluster-mesh': {
+        ...lock.packages['node_modules/@sentropic/cluster-mesh'],
+        version: LATEST_PUBLISHED_CLUSTER_MESH,
+      },
+    };
     expect(() => checkCandidateAlignment(
-      { ...candidate, version: `${RESERVED_NEXT}-dev.1` }, fixture.dependencies, lock.packages,
+      { ...candidate, version: `${RESERVED_NEXT}-dev.1` }, frozenDependencies, frozenPackages,
     )).not.toThrow();
   });
 

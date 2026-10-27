@@ -20,13 +20,32 @@
   - `tools/memory-mcp-l5/**` (inherited memory integration)
   - `spec/evidence/memory-mcp-l5/**` (inherited memory integration)
   - `Makefile` (BR024-EX1)
+  - `.github/workflows/ci.yml` (inherited main only)
+  - `.github/workflows/idp-workload-secret.yml` (inherited main only)
+  - `.security/security-fix.json` (inherited main only)
+  - `.tmp/live-stt/**` (inherited main only)
+  - `api/src/scripts/oauth-provision-exchange-client.ts` (inherited main only)
+  - `api/tests/api/auth/oauth-token-exchange.test.ts` (inherited main only)
+  - `api/tests/unit/gateway-package-version.test.ts` (inherited main only)
+  - `deploy/ci/idp-identity-sync/**` (inherited main only)
+  - `deploy/k8s/**` (inherited main only)
+  - `docs/runbooks/app-cm-baseline-restore.md` (inherited main only)
+  - `packages/artifacts/**` (inherited main only)
+  - `packages/llm-gateway/package.json` (inherited main only)
+  - `packages/llm-mesh/**` (inherited main only)
+  - `plan/71-BRANCH_chore-ci-capacity-policy.md` (inherited main only)
+  - `scripts/ci/**` (inherited main only)
+  - `scripts/security/daily/**` (inherited main only)
+  - `scripts/test-pgbackup-restore-isolation.sh` (inherited main only)
+  - `spec/SPEC_EVOL_LLM_MESH.md` (inherited main only)
+  - `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md` (inherited main only)
+  - `spec/ci-cd-ten-minutes/capacity.md` (inherited main only)
+  - `spec/decision/**` (inherited main only)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
-  - `api/**`
   - `ui/**`
-  - `.github/workflows/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - [x] Already committed origin/main changes are inherited; check authored merge resolution against that parent.
 - **Exception process**:
@@ -37,7 +56,7 @@
   - [x] Resume merge; union selectors; retain this branch plan with Inherited line.
   - [x] Set candidate, train constant and selected fixtures to 0.24.0-dev.1; move both reserved-next gates and vectors to 0.24.0, retaining old-line rejection.
   - [x] Registry ordering verified against latest 0.23.1 and main 0.23.2; root lock regenerated under flock, aligning inherited artifacts 0.2.4 workspace metadata; all 370 Track events retained from both parents; authored scope C2 passes against origin/main.
-  - [ ] Commit merge after final resolution checks.
+  - [x] Merge committed as b3933c86cbdfd2f0fb46172a2b0d685e6e94aa81 with both original parents and no attribution trailers.
 - [ ] **Lot 2 — Qualification**
   - [ ] Run reserved-next/packaging tests and memory qualification: mechanical, wiring, build, typecheck, lint, memory, common, grants, postgres; cleanup each step.
   - [ ] Preserve 23 blocked E9 Stage B cases; no five-profile acceptance claim.
@@ -48,6 +67,8 @@
 ## Feedback Loop
 - [x] Conductor authorizes the blocked selector and version resolutions; no new content decision requested.
 - [x] Mechanical integration of approved lots and explicit conductor resolutions; no new delegated implementation or consensus verdict claimed.
+- [x] CI compares scope against the integration PR base, so the allowed-path list explicitly includes inherited main paths; no authored edits are permitted there. Check both parent comparisons mechanically.
+- [x] Package regression reproduced: 1340 tests passed, two prepare-artifacts assertions rejected the owner-required selected dev tarball. Keep exact candidate/lock equality on the strict path; exercise stable-pin tolerance with an explicit stable synthetic fixture. No production gate changed. Rerun package suite; receipts retain the initial failure.
 
 ## AI Flaky tests
 - [ ] Retry failed AI/e2e jobs once only when green on main; retain evidence.
