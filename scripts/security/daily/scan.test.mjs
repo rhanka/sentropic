@@ -228,3 +228,32 @@ test('should preserve independent lock layout and local linked package metadata 
   });
   assert.match(run(plan.tasks.find((task) => task.target === 'apps/idp/web/package-lock.json')).scannerIdentity, /^npm:/);
 });
+
+test('should attribute langium/mermaid chain advisories only to affected package versions', async (t) => {
+  const root = fixture(t);
+  const raw = clean();
+  const packages = { '': { name: 'fixture', version: '1.0.0' } };
+  const entries = [
+    ['mermaid', '11.12.0', 'moderate', ['langium']],
+    ['langium', '3.3.1', 'moderate', ['chevrotain']],
+    ['chevrotain', '11.0.3', 'moderate', ['lodash-es']],
+    ['lodash-es', '4.17.21', 'high', [{ name: 'lodash-es', severity: 'high', range: '>=4.0.0 <=4.17.23',
+      url: 'https://github.com/advisories/GHSA-r5fr-rjxr-66jc' }]],
+  ];
+  for (const [name, version, severity, via] of entries) {
+    packages[`node_modules/${name}`] = { version };
+    raw.vulnerabilities[name] = { name, severity, via, range: '*', nodes: [`node_modules/${name}`] };
+  }
+  packages['node_modules/other/node_modules/lodash-es'] = { version: '4.17.24' };
+  raw.vulnerabilities['lodash-es'].nodes.push('node_modules/other/node_modules/lodash-es');
+  raw.metadata.vulnerabilities = { info: 0, low: 0, moderate: 3, high: 1, critical: 0, total: 4 };
+  writeFileSync(join(root, 'package-lock.json'), JSON.stringify({ lockfileVersion: 3, packages }));
+  const report = await scanRepository(options(root, { run: (task) => task.target === 'package-lock.json'
+    ? { status: 1, stdout: JSON.stringify(raw), scannerIdentity: 'npm:fixture', databaseIdentity: 'fixture-db' } : runner(task) }));
+  assert.deepEqual(report.findings.map(({ component, version, severity, dependencySeverity }) =>
+    ({ component, version, severity, dependencySeverity })),
+  [{ component: 'lodash-es', version: '4.17.21', severity: 'HIGH', dependencySeverity: 'HIGH' }]);
+  const langium = report.findings[0].dependencyContext.find((item) => item.component === 'langium');
+  assert.equal(langium.severity, 'MEDIUM');
+  assert.deepEqual(langium.via, ['chevrotain']);
+});
