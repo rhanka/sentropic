@@ -3,7 +3,7 @@ import { createHash } from 'node:crypto';
 import { spawnSync } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { failClosedReport, inventoryRepository, normalizeRegister, summarizeBacklog } from './inventory.mjs';
@@ -13,6 +13,7 @@ const hash = (bytes) => `sha256:${createHash('sha256').update(bytes).digest('hex
 const npmArgs = ['audit', '--json', '--package-lock-only', '--ignore-scripts',
   '--include=dev', '--include=optional', '--include=peer', '--audit-level=high'];
 const trivyArgs = ['--format', 'json', '--severity', 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL', '--exit-code', '0'];
+const npmSeverity = (value) => ({ info: 'UNKNOWN', moderate: 'MEDIUM' }[value] || value.toUpperCase());
 
 export function planScan(root, contract) {
   const inventory = inventoryRepository(root, contract);
@@ -33,7 +34,7 @@ function npmFindings(report, task, root, repository) {
   if (![2, 3].includes(lock.lockfileVersion) || !lock.packages) throw new Error('unsupported lock format');
   const entries = report.vulnerabilities;
   function advisories(entry, seen = new Set()) {
-    if (seen.has(entry.name)) throw new Error('cyclic npm advisory chain');
+    if (seen.has(entry.name)) return [];
     return entry.via.flatMap((via) => {
       if (typeof via !== 'string') return [via];
       if (!entries[via]) throw new Error('missing indirect npm advisory');
@@ -42,15 +43,17 @@ function npmFindings(report, task, root, repository) {
   }
   return Object.values(entries).flatMap((entry) => {
     if (!Array.isArray(entry.nodes) || !entry.nodes.length) throw new Error('missing affected dependency paths');
+    const resolved = [...new Map(advisories(entry).map((via) => [via.url || via.source, via])).values()];
+    if (!resolved.length) throw new Error('no reachable npm advisory');
     return entry.nodes.flatMap((path) => {
       const version = lock.packages[path]?.version;
       if (typeof version !== 'string' || !version) throw new Error('missing installed version');
-      return advisories(entry).map((via) => {
+      return resolved.map((via) => {
         const aliases = [...new Set((via.url || '').match(/CVE-\d{4}-\d+|GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}/gi) || [])];
         if (!aliases.length && !Number.isInteger(via.source)) throw new Error('missing advisory identity');
         return { repository, scanner: 'npm', id: aliases[0] || `npm:${via.source}`, aliases,
           component: entry.name, path: `${task.target}#${path}`, version,
-          range: entry.range, advisoryRange: via.range, severity: { info: 'UNKNOWN', moderate: 'MEDIUM' }[entry.severity] || entry.severity.toUpperCase(),
+          range: entry.range, advisoryRange: via.range, severity: npmSeverity(via.severity), dependencySeverity: npmSeverity(entry.severity),
           fixedTarget: typeof entry.fixAvailable === 'object' ? entry.fixAvailable.version : null };
       });
     });
@@ -122,14 +125,25 @@ export function npmRunner(root, inventory, execute = spawnSync) {
         npm_config_cache: join(scratch, 'cache'), npm_config_userconfig: '/dev/null',
         npm_config_globalconfig: join(scratch, 'global.npmrc'), npm_config_registry: 'https://registry.npmjs.org/',
         npm_config_ignore_scripts: 'true', npm_config_update_notifier: 'false' };
-      const opts = { cwd: scratch, env, encoding: 'utf8', timeout: 120000, maxBuffer: 16 * 1024 * 1024, shell: false };
-      copyFileSync(join(root, task.target), join(scratch, 'package-lock.json'));
-      copyFileSync(join(root, task.manifest), join(scratch, 'package.json'));
-      const manifest = JSON.parse(readFileSync(join(scratch, 'package.json'), 'utf8'));
+      const metadataRoot = join(scratch, 'repository');
+      const cwd = join(metadataRoot, dirname(task.target));
+      mkdirSync(cwd, { recursive: true });
+      const opts = { cwd, env, encoding: 'utf8', timeout: 120000, maxBuffer: 16 * 1024 * 1024, shell: false };
+      copyFileSync(join(root, task.target), join(cwd, 'package-lock.json'));
+      copyFileSync(join(root, task.manifest), join(cwd, 'package.json'));
+      const manifest = JSON.parse(readFileSync(join(cwd, 'package.json'), 'utf8'));
+      const lock = JSON.parse(readFileSync(join(cwd, 'package-lock.json'), 'utf8'));
+      for (const entry of Object.values(lock.packages || {}).filter((entry) => entry.link)) {
+        if (typeof entry.resolved !== 'string') throw new Error('missing local link target');
+        const path = relative(resolve(root), resolve(root, dirname(task.target), entry.resolved));
+        if (path.startsWith('..') || isAbsolute(path)) throw new Error('local link escapes repository');
+        mkdirSync(join(metadataRoot, path), { recursive: true });
+        copyFileSync(join(root, path, 'package.json'), join(metadataRoot, path, 'package.json'));
+      }
       if (manifest.workspaces) {
         for (const item of inventory.manifests.filter((item) => item.workspace && item.path !== 'package.json')) {
-          mkdirSync(join(scratch, dirname(item.path)), { recursive: true });
-          copyFileSync(join(root, item.path), join(scratch, item.path));
+          mkdirSync(join(metadataRoot, dirname(item.path)), { recursive: true });
+          copyFileSync(join(root, item.path), join(metadataRoot, item.path));
         }
       }
       const version = execute('npm', ['--version'], opts);

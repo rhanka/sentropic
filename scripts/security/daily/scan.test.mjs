@@ -125,7 +125,7 @@ test('should run bounded credential-free audits on isolated metadata, including 
       'npm_config_globalconfig', 'npm_config_ignore_scripts', 'npm_config_registry',
       'npm_config_update_notifier', 'npm_config_userconfig'].sort());
     assert.equal(opts.env.npm_config_userconfig, '/dev/null');
-    assert.equal(opts.env.npm_config_globalconfig, join(opts.cwd, 'global.npmrc'));
+    assert.equal(opts.env.npm_config_globalconfig, join(opts.env.HOME, 'global.npmrc'));
     assert.equal(readFileSync(join(opts.cwd, 'packages/child/package.json'), 'utf8'), '{"name":"child","version":"1.0.0"}');
     assert.throws(() => readFileSync(join(opts.cwd, '.npmrc')));
     return { status: 0, stdout: args[0] === '--version' ? '11.19.0\n' : JSON.stringify(clean()) };
@@ -190,4 +190,41 @@ test('should resolve the real npm binary with the isolated scanner configuration
     return result;
   });
   assert.match(run(plan.tasks.find((task) => task.target === 'package-lock.json')).scannerIdentity, /^npm:\d/);
+});
+
+test('should resolve cyclic npm references to their advisories and retain each advisory severity', async (t) => {
+  const root = fixture(t);
+  const raw = clean();
+  raw.vulnerabilities.demo = { name: 'demo', severity: 'critical', range: '<2', nodes: ['node_modules/demo'],
+    via: ['demo', ...['info', 'low', 'moderate', 'high', 'critical'].map((severity, source) => ({
+      name: 'demo', severity, range: '<2', source,
+    }))] };
+  raw.metadata.vulnerabilities.critical = raw.metadata.vulnerabilities.total = 1;
+  const report = await scanRepository(options(root, { run: (task) => task.target === 'package-lock.json'
+    ? { status: 1, stdout: JSON.stringify(raw), scannerIdentity: 'npm:fixture', databaseIdentity: 'fixture-db' } : runner(task) }));
+  assert.deepEqual(report.findings.map((finding) => finding.severity), ['UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
+  raw.vulnerabilities.demo.via = ['demo'];
+  const unresolved = await scanRepository(options(root, { run: () => ({ status: 1, stdout: JSON.stringify(raw),
+    scannerIdentity: 'npm:fixture', databaseIdentity: 'fixture-db' }) }));
+  assert.equal(unresolved.surfaces.find((surface) => surface.target === 'package-lock.json').state, 'error');
+});
+
+test('should preserve independent lock layout and local linked package metadata inside scratch', (t) => {
+  const root = fixture(t);
+  mkdirSync(join(root, 'apps/idp/web'), { recursive: true });
+  mkdirSync(join(root, 'packages/child'), { recursive: true });
+  writeFileSync(join(root, 'packages/child/package.json'), '{"name":"child","version":"1.0.0"}');
+  writeFileSync(join(root, 'apps/idp/web/package.json'), '{"name":"web","dependencies":{"child":"file:../../../packages/child"}}');
+  const bytes = JSON.stringify({ lockfileVersion: 3, packages: {
+    'node_modules/child': { resolved: '../../../packages/child', link: true },
+    '../../../packages/child': { name: 'child', version: '1.0.0' },
+  } });
+  writeFileSync(join(root, 'apps/idp/web/package-lock.json'), bytes);
+  const plan = planScan(root, loadContract());
+  const run = npmRunner(root, plan.inventory, (binary, args, opts) => {
+    assert.equal(readFileSync(join(opts.cwd, '../../../packages/child/package.json'), 'utf8'), '{"name":"child","version":"1.0.0"}');
+    assert.equal(readFileSync(join(opts.cwd, 'package-lock.json'), 'utf8'), bytes);
+    return { status: 0, stdout: args[0] === '--version' ? '11.19.0\n' : JSON.stringify(clean()) };
+  });
+  assert.match(run(plan.tasks.find((task) => task.target === 'apps/idp/web/package-lock.json')).scannerIdentity, /^npm:/);
 });
