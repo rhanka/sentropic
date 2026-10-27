@@ -1187,6 +1187,11 @@ jobs:
         run: make test-artifacts
       - name: Test Artifacts integration
         run: make test-artifacts-integration ENV=test-ci-artifacts
+      - name: Test installed activation conformance vectors
+        run: make -f packages/cluster-mesh/packaging.mk test-lazy-package-activation ENV=test-ci-artifacts-activation
+      - name: Remove activation qualification stack
+        if: always()
+        run: make down ENV=test-ci-artifacts-activation
       - name: Lint Artifacts
         run: make lint-artifacts
       - name: Pack Artifacts
