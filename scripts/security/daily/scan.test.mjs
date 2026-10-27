@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
+import { spawnSync } from 'node:child_process';
 import { npmRunner, planScan, scanRepository } from './scan.mjs';
 import { loadContract } from './schema.mjs';
 
@@ -124,6 +125,7 @@ test('should run bounded credential-free audits on isolated metadata, including 
       'npm_config_globalconfig', 'npm_config_ignore_scripts', 'npm_config_registry',
       'npm_config_update_notifier', 'npm_config_userconfig'].sort());
     assert.equal(opts.env.npm_config_userconfig, '/dev/null');
+    assert.equal(opts.env.npm_config_globalconfig, join(opts.cwd, 'global.npmrc'));
     assert.equal(readFileSync(join(opts.cwd, 'packages/child/package.json'), 'utf8'), '{"name":"child","version":"1.0.0"}');
     assert.throws(() => readFileSync(join(opts.cwd, '.npmrc')));
     return { status: 0, stdout: args[0] === '--version' ? '11.19.0\n' : JSON.stringify(clean()) };
@@ -176,4 +178,16 @@ test('should wire removable pinned Make targets without existing gate, socket or
   assert.match(tests, /test-publishable-manifests/);
   assert.match(tests, /scan.test.mjs/);
   assert.match(tests, /ENV=\$\(ENV\)\s*$/);
+});
+
+test('should resolve the real npm binary with the isolated scanner configuration', (t) => {
+  const root = fixture(t);
+  const plan = planScan(root, loadContract());
+  const run = npmRunner(root, plan.inventory, (binary, args, opts) => {
+    if (args[0] !== '--version') return { status: 0, stdout: JSON.stringify(clean()) };
+    const result = spawnSync(binary, args, opts);
+    assert.equal(result.status, 0, result.stderr);
+    return result;
+  });
+  assert.match(run(plan.tasks.find((task) => task.target === 'package-lock.json')).scannerIdentity, /^npm:\d/);
 });

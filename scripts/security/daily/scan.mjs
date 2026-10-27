@@ -120,7 +120,7 @@ export function npmRunner(root, inventory, execute = spawnSync) {
       // Never copy npmrc, credentials, source code or installed hooks to the scanner workspace.
       const env = { PATH: process.env.PATH, HOME: scratch, TMPDIR: scratch,
         npm_config_cache: join(scratch, 'cache'), npm_config_userconfig: '/dev/null',
-        npm_config_globalconfig: '/dev/null', npm_config_registry: 'https://registry.npmjs.org/',
+        npm_config_globalconfig: join(scratch, 'global.npmrc'), npm_config_registry: 'https://registry.npmjs.org/',
         npm_config_ignore_scripts: 'true', npm_config_update_notifier: 'false' };
       const opts = { cwd: scratch, env, encoding: 'utf8', timeout: 120000, maxBuffer: 16 * 1024 * 1024, shell: false };
       copyFileSync(join(root, task.target), join(scratch, 'package-lock.json'));
