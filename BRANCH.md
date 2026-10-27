@@ -96,7 +96,7 @@ Deliver approved r3 L4: `live-speech/src/node/{capture,device,terminal-control}.
   - [x] `src/node/index.ts`: export L4 modules.
 - [ ] **Lot N — Final validation**
   - [x] Typecheck (via `test-live-speech` tsc --noEmit) & Lint (n/a: no lint lane for this package)
-  - [x] Retest package green on head (70/70 over 11 files via `make test-live-speech ENV=test-stt-l4`, r1 fixes included)
+  - [x] Retest package green on head (71/71 over 11 files via `make test-live-speech ENV=test-stt-l4`, r1+r2 fixes included)
   - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. (New private package: CI skips bump check.)
   - [x] Final gate step 1: create draft PR to main using `BRANCH.md` text as PR body (source of truth). Draft PR #788 open, no merge.
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
