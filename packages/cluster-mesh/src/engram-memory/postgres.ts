@@ -9,7 +9,7 @@ import type { InjectedPgDriver, PostgresStorageOptions } from '../storage/postgr
 import { createPostgresKernel } from '../storage/postgres/index.js';
 import { loadPgAssets } from '../storage/postgres/migrations.js';
 import { decodePgText } from '../storage/postgres/codec.js';
-import { StorageInvalidCommandError, StorageUnavailableError } from '../storage/errors.js';
+import { StorageDeniedError, StorageInvalidCommandError, StorageUnavailableError } from '../storage/errors.js';
 import { MemoryHostDriverRequiredError } from './sqlite.js';
 import type { AtomicUnit } from '../storage/atomic.js';
 import { MEMORY_DESCRIPTOR } from './manifest.js';
@@ -250,10 +250,11 @@ export const verifyMemoryPostgresProvider = async (
  * provider no backend is reachable and the factory refuses with
  * `unavailable`. Engram never calls this factory: it receives the neutral
  * grant only.
- * Runtime pin (r2 P1-B'): caller extras spread FIRST, so smuggled host
- * parts (assets, descriptor, projection, validateEffects, queries, limits,
- * moduleId) can never override the E6 registration at runtime — the type
- * already omits them, and the spread order enforces it where types stop.
+ * Runtime pin (r2 P1-B'/r5): the caller owns exactly layout, history and
+ * cursorSecret. Factory-owned keys are dropped (the E6 registration always
+ * wins); any other key — notably an injected `operations` object, which the
+ * kernel would install as custom operations bypassing validateEffects — is
+ * refused with a denial, never ignored and never forwarded.
  */
 export const createMemoryPostgresStorage = async (
   options: Omit<
@@ -274,6 +275,22 @@ export const createMemoryPostgresStorage = async (
   const { provider, layout, history, cursorSecret, ...rest } = (options ?? {}) as Partial<PostgresStorageOptions> & {
     readonly provider?: unknown;
   };
+  // Allowlist (r2 P1-B'' / r5): the caller owns exactly layout, history
+  // and cursorSecret. Factory-owned keys (moduleId, driver, assets,
+  // descriptor, projection, validateEffects, queries, limits) are dropped —
+  // the E6 registration below always wins. Anything else — notably an
+  // injected `operations` object, which the kernel would install as custom
+  // operations bypassing validateEffects — is refused, never ignored.
+  const dropped = new Set([
+    'moduleId', 'driver', 'assets', 'descriptor',
+    'projection', 'validateEffects', 'queries', 'limits',
+  ]);
+  const smuggled = Object.keys(rest).filter((key) => !dropped.has(key));
+  if (smuggled.length > 0) {
+    throw new StorageDeniedError(
+      `memory Postgres composition refuses caller-owned kernel keys: ${smuggled.sort().join(', ')}`,
+    );
+  }
   if (typeof provider !== 'object' || provider === null) {
     throw new StorageUnavailableError(
       'memory Postgres composition requires the checked host provider for the G1b stateful projection: no backend reachable',
@@ -288,7 +305,6 @@ export const createMemoryPostgresStorage = async (
   const checked = checkMemoryPostgresDriver(provider);
   const registration = await createMemoryPostgresRegistration();
   return createPostgresKernel({
-    ...rest,
     ...registration,
     moduleId: 'engram-memory',
     driver: checked.pool,
