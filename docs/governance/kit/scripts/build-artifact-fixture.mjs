@@ -49,7 +49,7 @@ import './app.css'; import './harness.css';
 ${legacy}
 configureTranslations(dictionary);
 mount(App,{target:document.getElementById('app')});`);
-  write(join(scratch, 'index.html'), '<!doctype html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div id="app"></div><script type="module" src="/src/main.js"></script></body></html>');
+  write(join(scratch, 'index.html'), '<!doctype html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" href="data:,"></head><body><div id="app"></div><script type="module" src="/src/main.js"></script></body></html>');
 }
 await build({ root: scratch, configFile: false, plugins: [svelte({ configFile: false }), artifactAttribution()],
   resolve: { dedupe: ['svelte', '@sentropic/design-system-svelte', '@sentropic/design-system-themes'] },
