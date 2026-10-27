@@ -52,6 +52,15 @@ describe('terminal controller', () => {
     controller.detach();
   });
 
+  it('should emit mic-mode on the open-mic key without disturbing toggle', async () => {
+    const { controller, input, events } = driven();
+    controller.attach(input);
+    input.press('o');
+    input.press('m');
+    expect(events).toEqual([{ kind: 'mic-mode' }, { kind: 'mic-toggle' }]);
+    controller.detach();
+  });
+
   it('should ignore unknown keys and multi-key sequences', async () => {
     const { controller, input, events } = driven();
     controller.attach(input);
