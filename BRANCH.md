@@ -1,50 +1,32 @@
-# Branch: feat/cluster-mesh-engram-e5 — Continuous ownership through commit (lot E5)
+# Branch: feat/cluster-mesh-engram-e7 — Host memory and maintenance bindings (lot E7)
 
 ## Objective
 
-G-P1 integration: ownership stays validated continuously through the effective
-COMMIT/ROLLBACK, not only before returning from the callback. Same neutral
-`CanonicalInstanceOwnershipV1` contract and guards (frozen, reuse only);
-terminal reader revocation; late-window revocation/loss refusal; nested
-contributions; caught inner error poisoning; retry/replay; saved-reader
-refusal; stale release never clears a successor (assert on the full row).
-Base: E4 (`origin/feat/cluster-mesh-engram-e4` @ `2e929e103`) merged with E3
-(`origin/feat/cluster-mesh-engram-e3` @ `6615fae07`); merge commits only.
-Pack-only `0.23.0-dev.8`. Engram stays `0.21.1`; P3 manifest unchanged (STOP
-if a change would alter it).
+E7 after E3/E5/E6: host-owned memory bindings in `src/engram-memory/{binding,postgres,host-maintenance}.ts` with public host assembly and fixtures. Inject the host-owned PG driver/pool; Engram receives exactly `['read','write']`, while a distinct host-issued `maintain` grant/binding owns fence access/checks, consumer checkpoint/poison/retry, resync and snapshot maintenance. Provide the durable ledger, the continuation grant and proof-only recovery required by the E8 answers (gr-conductor). Base: E5 (`origin/feat/cluster-mesh-engram-e5` @ `8bad820e9`) merged with E6 (`origin/feat/cluster-mesh-engram-e6` @ `9b476e20d`); merge commits only. Pack-only `0.23.0-dev.9`. Engram stays `0.21.1`; P3 manifest unchanged (STOP if a change would alter it).
 
 ## Scope / Guardrails
 
-- MUST reuse `CANONICAL_INSTANCE_OWNERSHIP_CONTRACT`, handles and
-`CanonicalOwnershipError` codes from `src/storage/instance-ownership.ts`
-(frozen file, import only). NO new ownership contract.
-- Production scope: `postgres/{transactions,ordinary-transactions,core,scope}.ts`
-plus `postgres/errors.ts` (r1 fix: COMMIT-time lease-trigger refusal P0001
-maps to `terminal-loss`; no other classification change). No new SQL asset,
-no manifest change, no 008/007 checksum change.
-- Existing SQLite/Comments/E2/E3/E4 tests keep passing; shared corpus keeps
-registry semantics identical (additive cases only).
-- Tests first; `ENV=test-e2-int` as the last make argument; `make commit MSG="type: …"`
-(<150 lines, `git add` specific files, no AI trailers). Never `ENV=dev`. 0 Python.
-- Disk is tight: reuse `ENV=test-e2-int` images; `make down ENV=test-e2-int`
-only if this session owns the compose project.
+- MUST reuse the neutral memory contract and `CanonicalOwnershipError` codes (frozen files, import only). NO new ownership contract, NO second PG ownership contract.
+- Production scope: `src/engram-memory/{binding,postgres,host-maintenance}.ts` only (postgres.ts: host driver/pool injection; binding.ts: public host assembly; host-maintenance.ts: host-only maintenance ports). Neither the `maintain` grant nor the maintenance ports escape through Engram's neutral `['read','write']` handle (runtime/type denial).
+- E8-answers obligations: durable host-issued evidence (candidate→store/scope/invocation-or-continuation mapping, envelope binding, reservation/terminal/ambiguous state, receipt/cursor reconciliation); continuation grant needs fresh host authn/authz checked against retained authority (copied fields never grant); proof-only recovery path (authorized capture-proof reads, admission-outcome recovery, journal replay) that refuses unknown/foreign access and any second effect. Refusing on an empty ledger is correct until rehydration.
+- Existing `binding-compatibility`/`binding-errors` keep passing; shared corpus semantics unchanged (additive cases only).
+- Tests first; `ENV=test-e2-int` as the last make argument; `make commit MSG="type: …"` (<150 lines, `git add` specific files, no AI trailers). Never `ENV=dev`. 0 Python.
+- Disk is tight: reuse `ENV=test-e2-int` images; `make down ENV=test-e2-int` only if this session owns the compose project.
 
 ## Branch Scope Boundaries (MANDATORY)
 
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/cluster-mesh/src/storage/postgres/transactions.ts` (G-P1: final validation through COMMIT/ROLLBACK; error passthrough, no ownership retry)
-  - `packages/cluster-mesh/src/storage/postgres/ordinary-transactions.ts` (G-P1: post-hook contributor + ownership re-validation on the committing session; nested tx poisoning; replay)
-  - `packages/cluster-mesh/src/storage/postgres/core.ts` (G-P1 wiring only: expose final validation on the committing session; no transaction rewiring beyond E5)
-  - `packages/cluster-mesh/src/storage/postgres/scope.ts` (admission reads: saved-reader refusal; no new surface)
-  - `packages/cluster-mesh/src/storage/postgres/errors.ts` (r1: deferred-trigger P0001 `instance lease not live` at COMMIT maps to `CanonicalOwnershipError('terminal-loss')`; nothing else reclassified)
-  - `packages/cluster-mesh/tests/storage/postgres-instance-guard.spec.ts` (r1: trigger-backstop test aligned to the terminal-loss contract)
-  - `packages/cluster-mesh/tests/storage/postgres-instance-admission.spec.ts` (new: continuous ownership admission through real commits)
-  - `packages/cluster-mesh/tests/storage/instance-corpus.ts` (additive case: stale release cannot clear its successor)
-  - `packages/cluster-mesh/tests/storage/postgres-authority.spec.ts` (extend: late-window grant revocation/loss)
-  - `packages/cluster-mesh/tests/storage/postgres-transactions.spec.ts` (extend: waits, nested contributions, caught inner error poisoning, retry/replay)
-  - `packages/cluster-mesh/tests/storage/postgres-crashes.spec.ts` (extend: crash + ownership continuity, retry after SIGKILL)
-  - `packages/cluster-mesh/package.json` + `package-lock.json` (pack-only 0.23.0-dev.8 only)
+  - `packages/cluster-mesh/src/engram-memory/binding.ts` (new: public host assembly, Engram `['read','write']` handle only)
+  - `packages/cluster-mesh/src/engram-memory/postgres.ts` (extend: host PG driver/pool injection, identity/qualification checks)
+  - `packages/cluster-mesh/src/engram-memory/host-maintenance.ts` (new: host-only fence/checkpoint/poison/retry/resync/snapshot ports)
+  - `packages/cluster-mesh/src/engram-memory/ledger.ts` (new only if the durable host-evidence ledger cannot live in host-maintenance.ts; smallest file that holds)
+  - `packages/cluster-mesh/tests/engram-memory/postgres-driver-injection.spec.ts` (new: positive installed driver calls, missing/weak driver refusal, no fallback)
+  - `packages/cluster-mesh/tests/engram-memory/host-maintenance-binding.spec.ts` (new: host-only checkpoint/resync/snapshot/fence; runtime/type denial through the memory handle; revoked/foreign maintain refusal)
+  - `packages/cluster-mesh/tests/engram-memory/binding-compatibility.spec.ts` (extend: Engram handle stays `['read','write']`)
+  - `packages/cluster-mesh/tests/engram-memory/binding-errors.spec.ts` (extend: typed host-seam failures)
+  - `packages/cluster-mesh/tests/engram-memory/pg-host.ts` (extend fixture only: host assembly + maintenance authority)
+  - `packages/cluster-mesh/package.json` + `package-lock.json` (pack-only 0.23.0-dev.9 only)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -54,33 +36,24 @@ only if this session owns the compose project.
   - `packages/engram/**` (stays 0.21.1)
   - `packages/cluster-mesh/src/storage/instance-ownership.ts` (frozen, reuse only)
   - `packages/cluster-mesh/src/storage/sqlite/**`
+  - `packages/cluster-mesh/assets/storage/postgres/001-008*.sql` (published, byte-identical)
+  - `packages/cluster-mesh/assets/storage/engram-memory/001-projections.sql` (E6, byte-identical)
   - Any second ownership contract or artifacts-coordinator reuse.
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - None. If the neutral contract needs a change (epoch domain note), STOP and coordinate instead of inventing a PG contract.
+  - `packages/cluster-mesh/assets/storage/postgres/engram-memory/002-*.sql` (new memory-only ledger asset ONLY if host-evidence durability needs it; E2 owns `migrations.ts` single-writer — STOP and coordinate before touching it).
 
 ## Plan / Todo (lot-based)
 
-- [x] Lot E5-0 — setup: worktree `tmp/worktrees/mem-e5`, branch `feat/cluster-mesh-engram-e5`; merge E3 into E4 base (merge commit); this BRANCH.md; pack-only `0.23.0-dev.8`; draft PR to `feat/engram-e2-integration`.
-- [x] Lot E5-1 — tests first (red): new `postgres-instance-admission.spec.ts` (9 tests: live admission, late takeover, saved-reader refusal, in-commit takeover lockout, stale release vs successor/missing row with full-row readback, lock-timeout retry, in-window revoke ordering, COMMIT-time lapse refusal, taken-over non-released release no-op); corpus case `stale release cannot clear its successor`; authority/transactions/crashes extensions.
-- [x] Lot E5-2 — implementation (green): E4 lock + deferred trigger as the final validation (no extra post-hook pass: the guard renews before the caller hook, the COMMIT itself validates via the trigger); E5 `withPgTxTimeouts` bounds wrapper pre-work; COMMIT-time trigger refusal maps to `terminal-loss`; release bypasses renewal (predicate-guarded no-op); no new SQL; neutral contract untouched.
-- [ ] Lot E5-3 — gates: full `test-cluster-mesh SCOPE=tests/storage` green on `ENV=test-e2-int`; typecheck green; lint green; scope-check; `make commit` per file group (<150 lines); push; draft PR; CI green; no merge.
+- [x] Lot E7-0 — setup: worktree `tmp/worktrees/mem-e7`, branch `feat/cluster-mesh-engram-e7`; merge E6 into E5 base (merge commit); this BRANCH.md; pack-only `0.23.0-dev.9`; draft PR to `feat/engram-e2-integration`.
+- [ ] Lot E7-1 — tests first: `postgres-driver-injection.spec.ts` (provider required, identity/floor checks, installed calls, no fallback); `host-maintenance-binding.spec.ts` (host-only ports, memory-handle denial, revoked/foreign maintain refusal); ledger/continuation/proof-only cases; extend binding-compatibility/errors + `pg-host.ts` fixture.
+- [ ] Lot E7-2 — implementation: `binding.ts` host assembly; PG driver/pool injection in `postgres.ts`; `host-maintenance.ts` ports (fence/checkpoint/poison/retry/resync/snapshot); durable ledger + continuation grant + proof-only recovery per E8 answers; no `maintain` escape through the neutral handle.
+- [ ] Lot E7-3 — gates: engram-memory lanes + PG storage lanes green on `ENV=test-e2-int`; typecheck green; lint green; scope-check; `make commit` per file group (<150 lines); push; draft PR; CI green; no merge.
 
 ## Feedback Loop
 
-- Blocker: if E2/E3 move under this branch (new 008 occupant, changed scope.ts hooks), stop and coordinate — do not renumber or rewire around them.
-- E4 baseline: opt-in retained lease + G-P0b hook run before the caller hook on the committing session; COMMIT-time races map to `instance-busy`; open-time refusal is `open-refused`.
-- Delivered E5 design (differs from the first E5-2 draft, recorded here): no extra post-hook re-validation pass. Final validation IS the COMMIT: the E4 row lock (renewal UPDATE holds it to COMMIT) blocks takeover/revoke in-window, the deferred trigger re-checks liveness at COMMIT, and the trigger refusal maps to `terminal-loss`. E5 adds bounded wait timeouts so the pre-work cannot hang.
-- Late windows are hook-driven in tests (custom `onCommitPossession` on another connection), armed to the data commit only. The single bounded post-renewal lapse sleep (1000 ms lease / 2500 ms sleep) resolves one way only (the trigger fires at COMMIT): no lease-timing races.
-- r1 fixes: P2-1 in-window revoke ordering + COMMIT lapse mapped to `terminal-loss` (errors.ts, guard spec aligned); P2-2 release bypasses the renewal so the SQL predicate runs (taken-over non-released handle is a silent no-op per the neutral registry); P2-3 this receipts section + English commits from here on (the five pre-review `mem-e5:` subjects stay: pushed history, merge-only branch, no rebase).
-- AI CI job red-on-main is out of scope for this lot's gate (E5 gate = cluster-mesh lanes green).
-
-## E5 execution receipts (`ENV=test-e2-int`, `CM_PG_URL=postgresql://app:app@postgres:5432/app`)
-
-- `make test-cluster-mesh SCOPE=tests/storage CM_PG_URL=... ENV=test-e2-int` — exit 0: Test Files 77 passed | 1 skipped (78); Tests 492 passed | 4 skipped (496).
-  - `SCOPE=tests/storage/postgres-instance-admission.spec.ts` — 9 passed (incl. r1: in-window revoke ordering, COMMIT-time lapse refusal, taken-over non-released release no-op).
-  - `SCOPE=tests/storage/postgres-instance-guard.spec.ts` — 15 passed (r1: trigger backstop aligned to `terminal-loss`).
-  - `postgres-transactions.spec.ts` 7 passed; `postgres-authority.spec.ts` 3 passed; neutral corpus 10 passed (in-lane counts).
-  - `CM_PG_CRASH_PHASE=seed` then `=verify` on `postgres-crashes.spec.ts` — 2 passed | 2 skipped each phase (chain survives, takeover moves to the next epoch).
-- `make typecheck-cluster-mesh ENV=test-e2-int` — exit 0.
-- `make lint-cluster-mesh ENV=test-e2-int` — exit 0.
-- `make scope-check ENV=test-e2-int` — exit 0, `PASS C2 (sentropic)` (Allowed Paths widened for `errors.ts` + guard spec, r1).
+- Blocker: if E2/E3/E6 move under this branch (new migration writer, changed `migrations.ts`, moved `scope.ts` hooks), stop and coordinate — do not renumber or rewire around them.
+- Base refs: E5 `8bad820e9` (E5-1/E5-2 done, E5-3 CI pending on #787 for structural E2-base reasons, not code); E6 `9b476e20d` (projection/resync, memory PG assets, `postgres-memory.spec.ts` in the E2 real-PG lane).
+- Pack-only `0.23.0-dev.9` resolves the merge conflict (E5 `dev.8` vs E6 `dev.5`); version fields only, rollback both fields together. Known dev-bump gate friction (release-only `satisfiesRange`) tolerated until #774, as in E5/E6.
+- Engram 0.21.1 DTOs frozen; memory files unchanged at 0.21.2, so the E8 answers hold.
+- E7 gate = engram-memory lanes + PG storage lanes green (E9 runs the five-profile acceptance later, not here).
+- AI CI job red-on-main is out of scope for this lot's gate.
