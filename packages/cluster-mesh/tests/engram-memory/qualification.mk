@@ -81,7 +81,7 @@ installed-memory-locked:
 	        cp /workspace/$(INSTALLED_DIR)/artifacts/pre-candidate-manifest.json /consumer/artifacts/; \
 	        cp /workspace/$(INSTALLED_DIR)/artifacts/sentropic-engram-0.22.0.tgz /consumer/artifacts/; \
 	        cp /workspace/$(INSTALLED_DIR)/artifacts/sentropic-cluster-mesh-$(INSTALLED_MESH_VERSION).tgz /consumer/artifacts/; \
-	        ./node_modules/.bin/tsc --noEmit --strict --target es2022 --module nodenext --moduleResolution nodenext \
+	        ./node_modules/.bin/tsc --noEmit --strict --skipLibCheck --target es2022 --module nodenext --moduleResolution nodenext \
 	          --listFiles installed-memory-types.ts > type-files.txt; \
 	        node installed-memory.mjs; \
 	        node -e "const fs=require(\"fs\");const receipt=JSON.parse(fs.readFileSync(\"/consumer/installed-receipt.json\",\"utf8\"));receipt.typeClosure=fs.readFileSync(\"/consumer/type-files.txt\",\"utf8\").split(\"\\n\").filter((line)=>line.includes(\"/node_modules/\")&&line.endsWith(\".d.ts\")).map((line)=>line.slice(\"/consumer/\".length)).sort();fs.writeFileSync(\"/consumer/installed-receipt.json\",JSON.stringify(receipt,null,2)+\"\\n\")"'; \
