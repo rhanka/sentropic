@@ -7,6 +7,7 @@ import { memoryPgHost, memoryHostComposed } from './pg-host.js';
 import { verifyHostBinding } from '../../src/engram-memory/binding.js';
 import { openMemoryMaintenance, type MemoryMaintenancePorts } from '../../src/engram-memory/host-maintenance.js';
 import { CanonicalOwnershipError } from '../../src/storage/instance-ownership.js';
+import type { InjectedPgDriver } from '../../src/storage/postgres/protocol.js';
 import { memoryFailure, neutralQueryResult, neutralTransaction } from './memory-neutral.js';
 
 export type MemoryCampaignHost = Awaited<ReturnType<typeof memoryCampaignHost>>;
@@ -18,6 +19,18 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
   let kernel: Awaited<ReturnType<typeof createPostgresKernel>>;
   let fence: NeutralWriterFence;
   let acquired = false;
+  let expireCommit = false;
+  const driver: InjectedPgDriver = { transaction: (options, operation) => pg.options.driver.transaction(options, async (session) => {
+    const result = await operation(session);
+    if (expireCommit && !options.readOnly) {
+      expireCommit = false;
+      // Run after the kernel's final renewal, on the actual committing
+      // session. Only the installed deferred SQL trigger can reject this.
+      await session.execute({ text: `UPDATE "${pg.name}".instance_ownership
+        SET holder_until=clock_timestamp()-interval '1 second' WHERE module='engram-memory'`, values: [] });
+    }
+    return result;
+  }) };
   let store: CanonicalMemoryStorePort;
   let maintenance: MemoryMaintenancePorts;
   // Host-owned read/maintain authority has no write operation. Engram never
@@ -83,7 +96,7 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
     }),
   });
   const open = async (hydrate = true) => {
-    kernel = await createPostgresKernel({ ...pg.options, canonicalOwnership: { leaseMs: 1000 }, onCommitPossession: commitHook });
+    kernel = await createPostgresKernel({ ...pg.options, driver, canonicalOwnership: { leaseMs: 1000 }, onCommitPossession: commitHook });
     await kernel.bindNew(binding.memoryGrant);
     await kernel.bindNew(binding.maintainGrant);
     await kernel.bindNew(hostReader);
@@ -115,6 +128,7 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
     await open();
   } catch (error) { await kernel!?.ownership?.release(); await pg.close(); throw error; }
   return { pg, binding, handle, units, scopeBinding, get kernel() { return kernel; }, get store() { return store; },
+    expireAtCommit: () => { expireCommit = true; },
     get maintenance() { return maintenance; }, get fence() { return fence; }, hostReader,
     hostReplay: async (after: string, limit: number, consumer: string) => (await hostRead()).journalRead(after, limit, consumer),
     reopen: async () => { await store.close(); await open(); },

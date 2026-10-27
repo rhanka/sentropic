@@ -148,6 +148,7 @@
   - [x] Host maintenance positive cases pass (9/9); add independent-process contention and real SIGKILL before/after COMMIT, own peer TCP pool and elapsed durable lease, original-result lookup in a new epoch.
   - [x] Actual SIGKILL paths and process contention execute; correct two test-carrier errors (canonical source sequence and frozen `created_cursor` name). Add C5 sparse high-water cases at safe/signed/u64 boundaries through the same neutral PG handle.
   - [x] Add same-handle second constructor, durable store/scope binding and independent memory-token revocation cases before changing acquisition behavior.
+  - [x] Resume: 20 real-PG cases pass at `1b8b36290`; add bounded accepted snapshot/outbox and a deferred-COMMIT rollback probe. Snapshot assertions retain the historical document set and eligibility digest; the observation cursor follows the current head under frozen Engram semantics.
 - [ ] Lot E9-4 — `test-cluster-mesh` scoped memory and PostgreSQL lanes; typecheck/lint; mechanical scope gate before each `make commit`; every authored commit under 150 lines; no AI trailers.
 - [ ] Lot E9-5 — retain campaign facts and counts per profile; push retry every ten minutes until successful; draft PR from this file; record CI; do not merge or publish.
 
