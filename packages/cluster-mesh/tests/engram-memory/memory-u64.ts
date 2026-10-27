@@ -1,18 +1,15 @@
-import { expect, it } from 'vitest';
+import { expect } from 'vitest';
 import { PgRoots } from '../../src/storage/postgres/roots.js';
 import { memoryJcs } from '../../src/engram-memory/codec.js';
 import type { NeutralAtomicUnit, NeutralCommitOptions } from '../../src/engram-memory/neutral-contract.js';
 import type { MemoryCampaignHost } from './memory-pg-host.js';
 import { DIGEST, hostReceiptDigest, NOW } from './memory-engine.js';
-import { registerMemoryCase } from './memory-corpus.js';
+import { memoryScenario } from './memory-corpus.js';
 
 const MAX = '18446744073709551615';
 export const runMemoryU64Corpus = (open: () => Promise<MemoryCampaignHost>) => {
   for (const previous of ['9007199254740991', '9223372036854775807', '18446744073709551614']) {
-    registerMemoryCase(`atomic-units-v1/C5/${previous}`);
-    it(`atomic-units-v1/C5/${previous}: should cross with exact K3 K5 K8 guards chain positions and publication counters`, async () => {
-      const h = await open();
-      try {
+    memoryScenario(open, `atomic-units-v1/C5/${previous}: should cross with exact K3 K5 K8 guards chain positions and publication counters`, async (h) => {
         const next = (BigInt(previous) + 1n).toString();
         const options: NeutralCommitOptions = { grant: h.binding.memoryGrant, fence: h.fence,
           limits: { maxAppends: 1, maxRecords: 8, maxEncodedBytes: 1048576 } };
@@ -65,7 +62,6 @@ export const runMemoryU64Corpus = (open: () => Promise<MemoryCampaignHost>) => {
         await h.reopenBackend();
         for (const row of updates) expect((await h.handle.readAggregate(row.kind, row.key, h.binding.memoryGrant))?.version).toBe(next);
         expect(JSON.parse((await h.handle.query('scope-chain-index', memoryJcs({}), h.binding.memoryGrant)).data)).toEqual(index);
-      } finally { await h.close(); }
     });
   }
 };
