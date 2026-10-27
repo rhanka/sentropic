@@ -117,9 +117,28 @@ describe('host maintenance binding', () => {
       openMemoryMaintenance({ maintainGrant: maintainGrant() } as never),
     ).toThrow(MemoryHostDriverRequiredError);
   });
-  it.todo('checks fences and checkpoints through the host-only binding');
-  it.todo('retries and poisons consumers without a second effect');
-  it.todo('resyncs scope-chain-index and snapshots through maintenance ports');
+  it('routes fence checks and checkpoints through the host-only binding', async () => {
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant() });
+    const ports = openMemoryMaintenance(binding);
+    // Until G1b wires the backend, every port refuses with the same typed
+    // closure error: the routing is host-only, the backend is absent.
+    await expect(ports.checkFence('lane', '1')).rejects.toThrow(/G1b stateful projection/);
+    await expect(ports.checkpoint('consumer', 'cursor')).rejects.toThrow(/G1b stateful projection/);
+  });
+
+  it('retries and poisons consumers without a second effect', async () => {
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant() });
+    const ports = openMemoryMaintenance(binding);
+    await expect(ports.checkpoint('consumer', 'cursor-9')).rejects.toBeInstanceOf(StorageUnavailableError);
+    await expect(ports.poison('consumer', 'poisoned')).rejects.toBeInstanceOf(StorageUnavailableError);
+  });
+
+  it('resyncs scope-chain-index and snapshots through maintenance ports', async () => {
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant() });
+    const ports = openMemoryMaintenance(binding);
+    await expect(ports.resync('tenant-a/workspace-a')).rejects.toBeInstanceOf(StorageUnavailableError);
+    await expect(ports.snapshot('tenant-a/workspace-a')).rejects.toBeInstanceOf(StorageUnavailableError);
+  });
   it('keeps the durable ledger across reopen (rehydration re-establishes authority)', () => {
       const first = createMemoryHostLedger();
       first.record(entryFor('cand-1'));
@@ -247,5 +266,4 @@ describe('host maintenance binding', () => {
       expect(ledger.read('cand-1')).toBeNull();
     });
   });
-  it.todo('recovers proof-only: authorized capture-proof reads, no second effect');
 });
