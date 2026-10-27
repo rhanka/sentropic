@@ -1,108 +1,57 @@
-# Feature: V4-L3 JEV and OpenAI Decisions
+# Feature: BR-77 — Bound CI execution capacity and qualify contention/rollback
 
 ## Objective
-- [ ] Deliver separate native JEV and OpenAI Decisions protocols through the existing Decision mesh capability.
+- [ ] Enforce finite execution capacity and qualify contention/rollback on measured receipts.
+- [ ] Branch `chore/ci-capacity-policy`, step 2 of nine; train order BR-76 → BR-77; dependency: BR-76 (PR #705, metrics + expected-results) merged.
 
 ## Scope / Guardrails
-- [x] Base: origin/main; branch: feat/decision-v4-l3; worktree: tmp/worktrees/decision-v4l3.
-- [x] Make only; Docker lock on every container/test step; ENV=test-decision-v4l3 last.
-- [x] Fixtures only; no paid calls, live qualification, prompted fallback or JEV upgrade.
-- [x] Preserve receipt v1, custody, one attempt, deadlines, settlement and unqualified discovery.
-- [x] Reserved ports if needed: API_PORT=9465 UI_PORT=5665 MAILDEV_UI_PORT=1565.
+- [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md` and `spec/ci-cd-ten-minutes/capacity.md`; BR-76 receipts are inputs, not deliverables.
+- [ ] Work in `tmp/worktrees/ci-capacity-policy`; rebase on main after BR-76 merge; one implementation branch active on the shared workflow/Makefile.
+- [ ] Make entry points only; `ENV` last; tests on `ENV=test-ci-capacity` or `ENV=test-ci-capacity`, never `dev`; no secrets in evidence.
+- [ ] Slot 0 owner: branch author; API_PORT=9385, UI_PORT=5585, MAILDEV_UI_PORT=1485; verify availability before starting services and pass all three ports to service commands.
+- [ ] The agent inventories quotas and costs itself via the GitHub API (account/plan, billing usage with `user` scope, runner inventory); no owner-supplied inventory is assumed.
+- [ ] No migrations; keep root dev stable; no timeout inflation, removed assertions, or attribution trailers; commits ≤150 changed lines through `make commit` with scope checks.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [x] **Allowed Paths (implementation scope)**:
-  - [x] `BRANCH.md`
-  - [x] `packages/llm-mesh/src/decision/**`
-  - [x] `packages/llm-mesh/src/transport/openai-decisions.ts`
-  - [x] `packages/llm-mesh/tests/decision-*`
-  - [x] `packages/llm-mesh/tests/fixtures/decision/**`
-  - [x] `packages/llm-mesh/package.json`
-  - [x] `packages/llm-mesh/README.md`
-  - [x] `spec/SPEC_EVOL_LLM_MESH.md`
-  - [x] `spec/decision/**`
-  - [x] `packages/cluster-mesh/src/modules/catalog.ts`
-  - [x] `packages/cluster-mesh/package.json`
-  - [x] `packages/cluster-mesh/tests/**`
-  - [x] `packages/llm-gateway/package.json`
-  - [x] `scripts/ci/publishable-ci-wiring.test.mjs`
-  - [x] `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
-  - [x] `api/tests/unit/gateway-package-version.test.ts`
-  - [x] `api/src/scripts/oauth-provision-exchange-client.ts` (BR93-EX4, unchanged main integration only)
-  - [x] `api/tests/api/auth/oauth-token-exchange.test.ts` (BR93-EX4, unchanged main integration only)
-  - [x] `deploy/ci/idp-identity-sync/**` (BR93-EX4, unchanged main integration only)
-  - [x] `deploy/k8s/README.md` (BR93-EX4, unchanged main integration only)
-  - [x] `deploy/k8s/overlays/preprod/idp-identity-sync/**` (BR93-EX4, unchanged main integration only)
-- [x] **Forbidden Paths (must not change in this branch)**:
-  - [x] `Makefile`
-  - [x] `docker-compose*.yml`
-  - [x] `.cursor/rules/**`
-- [x] **Conditional Paths (explicit exception required)**:
-  - [x] `package-lock.json`
-  - [x] `.github/workflows/**`
-- [x] **Exception process**: declare reason, impact and rollback below before changes.
+- [ ] **Allowed Paths (implementation scope)**:
+  - [ ] `BRANCH.md`; `plan/71-BRANCH_chore-ci-capacity-policy.md`; `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`.
+  - [ ] `scripts/ci/ci-run-metrics.mjs`
+  - [ ] `scripts/ci/ci-run-metrics.test.mjs`
+  - [ ] `scripts/ci/ci-expected-results.mjs`
+  - [ ] `scripts/ci/ci-expected-results.test.mjs`
+  - [ ] `spec/ci-cd-ten-minutes/capacity.md`
+- [ ] **Forbidden Paths (must not change in this branch)**:
+  - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
+  - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
+- [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - [ ] `.github/workflows/ci.yml` under BR77-EX1; `Makefile` under BR77-EX2.
+  - [ ] `scripts/ci/publishable-ci-wiring.test.mjs` under BR77-EX3.
+
+- [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
-- [x] CI 40576360323/job 122444053780: speech-projection/revision cannot import mesh 0.29.0 under speech's <0.29.0 cap. The mesh speech implementation is byte-identical to origin/main; admit 0.29 alongside 0.28, retain the 0.30 refusal and exercise present/missing exports for both admitted families. Regression: existing projection/revision suites plus speech-peer admission cases; validation runs in CI while Docker is reserved until 21:00 UTC.
-- [x] BR93 integration: merge origin/main aa559f58c after PRs #732/#757/#766/#800; retain this branch plan, native Decisions range and main's separate speech range. Cluster-mesh 0.23.0 is published; use patch 0.23.1 and synchronize its workspace/fixture versions. Mesh 0.29.0 and gateway 0.21.4 remain above registry 0.28.1/0.21.3. Rollback: revert the merge. Imported history exceeds 150 lines; resolution changes are bounded metadata/catalog edits.
-- [x] BR93-EX4: owner-requested merge of origin/main at 55431a99c (#770), retaining L3 BRANCH.md on the sole conflict. Imported API/IdP files remain identical to main; no implementation edits. Rollback: revert the merge. Imported history exceeds the atomic author-change limit; this resolution adds six plan lines only.
-- [x] CI-LIVE — conductor decision B-lite (2026-10-26): open the draft PR with existing provider-backed CI under the owner's current budget. Added tests use fixtures and recorded answers only; no new live-call job or offline-CI profile is introduced.
-- [ ] REVIEW — attention: exact complementary reviewers not selected; no independent code-review consensus is claimed. Author handoff is ready for the conductor.
-- [x] P24 dated GA schema: require cache/reasoning objects; invalid usage counters remain non-billable pending reconciliation, while independently valid usage survives answer refusals.
-- [x] BR93-EX2: mesh 0.29.0 is rejected by cluster's current <0.29.0 bound. Extend only mesh compatibility to <0.30.0, gateway mesh dependency and exact fixture/CI tuple; patch-bump the affected metadata/source packages. Impact: admits the tested native Decisions minor via the existing loader. Rollback: revert tuple/range cells together. Conditional `.github/workflows/ci.yml` changes are limited to its three exact PEERS tuples.
-- [x] BR93-EX1: synchronize five `package-lock.json` workspace cells: llm-mesh version 0.29.0 for the native Decisions feature; cluster-mesh version 0.22.5 for its loader compatibility change; cluster-mesh llm-mesh peer range <0.30.0 to admit that feature; llm-gateway version 0.21.4 for its compatibility metadata change; llm-gateway llm-mesh dependency range adding ^0.29.0 to consume that feature (BR93-EX2). Impact: five metadata cells, no resolved dependency/integrity changes. Rollback: revert all five cells together with the corresponding package versions/ranges and BR93-EX2 tuple.
-- [x] Opus r1 P2-1/P2-2: add service controls for contradictory cached input and paid cache writes retaining the reserve without settle/release; test the shipped unqualified descriptor through service and direct adapter before egress; correct BR93-EX1.
-- [x] CI packaging: refresh the selected fixture's llm-mesh 0.29.0 integrity after the usage correction; CI run 40386278275/job 121798837785 rejected the stale archive hash while the mesh validation passed. Packed qualification: 107 tests/15 files passed; scope-check passed. Preserve the published Artifacts baseline.
-- [x] BR93-EX3: admit only `api/tests/unit/gateway-package-version.test.ts` to align its real-instance expectation with gateway 0.21.4 from BR93-EX2. CI 40392898856/job 121861085578 received 0.21.4 while the test pinned 0.21.3; main 40390149749 passed that lane. Impact: one version literal. Rollback: revert with the gateway candidate version.
-- [x] OD-5 remains open; live identity, billing and calibration belong to L5/L6.
-
-## Deferred to BR-7x
-- [ ] CI train owner: evaluate local proposal `tmp/decision-v4l3-offline-ci.patch`; retain the file unapplied and uncommitted. Acceptance: an independently reviewed offline CI profile with its own train validation; no profile workflow change in V4-L3.
+- [x] BR77-EX1 — Workflow exception: bound shared runner concurrency, independent package validation/publication, branch dry-run publication qualification, keep PR-only cancellation. Impact: dispatch and required results. Rollback: revert workflow policy while preserving complete-result checks.
+- [x] Review r2 owner instruction: replace repo-wide slot mutexes with per-run matrix widths and PR cancellation; measure hosted-runner scheduling. Static demand no longer claims account admission. API quality remains required at the gate and image publishers.
+- [x] BR77-EX2 — Makefile exception: capacity-policy entry points only. Impact: named CI measurement/policy entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [x] BR77-EX2 includes the requested dry-run publication target: real existing guarded packs, per-package receipts, no registry writes; rollback removes the target and dispatch mode.
+- [x] BR77-EX3 — Permit `scripts/ci/publishable-ci-wiring.test.mjs` to assert the explicit branch dry-run alternative while preserving all production publication barriers. Rollback: restore assertions with the workflow.
+- [x] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
+- [ ] Inherited open acceptance from BR-76/Round-4: account quota/reservation/cost inventory; bounded dispatch policy; concurrent PR/current-main delivery; rollback drill; classification ≤15s, verdict ≤5s, aggregate scheduling ≤60s under declared concurrent traffic.
 
 ## AI Flaky tests
-- [x] No live provider tests or accepted flaky failures.
+- [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; author implementation followed by independent harness review.
+- [ ] **Multi-branch** — This is one independently reviewed/qualified branch of the serialized nine-branch train.
+- [ ] Rationale: preserve branch-level rollback and serialize shared workflow/Makefile edits; internal CI lanes may run concurrently.
 
 ## UAT Management (in orchestration context)
-- [x] Library-only change; fixture API and mesh integration controls replace product UI UAT.
+- [ ] Run the lot UAT on the exact pushed qualification SHA; record immutable source/target SHAs for any integrated qualification workspace.
+- [ ] Use isolated automated environments; web/Chrome/VSCode UAT below is limited to affected behavior; no root-dev automated testing.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and scope**
-  - [x] Read Docker lock, complete spec v4, Sol review, merged PR #693 and its branch plan.
-  - [x] Run mechanical harness branch check before work.
-- [x] **Lot 1 — P25 JEV versioned discriminator**
-  - [x] Add failing versioned binary/choice/graded discriminator fixtures and contradiction controls.
-  - [x] Correct closed JEV codec and run scoped decision-jev-v4l3.test.ts; require discriminator on provider responses.
-- [x] **Lot 2 — P24 separate Decisions codec**
-  - [x] Add failing native controls and independent name/count/type/refusal/usage/identity mutations in decision-openai-v4l3.test.ts.
-  - [x] Implement one-question predicate/choice/score protocol with independent usage evidence.
-- [x] **Lot 3 — Transport, registration and tariff**
-  - [x] Add fixed HTTPS Decisions transport and adapter with explicit descriptor registration.
-  - [x] Test endpoint, credentials, one attempt, no CLI route, protocol tariff collision and unqualified refusal.
-  - [x] Keep JEV baseline and OpenAI candidate report packets with source evidence and outstanding qualification.
-  - [x] Test mesh 0.29 admission, update cluster/gateway compatibility metadata and verify packed tuple (107 packed tests passed).
-- [x] **Lot N-1 — Docs consolidation**
-  - [x] Update mesh README and tracked specification; registry baseline mesh 0.28.1/gateway 0.21.3/cluster 0.22.4; candidates 0.29.0/0.21.4/0.22.5.
-- [ ] **Lot N — Final validation**
-  - [x] Opus r1 correction: both usage contradictions reproduced at cost 100/settled before the fix; 54 scoped OpenAI tests passed afterward. Full mesh: 1445 passed across 80 files; mesh typecheck/lint passed on ENV=test-decision-v4l3.
-  - [x] Full cluster: 1144 passed/129 conventionally skipped; cluster typecheck/lint passed; packed consumer 107/15 passed; train lock integrity passed for published baselines, native candidates remain unpublished.
-  - [x] Source qualification head 1f4ed952d: verified sibling receipts; mesh archive SHA256 fd8a63feae824e3dc0800aa926ff64749681e4191b43391f906ac0da2dea342e. Preserve the published artifacts 0.1.4 lock baseline.
-  - [x] CI wiring tests: 24 passed; memory-l5-verify: 30 files/54 edges, unchanged retained manifest.
-  - [ ] Independent harness review; reconcile findings with tests.
-  - [x] Scope-check before every selective atomic commit under 150 lines.
-  - [x] Draft PR #772 opened; retain draft status during author corrections.
-  - [ ] Verify CI green at final head; do not merge.
-- [x] Atomic artifact: test(decision): pin JEV discriminator conformance.
-- [x] Atomic artifact: test(decision): specify native Decisions wire refusals.
-- [x] Atomic artifact: test(decision): cover native route and tariff admission.
-- [x] Atomic artifact: test(decision): bound dedicated Decisions transport.
-- [x] Atomic artifact: feat(decision): declare native Decisions candidate and request.
-- [x] Atomic artifact: feat(decision): decode typed Decisions answers and usage.
-- [x] Atomic artifact: feat(decision): add fixed bounded Decisions HTTP transport.
-- [x] Atomic artifact: feat(decision): register native OpenAI adapter and credentials.
-- [x] Atomic artifact: feat(decision): bind native host validation and service tariff.
-- [x] Atomic artifact: docs(decision): publish V4-L3 contracts and candidate packet.
-- [x] Atomic artifact: fix(decision): require JEV wire discriminators and retain identity liability.
-- [x] Atomic artifact: fix(cluster-mesh): admit the native Decisions feature tuple.
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, relevant security/domain rules, `README.md`, `TODO.md`, the execution `PLAN.md`, the study, `spec/ci-cd-ten-minutes/capacity.md`, and `plan/BRANCH_TEMPLATE.md`.
+  - [x] Verify branch mechanically with harness; confirm BR-76 merged; inventory the actual files and existing assertions at the new base.
+  - [x] Declare exceptions above; names marked new below are deliverables to create, not existing commands or evidence.
+  - [x] Base origin/main 440599d04e91bb33e3874588f067c6a90bffd1b3; harness C1 passed; inherited suites passed 45/45. BR77 uses ENV=test-ci-capacity per owner packet.
