@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { CompositeCatalogRegistry } from '../../../src/services/catalog/composite-registry';
 import { createCatalogContextResolver } from '../../../src/services/catalog/request-context';
-import type { CatalogEntry } from '../../../src/services/catalog/types';
+import type { ToolEntry } from '../../../src/services/catalog/types';
 
-const tool = (name: string): CatalogEntry => ({ kind: 'tool', sourceId: 'private',
+const tool = (name: string): ToolEntry => ({ kind: 'tool', sourceId: 'private',
   metadata: { name, description: `private ${name}` },
   tool: { name, description: name, inputSchema: {}, sideEffect: false } });
 const resolve = createCatalogContextResolver(async input => ({ tenantId: `tenant-${input.userId}`,
