@@ -36,6 +36,8 @@
   - [x] Declare BRL8-EXn with reason, impact and rollback before sensitive changes.
 
 ## Feedback Loop
+- [x] R1 P1/P2-1: build incremental totals through a mutable dimension map; require llm-mesh >=0.28.0 for speech contracts.
+- [x] R1 manifests: registry latest gateway 0.21.3 / cluster-mesh 0.22.4 on 2026-10-27; gateway feature 0.22.0 and cluster peer-range patch 0.23.1 remain unpublished BLOCK candidates. Mirror versions/ranges in package-lock.json; retain full pack gates.
 - [ ] G-LEDGER: existing host sink supports monthly text budgets only; ledger owner must supply atomic speech admission and adjustments before cloud activation.
 - [x] Docker reservation takes precedence over the container-backed scope target; temporary host Make adapter invokes the same installed harness C2 check before every commit.
 - [x] Registry latest is 0.21.3 (2026-10-27); feature version will be 0.22.0, without publication.

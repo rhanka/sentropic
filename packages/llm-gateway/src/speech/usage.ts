@@ -82,10 +82,12 @@ export const normalizeSpeechUsage = (state: SpeechUsageState | undefined, update
   if (!previous && Object.keys(next.events).length >= 4096) throw new Error('Speech usage event limit reached');
   if (update.mode === 'cumulative') next.totals = structuredClone(update.usage);
   else {
+    const totals: Partial<Record<SpeechDimension, number>> = { ...next.totals };
     for (const key of dimensions) {
       if (update.usage[key] === undefined && previous?.usage[key] === undefined) continue;
-      next.totals[key] = (next.totals[key] ?? 0) - (previous?.usage[key] ?? 0) + (update.usage[key] ?? 0);
+      totals[key] = (totals[key] ?? 0) - (previous?.usage[key] ?? 0) + (update.usage[key] ?? 0);
     }
+    next.totals = totals;
   }
   validateSpeechUsage(next.totals);
   Object.defineProperty(next.events, update.eventId, { value: { revision: update.revision,
