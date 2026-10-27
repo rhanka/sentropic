@@ -62,7 +62,7 @@
   - [x] Add `scripts/artifact-input.test.mjs`: scoped projection, missing routes, fold geometry/cache identity and translation equivalence.
   - [x] Add `scripts/portable.test.mjs`: reject dynamic `assets/` imports and external portable dependencies.
   - [ ] Run focused Node tests, full-governance geometry/routing checks and offline browser interactions for the typical fixture.
-  - [ ] UAT: both diagrams/folds, light/dark, mobile/desktop, zoom, option state, inventory totals and JSON downloads.
+  - [ ] UAT: `scripts/check-artifact-browser.mjs` covers both diagrams/folds, light/dark, mobile/desktop, zoom, option state, inventory totals and JSON downloads.
 - [ ] **W4 — Artifact size budget**
   - [x] Add deterministic fixture build and Vite module/chunk manifest reporting, without mutating tracked source.
   - [ ] Add `scripts/artifact-budget.mjs` and `scripts/artifact-budget.test.mjs`: raw/gzip/Brotli/SHA-256, initial/static/startup/full closures, per-chunk limits and agent read cost.
