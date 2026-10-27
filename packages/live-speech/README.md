@@ -26,10 +26,12 @@ no audio in logs — only sample counts, revisions and text cross the seam.
 - `src/node/profiles.ts` — independently pinned `local-tiny` / `local-base`.
 - `src/node/engines/faster-whisper.mjs` — the real engine behind the worker.
 - `src/node/tts-registry.ts` — TTS selection by name; the `local-espeak` entry
-  spawns the vetted `espeak-ng` binary with an explicit argv and refuses while
-  no digest is pinned (operators allowlist via `ESPEAK_DIGESTS`).
+  pipes narration text on `espeak-ng --stdin` and collects WAV from `--stdout`
+  (no text in argv, no audio files); refuses while no digest is pinned
+  (operators allowlist via `ESPEAK_DIGESTS`).
 - `src/node/playback.ts` — cancellable WAV playback over the vetted `aplay`
-  binary (fence cancel: SIGTERM, then SIGKILL, wait for close).
+  binary fed on stdin (no audio files; fence cancel: SIGTERM, then SIGKILL at
+  100 ms, sticky across the pre-spawn window).
 - `src/node/voice-loop.ts` — one narration at a time: bounded text in, one
   synthesis, one playback, barge-in out (VAD gated by mic mode, any key, stop);
   no retained audio, events carry ids/counts/text only.

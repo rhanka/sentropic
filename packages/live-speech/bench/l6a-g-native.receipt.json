@@ -4,7 +4,7 @@
   "lot": "L6a",
   "spec": "r3 §8.1 (L6a row: shared TTS + voice loop)",
   "status": "blocked",
-  "note": "L6a adds no native build and no new npm dependency. The runtime digest checks (refuse on unpinned helper, at every synth/play call) are implemented and unit-covered, but the TTS helper has never been measured and the playback helper digest is host-only: until every digest and trace below is real, this receipt stays blocked, never claimed.",
+  "note": "L6a adds no native build and no new npm dependency. The runtime digest checks (refuse on unpinned helper, at every synth/play call) are implemented and unit-covered, but the TTS helper has never been measured and the playback helper digest is host-only: until every digest and trace below is real, this receipt stays blocked, never claimed. No audio file is written by L6a at any point: espeak-ng renders to stdout and aplay consumes stdin, with bounded RAM buffers only.",
   "toolchain": {
     "testImage": "node:24-bookworm-slim (tag only; image digest not pinned — no lane exposes it, ad-hoc docker inspection is forbidden)",
     "arch": "amd64",
@@ -28,8 +28,8 @@
       "hostDigestScope": "measured on the Ubuntu qualification host — byte-identical to the vetted arecord build (dual alsa-utils binary, verified with cmp); NOT the node:24-bookworm-slim image, which ships no alsa-utils",
       "imageDigest": "missing — blocked: no lane provisions aplay inside the pinned image",
       "license": "GPL-2 (separate native executable, subprocess aggregation — same treatment as the L4 arecord binary)",
-      "invocation": "aplay [-D <device>] <wavfile> (explicit argv, shell:false; WAV rendered by TTS, temp file deleted after close; SIGTERM then SIGKILL + reap on cancel)",
-      "runtimeEnforcement": "AplayPlayback.play resolves the binary to an absolute path, hashes it, and refuses anything outside APLAY_SHA256_PINS plus constructor/APLAY_DIGESTS allowlist (PlaybackError on mismatch, PlaybackError when missing)"
+      "invocation": "aplay [-D <device>] with the WAV on stdin, header-autodetected (explicit argv, shell:false; SIGTERM then SIGKILL at 100 ms + reap on cancel, bounded by the 150 ms gate)",
+      "runtimeEnforcement": "AplayPlayback.play resolves the binary to an absolute path, hashes it, and refuses anything outside APLAY_SHA256_PINS plus constructor/APLAY_DIGESTS allowlist (PlaybackError on mismatch, PlaybackError when missing); cancel is sticky across the pre-spawn window via a generation counter"
     },
     "espeak-ng": {
       "role": "TTS backend (EspeakNgEngine) — UNWIRED",
@@ -41,15 +41,19 @@
       "hostDigest": "missing — blocked: no binary anywhere to measure; ESPEAK_SHA256_PINS is empty by design (no digest is ever invented)",
       "imageDigest": "missing — blocked",
       "license": "GPL-3.0 (Debian espeak-ng-data 1.52.0 copyright; separate native executable, subprocess aggregation once provisioned)",
-      "invocation": "espeak-ng -v <voice> -s <wpm> -w <wavfile> <text> (explicit argv, shell:false; bounded text travels as one argv element, temp WAV deleted in finally)",
-      "runtimeEnforcement": "EspeakNgEngine.synthesize verifies the digest before spawn and refuses with TtsUnsupportedError while zero pins exist (provision via ESPEAK_DIGESTS allowlist); empty/oversize text and out-of-range speed fail closed without spawning"
+      "invocation": "espeak-ng --stdin -v <voice> -s <wpm> --stdout with narration text on stdin (explicit argv carries no text; WAV collected from stdout into a bounded 8 MB buffer, child killed on abort)",
+      "runtimeEnforcement": "EspeakNgEngine.synthesize verifies the digest before spawn and refuses with TtsUnsupportedError while zero pins exist (provision via ESPEAK_DIGESTS allowlist); empty/oversize text and out-of-range speed fail closed without spawning; test doubles bypass verification (production never injects a runner)"
     }
   },
   "networkPosture": {
     "microphone": false,
     "paidApi": false,
     "runtimeDownloads": "none — audio helpers are preinstalled system binaries or refused when absent; no npm TTS dependency added",
-    "audioInTests": "synthetic PCM and byte-stub WAVs only via FakeDevice, FakePort and node fixtures; no audio payload in events or logs (counts, ids and text only)"
+    "audioInTests": "synthetic PCM and byte-stub WAVs only via FakeDevice, FakePort and node fixtures; no audio files written, no audio payload in events or logs (counts, ids, chunk indexes and text length only)"
+  },
+  "trustBoundary": {
+    "hashThenExec": "digest verified immediately before spawn, executed by path (TOCTOU inherited from the L4 arecord pattern and accepted there); ESPEAK_DIGESTS/APLAY_DIGESTS/APLAY_BIN/ESPEAK_BIN env overrides allow operator-chosen binaries and are therefore trusted operator input, recorded here",
+    "narrationText": "text travels on espeak stdin (never argv, never /proc cmdline); WAV bytes travel espeak-stdout to aplay-stdin with no filesystem copy; RAM buffers are dropped after close"
   },
   "sbom": {
     "status": "measured",
