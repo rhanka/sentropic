@@ -70,7 +70,7 @@
   - [x] Add `make check-artifact-budget` and CI step in `validate-artifacts` with `docs/governance/kit/**` filter and output report artifact.
   - [x] Preserve a separately bounded full-governance profile; do not claim actual A2UI L1 DS 0.36.0/chart qualification.
 
-- [ ] **Docs consolidation**
+- [x] **Docs consolidation**
   - [x] Document explicit input/build contract, budget counting, baseline comparison and report reproduction.
   - [x] Record server-side pinned-runtime reuse as a future host qualification candidate, without claiming support.
 

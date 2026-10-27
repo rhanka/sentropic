@@ -51,7 +51,7 @@ for(const language of ['fr','en']) {
     const folds=key==='overview'?states:[all];
     for(const ids of folds){
      progress(`${language} ${key}/fold ${ids.join(',')}`);
-    const input={...bindGovernanceScene(packed),projectionKey:key,detailedEdges:packed.edges,edges};
+     const input={...bindGovernanceScene(packed),projectionKey:key,detailedEdges:packed.edges,edges};
      const folded=cached({input,ids},()=>collapseGovernanceScene(input,ids,false));
      if(!projections.folded.some(p=>p.signature===folded.routingSignature))projections.folded.push({signature:folded.routingSignature,edges:folded.edges});
     }

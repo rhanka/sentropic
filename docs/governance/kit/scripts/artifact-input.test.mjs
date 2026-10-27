@@ -35,3 +35,13 @@ test('should preserve exact and trimmed translation lookups without unrelated pr
   assert.equal(t(' Bonjour ', 'en'), ' Hello ');
   assert.equal(t('Déplier', 'en'), 'Expand');
 });
+test('should isolate route caches by scene identity and reject stale routing versions', () => {
+  const { roles } = read('../fixtures/artifact-weight/harness-scenes.json');
+  const ids = [roles.groups[0].id];
+  const first = collapseGovernanceScene({ ...roles, id: 'cache-first' }, ids);
+  assert(first.edges.length > 0);
+  first.edges[0].data.routedPoints[0].x += 999999;
+  const second = { ...roles, id: 'cache-second' };
+  assert.deepEqual(collapseGovernanceScene(second, ids).edges, collapseGovernanceScene(second, ids, false).edges);
+  assert.throws(() => collapseGovernanceScene({ ...roles, routingVersion: 'outdated' }, ids), /Stale routing version/);
+});
