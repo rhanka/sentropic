@@ -77,6 +77,7 @@ describe('host maintenance binding', () => {
       storeId: 'store-1',
       scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
       invocationId: 'inv-1',
+      continuationIds: [],
       envelopeDigest: 'e'.repeat(64),
       state: 'reserved' as const,
       receipt: null,
@@ -99,6 +100,18 @@ describe('host maintenance binding', () => {
       expect(done.state).toBe('terminal');
       expect(ledger.read('cand-1')).toBe(done);
       expect(() => ledger.markTerminal('unknown', null, null)).toThrow(StorageDeniedError);
+    });
+
+    it('tracks continuations and refuses copied invocation fields', () => {
+      const ledger = createMemoryHostLedger();
+      ledger.record(entryFor('cand-1'));
+      const continued = ledger.recordContinuation('cand-1', 'inv-2');
+      expect(continued.continuationIds).toEqual(['inv-2']);
+      expect(ledger.read('cand-1')).toBe(continued);
+      expect(() => ledger.recordContinuation('cand-1', 'inv-1')).toThrow(StorageDeniedError);
+      expect(() => ledger.recordContinuation('cand-1', 'inv-2')).toThrow(StorageDeniedError);
+      expect(() => ledger.recordContinuation('cand-1', '')).toThrow(StorageDeniedError);
+      expect(() => ledger.recordContinuation('unknown', 'inv-9')).toThrow(StorageDeniedError);
     });
 
     it('refuses malformed entries without recording', () => {
