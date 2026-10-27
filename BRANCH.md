@@ -57,3 +57,4 @@ E7 after E3/E5/E6: host-owned memory bindings in `src/engram-memory/{binding,pos
 - Engram 0.21.1 DTOs frozen; memory files unchanged at 0.21.2, so the E8 answers hold.
 - E7 gate = engram-memory lanes + PG storage lanes green (E9 runs the five-profile acceptance later, not here).
 - AI CI job red-on-main is out of scope for this lot's gate.
+- Slices landed: PG provider check (`checkMemoryPostgresDriver`), host assembly (`assembleMemoryHostBinding`), fail-closed maintenance ports (`openMemoryMaintenance`); 5 real tests green, 11 todo. Ledger/continuation/proof-only recovery and PG positive-path composition remain.
