@@ -99,7 +99,8 @@ export async function resolveDecisionAuth(descriptor: DecisionEvaluatorDescripto
       || typeof material.token !== 'string'
       || !material.token.trim() || material.token !== material.token.trim() || /[\r\n]/.test(material.token)
       || typeof material.envVar !== 'string' || !material.envVar.trim()
-      || (isJev && material.envVar !== 'JEV_API_KEY')) {
+      || (isJev && material.envVar !== 'JEV_API_KEY')
+      || (descriptor.protocol === 'openai-decisions' && material.envVar !== 'OPENAI_API_KEY')) {
       return { ok: false, code: 'CREDENTIAL_MISSING' };
     }
     return { ok: true, auth: freezeDecisionData(snapshot.value as unknown as AuthResolution) };

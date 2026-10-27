@@ -33,17 +33,17 @@ export function quoteDecision(request: DecisionRequest, descriptor: DecisionEval
     || value.protocol !== (descriptor.protocol ?? 'jev-native')) return { ok: false, code: 'PRICING_UNAVAILABLE' };
   const price = freezeDecisionData(value as unknown as DecisionPrice);
   if (descriptor.qualification.billingBound !== 'qualified') return { ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' };
-  const isJev = (descriptor.protocol ?? 'jev-native') === 'jev-native';
-  // JEV has no qualified output liability bound. A nonzero output rate cannot be reserved.
-  if (isJev && price.outputMicroUsdPerMtok !== '0') return { ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' };
-  // Non-JEV protocols price output work, so quoting requires the descriptor's
+  const inputOnly = (descriptor.protocol ?? 'jev-native') === 'jev-native' || descriptor.protocol === 'openai-decisions';
+  // Native JEV/Decisions tariffs admit no billed output; reject a foreign output rate.
+  if (inputOnly && price.outputMicroUsdPerMtok !== '0') return { ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' };
+  // Other protocols price output work, so quoting requires the descriptor's
   // enforced output/reasoning bound. Without it no finite liability exists.
   const outputBound = descriptor.maxBillableOutputTokens;
-  if (!isJev && (typeof outputBound !== 'number' || !Number.isSafeInteger(outputBound) || outputBound < 1)) {
+  if (!inputOnly && (typeof outputBound !== 'number' || !Number.isSafeInteger(outputBound) || outputBound < 1)) {
     return { ok: false, code: 'BUDGET_BOUND_UNAVAILABLE' };
   }
   const inputReserve = ceilRate(descriptor.maxBillableInputTokens, price.inputMicroUsdPerMtok);
-  const outputReserve = isJev ? 0n : ceilRate(descriptor.maxBillableOutputTokens, price.outputMicroUsdPerMtok);
+  const outputReserve = inputOnly ? 0n : ceilRate(descriptor.maxBillableOutputTokens, price.outputMicroUsdPerMtok);
   const reserve = minimum(inputReserve + outputReserve, price);
   const caps = [hostCap, request.policy?.budget?.maxCostMicroUsd].filter((v): v is string => v !== undefined);
   if (caps.some((cap) => !isMicroUsd(cap))) return { ok: false, code: 'PRICING_UNAVAILABLE' };

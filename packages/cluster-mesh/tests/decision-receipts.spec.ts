@@ -76,7 +76,7 @@ describe('decision receipt correlation and generation-policy refusal via public 
     const decisionState = { now: 0 };
     const transportSend = vi.fn(async () => opts.timeout
       ? (decisionState.now = 10001, { ok: false as const, error: { code: 'CANCELLED' as const, phase: 'dispatch' as const, message: 'timeout' } })
-      : { ok: true as const, body: { model: 'syn-model', answers: { verdict: { noul: opts.pass === false ? 0.05 : 0.95 } }, usage: { input_tokens: 10, output_tokens: 0 } } });
+      : { ok: true as const, body: { model: 'syn-model', answers: { verdict: { type: 'noul', noul: opts.pass === false ? 0.05 : 0.95 } }, usage: { input_tokens: 10, output_tokens: 0 } } });
     const service = rInput.decisionHost!.createDecisionService({
       registry: rInput.llmMesh.createProviderRegistry([rInput.decisionHost!.createJevAdapter({ descriptor: desc, transport: { send: transportSend } })]),
       resolveEvaluator: () => desc, evaluatorAllowlist: [{ ...desc.evaluator }],
