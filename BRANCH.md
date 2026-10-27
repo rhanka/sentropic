@@ -18,6 +18,9 @@
   - `packages/llm-gateway/tests/fixtures/speech-*.ts`
   - `packages/llm-gateway/package.json`
   - `packages/llm-gateway/README.md`
+  - `packages/cluster-mesh/package.json`
+  - `package-lock.json`
+  - `.tmp/live-stt/l8/**`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -35,6 +38,8 @@
 - [ ] G-LEDGER: existing host sink supports monthly text budgets only; ledger owner must supply atomic speech admission and adjustments before cloud activation.
 - [x] Docker reservation takes precedence over the container-backed scope target; temporary host Make adapter invokes the same installed harness C2 check before every commit.
 - [x] Registry latest is 0.21.3 (2026-10-27); feature version will be 0.22.0, without publication.
+- [x] BRL8-EX1: gateway 0.22.0 requires widening cluster-mesh's optional gateway peer upper bound from 0.22 to 0.23 and mirroring workspace metadata in package-lock.json. Impact: manifest-only compatibility for the additive subpaths; rollback restores those three version/range fields. No cluster-mesh source changes.
+- [x] BRL8-EX2: permit .tmp/live-stt/l8 review/validation receipts only; no raw media, credentials or accounting store.
 
 ## AI Flaky tests
 - [x] Deterministic fixtures only; no provider calls or waiver.
