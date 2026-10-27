@@ -52,6 +52,9 @@ export const runMemoryCorpus = (open: () => Promise<MemoryCampaignHost>): void =
       expect(h.binding.maintainGrant.operations).toEqual(['maintain']);
       expect(h.handle.profiles).toEqual(MEMORY_PINNED_PROFILES.filter((claim) => MEMORY_STAGE_B_PROFILES.includes(claim.name as never)));
       expect(h.handle.profiles.map((claim) => claim.name)).toEqual(MEMORY_STAGE_B_PROFILES);
+      const backendProfiles = (await h.kernel.bind(h.binding.memoryGrant)).profiles
+        .filter((claim) => MEMORY_STAGE_B_PROFILES.includes(claim.profile as never));
+      expect(backendProfiles.map((claim) => claim.profile)).toEqual(MEMORY_STAGE_B_PROFILES);
       for (const name of ['checkpoint', 'journalCheckpoint', 'snapshot', 'snapshotRead', 'resync', 'maintainGrant'])
         expect(name in h.handle).toBe(false);
       expect(valueOf(await h.store.readiness()).storage_epoch).toBe('1');
@@ -63,7 +66,7 @@ export const runMemoryCorpus = (open: () => Promise<MemoryCampaignHost>): void =
       expect(process.versions.node.split('.')[0]).toBe('24');
       expect(facts.server).toMatchObject({ isolation: 'serializable', synchronous_commit: 'on' });
       console.info('MEMORY_STAGE_B_RUNTIME', JSON.stringify({ node: process.version, arch: process.arch, server: facts.server,
-        profiles: h.handle.profiles, migrations: facts.migrations,
+        profiles: h.handle.profiles, backendProfiles, migrations: facts.migrations,
         pgData: 'Compose test-e2-int tmpfs; process/reopen durability only' }));
     });
     scenario('atomic-units-v1/capture-completion: should complete K7 without allocating another cursor', async (h) => {
