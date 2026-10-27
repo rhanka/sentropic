@@ -825,9 +825,9 @@ check-eradicated-packages: ## Fail if cli, build-cli or focus return as sentropi
 .PHONY: ci-run-metrics ci-expected-results ci-expected-manifest test-ci-run-metrics test-ci-expected-results
 CI_METRICS_DIR ?= tmp/ci-capacity
 CI_EXPECTED_TOOLS = tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund yaml@2.8.1 >/dev/null; export CI_EXPECTED_TOOL_DIR="$$tool_dir"
-# BR77-EX2: fail closed when the workflow DAG exceeds the observed slot budget.
+# BR77-EX2: check per-run dispatch shape; measured timing is a separate proof.
 .PHONY: ci-capacity-policy
-ci-capacity-policy: ## Check the per-run finite-capacity bound (quota remains separately inventoried)
+ci-capacity-policy: ## Check independent dispatch and matrix widths (account admission requires live evidence)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file .github/workflows/ci.yml --capacity-policy $(if $(filter 1,$(CI_REQUIRE_CAPACITY_PROOF)),--require-proof) $(foreach file,$(CI_POLICY_RUN_FILES),--proof-file $(file))'
 CI_RUN_ATTEMPT ?= 1
 CI_CAPACITY_REF ?= $(shell git branch --show-current)

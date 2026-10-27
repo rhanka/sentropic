@@ -31,6 +31,7 @@
 
 ## Feedback Loop
 - [x] BR77-EX1 — Workflow exception: bound shared runner concurrency, independent package validation/publication, branch dry-run publication qualification, keep PR-only cancellation. Impact: dispatch and required results. Rollback: revert workflow policy while preserving complete-result checks.
+- [x] Review r2 owner instruction: replace repo-wide slot mutexes with per-run matrix widths and PR cancellation; measure hosted-runner scheduling. Static demand no longer claims account admission. API quality remains required at the gate and image publishers.
 - [x] BR77-EX2 — Makefile exception: capacity-policy entry points only. Impact: named CI measurement/policy entry points only. Rollback: restore the previous recipes and rerun their qualification.
 - [x] BR77-EX2 includes the requested dry-run publication target: real existing guarded packs, per-package receipts, no registry writes; rollback removes the target and dispatch mode.
 - [x] BR77-EX3 — Permit `scripts/ci/publishable-ci-wiring.test.mjs` to assert the explicit branch dry-run alternative while preserving all production publication barriers. Rollback: restore assertions with the workflow.
@@ -86,7 +87,8 @@
 - [x] **Lot 4 — Docs consolidation**
   - [x] Update this plan, the study, and `spec/ci-cd-ten-minutes/capacity.md` with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
-  - [ ] P1 (Opus r1) timing acceptance: completed final-policy PR 40460101167 took 3661s and main-like dry-run 40460107095 took 3928s on 2026-10-27; both exceed 2288s. Policy unchanged; PR stays draft.
+  - [x] Review r2 local workflow qualification: 22 expected-results tests pass; no capacity mutexes, unchanged matrix members, independent package publication, E2E parallel to API quality with retained image promotion barriers.
+  - [ ] P1 timing acceptance: previous slot-policy PR 40460101167 took 3661s and main-like dry-run 40460107095 took 3928s; both exceed 2288s. Review r2 removes mutexes and shortens E2E dependencies; require two new completed measurements before accepting. PR stays draft.
   - [x] Final measurement source: merge dd2737fa486985ecfa756261b26ba2323e73289f incorporates origin/main 2d6643692389ecbb7e5ac410e7b31a3cfbaa732a. Harness C1/C2 and all 35 + 21 + 90 tooling tests passed before push; both attempt-1 runs completed successfully without interruption.
   - [x] PR receipt: 06:16:16–07:17:17 UTC, 62 executions / 27 skips; qualification 3660s = 2582s scheduling + 1078s execution, then 1s finalization. E2E D job 122046116611 queued 2571s and executed 357s. Full receipts and hotspots are in capacity.md.
   - [x] Main-like dry-run receipt: 06:16:20–07:21:48 UTC, 82 executions / 7 skips; qualification 3927s = 2965s scheduling + 962s execution, then 1s finalization. All 21 guarded-pack steps passed; registry writers skipped. Package endpoint 3304s = 3205s scheduling + 99s execution.
