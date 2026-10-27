@@ -4,7 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync, writeFileSync, readdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-const versions = { artifacts: '0.2.3', 'cluster-mesh': '0.22.4', 'llm-mesh': '0.28.1', 'llm-gateway': '0.21.3' };
+const versions = { artifacts: '0.2.4', 'cluster-mesh': '0.22.4', 'llm-mesh': '0.28.1', 'llm-gateway': '0.21.3' };
 const digest = (bytes, algorithm = 'sha256') => createHash(algorithm).update(bytes).digest('hex');
 function payload(directory, prefix = '') {
   return Object.fromEntries(readdirSync(directory, { withFileTypes: true }).sort((a, b) =>
@@ -24,6 +24,8 @@ for (const [name, version] of Object.entries(versions)) {
   const bytes = Buffer.from(await archiveResponse.arrayBuffer());
   const sri = `sha512-${createHash('sha512').update(bytes).digest('base64')}`;
   assert.equal(sri, metadata.dist.integrity);
+  if (name === 'artifacts') assert.equal(sri,
+    'sha512-AMXfnuKVx5gdeFppZ4iSgb0KxmfH+qSOotm/cXGBKGEdhyv9R/D05jMhefP5pIW9HwD/jbEWqcU9Gv3KTxJSQQ==');
   const directory = mkdtempSync('/tmp/w0-payload-');
   try {
     writeFileSync(join(directory, 'published.tgz'), bytes);

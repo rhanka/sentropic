@@ -25,7 +25,7 @@ const definition = { profile, invocationScope: MCP_SCOPES.TOOLS_INVOKE,
     execute: async () => { throw new Error('No effect during compilation'); } },
   createInvocation: () => { throw new Error('No binding during compilation'); } };
 const manifest = createArtifactsManifest(definition);
-assert.equal(manifest.version, '0.2.3');
+assert.equal(manifest.version, '0.2.4');
 assert.deepEqual(manifest.tools.map(t => t.name).sort(), selected);
 assert.throws(() => createArtifactsManifest({ selectedCapabilities: selected }));
 const manifestDigest = computeManifestDigest(manifest);

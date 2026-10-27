@@ -10,7 +10,7 @@ const fit = json('/out/probe-result.json');
 const payload = json('/out/payload-equivalence.json');
 const lock = json('/out/workspace-package-lock.json');
 assert.equal(sha256('/out/workspace-package-lock.json'), sha256('/workspace/package-lock.json'));
-assert.equal(fit.manifestDigest, '80ca4b067a010690dc71036a3237a70b91d99d7c025ded7173566d0ae55b1600');
+assert.equal(fit.manifestDigest, '020aacfec500d754b76c90d3ad4a05097e0f996b8b9282145ca458917ea6fb27');
 const tree = json('/out/workspace-tree.json');
 const runtime = json('/out/workspace-runtime-tree.json');
 assert.equal(runtime.problems, undefined);
@@ -22,14 +22,16 @@ save('registry-results-2026-10-27.json', Object.fromEntries(['red', 'green'].map
 const packages = Object.fromEntries(Object.entries(payload.receipts).map(([name, receipt]) =>
   [name, { ...receipt.metadata, archiveSha256: receipt.archiveSha256 }]));
 const inputs = ['package.json', 'package-lock.json', 'api/package.json', 'api/package-lock.json',
-  'api/src/services/mcp/cluster-registry.ts', 'api/tests/api/app-mcp-registry.test.ts',
-  'api/tests/api/app-mcp-installed.test.ts'];
+  'api/src/services/mcp/cluster-registry.ts', 'api/src/services/artifacts/transport.ts', 'api/tests/api/app-mcp-registry.test.ts',
+  'api/tests/api/app-mcp-installed.test.ts', 'api/tests/api/app-artifacts-transport.test.ts',
+  'packages/artifacts/package.json', 'packages/artifacts/src/mcp-core.ts'];
 const tuple = {
   observedAt: fit.observedAt,
   status: 'published-qualified-workspace-source-not-app-deployed',
   sourceSha: process.env.W0_REFRESH_SOURCE_SHA,
   bases: { w2b: 'd0ce8aeb0', w0: '5dfab2cf3', mainUpT: '72bb2da3d',
-    mergedSource: '2c3bf7750c0d9e13372bb573cc4fb5fc0b4a86cc', mode: 'merge-commits' },
+    mergedSource: '2c3bf7750c0d9e13372bb573cc4fb5fc0b4a86cc', integration: 'ca3239295',
+    artifacts024: '60affbaf6fb3ea99fcb4c885c615140d2a34c9f2', mode: 'merge-commits' },
   historicalEvidence: ['published-tuple-2026-10-18.json', 'published-tuple-2026-10-26.json'],
   packages,
   selectedPeers: Object.fromEntries(Object.entries(fit.resolvedTree)
@@ -57,3 +59,13 @@ const tuple = {
 assert.match(tuple.sourceSha, /^[a-f0-9]{40}$/);
 writeFileSync(directory + 'published-tuple.json', '{\n' + Object.entries(tuple)
   .map(([key, value]) => JSON.stringify(key) + ':' + JSON.stringify(value)).join(',\n') + '\n}\n');
+save('tuple-vectors-2026-10-27.json', {
+  purpose: 'Refreshed tuple consistency fixture; no release authority',
+  sourceSha: tuple.sourceSha,
+  versions: Object.fromEntries(Object.entries(packages).map(([key, p]) => [key, p.version])),
+  lockEntries: tuple.workspaceResolution.entryCount,
+  manifestDigest: tuple.profile.manifestDigest,
+  fileHashes: Object.fromEntries(['published-tuple.json', tuple.publishedFit.receipt,
+    tuple.payloadEquivalence.receipt, tuple.workspaceResolution.completeTree]
+    .map(file => [file, sha256(directory + file)])),
+});

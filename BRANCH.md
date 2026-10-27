@@ -87,3 +87,4 @@
 - [x] Lot 4: refresh reservations.md, host-fit.md, catalog-context.md and published-tuple.json; dated evidence and exact base/lock hashes.
 - [x] Lot 5: installed/profile tests, scope/branch gates, locked make down, empty stack, draft PR and head.
 - [ ] Lot 6: resolve Opus r1 startup and record-check findings; document #794's workspace-source handoff in PR #796 without editing #794.
+- [x] Lot 6a: retain all historical signature/source checks; add regenerated current-tuple vectors and exact receipt/lock/source consistency checks for artifacts 0.2.4.
