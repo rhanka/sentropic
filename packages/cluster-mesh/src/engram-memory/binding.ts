@@ -10,6 +10,7 @@
 import { validateScopeGrant, type ScopeGrant } from '../storage/authority.js';
 import { StorageDeniedError } from '../storage/errors.js';
 import { checkMemoryPostgresDriver, type MemoryPostgresDriverProvider } from './postgres.js';
+import type { MemoryHostLedger } from './ledger.js';
 
 /** The only operations Engram's neutral memory handle ever carries. */
 export const MEMORY_HANDLE_OPERATIONS = ['read', 'write'] as const;
@@ -42,4 +43,66 @@ export const assembleMemoryHostBinding = (input: MemoryHostBindingInput): Memory
     maintainGrant: grant,
     memoryOperations: MEMORY_HANDLE_OPERATIONS,
   });
+};
+
+/** Fresh host authentication for a later invocation (E8 answer 2). */
+export interface MemoryContinuationAttestation {
+  readonly invocationId: string;
+  readonly issuedAt: string;
+  readonly hostPrincipal: string;
+}
+
+export interface MemoryContinuation {
+  readonly grant: ScopeGrant<unknown>;
+  readonly candidateId: string;
+  readonly storeId: string;
+}
+
+/**
+ * Issue the explicit host-controlled continuation grant for a retained
+ * candidate. The ledger must already hold the candidate (refusing on an
+ * empty or unknown ledger is correct until rehydration); the grant scope
+ * always comes from the retained record, so a foreign scope can never be
+ * minted; the attestation must carry a fresh invocation identity with host
+ * authn. Copied fields never grant: reusing the retained or an
+ * already-recorded invocation is refused by the ledger. The grant carries
+ * only the neutral operations with the new invocation lifetime, bound to
+ * the retained candidate and scope.
+ */
+export const issueContinuationGrant = (
+  ledger: MemoryHostLedger,
+  candidateId: string,
+  attestation: MemoryContinuationAttestation,
+): MemoryContinuation => {
+  const retained = ledger.read(candidateId);
+  if (!retained) throw new StorageDeniedError('no retained authority for this candidate');
+  if (
+    typeof attestation !== 'object' ||
+    attestation === null ||
+    typeof attestation.invocationId !== 'string' ||
+    attestation.invocationId.length === 0 ||
+    typeof attestation.issuedAt !== 'string' ||
+    attestation.issuedAt.length === 0 ||
+    typeof attestation.hostPrincipal !== 'string' ||
+    attestation.hostPrincipal.length === 0
+  ) {
+    throw new StorageDeniedError('continuation requires fresh host authentication');
+  }
+  const updated = ledger.recordContinuation(candidateId, attestation.invocationId);
+  return {
+    candidateId: updated.candidateId,
+    storeId: updated.storeId,
+    grant: Object.freeze({
+      token: `memory-continuation-${candidateId}-${attestation.invocationId}`,
+      moduleId: 'engram-memory',
+      scope: updated.scope,
+      principalId: attestation.hostPrincipal,
+      operations: Object.freeze([...MEMORY_HANDLE_OPERATIONS]),
+      issuer: 'host',
+      authorityRevision: '1',
+      policyRevision: '1',
+      moduleAuthority: null,
+      lifetime: Object.freeze({ kind: 'invocation', invocationId: attestation.invocationId }),
+    }),
+  };
 };
