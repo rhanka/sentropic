@@ -79,6 +79,21 @@ Fresh reports record actual Node, Svelte, Vite, Rollup, minifier and DS versions
 input digests, commit and output hashes. Current Vite is 7.3.7; the preserved harness
 used 7.3.6. Fresh baseline and typical builds use the same current renderer and lock.
 
+The local qualification receipt is `fixtures/artifact-weight/qualification.json`,
+bound to code commit `ca81d9392f19313bab70bab3b2a5fd17496df84f`:
+
+| Metric | Fresh corpus baseline | Scoped dossier |
+|---|---:|---:|
+| Portable HTML | 3734108 B | 291871 B |
+| Initial executable JS | 3691474 B | 249234 B |
+| Agent read cost, portable | 3734108 B | 291871 B |
+
+This removes 92.2% of portable bytes. Both fresh variants include the current
+renderer, bounded fold preparation and exact font notices. Twelve unit/negative
+tests, 1758 geometry scenes, four typical offline configurations and four full
+governance language/theme configurations passed; the cold startup closure is
+291870 B. These receipts do not substitute for CI on a later commit.
+
 Every report includes **agent read cost**: the bytes of every file a publishing
 agent must read, portable and hosted separately. Inline JS/data is already counted
 inside the HTML. This is non-gating. The Claude Artifact tool contract observed in
