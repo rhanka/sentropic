@@ -55,3 +55,12 @@ test('should sum static imports and reject missing or unreferenced deployed file
   assert(report.violations.some(message => message.startsWith('js:')));
   assert(report.violations.some(message => message.includes('Unreferenced deployed asset')));
 }));
+test('should count inline executable code without counting JSON or license notices as JS', () => fixture(({ put, measure }) => {
+  const html = '<script>' + 'x'.repeat(307201) + '</script>';
+  put('index.html', html + '<script type="text/plain">license</script><script type="application/json">{}</script>');
+  put('portable.html', html);
+  const report = measure();
+  assert(report.violations.some(message => message.startsWith('js:')));
+  assert(report.violations.some(message => message.startsWith('Portable executable JS:')));
+  assert.equal(report.portable.inlineExecutableJs, 307201);
+}));
