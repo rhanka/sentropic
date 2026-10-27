@@ -39,6 +39,7 @@
   - [ ] Update api/tests/services/catalog/{composite-registry,execution-seam,search-catalog-tool,mcp-source,standalone-tool-source}.spec.ts as signatures evolve.
   - [ ] Update api/tests/api/cluster-mesh-catalog.test.ts and api/tests/unit/foundation-executor.test.ts.
 - [ ] Lot 2: frozen server-only context resolver and fresh product session/turn authority.
+  - [x] Server inputs and allowlists frozen; provenance checked by identity; dispatch rechecks current grants and policy references.
 - [ ] Lot 3: require context at every HTTP product port; filter before ranking and serialization.
 - [ ] Lot 4: pass turn context through model selection, search and execution; handled denials never fall through.
 - [ ] Lot 5: focused suites, API typecheck/lint, runtime logs and locked make down.
