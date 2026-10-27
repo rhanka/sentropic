@@ -14,11 +14,23 @@ Mesh `speech/openai-transcription.ts` with two independently configured OpenAI s
 - **Allowed Paths (implementation scope)**:
   - `packages/llm-mesh/src/speech/openai-transcription.ts`
   - `packages/llm-mesh/src/speech/index.ts`
-  - `packages/llm-mesh/src/speech/catalog.ts`
   - `packages/llm-mesh/tests/speech-openai-transcription.test.ts`
+  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
   - `packages/llm-mesh/tests/fixtures/openai-transcription-frames.ts`
   - `packages/llm-mesh/bench/l9-openai-stt.receipt.json`
   - `packages/llm-mesh/package.json`
+  - `packages/llm-gateway/package.json`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/src/modules/catalog.ts`
+  - `packages/cluster-mesh/tests/fixtures/train.ts`
+  - `packages/cluster-mesh/tests/speech-peer.spec.ts`
+  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
+  - `api/tests/unit/gateway-package-version.test.ts`
+  - `package-lock.json`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -60,19 +72,10 @@ Mesh `speech/openai-transcription.ts` with two independently configured OpenAI s
   - [x] Read spec-plan L9 row, §2.1-2.2 OpenAI wire, §7-8.1, §9-10, L8 gateway caps.
   - [x] Fetch live wire [O7]: `wss://api.openai.com/v1/realtime?intent=transcription`, session.update transcription, append/commit, delta/completed by item_id, no server VAD, delay levels, no timestamps/confidence for live-transcribe.
   - [x] Seam: mesh stays dependency-free; admission as data + injected usage sink; real gateway wiring at composition (L16/API).
-  - [x] Worktree `tmp/worktrees/stt-l9`, branch `feat/live-stt-l9`, base `feat/live-stt-l8` at b4b559c63.
+  - [x] Worktree `tmp/worktrees/stt-l9`, branch `feat/live-stt-l9`, base `feat/live-stt-l8` at b4b559c63, merged origin/main (merge 54c7dcbe4) per r1 P1-1.
   - [x] Lanes: `make typecheck-llm-mesh`, `make test-llm-mesh`, `make build-llm-mesh`, CI `validate-llm-mesh`, all under flock, ENV=test-stt-l9 last.
   - [x] Lot gate: base head verified b4b559c63, scope boundaries declared, no exception needed.
-- [ ] **Lot 1 — Adapter `speech/openai-transcription.ts`**
-  - [ ] Profile configs `gpt-live-transcribe` / `gpt-realtime-whisper`: model pin, delay, language, format pcm16/24k mono, placement cloud-relay; independent selection, no shared mutable state.
-  - [ ] `SpeechCapabilities` per profile: streamingStt + partialTranscript + clientVad + manualCommit supported; serverVad + nativeDuplex + tts unsupported; languages/regions selectors; usageUnits session-seconds + audio-seconds.
-  - [ ] `session.update` builder: `type transcription`, `turn_detection null` refused otherwise, unsupported VAD options rejected at open (fail-closed).
-  - [ ] Transport port (injectable WS): append base64 pcm16, commit per client-VAD turn, abort closes, no audio persisted, no key in logs/errors.
-  - [ ] Event mapping: delta keyed by item_id to `transcript.partial` (monotonic revision, replaces-append), completed to `transcript.final` (full text, audioInterval, language); out-of-order finals kept per utterance; invalid frames to `session.error` without payload, stream continues.
-  - [ ] Metering: admission receipt required at open (operationId, ceiling, hold ref; refuse without); usage sink gets estimate/final `SpeechUsageUpdate` (connectedSeconds, admittedAudioSeconds) + settlement outcome completed/cancelled/failed; abort counts as cancelled.
-  - [ ] TTS exclusion: no synthesis model field, no speech-to-speech path, no implicit OpenAI voice.
-  - [ ] Lot gate: `make typecheck-llm-mesh` green on the lot head.
-- [x] **Lot 1 — Adapter `speech/openai-transcription.ts`**
+- [x] **Lot 1 — Adapter `speech/openai-transcription.ts`****
   - [x] Profile configs `gpt-live-transcribe` / `gpt-realtime-whisper`: model pin, delay, language, format pcm16/24k mono, placement cloud-relay; independent selection, no shared mutable state.
   - [x] `SpeechCapabilities` per profile: streamingStt + partialTranscript + clientVad + manualCommit supported; serverVad + nativeDuplex + tts unsupported; languages/regions selectors; usageUnits session-seconds + audio-seconds.
   - [x] `session.update` builder: `type transcription`, `turn_detection` null refused otherwise, unsupported VAD options rejected at open (fail-closed).
@@ -87,7 +90,7 @@ Mesh `speech/openai-transcription.ts` with two independently configured OpenAI s
   - [x] Lot gate: `make test-llm-mesh` green (SCOPE=file 20/20, then full 77 files / 1401 tests) on the lot head.
 - [x] **Lot 3 — Receipt + version**
   - [x] `bench/l9-openai-stt.receipt.json`: status blocked, exact missing G-CLOUD/§10 items, price revision unpinned, no live evidence claimed.
-  - [x] Bump `packages/llm-mesh/package.json` to 0.30.0 (minor, strictly above published 0.29.0).
+  - [x] Bump `packages/llm-mesh/package.json` to 0.31.0 (minor, strictly above published 0.30.0; 0.30.0 was already taken by main).
   - [x] Lot gate: receipt present and blocked, version bumped, `make build-llm-mesh` + `make pack-llm-mesh` green.
 - [ ] **Lot N — Final validation**
   - [ ] `make scope-check` (harness) green.
