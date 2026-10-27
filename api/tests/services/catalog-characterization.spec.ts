@@ -38,6 +38,7 @@ import {
   resolveFoundationChatTools,
 } from '../../src/services/skills/catalog';
 import { productCatalogDiscovery } from '../../src/routes/namespaces/catalog-product-ports';
+import { testCatalogContext } from './catalog/test-context';
 
 // ---- Foundation executor (dispatch + unhandled surface) ----
 import type { ExecuteFoundationSkillToolInput } from '../../src/services/skills/foundation-executor';
@@ -48,8 +49,9 @@ import { executeFoundationSkillTool } from '../../src/services/skills/foundation
 // ---------------------------------------------------------------------------
 
 describe('FOUNDATION_SKILLS bundle', () => {
-  it('keeps the root discovery projection in canonical registry order', () => {
-    const expected = compositeCatalogRegistry.list().map(({ kind, sourceId, metadata }) => ({
+  it('keeps the authorized root discovery projection in canonical registry order', async () => {
+    const context = await testCatalogContext(FOUNDATION_SKILLS.flatMap(skill => skill.tools.map(tool => tool.name)));
+    const expected = compositeCatalogRegistry.list(context).map(({ kind, sourceId, metadata }) => ({
       kind,
       sourceId,
       metadata: {
@@ -59,7 +61,7 @@ describe('FOUNDATION_SKILLS bundle', () => {
         ...(metadata.category === undefined ? {} : { category: metadata.category }),
       },
     }));
-    expect(productCatalogDiscovery.list({})).toEqual(expected);
+    expect(productCatalogDiscovery.list({}, context)).toEqual(expected);
   });
 
   it('contains exactly 16 skills in canonical registration order', () => {
