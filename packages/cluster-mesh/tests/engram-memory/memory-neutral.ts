@@ -40,15 +40,8 @@ export const neutralTransaction = (tx: KernelTransaction, units: NeutralAtomicUn
   readRecords: async (kind, keys) => (await tx.readRecords(keys, { maxRecords: 2000, maxEncodedBytes: 1048576 }))
     .map((row) => ({ kind, key: row.key, value: row.bytes as { format: 'utf8'; data: string }, contentHash: row.contentHash })),
   readChain: async ({ chain, afterAllocation = '0', limit }) => {
-    const records = []; let cursor: unknown = null;
-    do {
-      const page = await tx.readChain({ chainId: chain, limit: Math.min(limit, 1024), cursor, maxEncodedBytes: 1048576 });
-      if (page.outcome !== 'page') throw Object.assign(new Error('memory chain boundary unavailable'), { code: 'store-unavailable' });
-      records.push(...page.records.filter((row) => BigInt(JSON.parse(row.bytes).cursor) > BigInt(afterAllocation))
-        .map((row) => ({ id: row.id, hash: row.hash, value: { format: 'utf8' as const, data: row.bytes } })));
-      cursor = page.nextCursor;
-    } while (cursor !== null && records.length < limit);
-    return { chain, records: records.slice(0, limit) };
+    const exact = tx as KernelTransaction & { readMemoryChain: (input: { chainId: string; afterAllocation: string; limit: number }) => ReturnType<NeutralModuleTransaction['readChain']> };
+    return exact.readMemoryChain({ chainId: chain, afterAllocation, limit });
   },
   findIdempotency: async ({ commitIdentity }) => {
     const row = await tx.findIdempotency({ key: commitIndexKey(commitIdentity) });

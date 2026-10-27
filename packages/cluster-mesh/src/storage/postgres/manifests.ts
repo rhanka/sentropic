@@ -41,7 +41,7 @@ export const capturePgManifest = async (core: PgCore, grant: ScopeGrant<unknown>
       await core.visible(session, base.root, selection);
       const chain = await core.roots.get<PgChain>(session, base.root, 'chain', selection);
       if (!chain?.head) throw new StorageInvalidCommandError('manifest selection has no committed head');
-      heads[selection] = { head: chain.head, allocation: chain.allocation, terminalSeq: String(chain.count - 1) };
+      heads[selection] = { head: chain.head, allocation: chain.allocation, terminalSeq: (BigInt(chain.count) - 1n).toString() };
     }
     const unitRoots: string[] = [];
     for (const key of input.operationKeys ?? []) {

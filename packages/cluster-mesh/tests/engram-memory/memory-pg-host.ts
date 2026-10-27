@@ -6,6 +6,7 @@ import type { ScopeGrant } from '../../src/storage/authority.js';
 import { memoryPgHost, memoryHostComposed } from './pg-host.js';
 import { verifyHostBinding } from '../../src/engram-memory/binding.js';
 import { openMemoryMaintenance, type MemoryMaintenancePorts } from '../../src/engram-memory/host-maintenance.js';
+import { CanonicalOwnershipError } from '../../src/storage/instance-ownership.js';
 import { memoryFailure, neutralQueryResult, neutralTransaction } from './memory-neutral.js';
 
 export type MemoryCampaignHost = Awaited<ReturnType<typeof memoryCampaignHost>>;
@@ -16,6 +17,7 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
   const units: NeutralAtomicUnit[] = [];
   let kernel: Awaited<ReturnType<typeof createPostgresKernel>>;
   let fence: NeutralWriterFence;
+  let acquired = false;
   let store: CanonicalMemoryStorePort;
   let maintenance: MemoryMaintenancePorts;
   // Host-owned read/maintain authority has no write operation. Engram never
@@ -46,11 +48,13 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
         const rows = await session.execute({ text: `SELECT scope,store_id FROM "${pg.name}".host_memory_identity
           WHERE scope=$1 OR store_id=$2`, values: [JSON.stringify(scope), input.store_id] });
         if (rows.rows.length !== 1 || rows.rows[0]!.scope !== JSON.stringify(scope) || rows.rows[0]!.store_id !== input.store_id)
-          throw Object.assign(new Error('store_id and scope must be bijective'), { code: 'fence-conflict' });
+          throw new CanonicalOwnershipError('instance-busy', 'store_id and scope must be bijective');
         await kernel.ownership!.verify(session);
       });
+      if (acquired) throw Object.assign(new Error('a live canonical holder already owns this host handle'), { code: 'fence-conflict' });
       fence = { fenceId: kernel.ownership!.handle.instanceId, epoch: kernel.ownership!.handle.storageEpoch };
       await kernel.provisionFence(binding.memoryGrant, fence);
+      acquired = true;
       return fence;
     }),
     checkFence: (grant, supplied) => guarded(async () => {
@@ -59,7 +63,7 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
         throw Object.assign(new Error('canonical fence differs'), { code: 'fence-lost' });
     }),
     releaseFence: (supplied) => guarded(async () => {
-      if (fence?.fenceId === supplied.fenceId && fence?.epoch === supplied.epoch) await kernel.ownership!.release();
+      if (fence?.fenceId === supplied.fenceId && fence?.epoch === supplied.epoch) { await kernel.ownership!.release(); acquired = false; }
     }),
     transact: (options, operation) => guarded(async () => {
       const bound = await kernel.bind(castGrant(options.grant));
@@ -78,7 +82,7 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
       return neutralQueryResult(name, page.records);
     }),
   });
-  const open = async () => {
+  const open = async (hydrate = true) => {
     kernel = await createPostgresKernel({ ...pg.options, canonicalOwnership: { leaseMs: 1000 }, onCommitPossession: commitHook });
     await kernel.bindNew(binding.memoryGrant);
     await kernel.bindNew(binding.maintainGrant);
@@ -96,6 +100,10 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
       resync: (...args) => authorized(() => maintained.journalResync(...args)),
       snapshot: async (...args) => (await hostRead()).snapshotRead(...args),
     });
+    if (!hydrate) {
+      await handle.acquireFence({ scope, store_id: scopeBinding.store_id, grant: binding.memoryGrant });
+      return;
+    }
     const opened = await openModuleStorageCanonicalMemoryStoreV1({ handle, grant: binding.memoryGrant,
       scope_binding: scopeBinding, clock: { now: () => '2026-10-27T00:00:00.000Z' }, deadline_at: '2026-10-27T01:00:00.000Z' });
     if (!opened.ok) throw new Error(`PostgreSQL memory open: ${opened.error.code}: ${opened.error.message}`);
@@ -110,6 +118,7 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
     get maintenance() { return maintenance; }, get fence() { return fence; }, hostReader,
     hostReplay: async (after: string, limit: number, consumer: string) => (await hostRead()).journalRead(after, limit, consumer),
     reopen: async () => { await store.close(); await open(); },
-    close: async () => { try { await store.close(); } finally { await pg.close(); } },
+    reopenBackend: async () => { await store.close(); await open(false); },
+    close: async () => { try { await store.close(); } finally { await kernel.ownership?.release(); await pg.close(); } },
   };
 };
