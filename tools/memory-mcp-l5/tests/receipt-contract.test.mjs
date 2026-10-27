@@ -306,7 +306,11 @@ describe('P10.tooling.receipt-contract — L5 receipt contract and closed checkp
     expect(schema.properties.artifacts.maxItems).toBe(128);
     expect(catalog.proofs.map((p) => p.id)).toEqual(PROOF_IDS);
     expect(catalog.proofs.find((p) => p.id === 'P02').files).toContain('tools/memory-mcp-l5/packed/identity-source-refusal.test.ts');
-    expect(catalog.proofs.find((p) => p.id === 'P09').files).toHaveLength(22);
+    const p09 = catalog.proofs.find((p) => p.id === 'P09');
+    expect(p09.files).toHaveLength(18);
+    expect(p09.requiredCases).toEqual([
+      'P09.platform.predecessor-regressions', 'P09.platform.immo-wire-fixtures', 'P09.mesh.predecessor-regressions',
+    ]);
     expect(catalog.importGraphRoots).toContain('tools/memory-mcp-l5/verifier.mjs');
     expect(catalog.importGraphRoots).toContain('@sentropic/mcp-platform/memory');
     expect(catalog.importGraphRoots).toContain('@sentropic/mcp-broker/memory-reference');
