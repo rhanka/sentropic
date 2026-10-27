@@ -142,8 +142,10 @@ export class ArecordDevice implements DevicePort {
   }
 
   async listDevices(): Promise<AudioDeviceInfo[]> {
+    // G-NATIVE: verify the helper before executing it, even for listing.
+    const binary = await this.verifiedBinary();
     return new Promise<AudioDeviceInfo[]>((resolve, reject) => {
-      const child = spawn(this.binary, ['-l'], { shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+      const child = spawn(binary, ['-l'], { shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
       let stdout = '';
       let stderr = '';
       child.on('error', () => reject(new DeviceUnavailableError(`${this.binary} is not installed or not executable`)));
