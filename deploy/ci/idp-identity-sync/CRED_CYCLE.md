@@ -108,10 +108,14 @@ The `immo-mcp-workload` secret is environment-specific, server-side, and never
 committed or returned to the public MCP client. **Preprod uses only the named-Secret
 identity sync for creation and rotation.** Pause scheduled sync dispatches during
 rotation so a scheduled committing run cannot race the reviewed dry-run.
-Replace the 64-lowercase-hex value
-(no newline) in Secret `immo-mcp-workload`, key `IMMO_MCP_WORKLOAD_CLIENT_SECRET`,
-in `sentropic-preprod` through the approved secret manager, then run the protected
-sync dry-run and committing import. The sync hashes locally and rekeys the active
+Replace the 64-lowercase-hex value (no newline) in the ignored 0600 central `.env`
+line `IMMO_MCP_WORKLOAD_CLIENT_SECRET` (the source of truth), update the same-named
+GitHub environment secret in `sentropic-idp-run`, then run the protected
+`idp-workload-secret.yml` workflow on `main`. It idempotently applies Secret
+`immo-mcp-workload`, key `IMMO_MCP_WORKLOAD_CLIENT_SECRET`, in `sentropic-preprod`.
+Verify only its name, namespace, configured status and eight-hex SHA-256
+fingerprint in the output; never print the value. Then run the protected sync
+dry-run and committing import. The sync hashes locally and rekeys the active
 row transactionally: the new credential works and the old credential stops
 authenticating immediately on commit. Coordinate radar's namespace-local copy
 and restart/reload its consumer after commit. Retain the source Secret only as
@@ -134,7 +138,13 @@ test-only markers and never valid operational secrets.
 
 Preprod first-time creation uses the same named-Secret sync described above;
 the generic provisioner refuses preprod audiences/issuer. There is no second
-preprod bootstrap path. In other environments (including prod), use the protected
+preprod bootstrap path. Creation follows `.env` → GitHub environment secret
+`IMMO_MCP_WORKLOAD_CLIENT_SECRET` in `sentropic-idp-run` → protected manual
+`idp-workload-secret.yml` on `main` → named-Secret sync (dry-run, then committing
+import). The workflow reads `KUBE_CONFIG_DATA_PREPROD` through the same protected
+environment as identity sync; no local cluster kubeconfig is needed. Materializing
+the Secret alone does not register or rotate the database client.
+In other environments (including prod), use the protected
 idempotent path — never a manual SQL edit:
 
 ```sh

@@ -163,3 +163,40 @@ unconditional validators with fresh attempt receipts; carried-forward
 classification retains its original expected-manifest attempt. Account
 inventory access remains unavailable (billing HTTP 404, missing `user`
 scope), so finite-capacity and contention acceptance remains open.
+
+## 10. BR-77 capacity-policy implementation
+
+The 2026-10-26 execution packet assigns BR-77 to
+`plan/71-BRANCH_chore-ci-capacity-policy.md`, continuing the Lot 2/3 split
+from #705. Review r1 removes the 13/10-deep package validation chains:
+23 independent validators share six queued execution mutexes. All common
+jobs share 15 repository-wide mutexes, with two existing release groups
+outside that pool; PR/main demand is bounded by 15/17. API/E2E return to
+reference widths 15/5. Timing acceptance requires completed PR and main
+runs of the final policy, each <=2288s; static width alone never qualifies.
+Account quota and billed cost remain unknown. PR-only cancellation and
+all existing completeness/publication barriers remain. Ordinary publishers
+regain independence; explicit branch dry-run mode exercises their real packs.
+
+Completed replacement PR `40402395319` succeeded but took 18224s, with
+17227s of critical-path scheduling. The strict 2288s proof rejects it;
+timing acceptance remains open and no actual main receipt of this policy exists.
+Branch dry-run `40408883195` subsequently completed successfully in 20986s:
+all 21 real guarded packs and skipped registry writers have verified receipts.
+This qualifies publication wiring, while PR/main timing acceptance stays open.
+
+[Capacity receipts](ci-cd-ten-minutes/capacity.md) identify the current-base
+baseline, concurrent main rerun, obsolete PR and live conservative rollback.
+The old rollback used one validation lane and widths 1/1 without deleting
+expected-result or metrics checks, but run 40353670942 was cancelled:
+the rollback drill remains unticked until a completed receipt exists.
+Classification and verdict breaches remain visible. Completed concurrent
+delivery and the 60-second aggregate scheduling budget require post-run
+captures, not an inference from green fixtures or a maximum queue sample.
+
+The next branch consumes the retained dependency manifest, bounded DAG,
+Make capture/combined-traffic entry points and unresolved timing receipts.
+The train index above preserves the original #701 allocation: plan/63 still
+calls native checks BR-77 while the owner packet names capacity BR-77 and
+the next branch BR-78. The conductor must reconcile that allocation before
+launching the successor; this branch does not edit the other branch plans.
