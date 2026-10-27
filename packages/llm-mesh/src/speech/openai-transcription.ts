@@ -161,3 +161,108 @@ const base64Of = (payload: Uint8Array): string => {
   }
   return out;
 };
+
+/**
+ * Admission outcome consumed as data (gateway `admitSpeech` runs at
+ * composition, L16/API — mesh never imports the gateway). The session
+ * refuses to open without it and never exceeds its ceilings.
+ */
+export interface OpenAiTranscriptionAdmission {
+  readonly operationId: string;
+  readonly holdRef: string;
+  readonly pricingRevision: string;
+  readonly ceiling: { readonly connectedSeconds: number; readonly admittedAudioSeconds: number };
+  readonly maxDurationMs: number;
+}
+
+export interface OpenAiTranscriptionUsageTotals {
+  readonly connectedSeconds: number;
+  readonly admittedAudioSeconds: number;
+}
+
+/**
+ * Usage sink shaped for the gateway `recordSpeechUsage` / `settleSpeech`
+ * calls the composition layer performs. The adapter only measures seconds;
+ * pricing stays pinned at admission.
+ */
+export interface OpenAiTranscriptionUsageSink {
+  record(update: {
+    readonly eventId: string;
+    readonly revision: number;
+    readonly mode: 'cumulative' | 'incremental';
+    readonly usage: Partial<OpenAiTranscriptionUsageTotals>;
+  }): void | Promise<void>;
+  settle(request: {
+    readonly operationId: string;
+    readonly outcome: 'completed' | 'cancelled' | 'failed';
+    readonly usage: OpenAiTranscriptionUsageTotals;
+    readonly providerRevision?: number;
+  }): void | Promise<void>;
+}
+
+/** Injectable provider socket. Tests use recorded scripts; never a live call. */
+export interface OpenAiTranscriptionSocket {
+  send(message: string): void;
+  messages(): AsyncIterable<string>;
+  close(): Promise<void>;
+}
+
+export interface OpenAiTranscriptionConnect {
+  (url: string, headers: { readonly authorization: string; readonly originator: string }): Promise<OpenAiTranscriptionSocket> | OpenAiTranscriptionSocket;
+}
+
+export interface OpenAiTranscriptionOpenOptions {
+  readonly request: SpeechSessionRequest;
+  readonly admission: OpenAiTranscriptionAdmission;
+  /** Bearer material, used once for the socket handshake and never logged. */
+  readonly bearerToken: string;
+  readonly connect: OpenAiTranscriptionConnect;
+  readonly usage: OpenAiTranscriptionUsageSink;
+  readonly originator?: string;
+  readonly nowMs?: () => number;
+  readonly signal?: AbortSignal;
+}
+
+const assertAdmission = (admission: OpenAiTranscriptionAdmission): void => {
+  if (!admission || !isNonEmptyString(admission.operationId) || !isNonEmptyString(admission.holdRef)
+    || !isNonEmptyString(admission.pricingRevision)
+    || !(admission.ceiling?.connectedSeconds > 0) || !(admission.ceiling?.admittedAudioSeconds > 0)
+    || !(admission.maxDurationMs > 0)) {
+    throw new OpenAiTranscriptionError('admission', 'a valid admission (operation, hold, ceilings) is required');
+  }
+};
+
+interface PendingItem {
+  text: string;
+  revision: number;
+  audioStartMs: number;
+  audioEndMs: number;
+  finalized: boolean;
+  speechSessionId: string;
+  connectionEpoch: number;
+  binding: SpeechBinding;
+}
+
+const monotonicNow = (nowMs: (() => number) | undefined): number => {
+  const now = (nowMs ?? Date.now)();
+  if (!Number.isFinite(now) || now < 0) throw new OpenAiTranscriptionError('invalid-config', 'clock must be finite');
+  return now;
+};
+
+const errorEvent = (
+  base: Pick<SpeechEventMetadata, 'speechSessionId' | 'connectionEpoch' | 'clock'>,
+  eventId: string,
+  sequence: number,
+  reason: string,
+  retryable: boolean,
+): SpeechEvent => ({
+  schemaVersion: 1,
+  speechSessionId: base.speechSessionId,
+  connectionEpoch: base.connectionEpoch,
+  eventId,
+  sequence,
+  clock: base.clock,
+  type: 'error',
+  reason,
+  retryable,
+});
