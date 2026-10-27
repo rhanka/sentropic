@@ -802,17 +802,17 @@
 - [x] Inherited from lot #792 at `origin/feat/engram-e2-p3-repin`; its approved plan is preserved below.
 
 > # P3 re-pin after #769 (integration)
-> 
+>
 > ## Objective
 > Re-pin `feat/engram-e2-integration` from the P2 generation (`f2b094ae`, retained history `2b85ff28`) to the P3 generation frozen by main #769: manifest `1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730`, catalog `9bf377b774dda54a3b37189eea57cb845acca7b27b8b55b399f23c20215a1211`, l0-freeze `0541b15ba4d5e49ba3b30d92da1c5e3c2fd668e40937e4f942103a678e849bfb`.
-> 
+>
 > ## Scope / Guardrails
 > - Base `origin/feat/engram-e2-integration` (`d22fc3f24`); PR targets `feat/engram-e2-integration`.
 > - Make-only; `ENV=test-e2-int` last; 0 Python; no publication or merge.
 > - Serialize Docker/test steps with the shared lock; existing Compose targets only; `make down` after each step.
 > - Pin files only: no src, range, version or product change.
 > - Specific-file staging; `make commit` only, each below 150 changed lines, without attribution trailers.
-> 
+>
 > ## Branch Scope Boundaries (MANDATORY)
 > - **Allowed Paths (implementation scope)**:
 >   - `BRANCH.md`
@@ -837,7 +837,7 @@
 >   - _none_
 > - **Exception process**:
 >   - _none required_
-> 
+>
 > ## Feedback Loop
 > - [x] `C6-FREEZE.md` has no integration counterpart (E0/E6 lot file keeping its own P2 line); the re-pin ports the P3 generation files that exist on integration: the two content files plus manifest and sidecar, so the freeze check stays coherent.
 > - [x] Frozen sha256 verified after the change: l0-freeze `0541b15b…`, catalog `9bf377b7…`, manifest `1c96bada…` (sidecar contains the manifest hash).
@@ -845,16 +845,16 @@
 > - [x] Opus r1 (memory-l5 gate): the P09 hunk taken from main #769 without a main merge (single hunk, no other main delta); a full `origin/main` merge would explode this PR's scope.
 > - [x] `C6-FREEZE.md` has no integration counterpart (E0/E6 lot file); not ported — E6 keeps its own P2 line.
 > - [ ] Push draft PR targeting `feat/engram-e2-integration`; verify validate-cluster-mesh green without merging.
-> 
+>
 > ## AI Flaky tests
 > - [x] No AI tests or flaky waiver applies.
-> 
+>
 > ## Orchestration Mode (AI-selected)
 > - [x] Mono-branch: one integration fix; no delegated implementation.
-> 
+>
 > ## UAT Management (in orchestration context)
 > - [x] No web, Chrome or VS Code changes; no test campaign (pin files only, hashes verified byte for byte).
-> 
+>
 > ## Plan / Todo (lot-based)
 > - [x] **Lot 0 — Branch setup**: worktree `tmp/worktrees/p3-repin` on the integration base; `harness check branch` PASS.
 > - [x] **Lot 1 — Re-pin**: copy the four P3 files from `origin/main`; verify the three frozen sha256.
@@ -868,23 +868,23 @@
 - [x] Inherited from lot #790 at `origin/feat/cluster-mesh-engram-e9`; its approved plan is preserved below.
 
 > # Test: Durable memory acceptance corpus (E9; blocked on E7)
-> 
+>
 > ## Objective
-> 
+>
 > - [ ] Qualify approved plan row E9 through the shipped E7 bindings; current status `blocked: E7-fenced-writers`. Worktree `tmp/worktrees/mem-e9`, branch `feat/cluster-mesh-engram-e9`, draft PR targeting `feat/engram-e2-integration`.
 > - [ ] Run real PostgreSQL memory Stage B through installed Engram 0.21.1, its exact `['read','write']` binding and E7's separate host maintenance binding. Host snapshot/journal reads are `blocked: E7`. Pack-only reservation `0.23.0-dev.10`; P3 re-pin and CI PG wiring belong to the integration lane.
-> 
+>
 > ## Scope / Guardrails
-> 
+>
 > - MUST reuse the neutral memory contract and `CanonicalOwnershipError` codes (frozen files, import only). NO new ownership contract, NO second PG ownership contract.
 > - E9 authors acceptance tests only. The source paths declared below are inherited E7 scope; all E9 production changes have been reverted. Fenced-writer and maintain-read bindings belong to E7; CI PG wiring and P3 re-pin belong to the integration lane.
 > - E8-answers obligations: durable host-issued evidence (candidate→store/scope/invocation-or-continuation mapping, envelope binding, reservation/terminal/ambiguous state, receipt/cursor reconciliation); continuation grant needs fresh host authn/authz checked against retained authority (copied fields never grant); proof-only recovery path (authorized capture-proof reads, admission-outcome recovery, journal replay) that refuses unknown/foreign access and any second effect. Refusing on an empty ledger is correct until rehydration.
 > - Existing `binding-compatibility`/`binding-errors` keep passing; shared corpus semantics unchanged (additive cases only).
 > - Tests first; `ENV=test-e2-int` as the last make argument; `make commit MSG="type: …"` (<150 lines, `git add` specific files, no AI trailers). Never `ENV=dev`. 0 Python.
 > - Disk is tight: reuse `ENV=test-e2-int` images; `make down ENV=test-e2-int` only if this session owns the compose project.
-> 
+>
 > ## Branch Scope Boundaries (MANDATORY)
-> 
+>
 > - **Allowed Paths (implementation scope)**:
 >   - `BRANCH.md`
 >   - `packages/cluster-mesh/tests/engram-memory/memory-corpus.ts`
@@ -1002,9 +1002,9 @@
 >   - Any second ownership contract or artifacts-coordinator reuse.
 > - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
 >   - `packages/cluster-mesh/assets/storage/postgres/engram-memory/002-*.sql` (new memory-only ledger asset ONLY if host-evidence durability needs it; E2 owns `migrations.ts` single-writer — STOP and coordinate before touching it).
-> 
+>
 > ## Plan / Todo (lot-based)
-> 
+>
 > - [x] r1 status: checked pre-r1 campaign steps below are historical fixture-run provenance only. Current acceptance is blocked as specified in Objective and Feedback Loop; none of these runs qualifies the shipped host assembly.
 > - [x] Lot E9-0 — read approved plan and binding sections 7–10; mechanically check branch; merge E8 into E7; retain inherited scope declarations; freeze Engram/P3 bytes.
 > - [x] Lot E9-1a — initial tests first: `memory-corpus.ts`, `durable-memory.spec.ts`; real PostgreSQL required, initial run fails because the campaign fixture is not implemented yet. This is a scaffolding failure, not an invariant proof.
@@ -1033,19 +1033,19 @@
 >   - [x] Reproduce: `make -f Makefile -f packages/cluster-mesh/tests/engram-memory/qualification.mk memory-stage-b ENV=test-e2-int`. This target takes the shared lock, starts only existing Compose PostgreSQL, retains source/log hashes, then tears down the owned stack and releases the lock on success or failure.
 >   - [x] Engram remains pinned to 0.21.1; pack-only mesh version 0.23.0-dev.10; no P3/candidate edits. The inherited pre-candidate bytes are unchanged from E7 (`2b85ff28b6fe06bda0abcdc19255f61a1ed1e4b7cfbb40c2e881c98dd234424b`); they are historical bytes, not a newly generated P3 claim. The externally frozen candidate remains `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10`.
 >   - [x] Push succeeds at 08:26 UTC after ten-minute retries; remote author head `e6495b6799887da41a7057adcee01366c7185a44` verified by `git ls-remote`. Draft [PR #790](https://github.com/rhanka/sentropic/pull/790) targets `feat/engram-e2-integration`, mergeable=true. [CI 40473787086](https://github.com/rhanka/sentropic/actions/runs/40473787086) is queued on that head; no CI-green claim, merge, publication, consensus review or E10 installed mesh-tarball qualification is made by this author report.
-> 
+>
 > ## Orchestration Mode (AI-selected)
-> 
+>
 > - [x] Mono-branch: one E9 author, merge-only integration, no delegated implementation.
-> 
+>
 > ## UAT Management (in orchestration context)
-> 
+>
 > - [x] Library-only work; no application, browser, Chrome or VSCode changes or interactive UAT.
 > - [x] Reuse existing `ENV=test-e2-int` PostgreSQL stack and pinned Node 24 image; no image build. Docker lock held only while campaign commands run and released between steps.
 > - [x] Never tear down a shared stack owned by another session. Test schemas are private and removed by their fixtures.
-> 
+>
 > ## Feedback Loop
-> 
+>
 > - [x] r1 source verification at committed clean `a25bc3dfb`: memory 18 files / 150 passed / 23 explicitly blocked (Vitest skipped), total 173. Qualification correctly exits 2 and cleanup exits 0; receipt `tmp/memory-e9-r1/final-memory/`. Final head is rerun after this report-only commit, with its exact SHA/tree retained in `tmp/memory-e9-r1/head-memory/`.
 > - [x] r1 corpus disposition: preserve all 23 behavioral cases and the inventory case; every behavioral case depends on the fixture handle and is explicitly `blocked: E7-fenced-writers`. The three host maintenance cases additionally carry `blocked: E7` for snapshot/journal reads. Skips represent unmet source dependencies, never accepted profile evidence; the zero-skip qualification gate remains open.
 > - [x] P2-2: remove the fixture-issued `memory-host-reader` token entirely. Snapshot and journal reads bind only `binding.maintainGrant`; current E7 cannot authorize those reads. Retain the positive corpus and extend its revoked-authority probe to journal replay; enable it only against E7's shipped host assembly.
