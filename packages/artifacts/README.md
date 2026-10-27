@@ -76,7 +76,47 @@ Reconcile current authority independently of the restored ACL snapshot. Fresh
 authorized sessions create fresh flows; revoked readers stay denied. Rollback
 disables activation while retaining the additive schema and accepted artifacts.
 
-Package conformance lives in `tests/postgres-activation.test.ts` and
+### Importable host conformance (UP-T-2, 0.2.4)
+
+The packed package exports the framework-independent host suite and its stable
+vector IDs. Install the SQL asset through your test migration executor first:
+
+```ts
+import assert from 'node:assert/strict';
+import {
+  POSTGRES_ACTIVATION_VECTOR_IDS, runPostgresActivationConformance,
+} from '@sentropic/artifacts/adapters/postgres-activation/vectors';
+
+const passed = await runPostgresActivationConformance({
+  createStore: namespace => createPostgresActivationStore({ pool, namespace }),
+  wait: async (ms, client) => { await (client ?? pool).query('SELECT pg_sleep($1)', [ms / 1000]); },
+  onPass: id => console.log('activation vector passed:', id),
+});
+assert.deepEqual(passed, POSTGRES_ACTIVATION_VECTOR_IDS); // 14 vectors
+```
+
+Supply your host's store composition in `createStore`, using the supplied namespace
+and the same disposable PostgreSQL database/executor for every instance. Replica
+instances must share durable state. `wait` uses database time and the supplied
+leased client during authority checks, including when the pool has one connection.
+TypeScript hosts install `@types/pg` alongside `pg` in their consumer project.
+The runner throws with the failing vector ID and original cause; it returns all
+14 IDs only after every assertion passes. It uses fresh namespaces and invalidates
+and cleans its records after each vector. Namespace rows remain in the disposable
+database. Never point this test suite at a serving database.
+
+The vectors cover namespace isolation, immutable records, all nine exact binding
+comparisons, wrong IDs, denial/outage preservation, single use, concurrent replicas,
+expiry without cleanup and after authority waits, bounded cleanup, invalidation
+and fresh recovery, the 60-second TTL cap, and flow/ticket association. This adds
+only a testing export in 0.2.4; adapter behavior and SQL bytes are unchanged.
+
+`make -f packages/cluster-mesh/packaging.mk test-lazy-package-activation ENV=test-artifacts-upt2`
+packs and installs the candidate in a clean consumer, verifies the SQL hash, and
+runs all 14 vectors on that consumer's PostgreSQL executor. Follow with
+`make down ENV=test-artifacts-upt2` (use the shared Docker lock for both commands).
+
+Additional fault/process conformance lives in `tests/postgres-activation.test.ts` and
 `tests/postgres-activation.integration.test.ts`, with the independent process
 witness `tests/fixtures/activation-process.mjs`. Run through
 `make test-artifacts` and `make test-artifacts-integration` on an isolated test
