@@ -7,7 +7,8 @@ import {
   executeFoundationSearchSkills,
   type ResolveFoundationChatToolsInput,
 } from './catalog';
-import { reconcileTenantId } from '../tenancy/resolve-tenant';
+import { resolveTurnCatalogContext } from '../catalog/request-authority';
+import { revalidateCatalogInvocation, type CatalogRequestContext } from '../catalog/request-context';
 
 type FoundationToolCall = {
   readonly id: string;
@@ -37,6 +38,7 @@ type FoundationAllowedByType = {
 };
 
 export interface ExecuteFoundationSkillToolInput {
+  readonly catalogContext?: CatalogRequestContext;
   readonly toolCall: FoundationToolCall;
   readonly args: Record<string, unknown>;
   readonly options: FoundationExecutionOptions;
@@ -150,23 +152,13 @@ function requiredStringArg(
   return value;
 }
 
-async function buildSearchAuthz(
+function buildSearchAuthz(
   input: ExecuteFoundationSkillToolInput,
-): Promise<ResolveFoundationChatToolsInput> {
-  // ARCH-11 G1b (§4.2.2): resolve the tenant upstream and thread it into the sync builder —
-  // legacy workspaceId under alias/shadow (zero behavior change), resolved tenant under strict.
-  const tenantId = await reconcileTenantId({
-    workspaceId: input.sessionWorkspaceId,
-    userId: input.options.userId,
-    path: 'catalog:search-exec',
-  });
+  context: CatalogRequestContext,
+): ResolveFoundationChatToolsInput {
   return {
-    userId: input.options.userId,
-    workspaceId: input.sessionWorkspaceId,
-    tenantId,
-    workspaceType: input.workspaceType,
-    currentUserRole: input.currentUserRole,
-    allowedTools: activeToolNames(input.tools),
+    userId: context.subjectId, workspaceId: context.workspaceId, tenantId: context.tenantId,
+    workspaceType: context.workspaceType, currentUserRole: context.roles?.[0], allowedTools: context.allowedTools,
   };
 }
 
@@ -174,10 +166,24 @@ export async function executeFoundationSkillTool(
   input: ExecuteFoundationSkillToolInput,
 ): Promise<ExecuteFoundationSkillToolResult> {
   const { toolCall, args, options, sessionWorkspaceId } = input;
+  let context: CatalogRequestContext | undefined;
+  if (['search_skills', 'search_catalog'].includes(toolCall.name) || catalogExecutionSeam.hasTool(toolCall.name)) {
+    try {
+      const allowedTools = activeToolNames(input.tools);
+      context = input.catalogContext ?? await resolveTurnCatalogContext({ userId: options.userId,
+        sessionId: options.sessionId, workspaceId: sessionWorkspaceId, readOnly: input.readOnly, allowedTools });
+      if (context.subjectId !== options.userId || context.sessionId !== options.sessionId ||
+        context.workspaceId !== sessionWorkspaceId || (input.readOnly && !context.readOnly) ||
+        !allowedTools.includes(toolCall.name)) throw new Error('catalog_access_denied');
+      context = await revalidateCatalogInvocation(context, toolCall.name, args);
+    } catch {
+      return handledFinalResult(input, { status: 'denied', error: 'catalog_access_denied' });
+    }
+  }
 
   if (toolCall.name === 'search_skills') {
     const hits = executeFoundationSearchSkills({
-      authz: await buildSearchAuthz(input),
+      authz: buildSearchAuthz(input, context!), context,
       payload: args as { query: string; limit?: number },
     });
     const result = { status: 'completed', hits };
@@ -197,9 +203,9 @@ export async function executeFoundationSkillTool(
   // Dispatched immediately after search_skills. Uses compositeCatalogRegistry
   // to search across ALL 5 entry kinds. search_skills is NOT changed.
   if (toolCall.name === 'search_catalog') {
-    const result = executeFoundationSearchCatalog(
-      args as { query: string; limit?: number; filter?: { kind?: string; category?: string } },
-    );
+    const result = executeFoundationSearchCatalog({
+      payload: args as { query: string; limit?: number; filter?: { kind?: string; category?: string } }, context: context!,
+    });
     return {
       handled: true,
       result,
@@ -580,7 +586,7 @@ export async function executeFoundationSkillTool(
   // Foundation tools (hardcoded above) ALWAYS dispatch FIRST and never reach
   // this point — the seam is a pure fall-through for non-hardcoded names.
   // -------------------------------------------------------------------------
-  const seamResult = await catalogExecutionSeam.execute(toolCall.name, args);
+  const seamResult = await catalogExecutionSeam.execute(toolCall.name, args, context);
   if (seamResult.handled) {
     return {
       handled: true,
