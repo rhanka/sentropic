@@ -96,9 +96,9 @@ cluster-mesh-comments-test:
 	@$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test SCOPE=comments- API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 
 CM_COMMENTS_TARBALL ?= .h2a/build/cm-comments-candidate/sentropic-cluster-mesh-0.19.0.tgz
-# Latest published cluster-mesh pin, read from the frozen packaging fixture so
-# the bare probe can tell a planned pack-only dev bump from a stale pin.
-CM_PACK_ONLY_PIN ?= $(shell grep -o 'sentropic-cluster-mesh-[0-9][0-9.]*\.tgz' packages/cluster-mesh/tests/packaging/fixtures/selected/package.json | head -n 1 | sed 's/.*-//;s/\.tgz//')
+# Frozen released pin from the bare probe's gate contract. The selected
+# packaging fixture can pin the local development candidate independently.
+CM_PACK_ONLY_PIN ?= $(shell sed -n "s/^export const LATEST_PUBLISHED_CLUSTER_MESH = '\([^']*\)';/\1/p" packages/cluster-mesh/tests/storage/pack-only-dev-gate.mjs)
 # On a pack-only dev candidate the leaf is refused by design (#767): the bare
 # probe tolerates that refusal, while the installed consumer qualifies the
 # released pin instead of the unresolvable dev leaf. Release candidates keep

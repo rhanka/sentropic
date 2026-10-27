@@ -69,6 +69,9 @@
 - [x] Mechanical integration of approved lots and explicit conductor resolutions; no new delegated implementation or consensus verdict claimed.
 - [x] CI compares scope against the integration PR base, so the allowed-path list explicitly includes inherited main paths; no authored edits are permitted there. Check both parent comparisons mechanically.
 - [x] Package regression reproduced: 1340 tests passed, two prepare-artifacts assertions rejected the owner-required selected dev tarball. Keep exact candidate/lock equality on the strict path; exercise stable-pin tolerance with an explicit stable synthetic fixture. No production gate changed. Rerun package suite; receipts retain the initial failure.
+- [x] Full package rerun: 154 files passed, 1342 tests passed, 268 explicit skips without PG/installed fixtures, no type errors. Reserved-next gate 15/15 and selected alignment 15/15 pass; dedicated PG coverage remains in the qualification lanes.
+- [x] Dry-run regression: extracting the Comments released pin from the selected dev filename yielded an empty pin. Read the unchanged stable 0.22.4 from the existing bare-gate contract instead. Let preparation recognize the local dev filename; regression checks no registry pack request for that candidate. Production registry admission is unchanged.
+- [ ] Final focused regression: packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts; Comments make -n resolves stable 0.22.4; original pack-only-dev-gate.spec.ts and modules/registry.spec.ts passed in the full package run.
 
 ## AI Flaky tests
 - [ ] Retry failed AI/e2e jobs once only when green on main; retain evidence.
