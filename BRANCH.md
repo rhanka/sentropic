@@ -48,6 +48,7 @@
 - [ ] Lot 4: pass turn context through model selection, search and execution; handled denials never fall through.
   - [x] Handler context travels separately from arguments; seam refreshes authority and dispatches only through the winning entry's source.
   - [x] Search and model tools use the same request-local catalog view; public identifiers pass through unchanged.
+  - [x] Foundation executor resolves verified conversation authority, checks caller binding/effective turn allowlist and returns handled denials.
 - [ ] Lot 5: focused suites, API typecheck/lint, runtime logs and locked make down.
 - [ ] Lot 6: draft against feat/app-cm-integration with BRANCH.md body, publication-disabled CI and W4.b handoff.
 
