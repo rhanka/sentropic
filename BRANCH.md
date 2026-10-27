@@ -50,6 +50,7 @@
 - [x] All nine lot heads are ancestors of the batch; E2/E3/E4 were already present through E7. No lot excluded for a content conflict.
 - [x] Track containment checked against every lot and integration: all 370 event IDs retained; batch makes no Track changes or acceptance claims.
 - [x] Final pack-only version 0.23.0-dev.14 (one increment above accumulated dev.13); only package manifest and workspace lock fields require synchronization. Historical freeze and gate-vector versions remain historical.
+- [x] Nonterminal recovery regression asserts the candidate-scope refusal returned by the host wrapper; it does not assume the underlying store was reached.
 - [ ] Stage B retains 23 explicit blocked cases from approved E9; no five-profile qualification is claimed by this batch.
 - [ ] #758 approved review filename not found locally; conductor clarification pending.
 - [ ] #793 review is included in pr792_opus_r1.md; dedicated approval filename pending clarification.
