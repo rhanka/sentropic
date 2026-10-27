@@ -61,6 +61,8 @@
   - [x] Foundation executor resolves verified conversation authority, checks caller binding/effective turn allowlist and returns handled denials.
   - [x] Bounded chat caller resolves context from server-owned conversation inputs before model tool selection.
 - [ ] Lot 5: focused suites, API typecheck/lint, runtime logs and locked make down.
+  - [x] 18-file catalog/foundation/W2 regression pass: 334/334; final 5-file negative-vector pass: 28/28, no skips or AI calls.
+  - [x] Typecheck identified the OpenAI custom-tool union; filter narrows to the function tools produced by this catalog.
 - [ ] Lot 6: draft against feat/app-cm-integration with BRANCH.md body, publication-disabled CI and W4.b handoff.
 
 ## Feedback Loop
