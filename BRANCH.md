@@ -142,6 +142,7 @@
   - [x] Initial real-PG fixture opens installed Engram 0.21.1 with exact read/write and durable canonical ownership. First execution exposes a real capture-proof wire-shape mismatch in the installed validator; no bytes rewritten by the bridge.
 - [ ] Lot E9-3 — Stage B: capture/completion/admission/read, immutable proofs after destruction/replay, bounded snapshots/outbox, checkpoint/resync/fence/poison/retry, original receipts after crash/reopen, u64 crossings/exhaustion, G3 ownership, C4 recovery and C7 scope refusals.
   - [x] Initial five-case real-PG run passes after the two evidenced wire fixes; add engine acceptance/rejection traces through E8's authoritative candidate liaison and actual key destruction.
+  - [x] Engine traces pass (7/7); add host checkpoint/resync/snapshot and poison/retry with independent maintain checks, plus host read/maintain grant without write. No read/write/maintain grant enters the campaign.
 - [ ] Lot E9-4 — `test-cluster-mesh` scoped memory and PostgreSQL lanes; typecheck/lint; mechanical scope gate before each `make commit`; every authored commit under 150 lines; no AI trailers.
 - [ ] Lot E9-5 — retain campaign facts and counts per profile; push retry every ten minutes until successful; draft PR from this file; record CI; do not merge or publish.
 
