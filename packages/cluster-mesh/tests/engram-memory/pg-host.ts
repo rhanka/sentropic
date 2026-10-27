@@ -44,10 +44,10 @@ export const memoryNeutralGrant = (workspaceId = 'workspace-a') => grantFor({
  * `binding.maintainGrant`. The combined `memoryGrant()` is legacy E6
  * coverage only and never enters the host binding.
  */
-export const memoryHostComposed = (pool: InjectedPgDriver, invocationId = 'inv-host-1') => {
+export const memoryHostComposed = (pool: InjectedPgDriver, invocationId = 'inv-host-1', storeId = 'store-1') => {
   const driver = memoryHostProvider(pool);
   checkMemoryPostgresDriver(driver);
-  const binding = assembleMemoryHostBinding({ driver, maintainGrant: memoryMaintainGrant(), invocationId });
+  const binding = assembleMemoryHostBinding({ driver, maintainGrant: memoryMaintainGrant(), invocationId, storeId });
   return { provider: driver, binding };
 };
 /** Kernel-bound maintenance surface behind the host-only ports. */

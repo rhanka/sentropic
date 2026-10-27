@@ -9,7 +9,6 @@
 // authority) and proof-only recovery (no second effect, unknown/foreign
 // refused, empty ledger refuses) are covered here.
 
-import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import {
   assembleMemoryHostBinding,
@@ -76,6 +75,8 @@ describe('host maintenance binding', () => {
       throw new StorageUnavailableError('no backend');
     },
   });
+  // Kernel check-only stub: grants are treated as issued and live.
+  const stubAuthority = { bind: async () => ({}) };
   const entryFor = (candidateId: string, hostPrincipal = 'host-1') => ({
     candidateId,
     storeId: 'store-1',
@@ -88,7 +89,7 @@ describe('host maintenance binding', () => {
     receipt: null,
     cursor: null,
   });
-  const hostBindingFor = (principalId = 'user-1') =>
+  const hostBindingFor = (principalId = 'user-1', storeId = 'store-1') =>
     assembleMemoryHostBinding({
       driver: qualifiedProvider(),
       maintainGrant: grantFor({
@@ -99,10 +100,11 @@ describe('host maintenance binding', () => {
         operations: ['maintain'],
       }),
       invocationId: 'inv-host-1',
+      storeId,
     });
 
   it('issues a host-only maintain binding separate from the memory handle', () => {
-    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1' });
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1', storeId: 'store-1' });
     expect(binding.memoryOperations).toEqual(['read', 'write']);
     expect(binding.maintainGrant.operations).toContain('maintain');
     expect(binding.provider).toEqual(qualifiedProvider());
@@ -125,7 +127,7 @@ describe('host maintenance binding', () => {
   });
 
   it('opens host-only ports that delegate to the bound runner', async () => {
-    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1' });
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1', storeId: 'store-1' });
     const ports = openMemoryMaintenance(binding, stubRunner(binding.maintainGrant));
     // The stub runner refuses everything: the ports delegate 1:1 instead of
     // stubbing success. Live backend calls are covered PG-side.
@@ -156,6 +158,7 @@ describe('host maintenance binding', () => {
       driver: provider,
       maintainGrant: maintainGrant(),
       invocationId: 'inv-host-1',
+      storeId: 'store-1',
     }).memoryGrant;
     expect([...neutral.operations]).toEqual(['read', 'write']);
     expect(() =>
@@ -183,7 +186,7 @@ describe('host maintenance binding', () => {
       operations: ['maintain'],
       lifetime: { kind: 'lease', expiresAt: '2999-01-01T00:00:00.000Z' },
     });
-    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: live, invocationId: 'inv-host-1' });
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: live, invocationId: 'inv-host-1', storeId: 'store-1' });
     expect(() => openMemoryMaintenance(binding, stubRunner(binding.maintainGrant))).not.toThrow();
     expect(() =>
       openMemoryMaintenance({ provider: qualifiedProvider(), maintainGrant: expired } as never, undefined as never),
@@ -223,6 +226,7 @@ describe('host maintenance binding', () => {
       driver: qualifiedProvider(),
       maintainGrant: maintainGrant(),
       invocationId: 'inv-host-1',
+      storeId: 'store-1',
     });
     await expect(
       verifyHostBinding({ bind: async () => ({}) }, binding, { tenantId: 'tenant-a', workspaceId: 'workspace-a' }),
@@ -254,11 +258,14 @@ describe('host maintenance binding', () => {
           receipt: null,
           cursor: null,
         });
+        // The maintain grant is issued before the continuation is minted;
+        // the authority check binds it against the grants table.
+        await root.bindNew(binding.maintainGrant);
         const { grant } = await issueContinuationGrant(ledger, binding, 'cand-cont', {
           invocationId: 'inv-2',
           issuedAt: '2026-10-27T00:00:00.000Z',
           hostPrincipal: 'user-1',
-        });
+        }, root.adapter());
         const bound = await root.bindNew(grant);
         await bound.commitAtomic(memoryUnit({ appends: [memoryAppend('9')] }));
         expect(await bound.readHead('memory-journal')).toBe('hash-9');
@@ -287,25 +294,15 @@ describe('host maintenance binding', () => {
   });
 
   describe.skipIf(!pgEnabled)('PG-backed host ledger (002 asset)', () => {
-    const applyLedgerAsset = async (host: Awaited<ReturnType<typeof memoryPgHost>>) => {
-      const projection = host.layout.projectionSchemas['engram-memory'] as string;
-      const sql = await readFile(
-        new URL('../../assets/storage/postgres/engram-memory/002-host-ledger.sql', import.meta.url),
-        'utf8',
-      );
-      await host.tx.run(false, (session) =>
-        session.execute({
-          text: sql.replaceAll('__MEMORY_SCHEMA__', `"${projection}"`),
-          values: [],
-        }),
-      );
-      return projection;
-    };
+    // The 002 asset ships in the memory manifest, so memoryPgHost applies
+    // it with the registration migration; no hand-applied SQL here.
+    const ledgerProjection = (host: Awaited<ReturnType<typeof memoryPgHost>>) =>
+      host.layout.projectionSchemas['engram-memory'] as string;
 
     it('persists entries and rehydrates across a real reopen', async () => {
       const host = await memoryPgHost();
       try {
-        const projection = await applyLedgerAsset(host);
+        const projection = ledgerProjection(host);
         const first = testPgDriver();
         try {
           const ledgerA = await openMemoryPostgresHostLedger(first.driver, projection);
@@ -350,7 +347,7 @@ describe('host maintenance binding', () => {
     it('refuses duplicate continuations and repeats terminals atomically', async () => {
       const host = await memoryPgHost();
       try {
-        const projection = await applyLedgerAsset(host);
+        const projection = ledgerProjection(host);
         const connection = testPgDriver();
         try {
           const ledger = await openMemoryPostgresHostLedger(connection.driver, projection);
@@ -380,8 +377,11 @@ describe('host maintenance binding', () => {
     it('issues continuations durably and serves proof after reopen', async () => {
       const host = await memoryPgHost();
       try {
-        const projection = await applyLedgerAsset(host);
+        const projection = ledgerProjection(host);
         const binding = memoryHostComposed(host.options.driver, 'inv-durable-1').binding;
+        const root = await host.open();
+        // The maintain grant is issued so the authority check can bind it.
+        await root.bindNew(binding.maintainGrant);
         const first = testPgDriver();
         try {
           const ledgerA = await openMemoryPostgresHostLedger(first.driver, projection);
@@ -391,15 +391,15 @@ describe('host maintenance binding', () => {
             invocationId: 'inv-durable-2',
             issuedAt: '2026-10-27T00:00:00.000Z',
             hostPrincipal: binding.maintainGrant.principalId,
-          });
+          }, root.adapter());
           expect(grant.lifetime).toEqual({ kind: 'invocation', invocationId: 'inv-durable-2' });
           // Real reopen: fresh pool, fresh handle — the continuation survived.
           const second = testPgDriver();
           try {
             const ledgerB = await openMemoryPostgresHostLedger(second.driver, projection);
-            const proof = await proveForRecoveryAuthorized(ledgerB, binding, 'cand-1');
+            const proof = await proveForRecoveryAuthorized(ledgerB, binding, 'cand-1', undefined, root.adapter());
             expect(proof.state).toBe('reserved');
-            await expect(reattachMemoryMaintenance(binding, ledgerB, 'cand-1')).resolves.toBe(
+            await expect(reattachMemoryMaintenance(binding, ledgerB, 'cand-1', root.adapter())).resolves.toBe(
               binding.maintainGrant,
             );
           } finally {
@@ -413,13 +413,14 @@ describe('host maintenance binding', () => {
       }
     });
 
-    it('refuses to open when the 002 asset is not applied', async () => {
+    it('refuses to open where the 002 asset is not installed', async () => {
       const host = await memoryPgHost();
       try {
-        const projection = host.layout.projectionSchemas['engram-memory'] as string;
-        await expect(openMemoryPostgresHostLedger(host.options.driver, projection)).rejects.toThrow(
+        // The public schema never carries the ledger table: open refuses.
+        await expect(openMemoryPostgresHostLedger(host.options.driver, 'public')).rejects.toThrow(
           /002 asset is not applied/,
         );
+        const projection = ledgerProjection(host);
         await expect(openMemoryPostgresHostLedger(null as never, projection)).rejects.toThrow(
           StorageDeniedError,
         );
@@ -455,9 +456,64 @@ describe('host maintenance binding', () => {
         // owned by the storage lanes and the G1b read+maintain runner.
         await expect(ports.poison('live-consumer', 'event-1', 'no delivery')).rejects.toThrow();
         await expect(ports.snapshot('live-consumer', 0, 10)).rejects.toThrow();
+        // Post-open revocation: the kernel checks the grants table on every
+        // call, so the open ports stop working once revoked.
+        await root.revoke(binding.maintainGrant.token);
+        await expect(ports.checkFence(fence)).rejects.toThrow(/revoked/);
+        await expect(ports.checkpoint('live-consumer', '0', '0', fence)).rejects.toThrow(/revoked/);
       } finally {
         await host.close();
       }
+    });
+  });
+
+  describe.skipIf(!pgEnabled)('revoked and foreign host authority', () => {
+    const attestationFor = (hostPrincipal: string) => ({
+      invocationId: 'inv-2',
+      issuedAt: '2026-10-27T00:00:00.000Z',
+      hostPrincipal,
+    });
+
+    it('refuses continuation, proof and reattach after revocation', async () => {
+      const host = await memoryPgHost();
+      try {
+        const { binding } = memoryHostComposed(host.options.driver, 'inv-revoked-1');
+        const root = await host.open();
+        await root.bindNew(binding.maintainGrant);
+        const ledger = createMemoryHostLedgerAsync();
+        await ledger.record(entryFor('cand-1', 'user-1'));
+        await root.revoke(binding.maintainGrant.token);
+        await expect(
+          issueContinuationGrant(ledger, binding, 'cand-1', attestationFor('user-1'), root.adapter()),
+        ).rejects.toThrow(/revoked/);
+        await expect(
+          proveForRecoveryAuthorized(ledger, binding, 'cand-1', undefined, root.adapter()),
+        ).rejects.toThrow(/revoked/);
+        // Retained but revoked: a refusal, never a silent NOT_FOUND.
+        await expect(
+          reattachMemoryMaintenance(binding, ledger, 'cand-1', root.adapter()),
+        ).rejects.toThrow(StorageDeniedError);
+        await expect(
+          reattachMemoryMaintenance(binding, ledger, 'cand-1', root.adapter()),
+        ).rejects.not.toThrow(MemoryMaintenanceNotFoundError);
+      } finally {
+        await host.close();
+      }
+    });
+
+    it('refuses a foreign store on every maintain path', async () => {
+      const ledger = createMemoryHostLedgerAsync();
+      const binding = hostBindingFor('user-1', 'store-1');
+      await ledger.record({ ...entryFor('cand-1', 'user-1'), storeId: 'store-2' });
+      await expect(
+        issueContinuationGrant(ledger, binding, 'cand-1', attestationFor('user-1'), stubAuthority),
+      ).rejects.toThrow(/store/);
+      await expect(
+        proveForRecoveryAuthorized(ledger, binding, 'cand-1', undefined, stubAuthority),
+      ).rejects.toThrow(/store/);
+      await expect(
+        reattachMemoryMaintenance(binding, ledger, 'cand-1', stubAuthority),
+      ).rejects.toThrow(/store/);
     });
   });
 
@@ -467,27 +523,27 @@ describe('host maintenance binding', () => {
       openMemoryMaintenance({ maintainGrant: maintainGrant() } as never, undefined as never),
     ).toThrow(MemoryHostDriverRequiredError);
     // Runner bound to another grant: identity mismatch, even with live ports.
-    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1' });
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1', storeId: 'store-1' });
     expect(() =>
       openMemoryMaintenance(binding, stubRunner(maintainGrant())),
     ).toThrow(/runner bound to this binding/);
   });
   it('routes fence checks and checkpoints through the host-only binding', async () => {
-    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1' });
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1', storeId: 'store-1' });
     const ports = openMemoryMaintenance(binding, stubRunner(binding.maintainGrant));
     await expect(ports.checkFence({} as never)).rejects.toThrow('no backend');
     await expect(ports.checkpoint('consumer', '0', '0', {} as never)).rejects.toThrow('no backend');
   });
 
   it('retries and poisons consumers without a second effect', async () => {
-    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1' });
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1', storeId: 'store-1' });
     const ports = openMemoryMaintenance(binding, stubRunner(binding.maintainGrant));
     await expect(ports.checkpoint('consumer', '0', '0', {} as never)).rejects.toBeInstanceOf(StorageUnavailableError);
     await expect(ports.poison('consumer', 'event-1', 'poisoned')).rejects.toBeInstanceOf(StorageUnavailableError);
   });
 
   it('resyncs scope-chain-index and snapshots through maintenance ports', async () => {
-    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1' });
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1', storeId: 'store-1' });
     const ports = openMemoryMaintenance(binding, stubRunner(binding.maintainGrant));
     await expect(ports.resync('tenant-a/workspace-a', {} as never)).rejects.toBeInstanceOf(StorageUnavailableError);
     await expect(ports.snapshot('token', 0, 10)).rejects.toBeInstanceOf(StorageUnavailableError);
@@ -514,7 +570,7 @@ describe('host maintenance binding', () => {
         invocationId: 'inv-2',
         issuedAt: '2026-10-27T00:00:00.000Z',
         hostPrincipal: 'host-1',
-      })).rejects.toThrow(StorageDeniedError);
+      }, stubAuthority)).rejects.toThrow(StorageDeniedError);
       const memory = createMemoryHostLedger();
       expect(() => memory.restore([{ ...entryFor('cand-1'), envelopeDigest: '' }])).toThrow(
         StorageDeniedError,
@@ -558,7 +614,7 @@ describe('host maintenance binding', () => {
       await ledger.record(entryFor('cand-1', 'user-1'));
       const binding = hostBindingFor('user-1');
       const attestation = { invocationId: 'inv-2', issuedAt: '2026-10-27T00:00:00.000Z', hostPrincipal: 'user-1' };
-      const continued = await issueContinuationGrant(ledger, binding, 'cand-1', attestation);
+      const continued = await issueContinuationGrant(ledger, binding, 'cand-1', attestation, stubAuthority);
       expect(continued.candidateId).toBe('cand-1');
       expect(continued.storeId).toBe('store-1');
       expect(continued.grant.operations).toEqual(['read', 'write']);
@@ -572,6 +628,7 @@ describe('host maintenance binding', () => {
         binding,
         'cand-1',
         { ...attestation, invocationId: 'inv-3' },
+        stubAuthority,
       );
       expect(again.grant.token).not.toBe(continued.grant.token);
     });
@@ -580,29 +637,29 @@ describe('host maintenance binding', () => {
       const ledger = createMemoryHostLedgerAsync();
       const binding = hostBindingFor('user-1');
       const attestation = { invocationId: 'inv-2', issuedAt: '2026-10-27T00:00:00.000Z', hostPrincipal: 'user-1' };
-      await expect(issueContinuationGrant(ledger, binding, 'unknown', attestation)).rejects.toThrow(
+      await expect(issueContinuationGrant(ledger, binding, 'unknown', attestation, stubAuthority)).rejects.toThrow(
         StorageDeniedError,
       );
       await ledger.record(entryFor('cand-1', 'user-1'));
-      await expect(issueContinuationGrant(ledger, binding, 'cand-1', { ...attestation, invocationId: '' })).rejects.toThrow(
+      await expect(issueContinuationGrant(ledger, binding, 'cand-1', { ...attestation, invocationId: '' }, stubAuthority)).rejects.toThrow(
         StorageDeniedError,
       );
-      await expect(issueContinuationGrant(ledger, binding, 'cand-1', { ...attestation, hostPrincipal: '' })).rejects.toThrow(
+      await expect(issueContinuationGrant(ledger, binding, 'cand-1', { ...attestation, hostPrincipal: '' }, stubAuthority)).rejects.toThrow(
         StorageDeniedError,
       );
       // Copied retained invocation fields never grant.
-      await expect(issueContinuationGrant(ledger, binding, 'cand-1', { ...attestation, invocationId: 'inv-1' })).rejects.toThrow(
+      await expect(issueContinuationGrant(ledger, binding, 'cand-1', { ...attestation, invocationId: 'inv-1' }, stubAuthority)).rejects.toThrow(
         StorageDeniedError,
       );
       // Foreign principal: neither the attestation nor another binding passes.
       await expect(
-        issueContinuationGrant(ledger, binding, 'cand-1', { ...attestation, hostPrincipal: 'other' }),
+        issueContinuationGrant(ledger, binding, 'cand-1', { ...attestation, hostPrincipal: 'other' }, stubAuthority),
       ).rejects.toThrow(/original host principal/);
       await expect(
-        issueContinuationGrant(ledger, hostBindingFor('other'), 'cand-1', attestation),
+        issueContinuationGrant(ledger, hostBindingFor('other'), 'cand-1', attestation, stubAuthority),
       ).rejects.toThrow(/different host principal/);
-      await issueContinuationGrant(ledger, binding, 'cand-1', attestation);
-      await expect(issueContinuationGrant(ledger, binding, 'cand-1', attestation)).rejects.toThrow(
+      await issueContinuationGrant(ledger, binding, 'cand-1', attestation, stubAuthority);
+      await expect(issueContinuationGrant(ledger, binding, 'cand-1', attestation, stubAuthority)).rejects.toThrow(
         StorageDeniedError,
       );
     });
@@ -617,7 +674,7 @@ describe('host maintenance binding', () => {
           invocationId: 'inv-2',
           issuedAt: '2026-10-27T00:00:00.000Z',
           hostPrincipal: 'user-1',
-        }),
+        }, stubAuthority),
       ).rejects.toThrow(/completed candidates cannot continue/);
     });
 
@@ -651,11 +708,11 @@ describe('host maintenance binding', () => {
       const ledger = createMemoryHostLedgerAsync();
       const binding = hostBindingFor('user-1');
       await ledger.record(entryFor('cand-1', 'user-1'));
-      await expect(reattachMemoryMaintenance(binding, ledger, 'cand-1')).resolves.toBe(binding.maintainGrant);
+      await expect(reattachMemoryMaintenance(binding, ledger, 'cand-1', stubAuthority)).resolves.toBe(binding.maintainGrant);
       // Never tracked: NOT_FOUND with the NOT_FOUND code, never a refusal.
       const missing = await (async () => {
         try {
-          await reattachMemoryMaintenance(binding, ledger, 'never-tracked');
+          await reattachMemoryMaintenance(binding, ledger, 'never-tracked', stubAuthority);
           return null;
         } catch (error) {
           return error;
@@ -666,7 +723,7 @@ describe('host maintenance binding', () => {
       // Spent invocation drained: the same candidate is now NOT_FOUND.
       expect(await ledger.drainInvocation('inv-1')).toBe(1);
       expect(await ledger.drainInvocation('inv-1')).toBe(0);
-      await expect(reattachMemoryMaintenance(binding, ledger, 'cand-1')).rejects.toThrow(
+      await expect(reattachMemoryMaintenance(binding, ledger, 'cand-1', stubAuthority)).rejects.toThrow(
         MemoryMaintenanceNotFoundError,
       );
       await expect(ledger.drainInvocation('')).rejects.toThrow(StorageDeniedError);
@@ -677,7 +734,7 @@ describe('host maintenance binding', () => {
       const binding = hostBindingFor('user-1');
       await ledger.record(entryFor('cand-1', 'user-1'));
       await ledger.markTerminal('cand-1', { outcome: 'admitted' }, 'cursor-9');
-      const proof = await proveForRecoveryAuthorized(ledger, binding, 'cand-1');
+      const proof = await proveForRecoveryAuthorized(ledger, binding, 'cand-1', undefined, stubAuthority);
       expect(proof.state).toBe('terminal');
       expect(proof.receipt).toEqual({ outcome: 'admitted' });
       // A live binding for a foreign scope is refused even with authority.
@@ -692,16 +749,16 @@ describe('host maintenance binding', () => {
           operations: ['maintain'],
         }),
       } as never;
-      await expect(proveForRecoveryAuthorized(ledger, foreignScoped, 'cand-1')).rejects.toThrow(
+      await expect(proveForRecoveryAuthorized(ledger, foreignScoped, 'cand-1', undefined, stubAuthority)).rejects.toThrow(
         /recovery scope does not match/,
       );
-      await expect(reattachMemoryMaintenance(foreignScoped, ledger, 'cand-1')).rejects.toThrow(
+      await expect(reattachMemoryMaintenance(foreignScoped, ledger, 'cand-1', stubAuthority)).rejects.toThrow(
         /reattach scope does not match/,
       );
       // Drained candidates refuse proof; reattach distinguishes the spent case.
       await ledger.drainInvocation('inv-1');
-      await expect(proveForRecoveryAuthorized(ledger, binding, 'cand-1')).rejects.toThrow(StorageDeniedError);
-      await expect(reattachMemoryMaintenance(binding, ledger, 'cand-1')).rejects.toThrow(
+      await expect(proveForRecoveryAuthorized(ledger, binding, 'cand-1', undefined, stubAuthority)).rejects.toThrow(StorageDeniedError);
+      await expect(reattachMemoryMaintenance(binding, ledger, 'cand-1', stubAuthority)).rejects.toThrow(
         MemoryMaintenanceNotFoundError,
       );
     });
