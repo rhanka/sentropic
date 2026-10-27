@@ -36,7 +36,7 @@
 - [x] BR84-EX2 — Owner-authorized CI exception: add the budget step/report upload (explicit `.cache` report paths only) in `validate-artifacts`, extend its change filter to kit and DS consumer inputs. Reason: prevent data-corpus regressions. Impact: this validation job runs for those paths; publication filters remain unchanged. Rollback: remove the added step/upload and filter entries.
 - [x] Approved analysis: `.tmp/ds-artifact-weight/analysis.md` sections 3–5; review `.h2a/reviews/ds_artifact_weight_opus_r1.md` APPROVE; incorporate P2-1 through P2-4 in the committed receipt and validation.
 - [x] BR84-F1 — Full-governance build omitted its `../raw-spec.md?raw` input from scratch; copied the declared raw input. The full-governance build is the regression gate.
-- [ ] BR84-F2 — Typical portable browser initialization times out; added initialization error/DOM receipts. Diagnostic rerun queued on the shared Docker lock; draft CI runs independently. No timeout increase.
+- [ ] BR84-F2 — Portable initialization: the fixture called `diagramTabs()` as an expression, so Svelte received no DOM anchor (`before` error). Replaced with `{@render diagramTabs()}`; rebuilding and rerunning offline probes. Initialization error/DOM/stack receipts retained; no timeout increase.
 
 ## AI Flaky tests
 - [x] No AI/provider tests in this scope; no flaky exception requested.
