@@ -237,9 +237,10 @@ export function resolveFoundationChatTools(
   if (searchSkillsEntry === undefined) {
     // Defensive: should never happen (adapter always prepends search_skills),
     // but if it does, just prepend search_catalog first.
-    return [searchCatalogTool];
+    return context && !context.allowedTools.includes('search_catalog') ? [] : [searchCatalogTool];
   }
-  return [searchSkillsEntry, searchCatalogTool, ...rest];
+  return [searchSkillsEntry, searchCatalogTool, ...rest]
+    .filter(tool => !context || context.allowedTools.includes(tool.function.name));
 }
 
 export function executeFoundationSearchSkills(input: {
