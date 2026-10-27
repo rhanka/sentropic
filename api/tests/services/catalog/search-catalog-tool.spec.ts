@@ -22,7 +22,10 @@
  *   - categoryHint filter narrows to the correct category
  */
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { testCatalogContext } from './test-context';
+import type { CatalogRequestContext } from '../../../src/services/catalog/request-context';
+import type { SearchCatalogInput } from '../../../src/services/catalog/search-catalog-tool';
 
 import {
   SEARCH_CATALOG_TOOL_NAME,
@@ -32,7 +35,7 @@ import {
 } from '../../../src/services/catalog/search-catalog-tool';
 import {
   compositeCatalogRegistry,
-  executeFoundationSearchCatalog,
+  executeFoundationSearchCatalog as searchCatalog,
   executeFoundationSearchSkills,
   resolveFoundationChatTools,
 } from '../../../src/services/skills/catalog';
@@ -51,6 +54,9 @@ import { productCatalogDiscovery } from '../../../src/routes/namespaces/catalog-
 const ALL_FOUNDATION_TOOL_NAMES: string[] = FOUNDATION_SKILLS.flatMap((s) =>
   s.tools.map((t) => t.name),
 );
+let context: CatalogRequestContext;
+beforeEach(async () => { context = await testCatalogContext(ALL_FOUNDATION_TOOL_NAMES); });
+const executeFoundationSearchCatalog = (payload: SearchCatalogInput) => searchCatalog({ payload, context });
 
 function makeAllowlistInput(toolNames: string[]) {
   return {
@@ -212,7 +218,7 @@ describe('search_catalog position in resolveFoundationChatTools', () => {
 describe('executeFoundationSearchCatalog — cross-kind hits', () => {
   it('matches the root discovery adapter for the same deterministic query', () => {
     const toolHits = executeFoundationSearchCatalog({ query: 'workspace', limit: 3 }).hits;
-    const httpHits = productCatalogDiscovery.search({ query: 'workspace', limit: 3 })
+    const httpHits = productCatalogDiscovery.search({ query: 'workspace', limit: 3 }, context)
       .map(({ entry, score, matchedFields }) => ({
         kind: entry.kind,
         name: entry.metadata.name,
