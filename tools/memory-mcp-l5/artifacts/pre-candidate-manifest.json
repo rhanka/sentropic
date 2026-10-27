@@ -80,14 +80,14 @@
     {"path":"packages/mcp-platform/etc/mcp-platform-memory.api.md","version":"0.4.0","sha256":"91d9ee28c09fb99d6836c88f6c1cb113b9b0c72e5e24bc32f8283e1e03c2eadd"},
     {"path":"packages/mcp-platform/etc/mcp-platform.api.md","version":"0.4.0","sha256":"6ad5a84ed3fb2086189aa123fdee23d0c7d3ef17fac92f1b3bf1347bb6dbd8dc"},
     {"path":"packages/mcp-platform/package.json","version":"0.4.0","sha256":"eaa3da5cd030c6e68cf273b8f225a84c8070c7d69804b124532db9b945e4bba8"},
-    {"path":"spec/evidence/memory-mcp-l5/l0-freeze.json","version":"1.0.0","sha256":"f37b3b9e220ab1043614b14eec34cbd1539b0cb9358d5ecee37f1bf81ad43bc5"},
+    {"path":"spec/evidence/memory-mcp-l5/l0-freeze.json","version":"1.0.0","sha256":"0541b15ba4d5e49ba3b30d92da1c5e3c2fd668e40937e4f942103a678e849bfb"},
     {"path":"tools/memory-mcp-l5/exports-v1.json","version":"1.0.0","sha256":"e19ec2ef6b84f0302930df88dc3b1a2c9ca99a6cee9d1c0c74e7eb6deb93ea02"},
     {"path":"tools/memory-mcp-l5/fixtures/l0/60a8bfa828b5eabd360232ea5865391c23f99f48/index.json","version":"1.0.0","sha256":"7b956be8394e9ac9f14770a6a63a7803c8f0dabc89bcd021df9423a13ddc5f39"},
     {"path":"tools/memory-mcp-l5/fixtures/l0/60a8bfa828b5eabd360232ea5865391c23f99f48/memory-mcp-sol-rules.ts","version":"1.0.0","sha256":"e685748ead67be8da29bb97487176ee8902624657f90f82b209b4fc661275419"},
     {"path":"tools/memory-mcp-l5/fixtures/l0/60a8bfa828b5eabd360232ea5865391c23f99f48/memory-mcp-spec-rules.ts","version":"1.0.0","sha256":"64b44d834db6d07c10856118824c51422255799558d0ce6b2e96461d6caf7f2a"},
     {"path":"tools/memory-mcp-l5/fixtures/l0/schema-assets.sha256","version":"1.0.0","sha256":"667646723c163341b42c34612a2d78f3eed1461f17b80d6dec98841ffc7fe9fd"},
     {"path":"tools/memory-mcp-l5/fixtures/l0/tool-schemas.json","version":"1.0.0","sha256":"584f4aa5d09ba2b8bc6af4737962141863bc89d55a101dafbe2edff8ed822dfa"},
-    {"path":"tools/memory-mcp-l5/proof-catalog-v1.json","version":"1.0.0","sha256":"c8b0f9c8a907eb3d6a42e7a81d7509e6f5149aaf0b9f557842bda928c74c84be"},
+    {"path":"tools/memory-mcp-l5/proof-catalog-v1.json","version":"1.0.0","sha256":"9bf377b774dda54a3b37189eea57cb845acca7b27b8b55b399f23c20215a1211"},
     {"path":"tools/memory-mcp-l5/schemas/artifact-manifest-v1.schema.json","version":"1.0.0","sha256":"c0f968512d7b7bea14b0502eed95fae207e3ea09aba6524d77518631e69a6d36"},
     {"path":"tools/memory-mcp-l5/schemas/checkpoint-v1.schema.json","version":"1.0.0","sha256":"144a428ae5abf99f76c7585d1976b821c2ef207f8685bd5bfa5f2f247084f3e5"}
   ]
