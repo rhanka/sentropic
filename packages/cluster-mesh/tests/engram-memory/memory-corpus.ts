@@ -13,12 +13,15 @@ export const MEMORY_STAGE_B_PROFILES = [
   'atomic-units-v1', 'immutable-chains-v1', 'immutable-boundaries-v1', 'scope-outbox-v1', 'fenced-writers-v1',
 ] as const;
 export const MEMORY_STAGE_B_CASES = {
-  'atomic-units-v1': ['capture-completion', 'completion-conflict', 'rollback'],
-  'immutable-chains-v1': ['first-proof-reopen', 'destruction-replay'],
+  'atomic-units-v1': ['capture-completion', 'completion-conflict', 'rollback', 'crash-before', 'crash-after',
+    'C5/9007199254740991', 'C5/9223372036854775807', 'C5/18446744073709551614'],
+  'immutable-chains-v1': ['first-proof-reopen', 'destruction-replay/accept', 'destruction-replay/reject'],
   'immutable-boundaries-v1': ['bounded-journal', 'bounded-outbox', 'accepted-snapshot'],
   'scope-outbox-v1': ['checkpoint-resync-snapshot', 'poison-retry', 'authority-refusals'],
-  'fenced-writers-v1': ['second-holder', 'store-bijection', 'revocation', 'two-process', 'final-guard'],
+  'fenced-writers-v1': ['second-holder', 'store-bijection', 'revocation', 'two-process', 'final-guard', 'C7'],
 } as const;
+export const memoryCaseInventory: string[] = [];
+export const registerMemoryCase = (name: string) => { memoryCaseInventory.push(name.split(':')[0]!); };
 export const MEMORY_NOW = '2026-10-27T00:00:00.000Z';
 export const MEMORY_DIGEST = `sha256:${'a'.repeat(64)}` as const;
 export const valueOf = <T>(result: Result<T>): T => {
@@ -36,10 +39,13 @@ export const pendingCapture = (candidateId = 'candidate-1'): Parameters<Canonica
 });
 
 export const runMemoryCorpus = (open: () => Promise<MemoryCampaignHost>): void => {
-  const scenario = (name: string, run: (host: MemoryCampaignHost) => Promise<void>) => it(name, async () => {
+  const scenario = (name: string, run: (host: MemoryCampaignHost) => Promise<void>) => {
+    registerMemoryCase(name);
+    return it(name, async () => {
     const host = await open();
     try { await run(host); } finally { await host.close(); }
-  });
+    });
+  };
   describe('memory Stage B: exact read/write binding and separate host maintenance', () => {
     scenario('inventory: should negotiate all five frozen semantic profiles with no maintenance escape', async (h) => {
       expect(h.binding.memoryGrant.operations).toEqual(['read', 'write']);
@@ -49,6 +55,16 @@ export const runMemoryCorpus = (open: () => Promise<MemoryCampaignHost>): void =
       for (const name of ['checkpoint', 'journalCheckpoint', 'snapshot', 'snapshotRead', 'resync', 'maintainGrant'])
         expect(name in h.handle).toBe(false);
       expect(valueOf(await h.store.readiness()).storage_epoch).toBe('1');
+      const facts = await h.pg.tx.run(true, async (session) => ({
+        server: (await session.execute({ text: `SELECT version(),current_setting('transaction_isolation') AS isolation,
+          current_setting('synchronous_commit') AS synchronous_commit`, values: [] })).rows[0],
+        migrations: await h.pg.history.read(session),
+      }));
+      expect(process.versions.node.split('.')[0]).toBe('24');
+      expect(facts.server).toMatchObject({ isolation: 'serializable', synchronous_commit: 'on' });
+      console.info('MEMORY_STAGE_B_RUNTIME', JSON.stringify({ node: process.version, arch: process.arch, server: facts.server,
+        profiles: h.handle.profiles, migrations: facts.migrations,
+        pgData: 'Compose test-e2-int tmpfs; process/reopen durability only' }));
     });
     scenario('atomic-units-v1/capture-completion: should complete K7 without allocating another cursor', async (h) => {
       const receipt = valueOf(await h.store.commitPending(pendingCapture()));
@@ -112,6 +128,12 @@ export const runMemoryCorpus = (open: () => Promise<MemoryCampaignHost>): void =
       expect(await h.store.readPending({ ...candidate, authorization_receipt_digest: DIGEST }))
         .toMatchObject({ ok: false, error: { code: 'NOT_FOUND' } });
       const first = valueOf(await h.store.readAdmissionOutcome!(candidate));
+      const replayCapture = valueOf(await host.engine.capture(memoryCaptureRequest()));
+      expect(replayCapture).toMatchObject({ status: 'duplicate_exact', candidate_id: captured.candidate_id,
+        transaction_receipt_digest: captured.transaction_receipt_digest });
+      expect(valueOf(await host.engine.requestAdmission({ ...candidate,
+        authorization: { credential: 'credential-memory' }, deadline_at: DEADLINE }))).toEqual(admitted);
+      expect(host.destroyed).toBe(1);
       const journal = valueOf(await h.store.readJournal({ after: '0', limit: 10 }));
       expect(journal).toHaveLength(2);
       const original = await h.handle.readCommitResult!(journal.at(-1)!.event_id, h.binding.memoryGrant);
@@ -124,6 +146,12 @@ export const runMemoryCorpus = (open: () => Promise<MemoryCampaignHost>): void =
       expect(valueOf(await h.store.readCaptureIdempotency!(candidate))).toEqual(captureProof);
       expect(valueOf(await h.store.readAdmissionOutcome!(candidate))).toEqual(first);
       expect(await h.handle.readCommitResult!(journal.at(-1)!.event_id, h.binding.memoryGrant)).toEqual(original);
+      expect(valueOf(await h.store.readJournal({ after: '0', limit: 10 }))).toEqual(journal);
+      const restarted = memoryEngine(h, decision);
+      expect(valueOf(await restarted.engine.capture(memoryCaptureRequest()))).toEqual(replayCapture);
+      expect(valueOf(await restarted.engine.requestAdmission({ ...candidate,
+        authorization: { credential: 'credential-memory' }, deadline_at: DEADLINE }))).toEqual(admitted);
+      expect(restarted.destroyed).toBe(0);
       expect(valueOf(await h.store.readJournal({ after: '0', limit: 10 }))).toEqual(journal);
     });
     scenario('scope-outbox-v1/checkpoint-resync-snapshot: should retain a host snapshot while memory advances', async (h) => {
