@@ -12,6 +12,7 @@ import {
 import { db } from '../../src/db/client';
 import { tenantMemberships, userSessions } from '../../src/db/schema';
 import { resolveHttpCatalogContext } from '../../src/services/catalog/request-authority';
+import { revalidateCatalogInvocation } from '../../src/services/catalog/request-context';
 import { testCatalogContext } from '../services/catalog/test-context';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import {
@@ -178,6 +179,25 @@ describe('cluster mesh catalog product authority', () => {
     const blocked = await authenticatedRequest(app, 'GET', path, user.sessionToken!);
     expect(blocked.status).toBe(503);
     await expect(blocked.json()).resolves.toEqual({ error: 'wrong_author' });
+  });
+
+  it('should deny all mounted discovery paths after tenant membership is revoked', async () => {
+    await db.delete(tenantMemberships).where(eq(tenantMemberships.userId, user.id));
+    for (const suffix of ['entries', 'entries/workspace', 'search?query=workspace', 'sources']) {
+      const response = await authenticatedRequest(productApp, 'GET', `/api/v1/catalog/${suffix}`, user.sessionToken!);
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toEqual({ error: 'catalog_access_denied' });
+    }
+  });
+
+  it('should reject stale session authority and foreign workspace selectors before execution', async () => {
+    const [session] = await db.select().from(userSessions).where(eq(userSessions.userId, user.id));
+    const authenticated = { userId: user.id, sessionId: session.id, workspaceId: user.workspaceId!, role: 'editor' };
+    const context = await resolveHttpCatalogContext(authenticated);
+    await expect(resolveHttpCatalogContext({ ...authenticated, workspaceId: 'foreign-workspace' }))
+      .rejects.toThrow('catalog_access_denied');
+    await db.delete(userSessions).where(eq(userSessions.id, session.id));
+    await expect(revalidateCatalogInvocation(context, 'workspace_list', {})).rejects.toThrow('catalog_access_denied');
   });
 
   it('has no anonymous, disabled, duplicate, effect, or unavailable-control fallback', async () => {
