@@ -4,10 +4,6 @@
     "module": "ESNext",
     "lib": ["ES2022"],
     "moduleResolution": "Bundler",
-    "paths": {
-      "@sentropic/artifacts": ["../packages/artifacts/dist/index.d.ts"],
-      "@sentropic/artifacts/*": ["../packages/artifacts/dist/*"]
-    },
     "allowSyntheticDefaultImports": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
