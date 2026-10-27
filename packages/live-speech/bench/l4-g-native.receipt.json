@@ -1,0 +1,69 @@
+{
+  "createdAt": "2026-10-27T03:50:25Z",
+  "kind": "l4-g-native-receipt",
+  "lot": "L4",
+  "spec": "r3 §5.1 + §8.1",
+  "status": "measured",
+  "note": "L4 terminal devices add no native build and no new npm dependency: pure Node over a vetted system audio binary. G-NATIVE evidence below pins the helper binaries, the zero-dependency posture, the device-listing trace and the explicitly blocked paths.",
+  "toolchain": {
+    "testImage": "node:24-bookworm-slim",
+    "arch": "amd64",
+    "pythonInImage": "none (verified: no python/python3 on PATH)",
+    "nodeGyp": "never invoked in live-speech install, build, test or device paths",
+    "nativeBuild": "none — no native module in the L4 path; faster-whisper-ts stays an optional L3 peer"
+  },
+  "packageDependencies": {
+    "runtime": [],
+    "optionalPeer": ["faster-whisper-ts@1.2.1 (L3, unused by L4)"],
+    "dev": ["typescript@5.4.5", "@types/node@^22.10.10", "vitest@4.0.18 (via make lane)"],
+    "note": "Zero runtime dependencies: capture/device/control import only node:child_process and node builtins."
+  },
+  "helpers": {
+    "arecord": {
+      "role": "wired backend (ArecordDevice)",
+      "binary": "/usr/bin/arecord",
+      "package": "alsa-utils 1.2.15.2-1ubuntu1",
+      "version": "arecord: version 1.2.15.2",
+      "sha256": "4436d05a3f9ce9d92432ea73dd5b6233f69d6243a6cfb3b6b1b8852622cb26c5",
+      "license": "GPL-2 (separate native executable, subprocess aggregation — same treatment as the L3 eSpeak NG binary)",
+      "invocation": "arecord -D <id> -f S16_LE -r <rate> -c 1 -t raw (explicit argv, shell:false; stdout streamed as PCM, stderr drained as text, no audio files)"
+    },
+    "pw-record": {
+      "role": "qualified alternative, not wired (single-backend surface)",
+      "binary": "/usr/bin/pw-record",
+      "package": "pipewire-bin 1.6.2-1ubuntu1.1 (libpipewire 1.6.2)",
+      "sha256": "19d0bdba77511b1710d1740ce0a9420a978d4168f56e1409855c657caef0bd",
+      "license": "package mix Expat/LGPL-2.1+ (see /usr/share/doc/pipewire-bin/copyright); subprocess aggregation only"
+    }
+  },
+  "deviceTrace": {
+    "command": "arecord -l",
+    "exit": 0,
+    "output": "**** Liste des périphériques matériels CAPTURE ****\ncarte 1 : Generic_1 [HD-Audio Generic], périphérique 0 : ALC294 Analog [ALC294 Analog]\n  Sous-périphériques : 1/1\n  Sous-périphérique #0 : subdevice #0",
+    "note": "Listing only: proves backend parsing against real hardware enumeration. No capture attempted — no microphone in this environment, and microphone capture is forbidden in CI tests (FakeDevice covers behavior)."
+  },
+  "networkPosture": {
+    "microphone": false,
+    "paidApi": false,
+    "runtimeDownloads": "none — audio helpers are preinstalled system binaries, not fetched artifacts; no npm audio dependency added",
+    "audioInTests": "synthetic PCM only via FakeDevice; no audio payload in events or logs (counts, revisions, ids and text only)"
+  },
+  "sbom": {
+    "status": "measured",
+    "delta": "empty — L4 adds zero packages to package.json/package-lock.json; SBOM is the unchanged L3 set plus two system binaries pinned above"
+  },
+  "blocked": {
+    "liveMicCapture": {
+      "status": "blocked",
+      "detail": "No microphone available on the host or CI runners; live capture stays undelivered. Path: FakeDevice behavior + qualified arecord backend + device-listing trace."
+    },
+    "speakerAEC": {
+      "status": "blocked",
+      "detail": "Speaker mode needs an output reference (spec §5.1), not just an amplitude threshold. Headset-only profile until a qualified AEC reference exists; speaker mode stays unavailable, never silently muted."
+    },
+    "holdToTalk": {
+      "status": "blocked",
+      "detail": "No qualified native hotkey or browser companion source in this lot, so TerminalController push mode fails closed (ControlError). Toggle and explicit start/end keys only."
+    }
+  }
+}
