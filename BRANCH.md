@@ -17,6 +17,9 @@ Re-pin `feat/engram-e2-integration` from the P2 generation (`f2b094ae`, retained
   - `tools/memory-mcp-l5/proof-catalog-v1.json` (P3 content, from main #769)
   - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json` (P3 manifest, from main #769)
   - `tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json.sha256` (P3 pin)
+  - `tools/memory-mcp-l5/artifacts/history/f2b094ae034514727dfe2f4c9a89b3742e3d75beafc8f70e5074cd49d7f16642.json` (outgoing-pin archive, per retention spec)
+  - `tools/memory-mcp-l5/artifacts/history/f2b094ae034514727dfe2f4c9a89b3742e3d75beafc8f70e5074cd49d7f16642.json.sha256` (archive sidecar)
+  - `tools/memory-mcp-l5/tests/receipt-contract.test.mjs` (P09: 18 files + requiredCases, from main #769 — no main merge, single hunk)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.github/workflows/**`
@@ -35,7 +38,9 @@ Re-pin `feat/engram-e2-integration` from the P2 generation (`f2b094ae`, retained
 ## Feedback Loop
 - [x] `C6-FREEZE.md` has no integration counterpart (E0/E6 lot file keeping its own P2 line); the re-pin ports the P3 generation files that exist on integration: the two content files plus manifest and sidecar, so the freeze check stays coherent.
 - [x] Frozen sha256 verified after the change: l0-freeze `0541b15b…`, catalog `9bf377b7…`, manifest `1c96bada…` (sidecar contains the manifest hash).
-- [x] Retained history (`2b85ff28`, `f2b094ae` generations) untouched.
+- [x] Retained history (`2b85ff28` generation) untouched; outgoing `f2b094ae` archived under `history/` as the spec prescribes (archive content hashes to the pin).
+- [x] Opus r1 (memory-l5 gate): the P09 hunk taken from main #769 without a main merge (single hunk, no other main delta); a full `origin/main` merge would explode this PR's scope.
+- [x] `C6-FREEZE.md` has no integration counterpart (E0/E6 lot file); not ported — E6 keeps its own P2 line.
 - [ ] Push draft PR targeting `feat/engram-e2-integration`; verify validate-cluster-mesh green without merging.
 
 ## AI Flaky tests
