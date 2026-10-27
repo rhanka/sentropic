@@ -4,6 +4,8 @@ import { MEMORY_DESCRIPTOR, MEMORY_PINNED_PROFILES } from '../../src/engram-memo
 import { createPostgresKernel } from '../../src/storage/postgres/index.js';
 import type { ScopeGrant } from '../../src/storage/authority.js';
 import { memoryPgHost, memoryHostComposed } from './pg-host.js';
+import { verifyHostBinding } from '../../src/engram-memory/binding.js';
+import { openMemoryMaintenance, type MemoryMaintenancePorts } from '../../src/engram-memory/host-maintenance.js';
 import { memoryFailure, neutralQueryResult, neutralTransaction } from './memory-neutral.js';
 
 export type MemoryCampaignHost = Awaited<ReturnType<typeof memoryCampaignHost>>;
@@ -15,6 +17,14 @@ export const memoryCampaignHost = async () => {
   let kernel: Awaited<ReturnType<typeof createPostgresKernel>>;
   let fence: NeutralWriterFence;
   let store: CanonicalMemoryStorePort;
+  let maintenance: MemoryMaintenancePorts;
+  // Host-owned read/maintain authority has no write operation. Engram never
+  // sees this grant; every call also checks E7's independent maintain token.
+  const hostReader: ScopeGrant<unknown> = { ...binding.maintainGrant, token: 'memory-host-reader', operations: ['read', 'maintain'] };
+  const hostRead = async () => {
+    await verifyHostBinding(kernel, binding, scope);
+    return kernel.bind(hostReader);
+  };
   const scope = binding.memoryGrant.scope;
   const scopeBinding = { scope, store_id: 'memory-stage-b-store',
     resolveScope: (ref: string) => ref === 'memory-stage-b-scope' ? scope : null };
@@ -72,6 +82,20 @@ export const memoryCampaignHost = async () => {
     kernel = await createPostgresKernel({ ...pg.options, canonicalOwnership: {} });
     await kernel.bindNew(binding.memoryGrant);
     await kernel.bindNew(binding.maintainGrant);
+    await kernel.bindNew(hostReader);
+    const maintained = await kernel.bind(binding.maintainGrant);
+    const authorized = async <T,>(run: () => Promise<T>) => {
+      await verifyHostBinding(kernel, binding, scope); return run();
+    };
+    maintenance = openMemoryMaintenance(binding, {
+      grant: binding.maintainGrant,
+      currentFence: () => authorized(() => maintained.journalFence()),
+      checkpoint: (...args) => authorized(() => maintained.journalCheckpoint(...args)),
+      poison: (...args) => authorized(() => maintained.journalPoison(...args)),
+      retry: (...args) => authorized(() => maintained.journalRetry(...args)),
+      resync: (...args) => authorized(() => maintained.journalResync(...args)),
+      snapshot: async (...args) => (await hostRead()).snapshotRead(...args),
+    });
     const opened = await openModuleStorageCanonicalMemoryStoreV1({ handle, grant: binding.memoryGrant,
       scope_binding: scopeBinding, clock: { now: () => '2026-10-27T00:00:00.000Z' }, deadline_at: '2026-10-27T01:00:00.000Z' });
     if (!opened.ok) throw new Error(`PostgreSQL memory open: ${opened.error.code}: ${opened.error.message}`);
@@ -83,6 +107,8 @@ export const memoryCampaignHost = async () => {
     await open();
   } catch (error) { await kernel!?.ownership?.release(); await pg.close(); throw error; }
   return { pg, binding, handle, units, scopeBinding, get kernel() { return kernel; }, get store() { return store; },
+    get maintenance() { return maintenance; }, hostReader,
+    hostReplay: async (after: string, limit: number, consumer: string) => (await hostRead()).journalRead(after, limit, consumer),
     reopen: async () => { await store.close(); await open(); },
     close: async () => { try { await store.close(); } finally { await pg.close(); } },
   };
