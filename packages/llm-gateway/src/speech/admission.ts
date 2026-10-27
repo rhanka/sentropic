@@ -100,7 +100,7 @@ const validateOperation = (op: SpeechOperation): void => {
     throw new SpeechAccountingError('invalid');
   }
   const strings = [op.operationId, op.sessionId, op.attemptId, op.backendOperationRef,
-    op.submitKey, op.allocatorReceiptRef, op.cost?.tenantId, op.cost?.principalId, op.cost?.source,
+    op.submitKey, op.allocatorReceiptRef, op.cost?.tenantId, op.cost?.workspaceId, op.cost?.principalId, op.cost?.source,
     op.cost?.correlationId, op.binding?.providerId, op.binding?.modelId, op.binding?.modelRevision,
     op.binding?.adapterId, op.binding?.adapterRevision, op.binding?.placement, op.binding?.accountRef,
     op.binding?.region, op.configuration?.profileId, op.configuration?.configRevision,

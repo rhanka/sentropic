@@ -15,7 +15,7 @@ tuple, not an attestation of effective model routing. No independent consensus v
 
 The required procedure is [harness/review](</home/antoinefa/.codex/plugins/cache/sentropic/h2a/0.98.7/skills/harness/review/SKILL.md>):
 “Deduplicate surviving `(profile, model)` pairs and require ≥2.” Repository
-[subagent rules](../../../../rules/subagents.md) also require owner agreement before agent launches.
+[subagent rules](../../../rules/subagents.md) also require owner agreement before agent launches.
 The author did not infer extra allocator units from this speech engineering mandate.
 
 Reviewer lenses: transaction/cancellation/replay correctness; aggregate caps, quota attribution and
