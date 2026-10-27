@@ -1,7 +1,28 @@
+import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { enabled, fixtureDir, nodeJson, tsc, TSC_CASES } from './helpers.js';
 
-describe.skipIf(!enabled || !process.env.DATABASE_URL)('installed activation conformance vectors', () => {
+const required = process.env.ACTIVATION_CONFORMANCE_REQUIRED === '1';
+if (required || enabled) {
+  assert.ok(enabled, 'CLUSTER_MESH_PACKAGING_DIR is required');
+  assert.ok(process.env.DATABASE_URL, 'DATABASE_URL is required');
+  assert.equal(process.env.ACTIVATION_DISPOSABLE, '1', 'ACTIVATION_DISPOSABLE=1 is required');
+  assert.match(new URL(process.env.DATABASE_URL).pathname, /^\/test[_-][a-z0-9_-]+$/i, 'A test database name is required');
+}
+
+// Ordinary cluster-mesh unit runs have no packed consumer; the dedicated target always requires this suite.
+describe.skipIf(!required && !enabled)('installed activation conformance vectors', () => {
+  it.each(['CLUSTER_MESH_PACKAGING_DIR', 'DATABASE_URL', 'ACTIVATION_DISPOSABLE'])
+    ('should fail the required suite when %s is missing', key => {
+      const result = spawnSync(fixtureDir('tools/node_modules/.bin/vitest'), [
+        'run', 'tests/packaging/activation-vectors.spec.ts', '--config', fixtureDir('tools/vitest.config.ts'),
+        '--environment', 'node', '--maxWorkers=1',
+      ], { encoding: 'utf8', env: { ...process.env, ACTIVATION_CONFORMANCE_REQUIRED: '1', [key]: undefined } });
+      expect(result.status).not.toBe(0);
+      expect(result.stdout + result.stderr).toContain(key);
+    });
+
   it.each([1, 4])('should run every shipped vector on a clean consumer PostgreSQL executor with pool max %d', max => {
     const result = nodeJson(fixtureDir('artifacts-consumer'), `
       import assert from 'node:assert/strict';
@@ -18,11 +39,42 @@ describe.skipIf(!enabled || !process.env.DATABASE_URL)('installed activation con
       const passed = [];
       let stores = 0;
       const host = {
+        disposable: { confirmed: true, databaseName: new URL(process.env.DATABASE_URL).pathname.slice(1) },
         createStore(namespace) { stores++; return createPostgresActivationStore({ pool, namespace }); },
+        async inspectTicket(namespace, ticketId) {
+          const { rows } = await pool.query(\`SELECT issued_ms, expires_ms,
+            floor(extract(epoch FROM clock_timestamp()) * 1000) AS db_now
+            FROM artifact_host.activation_tickets WHERE namespace=$1 AND ticket_id=$2\`, [namespace, ticketId]);
+          return { issuedAt: Number(rows[0].issued_ms), expiresAt: Number(rows[0].expires_ms), now: Number(rows[0].db_now) };
+        },
+        createStoreWithCommitAckLoss(namespace) {
+          const uncertainPool = { async connect() {
+            const client = await pool.connect();
+            return {
+              async query(sql, params) {
+                const result = await client.query(sql, params);
+                if (sql === 'COMMIT') throw new Error('injected acknowledgement loss');
+                return result;
+              },
+              release(destroy) { client.release(destroy); },
+            };
+          } };
+          return createPostgresActivationStore({ pool: uncertainPool, namespace });
+        },
         wait: async (ms, client) => { await (client ?? pool).query('SELECT pg_sleep($1)', [ms / 1000]); },
         onPass: id => passed.push(id),
       };
+      let disposableVerified = false;
       try {
+        const { rows } = await pool.query('SELECT current_database() AS name');
+        assert.equal(rows[0].name, host.disposable.databaseName);
+        assert.match(rows[0].name, /^test[_-][a-z0-9_-]+$/i);
+        disposableVerified = true;
+        for (const disposable of [undefined, { confirmed: false, databaseName: rows[0].name },
+          { confirmed: true, databaseName: 'serving' }]) {
+          await assert.rejects(runPostgresActivationConformance({ ...host, disposable }));
+        }
+        assert.equal(stores, 0, 'unsafe hosts must be refused before any store is created');
         await pool.query('DROP SCHEMA IF EXISTS artifact_host CASCADE');
         await pool.query(bytes.toString('utf8'));
         const report = await runPostgresActivationConformance(host);
@@ -36,7 +88,7 @@ describe.skipIf(!enabled || !process.env.DATABASE_URL)('installed activation con
         }));
         console.log(JSON.stringify({ passed: report, stores }));
       } finally {
-        try { await pool.query('DROP SCHEMA IF EXISTS artifact_host CASCADE'); }
+        try { if (disposableVerified) await pool.query('DROP SCHEMA IF EXISTS artifact_host CASCADE'); }
         finally { await pool.end(); }
       }
     `);
@@ -45,6 +97,7 @@ describe.skipIf(!enabled || !process.env.DATABASE_URL)('installed activation con
       'authority-denial', 'authority-outage', 'single-use', 'concurrent-consume',
       'expiry-without-cleanup', 'expiry-after-authority', 'bounded-cleanup',
       'invalidation-recovery', 'ttl-cap', 'flow-association',
+      'db-time-skew', 'commit-unknown',
     ]);
   });
 

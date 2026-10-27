@@ -36,15 +36,21 @@ test-lazy-package-activation:
 	@case "$(ENV)" in test-*) ;; *) echo 'A dedicated test ENV is required'; exit 1 ;; esac
 	@$(MAKE) --no-print-directory -f Makefile build-artifacts ENV=$(ENV)
 	@docker compose -p $(ENV) -f docker-compose.immo-861.yml up -d --wait postgres
+	@printf '%s\n' "SELECT 'CREATE DATABASE test_artifacts_upt2' WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname='test_artifacts_upt2')" '\gexec' | \
+		docker compose -p $(ENV) -f docker-compose.immo-861.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U app -d app
 	@docker compose -p $(ENV) -f docker-compose.immo-861.yml run --rm --no-deps \
 		-u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
-		-e DATABASE_URL=postgres://app:app@postgres:5432/app \
+		-e DATABASE_URL=postgres://app:app@postgres:5432/test_artifacts_upt2 \
+		-e ACTIVATION_DISPOSABLE=1 -e ACTIVATION_CONFORMANCE_REQUIRED=1 \
 		-w /workspace/packages/cluster-mesh qualification sh -lc 'set -eu; work=/tmp/lazy-activation; \
 		CLUSTER_MESH_PREPARE_ONLY=activation sh tests/packaging/prepare.sh "$$work"; \
 		cp vitest.config.ts "$$work/tools/vitest.config.ts"; \
 		CLUSTER_MESH_PACKAGING_DIR="$$work" "$$work/tools/node_modules/.bin/vitest" \
-		run tests/packaging/activation-vectors.spec.ts --config "$$work/tools/vitest.config.ts" --environment node --maxWorkers=1'
+		run tests/packaging/activation-vectors.spec.ts --config "$$work/tools/vitest.config.ts" --environment node --maxWorkers=1 \
+		--reporter=default --reporter=json --outputFile.json="$$work/activation-results.json"; \
+		node -e '\''const fs=require("node:fs"), assert=require("node:assert/strict"); const r=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); assert.equal(r.numPassedTests,9); assert.equal(r.numPendingTests,0);'\'' "$$work/activation-results.json"'
 
+# Activation vectors require the dedicated mandatory PostgreSQL target used by validate-artifacts.
 test-lazy-package:
 	$(LAZY_SIBLING_CHECK)
 	@$(MAKE) --no-print-directory -f Makefile build-cluster-mesh ENV=$(ENV)
@@ -56,7 +62,7 @@ test-lazy-package:
 	@$(LAZY_PACKAGE_RUN) sh -lc 'set -eu; work=/tmp/lazy-package; sh tests/packaging/prepare.sh "$$work"; \
 		cp vitest.config.ts "$$work/tools/vitest.config.ts"; \
 		CLUSTER_MESH_PACKAGING_DIR="$$work" NODE_PATH="$$work/tools/node_modules" \
-		"$$work/tools/node_modules/.bin/vitest" run tests/packaging --config "$$work/tools/vitest.config.ts" --environment node --maxWorkers=1'
+		"$$work/tools/node_modules/.bin/vitest" run tests/packaging --exclude tests/packaging/activation-vectors.spec.ts --config "$$work/tools/vitest.config.ts" --environment node --maxWorkers=1'
 
 refresh-lazy-package-lock:
 	$(LAZY_SIBLING_CHECK)

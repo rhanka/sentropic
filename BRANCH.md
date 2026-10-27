@@ -36,6 +36,8 @@
 - [x] UP-T-2 / P1-1 in `pr794_opus_r1.md`: existing 0.2.3 vectors are repository tests absent from the published package; this branch supplies an executable package export.
 - [x] TYPE-1: strict installed-consumer compilation requires `@types/pg` in the consumer tree, alongside `pg`; fixture corrected without changing package production code.
 - [ ] REV-1: owner review on draft PR #797; harness consensus selection unavailable because live peer discovery does not provide exact model IDs (`.h2a/reviews/upt2-author.md`); no consensus claimed.
+- [x] REV-P1-1: reproduce missing db-time-skew/commit-unknown IDs on both pool sizes; add both mandatory vectors with additive host hooks (16 total).
+- [x] REV-P2: dedicated target requires packed-consumer/DB wiring and explicit disposable opt-in; refuse non-test database names before schema changes or vector stores.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky acceptance in this package-only scope.

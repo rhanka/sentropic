@@ -1,28 +1,39 @@
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import type { PoolClient } from 'pg';
-import type { PostgresActivationStore } from './postgres-activation.js';
+import { ActivationCommitUnknownError, type PostgresActivationStore } from './postgres-activation.js';
 
 export const POSTGRES_ACTIVATION_VECTOR_IDS = Object.freeze([
   'namespace-isolation', 'immutable-records', 'binding-mismatch', 'wrong-ids',
   'authority-denial', 'authority-outage', 'single-use', 'concurrent-consume',
   'expiry-without-cleanup', 'expiry-after-authority', 'bounded-cleanup',
   'invalidation-recovery', 'ttl-cap', 'flow-association',
+  'db-time-skew', 'commit-unknown',
 ] as const);
 export type PostgresActivationVectorId = typeof POSTGRES_ACTIVATION_VECTOR_IDS[number];
 export interface PostgresActivationConformanceHost {
+  /** Explicit opt-in; databaseName must be the executor's actual current_database(), starting test_ or test-. */
+  disposable?: { confirmed: true; databaseName: string };
   /** Same disposable DB/executor for every namespace and replica; schema installed by the host. */
   createStore(namespace: string): PostgresActivationStore;
   /** Wait on DB time; use the supplied leased client during authority checks (supports max:1). */
   wait(milliseconds: number, client?: PoolClient): Promise<void>;
+  /** Read persisted issuance/expiry and current DB milliseconds through the host executor. */
+  inspectTicket?(namespace: string, ticketId: string): Promise<{ issuedAt: number; expiresAt: number; now: number }>;
+  /** Same host composition, but throw AFTER the consume COMMIT succeeds, losing its acknowledgement. */
+  createStoreWithCommitAckLoss?(namespace: string): PostgresActivationStore;
   onPass?(id: PostgresActivationVectorId): void;
 }
 
 /** Test-only, framework-independent host conformance. Throws on the first failing vector.
  * Uses fresh isolated namespaces; invalidates and collects its own records after each vector.
- * Process crashes, restore snapshots and commit fault injection remain package integration tests.
+ * Process crashes and restore snapshots remain package integration tests.
+ * Optional hooks preserve interface compatibility; their vectors are mandatory and fail if absent.
+ * Run in an isolated process: db-time-skew temporarily replaces Date.now and always restores it.
  */
 export async function runPostgresActivationConformance(host: PostgresActivationConformanceHost): Promise<PostgresActivationVectorId[]> {
+  assert.ok(host.disposable?.confirmed === true, 'Explicit disposable database confirmation is required');
+  assert.match(host.disposable.databaseName, /^test[_-][a-z0-9_-]+$/i, 'A test database name is required');
   const passed: PostgresActivationVectorId[] = [];
   for (const id of POSTGRES_ACTIVATION_VECTOR_IDS) {
     const namespace = `upt2:${randomUUID()}`;
@@ -109,6 +120,34 @@ export async function runPostgresActivationConformance(host: PostgresActivationC
       } else if (id === 'flow-association') {
         await assert.rejects(store.flows.put({ ...flow, flowId: randomUUID(), subjectId: 'mallory' }));
         await assert.rejects(store.flows.put({ ...flow, flowId: randomUUID(), expiresAt: ticket.expiresAt + 1 }));
+      } else if (id === 'db-time-skew') {
+        assert.ok(host.inspectTicket, 'inspectTicket hook is required for db-time-skew');
+        const originalNow = Date.now;
+        try {
+          for (const skew of [-120_000, 120_000]) {
+            Date.now = () => originalNow() + skew;
+            const issued = await seed(60_000);
+            const db: { issuedAt: number; expiresAt: number; now: number } =
+              await host.inspectTicket(namespace, issued.ticket.ticketId);
+            assert.equal(db.expiresAt - db.issuedAt, 60_000);
+            assert.equal(issued.ticket.expiresAt, db.expiresAt);
+            assert.ok(db.expiresAt - db.now > 59_000 && db.expiresAt - db.now <= 60_000);
+            assert.deepEqual(await store.consume(issued.input, async () => true), issued.ticket);
+            const expired = await seed(50);
+            await host.wait(80);
+            assert.equal(await store.consume(expired.input, async () => true), undefined);
+            assert.equal(await store.tickets.peek(expired.ticket.ticketId), undefined);
+          }
+        } finally { Date.now = originalNow; }
+      } else if (id === 'commit-unknown') {
+        assert.ok(host.createStoreWithCommitAckLoss, 'createStoreWithCommitAckLoss hook is required for commit-unknown');
+        const uncertain = host.createStoreWithCommitAckLoss(namespace);
+        const grants: unknown[] = [];
+        await assert.rejects(uncertain.consume(input, async () => true).then(result => grants.push(result)),
+          error => error instanceof ActivationCommitUnknownError);
+        assert.deepEqual(grants, []);
+        assert.equal(await host.createStore(namespace).consume(input, async () => true), undefined);
+        assert.equal(await store.flows.peek(flow.flowId), undefined);
       }
     } catch (cause) { throw new Error(`UP-T conformance failed: ${id}`, { cause }); }
     finally {
