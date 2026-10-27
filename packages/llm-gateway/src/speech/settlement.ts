@@ -20,10 +20,10 @@ export interface SpeechSettlementRequest {
 export const recordSpeechUsage = async (options: SpeechAccountingOptions, operationId: string,
   input: SpeechUsageUpdate): Promise<void> => {
   const update = structuredClone(input);
-  await speechTransaction(options, async (tx, nowMs) => {
-    await tx.lock(options.campaignRef, operationId, utcSpeechDay(nowMs));
+  await speechTransaction(options, async (tx, nowMs, campaignRef) => {
+    await tx.lock(campaignRef, operationId, utcSpeechDay(nowMs));
     const hold = await tx.getHold(operationId);
-    if (!hold || hold.campaignRef !== options.campaignRef || !hold.dispatched || hold.state === 'settled') {
+    if (!hold || hold.campaignRef !== campaignRef || !hold.dispatched || hold.state === 'settled') {
       throw new SpeechAccountingError('invalid');
     }
     hold.usage = normalizeSpeechUsage(hold.usage, update);
@@ -38,10 +38,10 @@ export const settleSpeech = async (options: SpeechAccountingOptions, input: Spee
     throw new SpeechAccountingError('invalid');
   }
   if (request.usage) validateSpeechUsage(request.usage);
-  return speechTransaction(options, async (tx, nowMs) => {
-    await tx.lock(options.campaignRef, request.operationId, utcSpeechDay(nowMs));
+  return speechTransaction(options, async (tx, nowMs, campaignRef) => {
+    await tx.lock(campaignRef, request.operationId, utcSpeechDay(nowMs));
     const hold = await tx.getHold(request.operationId);
-    if (!hold || hold.campaignRef !== options.campaignRef || !hold.dispatched) throw new SpeechAccountingError('invalid');
+    if (!hold || hold.campaignRef !== campaignRef || !hold.dispatched) throw new SpeechAccountingError('invalid');
     const complete = request.usage !== undefined
       && Object.keys(hold.price.rates).every(key => request.usage![key as keyof SpeechUsage] !== undefined);
     if (complete && (!Number.isSafeInteger(request.providerRevision) || request.providerRevision! < 0)) {
@@ -80,10 +80,10 @@ export const settleSpeech = async (options: SpeechAccountingOptions, input: Spee
 
 /** Only a never-dispatched hold may be released for zero; Stop itself needs no new admission. */
 export const releaseSpeech = async (options: SpeechAccountingOptions, operationId: string): Promise<boolean> =>
-  speechTransaction(options, async (tx, nowMs) => {
-    await tx.lock(options.campaignRef, operationId, utcSpeechDay(nowMs));
+  speechTransaction(options, async (tx, nowMs, campaignRef) => {
+    await tx.lock(campaignRef, operationId, utcSpeechDay(nowMs));
     const hold = await tx.getHold(operationId);
-    if (!hold || hold.campaignRef !== options.campaignRef) throw new SpeechAccountingError('invalid');
+    if (!hold || hold.campaignRef !== campaignRef) throw new SpeechAccountingError('invalid');
     if (hold.dispatched || hold.state !== 'reserved') return false;
     await tx.adjustBudgets(hold.campaignRef, hold.utcDay, -hold.liabilityMicroUsd, 0);
     hold.state = 'settled';
