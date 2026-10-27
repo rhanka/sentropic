@@ -32,6 +32,14 @@ function digestOf(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
+/** Pids the fixture logged at spawn time, one per line. Throws ENOENT when nothing spawned. */
+function readSpawnLog(path: string): number[] {
+  return readFileSync(path, 'utf8')
+    .split('\n')
+    .filter((line) => line.length > 0)
+    .map(Number);
+}
+
 async function withEnv<T>(vars: Record<string, string | undefined>, run: () => Promise<T>): Promise<T> {
   const prior: Record<string, string | undefined> = {};
   for (const key of Object.keys(vars)) {
@@ -470,22 +478,58 @@ describe('voice loop', () => {
 
   it('should never spawn real playback for a barge that lands during synthesis', async () => {
     const pidFile = join(tmpdir(), `voice-loop-prespawn-${process.pid}.pid`);
+    const spawnLog = join(tmpdir(), `voice-loop-prespawn-${process.pid}.log`);
     rmSync(pidFile, { force: true });
+    rmSync(spawnLog, { force: true });
     try {
-      await withEnv({ FAKE_APLAY_MODE: 'hang', FAKE_APLAY_PIDFILE: pidFile }, async () => {
-        const tts = new FakeTts({ hangSynth: true });
-        const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
-        const h = harness(tts, playback, { micMode: 'open-mic' });
-        const pending = h.loop.speak('barge arrives before any spawn');
-        await flush(10);
-        h.loop.barge('key');
-        tts.release();
-        await expect(pending).resolves.toMatchObject({ status: 'cancelled' });
-        expect(playback.playing).toBe(false);
-        await expect((async () => readFileSync(pidFile, 'utf8'))()).rejects.toThrow(/ENOENT/);
-      });
+      await withEnv(
+        { FAKE_APLAY_MODE: 'hang', FAKE_APLAY_PIDFILE: pidFile, FAKE_APLAY_SPAWNLOG: spawnLog },
+        async () => {
+          const tts = new FakeTts({ hangSynth: true });
+          const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
+          const h = harness(tts, playback, { micMode: 'open-mic' });
+          const pending = h.loop.speak('barge arrives before any spawn');
+          await flush(10);
+          h.loop.barge('key');
+          tts.release();
+          await expect(pending).resolves.toMatchObject({ status: 'cancelled' });
+          expect(playback.playing).toBe(false);
+          // The fixture logs every spawn before reading stdin, so a
+          // stdin-held orphan would still show up in the log.
+          await expect((async () => readFileSync(pidFile, 'utf8'))()).rejects.toThrow(/ENOENT/);
+          expect(() => readSpawnLog(spawnLog)).toThrow(/ENOENT/);
+          // Positive control: a later speak on the same loop does spawn real
+          // playback. The control boots after any orphan would have; exactly
+          // one log line — the control pid — proves the barged speak
+          // spawned nothing.
+          const second = h.loop.speak('control narration that does spawn');
+          await flush(10);
+          tts.release();
+          const playDeadline = Date.now() + 10000;
+          while (!playback.playing && Date.now() < playDeadline) {
+            await new Promise((resolve) => setTimeout(resolve, 10));
+          }
+          expect(playback.playing).toBe(true);
+          const bootDeadline = Date.now() + 10000;
+          while (Date.now() < bootDeadline) {
+            try {
+              readFileSync(pidFile, 'utf8');
+              break;
+            } catch {
+              await new Promise((resolve) => setTimeout(resolve, 10));
+            }
+          }
+          h.loop.barge('key');
+          await expect(second).resolves.toMatchObject({ status: 'cancelled' });
+          const pid = Number(readFileSync(pidFile, 'utf8').trim());
+          expect(Number.isInteger(pid) && pid > 0).toBe(true);
+          expect(readSpawnLog(spawnLog)).toEqual([pid]);
+          expect(() => process.kill(pid, 0)).toThrow(/ESRCH/);
+        },
+      );
     } finally {
       rmSync(pidFile, { force: true });
+      rmSync(spawnLog, { force: true });
     }
   });
 

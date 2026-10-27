@@ -22,6 +22,14 @@ function digestOf(path: string): string {
   return createHash('sha256').update(readFileSync(path)).digest('hex');
 }
 
+/** Pids the fixture logged at spawn time, one per line. Throws ENOENT when nothing spawned. */
+function readSpawnLog(path: string): number[] {
+  return readFileSync(path, 'utf8')
+    .split('\n')
+    .filter((line) => line.length > 0)
+    .map(Number);
+}
+
 async function withMode<T>(mode: string | undefined, run: () => Promise<T>): Promise<T> {
   const key = 'FAKE_APLAY_MODE';
   const prior = process.env[key];
@@ -176,24 +184,30 @@ describe('playback', () => {
 
   it('should never spawn after a cancel that lands before the spawn', async () => {
     const pidFile = join(tmpdir(), `fake-aplay-prespawn-${process.pid}.pid`);
+    const spawnLog = join(tmpdir(), `fake-aplay-prespawn-${process.pid}.log`);
     rmSync(pidFile, { force: true });
+    rmSync(spawnLog, { force: true });
     try {
-      await withEnv({ FAKE_APLAY_PIDFILE: pidFile }, async () => {
+      await withEnv({ FAKE_APLAY_PIDFILE: pidFile, FAKE_APLAY_SPAWNLOG: spawnLog }, async () => {
       await withMode('hang', async () => {
         const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
         const pending = playback.play(STUB);
         // Cancel synchronously: the async verification has not finished, so
         // no child can exist yet. The play must reject without ever spawning
-        // — the fixture would write its pidfile if it did.
+        // — the fixture logs every spawn before reading stdin, so even a
+        // stdin-held orphan would show up in the log.
         playback.cancel();
         await expect(pending).rejects.toThrow(PlaybackCancelledError);
         expect(playback.playing).toBe(false);
         await expect(
           (async () => readFileSync(pidFile, 'utf8'))(),
         ).rejects.toThrow(/ENOENT/);
+        expect(() => readSpawnLog(spawnLog)).toThrow(/ENOENT/);
         // Positive control: the same setup without the early cancel spawns
-        // and the pidfile appears, so the absence above is meaningful.
-        await withEnv({ FAKE_APLAY_PIDFILE: pidFile }, async () => {
+        // and the pidfile appears, so the absence above is meaningful. The
+        // control boots after any orphan would have; exactly one log line —
+        // the control pid — proves the cancelled play spawned nothing.
+        await withEnv({ FAKE_APLAY_PIDFILE: pidFile, FAKE_APLAY_SPAWNLOG: spawnLog }, async () => {
           const second = playback.play(STUB);
           const deadline = Date.now() + 10000;
           while (!playback.playing && Date.now() < deadline) {
@@ -205,11 +219,14 @@ describe('playback', () => {
           expect(Number.isInteger(pid) && pid > 0).toBe(true);
           playback.cancel();
           await expect(second).rejects.toThrow(PlaybackCancelledError);
+          expect(readSpawnLog(spawnLog)).toEqual([pid]);
+          expect(() => process.kill(pid, 0)).toThrow(/ESRCH/);
         });
       });
       });
     } finally {
       rmSync(pidFile, { force: true });
+      rmSync(spawnLog, { force: true });
     }
   });
 });
