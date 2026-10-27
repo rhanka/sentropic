@@ -34,6 +34,14 @@ describe('worker protocol round-trip', () => {
     expect(client.terminated).toBe(true);
   });
 
+  it('should await engine preload before reporting ready', async () => {
+    const options = fakeClientOptions([]);
+    const failing = { ...options, engineOptions: { script: [], failPreload: 'preload boom' } };
+    await expect(NodeWorkerClient.create(failing)).rejects.toThrow('preload boom');
+    await settledWorkers();
+    expect(liveWorkers()).toBe(0);
+  });
+
   it('should fail closed when a pinned digest mismatches, before any load', async () => {
     const options = fakeClientOptions([]);
     const tampered = {
