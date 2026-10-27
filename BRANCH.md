@@ -5,6 +5,7 @@
 
 ## Scope / Guardrails
 - [x] Base W2.a `247015eba` merged with W1.d `8729aff22`; merge commits only.
+- [x] Merge approved W1.b `79a6a968c` fixture-shutdown correction; no production composition override; Track log blobs identical across all three bases.
 - [x] Worktree `tmp/worktrees/app-w2b`; branch `feat/app-cm-w2b`; draft base `feat/app-cm-integration`.
 - [x] Read Docker lock, complete plan-v2 and W0-close.d reservations; sole root/API lock writer.
 - [x] Make-only; builds, tests and starts take shared Docker flock; teardown after each step.
