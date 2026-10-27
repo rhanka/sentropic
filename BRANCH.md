@@ -5,6 +5,7 @@
 
 ## Scope / Guardrails
 - [x] Base W2.b d0ce8aeb0; merge commits only; worktree tmp/worktrees/app-w4a.
+- [x] Draft #795 targets feat/app-cm-integration; review W4.a from W2.b d0ce8aeb0 because the PR also contains the approved inherited train until integration catches up.
 - [x] ENV=test-app-w4a last; API/UI/Maildev ports 8797/5183/1090; Docker flock and teardown.
 - [x] Tests first; selective atomic make commits under 150 lines; no trailers.
 
@@ -60,12 +61,15 @@
   - [x] The effective turn allowlist also governs search_skills/search_catalog advertisement.
   - [x] Foundation executor resolves verified conversation authority, checks caller binding/effective turn allowlist and returns handled denials.
   - [x] Bounded chat caller resolves context from server-owned conversation inputs before model tool selection.
-- [ ] Lot 5: focused suites, API typecheck/lint, runtime logs and locked make down.
+- [x] Lot 5: focused suites, API typecheck/lint, runtime logs and locked make down.
   - [x] 18-file catalog/foundation/W2 regression pass: 334/334; final 5-file negative-vector pass: 28/28, no skips or AI calls.
   - [x] Typecheck identified the OpenAI custom-tool union; filter narrows to the function tools produced by this catalog.
   - [x] Final function-tool narrowing verified by chat-context integration (1/1), API typecheck and lint (0 errors, 219 warnings); startup logs contain no runtime errors.
   - [x] Local receipts: /tmp/app-w4a-{product,final,quality}.log; same package/lock tree as W2.b; reused local image d0928e and matching package outputs without rebuilding.
-- [ ] Lot 6: draft against feat/app-cm-integration with BRANCH.md body, publication-disabled CI and W4.b handoff.
+  - [x] Locked make down after checks, then project-scoped make clean and final make down; make ps and project-volume inventory empty; /tmp/app-w4a-cleanup.log.
+  - [x] Mechanical branch/scope and ancestry checks pass; maximum authored commit is 106 changed lines; no trailers, package/lock or Track changes.
+- [x] Lot 6: draft #795 against feat/app-cm-integration with BRANCH.md body and W4.b handoff; submit CI on the final documentation head with bootstrap_publish_target=none.
+  - [ ] Remote CI outcome and independent receiving reviews remain separate gates before integration; no merge or deployment in this lot.
 
 ## Feedback Loop
 - [x] W4.b owns host-registry-source.ts and its registration; W4.a prepares the context and execution contracts.
