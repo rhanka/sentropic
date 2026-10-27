@@ -58,7 +58,7 @@
 - [ ] **Lot 2 — Admission binding**
   - [x] Define transaction views over existing owner holds/buckets/allocator receipts; no production store supplied.
   - [x] src/speech/admission.ts: trusted campaign identity, UTC daily and campaign caps, authoritative allocator links, bounded holds and fail-closed host port.
-  - [ ] tests/speech-admission.test.ts: daily/total refusal, provider switching, concurrent reservations, restart/replay, allocator identity and ledger outage.
+  - [x] tests/speech-admission.test.ts: daily/total refusal, provider switching, concurrent reservations, restart/replay, allocator identity and ledger outage.
 - [ ] **Lot 3 — Settlement binding**
   - [x] src/speech/settlement.ts: one billable operation, conservative missing-usage estimate, signed true-ups, replay and retained uncertainty.
   - [ ] tests/speech-settlement.test.ts: missing usage, adjustment idempotence, restart, unavailable sink and no duplicate backend counted unit.
