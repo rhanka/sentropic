@@ -13,6 +13,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import {
   assembleMemoryHostBinding,
+  assertMaintainGrantLive,
   issueContinuationGrant,
   MemoryMaintenanceNotFoundError,
   proveForRecoveryAuthorized,
@@ -185,6 +186,34 @@ describe('host maintenance binding', () => {
     expect(() =>
       openMemoryMaintenance({ provider: qualifiedProvider(), maintainGrant: expired } as never, undefined as never),
     ).toThrow(/lease has expired/);
+  });
+
+  it('compares lease expiry numerically like the kernel, not lexicographically', () => {
+    const offsetExpired = grantFor({
+      token: 'memory-maintain-offset',
+      moduleId: 'engram-memory',
+      scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
+      operations: ['maintain'],
+      // 01:00+02:00 = 23:00Z, before the pinned now — expired numerically,
+      // but a lexicographic compare against the Zulu now would call it live.
+      lifetime: { kind: 'lease', expiresAt: '2026-10-28T01:00:00.000+02:00' },
+    });
+    expect(() => assertMaintainGrantLive(offsetExpired, '2026-10-27T23:30:00.000Z')).toThrow(
+      /lease has expired/,
+    );
+    const offsetLive = grantFor({
+      token: 'memory-maintain-offset-live',
+      moduleId: 'engram-memory',
+      scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
+      operations: ['maintain'],
+      // 19:00-05:00 = midnight Z, after the pinned now — live numerically,
+      // but lexicographically smaller than the Zulu now.
+      lifetime: { kind: 'lease', expiresAt: '2026-10-27T19:00:00.000-05:00' },
+    });
+    expect(() => assertMaintainGrantLive(offsetLive, '2026-10-27T23:30:00.000Z')).not.toThrow();
+    expect(() => assertMaintainGrantLive({ ...offsetLive, lifetime: { kind: 'lease' } })).toThrow(
+      /lease has expired/,
+    );
   });
 
   it('refuses a foreign scope even with a live grant', async () => {
@@ -615,6 +644,20 @@ describe('host maintenance binding', () => {
         ledger.record({ ...entryFor('cand-1'), scope: { tenantId: '', workspaceId: '' } }),
       ).toThrow(StorageDeniedError);
       expect(ledger.read('cand-1')).toBeNull();
+    });
+
+    it('keeps first-write parity on identical terminals, reconciles on change', () => {
+      const ledger = createMemoryHostLedger();
+      ledger.record(entryFor('cand-1'));
+      const terminal = ledger.markTerminal('cand-1', { outcome: 'admitted' }, 'cursor-9');
+      // Identical repeat: no-op returning the retained entry.
+      expect(ledger.markTerminal('cand-1', { outcome: 'admitted' }, 'cursor-9')).toBe(terminal);
+      // Different receipt or cursor: reconciliation overwrites.
+      const reconciled = ledger.markTerminal('cand-1', { outcome: 'retried' }, 'cursor-10');
+      expect(reconciled).not.toBe(terminal);
+      expect(reconciled.receipt).toEqual({ outcome: 'retried' });
+      expect(reconciled.cursor).toBe('cursor-10');
+      expect(ledger.markTerminal('cand-1', { outcome: 'retried' }, 'cursor-10')).toBe(reconciled);
     });
   });
 });

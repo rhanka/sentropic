@@ -83,6 +83,20 @@ export const proveForRecovery = (
 
 const nonEmpty = (value: unknown): value is string => typeof value === 'string' && value.length > 0;
 
+/**
+ * First-write parity for terminal evidence (P2): repeating the identical
+ * terminal (same receipt and cursor) is a no-op returning the retained
+ * entry; a different receipt or cursor reconciles by overwriting.
+ */
+const isSameTerminal = (existing: HostLedgerEntry, receipt: unknown, cursor: string | null): boolean => {
+  if (existing.state !== 'terminal') return false;
+  try {
+    return JSON.stringify(existing.receipt) === JSON.stringify(receipt ?? null) && existing.cursor === cursor;
+  } catch {
+    return false;
+  }
+};
+
 const checkEntry = (entry: HostLedgerEntry): void => {
   if (typeof entry !== 'object' || entry === null) throw new StorageDeniedError('ledger entry must be an object');
   if (!nonEmpty(entry.candidateId) || !nonEmpty(entry.storeId) || !nonEmpty(entry.invocationId)) {
@@ -151,6 +165,7 @@ export const createMemoryHostLedger = (): MemoryHostLedger => {
     markTerminal: (candidateId, receipt, cursor) => {
       const existing = entries.get(candidateId);
       if (!existing) throw new StorageDeniedError('cannot complete an unknown ledger entry');
+      if (isSameTerminal(existing, receipt, cursor)) return existing;
       const stored = Object.freeze({ ...existing, state: 'terminal' as const, receipt, cursor });
       entries.set(candidateId, stored);
       return stored;
@@ -282,6 +297,9 @@ export const openMemoryPostgresHostLedger = async (
       if (cursor !== null && typeof cursor !== 'string') {
         throw new StorageDeniedError('ledger entry requires a text cursor or null');
       }
+      const current = await selectOne(candidateId);
+      if (!current) throw new StorageDeniedError('cannot complete an unknown ledger entry');
+      if (isSameTerminal(current, receipt, cursor)) return current;
       const updated = await run(async (session) => {
         const result = await session.execute({
           text: `UPDATE ${table} SET state = 'terminal', receipt = $2::jsonb, cursor = $3 WHERE candidate_id = $1 RETURNING *`,
