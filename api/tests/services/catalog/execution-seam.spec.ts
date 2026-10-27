@@ -15,6 +15,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest';
+import { testCatalogContext } from './test-context';
 
 import { CompositeCatalogRegistry } from '../../../src/services/catalog/composite-registry';
 import { CatalogExecutionSeam } from '../../../src/services/catalog/execution-seam';
@@ -92,12 +93,12 @@ describe('CatalogExecutionSeam — standalone tool dispatch', () => {
       handler,
     });
 
-    const result = await seam.execute('echo_tool', { value: 'hello' });
+    const result = await seam.execute('echo_tool', { value: 'hello' }, await testCatalogContext(['echo_tool']));
 
     expect(result.handled).toBe(true);
     expect(result.result).toEqual({ echoed: 'hello' });
     expect(handler).toHaveBeenCalledOnce();
-    expect(handler).toHaveBeenCalledWith({ value: 'hello' });
+    expect(handler).toHaveBeenCalledWith({ value: 'hello' }, expect.objectContaining({ subjectId: 'user-test' }));
   });
 
   it('passes args correctly to sync handlers (non-async)', async () => {
@@ -108,7 +109,7 @@ describe('CatalogExecutionSeam — standalone tool dispatch', () => {
       handler: (args: Record<string, unknown>) => ({ doubled: String(args.value) + String(args.value) }),
     });
 
-    const result = await seam.execute('sync_tool', { value: 'x' });
+    const result = await seam.execute('sync_tool', { value: 'x' }, await testCatalogContext(['sync_tool']));
     expect(result.handled).toBe(true);
     expect(result.result).toEqual({ doubled: 'xx' });
   });
@@ -120,7 +121,7 @@ describe('CatalogExecutionSeam — standalone tool dispatch', () => {
       handler: async () => undefined,
     });
 
-    const result = await seam.execute('void_tool', {});
+    const result = await seam.execute('void_tool', {}, await testCatalogContext(['void_tool']));
     expect(result.handled).toBe(true);
     expect(result.result).toBeUndefined();
   });
@@ -133,7 +134,7 @@ describe('CatalogExecutionSeam — standalone tool dispatch', () => {
 describe('CatalogExecutionSeam — unknown names return handled:false', () => {
   it('returns handled:false for a name absent from the catalog', async () => {
     const { seam } = makeSeamFixture();
-    const result = await seam.execute('__completely_unknown__', {});
+    const result = await seam.execute('__completely_unknown__', {}, await testCatalogContext(['__completely_unknown__']));
     expect(result.handled).toBe(false);
     expect(result.result).toBeUndefined();
   });
@@ -207,7 +208,7 @@ describe('CatalogExecutionSeam — hardcoded foundation names are not its concer
     // If 'workspace_list' is not registered as a standalone tool, the seam
     // returns handled:false — foundation-executor handles it first anyway.
     const { seam } = makeSeamFixture();
-    const result = await seam.execute('workspace_list', {});
+    const result = await seam.execute('workspace_list', {}, await testCatalogContext(['workspace_list']));
     expect(result.handled).toBe(false);
   });
 });
@@ -233,7 +234,7 @@ describe('CatalogExecutionSeam — skill-kind entries are NOT dispatched (D-TOOL
     expect(entry!.kind).toBe('skill'); // confirm it's skill-kind
 
     // The seam must return handled:false for skill-kind entries.
-    const result = await seam.execute('workspace', {});
+    const result = await seam.execute('workspace', {}, await testCatalogContext(['workspace']));
     expect(result.handled).toBe(false);
   });
 });
@@ -257,7 +258,7 @@ describe('CatalogExecutionSeam — no handler source wired', () => {
     const seam = new CatalogExecutionSeam(registry, []);
 
     // The entry IS in the registry, but the seam has no handler source.
-    const result = await seam.execute('orphan_tool', {});
+    const result = await seam.execute('orphan_tool', {}, await testCatalogContext(['orphan_tool']));
     expect(result.handled).toBe(false);
   });
 });
@@ -284,7 +285,7 @@ describe('CatalogExecutionSeam — multiple sources, first match wins', () => {
     const seam = new CatalogExecutionSeam(registry, [source1, source2]);
 
     // 'shared_tool' is in source1 — source1's handler fires.
-    const result1 = await seam.execute('shared_tool', {});
+    const result1 = await seam.execute('shared_tool', {}, await testCatalogContext(['shared_tool']));
     expect(result1.handled).toBe(true);
     expect(result1.result).toEqual({ from: 'source-1' });
     expect(handler1).toHaveBeenCalledOnce();
@@ -292,7 +293,7 @@ describe('CatalogExecutionSeam — multiple sources, first match wins', () => {
 
     // 'only_in_2' is only in source2.
     // Note: registry will find the entry from source2's snapshot.
-    const result2 = await seam.execute('only_in_2', {});
+    const result2 = await seam.execute('only_in_2', {}, await testCatalogContext(['only_in_2']));
     expect(result2.handled).toBe(true);
     expect(result2.result).toEqual({ from: 'source-2' });
     expect(handler2).toHaveBeenCalledOnce();

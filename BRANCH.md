@@ -37,6 +37,7 @@
   - [x] api/tests/api/catalog-auth-context.test.ts: authenticated list/get/search/sources with interleaved subjects and missing authority.
   - [x] api/tests/services/catalog/chat-context.integration.test.ts: model selection/search through real executor and seam, zero denied effects.
   - [ ] Update api/tests/services/catalog/{composite-registry,execution-seam,search-catalog-tool,mcp-source,standalone-tool-source}.spec.ts as signatures evolve.
+  - [x] Regression inventory also covers existing agent/canvas/workflow source suites; source fixtures use the current ai-priorities workspace type.
   - [ ] Update api/tests/api/cluster-mesh-catalog.test.ts and api/tests/unit/foundation-executor.test.ts.
 - [ ] Lot 2: frozen server-only context resolver and fresh product session/turn authority.
   - [x] Server inputs and allowlists frozen; provenance checked by identity; dispatch rechecks current grants and policy references.
