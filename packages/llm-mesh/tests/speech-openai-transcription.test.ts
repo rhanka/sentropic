@@ -298,3 +298,153 @@ describe('openai transcript mapping', () => {
   it('should emit ordered partials under the client id then a final that rebuilds', async () => {
     const driven = await openDriven();
     await driven.turn('u1', 10);
+    driven.socket.push(...frameScriptFr);
+    const events = await driven.collect();
+    const partials = events.filter((event) => event.type === 'transcript.partial');
+    const finals = events.filter((event) => event.type === 'transcript.final');
+    expect(partials.map((event) => (event as { revision: number }).revision)).toEqual([1, 2, 3]);
+    expect(partials.map((event) => (event as { utteranceId: string }).utteranceId)).toEqual(['u1', 'u1', 'u1']);
+    expect(partials.map((event) => (event as { replaces: unknown }).replaces)).toEqual([
+      { start: 0, end: 0 }, { start: 9, end: 9 }, { start: 23, end: 23 },
+    ]);
+    expect(finals).toHaveLength(1);
+    const final = finals[0] as unknown as Record<string, unknown>;
+    expect(final.utteranceId).toBe('u1');
+    expect(final.text).toBe("Bonjour, pouvez-vous m'entendre ?");
+    expect(final.language).toBe('fr');
+    expect(final.revision).toBe(4);
+    expect(final.audioInterval).toEqual({ startMs: 10, endMs: 10 });
+    let rebuilt: SpeechTranscript | undefined;
+    for (const event of events) {
+      if (event.type === 'transcript.partial' || event.type === 'transcript.final') {
+        rebuilt = reviseSpeechTranscript(rebuilt, event as SpeechTranscript) ?? rebuilt;
+      }
+    }
+    expect(rebuilt?.text).toBe(final.text);
+  });
+
+  it('should let a completion correct the accumulated hypothesis', async () => {
+    const driven = await openDriven(whisperConfig);
+    await driven.turn('u_en', 20);
+    driven.socket.push(...frameScriptEnCorrected);
+    const events = await driven.collect();
+    const final = events.find((event) => event.type === 'transcript.final') as unknown as Record<string, unknown>;
+    expect(final.utteranceId).toBe('u_en');
+    expect(final.text).toBe('Hello, world');
+    expect(final.language).toBe('en');
+  });
+
+  it('should keep out-of-order completions keyed by item', async () => {
+    const driven = await openDriven();
+    await driven.turn('u_a', 10);
+    await driven.turn('u_b', 30);
+    driven.socket.push(...frameScriptOutOfOrder);
+    const events = await driven.collect();
+    const finals = events
+      .filter((event) => event.type === 'transcript.final')
+      .map((event) => {
+        const final = event as unknown as { utteranceId: string; text: string; revision: number };
+        return { utteranceId: final.utteranceId, text: final.text, revision: final.revision };
+      });
+    expect(finals).toEqual([
+      { utteranceId: 'u_b', text: 'second tour', revision: 2 },
+      { utteranceId: 'u_a', text: 'premier tour', revision: 3 },
+    ]);
+  });
+
+  it('should create the item on a completion without prior deltas', async () => {
+    const driven = await openDriven();
+    await driven.turn('u_solo', 40);
+    driven.socket.push(...frameScriptCompletedOnly);
+    const events = await driven.collect();
+    const finals = events.filter((event) => event.type === 'transcript.final');
+    expect(finals).toHaveLength(1);
+    const final = finals[0] as unknown as Record<string, unknown>;
+    expect(final.utteranceId).toBe('u_solo');
+    expect(final.revision).toBe(1);
+    expect(final.text).toBe('un tour silencieux');
+  });
+
+  it('should surface invalid frames as error events and continue the stream', async () => {
+    const driven = await openDriven();
+    await driven.turn('u_ok', 10);
+    driven.socket.push(...frameScriptInvalid);
+    const events = await driven.collect();
+    const errors = events.filter((event) => event.type === 'error');
+    expect(errors.length).toBeGreaterThanOrEqual(4);
+    expect(errors[0]).toMatchObject({ reason: 'invalid-format', retryable: true });
+    const providerError = errors.find((event) => (event as { reason: string }).reason === 'provider-error');
+    expect(providerError).toMatchObject({ retryable: false });
+    const final = events.find((event) => event.type === 'transcript.final') as unknown as Record<string, unknown>;
+    expect(final?.utteranceId).toBe('u_ok');
+    expect(final?.text).toBe('kept going');
+  });
+
+  it('should reject a duplicate final for the same item', async () => {
+    const driven = await openDriven();
+    await driven.turn('u1', 10);
+    driven.socket.push(
+      frameDelta('item_1', 'hello '),
+      frameCommitted('item_1'),
+      frameCompleted('item_1', 'hello'),
+      frameCompleted('item_1', 'hello again'),
+    );
+    const events = await driven.collect();
+    expect(events.filter((event) => event.type === 'transcript.final')).toHaveLength(1);
+    expect(events.filter((event) => event.type === 'error')).toHaveLength(1);
+  });
+
+  it('should drop late frames for cleared and finalized turns', async () => {
+    const driven = await openDriven();
+    await driven.turn('u_keep', 10);
+    await driven.turn('u_drop', 30);
+    await driven.session.command({
+      schemaVersion: 1, speechSessionId: 'speech-op-1', connectionEpoch: 3,
+      eventId: 'cmd-clear', sequence: 2, clock: { id: 'test', monotonicMs: 1 },
+      type: 'input.clear', utteranceId: 'u_drop',
+    });
+    driven.socket.push(
+      frameDelta('item_keep', 'kept '),
+      frameCommitted('item_keep'),
+      frameCompleted('item_keep', 'kept'),
+      frameDelta('item_keep', 'late '),
+    );
+    await flush();
+    const late: SpeechEvent[] = [];
+    for await (const event of driven.session.events) {
+      late.push(event);
+      if (late.length >= 2) break;
+    }
+    await driven.session.close();
+    expect(late.filter((event) => event.type === 'transcript.partial')).toHaveLength(1);
+    expect(late.filter((event) => event.type === 'transcript.final')).toHaveLength(1);
+    expect(late.filter((event) => event.type === 'error')).toHaveLength(0);
+    const final = late.find((event) => event.type === 'transcript.final') as unknown as Record<string, unknown>;
+    expect(final?.utteranceId).toBe('u_keep');
+  });
+
+  it('should error on an orphan completion with no client turn', async () => {
+    const driven = await openDriven();
+    driven.socket.push(frameCompleted('item_orphan', 'nowhere'));
+    const events = await driven.collect();
+    expect(events.filter((event) => event.type === 'error')).toHaveLength(1);
+    expect(events.filter((event) => event.type === 'transcript.final')).toHaveLength(0);
+  });
+
+  it('should error on a committed frame with no client commit', async () => {
+    const driven = await openDriven();
+    driven.socket.push(frameCommitted('item_orphan'));
+    const events = await driven.collect();
+    expect(events.filter((event) => event.type === 'error')).toHaveLength(1);
+    expect(events.filter((event) => event.type === 'transcript.final')).toHaveLength(0);
+  });
+});
+
+describe('openai session lifecycle', () => {
+  it('should refuse to connect when the signal is already aborted', async () => {
+    let connected = 0;
+    const connect: OpenAiTranscriptionConnect = async () => {
+      connected += 1;
+      return new GateSocket();
+    };
+    const controller = new AbortController();
