@@ -267,13 +267,19 @@ export const createMemoryPostgresStorage = async (
     readonly provider: MemoryPostgresDriverProvider;
   },
 ): Promise<Awaited<ReturnType<typeof createPostgresKernel>>> => {
-  const { provider, ...rest } = (options ?? {}) as Partial<PostgresStorageOptions> & {
+  const { provider, layout, history, cursorSecret, ...rest } = (options ?? {}) as Partial<PostgresStorageOptions> & {
     readonly provider?: unknown;
   };
   if (typeof provider !== 'object' || provider === null) {
     throw new StorageUnavailableError(
       'memory Postgres composition requires the checked host provider for the G1b stateful projection: no backend reachable',
     );
+  }
+  if (typeof layout !== 'object' || layout === null || typeof history !== 'object' || history === null) {
+    throw new StorageUnavailableError('memory Postgres composition requires the host layout and history');
+  }
+  if (typeof cursorSecret !== 'string' || cursorSecret.length === 0) {
+    throw new StorageUnavailableError('memory Postgres composition requires the host cursor secret');
   }
   const checked = checkMemoryPostgresDriver(provider);
   const registration = await createMemoryPostgresRegistration();
@@ -282,5 +288,8 @@ export const createMemoryPostgresStorage = async (
     ...rest,
     moduleId: 'engram-memory',
     driver: checked.pool,
+    layout,
+    history,
+    cursorSecret,
   });
 };
