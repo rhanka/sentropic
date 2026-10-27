@@ -179,6 +179,70 @@ attempt 2 already proves selected release continuity and measures the
 remain unavailable through the inventoried token. Unmet 15s/5s/60s budgets
 remain open; a green correctness verdict does not satisfy them.
 
+## Completed final-policy timing attempt — 2026-10-27
+
+Measurement source: `dd2737fa486985ecfa756261b26ba2323e73289f`, a merge commit
+with parents `6c95004384b61aada3f9f48d05b4128400dc87b2` and
+`2d6643692389ecbb7e5ac410e7b31a3cfbaa732a` (`origin/main`). The workflow
+policy was unchanged. Harness branch/scope checks and 35 metrics + 21
+expected-results + 90 publication tests passed before push. Both runs used
+attempt 1, completed successfully, and were allowed to finish without a push.
+
+| Receipt | Run | UTC creation → completion | Wall seconds | Qualification scheduling | Qualification execution | Finalization |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| PR | [40460101167](https://github.com/rhanka/sentropic/actions/runs/40460101167) | 06:16:16 → 07:17:17 | **3661** | 2582s | 1078s | 1s |
+| Main-like guarded-pack dry-run | [40460107095](https://github.com/rhanka/sentropic/actions/runs/40460107095) | 06:16:20 → 07:21:48 | **3928** | 2965s | 962s | 1s |
+
+Wall time is run creation to final `updated_at`; qualification ends at the
+completed `ci-gate`. Scheduling includes admission, dependency handoff and
+job creation-to-runner-start waits along that endpoint's identified path.
+Execution is the sum of runner spans on that same path; parallel jobs are
+not summed into wall time. The Jobs API does not separate mutex admission
+from hosted-runner scheduling. First runner starts were 3s/27s after creation.
+Both qualification paths are changes → typecheck-lint-api → E2E D →
+ci-capacity-receipts → ci-gate. PR membership: 89 rows, 62 executions,
+27 skips; dry-run: 89 rows, 82 executions, 7 skips. No missing execution
+timestamps or carried-forward executions; both gates succeeded.
+
+| Hotspot | PR job: queue / execution | Dry-run job: queue / execution |
+| --- | --- | --- |
+| E2E D, shared slot 3 | `122046116611`: 2571s / 357s | `122050390092`: 2119s / 268s |
+| E2E B, shared slot 1 | `122046116679`: 2374s / 264s | `122050390297`: 1830s / 232s |
+| API typecheck/lint | `122042533052`: 2s / 656s | `122042643129`: 812s / 637s |
+| Cluster Mesh validator, slot 1 | `122042534709`: 62s / 782s | `122042642781`: 1376s / 790s |
+| API chat-sync/summary/comment-assistant member | `122043986809`: 2255s / 412s | `122045883430`: 2322s / 290s |
+
+Queue p50/max: PR 223s/2571s; dry-run 834s/2322s. Slots 1/3 are also
+shared with package validators and API matrix members across both runs.
+The measured pair peaked at 15 simultaneous executions (individual peaks
+14/8); combined admission against 17 observed slots passes. This accounts
+for this pair only. A static width bound does not establish latency.
+
+All 21 dry-run publishers succeeded, each with a successful `Dry-run package
+publication` step and skipped registry writers. The package endpoint was
+3304s: 3205s scheduling + 99s execution on changes → validate-mcp-auth →
+publish-mcp-auth (`122042643284` / `122054658384`). Classification/verdict
+were 26s/18s for PR and 18s/18s for dry-run; the 15s/5s budgets still fail.
+The scheduling budget uses the maximum selected endpoint: 2582s/3205s.
+
+Retained pre-dispatch manifests: artifacts `12713454598` / `12714271150`,
+both attesting policy digest
+`26701db9bc29a11f192fccba349d4d95e6d0bfccf792482380e808f32f89466d`.
+Their ZIP SHA-256 values matched GitHub's artifact digests on download.
+Full run/jobs/workflow/manifest/capture/metrics receipts are retained locally
+in `tmp/ci-capacity/40460101167-1/` and `tmp/ci-capacity/40460107095-1/`;
+the canonical `make ci-capacity-capture` command above reproduces them.
+During collection, the CLI's public API route hit its rate limit; complete
+100-row Jobs API pages and artifacts came through the GitHub connector,
+then the unchanged capture/metrics readers ran through Make in Docker.
+
+**P1 remains open:** PR exceeds 2288s by 1373s; dry-run exceeds it by 1640s.
+`make ci-capacity-policy CI_REQUIRE_CAPACITY_PROOF=1` with these two capture
+files rejects both fresh, attested timing receipts. The requested main-like
+run is `workflow_dispatch` on the branch; it does not replace the strict
+reader's actual-main-push requirement or prove main delivery. No policy
+change or acceptance tick follows these measurements; PR #766 stays draft.
+
 ## BR-76 retained measurements
 
 Status: measurement record with reconciled receipts (metrics +
