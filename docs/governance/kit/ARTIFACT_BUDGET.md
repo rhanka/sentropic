@@ -46,7 +46,9 @@ the typical gate; both profiles are reported and enforced on every budget run.
 
 The Vite manifest determines static and dynamic closures. A cold browser probe adds
 every request through the first usable typical dossier to the initial closure,
-including startup data fetches. Files count once per deployed path; repeated inline
+including startup data fetches. Executable inline scripts count toward the JS
+limit in both variants; JSON and plain-text notices count toward HTML bytes.
+Files count once per deployed path; repeated inline
 bytes count each time. Missing assets, unreferenced deployed payloads, external
 startup dependencies and runtime source maps fail. Every file reports raw, gzip,
 Brotli and SHA-256; Rollup module attribution is explicitly before final
