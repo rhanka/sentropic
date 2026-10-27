@@ -206,6 +206,20 @@ const translateAggregateRead = (key, value) => {
   if (typeof parsed.candidate_id === 'string') return value;
   return memoryJcs(parsed.proof);
 };
+// The K7 receipt digest is born with the capture commit, after the
+// registry write, so the bridge rejoins it at read time from the pending
+// control aggregate, which carries the same digest.
+const withCaptureReceipt = async (key, value, readControl) => {
+  const translated = translateAggregateRead(key, value);
+  if (!isCaptureKey(key)) return translated;
+  const entry = JSON.parse(translated.data);
+  if (typeof entry.receipt_digest === 'string') return translated;
+  const candidateId = JSON.parse(key)[1];
+  const control = await readControl(JSON.stringify(['memory-pending-control-v1', candidateId]));
+  if (!control) return translated;
+  const receiptDigest = JSON.parse(control.data ?? control.value?.data ?? '{}').capture_receipt_digest;
+  return typeof receiptDigest === 'string' ? memoryJcs({ ...entry, receipt_digest: receiptDigest }) : translated;
+};
 const neutralUnitToPg = (unit) => {
   if (unit.relationships.length || unit.barriers.length || unit.purgeIntents.length)
     throw Object.assign(new Error('unsupported memory effects'), { code: 'invalid-schema' });
@@ -231,8 +245,12 @@ const neutralUnitToPg = (unit) => {
 const neutralTransaction = (tx, units, identity) => ({
   readAggregate: async (kind, key) => {
     const found = await tx.readAggregate(key);
-    return found === null ? null
-      : { kind, key, version: String(found.version), value: translateAggregateRead(key, found.value) };
+    if (found === null) return null;
+    const value = await withCaptureReceipt(key, found.value, async (controlKey) => {
+      const row = await tx.readAggregate(controlKey);
+      return row?.value ?? null;
+    });
+    return { kind, key, version: String(found.version), value };
   },
   readRecords: async (kind, keys) => (await tx.readRecords(keys, { maxRecords: 2000, maxEncodedBytes: 1048576 }))
     .map((row) => ({ kind, key: row.key, value: row.bytes, contentHash: row.contentHash })),
@@ -338,8 +356,14 @@ const handle = Object.freeze({
     return bound.transact(options, (tx) => operation(neutralTransaction(tx, units, options.idempotencyKey)));
   }),
   readAggregate: (kind, key, grant) => guarded(async () => {
-    const row = await (await kernel.bind(castGrant(grant))).readAggregate(key);
-    return row ? { kind, key, version: String(row.version), value: translateAggregateRead(key, row.value) } : null;
+    const bound = await kernel.bind(castGrant(grant));
+    const row = await bound.readAggregate(key);
+    if (!row) return null;
+    const value = await withCaptureReceipt(key, row.value, async (controlKey) => {
+      const control = await bound.readAggregate(controlKey);
+      return control?.value ?? null;
+    });
+    return { kind, key, version: String(row.version), value };
   }),
   readCommitResult: (identity, grant) => guarded(async () =>
     (await (await kernel.bind(castGrant(grant)))).readCommitResult(identity, fence)),
