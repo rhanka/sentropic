@@ -1,17 +1,12 @@
-import { expect, it } from 'vitest';
+import { expect } from 'vitest';
 import { openModuleStorageCanonicalMemoryStoreV1 } from '@sentropic/engram/memory-substrate';
 import type { MemoryCampaignHost } from './memory-pg-host.js';
-import { pendingCapture, registerMemoryCase, valueOf } from './memory-corpus.js';
+import { memoryScenario, pendingCapture, valueOf } from './memory-corpus.js';
 import { DEADLINE, NOW } from './memory-engine.js';
 import { memoryNeutralGrant } from './pg-host.js';
 
 export const runMemoryOwnershipCorpus = (open: () => Promise<MemoryCampaignHost>) => {
-  const scenario = (name: string, run: (host: MemoryCampaignHost) => Promise<void>) => {
-    registerMemoryCase(name);
-    return it(name, async () => {
-    const h = await open(); try { await run(h); } finally { await h.close(); }
-    });
-  };
+  const scenario = (name: string, run: (host: MemoryCampaignHost) => Promise<void>) => memoryScenario(open, name, run);
   scenario('fenced-writers-v1/second-holder: should refuse a second installed constructor over the same host handle', async (h) => {
     const second = await openModuleStorageCanonicalMemoryStoreV1({ handle: h.handle, grant: h.binding.memoryGrant,
       scope_binding: h.scopeBinding, clock: { now: () => NOW }, deadline_at: DEADLINE });

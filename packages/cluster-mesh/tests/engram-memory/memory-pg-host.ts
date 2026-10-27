@@ -13,6 +13,8 @@ import { openMemoryPostgresHostLedger } from '../../src/engram-memory/ledger.js'
 import { memoryFailure, neutralQueryResult, neutralTransaction } from './memory-neutral.js';
 
 export type MemoryCampaignHost = Awaited<ReturnType<typeof memoryCampaignHost>>;
+// Provisional wiring retained for the blocked corpus, not host qualification:
+// E7 must supply the shipped fenced handle before these cases can execute.
 export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof memoryPgHost>>, commitHook?: () => Promise<void>) => {
   if (!process.env.CM_PG_URL) throw new Error('Stage B requires CM_PG_URL and real PostgreSQL');
   const pg = existing ?? await memoryPgHost();
@@ -36,12 +38,11 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
   }) };
   let store: CanonicalMemoryStorePort;
   let maintenance: MemoryMaintenancePorts;
-  // Host-owned read/maintain authority has no write operation. Engram never
-  // sees this grant; every call also checks E7's independent maintain token.
-  const hostReader: ScopeGrant<unknown> = { ...binding.maintainGrant, token: 'memory-host-reader', operations: ['read', 'maintain'] };
+  // No fixture-issued read authority. The E7 maintain binding currently
+  // refuses snapshot/journal reads: dependent cases remain blocked: E7.
   const hostRead = async () => {
     await verifyHostBinding(kernel, binding, scope);
-    return kernel.bind(hostReader);
+    return kernel.bind(binding.maintainGrant);
   };
   const scope = binding.memoryGrant.scope;
   const scopeBinding = { scope, store_id: 'memory-stage-b-store',
@@ -106,7 +107,6 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
     kernel = await createPostgresKernel({ ...pg.options, driver, canonicalOwnership: { leaseMs: 1000 }, onCommitPossession: commitHook });
     await kernel.bindNew(binding.memoryGrant);
     await kernel.bindNew(binding.maintainGrant);
-    await kernel.bindNew(hostReader);
     const maintained = await kernel.bind(binding.maintainGrant);
     const authorized = async <T,>(run: () => Promise<T>) => {
       await verifyHostBinding(kernel, binding, scope); return run();
@@ -144,7 +144,7 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
   const ledger = await openMemoryPostgresHostLedger(pg.options.driver, `${pg.name}_projection`);
   return { pg, binding, handle, units, scopeBinding, ledger, get kernel() { return kernel; }, get store() { return store; },
     expireAtCommit: () => { expireCommit = true; },
-    get maintenance() { return maintenance; }, get fence() { return fence; }, hostReader,
+    get maintenance() { return maintenance; }, get fence() { return fence; },
     hostReplay: async (after: string, limit: number, consumer: string) => (await hostRead()).journalRead(after, limit, consumer),
     reopen: async () => { await store.close(); clockNow = '2026-10-27T00:30:00.000Z'; await open(); },
     reopenBackend: async () => { await store.close(); await open(false); },

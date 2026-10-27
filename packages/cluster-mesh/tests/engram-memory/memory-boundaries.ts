@@ -1,16 +1,11 @@
-import { expect, it } from 'vitest';
+import { expect } from 'vitest';
 import { memoryJcs } from '../../src/engram-memory/codec.js';
 import type { MemoryCampaignHost } from './memory-pg-host.js';
-import { pendingCapture, registerMemoryCase, valueOf } from './memory-corpus.js';
+import { memoryScenario, pendingCapture, valueOf } from './memory-corpus.js';
 import { DEADLINE, DIGEST, memoryCaptureRequest, memoryEngine } from './memory-engine.js';
 
 export const runMemoryBoundaryCorpus = (open: () => Promise<MemoryCampaignHost>) => {
-  const scenario = (name: string, run: (h: MemoryCampaignHost) => Promise<void>) => {
-    registerMemoryCase(name);
-    return it(name, async () => {
-    const h = await open(); try { await run(h); } finally { await h.close(); }
-    });
-  };
+  const scenario = (name: string, run: (h: MemoryCampaignHost) => Promise<void>) => memoryScenario(open, name, run);
   scenario('immutable-boundaries-v1/accepted-snapshot: should preserve an exact accepted prefix as memory advances', async (h) => {
     const host = memoryEngine(h);
     const admit = async (sequence: string) => {
