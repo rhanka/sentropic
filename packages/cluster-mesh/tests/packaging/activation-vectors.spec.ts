@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { enabled, fixtureDir, nodeJson } from './helpers.js';
+import { enabled, fixtureDir, nodeJson, tsc, TSC_CASES } from './helpers.js';
 
 describe.skipIf(!enabled || !process.env.DATABASE_URL)('installed activation conformance vectors', () => {
-  it('should run every shipped vector on a clean consumer PostgreSQL executor', () => {
+  it.each([1, 4])('should run every shipped vector on a clean consumer PostgreSQL executor with pool max %d', max => {
     const result = nodeJson(fixtureDir('artifacts-consumer'), `
       import assert from 'node:assert/strict';
       import { readFileSync } from 'node:fs';
@@ -12,17 +12,18 @@ describe.skipIf(!enabled || !process.env.DATABASE_URL)('installed activation con
         from '@sentropic/artifacts/adapters/postgres-activation';
       import { POSTGRES_ACTIVATION_VECTOR_IDS, runPostgresActivationConformance }
         from '@sentropic/artifacts/adapters/postgres-activation/vectors';
-      const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+      const pool = new Pool({ connectionString: process.env.DATABASE_URL, max: ${max} });
       const bytes = readFileSync(new URL(import.meta.resolve(ACTIVATION_SQL_ASSET)));
       assert.equal(createHash('sha256').update(bytes).digest('hex'), ACTIVATION_SQL_ASSET_SHA256);
       const passed = [];
       let stores = 0;
       const host = {
         createStore(namespace) { stores++; return createPostgresActivationStore({ pool, namespace }); },
-        wait: async ms => { await pool.query('SELECT pg_sleep($1)', [ms / 1000]); },
+        wait: async (ms, client) => { await (client ?? pool).query('SELECT pg_sleep($1)', [ms / 1000]); },
         onPass: id => passed.push(id),
       };
       try {
+        await pool.query('DROP SCHEMA IF EXISTS artifact_host CASCADE');
         await pool.query(bytes.toString('utf8'));
         const report = await runPostgresActivationConformance(host);
         assert.deepEqual(report, POSTGRES_ACTIVATION_VECTOR_IDS);
@@ -34,7 +35,10 @@ describe.skipIf(!enabled || !process.env.DATABASE_URL)('installed activation con
           createStore(namespace) { return { ...host.createStore(namespace), consume: async () => undefined }; },
         }));
         console.log(JSON.stringify({ passed: report, stores }));
-      } finally { await pool.end(); }
+      } finally {
+        try { await pool.query('DROP SCHEMA IF EXISTS artifact_host CASCADE'); }
+        finally { await pool.end(); }
+      }
     `);
     expect(result.passed).toEqual([
       'namespace-isolation', 'immutable-records', 'binding-mismatch', 'wrong-ids',
@@ -42,5 +46,17 @@ describe.skipIf(!enabled || !process.env.DATABASE_URL)('installed activation con
       'expiry-without-cleanup', 'expiry-after-authority', 'bounded-cleanup',
       'invalidation-recovery', 'ttl-cap', 'flow-association',
     ]);
+  });
+
+  it.each(TSC_CASES)('should expose installed vector types under $module with skipLibCheck=$skipLibCheck', options => {
+    const result = tsc(fixtureDir('artifacts-consumer'), 'activation-vectors', `
+      import { runPostgresActivationConformance, POSTGRES_ACTIVATION_VECTOR_IDS,
+        type PostgresActivationConformanceHost, type PostgresActivationVectorId }
+        from '@sentropic/artifacts/adapters/postgres-activation/vectors';
+      export const run = (host: PostgresActivationConformanceHost): Promise<PostgresActivationVectorId[]> =>
+        runPostgresActivationConformance(host);
+      export const ids: readonly PostgresActivationVectorId[] = POSTGRES_ACTIVATION_VECTOR_IDS;
+    `, options);
+    expect(result.status, result.stdout + result.stderr).toBe(0);
   });
 });
