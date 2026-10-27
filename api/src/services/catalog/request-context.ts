@@ -1,6 +1,8 @@
 /** Server-owned authority; never construct this object from request or model JSON. */
 export type CatalogRequestContext = Readonly<{
   subjectId: string; sessionId: string; tenantId: string; workspaceId: string;
+  /** A turn session is a conversation, never an HTTP login credential. */
+  sessionKind: 'http' | 'turn';
   membershipRef: string; consentRef: string; policyVersion: string;
   readOnly: boolean; allowedTools: readonly string[];
   roles?: readonly string[]; workspaceType?: string;
@@ -15,7 +17,7 @@ export interface CatalogContextInput {
   readonly readOnly?: boolean;
   readonly allowedTools?: readonly string[];
 }
-export type CatalogAuthority = Omit<CatalogRequestContext, 'subjectId' | 'sessionId' | 'workspaceId'>;
+export type CatalogAuthority = Omit<CatalogRequestContext, 'subjectId' | 'sessionId' | 'sessionKind' | 'workspaceId'>;
 export type CatalogAuthorityReader = (input: CatalogContextInput) => Promise<CatalogAuthority>;
 
 const refreshers = new WeakMap<CatalogRequestContext, () => Promise<CatalogRequestContext>>();
@@ -38,7 +40,7 @@ export function createCatalogContextResolver(readAuthority: CatalogAuthorityRead
           .every(value => typeof value === 'string' && value.length > 0)) throw denied();
         const allowedTools = Object.freeze([...new Set(authority.allowedTools)]
           .filter(name => input.allowedTools === undefined || input.allowedTools.includes(name)));
-        const context = Object.freeze({ subjectId: input.userId, sessionId: input.sessionId,
+        const context = Object.freeze({ subjectId: input.userId, sessionId: input.sessionId, sessionKind: input.kind,
           workspaceId: input.workspaceId, tenantId: authority.tenantId,
           membershipRef: authority.membershipRef, consentRef: authority.consentRef,
           policyVersion: authority.policyVersion, readOnly: input.readOnly === true || authority.readOnly,
@@ -54,7 +56,7 @@ export function createCatalogContextResolver(readAuthority: CatalogAuthorityRead
 
 const RESERVED_CLAIMS = new Set(['subject', 'subjectId', 'userId', 'sessionId', 'tenantId',
   'workspaceId', 'clientId', 'credentialId', 'actorId', 'storageScopeId', 'identity', 'context',
-  'invocation', 'authorization', 'allowedTools', 'readOnly', 'policyVersion', 'membershipRef', 'consentRef']);
+  'invocation', 'authorization', 'allowedTools', 'readOnly', 'policyVersion', 'membershipRef', 'consentRef', 'sessionKind']);
 
 export async function revalidateCatalogInvocation(
   context: CatalogRequestContext | undefined,
