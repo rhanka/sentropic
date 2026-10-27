@@ -10,17 +10,17 @@ describe('Radar llm-mesh compatibility range', () => {
   const range = LLM_MESH_RANGE;
   it('should keep the runtime catalog aligned with the manifest peer range', () => {
     const manifest = JSON.parse(readFileSync(new URL('../../package.json', import.meta.url), 'utf8'));
-    expect(range).toBe('0.19.2 || >=0.22.0 <0.31.0');
+    expect(range).toBe('0.19.2 || >=0.22.0 <0.32.0');
     expect(range).toBe(manifest.peerDependencies['@sentropic/llm-mesh']);
     for (const entry of Object.values(PROVIDER_CATALOG).filter((entry) => entry.owner === 'llm-mesh')) {
       expect(entry.range).toBe(entry.id === 'speech' ? LLM_MESH_SPEECH_RANGE : range);
     }
   });
   // 0.28 adds an independent speech contract; existing text routing stays compatible.
-  it.each(['0.19.2', '0.22.0', '0.27.9', '0.28.0', '0.28.9', '0.29.0', '0.30.0'])('should admit the qualified version %s', (version) => {
+  it.each(['0.19.2', '0.22.0', '0.27.9', '0.28.0', '0.28.9', '0.29.0', '0.30.0', '0.31.0'])('should admit the qualified version %s', (version) => {
     expect(satisfiesRange(version, range)).toBe(true);
   });
-  it.each(['0.19.1', '0.19.3', '0.20.0', '0.21.2', '0.31.0', '0.22.0-dev.1'])
+  it.each(['0.19.1', '0.19.3', '0.20.0', '0.21.2', '0.32.0', '0.22.0-dev.1'])
     ('should refuse the unqualified version %s', (version) => {
       expect(satisfiesRange(version, range)).toBe(false);
     });
