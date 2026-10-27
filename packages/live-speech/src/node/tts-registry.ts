@@ -1,19 +1,20 @@
 // TTS engine registry (r3 L6a). Config-only engine selection over an injected
 // port: production resolves the local eSpeak NG entry, tests inject fakes, and
 // cloud voices arrive at Lp1 (unknown names fail closed, never silently fall
-// back). The eSpeak NG binary is hash-verified before every synthesis, exactly
-// like the L4 arecord backend; no pins are baked in until a qualified binary
-// is measured, so the entry refuses until provisioned instead of guessing.
+// back). Synthesis pipes text on stdin and collects WAV from stdout — the
+// narration text never appears in argv (no /proc exposure) and no audio file
+// is ever written, only a bounded RAM buffer that is dropped after playback.
+// The eSpeak NG binary is hash-verified before every synthesis, exactly like
+// the L4 arecord backend; no pins are baked in until a qualified binary is
+// measured, so the entry refuses until provisioned instead of guessing.
 import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { access, readFile, rm } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 import { constants } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 
 export type TtsEngineName = 'local-espeak';
 
-/** Complete WAV file bytes from one synthesis. Freed after playback. */
+/** Complete WAV file bytes from stdout. Dropped after playback. */
 export interface TtsAudio {
   readonly wav: Buffer;
   readonly voice: string;
@@ -23,13 +24,16 @@ export interface TtsAudio {
 export interface TtsSynthesizeOptions {
   readonly voice?: string;
   readonly speedWpm?: number;
+  /** Abort a running synthesis (barge-in kills the espeak child). */
+  readonly signal?: AbortSignal;
 }
 
 export interface TtsCapabilities {
-  /** File-based engines render a whole WAV before playback (no streaming). */
+  /** Piped engines render a whole WAV to stdout before playback (no streaming). */
   readonly streaming: false;
-  readonly fileBased: true;
-  /** Absolute input bound; longer text is refused, never silently cut. */
+  readonly fileBased: false;
+  readonly pipedStdin: true;
+  /** Absolute input bound: longer text is refused, never silently cut. */
   readonly maxChars: number;
 }
 
@@ -100,12 +104,15 @@ async function digestBinary(path: string): Promise<string> {
 /** Absolute synthesis bound: longer input is refused, never silently cut. */
 export const ESPEAK_MAX_CHARS = 2000;
 
-/** Exact espeak-ng argv for file synthesis (explicit argv, shell:false). Pure. */
-export function buildEspeakArgs(
-  text: string,
-  options: { voice: string; speedWpm: number; wavPath: string },
-): string[] {
-  return ['-v', options.voice, '-s', String(options.speedWpm), '-w', options.wavPath, text];
+/** Absolute stdout bound: runaway output kills the child instead of growing RAM. */
+export const ESPEAK_MAX_WAV_BYTES = 8 * 1024 * 1024;
+
+/**
+ * Exact espeak-ng argv for piped synthesis (man page: --stdin reads text to
+ * the end of stream, --stdout writes speech output). No text in argv. Pure.
+ */
+export function buildEspeakArgs(options: { voice: string; speedWpm: number }): string[] {
+  return ['--stdin', '-v', options.voice, '-s', String(options.speedWpm), '--stdout'];
 }
 
 export interface EspeakNgOptions {
@@ -114,19 +121,24 @@ export interface EspeakNgOptions {
   readonly maxChars?: number;
 }
 
-/** Spawn runner: real espeak-ng unless tests inject a fake. */
-export type EspeakRunner = (argv: string[], wavPath: string) => Promise<void>;
+/**
+ * Spawn runner: real espeak-ng unless tests inject a fake. The runner owns the
+ * whole synth (argv without text, stdin text in, WAV bytes out).
+ */
+export type EspeakRunner = (argv: string[], stdinText: string, signal?: AbortSignal) => Promise<Buffer>;
 
-let tempCounter = 0;
+/** SIGKILL escalation delay: bounded by the §9 150 ms stop-to-silence gate. */
+const ESCALATE_MS = 100;
 
 /**
- * Local eSpeak NG engine. Text travels as an explicit argv element (bounded
- * narration keeps it short); audio lands in a temp WAV that is always deleted,
- * whether synthesis succeeds or fails.
+ * Local eSpeak NG engine. Text travels on stdin (never argv); WAV returns on
+ * stdout into a bounded RAM buffer. An abort signal kills the child, so a
+ * barge during synthesis never waits for espeak to finish.
  */
 export class EspeakNgEngine implements TtsEnginePort {
-  readonly engineId = 'espeak-ng/1.52';
-  readonly capabilities: TtsCapabilities = { streaming: false, fileBased: true, maxChars: ESPEAK_MAX_CHARS };
+  // Unpinned until a qualified binary is measured (receipt: blocked).
+  readonly engineId = 'espeak-ng/unpinned';
+  readonly capabilities: TtsCapabilities = { streaming: false, fileBased: false, pipedStdin: true, maxChars: ESPEAK_MAX_CHARS };
   private readonly voice: string;
   private readonly speedWpm: number;
   private readonly maxChars: number;
@@ -158,9 +170,8 @@ export class EspeakNgEngine implements TtsEnginePort {
   async synthesize(text: string, options: TtsSynthesizeOptions = {}): Promise<TtsAudio> {
     if (this.closed) throw new TtsSynthesisError('engine is closed');
     if (text.length === 0) throw new TtsSynthesisError('refusing empty narration');
-    const maxChars = this.maxChars;
-    if (text.length > maxChars) {
-      throw new TtsSynthesisError(`narration too long: ${text.length} chars (max ${maxChars})`);
+    if (text.length > this.maxChars) {
+      throw new TtsSynthesisError(`narration too long: ${text.length} chars (max ${this.maxChars})`);
     }
     const voice = options.voice ?? this.voice;
     if (voice.length === 0) throw new TtsSynthesisError('refusing empty voice');
@@ -168,27 +179,23 @@ export class EspeakNgEngine implements TtsEnginePort {
     if (!Number.isInteger(speedWpm) || speedWpm < 80 || speedWpm > 450) {
       throw new TtsSynthesisError(`speed out of range: ${String(speedWpm)} wpm (80-450)`);
     }
-    // Pins first: no helper exists yet, so nothing can leak on mismatch.
-    const binary = await this.verifiedBinary();
-    const wavPath = join(tmpdir(), `live-stt-tts-${process.pid}-${tempCounter++}.wav`);
-    const argv = buildEspeakArgs(text, { voice, speedWpm, wavPath });
-    try {
-      if (this.runner !== null) {
-        await this.runner(argv, wavPath);
-      } else {
-        await runEspeak(binary, argv);
-      }
-      let wav: Buffer;
-      try {
-        wav = await readFile(wavPath);
-      } catch {
-        throw new TtsSynthesisError('espeak-ng produced no WAV output');
-      }
+    if (options.signal?.aborted === true) {
+      throw new TtsSynthesisError('synthesis aborted before spawn');
+    }
+    // A test seam bypasses verification: production never injects a runner,
+    // and the digest paths below are covered against a fixture binary.
+    if (this.runner !== null) {
+      const wav = await this.runner(
+        buildEspeakArgs({ voice, speedWpm }),
+        text,
+        options.signal,
+      );
       if (wav.length === 0) throw new TtsSynthesisError('espeak-ng produced an empty WAV');
       return { wav, voice, chars: text.length };
-    } finally {
-      await rm(wavPath, { force: true });
     }
+    // Pins first: no helper exists yet, so nothing can leak on mismatch.
+    const binary = await this.verifiedBinary();
+    return runEspeak(binary, buildEspeakArgs({ voice, speedWpm }), text, options.signal);
   }
 
   async close(): Promise<void> {
@@ -196,23 +203,81 @@ export class EspeakNgEngine implements TtsEnginePort {
   }
 }
 
-function runEspeak(binary: string, argv: string[]): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const child = spawn(binary, argv, { shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+function runEspeak(binary: string, argv: string[], text: string, signal?: AbortSignal): Promise<Buffer> {
+  return new Promise<Buffer>((resolve, reject) => {
+    const child = spawn(binary, argv, { shell: false, stdio: ['pipe', 'pipe', 'pipe'] });
+    const chunks: Buffer[] = [];
+    let stdoutBytes = 0;
     let stderr = '';
-    child.on('error', () => reject(new TtsSynthesisError(`${binary} is not installed or not executable`)));
+    let settled = false;
+    const settle = (error: Error | null, wav?: Buffer): void => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener('abort', onAbort);
+      if (error === null && wav !== undefined) resolve(wav);
+      else reject(error ?? new TtsSynthesisError('espeak-ng failed'));
+    };
+    const kill = (): void => {
+      try {
+        child.kill('SIGTERM');
+      } catch {
+        // Already gone; its close event settles the synth.
+      }
+      const escalate = setTimeout(() => {
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          // Gone between the two signals.
+        }
+      }, ESCALATE_MS);
+      escalate.unref?.();
+      child.once('close', () => clearTimeout(escalate));
+    };
+    const onAbort = (): void => {
+      kill();
+      settle(new TtsSynthesisError('synthesis aborted by barge-in'));
+    };
+    child.on('error', () => settle(new TtsSynthesisError(`${binary} is not installed or not executable`)));
+    child.stdout?.on('data', (chunk: Buffer) => {
+      stdoutBytes += chunk.length;
+      if (stdoutBytes > ESPEAK_MAX_WAV_BYTES) {
+        kill();
+        settle(new TtsSynthesisError(`espeak-ng output exceeded ${ESPEAK_MAX_WAV_BYTES} bytes`));
+        return;
+      }
+      chunks.push(chunk);
+    });
     child.stderr?.on('data', (chunk: Buffer) => {
       stderr = `${stderr}${chunk.toString('utf8')}`.slice(-300);
     });
     child.on('close', (code) => {
-      if (code === 0) resolve();
-      else reject(new TtsSynthesisError(`espeak-ng exited ${String(code)}: ${stderr}`));
+      if (code === 0) {
+        const wav = Buffer.concat(chunks);
+        if (wav.length === 0) settle(new TtsSynthesisError('espeak-ng produced no WAV output'));
+        else settle(null, wav);
+      } else {
+        settle(new TtsSynthesisError(`espeak-ng exited ${String(code)}: ${stderr}`));
+      }
+    });
+    if (signal?.aborted === true) {
+      onAbort();
+      return;
+    }
+    signal?.addEventListener('abort', onAbort, { once: true });
+    try {
+      child.stdin?.write(text, 'utf8');
+      child.stdin?.end();
+    } catch {
+      // Already gone; the close event settles the synth.
+    }
+    child.stdin?.on('error', () => {
+      // The child died early: the close code decides, never the pipe.
     });
   });
 }
 
 export interface TtsRegistryOptions {
-  /** Injected engines for tests (config-only switch without a binary). */
+  /** Injected engines for tests (config-only switching without a binary). */
   readonly engines?: Record<string, TtsEnginePort>;
 }
 
