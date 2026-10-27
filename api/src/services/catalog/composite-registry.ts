@@ -102,6 +102,11 @@ export class CompositeCatalogRegistry {
     if ((context !== undefined || source.requiresContext) && !isTrustedCatalogContext(context)) return [];
     return source.snapshot(context).flatMap(entry => {
       if (!context) return [entry];
+      const { contextFilter, authzRequirements } = entry.metadata;
+      if (contextFilter?.workspaceTypes?.length &&
+        (!context.workspaceType || !contextFilter.workspaceTypes.includes(context.workspaceType))) return [];
+      if (contextFilter?.roles?.length && !contextFilter.roles.some(role => context.roles?.includes(role))) return [];
+      if (authzRequirements?.permissions?.length) return []; // No permission grant is inferred from a role.
       const permitted = (name: string, sideEffect?: boolean) => context.allowedTools.includes(name)
         && (!context.readOnly || sideEffect === false);
       if (entry.kind === 'tool') return permitted(entry.metadata.name, entry.tool.sideEffect) ? [entry] : [];
