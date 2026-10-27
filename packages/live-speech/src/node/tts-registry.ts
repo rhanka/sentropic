@@ -195,7 +195,8 @@ export class EspeakNgEngine implements TtsEnginePort {
     }
     // Pins first: no helper exists yet, so nothing can leak on mismatch.
     const binary = await this.verifiedBinary();
-    return runEspeak(binary, buildEspeakArgs({ voice, speedWpm }), text, options.signal);
+    const wav = await runEspeak(binary, buildEspeakArgs({ voice, speedWpm }), text, options.signal);
+    return { wav, voice, chars: text.length };
   }
 
   async close(): Promise<void> {
@@ -210,6 +211,7 @@ function runEspeak(binary: string, argv: string[], text: string, signal?: AbortS
     let stdoutBytes = 0;
     let stderr = '';
     let settled = false;
+    let aborting = false;
     const settle = (error: Error | null, wav?: Buffer): void => {
       if (settled) return;
       settled = true;
@@ -234,8 +236,10 @@ function runEspeak(binary: string, argv: string[], text: string, signal?: AbortS
       child.once('close', () => clearTimeout(escalate));
     };
     const onAbort = (): void => {
+      // Never settle here: the open only rejects once the child is reaped
+      // below, so no orphan survives the abort.
+      aborting = true;
       kill();
-      settle(new TtsSynthesisError('synthesis aborted by barge-in'));
     };
     child.on('error', () => settle(new TtsSynthesisError(`${binary} is not installed or not executable`)));
     child.stdout?.on('data', (chunk: Buffer) => {
@@ -251,7 +255,9 @@ function runEspeak(binary: string, argv: string[], text: string, signal?: AbortS
       stderr = `${stderr}${chunk.toString('utf8')}`.slice(-300);
     });
     child.on('close', (code) => {
-      if (code === 0) {
+      if (aborting) {
+        settle(new TtsSynthesisError('synthesis aborted by barge-in'));
+      } else if (code === 0) {
         const wav = Buffer.concat(chunks);
         if (wav.length === 0) settle(new TtsSynthesisError('espeak-ng produced no WAV output'));
         else settle(null, wav);
@@ -260,7 +266,8 @@ function runEspeak(binary: string, argv: string[], text: string, signal?: AbortS
       }
     });
     if (signal?.aborted === true) {
-      onAbort();
+      // No child exists yet: nothing to reap, settle at once.
+      settle(new TtsSynthesisError('synthesis aborted by barge-in'));
       return;
     }
     signal?.addEventListener('abort', onAbort, { once: true });
