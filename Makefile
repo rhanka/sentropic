@@ -15,7 +15,7 @@ MANIFEST_PACK_RUN = $(MANIFEST_GUARD_RUN)
 MANIFEST_PACK_IMAGE = $(MANIFEST_GUARD_IMAGE)
 CM_RUN = docker run --rm --init $(CM_DOCKER_NETWORK)
 CM_RUN_IMAGE = $(LLM_MESH_NODE_IMAGE)
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-artifacts-021 test-llm-judge),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-artifacts-021 test-artifacts-022 test-llm-judge),)
 ARTIFACTS_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.immo-861.yml
 ARTIFACTS_RUN = $(ARTIFACTS_COMPOSE) run --rm --no-deps
 ARTIFACTS_RUN_IMAGE = qualification
@@ -829,12 +829,47 @@ check-eradicated-packages: ## Fail if cli, build-cli or focus return as sentropi
 .PHONY: ci-run-metrics ci-expected-results ci-expected-manifest test-ci-run-metrics test-ci-expected-results
 CI_METRICS_DIR ?= tmp/ci-capacity
 CI_EXPECTED_TOOLS = tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund yaml@2.8.1 >/dev/null; export CI_EXPECTED_TOOL_DIR="$$tool_dir"
+# BR77-EX2: check per-run dispatch shape; measured timing is a separate proof.
+.PHONY: ci-capacity-policy
+ci-capacity-policy: ## Check independent dispatch and matrix widths (account admission requires live evidence)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file .github/workflows/ci.yml --capacity-policy $(if $(filter 1,$(CI_REQUIRE_CAPACITY_PROOF)),--require-proof) $(foreach file,$(CI_POLICY_RUN_FILES),--proof-file $(file))'
+CI_RUN_ATTEMPT ?= 1
+CI_CAPACITY_REF ?= $(shell git branch --show-current)
+.PHONY: ci-capacity-dispatch ci-capacity-runs ci-capacity-status
+ci-capacity-dispatch: ## Dispatch this branch's package publication dry-run (never main)
+	@test -n "$(CI_CAPACITY_REF)" && test "$(CI_CAPACITY_REF)" != main
+	@gh workflow run ci.yml --repo rhanka/sentropic --ref "$(CI_CAPACITY_REF)" -f bootstrap_publish_target=none -f capacity_publish_dry_run=true
+ci-capacity-runs: ## List identified policy runs on the qualification branch
+	@gh run list --repo rhanka/sentropic --workflow ci.yml --branch "$(CI_CAPACITY_REF)" --limit 5 --json databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url
+ci-capacity-status: ## Inspect CI_RUN_ID without cancelling or retrying any job
+	@printf '%s\n' '$(CI_RUN_ID)' | awk '!/^[1-9][0-9]*$$/ { bad=1 } END { exit bad }'
+	@gh run view $(CI_RUN_ID) --repo rhanka/sentropic --json databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,jobs --jq '{databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,pendingOrFailed: [.jobs[] | select(.conclusion != "success" and .conclusion != "skipped") | {databaseId,name,status,conclusion,startedAt,completedAt}]}'
+.PHONY: ci-capacity-publish-dry-run
+ci-capacity-publish-dry-run: ## Exercise a publisher's real guarded pack without registry writes
+	@case '$(PACKAGE)' in llm-mesh|llm-gateway|cluster-mesh|chat-ui|cited-source-viewer|cowork-bridge|cowork-desktop|oauth-verify|mcp-auth|mcp-platform|artifacts|auth-hono|auth-client|auth-ui|contracts|events|chat-core|chat-server|comments|flow|harness) ;; *) echo 'Invalid dry-run package'; exit 1;; esac
+	@$(MAKE) --no-print-directory pack-$(PACKAGE) MANIFEST_REPORT_DIR=tmp/ci-capacity/publish-$(PACKAGE) ENV=$(ENV)
+	@jq -n --arg package '$(PACKAGE)' --arg run "$$GITHUB_RUN_ID" --arg sha "$$GITHUB_SHA" '{package: $$package, runId: $$run, headSha: $$sha, mode: "guarded-pack-no-publication", completed: true}' | tee tmp/ci-capacity/publish-$(PACKAGE)/dry-run.json
+CI_EXPECTED_ATTEMPT ?= $(CI_RUN_ATTEMPT)
+CI_CAPTURE_DIR ?= tmp/ci-capacity/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)
+.PHONY: ci-capacity-capture
+ci-capacity-capture: ## Capture identified completed run/attempt CI_RUN_ID=<id> and emit BR-76-format metrics
+	@printf '%s\n' '$(CI_RUN_ID)' '$(CI_RUN_ATTEMPT)' '$(CI_EXPECTED_ATTEMPT)' | awk '!/^[1-9][0-9]*$$/ { bad=1 } END { exit bad }'
+	@mkdir -p "$(CI_CAPTURE_DIR)"
+	@gh api repos/rhanka/sentropic/actions/runs/$(CI_RUN_ID)/attempts/$(CI_RUN_ATTEMPT) > "$(CI_CAPTURE_DIR)/run.json"
+	@gh api --paginate 'repos/rhanka/sentropic/actions/runs/$(CI_RUN_ID)/attempts/$(CI_RUN_ATTEMPT)/jobs?per_page=100' > "$(CI_CAPTURE_DIR)/job-pages.json"
+	@jq -s '[.[].jobs[]]' "$(CI_CAPTURE_DIR)/job-pages.json" > "$(CI_CAPTURE_DIR)/jobs.json"
+	@gh api "repos/rhanka/sentropic/contents/.github/workflows/ci.yml?ref=$$(jq -r .head_sha '$(CI_CAPTURE_DIR)/run.json')" --jq .content | base64 -d > "$(CI_CAPTURE_DIR)/workflow.yml"
+	@rm -f "$(CI_CAPTURE_DIR)/expected.json"
+	@gh run download $(CI_RUN_ID) --name ci-expected-$(CI_RUN_ID)-$(CI_EXPECTED_ATTEMPT) --dir "$(CI_CAPTURE_DIR)"
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -v "$(abspath $(CI_CAPTURE_DIR)):/receipts" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file /receipts/workflow.yml --capture-dir /receipts'
+	@$(MAKE) --no-print-directory ci-run-metrics RUN_FILE=$(CI_CAPTURE_DIR)/capture.json ENV=$(ENV) > "$(CI_CAPTURE_DIR)/metrics.json"
+	@echo "Capacity receipts: $(CI_CAPTURE_DIR)/metrics.json"
 ci-expected-manifest: ## Retain the selected workflow/member manifest before dispatch (BR76-EX2)
 	@mkdir -p "$(CI_METRICS_DIR)"
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e CI_SELECTION_CONTEXT -v "$(CURDIR):/workspace:ro" -v "$(abspath $(CI_METRICS_DIR)):/receipts" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file .github/workflows/ci.yml --manifest-file /receipts/expected.json'
 	@if [ -n "$$GITHUB_OUTPUT" ]; then printf 'attempt=%s\n' "$$GITHUB_RUN_ATTEMPT" >> "$$GITHUB_OUTPUT"; fi
 ci-run-metrics: ## Summarize one captured CI run file RUN_FILE=<path> (BR76-EX2)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-run-metrics.mjs $(if $(RUN_FILE),--run-file $(RUN_FILE),--help)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-run-metrics.mjs $(if $(RUN_FILE),--run-file $(RUN_FILE),--help) $(foreach file,$(CI_COMPETING_FILES),--competing-file $(file))
 ci-expected-results: ## Evaluate expected vs executed results EXPECTED_FILE=<json> EXECUTED_FILE=<json> (BR76-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e CI_GATE_NEEDS -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-expected-results.mjs $(if $(EXPECTED_FILE),--expected-file $(EXPECTED_FILE),--help) $(if $(EXECUTED_FILE),--executed-file $(EXECUTED_FILE),)
 test-ci-run-metrics: ## Run ci-run-metrics fixture tests in Docker (BR76-EX2)
@@ -1499,7 +1534,7 @@ build-mcp-platform: install-internal-packages ## Build @sentropic/mcp-platform d
 
 .PHONY: immo-861-build-mcp-platform freeze-types
 immo-861-build-mcp-platform: install-internal-packages
-	@case "$(ENV)" in test-861-int|test-861-gaps|test-artifacts-021) ;; *) exit 1 ;; esac
+	@case "$(ENV)" in test-861-int|test-861-gaps|test-artifacts-021|test-artifacts-022) ;; *) exit 1 ;; esac
 	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; rm -rf dist node_modules; tool_dir="$$(mktemp -d)"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 
 freeze-types:
@@ -1893,7 +1928,7 @@ test-idp-sync-sql: ## Test isolated IdP SQL and imported-client authorize accept
 		sh -ec 'npm install --prefix /tmp/idp-tools --ignore-scripts --no-audit --no-fund tsx@4.20.6 >/dev/null; /tmp/idp-tools/node_modules/.bin/tsx deploy/ci/idp-identity-sync/authorize.selftest.mjs'
 
 .PHONY: scope-check
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-sec-zod4 test-artifacts-021 test-e2-int test-resync-752 test-llm-judge),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-artifacts-021 test-artifacts-022 test-sec-zod4 test-resync-752 test-llm-judge),)
 scope-check: ## Advisory C2 scope-check via the installed host harness (BR861-EX1, BR01-EX2)
 	@files="$$( { git diff --cached --name-only $(SCOPE_BASE); git diff --name-only $(SCOPE_BASE); } | sort -u | paste -sd, - )"; \
 	harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
@@ -2710,7 +2745,7 @@ up-ui: ## Start the ui stack in detached mode
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-artifacts-021 test-llm-judge),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-artifacts-021 test-artifacts-022 test-llm-judge),)
 	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans
 else
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down

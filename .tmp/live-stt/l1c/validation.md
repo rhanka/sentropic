@@ -1,5 +1,34 @@
 # L1c deterministic verification receipt
 
+## PR757 Opus r2 integration
+
+- Main advanced during the first CI run: merge #769 at
+  `365e8b313f1c4c627c87db4f6761847a1e6a5ae7` adds Memory L5 evidence/tests.
+  The second integration resolves only `BRANCH.md`, retaining the L1c plan;
+  cluster/mesh sources, manifests and root lock match `5258b9a6c` byte-for-byte.
+  The locked speech rerun passes **4 files / 66 tests**, zero skips, with
+  `SCOPE=tests/speech- ENV=test-stt-l1c`. All tests/qualifications passed in
+  [the first CI run](https://github.com/rhanka/sentropic/actions/runs/40401909237)
+  at `5258b9a6c`; CI is refreshed on the second merge head.
+- Retargeted draft #757 from `feat/live-stt-l1` to `main`.
+- Integrated `origin/main` at `ab981b16dfe4769d0dd44443f4d459a375848a8d`
+  with a merge commit; no history rewrite.
+- Kept cluster 0.23.0, the speech export and comments range <0.24.0;
+  retained main's Decision support and selected comments 0.3.1 / gateway
+  0.21.3 / mesh 0.28.1 tuple, changing only the cluster archive version.
+- Registry check through the locked Compose make adapter: cluster 0.22.4,
+  mesh 0.28.1, gateway 0.21.3; the cluster bump remains above publication.
+- Mechanical scope check uses `SCOPE_BASE=origin/main` to exclude inherited
+  upstream changes. Track containment preserves all 346 pre-merge event IDs.
+- Integration commands use the owner's `ENV=test-stt-l1c`; the adapter also
+  retains the historical ENV accepted by the reproduction commands below.
+- Post-merge `make -f .tmp/live-stt/l1c/verify.mk test-cluster-mesh
+  ENV=test-stt-l1c` through the shared Docker flock passes **142 files /
+  1,208 tests**, including all **66 speech tests**. The **56 files / 129 tests**
+  gated on separate environments remain skipped; packed qualification is a
+  separate CI gate. This replaces the historical default-suite receipt for
+  the integrated source tuple.
+
 ## PR757 Opus r1 corrections
 
 Author: codex / gpt-6.1-sol / high. Corrected source/test target:
