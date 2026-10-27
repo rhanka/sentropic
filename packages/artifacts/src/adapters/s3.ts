@@ -17,6 +17,7 @@ import {
   type S3Client,
 } from '@aws-sdk/client-s3';
 import type { PublicationBlobStore } from '../server/publication.js';
+import { assertBlobPrefix } from '../server/blob-prefix.js';
 
 const BLOB_KEY_PATTERN = /^artifacts\/[A-Za-z0-9_-]+\/blobs\/sha256\/[0-9a-f]{64}$/;
 
@@ -29,13 +30,6 @@ export interface S3BlobStoreOptions {
 function assertBlobKey(key: string): void {
   if (!BLOB_KEY_PATTERN.test(key)) {
     throw new Error(`invalid blob key (must be artifacts/<scope>/blobs/sha256/<hex>): ${key}`);
-  }
-}
-
-/** Reject empty or escaping prefixes before any I/O. */
-function assertPrefix(prefix: string): void {
-  if (prefix.length === 0 || prefix.includes('..')) {
-    throw new Error(`invalid blob prefix: ${prefix}`);
   }
 }
 
@@ -66,7 +60,7 @@ export function createS3BlobStore(options: S3BlobStoreOptions): PublicationBlobS
       }
     },
     async listKeys(prefix: string): Promise<string[]> {
-      assertPrefix(prefix);
+      assertBlobPrefix(prefix);
       const keys: string[] = [];
       let token: string | undefined;
       do {

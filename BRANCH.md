@@ -1,75 +1,77 @@
-# Feature: RFC 8693 token exchange for the radar preprod workload client
+# fix(artifacts): 0.2.2 listKeys prefix parity (memory = S3)
 
 ## Objective
-- [ ] Register `immo-mcp-workload` through the existing preprod sync using a named Kubernetes Secret; qualify the exchange-only policy for radar.
+- [x] Make memory and S3 listKeys reject the same invalid prefixes through one validator.
+- [ ] Release a compatible patch at 0.2.2; push a PR with green CI, then merge on owner GO.
 
 ## Scope / Guardrails
-- [x] Worktree `tmp/worktrees/idp-token-exchange`, branch `feat/idp-token-exchange-preprod`, from `origin/main`; harness branch check passed.
-- [x] `ENV=test-idp-token-exchange` last; shared Docker flock and teardown; no Python, deployment, secret minting or production changes.
-- [x] No schema, package source or discovery change: live preprod now advertises RFC 8693 unconditionally.
-- [x] Dedicated local ports: API 9845, UI 6045, Maildev UI 1945; verified free before startup.
+- [x] Base: origin/main; branch: fix/artifacts-0.2.2-listkeys-parity.
+- [x] Worktree: tmp/worktrees/artifacts-022; make-only; no Python.
+- [x] ENV=test-artifacts-022 always last; shared Docker flock for every build/test/cleanup.
+- [x] Compose qualification has no host ports; no API/UI/Maildev services are started.
+- [x] Keep packages/artifacts/l0-freeze byte-identical; no breaking API changes.
+- [x] Selective staging; make commit only; each commit below 150 changed lines.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [x] **Allowed Paths (implementation scope)**:
-  - [x] `BRANCH.md`
-  - [x] `deploy/k8s/overlays/preprod/idp-identity-sync/**`
-  - [x] `deploy/ci/idp-identity-sync/import-job.tmpl.yaml`
-  - [x] `deploy/ci/idp-identity-sync/bundle-checks.mjs`
-  - [x] `deploy/ci/idp-identity-sync/services-test.sh`
-  - [x] `deploy/ci/idp-identity-sync/sql-test.sh`
-  - [x] `deploy/ci/idp-identity-sync/run-core.mjs`
-  - [x] `deploy/ci/idp-identity-sync/run.selftest.mjs`
-  - [x] `deploy/ci/idp-identity-sync/CRED_CYCLE.md`
-  - [x] `deploy/ci/idp-identity-sync/README.md`
-  - [x] `api/src/scripts/oauth-provision-exchange-client.ts`
-  - [x] `deploy/k8s/README.md`
-  - [x] `api/tests/api/auth/oauth-token-exchange.test.ts`
-- [x] **Forbidden Paths (must not change in this branch)**:
-  - [x] `Makefile`
-  - [x] `docker-compose*.yml`
-  - [x] `.cursor/rules/**`
-  - [x] `deploy/k8s/overlays/prod/**`
-  - [x] `.track/**`
-- [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [x] `.github/workflows/**`
-  - [x] `api/drizzle/*.sql`
-- [x] **Exception process**: record reason, impact and rollback before editing a conditional or forbidden path.
+- **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
+  - `packages/artifacts/src/server/blob-prefix.ts`
+  - `packages/artifacts/src/server/publication.ts`
+  - `packages/artifacts/src/adapters/s3.ts`
+  - `packages/artifacts/tests/s3.integration.test.ts`
+  - `packages/artifacts/tests/publication-security.test.ts`
+  - `packages/artifacts/package.json`
+  - `packages/artifacts/src/mcp-core.ts` (ARTIFACTS_PROVIDER_VERSION constant only, aligned on 0.2.2)
+  - `package-lock.json` (artifacts workspace version only)
+- **Forbidden Paths (must not change in this branch)**:
+  - `packages/artifacts/l0-freeze/**`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile` (BR022-EX1)
+  - `.github/workflows/**`
+- **Exception process**:
+  - [x] Record rationale, impact and rollback before editing conditional paths.
 
 ## Feedback Loop
-- [x] BR770-EX1: preprod `deploy/k8s/**` sync and runbook changes; rationale: register radar's missing workload and support Secret rotation; impact: preprod imports only, no prod change; rollback: revert the sync ConfigMap/Job references and revoke the workload through the owner credential process.
-- [x] BR770-EX2: `deploy/ci/idp-identity-sync/{README,CRED_CYCLE}.md` and `api/src/scripts/oauth-provision-exchange-client.ts`; rationale: one preprod creation path; impact: prevent manual preprod provisioning and document Secret-driven rotation; rollback: restore these files and disable the sync registration before reverting the guard.
-- [x] BR770-EX3: `deploy/ci/idp-identity-sync/{run-core,run.selftest}.mjs`; rationale: preserve the validated workload failure code in the operator message; impact: one additional allowed code, no new payload fields; rollback: remove that code and its regression assertion.
-- [x] Existing policy rewrites the exact preprod MCP/API audiences but skips missing workload rows; register before its invariant snapshot.
-- [x] Author metadata: codex / gpt-6.1-sol / high; external reviews require repository reviewer authorization.
+- [x] BR022-EX1: acknowledge; owner: code author; 2026-10-26. Add test-artifacts-022 to existing Compose ENV selectors only. Required by the requested ENV and Docker lock; no recipe changes. Rollback: remove that ENV from the selectors.
+- [x] Review availability: no live model catalog configured for selecting two complementary reviewers; selection-failed recorded in tmp/artifacts-022-review/dossier.md. No consensus claimed; merge remains prohibited.
 
 ## AI Flaky tests
-- [x] No live AI dependency in this scope.
+- [x] No AI/provider tests in this package fix; no flaky acceptance requested.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; single author, no delegated implementation or cherry-pick.
+- [x] Mono-branch; one code author; independent review through harness when available.
 
 ## UAT Management (in orchestration context)
-- [x] No UI change; preprod acceptance remains an owner action after rollout.
+- [x] Package-only change; web, Chrome and VSCode UAT not applicable.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Read-only diagnosis**
-  - [x] Read Docker lock, rules, radar aadc5291 runbook steps 3–4 and server-http.ts; inspect CI deploy and live discovery.
-- [x] **Lot 1 — Workload registration and rotation**
-  - [x] Validate 64 lowercase hex characters without a newline; hash in the importer before psql; only the hash reaches SQL.
-  - [x] Make the named-Secret sync the only preprod creation/rotation path; preserve revoked state without blocking identity sync.
-  - [x] Evolve `deploy/ci/idp-identity-sync/services-test.sh` and `sql-test.sh`: invalid inputs, registration, rollback, replay, rotation and revocation.
-  - [x] Preserve `workload_credential_invalid` through the launcher's validated pod-status failure message; reproduce its rejection, then pass all 47 selfchecks with the explicit operator-message regression.
-  - [x] Gate: `make test-idp-sync-selftest ENV=test-idp-token-exchange` passed (47 checks).
-  - [x] Gate: `make test-idp-sync-sql ENV=test-idp-token-exchange` passed, including statement-log secrecy, rotation rollback/commit and revoked-row sync.
-- [x] **Lot 2 — Policy regression**
-  - [x] Test preprod allowed exchange, public/unregistered denial, wrong subject/target audiences and client_credentials denial in `api/tests/api/auth/oauth-token-exchange.test.ts`.
-  - [x] Extend exact subject-audience and missing/form/dual-credential refusals; use a public synthetic 64-hex fixture.
-  - [x] Gate: `make test-api-endpoints SCOPE=tests/api/auth/oauth-token-exchange.test.ts API_PORT=9845 UI_PORT=6045 MAILDEV_UI_PORT=1945 ENV=test-idp-token-exchange` passed (18 tests) through the CI toolbox and branch-file mounts.
-- [x] **Lot N-1 — Docs consolidation**
-  - [x] Align `deploy/ci/idp-identity-sync/{README,CRED_CYCLE}.md` and `deploy/k8s/README.md`: metadata check, one preprod writer, 90-day rotation with schedule pause, revocation and protected owner handoff.
-  - [x] No temporary feature spec or package source/version change; no UI/e2e surface or live AI dependency.
-- [ ] **Lot N — Final validation**
-  - [x] Scoped IdP checks and API typecheck/lint pass; generic provisioning refuses the preprod API context with a synthetic fixture; dedicated-stack teardown uses Make only.
-  - [x] Scope-check every atomic commit under 150 changed lines; selective staging and Make commits without attribution trailers.
-  - [ ] Push and use this complete file as draft PR #770 body; verify CI green on the head and report its SHA.
-  - [ ] Owner-only after review: merge, mint/handoff the credential, deploy, sync dry-run/commit and qualify radar. No deployment or secret creation in this author task.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read Docker lock, project rules, template and relevant harness skills.
+  - [x] Create worktree from origin/main; mechanical harness branch check passed.
+  - [x] Identify existing Compose test, lint, typecheck, freeze and cleanup targets.
+  - [x] Enable requested ENV in existing disposable Compose lane.
+- [x] **Lot 1 — Regression first**
+  - [x] Add a shared memory/S3 case matrix in tests/s3.integration.test.ts.
+  - [x] Exercise empty, embedded '..', valid matching and unmatched prefixes on real MinIO.
+  - [x] Before production changes: 12 expected failures (6 memory acceptances, 6 untyped S3 errors), 15 passing tests. Command: make -o build-artifacts test-artifacts-integration SCOPE=tests/s3.integration.test.ts ENV=test-artifacts-022.
+- [x] **Lot 2 — Shared validation and patch version**
+  - [x] Add one shared prefix validator; both stores call it before enumeration/I/O.
+  - [x] Reuse typed invalid_request errors, preserve message, add stable invalid_blob_prefix code.
+  - [x] Registry latest is 0.2.1; bump package.json and workspace lock entry to 0.2.2.
+  - [x] Update four existing publication-security empty-store assertions to enumerate artifacts/.
+  - [x] Parity: 27/27; full integration/E2E suite passed; unit suite: 446/446. Typecheck, lint and freeze-types passed under the shared Docker lock on ENV=test-artifacts-022.
+- [ ] **Lot 3 — Review and delivery**
+  - [x] Author review of every diff hunk completed; no remaining blocking code findings.
+  - [x] Confirm l0-freeze unchanged and scope-check before each commit.
+  - [ ] Push and open PR to main using this file as PR body.
+  - [ ] Verify enforce-package-bump and all CI checks on exact head SHA.
+  - [ ] Tear down isolated stack; report PR number, head SHA and CI URL.
+  - [x] Owner GO « Go 0.2.2 » received 2026-10-26: merge authorized via gh pr merge --merge --match-head-commit, then remove BRANCH.md for merge preparation.
+- [x] BR022-EX2: merge origin/main 2026-10-26; resolved BRANCH.md (kept branch file) and Makefile (union of ENV selectors, kept main recipes); package-lock auto-merged with artifacts 0.2.2 intact. Rollback: git reset --hard 01499d513.
+- [x] BR022-EX3: merge origin/main 22d8a9e68 (post-#760) 2026-10-26; BRANCH.md conflict resolved by keeping branch file; rest auto-merged. Rollback: git reset --hard 90c1d414a.
+- [x] BR022-EX4: merge origin/main ab981b16d (post-#756) 2026-10-26; BRANCH.md kept, Makefile union intact, rest auto-merged. Rollback: git reset --hard e07add6a0.
+- [x] BR022-EX5: merge origin/main 365e8b313 (post-#769) 2026-10-26; BRANCH.md kept, Makefile union intact, rest auto-merged. Rollback: git reset --hard 3c906d8f9.
+- [x] BR022-EX6: merge origin/main 55431a99c (post-#770) 2026-10-26; BRANCH.md kept, Makefile union intact, rest auto-merged. Rollback: git reset --hard 688b72e7b.
