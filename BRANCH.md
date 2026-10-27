@@ -1,8 +1,9 @@
-# Branch: feat/cluster-mesh-engram-e7 — Host memory and maintenance bindings (lot E7)
+# Feature: Durable memory acceptance (E9)
 
 ## Objective
 
-E7 after E3/E5/E6: host-owned memory bindings in `src/engram-memory/{binding,postgres,host-maintenance}.ts` with public host assembly and fixtures. Inject the host-owned PG driver/pool; Engram receives exactly `['read','write']`, while a distinct host-issued `maintain` grant/binding owns fence access/checks, consumer checkpoint/poison/retry, resync and snapshot maintenance. Provide the durable ledger, the continuation grant and proof-only recovery required by the E8 answers (gr-conductor). Base: E5 (`origin/feat/cluster-mesh-engram-e5` @ `b982026cd`) merged with E6 (`origin/feat/cluster-mesh-engram-e6` @ `9b476e20d`); merge commits only. Pack-only `0.23.0-dev.9`. Engram stays `0.21.1`; P3 manifest unchanged (STOP if a change would alter it).
+- [x] Qualify approved plan row E9 after local E7 `ee654ace2` and E8 `4eaeacd85`, using merge commits only. Worktree `tmp/worktrees/mem-e9`, branch `feat/cluster-mesh-engram-e9`, draft PR targeting `feat/engram-e2-integration`.
+- [x] Run real PostgreSQL memory Stage B through installed Engram 0.21.1, its exact `['read','write']` binding and E7's separate host maintenance binding. Pack-only reservation `0.23.0-dev.10`; P3 and candidate archive `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10` stay frozen.
 
 ## Scope / Guardrails
 
@@ -17,6 +18,15 @@ E7 after E3/E5/E6: host-owned memory bindings in `src/engram-memory/{binding,pos
 
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
+  - `packages/cluster-mesh/tests/engram-memory/memory-corpus.ts`
+  - `packages/cluster-mesh/tests/engram-memory/memory-*.ts`
+  - `packages/cluster-mesh/tests/engram-memory/memory-*.mjs`
+  - `packages/cluster-mesh/tests/engram-memory/durable-memory.spec.ts`
+  - `packages/cluster-mesh/tests/engram-memory/qualification.mk`
+  - `packages/cluster-mesh/tests/engram-memory/candidate-scope.spec.ts` (inherited E8)
+  - `packages/cluster-mesh/tests/engram-memory/host-scope-binding.ts` (inherited E8)
+  - `packages/cluster-mesh/tests/engram-memory/scope.spec.ts` (inherited E8)
+  - `packages/cluster-mesh/tests/storage/postgres-memory.spec.ts`
   - `packages/cluster-mesh/src/engram-memory/binding.ts` (new: public host assembly, Engram `['read','write']` handle only)
   - `packages/cluster-mesh/src/engram-memory/postgres.ts` (extend: host PG driver/pool injection, identity/qualification checks)
   - `packages/cluster-mesh/src/engram-memory/host-maintenance.ts` (new: host-only fence/checkpoint/poison/retry/resync/snapshot ports)
@@ -26,7 +36,7 @@ E7 after E3/E5/E6: host-owned memory bindings in `src/engram-memory/{binding,pos
   - `packages/cluster-mesh/tests/engram-memory/binding-compatibility.spec.ts` (extend: Engram handle stays `['read','write']`)
   - `packages/cluster-mesh/tests/engram-memory/binding-errors.spec.ts` (extend: typed host-seam failures)
   - `packages/cluster-mesh/tests/engram-memory/pg-host.ts` (extend fixture only: host assembly + maintenance authority)
-  - `packages/cluster-mesh/package.json` + `package-lock.json` (pack-only 0.23.0-dev.9 only)
+  - `packages/cluster-mesh/package.json` + `package-lock.json` (pack-only 0.23.0-dev.10 only)
   - `packages/cluster-mesh/assets/storage/engram-memory/C6-FREEZE.md` (inherited base lots E0-E6 only; BR7-EX2)
   - `packages/cluster-mesh/assets/storage/engram-memory/neutral-asset-inventory.json` (inherited base lots E0-E6 only; BR7-EX2)
   - `packages/cluster-mesh/assets/storage/engram-memory/neutral-equivalence.json` (inherited base lots E0-E6 only; BR7-EX2)
@@ -124,10 +134,22 @@ E7 after E3/E5/E6: host-owned memory bindings in `src/engram-memory/{binding,pos
 
 ## Plan / Todo (lot-based)
 
-- [x] Lot E7-0 — setup: worktree `tmp/worktrees/mem-e7`, branch `feat/cluster-mesh-engram-e7`; merge E6 into E5 base (merge commit); this BRANCH.md; pack-only `0.23.0-dev.9`; draft PR to `feat/engram-e2-integration`.
-- [x] Lot E7-1 — tests first: `postgres-driver-injection.spec.ts` (4 passed, 0 todo: provider required, identity/floor, positive installed calls, no-fallback with usable pool); `host-maintenance-binding.spec.ts` (12 passed, 7 todo: assembly, neutral-handle denial, fail-closed ports, ledger/continuation/proof-only); extended binding-compatibility (handle pinned) + `pg-host.ts` (`memoryHostComposed`). `binding-errors` (G1-sqlite-scoped) untouched: E7 typed failures live in the E7 specs, no duplication.
-- [x] Lot E7-2 — implementation: `binding.ts` assembly + continuation grants; PG provider check in `postgres.ts`; `host-maintenance.ts` fail-closed ports; `ledger.ts` (record/read/continuation/terminal/proof-only) per E8 answers; no `maintain` escape. Durable PG backing deferred to the conditional 002 asset (needs E2-writer coordination).
-- [ ] Lot E7-3 — gates: engram-memory lanes + PG storage lanes green on `ENV=test-e2-int`; typecheck green; lint green; scope-check; `make commit` per file group (<150 lines); push; draft PR; CI green; no merge.
+- [x] Lot E9-0 — read approved plan and binding sections 7–10; mechanically check branch; merge E8 into E7; retain inherited scope declarations; freeze Engram/P3 bytes.
+- [ ] Lot E9-1 — tests first: `memory-corpus.ts`, `durable-memory.spec.ts`; explicit profile/case inventory, zero skip/todo, real PostgreSQL required; failure controls assert the intended invariant.
+- [ ] Lot E9-2 — PostgreSQL fixture: `memory-pg-host.ts`, `memory-neutral.ts`; neutral wire translation, real transactions and queries, separate host maintenance runner, injected driver, installed constructor and E8 candidate liaison.
+- [ ] Lot E9-3 — Stage B: capture/completion/admission/read, immutable proofs after destruction/replay, bounded snapshots/outbox, checkpoint/resync/fence/poison/retry, original receipts after crash/reopen, u64 crossings/exhaustion, G3 ownership, C4 recovery and C7 scope refusals.
+- [ ] Lot E9-4 — `test-cluster-mesh` scoped memory and PostgreSQL lanes; typecheck/lint; mechanical scope gate before each `make commit`; every authored commit under 150 lines; no AI trailers.
+- [ ] Lot E9-5 — retain campaign facts and counts per profile; push retry every ten minutes until successful; draft PR from this file; record CI; do not merge or publish.
+
+## Orchestration Mode (AI-selected)
+
+- [x] Mono-branch: one E9 author, merge-only integration, no delegated implementation.
+
+## UAT Management (in orchestration context)
+
+- [x] Library-only work; no application, browser, Chrome or VSCode changes or interactive UAT.
+- [x] Reuse existing `ENV=test-e2-int` PostgreSQL stack and pinned Node 24 image; no image build. Docker lock held only while campaign commands run and released between steps.
+- [x] Never tear down a shared stack owned by another session. Test schemas are private and removed by their fixtures.
 
 ## Feedback Loop
 
