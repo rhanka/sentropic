@@ -22,11 +22,31 @@ export interface ReconciledPartial {
   readonly replaces: { start: number; end: number };
 }
 
-/** Longest prefix of `candidate` that matches a suffix of `committed`. */
+/**
+ * Word-anchored overlap: longest leading run of `candidate` words that matches
+ * trailing `committed` words, returned as a character count. A single shared
+ * character across a word boundary (e.g. 'I like it' + 'the dog' sharing 't')
+ * never matches a whole word, so it can never stitch ('ithe dog' is impossible).
+ */
 function overlapLength(committed: string, candidate: string): number {
-  const max = Math.min(committed.length, candidate.length);
-  for (let length = max; length > 0; length--) {
-    if (candidate.startsWith(committed.slice(committed.length - length))) return length;
+  const head = committed.split(/\s+/).filter((word) => word.length > 0);
+  const tail = candidate.split(/\s+/).filter((word) => word.length > 0);
+  const maxWords = Math.min(head.length, tail.length);
+  for (let words = maxWords; words >= 1; words--) {
+    let match = true;
+    for (let i = 0; i < words; i++) {
+      if (head[head.length - words + i] !== tail[i]) {
+        match = false;
+        break;
+      }
+    }
+    if (match) {
+      // Character length of the overlapping word run plus the single separator
+      // that joins it to the remainder (the committed head carries no trailing
+      // space, so the merge re-adds exactly one).
+      const prefix = tail.slice(0, words).join(' ');
+      return candidate.length > prefix.length ? prefix.length + 1 : prefix.length;
+    }
   }
   return 0;
 }
@@ -69,8 +89,10 @@ export class HypothesisTracker {
     const strip = overlapLength(this.committed, text);
     if (strip === text.length) return null;
     if (strip === 0) return null;
+    // The overlap strips the shared word run plus its joining separator; the
+    // committed head carries no trailing space, so the merge re-adds exactly one.
     const replaces = { start: 0, end: this.committed.length };
-    this.committed += text.slice(strip);
+    this.committed += ` ${text.slice(strip)}`;
     this.committedEnd = endSample;
     this.revision += 1;
     return { text: this.committed, revision: this.revision, replaces };
