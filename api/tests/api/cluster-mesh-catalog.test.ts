@@ -10,10 +10,12 @@ import {
   ROOT_MOUNTED_NAMESPACE_REGISTRY,
 } from '../../src/app';
 import { db } from '../../src/db/client';
-import { tenantMemberships, userSessions } from '../../src/db/schema';
+import { chatMessages, chatSessions, tenantMemberships, userSessions } from '../../src/db/schema';
 import { resolveHttpCatalogContext } from '../../src/services/catalog/request-authority';
 import { revalidateCatalogInvocation } from '../../src/services/catalog/request-context';
 import { testCatalogContext } from '../services/catalog/test-context';
+import { chatService } from '../../src/services/chat-service';
+import { standaloneToolSource } from '../../src/services/catalog/sources/standalone-tool-source';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import {
   CATALOG_AUTHOR,
@@ -128,6 +130,7 @@ describe('cluster mesh catalog product authority', () => {
   });
 
   afterEach(async () => {
+    standaloneToolSource.unregister('catalog_context_probe');
     await clearCutover();
     await cleanupAuthData();
   });
@@ -198,6 +201,29 @@ describe('cluster mesh catalog product authority', () => {
       .rejects.toThrow('catalog_access_denied');
     await db.delete(userSessions).where(eq(userSessions.id, session.id));
     await expect(revalidateCatalogInvocation(context, 'workspace_list', {})).rejects.toThrow('catalog_access_denied');
+  });
+
+  it('should carry verified chat-service authority through the real executor and deny a later revoked call', async () => {
+    const sessionId = crypto.randomUUID();
+    const messageId = crypto.randomUUID();
+    await db.insert(chatSessions).values({ id: sessionId, userId: user.id, workspaceId: user.workspaceId });
+    await db.insert(chatMessages).values({ id: messageId, sessionId, role: 'assistant', sequence: 0 });
+    const handler = vi.fn((_args, context) => ({ actor: context.subjectId, workspace: context.workspaceId }));
+    standaloneToolSource.register({ tool: { name: 'catalog_context_probe', description: 'Context probe',
+      inputSchema: {}, sideEffect: false }, handler });
+    const invoke = async () => (chatService as unknown as {
+      executeServerToolInternal(input: unknown): Promise<unknown>;
+    }).executeServerToolInternal({ toolCall: { id: 'probe', name: 'catalog_context_probe', args: '{}' }, args: {},
+      options: { userId: user.id, sessionId, assistantMessageId: messageId }, streamSeq: 0,
+      sessionWorkspaceId: user.workspaceId, currentUserRole: 'editor', readOnly: false,
+      allowedFolderIds: new Set(), allowedByType: { organization: new Set(), folder: new Set(),
+        usecase: new Set(), executive_summary: new Set() }, hasContextType: () => false,
+      isAllowedOrganizationId: async () => false,
+      tools: [{ type: 'function', function: { name: 'catalog_context_probe', parameters: {} } }] });
+    await expect(invoke()).resolves.toMatchObject({ result: { actor: user.id, workspace: user.workspaceId } });
+    await db.delete(tenantMemberships).where(eq(tenantMemberships.userId, user.id));
+    await expect(invoke()).resolves.toMatchObject({ result: { error: 'catalog_access_denied' } });
+    expect(handler).toHaveBeenCalledOnce();
   });
 
   it('has no anonymous, disabled, duplicate, effect, or unavailable-control fallback', async () => {
