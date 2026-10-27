@@ -37,7 +37,7 @@ test('should require completed PR and main receipts of the same policy within th
     [pr, { ...main, jobs: [] }]]) assert.equal(proof(rows).accepted, false);
 });
 
-test('should bound shared queued slots without inventing validator dependencies', () => {
+test('should keep validators independent without static capacity mutexes', () => {
   const concurrency = { group: 'capacity-0', queue: 'max', 'cancel-in-progress': false };
   assert.equal(capacityDemand({ jobs: { a: { concurrency }, b: { concurrency } } }), 1);
   assert.equal(capacityDemand({ jobs: { a: { concurrency }, b: {} } }), 2);
@@ -48,12 +48,22 @@ test('should bound shared queued slots without inventing validator dependencies'
   assert.equal(validators.length, 23);
   for (const [name, job] of validators) {
     assert.deepEqual(job.needs, ['changes'], name);
-    assert.equal(job.concurrency.queue, 'max', name);
-    assert.equal(job.concurrency['cancel-in-progress'], false, name);
+    assert.equal(job.concurrency, undefined, name);
   }
-  assert.equal(new Set(validators.map(([, job]) => job.concurrency.group)).size, 6);
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    assert.ok(!job.concurrency?.group.startsWith('ci-capacity-'), name);
+  }
   assert.equal(workflow.jobs['test-api-unit-integration'].strategy['max-parallel'], 15);
   assert.equal(workflow.jobs['test-e2e'].strategy['max-parallel'], 5);
+});
+
+test('should run E2E beside API quality checks while retaining promotion barriers', () => {
+  assert.ok(!workflow.jobs['test-e2e'].needs.includes('typecheck-lint-api'));
+  for (const name of ['ci-gate', 'ci-capacity-receipts', 'publish-api-image', 'publish-ui-image']) {
+    assert.ok(workflow.jobs[name].needs.includes('typecheck-lint-api'), name);
+  }
+  assert.equal(workflow.concurrency.group, 'ci-${{ github.ref }}');
+  assert.equal(workflow.concurrency['cancel-in-progress'], "${{ github.event_name == 'pull_request' }}");
 });
 
 test('should allow unrelated npm releases when another package fails', () => {
