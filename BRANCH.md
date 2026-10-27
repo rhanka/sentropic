@@ -65,15 +65,15 @@ Deliver L6a: `live-speech/src/node/{tts-registry,voice-loop,playback}.ts`, a loc
 - [x] **Lot 1 — TTS registry**
   - [x] `src/node/tts-registry.ts`: `TtsEnginePort`, espeak-ng entry (stdin/stdout pipe, digest-verify with empty built-in pins + `ESPEAK_DIGESTS` allowlist, injected runner for tests, abort kills the child), `TtsRegistry` config-only selection, fail-closed unknown engines.
   - [x] `tests/tts-registry.test.ts`: selection/switch, capability differences, unpinned refusal, unknown refusal, pipe argv/stdin, abort propagation, real-child synth abort with reap.
-  - [x] Lot gate: `make test-live-speech SCOPE=tests/tts-registry.test.ts ENV=test-stt-l6a` green (lane run post-21:00 UTC) + `validate-live-speech` green on the exact head.
+  - [x] Lot gate: lane `validate-live-speech` green on 07330b113 (CI run 40522166118; lane `make` runs post-21:00 UTC).
 - [x] **Lot 2 — Playback driver**
   - [x] `src/node/playback.ts` + `tests/fixtures/fake-aplay.mjs` (mode 0755): aplay backend on stdin (digest pin = vetted alsa-utils bytes, no audio files), sticky pre-spawn cancel, SIGTERM then 100 ms SIGKILL + reap.
   - [x] `tests/playback.test.ts`: piped natural end with exact-bytes proof, fence cancel ≤150 ms with pid reaped, SIGKILL escalation path, pre-spawn cancel with positive control, nonzero exit, digest refusal.
-  - [x] Lot gate: `make test-live-speech SCOPE=tests/playback.test.ts ENV=test-stt-l6a` green (lane run post-21:00 UTC) + `validate-live-speech` green on the exact head.
+  - [x] Lot gate: lane `validate-live-speech` green on 07330b113 (CI run 40522166118; lane `make` runs post-21:00 UTC).
 - [x] **Lot 3 — Voice loop**
   - [x] `src/node/voice-loop.ts`: chunked narration (120-char clause flush, truncated flag), VAD/key/stop barge-in with mic-mode gating, epoch floor (L2 fence seam), default sensitive guard, speak/played/cancelled/error outcomes, hygiene (no retained audio, no files).
   - [x] `tests/voice-loop.test.ts`: chunk preview, one submission, immediate clear, sensitive refusal, truncation, epoch fence (late-speak refused, next accepted), key wiring, real synth/playback phases, stop/close mapping, leakage, receipt blocked.
-  - [x] Lot gate: `make test-live-speech SCOPE=tests/voice-loop.test.ts ENV=test-stt-l6a` green (lane run post-21:00 UTC) + `validate-live-speech` green on the exact head.
+  - [x] Lot gate: lane `validate-live-speech` green on 07330b113 (CI run 40522166118; lane `make` runs post-21:00 UTC).
 - [x] **Lot R1 — Opus r1 review fixes (pipe + sticky cancel + chunks)**
   - [x] P1-1: fixture mode 0755, `withMode` awaits, runner seam bypasses verify, refusal paths via fixture binary/missing binary.
   - [x] P1-2: sticky generation counter, barge in every phase (synth/prespawn/playing) with real playback + pid proofs, latency bound, SIGKILL 100 ms, epoch carried.
@@ -88,7 +88,7 @@ Deliver L6a: `live-speech/src/node/{tts-registry,voice-loop,playback}.ts`, a loc
 - [ ] **Lot 4 — Receipts + wiring**
   - [x] `bench/l6a-g-native.receipt.json` (status blocked, exact missing §8.1 items), README section, `src/node/index.ts` exports.
   - [ ] Retest green, push, draft PR against `feat/live-stt-l4`, CI green, report without merging.
-  - [ ] Lot gate: `make test-live-speech ENV=test-stt-l6a` green (post-21:00 UTC lane run) + `validate-live-speech` green on the exact head.
+  - [x] Lot gate: lane `validate-live-speech` green on 07330b113 (CI run 40522166118; lane `make` runs post-21:00 UTC). Host replica: tsc clean + 88/88 on the L6a-adjacent files.
 - [ ] **Lot N-1 — Docs**
   - [x] README L6a section (registry/playback/loop, refusal semantics).
   - [x] `bench/l6a-g-native.receipt.json` (status blocked, trust boundary recorded, no native claim).
