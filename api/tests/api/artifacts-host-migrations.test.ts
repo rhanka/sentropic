@@ -54,7 +54,7 @@ describe('artifact host migrations', () => {
   it('should serialize concurrent first installations and package reruns', async () => {
     await Promise.all([runMigrations(database), runMigrations(database)]);
     await Promise.all([installArtifactPackageAssets(database), installArtifactPackageAssets(database)]);
-    expect(await journal()).toHaveLength(3);
+    expect(await journal()).toHaveLength(4);
   });
 
   it('should leave a later reserved control migration eligible for installation', async () => {
@@ -89,7 +89,7 @@ describe('artifact host migrations', () => {
       await migrate(drizzle(database), { migrationsFolder: './drizzle/control', migrationsTable: '__drizzle_control_migrations', migrationsSchema: 'public' });
       expect((await database.query(`SELECT to_regclass('control.artifact_host_kv') AS kv`)).rows).toEqual([{ kv: null }]);
       await runMigrations(database);
-      expect(await journal()).toHaveLength(3);
+      expect(await journal()).toHaveLength(4);
       expect((await database.query(`SELECT to_regclass('control.artifact_host_kv')::text AS kv`)).rows).toEqual([{ kv: 'control.artifact_host_kv' }]);
       await database.query(`UPDATE public.__drizzle_control_migrations SET hash = repeat('0', 64) WHERE created_at = 1791860000001`);
       await expect(runMigrations(database)).rejects.toThrow(/control migration journal hash mismatch/i);
@@ -135,13 +135,14 @@ describe('artifact host migrations', () => {
       'CREATE TABLE control.additive_witness (id integer PRIMARY KEY);',
       'INSERT INTO control.additive_witness VALUES (1);',
     ].map((source, index) => ({
-      id: `@sentropic/artifacts/migrations/000${index + 4}_witness.sql`,
+      id: `@sentropic/artifacts/migrations/000${index + 5}_witness.sql`,
       sha256: createHash('sha256').update(source).digest('hex'),
       read: () => source,
     }));
     const assets = [...artifactMigrationAssets, ...additions];
     await installArtifactPackageAssets(database, undefined, assets);
-    expect(await journal()).toEqual([...before, ...additions.map(({ id, sha256 }) => ({ asset_id: id, sha256 }))]);
+    expect(await journal()).toEqual([...before, ...additions.map(({ id, sha256 }) => ({ asset_id: id, sha256 }))]
+      .sort((a, b) => a.asset_id.localeCompare(b.asset_id)));
     const installed = await database.query('SELECT * FROM public.__drizzle_control_migrations ORDER BY id');
     await database.query(`CREATE FUNCTION reject_replay() RETURNS event_trigger LANGUAGE plpgsql AS $$
       BEGIN RAISE EXCEPTION 'unexpected boot DDL'; END $$;
@@ -169,7 +170,7 @@ describe('artifact host migrations', () => {
     expect((await database.query(`SELECT to_regnamespace('artifacts') AS schema`)).rows[0].schema).toBeNull();
     await database.query('DROP EVENT TRIGGER reject_receipts');
     await runMigrations(database);
-    expect(await journal()).toHaveLength(3);
+    expect(await journal()).toHaveLength(4);
   });
 
   it('should refuse missing receipts when an installed package schema remains', async () => {
@@ -256,6 +257,6 @@ describe('artifact host migrations', () => {
     expect(observed).toBe(value);
     await runMigrations(database);
     expect(await createArtifactHostKv(database, 'scope-a').putIfAbsent('scope/binding', 'replacement')).toBe(false);
-    expect(await journal()).toHaveLength(3);
+    expect(await journal()).toHaveLength(4);
   });
 });

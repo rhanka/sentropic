@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { ACTIVATION_SQL_ASSET, ACTIVATION_SQL_ASSET_SHA256, ActivationCommitUnknownError } from '@sentropic/artifacts/adapters/postgres-activation';
 import { runMigrations } from '../../src/db/run-migrations';
-import { artifactMigrationAssets } from '../../src/services/artifacts/host-storage';
+import { artifactMigrationAssets, installArtifactPackageAssets } from '../../src/services/artifacts/host-storage';
 import { createArtifactHostActivationStorage } from '../../src/services/artifacts/activation-storage';
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL });
@@ -37,6 +37,25 @@ describe('artifact host activation storage', () => {
       [ACTIVATION_SQL_ASSET])).rows).toEqual([{ hash: ACTIVATION_SQL_ASSET_SHA256 }]);
     await runMigrations(pool);
     await expect(createArtifactHostActivationStorage(options())).resolves.toBeDefined();
+  });
+
+  it('should append activation to the W1.a three-asset installation without changing earlier receipts', async () => {
+    await pool.query('DROP SCHEMA artifact_host CASCADE');
+    await pool.query('DELETE FROM public.__drizzle_control_migrations WHERE asset_id=$1', [ACTIVATION_SQL_ASSET]);
+    const earlier = await pool.query('SELECT * FROM public.__drizzle_control_migrations ORDER BY id');
+    await runMigrations(pool);
+    expect((await pool.query('SELECT * FROM public.__drizzle_control_migrations WHERE asset_id IS DISTINCT FROM $1 ORDER BY id',
+      [ACTIVATION_SQL_ASSET])).rows).toEqual(earlier.rows);
+    await expect(createArtifactHostActivationStorage(options())).resolves.toBeDefined();
+  });
+
+  it('should refuse changed activation SQL bytes before acquiring an installer connection', async () => {
+    const connect = vi.spyOn(pool, 'connect');
+    await expect(installArtifactPackageAssets(pool, id => {
+      const source = artifactMigrationAssets.find(asset => asset.id === id)!.read();
+      return id === ACTIVATION_SQL_ASSET ? `${source}\nSELECT 1;` : source;
+    })).rejects.toThrow(/asset hash mismatch/);
+    expect(connect).not.toHaveBeenCalled();
   });
 
   it.each([0, -1, 61, 1.5, NaN, Infinity])('should refuse invalid ticket and flow lifetime %s', async ttl => {

@@ -3,10 +3,12 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import type { Pool, PoolClient } from 'pg';
 import type { KvPort } from '@sentropic/artifacts/server/ports';
+import { ACTIVATION_SQL_ASSET, ACTIVATION_SQL_ASSET_SHA256 } from '@sentropic/artifacts/adapters/postgres-activation';
 
 const require = createRequire(import.meta.url);
 const requiredRelations = [
   'control.artifact_host_kv', 'public.__drizzle_control_migrations',
+  'artifact_host.activation_namespaces', 'artifact_host.activation_tickets', 'artifact_host.browser_flows',
   ...['storage_scopes', 'artifacts', 'releases', 'artifact_current', 'blobs', 'uploads',
     'object_intents', 'idempotency_keys', 'artifact_access', 'artifact_sources',
     'blob_ref_holders', 'blob_pins', 'operation_keys', 'operation_receipts'].map((name) => `artifacts.${name}`),
@@ -22,6 +24,8 @@ export const artifactMigrationAssets = Object.freeze([
     const id = `@sentropic/artifacts/migrations/${name}`;
     return Object.freeze({ id, sha256, read: () => readFileSync(require.resolve(id), 'utf8') });
   }),
+  Object.freeze({ id: ACTIVATION_SQL_ASSET, sha256: ACTIVATION_SQL_ASSET_SHA256,
+    read: () => readFileSync(require.resolve(ACTIVATION_SQL_ASSET), 'utf8') }),
 ]);
 
 /** Called only by the API migration runner, after the control stream. */
