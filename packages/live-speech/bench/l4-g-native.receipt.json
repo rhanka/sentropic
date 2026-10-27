@@ -52,7 +52,7 @@
   "blocked": {
     "liveMicCapture": {
       "status": "blocked",
-      "detail": "No microphone available on the host or CI runners; live capture stays undelivered. Path: FakeDevice behavior + digest-verified arecord backend + device-listing trace."
+      "detail": "No microphone available on the host or CI runners; live capture stays undelivered. Path: FakeDevice behavior + digest-verified arecord backend."
     },
     "speakerAEC": {
       "status": "blocked",

@@ -127,10 +127,17 @@ describe('arecord backend', () => {
     });
   });
 
-  it('should fail open before the first frame on an immediate exit', async () => {
+  it('should fail open with DeviceOpenError when the child exits with no bytes after 60 ms', async () => {
     await withMode('exit-early', async () => {
       const device = new ArecordDevice(FAKE_ARECORD, [digestOf(FAKE_ARECORD)]);
-      await expect(device.open('hw:9,9', OPEN_OPTS)).rejects.toThrow(/no such device/);
+      // 60 ms sits past any fixed ready probe (e.g. 50 ms): restoring one
+      // would resolve the open as healthy and fail this assertion.
+      const error = await device.open('hw:9,9', OPEN_OPTS).then(
+        () => null,
+        (reason: unknown) => reason,
+      );
+      expect(error).toBeInstanceOf(DeviceOpenError);
+      expect((error as DeviceOpenError).message).toMatch(/no such device/);
     });
   });
 
