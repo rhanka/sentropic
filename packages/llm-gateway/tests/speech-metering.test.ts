@@ -58,6 +58,17 @@ describe('speech native usage units', () => {
     expect(() => normalizeSpeechUsage(first, { ...one, mode: 'cumulative' })).toThrow();
   });
 
+  it('should reconcile revised text token events without mutating the previous snapshot', () => {
+    const event = { eventId: 'tokens', revision: 0, mode: 'incremental' as const,
+      usage: { inputTokens: 10, outputTokens: 5 } };
+    const first = normalizeSpeechUsage(undefined, event);
+    const next = normalizeSpeechUsage(first, { ...event, revision: 1,
+      usage: { inputTokens: 12, outputTokens: 3 } });
+    expect(next.totals).toEqual({ inputTokens: 12, outputTokens: 3 });
+    expect(first.totals).toEqual({ inputTokens: 10, outputTokens: 5 });
+    expect(normalizeSpeechUsage(next, event)).toEqual(next);
+  });
+
   it('should treat prototype-shaped event IDs as ordinary deduplicated provider IDs', () => {
     for (const eventId of ['constructor', '__proto__', 'toString']) {
       const event = { eventId, revision: 0, mode: 'incremental' as const, usage: { ttsCharacters: 3 } };
