@@ -79,6 +79,15 @@ Deliver approved r3 L4: `live-speech/src/node/{capture,device,terminal-control}.
 - [x] **Lot N-1 — Docs + receipts**
   - [x] `packages/live-speech/README.md`: L4 layout (device/capture/control).
   - [x] `packages/live-speech/bench/l4-g-native.receipt.json` (§8.1/G-NATIVE: image, toolchain, helper digests/licenses, no-interpreter evidence, blocked live-mic/speaker-AEC/hold-hotkey).
+- [x] **Lot R1 — Opus r1 review fixes (P1 + P2)**
+  - [x] P1-1: explicit open-mic mode (controller `mic-mode` command + capture `micMode` state driven by L1c `SpeechMicMode`, VAD onset/offset for barge-in, mute/stop still effective).
+  - [x] P1-2: digest mismatch now refuses before spawn; helper digests corrected and host-scoped; receipt rewritten to `status: partial` with exact missing items (in-image digests, offline trace, network-denial log).
+  - [x] P2-1: key modes split `toggle`/`start-end`/`hold`, hold gated on a real source object.
+  - [x] P2-2: keys dispatch per code point with ANSI stripping (Stop never lost to coalescing).
+  - [x] P2-3: real backend covered via non-Python node fixture (frames/loss/open-failure/cleanup) + digest allowlist/mismatch tests.
+  - [x] P2-4: null stream on loss (reconnect works) + non-loss pump errors recorded with `onError`.
+  - [x] P2-5: wiring asserts the transcript stays free of pressed key bytes.
+  - [ ] P2-6: retarget PR base to the L3 branch, push, CI green, report without merging.
   - [x] `src/node/index.ts`: export L4 modules.
 - [ ] **Lot N — Final validation**
   - [x] Typecheck (via `test-live-speech` tsc --noEmit) & Lint (n/a: no lint lane for this package)
