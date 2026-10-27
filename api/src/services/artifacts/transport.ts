@@ -1,7 +1,7 @@
 import { authorizeDispatch } from '@sentropic/mcp-platform/transport/dispatch';
 import type { HttpRequest, HttpResponse } from '@sentropic/artifacts/http';
 import { ArtifactProfileInputError } from '@sentropic/artifacts/mcp-core';
-import { compileAppMcpRegistry } from '../mcp/cluster-registry';
+import { APP_P1_MANIFEST_DIGEST, compileAppMcpRegistry } from '../mcp/cluster-registry';
 import type { createArtifactHost } from './composition';
 import type { ArtifactHostIdentity } from './authorization';
 
@@ -17,7 +17,7 @@ export function createArtifactTransport(host: Host) {
     createInvocation: () => { throw new Error('Registry compilation cannot bind a credential'); } },
     selection: ['sentropic.artifacts'], configurations: { 'sentropic.artifacts': {} }, bindings: {},
     compatibility: { 'sentropic.artifacts': {
-      manifestDigest: 'ccf8a4ddd9365537741eb0550efa49954d86a0c2d1ee808fb18ca81ef7090e9a' } },
+      manifestDigest: APP_P1_MANIFEST_DIGEST } },
   }).then(result => {
     if (!result.ok) throw new Error(`App registry compilation refused: ${JSON.stringify(result.diagnostics)}`);
     return result.registry;
