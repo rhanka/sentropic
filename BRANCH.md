@@ -61,7 +61,7 @@
   - [x] Scope route cache identity to scene/geometry/routing version; preserve bounded runtime routing for uncovered folds.
   - [x] Add `scripts/artifact-input.test.mjs`: scoped projection, missing routes, fold geometry/cache identity and translation equivalence.
   - [x] Add `scripts/portable.test.mjs`: reject dynamic `assets/` imports, sibling chunks and external portable dependencies.
-  - [ ] Run focused Node tests, full-governance geometry/routing checks and offline browser interactions for the typical fixture.
+  - [ ] Run focused Node tests, full-governance geometry/routing and FR/EN browser checks (`scripts/check-governance-input-browser.mjs`), and offline browser interactions for the typical fixture.
   - [ ] UAT: `scripts/check-artifact-browser.mjs` covers both diagrams/folds, light/dark, mobile/desktop, zoom, option state, inventory totals and JSON downloads.
 - [ ] **W4 — Artifact size budget**
   - [x] Add deterministic fixture build and Vite module/chunk manifest reporting, without mutating tracked source.
