@@ -105,7 +105,23 @@ preprod backup identity as part of retiring this sync feature.
 ## Workload client rotation (2-IdP)
 
 The `immo-mcp-workload` secret is environment-specific, server-side, and never
-committed or returned to the MCP client. Rotate with
+committed or returned to the public MCP client. **Preprod uses only the named-Secret
+identity sync for creation and rotation.** Pause scheduled sync dispatches during
+rotation so a scheduled committing run cannot race the reviewed dry-run.
+Replace the 64-lowercase-hex value
+(no newline) in Secret `immo-mcp-workload`, key `IMMO_MCP_WORKLOAD_CLIENT_SECRET`,
+in `sentropic-preprod` through the approved secret manager, then run the protected
+sync dry-run and committing import. The sync hashes locally and rekeys the active
+row transactionally: the new credential works and the old credential stops
+authenticating immediately on commit. Coordinate radar's namespace-local copy
+and restart/reload its consumer after commit. Retain the source Secret only as
+the authoritative current value; every rotation must update it first. Do not
+use the generic rotation target against preprod (it would leave a stale Secret).
+Revocation sets `service_clients.revoked_at`; sync never reactivates a revoked
+row and continues even if its old Secret remains. Remove the preprod source
+Secret and radar copy through the owner process when revoking access; restoring
+access requires separate explicit owner authorization. No user/public-client
+credentials rotate. Resume scheduled dispatches after verification. For other environments, rotate with
 `make oauth-rotate-service-client CLIENT_ID=immo-mcp-workload ENV=<env>`
 (single-secret cutover) and prove the effect: the rotated credential exchanges
 successfully while the previous hash no longer authenticates, with no rotation
@@ -116,7 +132,9 @@ test-only markers and never valid operational secrets.
 
 ## Workload client creation (2-IdP, M3)
 
-First-time creation in any environment (including prod) uses the protected
+Preprod first-time creation uses the same named-Secret sync described above;
+the generic provisioner refuses preprod audiences/issuer. There is no second
+preprod bootstrap path. In other environments (including prod), use the protected
 idempotent path — never a manual SQL edit:
 
 ```sh

@@ -24,19 +24,24 @@
   - `api/package-lock.json`
   - `.h2a/owner-questions-w0.md`
   - `docs/runbooks/app-cm-baseline-restore/receipts/TEMPLATE.md`
-- **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
+  - `packages/artifacts/**`
+  - `api/src/scripts/oauth-provision-exchange-client.ts`
+  - `api/tests/api/auth/oauth-token-exchange.test.ts`
+  - `deploy/**`
+  - `spec/evidence/memory-mcp-l5/**`
+  - `tools/memory-mcp-l5/**`
+- **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
   - `plan/**`
-  - `deploy/**`
 - **Conditional Paths (allowed only with explicit exception)**:
-  - `packages/**`
   - `.github/workflows/**`
 - [x] BR00D-EXn records reason, impact and rollback before expansion.
 
 ## Feedback Loop
+- [x] BR00D-EX2: merge main 72bb2da3d to consume already-published UP-T; listed inherited paths are merge-only, no author edits. Impact is existing upstream ancestry; rollback reverts the merge.
 - [x] BR00D-EX1: merge #702 evidence and its owner question/restore template; retained evidence only; rollback reverts merge. No author edits outside scope.
 - [ ] Independent reviews and remote CI remain separate from code authorship.
 
