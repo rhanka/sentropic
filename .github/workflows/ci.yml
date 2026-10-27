@@ -1190,6 +1190,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: artifact-size-reports
+          include-hidden-files: true
           path: |
             docs/governance/kit/.cache/artifact-weight/**/artifact-size-report.*
             docs/governance/kit/.cache/artifact-weight/**/browser.json
