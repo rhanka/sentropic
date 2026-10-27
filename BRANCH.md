@@ -1,19 +1,20 @@
-# Feature: Live STT L3 local registry adapter
+# Feature: Live STT L4 terminal devices
 
 ## Objective
-Deliver approved r3 L3: `live-speech/src/node/local-stt.ts` plus an isolated worker using the owned TS package, rolling windows/VAD, independently pinned tiny/base profiles with no fixed model in the loop.
+Deliver approved r3 L4: `live-speech/src/node/{capture,device,terminal-control}.ts`, pinned audio helpers, both key (toggle) and open-mic controls, wired to the L3 session.
 
 ## Scope / Guardrails
-- Scope limited to L3 local STT: adapter, isolated worker, tiny/base profiles, session/pins/reconciliation/ordering/protocol/backpressure tests, session-level bench + receipts, §8.1 evidence.
+- Scope limited to L4 terminal devices: device port (fake + arecord backend), capture session (mic state, mute, level meter, bounded queue, device loss), terminal controller (toggle/start-end keys, no leakage, TTY restore), wiring into the L3 session, §8.1/G-NATIVE receipts.
 - No L2 core files (`live-speech/src/core/**` belongs to the parallel L2 lane).
-- No llm-mesh/cluster-mesh source edits; L1 contract types consumed as `import type` only.
+- No llm-mesh/cluster-mesh source edits.
+- No new npm dependencies: pure Node (node:child_process spawn with argv, no shell), no Python, no node-gyp.
+- No microphone in tests (fake device only); no audio payload in logs (counts/revisions/text only).
 - Make-only workflow, no direct Docker commands.
-- Branch development in isolated worktree `tmp/worktrees/stt-l3` (even for one active branch).
-- Automated test campaigns on dedicated env `ENV=test-stt-l3`, never on root `dev`.
+- Branch development in isolated worktree `tmp/worktrees/stt-l4` (even for one active branch).
+- Automated test campaigns on dedicated env `ENV=test-stt-l4`, never on root `dev`.
 - UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off).
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
-- No paid API call; no microphone in tests; no audio payload in logs; model use only through pinned, hashed artifacts.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -33,10 +34,7 @@ Deliver approved r3 L3: `live-speech/src/node/local-stt.ts` plus an isolated wor
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [x] BR03-EX1: touch conditional `Makefile` (`test-live-speech` target only). Reason: L3 needs a runnable vitest lane mirroring `test-oauth-verify` (SCOPE support, pinned vitest/typescript). Impact: one additive target; no existing target changed. Rollback: delete the target block.
-- [x] BR04-EX1: touch conditional `.github/workflows/ci.yml` (live_speech filter + output + `validate-live-speech` job + 2 needs entries), conditional `Makefile` (`bench-live-speech` target), root `package.json` (onnxruntime-node override pin), root `package-lock.json` (workspace refresh via `make lock-root`). Reason: P1-5/P2-1 demand the CI lane, the bench lane, exact onnx pinning and lockfile refresh. Impact: additive CI job gated on live-speech paths; additive bench target; one override line; lock gains only live-speech entries. Rollback: revert the job/filter/target/override lines.
-- [x] BR05-EX1: touch conditional `.github/workflows/ci.yml` (one-line `pull_request.branches` exception adding `feat/live-stt-l1c`). Reason: PR #781 targets the unmerged L1c base, so the `main`-only PR filter suppresses every automatic run; the exception restores `pull_request` CI on the exact L3 head without changing any job. Impact: one branch string; no job/filter logic changed. Rollback: remove the branch string.
-- [ ] CI run for PR #781: after BR05-EX1, expect an automatic `pull_request` run on the exact head; keep `workflow_dispatch` only as a fallback if the queue stalls.
+- [ ] No conditional path touched (no Makefile/CI changes: `test-live-speech` already covers `tests/**`, `validate-live-speech` already gates on `packages/live-speech/**`).
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -45,11 +43,6 @@ Deliver approved r3 L3: `live-speech/src/node/local-stt.ts` plus an isolated wor
   - Never amend tests with additive timeouts.
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
-  - 2026-10-27 bench flake (accepted, non-systematic): one orchestrated
-    `run-local-bench.mjs` run failed with `bench child failed for
-    local-base/espeak`; the same command on the same head measured 4/4 clean on
-    direct rerun and on full rerun (tiny 1 partial, base 2 partials, 0 errors).
-    Native-side flake, unrelated to the committed diff.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -57,38 +50,36 @@ Deliver approved r3 L3: `live-speech/src/node/local-stt.ts` plus an isolated wor
 - Rationale: Single-package lot with one test cycle; no UI.
 
 ## UAT Management (in orchestration context)
-- [x] No UI change; no UAT required (no microphone path in this lot; bench is local-only).
+- [x] No UI change; no UAT required (no microphone path exercised by a human in this lot; capture proven with fake device + qualified host binaries).
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read packet, `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `DOCKER-LOCK.md`, spec-plan r3 (L3 row l.420, §8.1).
-  - [x] Create worktree `tmp/worktrees/stt-l3` on `origin/feat/live-stt-l1c` as `feat/live-stt-l3`.
-  - [x] Confirm scope and declare `BR03-EX1` before touching `Makefile`.
-- [x] **Lot 1 — Local STT adapter**
-  - [x] `packages/live-speech/package.json` (private), `tsconfig.json`.
-  - [x] `src/node/profiles.ts`: independently pinned tiny/base profiles with origin/revision/license, per-file digests, max-utterance bound.
-  - [x] `src/node/engine-port.ts`: engine port interface (no faster-whisper import).
-  - [x] `src/node/worker-port.ts`: profile-driven `NodeWorkerClient`, engineId capture, terminate on init failure.
-  - [x] `src/node/model-pins.ts`: hash-verified profile-to-artifact binding, fail closed.
-  - [x] `src/node/engines/faster-whisper.mjs`: real engine behind the worker (lazy, injectable loader).
-  - [x] `src/node/stt-worker.mjs`: isolated worker entry (plain JS), engine path injected, no audio in logs.
-  - [x] `src/node/local-stt.ts` + `utterance-buffer.ts` + `reconciler.ts`: anchored windows, one in-flight decode, forced endpoint, one final, teardown.
-  - [x] `Makefile`: `test-live-speech` target (BR03-EX1), `bench-live-speech` target (BR04-EX1).
-  - [x] Lot gate: `make test-live-speech ENV=test-stt-l3` green (27/27 over 7 files, tsc clean).
-- [x] **Lot 2 — Tests + bench receipts**
-  - [x] `tests/local-stt.test.ts` + `profiles.test.ts` + `model-pins.test.ts`: model selection, one final, commit offsets, pin verification, teardown.
-  - [x] `tests/window-reconciliation.test.ts` + `ordering.test.ts`: anchored stitching over 2x window, endpoint priority, per-utterance finals.
-  - [x] `tests/worker-protocol.test.ts` + `backpressure.test.ts`: profile-driven load, init-failure terminate, real-thread backpressure (final < 1500 ms vs ~2000 ms uncoalesced floor).
-  - [x] `bench/run-local-bench.mjs` + `bench/profile-run.mjs` + `bench/local-stt-bench.receipt.json`: measured through worker + session on multi-window paced fixtures (tiny 5.6 s/1 partial/1 final/87 chars, base 7.6 s/2 partials/1 final/26 chars, silence 0 finals, 0 errors, 4/4 children exit clean).
-  - [x] `bench/l3-g-native.receipt.json` (§8.1 evidence: corrected integrity, pending items explicit).
-  - [x] Lot gate: `make test-live-speech ENV=test-stt-l3` green (27/27 over 7 files, tsc clean).
-- [x] **Lot N-1 — Docs consolidation**
-  - [x] `packages/live-speech/README.md`: layout, profiles/pins, tests and bench lanes.
-  - [x] No `spec/BRANCH_SPEC_EVOL.md` in this branch; nothing to integrate or delete.
+  - [x] Read packet, `rules/MASTER.md`, `rules/workflow.md`, DOCKER-LOCK, spec-plan r3 (L4 l.422, G-NATIVE l.351/l.486, §5.1, §8.1).
+  - [x] Create worktree `tmp/worktrees/stt-l4` on `origin/feat/live-stt-l3` as `feat/live-stt-l4`.
+  - [x] Qualify host audio helpers: arecord 1.2.15.2 (alsa-utils), pw-record (pipewire-bin, libpipewire 1.6.2) with sha256 digests.
+  - [x] Confirm scope: no Makefile/CI changes needed, no exceptions.
+- [x] **Lot 1 — Device port**
+  - [x] `src/node/device.ts`: `DevicePort`, `AudioDeviceInfo`, `AudioStream`, `DeviceUnavailableError`/`DeviceOpenError`/`DeviceLostError`.
+  - [x] `ArecordDevice`: argv-pinned `arecord` spawn (no shell), S16_LE raw stdout to Float32Array frames, list via `arecord -l`, fail closed without binary.
+  - [x] `tests/device.test.ts` + `tests/fixtures/fake-device.ts` (scripted frames, open-failure and loss injection): list/open/frames, open failure, mid-stream loss, missing binary, argv exactness.
+  - [x] Lot gate: `make test-live-speech SCOPE=tests/device.test.ts ENV=test-stt-l4` green (8/8).
+- [ ] **Lot 2 — Capture session**
+  - [ ] `src/node/capture.ts`: mic-off default, mute independent of VAD, level meter (dBFS only), bounded downstream queue with drop counter, device-loss event, idempotent close.
+  - [ ] `tests/capture.test.ts`: starts muted/off, toggle, mute/VAD independence, meter values, bounded drops, loss propagation, cleanup.
+  - [ ] Lot gate: `make test-live-speech SCOPE=tests/capture.test.ts ENV=test-stt-l4` green.
+- [ ] **Lot 3 — Terminal control + wiring**
+  - [ ] `src/node/terminal-control.ts`: toggle + explicit start/end keys on its own TTY stream, no hold without qualified hotkey (fail closed), documented defaults, TTY restore on close, never forwards keys.
+  - [ ] `tests/terminal-control.test.ts`: toggle/stop keys, unknown keys ignored, no leakage, raw-mode restore, hold-without-hotkey throws.
+  - [ ] `tests/capture-control.test.ts`: FakeDevice tone through capture into the L3 session; toggle on yields a final, toggle off yields silence; stop closes everything.
+  - [ ] Lot gate: `make test-live-speech ENV=test-stt-l4` green (full package).
+- [ ] **Lot N-1 — Docs + receipts**
+  - [ ] `packages/live-speech/README.md`: L4 layout (device/capture/control).
+  - [ ] `packages/live-speech/bench/l4-g-native.receipt.json` (§8.1/G-NATIVE: image, toolchain, helper digests/licenses, no-interpreter evidence, blocked live-mic/speaker-AEC/hold-hotkey).
+  - [ ] `src/node/index.ts`: export L4 modules.
 - [ ] **Lot N — Final validation**
   - [x] Typecheck (via `test-live-speech` tsc --noEmit) & Lint (n/a: no lint lane for this package)
-  - [x] Retest package: 31/31 green on head (normalized overlap, graceful worker close)
-  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`. (New private package: CI skips bump check.)
-  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
+  - [ ] Retest package green on head
+  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. (New private package: CI skips bump check.)
+  - [ ] Final gate step 1: create draft PR to main using `BRANCH.md` text as PR body (source of truth).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
