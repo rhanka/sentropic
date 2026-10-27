@@ -87,7 +87,13 @@ Deliver approved r3 L4: `live-speech/src/node/{capture,device,terminal-control}.
   - [x] P2-3: real backend covered via non-Python node fixture (frames/loss/open-failure/cleanup) + digest allowlist/mismatch tests.
   - [x] P2-4: null stream on loss (reconnect works) + non-loss pump errors recorded with `onError`.
   - [x] P2-5: wiring asserts the transcript stays free of pressed key bytes.
-  - [ ] P2-6: retarget PR base to the L3 branch, push, CI green, report without merging.
+  - [x] P2-6: retarget PR base to the L3 branch (done in r1, verified MERGEABLE/CLEAN).
+  - [ ] P2-7: push r3, CI green on the exact head, report without merging.
+- [x] **Lot R3 — Opus r3 review fixes (receipt trace + reopen + P2)**
+  - [x] `arecord -l` trace dropped (unverifiable across environments); parsing proven by English + French locale unit tests over the real host capture.
+  - [x] Reopen-after-loss test without intermediate `close()`: only the pump's own parking lets it pass (mutation-proof).
+  - [x] `close()` no longer resets `micMode` (explicit choice survives teardown).
+  - [x] Receipt status `blocked` with the exact missing §8.1 items; retest green.
 - [x] **Lot R2 — Opus r2 review fixes (G-NATIVE receipt)**
   - [x] Digest check enforced at `listDevices` too, with a mismatch test (no exec before verify).
   - [x] pw-record entry removed (prior digest was a corrupted transcription; unverified hashes are dropped, not carried).
@@ -96,7 +102,7 @@ Deliver approved r3 L4: `live-speech/src/node/{capture,device,terminal-control}.
   - [x] `src/node/index.ts`: export L4 modules.
 - [ ] **Lot N — Final validation**
   - [x] Typecheck (via `test-live-speech` tsc --noEmit) & Lint (n/a: no lint lane for this package)
-  - [x] Retest package green on head (71/71 over 11 files via `make test-live-speech ENV=test-stt-l4`, r1+r2 fixes included)
+  - [x] Retest package green on head (72/72 over 11 files via `make test-live-speech ENV=test-stt-l4`, r1+r2+r3 fixes included)
   - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. (New private package: CI skips bump check.)
   - [x] Final gate step 1: create draft PR to main using `BRANCH.md` text as PR body (source of truth). Draft PR #788 open, no merge.
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
