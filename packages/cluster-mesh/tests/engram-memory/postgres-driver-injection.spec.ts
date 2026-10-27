@@ -5,15 +5,26 @@
 
 import { describe, expect, it } from 'vitest';
 import { MemoryHostDriverRequiredError } from '../../src/engram-memory/sqlite.js';
-import { checkMemoryPostgresDriver, createMemoryPostgresStorage } from '../../src/engram-memory/postgres.js';
 import { openMemoryMaintenance } from '../../src/engram-memory/host-maintenance.js';
 import { StorageDeniedError, StorageUnavailableError } from '../../src/storage/errors.js';
-import { pgEnabled } from '../storage/pg-driver.js';
-import { memoryAppend, memoryHostComposed, memoryPgHost, memoryUnit } from './pg-host.js';
+import { testPgDriver, pgEnabled } from '../storage/pg-driver.js';
+import { memoryAppend, memoryHostComposed, memoryHostProvider, memoryPgHost, memoryUnit } from './pg-host.js';
+import {
+  checkMemoryPostgresDriver,
+  createMemoryPostgresStorage,
+  verifyMemoryPostgresProvider,
+} from '../../src/engram-memory/postgres.js';
+
+const stubPool = () => ({
+  transaction: async () => ({ rows: [] as { server_version?: string }[] }),
+});
+
+const sharedStubPool = stubPool();
 
 const qualifiedProvider = () => ({
   identity: { name: 'node-pg-owner', version: '8.16.3', artifactDigest: 'b'.repeat(64) },
   serverFloor: '17.0.0',
+  pool: sharedStubPool,
 });
 
 describe('memory PG driver injection', () => {
@@ -21,6 +32,12 @@ describe('memory PG driver injection', () => {
     expect(() => checkMemoryPostgresDriver(undefined)).toThrow(MemoryHostDriverRequiredError);
     expect(() => checkMemoryPostgresDriver(null)).toThrowError(/explicit host-injected/);
     expect(() => checkMemoryPostgresDriver({})).toThrow(MemoryHostDriverRequiredError);
+    expect(() => checkMemoryPostgresDriver({ ...qualifiedProvider(), pool: undefined })).toThrow(
+      /live host pool/,
+    );
+    expect(() =>
+      checkMemoryPostgresDriver({ ...qualifiedProvider(), pool: { release: () => undefined } }),
+    ).toThrow(/live host pool/);
   });
 
   it('refuses unqualified provider identities and weak servers', () => {
@@ -51,9 +68,25 @@ describe('memory PG driver injection', () => {
 });
 
 describe.skipIf(!pgEnabled)('memory PG positive installed calls', () => {
+  it('probes the installed server through the provider pool', async () => {
+    const connection = testPgDriver();
+    try {
+      const provider = await verifyMemoryPostgresProvider(memoryHostProvider(connection.driver));
+      expect(provider.serverFloor).toBe('17.0.0');
+      await expect(
+        verifyMemoryPostgresProvider({
+          ...memoryHostProvider(connection.driver),
+          serverFloor: '99.0.0',
+        }),
+      ).rejects.toBeInstanceOf(StorageUnavailableError);
+    } finally {
+      await connection.close();
+    }
+  });
+
   it('runs the write path on the neutral grant and maintenance on the maintain grant', async () => {
-    const { binding } = memoryHostComposed();
     const host = await memoryPgHost();
+    const { binding } = memoryHostComposed(host.options.driver);
     try {
       const root = await host.open();
       // Write path (neutral grant only): provision, commit, read. No
