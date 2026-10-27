@@ -250,6 +250,10 @@ export const verifyMemoryPostgresProvider = async (
  * provider no backend is reachable and the factory refuses with
  * `unavailable`. Engram never calls this factory: it receives the neutral
  * grant only.
+ * Runtime pin (r2 P1-B'): caller extras spread FIRST, so smuggled host
+ * parts (assets, descriptor, projection, validateEffects, queries, limits,
+ * moduleId) can never override the E6 registration at runtime — the type
+ * already omits them, and the spread order enforces it where types stop.
  */
 export const createMemoryPostgresStorage = async (
   options: Omit<
@@ -284,8 +288,8 @@ export const createMemoryPostgresStorage = async (
   const checked = checkMemoryPostgresDriver(provider);
   const registration = await createMemoryPostgresRegistration();
   return createPostgresKernel({
-    ...registration,
     ...rest,
+    ...registration,
     moduleId: 'engram-memory',
     driver: checked.pool,
     layout,
