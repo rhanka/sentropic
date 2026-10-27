@@ -30,7 +30,7 @@ export const memoryHostProvider = (pool: InjectedPgDriver) => ({
 /** Host-issued maintain grant: exactly `['maintain']`, never combined. */
 export const memoryMaintainGrant = (workspaceId = 'workspace-a') => grantFor({
   token: `memory-maintain-${workspaceId}`, moduleId: 'engram-memory',
-  scope: { tenantId: 'tenant-a', workspaceId }, operations: ['maintain'],
+  scope: { tenantId: 'tenant-a', workspaceId }, operations: ['read', 'maintain'],
 });
 /** Neutral Engram-facing grant: exactly `['read','write']`, no maintain authority. */
 export const memoryNeutralGrant = (workspaceId = 'workspace-a') => grantFor({
@@ -69,11 +69,11 @@ export interface MemoryLiveBound {
 }
 /**
  * Live maintenance runner for the positive fixture: every port delegates
- * 1:1 to the kernel-bound handle, which enforces the maintain authority on
- * every call. Poison/retry/snapshot stay kernel-coupled (consumer delivery
- * and snapshot reads need read authority the strict maintain-only runner
- * cannot carry): they delegate here and their live kernel behavior is
- * owned by the storage lanes; G1b wires the read+maintain runner.
+ * 1:1 to the kernel-bound handle, which enforces the runner authority on
+ * every call. The runner is bound to the host-only `['read', 'maintain']`
+ * grant (never Engram's neutral handle): consumer delivery and snapshot
+ * reads need the read leg, maintenance the maintain leg; `write` is never
+ * carried, so the write path cannot reach maintain authority.
  */
 export const memoryLiveRunner = (
   grant: ScopeGrant<unknown>,

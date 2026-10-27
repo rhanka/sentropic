@@ -50,7 +50,7 @@ const maintainGrant = () =>
     token: 'memory-maintain-1',
     moduleId: 'engram-memory',
     scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
-    operations: ['maintain'],
+    operations: ['read', 'maintain'],
   });
 
 describe('host maintenance binding', () => {
@@ -97,7 +97,7 @@ describe('host maintenance binding', () => {
         moduleId: 'engram-memory',
         scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
         principalId,
-        operations: ['maintain'],
+        operations: ['read', 'maintain'],
       }),
       invocationId: 'inv-host-1',
       storeId,
@@ -173,7 +173,7 @@ describe('host maintenance binding', () => {
       token: 'memory-maintain-expired',
       moduleId: 'engram-memory',
       scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
-      operations: ['maintain'],
+      operations: ['read', 'maintain'],
       lifetime: { kind: 'lease', expiresAt: '2000-01-01T00:00:00.000Z' },
     });
     expect(() =>
@@ -183,7 +183,7 @@ describe('host maintenance binding', () => {
       token: 'memory-maintain-leased',
       moduleId: 'engram-memory',
       scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
-      operations: ['maintain'],
+      operations: ['read', 'maintain'],
       lifetime: { kind: 'lease', expiresAt: '2999-01-01T00:00:00.000Z' },
     });
     const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: live, invocationId: 'inv-host-1', storeId: 'store-1' });
@@ -198,7 +198,7 @@ describe('host maintenance binding', () => {
       token: 'memory-maintain-offset',
       moduleId: 'engram-memory',
       scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
-      operations: ['maintain'],
+      operations: ['read', 'maintain'],
       // 01:00+02:00 = 23:00Z, before the pinned now — expired numerically,
       // but a lexicographic compare against the Zulu now would call it live.
       lifetime: { kind: 'lease', expiresAt: '2026-10-28T01:00:00.000+02:00' },
@@ -210,7 +210,7 @@ describe('host maintenance binding', () => {
       token: 'memory-maintain-offset-live',
       moduleId: 'engram-memory',
       scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
-      operations: ['maintain'],
+      operations: ['read', 'maintain'],
       // 19:00-05:00 = midnight Z, after the pinned now — live numerically,
       // but lexicographically smaller than the Zulu now.
       lifetime: { kind: 'lease', expiresAt: '2026-10-27T19:00:00.000-05:00' },
@@ -449,11 +449,9 @@ describe('host maintenance binding', () => {
         expect(snapshotRoot.length).toBeGreaterThan(0);
         expect(typeof journalSeq).toBe('string');
         await expect(ports.resync('live-consumer', { ...fence, epoch: '999' })).rejects.toThrow();
-        // Poison/retry/snapshot delegate 1:1 to the runner (stub-proven);
-        // live kernel behavior needs read-coupled authority (delivery scan
-        // for poison/retry, read+maintain for snapshot reads) that the
-        // strict maintain-only runner cannot carry by kernel design —
-        // owned by the storage lanes and the G1b read+maintain runner.
+        // Poison/retry/snapshot without prior delivery have nothing to act
+        // on; the live poison/retry/snapshot cycle runs in the dedicated
+        // test below with the read+maintain runner grant.
         await expect(ports.poison('live-consumer', 'event-1', 'no delivery')).rejects.toThrow();
         await expect(ports.snapshot('live-consumer', 0, 10)).rejects.toThrow();
         // Post-open revocation: the kernel checks the grants table on every
@@ -461,6 +459,49 @@ describe('host maintenance binding', () => {
         await root.revoke(binding.maintainGrant.token);
         await expect(ports.checkFence(fence)).rejects.toThrow(/revoked/);
         await expect(ports.checkpoint('live-consumer', '0', '0', fence)).rejects.toThrow(/revoked/);
+      } finally {
+        await host.close();
+      }
+    });
+  });
+
+  describe.skipIf(!pgEnabled)('live poison, retry and snapshot through the host-only ports', () => {
+    it('poisons, retries, checkpoints and snapshots with asserted outcomes', async () => {
+      const host = await memoryPgHost();
+      const { binding } = memoryHostComposed(host.options.driver, 'inv-live-2');
+      try {
+        const root = await host.open();
+        const boundM = await root.bindNew(binding.maintainGrant);
+        const boundN = await root.bindNew(binding.memoryGrant);
+        const ports = openMemoryMaintenance(binding, memoryLiveRunner(binding.maintainGrant, boundM));
+        const fence = {
+          fenceId: 'host-fence-2', epoch: '1', incarnation: root.incarnation,
+          ownerId: binding.memoryGrant.principalId,
+        };
+        await root.provisionFence(binding.memoryGrant, fence);
+        await boundN.commitAtomic(memoryUnit({ appends: [memoryAppend('10')] }));
+        // Delivery through the runner grant advances the consumer scan.
+        const delivery = await boundM.journalRead('0', 10, 'live-poison');
+        expect(delivery.events).toHaveLength(1);
+        const eventId = delivery.events[0]!.eventId;
+        const seq = delivery.events[0]!.seq;
+        // Poison stalls; retry re-arms; re-delivery unlocks the checkpoint,
+        // which advances past the event.
+        await ports.poison('live-poison', eventId, 'decode failed');
+        expect((await boundM.journalInspect('live-poison')).status).toBe('stalled');
+        await ports.retry('live-poison', eventId, fence);
+        expect((await boundM.journalRead('0', 10, 'live-poison')).events).toHaveLength(1);
+        await ports.checkpoint('live-poison', '0', seq, fence);
+        expect((await boundM.journalInspect('live-poison')).cursor).toBe(seq);
+        expect(await boundM.readHead('memory-journal')).toBe('hash-10');
+        // No second effect: the consumed event cannot poison or checkpoint again.
+        await expect(ports.poison('live-poison', eventId, 'again')).rejects.toThrow();
+        await expect(ports.checkpoint('live-poison', '0', seq, fence)).rejects.toThrow();
+        // Resync + snapshot read back the retained chain head.
+        const { snapshotRoot, journalSeq } = await ports.resync('live-poison', fence);
+        const page = await ports.snapshot(snapshotRoot, 0, 10);
+        expect(page.rows).toEqual([{ chainId: 'memory-journal', headHash: 'hash-10', allocation: '1' }]);
+        expect(page.watermark).toBe(journalSeq);
       } finally {
         await host.close();
       }
@@ -746,7 +787,7 @@ describe('host maintenance binding', () => {
           moduleId: 'engram-memory',
           scope: { tenantId: 'tenant-a', workspaceId: 'workspace-b' },
           principalId: 'user-1',
-          operations: ['maintain'],
+          operations: ['read', 'maintain'],
         }),
       } as never;
       await expect(proveForRecoveryAuthorized(ledger, foreignScoped, 'cand-1', undefined, stubAuthority)).rejects.toThrow(

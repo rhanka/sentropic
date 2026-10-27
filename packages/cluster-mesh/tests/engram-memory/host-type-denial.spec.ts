@@ -30,7 +30,7 @@ const maintainOnly = () =>
     token: 'memory-maintain-denial',
     moduleId: 'engram-memory',
     scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
-    operations: ['maintain'],
+    operations: ['read', 'maintain'],
   });
 
 const stubRunner = (grant: unknown): MemoryMaintenanceRunner => {
@@ -49,7 +49,7 @@ const stubRunner = (grant: unknown): MemoryMaintenanceRunner => {
 };
 
 describe('host type denial', () => {
-  it('refuses combined grants at the maintain-only type', () => {
+  it('refuses combined grants at the host runner type', () => {
     const combined = grantFor({ moduleId: 'engram-memory', operations: ['read', 'write', 'maintain'] });
     // @ts-expect-error combined grants are not host maintain grants
     const rejected: MemoryMaintainGrant = combined;
@@ -86,8 +86,8 @@ describe('host type denial', () => {
     });
     const neutral: readonly ['read', 'write'] = binding.memoryGrant.operations;
     expect([...neutral]).toEqual(['read', 'write']);
-    const maintain: readonly ['maintain'] = binding.maintainGrant.operations;
-    expect([...maintain]).toEqual(['maintain']);
+    const maintain: readonly ['read', 'maintain'] = binding.maintainGrant.operations;
+    expect([...maintain]).toEqual(['read', 'maintain']);
     expect(binding.memoryOperations).toEqual(['read', 'write']);
   });
 });
