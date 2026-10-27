@@ -49,8 +49,8 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# BR77-EX1: shared queued capacity slots; six independent package validation slots.
-# Matrix indices share the same 15 slots; the two existing release groups remain separate.
+# BR77-EX1: independent jobs use hosted-runner scheduling; no per-index mutexes.
+# Matrix widths and PR cancellation bound each run; release groups remain separate.
 jobs:
   enforce-package-bump:
     runs-on: ubuntu-latest
@@ -1453,7 +1453,7 @@ jobs:
 
   test-e2e:
     runs-on: ubuntu-latest
-    needs: [changes, typecheck-lint-ui, typecheck-lint-api, build-api-image, build-ui, build-e2e, security-sast-sca]
+    needs: [changes, typecheck-lint-ui, build-api-image, build-ui, build-e2e, security-sast-sca]
     if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     strategy:
       max-parallel: 5
@@ -1794,7 +1794,7 @@ jobs:
 
   publish-ui-image:
     runs-on: ubuntu-latest
-    needs: [changes, test-e2e, e2e-vscode, security-container]
+    needs: [changes, typecheck-lint-api, test-e2e, e2e-vscode, security-container]
     if: (needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true') && github.ref == 'refs/heads/main'
     env:
       DOCKER_USERNAME: nologin
@@ -1833,7 +1833,7 @@ jobs:
     concurrency:
       group: api-image-publication
       cancel-in-progress: false
-    needs: [changes, test-api-unit-integration, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container]
+    needs: [changes, typecheck-lint-api, test-api-unit-integration, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container]
     if: (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') && github.ref == 'refs/heads/main'
     env:
       DOCKER_USERNAME: nologin
@@ -2251,10 +2251,6 @@ jobs:
 
   publish-events:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-8
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-events]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.validate-events.result == 'success' && (needs.changes.outputs.events_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
@@ -2278,10 +2274,6 @@ jobs:
 
   publish-chat-core:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-9
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-chat-core]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.validate-chat-core.result == 'success' && (needs.changes.outputs.chat_core_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
@@ -2305,10 +2297,6 @@ jobs:
 
   publish-chat-server:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-10
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-chat-server]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.validate-chat-server.result == 'success' && (needs.changes.outputs.chat_server_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
@@ -2332,10 +2320,6 @@ jobs:
 
   publish-comments:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-11
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-comments]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.validate-comments.result == 'success' && (needs.changes.outputs.comments_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
@@ -2359,10 +2343,6 @@ jobs:
 
   publish-flow:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-12
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-flow]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.validate-flow.result == 'success' && (needs.changes.outputs.flow_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
@@ -2386,10 +2366,6 @@ jobs:
 
   publish-harness:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-13
-      queue: max
-      cancel-in-progress: false
     needs: [changes, validate-harness]
     if: >-
       !cancelled() && needs.changes.result == 'success' && needs.validate-harness.result == 'success' && (needs.changes.outputs.harness_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
@@ -2495,10 +2471,6 @@ jobs:
   # not a publish step: a mismatch turns main red (fixture lock stale) without stopping the publish chain.
   verify-train-lock-integrity:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-6
-      queue: max
-      cancel-in-progress: false
     needs: [changes, publish-llm-mesh, publish-llm-gateway]
     # `!cancelled()` (not `always()`): a manual cancel stops the chain (deviation from design section 5).
     if: >-
@@ -2523,10 +2495,6 @@ jobs:
 
   bootstrap-publish:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-7
-      queue: max
-      cancel-in-progress: false
     if: github.event_name == 'workflow_dispatch' && inputs.bootstrap_publish_target != 'none' && github.ref == 'refs/heads/main'
     steps:
       # Defense in depth for API-dispatched runs: the choice list is not enforced
@@ -2650,10 +2618,6 @@ jobs:
   # overlays/preprod before applying (kills the floating :main staleness, D-c1).
   deploy-preprod:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-8
-      queue: max
-      cancel-in-progress: false
     needs: [publish-api-image, publish-ui-image]
     # Deploy on every main merge. Run even when the publish jobs were SKIPPED (no
     # api/ui content change) so an overlay/manifest-only change still reaches preprod;
@@ -2702,10 +2666,6 @@ jobs:
   # deploy-preprod (main-only deployment); none validates a PR before merge.
   ci-gate:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-9
-      queue: max
-      cancel-in-progress: false
     if: always()
     permissions:
       contents: read
@@ -2792,10 +2752,6 @@ jobs:
   # completed result through needs. Rollback preserves expected-result checks.
   ci-capacity-receipts:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-10
-      queue: max
-      cancel-in-progress: false
     if: always()
     permissions:
       contents: read
@@ -2860,10 +2816,6 @@ jobs:
   # Rollback: delete this job and its ci-gate entry.
   validate-ci-capacity-metrics:
     runs-on: ubuntu-latest
-    concurrency:
-      group: ci-capacity-11
-      queue: max
-      cancel-in-progress: false
     needs: [changes]
     if: always() && !cancelled()
     permissions:
