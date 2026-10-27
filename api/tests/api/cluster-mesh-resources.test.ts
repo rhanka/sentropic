@@ -72,13 +72,17 @@ const createPorts = (resources = createProjection()): ResourcesNamespacePorts =>
 });
 
 describe('cluster mesh resources transport', () => {
-  it('requires injected ports and exposes only six exact POST routes', async () => {
+  it('requires injected ports and keeps six resource verbs alongside the declared artifact paths', async () => {
     expect(() => createResourcesTransportRouter({
       ...createPorts(), resources: undefined,
     } as unknown as ResourcesNamespacePorts)).toThrowError('resources product ports are unavailable');
     const router = createResourcesTransportRouter(createPorts());
     expect(router.routes.map(({ method, path }) => [method, path])).toEqual(RESOURCE_ROUTES);
-    expect(RESOURCE_PATHS).toHaveLength(6);
+    expect(RESOURCE_PATHS).toEqual([
+      '/resources/list', '/resources/stat', '/resources/read', '/resources/grep', '/resources/edit', '/resources/invoke',
+      '/resources/artifacts/*', '/resources/artifacts/ensure', '/resources/artifacts/publish',
+      '/resources/artifacts/list', '/resources/artifacts/meta/:artifactId',
+    ]);
     expect(RESOURCE_PATHS).not.toContain('/*');
 
     const source = readFileSync(
