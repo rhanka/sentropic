@@ -29,17 +29,19 @@
   - `Makefile`
   - `.github/workflows/ci.yml`
   - `scripts/ci/ci-expected-results.test.mjs`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
 - **Exception process**:
   - [x] Declare reason, impact and rollback before edits in Feedback Loop.
 
 ## Feedback Loop
 - [x] BR84-EX1 — Owner-authorized Makefile exception: add artifact budget/build/test targets and enable installed-host scope checking for this ENV. Reason: reproducible Make-only validation and pre-21:00 non-Docker commits. Impact: additive tooling lane; no application runtime changes. Rollback: remove the targets and ENV condition.
 - [x] BR84-EX2 — Owner-authorized CI exception: add the budget step/report upload (explicit `.cache` report paths only) in `validate-artifacts`, extend its change filter to kit and DS consumer inputs. Reason: prevent data-corpus regressions. Impact: this validation job runs for those paths; publication filters remain unchanged. Rollback: remove the added step/upload and filter entries.
-- [x] BR84-EX3 — Directly blocking CI correction in `.github/workflows/ci.yml` and its existing `scripts/ci/ci-expected-results.test.mjs` fixture: `ci-gate` receipt capture returned HTTP 403 while all validation jobs passed. Use the authenticated Actions reader and `actions: read` permission already proven by `ci-capacity-receipts`. Impact: read-only run/job metadata access, no publication or write permission. Rollback: restore the capture block/fixture and remove the added permission.
+- [x] BR84-EX3 — Directly blocking CI correction in `.github/workflows/ci.yml` and its existing `scripts/ci/{ci-expected-results,publishable-ci-wiring}.test.mjs` fixtures: `ci-gate` receipt capture returned HTTP 403 while all validation jobs passed. Use the authenticated Actions reader and `actions: read` permission already proven by `ci-capacity-receipts`. Impact: read-only run/job metadata access, no publication or write permission. Rollback: restore the capture block/fixtures and remove the added permission.
 - [x] Approved analysis: `.tmp/ds-artifact-weight/analysis.md` sections 3–5; review `.h2a/reviews/ds_artifact_weight_opus_r1.md` APPROVE; incorporate P2-1 through P2-4 in the committed receipt and validation.
 - [x] BR84-F1 — Full-governance build omitted its `../raw-spec.md?raw` input from scratch; copied the declared raw input. The full-governance build is the regression gate.
 - [x] BR84-F2 — Portable initialization: the fixture called `diagramTabs()` as an expression, so Svelte received no DOM anchor (`before` error). Replaced with `{@render diagramTabs()}`; four offline configurations and all 48 fold states pass. Initialization error/DOM/stack receipts retained; no timeout increase.
 - [x] BR84-F3 — Run 40586690568: all validation jobs, including the artifact budget, passed; the final gate's anonymous receipt request failed HTTP 403. Reused the authenticated, paginated capture already proven by the sibling receipt job (BR84-EX3); final-head CI rerun required.
+- [x] BR84-F4 — Run 40599289114 rejected the old contents-only permission assertion in the existing publication wiring fixture. Aligned its exact expected permissions with the required read-only Actions reader; all 185 publication guard tests and 23 final-gate tests pass locally before push.
 
 ## AI Flaky tests
 - [x] No AI/provider tests in this scope; no flaky exception requested.
