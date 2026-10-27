@@ -57,7 +57,7 @@
 ## Feedback Loop
 - [ ] W1.b P2: verify OAuth tuple, scopes, expiry and revocation with DB time after waits.
 - [x] W2.a P2 reconciliation: API artifacts uses file workspace; root lock removes private registry copy; TS/Vitest artifacts aliases removed.
-- [ ] W2.a P2 installed proof: api/tests/api/app-mcp-installed.test.ts runs Node/tsx outside Vitest resolution; final strict install pending.
+- [x] W2.a P2 installed proof: native Node/tsx uses ESM import resolution from API/mesh and matches physical artifacts paths; production-settings bundle also compiles; 2/2 in /tmp/app-w2b-installed-final.log.
 - [x] Bundle red: production esbuild settings refused the loaded profile with invalid compiled artifacts profile; /tmp/app-w2b-focused1.log.
 - [x] API build keeps artifacts and cluster-mesh external, preserving physical runtime instances and package topology guards.
 - [ ] Retry failed pushes every ten minutes; draft PR after push; no merge.
@@ -78,7 +78,7 @@
 - [x] Lot 1 reader: locked session/OAuth tuple, consent, audience, proof key and DB-time expiry; validation pending.
 - [x] Test fixture uses allowed id_token substitution and waits for physical PG connection closure before drop.
 - [x] Lot 2 manifests/locks regenerated strictly without peer overrides; API leaf metadata refreshed to source versions.
-- [ ] Lot 2 strict install/physical compilation final receipt.
+- [x] Lot 2 strict workspace npm ci passed in the API image; physical and bundled compilation pass without artifacts aliases.
 - [x] Lot 3 tests authored in api/tests/api/app-artifacts-transport.test.ts; exact dispatch, denial, HTTP and MCP routing.
 - [x] Lot 3 durable test: HTTP session ensure and OAuth MCP replay, MCP publish and HTTP replay; assert one artifact/release and two receipts.
 - [x] Current-reader vectors include matching/wrong DPoP proof, revocation during artifact-row waits and expiry during quota waits for both credential kinds.
