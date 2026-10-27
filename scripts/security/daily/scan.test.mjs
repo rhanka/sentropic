@@ -4,8 +4,10 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
+import { createRequire } from 'node:module';
 import { npmRunner, planScan, scanRepository } from './scan.mjs';
 import { loadContract } from './schema.mjs';
+import { normalizeRegister } from './inventory.mjs';
 
 const sourceSha = 'a'.repeat(40);
 const clean = () => ({ auditReportVersion: 2, vulnerabilities: {}, metadata: {
@@ -72,6 +74,56 @@ test('should keep accepted low severity debt queued with its expiry and raw byte
   assert.equal(report.findings[0].register, 'registered-exception');
   assert.equal(report.findings[0].expired, true);
   assert.equal(report.surfaces.find((task) => task.target === 'ui/package-lock.json').raw, stdout);
+});
+
+test('should eagerly report deterministic joins for manifest-scoped and legacy register rows', async (t) => {
+  const root = fixture(t);
+  const id = 'GHSA-aaaa-bbbb-cccc';
+  const legacy = { file: 'ui/package.json', risk: 'LOW', status: 'accepted_temporary', review_due: '2026-10-11' };
+  const exact = { ...legacy, scanner: 'npm', component: 'demo', affected_version: '1.0.0' };
+  const rows = normalizeRegister({ vulnerability_register: { vulnerabilities: {
+    [`${id}_legacy`]: legacy, [`${id}_exact`]: exact, [`${id}_other`]: { ...exact, affected_version: '2.0.0' },
+  } } }, 'rhanka/sentropic');
+  const raw = clean();
+  raw.vulnerabilities.demo = { name: 'demo', severity: 'low', range: '<1.0.1', nodes: ['node_modules/demo'],
+    via: [{ name: 'demo', severity: 'low', range: '<1.0.1', url: `https://github.com/advisories/${id}` }] };
+  raw.metadata.vulnerabilities.low = raw.metadata.vulnerabilities.total = 1;
+  const run = (task) => task.target === 'ui/package-lock.json'
+    ? { status: 0, stdout: JSON.stringify(raw), scannerIdentity: 'npm:fixture', databaseIdentity: 'fixture-db' } : runner(task);
+  const report = await scanRepository(options(root, { rows, run }));
+  assert.equal(report.findings[0].register, 'registered-exception');
+  assert.equal(report.findings[0].expired, true);
+  assert.deepEqual(report.registerJoin.map((row) => [row.state, row.reason]), [
+    ['registered-exception', 'exact affected identity'],
+    ['verification-pending', 'missing exact identity: scanner, component, version'],
+    ['verification-pending', 'no exact affected identity'],
+  ]);
+  assert.deepEqual(report.registerJoin[0].matchedPaths, ['ui/package-lock.json#node_modules/demo']);
+  assert.equal(report.verificationPending.length, 2);
+  const reversed = await scanRepository(options(root, { rows: [...rows].reverse(), run }));
+  assert.deepEqual(reversed.registerJoin, report.registerJoin);
+  const lock = JSON.parse(readFileSync(join(root, 'ui/package-lock.json')));
+  lock.packages['node_modules/parent/node_modules/demo'] = { version: '1.0.0' };
+  writeFileSync(join(root, 'ui/package-lock.json'), JSON.stringify(lock));
+  raw.vulnerabilities.demo.nodes.push('node_modules/parent/node_modules/demo');
+  const ambiguous = await scanRepository(options(root, { rows, run }));
+  assert.equal(ambiguous.registerJoin[0].reason, 'ambiguous affected paths');
+  assert.ok(ambiguous.findings.every((finding) => finding.register === 'none'));
+  assert.equal(ambiguous.verificationPending.length, 3);
+});
+
+test('should expose a join result for every unresolved row in the real register', async (t) => {
+  const root = fixture(t);
+  const yaml = createRequire(join(process.env.MANIFEST_GUARD_TOOL_DIR, 'package.json'))('yaml');
+  const rows = normalizeRegister(yaml.parse(readFileSync('.security/vulnerability-register.yaml', 'utf8')), 'rhanka/sentropic');
+  const unresolved = rows.filter((row) => row.status !== 'resolved');
+  const report = await scanRepository(options(root, { rows }));
+  assert.equal(report.registerJoin.length, unresolved.length);
+  assert.deepEqual(report.registerJoin.map((row) => row.registerKey),
+    unresolved.map((row) => row.registerKey).sort((a, b) => a.localeCompare(b)));
+  assert.ok(report.registerJoin.every((row) => row.state === 'verification-pending' && row.reason));
+  assert.equal(report.verificationPending.length, unresolved.length);
+  assert.ok(report.registerJoin.some((row) => row.reason.includes('missing exact identity')));
 });
 
 test('should continue all surfaces and reject empty, malformed, partial or errored output', async (t) => {
