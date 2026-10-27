@@ -51,13 +51,14 @@ configureTranslations(dictionary);
 mount(App,{target:document.getElementById('app')});`);
   write(join(scratch, 'index.html'), '<!doctype html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="icon" href="data:,"></head><body><div id="app"></div><script type="module" src="/src/main.js"></script></body></html>');
 }
+const notices = read(join(root, 'src/hrpolnav-card-font.LICENSE.txt'));
+write(join(scratch, 'index.html'), read(join(scratch, 'index.html')).replace('</body>',
+  `<script type="text/plain" data-font-license>${notices.replaceAll('</script', '<\\/script')}</script></body>`));
 await build({ root: scratch, configFile: false, plugins: [svelte({ configFile: false }), artifactAttribution()],
   resolve: { dedupe: ['svelte', '@sentropic/design-system-svelte', '@sentropic/design-system-themes'] },
   build: { target: 'es2022', manifest: true, outDir: 'dist', emptyOutDir: true } });
 const directory = join(scratch, 'dist'), portablePath = join(directory, 'dossier-portable.html');
-const notices = read(join(root, 'src/hrpolnav-card-font.LICENSE.txt')).replaceAll('--', '—');
-write(portablePath, inlinePortable(read(join(directory, 'index.html')), path => read(join(directory, path.replace(/^\//, ''))))
-  + `\n<!-- Embedded font license\n${notices}\n-->\n`);
+write(portablePath, inlinePortable(read(join(directory, 'index.html')), path => read(join(directory, path.replace(/^\//, '')))));
 const report = measureArtifact({ directory, portablePath, profile: profile === 'governance' ? 'governance' : 'typical' });
 const lock = json(join(root, 'package-lock.json'));
 report.build = { commit: process.env.ARTIFACT_COMMIT ?? 'unknown', fixture: profile, node: process.version,
