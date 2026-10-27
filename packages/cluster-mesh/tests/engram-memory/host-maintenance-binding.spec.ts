@@ -346,6 +346,36 @@ describe('host maintenance binding', () => {
       }
     });
 
+    it('refuses duplicate continuations and repeats terminals atomically', async () => {
+      const host = await memoryPgHost();
+      try {
+        const projection = await applyLedgerAsset(host);
+        const connection = testPgDriver();
+        try {
+          const ledger = await openMemoryPostgresHostLedger(connection.driver, projection);
+          await ledger.record(entryFor('cand-1', 'user-1'));
+          await ledger.recordContinuation('cand-1', 'inv-2');
+          // Same invocation twice: the conditional write refuses the second.
+          await expect(ledger.recordContinuation('cand-1', 'inv-2')).rejects.toThrow(
+            /copied invocation fields/,
+          );
+          const terminal = await ledger.markTerminal('cand-1', { outcome: 'admitted' }, 'cursor-9');
+          // Identical repeat: no second effect, the retained entry returns.
+          await expect(
+            ledger.markTerminal('cand-1', { outcome: 'admitted' }, 'cursor-9'),
+          ).resolves.toEqual(terminal);
+          // Different receipt: reconciliation overwrites.
+          const reconciled = await ledger.markTerminal('cand-1', { outcome: 'retried' }, 'cursor-10');
+          expect(reconciled.receipt).toEqual({ outcome: 'retried' });
+          expect(reconciled.cursor).toBe('cursor-10');
+        } finally {
+          await connection.close();
+        }
+      } finally {
+        await host.close();
+      }
+    });
+
     it('refuses to open when the 002 asset is not applied', async () => {
       const host = await memoryPgHost();
       try {

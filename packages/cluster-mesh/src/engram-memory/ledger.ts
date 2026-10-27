@@ -276,40 +276,41 @@ export const openMemoryPostgresHostLedger = async (
     },
     read: (candidateId) => selectOne(candidateId),
     recordContinuation: async (candidateId, invocationId) => {
-      const existing = await selectOne(candidateId);
-      if (!existing) throw new StorageDeniedError('cannot continue an unknown ledger entry');
       if (!nonEmpty(invocationId)) throw new StorageDeniedError('continuation requires a fresh invocation identity');
-      if (invocationId === existing.invocationId || existing.continuationIds.includes(invocationId)) {
-        throw new StorageDeniedError('copied invocation fields never grant a continuation');
-      }
+      // Atomic: the guard runs in the single UPDATE statement, so two
+      // concurrent continuations with the same invocation cannot both win.
       const updated = await run(async (session) => {
         const result = await session.execute({
-          text: `UPDATE ${table} SET continuation_ids = array_append(continuation_ids, $2) WHERE candidate_id = $1 RETURNING *`,
+          text: `UPDATE ${table} SET continuation_ids = array_append(continuation_ids, $2) WHERE candidate_id = $1 AND invocation_id <> $2 AND NOT ($2 = ANY(continuation_ids)) RETURNING *`,
           values: [candidateId, invocationId],
         });
         const row = result.rows[0];
-        if (!row) throw new StorageDeniedError('cannot continue an unknown ledger entry');
-        return rowToEntry(row);
+        return row ? rowToEntry(row) : null;
       });
-      return updated;
+      if (updated) return updated;
+      const current = await selectOne(candidateId);
+      if (!current) throw new StorageDeniedError('cannot continue an unknown ledger entry');
+      throw new StorageDeniedError('copied invocation fields never grant a continuation');
     },
     markTerminal: async (candidateId, receipt, cursor) => {
       if (cursor !== null && typeof cursor !== 'string') {
         throw new StorageDeniedError('ledger entry requires a text cursor or null');
       }
-      const current = await selectOne(candidateId);
-      if (!current) throw new StorageDeniedError('cannot complete an unknown ledger entry');
-      if (isSameTerminal(current, receipt, cursor)) return current;
+      // Atomic: an identical terminal repeat skips the write in the single
+      // UPDATE statement (first-write parity, no second effect); a different
+      // receipt or cursor reconciles by overwriting.
       const updated = await run(async (session) => {
         const result = await session.execute({
-          text: `UPDATE ${table} SET state = 'terminal', receipt = $2::jsonb, cursor = $3 WHERE candidate_id = $1 RETURNING *`,
+          text: `UPDATE ${table} SET state = 'terminal', receipt = $2::jsonb, cursor = $3 WHERE candidate_id = $1 AND NOT (state = 'terminal' AND receipt = $2::jsonb AND cursor IS NOT DISTINCT FROM $3) RETURNING *`,
           values: [candidateId, toReceiptJson(receipt), cursor],
         });
         const row = result.rows[0];
-        if (!row) throw new StorageDeniedError('cannot complete an unknown ledger entry');
-        return rowToEntry(row);
+        return row ? rowToEntry(row) : null;
       });
-      return updated;
+      if (updated) return updated;
+      const current = await selectOne(candidateId);
+      if (!current) throw new StorageDeniedError('cannot complete an unknown ledger entry');
+      return current;
     },
     drainInvocation: (invocationId) => {
       if (!nonEmpty(invocationId)) throw new StorageDeniedError('ledger drain requires an invocation identity');
