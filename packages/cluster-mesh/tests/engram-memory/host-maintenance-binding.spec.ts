@@ -87,7 +87,36 @@ describe('host maintenance binding', () => {
       openMemoryMaintenance({ provider, maintainGrant: g1Grant() } as never),
     ).toThrow(StorageDeniedError);
   });
-  it.todo('refuses expired, revoked or foreign-scope maintain grants');
+  it('refuses expired maintain grants at assembly and at open', () => {
+    const expired = grantFor({
+      token: 'memory-maintain-expired',
+      moduleId: 'engram-memory',
+      scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
+      operations: ['maintain'],
+      lifetime: { kind: 'lease', expiresAt: '2000-01-01T00:00:00.000Z' },
+    });
+    expect(() =>
+      assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: expired }),
+    ).toThrow(/lease has expired/);
+    const live = grantFor({
+      token: 'memory-maintain-leased',
+      moduleId: 'engram-memory',
+      scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
+      operations: ['maintain'],
+      lifetime: { kind: 'lease', expiresAt: '2999-01-01T00:00:00.000Z' },
+    });
+    const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: live });
+    expect(() => openMemoryMaintenance(binding)).not.toThrow();
+    expect(() =>
+      openMemoryMaintenance({ provider: qualifiedProvider(), maintainGrant: expired } as never),
+    ).toThrow(/lease has expired/);
+  });
+
+  it('refuses ad-hoc objects shaped like a binding', () => {
+    expect(() =>
+      openMemoryMaintenance({ maintainGrant: maintainGrant() } as never),
+    ).toThrow(MemoryHostDriverRequiredError);
+  });
   it.todo('checks fences and checkpoints through the host-only binding');
   it.todo('retries and poisons consumers without a second effect');
   it.todo('resyncs scope-chain-index and snapshots through maintenance ports');
