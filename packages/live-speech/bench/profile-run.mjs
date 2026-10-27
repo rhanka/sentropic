@@ -135,13 +135,9 @@ try {
     finals = events.filter((event) => event.type === 'final');
   }
   const elapsedMs = performance.now() - at;
-  if (fixture.expectFinal) {
-    // Quiesce before teardown: with paced multi-window audio a superseded window
-    // decode may still be in flight when the final lands; killing the worker
-    // mid-native-call aborts the process (koffi FATAL at teardown). Waiting lets
-    // the straggler resolve (superseded, never emitted) so terminate hits idle.
-    await new Promise((resolve) => setTimeout(resolve, 5000));
-  }
+  // No quiesce needed: terminate() asks the worker to close gracefully (drains
+  // the in-flight decode before freeing the engine) and force-terminates only a
+  // hung engine, so teardown hits an idle worker.
   run = {
     fixture: fixtureKind,
     samples: fixture.pcm.length,
