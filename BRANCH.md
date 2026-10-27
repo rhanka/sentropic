@@ -56,6 +56,8 @@
 - [ ] W1.b P2: verify OAuth tuple, scopes, expiry and revocation with DB time after waits.
 - [x] W2.a P2 reconciliation: API artifacts uses file workspace; root lock removes private registry copy; TS/Vitest artifacts aliases removed.
 - [ ] W2.a P2 installed proof: api/tests/api/app-mcp-installed.test.ts runs Node/tsx outside Vitest resolution; final strict install pending.
+- [x] Bundle red: production esbuild settings refused the loaded profile with invalid compiled artifacts profile; /tmp/app-w2b-focused1.log.
+- [x] API build keeps artifacts and cluster-mesh external, preserving physical runtime instances and package topology guards.
 - [ ] Retry failed pushes every ten minutes; draft PR after push; no merge.
 - [ ] Independent final-head reviews and remote CI remain separate receipts.
 
