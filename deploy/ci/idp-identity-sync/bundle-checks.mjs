@@ -33,7 +33,7 @@ export function checkBundle(objects, tier) {
     for (const e of c.env ?? []) if (/PASSWORD|SECRET|ACCESS_KEY/.test(e.name)) assert(e.valueFrom?.secretKeyRef, 'credential must use a Secret ref');
   }
   const secretNames = containers.flatMap(c => (c.env ?? []).flatMap(e => e.valueFrom?.secretKeyRef?.name ?? []));
-  const expectedSecrets = prod ? ['sentropic-idp-identity-reader', 'sentropic-idp-relay-writer'] : ['sentropic-postgres', 'sentropic-pgbackup', 'sentropic-idp-relay-reader'];
+  const expectedSecrets = prod ? ['sentropic-idp-identity-reader', 'sentropic-idp-relay-writer'] : ['sentropic-postgres', 'sentropic-pgbackup', 'sentropic-idp-relay-reader', 'immo-mcp-workload'];
   assert.deepEqual([...new Set(secretNames)].sort(), expectedSecrets.sort(), 'tier credential separation');
   const network = get('NetworkPolicy', prod ? 'allow-idp-export-to-postgres' : 'allow-idp-sync-to-postgres');
   assert.deepEqual(network.spec.podSelector.matchLabels, { 'app.kubernetes.io/name': 'sentropic', 'app.kubernetes.io/component': 'postgres' });
@@ -63,6 +63,8 @@ export function checkBundle(objects, tier) {
     const importer = pod.containers[0];
     assert.equal(envValue(importer, 'DRY_RUN'), '1'); assert.equal(envValue(importer, 'ALLOWED_REKEY'), '');
     assert.equal(envValue(importer, 'ALLOWED_CLIENTS'), '');
+    assert.deepEqual(importer.env.find(e => e.name === 'IMMO_MCP_WORKLOAD_CLIENT_SECRET').valueFrom.secretKeyRef,
+      { name: 'immo-mcp-workload', key: 'IMMO_MCP_WORKLOAD_CLIENT_SECRET', optional: true });
     assert.equal(envValue(importer, 'MAX_SNAPSHOT_AGE_S'), '7200');
     assert.deepEqual(importer.command, ['sh', '/sql/import-preprod.sh']);
     assert(pod.initContainers[0].args[0].includes('pg_dump -Fc'));
