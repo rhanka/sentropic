@@ -7,7 +7,7 @@ import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { failClosedReport, inventoryRepository, normalizeRegister, summarizeBacklog } from './inventory.mjs';
-import { loadContract } from './schema.mjs';
+import { canonicalAliases, joinRegister, loadContract, validDate } from './schema.mjs';
 
 const hash = (bytes) => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const npmArgs = ['audit', '--json', '--package-lock-only', '--ignore-scripts',
@@ -74,6 +74,33 @@ function npmFindings(report, task, root, repository) {
   });
 }
 
+function scanBacklog(findings, rows, options) {
+  const rowKey = (row) => row.registerKey || [row.id, row.path, row.component, row.version].join('|');
+  const ordered = [...rows].sort((a, b) => rowKey(a).localeCompare(rowKey(b)));
+  const registerJoin = [];
+  const identities = (row) => new Set([row.id?.toUpperCase(), ...canonicalAliases(row.aliases || {})].filter(Boolean));
+  const prepared = ordered.map((row) => {
+    if (row.status === 'resolved') return row;
+    const aliases = identities(row);
+    const candidates = findings.filter((finding) => [...identities(finding)].some((id) => aliases.has(id)) &&
+      (row.path === finding.path || (finding.scanner === 'npm' &&
+        row.path === finding.path.split('#')[0].replace(/package-lock\.json$/, 'package.json'))));
+    const missing = ['scanner', 'component', 'version', 'path'].filter((key) => !row[key]);
+    const paths = [...new Set(candidates.filter((finding) =>
+      joinRegister({ ...finding, path: row.path }, [row], options.today).register === 'registered-exception')
+      .map((finding) => finding.path))].sort();
+    const reason = missing.length ? `missing exact identity: ${missing.join(', ')}` :
+      !validDate(row.review_due) ? 'invalid review date' : row.status !== 'accepted_temporary' ? 'not accepted_temporary' :
+        paths.length > 1 ? 'ambiguous affected paths' : paths.length === 1 ? 'exact affected identity' : 'no exact affected identity';
+    const matched = reason === 'exact affected identity';
+    registerJoin.push({ registerKey: rowKey(row), state: matched ? 'registered-exception' : 'verification-pending', reason,
+      candidatePaths: [...new Set(candidates.map((finding) => finding.path))].sort(), matchedPaths: matched ? paths : [] });
+    // Translate a manifest scope only when it identifies one exact affected lock node.
+    return matched ? { ...row, registeredPath: row.path, path: paths[0] } : row;
+  });
+  return { ...summarizeBacklog(findings, prepared, options), registerJoin };
+}
+
 export async function scanRepository({ root = '.', sourceSha, repository, contract, rows = [], run,
   today = new Date().toISOString().slice(0, 10) }) {
   if (!/^[a-f0-9]{40}$/.test(sourceSha || '')) throw new Error('immutable source SHA required');
@@ -126,7 +153,7 @@ export async function scanRepository({ root = '.', sourceSha, repository, contra
     if (after !== before) coverageBlocked.push(`source bytes changed: ${path}`);
   }
   return { sourceSha, repository, scannedAt: new Date().toISOString(), inventory, inputHashes, surfaces,
-    ...summarizeBacklog(findings, rows, { today, complete: coverageBlocked.length === 0, coverageBlocked }) };
+    ...scanBacklog(findings, rows, { today, complete: coverageBlocked.length === 0, coverageBlocked }) };
 }
 
 export function npmRunner(root, inventory, execute = spawnSync) {
