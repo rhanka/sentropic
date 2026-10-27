@@ -124,6 +124,7 @@ export {
   reattachMemoryMaintenance,
   proveForRecoveryAuthorized,
   MemoryMaintenanceNotFoundError,
+  type MemoryAuthorityCheck,
   type MemoryMaintainGrant,
   type MemoryNeutralGrant,
   type MemoryHostBinding,
