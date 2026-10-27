@@ -1,7 +1,31 @@
+import assert from 'node:assert/strict';
 import { describe, expect, it } from 'vitest';
+import { StorageDeniedError } from '../../src/storage/errors.js';
+import type { PostgresStorageOptions } from '../../src/storage/postgres/protocol.js';
+import { createPostgresKernel } from '../../src/storage/postgres/index.js';
 import { createPgFixture } from './pg-fixture.js';
 import { pgEnabled } from './pg-driver.js';
 import { grantFor } from './authority-corpus.js';
+
+const withCanonical = (options: PostgresStorageOptions, leaseMs = 60000) =>
+  createPostgresKernel({ ...options, canonicalOwnership: { leaseMs } });
+
+const unitFor = (chainId: string, hash: string) => ({
+  guards: [],
+  records: [],
+  appends: [
+    {
+      chainId,
+      record: { id: `${chainId}-1`, bytes: '{"n":1}', hash },
+      expectation: { kind: 'absent', allocation: '0' } as const,
+    },
+  ],
+  updates: [],
+  relationships: [],
+  barriers: [],
+  purgeIntents: [],
+  indexWrites: [],
+});
 import { emptyEffects } from '../../src/storage/staged-preparation.js';
 import { stagedDigestOf, stagedSealRoot } from './staged-corpus.js';
 describe.skipIf(!pgEnabled)('durable Postgres authority and ownership recovery', () => {
@@ -35,5 +59,35 @@ describe.skipIf(!pgEnabled)('durable Postgres authority and ownership recovery',
       expect((await next.readRecord('recovered'))?.bytes.data).toBe('retained');
       await expect(root.recoverStaged(grant, { operationKey: begin.operationKey, expectedOwner: grant.principalId, recipient, fence: fresh, reason: 'repeat' })).rejects.toMatchObject({ code: 'cas-conflict' });
     } finally { await fixture.close(); }
+  });
+});
+
+describe.skipIf(!pgEnabled)('postgres grant revocation late window', () => {
+  it('refuses a commit when its grant is revoked between admission and commit', async () => {
+    const fixture = await createPgFixture();
+    try {
+      const kernel = await withCanonical(fixture.options);
+      const grant = grantFor({ operations: ['read', 'write', 'maintain'] });
+      const bound = await kernel.bindNew(grant);
+      await bound.configureLifecycle('optional');
+      // Independent connection (no opt-in session of its own): the grant is
+      // revoked after admission while the lease stays live, so the denial
+      // comes from the grant, not from ownership.
+      const other = await fixture.open();
+      await other.revoke(grant.token);
+      await assert.rejects(
+        bound.commitAtomic(unitFor('revoked-late', 'hash-revoked')),
+        (error: unknown) => error instanceof StorageDeniedError,
+      );
+      // A fresh grant still commits through the same kernel and session.
+      const rebound = await kernel.bindNew(
+        grantFor({ token: 'token-test-2', operations: ['read', 'write', 'maintain'] }),
+      );
+      await rebound.configureLifecycle('optional');
+      await rebound.commitAtomic(unitFor('revoked-after', 'hash-after'));
+      assert.equal(await rebound.readHead('revoked-after'), 'hash-after');
+    } finally {
+      await fixture.close();
+    }
   });
 });

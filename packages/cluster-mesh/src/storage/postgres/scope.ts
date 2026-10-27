@@ -25,6 +25,7 @@ import {
   checkpointPgJournal,
   inspectPgConsumer,
   operatePgConsumer,
+  type PgPosition,
 } from './journal.js';
 import type { JournalFence } from '../staged-core.js';
 import { queryPgRoot, type PgQueryRequest } from './queries.js';
@@ -37,6 +38,7 @@ import { pgCapability, pgProfileClaims, type PgCapability } from './profiles.js'
 import type { ProfileClaim, ProfileId } from '../profiles.js';
 import { cleanupPgStaged, type PgCleanupRequest } from './cleanup.js';
 import { runPgInstalled } from './installed.js';
+import { readPgCommitResult } from './commit-results.js';
 const freeze = (value: unknown): void => {
   if (value && typeof value === 'object') {
     Object.values(value).forEach(freeze);
@@ -144,6 +146,9 @@ export class PgScoped {
   readAggregate(key: string) {
     return this.#read((view) => view.readAggregate(key));
   }
+  readCommitResult(commitIdentity: string, fence: WriterFence) {
+    return readPgCommitResult(this.#core, this.#grant, commitIdentity, fence);
+  }
   beginStaged(input: StagedBeginInput) {
     return beginPgStaged(this.#core, this.#grant, input);
   }
@@ -180,7 +185,7 @@ export class PgScoped {
   readBlob(id: string) {
     return readPgBlob(this.#core, this.#grant, id);
   }
-  journalRead(after: number, limit: number, consumer?: string) {
+  journalRead(after: PgPosition, limit: number, consumer?: string) {
     return readPgJournal(this.#core, this.#grant, after, limit, consumer);
   }
   query(name: string, input: unknown, request: PgQueryRequest) {
@@ -201,7 +206,7 @@ export class PgScoped {
   manifestReadPage(digest: string, chainId: string, limit: number, cursor: unknown, bytes: number) {
     return readPgManifestPage(this.#core, this.#grant, digest, chainId, limit, cursor, bytes);
   }
-  journalCheckpoint(consumer: string, expected: number, next: number, fence: JournalFence) {
+  journalCheckpoint(consumer: string, expected: PgPosition, next: PgPosition, fence: JournalFence) {
     return checkpointPgJournal(this.#core, this.#grant, consumer, expected, next, fence);
   }
   journalInspect(consumer: string) {
