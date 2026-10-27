@@ -17,16 +17,28 @@ export const memoryHostProvider = () => ({
   identity: { name: 'node-pg-owner', version: '8.16.3', artifactDigest: 'c'.repeat(64) },
   serverFloor: '17.0.0',
 });
+/** Host-issued maintain grant: exactly `['maintain']`, never combined. */
+export const memoryMaintainGrant = (workspaceId = 'workspace-a') => grantFor({
+  token: `memory-maintain-${workspaceId}`, moduleId: 'engram-memory',
+  scope: { tenantId: 'tenant-a', workspaceId }, operations: ['maintain'],
+});
+/** Neutral Engram-facing grant: exactly `['read','write']`, no maintain authority. */
+export const memoryNeutralGrant = (workspaceId = 'workspace-a') => grantFor({
+  token: `memory-neutral-${workspaceId}`, moduleId: 'engram-memory',
+  scope: { tenantId: 'tenant-a', workspaceId }, operations: ['read', 'write'],
+});
 /**
- * Host composition over an opened host: the provider is checked, then the
- * distinct host-issued maintain binding is assembled. Callers run fence and
- * storage calls through `binding.maintainGrant`, never the neutral handle.
+ * Host composition: the provider is checked, then the distinct
+ * host-issued maintain binding is assembled alongside the derived neutral
+ * grant. Engram paths use `binding.memoryGrant`; maintenance paths use
+ * `binding.maintainGrant`. The combined `memoryGrant()` is legacy E6
+ * coverage only and never enters the host binding.
  */
-export const memoryHostComposed = () => {
+export const memoryHostComposed = (invocationId = 'inv-host-1') => {
   const driver = memoryHostProvider();
   checkMemoryPostgresDriver(driver);
-  const binding = assembleMemoryHostBinding({ driver, maintainGrant: memoryGrant() });
-  return { provider: driver, binding, grant: binding.maintainGrant };
+  const binding = assembleMemoryHostBinding({ driver, maintainGrant: memoryMaintainGrant(), invocationId });
+  return { provider: driver, binding };
 };
 export const memoryUnit = (extra: Partial<AtomicUnit> = {}): AtomicUnit => ({
   guards: [], records: [], appends: [], updates: [], relationships: [], barriers: [], purgeIntents: [], indexWrites: [], ...extra,
