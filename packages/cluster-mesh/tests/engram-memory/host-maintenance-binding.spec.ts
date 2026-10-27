@@ -18,7 +18,7 @@ import {
   type MemoryNeutralGrant,
 } from '../../src/engram-memory/binding.js';
 import { pgEnabled } from '../storage/pg-driver.js';
-import { memoryHostComposed, memoryPgHost } from './pg-host.js';
+import { memoryAppend, memoryHostComposed, memoryPgHost, memoryUnit } from './pg-host.js';
 import {
   openMemoryMaintenance,
   type MemoryMaintenanceRunner,
@@ -67,17 +67,30 @@ describe('host maintenance binding', () => {
       throw new StorageUnavailableError('no backend');
     },
   });
-  const entryFor = (candidateId: string) => ({
+  const entryFor = (candidateId: string, hostPrincipal = 'host-1') => ({
     candidateId,
     storeId: 'store-1',
     scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
     invocationId: 'inv-1',
+    hostPrincipal,
     continuationIds: [] as string[],
     envelopeDigest: 'e'.repeat(64),
     state: 'reserved' as const,
     receipt: null,
     cursor: null,
   });
+  const hostBindingFor = (principalId = 'user-1') =>
+    assembleMemoryHostBinding({
+      driver: qualifiedProvider(),
+      maintainGrant: grantFor({
+        token: `memory-maintain-${principalId}`,
+        moduleId: 'engram-memory',
+        scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
+        principalId,
+        operations: ['maintain'],
+      }),
+      invocationId: 'inv-host-1',
+    });
 
   it('issues a host-only maintain binding separate from the memory handle', () => {
     const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant(), invocationId: 'inv-host-1' });
@@ -183,6 +196,39 @@ describe('host maintenance binding', () => {
     );
   });
 
+  describe.skipIf(!pgEnabled)('continuation grants accepted by the kernel', () => {
+    it('issues a grant the kernel binds and commits', async () => {
+      const host = await memoryPgHost();
+      const { binding } = memoryHostComposed(host.options.driver, 'inv-cont-1');
+      const root = await host.open();
+      try {
+        const ledger = createMemoryHostLedger();
+        ledger.record({
+          candidateId: 'cand-cont',
+          storeId: 'store-1',
+          scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
+          invocationId: 'inv-1',
+          hostPrincipal: 'user-1',
+          continuationIds: [],
+          envelopeDigest: 'e'.repeat(64),
+          state: 'reserved' as const,
+          receipt: null,
+          cursor: null,
+        });
+        const { grant } = issueContinuationGrant(ledger, binding, 'cand-cont', {
+          invocationId: 'inv-2',
+          issuedAt: '2026-10-27T00:00:00.000Z',
+          hostPrincipal: 'user-1',
+        });
+        const bound = await root.bindNew(grant);
+        await bound.commitAtomic(memoryUnit({ appends: [memoryAppend('9')] }));
+        expect(await bound.readHead('memory-journal')).toBe('hash-9');
+      } finally {
+        await host.close();
+      }
+    });
+  });
+
   describe.skipIf(!pgEnabled)('host binding authoritative verification', () => {
     it('checks the maintain grant against the live grants table', async () => {
       const host = await memoryPgHost();
@@ -250,7 +296,7 @@ describe('host maintenance binding', () => {
     it('refuses on an empty ledger until rehydration', () => {
       const ledger = createMemoryHostLedger();
       expect(ledger.snapshot()).toEqual([]);
-      expect(() => issueContinuationGrant(ledger, 'cand-1', {
+      expect(() => issueContinuationGrant(ledger, hostBindingFor(), 'cand-1', {
         invocationId: 'inv-2',
         issuedAt: '2026-10-27T00:00:00.000Z',
         hostPrincipal: 'host-1',
@@ -294,34 +340,70 @@ describe('host maintenance binding', () => {
 
     it('issues continuation grants against retained authority only', () => {
       const ledger = createMemoryHostLedger();
-      ledger.record(entryFor('cand-1'));
-      const attestation = { invocationId: 'inv-2', issuedAt: '2026-10-27T00:00:00.000Z', hostPrincipal: 'host-1' };
-      const continued = issueContinuationGrant(ledger, 'cand-1', attestation);
+      ledger.record(entryFor('cand-1', 'user-1'));
+      const binding = hostBindingFor('user-1');
+      const attestation = { invocationId: 'inv-2', issuedAt: '2026-10-27T00:00:00.000Z', hostPrincipal: 'user-1' };
+      const continued = issueContinuationGrant(ledger, binding, 'cand-1', attestation);
       expect(continued.candidateId).toBe('cand-1');
       expect(continued.storeId).toBe('store-1');
       expect(continued.grant.operations).toEqual(['read', 'write']);
       expect(continued.grant.lifetime).toEqual({ kind: 'invocation', invocationId: 'inv-2' });
       expect(continued.grant.scope).toEqual({ tenantId: 'tenant-a', workspaceId: 'workspace-a' });
+      expect(continued.grant.principalId).toBe('user-1');
       expect(ledger.read('cand-1')?.continuationIds).toEqual(['inv-2']);
+      // Unpredictable token: a second continuation mints a different grant.
+      const again = issueContinuationGrant(
+        ledger,
+        binding,
+        'cand-1',
+        { ...attestation, invocationId: 'inv-3' },
+      );
+      expect(again.grant.token).not.toBe(continued.grant.token);
     });
 
     it('refuses continuations without retained authority or fresh authn', () => {
       const ledger = createMemoryHostLedger();
-      const attestation = { invocationId: 'inv-2', issuedAt: '2026-10-27T00:00:00.000Z', hostPrincipal: 'host-1' };
-      expect(() => issueContinuationGrant(ledger, 'unknown', attestation)).toThrow(StorageDeniedError);
-      ledger.record(entryFor('cand-1'));
-      expect(() => issueContinuationGrant(ledger, 'cand-1', { ...attestation, invocationId: '' })).toThrow(
+      const binding = hostBindingFor('user-1');
+      const attestation = { invocationId: 'inv-2', issuedAt: '2026-10-27T00:00:00.000Z', hostPrincipal: 'user-1' };
+      expect(() => issueContinuationGrant(ledger, binding, 'unknown', attestation)).toThrow(
         StorageDeniedError,
       );
-      expect(() => issueContinuationGrant(ledger, 'cand-1', { ...attestation, hostPrincipal: '' })).toThrow(
+      ledger.record(entryFor('cand-1', 'user-1'));
+      expect(() => issueContinuationGrant(ledger, binding, 'cand-1', { ...attestation, invocationId: '' })).toThrow(
+        StorageDeniedError,
+      );
+      expect(() => issueContinuationGrant(ledger, binding, 'cand-1', { ...attestation, hostPrincipal: '' })).toThrow(
         StorageDeniedError,
       );
       // Copied retained invocation fields never grant.
-      expect(() => issueContinuationGrant(ledger, 'cand-1', { ...attestation, invocationId: 'inv-1' })).toThrow(
+      expect(() => issueContinuationGrant(ledger, binding, 'cand-1', { ...attestation, invocationId: 'inv-1' })).toThrow(
         StorageDeniedError,
       );
-      issueContinuationGrant(ledger, 'cand-1', attestation);
-      expect(() => issueContinuationGrant(ledger, 'cand-1', attestation)).toThrow(StorageDeniedError);
+      // Foreign principal: neither the attestation nor another binding passes.
+      expect(() =>
+        issueContinuationGrant(ledger, binding, 'cand-1', { ...attestation, hostPrincipal: 'other' }),
+      ).toThrow(/original host principal/);
+      expect(() =>
+        issueContinuationGrant(ledger, hostBindingFor('other'), 'cand-1', attestation),
+      ).toThrow(/different host principal/);
+      issueContinuationGrant(ledger, binding, 'cand-1', attestation);
+      expect(() => issueContinuationGrant(ledger, binding, 'cand-1', attestation)).toThrow(
+        StorageDeniedError,
+      );
+    });
+
+    it('refuses continuations of terminal candidates', () => {
+      const ledger = createMemoryHostLedger();
+      const binding = hostBindingFor('user-1');
+      ledger.record(entryFor('cand-1', 'user-1'));
+      ledger.markTerminal('cand-1', { outcome: 'admitted' }, 'cursor-9');
+      expect(() =>
+        issueContinuationGrant(ledger, binding, 'cand-1', {
+          invocationId: 'inv-2',
+          issuedAt: '2026-10-27T00:00:00.000Z',
+          hostPrincipal: 'user-1',
+        }),
+      ).toThrow(/completed candidates cannot continue/);
     });
 
     it('proves recovery evidence without applying effects', () => {
@@ -337,7 +419,7 @@ describe('host maintenance binding', () => {
         proof,
       );
       // Nothing was written by the proof path.
-      expect(ledger.read('cand-1')).toEqual({ ...proof, invocationId: 'inv-1', continuationIds: [] });
+      expect(ledger.read('cand-1')).toEqual({ ...proof, invocationId: 'inv-1', hostPrincipal: 'host-1', continuationIds: [] });
     });
 
     it('refuses recovery for unknown candidates and foreign scopes', () => {
