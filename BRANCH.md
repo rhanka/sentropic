@@ -43,6 +43,10 @@ Deliver approved r3 L4: `live-speech/src/node/{capture,device,terminal-control}.
   - Never amend tests with additive timeouts.
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
+  - 2026-10-27 lane-provisioning flake (accepted, non-systematic): one `make
+    test-live-speech SCOPE=tests/terminal-control.test.ts ENV=test-stt-l4` run
+    failed in `esbuild` postinstall (`spawnSync ... ETXTBSY`); the identical
+    rerun passed 9/9. Provisioning-side, unrelated to the committed diff.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)

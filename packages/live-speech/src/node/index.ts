@@ -23,6 +23,7 @@ export { CaptureSession } from './capture.js';
 export type { CaptureDiagnostics, CaptureFrame, CaptureSessionEvents, CaptureSessionOptions } from './capture.js';
 export { ControlError, TerminalController } from './terminal-control.js';
 export type {
+  HoldSource,
   KeyInput,
   TerminalControlEvent,
   TerminalControllerOptions,
