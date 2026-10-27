@@ -4,7 +4,7 @@
 - [x] Deliver W0, W1 and W4 from the approved artifact-weight analysis: dossier-only runtime data and a reproducible CI size budget, without changing the DS package.
 
 ## Scope / Guardrails
-- [x] Base: `origin/main` at `e70c056c37f6b95faa0372ba33ec2f75bc92705f`; W0 reference at `80b140557393667d468a0a99363a6bec99ed9150`; branch: `feat/artifact-render-budget`.
+- [x] Base: `origin/main` at `6690b8add`; W0 reference at `80b140557393667d468a0a99363a6bec99ed9150`; branch: `feat/artifact-render-budget`.
 - [x] Isolated worktree: `tmp/worktrees/artifact-weight`; root remains reserved for owner work.
 - [x] Make-only execution; no Python; no DS package or dependency version changes.
 - [x] Environment: `test-artifact-weight`, last argument of every make command; no application service ports required by the isolated file/build lane.
