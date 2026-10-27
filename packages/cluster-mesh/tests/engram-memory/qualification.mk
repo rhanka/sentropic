@@ -1,6 +1,7 @@
 # Run from the worktree root with both Makefiles; reuse the pinned Compose images.
 MEMORY_QUALIFICATION_MK := packages/cluster-mesh/tests/engram-memory/qualification.mk
 MEMORY_RECEIPTS ?= .tmp/memory-stage-b
+MEMORY_SCOPE ?= tests/engram-memory/durable-memory.spec.ts
 .PHONY: memory-stage-b memory-stage-b-locked
 memory-stage-b:
 	@test "$(ENV)" = test-e2-int
@@ -19,6 +20,6 @@ memory-stage-b-locked:
 	  { date -u +%FT%TZ; git rev-parse HEAD; git status --short; \
 	    sha256sum $(MEMORY_QUALIFICATION_MK) packages/cluster-mesh/tests/engram-memory/memory-* packages/cluster-mesh/tests/engram-memory/durable-memory.spec.ts; \
 	    $(MAKE) engram-e2-postgres-up API_PORT=9045 UI_PORT=5245 MAILDEV_UI_PORT=1145 ENV=$(ENV); \
-	    $(MAKE) test-cluster-mesh SCOPE=tests/engram-memory/durable-memory.spec.ts \
+	    $(MAKE) test-cluster-mesh SCOPE="$(MEMORY_SCOPE)" \
 	      CM_PG_URL=postgresql://app:app@postgres:5432/app API_PORT=9045 UI_PORT=5245 MAILDEV_UI_PORT=1145 ENV=$(ENV); \
 	  } 2>&1 | tee "$(MEMORY_RECEIPTS)/campaign.log"
