@@ -2,7 +2,7 @@
 
 ## Objective
 
-E7 after E3/E5/E6: host-owned memory bindings in `src/engram-memory/{binding,postgres,host-maintenance}.ts` with public host assembly and fixtures. Inject the host-owned PG driver/pool; Engram receives exactly `['read','write']`, while a distinct host-issued `maintain` grant/binding owns fence access/checks, consumer checkpoint/poison/retry, resync and snapshot maintenance. Provide the durable ledger, the continuation grant and proof-only recovery required by the E8 answers (gr-conductor). Base: E5 (`origin/feat/cluster-mesh-engram-e5` @ `8bad820e9`) merged with E6 (`origin/feat/cluster-mesh-engram-e6` @ `9b476e20d`); merge commits only. Pack-only `0.23.0-dev.9`. Engram stays `0.21.1`; P3 manifest unchanged (STOP if a change would alter it).
+E7 after E3/E5/E6: host-owned memory bindings in `src/engram-memory/{binding,postgres,host-maintenance}.ts` with public host assembly and fixtures. Inject the host-owned PG driver/pool; Engram receives exactly `['read','write']`, while a distinct host-issued `maintain` grant/binding owns fence access/checks, consumer checkpoint/poison/retry, resync and snapshot maintenance. Provide the durable ledger, the continuation grant and proof-only recovery required by the E8 answers (gr-conductor). Base: E5 (`origin/feat/cluster-mesh-engram-e5` @ `b982026cd`) merged with E6 (`origin/feat/cluster-mesh-engram-e6` @ `9b476e20d`); merge commits only. Pack-only `0.23.0-dev.9`. Engram stays `0.21.1`; P3 manifest unchanged (STOP if a change would alter it).
 
 ## Scope / Guardrails
 
