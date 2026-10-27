@@ -8,14 +8,10 @@
 // window). No transaction rewiring: the existing onCommitPossession seam is
 // reused, chained only for opt-in canonical kernels.
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { CanonicalOwnershipError } from '../instance-ownership.js';
+import { CanonicalOwnershipError, type CanonicalInstanceHandle } from '../instance-ownership.js';
 import { decodePgText } from './codec.js';
 import { PostgresStorageError } from './errors.js';
-import {
-  renewPgInstanceLease,
-  verifyPgInstanceOwnership,
-  type CanonicalInstanceHandle,
-} from './instance-ownership.js';
+import { renewPgInstanceLease, verifyPgInstanceOwnership } from './instance-ownership.js';
 import type { InjectedPgDriver, PgSession, PgTransactionOptions } from './protocol.js';
 
 const DEPRECATED_ASSET_NAME = /(?:^|[^a-z])(?:legacy|deprecated|backup|tmp|temp|old|bak|copy)(?:[^a-z]|$)/i;
@@ -167,8 +163,7 @@ export const assertPgOwnershipCatalog = async (session: PgSession, dataSchema: s
       WHERE n.nspname=$1 AND c.relname='instance_ownership' AND NOT t.tgisinternal`,
     values: [dataSchema],
   });
-  const trigger = triggers.rows.find((row) => row.tgname === 'instance_ownership_lease');
-  if (!trigger) refuse();
+  const trigger = triggers.rows.find((row) => row.tgname === 'instance_ownership_lease') ?? refuse();
   if ((trigger.tgenabled !== 'O' && trigger.tgenabled !== 'A') || trigger.tgdeferrable !== true || trigger.tginitdeferred !== true) refuse();
   if (trigger.tgtype !== 17) refuse();
   if (trigger.proname !== 'instance_ownership_guard' || trigger.lanname !== 'plpgsql') refuse();
