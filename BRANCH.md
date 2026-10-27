@@ -41,7 +41,7 @@
 - [x] P2-1 red: real PG rejects full 60s issuance at app skew -120s and +120s (CHECK 23514); remaining 15 integration cases pass.
 - [x] P2-2: export ACTIVATION_SQL_ASSET_SHA256 and test the raw SQL bytes; original 0001 remains byte-identical.
 - [x] R1 verification: typecheck/lint, 451 unit tests and 198 integration/E2E tests pass; includes one preserved, uncommitted cleanup/EXPLAIN vector. DB issuance rejects invalid TTLs and expired tickets deny at both app-clock skews.
-- [ ] P2-3: #759 remains open as of 2026-10-26; merge origin/main after it lands, retain 0.2.3, rerun validate-artifacts; PR stays draft.
+- [x] P2-3: #759 merged at 2d6643692; merge origin/main without rebasing, retain 0.2.3 over main's 0.2.2; typecheck, lint, 451 unit tests, 221 integration/E2E tests and pack pass on ENV=test-artifacts-upt. Mark PR ready after CI passes; do not merge.
 - [x] BR861-EX3: existing TicketStore plus browser-flow port; namespace binding, immutable IDs, <=60s lifetime, leased transaction, database clock after waits, no grant on uncertain COMMIT.
 - [x] Hosts own authority locks, migration/journal, scheduling, rotation and serving policy; restore invalidates activation state and rotates signing keys before serving.
 - [x] BR861-EX3 pack-only metadata: synchronize package/provider/workspace-lock versions; impact limited to 0.2.3 identity; rollback retains 0.2.2 metadata.
@@ -71,7 +71,7 @@
   - [x] Add lock-delayed/authority-delayed expiry, real committed acknowledgement loss and bounded cleanup vectors.
   - [x] Add restored pre-consume snapshot invalidation, fresh authority/flow recovery, SQL immutability and missing migration denial.
   - [x] Scoped gate green: 18/18 tests (4 unit, 14 real PG), 2026-10-26; cleanup completed afterward.
-- [ ] Lot 4: exact imports and authority/restore obligations; merge main again after #759.
+- [x] Lot 4: exact imports and authority/restore obligations; merge main again after #759.
   - [x] Export the adapter and unchanged versioned SQL; document W1.c/A6 composition and host authority/restore obligations.
 - [x] Lot 5: separate pack-only 0.2.3 bump; typecheck/lint/unit/integration/pack gates.
   - [x] Registry pre-bump check: latest 0.2.1; reserve owner-selected 0.2.3 after pending #759/0.2.2, no publication.
