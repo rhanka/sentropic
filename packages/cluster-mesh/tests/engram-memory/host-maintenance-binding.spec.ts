@@ -16,6 +16,7 @@ import { createMemoryHostLedger, proveForRecovery } from '../../src/engram-memor
 import { MemoryHostDriverRequiredError } from '../../src/engram-memory/sqlite.js';
 import { StorageDeniedError, StorageUnavailableError } from '../../src/storage/errors.js';
 import { grantFor } from '../storage/authority-corpus.js';
+import { g1Grant } from './g1-host.js';
 
 const qualifiedProvider = () => ({
   identity: { name: 'node-pg-owner', version: '8.16.3', artifactDigest: 'b'.repeat(64) },
@@ -63,7 +64,17 @@ describe('host maintenance binding', () => {
     await expect(ports.snapshot('scope')).rejects.toBeInstanceOf(StorageUnavailableError);
     expect(() => openMemoryMaintenance(null as never)).toThrow(StorageDeniedError);
   });
-  it.todo('denies maintenance operations through the neutral memory handle');
+  it('denies maintenance operations through the neutral memory handle', () => {
+    const provider = qualifiedProvider();
+    // The neutral handle grant carries only read/write: it cannot assemble
+    // a binding and cannot open maintenance ports.
+    expect(() =>
+      assembleMemoryHostBinding({ driver: provider, maintainGrant: g1Grant() }),
+    ).toThrow(StorageDeniedError);
+    expect(() =>
+      openMemoryMaintenance({ provider, maintainGrant: g1Grant() } as never),
+    ).toThrow(StorageDeniedError);
+  });
   it.todo('refuses expired, revoked or foreign-scope maintain grants');
   it.todo('checks fences and checkpoints through the host-only binding');
   it.todo('retries and poisons consumers without a second effect');
