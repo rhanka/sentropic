@@ -12,7 +12,11 @@ import { validateScopeGrant, type ScopeGrant } from '../storage/authority.js';
 import { StorageDeniedError } from '../storage/errors.js';
 import type { StorageScope } from '../storage/contracts.js';
 import { checkMemoryPostgresDriver, type MemoryPostgresDriverProvider } from './postgres.js';
-import type { MemoryHostLedger } from './ledger.js';
+import {
+  proveForRecovery,
+  type HostRecoveryProof,
+  type MemoryHostLedger,
+} from './ledger.js';
 
 /** The only operations Engram's neutral memory handle ever carries. */
 export const MEMORY_HANDLE_OPERATIONS = ['read', 'write'] as const;
@@ -209,4 +213,66 @@ export const issueContinuationGrant = (
     storeId: updated.storeId,
     grant,
   };
+};
+
+/** Spent or never-tracked candidate: the host ledger holds no entry. */
+export class MemoryMaintenanceNotFoundError extends Error {
+  readonly code = 'NOT_FOUND' as const;
+  constructor(candidateId: string) {
+    super(`NOT_FOUND: no host ledger entry for memory candidate '${candidateId}'`);
+    this.name = 'MemoryMaintenanceNotFoundError';
+  }
+}
+
+const checkBindingScope = (binding: MemoryHostBinding, scope: StorageScope, what: string): void => {
+  if (
+    scope.tenantId !== binding.maintainGrant.scope.tenantId ||
+    scope.workspaceId !== binding.maintainGrant.scope.workspaceId
+  ) {
+    throw new StorageDeniedError(`${what} scope does not match the maintain grant scope`);
+  }
+};
+
+/**
+ * Reattach a host maintenance session to a retained candidate. An unknown
+ * candidate — never tracked, or drained after its invocation was spent —
+ * surfaces NOT_FOUND (never a refusal and never a fresh reservation). A
+ * foreign scope is refused; an expired maintain grant cannot reattach.
+ */
+export const reattachMemoryMaintenance = (
+  binding: MemoryHostBinding,
+  ledger: MemoryHostLedger,
+  candidateId: string,
+): MemoryMaintainGrant => {
+  if (typeof binding !== 'object' || binding === null) {
+    throw new StorageDeniedError('memory reattach requires an assembled binding');
+  }
+  const retained = ledger.read(candidateId);
+  if (!retained) throw new MemoryMaintenanceNotFoundError(candidateId);
+  checkBindingScope(binding, retained.scope, 'reattach');
+  assertMaintainGrantLive(binding.maintainGrant);
+  return binding.maintainGrant;
+};
+
+/**
+ * Proof-only recovery through the host binding (E8 answer 4): the caller
+ * must hold a live maintain grant for the retained scope — a foreign
+ * scope is refused even with a live grant. Unknown or drained candidates
+ * are refused; use reattach to distinguish the spent (NOT_FOUND) case.
+ * By construction this path cannot write.
+ */
+export const proveForRecoveryAuthorized = (
+  ledger: MemoryHostLedger,
+  binding: MemoryHostBinding,
+  candidateId: string,
+  scope?: StorageScope,
+): HostRecoveryProof => {
+  if (typeof binding !== 'object' || binding === null) {
+    throw new StorageDeniedError('authorized recovery requires an assembled binding');
+  }
+  assertMaintainGrantLive(binding.maintainGrant);
+  const retained = ledger.read(candidateId);
+  if (!retained) throw new StorageDeniedError('no retained evidence for this candidate');
+  checkBindingScope(binding, retained.scope, 'recovery');
+  return proveForRecovery(ledger, candidateId, scope);
 };

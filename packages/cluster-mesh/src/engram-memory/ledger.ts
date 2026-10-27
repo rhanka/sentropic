@@ -29,6 +29,12 @@ export interface MemoryHostLedger {
   readonly read: (candidateId: string) => HostLedgerEntry | null;
   readonly recordContinuation: (candidateId: string, invocationId: string) => HostLedgerEntry;
   readonly markTerminal: (candidateId: string, receipt: unknown, cursor: string | null) => HostLedgerEntry;
+  /**
+   * Drop every entry of a spent invocation (terminal candidates whose
+   * continuation window closed). A later reattach for a drained candidate
+   * surfaces NOT_FOUND; proof-only recovery is impossible once drained.
+   */
+  readonly drainInvocation: (invocationId: string) => number;
   readonly snapshot: () => readonly HostLedgerEntry[];
   readonly restore: (entries: readonly HostLedgerEntry[]) => void;
 }
@@ -147,6 +153,17 @@ export const createMemoryHostLedger = (): MemoryHostLedger => {
       const stored = Object.freeze({ ...existing, state: 'terminal' as const, receipt, cursor });
       entries.set(candidateId, stored);
       return stored;
+    },
+    drainInvocation: (invocationId) => {
+      if (!nonEmpty(invocationId)) throw new StorageDeniedError('ledger drain requires an invocation identity');
+      let removed = 0;
+      for (const [candidateId, entry] of entries) {
+        if (entry.invocationId === invocationId) {
+          entries.delete(candidateId);
+          removed += 1;
+        }
+      }
+      return removed;
     },
   };
 };
