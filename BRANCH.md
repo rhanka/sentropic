@@ -55,11 +55,11 @@
   - [x] Validate exactly 64 lowercase hex without newline; apply a 0600 temporary Opaque manifest without leaking values or kubectl diagnostics.
   - [x] Emit only name, namespace, created/configured and an eight-hex SHA-256 fingerprint.
   - [x] Lot gate: mechanical host harness scope check through `make scope-check ENV=test-861-int`; this existing host-only target avoids Docker.
-- [ ] **Lot 2 — Selftests and documentation**
-  - [ ] Extend `deploy/ci/idp-identity-sync/workflow.selftest.mjs` for dispatch-only wiring, protected environment, no secret echo and always cleanup.
-  - [ ] Exercise real Node materialization with synthetic fixtures and stubbed kubectl in CI; reject malformed credentials without invoking kubectl.
-  - [ ] Update `deploy/ci/idp-identity-sync/CRED_CYCLE.md`: `.env` → `sentropic-idp-run` environment secret → protected workflow → named-Secret sync.
-  - [ ] Lot gate: run existing `make test-idp-sync-selftest ENV=test-idp-sync` only in CI because it starts containers.
+- [x] **Lot 2 — Selftests and documentation**
+  - [x] Extend `deploy/ci/idp-identity-sync/workflow.selftest.mjs` for dispatch-only wiring, protected environment, no secret echo and always cleanup.
+  - [x] Add CI execution of real Node materialization with synthetic fixtures and stubbed kubectl; reject malformed credentials without invoking kubectl.
+  - [x] Update `deploy/ci/idp-identity-sync/CRED_CYCLE.md`: `.env` → `sentropic-idp-run` environment secret → protected workflow → named-Secret sync.
+  - [x] Lot gate: runtime selftests delegated to CI `make test-idp-sync-selftest ENV=test-idp-sync` because the existing target starts containers.
 - [ ] **Lot N — Final validation**
   - [ ] Review every hunk and reconcile independent review where available.
   - [ ] Validate scope before each `make commit`; selectively stage, no AI trailers.
