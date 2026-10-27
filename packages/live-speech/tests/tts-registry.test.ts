@@ -4,7 +4,9 @@
 // binary, no audio files, no audio payload anywhere.
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   buildEspeakArgs,
@@ -80,7 +82,7 @@ describe('tts registry', () => {
     expect(engine.capabilities.maxChars).toBeGreaterThan(0);
   });
 
-  it('should identify the unpinned engine honestly', () => {
+  it('should expose the unpinned engine id', () => {
     expect(new EspeakNgEngine().engineId).toBe('espeak-ng/unpinned');
   });
 
@@ -139,5 +141,41 @@ describe('tts registry', () => {
     await expect(engine.synthesize('hello')).rejects.toThrow(/digest mismatch/);
     const pinned = new EspeakNgEngine(FAKE_BIN, [digestOf(FAKE_BIN)]);
     await expect(pinned.synthesize('hello')).rejects.toThrow(TtsSynthesisError);
+  });
+
+  it('should abort a real synthesis child on barge and reap it', async () => {
+    const pidFile = join(tmpdir(), `fake-espeak-abort-${process.pid}.pid`);
+    rmSync(pidFile, { force: true });
+    const priorMode = process.env.FAKE_APLAY_MODE;
+    const priorPid = process.env.FAKE_APLAY_PIDFILE;
+    try {
+      process.env.FAKE_APLAY_MODE = 'hang';
+      process.env.FAKE_APLAY_PIDFILE = pidFile;
+      const engine = new EspeakNgEngine(FAKE_BIN, [digestOf(FAKE_BIN)]);
+      const controller = new AbortController();
+      const pending = engine.synthesize('a narration that is still synthesizing', {
+        signal: controller.signal,
+      });
+      const deadline = Date.now() + 10000;
+      while (Date.now() < deadline) {
+        try {
+          readFileSync(pidFile, 'utf8');
+          break;
+        } catch {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+      }
+      controller.abort();
+      await expect(pending).rejects.toThrow(/aborted by barge-in/);
+      const pid = Number(readFileSync(pidFile, 'utf8').trim());
+      expect(Number.isInteger(pid) && pid > 0).toBe(true);
+      expect(() => process.kill(pid, 0)).toThrow(/ESRCH/);
+    } finally {
+      if (priorMode === undefined) delete process.env.FAKE_APLAY_MODE;
+      else process.env.FAKE_APLAY_MODE = priorMode;
+      if (priorPid === undefined) delete process.env.FAKE_APLAY_PIDFILE;
+      else process.env.FAKE_APLAY_PIDFILE = priorPid;
+      rmSync(pidFile, { force: true });
+    }
   });
 });
