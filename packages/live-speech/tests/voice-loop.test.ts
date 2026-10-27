@@ -4,7 +4,7 @@
 // and the blocked §8.1 receipt guard.
 import { describe, expect, it } from 'vitest';
 import { createHash } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -118,9 +118,6 @@ class FakePlayback implements PlaybackPort {
     // The loop maps any play failure to cancelled while bargePending is set,
     // exactly like the real PlaybackCancelledError path.
     this.failPlay?.(new Error('cancelled by test double'));
-  }
-  complete(): void {
-    this.releasePlay?.();
   }
   close(): void {
     this.closeCount += 1;
@@ -272,6 +269,28 @@ describe('voice loop', () => {
     expect(h.events.filter((event) => event.type === 'narration-start')).toHaveLength(1);
     await h.loop.speak('epoch five', { turnEpoch: 5 });
     expect(h.loop.diagnostics().epoch).toBe(5);
+  });
+
+  it('should refuse a late speak from the barged turn but accept the next one', async () => {
+    const h = harness(new FakeTts(), new FakePlayback(false));
+    await h.loop.speak('turn three', { turnEpoch: 3 });
+    // L2 barges turn 4 before its late callback arrives: without the barge
+    // raising the floor, speak(4) would be accepted (4 > 3).
+    h.loop.barge('key', { turnEpoch: 4 });
+    expect(h.loop.diagnostics().epoch).toBe(4);
+    await expect(h.loop.speak('late turn four', { turnEpoch: 4 })).rejects.toThrow(/stale turn epoch/);
+    await expect(h.loop.speak('untagged after epoch use')).rejects.toThrow(/untagged narration refused/);
+    await expect(h.loop.speak('turn five', { turnEpoch: 5 })).resolves.toMatchObject({ status: 'played' });
+    expect(h.loop.diagnostics().epoch).toBe(5);
+  });
+
+  it('should refuse key-shaped secrets by default without explicit policy', async () => {
+    const secret = 'sk-ant-abcDEF1234567890';
+    const h = harness(new FakeTts(), new FakePlayback(false));
+    await expect(h.loop.speak(`the key is ${secret}`)).rejects.toThrow(VoiceLoopRefusedError);
+    expect(h.events).toEqual([]);
+    expect(h.tts.calls).toEqual([]);
+    eventHygiene(h, secret);
   });
 
   it('should cancel playback within the barge call on open-mic VAD onset', async () => {
@@ -435,38 +454,48 @@ describe('voice loop', () => {
 
   it('should never spawn real playback for a barge that lands during synthesis', async () => {
     const pidFile = join(tmpdir(), `voice-loop-prespawn-${process.pid}.pid`);
-    await withEnv({ FAKE_APLAY_MODE: 'hang', FAKE_APLAY_PIDFILE: pidFile }, async () => {
-      const tts = new FakeTts({ hangSynth: true });
-      const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
-      const h = harness(tts, playback, { micMode: 'open-mic' });
-      const pending = h.loop.speak('barge arrives before any spawn');
-      await flush(10);
-      h.loop.barge('key');
-      tts.release();
-      await expect(pending).resolves.toMatchObject({ status: 'cancelled' });
-      expect(playback.playing).toBe(false);
-      await expect((async () => readFileSync(pidFile, 'utf8'))()).rejects.toThrow(/ENOENT/);
-    });
+    rmSync(pidFile, { force: true });
+    try {
+      await withEnv({ FAKE_APLAY_MODE: 'hang', FAKE_APLAY_PIDFILE: pidFile }, async () => {
+        const tts = new FakeTts({ hangSynth: true });
+        const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
+        const h = harness(tts, playback, { micMode: 'open-mic' });
+        const pending = h.loop.speak('barge arrives before any spawn');
+        await flush(10);
+        h.loop.barge('key');
+        tts.release();
+        await expect(pending).resolves.toMatchObject({ status: 'cancelled' });
+        expect(playback.playing).toBe(false);
+        await expect((async () => readFileSync(pidFile, 'utf8'))()).rejects.toThrow(/ENOENT/);
+      });
+    } finally {
+      rmSync(pidFile, { force: true });
+    }
   });
 
   it('should reap real playback on a mid-play barge within the bound', async () => {
     const pidFile = join(tmpdir(), `voice-loop-midplay-${process.pid}.pid`);
-    await withEnv({ FAKE_APLAY_MODE: 'hang', FAKE_APLAY_PIDFILE: pidFile }, async () => {
-      const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
-      const h = harness(new FakeTts(), playback, { micMode: 'open-mic' });
-      const pending = h.loop.speak('barge arrives mid-play');
-      const deadline = Date.now() + 10000;
-      while (!playback.playing && Date.now() < deadline) {
-        await new Promise((resolve) => setTimeout(resolve, 10));
-      }
-      expect(playback.playing).toBe(true);
-      const start = Date.now();
-      h.loop.barge('vad');
-      await expect(pending).resolves.toMatchObject({ status: 'cancelled' });
-      expect(Date.now() - start).toBeLessThan(1000);
-      const pid = Number(readFileSync(pidFile, 'utf8').trim());
-      expect(() => process.kill(pid, 0)).toThrow(/ESRCH/);
-    });
+    rmSync(pidFile, { force: true });
+    try {
+      await withEnv({ FAKE_APLAY_MODE: 'hang', FAKE_APLAY_PIDFILE: pidFile }, async () => {
+        const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
+        const h = harness(new FakeTts(), playback, { micMode: 'open-mic' });
+        const pending = h.loop.speak('barge arrives mid-play');
+        const deadline = Date.now() + 10000;
+        while (!playback.playing && Date.now() < deadline) {
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+        expect(playback.playing).toBe(true);
+        const start = Date.now();
+        h.loop.barge('vad');
+        await expect(pending).resolves.toMatchObject({ status: 'cancelled' });
+        expect(Date.now() - start).toBeLessThanOrEqual(150);
+        const pid = Number(readFileSync(pidFile, 'utf8').trim());
+        expect(() => process.kill(pid, 0)).toThrow(/ESRCH/);
+      });
+    } finally {
+      rmSync(pidFile, { force: true });
+    }
   });
 
   it('should map close-during-playback to cancelled, not playback-error', async () => {
