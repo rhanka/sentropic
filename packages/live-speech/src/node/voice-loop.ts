@@ -45,10 +45,34 @@ export interface VoiceLoopOptions {
 }
 
 export interface SpeakOptions {
-  /** L2 turn epoch carried through events; older epochs are refused (L2 fence seam). */
+  /**
+   * L2 turn epoch carried through events. The loop keeps a floor: a narration
+   * tagged at or below the floor is refused as stale, and once any epoch is
+   * in use an untagged narration is refused too. L2 raises the floor by
+   * barging with the interrupted turn's epoch, so a late callback from the
+   * cancelled turn can never create work.
+   */
   readonly turnEpoch?: number;
   readonly submitKey?: string;
 }
+
+export interface BargeOptions {
+  /** Epoch of the interrupted turn; raises the stale floor (L2 fence seam). */
+  readonly turnEpoch?: number;
+}
+
+/**
+ * Minimal default sensitive set: key/token-shaped secrets are refused unplayed
+ * by default (fail closed for spoken output). Callers own the policy and may
+ * replace the set wholesale; an explicit empty array disables the guard.
+ */
+const DEFAULT_SENSITIVE_PATTERNS: readonly RegExp[] = [
+  /sk-ant-[A-Za-z0-9\-_]{10,}/,
+  /ghp_[A-Za-z0-9]{10,}|github_pat_[A-Za-z0-9_]{10,}/,
+  /AKIA[0-9A-Z]{16}/,
+  /-----BEGIN (?:RSA )?PRIVATE KEY-----/,
+  /xox[bpas]-[A-Za-z0-9\-]{10,}/,
+];
 
 export interface VoiceLoopDiagnostics {
   readonly speaking: boolean;
@@ -58,7 +82,7 @@ export interface VoiceLoopDiagnostics {
   readonly muted: boolean;
   readonly played: number;
   readonly cancelled: number;
-  /** Highest turn epoch seen; null until the first epoch-tagged narration. */
+  /** Stale floor: narrations at or below it are refused; null until epochs are used. */
   readonly epoch: number | null;
 }
 
@@ -164,7 +188,7 @@ export class VoiceLoop {
   private closed = false;
   private played = 0;
   private cancelled = 0;
-  private maxSeenEpoch: number | null = null;
+  private epochFloor: number | null = null;
 
   constructor(options: VoiceLoopOptions) {
     this.tts = options.tts;
@@ -175,7 +199,10 @@ export class VoiceLoop {
     this.maxChunkChars = options.maxChunkChars ?? DEFAULT_MAX_CHUNK_CHARS;
     this.voice = options.voice;
     this.speedWpm = options.speedWpm;
-    this.sensitivePatterns = options.sensitivePatterns ?? [];
+    // A caller-supplied /g/ regex is stateful through lastIndex under .test():
+    // normalize once so the guard is deterministic.
+    const patterns = options.sensitivePatterns ?? DEFAULT_SENSITIVE_PATTERNS;
+    this.sensitivePatterns = patterns.map((pattern) => new RegExp(pattern.source, pattern.flags.replace('g', '')));
   }
 
   diagnostics(): VoiceLoopDiagnostics {
@@ -187,7 +214,7 @@ export class VoiceLoop {
       muted: this.muted,
       played: this.played,
       cancelled: this.cancelled,
-      epoch: this.maxSeenEpoch,
+      epoch: this.epochFloor,
     };
   }
 
@@ -207,9 +234,14 @@ export class VoiceLoop {
    * Barge in: cancel the current narration within the fence (the playback
    * cancel and the synth abort fire synchronously, before this call returns).
    * VAD barge-in is gated by the mic mode: open-mic always listens (unless
-   * muted), key mode only while the mic is on. Stop always wins.
+   * muted), key mode only while the mic is on. Stop always wins. A tagged
+   * barge raises the epoch floor even with nothing speaking, so a late
+   * callback from the cancelled turn is refused afterwards.
    */
-  barge(source: BargeSource): void {
+  barge(source: BargeSource, options: BargeOptions = {}): void {
+    if (options.turnEpoch !== undefined) {
+      this.epochFloor = Math.max(this.epochFloor ?? options.turnEpoch, options.turnEpoch);
+    }
     if (source === 'vad') {
       if (this.muted) return;
       if (this.micMode === 'key' && !this.micOn) return;
@@ -230,10 +262,12 @@ export class VoiceLoop {
     if (this.closed) throw new VoiceLoopClosedError();
     if (this.speaking !== null) throw new VoiceLoopBusyError();
     if (options.turnEpoch !== undefined) {
-      if (this.maxSeenEpoch !== null && options.turnEpoch < this.maxSeenEpoch) {
-        throw new VoiceLoopRefusedError(`stale turn epoch ${options.turnEpoch} (latest ${this.maxSeenEpoch})`);
+      if (this.epochFloor !== null && options.turnEpoch <= this.epochFloor) {
+        throw new VoiceLoopRefusedError(`stale turn epoch ${options.turnEpoch} (floor ${this.epochFloor})`);
       }
-      this.maxSeenEpoch = Math.max(this.maxSeenEpoch ?? options.turnEpoch, options.turnEpoch);
+      this.epochFloor = Math.max(this.epochFloor ?? options.turnEpoch, options.turnEpoch);
+    } else if (this.epochFloor !== null) {
+      throw new VoiceLoopRefusedError('untagged narration refused once epochs are in use');
     }
     const narrationId = `n${++narrationCounter}`;
     const bounded = boundNarration(text, this.maxNarrationChars);
