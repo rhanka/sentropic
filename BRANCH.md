@@ -68,10 +68,10 @@
 - [x] Inherited from lot #758 at `origin/feat/cluster-mesh-engram-e0`; its approved plan is preserved below.
 
 > # Feature: Engram E0 C6 asset freeze
-> 
+>
 > ## Objective
 > - [ ] Freeze the neutral declaration surface and additive asset mapping against installed Engram 0.21.1, preserving semantic digest `sha256:dff737ced37d801ef48bb4d7088fc4fbc92021d21fe2034ff33ea643b49bec28`.
-> 
+>
 > ## Scope / Guardrails
 > - [x] Approved specification: root `.tmp/engram-e2-host-tuple/plan.md`, revision 3, E0 only; PostgreSQL first under E2-Q1.
 > - [x] Branch `feat/cluster-mesh-engram-e0`; worktree `tmp/worktrees/mem-e0`; integration base `6c3f9f04a`; author codex / gpt-6.1-sol / high.
@@ -80,7 +80,7 @@
 > - [x] Preserve P2 `2b85ff28b6fe06bda0abcdc19255f61a1ed1e4b7cfbb40c2e881c98dd234424b`; stop if an authored change alters it.
 > - [x] Specific-file staging; `make commit` only, each below 150 changed lines, without attribution trailers.
 > - [x] Owner assigns this topic's unique pack-only `0.23.0-dev.1`; final declaration packaging remains serially assigned to the integrator.
-> 
+>
 > ## Branch Scope Boundaries (MANDATORY)
 > - **Allowed Paths (implementation scope)**:
 >   - `BRANCH.md`
@@ -107,7 +107,7 @@
 >   - [x] Inherited from integration #789 at `978fb67c0`: E1/E2/E3/E5/E6/E7 PostgreSQL storage and host-memory implementation, migration assets, tests, qualification wiring and candidate manifest; E7 released-pin consumer substitution, last-receipt reattestation and frozen-pin packaging fetch. These are inherited bytes, not E0 edits. Keep the E0 plan; validate authored scope against the integration base. Rollback: revert this merge.
 >   - [x] Integration version rule: max(E0 `0.23.0-dev.1`, integration `0.23.0-dev.9`) plus one dev increment is `0.23.0-dev.10`; update package manifest and root lock together. Regenerate through `make lock-root ENV=test-e2-int` after 21:00 UTC; no Docker before that time.
 >   - [x] BR0-EX1 (owner-authorized): serial pack-only package.json/root lock bump to unique 0.23.0-dev.1; satisfies topic bump gate, never published; rollback both version fields together.
-> 
+>
 > ## Feedback Loop
 > - [x] Owner update closes common-rule/Immo E2-D1 and Comments ACK gate; retained ACK in root `.tmp/engram-e2-host-tuple/e0-entry-check-2026-10-26.md`.
 > - [x] Integration-target bump probes retained; positive https://github.com/rhanka/sentropic/actions/runs/40314659239 at `e6a62bf52`: bump and E2 qualification job `121545389429` passed; publishers disabled.
@@ -128,16 +128,16 @@
 > - [ ] Engram producer ACK remains pending conductor relay; Sentropic freeze reference `b588dccbc`. No joint producer agreement or C9/L5 acceptance is claimed.
 > - [ ] Release-integrator handoff: admission run's broader validate-cluster-mesh fails registry Comments admission and selected fixture alignment on pack-only 0.23.0-dev.1 (jobs/121545389738); E2 qualification passes. Scope: integration-owned frozen Comments separation and selected installed tuple. Acceptance: full registry/packaging checks pass on the intended separate tuples without forced peers or widening. E0 does not alter those fixtures or claim installed acceptance.
 > - [x] Admission run's API lint failed npm installation with ECONNRESET (jobs/121545388775); final push starts a fresh run. No API source changes are indicated by that log.
-> 
+>
 > ## AI Flaky tests
 > - [x] No AI tests or flaky waiver applies.
-> 
+>
 > ## Orchestration Mode (AI-selected)
 > - [x] Multi-branch: one E0 topic targets the integration branch; serial metadata writer; no delegated implementation.
-> 
+>
 > ## UAT Management (in orchestration context)
 > - [x] No web, Chrome or VS Code changes; qualify declaration and installed constructor compatibility.
-> 
+>
 > ## Plan / Todo (lot-based)
 > - [x] **Lot 0 — Entry gates**
 >   - [x] Read Docker lock, rules, approved plan and P2 binding; mechanical branch check passes.
@@ -161,10 +161,10 @@
 - [x] Inherited from lot #763 at `origin/feat/cluster-mesh-engram-e1`; its approved plan is preserved below.
 
 > # Feature: Engram E1 Additive exact u64 counters
-> 
+>
 > ## Objective
 > Additive exact u64 counters for generic storage, with opt-in consumed paths and u64 epoch ownership.
-> 
+>
 > ## Scope / Guardrails
 > - Approved specification: root `.tmp/engram-e2-host-tuple/plan.md`, revision 3, E1 row and referenced sections.
 > - Branch `feat/cluster-mesh-engram-e1`; worktree `tmp/worktrees/mem-e1`; base `origin/feat/engram-e2-integration` plus `origin/feat/cluster-mesh-engram-e0` merge, no rebase.
@@ -175,7 +175,7 @@
 > - Keep old exports and signatures compatible.
 > - Specific-file staging; `make commit` only, each below 150 changed lines, without attribution trailers.
 > - Unique pack-only `0.23.0-dev.2`, next free N after E0.
-> 
+>
 > ## Branch Scope Boundaries (MANDATORY)
 > - **Allowed Paths (implementation scope)**:
 >   - `BRANCH.md`
@@ -218,7 +218,7 @@
 >   - `package-lock.json`
 > - **Exception process**:
 >   - [x] BR1-EX1: pack-only package.json/root lock bump to unique `0.23.0-dev.2`; satisfies topic bump gate, never published; rollback both version fields together.
-> 
+>
 > ## Feedback Loop
 > - [x] E0 merged from `origin/feat/cluster-mesh-engram-e0` at `ad4164534`; integration base `6c3f9f04a`; P2 unchanged.
 > - [x] Registry check 2026-10-26: mesh latest `0.22.1`; `0.23.0` reserved, `0.23.0-dev.1` taken by E0; `0.23.0-dev.2` is next free N for E1.
@@ -231,16 +231,16 @@
 > - [x] Scope lesson: PR diff vs integration includes the E0 merge until PR #758 lands; E0-originated paths above are declared inherited/unauthored. After E0 lands, merge the integration base and drop those lines.
 > - [x] Draft PR #763 targeting `feat/engram-e2-integration` is open; E2 qualification green on the previous head.
 > - [ ] Merge order (P2-6): #763 stays unmerged until #758 lands; then merge the integration base and drop the inherited-path lines.
-> 
+>
 > ## AI Flaky tests
 > - [x] No AI tests or flaky waiver applies.
-> 
+>
 > ## Orchestration Mode (AI-selected)
 > - [x] Mono-branch: one E1 topic targets the integration branch; no delegated implementation.
-> 
+>
 > ## UAT Management (in orchestration context)
 > - [x] No web, Chrome or VS Code changes; qualify storage counters and ownership.
-> 
+>
 > ## Plan / Todo (lot-based)
 > - [x] **Lot 0 — Baseline and branch setup**
 >   - [x] Read Docker lock, rules, approved plan, E0 entry check and P2 binding.
@@ -271,10 +271,10 @@
 - [x] Inherited from lot #765 at `origin/feat/cluster-mesh-engram-e2`; its approved plan is preserved below.
 
 > # Feature: Engram E2 PostgreSQL u64 persistence
-> 
+>
 > ## Objective
 > Persist exact u64 counters on PostgreSQL: counter codec, effects, journal/roots/readers paths and a new versioned migration for consumed counters/versions. Semantic counters travel separately from bounded page sizes and physical map-node IDs. Published SQL stays byte-identical.
-> 
+>
 > ## Scope / Guardrails
 > - Approved specification: root `.tmp/engram-e2-host-tuple/plan.md`, revision 3, E2 row and referenced sections.
 > - Branch `feat/cluster-mesh-engram-e2`; worktree `tmp/worktrees/mem-e2`; base `origin/feat/cluster-mesh-engram-e1`, no rebase.
@@ -285,7 +285,7 @@
 > - Specific-file staging; `make commit` only, each below 150 changed lines, without attribution trailers.
 > - Unique pack-only `0.23.0-dev.3`, next free N after E1.
 > - Published 001-006 and comments SQL stay byte-identical (checksums pinned in tests); only `007` is new.
-> 
+>
 > ## Branch Scope Boundaries (MANDATORY)
 > - **Allowed Paths (implementation scope)**:
 >   - `BRANCH.md`
@@ -357,7 +357,7 @@
 > - **Exception process**:
 >   - [x] BR2-EX2: owner-authorized PR765 r1 fixes include PostgreSQL snapshots, scope cursor signatures and directly affected PG tests; exact journal positions must cover full u64. Impact: PG counter strings; rollback: revert r1 commits together.
 >   - [x] BR2-EX1: pack-only package.json/root lock bump to unique `0.23.0-dev.3`; satisfies topic bump gate, never published; rollback both version fields together.
-> 
+>
 > ## Feedback Loop
 > - [x] PR765 r1 P1-2: PG atomic gate requires unique non-empty string result IDs for legacy and u64 units; missing and malformed IDs refuse before effects.
 > - [x] P1-2 negative fixture rows retain array identity (including duplicates) and include negative/unsafe numeric IDs; legacy and u64 gate paths both tested.
@@ -380,16 +380,16 @@
 > - [ ] Push draft PR targeting `feat/engram-e2-integration`; E2 qualification green; no merge.
 > - [x] 007 consequence: the two specs pinning migration-chain ordinals move with the new version (module hypothetical 007→008, reattest last receipt 6→7); no behavior change.
 > - [x] Scope lesson (stacked PRs): the PR diff vs integration includes the E0 merge and E1 until #758/#763 land; E0/E1-originated paths above are declared inherited/unauthored. After they land, merge the integration base and drop those lines.
-> 
+>
 > ## AI Flaky tests
 > - [x] No AI tests or flaky waiver applies.
-> 
+>
 > ## Orchestration Mode (AI-selected)
 > - [x] Mono-branch: one E2 topic on the E1 branch; no delegated implementation.
-> 
+>
 > ## UAT Management (in orchestration context)
 > - [x] No web, Chrome or VS Code changes; qualify PG counters, migration, reopen and rollback.
-> 
+>
 > ## Plan / Todo (lot-based)
 > - [x] **Lot 0 — Baseline and branch setup**
 >   - [x] Read Docker lock, approved plan E2 row, C5 binding and K3/K5/K8 version rule.
@@ -416,10 +416,10 @@
 - [x] Inherited from lot #775 at `origin/feat/cluster-mesh-engram-e3`; its approved plan is preserved below.
 
 > # Feature: Engram E3 original-result recovery
-> 
+>
 > ## Objective
 > - [ ] Recover the immutable stored moduleResult after a lost commit acknowledgement through scoped PostgreSQL lookup and a neutral memory bridge.
-> 
+>
 > ## Scope / Guardrails
 > - Approved specification: root `.tmp/engram-e2-host-tuple/plan.md`, revision 3, E3 row and referenced sections.
 > - Branch `feat/cluster-mesh-engram-e3`; worktree `tmp/worktrees/mem-e3`; base E2 `75076d43e`, merge never rebase.
@@ -430,7 +430,7 @@
 > - Specific-file staging; `make commit` only, each below 150 changed lines, without attribution trailers.
 > - Unique pack-only `0.23.0-dev.6`; Engram stays exactly `0.21.1`.
 > - Published SQL stays byte-identical; `007` is inherited from E2. No E3 migration or receipt table.
-> 
+>
 > ## Branch Scope Boundaries (MANDATORY)
 > - **Allowed Paths (implementation scope)**:
 >   - `BRANCH.md`
@@ -508,7 +508,7 @@
 >   - `package-lock.json`
 > - **Exception process**:
 >   - [x] BR3-EX1: authorized pack-only package.json/root lock bump to `0.23.0-dev.6`; no publication; rollback both fields together.
-> 
+>
 > ## Feedback Loop
 > - [x] E2 #765 is in review at `75076d43e`; E3 owns recovery hooks next; E5 follows E3/E4 serially.
 > - [x] Source manifest baseline is inherited `f2b094ae034514727dfe2f4c9a89b3742e3d75beafc8f70e5074cd49d7f16642`; no P2/P3 re-pin or manifest edit is authorized here.
@@ -521,16 +521,16 @@
 > - [x] Shared #767 merge 4/4: inherit `0cc3b1bf8` reserved-next Comments refusal proof. All three shared test files now match #767 exactly; frozen fixture and manifest bytes remain unchanged.
 > - [x] The inherited E0/E1/E2 paths above describe stacked PR ancestry only; authored E3 changes are restricted to recovery files and pack metadata.
 > - [ ] Push draft PR to `feat/engram-e2-integration`; get E2 qualification green; do not merge.
-> 
+>
 > ## AI Flaky tests
 > - [x] No AI tests or flaky waiver applies.
-> 
+>
 > ## Orchestration Mode (AI-selected)
 > - [x] Multi-branch: one E3 topic on E2, integrated by merge only; no delegated implementation.
-> 
+>
 > ## UAT Management (in orchestration context)
 > - [x] No web, Chrome or VS Code changes; qualify durable recovery and authority through storage tests.
-> 
+>
 > ## Plan / Todo (lot-based)
 > - [x] **Lot 0 — Baseline and branch setup**
 >   - [x] Read Docker lock, mandatory rules, approved E3 plan and neutral recovery contract.
@@ -561,9 +561,9 @@
 - [x] Inherited from lot #779 at `origin/feat/cluster-mesh-engram-e4`; its approved plan is preserved below.
 
 > # Branch: feat/cluster-mesh-engram-e4 — Canonical PostgreSQL acquisition (lot E4)
-> 
+>
 > ## Objective
-> 
+>
 > Implement the EXISTING `CanonicalInstanceOwnershipV1` durably in PostgreSQL:
 > new `src/storage/postgres/instance-*.ts` backed by additive core migration
 > `008-instance-ownership`, reusing `CANONICAL_INSTANCE_OWNERSHIP_CONTRACT`
@@ -572,18 +572,18 @@
 > artifacts-coordinator reuse). G-P0a/G-P0b retained session, durable u64 epoch,
 > journal/scope↔store identity, installed guard assets/catalog checks.
 > E2 = #765 core 007; E4 reserves core **008** (recorded below).
-> 
+>
 > ## Scope / Guardrails
-> 
+>
 > - MUST reuse `CANONICAL_INSTANCE_OWNERSHIP_CONTRACT` name/version/meaning/digest, handles and `CanonicalOwnershipError` codes from `src/storage/instance-ownership.ts` (frozen file, import only).
 > - NO second PostgreSQL ownership contract. NO artifacts-coordinator reuse.
 > - Engram stays `0.21.1`; P2/P2+P3 manifests unchanged; stop if an authored change alters them.
 > - Additive SQL only, chained `requires` on `007-consumed-counters@1`; `generate-pg-manifest.mjs` + `manifest.json` stay in sync (checksums pinned by specs).
 > - Existing SQLite tests pass; the shared corpus keeps registry semantics identical.
 > - Tests first; `ENV=test-e2-int` as the last make argument; `make commit MSG="type: …"` (<150 lines, `git add` specific files, no AI trailers). Never `ENV=dev`. 0 Python.
-> 
+>
 > ## Branch Scope Boundaries (MANDATORY)
-> 
+>
 > - **Allowed Paths (implementation scope)**:
 >   - `BRANCH.md`
 >   - `packages/cluster-mesh/src/storage/postgres/instance-ownership.ts` (new)
@@ -625,17 +625,17 @@
 > - **Exception process**:
 >   - Declare `BRCM-E4-EXn` with reason, impact and rollback before any scope expansion.
 >   - [x] `BRCM-E4-EX0`: reserved core migration number **008** (`008-instance-ownership`), next free after E2's 007 (`#765`). Impact: one additive asset + manifest entry chained on 007; rollback: drop the file and the manifest entry. No renumbering.
-> 
+>
 > ## Plan / Todo (lot-based)
-> 
+>
 > - [x] Lot E4-0 — setup: this BRANCH.md; harness branch check; pack-only `0.23.0-dev.7` (`package.json` + lock); record core 008 reservation (EX0 above).
 > - [x] Lot E4-1 — tests first (red): `instance-corpus.ts` shared registry semantics; parameterize `instance-ownership.spec.ts` (same outcomes); new `postgres-instance-ownership.spec.ts` (two processes/copies, same principal, aliases, different store_id for one journal, exactly one live holder, prompt refusal, release/reacquire, exact u64 epoch advance, terminal loss); new `postgres-instance-guard.spec.ts` (G-P0a open, G-P0b commit guard, journal/scope↔store identity, installed asset/catalog checks, contract digest + error codes unchanged).
 > - [x] Lot E4-2 — 008 migration + manifest sync: `008-instance-ownership.sql` (ownership table, exact u64 epoch, additive only); `manifest.json` 008 entry; generator entry; pinned-spec updates (module hypothetical→009, reattest ordinal→8, u64 length→8 + 008 block).
 > - [x] Lot E4-3 — implementation (green): `instance-ownership.ts` (durable acquire/verify/release/mark-terminal/current, exact u64, `CanonicalOwnershipError` codes); `instance-guard.ts` (G-P0a retained-session open, G-P0b commit decision guard); wire open path only (no transaction rewiring — E5).
 > - [ ] Lot E4-4 — gates: full `test-cluster-mesh SCOPE=tests/storage` green on `ENV=test-e2-int`; scope-check; `make commit` per file group (<150 lines); push; draft PR to `feat/engram-e2-integration`; CI green; no merge.
-> 
+>
 > ## Feedback Loop
-> 
+>
 > - Blocker: if E2's #765 lands on the integration branch with a different 008 occupant, stop and coordinate (requires-chain conflict) — do not renumber.
 > - Resync R1: merged `origin/feat/cluster-mesh-engram-e2` at `09cff1f8b` (merge commit `41071d16d`); 007 checksum re-derived from E2 (`545e6f92…`); 008 stays chained after it.
 > - R1 redesign (Opus r1 CHANGES): opt-in `canonicalOwnership` (intended for the memory kernel; composition owns the allow-list; Comments/M2 behavior unchanged, no 008 requirement); lease-based retained session (`holder_until`) with prompt `instance-busy` refusal (no supersede, no queue); in-commit-tx guard via per-kernel driver wrapper + AsyncLocalStorage session (no second tx, no pool deadlock); renewal piggyback on RW txs; deferred lease trigger in 008 as installed final backstop + catalog verification (`tgenabled='O'` born, `'A'` accepted; binding; deferral).
@@ -646,9 +646,9 @@
 > - Qualification limits (lease semantics): the holder renews only on read-write transactions (default TTL 5 min); a read-only or idle holder past TTL may be taken over and then reads as `stale-epoch`/`terminal-loss`. The deferred trigger rejects any UPDATE committing a dead lease, including test setup — seed/terminate rows via DELETE+INSERT, never UPDATE.
 > - Qualification limits (replica mode): 008 creates a plain constraint trigger, born `tgenabled='O'` — skipped under `session_replication_role=replica`, so the backstop only guards the primary. E4 is single-primary by design (no replicas; writes never go to a standby), and the in-tx renewal UPDATE stays the primary guard. Pinned by `pg ownership catalog enablement` mock tests (`'O'`/`'A'` accept, `'D'`/`'R'`/missing refuse as `open-refused`). Requiring `'A'` (`ENABLE ALWAYS`) would change the 008 checksum — decided against; revisit if replicas ever enter scope.
 > - AI CI job red-on-main is out of scope for this lot's gate (E4 gate = cluster-mesh lanes green).
-> 
+>
 > ## Gate receipts (r3, head `d8132b821` + r3 commits)
-> 
+>
 > All commands run as `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make <target> ... ENV=test-e2-int` (`ENV` last, never `ENV=dev`):
 > - `make test-cluster-mesh SCOPE=tests/storage CM_PG_URL=postgresql://app:app@postgres:5432/app ENV=test-e2-int` → Test Files 75 passed | 1 skipped (76); Tests 470 passed | 2 skipped (472). Includes `postgres-instance-multiprocess.spec.ts` 2/2 (real kernels, deterministic expiry injection, no sleeps), `postgres-instance-guard.spec.ts` 15/15 (incl. 5 `pg ownership catalog enablement` mock rows), `postgres-instance-ownership.spec.ts` 15/15, shared corpus neutral + PG green.
 > - `make typecheck-cluster-mesh ENV=test-e2-int` → exit 0, no TS errors.
@@ -662,10 +662,10 @@
 - [x] Inherited from lot #764 at `origin/feat/cluster-mesh-engram-e8`; its approved plan is preserved below.
 
 > # Feature: Engram E8 authoritative candidate scope liaison
-> 
+>
 > ## Objective
 > - [ ] Exercise the frozen Engram 0.21.1 candidate-to-invocation/store/scope liaison outside sealed bytes; C7 acceptance remains `unverified` pending E7 integration evidence.
-> 
+>
 > ## Scope / Guardrails
 > - [x] Approved root `.tmp/engram-e2-host-tuple/plan.md`, revision 3, E8 only; base E0 `ad4164534`.
 > - [x] Branch `feat/cluster-mesh-engram-e8`; worktree `tmp/worktrees/mem-e8`; merge only, no rebase.
@@ -674,7 +674,7 @@
 > - [x] Shared Docker lock for builds/tests/containers; sanctioned Compose targets; cleanup after each step.
 > - [x] No service ports published; reserve API 9040, UI 5240, mail 1140 if needed.
 > - [x] Specific-file staging; `make commit` only; each commit below 150 changed lines; no attribution trailers.
-> 
+>
 > ## Branch Scope Boundaries (MANDATORY)
 > - **Allowed Paths (implementation scope)**:
 >   - `BRANCH.md`
@@ -705,7 +705,7 @@
 >   - `package-lock.json`
 > - **Exception process**:
 >   - [x] BRE8-EX1: owner assigns unique pack-only `0.23.0-dev.4`; manifest/root-lock version edits only; rollback both together; never publish.
-> 
+>
 > ## Feedback Loop
 > - [x] BRE8-EX2: integration base `6c3f9f04a` does not yet contain E0; list inherited E0 paths for actual-base CI scope only. `git diff --exit-code ad4164534 HEAD -- <inherited paths>` passes; E8 must not edit those bytes. Impact: scope declaration only; rollback: remove inherited entries after E0 integration. Manifest/root-lock entries remain version-only under BRE8-EX1.
 > - [x] Producer answers 1–5 recorded in root `.tmp/engram-e2-host-tuple/e8-report.md`; E7 inputs: durable ledger, continuation grant, proof-only recovery. Composition ACK is partial; C7 acceptance remains `unverified`.
@@ -717,16 +717,16 @@
 > - [x] Resume: retain prior commits; type the DTO fixtures and crypto result explicitly; cover admission, asynchronous issuance revocation and ambiguous commit refusal.
 > - [x] Known llm-gateway 404 is outside E8 scope per owner.
 > - [x] Registry 2026-10-26: latest mesh 0.22.1; assigned 0.23.0-dev.4 returns 404 and exceeds registry/base; pack-only manifest/root-lock bump, no publication.
-> 
+>
 > ## AI Flaky tests
 > - [x] No AI-dependent tests, flaky waiver, or increased timeout.
-> 
+>
 > ## Orchestration Mode (AI-selected)
 > - [x] Multi-branch: independent E8 topic targets `feat/engram-e2-integration`.
-> 
+>
 > ## UAT Management (in orchestration context)
 > - [x] No UI change; host integration and producer co-review replace interactive UAT.
-> 
+>
 > ## Plan / Todo (lot-based)
 > - [x] **Lot 0 — Baseline**: read Docker lock, E8 row, E0 ACK, rules/template; mechanical branch check; P2 pinned.
 > - [x] **Lot 1 — Tests first**: candidate probe reproduced 5 failures/1 pass before liaison; expanded memory suite passes 92/92 across 12 files, including installed constructor provenance and DTO compilation.
@@ -743,17 +743,17 @@
 - [x] Inherited from lot #793 at `origin/feat/engram-e2-memory-pg`; its approved plan is preserved below.
 
 > # Wire shared PG for the memory lane (integration)
-> 
+>
 > ## Objective
 > Run the `memory` lane of `engram-e2-qualify` against the shared Postgres service (`ENV=test-e2-int` style) so PG-backed memory cases execute instead of skipping, fail-closed when PG is absent.
-> 
+>
 > ## Scope / Guardrails
 > - Base `origin/feat/engram-e2-integration` (`d22fc3f24`); PR targets `feat/engram-e2-integration`.
 > - Make-only; `ENV=test-e2-int` last; 0 Python; no publication or merge.
 > - Serialize Docker/test steps with the shared lock; existing Compose targets only; `make down` after each step.
 > - Makefile lane wiring only: no src, range, version or product change.
 > - Specific-file staging; `make commit` only, each below 150 changed lines, without attribution trailers.
-> 
+>
 > ## Branch Scope Boundaries (MANDATORY)
 > - **Allowed Paths (implementation scope)**:
 >   - `BRANCH.md`
@@ -772,22 +772,22 @@
 >   - _none_
 > - **Exception process**:
 >   - [x] BR-MEMPG-EX1 (integrator): the memory lane starts the shared PG service and exports the lane `CM_PG_URL`, mirroring the postgres lane; a missing PG aborts the lane before any test runs.
-> 
+>
 > ## Feedback Loop
 > - [x] Root cause: the `memory` lane ran `test-cluster-mesh SCOPE=tests/engram-memory` with no `CM_PG_URL` and no PG service, so PG-backed memory cases skipped and any PG stage never ran in CI.
 > - [x] Fix: same `CM_PG_URL` value and same `engram-e2-postgres-up` gate as the `postgres` lane; `set -eu` keeps it fail-closed.
 > - [x] No `ci.yml` change: `qualify-engram-e2` already runs `engram-e2-qualify` on the `test-e2-int` Compose project that provides the `postgres` host (proven by the postgres lane).
 > - [ ] Push draft PR targeting `feat/engram-e2-integration`; verify validate-cluster-mesh green without merging.
-> 
+>
 > ## AI Flaky tests
 > - [x] No AI tests or flaky waiver applies.
-> 
+>
 > ## Orchestration Mode (AI-selected)
 > - [x] Mono-branch: one integration fix; no delegated implementation.
-> 
+>
 > ## UAT Management (in orchestration context)
 > - [x] No web, Chrome or VS Code changes; qualify the memory lane locally on integration with PG up (skips become executions where PG-backed).
-> 
+>
 > ## Plan / Todo (lot-based)
 > - [x] **Lot 0 — Branch setup**: worktree `tmp/worktrees/mem-pg-wire` on the integration base; `harness check branch` PASS.
 > - [x] **Lot 1 — Wiring**: `CM_PG_URL` + `postgres-up` for the memory lane.
@@ -1065,4 +1065,3 @@
 > - AI CI job red-on-main is out of scope for this lot's gate.
 > - Slices landed: PG provider check, host assembly, fail-closed maintenance ports, ledger + continuation + proof-only, positive host calls through the injected pool, neutral-handle denial; binding-compatibility pinned.
 > - E7 receipts (ENV=test-e2-int, CM_PG_URL=postgresql://app:app@postgres:5432/app, head `aba2cbb97`): `SCOPE=tests/engram-memory` 16 files 122 passed, 0 todo; `SCOPE=tests/storage` 78 passed | 1 skipped files, 502 passed | 4 skipped; typecheck/lint exit 0; scope-check PASS C2. CI rerun pending.
-
