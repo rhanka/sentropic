@@ -398,3 +398,81 @@ describe('openai session lifecycle', () => {
   it('should keep profiles independent on separate sockets and sinks', async () => {
     const liveSocket = new ScriptSocket(frameScriptFr);
     const whisperSocket = new ScriptSocket(frameScriptEnCorrected);
+    const liveSink = new RecordingSink();
+    const whisperSink = new RecordingSink();
+    const open = (config: typeof liveConfig, socket: ScriptSocket, sink: RecordingSink) =>
+      openTranscriptionSession(config, {
+        request: sessionRequest(config.modelId),
+        admission: admission({ operationId: `op-${config.modelId}` }),
+        bearerToken: 'bearer-fixture',
+        connect: async () => socket,
+        usage: sink,
+        nowMs: () => 1_000,
+      });
+    const [live, whisper] = await Promise.all([
+      open(liveConfig, liveSocket, liveSink), open(whisperConfig, whisperSocket, whisperSink),
+    ]);
+    const [liveEvents, whisperEvents] = await Promise.all([collectEvents(live), collectEvents(whisper)]);
+    expect(liveEvents.filter((event) => event.type === 'transcript.final')).toHaveLength(1);
+    expect(whisperEvents.filter((event) => event.type === 'transcript.final')).toHaveLength(1);
+    expect(liveSocket.sent).not.toEqual(whisperSocket.sent);
+    expect(liveSink.settles).toHaveLength(1);
+    expect(whisperSink.settles).toHaveLength(1);
+  });
+
+  it('should never surface the bearer [REDACTED] in failures and store no audio', async () => {
+    const failingConnect: OpenAiTranscriptionConnect = async () => {
+      throw new Error('provider connect failed (status 401)');
+    };
+    await expect(openTranscriptionSession(liveConfig, {
+      request: sessionRequest('gpt-live-transcribe'),
+      admission: admission(),
+      bearerToken: 'bearer-secret-fixture',
+      connect: failingConnect,
+      usage: new RecordingSink(),
+    })).rejects.toThrowError(/provider connect failed \(status 401\)/);
+    try {
+      await openTranscriptionSession(liveConfig, {
+        request: sessionRequest('gpt-live-transcribe'),
+        admission: admission(),
+        bearerToken: 'bearer-secret-fixture',
+        connect: failingConnect,
+        usage: new RecordingSink(),
+      });
+      expect.unreachable();
+    } catch (error) {
+      expect(String(error)).not.toContain('bearer-secret-fixture');
+      expect(JSON.stringify(new RecordingSink())).not.toContain('bearer-secret-fixture');
+    }
+    const socket = new ScriptSocket();
+    const session = await openTranscriptionSession(liveConfig, {
+      request: sessionRequest('gpt-live-transcribe'),
+      admission: admission(),
+      bearerToken: 'bearer-secret-fixture',
+      connect: async (url, headers) => {
+        expect(headers.authorization).toBe('bearer-secret-fixture');
+        expect(url).toBe('wss://api.openai.com/v1/realtime?intent=transcription');
+        return socket;
+      },
+      usage: new RecordingSink(),
+      nowMs: () => 1_000,
+    });
+    await session.write(frame('u1', 10, 24));
+    const append = JSON.parse(socket.sent[1] as string) as { audio: string };
+    expect(Buffer.from(append.audio, 'base64')).toEqual(Buffer.alloc(48));
+    expect(session).not.toHaveProperty('bearerToken');
+    await session.close();
+  });
+
+  it('should keep the G-CLOUD receipt blocked and never claim live evidence', () => {
+    const receiptPath = fileURLToPath(new URL('../bench/l9-openai-stt.receipt.json', import.meta.url));
+    const receipt = JSON.parse(readFileSync(receiptPath, 'utf8')) as {
+      status: string;
+      missing: Array<{ item: string; status: string }>;
+    };
+    expect(receipt.status).toBe('blocked');
+    for (const item of receipt.missing) {
+      expect(item.status).toBe('blocked');
+    }
+  });
+});
