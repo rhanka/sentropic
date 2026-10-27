@@ -57,6 +57,7 @@
   - `packages/cluster-mesh/src/storage/postgres/commit-results.ts` (inherited base lots E0-E6 only; BR7-EX2)
   - `packages/cluster-mesh/src/storage/postgres/core.ts` (inherited base lots E0-E6 only; BR7-EX2)
   - `packages/cluster-mesh/src/storage/postgres/effects.ts` (inherited base lots E0-E6 only; BR7-EX2)
+  - `packages/cluster-mesh/src/storage/postgres/memory-chain.ts` (BR9-EX3 exact memory chain transport)
   - `packages/cluster-mesh/src/storage/postgres/errors.ts` (inherited base lots E0-E6 only; BR7-EX2)
   - `packages/cluster-mesh/src/storage/postgres/index.ts` (inherited base lots E0-E6 only; BR7-EX2)
   - `packages/cluster-mesh/src/storage/postgres/instance-guard.ts` (inherited base lots E0-E6 only; BR7-EX2)
@@ -145,6 +146,7 @@
   - [x] Engine traces pass (7/7); add host checkpoint/resync/snapshot and poison/retry with independent maintain checks, plus host read/maintain grant without write. No read/write/maintain grant enters the campaign.
   - [x] Host maintenance positive cases pass (9/9); add independent-process contention and real SIGKILL before/after COMMIT, own peer TCP pool and elapsed durable lease, original-result lookup in a new epoch.
   - [x] Actual SIGKILL paths and process contention execute; correct two test-carrier errors (canonical source sequence and frozen `created_cursor` name). Add C5 sparse high-water cases at safe/signed/u64 boundaries through the same neutral PG handle.
+  - [x] Add same-handle second constructor, durable store/scope binding and independent memory-token revocation cases before changing acquisition behavior.
 - [ ] Lot E9-4 — `test-cluster-mesh` scoped memory and PostgreSQL lanes; typecheck/lint; mechanical scope gate before each `make commit`; every authored commit under 150 lines; no AI trailers.
 - [ ] Lot E9-5 — retain campaign facts and counts per profile; push retry every ten minutes until successful; draft PR from this file; record CI; do not merge or publish.
 
@@ -162,6 +164,7 @@
 
 - [x] BR9-EX1: direct E9 blocker reproduced by installed `commitPending`: PostgreSQL validator expects the E6 camel-case proof model while frozen Engram persists snake-case K7/K8 DTOs. Allow the smallest adapter in `src/engram-memory/postgres.ts` to validate the actual wire bytes through the existing first-proof rules. No stored-value rewrite, schema/contract/P3 change. Rollback: remove that adapter; the positive Stage B capture must fail again.
 - [x] BR9-EX2: the next real capture reaches journal validation and fails because E6 expects an `intent_hash` field absent from frozen Engram events. Derive that projection metadata from the canonical event intent in `src/engram-memory/projection.ts`; immutable event bytes remain unchanged. Rollback: remove derivation; the capture regression fails again.
+- [x] BR9-EX3: all three C5 high-water cases reproduce `chain sequence exhausted` in `postgres/effects.ts:129`. Permit exact-u64 memory chain count/position arithmetic, the corresponding transactional reader and projection ordinal, with type-only adaptations in the existing generic readers/manifests/installed/scope. Other modules retain numeric transport. No published SQL or neutral contract changes. Rollback: revert this bounded chain fix; C5 must fail again.
 - Blocker: if E2/E3/E6 move under this branch (new migration writer, changed `migrations.ts`, moved `scope.ts` hooks), stop and coordinate — do not renumber or rewire around them.
 - Base refs: E5 `8bad820e9` (E5-1/E5-2 done, E5-3 CI pending on #787 for structural E2-base reasons, not code); E6 `9b476e20d` (projection/resync, memory PG assets, `postgres-memory.spec.ts` in the E2 real-PG lane).
 - Pack-only `0.23.0-dev.9` resolves the merge conflict (E5 `dev.8` vs E6 `dev.5`); version fields only, rollback both fields together. Known dev-bump gate friction (release-only `satisfiesRange`) tolerated until #774, as in E5/E6.
