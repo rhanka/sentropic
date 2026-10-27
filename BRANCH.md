@@ -80,6 +80,7 @@
   - [x] Export speech subpath and bump package to 0.22.0; keep all shared owner source files unchanged.
   - [ ] Reconcile independent correctness and accounting/security reviews; no self-certification of durable host acceptance.
 - [ ] **Lot 5 — Draft delivery and validation**
+  - [x] Prepare .tmp/live-stt/l8/local-gate.sh: 21:00 UTC guard, exact-head/clean-worktree checks, one package run, locked cleanup and persisted exit receipts.
   - [x] Push feat/live-stt-l8; open draft PR798 against feat/live-stt-l2 with this plan as body and post implementation plan.
   - [ ] Monitor exact-head GitHub CI: lint/typecheck/test/build/pack; resolve branch failures.
   - [ ] After 21:00 UTC only: flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make test-llm-gateway ENV=test-stt-l8 once.
