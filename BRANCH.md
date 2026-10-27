@@ -41,6 +41,7 @@
 - [x] **Exception process**: declare reason, impact and rollback below before changes.
 
 ## Feedback Loop
+- [x] CI 40411377258 / job 121904126708: stale selected lock tuple and refusal regex caused three packaging failures. Align the lock with mesh 0.30.0 / gateway 0.21.5 / cluster 0.22.6 and the refusal bound <0.31.0; preserve artifacts 0.1.4. Reproduced the refusal failures locally before correction.
 - [x] BR95-EX3: merge origin/main at 365e8b313 after #756/#769; retain L5 BRANCH.md on the sole conflict. Imported memory evidence stays identical to main; rollback by reverting the merge. No memory implementation edits.
 - [x] BR95-EX1: synchronize package-lock workspace metadata and cluster/gateway compatibility with the L5 feature version; rollback the tuple together; no resolved dependency changes.
 - [x] BR95-EX2: CI edits limited to the release tuple; remove branch-name test exclusions per owner review, restoring API, browser E2E and VSCode gates. Earlier skips constrained provider/runtime work; existing CI gates must run.
