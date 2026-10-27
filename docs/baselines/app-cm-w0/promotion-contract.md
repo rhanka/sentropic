@@ -4,7 +4,7 @@ P remains a required TG slot. W0's read-only GitHub API observations at 23:26 UT
 
 ## Canonical verifier pin and vectors
 
-Consume **`@sentropic/h2a@0.98.6`**, the registry `latest` observed in W0, with the exact tarball/integrity in `published-tuple.json`. Do not consume the host's unpublished `0.98.7-rc.4` merely because it is installed. Both versions' observed primitive hashes happen to agree; the published package was installed and its public exports exercised independently in a disposable container.
+Consume **`@sentropic/h2a@0.98.6`**, the registry `latest` observed in W0, with the exact tarball/integrity in `published-tuple-2026-10-18.json`. Do not consume the host's unpublished `0.98.7-rc.4` merely because it is installed. Both versions' observed primitive hashes happen to agree; the published package was installed and its public exports exercised independently in a disposable container.
 
 Public API: `createEnvelope`, `signEnvelope`, `verifyEnvelopeSignature`, `isH2AEnvelope`, `canonicalize`, `computeHash`. Implementation bytes in the published archive:
 
