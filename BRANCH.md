@@ -1,76 +1,135 @@
-# Feature: feat(artifacts): ship UP-T conformance vectors (0.2.4)
+# Feature: Security autofix S1 inventory and contract
 
 ## Objective
-- [x] Deliver UP-T-2: ship importable activation conformance vectors for W1.c and Radar host executors in the 0.2.4 candidate tarball.
+- [x] Resume #732 as approved S1 inventory and contract, integrating the binding r4 owner amendment.
 
 ## Scope / Guardrails
-- [x] Additive testing surface only; activation implementation and SQL bytes stay unchanged.
-- [x] Base `origin/main`; branch `feat/artifacts-up-t2`; worktree `tmp/worktrees/artifacts-up-t2`; merge only.
-- [x] Make-only Docker tests under the shared lock; `ENV=test-artifacts-upt2` last; no Python.
-- [x] No publication or merge; push and open a draft PR to main.
-- [x] Publication boundary: merging to main publishes 0.2.4 through CI; W1.c (#794) must then move its exact pin from 0.2.3 to 0.2.4; SQL hash/receipts stay unchanged.
-- [x] Ports: API 8799, UI 5185, Maildev 1092; qualification PostgreSQL has no host port.
-- [x] Atomic commits below 150 changed lines, selective staging, `make commit`, no attribution trailers.
+- Scope limited to S1 inventory and contract only.
+- No service, schedule, credential or merge activation.
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/sentropic` is reserved for user dev (`ENV=dev`) and must remain stable.
+- Branch development happens in isolated worktree `tmp/worktrees/sec-lot1`.
+- Automated test campaigns run on dedicated environments (`ENV=test-sec-lot1`), never on root `dev`.
+- UAT qualification worktree must be commit-identical to the branch under qualification (same HEAD SHA).
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
+- Zero Python in automation.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `.security/security-fix.json`
+  - `scripts/security/daily/schema.mjs`
+  - `scripts/security/daily/inventory.mjs`
+  - `scripts/security/daily/schema.test.mjs`
+  - `scripts/security/daily/inventory.test.mjs`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
+  - `.github/workflows/ci.yml`
   - `BRANCH.md`
-  - `packages/artifacts/package.json`
-  - `packages/artifacts/README.md`
-  - `packages/artifacts/src/adapters/postgres-activation-vectors.ts`
-  - `packages/artifacts/src/mcp-core.ts`
-  - `packages/cluster-mesh/packaging.mk`
-  - `packages/cluster-mesh/tests/packaging/activation-vectors.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/prepare.sh`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `api/**`
-  - `ui/**`
-  - `packages/artifacts/sql/**`
+  - `plan/NN-BRANCH_*.md`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/ci.yml`
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/ci.yml` (SECDAILY-S1-EX1 only)
 - **Exception process**:
-  - [x] BR861-EX3 authorized by the owner: package writer ships shared vectors and pack-only 0.2.4; scope includes isolated packed-consumer qualification and CI wiring. Impact: additive export/testing only. Rollback: revert these commits; keep 0.2.3 consumers unchanged.
-  - [x] BR861-EX4: exact-head green CI request covers the evidenced blocking provider-version mismatch. Impact: mcp-core.ts version metadata only, aligned to 0.2.4. Rollback: revert this metadata fix with the 0.2.4 package bump.
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- [x] UP-T-2 / P1-1 in `pr794_opus_r1.md`: existing 0.2.3 vectors are repository tests absent from the published package; this branch supplies an executable package export.
-- [x] TYPE-1: strict installed-consumer compilation requires `@types/pg` in the consumer tree, alongside `pg`; fixture corrected without changing package production code.
-- [ ] REV-1: owner review on draft PR #797; harness consensus selection unavailable because live peer discovery does not provide exact model IDs (`.h2a/reviews/upt2-author.md`); no consensus claimed.
-- [x] REV-P1-1: reproduce missing db-time-skew/commit-unknown IDs on both pool sizes; add both mandatory vectors with additive host hooks (16 total).
-- [x] REV-P2: dedicated target requires packed-consumer/DB wiring and explicit disposable opt-in; refuse non-test database names before schema changes or vector stores.
-- [x] CI-1: run 40492154926 passes installed vectors but packed-consumer probe rejects provider 0.2.3 against package 0.2.4; align only the provider version metadata in mcp-core.ts to unblock the requested exact-head CI gate.
+- [x] Opus r1 P2-2: validate npm entry names, severities, via/range types and exact per-severity/total counters; refuse empty contradictory reports and null/malformed entries, with clean and populated positive controls.
+- [x] Opus r1 P2-3: exercise real Dockerfile stages plus a missing-stage fixture, assert required lock presence, compute seven stale candidates on the 67-row fixture and derive the current-register count; retitle metadata-only assertions.
+- [x] Review-fix final local gate: required `scripts/ci/publishable-ci-wiring.test.mjs` entrypoint passes all 119 tests after merging `365e8b313`; locked Make execution on `ENV=test-sec-s1`, no failures or skips.
+- [x] Resync after Opus r1: merge `origin/main` at `365e8b313f1c4c627c87db4f6761847a1e6a5ae7`, retain the S1 plan on the sole `BRANCH.md` conflict and preserve Track events; incoming L5 artifacts remain main's exact bytes, with the repair class disabled.
+- [x] Opus r1 P2-1: pin disabled activation, exact allow/deny scope, grouping, fail-closed kill switch, blocked L5 class and budget ceilings independently of the candidate JSON; weakened fixtures reproduce the former acceptance gap.
+- [x] Review-fix validation uses `ENV=test-sec-s1` last and the shared Docker lock; all 70 weakened-contract fixtures pass after the validator fix (the remaining failing npm-counter regression is handled separately).
+- [x] SECDAILY-S1-EX1: register S1 suites in the existing required Node test entrypoint `scripts/ci/publishable-ci-wiring.test.mjs`; restore `.github/workflows/ci.yml` to main bytes. Editing that workflow selects global CI including legacy Python SAST, outside this zero-Python lot. Existing filters and gates stay unchanged; rollback removes only the S1 suite imports, with implementation disabled.
+- [x] Integration: merge `origin/main` at `ab981b16dfe4769d0dd44443f4d459a375848a8d`; retain S1 plan and all 342 prior Track events. Scope-check includes incoming main files; the independent harness check against `origin/main` limits authored changes to S1.
+- [x] Approved-r4 alignment: tests first for exact register matching, all-severity inventory, separate own-code scope, bounded grouping, complete dated reconciliation and discovered lock/hash consumers.
+- [x] Tests-first evidence: existing 14 tests passed; expanded S1 suite reproduces nine contract/inventory failures before implementation (22 tests, 13 pass, 9 fail).
+- [x] Contract alignment: all-severity public inventory, disabled exact own-code paths, separate automatic reconciliation, exact exception joins and explicit current-main L5 compatibility blocker.
+- [x] Grouping alignment: stable lock-set/defect/image identities, visible no-upstream-fix units, severity/expiry/age order, explicit estimates and strict repository/class/size bounds.
+- [x] Reconciliation alignment: distinct consecutive UTC daily full scans, immutable source/image/database identities, fresh databases and exact unchanged registered path/platform/lineage/flags/policy; pre-merge proof remains a separate S5a guard.
+- [x] Discovery alignment: enumerate independent lockfiles with dev dependencies and tracked source/hash consumers; fail on unreadable trees, symlinks and exhausted discovery bounds rather than silently truncating coverage.
+- [x] Backlog alignment: raw all-severity findings remain queued, unresolved unmatched rows remain verification-pending, expiry is computed from current rows and malformed/missing/errored reports cannot produce clean state.
+- [x] Current-register boundary: normalize the real YAML document without inferring missing affected identities; current main has 68 unresolved rows (60 due November 20, seven expired, one due October 30), distinct from the historical 67-row fixture. Register bytes remain unchanged.
+- [x] Receipt boundary: require digest-qualified scanner/policy identities and full severity coverage for absence evidence; join GHSA/CVE aliases without relaxing the affected path/version/image match. Legacy container candidates remain pending qualification.
+- [x] Reconciliation regression: current-register integration checks preserve its actual pending rows without freezing the count in CI; a removal-only document fixture proves legitimate future reconciliation does not require test edits.
+- [x] Malformed-report regression: Trivy result rows and finding identities are validated, so a valid outer envelope cannot turn missing/partial nested findings into a clean report.
+- [x] Coverage alignment: discover package/app/script/tool source roots and workspace manifests, verify the three image stages, enumerate reviewed hash consumers and expose missing locks/unknown consumers/SAST qualification as blockers.
+- [x] Identity hardening: malformed aliases and ambiguous/empty key components fail closed; source defects may use an explicit stable defect identity. Local editor-rule symlinks are excluded from application surface discovery.
+- [ ] Independent review: Opus r1 on `d405cf7e0` returned CHANGES (0 P1, 3 P2); the three findings are corrected above, with re-review/approval pending. No consensus or merge readiness claimed.
+- [x] SECDAILY-EX6 inventory: `api/Dockerfile` (`ci-tools` and `ci-esbuild`) is the existing approved toolbox path; S1 does not modify it or introduce an image.
+- `owner-all-public` / `acknowledge`: binding owner decision (OWNER-REQUEST.md 2026-10-23 disclosure section) supersedes the spec private-scan design. No private scan repo, everything runs in the public repos, fix PRs are public and auto-merged after other-model review and green CI. S1 contract adapted accordingly.
 
 ## AI Flaky tests
-- [x] No AI tests or flaky acceptance in this package-only scope.
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; single package writer; external review on the draft PR.
+- [x] **Mono-branch** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: S1 is a single isolated contract and inventory unit with no orthogonal sub-branches.
 
 ## UAT Management (in orchestration context)
-- [x] Package consumer qualification replaces browser UAT; host session/ACL and deployment qualification remain consumer obligations.
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/worktrees/sec-lot1`.
+  - Push branch before UAT.
+  - [x] Web app, Chrome and VSCode UAT are not applicable to pure security inventory helpers.
+  - Switch back to `tmp/worktrees/sec-lot1` after UAT.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read Docker lock, rules, template, package adapter/tests and Opus P1-1 evidence.
-  - [x] Create isolated branch from fetched `origin/main`; mechanical harness branch check passes.
-  - [x] Capture existing package targets and lazy-package consumer harness.
-- [x] **Lot 1 — Test first**
-  - [x] Add `packages/cluster-mesh/tests/packaging/activation-vectors.spec.ts`: native consumer import, complete execution on PostgreSQL, negative executor witness, counts.
-  - [x] Reuse lazy-package preparation with an activation-only consumer and disposable Compose PostgreSQL.
-  - [x] RED: installed 0.2.3 fails with `ERR_PACKAGE_PATH_NOT_EXPORTED` for `./adapters/postgres-activation/vectors` (`/tmp/artifacts-upt2-red.log`).
-- [x] **Lot 2 — Package vectors**
-  - [x] Export framework-independent executable vectors; run against the supplied host stores and DB-time wait.
-  - [x] GREEN: all 14 vectors pass on clean-installed 0.2.4 with real PostgreSQL; broken-executor witness rejects (`/tmp/artifacts-upt2-green.log`).
-  - [x] Registry `npm view` returned 0.2.3 before bumping to 0.2.4; document exact import and host fixture contract.
-- [ ] **Lot 3 — Docs consolidation & validation**
-  - [x] Packed consumer after Opus r1: 9/9 tests pass, zero skipped; 16 vectors on each of pool max 1 and 4, broken-executor/disposable-host refusal, missing-wiring failures, NodeNext/Bundler types with skipLibCheck false/true.
-  - [x] Document mandatory additive hooks, isolated-process clock skew and disposable database guard; package build and JSON execution receipt gate pass on review rerun.
-  - [x] Package unit tests: 451/451 (37 files); lint passes; strict package build passed during packed-consumer qualification (`/tmp/artifacts-upt2-unit-lint.log`).
-  - [x] Wire packed-vector qualification into artifacts CI under BR861-EX3.
-  - [x] Run scope check before each commit; author diff inspection complete; external review tracked as REV-1.
-  - [x] Push and create draft PR #797 to main with this file as body; 3-step plan posted.
-  - [ ] Verify CI on the exact head; report PR, head, vector import path.
-  - [x] Tear down `test-artifacts-upt2` after each test step; retain BRANCH.md and draft status; do not merge.
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read `rules/MASTER.md` and `rules/workflow.md`.
+  - [x] Create isolated worktree `tmp/worktrees/sec-lot1` from `origin/main` on branch `feat/security-autofix-s1`.
+  - [x] Capture Makefile targets needed for debug/testing.
+  - [x] Define environment mapping (`ENV=test-sec-lot1`) for this branch.
+  - [x] Confirm command style: `make ... ENV=test-sec-lot1` with `ENV` last.
+  - [x] Confirm scope and guardrails.
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare exceptions if needed.
+  - [x] Resolve existing toolbox path `api/Dockerfile` (`ci-tools`, `ci-esbuild` stages) as inventory fact for SECDAILY-EX6.
+- [x] **Lot 1 — S1 contract `.security/security-fix.json`**
+  - [x] Declare inventory surfaces (three images, root/UI/kit locks, SAST roots, derived pins).
+  - [x] Declare HIGH/CRITICAL severity contract with identical flags before/after and reconciliation.
+  - [x] Declare raw/register join with 67-row expiry split (60 due 2026-11-20, 7 expired).
+  - [x] Declare grouping into remediation units and bounded lots (3 units, 10 files, 150 lines).
+  - [x] Declare exact automatic scope from spec section 7 with exclusion list.
+  - [x] Integrate P3-1 credential naming (read-only access on the public repository, owner all-public decision).
+  - [x] Integrate P3-4 bumpGate manual class for published package dependency edits.
+  - [x] Declare N=2 reconciliation rule with reset conditions.
+  - [x] Declare kill switches and rate limits.
+  - [x] Lot gate:
+    - [x] `make scope-check ENV=test-sec-lot1`
+    - [x] `make commit MSG="..." ENV=test-sec-lot1` with selective `git add`
+- [x] **Lot 2 — S1 modules `scripts/security/daily/schema.mjs` and `inventory.mjs`**
+  - [x] Implement schema validation for contract, findings, units, lots, reconciliation evidence.
+  - [x] Implement inventory of locks, images, SAST roots, derived-pin consumers.
+  - [x] Implement raw/register join, grouping, lot batching, reconciliation streak check.
+  - [x] Implement bumpGate manual classification hook.
+  - [x] Lot gate:
+    - [x] `make scope-check ENV=test-sec-lot1`
+    - [x] `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-lot1`
+- [x] **Lot 3 — S1 tests `schema.test.mjs` and `inventory.test.mjs`**
+  - [x] Cover three images, root/UI/kit locks, 67-row expiry split, seven stale-container candidates.
+  - [x] Cover N=2 complete-scan fixture, severity flags, aliases, malformed data.
+  - [x] Cover P3-1 credential fields and P3-4 manual class.
+  - [x] Cover owner all-public decision (no private scan repo or storage).
+  - [x] Lot gate:
+    - [x] `make scope-check ENV=test-sec-lot1`
+    - [x] `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-lot1`
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Contract records r4, disabled activation and the current L5 compatibility blocker; source planning documents remain unchanged.
+- [ ] **Lot N — Final validation**
+  - [x] Typecheck and lint not applicable to plain Node security scripts.
+  - [x] Retest S1 suites via `make test-publishable-manifests SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs" ENV=test-sec-lot1` after approved-r4 corrections: 24 pass, no failures or skips; official existing pinned Node image, shared Docker lock and scoped teardown.
+  - [x] Final gate step 1: update existing draft #732 using `BRANCH.md` text as PR body.
+  - [ ] Final gate step 2: run and verify branch CI green.
+  - [ ] Final gate step 3: do not merge, report PR number, head SHA, CI URL.
