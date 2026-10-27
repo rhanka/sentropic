@@ -1,0 +1,125 @@
+{
+  "version": 1,
+  "kind": "engram-e10-installed-receipt",
+  "head": "b8bb6fa6a4be2cc751562ed5ee5960b075c8c3df",
+  "tree": "b5350569d0877ec4a6ead7bad9c9adee335ff892",
+  "consumer": {
+    "node": "v24.21.0",
+    "platform": "linux",
+    "arch": "x64",
+    "root": "clean-consumer-outside-repository",
+    "lockSha256": "105adab03826fd993b752379266acd8d7a1e3b18f8b19b867734726467b05bc0"
+  },
+  "engram": {
+    "version": "0.22.0",
+    "tarballSha256": "26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10",
+    "integrity": "sha512-/TV03olHbzG+3haTC5j5YJ282egCrXak1yQE0I8DHF1kAQDwsKUe1QlMwibvBCEmPGdWeTgSHT4fF8lZJTH8cw=="
+  },
+  "clusterMesh": {
+    "version": "0.24.0-dev.1",
+    "tarballSha256": "b0192c73af37d230dd179c5079d8fbe1d14fe6cab82d487c2ec02ba3f0a31c90",
+    "integrity": "sha512-Zqwwq1Xaa4FDzorhY0Sfzm8MIwpdDHifB+cW3xtFR295i6uYyL5GUDZH3DETixDdUk7tcjYI8qxEZvxbyFKPwQ=="
+  },
+  "p3ManifestSha256": "1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730",
+  "postgres": {
+    "serverVersion": "17.11",
+    "image": "sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
+    "driver": {
+      "name": "node-pg-installed",
+      "version": "8.16.3",
+      "artifactDigest": "f7b678a8055c234669e8dd272dd624771e29d9f0e3a3353f15c3005ab1a5fd29"
+    },
+    "statements": 874,
+    "transactions": 82
+  },
+  "migrations": [
+    {
+      "id": "cluster-mesh-pg/001-core@1",
+      "checksum": "40fa2bed5b4076860d505385f3e044bc60e74a2e1e1bfd524562cd911812c460"
+    },
+    {
+      "id": "cluster-mesh-pg/002-map@1",
+      "checksum": "03a9c68bfb1ace1eb3c067a04d2293129f80d4cb354f28a22298bf66354b1dfc"
+    },
+    {
+      "id": "cluster-mesh-pg/003-staged@1",
+      "checksum": "1d1c6bd83bb080ecde057181742554fddd2812f08d03ea16407bf3a77ba429d5"
+    },
+    {
+      "id": "cluster-mesh-pg/004-queries@1",
+      "checksum": "17a5c4a78e20efa1c9a21f0112b5cbf70b9f9acaf8d577f2e16efc6759e4b295"
+    },
+    {
+      "id": "cluster-mesh-pg/005-cleanup@1",
+      "checksum": "f8fda33a8f9c167f53be412977418da063c1e14c0ed7f3d8a96a9feeba01fa5f"
+    },
+    {
+      "id": "cluster-mesh-pg/006-staged-coverage@1",
+      "checksum": "82b4f485399fd195eaf5178144e23f6d6b26dd36010d78b05816b8e96079d75f"
+    },
+    {
+      "id": "cluster-mesh-pg/007-consumed-counters@1",
+      "checksum": "545e6f9290cb7076717fc74c7f0d361d4f06241fbb23be702d6796b382b2c85f"
+    },
+    {
+      "id": "cluster-mesh-pg/008-instance-ownership@1",
+      "checksum": "d6a45b8760eaf783da6561f9b40d3bfff80807e6381cd0df3ebfe36c830c6554"
+    },
+    {
+      "id": "cluster-mesh-pg/engram-memory/001-projections@1",
+      "checksum": "3f4b201966668fd08a4aaa0f3a19dfc4498ecfe8bda9f4c5ca9b33db8e1351a1"
+    },
+    {
+      "id": "cluster-mesh-pg/engram-memory/002-host-ledger@1",
+      "checksum": "e4dc0805c266f04e06b9f99f37d0234f0db8d466c422e606838c8af4c0636d9b"
+    }
+  ],
+  "hostHistory": [
+    "cluster-mesh-pg/001-core@1",
+    "cluster-mesh-pg/002-map@1",
+    "cluster-mesh-pg/003-staged@1",
+    "cluster-mesh-pg/004-queries@1",
+    "cluster-mesh-pg/005-cleanup@1",
+    "cluster-mesh-pg/006-staged-coverage@1",
+    "cluster-mesh-pg/007-consumed-counters@1",
+    "cluster-mesh-pg/008-instance-ownership@1",
+    "cluster-mesh-pg/engram-memory/001-projections@1",
+    "cluster-mesh-pg/engram-memory/002-host-ledger@1"
+  ],
+  "profiles": [
+    {
+      "name": "atomic-units-v1",
+      "version": "1",
+      "digest": "sha256:507fd5a8f5d68a8c2b99c05bee5a23c0ded47d79532ca5edf34ea08c1919958a"
+    },
+    {
+      "name": "immutable-chains-v1",
+      "version": "1",
+      "digest": "sha256:927777f8470be49c968a15cb9bbf2560efdd63bd329d763bfeeb1c166759a3bc"
+    },
+    {
+      "name": "immutable-boundaries-v1",
+      "version": "1",
+      "digest": "sha256:47ee879a5552868ec7cee15f9984cb44f5a72b64aa2b02556232cd0c9037c80f"
+    },
+    {
+      "name": "scope-outbox-v1",
+      "version": "1",
+      "digest": "sha256:d4f1e16890c9541fada3e71e4ba7ba2016da5b07e26383979e29e42b7916b1ed"
+    },
+    {
+      "name": "fenced-writers-v1",
+      "version": "1",
+      "digest": "sha256:48cfb030a1a9c614de6170588116d1afe3d7c94acda79b4322b6b6d7d5156900"
+    }
+  ],
+  "requiredProfiles": [
+    "atomic-units-v1",
+    "immutable-chains-v1",
+    "immutable-boundaries-v1",
+    "scope-outbox-v1",
+    "fenced-writers-v1"
+  ],
+  "contractDigest": "sha256:dff737ced37d801ef48bb4d7088fc4fbc92021d21fe2034ff33ea643b49bec28",
+  "refusals": {
+    "missing-driver": "MemoryHostDriverRequiredError: memory Postgres storage requires an explicit host-injected driver provider",
