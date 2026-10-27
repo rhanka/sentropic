@@ -10,3 +10,22 @@ export type { LocalSttEvent, LocalSttSessionOptions } from './local-stt.js';
 export { UtteranceBuffer, rmsDbfs } from './utterance-buffer.js';
 export { HypothesisTracker, usableText } from './reconciler.js';
 export type { ReconciledPartial } from './reconciler.js';
+export {
+  ArecordDevice,
+  buildArecordArgs,
+  DeviceLostError,
+  DeviceOpenError,
+  DeviceUnavailableError,
+  parseArecordList,
+} from './device.js';
+export type { AudioDeviceInfo, AudioStream, DevicePort, OpenDeviceOptions } from './device.js';
+export { CaptureSession } from './capture.js';
+export type { CaptureDiagnostics, CaptureFrame, CaptureSessionEvents, CaptureSessionOptions } from './capture.js';
+export { ControlError, TerminalController } from './terminal-control.js';
+export type {
+  KeyInput,
+  TerminalControlEvent,
+  TerminalControllerOptions,
+  TerminalKeyBindings,
+  TerminalKeyMode,
+} from './terminal-control.js';

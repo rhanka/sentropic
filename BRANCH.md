@@ -72,10 +72,10 @@ Deliver approved r3 L4: `live-speech/src/node/{capture,device,terminal-control}.
   - [x] `tests/terminal-control.test.ts`: toggle/stop keys, unknown keys ignored, no leakage, raw-mode restore, hold-without-hotkey throws.
   - [x] `tests/capture-control.test.ts`: FakeDevice tone through capture into the L3 session; toggle on yields a final, toggle off yields silence; stop closes everything.
   - [x] Lot gate: `make test-live-speech ENV=test-stt-l4` green (full package, 56/56 over 11 files).
-- [ ] **Lot N-1 — Docs + receipts**
-  - [ ] `packages/live-speech/README.md`: L4 layout (device/capture/control).
-  - [ ] `packages/live-speech/bench/l4-g-native.receipt.json` (§8.1/G-NATIVE: image, toolchain, helper digests/licenses, no-interpreter evidence, blocked live-mic/speaker-AEC/hold-hotkey).
-  - [ ] `src/node/index.ts`: export L4 modules.
+- [x] **Lot N-1 — Docs + receipts**
+  - [x] `packages/live-speech/README.md`: L4 layout (device/capture/control).
+  - [x] `packages/live-speech/bench/l4-g-native.receipt.json` (§8.1/G-NATIVE: image, toolchain, helper digests/licenses, no-interpreter evidence, blocked live-mic/speaker-AEC/hold-hotkey).
+  - [x] `src/node/index.ts`: export L4 modules.
 - [ ] **Lot N — Final validation**
   - [x] Typecheck (via `test-live-speech` tsc --noEmit) & Lint (n/a: no lint lane for this package)
   - [ ] Retest package green on head
