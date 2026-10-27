@@ -28,6 +28,8 @@ export interface MemoryHostLedger {
   readonly read: (candidateId: string) => HostLedgerEntry | null;
   readonly recordContinuation: (candidateId: string, invocationId: string) => HostLedgerEntry;
   readonly markTerminal: (candidateId: string, receipt: unknown, cursor: string | null) => HostLedgerEntry;
+  readonly snapshot: () => readonly HostLedgerEntry[];
+  readonly restore: (entries: readonly HostLedgerEntry[]) => void;
 }
 
 /** Read-only recovery evidence: envelope binding, state, receipt and cursor. */
@@ -102,6 +104,25 @@ export const createMemoryHostLedger = (): MemoryHostLedger => {
       return stored;
     },
     read: (candidateId) => entries.get(candidateId) ?? null,
+    snapshot: () => Object.freeze([...entries.values()]),
+    restore: (restored) => {
+      if (!Array.isArray(restored)) throw new StorageDeniedError('ledger restore requires an entry list');
+      const fresh = new Map<string, HostLedgerEntry>();
+      for (const entry of restored) {
+        checkEntry(entry);
+        if (fresh.has(entry.candidateId)) throw new StorageDeniedError('ledger restore carries a duplicate candidate');
+        fresh.set(
+          entry.candidateId,
+          Object.freeze({
+            ...entry,
+            continuationIds: Object.freeze([...(entry.continuationIds ?? [])]),
+            scope: Object.freeze({ ...entry.scope }),
+          }),
+        );
+      }
+      entries.clear();
+      for (const [candidateId, stored] of fresh) entries.set(candidateId, stored);
+    },
     recordContinuation: (candidateId, invocationId) => {
       const existing = entries.get(candidateId);
       if (!existing) throw new StorageDeniedError('cannot continue an unknown ledger entry');

@@ -32,6 +32,18 @@ const maintainGrant = () =>
   });
 
 describe('host maintenance binding', () => {
+  const entryFor = (candidateId: string) => ({
+    candidateId,
+    storeId: 'store-1',
+    scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
+    invocationId: 'inv-1',
+    continuationIds: [] as string[],
+    envelopeDigest: 'e'.repeat(64),
+    state: 'reserved' as const,
+    receipt: null,
+    cursor: null,
+  });
+
   it('issues a host-only maintain binding separate from the memory handle', () => {
     const binding = assembleMemoryHostBinding({ driver: qualifiedProvider(), maintainGrant: maintainGrant() });
     expect(binding.memoryOperations).toEqual(['read', 'write']);
@@ -79,22 +91,36 @@ describe('host maintenance binding', () => {
   it.todo('checks fences and checkpoints through the host-only binding');
   it.todo('retries and poisons consumers without a second effect');
   it.todo('resyncs scope-chain-index and snapshots through maintenance ports');
-  it.todo('keeps the durable ledger across reopen (rehydration re-establishes authority)');
-  it.todo('refuses on an empty ledger until rehydration');
-
-  describe('durable host-evidence ledger', () => {
-    const entryFor = (candidateId: string) => ({
-      candidateId,
-      storeId: 'store-1',
-      scope: { tenantId: 'tenant-a', workspaceId: 'workspace-a' },
-      invocationId: 'inv-1',
-      continuationIds: [],
-      envelopeDigest: 'e'.repeat(64),
-      state: 'reserved' as const,
-      receipt: null,
-      cursor: null,
+  it('keeps the durable ledger across reopen (rehydration re-establishes authority)', () => {
+      const first = createMemoryHostLedger();
+      first.record(entryFor('cand-1'));
+      first.recordContinuation('cand-1', 'inv-2');
+      first.markTerminal('cand-1', { outcome: 'admitted' }, 'cursor-9');
+      // Reopen with a fresh instance: the serialized snapshot restores authority.
+      const reopened = createMemoryHostLedger();
+      expect(reopened.read('cand-1')).toBeNull();
+      expect(() => proveForRecovery(reopened, 'cand-1')).toThrow(StorageDeniedError);
+      reopened.restore(JSON.parse(JSON.stringify(first.snapshot())) as ReturnType<typeof first.snapshot>);
+      expect(reopened.read('cand-1')).toEqual(first.read('cand-1'));
+      expect(proveForRecovery(reopened, 'cand-1').state).toBe('terminal');
+      expect(reopened.record(entryFor('cand-1'))).toEqual(first.read('cand-1'));
     });
 
+    it('refuses on an empty ledger until rehydration', () => {
+      const ledger = createMemoryHostLedger();
+      expect(ledger.snapshot()).toEqual([]);
+      expect(() => issueContinuationGrant(ledger, 'cand-1', {
+        invocationId: 'inv-2',
+        issuedAt: '2026-10-27T00:00:00.000Z',
+        hostPrincipal: 'host-1',
+      })).toThrow(StorageDeniedError);
+      expect(() => ledger.restore([{ ...entryFor('cand-1'), envelopeDigest: '' }])).toThrow(
+        StorageDeniedError,
+      );
+      expect(ledger.read('cand-1')).toBeNull();
+    });
+
+  describe('durable host-evidence ledger', () => {
     it('records host evidence and reads it back', () => {
       const ledger = createMemoryHostLedger();
       expect(ledger.read('unknown')).toBeNull();
