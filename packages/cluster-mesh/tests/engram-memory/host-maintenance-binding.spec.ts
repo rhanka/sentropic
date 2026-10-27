@@ -9,6 +9,7 @@
 // authority) and proof-only recovery (no second effect, unknown/foreign
 // refused, empty ledger refuses) are covered here.
 
+import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 import {
   assembleMemoryHostBinding,
@@ -20,13 +21,17 @@ import {
   type MemoryMaintainGrant,
   type MemoryNeutralGrant,
 } from '../../src/engram-memory/binding.js';
-import { pgEnabled } from '../storage/pg-driver.js';
+import { pgEnabled, testPgDriver } from '../storage/pg-driver.js';
 import { memoryAppend, memoryHostComposed, memoryPgHost, memoryUnit } from './pg-host.js';
 import {
   openMemoryMaintenance,
   type MemoryMaintenanceRunner,
 } from '../../src/engram-memory/host-maintenance.js';
-import { createMemoryHostLedger, proveForRecovery } from '../../src/engram-memory/ledger.js';
+import {
+  createMemoryHostLedger,
+  openMemoryPostgresHostLedger,
+  proveForRecovery,
+} from '../../src/engram-memory/ledger.js';
 import { MemoryHostDriverRequiredError } from '../../src/engram-memory/sqlite.js';
 import { StorageDeniedError, StorageUnavailableError } from '../../src/storage/errors.js';
 import { grantFor } from '../storage/authority-corpus.js';
@@ -244,6 +249,83 @@ describe('host maintenance binding', () => {
         await verifyHostBinding(root.adapter(), binding);
         await root.revoke(binding.maintainGrant.token);
         await expect(verifyHostBinding(root.adapter(), binding)).rejects.toThrow(StorageDeniedError);
+      } finally {
+        await host.close();
+      }
+    });
+  });
+
+  describe.skipIf(!pgEnabled)('PG-backed host ledger (002 asset)', () => {
+    const applyLedgerAsset = async (host: Awaited<ReturnType<typeof memoryPgHost>>) => {
+      const projection = host.layout.projectionSchemas['engram-memory'] as string;
+      const sql = await readFile(
+        new URL('../../assets/storage/postgres/engram-memory/002-host-ledger.sql', import.meta.url),
+        'utf8',
+      );
+      await host.tx.run(false, (session) =>
+        session.execute({
+          text: sql.replaceAll('__MEMORY_SCHEMA__', `"${projection}"`),
+          values: [],
+        }),
+      );
+      return projection;
+    };
+
+    it('persists entries and rehydrates across a real reopen', async () => {
+      const host = await memoryPgHost();
+      try {
+        const projection = await applyLedgerAsset(host);
+        const first = testPgDriver();
+        try {
+          const ledgerA = await openMemoryPostgresHostLedger(first.driver, projection);
+          const stored = await ledgerA.record(entryFor('cand-1', 'user-1'));
+          expect(stored.state).toBe('reserved');
+          // First-write wins across the durable backing, not per handle.
+          await expect(
+            ledgerA.record({ ...entryFor('cand-1', 'user-1'), invocationId: 'inv-2' }),
+          ).resolves.toEqual(stored);
+          await expect(ledgerA.recordContinuation('cand-1', 'inv-1')).rejects.toThrow(
+            /copied invocation fields/,
+          );
+          await ledgerA.recordContinuation('cand-1', 'inv-2');
+          await ledgerA.markTerminal('cand-1', { outcome: 'admitted' }, 'cursor-9');
+          // Real reopen: a fresh pool and a fresh handle over the same schema.
+          const second = testPgDriver();
+          try {
+            const ledgerB = await openMemoryPostgresHostLedger(second.driver, projection);
+            const rehydrated = await ledgerB.read('cand-1');
+            expect(rehydrated).toEqual(await ledgerA.read('cand-1'));
+            expect(rehydrated?.state).toBe('terminal');
+            expect(rehydrated?.continuationIds).toEqual(['inv-2']);
+            expect(rehydrated?.receipt).toEqual({ outcome: 'admitted' });
+            // Rehydration feeds the in-memory authority seam unchanged.
+            const memory = createMemoryHostLedger();
+            memory.restore(await ledgerB.snapshot());
+            expect(proveForRecovery(memory, 'cand-1').state).toBe('terminal');
+            // The spent drain is durable too.
+            expect(await ledgerB.drainInvocation('inv-1')).toBe(1);
+            expect(await ledgerA.read('cand-1')).toBeNull();
+          } finally {
+            await second.close();
+          }
+        } finally {
+          await first.close();
+        }
+      } finally {
+        await host.close();
+      }
+    });
+
+    it('refuses to open when the 002 asset is not applied', async () => {
+      const host = await memoryPgHost();
+      try {
+        const projection = host.layout.projectionSchemas['engram-memory'] as string;
+        await expect(openMemoryPostgresHostLedger(host.options.driver, projection)).rejects.toThrow(
+          /002 asset is not applied/,
+        );
+        await expect(openMemoryPostgresHostLedger(null as never, projection)).rejects.toThrow(
+          StorageDeniedError,
+        );
       } finally {
         await host.close();
       }
