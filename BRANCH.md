@@ -53,10 +53,10 @@
   - [x] Add `packages/cluster-mesh/tests/packaging/activation-vectors.spec.ts`: native consumer import, complete execution on PostgreSQL, negative executor witness, counts.
   - [x] Reuse lazy-package preparation with an activation-only consumer and disposable Compose PostgreSQL.
   - [x] RED: installed 0.2.3 fails with `ERR_PACKAGE_PATH_NOT_EXPORTED` for `./adapters/postgres-activation/vectors` (`/tmp/artifacts-upt2-red.log`).
-- [ ] **Lot 2 — Package vectors**
-  - [ ] Export framework-independent executable vectors; run against the supplied host stores and DB-time wait.
-  - [ ] Cover exact bindings, denial/outage, replay/race, namespace isolation, immutable records, expiry, cleanup, invalidation and recovery.
-  - [ ] Verify registry version before additive 0.2.4 pack-only bump; document exact import and host fixture contract.
+- [x] **Lot 2 — Package vectors**
+  - [x] Export framework-independent executable vectors; run against the supplied host stores and DB-time wait.
+  - [x] GREEN: all 14 vectors pass on clean-installed 0.2.4 with real PostgreSQL; broken-executor witness rejects (`/tmp/artifacts-upt2-green.log`).
+  - [x] Registry `npm view` returned 0.2.3 before bumping to 0.2.4; document exact import and host fixture contract.
 - [ ] **Lot 3 — Docs consolidation & validation**
   - [ ] Run packed clean-consumer qualification, package unit tests, typecheck/build and lint.
   - [ ] Wire packed-vector qualification into artifacts CI under BR861-EX3.
