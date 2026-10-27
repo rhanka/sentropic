@@ -1,5 +1,5 @@
 import { sameSpeechIdentity, speechTransaction, SpeechAccountingError, utcSpeechDay,
-  type SpeechAccountingOptions, type SpeechOperation } from './admission.js';
+  type SpeechAccountingOptions, type SpeechAllocatorReceipt, type SpeechHold, type SpeechOperation } from './admission.js';
 import { normalizeSpeechUsage, priceSpeechUsage, validateSpeechUsage,
   type SpeechUsage, type SpeechUsageUpdate } from './usage.js';
 
@@ -15,6 +15,61 @@ export interface SpeechSettlementRequest {
   readonly operationId: string; readonly usage?: SpeechUsage; readonly providerRevision?: number;
   readonly outcome: SpeechSettlementEntry['outcome'];
 }
+
+export interface SpeechReconciliationRow {
+  readonly operationId: string; readonly attemptId: string; readonly allocatorReceiptRef: string;
+  readonly submitKey: string; readonly coordinatorEpoch: number; readonly entryRefs: readonly string[];
+  readonly issues: readonly ('orphan-usage' | 'allocator-mismatch' | 'duplicate-allocator-receipt'
+    | 'uncounted-admission' | 'duplicate-usage-receipt' | 'orphan-adjustment' | 'missing-usage')[];
+}
+/** L7 supplies a complete, consistent owner snapshot; this projection never writes or counts units. */
+export const reconcileSpeech = (admissions: readonly SpeechHold[], allocatorReceipts: readonly SpeechAllocatorReceipt[],
+  usageReceipts: readonly SpeechSettlementEntry[]): SpeechReconciliationRow[] => {
+  const operationKey = (op: SpeechOperation): string => JSON.stringify([op.operationId, op.attemptId]);
+  const allocatorIdentity = (op: SpeechOperation): Omit<SpeechAllocatorReceipt, 'countedUnits'> => ({
+    receiptRef: op.allocatorReceiptRef, tenantId: op.cost.tenantId, workspaceId: op.cost.workspaceId,
+    principalId: op.cost.principalId, targetSessionId: op.target.sessionId, nativeTurnRef: op.nativeTurnRef,
+    submitKey: op.submitKey, coordinatorEpoch: op.coordinatorEpoch, backendOperationRef: op.backendOperationRef,
+  });
+  const turnKey = (r: SpeechAllocatorReceipt | Omit<SpeechAllocatorReceipt, 'countedUnits'>): string =>
+    JSON.stringify([r.tenantId, r.workspaceId, r.principalId, r.targetSessionId, r.submitKey, r.coordinatorEpoch]);
+  const groups = new Map<string, { operation: SpeechOperation; admission?: SpeechHold; entries: SpeechSettlementEntry[] }>();
+  for (const admission of admissions) {
+    groups.set(operationKey(admission.operation), { operation: admission.operation, admission, entries: [] });
+  }
+  for (const entry of usageReceipts) {
+    const key = operationKey(entry.operation);
+    let group = groups.get(key);
+    if (!group) {
+      group = { operation: entry.operation, entries: [] };
+      groups.set(key, group);
+    }
+    group.entries.push(entry);
+  }
+  return [...groups.values()].map(({ operation: op, admission, entries }) => {
+    const issues: SpeechReconciliationRow['issues'][number][] = [];
+    const expected = allocatorIdentity(op);
+    const receipts = allocatorReceipts.filter(r => r.receiptRef === op.allocatorReceiptRef);
+    if (!admission) issues.push('orphan-usage');
+    if (receipts.length !== 1 || !sameSpeechIdentity({ ...expected, countedUnits: receipts[0]?.countedUnits }, receipts[0])
+      || entries.some(e => !sameSpeechIdentity(e.operation, op))) issues.push('allocator-mismatch');
+    if (allocatorReceipts.filter(r => turnKey(r) === turnKey(expected)).length > 1) {
+      issues.push('duplicate-allocator-receipt');
+    }
+    if (receipts.some(r => r.countedUnits === 0) && (admission?.dispatched || entries.length > 0)) {
+      issues.push('uncounted-admission');
+    }
+    if (new Set(entries.map(e => e.entryRef)).size !== entries.length
+      || entries.filter(e => e.kind !== 'adjustment').length > 1) issues.push('duplicate-usage-receipt');
+    const roots = new Set(entries.filter(e => e.kind !== 'adjustment').map(e => e.entryRef));
+    if (entries.some(e => e.kind === 'adjustment' && (!e.rootEntryRef || !roots.has(e.rootEntryRef)))) {
+      issues.push('orphan-adjustment');
+    }
+    if (admission?.dispatched && admission.state !== 'reserved' && entries.length === 0) issues.push('missing-usage');
+    return { operationId: op.operationId, attemptId: op.attemptId, allocatorReceiptRef: op.allocatorReceiptRef,
+      submitKey: op.submitKey, coordinatorEpoch: op.coordinatorEpoch, entryRefs: entries.map(e => e.entryRef), issues };
+  });
+};
 
 /** Usage updates are operational evidence on the existing hold; they never charge or allocate units. */
 export const recordSpeechUsage = async (options: SpeechAccountingOptions, operationId: string,
