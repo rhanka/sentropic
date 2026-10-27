@@ -1,9 +1,16 @@
-# Feature: integrate memory lots E0–E4, E8, E9, PG, P3
+# Feature: Engram E10 installed injection proof
 
 ## Objective
-- [ ] Integrate the approved memory lots into one batch branch and qualify one exact head before conductor merge.
+- [ ] Prove the installed tuple: clean consumer outside repository resolution installs the exact Engram 0.22.0 tarball and a candidate cluster-mesh tarball built from the batch head, then runs real durable memory operations and a restart through the neutral constructor with an injected PostgreSQL driver.
+- [ ] Retained batch objective below: integrate the approved memory lots into one batch branch and qualify one exact head before conductor merge.
 
 ## Scope / Guardrails
+- [ ] Base `feat/engram-e2-batch1` at `4bd435349b76145a8d1693cd16082ee187d6e4f4` (PR #802); branch `feat/cluster-mesh-engram-e10`; worktree `tmp/worktrees/mem-e10`; draft PR against `feat/engram-e2-batch1`; merge the batch re-pin when it lands, never rebase.
+- [ ] Engram candidate is read-only: `@sentropic/engram` `0.22.0` tarball `/home/antoinefa/src/graphify-wt-mcpl4/.graphify/scratch/l4-r4-artifacts/sentropic-engram-0.22.0.tgz`, sha256 `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10`; P3 manifest sha256 `1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730`. No write in that repository.
+- [ ] Candidate cluster-mesh tarball is built from this branch head with version `0.24.0-dev.1` stamped in the staging copy only; the committed workspace version stays on the batch line until the integrator re-pin is merged.
+- [ ] Host driver closure is the installed `pg` package plus the installed cluster-mesh bytes; no sibling source resolution, no workspace links.
+- [ ] E10 authored scope only: `packages/cluster-mesh/tests/engram-memory/installed-memory.mjs`, `packages/cluster-mesh/tests/engram-memory/installed-memory-types.ts`, `packages/cluster-mesh/tests/engram-memory/qualification.mk`, `packages/cluster-mesh/tests/engram-memory/installed-receipt.json`, plus `BRANCH.md` and `PLAN.md`. Inherited batch files below stay unchanged unless BR10-EX1 is declared.
+- [ ] Ports reserved for this branch only: API 8791, UI 5191, Maildev UI 1091; qualification PostgreSQL publishes no host port; `ENV=test-mem-e10` last.
 - [x] Owner-directed batch: merge commits only, no rebase, no publication, conductor merges the draft PR.
 - [x] Worktree `tmp/worktrees/mem-batch1`; branch `feat/engram-e2-batch1`; base `978fb67c0`.
 - [x] Inherited from integration: E5/E6/E7 host bindings, #767 pack-only tolerance, #774 Comments gate and installed-consumer released-pin substitution.
@@ -33,6 +40,20 @@
   - [x] BR1-EX1: inherit #793 Makefile wiring, extend qualification environment selectors only as needed; impact limited to isolated test environment, rollback batch changes to those lines.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot E10-0 — Baseline and constraints**
+  - [x] Read `rules/MASTER.md`, `plan/BRANCH_TEMPLATE.md` and the E10 plan line; worktree `tmp/worktrees/mem-e10` verified on `feat/cluster-mesh-engram-e10` at `4bd435349`.
+  - [ ] Verify the Engram tarball sha256 and the P3 manifest sha256 before any install.
+  - [ ] Confirm ports API 8791, UI 5191, Maildev UI 1091 and `ENV=test-mem-e10` last; validate scope boundaries.
+- [ ] **Lot E10-1 — Installed consumer**
+  - [ ] Add `packages/cluster-mesh/tests/engram-memory/installed-memory.mjs`: resolution guard rejecting checkout paths, strict installed imports, host PG driver injection, neutral constructor open, capture, admission, read, restart reopen and original-result replay.
+  - [ ] Add refusal cases in the same file: wrong driver identity, missing driver and a handle missing a required profile each refuse before durable effects.
+  - [ ] Add `packages/cluster-mesh/tests/engram-memory/installed-memory-types.ts`: type-only imports from the installed packages plus compile-time denial of the maintain grant through the neutral handle.
+  - [ ] Extend `packages/cluster-mesh/tests/engram-memory/qualification.mk` with the `installed-memory` lane: candidate pack at `0.24.0-dev.1`, clean consumer staging outside the repository, strict lock install, runtime run, strict typecheck and receipt capture.
+  - [ ] Lot gate: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make -f Makefile -f packages/cluster-mesh/tests/engram-memory/qualification.mk installed-memory API_PORT=8791 UI_PORT=5191 MAILDEV_UI_PORT=1091 ENV=test-mem-e10`, then `make down ENV=test-mem-e10`.
+- [ ] **Lot E10-2 — Receipt and handoff**
+  - [ ] Retain `packages/cluster-mesh/tests/engram-memory/installed-receipt.json` from the green run: archive hashes, runtime and type closure, engine, configuration and migration identities, five-profile equivalence and refusal outcomes.
+  - [ ] Record the receipt path and its sha256 in the PR body; list the exact E11 inputs so `e2-host-tuple/v1` can be generated from this head without new qualification.
+  - [ ] Push and keep the draft PR current; require CI on the exact head before marking ready.
 - [ ] **Lot 1 — Ordered merges**
   - [x] Merge #758, #763, #765, #775, #779, #764, #793, #792, #790; all heads retained; no lot excluded.
   - [x] Preserve P3 manifest 1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730 and Engram 0.22.0 tarball 26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10; both checked with sha256sum.
