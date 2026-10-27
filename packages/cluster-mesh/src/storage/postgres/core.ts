@@ -262,6 +262,12 @@ export const openPgCore = async (options: PostgresStorageOptions): Promise<PgCor
   // bounded. `run` re-applies the same values afterwards (idempotent).
   const timed = withPgTxTimeouts(options.driver, Object.freeze({ ...DEFAULT_PG_BUDGETS, ...options.budgets }));
   const wrapped = cell ? wrapDriverWithOwnership(timed, cell) : null;
+  // Release runs on the timeout-guarded driver WITHOUT the ownership
+  // renewal: expiring the lease is the opposite of renewing it, and the
+  // DELETE predicate (module, instance, epoch) already leaves a taken-over
+  // successor row alone. A stale handle is therefore a silent no-op per the
+  // neutral registry contract, never a renewal refusal.
+  const releaseTx = new PgTransactions(timed, options.budgets);
   const provisional = new PgCore(
     wrapped ? { ...options, driver: wrapped.driver } : options,
     options.incarnation ?? `store:${randomUUID()}`,
@@ -309,9 +315,12 @@ export const openPgCore = async (options: PostgresStorageOptions): Promise<PgCor
           verifyPgInstanceOwnership(verifySession, cell.schema, cell.moduleId, won.handle, cell.released),
         release: async () => {
           // Idempotent like the neutral registry: a repeated or stale
-          // release is a no-op and must never clear a successor row.
+          // release is a no-op and must never clear a successor row. The
+          // release transaction bypasses the renewal (see releaseTx), so
+          // the predicate in expirePgInstanceLease is what runs — not the
+          // short-circuit above.
           if (cell.released) return;
-          await provisional.tx.run(false, (releaseSession) =>
+          await releaseTx.run(false, (releaseSession) =>
             expirePgInstanceLease(releaseSession, cell.schema, cell.moduleId, won.handle),
           );
           cell.released = true;
