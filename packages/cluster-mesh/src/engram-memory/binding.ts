@@ -37,20 +37,45 @@ export const assertMaintainGrantLive = (grant: unknown, nowIso: string = new Dat
   }
 };
 
+/**
+ * Host-issued maintain grant: exactly `['maintain']`, never combined with
+ * read/write. A combined grant is refused at runtime and rejected at
+ * compile time (not assignable to this type).
+ */
+export type MemoryMaintainGrant = ScopeGrant<unknown> & {
+  readonly operations: readonly ['maintain'];
+};
+
+/**
+ * Neutral Engram-facing grant: exactly `['read','write']`, minted by the
+ * host assembly. It carries no maintain authority by construction.
+ */
+export type MemoryNeutralGrant = ScopeGrant<unknown> & {
+  readonly operations: readonly ['read', 'write'];
+};
+
 export interface MemoryHostBindingInput {
   readonly driver: unknown;
   readonly maintainGrant: unknown;
+  readonly invocationId: string;
 }
 
 export interface MemoryHostBinding {
   readonly provider: MemoryPostgresDriverProvider;
-  readonly maintainGrant: ScopeGrant<unknown>;
+  readonly maintainGrant: MemoryMaintainGrant;
+  readonly memoryGrant: MemoryNeutralGrant;
   readonly memoryOperations: typeof MEMORY_HANDLE_OPERATIONS;
 }
 
+const isExactMaintain = (grant: ScopeGrant<unknown>): grant is MemoryMaintainGrant =>
+  Array.isArray(grant.operations) && grant.operations.length === 1 && grant.operations[0] === 'maintain';
+
 /**
- * Assemble the host binding: checked PG provider plus a host-issued grant
- * carrying the maintain operation for the engram-memory module scope.
+ * Assemble the host binding: checked PG provider, a host-issued grant with
+ * exactly the maintain operation (a combined read/write/maintain grant is
+ * refused — it would leak maintain authority into the write path), and the
+ * derived neutral grant (exactly read/write) for the same scope. The two
+ * grants are separate objects; Engram receives only the neutral one.
  */
 export const assembleMemoryHostBinding = (input: MemoryHostBindingInput): MemoryHostBinding => {
   const provider = checkMemoryPostgresDriver(input?.driver);
@@ -58,9 +83,28 @@ export const assembleMemoryHostBinding = (input: MemoryHostBindingInput): Memory
   if (!valid.ok) throw new StorageDeniedError('host binding requires a valid maintain grant');
   const grant = input.maintainGrant as ScopeGrant<unknown>;
   assertMaintainGrantLive(grant);
+  if (!isExactMaintain(grant)) {
+    throw new StorageDeniedError('host maintain grant must carry exactly the maintain operation');
+  }
+  if (typeof input?.invocationId !== 'string' || input.invocationId.length === 0) {
+    throw new StorageDeniedError('host binding requires a host invocation identity');
+  }
+  const neutral: MemoryNeutralGrant = Object.freeze({
+    token: `memory-neutral-${grant.scope.tenantId}-${grant.scope.workspaceId}-${input.invocationId}`,
+    moduleId: grant.moduleId,
+    scope: grant.scope,
+    principalId: grant.principalId,
+    operations: MEMORY_HANDLE_OPERATIONS,
+    issuer: grant.issuer,
+    authorityRevision: grant.authorityRevision,
+    policyRevision: grant.policyRevision,
+    moduleAuthority: null,
+    lifetime: Object.freeze({ kind: 'invocation', invocationId: input.invocationId }),
+  });
   return Object.freeze({
     provider,
     maintainGrant: grant,
+    memoryGrant: neutral,
     memoryOperations: MEMORY_HANDLE_OPERATIONS,
   });
 };
