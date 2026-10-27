@@ -39,6 +39,7 @@
   - [x] Declare any additional exception with rationale, impact and rollback in this feedback loop before editing.
 
 ## Feedback Loop
+- [x] PR786 P2-1, author, resolved: emit only a package's own advisories at affected installed versions; retain npm carrier graph and severities as context. Langium/mermaid with two lodash-es versions is covered; locked daily suite passes 107 tests. Reuse the pinned semver tool from the existing fixture lane.
 - [x] SECDAILY-EX1 predeclared by approved r4 for S2a: edit only `security-daily-scan` and `test-security-daily` recipes in `Makefile`; reuse the existing pinned credential-free Node test lane. Impact: explicit raw scanner orchestration and its regression target; existing gates and deploy recipes remain unchanged. Rollback: revert these adapter recipes and scan files, keeping activation disabled.
 - [x] S1 dependency: owner confirms Opus r2 approval of corrected #732 head `76c745d5a`.
 - [x] S2A-F1, author, resolved: native npm rejected user/global config both pointing to `/dev/null` (double-loading config); use a distinct absent global config in scratch. Native-version regression preserves credential isolation.

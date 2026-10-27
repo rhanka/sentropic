@@ -3275,7 +3275,7 @@ security-daily-scan: ## Emit a local raw receipt; incomplete coverage exits nonz
 	@docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges --memory=512m --cpus=1 --tmpfs /tmp:rw,nosuid,nodev,size=128m \
 		-u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -e SECURITY_DAILY_SOURCE_SHA="$$(git rev-parse HEAD)" \
 		-v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) \
-		sh -ec 'tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node scripts/security/daily/scan.mjs'
+		sh -ec 'tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund yaml@2.8.1 semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node scripts/security/daily/scan.mjs'
 
 test-security-daily: ## Run daily inventory, schema and adapter regressions in the approved pinned Node lane
 	@$(MAKE) test-publishable-manifests MANIFEST_GUARD_IMAGE="$(MEMORY_L5_NODE_IMAGE)" SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs scripts/security/daily/scan.test.mjs" ENV=$(ENV)

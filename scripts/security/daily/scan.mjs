@@ -30,6 +30,7 @@ export function planScan(root, contract) {
 }
 
 function npmFindings(report, task, root, repository) {
+  const semver = createRequire(join(process.env.MANIFEST_GUARD_TOOL_DIR, 'package.json'))('semver');
   const lock = JSON.parse(readFileSync(join(root, task.target), 'utf8'));
   if (![2, 3].includes(lock.lockfileVersion) || !lock.packages) throw new Error('unsupported lock format');
   const entries = report.vulnerabilities;
@@ -43,17 +44,26 @@ function npmFindings(report, task, root, repository) {
   }
   return Object.values(entries).flatMap((entry) => {
     if (!Array.isArray(entry.nodes) || !entry.nodes.length) throw new Error('missing affected dependency paths');
-    const resolved = [...new Map(advisories(entry).map((via) => [via.url || via.source, via])).values()];
-    if (!resolved.length) throw new Error('no reachable npm advisory');
+    if (!advisories(entry).length) throw new Error('no reachable npm advisory');
+    const resolved = entry.via.filter((via) => typeof via !== 'string' && via.name === entry.name);
+    const dependencyContext = Object.values(entries).filter((carrier) => carrier.name !== entry.name &&
+      advisories(carrier).some((via) => via.name === entry.name)).map((carrier) => ({
+      component: carrier.name, nodes: [...carrier.nodes].sort(), severity: npmSeverity(carrier.severity),
+      via: carrier.via.filter((via) => typeof via === 'string').sort(),
+    })).sort((a, b) => a.component.localeCompare(b.component));
     return entry.nodes.flatMap((path) => {
       const version = lock.packages[path]?.version;
       if (typeof version !== 'string' || !version) throw new Error('missing installed version');
-      return resolved.map((via) => {
+      return resolved.filter((via) => {
+        if (!semver.valid(version) || !semver.validRange(via.range)) throw new Error('invalid advisory version/range');
+        return semver.satisfies(version, via.range, { includePrerelease: true });
+      }).map((via) => {
         const aliases = [...new Set((via.url || '').match(/CVE-\d{4}-\d+|GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}/gi) || [])];
         if (!aliases.length && !Number.isInteger(via.source)) throw new Error('missing advisory identity');
         return { repository, scanner: 'npm', id: aliases[0] || `npm:${via.source}`, aliases,
           component: entry.name, path: `${task.target}#${path}`, version,
           range: entry.range, advisoryRange: via.range, severity: npmSeverity(via.severity), dependencySeverity: npmSeverity(entry.severity),
+          dependencyContext,
           fixedTarget: typeof entry.fixAvailable === 'object' ? entry.fixAvailable.version : null };
       });
     });
