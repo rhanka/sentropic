@@ -7,6 +7,8 @@
 import type { AudioStream, DevicePort, OpenDeviceOptions } from './device.js';
 import { DeviceLostError, DeviceOpenError } from './device.js';
 import { rmsDbfs } from './utterance-buffer.js';
+// L1c mic mode consumed as a type only: no runtime dependency on the mesh.
+import type { SpeechMicMode } from '../../../llm-mesh/src/speech/contracts.js';
 
 export interface CaptureFrame {
   readonly seq: number;
@@ -20,10 +22,13 @@ export interface CaptureSessionOptions extends OpenDeviceOptions {
   readonly energyThresholdDb: number;
   /** Mailbox cap: oldest frames drop with a counter, never unbounded growth. */
   readonly maxMailboxFrames: number;
+  /** Explicit session choice, driven by the L1c profile micMode. Starts 'key'. */
+  readonly micMode?: SpeechMicMode;
 }
 
 export interface CaptureDiagnostics {
   readonly open: boolean;
+  readonly micMode: SpeechMicMode;
   readonly micOn: boolean;
   readonly muted: boolean;
   readonly buffered: number;
@@ -34,17 +39,22 @@ export interface CaptureDiagnostics {
 export interface CaptureSessionEvents {
   readonly onDeviceLost?: (error: DeviceLostError) => void;
   readonly onDropped?: (count: number) => void;
+  /** VAD onset/offset for barge-in. Fires on the VAD path, independent of mic/mute. */
+  readonly onSpeechStart?: (frame: CaptureFrame) => void;
+  readonly onSpeechEnd?: (frame: CaptureFrame) => void;
 }
 
 /** Mic capture over a DevicePort with independent control and VAD paths. */
 export class CaptureSession {
   private stream: AudioStream | null = null;
   private pumpDone: Promise<void> | null = null;
+  private micMode: SpeechMicMode;
   private micOn = false;
   private muted = false;
   private mailbox: CaptureFrame[] = [];
   private dropped = 0;
   private seq = 0;
+  private speaking = false;
   private lastLevelDb = -Infinity;
   private lost: string | null = null;
 
@@ -52,7 +62,9 @@ export class CaptureSession {
     private readonly device: DevicePort,
     private readonly options: CaptureSessionOptions,
     private readonly events: CaptureSessionEvents = {},
-  ) {}
+  ) {
+    this.micMode = options.micMode ?? 'key';
+  }
 
   /** Last observed frame level in dBFS, updated even when muted or mic-off. */
   get levelDb(): number {
@@ -75,6 +87,11 @@ export class CaptureSession {
     this.muted = muted;
   }
 
+  /** Explicit open-mic session choice (spec §5.1: opt-in, never the default). */
+  setMicMode(mode: SpeechMicMode): void {
+    this.micMode = mode;
+  }
+
   /** Take all buffered frames and clear the mailbox. Never audio-logged. */
   drain(): CaptureFrame[] {
     const frames = this.mailbox;
@@ -86,6 +103,7 @@ export class CaptureSession {
     const stream = this.stream;
     return {
       open: stream !== null && !stream.closed,
+      micMode: this.micMode,
       micOn: this.micOn,
       muted: this.muted,
       buffered: this.mailbox.length,
@@ -96,8 +114,10 @@ export class CaptureSession {
 
   /** Stop the pump, close the device stream, reset control state. Idempotent. */
   async close(): Promise<void> {
+    this.micMode = 'key';
     this.micOn = false;
     this.muted = false;
+    this.speaking = false;
     this.mailbox = [];
     const stream = this.stream;
     this.stream = null;
@@ -111,13 +131,24 @@ export class CaptureSession {
       for await (const pcm of stream.frames()) {
         const level = rmsDbfs(pcm);
         this.lastLevelDb = level;
+        const speech = level > this.options.energyThresholdDb;
         const frame: CaptureFrame = {
           seq: this.seq++,
           pcm,
-          speech: level > this.options.energyThresholdDb,
+          speech,
           levelDb: level,
         };
-        if (!this.micOn || this.muted) continue;
+        // VAD onset/offset runs on its own path: independent of mic, mute and mode.
+        if (speech && !this.speaking) {
+          this.speaking = true;
+          this.events.onSpeechStart?.(frame);
+        } else if (!speech && this.speaking) {
+          this.speaking = false;
+          this.events.onSpeechEnd?.(frame);
+        }
+        // Open mic stays on: only mute gates the mailbox, never a key.
+        if (this.muted) continue;
+        if (this.micMode === 'key' && !this.micOn) continue;
         if (this.mailbox.length >= this.options.maxMailboxFrames) {
           this.mailbox.shift();
           this.dropped += 1;
