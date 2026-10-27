@@ -70,6 +70,10 @@
   - [x] Mechanical branch/scope and ancestry checks pass; maximum authored commit is 106 changed lines; no trailers, package/lock or Track changes.
 - [x] Lot 6: draft #795 against feat/app-cm-integration with BRANCH.md body and W4.b handoff; submit CI on the final documentation head with bootstrap_publish_target=none.
   - [ ] Remote CI outcome and independent receiving reviews remain separate gates before integration; no merge or deployment in this lot.
+- [ ] Lot 7: address Opus R1 without making catalog authority a chat prerequisite.
+  - [ ] chat-turn.integration.test.ts: real-store missing/requested tenant membership, NULL session workspace, hidden workspace, non-member and failed transport; completed generation, no catalog tools, explicit unavailable context and fixed PII-free warning.
+  - [ ] Real-store interleaved chat turns and mounted HTTP discovery for two users in two workspaces; assert each model tool list and revocation isolation.
+  - [ ] Run existing chat-service, chat-summary, chat-tools and comment-assistant suites, catalog regressions, API typecheck/lint; push and inspect CI on the exact head; make down.
 
 ## Feedback Loop
 - [x] W4.b owns host-registry-source.ts and its registration; W4.a prepares the context and execution contracts.
