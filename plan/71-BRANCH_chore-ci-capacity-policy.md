@@ -87,7 +87,7 @@
   - [ ] Review r1 publication qualification: dispatch `capacity_publish_dry_run=true` on this branch; 21 real publisher jobs run guarded packs and log identified receipts; their registry writers and post-publication checks are disabled only for that explicit mode.
   - [ ] Use `ci-capacity-dispatch`, `ci-capacity-runs`, `ci-capacity-status` and `ci-capacity-capture` Make entry points for remote qualification; do not cancel receipt runs with intermediate pushes.
   - [x] Superseded old-policy run 40380899105 retained the PR group after automatic cancellation; verified PR 766, same-repo branch and obsolete head 773aa4283, then finished cancellation at 19:19:06 UTC. No current run or main release cancelled.
-  - [ ] Dry-run run 40385085415 exposed missing CI manifest context in publisher job 121805361211 (cowork-desktop): standalone BLOCK rejected unchanged local dependencies. Regression assertion added before correction; 21 fixture tests and the real cowork-desktop guarded pack pass with the preserved CI/WARN context. Final live rerun still required.
+  - [x] Dry-run 40385085415 exposed missing CI context in cowork-desktop job 121805361211. Test-first correction passes 21 fixtures and the local guarded pack; final-source dry-run 40408883195 job 121963393513 now passes the actual pack in CI/WARN mode with the registry writer skipped. Full 21-package qualification remains separate below.
   - [x] Review r1: wall-clock proof rejects cancelled/incomplete/old-policy receipts, branch dispatches labelled as main, duplicate PRs, missing gates and 2289s regressions.
   - [x] Receipt-reader regression: reject carried executions predating the attempt creation and missing execution stamps; observed main retry 40356941217 cannot qualify fresh delivery. All 21 expected-results tests pass; workflow unchanged.
   - [ ] Policy provenance: retain the workflow digest before dispatch, reject mismatched captures, and leave historical captures without that attestation unqualified. Regression failed on unattested source-only credit before correction.
@@ -95,6 +95,7 @@
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
   - [x] Static: `make test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity` must parse/import the changed scripts and reject invalid result sets.
   - [x] Review r1 local qualification: 35 metrics + 21 expected-results and 90 publication tests pass (includes 24 wiring checks). Static PR/main bounds 15/17; final-policy timing acceptance remains open.
+  - [ ] Timing rejected: completed PR 40402395319 on frozen policy source 1b5ef536885cf1f8533e88fc54dc40dbbf8c7223 succeeded with 62 executions / 27 skips, but wall-clock 18224s exceeds 2288s. Aggregate critical-path scheduling is 17227s; strict proof command rejects it. Require qualifying new PR/main receipts before acceptance.
   - [ ] Build: no image/package build recipe changes; retain the final concurrent PR/main runs' existing build and artifact receipts.
   - [ ] API regression: no API source/test edits; verify every selected API result from the concurrent runs is present and successful.
   - [ ] UI regression: no UI source/test edits; verify the unchanged UI test/build results are present in the complete verdict.

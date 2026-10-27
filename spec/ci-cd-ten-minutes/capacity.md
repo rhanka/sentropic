@@ -53,6 +53,23 @@ captures, old-policy main runs and branch dry-runs never qualify this proof.
 The prior 13/10-deep chains are rejected: run `40368572524` was still
 unfinished at 81 minutes. No final-policy timing acceptance is claimed yet.
 
+The completed replacement PR run `40402395319` is a negative timing receipt:
+source `1b5ef536885cf1f8533e88fc54dc40dbbf8c7223`, attempt 1,
+2026-10-26T21:12:34Z to 2026-10-27T02:16:18Z, success with 62 executions
+and 27 skips. Wall-clock is **18224s**, qualification endpoint 18223s,
+aggregate critical-path scheduling **17227s**, queue p50 3040s / max 7640s,
+and own execution peak 5. Classification 26s and verdict 19s also breach
+their budgets. The strict proof command rejects this attested, fresh receipt.
+The path is changes → build-ui → E2E group-c → receipts → gate; validator
+chains are gone, yet queueing still defeats the goal. This policy remains
+unqualified. A new successful PR and actual main run must each meet 2288s.
+
+Concurrent traffic snapshot at 2026-10-26T23:58:02Z retained 25 unfinished
+runs and 19 executing jobs, including two on these qualifications and 17
+elsewhere. The previous-policy main run `40390149749` completed successfully
+in 9728s; it is context, never a final-policy main receipt. Current main
+`365e8b313f1c4c627c87db4f6761847a1e6a5ae7` still lacks this policy.
+
 Dispatch this branch with `capacity_publish_dry_run=true` to exercise all
 21 actual package publication jobs and their dependency guards. Each runs
 `make ci-capacity-publish-dry-run PACKAGE=<slug> ENV=test-ci-capacity`,
@@ -60,6 +77,12 @@ which executes the existing real guarded pack and logs a run/SHA/package
 receipt. Registry writers and registry post-publication qualification steps
 are disabled only in that mode. This proves branch publication wiring after
 completion; it is not a main release receipt.
+
+On dry-run `40408883195`, cowork-desktop job `121963393513` completed its
+guarded pack after the missing-context correction, with the npm writer skipped.
+Its archive guard passed in CI/WARN mode (SHA-256
+`2f32a5346e3f87d3f02f81662197e5b5b1d226d0f8b1d1ed72f4b78f49ac2613`).
+This package receipt does not qualify the whole 21-package chain until complete.
 
 | Receipt | Identified observation | Acceptance |
 | --- | --- | --- |
