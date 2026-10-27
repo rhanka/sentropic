@@ -7,6 +7,9 @@ speech accounting policy. They do not install a ledger, expose an unauthenticate
 or enable paid speech on the existing gateway host. **G-LEDGER remains open:** the current application
 adapter supports monthly text budgets, not native audio units and aggregate UTC-day/campaign holds.
 L9/L13 must remain fixture-only until the ledger owner supplies and qualifies the binding below.
+This PR is **L8a policy/contracts**; L8 acceptance remains **conditional**. The separate **L8b durable
+owner-adapter** sub-lot (gateway/ledger owner + Sol, recorded 2026-10-27 in BRANCH.md) provides the
+real DB binding and qualification. L8a does not establish M1 readiness.
 
 `SpeechLedgerPort` is a transaction view over the owner's existing `control.budgets`,
 `control.budget_holds`, `control.cost_ledger`, allocator receipts and pool leases. Implementing it
@@ -58,6 +61,14 @@ and change budget spend by the difference only. Provider-billed discarded/unhear
 billable. Replay is a no-op; storage failures retain the hold. `releaseSpeech` frees only a hold
 that never acquired its durable dispatch marker. The owner reaper must use these same semantics:
 expired dispatched holds retain or settle worst-case liability, never expire as free speech.
+
+L7 can import `reconcileSpeech` from `@sentropic/llm-gateway/speech/settlement`. Supply a complete,
+consistent owner snapshot of holds, allocator admissions and settlement entries for the audited scope.
+Rows retain operation/attempt IDs, allocator receipt, submit key/epoch and usage entry references.
+Issues identify duplicated allocator admissions for a scoped turn, uncounted dispatched admissions,
+duplicate usage receipts/roots, missing usage, orphan entries/adjustments and identity mismatches.
+STT/TTS may share one allocator admission; signed adjustments share one root. The projection reads
+owner data without allocating units or creating another ledger; real DB snapshot delivery belongs to L8b.
 
 G-LEDGER acceptance requires real database tests for restart, concurrent reservations across replicas,
 daily rollover, settlement crash/replay, estimate/adjustment persistence and unavailable-store refusal.

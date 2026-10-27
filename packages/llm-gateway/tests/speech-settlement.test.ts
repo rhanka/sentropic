@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { admitSpeech, markSpeechDispatched } from '../src/speech/admission.js';
-import { recordSpeechUsage, releaseSpeech, settleSpeech } from '../src/speech/settlement.js';
+import { reconcileSpeech, recordSpeechUsage, releaseSpeech, settleSpeech } from '../src/speech/settlement.js';
 import { operation, SpeechLedgerFixture } from './fixtures/speech-ledger.js';
 
 const dispatched = async () => {
@@ -22,6 +22,8 @@ describe('speech settlement', () => {
     expect(await settleSpeech(restarted.options(), { operationId: 'stt-1', outcome: 'unknown' })).toBe(false);
     expect(await settleSpeech(restarted.options(), final)).toBe(true);
     expect(await settleSpeech(restarted.options(), final)).toBe(false);
+    expect(reconcileSpeech(Object.values(restarted.state.holds), [restarted.state.allocator], restarted.state.entries)
+      .map(row => row.issues)).toEqual([[]]);
     expect(restarted.state.campaign.spentMicroUsd).toBe(500_000);
     expect(restarted.state.entries.map(e => e.deltaMicroUsd)).toEqual([1_000_000, -500_000]);
     expect(restarted.state.entries[1].rootEntryRef).toBe(restarted.state.entries[0].entryRef);
@@ -65,7 +67,7 @@ describe('speech settlement', () => {
     expect(ledger.state.campaign.spentMicroUsd).toBe(500_000);
   });
 
-  it('should link both speech operations to the existing allocator unit without counting the backend twice', async () => {
+  it('should reconcile two speech attempts to one allocator admission and detect duplicated usage receipts', async () => {
     const ledger = await dispatched();
     await admitSpeech(ledger.options(), { ...operation('tts-1'), stage: 'tts' });
     await markSpeechDispatched(ledger.options(), 'tts-1');
@@ -73,7 +75,31 @@ describe('speech settlement', () => {
     await settleSpeech(ledger.options(), { ...final, operationId: 'tts-1' });
     expect(ledger.state.entries.every(e => e.operation.allocatorReceiptRef === ledger.state.allocator.receiptRef)).toBe(true);
     expect(ledger.state.entries.every(e => e.operation.backendOperationRef === 'agent-ledger-op')).toBe(true);
-    expect(ledger.state.entries.reduce((sum, e) => sum + e.countedUnitDelta, ledger.state.allocator.countedUnits)).toBe(1);
+    const holds = Object.values(ledger.state.holds);
+    const rows = reconcileSpeech(holds, [ledger.state.allocator], ledger.state.entries);
+    expect(rows.map(row => [row.operationId, row.attemptId, row.issues])).toEqual([
+      ['stt-1', 'stt-1', []], ['tts-1', 'tts-1', []],
+    ]);
+    const duplicate = { ...ledger.state.entries[0], entryRef: 'duplicate-receipt' };
+    expect(reconcileSpeech(holds, [ledger.state.allocator], [...ledger.state.entries, duplicate])[0].issues)
+      .toEqual(['duplicate-usage-receipt']);
+    expect(reconcileSpeech(holds, [ledger.state.allocator], [...ledger.state.entries, ledger.state.entries[0]])[0].issues)
+      .toEqual(['duplicate-usage-receipt']);
+  });
+
+  it('should expose duplicate allocator receipts, uncounted paid admissions and orphan usage to L7', async () => {
+    const ledger = await dispatched();
+    await settleSpeech(ledger.options(), final);
+    const holds = Object.values(ledger.state.holds);
+    const { allocator, entries } = ledger.state;
+    expect(reconcileSpeech(holds, [allocator, { ...allocator, receiptRef: 'allocator-duplicate', countedUnits: 0 }], entries)
+      [0].issues).toEqual(['duplicate-allocator-receipt']);
+    expect(reconcileSpeech(holds, [{ ...allocator, countedUnits: 0 }], entries)[0].issues).toEqual(['uncounted-admission']);
+    expect(reconcileSpeech([], [allocator], entries)[0].issues).toEqual(['orphan-usage']);
+    expect(reconcileSpeech(holds, [], entries)[0].issues).toEqual(['allocator-mismatch']);
+    expect(reconcileSpeech(holds, [allocator], [])[0].issues).toEqual(['missing-usage']);
+    expect(reconcileSpeech(holds, [allocator], [{ ...entries[0], kind: 'adjustment', rootEntryRef: 'absent' }])[0].issues)
+      .toEqual(['orphan-adjustment']);
   });
 
   it('should release a never-opened connection once and keep a marked connection charged', async () => {
