@@ -33,6 +33,9 @@ async function harness(deviceScripts: Float32Array[][], initialKeys: string[] = 
   const controller = new TerminalController((event) => {
     controlEvents.push(event);
     if (event.kind === 'mic-toggle') capture.setMicOn(!capture.diagnostics().micOn);
+    if (event.kind === 'mic-mode') {
+      capture.setMicMode(capture.diagnostics().micMode === 'key' ? 'open-mic' : 'key');
+    }
     if (event.kind === 'stop') void capture.close().then(() => session.close());
   });
   // Owned test key source: synchronous delivery like a TTY data event.
@@ -76,6 +79,21 @@ describe('capture/control wiring', () => {
     expect(finals).toHaveLength(1);
     expect(finals[0]).toMatchObject({ utteranceId: 'u1', text: 'hello world' });
     expect(h.controlEvents).toEqual([{ kind: 'mic-toggle' }]);
+    await h.capture.close();
+    h.session.close();
+  });
+
+  it('should flow frames after the mic-mode key without any toggle', async () => {
+    const h = await harness([[tone(1.2), silence(0.7)]], ['o']);
+    await flush(10);
+    await pushDrained(h);
+    await flush(40);
+    // Hands-free: no toggle was ever pressed, yet the explicit open-mic choice flows.
+    expect(h.controlEvents).toEqual([{ kind: 'mic-mode' }]);
+    expect(h.capture.diagnostics().micMode).toBe('open-mic');
+    const finals = h.events.filter((event) => event.type === 'final');
+    expect(finals).toHaveLength(1);
+    expect(finals[0]).toMatchObject({ utteranceId: 'u1', text: 'hello world' });
     await h.capture.close();
     h.session.close();
   });
