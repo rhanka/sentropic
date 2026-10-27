@@ -403,10 +403,10 @@ authority escalation and lineage conflicts. Package enrollment keeps existing id
 
 ## Generic Decision Capability
 
-`@sentropic/llm-mesh` provides strict decision evaluation contracts, portable client execution, and a deterministic JEV host service via three distinct export subpaths:
+`@sentropic/llm-mesh` provides strict decision evaluation contracts, portable client execution, and native JEV/OpenAI Decisions adapters via three distinct export subpaths:
 
 - `@sentropic/llm-mesh/decision`: Consumer contracts (`EvaluatorRef`, `DecisionRequest`, `DecisionResult`, `DecisionVerdict`, `DecisionReceipt`) and portable remote client (`createRemoteDecisionClient`).
-- `@sentropic/llm-mesh/decision/host`: Trusted host factory (`createDecisionService`) and JEV adapter (`createJevAdapter`).
+- `@sentropic/llm-mesh/decision/host`: Trusted host factory (`createDecisionService`), JEV adapter (`createJevAdapter`), and dedicated OpenAI Decisions adapter/transport (`createOpenAiDecisionsAdapter`, `createOpenAiDecisionsTransport`).
 - `@sentropic/llm-mesh/transport/jev`: Deterministic JEV transport (`createJevTransport`).
 
 ### Consumer usage
@@ -464,6 +464,45 @@ const service = createDecisionService({
   clock,
 });
 ```
+
+### Qualification and production readiness
+
+The default execution profile is production. The host supplies immutable `readiness` evidence
+(`contractConformance`, `transportAccessible`, an exact operating `policy`, and recorded
+`assessments`). Missing criterion calibration refuses admission before credentials or budget.
+`discoverDecisionEvaluator` reports identity, billing, protocol price, transport and calibration
+independently. `productionReady` exists only for a specific request/policy; evaluator discovery
+lists qualified scopes. A passing rubric never qualifies new arbitrary instructions.
+
+An explicitly published `executionProfile: 'qualification'` candidate remains experimental,
+even with provisional expected served IDs. It requires the same explicit profile on
+`createDecisionService` host options; production refuses it. It still needs qualified financial bounds, host
+credentials and one-attempt admission. Success uses `kind: 'experimental-verdict'`; results and
+receipts carry `experimental: true`, and served evaluator IDs carry `provisional: true`.
+Production consumer validation rejects these envelopes and receipts, including errors.
+Deterministic assessments are cached per service and exact scope; price remains a live gate.
+
+The host exports `decisionExecutionDigest`, `decisionQualificationScope` and
+`assessDecisionCalibration` for reproducible offline records. Fixtures cannot qualify semantic
+calibration. See [the assessment contract and L6 requirements](../../spec/decision/v4l5-qualification.md).
+
+### Native OpenAI Decisions
+
+The host subpath exports `openAiDecisionsDescriptor` and the published standard/no-cache rate projection `openAiDecisionsPrice`.
+Register `createOpenAiDecisionsAdapter({ transport: createOpenAiDecisionsTransport({ fetch: globalThis.fetch }) })`
+in a dedicated Decision provider registry and explicitly allowlist its exact evaluator reference. Resolve credentials
+from host-owned `OPENAI_API_KEY` and pricing from `control.model_pricing`; ordinary chat composition is unchanged.
+Consumers keep using `createRemoteDecisionClient` with a trusted `native-distribution-v1` context for that revision.
+
+The adapter sends one named predicate, choice or score question to `/v1/decisions`. It disables implicit caching,
+uses the separate $0.10/M uncached-input tariff with no output charge, and rejects a Responses price row.
+Refusals remain typed errors with independently validated usage; no retry, prompted fallback or CLI route is added.
+JEV stays pinned to 1.13.0 and accepts its documented answer discriminator with closed key validation.
+
+Both built-in candidates remain unqualified with empty accepted served-model sets. Fixtures establish protocol
+conformance only. Identity stability, account access, billing bounds and criterion-specific calibration require
+the separately approved V4-L5/L6 work. See the [JEV](../../spec/decision/jev-v4l3-candidate.md) and
+[OpenAI Decisions](../../spec/decision/openai-v4l3-candidate.md) candidate packets for dated evidence and gaps.
 
 ### Deadline & Failure Semantics
 

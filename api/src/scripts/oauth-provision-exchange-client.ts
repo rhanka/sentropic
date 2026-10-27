@@ -83,6 +83,10 @@ try {
     } else {
       const subjectAud = (process.env.OAUTH_WORKLOAD_SUBJECT_AUD || DEFAULT_SUBJECT_AUD).trim();
       const targetAud = (process.env.OAUTH_WORKLOAD_TARGET_AUD || DEFAULT_TARGET_AUD).trim();
+      // Preprod has one owner-controlled writer: the named-Secret identity sync.
+      if ([subjectAud, targetAud, process.env.OAUTH_ISSUER_URL, process.env.API_BASE_URL].some((value) => value?.startsWith('https://preprod.'))) {
+        throw new Error('Preprod workload provisioning must use the named-Secret identity sync.');
+      }
       const policy = desiredPolicy(clientId, subjectAud, targetAud);
 
       const [existing] = await db
