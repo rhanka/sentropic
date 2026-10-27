@@ -51,6 +51,15 @@ function makeSeamFixture() {
 // ---------------------------------------------------------------------------
 
 describe('CatalogExecutionSeam — standalone tool dispatch', () => {
+  it('should return a handled denial without an effect when trusted context is missing', async () => {
+    const { seam, standaloneSource } = makeSeamFixture();
+    const handler = vi.fn();
+    standaloneSource.register({ tool: makeSampleTool('context_required'), handler });
+    expect(await seam.execute('context_required', {})).toEqual({ handled: true,
+      result: { status: 'denied', error: 'catalog_access_denied' } });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it('does not invoke effect handlers during list, detail, or search discovery', () => {
     const { registry, standaloneSource } = makeSeamFixture();
     const handler = vi.fn(async () => ({ effected: true }));
