@@ -55,7 +55,9 @@ await build({ root: scratch, configFile: false, plugins: [svelte({ configFile: f
   resolve: { dedupe: ['svelte', '@sentropic/design-system-svelte', '@sentropic/design-system-themes'] },
   build: { target: 'es2022', manifest: true, outDir: 'dist', emptyOutDir: true } });
 const directory = join(scratch, 'dist'), portablePath = join(directory, 'dossier-portable.html');
-write(portablePath, inlinePortable(read(join(directory, 'index.html')), path => read(join(directory, path.replace(/^\//, '')))));
+const notices = read(join(root, 'src/hrpolnav-card-font.LICENSE.txt')).replaceAll('--', '—');
+write(portablePath, inlinePortable(read(join(directory, 'index.html')), path => read(join(directory, path.replace(/^\//, ''))))
+  + `\n<!-- Embedded font license\n${notices}\n-->\n`);
 const report = measureArtifact({ directory, portablePath, profile: profile === 'governance' ? 'governance' : 'typical' });
 const lock = json(join(root, 'package-lock.json'));
 report.build = { commit: process.env.ARTIFACT_COMMIT ?? 'unknown', fixture: profile, node: process.version,
