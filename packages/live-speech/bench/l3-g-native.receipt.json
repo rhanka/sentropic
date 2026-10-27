@@ -76,7 +76,7 @@
     },
     "multiWindowTeardownRace": {
       "status": "recorded and mitigated",
-      "detail": "Paced multi-window base fixture: terminating the worker while a superseded window decode is still in flight aborts the child mid-native-call (koffi FATAL after valid stdout JSON, exit 134). profile-run.mjs quiesces 5 s after the final so terminate hits an idle worker; all four bench children exit clean."
+      "detail": "Paced multi-window base fixture: terminating the worker while a superseded window decode is still in flight aborts the child mid-native-call (koffi FATAL after valid stdout JSON, exit 134). stt-worker.mjs close drains the in-flight decode before freeing the engine; NodeWorkerClient.terminate posts close and force-terminates only a hung engine (2 s fallback). All four bench children exit clean with no bench-side wait."
     }
   },
   "networkPosture": {

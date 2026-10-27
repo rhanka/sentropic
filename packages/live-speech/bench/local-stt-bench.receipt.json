@@ -1,7 +1,7 @@
 {
   "status": "measured",
   "lot": "L3",
-  "createdAt": "2026-10-27T01:28:26.293Z",
+  "createdAt": "2026-10-27T02:00:38.690Z",
   "note": "Functional pipeline timings through worker + session on eSpeak NG fixtures resampled to 16 kHz in-process; quality and latency budgets belong to the M1 campaign with real speech fixtures.",
   "node": "v22.22.1 linux x64",
   "engine": "faster-whisper-ts@1.2.1",
@@ -80,20 +80,20 @@
       },
       "runs": [
         {
-          "loadMs": 188.3,
+          "loadMs": 195.4,
           "fixture": "espeak",
           "samples": 89118,
-          "elapsedMs": 6632.5,
+          "elapsedMs": 6683,
           "finals": 1,
           "partials": 1,
           "chars": 87,
           "errors": []
         },
         {
-          "loadMs": 199,
+          "loadMs": 217.2,
           "fixture": "silence",
           "samples": 16000,
-          "elapsedMs": 1008.5,
+          "elapsedMs": 1007,
           "finals": 0,
           "partials": 0,
           "chars": 0,
@@ -111,20 +111,20 @@
       },
       "runs": [
         {
-          "loadMs": 333.5,
+          "loadMs": 304.6,
           "fixture": "espeak",
           "samples": 122390,
-          "elapsedMs": 7589.1,
+          "elapsedMs": 7586.3,
           "finals": 1,
           "partials": 2,
           "chars": 26,
           "errors": []
         },
         {
-          "loadMs": 310.7,
+          "loadMs": 346.3,
           "fixture": "silence",
           "samples": 16000,
-          "elapsedMs": 1006.6,
+          "elapsedMs": 1009,
           "finals": 0,
           "partials": 0,
           "chars": 0,

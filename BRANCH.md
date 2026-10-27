@@ -45,6 +45,11 @@ Deliver approved r3 L3: `live-speech/src/node/local-stt.ts` plus an isolated wor
   - Never amend tests with additive timeouts.
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
+  - 2026-10-27 bench flake (accepted, non-systematic): one orchestrated
+    `run-local-bench.mjs` run failed with `bench child failed for
+    local-base/espeak`; the same command on the same head measured 4/4 clean on
+    direct rerun and on full rerun (tiny 1 partial, base 2 partials, 0 errors).
+    Native-side flake, unrelated to the committed diff.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -82,7 +87,7 @@ Deliver approved r3 L3: `live-speech/src/node/local-stt.ts` plus an isolated wor
   - [x] No `spec/BRANCH_SPEC_EVOL.md` in this branch; nothing to integrate or delete.
 - [ ] **Lot N — Final validation**
   - [x] Typecheck (via `test-live-speech` tsc --noEmit) & Lint (n/a: no lint lane for this package)
-  - [x] Retest package: 30/30 green on head (word-anchored dedupe, maxInflight bound, preload-before-ready)
+  - [x] Retest package: 31/31 green on head (normalized overlap, graceful worker close)
   - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`. (New private package: CI skips bump check.)
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
