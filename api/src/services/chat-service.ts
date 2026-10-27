@@ -49,6 +49,7 @@ import {
 } from './skills/catalog';
 import { reconcileTenantId } from './tenancy/resolve-tenant';
 import { executeFoundationSkillTool } from './skills/foundation-executor';
+import { resolveTurnCatalogContext } from './catalog/request-authority';
 import { toolService } from './tool-service';
 import { listTabs as listRegisteredTabs, isBrowserSource } from './tab-registry';
 import type { TabEntry } from './tab-registry';
@@ -2769,18 +2770,15 @@ export class ChatService {
         toolSet.set(name, t);
       }
     };
-    // ARCH-11 G1b (§4.2.2): resolve the tenant UPSTREAM and thread it into the sync builder —
-    // legacy workspaceId under alias/shadow (zero behavior change), resolved tenant under strict.
-    const foundationTenantId = await reconcileTenantId({
-      workspaceId: sessionWorkspaceId,
-      userId: options.userId,
-      path: 'catalog:chat-tools',
-    });
+    const catalogContext = await resolveTurnCatalogContext({ userId: options.userId,
+      sessionId: options.sessionId, workspaceId: sessionWorkspaceId, readOnly,
+      allowedTools: ['search_skills', 'search_catalog', ...allowedSkillToolNames] });
     addResolvedTools(
       resolveFoundationChatTools({
         userId: options.userId,
         workspaceId: sessionWorkspaceId,
-        tenantId: foundationTenantId,
+        tenantId: catalogContext.tenantId,
+        context: catalogContext,
         workspaceType: wsType,
         currentUserRole,
         allowedTools: allowedSkillToolNames,
