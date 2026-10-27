@@ -28,7 +28,7 @@ export const sessionDeviceHandlers: DeviceRouteHandlers = {
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return c.json({ error: 'Invalid request data', details: error.errors }, 400);
+        return c.json({ error: 'Invalid request data', details: error.issues }, 400);
       }
       logger.error({ err: error }, 'Error issuing device code');
       return c.json({ error: 'Failed to issue device code' }, 500);
@@ -63,7 +63,7 @@ export const sessionDeviceHandlers: DeviceRouteHandlers = {
       });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return c.json({ error: 'Invalid request data', details: error.errors }, 400);
+        return c.json({ error: 'Invalid request data', details: error.issues }, 400);
       }
       if (error instanceof Error && error.message === 'cluster_mesh_generation_unavailable') {
         return c.json({ error: 'cluster_mesh_generation_unavailable' }, 503);
@@ -92,7 +92,7 @@ export const sessionDeviceHandlers: DeviceRouteHandlers = {
       return c.json({ success: true });
     } catch (error) {
       if (error instanceof z.ZodError) {
-        return c.json({ error: 'Invalid request data', details: error.errors }, 400);
+        return c.json({ error: 'Invalid request data', details: error.issues }, 400);
       }
       logger.error({ err: error }, 'Error approving device code');
       return c.json({ error: 'Failed to approve device code' }, 500);
