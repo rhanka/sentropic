@@ -288,7 +288,10 @@ describe('openai transcript mapping', () => {
     const events = await collectEvents(session);
     const finals = events
       .filter((event) => event.type === 'transcript.final')
-      .map((event) => (event as unknown as { utteranceId: string; text: string; revision: number }));
+      .map((event) => {
+        const final = event as unknown as { utteranceId: string; text: string; revision: number };
+        return { utteranceId: final.utteranceId, text: final.text, revision: final.revision };
+      });
     expect(finals).toEqual([
       { utteranceId: 'item_b', text: 'second tour', revision: 2 },
       { utteranceId: 'item_a', text: 'premier tour', revision: 3 },
@@ -372,7 +375,7 @@ describe('openai session lifecycle', () => {
   });
 
   it('should meter audio seconds and refuse past the admitted ceiling', async () => {
-    const socket = new ScriptSocket();
+    const socket = new HangSocket();
     const sink = new RecordingSink();
     const session = await openTranscriptionSession(liveConfig, {
       request: sessionRequest('gpt-live-transcribe'),
@@ -444,13 +447,13 @@ describe('openai session lifecycle', () => {
       expect(String(error)).not.toContain('bearer-secret-fixture');
       expect(JSON.stringify(new RecordingSink())).not.toContain('bearer-secret-fixture');
     }
-    const socket = new ScriptSocket();
+    const socket = new HangSocket();
     const session = await openTranscriptionSession(liveConfig, {
       request: sessionRequest('gpt-live-transcribe'),
       admission: admission(),
       bearerToken: 'bearer-secret-fixture',
       connect: async (url, headers) => {
-        expect(headers.authorization).toBe('bearer-secret-fixture');
+        expect(headers.authorization).toBe('Bearer bearer-secret-fixture');
         expect(url).toBe('wss://api.openai.com/v1/realtime?intent=transcription');
         return socket;
       },
