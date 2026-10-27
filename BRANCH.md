@@ -56,9 +56,9 @@
   - [ ] Rebuild the baseline and scoped fixture after the Docker reservation; explain differences from preserved outputs.
   - [ ] Record the read-before-publication contract, corrected source anchors and separate L1/host qualification limits in `docs/governance/kit/ARTIFACT_BUDGET.md`.
 - [ ] **W1 — Dossier data boundary**
-  - [ ] Remove global route/summary imports from the diagram engine; explicitly bind governance data in its consumer and preparation scripts.
+  - [x] Remove global route/summary imports from the diagram engine; explicitly bind governance data in its consumer and preparation scripts.
   - [ ] Supply selected scenes, folds/plans, summary geometry and locale dictionary through dossier inputs; fail missing required projection data.
-  - [ ] Scope route cache identity to scene/geometry/routing version; preserve bounded runtime routing for uncovered folds.
+  - [x] Scope route cache identity to scene/geometry/routing version; preserve bounded runtime routing for uncovered folds.
   - [ ] Add `scripts/artifact-input.test.mjs`: scoped projection, missing routes, fold geometry/cache identity and translation equivalence.
   - [ ] Add `scripts/portable.test.mjs`: reject dynamic `assets/` imports and external portable dependencies.
   - [ ] Run focused Node tests, full-governance geometry/routing checks and offline browser interactions for the typical fixture.
