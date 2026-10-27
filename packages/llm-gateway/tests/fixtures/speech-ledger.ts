@@ -34,6 +34,7 @@ export class SpeechLedgerFixture implements SpeechLedgerPort {
   state: State = { holds: {}, days: {}, campaign: emptyBudget(), entries: [], allocator: {
     receiptRef: 'allocator-1', tenantId: 'tenant', workspaceId: 'workspace', principalId: 'principal',
     targetSessionId: 'agent-session', nativeTurnRef: 'native-turn', submitKey: 'submit-1', coordinatorEpoch: 1, countedUnits: 1,
+    backendOperationRef: 'agent-ledger-op',
   } };
   private queue: Promise<unknown> = Promise.resolve();
   options(): SpeechAccountingOptions { return { campaignRef: 'owner-campaign', ledger: this, now: () => this.nowMs }; }
