@@ -8,7 +8,7 @@ import { MemoryHostDriverRequiredError } from '../../src/engram-memory/sqlite.js
 import { openMemoryMaintenance } from '../../src/engram-memory/host-maintenance.js';
 import { StorageDeniedError, StorageUnavailableError } from '../../src/storage/errors.js';
 import { testPgDriver, pgEnabled } from '../storage/pg-driver.js';
-import { memoryAppend, memoryHostComposed, memoryHostProvider, memoryPgHost, memoryUnit } from './pg-host.js';
+import { memoryAppend, memoryHostComposed, memoryHostProvider, memoryLiveRunner, memoryPgHost, memoryUnit } from './pg-host.js';
 import {
   checkMemoryPostgresDriver,
   createMemoryPostgresStorage,
@@ -108,16 +108,7 @@ describe.skipIf(!pgEnabled)('memory PG positive installed calls', () => {
       // entry check requires write, so it stays outside the strict split
       // (E6 combined-grant coverage owns it).
       const boundM = await root.bindNew(binding.maintainGrant);
-      const ports = openMemoryMaintenance(binding, {
-        grant: binding.maintainGrant,
-        currentFence: () => boundM.journalFence(),
-        checkpoint: (consumer, expected, next, check) =>
-          boundM.journalCheckpoint(consumer, expected, next, check),
-        poison: (consumer, event, reason) => boundM.journalPoison(consumer, event, reason),
-        retry: (consumer, expected, check) => boundM.journalRetry(consumer, expected, check),
-        resync: (consumer, check) => boundM.journalResync(consumer, check),
-        snapshot: (token, after, limit) => boundM.snapshotRead(token, after, limit),
-      });
+      const ports = openMemoryMaintenance(binding, memoryLiveRunner(binding.maintainGrant, boundM));
       const current = await boundM.journalFence();
       expect(await ports.checkFence(current)).toEqual(current);
       await expect(ports.checkFence({ ...current, epoch: '999' })).rejects.toThrow(

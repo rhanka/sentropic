@@ -22,7 +22,7 @@ import {
   type MemoryNeutralGrant,
 } from '../../src/engram-memory/binding.js';
 import { pgEnabled, testPgDriver } from '../storage/pg-driver.js';
-import { memoryAppend, memoryHostComposed, memoryPgHost, memoryUnit } from './pg-host.js';
+import { memoryAppend, memoryHostComposed, memoryLiveRunner, memoryPgHost, memoryUnit } from './pg-host.js';
 import {
   openMemoryMaintenance,
   type MemoryMaintenanceRunner,
@@ -326,6 +326,38 @@ describe('host maintenance binding', () => {
         await expect(openMemoryPostgresHostLedger(null as never, projection)).rejects.toThrow(
           StorageDeniedError,
         );
+      } finally {
+        await host.close();
+      }
+    });
+  });
+
+  describe.skipIf(!pgEnabled)('live maintenance ports over the kernel', () => {
+    it('runs fence, checkpoint and resync through the host-only ports', async () => {
+      const host = await memoryPgHost();
+      const { binding } = memoryHostComposed(host.options.driver, 'inv-live-1');
+      try {
+        const root = await host.open();
+        const boundM = await root.bindNew(binding.maintainGrant);
+        const ports = openMemoryMaintenance(binding, memoryLiveRunner(binding.maintainGrant, boundM));
+        const fence = await boundM.journalFence();
+        expect(await ports.checkFence(fence)).toEqual(fence);
+        await expect(ports.checkFence({ ...fence, epoch: '999' })).rejects.toThrow(/not current/);
+        await ports.checkpoint('live-consumer', '0', '0', fence);
+        // Resync captures a snapshot boundary through the maintain grant:
+        // no refusal stub, the kernel answers.
+        const { snapshotRoot, journalSeq } = await ports.resync('live-consumer', fence);
+        expect(typeof snapshotRoot).toBe('string');
+        expect(snapshotRoot.length).toBeGreaterThan(0);
+        expect(typeof journalSeq).toBe('string');
+        await expect(ports.resync('live-consumer', { ...fence, epoch: '999' })).rejects.toThrow();
+        // Poison/retry/snapshot delegate 1:1 to the runner (stub-proven);
+        // live kernel behavior needs read-coupled authority (delivery scan
+        // for poison/retry, read+maintain for snapshot reads) that the
+        // strict maintain-only runner cannot carry by kernel design —
+        // owned by the storage lanes and the G1b read+maintain runner.
+        await expect(ports.poison('live-consumer', 'event-1', 'no delivery')).rejects.toThrow();
+        await expect(ports.snapshot('live-consumer', 0, 10)).rejects.toThrow();
       } finally {
         await host.close();
       }
