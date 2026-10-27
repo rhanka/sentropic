@@ -1,10 +1,10 @@
 # Feature: feat(governance-kit): render only the dossier's data + artifact size budget
 
 ## Objective
-- [ ] Deliver W0, W1 and W4 from the approved artifact-weight analysis: dossier-only runtime data and a reproducible CI size budget, without changing the DS package.
+- [x] Deliver W0, W1 and W4 from the approved artifact-weight analysis: dossier-only runtime data and a reproducible CI size budget, without changing the DS package.
 
 ## Scope / Guardrails
-- [x] Base: `origin/main` at `80b140557393667d468a0a99363a6bec99ed9150`; branch: `feat/artifact-render-budget`.
+- [x] Base: `origin/main` at `e70c056c37f6b95faa0372ba33ec2f75bc92705f`; W0 reference at `80b140557393667d468a0a99363a6bec99ed9150`; branch: `feat/artifact-render-budget`.
 - [x] Isolated worktree: `tmp/worktrees/artifact-weight`; root remains reserved for owner work.
 - [x] Make-only execution; no Python; no DS package or dependency version changes.
 - [x] Environment: `test-artifact-weight`, last argument of every make command; no application service ports required by the isolated file/build lane.
@@ -36,7 +36,7 @@
 - [x] BR84-EX2 — Owner-authorized CI exception: add the budget step/report upload (explicit `.cache` report paths only) in `validate-artifacts`, extend its change filter to kit and DS consumer inputs. Reason: prevent data-corpus regressions. Impact: this validation job runs for those paths; publication filters remain unchanged. Rollback: remove the added step/upload and filter entries.
 - [x] Approved analysis: `.tmp/ds-artifact-weight/analysis.md` sections 3–5; review `.h2a/reviews/ds_artifact_weight_opus_r1.md` APPROVE; incorporate P2-1 through P2-4 in the committed receipt and validation.
 - [x] BR84-F1 — Full-governance build omitted its `../raw-spec.md?raw` input from scratch; copied the declared raw input. The full-governance build is the regression gate.
-- [ ] BR84-F2 — Portable initialization: the fixture called `diagramTabs()` as an expression, so Svelte received no DOM anchor (`before` error). Replaced with `{@render diagramTabs()}`; rebuilding and rerunning offline probes. Initialization error/DOM/stack receipts retained; no timeout increase.
+- [x] BR84-F2 — Portable initialization: the fixture called `diagramTabs()` as an expression, so Svelte received no DOM anchor (`before` error). Replaced with `{@render diagramTabs()}`; four offline configurations and all 48 fold states pass. Initialization error/DOM/stack receipts retained; no timeout increase.
 
 ## AI Flaky tests
 - [x] No AI/provider tests in this scope; no flaky exception requested.
@@ -51,21 +51,21 @@
 - [x] Web app, Chrome plugin and VS Code plugin are not modified.
 
 ## Plan / Todo (lot-based)
-- [ ] **W0 — Baseline receipt**
+- [x] **W0 — Baseline receipt**
   - [x] Read project rules, approved analysis/review and Docker lock; verify branch mechanically.
   - [x] Pin harness r5 input/dependency hashes, renderer/toolchain and preserved before/slim/Focus output hashes in `docs/governance/kit/fixtures/artifact-weight/baseline.json`.
   - [x] Preserve the representative two-diagram, two-question/six-option, 24-row/eight-gap fixture and its source provenance.
-  - [x] Rebuild the baseline and scoped fixture after the Docker reservation; explain differences from preserved outputs. Node 24.22.1 pinned; 12 tests pass; baseline 3734122 B / typical 291885 B HTML, JS 3691488 B / 249248 B.
+  - [x] Rebuild the baseline and scoped fixture after the Docker reservation; explain differences from preserved outputs. Node 24.22.1 pinned; 12 tests pass; baseline 3734108 B / typical 291871 B HTML, JS 3691474 B / 249234 B; hash-bound `fixtures/artifact-weight/qualification.json` receipt.
   - [x] Record the read-before-publication contract, corrected source anchors and separate L1/host qualification limits in `docs/governance/kit/ARTIFACT_BUDGET.md`.
-- [ ] **W1 — Dossier data boundary**
+- [x] **W1 — Dossier data boundary**
   - [x] Remove global route/summary imports from the diagram engine; explicitly bind governance data in its consumer and preparation scripts.
   - [x] Supply selected scenes, folds/plans, summary geometry and locale dictionary through dossier inputs; fail missing required projection data.
   - [x] Scope route cache identity to scene/geometry/routing version; preserve bounded runtime routing for uncovered folds.
   - [x] Add `scripts/artifact-input.test.mjs`: scoped projection, missing routes, fold geometry/cache identity and translation equivalence.
   - [x] Add `scripts/portable.test.mjs`: reject dynamic `assets/` imports, sibling chunks and external portable dependencies.
-  - [ ] Run focused Node tests, full-governance geometry/routing and FR/EN browser checks (`scripts/check-governance-input-browser.mjs`), and offline browser interactions for the typical fixture.
-  - [ ] UAT: `scripts/check-artifact-browser.mjs` covers both diagrams/folds, light/dark, mobile/desktop, zoom, option state, inventory totals and JSON downloads.
-- [ ] **W4 — Artifact size budget**
+  - [x] Run focused Node tests, full-governance geometry/routing and FR/EN browser checks (`scripts/check-governance-input-browser.mjs`), and offline browser interactions for the typical fixture.
+  - [x] UAT: `scripts/check-artifact-browser.mjs` covers both diagrams/folds, light/dark, mobile/desktop, zoom, option state, inventory totals and JSON downloads.
+- [x] **W4 — Artifact size budget**
   - [x] Add deterministic fixture build and Vite module/chunk manifest reporting, without mutating tracked source.
   - [x] Add `scripts/artifact-budget.mjs` and `scripts/artifact-budget.test.mjs`: raw/gzip/Brotli/SHA-256, initial/static/startup/full closures, per-chunk limits and agent read cost.
   - [x] Negative tests: corpus reimport, oversized startup data, deferred/inline JS excess, missing/unreferenced assets and portable dynamic imports.
@@ -78,9 +78,9 @@
 
 - [ ] **Final validation**
   - [x] Focused tests and budget build under the shared lock, after 21:00 UTC; geometry 1758 scenes / 16740 relations, zero findings, planned routing max 73.6 ms.
-  - [ ] Full-governance geometry/routing checks; typical offline/browser checks; report output digests and before/after sizes.
-  - [ ] Review final diff and mechanically validate scope before every commit.
-  - [ ] Run `make down ENV=test-artifact-weight` under the shared lock.
-  - [ ] Push `feat/artifact-render-budget` and create draft PR to `main` with this plan as body and the requested title.
+  - [x] Full-governance geometry/routing checks; typical offline/browser checks; report output digests and before/after sizes.
+  - [x] Review final diff and mechanically validate scope before every commit.
+  - [x] Run `make down ENV=test-artifact-weight` under the shared lock after every container step and after final qualification.
+  - [x] Push `feat/artifact-render-budget` and create draft PR #801 to `main` with this plan as body and the requested title.
   - [ ] Wait for CI on the pushed head and resolve branch failures; report head and measured sizes.
   - [x] Package version bump not applicable: no package source changes; draft PR only, no merge requested.
