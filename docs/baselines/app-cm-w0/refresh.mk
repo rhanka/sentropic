@@ -10,3 +10,7 @@ w0-refresh-payload: w0-probe-env
 
 w0-refresh-ps:
 	@$(W0_COMPOSE) ps --all --format json
+
+.PHONY: w0-refresh-record
+w0-refresh-record: w0-probe-env
+	@$(W0_COMPOSE) run --rm --no-deps --user "$$(id -u):$$(id -g)" -e W0_REFRESH_SOURCE_SHA=$$(git rev-parse HEAD) -e W0_REFRESH_LOCK_BLOB=$$(git hash-object package-lock.json) -e W0_REFRESH_API_LOCK_BLOB=$$(git hash-object api/package-lock.json) -v "$(W0_OUTPUT_DIR):/out" qualification node /workspace/docs/baselines/app-cm-w0/refresh-record.mjs
