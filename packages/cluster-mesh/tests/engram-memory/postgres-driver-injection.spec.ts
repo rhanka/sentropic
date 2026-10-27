@@ -5,8 +5,10 @@
 
 import { describe, expect, it } from 'vitest';
 import { MemoryHostDriverRequiredError } from '../../src/engram-memory/sqlite.js';
-import { checkMemoryPostgresDriver } from '../../src/engram-memory/postgres.js';
+import { checkMemoryPostgresDriver, createMemoryPostgresStorage } from '../../src/engram-memory/postgres.js';
 import { StorageUnavailableError } from '../../src/storage/errors.js';
+import { pgEnabled } from '../storage/pg-driver.js';
+import { memoryAppend, memoryHostComposed, memoryPgHost, memoryUnit } from './pg-host.js';
 
 const qualifiedProvider = () => ({
   identity: { name: 'node-pg-owner', version: '8.16.3', artifactDigest: 'b'.repeat(64) },
@@ -45,7 +47,38 @@ describe('memory PG driver injection', () => {
       serverFloor: '17.5.1',
     });
   });
-  it.todo('runs positive installed driver calls through the injected pool');
-  it.todo('releases pool resources when the open fails');
-  it.todo('never falls back to an implicit driver or the generic kernel');
+});
+
+describe.skipIf(!pgEnabled)('memory PG positive installed calls', () => {
+  it('runs installed calls through the injected pool', async () => {
+    const { binding } = memoryHostComposed();
+    const host = await memoryPgHost();
+    try {
+      const root = await host.open();
+      const bound = await root.bindNew(binding.maintainGrant);
+      await bound.configureLifecycle('optional');
+      const fence = {
+        fenceId: 'host-fence', epoch: '1', incarnation: root.incarnation,
+        ownerId: binding.maintainGrant.principalId,
+      };
+      await root.provisionFence(binding.maintainGrant, fence);
+      await bound.commitAtomic(memoryUnit({ appends: [memoryAppend('7')] }));
+      expect(await bound.readHead('memory-journal')).toBe('hash-7');
+    } finally {
+      await host.close();
+    }
+  });
+
+  it('refuses storage composition without falling back, pool stays usable', async () => {
+    const host = await memoryPgHost();
+    try {
+      await expect(createMemoryPostgresStorage(host.options)).rejects.toBeInstanceOf(StorageUnavailableError);
+      const probe = await host.tx.run(true, (session) =>
+        session.execute({ text: 'SELECT 1 AS one', values: [] }),
+      );
+      expect(probe.rows[0]).toMatchObject({ one: 1 });
+    } finally {
+      await host.close();
+    }
+  });
 });
