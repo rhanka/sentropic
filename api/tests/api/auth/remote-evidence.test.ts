@@ -8,9 +8,9 @@ const body = { version: 'remote-action-v1', kind: 'evidence-request',
   sessionCredential: 'private-credential' };
 function setup(role: 'auth-idp' | 'product' = 'auth-idp', allowed = true) {
   const issue = vi.fn(async () => 'compact.signed.evidence');
-  const authenticateWorkload = vi.fn(async () => allowed);
+  const authenticateWorkload = vi.fn(async () => allowed ? { workload: 'app-authorization' } : null);
   const app = new Hono().route('/api/v1/auth/session/remote-action-evidence',
-    createRemoteEvidenceRouter({ role, authenticateWorkload, issue }));
+    createRemoteEvidenceRouter({ role, expectedWorkload: 'app-authorization', authenticateWorkload, issue }));
   const send = (value = JSON.stringify(body), headers = {}) => app.request(
     'https://idp/api/v1/auth/session/remote-action-evidence', { method: 'POST',
       headers: { 'content-type': 'application/json', ...headers }, body: value });
@@ -24,6 +24,7 @@ describe('RC1 internal evidence boundary', () => {
     expect(await result.text()).toBe('compact.signed.evidence');
     expect(result.headers.get('cache-control')).toBe('no-store');
     expect(issue).toHaveBeenCalledWith(body);
+    expect(authenticateWorkload).toHaveBeenCalledWith(expect.any(Request));
   });
   it('should refuse product-role issuance before reading the body', async () => {
     const { send, issue, authenticateWorkload } = setup('product');
