@@ -47,6 +47,13 @@ describe('conversation permission boundary through the real runtime and HTTP ser
     expect(fixture.executions).toHaveLength(0);
     const posts = fixture.requests.filter((entry) => entry.path.endsWith('/tool-results'));
     expect(posts.every((entry) => (entry.body as { result: { status: string } }).result.status === 'error')).toBe(true);
+    request(fixture, streamId, 5);
+    await vi.advanceTimersByTimeAsync(200);
+    expect(fixture.runtime.snapshot().permissions).toEqual([
+      { id: `${streamId}:tool-1`, name: 'render_mermaid', status: 'denied' },
+    ]);
+    expect(fixture.executions).toHaveLength(0);
+    expect(fixture.requests.filter((entry) => entry.path.endsWith('/tool-results'))).toHaveLength(posts.length);
   });
 
   it('should expose pending state and ignore approval arriving after the timeout', async () => {
