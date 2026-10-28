@@ -450,3 +450,143 @@ export function createCommentState(host: CommentHost, presentation: CommentPrese
           assigned_to: assignedUserId,
           status: 'open',
           thread_id: res.thread_id,
+          content: trimmed,
+          created_at: nowIso,
+          updated_at: null,
+          created_by_user: user
+            ? {
+                id: user.id ?? null,
+                email: user.email ?? null,
+                displayName: user.displayName ?? null,
+              }
+            : null,
+          assigned_to_user: assignedMember
+            ? {
+                id: assignedMember.userId,
+                email: assignedMember.email ?? null,
+                displayName: assignedMember.displayName ?? null,
+              }
+            : assignedUserId && user
+              ? {
+                  id: user.id ?? null,
+                  email: user.email ?? null,
+                  displayName: user.displayName ?? null,
+                }
+              : null,
+        };
+
+        commentItemsByThread = new Map(commentItemsByThread);
+        commentItemsByThread.set(res.thread_id, [optimistic]);
+        commentMessages = [optimistic];
+
+        const authorLabel =
+          user?.displayName || user?.email || user?.id || '';
+        const newThread: CommentThreadSummary = {
+          id: res.thread_id,
+          sectionKey: commentSectionKey ?? null,
+          count: 1,
+          lastAt: nowIso,
+          preview: trimmed,
+          authorLabel,
+          status: 'open',
+          assignedTo: assignedUserId,
+          rootId: res.id,
+          createdBy: user?.id ?? '',
+        };
+        commentThreads = [
+          newThread,
+          ...commentThreads.filter((t) => t.id !== res.thread_id),
+        ];
+        lastCommentThreadId = res.thread_id;
+        lastCommentMessageCount = 1;
+        syncThreadRoot();
+      }
+
+      commentInput = '';
+      assignedToUserId = null;
+      assignedToLabel = null;
+      mentionQuery = '';
+      mentionMatches = [];
+      showMentionMenu = false;
+      notify();
+
+      await loadCommentThreads({ silent: true });
+      if (commentThreadId && commentItemsByThread.has(commentThreadId)) {
+        commentMessages = commentItemsByThread.get(commentThreadId) ?? [];
+        syncThreadRoot();
+        notify();
+      }
+    } catch (e) {
+      commentError = e instanceof Error ? e.message : String(e);
+      notify();
+    }
+  };
+
+  const selectThread = (thread: CommentThreadSummary) => {
+    commentThreadId = thread.id;
+    commentSectionKey = thread.sectionKey;
+    syncThreadRoot();
+    if (commentThreadId && commentItemsByThread.has(commentThreadId)) {
+      commentMessages = commentItemsByThread.get(commentThreadId) ?? [];
+    }
+    notify();
+  };
+
+  const newThread = () => {
+    commentThreadId = null;
+    commentSectionKey = sectionKey;
+    syncThreadRoot();
+    commentMessages = [];
+    notify();
+  };
+
+  const goToRelativeThread = (direction: -1 | 1) => {
+    const visible = showResolvedComments
+      ? commentThreads
+      : commentThreads.filter((t) => t.status !== 'closed');
+    const idx = commentThreadId
+      ? visible.findIndex((t) => t.id === commentThreadId)
+      : -1;
+    if (idx < 0) return;
+    const next = visible[idx + direction];
+    if (!next) return;
+    commentThreadId = next.id;
+    commentSectionKey = next.sectionKey;
+    syncThreadRoot();
+    if (commentThreadId && commentItemsByThread.has(commentThreadId)) {
+      commentMessages = commentItemsByThread.get(commentThreadId) ?? [];
+    }
+    notify();
+  };
+
+  const selectNextOpenThreadAfterResolve = (
+    currentThreadId: string,
+    previousOpenOrder: string[],
+  ) => {
+    const openThreads = commentThreads.filter((t) => t.status !== 'closed');
+    if (openThreads.length === 0) {
+      commentThreadId = null;
+      return;
+    }
+    const preferredIds = previousOpenOrder.filter((id) => id !== currentThreadId);
+    const next =
+      preferredIds
+        .map((id) => openThreads.find((t) => t.id === id) ?? null)
+        .find(Boolean) ?? openThreads[0];
+    commentThreadId = next?.id ?? null;
+    commentSectionKey = next?.sectionKey ?? null;
+  };
+
+  const resolveThread = async (): Promise<void> => {
+    if (!currentCommentRoot || !host.canResolve(currentCommentRoot)) return;
+    try {
+      const currentThreadId = commentThreadId;
+      const previousOpenOrder = commentThreads
+        .filter((t) => t.status !== 'closed')
+        .map((t) => t.id);
+      const wasClosed = currentCommentRoot.status === 'closed';
+      if (wasClosed) {
+        await host.reopenComment(currentCommentRoot.id);
+      } else {
+        await host.closeComment(currentCommentRoot.id);
+      }
