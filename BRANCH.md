@@ -136,6 +136,7 @@
   - [x] Conversation view source slice 15 committed within the atomic limit.
   - [x] Conversation view source slice 16 committed within the atomic limit.
   - [x] Conversation view source slice 17 committed within the atomic limit.
+  - [x] Conversation view source slice 18 committed within the atomic limit.
 - [ ] **Lot 3 — Parity and packed boundary qualification**
   - [x] Respect JSON-safe session state in upload transitions: omit absent optional fields instead of inserting undefined; preserve the failed attachment for retry.
   - [x] Add real-runtime document/history parity: failed upload retained across remount, retry/preview/remove, full server history restart and generated-file download through host I/O.
