@@ -33,6 +33,9 @@
 - [x] Owner author identity: codex / gpt-6.1-sol / high; no Python, no AI trailers, commits <=150 changed lines. BR-78 Lots 3/5 and unmet 255s UI readiness remain open.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
+- [x] First local locked qualification: `make test-ci-dag test-ci-expected-results test-security-parser API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-br79` passes 6 DAG / 23 expected-result tests and all parser fixtures; repeat after final edits. Isolated cleanup requested under the same lock.
+- [ ] Baseline main run 40736913130 attempt 1 at c8ec01237 is still incomplete; raw attempt/job/step receipts are in `.tmp/ci-br79/receipts/40736913130/`. Do not infer a completed verdict or duration.
+- [ ] Chrome/VSCode fan-out needs the owner's pending BR79-EX3 decision for `ui/Dockerfile`; current builds still preserve both embedded extension assertions and separate profile endpoints.
 
 ## AI Flaky tests
 - [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
