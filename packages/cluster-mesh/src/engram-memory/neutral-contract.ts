@@ -5,9 +5,9 @@ export const MEMORY_NEUTRAL_CONTRACT = {
   version: '1.0.0',
   declaration: 'contracts/engram-memory-neutral-contract-v1.d.ts',
   constructor: 'openModuleStorageCanonicalMemoryStoreV1',
-  engramVersion: '0.21.1',
+  engramVersion: '0.21.3',
   contractVersion: 'memory-binding-v1',
-  contractDigest: 'sha256:dff737ced37d801ef48bb4d7088fc4fbc92021d21fe2034ff33ea643b49bec28',
+  contractDigest: 'sha256:dd0cccbd6e5e29766fbc9c48351ffe58f5b0a3162152f5ff02da0798c3244fee',
   genericContract: {
     name: 'l3a-generic-module-storage-port', version: 'v4.1',
     digest: 'c7111c9e7293ee270a0b4dde277f1cfc40fa3c863c3915c6f9ccdd6935c46294',
@@ -80,6 +80,8 @@ export interface NeutralGuard {
     readonly version?: string;
 }
 export interface NeutralAtomicUnit {
+    /** Producer-owned intent: persist and return unchanged with the idempotency entry. */
+    readonly intentHash: string;
     readonly guards: ReadonlyArray<NeutralGuard>;
     readonly records: ReadonlyArray<NeutralRecordWrite>;
     readonly appends: ReadonlyArray<NeutralChainAppend>;
@@ -317,7 +319,7 @@ export interface MemoryWorkLimitsV1 {
     readonly maintenance_max_records?: number;
 }
 
-// Installed 0.21.1 consumes structural error codes, never a shared Error class.
+// Installed 0.21.3 consumes structural error codes, never a shared Error class.
 // Only fence failures latch the canonical instance; other errors permit retry/revalidation.
 export const MEMORY_NEUTRAL_ERROR_MAPPING = {
   'fence-lost': { code: 'FENCE_LOST', terminal: true },

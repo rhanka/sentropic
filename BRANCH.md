@@ -43,7 +43,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Inputs**: published receipt, rules and gate read; isolated branch created; mechanical harness branch check passed.
-- [ ] **Lot 1 — Producer and contract**: re-pin package/peer/registry lock, bind final manifest bytes and digest; bump pack-only 0.24.0-dev.6.
+- [x] **Lot 1 — Producer and contract**: re-pin package/peer/registry lock, bind final manifest bytes and digest; bump pack-only 0.24.0-dev.6.
   - [x] Exact 0.21.3 registry integrity verified in regenerated lock; 0.24.0-dev.6 exceeds published 0.23.4; root and peer-tool pins aligned.
 - [x] **Lot 2 — Intent carriage**: delete runtime/test host formula; persist supplied intentHash and return unchanged.
 - [ ] **Lot 3 — Tests**: wire-adaptation, contract-vectors, binding compatibility and receipt host; real 0.21.3 persistence/replay/tamper tests; receipt divergence negative test.
