@@ -832,3 +832,143 @@ export type ChatLoopController<
    * Throws on transport failure — caller wraps in try/catch.
    */
   setFeedback(messageId: string, vote: 'up' | 'down' | 'clear'): Promise<void>;
+
+  // -- Local-tool state machine (slice 1E) ------------------------------------
+
+  /**
+   * Attach the local-tool execution machine (slice 1E).
+   *
+   * Injects:
+   *   - executeLocalTool — calls the extension runtime to run a tool.
+   *   - decideLocalToolPermission — sends user decision to the runtime.
+   *   - postLocalToolResult — posts tool result back to the stream (app handles retry).
+   *   - isLocalToolName — predicate to identify local tool names.
+   *   - isLocalToolRuntimeAvailable — predicate to check runtime availability.
+   *   - isLocalToolPermissionRequired — identifies LocalToolPermissionRequiredError.
+   *   - getPermissionRequest — extracts the request from the error.
+   *
+   * The controller takes ownership of:
+   *   - localToolStatesById (Map<toolCallId, state>)
+   *   - localToolInFlight (Set<toolCallId>)
+   *   - localToolExecutionTimersById (Map<toolCallId, timer>)
+   *   - pendingLocalToolPermissionPrompts (array)
+   *   - localToolPermissionRetriesInFlight (Set<toolCallId>)
+   *
+   * Safe to call multiple times — replaces any previously attached machine.
+   */
+  attachLocalToolMachine(opts: AttachLocalToolMachineOptions): void;
+
+  /**
+   * Reset local-tool machine state without detaching injected functions (slice 1E).
+   *
+   * Clears all in-flight state (timers, state maps, permission prompts, in-flight sets)
+   * but keeps the executor/decider/poster/predicate injections intact.
+   * Use this on session change or session deletion to start fresh while keeping
+   * the machine ready for the next session.
+   *
+   * Notifies listeners (snapshot gains empty local-tool state).
+   */
+  resetLocalToolMachineState(): void;
+
+  /**
+   * Detach and reset the local-tool machine (slice 1E).
+   * Clears all timers, resets all state maps, AND clears injected functions.
+   * Call this on component destroy (after detachLocalToolMachine the machine
+   * will not execute any further tools until re-attached).
+   * Safe to call when not attached.
+   */
+  detachLocalToolMachine(): void;
+
+  /**
+   * Route an incoming stream event through the local-tool machine (slice 1E).
+   *
+   * Called from the app-side streamHub handler (the app keeps the hub subscription
+   * key lifecycle). The controller processes:
+   *   - 'status': awaiting_local_tool_results / local_tool_result_received / response_created
+   *   - 'done' / 'error': clear local-tool state for the stream
+   *   - 'tool_call_start' / 'tool_call_delta': buffer args + schedule execution
+   *
+   * No-ops when no local-tool machine is attached.
+   */
+  handleLocalToolStreamEvent(event: unknown): void;
+
+  /**
+   * Handle a user permission decision for a pending local-tool prompt (slice 1E).
+   *
+   * Mirrors AppChatPanel's handleLocalToolPermissionDecision:
+   *   1. Calls decideLocalToolPermission(requestId, decision).
+   *   2. Removes the prompt from pendingLocalToolPermissionPrompts.
+   *   3. On deny: posts an error result.
+   *   4. On allow: re-executes the tool; on permission-required again, re-queues the prompt.
+   *
+   * No-ops if a decision for this toolCallId is already in flight.
+   */
+  decideLocalToolPermission(
+    prompt: ControllerLocalToolPermissionPrompt,
+    decision: string,
+  ): Promise<void>;
+
+  // -- Steer (slice 1F) -------------------------------------------------------
+
+  /**
+   * Send a steer message via the host transport (slice 1F).
+   *
+   * Orchestration:
+   *   1. Builds an optimistic steer message and appends to optimisticSteerMessages.
+   *   2. Creates a composerSteerAck (shown while server processes the steer).
+   *   3. Calls host.postSteer(targetStreamId, steerText).
+   *   4. On success: KEEPS the optimistic message (it is the only visible
+   *      rendering of the steer text until the next session reload, which
+   *      clears optimistic steers and shows the server-persisted message).
+   *      ACK clears after ackTimeoutMs.
+   *   5. On error: rolls back the optimistic message; clears ACK; re-throws so
+   *      the caller (AppChatPanel) can display an errorMsg.
+   *
+   * App-side responsibilities after this call:
+   *   - Input clearing / scroll scheduling (DOM concerns)
+   *   - composerSteerInFlight flag management (button-disabled UI concern)
+   *   - errorMsg display on catch
+   *
+   * Throws on transport failure — caller wraps in try/catch.
+   */
+  sendSteer(steerText: string, targetStreamId: string, opts: SendSteerOptions): Promise<void>;
+
+  /**
+   * Clear all optimistic steer messages (slice 1F).
+   * Call on session change, session deletion, or loadMessages.
+   */
+  clearOptimisticSteerMessages(): void;
+
+  // -- Model catalog (slice 1F) -----------------------------------------------
+
+  /**
+   * Load the model catalog via the injected fetch function (slice 1F).
+   *
+   * Orchestration:
+   *   1. Calls fetchFn() (structurally compatible with ChatCoreHost.fetchModelCatalog).
+   *   2. Stores providers + models + default selection.
+   *   3. Derives groups via groupModelsByProvider.
+   *   4. Coerces current selection to a valid entry.
+   *   5. Notifies subscribers.
+   *
+   * Throws on fetch failure — caller wraps in try/catch.
+   */
+  loadModelCatalog(fetchFn: ControllerModelCatalogFetchFn): Promise<void>;
+
+  /**
+   * Explicitly set the model selection from the UI (slice 1F).
+   * Coerces the pair to a valid catalog entry if the catalog is loaded.
+   * Does NOT update defaultProviderIdForNewSession / defaultModelIdForNewSession —
+   * those are only changed by loadModelCatalog + applyUserDefaults.
+   */
+  setModelSelection(providerId: ModelProviderId, modelId: string): void;
+
+  /**
+   * Apply user preference defaults for new sessions (slice 1F).
+   * Called from the app-side USER_AI_SETTINGS_UPDATED_EVENT listener.
+   *
+   * Mirrors AppChatPanel's applyUserDefaultsForNewSessions:
+   *   - Resolves the best matching entry in the catalog.
+   *   - Updates defaultProviderIdForNewSession + defaultModelIdForNewSession.
+   *   - If no session is active, also updates the current selection.
+   *
