@@ -65,6 +65,18 @@ describe('authorized compiled host registry catalog source', () => {
     expect(source.snapshot(context).map(entry => entry.metadata.name)).toEqual(['artifacts_get', 'artifacts_list']);
   });
 
+  it('should isolate unequal permissions in the same tenant and workspace', async () => {
+    const { source } = await fixture();
+    const resolve = createCatalogContextResolver(async input => ({ tenantId: 'shared-tenant',
+      membershipRef: input.userId, consentRef: 'consent', policyVersion: 'v1', readOnly: false,
+      allowedTools: input.userId === 'alice' ? names : ['artifacts_get'] }));
+    const context = (userId: string) => resolve({ kind: 'http', userId, sessionId: userId, workspaceId: 'shared-workspace' });
+    const [alice, bob] = await Promise.all([context('alice'), context('bob')]);
+    expect(source.snapshot(alice).map(entry => entry.metadata.name)).toEqual(names);
+    expect(source.snapshot(bob).map(entry => entry.metadata.name)).toEqual(['artifacts_get']);
+    expect(source.snapshot(alice).map(entry => entry.metadata.name)).toEqual(names);
+  });
+
   it('should delegate one effect with refreshed authority and deny replay after revocation', async () => {
     const { seam, invoke, alice, revoke } = await fixture();
     const args = { bindingName: 'report', idempotencyKey: 'one' };
