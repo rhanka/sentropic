@@ -1459,6 +1459,9 @@ jobs:
       - name: Test canonical API image artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make test-ci-api-image-canonical ENV=test-ci-api
+      - name: Verify the production artifact content entrypoint
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make test-artifact-content-image ENV=test-ci-api
       - name: Save API image as artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make save-api

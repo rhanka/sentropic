@@ -52,7 +52,7 @@ content_build() {
 }
 
 content_ci_identity() {
-  local build_job publish_job test_line save_line
+  local build_job publish_job test_line save_line promotion
   # Read the whole job, stopping at the next job rather than at nested steps.
   build_job=$(awk '/^  build-api-image:$/ { found=1; next } found && /^  [a-z].*:$/ { exit } found { print }' .github/workflows/ci.yml)
   test_line=$(grep -n 'run: make test-artifact-content-image .*ENV=test-ci-api' <<< "$build_job" | cut -d: -f1 || true)
@@ -62,7 +62,9 @@ content_ci_identity() {
   grep -Fq 'name: api-image' <<< "$publish_job" || fail 'publisher does not consume the tested image artifact'
   grep -Fq 'make load-api' <<< "$publish_job" || fail 'publisher does not verify the transported image receipt'
   ! grep -Eq 'make (build-api|build-api-image)' <<< "$publish_job" || fail 'publisher rebuilds the tested artifact'
-  grep -Fq '$(API_IMAGE_NAME):$(API_VERSION)' Makefile || fail 'promotion does not retain the canonical API tag'
+  promotion=$(make --no-print-directory -n k8s-deploy-preprod API_VERSION=abc123 UI_VERSION=def456 \
+    API_IMAGE_NAME=sentropic-api REGISTRY=registry.test.example ENV="${ENV:?}")
+  grep -Fq '"registry.test.example" "sentropic-api" "abc123"' <<< "$promotion" || fail 'promotion changes the canonical API tag'
   echo 'PASS: CI tests content before transport, publishes the verified receipt without rebuilding and retains canonical promotion tags'
 }
 

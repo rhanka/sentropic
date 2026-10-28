@@ -602,6 +602,10 @@ test-ci-api-tag-guard: ci-test-env ## Regress publish-api-image tag collision gu
 test-ci-api-image-canonical: ci-test-env ## Regress canonical artifact resolution (reuse/absent/fail-closed) and tag inputs
 	@bash scripts/test-api-image-canonical.sh $(or $(CI_CANONICAL_CASE),all)
 
+.PHONY: test-artifact-content-image
+test-artifact-content-image: ci-test-env ## Qualify the content role in the recorded canonical production artifact
+	@bash scripts/test-artifact-content-image.sh $(or $(CONTENT_IMAGE_CASE),all)
+
 .PHONY: api-tool-version build-api-tool-image check-api-tool-image pull-api-tool-image save-api-tool load-api-tool publish-api-tool-image
 api-tool-version: ## Print the content-addressed CI toolbox tag
 	@echo $(API_TOOL_VERSION)
