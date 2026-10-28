@@ -7,7 +7,7 @@
 import { isCanonicalU64, MemoryCanonicalJsonError, memoryJcs, type MemoryEncodedValue } from './codec.js';
 import { isMemoryAdmissionOutcome, isMemoryCaptureProof } from './validation.js';
 import { StorageInvalidCommandError } from '../storage/errors.js';
-import type { AtomicUnit } from '../storage/atomic.js';
+import type { U64AtomicUnit } from '../storage/atomic.js';
 import type { EncodedValue } from '../storage/contracts.js';
 import type {
   NeutralAggregateUpdate, NeutralAtomicUnit, NeutralModuleTransaction,
@@ -129,13 +129,13 @@ export const stripJournalIntentHash = (data: string): string => {
   return memoryJcs(rest).data;
 };
 
-export const neutralUnitToPg = (unit: NeutralAtomicUnit): AtomicUnit => {
+export const neutralUnitToPg = (unit: NeutralAtomicUnit): U64AtomicUnit => {
   if (unit.relationships.length || unit.barriers.length || unit.purgeIntents.length) {
     throw Object.assign(new Error('unsupported memory effects'), { code: 'invalid-schema' });
   }
   return {
     guards: unit.guards.map((guard) => guard.kind === 'aggregate-version'
-      ? { kind: 'aggregate-version', key: guard.aggregateKey!, version: Number(guard.version) }
+      ? { kind: 'aggregate-version', key: guard.aggregateKey!, version: guard.version! }
       : guard.kind === 'chain-head' ? { kind: 'head', chainId: guard.chain!, hash: guard.hash! }
         : { kind: 'absent', chainId: guard.chain! }),
     records: unit.records.map((row) => ({ key: row.key, bytes: row.value, contentHash: row.contentHash })),
@@ -146,7 +146,7 @@ export const neutralUnitToPg = (unit: NeutralAtomicUnit): AtomicUnit => {
     })),
     updates: unit.updates.map((row) => {
       const translated = translateMemoryUpdateWrite(row);
-      return { key: translated.key, version: Number(translated.version), value: translated.value };
+      return { key: translated.key, version: translated.version, value: translated.value };
     }),
     indexWrites: unit.indexWrites.map((row) => ({
       key: row.key,
@@ -169,7 +169,7 @@ export interface MemoryKernelTransactionPort {
     readonly nextCursor?: unknown }>;
   findIdempotency(selector: { readonly key: string }):
     Promise<{ readonly digest: string; readonly resultHash: string | null } | null>;
-  apply(unit: AtomicUnit): Promise<void>;
+  apply(unit: U64AtomicUnit): Promise<void>;
 }
 
 export const createMemoryNeutralTransaction = (

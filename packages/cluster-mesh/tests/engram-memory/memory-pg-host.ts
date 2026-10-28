@@ -12,7 +12,7 @@ export type MemoryCampaignHost = Awaited<ReturnType<typeof memoryCampaignHost>>;
 export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof memoryPgHost>>, commitHook?: () => Promise<void>) => {
   if (!process.env.CM_PG_URL) throw new Error('Stage B requires CM_PG_URL and real PostgreSQL');
   const pg = existing ?? await memoryPgHost();
-  const { binding } = memoryHostComposed(pg.options.driver);
+  const { binding } = memoryHostComposed(pg.options.driver, 'inv-host-1', 'memory-stage-b-store');
   let kernel!: Awaited<ReturnType<typeof createPostgresKernel>>;
   let installed: MemoryNeutralHandleAssembly;
   let expireCommit = false;
@@ -38,7 +38,7 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
   const scope = binding.memoryGrant.scope;
   const scopeBinding = { scope, store_id: 'memory-stage-b-store',
     resolveScope: (ref: string) => ref === 'memory-stage-b-scope' ? scope : null };
-  const open = async (hydrate = true) => {
+  const open = async (hydrate = true, acquire = true) => {
     kernel = await createPostgresKernel({ ...pg.options, driver, canonicalOwnership: { leaseMs: 1000 }, onCommitPossession: commitHook });
     installed = createMemoryNeutralHandle({ kernel, binding, driver, schemaName: pg.name, scope });
     const handle = installed.handle;
@@ -58,7 +58,7 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
       snapshot: async (...args) => (await hostRead()).snapshotRead(...args),
     });
     if (!hydrate) {
-      await handle.acquireFence({ scope, store_id: scopeBinding.store_id, grant: binding.memoryGrant });
+      if (acquire) await handle.acquireFence({ scope, store_id: scopeBinding.store_id, grant: binding.memoryGrant });
       return;
     }
     const opened = await openModuleStorageCanonicalMemoryStoreV1({ handle, grant: binding.memoryGrant,
@@ -76,7 +76,7 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
     get maintenance() { return maintenance; }, get fence() { return installed.getFence()!; },
     hostReplay: async (after: string, limit: number, consumer: string) => (await hostRead()).journalRead(after, limit, consumer),
     reopen: async () => { await store.close(); clockNow = '2026-10-27T00:30:00.000Z'; await open(); },
-    reopenBackend: async () => { await store.close(); await open(false); },
+    reopenBackend: async (acquire = true) => { await store.close(); await open(false, acquire); },
     close: async () => { try { await store.close(); } finally { await kernel.ownership?.release(); await pg.close(); } },
   };
 };

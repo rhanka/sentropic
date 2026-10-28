@@ -20,6 +20,7 @@
   - `packages/cluster-mesh/tests/storage/cold-workspace.sh`
   - `packages/cluster-mesh/src/engram-memory/**`
   - `packages/cluster-mesh/contracts/**`
+  - `packages/cluster-mesh/.gitignore`
   - `packages/cluster-mesh/assets/storage/engram-memory/**`
   - `packages/cluster-mesh/package.json`
   - `package-lock.json`
@@ -44,6 +45,7 @@
   - [x] Read #789 scope: E7 supplies host binding/maintenance, not the neutral fenced handle; E10a supplies the installed handle. Stage B still uses fixture glue and unconditional skips.
   - [x] Replace fixture handle/codec/fence authority with shipped createMemoryNeutralHandle; reacquire a fresh assembly on every reopen. Qualification follows in the installed runner.
   - [x] Add installed consumer routing with source-free runtime/assets, remove unconditional skips, and add a separate Stage B CI lane; qualification remains pending until all behaviors pass.
+  - [x] First installed run: 16/23 behaviors pass; fix adapter Number narrowing using E2 U64AtomicUnit, align fixture store identity, and exercise bijection after releasing the live holder. No Engram change identified.
   - [ ] Replace fixture handle with shipped factory; run durable-memory.spec.ts (all 23 behaviors) from a clean packed consumer with real PostgreSQL, including independent crash/ownership processes.
   - [ ] Stop and write exact Engram-owner request if a producer change is required; never promote a blocked profile.
 - [ ] **Lot E11b-1 — Package and tuple**
