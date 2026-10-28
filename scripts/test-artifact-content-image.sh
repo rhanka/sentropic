@@ -3,6 +3,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
+mkdir -p .tmp
 scratch=$(mktemp -d .tmp/content-image.XXXXXX)
 trap 'rm -rf "$scratch"' EXIT
 
@@ -42,9 +43,76 @@ content_filters() {
   echo 'PASS: content-only and test-only changes trigger canonical image qualification'
 }
 
+content_build() {
+  grep -Fxq 'COPY apps/artifact-content ./apps/artifact-content' api/Dockerfile || fail 'content sources are not copied for compilation'
+  grep -Fq 'npx esbuild ../apps/artifact-content/src/index.ts' api/Dockerfile || fail 'real content entrypoint is not compiled'
+  grep -Fq -- '--outfile=../apps/artifact-content/dist/index.js' api/Dockerfile || fail 'compiled content entrypoint has no runtime output'
+  grep -Fxq 'COPY --from=build /workspace/apps/artifact-content/dist /workspace/apps/artifact-content/dist' api/Dockerfile || fail 'production stage does not retain content bundle'
+  echo 'PASS: canonical Dockerfile compiles and retains the content entrypoint'
+}
+
+content_runtime() {
+  make --no-print-directory verify-api-image ENV="${ENV:?}"
+  # Run the recorded production artifact, with no source mounts, ports or service dependencies.
+  API_IMAGE_REF=$(cat "${API_IMAGE_RECEIPT:-.tmp/ci-prod-image/api-image-id}") \
+    docker compose -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.ci.yml \
+    run --rm --no-deps -T --entrypoint sh api-sut -ec '
+      ! command -v npm && ! command -v npx && test ! -e /workspace/node_modules/.bin/tsx
+      test -f /workspace/apps/artifact-content/dist/index.js
+      env -i PATH="$PATH" NODE_ENV=production node --input-type=module
+    ' <<'NODE'
+import assert from 'node:assert/strict';
+import { spawn, spawnSync } from 'node:child_process';
+import { once } from 'node:events';
+import { setTimeout as delay } from 'node:timers/promises';
+const entry = '/workspace/apps/artifact-content/dist/index.js';
+const env = { NODE_ENV: 'production', ARTIFACT_CONTENT_PORT: '8791' };
+const child = spawn(process.execPath, [entry], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+let output = '';
+child.stdout.on('data', bytes => { output += bytes; });
+child.stderr.on('data', bytes => { output += bytes; });
+const exit = once(child, 'exit');
+try {
+  let health;
+  for (let attempt = 0; attempt < 100; attempt++) {
+    assert.equal(child.exitCode, null, `content entrypoint exited: ${output}`);
+    try { health = await fetch('http://127.0.0.1:8791/healthz'); break; }
+    catch { await delay(25); }
+  }
+  assert.equal(health?.status, 200, `content entrypoint did not listen: ${output}`);
+  assert.equal(await health.text(), 'ok');
+  assert.equal(health.headers.get('cache-control'), 'no-store');
+  for (const path of ['/', '/_reader/activate', '/artifacts/private/blobs/sha256/secret']) {
+    const response = await fetch(`http://127.0.0.1:8791${path}`, {
+      headers: { 'x-forwarded-host': 'forged.content.example.test', 'x-subject-id': 'forged' },
+    });
+    assert.equal(response.status, 404);
+    assert.equal(await response.text(), '');
+    assert.equal(response.headers.get('cache-control'), 'no-store');
+    assert.equal(response.headers.get('set-cookie'), null);
+  }
+  child.kill('SIGTERM');
+  const timer = setTimeout(() => child.kill('SIGKILL'), 2000);
+  const [code, signal] = await exit;
+  clearTimeout(timer);
+  assert.equal(code, 0, output);
+  assert.equal(signal, null);
+} finally { if (child.exitCode === null) child.kill('SIGKILL'); }
+const refused = spawnSync(process.execPath, [entry], {
+  env: { ...env, APP_ARTIFACT_CONTENT_ENABLED: '1' }, encoding: 'utf8', timeout: 3000,
+});
+assert.equal(refused.status, 1);
+assert.match(refused.stderr, /Artifact content startup refused/);
+console.log('PASS: real pruned content entrypoint serves health, denies private reads, shuts down and refuses incomplete activation');
+NODE
+}
+
 case "${1:-static}" in
   hash) content_hash ;;
   filters) content_filters ;;
-  static) content_hash; content_filters ;;
-  *) fail 'Expected hash, filters or static' ;;
+  build) content_build ;;
+  static) content_hash; content_filters; content_build ;;
+  runtime) content_runtime ;;
+  all) content_hash; content_filters; content_build; content_runtime ;;
+  *) fail 'Expected hash, filters, build, static, runtime or all' ;;
 esac
