@@ -19,6 +19,8 @@ Deliver approved r3 L3: `live-speech/src/node/local-stt.ts` plus an isolated wor
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `packages/live-speech/**`
+  - `package.json` (BR04-EX1)
+  - `package-lock.json` (BR04-EX1)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -33,6 +35,7 @@ Deliver approved r3 L3: `live-speech/src/node/local-stt.ts` plus an isolated wor
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] Integration after L2: retain the root core export and the L3 `/node` export; keep both ordering suites by moving L3 tests to `tests/local-stt-ordering.test.ts`; retain source-only dist compilation and both README contracts.
 - [x] BR03-EX1: touch conditional `Makefile` (`test-live-speech` target only). Reason: L3 needs a runnable vitest lane mirroring `test-oauth-verify` (SCOPE support, pinned vitest/typescript). Impact: one additive target; no existing target changed. Rollback: delete the target block.
 - [x] BR04-EX1: touch conditional `.github/workflows/ci.yml` (live_speech filter + output + `validate-live-speech` job + 2 needs entries), conditional `Makefile` (`bench-live-speech` target), root `package.json` (onnxruntime-node override pin), root `package-lock.json` (workspace refresh via `make lock-root`). Reason: P1-5/P2-1 demand the CI lane, the bench lane, exact onnx pinning and lockfile refresh. Impact: additive CI job gated on live-speech paths; additive bench target; one override line; lock gains only live-speech entries. Rollback: revert the job/filter/target/override lines.
 - [x] BR05-EX1: touch conditional `.github/workflows/ci.yml` (one-line `pull_request.branches` exception adding `feat/live-stt-l1c`). Reason: PR #781 targets the unmerged L1c base, so the `main`-only PR filter suppresses every automatic run; the exception restores `pull_request` CI on the exact L3 head without changing any job. Impact: one branch string; no job/filter logic changed. Rollback: remove the branch string.
