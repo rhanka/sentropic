@@ -2,7 +2,7 @@ import type { ChatProjectedTimelineItem } from '@sentropic/chat-runtime/state/ch
 import type { ChatSessionRuntimeMessage } from '@sentropic/chat-runtime/state/chatSessionRuntime';
 import type { ModelCatalogGroup, ModelCatalogModel } from '@sentropic/chat-runtime/utils/model-selection';
 import type { ChatContextEntry, ReadableStore } from '@sentropic/chat-runtime/state/chat-context';
-import type { UnifiedAttachmentItem } from './documents/types.js';
+import type { UnifiedAttachmentItem, ChatGeneratedFileCard } from './documents/types.js';
 
 /** Data-only port consumed by the conversation view; no runtime lifecycle is exposed. */
 export type ConversationPermission = {
@@ -22,6 +22,7 @@ export type ChatConversationSnapshot = {
   modelGroups: ModelCatalogGroup[];
   contextEntries: ChatContextEntry[];
   attachments: UnifiedAttachmentItem[];
+  generatedFiles: ChatGeneratedFileCard[];
   permissions: ConversationPermission[];
   activeStreamId: string | null;
   activeMessageId: string | null;
@@ -37,7 +38,9 @@ export type ChatConversationCommands = {
   steer(): Promise<void>;
   selectModel(value: string): void;
   toggleContext(key: string, enabled: boolean): void;
-  attachFiles(files: File[]): Promise<void>;
+  attachFiles(files: File[], source?: 'upload' | 'paste'): Promise<void>;
+  retryAttachment(id: string): Promise<void>;
+  downloadGeneratedFile(card: ChatGeneratedFileCard): Promise<void>;
   removeAttachment(id: string): Promise<void>;
   decidePermission(id: string, allow: boolean): Promise<void>;
 };
