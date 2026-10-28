@@ -114,7 +114,7 @@ describe('RC1 D2 session evidence', () => {
       .rejects.toMatchObject({ code: 'authority_unavailable' });
   });
 
-  // R04/R06: action bindings and EdDSA producer check; native algorithm-substitution vectors remain pending.
+  // R04/R06: action bindings and the pinned EdDSA producer.
   it('should sign EdDSA with the pinned IdP key and exact action binding', async () => {
     const evidence = await setup().issue(request);
     const { payload, protectedHeader } = await jwtVerify(evidence, keys.publicKey, {
@@ -130,6 +130,31 @@ describe('RC1 D2 session evidence', () => {
       issuer: 'idp', kid: 'idp-1', audience: 'native-b', tenantId: 'tenant-1', workspaceId: 'workspace-1',
       now, request, login }))
       .rejects.toMatchObject({ code: 'authority_refused' });
+  });
+
+  // R06: app-side D2-JWS substitution refusals; installed native vectors remain separate.
+  it.each(['none', 'HS256', 'ES256', 'RS256', 'PS256', 'EdDSA-unpinned'])
+  ('should refuse D2-JWS algorithm substitution %s', async (algorithm) => {
+    const evidence = await setup().issue(request);
+    const payload = decodeJwt(evidence);
+    const trust = { key: keys.publicKey, issuer: 'idp', kid: 'idp-1', audience: 'native-b',
+      tenantId: 'tenant-1', workspaceId: 'workspace-1', now, request, login };
+    let token: string;
+    if (algorithm === 'none') {
+      token = `${Buffer.from(JSON.stringify({ alg: 'none', kid: 'idp-1' })).toString('base64url')}.${Buffer.from(JSON.stringify(payload)).toString('base64url')}.`;
+    } else if (algorithm === 'EdDSA-unpinned') {
+      // Even valid EdDSA bytes cannot turn an EC trust key into the pinned Ed25519 key.
+      await expect(verifyRemoteEvidence(evidence, { ...trust,
+        key: generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).publicKey }))
+        .rejects.toMatchObject({ code: 'authority_refused' });
+      return;
+    } else {
+      const key = algorithm === 'HS256' ? new Uint8Array(keys.publicKey.export({ type: 'spki', format: 'der' }))
+        : algorithm === 'ES256' ? generateKeyPairSync('ec', { namedCurve: 'prime256v1' }).privateKey
+          : generateKeyPairSync('rsa', { modulusLength: 2048 }).privateKey;
+      token = await new SignJWT(payload).setProtectedHeader({ alg: algorithm, kid: 'idp-1' }).sign(key);
+    }
+    await expect(verifyRemoteEvidence(token, trust)).rejects.toMatchObject({ code: 'authority_refused' });
   });
 
   // R05: pinned IdP key rejection, including message-selected trust roots.
