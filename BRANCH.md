@@ -77,6 +77,7 @@
   - [x] Migrate VSCode and package test imports to runtime tool/projection modules.
   - [x] Resolve visual export failures: remove relocated checkpoint export, migrate consumers and align major-version assertions; keep consumer scan strict.
   - [x] Gate runtime typecheck/tests/pack in the existing chat CI lane; register the guarded runtime pack target without publishing.
+  - [x] Reserve cowork-desktop 0.2.1 above registry 0.2.0 for its runtime import migration; visual unit tests 676/676 and DOM tests 219/219 pass.
   - [ ] Migrate inventoried web/Chrome/VSCode/cowork imports and active tooling links.
   - [ ] Split neutral contracts and optional module state from views; runtime never imports a view implementation.
   - [ ] Qualify breaking chat-ui version and initial runtime version against registry; update lockfiles.
