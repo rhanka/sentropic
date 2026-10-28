@@ -730,3 +730,55 @@ export function createCommentState(host: CommentHost, presentation: CommentPrese
     if (threadId !== lastSelectedCommentThreadId) {
       lastSelectedCommentThreadId = threadId;
       lastCommentThreadId = threadId;
+      lastCommentMessageCount = commentMessages.length;
+    }
+    if (commentThreadId && commentItemsByThread.has(commentThreadId)) {
+      commentMessages = commentItemsByThread.get(commentThreadId) ?? [];
+    } else if (!commentLoading) {
+      commentMessages = [];
+    }
+    notify();
+  };
+
+  const toggleShowResolved = () => {
+    showResolvedComments = !showResolvedComments;
+    notify();
+  };
+
+  const subscribeUpdates = (): (() => void) => {
+    if (!contextType || !contextId) return () => {};
+    return host.subscribeCommentUpdates(contextType, contextId, () => {
+      scheduleCommentReload();
+    });
+  };
+
+  const clearAssignment = () => {
+    assignedToUserId = null;
+    assignedToLabel = null;
+    notify();
+  };
+
+  return {
+    subscribe: store.subscribe.bind(store),
+    actions: {
+      loadCommentThreads,
+      sendComment,
+      selectThread,
+      newThread,
+      goToRelativeThread,
+      resolveThread,
+      deleteThread,
+      startEditComment,
+      cancelEditComment,
+      commitEditComment,
+      selectMentionMember,
+      setCommentInput,
+      setContext,
+      setThreadId,
+      toggleShowResolved,
+      subscribeUpdates,
+      loadMentionMembers,
+      clearAssignment,
+    },
+  };
+}
