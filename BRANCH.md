@@ -74,6 +74,7 @@
   - [x] Move raw stream fixtures and the checkpoint barrel with runtime parity tests; preserve fixture bytes.
   - [x] Remove session/controller/projection exports from the visual manifest snapshot.
   - [x] Remove local-tool/persistence exports from the visual snapshot; runtime typecheck and 301 tests pass.
+  - [x] Migrate VSCode and package test imports to runtime tool/projection modules.
   - [ ] Migrate inventoried web/Chrome/VSCode/cowork imports and active tooling links.
   - [ ] Split neutral contracts and optional module state from views; runtime never imports a view implementation.
   - [ ] Qualify breaking chat-ui version and initial runtime version against registry; update lockfiles.

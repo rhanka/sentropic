@@ -8,7 +8,7 @@ import type { ChatWidgetHandoffState } from '@sentropic/cowork-bridge/core';
 import { initializeSession } from '$lib/stores/session';
 import { init as initI18n, register } from 'svelte-i18n';
 import { mount as mountSvelte } from 'svelte';
-import { setLocalToolsAdapter } from '@sentropic/chat-ui/stores/localTools';
+import { setLocalToolsAdapter } from '@sentropic/chat-runtime/stores/localTools';
 import {
   createVsCodeBridge,
   createWindowVsCodeBridgeTransport,
