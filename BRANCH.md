@@ -60,6 +60,7 @@
   - [x] Record documentation-only environment, scope and existing source baseline.
 - [ ] **Lot P0a — Inventory and classify**
   - [ ] Inventory all package files/exports, consumers, styling overrides and app widget snippets.
+  - [x] Record appendix: sources inventory.
   - [ ] Assign reusable visual, Sentropic runtime or justified host responsibility to every path.
   - [ ] Build behavior/owner/test matrix and transitive runtime relocation map.
 - [ ] **Lot P0b — Reconcile and freeze**
