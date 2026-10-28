@@ -297,7 +297,7 @@ build: build-ui build-api ## Build UI and API artifacts
 
 .PHONY: build-ui-image
 build-ui-image: ## Build the UI Docker image for production
-	TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml build --no-cache \
+	TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml build \
 		--build-arg VITE_EXTENSION_PROFILE=$(VITE_EXTENSION_PROFILE_BUILD) \
 		--build-arg VITE_EXTENSION_API_BASE_URL=$(VITE_EXTENSION_API_BASE_URL_BUILD) \
 		--build-arg VITE_EXTENSION_APP_BASE_URL=$(VITE_EXTENSION_APP_BASE_URL_BUILD) \
@@ -553,13 +553,11 @@ lock-e2e: ## Update e2e package-lock.json using Node container (no compose servi
 
 .PHONY: save-ui
 save-ui: ## Save UI Docker image as tar artifact
-	@echo "💾 Saving UI image as artifact..."
-	@docker save $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) -o ui-image.tar
+	@$(MAKE) ci-save-image IMAGE_KIND=ui IMAGE_REF=$(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) ENV=$(ENV)
 
 .PHONY: load-ui
 load-ui:
-	@echo "📥 Loading UI image from artifact..."
-	@docker load -i ui-image.tar
+	@$(MAKE) ci-load-image IMAGE_KIND=ui IMAGE_REF=$(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) ENV=$(ENV)
 
 .PHONY: build-api-image build-api-image-fresh
 build-api-image: ## Reuse the canonical production image when its tag exists; build only on established absence
@@ -573,14 +571,12 @@ build-api: build-api-image
 
 .PHONY: save-api
 save-api: ## Save API Docker image as tar artifact
-	@echo "💾 Saving API image as artifact..."
 	@$(MAKE) record-api-image ENV=$(ENV)
-	@docker save $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) -o api-image.tar
+	@$(MAKE) ci-save-image IMAGE_KIND=api IMAGE_REF=$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) ENV=$(ENV)
 
 .PHONY: load-api
 load-api:
-	@echo "📥 Loading API image from artifact..."
-	@docker load -i api-image.tar
+	@$(MAKE) ci-load-image IMAGE_KIND=api IMAGE_REF=$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) ENV=$(ENV)
 	@$(MAKE) verify-api-image ENV=$(ENV)
 
 .PHONY: record-api-image verify-api-image
@@ -637,10 +633,26 @@ pull-api-tool-image: ## Pull the toolbox by its input hash
 	@docker pull $(API_TOOL_IMAGE)
 
 save-api-tool: ## Save the toolbox for CI artifact transport
-	@docker save $(API_TOOL_IMAGE) -o api-tool-image.tar
+	@$(MAKE) ci-save-image IMAGE_KIND=api-tool IMAGE_REF=$(API_TOOL_IMAGE) ENV=$(ENV)
 
 load-api-tool: ## Load the toolbox from a CI artifact
-	@docker load -i api-tool-image.tar
+	@$(MAKE) ci-load-image IMAGE_KIND=api-tool IMAGE_REF=$(API_TOOL_IMAGE) ENV=$(ENV)
+
+# BR78-EX2: byte verification uses runner Node, without a browser/compiler image.
+IMAGE_ARCHIVE = $(IMAGE_KIND)-image.tar.zst
+IMAGE_RECEIPT = $(IMAGE_KIND)-image.json
+.PHONY: ci-save-image ci-load-image save-e2e load-e2e
+ci-save-image:
+	@set -o pipefail; docker save $(IMAGE_REF) | zstd -T0 -1 > $(IMAGE_ARCHIVE)
+	@node scripts/ci/image-receipt.mjs write $(IMAGE_KIND) $(IMAGE_REF) $(IMAGE_ARCHIVE) $(IMAGE_RECEIPT)
+ci-load-image:
+	@node scripts/ci/image-receipt.mjs verify $(IMAGE_KIND) $(IMAGE_REF) $(IMAGE_ARCHIVE) $(IMAGE_RECEIPT)
+	@set -o pipefail; zstd -dc $(IMAGE_ARCHIVE) | docker load
+	@node scripts/ci/image-receipt.mjs loaded $(IMAGE_KIND) $(IMAGE_REF) $(IMAGE_ARCHIVE) $(IMAGE_RECEIPT)
+save-e2e:
+	@$(MAKE) ci-save-image IMAGE_KIND=e2e IMAGE_REF=$(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) ENV=$(ENV)
+load-e2e:
+	@$(MAKE) ci-load-image IMAGE_KIND=e2e IMAGE_REF=$(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) ENV=$(ENV)
 
 publish-api-tool-image: docker-login ## Publish the non-shipping toolbox for reuse across CI runs
 	@docker push $(API_TOOL_IMAGE)
