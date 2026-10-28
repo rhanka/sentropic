@@ -10,4 +10,5 @@ resources:
   - artifact-content-deployment.yaml
   - artifact-content-service.yaml
   - artifact-content-configmap.yaml
+  - artifact-content-networkpolicy.yaml
   - 70-pgbackup-cronjob.yaml
