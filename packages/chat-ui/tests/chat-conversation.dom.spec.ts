@@ -1,104 +1,50 @@
-    expect(btn).not.toBeNull();
-  });
+import { cleanup, render } from '@testing-library/svelte';
+import { afterEach, expect, it } from 'vitest';
+import { createConversationFixture } from '../../chat-runtime/tests/fixtures/conversationHost.js';
+import ConversationView from './fixtures/ConversationViewHarness.svelte';
 
-  it('should disable the send button when no sessionId is supplied', () => {
-    render(ChatConversation, {
-      props: { host: makeMockHost() },
-    });
-    const btn = screen.getByRole('button', { name: 'chat.composer.send' });
-    expect(btn).toHaveProperty('disabled', true);
-  });
+const fixtures: Awaited<ReturnType<typeof createConversationFixture>>[] = [];
+afterEach(() => { cleanup(); for (const fixture of fixtures.splice(0)) fixture.dispose(); });
+async function fixture(options: Parameters<typeof createConversationFixture>[0] = {}) {
+  const host = await createConversationFixture(options); fixtures.push(host); return host;
+}
 
-  it('should enable the send button when a sessionId is supplied', () => {
-    render(ChatConversation, {
-      props: { host: makeMockHost(), sessionId: 'sess-001' },
-    });
-    const btn = screen.getByRole('button', { name: 'chat.composer.send' });
-    expect(btn).toHaveProperty('disabled', false);
-  });
+it.each(['inline', 'docked', 'floating'] as const)('should preserve the %s layout, region, timeline and composer', async (layout) => {
+  const host = await fixture();
+  const view = render(ConversationView, { runtime: host.runtime, layout });
+  expect(view.getByRole('region', { name: 'chat.panel.label' })).toBeTruthy();
+  expect(view.container.querySelector('.chat-conversation')?.getAttribute('data-layout')).toBe(layout);
+  expect(view.container.querySelector('.chat-conversation-timeline')?.textContent).toContain('chat.sessions.none');
+  expect(view.container.querySelector('.chat-composer-footer')).toBeTruthy();
+  expect(view.getByRole('textbox', { name: 'chat.composer.placeholder.chat' })).toBeTruthy();
+  expect(view.getByRole('button', { name: 'chat.composer.send' })).toHaveProperty('disabled', false);
 });
 
-// ---------------------------------------------------------------------------
-// ModelSelector — only rendered when models are supplied
-// ---------------------------------------------------------------------------
-
-describe('ChatConversation — ModelSelector conditional', () => {
-  it('should NOT render ModelSelector when no models are provided', () => {
-    const { container } = render(ChatConversation, {
-      props: { host: makeMockHost() },
-    });
-    expect(container.querySelector('#chat-model-selection')).toBeNull();
-  });
-
-  it('should render ModelSelector when models array is non-empty', () => {
-    const { container } = render(ChatConversation, {
-      props: {
-        host: makeMockHost(),
-        models: [
-          {
-            provider_id: 'openai',
-            model_id: 'gpt-4o',
-            label: 'GPT-4o',
-            contextTokens: 128000,
-          },
-        ],
-      },
-    });
-    expect(container.querySelector('#chat-model-selection')).not.toBeNull();
-  });
-
-  it('should render ModelSelector when modelGroups is non-empty', () => {
-    const { container } = render(ChatConversation, {
-      props: {
-        host: makeMockHost(),
-        modelGroups: [
-          {
-            provider: 'openai',
-            models: [
-              { provider_id: 'openai', model_id: 'gpt-4o', label: 'GPT-4o', contextTokens: 128000 },
-            ],
-          },
-        ],
-      },
-    });
-    expect(container.querySelector('#chat-model-selection')).not.toBeNull();
-  });
+it('should render catalog and context controls from the injected snapshot', async () => {
+  const host = await fixture({ contextProvider: { context: { subscribe(run) {
+    run([{ type: 'folder', id: 'f1', label: 'My folder', active: true }]); return () => {};
+  } } } });
+  const view = render(ConversationView, { runtime: host.runtime });
+  expect(view.getByRole('combobox')).toBeTruthy();
+  expect(view.container.querySelector('.chat-conversation-header')?.textContent).toContain('My folder');
 });
 
-// ---------------------------------------------------------------------------
-// ContextChips — only rendered when contextProvider is supplied
-// ---------------------------------------------------------------------------
-
-describe('ChatConversation — ContextChips conditional', () => {
-  it('should NOT render a context chip list when contextProvider is omitted', () => {
-    const { container } = render(ChatConversation, {
-      props: { host: makeMockHost() },
-    });
-    // ContextChips renders [role=list] only when entries > 0
-    expect(container.querySelector('[aria-label="chat.context.chips.label"]')).toBeNull();
-  });
-
-  it('should render ChatContextPicker region when contextProvider supplies entries', () => {
-    const { container } = render(ChatConversation, {
-      props: {
-        host: makeMockHost(),
-        contextProvider: {
-          context: {
-            subscribe(run: (value: { type: string; id?: string; label: string; active?: boolean; used?: boolean; lastUsedAt?: string }[]) => void) {
-              run([{ type: 'folder', id: 'f1', label: 'My Folder', active: true, used: true, lastUsedAt: '2026-01-01T00:00:00.000Z' }]);
-              return () => undefined;
-            },
-          },
-        },
-      },
-    });
-    // ChatContextPicker renders a button per entry (replaces ContextChips role=list)
-    const pickerContainer = container.querySelector('.chat-conversation-header');
-    expect(pickerContainer).not.toBeNull();
-    // At least one button should appear for the folder entry
-    const entryButtons = pickerContainer?.querySelectorAll('button');
-    expect(entryButtons?.length).toBeGreaterThan(0);
-  });
+it('should preserve feature defaults and render optional modules only when enabled', async () => {
+  const host = await fixture();
+  const view = render(ConversationView, { runtime: host.runtime });
+  const region = view.container.querySelector('.chat-conversation')!;
+  for (const flag of ['steer', 'retry', 'stop']) expect(region.getAttribute(`data-feature-${flag}`)).toBe('true');
+  expect(view.queryByText('Comments module')).toBeNull();
+  expect(view.queryByText('Documents module')).toBeNull();
+  expect(view.queryByText('Jobs module')).toBeNull();
+  expect(view.queryByText('Workspace scope module')).toBeNull();
+  await view.rerender({ runtime: host.runtime, features: {
+    comments: true, documents: true, jobs: true, workspaceScope: true, steer: false,
+  } });
+  for (const label of ['Comments module', 'Documents module', 'Jobs module', 'Workspace scope module']) {
+    expect(view.getByText(label)).toBeTruthy();
+  }
+  expect(region.getAttribute('data-feature-steer')).toBe('false');
 });
 
 // ---------------------------------------------------------------------------
