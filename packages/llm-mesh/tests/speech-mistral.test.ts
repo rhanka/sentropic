@@ -2,6 +2,8 @@
 // cancel/flush, no double count, late-frame suppression, Bearer redaction,
 // per-turn windows. Recorded fixtures only; no live call.
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
   negotiateSpeech,
 } from '../src/speech/capabilities.js';
@@ -728,5 +730,17 @@ describe('mistral session lifecycle', () => {
     await driven.commit('u1', [frameDone('one')]);
     const events = await driven.collect();
     expect(events.filter((event) => event.type === 'transcript.final')).toHaveLength(1);
+  });
+
+  it('should keep the G-CLOUD receipt blocked and never claim live evidence', () => {
+    const receiptPath = fileURLToPath(new URL('../bench/l13-mistral.receipt.json', import.meta.url));
+    const receipt = JSON.parse(readFileSync(receiptPath, 'utf8')) as {
+      status: string;
+      missing: Array<{ item: string; status: string }>;
+    };
+    expect(receipt.status).toBe('blocked');
+    for (const item of receipt.missing) {
+      expect(item.status).toBe('blocked');
+    }
   });
 });
