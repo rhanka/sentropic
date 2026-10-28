@@ -1,7 +1,7 @@
 # Feature: W3.d default-closed artifact content infrastructure
 
 ## Objective
-- [ ] Deliver the content Kubernetes workload and isolated TLS routes without activating artifacts or accessing any cluster.
+- [x] Deliver the content Kubernetes workload and isolated TLS routes without activating artifacts or accessing any cluster.
 
 ## Scope / Guardrails
 - [x] Source: `.tmp/app-switch-week/plan-v2.md` W3.d and sections 3, 4, 5; W0 host-fit/reservations and W3.c inherited.
@@ -78,11 +78,11 @@
 - [ ] **Lot 4 — Handoff and final validation**
   - [x] Document tenant DNS/TLS/storage/restore/digest evidence and FIRST-IMMO activation gate in runbook.
   - [x] Pass `make test-artifact-content-manifests API_PORT=8806 UI_PORT=5192 MAILDEV_UI_PORT=1099 ENV=test-app-w3d`: 22 deterministic checks, including additive-policy mutation and both namespace reachability matrices.
-  - [ ] Pass inherited IdP parent-overlay regression and W3.c static image checks as applicable.
+  - [x] Pass inherited IdP parent-overlay regression (47 checks) and W3.c static image checks (canonical hash `eeb755`, API/content-only invalidation, filters, compilation/copy).
   - [x] Mechanical scope checks and whitespace/diff inspection pass; exception uses BR03d-EX1 and explicit overlay paths.
   - [ ] Independent receiving review: conductor-owned before merge; selection failed here because the required live model catalog is unavailable. No peer launched or consensus claimed; `.tmp/app-w3d-review.md` records this limitation.
-  - [ ] Create draft PR against `feat/app-cm-integration` using this file; push and verify CI on exact final head.
-  - [ ] Run locked `make down ENV=test-app-w3d` and confirm no services remain.
+  - [x] Create draft PR #814 against `feat/app-cm-integration` using this file; final pushed-head CI receipt is recorded in its validation comment. First green run: `40644234492` at `fb170161b29870b439d1e5f36822ab351d3d9e42`.
+  - [x] Run locked `make down ps API_PORT=8806 UI_PORT=5192 MAILDEV_UI_PORT=1099 ENV=test-app-w3d`: no services remain.
 
 ## Inherited main qualification record
 
