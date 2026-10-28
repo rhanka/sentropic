@@ -66,7 +66,7 @@
   - [x] Dedicated unprivileged ServiceAccount, read-only root, bounded resources/probes, no migration command or broad app secret.
   - [x] Keep storage egress closed pending tenant-specific network/IAM receipts; health can run without secrets.
 - [ ] **Lot 3 — Environment routes and certificates**
-  - [ ] Add prod/preprod content ingress, explicit Certificate and domain patches/registrations.
+  - [ ] Add prod/preprod content ingress, explicit Certificate and domain patches/registrations (prod added).
   - [ ] Both stable and pinned wildcard SANs, dedicated TLS secret, HTTPS-only route; no catch-all/identity headers.
 - [ ] **Lot 4 — Handoff and final validation**
   - [x] Document tenant DNS/TLS/storage/restore/digest evidence and FIRST-IMMO activation gate in runbook.
