@@ -2790,16 +2790,21 @@ up-idp-sut: up-api-sut ## Start the compiled IdP on the production API's migrate
 	$(CI_COMPOSE) run --rm --no-deps api npm run oauth:seed-clients
 	# Production CSP permits HTTPS RP redirects; this callback is intercepted by Playwright.
 	$(CI_COMPOSE) exec -T postgres psql -U app -d app -v ON_ERROR_STOP=1 -c "UPDATE oauth_clients SET redirect_uris=ARRAY['https://ci-rp.invalid/auth/oauth/callback'] WHERE client_id='design-system';"
-	$(CI_COMPOSE) up --no-build -d --wait auth-idp
+	@printf '%s\n' 'services:' '  auth-idp:' '    environment:' \
+		'      OAUTH_ISSUER_URL: http://localhost:8787' \
+		'      AUTH_CALLBACK_BASE_URL: http://localhost:8787' \
+		'      UI_BASE_URL: http://localhost:8787' \
+		| $(CI_COMPOSE) -f - up --no-build -d --wait auth-idp
 smoke-idp-screens-ci: ci-test-env ## Run the screen smoke using the qualified E2E browser against compiled IdP
 	@set -eu; seed="$$(mktemp)"; trap 'rm -f "$$seed"' EXIT; \
 	smoke_email="idp-screen-smoke-$$(date +%s%N)@example.com"; \
 	$(CI_COMPOSE) run --rm --no-deps -w /workspace -e SCREEN_SMOKE_EMAIL="$$smoke_email" api npx --no-install tsx apps/auth-idp/screen-smoke-seed.ts > "$$seed"; \
 	user_id="$$(sed -n 's/^USER_ID=//p' "$$seed")"; session_token="$$(sed -n 's/^SESSION_TOKEN=//p' "$$seed")"; \
 	test -n "$$user_id"; test -n "$$session_token"; \
-	docker run --rm --network "$(COMPOSE_PROJECT_NAME)_default" -w /app \
+	idp_container="$$( $(CI_COMPOSE) ps -q auth-idp )"; test -n "$$idp_container"; \
+	docker run --rm --network "container:$$idp_container" -w /app \
 		-v "$(CURDIR)/apps/auth-idp/screen-smoke.ts:/app/idp-screen-smoke.ts:ro" \
-		-e IDP_BASE_URL=http://auth-idp:8787 -e USER_ID="$$user_id" -e SESSION_TOKEN="$$session_token" \
+		-e IDP_BASE_URL=http://localhost:8787 -e USER_ID="$$user_id" -e SESSION_TOKEN="$$session_token" \
 		-e SCREEN_SMOKE_REDIRECT_URI=https://ci-rp.invalid/auth/oauth/callback \
 		-e SCREEN_SMOKE_EMAIL="$$smoke_email" \
 		$(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) node --input-type=module -e \
