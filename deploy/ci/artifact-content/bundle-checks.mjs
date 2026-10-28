@@ -7,7 +7,14 @@ export const object = (objects, kind, name) => {
   return found[0];
 };
 export const closed = ['APP_ARTIFACT_HOST_ENABLED', 'APP_ARTIFACT_CONTENT_ENABLED', 'APP_ARTIFACT_READER_ENABLED'];
+export function checkActivationImage(objects) {
+  const containers = ['api', 'artifact-content'].flatMap(name => object(objects, 'Deployment', name).spec.template.spec.containers);
+  if (containers.some(c => c.env?.some(e => closed.includes(e.name) && e.value === '1'))) {
+    for (const c of containers) assert.match(c.image, /@sha256:[0-9a-f]{64}$/, 'artifact opening requires digest-pinned API/content images');
+  }
+}
 export function checkWorkload(objects, tier) {
+  checkActivationImage(objects);
   const ns = tier === 'prod' ? 'sentropic' : 'sentropic-preprod';
   for (const o of objects) assert.equal(o.metadata.namespace, ns, `${o.kind}/${o.metadata.name} namespace`);
   const pod = object(objects, 'Deployment', 'artifact-content').spec.template.spec;
