@@ -655,7 +655,7 @@ export IMAGE_PLATFORM ?= linux/amd64
 CI_IMAGE_CACHE ?= 0
 CI_IMAGE_CACHE_FLAGS = $(if $(filter 1,$(CI_IMAGE_CACHE)),--cache-from type=gha$(comma)scope=br78-v1-$(IMAGE_KIND)-$(IMAGE_PLATFORM) --cache-to type=gha$(comma)scope=br78-v1-$(IMAGE_KIND)-$(IMAGE_PLATFORM)$(comma)mode=max,--no-cache)
 comma := ,
-CI_IMAGE_BUILD = docker buildx build --platform $(IMAGE_PLATFORM) $(CI_IMAGE_CACHE_FLAGS) --load
+CI_IMAGE_BUILD = docker buildx build --platform $(IMAGE_PLATFORM) $(CI_IMAGE_CACHE_FLAGS)
 .PHONY: ci-build-api ci-build-api-tool ci-build-ui ci-build-e2e
 ci-build-api:
 	@$(MAKE) ci-build-api-target IMAGE_KIND=api ENV=$(ENV)
