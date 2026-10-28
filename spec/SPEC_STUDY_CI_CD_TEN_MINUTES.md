@@ -298,3 +298,21 @@ rejected their loaded identities. No digest check was relaxed. Normal toolbox
 All superseded PRs (40635754181, 40636281967, 40636804356, 40637033882,
 40637537467, 40637927472, 40638269271) and pending dispatch 40637534902 retain
 their cancelled/failed statuses and partial durations in the run records.
+
+At head `9d7c58cab`, [40643738039](https://github.com/rhanka/sentropic/actions/runs/40643738039)
+attempt 1 completes successfully in 1313s, including ci-gate 122674614619.
+All selected API/UI/browser/VSCode/static/security/restore results pass.
+Image jobs are API 287s (122667727218), toolbox 209s (122667727115),
+full UI 400s (122667727048), E2E 109s (122667726528). These are identified
+cache-enabled executions, not an accepted warm/cold performance campaign.
+IdP 122671543007 succeeds in 220s: discovery, served login and consent,
+authorization code, id_token iss/aud/nonce/sub and userinfo remain asserted.
+Its qualified full Chromium joins the SUT network namespace and uses a CI-only
+loopback public origin; production CSP/HSTS, NODE_ENV and health waits remain.
+
+The following coverage addition must qualify on a fresh head: security-container
+also waits for build-e2e, verifies its receipt and applies the existing blocking
+HIGH/CRITICAL scan/compliance gate to the browser artifact. This preserves the
+browser coverage formerly provided by the larger API toolbox. Existing scans,
+ci-gate membership and publication/restore barriers remain enforced; no register
+exception, scanner threshold, assertion or timeout is relaxed.
