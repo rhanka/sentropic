@@ -8,7 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../../../src/db/client';
 import { users, userSessions } from '../../../src/db/schema';
 import { createSession, refreshSession, revokeAllSessions, revokeSession } from '../../../src/services/session-manager';
-import { resolveRemoteLogin, reserveRemoteEvidence } from '../../../src/services/auth/remote-session';
+import { commitRemoteEvidence, resolveRemoteLogin, reserveRemoteEvidence } from '../../../src/services/auth/remote-session';
 import { createRemoteEvidenceIssuer } from '../../../src/services/auth/remote-evidence';
 import { getRemoteSessionAuthority } from '../../../src/services/auth/remote-private-session';
 import { getSentropicOAuthPorts } from '../../../src/routes/auth/oauth';
@@ -33,7 +33,7 @@ async function setup() {
   const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
   const login = (await resolveRemoteLogin(tokens.sessionToken))!;
   const issue = createRemoteEvidenceIssuer({ issuer: 'idp', kid: 'idp-1', key: keys.privateKey,
-    now: Date.now, session: resolveRemoteLogin, reserve: reserveRemoteEvidence,
+    now: Date.now, session: resolveRemoteLogin, reserve: reserveRemoteEvidence, commit: commitRemoteEvidence,
     approvedTarget: async (digest) => ({ audience: digest.startsWith('c') ? 'native-c' : 'native-b',
       tenantId: 'tenant', workspaceId: 'workspace' }) });
   const request = { version: 'remote-action-v1', kind: 'evidence-request', actionId: 'AAAAAAAAAAAAAAAAAAAAAA',
