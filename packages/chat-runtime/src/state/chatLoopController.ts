@@ -412,3 +412,143 @@ export type ControllerLocalToolResultPosterFn = (
   streamId: string,
   toolCallId: string,
   result: unknown,
+) => Promise<void>;
+
+/**
+ * Options for attachLocalToolMachine (slice 1E).
+ *
+ * - executeLocalTool: calls the extension runtime to execute a local tool.
+ *     Throws an error satisfying isLocalToolPermissionRequired when approval needed.
+ * - decideLocalToolPermission: sends the user's permission decision to the runtime.
+ * - postLocalToolResult: posts the tool result back to the stream (with retry on the app side).
+ * - isLocalToolName: predicate — true when the name is a recognized local tool name.
+ * - isLocalToolRuntimeAvailable: predicate — true when the extension runtime is present.
+ * - isLocalToolPermissionRequired: predicate — true when an error is a
+ *     LocalToolPermissionRequiredError and the controller should extract `error.request`.
+ *     The controller uses this to avoid importing the concrete error class.
+ * - getPermissionRequest: extract the permission request from a LocalToolPermissionRequiredError.
+ *     Called only when isLocalToolPermissionRequired returns true.
+ */
+export type AttachLocalToolMachineOptions = {
+  executeLocalTool: ControllerLocalToolExecutorFn;
+  decideLocalToolPermission: ControllerLocalToolPermissionDeciderFn;
+  postLocalToolResult: ControllerLocalToolResultPosterFn;
+  isLocalToolName: (name: string) => boolean;
+  isLocalToolRuntimeAvailable: () => boolean;
+  isLocalToolPermissionRequired: (error: unknown) => boolean;
+  getPermissionRequest: (error: unknown) => ControllerLocalToolPermissionPrompt['request'];
+};
+
+// ---------------------------------------------------------------------------
+// Steer types — slice 1F (re-exported for app-side use)
+// ---------------------------------------------------------------------------
+
+/** Re-export so AppChatPanel imports the type from a single location. */
+export type { ComposerSteerAck };
+
+/**
+ * An optimistic steer message inserted into the timeline while the steer
+ * request is in-flight. Matches the shape produced by createOptimisticSteerMessage.
+ */
+export type ControllerOptimisticSteerMessage = {
+  id: string;
+  sessionId: string;
+  role: 'user';
+  content: string;
+  createdAt: string;
+  _localStatus: 'completed';
+  _optimisticSteerTargetAssistantId: string;
+  _optimisticSteerSubmittedAtMs: number;
+};
+
+/**
+ * Options for sendSteer (slice 1F).
+ *
+ * - sessionId: the current session (for the optimistic message factory)
+ * - targetAssistantMessageId: the id of the assistant message being steered
+ * - ackMessage: human-readable ack text (i18n — supplied by the app)
+ * - ackTimeoutMs: ms before ack is cleared (default 5000)
+ */
+export type SendSteerOptions = {
+  sessionId: string;
+  targetAssistantMessageId?: string | null;
+  ackMessage: string;
+  ackTimeoutMs?: number;
+};
+
+// ---------------------------------------------------------------------------
+// Model catalog types — slice 1F (re-exported for app-side use)
+// ---------------------------------------------------------------------------
+
+/** Re-export catalog types so AppChatPanel keeps a single import. */
+export type { ModelCatalogProvider, ModelCatalogModel, ModelCatalogGroup, ModelProviderId };
+
+/**
+ * Minimal fetch function for the model catalog — structurally compatible with
+ * ChatCoreHost.fetchModelCatalog. The controller does not import the concrete host.
+ */
+export type ControllerModelCatalogFetchFn = () => Promise<{
+  providers: Array<{ provider_id: string; label: string; status: 'ready' | 'planned' }>;
+  models: Array<{ provider_id: string; model_id: string; label: string; default_contexts: string[] }>;
+  defaults?: { provider_id?: string; model_id?: string };
+}>;
+
+// ---------------------------------------------------------------------------
+// Public state snapshot exposed to the bridge layer
+// ---------------------------------------------------------------------------
+export type ChatLoopProjectionState<
+  Message extends ChatProjectionMessage = ChatProjectionMessage,
+  RuntimeSummary = unknown,
+> = {
+  /** The authoritative message list (user + assistant). */
+  readonly messages: readonly Message[];
+  /** History events per message id (from session history ndjson fetch). */
+  readonly initialEventsByMessageId: ReadonlyMap<string, ControllerStreamEvent[]>;
+  /** Accumulated live stream events per stream id. */
+  readonly projectedStreamEventsById: ReadonlyMap<string, ControllerStreamEvent[]>;
+  /** Version counter — bumped on every event write. Drives timeline recomputation. */
+  readonly projectionEventsVersion: number;
+  /** Pre-built timeline (recomputed whenever any input changes). */
+  readonly projectedTimelineItems: ReadonlyArray<
+    ChatProjectedTimelineItem<Message, RuntimeSummary>
+  >;
+  /**
+   * Local-tool execution state per toolCallId (slice 1E).
+   * ReadonlyMap — mutations go through the controller's local-tool machine.
+   */
+  readonly localToolStatesById: ReadonlyMap<string, ControllerLocalToolStreamState>;
+  /**
+   * Permission prompts awaiting user decision (slice 1E).
+   * App renders these as permission UI; decisions go through ctrl.decideLocalToolPermission.
+   */
+  readonly pendingLocalToolPermissionPrompts: readonly ControllerLocalToolPermissionPrompt[];
+
+  // -- Steer state (slice 1F) ------------------------------------------------
+
+  /**
+   * Optimistic steer messages in the timeline (while steer is in-flight).
+   * App clears these on session change; controller removes them on successful
+   * post + on error rollback.
+   */
+  readonly optimisticSteerMessages: readonly ControllerOptimisticSteerMessage[];
+
+  /**
+   * Current steer ACK displayed while the steer is being processed.
+   * Cleared automatically after ackTimeoutMs.
+   */
+  readonly composerSteerAck: ComposerSteerAck | null;
+
+  // -- Model catalog state (slice 1F) ----------------------------------------
+
+  /** Raw provider list from the catalog API. */
+  readonly modelCatalogProviders: readonly ModelCatalogProvider[];
+
+  /** Raw model list from the catalog API. */
+  readonly modelCatalogModels: readonly ModelCatalogModel[];
+
+  /** Grouped view (derived from providers + models). */
+  readonly modelCatalogGroups: readonly ModelCatalogGroup[];
+
+  /** Currently selected provider id. */
+  readonly selectedProviderId: ModelProviderId;
+
