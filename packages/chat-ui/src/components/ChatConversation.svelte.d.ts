@@ -2,8 +2,8 @@ import type { Component } from 'svelte';
 import type { ChatUiLabelResolver, ChatUiWebHost } from '../hosts/createWebHost.js';
 import type { ChatContextProvider } from '../state/chat-context.js';
 import type { RendererRegistry } from '../renderers/registry.js';
-import type { ModelCatalogGroup, ModelCatalogModel } from '../utils/model-selection.js';
-import type { NormalizedPendingLocalToolCall } from '../utils/localToolStreamSync.js';
+import type { ModelCatalogGroup, ModelCatalogModel } from '@sentropic/chat-runtime/utils/model-selection';
+import type { NormalizedPendingLocalToolCall } from '@sentropic/chat-runtime/utils/localToolStreamSync';
 
 /**
  * Feature flags for ChatConversation.

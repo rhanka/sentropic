@@ -30,7 +30,7 @@
   import ImageLightbox from '../documents/ImageLightbox.svelte';
   import MessageAttachments from '../documents/MessageAttachments.svelte';
   import type { ChatGeneratedFileCard } from '../documents/generated-file-cards.js';
-  import type { ChatProjectedTimelineItem } from '../state/chatProjection.js';
+  import type { ChatProjectedTimelineItem } from '@sentropic/chat-runtime/state/chatProjection';
 
   type TimelineItem = ChatProjectedTimelineItem<any, any>;
 
