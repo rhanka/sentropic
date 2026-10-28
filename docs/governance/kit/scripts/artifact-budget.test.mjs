@@ -4,6 +4,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { measureArtifact, reportTable } from './artifact-budget.mjs';
+const csp = `<meta http-equiv="Content-Security-Policy" content="connect-src 'none'">`;
 
 function fixture(run) {
   const directory = mkdtempSync(join(tmpdir(), 'artifact-budget-'));
@@ -11,7 +12,7 @@ function fixture(run) {
   const put = (path, value) => writeFileSync(join(directory, path), typeof value === 'object' ? JSON.stringify(value) : value);
   put('index.html', '<script type="module" src="/entry.js"></script>');
   put('entry.js', 'document.title="Ready"');
-  put('portable.html', '<script>document.title="Ready"</script>');
+  put('portable.html', csp + '<script>document.title="Ready"</script>');
   const manifest = { entry: { file: 'entry.js', isEntry: true } };
   const measure = (startupPaths = []) => {
     put('.vite/manifest.json', manifest);
@@ -25,7 +26,15 @@ test('should report exact unique closure bytes and non-gating agent read cost', 
   assert.equal(report.totals.release, report.files.reduce((n, f) => n + f.raw, 0));
   assert.equal(report.agentReadCost.portable, report.portable.raw);
   assert.match(reportTable(report), /agent read cost/);
+  assert.match(reportTable(report), /coût de lecture agent ≈ 0,5 token par octet de JS minifié/);
+  assert.equal(report.agentReadCost.estimatedTokens, Math.round(report.portable.inlineExecutableJs * 0.5));
   assert(report.files.every(file => file.sha256.length === 64 && file.gzip > 0 && file.brotli > 0));
+}));
+test('should gate the measured portable on CSP and single-file portability', () => fixture(({ put, measure }) => {
+  put('portable.html', '<script>document.title="Ready"</script>');
+  assert(measure().violations.some(message => message.includes("CSP connect-src 'none'")));
+  put('portable.html', csp + '<script>import("./assets/chunk.js")</script>');
+  assert(measure().violations.some(message => message.includes('external dist asset')));
 }));
 test('should fail when an entry reimports the governance corpus', () => fixture(({ put, measure }) => {
   put('entry.js', 'const governanceRoutes = ' + 'x'.repeat(3115306));
