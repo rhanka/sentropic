@@ -476,3 +476,143 @@ describe('mistral transcript mapping', () => {
     expect(driven.sink.settles).toEqual([{ operationId: 'op-1', outcome: 'completed' }]);
   });
 });
+
+describe('mistral session lifecycle', () => {
+  it('should wait for session.created before sending session.update', async () => {
+    const socket = new GateSocket();
+    let connected = 0;
+    const session = await openMistralTranscriptionSession(sttConfig, {
+      request: sessionRequest(),
+      admission: admission(),
+      bearerToken: 'bearer-fixture',
+      connect: async () => {
+        connected += 1;
+        return socket;
+      },
+      usage: new RecordingSink(),
+      schedule: () => () => undefined,
+    });
+    const pending = session.write(frame('u1', 10));
+    await flush();
+    // Created has not arrived: no update on the wire yet.
+    expect(socket.sent).toHaveLength(0);
+    socket.push(frameCreated());
+    await pending;
+    expect(socket.sent).toHaveLength(2);
+    expect(JSON.parse(socket.sent[0] as string)).toMatchObject({ type: 'session.update' });
+    expect(JSON.parse(socket.sent[1] as string)).toMatchObject({ type: 'input_audio.append' });
+    expect(connected).toBe(1);
+    await session.close();
+  });
+
+  it('should refuse a stream that does not open with session.created', async () => {
+    const socket = new GateSocket([frameDelta('early')]);
+    const session = await openMistralTranscriptionSession(sttConfig, {
+      request: sessionRequest(),
+      admission: admission(),
+      bearerToken: 'bearer-fixture',
+      connect: async () => socket,
+      usage: new RecordingSink(),
+      schedule: () => () => undefined,
+    });
+    try {
+      await expect(session.write(frame('u1', 10))).rejects.toMatchObject({ code: 'transport' });
+    } finally {
+      await session.close();
+    }
+  });
+
+  it('should refuse to connect when the signal is already aborted', async () => {
+    let connected = 0;
+    const controller = new AbortController();
+    controller.abort();
+    await expect(openMistralTranscriptionSession(sttConfig, {
+      request: sessionRequest(),
+      admission: admission(),
+      bearerToken: 'bearer-fixture',
+      connect: async () => {
+        connected += 1;
+        return new GateSocket();
+      },
+      usage: new RecordingSink(),
+      signal: controller.signal,
+      schedule: () => () => undefined,
+    })).rejects.toMatchObject({ code: 'aborted' });
+    expect(connected).toBe(0);
+  });
+
+  it('should close the socket and settle cancelled on abort', async () => {
+    const socket = new GateSocket([frameCreated()]);
+    const sink = new RecordingSink();
+    const controller = new AbortController();
+    const session = await openMistralTranscriptionSession(sttConfig, {
+      request: sessionRequest(),
+      admission: admission(),
+      bearerToken: 'bearer-fixture',
+      connect: async () => socket,
+      usage: sink,
+      signal: controller.signal,
+      schedule: () => () => undefined,
+    });
+    await session.write(frame('u1', 10));
+    controller.abort();
+    await flush();
+    expect(socket.closed).toBe(true);
+    expect(sink.settles).toEqual([{ operationId: 'op-1', outcome: 'cancelled' }]);
+    await expect(session.write(frame('u2', 30))).rejects.toMatchObject({ code: 'closed' });
+    await session.close();
+  });
+
+  it('should enforce maxDurationMs with an injectable scheduler', async () => {
+    const driven = await openMistralDriven(sttConfig, {
+      admission: admission({ maxDurationMs: 500 }),
+    });
+    expect(driven.expiries).toHaveLength(1);
+    expect(driven.expiries[0]?.ms).toBe(500);
+    await driven.write('u1', 10);
+    driven.advance(600);
+    await expect(driven.session.write(frame('u2', 30))).rejects.toMatchObject({ code: 'ceiling' });
+    await expect(driven.session.command(commitCommand('u2'))).rejects.toMatchObject({ code: 'ceiling' });
+    driven.expiries[0]?.fn();
+    await flush();
+    expect(driven.lastSocket().closed).toBe(true);
+    expect(driven.sink.settles).toEqual([{ operationId: 'op-1', outcome: 'cancelled' }]);
+  });
+
+  it('should record cumulative totals under a stable eventId', async () => {
+    const driven = await openMistralDriven();
+    await driven.write('u1', 10);
+    await driven.commit('u1', [frameDone('one')]);
+    await driven.write('u2', 30);
+    await driven.commit('u2', [frameDone('two')]);
+    expect(driven.sink.records).toEqual([
+      {
+        eventId: 'op-1:audio', revision: 0, mode: 'cumulative',
+        usage: { admittedAudioSeconds: 0.02, connectedSeconds: 0 },
+      },
+      {
+        eventId: 'op-1:audio', revision: 1, mode: 'cumulative',
+        usage: { admittedAudioSeconds: 0.04, connectedSeconds: 0 },
+      },
+    ]);
+    await driven.session.close();
+    expect(driven.sink.settles).toEqual([{ operationId: 'op-1', outcome: 'completed' }]);
+  });
+
+  it('should meter audio seconds and refuse past the admitted ceiling', async () => {
+    const driven = await openMistralDriven(sttConfig, {
+      admission: admission({ ceiling: { connectedSeconds: 60, admittedAudioSeconds: 0.03 } }),
+    });
+    await driven.session.write(frame('u1', 10, 480));
+    expect(driven.lastSocket().sent.filter((message) => JSON.parse(message).type === 'input_audio.append')).toHaveLength(1);
+    await expect(driven.session.write(frame('u1', 30, 480))).rejects.toMatchObject({ code: 'ceiling' });
+    // The commit still ends the admitted turn; the done confirms it.
+    const sealing = driven.session.command(commitCommand('u1'));
+    await flush();
+    driven.lastSocket().push(frameDone(''));
+    await sealing;
+    expect(JSON.stringify(driven.sink)).not.toContain('transcript');
+    await driven.session.close();
+  });
+
+  it('should abandon the turn on clear and drop its late frames', async () => {
