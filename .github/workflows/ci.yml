@@ -969,7 +969,21 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-chat-ui ENV=test-ci-chat-ui
+        run: make pack-chat-ui PACK_DESTINATION=tmp/chat-pair/ui ENV=test-ci-chat-ui
+      - name: Qualify installed Chat pair
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: |
+          make pack-chat-runtime PACK_DESTINATION=tmp/chat-pair/runtime ENV=test-ci-chat-ui
+          make qualify-chat-pair UI_ARCHIVE=tmp/chat-pair/ui/sentropic-chat-ui-1.0.0.tgz RUNTIME_ARCHIVE=tmp/chat-pair/runtime/sentropic-chat-runtime-0.1.0.tgz REPORT_DIR=tmp/chat-pair/report ENV=test-ci-chat-ui
+      - name: Retain installed Chat pair evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: chat-pair-qualification
+          path: tmp/chat-pair/report
+          if-no-files-found: error
 
   validate-cited-source-viewer:
     runs-on: ubuntu-latest

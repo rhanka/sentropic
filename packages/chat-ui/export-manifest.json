@@ -298,7 +298,7 @@
       "kind": "svelte",
       "file": "dist/documents/AttachmentBand.svelte",
       "exists": true,
-      "_propSnapshot": "Props: items (UnifiedAttachmentItem[]), onResolveSrc? (fn: item→string), onEnlarge? (fn: item,src→void), onRemove? (fn: item→void), removeLabel? (string), enlargeLabel? (string), loadingLabel? (string), errorLabel? (string)"
+      "_propSnapshot": "Props: items (UnifiedAttachmentItem[]), onResolveSrc? (fn: item→string), onEnlarge? (fn: item,src→void), onRemove? (fn: item→void), onRetry? (fn: item→void), retryLabel? (string), removeLabel? (string), enlargeLabel? (string), loadingLabel? (string), errorLabel? (string)"
     },
     "./documents/GeneratedFileCardTray.svelte": {
       "kind": "svelte",

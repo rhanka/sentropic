@@ -38,5 +38,5 @@ if (files.status !== 0 || /package\/(src|dist\/(client|checkpoints|stores\/local
 }
 const hashes = Object.fromEntries(['ui', 'runtime'].map((name) => [name,
   createHash('sha256').update(readFileSync(`/input/${name}.tgz`)).digest('hex')]));
-writeFileSync('/reports/chat-pair.json', JSON.stringify({ status: 'passed', hashes, checks: ['installed public contracts', 'Svelte typecheck', 'Vite production build', 'visual archive ownership'] }, null, 2));
+writeFileSync('/reports/chat-pair.json', JSON.stringify({ status: 'passed', head: process.env.QUALIFY_HEAD_SHA, hashes, checks: ['installed public contracts', 'Svelte typecheck', 'Vite production build', 'visual archive ownership'] }, null, 2));
 console.log(`PASS installed chat pair ${JSON.stringify(hashes)}`);
