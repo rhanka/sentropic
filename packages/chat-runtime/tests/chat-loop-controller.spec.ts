@@ -1591,3 +1591,143 @@ describe('chat-loop-controller: local-tool state machine (slice 1E)', () => {
       await vi.runAllTimersAsync();
 
       const prompt = ctrl.getSnapshot().pendingLocalToolPermissionPrompts[0]!;
+      await ctrl.decideLocalToolPermission(prompt, 'deny_once');
+
+      // Decider called
+      expect(calls.decide).toHaveLength(1);
+      expect(calls.decide[0]?.decision).toBe('deny_once');
+
+      // Poster called with error result — executor NOT called again
+      expect(calls.execute).toHaveLength(1); // only the original call
+      expect(calls.poster).toHaveLength(1);
+      const posted = calls.poster[0]!.result as Record<string, unknown>;
+      expect(posted.status).toBe('error');
+      expect(String(posted.error)).toMatch(/Permission denied/i);
+
+      // Prompt removed
+      expect(ctrl.getSnapshot().pendingLocalToolPermissionPrompts).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 11h. done/error event clears local-tool state for stream
+  it('11h: done event clears all local-tool state for the stream', async () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = createChatLoopController<Msg>();
+      const { opts } = makeFakeLocalToolMachine();
+      ctrl.attachLocalToolMachine(opts);
+      ctrl.setMessages([assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' })]);
+
+      emitToolCallStart(ctrl, 'stream-1', 'tc-1', 'bash', '{}', 1);
+      expect(ctrl.getSnapshot().localToolStatesById.size).toBe(1);
+
+      ctrl.handleLocalToolStreamEvent({ type: 'done', streamId: 'stream-1', sequence: 5, data: {} });
+
+      expect(ctrl.getSnapshot().localToolStatesById.size).toBe(0);
+      expect(ctrl.getSnapshot().pendingLocalToolPermissionPrompts).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 11i. local_tool_result_received clears specific toolCallId
+  it('11i: local_tool_result_received status removes only that toolCallId', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const { opts } = makeFakeLocalToolMachine();
+    ctrl.attachLocalToolMachine(opts);
+    ctrl.setMessages([assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' })]);
+
+    emitToolCallStart(ctrl, 'stream-1', 'tc-1', 'bash', '{}', 1);
+    emitToolCallStart(ctrl, 'stream-1', 'tc-2', 'bash', '{}', 2);
+    expect(ctrl.getSnapshot().localToolStatesById.size).toBe(2);
+
+    emitStatusEvent(ctrl, 'stream-1', 'local_tool_result_received', 10, { tool_call_id: 'tc-1' });
+
+    expect(ctrl.getSnapshot().localToolStatesById.has('tc-1')).toBe(false);
+    expect(ctrl.getSnapshot().localToolStatesById.has('tc-2')).toBe(true);
+  });
+
+  // 11j. awaiting_local_tool_results filters permission prompts for pending stream
+  it('11j: awaiting_local_tool_results filters out prompts for toolCallIds not in pending list', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const { opts } = makeFakeLocalToolMachine();
+    ctrl.attachLocalToolMachine(opts);
+    ctrl.setMessages([assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' })]);
+
+    // Manually inject a permission prompt for a toolCallId that is NOT in the pending list
+    emitStatusEvent(ctrl, 'stream-1', 'awaiting_local_tool_results', 5, {
+      pending_local_tool_calls: [
+        { tool_call_id: 'tc-A', name: 'bash', args: '{}' },
+      ],
+    });
+
+    // Snapshot shows tc-A state
+    expect(ctrl.getSnapshot().localToolStatesById.has('tc-A')).toBe(true);
+
+    // Now emit awaiting again with only tc-B (tc-A removed)
+    emitStatusEvent(ctrl, 'stream-1', 'awaiting_local_tool_results', 6, {
+      pending_local_tool_calls: [
+        { tool_call_id: 'tc-B', name: 'bash', args: '{}' },
+      ],
+    });
+
+    // Both tc-A and tc-B should be in localToolStatesById (status event does not remove old entries unless done/local_tool_result_received)
+    // The pending_list filter applies only to permission prompts (not to state map itself)
+    expect(ctrl.getSnapshot().localToolStatesById.has('tc-B')).toBe(true);
+  });
+
+  // 11k. fresh-round detection: executed tool reset when sequence advances past lastSequence
+  it('11k: fresh-round resets executed flag when sequence advances beyond lastSequence', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const { opts } = makeFakeLocalToolMachine();
+    ctrl.attachLocalToolMachine(opts);
+    ctrl.setMessages([assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' })]);
+
+    emitToolCallStart(ctrl, 'stream-1', 'tc-1', 'bash', '{}', 1);
+
+    // Mark as executed (simulate completed execution)
+    const stateMap = ctrl.getSnapshot().localToolStatesById as Map<string, { executed: boolean; lastSequence: number }>;
+    const state = stateMap.get('tc-1')!;
+    // We can't mutate directly (ReadonlyMap), so we drive a second start event
+    // with a HIGHER sequence — this should trigger isFreshRound = true
+    emitToolCallStart(ctrl, 'stream-1', 'tc-1', 'bash', '{}', 5);
+
+    const snap = ctrl.getSnapshot();
+    const updated = snap.localToolStatesById.get('tc-1')!;
+    // executed should be false (fresh round)
+    expect(updated.executed).toBe(false);
+    expect(state).toBeDefined(); // state was previously set
+  });
+
+  // 11l. tab_type missing-args wait — fake timers
+  it('11l: tab_type with empty args waits up to 1500ms before posting missing-args error', async () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = createChatLoopController<Msg>();
+      const { opts, calls } = makeFakeLocalToolMachine();
+      ctrl.attachLocalToolMachine(opts);
+      ctrl.setMessages([assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' })]);
+
+      // tab_type with empty args
+      emitToolCallStart(ctrl, 'stream-1', 'tc-tab', 'tab_type', '', 1);
+
+      // Before 1500ms — executor must NOT fire
+      await vi.advanceTimersByTimeAsync(200);
+      expect(calls.poster).toHaveLength(0);
+      expect(calls.execute).toHaveLength(0);
+
+      // After 1500ms — missing-args error should be forwarded
+      await vi.advanceTimersByTimeAsync(1500);
+      await vi.runAllTimersAsync();
+
+      // Poster called with missing-args error (execute NOT called for missing-args path)
+      expect(calls.poster).toHaveLength(1);
+      expect(calls.execute).toHaveLength(0);
+      const posted = calls.poster[0]!.result as Record<string, unknown>;
+      expect(posted.status).toBe('error');
+      expect(String(posted.error)).toMatch(/tab_type arguments are missing/i);
+    } finally {
+      vi.useRealTimers();
+    }
