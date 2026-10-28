@@ -61,10 +61,10 @@
   - [x] Prove red: rendered overlays fail `Deployment/artifact-content must occur once` (0 vs 1), before any content manifest exists.
   - [ ] Test closed gates despite enabled secret values, least privilege, network peer namespace isolation, both TLS wildcard depths and exact app route precedence.
   - [ ] Test synthetic digest replacement across API/IdP/content, unchanged backup/restore access and mutation denials.
-- [ ] **Lot 2 — Workload and default closure**
-  - [ ] Add content Deployment/Service/ConfigMap/NetworkPolicies and base registration; API/Deployment/Service/ConfigMap wired closed, network follows.
+- [x] **Lot 2 — Workload and default closure**
+  - [x] Add content Deployment/Service/ConfigMap/NetworkPolicies and base registration; pin API gate env values explicitly.
   - [x] Dedicated unprivileged ServiceAccount, read-only root, bounded resources/probes, no migration command or broad app secret.
-  - [ ] Keep storage egress closed pending tenant-specific network/IAM receipts; health can run without secrets.
+  - [x] Keep storage egress closed pending tenant-specific network/IAM receipts; health can run without secrets.
 - [ ] **Lot 3 — Environment routes and certificates**
   - [ ] Add prod/preprod content ingress, explicit Certificate and domain patches/registrations.
   - [ ] Both stable and pinned wildcard SANs, dedicated TLS secret, HTTPS-only route; no catch-all/identity headers.
