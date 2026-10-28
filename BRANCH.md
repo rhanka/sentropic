@@ -37,6 +37,8 @@
   - No exception declared; the additive `./engram-memory` export is declared above with rationale, impact and rollback.
 
 ## Feedback Loop
+- [x] Opus r1 P1: reproduce nine malformed-proof failures; validate K7/K8 before translation and map canonical JSON errors to `invalid-schema`; exercise the installed Engram commit loop with no reconcile.
+- [x] CI accepted baseline `05cecaa6f`; rerun CI on the revision head before handoff.
 - [x] BRE10a-EX1: owner-authorized PR #808 CI repair in `tmp/worktrees/mem-e10a-ci`, `ENV=test-mem-e10a-ci`; rationale: a frozen prerelease pin breaks pack-only alignment after the dev bump; impact: pin the selected fixture and lock to published stable `0.23.2` (matching this candidate's dependency metadata), align the mirrored contract and assert only that frozen registry request; rollback: revert this repair commit. Registry probes returned 404 for `0.23.4` and `0.23.5`.
 - Frozen-surface gates from the pack-only tolerance and the Comments gate lines must still pass on this branch; any failure is blocking for this lot.
 
@@ -71,4 +73,4 @@
   - [x] Repair the stable selected fixture/lock pin; shared-lock `ENV=test-mem-e10a-ci` runs: targeted packaging 17 passed; full cluster-mesh 1361 passed, 268 conditional skips, no type errors; `make down` after each step.
   - [x] Run `make scope-check` and the frozen-surface gates before every commit.
   - [x] Push and open the draft PR against `feat/engram-e2-integration` with `BRANCH.md` as the PR body.
-  - [ ] Require CI on the exact head before marking ready.
+  - [x] Require CI on the exact head before marking ready (baseline `05cecaa6f`; repeat for revisions).
