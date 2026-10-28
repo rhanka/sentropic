@@ -9,7 +9,7 @@
  * to override the tool name convention without forking this module.
  */
 
-import type { ChatGeneratedFileCard, ChatRuntimeSummaryWithGeneratedFiles } from './types.js';
+import type { ChatGeneratedFileCard, ChatRuntimeSummaryWithGeneratedFiles } from '@sentropic/chat-ui/documents';
 
 // ---------------------------------------------------------------------------
 // normalizeGeneratedFileCard
@@ -124,10 +124,3 @@ export function extractGeneratedFileCardsFromEvents(
  * Return a human-readable label for a generated file format.
  * Falls back to 'FILE' for missing or empty format strings.
  */
-export function getGeneratedFileFormatLabel(
-  format: ChatGeneratedFileCard['format'],
-): string {
-  return typeof format === 'string' && format.trim().length > 0
-    ? format.trim().toUpperCase()
-    : 'FILE';
-}

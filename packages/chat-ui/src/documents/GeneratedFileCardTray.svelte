@@ -8,7 +8,7 @@
    * ZERO sentropic domain strings. ZERO google-drive code.
    */
   import type { ChatGeneratedFileCard } from './types.js';
-  import { getGeneratedFileFormatLabel } from './generatedFileCards.js';
+  import { getGeneratedFileFormatLabel } from './file-format.js';
 
   interface Props {
     /** The generated file cards to render. */
