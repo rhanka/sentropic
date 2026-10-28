@@ -27,7 +27,7 @@ COPY global.setup.ts ./
 # Use maintained native browsers/libraries instead of Debian's unfixed packages.
 # Preserve both full Chromium and the headless shell, plus video recording.
 RUN npm ci --legacy-peer-deps --ignore-scripts && \
-    apk add --no-cache libcrypto3=3.5.8-r0 libssl3=3.5.8-r0 chromium=155.0.8059.84-r0 \
+    apk add --no-cache libcrypto3=3.5.9-r0 libssl3=3.5.9-r0 chromium=155.0.8059.84-r0 \
       chromium-headless-shell=155.0.8059.84-r0 ffmpeg=8.1.3-r0 && \
     node -e 'const fs=require("node:fs"),path=require("node:path"); const {registry}=require("playwright-core/lib/coreBundle").registry; for(const [name,binary] of [["chromium","/usr/bin/chromium"],["chromium-headless-shell","/usr/bin/chromium-headless-shell"],["ffmpeg","/usr/bin/ffmpeg"]]){const executable=registry.findExecutable(name).executablePath(); fs.mkdirSync(path.dirname(executable),{recursive:true}); fs.symlinkSync(binary,executable); console.log(name,executable,"->",binary);}' && \
     node --input-type=module -e 'import {chromium} from "playwright"; import assert from "node:assert/strict"; import {stat} from "node:fs/promises"; for(const channel of [undefined,"chromium"]){const browser=await chromium.launch({channel}); console.log("Qualified Chromium:",channel??"headless shell",browser.version()); const context=await browser.newContext({recordVideo:{dir:"/tmp/browser-probe"}}); const page=await context.newPage(); await page.setContent("<title>BR78 browser probe</title>"); assert.equal(await page.title(),"BR78 browser probe"); await page.screenshot({path:"/tmp/browser-probe.png"}); const video=page.video(); await context.close(); assert.ok((await stat(await video.path())).size>0); await browser.close();}' && \
