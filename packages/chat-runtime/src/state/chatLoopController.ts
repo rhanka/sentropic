@@ -1392,3 +1392,143 @@ export function createChatLoopController<
     projectedStreamEventsById = new Map(projectedStreamEventsById);
     projectedStreamEventsById.set(
       streamId,
+      appendLiveProjectionEvent(
+        projectedStreamEventsById.get(streamId) ?? [],
+        event,
+      ),
+    );
+    projectionEventsVersion += 1;
+    recomputeTimeline();
+    notify();
+  };
+
+  const clearProjectedEventsForStream = (streamId: string): void => {
+    if (!projectedStreamEventsById.has(streamId)) return;
+    projectedStreamEventsById = new Map(projectedStreamEventsById);
+    projectedStreamEventsById.delete(streamId);
+    projectionEventsVersion += 1;
+    recomputeTimeline();
+    notify();
+  };
+
+  const resetProjectionState = (): void => {
+    initialEventsByMessageId = new Map();
+    projectedStreamEventsById = new Map();
+    projectedAssistantComputationByMessageId = new Map();
+    projectionEventsVersion = 0;
+    recomputeTimeline();
+    notify();
+  };
+
+  const invalidateComputationCache = (messageId: string): void => {
+    if (!projectedAssistantComputationByMessageId.has(messageId)) return;
+    projectedAssistantComputationByMessageId = new Map(
+      projectedAssistantComputationByMessageId,
+    );
+    projectedAssistantComputationByMessageId.delete(messageId);
+    // No notify here — timeline will pick up the change on next buildTimeline call
+  };
+
+  // -- Projection queries ----------------------------------------------------
+
+  const isTrackedAssistantStreamId = (streamId: string): boolean =>
+    messages.some(
+      (message) =>
+        message.role === 'assistant' &&
+        (message._streamId ?? message.id) === streamId,
+    );
+
+  const buildTimeline = (opts?: {
+    optimisticSteerMessages?: Message[];
+    runtimeSummariesByMessageId?: ReadonlyMap<string, RuntimeSummary>;
+    composerSteerAck?: ChatProjectionSteerAck | null;
+  }): ReadonlyArray<ChatProjectedTimelineItem<Message, RuntimeSummary>> => {
+    recomputeTimeline(opts);
+    return projectedTimelineItems;
+  };
+
+  // -- Stream subscription lifecycle (slice 1C) ----------------------------------
+
+  const attachStream = (opts: AttachStreamOptions): void => {
+    // If already attached, detach first (hot-swap semantics)
+    detachStream();
+
+    const key = `ctrl-projection:${Math.random().toString(36).slice(2)}`;
+    attachedClient = opts.streamClient;
+    attachedPollJob = opts.pollJob;
+    attachedOnProjectionEvent = opts.onProjectionEvent ?? null;
+    attachedOnTerminal = opts.onTerminal ?? null;
+    attachedPollTimeoutMs = opts.pollTimeoutMs ?? 60_000;
+    attachedPollInitialDelayMs = opts.pollInitialDelayMs ?? 750;
+    attachedPollIntervalMs = opts.pollIntervalMs ?? 800;
+    streamHubKey = key;
+
+    opts.streamClient.set(key, handleIncomingStreamEvent);
+  };
+
+  const detachStream = (): void => {
+    if (streamHubKey && attachedClient) {
+      attachedClient.delete(streamHubKey);
+    }
+    streamHubKey = null;
+    attachedClient = null;
+    attachedPollJob = null;
+    attachedOnProjectionEvent = null;
+    attachedOnTerminal = null;
+  };
+
+  const startJobPoll = (
+    jobId: string,
+    streamId: string,
+    opts?: { timeoutMs?: number },
+  ): void => {
+    void runJobPollLoop(jobId, streamId, opts);
+  };
+
+  // -------------------------------------------------------------------------
+  // Host transport state (slice 1D)
+  // -------------------------------------------------------------------------
+  let attachedTransport: ControllerHostTransport | null = null;
+
+  // -------------------------------------------------------------------------
+  // Host transport lifecycle (slice 1D)
+  // -------------------------------------------------------------------------
+
+  const attachHost = (opts: AttachHostOptions): void => {
+    attachedTransport = opts.transport;
+  };
+
+  const detachHost = (): void => {
+    attachedTransport = null;
+  };
+
+  // -------------------------------------------------------------------------
+  // bootstrapRun — optimistic message insertion + job-poll start (slice 1D)
+  // -------------------------------------------------------------------------
+
+  const bootstrapRun = (
+    input: BootstrapRunInput<Message>,
+  ): BootstrapRunResult<Message> => {
+    const nowIso = new Date().toISOString();
+    const assistantMessage = input.buildAssistantMessage({
+      id: input.assistantMessageId,
+      sessionId: input.sessionId,
+      _streamId: input.streamId,
+      _localStatus: 'processing',
+      role: 'assistant',
+      content: null,
+      createdAt: nowIso,
+    });
+
+    if (input.userMessage) {
+      // New-session send path: prepend user + assistant
+      setMessages([...messages, input.userMessage, assistantMessage]);
+    } else if (input.truncateAfterMessageId) {
+      // Retry path: truncate messages after the given id, then append assistant.
+      // NOTE: app-side MUST have already truncated historyTimelineItems before
+      // calling bootstrapRun, since that is Svelte state.
+      const userIndex = messages.findIndex(
+        (m) => m.id === input.truncateAfterMessageId,
+      );
+      const truncatedMessages =
+        userIndex >= 0
