@@ -68,7 +68,7 @@ layers() {
     grep -F -- "--cache-to type=gha,scope=br78-v1-$kind-linux/amd64,mode=max" "$scratch/builds"
   done
   make -n ci-build-api CI_IMAGE_CACHE=0 ENV="$ENV" > "$scratch/cold"
-  grep -F -- '--no-cache --load' "$scratch/cold"
+  grep -F -- '--no-cache --target production' "$scratch/cold"
   if grep -Fq -- '--cache-from' "$scratch/cold"; then return 1; fi
   echo 'PASS: distinct persistent layer scopes and explicit cold-cache mode'
 }
