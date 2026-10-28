@@ -79,15 +79,10 @@ test.describe('Comment assistant', () => {
   });
 
   test('tool is enabled by default and the tools payload includes comment_assistant', async ({ page }) => {
-    await page.goto('/folders');
-    await page.evaluate((wsId) => {
-      try {
-        localStorage.setItem('workspaceScopeId', wsId);
-      } catch {
-        // ignore
-      }
+    await page.addInitScript((wsId) => {
+      localStorage.setItem('workspaceScopeId', wsId);
     }, workspaceId);
-    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.goto('/folders');
     await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
     await page.waitForLoadState('domcontentloaded');
 
@@ -119,16 +114,11 @@ test.describe('Comment assistant', () => {
 
   test('AI posts a comment with the AI Assistant badge', async ({ browser }) => {
     const pageBContext = await browser.newContext({ storageState: USER_B_STATE });
+    await pageBContext.addInitScript((wsId) => {
+      localStorage.setItem('workspaceScopeId', wsId);
+    }, workspaceId);
     const pageB = await pageBContext.newPage();
     await pageB.goto('/folders');
-    await pageB.evaluate((wsId) => {
-      try {
-        localStorage.setItem('workspaceScopeId', wsId);
-      } catch {
-        // ignore
-      }
-    }, workspaceId);
-    await pageB.reload({ waitUntil: 'domcontentloaded' });
     await pageB.goto(`/folders/${encodeURIComponent(FOLDER_ID)}`);
     await pageB.waitForLoadState('domcontentloaded');
 
