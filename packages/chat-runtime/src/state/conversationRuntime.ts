@@ -1,5 +1,5 @@
 import type { ChatConversationSnapshot } from '@sentropic/chat-runtime/conversation';
-import type { DocumentHost } from '@sentropic/chat-ui/documents';
+import type { DocumentHost } from '@sentropic/chat-runtime/documents';
 import type { ChatCoreHost, ModelCatalog } from '../client/chat-core-host.js';
 import type { CheckpointHost } from '../checkpoints/index.js';
 import { createConversationCheckpoints } from './conversationCheckpoints.js';

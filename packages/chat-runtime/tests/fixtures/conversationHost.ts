@@ -2,7 +2,7 @@ import { createChatServer, createInMemoryChatServerDeps } from '../../../chat-se
 import { createDefaultTransport } from '../../src/client/transport.js';
 import { createStreamHub } from '../../src/client/streamHub.js';
 import { createConversationRuntime, type ConversationRuntimeOptions } from '../../src/state/conversationRuntime.js';
-import type { DocumentHost } from '@sentropic/chat-ui/documents';
+import type { DocumentHost } from '@sentropic/chat-runtime/documents';
 import { registerLocalTool, unregisterLocalTool, LocalToolPermissionRequiredError } from '../../src/stores/localTools.js';
 import { buildChatHistoryTimeline, type ChatHistoryMessage } from '../../../chat-core/src/history.js';
 import type { CheckpointHost } from '../../src/checkpoints/index.js';
