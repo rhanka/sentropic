@@ -3,6 +3,7 @@ import { createDefaultTransport } from '../../src/client/transport.js';
 import { createStreamHub } from '../../src/client/streamHub.js';
 import { createConversationRuntime, type ConversationRuntimeOptions } from '../../src/state/conversationRuntime.js';
 import type { DocumentHost } from '@sentropic/chat-ui/documents';
+import { registerLocalTool, unregisterLocalTool } from '../../src/stores/localTools.js';
 
 class FixtureEventSource extends EventTarget {
   closed = false;
@@ -15,6 +16,7 @@ class FixtureEventSource extends EventTarget {
 
 /** Real server, transport, stream hub, controller and session; only platform I/O is in memory. */
 export async function createConversationFixture(overrides: Partial<ConversationRuntimeOptions> = {}) {
+  registerLocalTool({ name: 'render_mermaid', description: 'Diagram', parameters: {} });
   const requests: Array<{ method: string; path: string; body: unknown }> = [];
   const executions: Array<{ id: string; name: string; args: unknown }> = [];
   const decisions: Array<{ id: string; value: string }> = [];
@@ -80,6 +82,6 @@ export async function createConversationFixture(overrides: Partial<ConversationR
       const events = await deps.stream.readSessionEvents({ sessionId, fromSeq: 0, userId: 'user_test' });
       for (const event of events) source!.publish(event.eventType, { streamId: event.streamId, data: event.data, sequence: event.sequence });
     },
-    dispose() { runtime.dispose(); streamClient.reset(); globalThis.fetch = originalFetch; },
+    dispose() { runtime.dispose(); streamClient.reset(); unregisterLocalTool('render_mermaid'); globalThis.fetch = originalFetch; },
   };
 }
