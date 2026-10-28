@@ -57,7 +57,7 @@ describe('automatic leaf guard ranges', () => {
     const error = refusal(guard('llm-mesh'));
     expect(error).toMatchObject({ code: 'cluster_mesh_topology_invalid', reason: 'incompatible_version', paths: [meshDir] });
     expect(error.message).toBe('Cluster Mesh topology is invalid (incompatible_version): installed @sentropic/llm-mesh@0.21.2'
-      + ` at ${meshDir} does not satisfy the required range "0.19.2 || >=0.22.0 <0.29.0"`);
+      + ` at ${meshDir} does not satisfy the required range "0.19.2 || >=0.22.0 <0.31.0"`);
     expect(refusal(guard('gateway'))).toMatchObject({ reason: 'incompatible_version', paths: [meshDir] });
   });
 

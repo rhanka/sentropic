@@ -9,6 +9,7 @@ import { mintStructuredContractDigests, STRUCTURED_READOUT_IDENTITY } from '../s
 
 /** Synthetic qualification only: these IDs/evidence do not activate the built-in descriptor. */
 export const qualifiedDescriptor = () => structuredClone({ ...jevDescriptor,
+  executionProfile: 'qualification' as 'production' | 'qualification' | undefined,
   evaluator: { ...jevDescriptor.evaluator, revision: 'synthetic-v1' },
   acceptedServedModelIds: ['synthetic-served-model'],
   qualification: { servedIdentity: 'qualified' as const, billingBound: 'qualified' as const,
@@ -20,7 +21,9 @@ export const decisionRequest = (overrides: Partial<DecisionRequest> = {}): Decis
   ...overrides,
 });
 export const jevResponse = (answer: unknown = { noul: 0.25 }) => ({
-  model: 'synthetic-served-model', answers: { verdict: answer }, usage: { input_tokens: 1000, output_tokens: 0 },
+  model: 'synthetic-served-model', answers: { verdict: answer !== null && typeof answer === 'object'
+    ? { type: 'noul' in answer ? 'noul' : 'score' in answer ? 'score' : 'choice', ...answer } : answer },
+  usage: { input_tokens: 1000, output_tokens: 0 },
 });
 export const trustedNativeContext = (request: DecisionRequest) => {
   const kind = request.criterion.kind;
@@ -126,7 +129,7 @@ export function decisionServiceFixture() {
       if (input.boundViolated) state.disabled.add(key(input.receipt.evaluator));
     }),
   };
-  const options: DecisionServiceOptions = { registry: createProviderRegistry([adapter]), resolveEvaluator: () => descriptor,
+  const options: DecisionServiceOptions = { executionProfile: 'qualification', registry: createProviderRegistry([adapter]), resolveEvaluator: () => descriptor,
     evaluatorAllowlist: [{ ...descriptor.evaluator }],
     resolvePrice: vi.fn(() => decisionPrice()), authorize: vi.fn(async () => true), budget,
     resolveAuth: vi.fn(async () => ({ material: { type: 'environment-token', envVar: 'JEV_API_KEY', token: 'synthetic-secret-canary' },
