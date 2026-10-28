@@ -36,6 +36,8 @@
 ## Feedback Loop
 - [x] BR03c-EX1 — acknowledged: W3.c authorizes `Makefile`, `.github/workflows/{ci,app-cm-w3c}.yml` and `.dockerignore` for hash/filters, runtime gates and generated bundle exclusion. The topic workflow follows W3.b because shared CI excludes this integration base. Impact: canonical API image and validation only. Rollback: revert W3.c commits; retain W3.b source and prior qualified image. No deployment edits.
 - [x] Track remains single-writer: update this mergeable plan; conductor owns import and independent final acceptance.
+- [x] Review P2-2 — integration close-out owner: conductor. Remove `.github/workflows/app-cm-w3*.yml` before `feat/app-cm-integration` merges into `main`. That integration PR is the first real execution of the `ci.yml` content gate through `make build-api` (canonical resolver reuse path, real registry); shared CI must pass on its exact head.
+- [x] Merge #813 from `origin/feat/app-cm-integration` at `b0e60eb34`, retaining this W3.c plan for the BRANCH.md conflict; no rebase or force-push.
 
 ## AI Flaky tests
 - [x] No AI/provider behavior changes or accepted flaky tests; all selected checks must pass.
