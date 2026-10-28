@@ -3,12 +3,12 @@
 import { MEMORY_DESCRIPTOR, MEMORY_PINNED_PROFILES } from './manifest.js';
 import { MemoryHostDriverRequiredError } from './sqlite.js';
 import { StorageDeniedError, StorageInvalidCommandError, StorageUnavailableError } from '../storage/errors.js';
-import type { StorageScope, WriterFence } from '../storage/contracts.js';
+import type { EncodedValue, StorageScope, WriterFence } from '../storage/contracts.js';
 import type { ScopeGrant } from '../storage/authority.js';
 import type { MemoryHostBinding } from './binding.js';
 import {
   createMemoryNeutralTransaction, memoryNeutralFailure, neutralQueryResult,
-  withMemoryCaptureReceipt, type MemoryKernelTransactionPort,
+  requireMemoryUtf8, withMemoryCaptureReceipt, type MemoryKernelTransactionPort,
 } from './wire-adaptation.js';
 import type {
   NeutralAtomicUnit, NeutralCommitReceipt, NeutralMemoryHandle, NeutralScopeGrant, NeutralWriterFence,
@@ -18,9 +18,8 @@ export interface MemoryNeutralBoundPort {
   transact<T>(options: unknown, operation: (tx: MemoryKernelTransactionPort) => Promise<T>):
     Promise<{ readonly value: T; readonly receipt: unknown }>;
   readAggregate(key: string): Promise<{ readonly version: number;
-    readonly value: { readonly format: 'utf8'; readonly data: string } } | null>;
-  readCommitResult(identity: string, fence: NeutralWriterFence | undefined):
-    Promise<{ readonly format: 'utf8'; readonly data: string } | null>;
+    readonly value: EncodedValue } | null>;
+  readCommitResult(identity: string, fence: NeutralWriterFence): Promise<EncodedValue | null>;
   query(name: string, input: unknown, request: { readonly limit: number }):
     Promise<{ readonly records: readonly unknown[] }>;
 }
@@ -152,8 +151,11 @@ export const createMemoryNeutralHandle = (input: CreateMemoryNeutralHandleInput)
       });
       return { kind, key, version: String(row.version), value };
     }),
-    readCommitResult: (identity, grant) => guarded(async () =>
-      (await kernel.bind(castGrant(grant))).readCommitResult(identity, fence)),
+    readCommitResult: (identity, grant) => guarded(async () => {
+      if (!fence) throw Object.assign(new Error('canonical fence is absent'), { code: 'fence-lost' });
+      const result = await (await kernel.bind(castGrant(grant))).readCommitResult(identity, fence);
+      return result === null ? null : requireMemoryUtf8(result);
+    }),
     query: (name, encoded, grant) => guarded(async () => {
       const queryInput = JSON.parse(encoded.data) as { limit?: number; max_candidates?: number };
       const bound = await kernel.bind(castGrant(grant));

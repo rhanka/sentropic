@@ -4,9 +4,9 @@
 - Ship the fenced neutral-handle factory and the K7/K8 wire adaptation in the installed cluster-mesh bytes so durable memory runs from installed bytes only, with no host-authored bridge.
 
 ## Scope / Guardrails
-- Base `feat/engram-e2-integration` at `ef585a6b1164923929add4dfee2c8a64390da267`; branch `feat/cluster-mesh-engram-e10a`; worktree `tmp/worktrees/mem-e10a`; draft PR against `feat/engram-e2-integration`; merge only, never rebase, never force-push.
-- Ports reserved for this branch only: API 8792, UI 5192, Maildev UI 1092; `ENV=test-mem-e10a` last; never `ENV=dev`; never `make clean-all`; 0 Python.
-- One Docker build at a time under the shared Docker lock; `make down ENV=test-mem-e10a` after each Docker step.
+- Base `feat/engram-e2-integration` at `ef585a6b1164923929add4dfee2c8a64390da267`; branch `feat/cluster-mesh-engram-e10a`; revision worktree `tmp/worktrees/mem-e10a-ci`; draft PR against `feat/engram-e2-integration`; merge only, never rebase, never force-push.
+- Ports reserved for this branch only: API 8792, UI 5192, Maildev UI 1092; `ENV=test-mem-e10a-ci` last; never `ENV=dev`; never `make clean-all`; 0 Python.
+- One Docker build at a time under the shared Docker lock; `make down ENV=test-mem-e10a-ci` after each Docker step.
 - Commits under 150 lines via `make commit`, specific `git add` only, no AI trailers.
 - Additive export only on the frozen `./engram-memory` surface: rationale is that the installed export has no neutral-handle factory and the frozen Engram substrate speaks snake-case K7/K8 wire while the kernel validator expects the camel-case proof model; impact is new exported factory and pure adaptation helpers with no change to existing exported behavior, digests or descriptors; rollback is removal of the new modules, their exports and the pack-only version increment.
 
@@ -40,7 +40,8 @@
 - [x] Opus r1 P1: reproduce nine malformed-proof failures; validate K7/K8 before translation and map canonical JSON errors to `invalid-schema`; exercise the installed Engram commit loop with no reconcile.
 - [x] CI accepted baseline `05cecaa6f`; rerun CI on the revision head before handoff.
 - [x] Opus r1 P2-D: enforce R-G3-1 second-holder refusal before side effects, including concurrent acquisitions; refresh ownership at checkFence per binding §§9.3–9.6 and test release/failure cleanup.
-- [x] BRE10a-EX1: owner-authorized PR #808 CI repair in `tmp/worktrees/mem-e10a-ci`, `ENV=test-mem-e10a-ci`; rationale: a frozen prerelease pin breaks pack-only alignment after the dev bump; impact: pin the selected fixture and lock to published stable `0.23.2` (matching this candidate's dependency metadata), align the mirrored contract and assert only that frozen registry request; rollback: revert this repair commit. Registry probes returned 404 for `0.23.4` and `0.23.5`.
+- [x] Opus r1 P1/P2-E: assert the adapted commit digest equals Engram's expectedIntentHash and round-trips through findIdempotency; typecheck the real PostgreSQL kernel/driver without casts and refuse binary memory reads.
+- [x] BRE10a-EX1: owner-authorized PR #808 CI repair in `tmp/worktrees/mem-e10a-ci`, `ENV=test-mem-e10a-ci`; rationale: a frozen prerelease pin breaks pack-only alignment after the dev bump; impact: pin the selected fixture and lock to `0.23.2`, the latest published release whose dependency and peer metadata equals the candidate's (0.23.3/0.23.4 peer ranges differ), align the mirrored contract and assert only that frozen registry request; rollback: revert this repair commit. Registry reconfirmed `0.23.4` on 2026-10-28.
 - Frozen-surface gates from the pack-only tolerance and the Comments gate lines must still pass on this branch; any failure is blocking for this lot.
 
 ## AI Flaky tests
