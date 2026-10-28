@@ -1,14 +1,14 @@
 {
   "version": 1,
   "kind": "engram-e10-installed-receipt",
-  "head": "1eb052fe6d1f4ac6f3ed8e244efed28020e825a6",
-  "tree": "e23fa32e8d251cfae186a6555b2e1c63edf91218",
+  "head": "cd563d72eaf934ceab93f88f48e0ab30d2b6f6be",
+  "tree": "ad748ec72f1f5f4443d6c55e6ea62cd190bdb30c",
   "consumer": {
     "node": "v24.21.0",
     "platform": "linux",
     "arch": "x64",
     "root": "clean-consumer-outside-repository",
-    "lockSha256": "8abf2ea7560354f1edbdcf0f6e43c9c1c815aa5a443e8e8dab06fdfd386e3b2d",
+    "lockSha256": "eab1961ca86892edeace4c08b6dd2ba130a3e8d5ef47147f2136b0f2d37fb5ac",
     "npmVersion": "11.19.0"
   },
   "engram": {
@@ -17,23 +17,14 @@
     "integrity": "sha512-/TV03olHbzG+3haTC5j5YJ282egCrXak1yQE0I8DHF1kAQDwsKUe1QlMwibvBCEmPGdWeTgSHT4fF8lZJTH8cw=="
   },
   "clusterMesh": {
-    "version": "0.24.0-dev.1",
-    "tarballSha256": "4799bcc39944b7d487cf1f4b6d5b628a5c4556a068918a5ffb36db54348bd8cc",
-    "integrity": "sha512-3dNFR7+a2vDra2nZuffLKd28HAVdNEu3B4y2e4LF+4r3p8FcQbihxE7zPtePJZtN+g2wUX84eqEkzz2Cl9/MPw==",
-    "fileListSha256": "dae60a97c1df035c23377a1d25da543ca662fdb7c04cec28bc5da779f9e39b0e"
+    "version": "0.24.0-dev.2",
+    "tarballSha256": "bced27e380962f5792cc3af734db20c46750bd0a892c29d7cc83ac6d2f31997f",
+    "integrity": "sha512-N+blFRfwZAe3e/qps0x+0hNk3xeEWGRRyjmBirSUOg20pjnwOwPdKlEhEbr9AWj17jVg04rJrEj/6jIT3Oe5Nw==",
+    "fileListSha256": "cd30501f29c188e15434e435287cc198c359cc9c8b14ae2efe2a34f62b9f7898"
   },
   "p3ManifestSha256": "1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730",
   "qualificationImage": "sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
-  "hostGlue": {
-    "file": "installed-host-bridge.mjs",
-    "sha256": "a50b94737fe41ded997111447aee488a3131b834c706432518b93ede92bfbdef",
-    "status": "host-authored-not-installed",
-    "derivedFrom": [
-      "tests/engram-memory/memory-pg-host.ts",
-      "tests/engram-memory/memory-neutral.ts"
-    ],
-    "tupleCoverage": "partial"
-  },
+  "tupleCoverage": "full",
   "postgres": {
     "serverVersion": "17.11",
     "image": "sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
@@ -42,7 +33,7 @@
       "version": "8.22.0",
       "artifactDigest": "bab5faf4410151a463078fffa326d10979150bfc330f0a29bd08948378ed3421"
     },
-    "statements": 878,
+    "statements": 880,
     "transactions": 86
   },
   "migrations": [
@@ -188,6 +179,7 @@
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/ledger.js",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/limits.js",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/manifest.js",
+    "node_modules/@sentropic/cluster-mesh/dist/engram-memory/neutral-handle.js",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/postgres-queries.js",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/postgres.js",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/projection.js",
@@ -195,6 +187,7 @@
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/sqlite-queries.js",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/sqlite.js",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/validation.js",
+    "node_modules/@sentropic/cluster-mesh/dist/engram-memory/wire-adaptation.js",
     "node_modules/@sentropic/cluster-mesh/dist/storage/atomic.js",
     "node_modules/@sentropic/cluster-mesh/dist/storage/authority.js",
     "node_modules/@sentropic/cluster-mesh/dist/storage/backend.js",
@@ -307,12 +300,14 @@
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/limits.d.ts",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/manifest.d.ts",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/neutral-contract.d.ts",
+    "node_modules/@sentropic/cluster-mesh/dist/engram-memory/neutral-handle.d.ts",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/postgres-queries.d.ts",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/postgres.d.ts",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/replay-policy.d.ts",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/sqlite-queries.d.ts",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/sqlite.d.ts",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/validation.d.ts",
+    "node_modules/@sentropic/cluster-mesh/dist/engram-memory/wire-adaptation.d.ts",
     "node_modules/@sentropic/cluster-mesh/dist/storage/atomic.d.ts",
     "node_modules/@sentropic/cluster-mesh/dist/storage/authority.d.ts",
     "node_modules/@sentropic/cluster-mesh/dist/storage/backend.d.ts",
