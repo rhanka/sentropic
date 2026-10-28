@@ -39,7 +39,7 @@
   - [x] Validate source/package, tarball identities, retained locks, installed closure, migration bytes, engines and exact profile statuses.
   - [ ] Add `tools/engram-e11/{tuple,bindings,slots}.mjs` and candidate spec; hash files/tarballs/backend/C6/locks; reject drift and status promotion.
   - [x] Add `tools/engram-e11/e11.mk`: pinned Node 24, temporary evidence, deterministic dry-run/check; no lock regeneration.
-  - [ ] Add `tools/engram-e11/tuple.test.mjs`: tampering, missing input, pending/final refusal, deterministic output.
+  - [x] Add `tools/engram-e11/tuple.test.mjs`: tampering, missing input, pending/final refusal, deterministic output.
 - [ ] **Lot E11-2 — Receiving handoff**
   - [ ] Add `tools/engram-e11/README.md`: 21 categories, PENDING reasons, retained-lock install, reservation, main PR, CI publication, byte recheck, separate C9/L5 ACKs.
 - [ ] **Lot E11-3 — Evidence and draft PR**
