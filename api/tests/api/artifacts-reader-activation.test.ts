@@ -134,6 +134,8 @@ describe('trusted app reader activation', () => {
     ['subject', {}, { subjectId: 'other' }],
     ['session', {}, { sessionId: 'new-session' }],
     ['origin', { targetOrigin: 'https://foreign.example.test' }, {}],
+    ['ticket', { ticketId: randomUUID() }, {}],
+    ['flow', { flowId: randomUUID() }, {}],
     ['workspace', {}, { workspaceId: 'foreign' }],
     ['tenant', {}, { tenantId: 'foreign' }],
   ])('should refuse a wrong %s without consuming either record', async (_name, changed, claims) => {
@@ -247,5 +249,21 @@ describe('trusted app reader activation', () => {
     expect(await reader().consume(session, input(issued))).toBeUndefined();
     const fresh = await reader().issue(session, target);
     expect(await reader().consume(session, input(fresh))).toEqual(fresh.ticket);
+  });
+
+  it.each(['connect', 'consume'])('should emit no grant on %s failure and preserve unconsumed state', async failure => {
+    const issued = await reader().issue(session, target);
+    const failing = { query: pool.query.bind(pool), async connect() {
+      if (failure === 'connect') throw new Error('injected PG outage');
+      const client = await pool.connect();
+      return { async query(sql: string, values?: unknown[]) {
+        if (sql.includes('DELETE FROM artifact_host.activation_tickets t')) throw new Error('injected consume failure');
+        return client.query(sql, values);
+      }, release(destroy?: boolean) { client.release(destroy); } };
+    } } as unknown as Pool;
+    const grant = vi.fn();
+    await expect(reader({ pool: failing }).consume(session, input(issued)).then(grant)).rejects.toThrow(/injected/);
+    expect(grant).not.toHaveBeenCalled();
+    expect(await reader().consume(session, input(issued))).toEqual(issued.ticket);
   });
 });
