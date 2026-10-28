@@ -1,0 +1,108 @@
+// BR-79: artifact readiness and release barriers are separate contracts.
+import { evaluateExpected, workflowExpected } from './ci-expected-results.mjs';
+import fs from 'node:fs';
+
+export const runtimeInputs = {
+  'test-e2e': ['changes', 'build-api-image', 'build-ui', 'build-e2e'],
+  'e2e-vscode': ['changes', 'build-api-image', 'build-ui', 'build-e2e'],
+  'smoke-idp-screens': ['changes', 'build-api-image', 'build-api-tool-image', 'build-e2e'],
+  'test-smoke-restore': ['changes', 'build-api-image', 'build-api-tool-image'],
+};
+export const scanInputs = { api: 'build-api-image', 'api-tool': 'build-api-tool-image',
+  ui: 'build-ui', e2e: 'build-e2e' };
+const needsOf = job => [job?.needs ?? []].flat();
+
+export function securityJoin(needs, category) {
+  if (!['container', 'code'].includes(category)) throw Error('Unknown scan category');
+  const changes = needs.changes?.outputs ?? {};
+  if (needs.changes?.result !== 'success'
+    || ['api', 'ui', 'global'].some(key => !['true', 'false'].includes(changes[key]))) {
+    return { ok: false, failures: [{ job: 'changes', reason: 'missing-selection' }] };
+  }
+  const api = changes.api === 'true' || changes.global === 'true';
+  const ui = changes.ui === 'true' || changes.global === 'true';
+  const selected = category === 'container' ? { api, 'api-tool': api, ui, e2e: api || ui }
+    : { api, ui };
+  const expected = Object.entries(selected).map(([service, selected]) => ({
+    job: `security-${category}-${service}`, selected,
+  }));
+  return evaluateExpected({ expected, executed: Object.entries(needs).map(([job, row]) =>
+    ({ job, conclusion: row.result })) });
+}
+
+export function checkDag(workflow, context) {
+  const errors = [];
+  const jobs = workflow.jobs;
+  for (const [name, inputs] of Object.entries(runtimeInputs)) {
+    if (JSON.stringify(needsOf(jobs[name]).sort()) !== JSON.stringify([...inputs].sort())) {
+      errors.push(`${name}: runtime inputs differ`);
+    }
+  }
+  for (const [kind, producer] of Object.entries(scanInputs)) {
+    if (JSON.stringify(needsOf(jobs[`security-container-${kind}`]).sort())
+      !== JSON.stringify(['changes', producer].sort())) errors.push(`${kind}: scan inputs differ`);
+  }
+  const expected = workflowExpected(workflow, context);
+  const gate = new Set(needsOf(jobs['ci-gate']));
+  for (const row of expected.filter(row => row.required && row.selected)) {
+    const name = row.job.split(' (')[0];
+    if (!name.startsWith('publish-') && !['deploy-preprod', 'bootstrap-publish'].includes(name)
+      && !gate.has(name)) errors.push(`${name}: missing final join`);
+  }
+  const ancestors = name => {
+    const found = new Set();
+    const visit = (current, active = new Set()) => {
+      if (!jobs[current] || active.has(current)) throw Error(`Invalid DAG: ${current}`);
+      for (const parent of needsOf(jobs[current])) {
+        if (!found.has(parent)) { visit(parent, new Set([...active, current])); found.add(parent); }
+      }
+    };
+    visit(name);
+    return found;
+  };
+  for (const publisher of ['publish-api-image', 'publish-ui-image']) {
+    const parents = ancestors(publisher);
+    for (const name of ['typecheck-lint-ui', 'typecheck-lint-api', 'security-sast-sca', 'security-iac', 'security-container']) {
+      if (!parents.has(name)) errors.push(`${publisher}: missing release barrier ${name}`);
+    }
+  }
+  return { ok: errors.length === 0, errors, expected };
+}
+
+// Readiness uses completed producer jobs, including artifact upload. Missing
+// spans stay null; queue/admission time never becomes an execution duration.
+export function readiness(jobs, dependencies = runtimeInputs) {
+  return Object.entries(dependencies).map(([name, inputs]) => {
+    const consumers = jobs.filter(job => job.name === name || job.name.startsWith(`${name} (`));
+    const parents = inputs.map(input => jobs.find(job => job.name === input));
+    const ready = parents.every(job => job?.conclusion === 'success' && job.completed_at)
+      ? Math.max(...parents.map(job => Date.parse(job.completed_at))) : null;
+    return { name, readyAt: ready === null ? null : new Date(ready).toISOString(),
+      executions: consumers.map(job => ({ jobId: job.id, name: job.name, conclusion: job.conclusion,
+        startedAt: job.started_at ?? null, completedAt: job.completed_at ?? null,
+        admissionSeconds: ready !== null && job.runner_id && job.started_at
+          ? (Date.parse(job.started_at) - ready) / 1000 : null })) };
+  });
+}
+
+if (process.argv[1]?.endsWith('/ci-dag.mjs') && process.argv.includes('--security-join')) {
+  const verdict = securityJoin(JSON.parse(process.env.CI_SECURITY_NEEDS), process.env.CI_SECURITY_CATEGORY);
+  console.log(JSON.stringify(verdict, null, 2));
+  process.exit(verdict.ok ? 0 : 1);
+}
+
+if (process.argv[1]?.endsWith('/ci-dag.mjs') && process.argv.includes('--readiness')) {
+  const capture = JSON.parse(fs.readFileSync(process.argv[process.argv.indexOf('--readiness') + 1], 'utf8'));
+  const run = capture.run;
+  const complete = run.status === 'completed';
+  const unmeasuredJobs = capture.jobs.filter(job => job.conclusion !== 'skipped'
+    && (!job.runner_id || !job.started_at || !job.completed_at)).map(job => ({ jobId: job.id, name: job.name }));
+  const measuredRunnerMinutes = capture.jobs.reduce((sum, job) => sum + (job.runner_id && job.started_at && job.completed_at
+    ? (Date.parse(job.completed_at) - Date.parse(job.started_at)) / 60000 : 0), 0);
+  const receipt = { runId: run.id, attempt: run.run_attempt, headSha: run.head_sha,
+    complete, conclusion: run.conclusion, artifactReadiness: readiness(capture.jobs),
+    runnerMinutes: unmeasuredJobs.length ? null : measuredRunnerMinutes, measuredRunnerMinutes, unmeasuredJobs,
+    note: 'Cache hits are not inferred; retain producer step logs. Admission includes hosted-runner queueing.' };
+  console.log(JSON.stringify(receipt, null, 2));
+  process.exit(complete ? 0 : 1);
+}
