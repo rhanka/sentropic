@@ -48,11 +48,13 @@
 ## Feedback Loop
 - [x] BRRC1-EX3: F1 authorizes pre-apply Secret/KEK/PVC checks and an IdP session Secret provisioning workflow matching idp-workload-secret.yml. Impact: missing prerequisites fail CD before any apply; conductor owns key generation/storage. Rollback: revert workflow/checks together with the isolated manifest, without changing stored credentials.
 - [x] Opus r1 F1: provision isolated signing through sentropic-idp-run; verify Secret/KEK/Bound PVC before deploy; selftests cover absent/invalid prerequisites and pre-apply ordering.
-- [ ] Opus r1 F2/F4: delete DB sessions despite private-store errors; route product revocations to issuer tombstones; test failure modes and restored rows.
+- [x] Opus r1 F2/F4: DB deletion survives private-store errors; all four product revocation ports write issuer tombstones; lock/corrupt/missing-PVC, delivery retry and restored-row regressions pass.
 - [x] F2 regression matrix authored for session-manager/OAuth single and bulk revocation under stale lock, corrupt foreign file and missing PVC; DB deletion and remote refusal asserted.
 - [x] F2 RED: six failures reproduce lock/corrupt-file prevention of DB deletion (RC1-opus-red.log). DB deletion now precedes guarded tombstones; private errors latch issuer authority closed; a missing mount is never recreated locally.
 - [x] F2/F3 GREEN: 129 RC1 unit and 32 API cases pass; test-rc1 removed (RC1-opus-green.log).
-- [ ] F4 regressions: product session-manager/OAuth single/bulk calls must reach the actual IdP router/store; shared-row restore must remain refused; wrong S2S claims and failed delivery are tested.
+- [x] F4 regressions: all four product revocation ports traverse the actual IdP router/store and refuse shared-row restoration; wrong S2S claims and delivery failure pass (129 unit + 43 API cases).
+- [x] F4 additional coverage: issuer-store lock/corrupt/missing-PVC failures, retry after DB removal, browser/body refusals and missing active-product configuration; evidence requires the revocation composition.
+- [x] Opus r1 final local gates: 219 passing cases (129 RC1 unit, 56 RC1 API, 11 session-manager, 2 passkey-MFA, 10 federation cookies, 11 API sessions); API typecheck/lint, IdP typecheck and 60 IdP pipeline selftests pass. Receipts: RC1-opus-final.log and RC1-opus-quality.log; make down removed test-rc1.
 - [x] F4 RED: eleven expected failures (RC1-opus-f4-red.log). Product revocation now awaits issuer-only tombstones through HTTPS, exact S2S client/resource and remote.sessions.revoke scope; delivery failure is explicit after committed DB removal.
 - [x] Opus r1 F3: D2-JWS none/HS256(public bytes)/ES256/RS256/PS256 and EdDSA with EC trust key explicitly require authority_refused; existing exact EdDSA header/key pin enforces all other algorithms.
 - [x] BRRC1-EX2: temporary scope for byte-preserving import of origin/main 8d37455df7f019cb42699257d343abbcc7ac2f68 by merge. Reason: main advanced and BRANCH.md conflicts prevent PR CI. Impact: import accepted upstream build/CI/chat-runtime commits; no RC1 edits to those files. Resolve only BRANCH.md, verify Track containment, then immediately restore narrow scope. Rollback: revert the integration merge without rewriting history. The 150-line author-change limit remains on authored patches; this merge preserves upstream commit identities.
@@ -106,7 +108,7 @@
   - [x] First GREEN pass: 118 unit cases passed and 16 API cases passed; fixed a missing test-local workload mock binding before rerun.
   - [x] Code-review OIDC end_session restore regression authored; OAuth revocation adapters and federated login minting must share the canonical session lifecycle.
   - [x] Unknown wire versions now produce unsupported_version/426 independently of schema/kind errors.
-  - [x] OAuth single/bulk revocation persists the same private tombstone before DB deletion; federation uses canonical signed session/refresh minting without adding MFA.
+  - [x] OAuth single/bulk revocation removes DB rows before guarded private tombstones; federation uses canonical signed session/refresh minting without adding MFA.
   - [x] Review-r2 regressions authored for late private creation after bulk revoke and revocation/deadline changes during asynchronous evidence preparation.
   - [x] Bulk logout fences every deleted session, including a private create that has not completed; unknown-session tombstones prevent late recreation.
   - [x] Issuer-private synchronous signing boundary shares the revocation fence and validates current immutable login/hash/deadline before signing.

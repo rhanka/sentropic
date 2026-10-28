@@ -12,6 +12,7 @@ import { commitRemoteEvidence, resolveRemoteLogin, reserveRemoteEvidence } from 
 import { createRemoteEvidenceIssuer } from '../../../src/services/auth/remote-evidence';
 import { getRemoteSessionAuthority } from '../../../src/services/auth/remote-private-session';
 import { getSentropicOAuthPorts } from '../../../src/routes/auth/oauth';
+import { createRemoteIdpEvidencePorts } from '../../../src/services/auth/remote-idp';
 
 const keys = generateKeyPairSync('ed25519');
 let userId: string;
@@ -43,6 +44,14 @@ async function setup() {
 }
 
 describe('RC1 current issuer session store', () => {
+  it('should keep evidence unavailable without the product revocation composition', async () => {
+    const { request } = await setup();
+    vi.stubEnv('REMOTE_ACTION_TRUST_FILE', '/missing-public-trust');
+    vi.stubEnv('REMOTE_ACTION_WORKLOAD_ID', 'idp-test');
+    vi.stubEnv('REMOTE_ACTION_REVOCATION_ISSUER', '');
+    await expect(createRemoteIdpEvidencePorts(async () => null).issue(request))
+      .rejects.toMatchObject({ code: 'authority_unavailable' });
+  });
   it.each(['logout', 'revoke-all', 'oauth-logout', 'oauth-revoke-all'].flatMap(operation =>
     ['lock', 'corrupt-foreign-file', 'missing-pvc'].map(failure => ({ operation, failure }))))
   ('should complete $operation and refuse authority after $failure', async ({ operation, failure }) => {
@@ -62,7 +71,9 @@ describe('RC1 current issuer session store', () => {
     // Recovery of shared DB/files alone must not reopen authority in the issuer process.
     mkdirSync(directory, { recursive: true });
     await db.insert(userSessions).values(row);
-    await expect(issue(request)).rejects.toHaveProperty('code');
+    const code = failure === 'corrupt-foreign-file' && !operation.endsWith('all')
+      ? 'authentication_required' : 'authority_unavailable';
+    await expect(issue(request)).rejects.toMatchObject({ code });
   });
   it('should fence the late private creation of a session deleted by actual OAuth bulk revoke', async () => {
     const { tokens } = await setup();
