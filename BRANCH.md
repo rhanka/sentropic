@@ -49,34 +49,34 @@
 
 ## UAT Management (in orchestration context)
 - [x] Library-only surface; no web, Chrome or VSCode UAT required.
-- [ ] Local native smoke evidence and fixture receipt verification required.
+- [x] Local native smoke evidence and fixture receipt verification passed; binary/choice receipts verified; graded fixture coverage.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and constraints**
   - [x] Read rules, V4 spec, dossier and merged L3/L5 contracts; harness branch check passed.
   - [x] Confirm published mesh version 0.31.0; feature bump will be 0.32.0.
-- [ ] **Lot 1 — Immutable runtime and artifact manifest**
+- [x] **Lot 1 — Immutable runtime and artifact manifest**
   - [x] Pin upstream native CPU release/source/archive; verify provenance, licence and model LFS source before use.
   - [x] Add opt-in Make provisioning target; one shared cache; verified native archive contents.
-- [ ] **Lot 2 — Inventory and descriptor**
+- [x] **Lot 2 — Inventory and descriptor**
   - [x] Bind file, revision, bytes, quantization, runtime archive/readout and compilation into evaluator definition.
-  - [ ] Keep shipped candidate unqualified; explicit local qualification composition only.
-- [ ] **Lot 3 — Fixed local transport**
+  - [x] Keep shipped candidate unqualified; explicit local qualification composition only.
+- [x] **Lot 3 — Fixed local transport**
   - [x] Verify host inventory and single served native model before/after one System One POST.
   - [x] Bound request, response, timeout and cancellation; reject redirects and identity gaps without replay; explicit positive local call-rate tariff.
-- [ ] **Lot 4 — Native adapter and host exports**
+- [x] **Lot 4 — Native adapter and host exports**
   - [x] Compile typed binary/choice/graded questions and validate pinned native output, independent usage and identity.
   - [x] Preserve host allowlist, receipt, budget and qualification gates; no general chat registration.
-- [ ] **Lot 5 — Fixture acceptance**
+- [x] **Lot 5 — Fixture acceptance**
   - [x] `packages/llm-mesh/tests/decision-kev-inventory.test.ts`: P26 wrong file/revision/hash/runtime and P27 execution changes.
   - [x] `packages/llm-mesh/tests/decision-kev-transport.test.ts`: fixed endpoint, identity, redirects, bounds, cancellation.
   - [x] `packages/llm-mesh/tests/decision-kev-routing.test.ts`: P28 no egress, native kinds and served-model receipt.
   - [x] Scoped make test-llm-mesh passed all 38 Kev fixtures; public feature-version assertion updated for 0.32.0.
-- [ ] **Lot 6 — Local native qualification**
+- [x] **Lot 6 — Local native qualification**
   - [x] Download exact selected model once; validate all bytes and pinned runtime before inference.
-  - [ ] Run at most three protocol/identity smokes through native process plus Docker Node client; record usage, memory/latency, wrong-selection refusal and cache path.
-  - [ ] Report calibration/production limits separately from protocol evidence.
-- [ ] **Lot 7 — Documentation and publication**
+  - [x] Three attempted calls total: one inventory refusal before POST, then binary/choice successes; receipts, 4.45 GiB RSS and cache recorded in spec; native process stopped and make down completed.
+  - [x] Report calibration/production limits separately from protocol evidence.
+- [x] **Lot 7 — Documentation and publication**
   - [x] Consolidate manifest, provenance gaps, bounded cost plan and runtime update/rollback in `spec/decision/kev-v4l4-candidate.md`.
   - [x] Bump mesh package and lock to 0.32.0, above npm published version 0.31.0 verified 2026-10-28.
 - [ ] **Lot 8 — Final validation and draft PR**
