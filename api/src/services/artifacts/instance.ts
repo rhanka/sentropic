@@ -57,7 +57,10 @@ export function getProductArtifactReader() {
 }
 export const productArtifactReaderPort: NonNullable<ArtifactHttpPorts['reader']> = {
   enabled: artifactReaderEnabled,
-  controlOrigin: new URL(env.UI_BASE_URL).origin,
+  get controlOrigin() {
+    if (!process.env.UI_BASE_URL) throw new Error('Approved reader control origin required');
+    return new URL(process.env.UI_BASE_URL).origin;
+  },
   async issue({ identity, workspaceId }, target) {
     const credential: unknown = JSON.parse(identity.credentialId);
     if (identity.clientId !== ARTIFACT_SESSION_CLIENT || !Array.isArray(credential) || credential.length !== 4 ||
