@@ -16,6 +16,19 @@ function setup() {
   return { directory, store, record };
 }
 describe('RC1 issuer-private durable authority', () => {
+  it('should serialize synchronous signing with the private revocation fence', () => {
+    const { store, record } = setup();
+    store.create(record);
+    const login = { sub: record.userId, authTime: record.login.authTime, sessionVersion: record.login.sessionVersion };
+    expect(store.signCurrent(record.sessionId, record.sessionTokenHash, login, () => 'signed')).toBe('signed');
+    store.revoke(record.sessionId);
+    let attempts = 0;
+    expect(() => store.signCurrent(record.sessionId, record.sessionTokenHash, login, () => {
+      attempts++;
+      return 'signed';
+    })).toThrow();
+    expect(attempts).toBe(0);
+  });
   it('should fence a session whose private creation finishes after bulk revocation', () => {
     const { store, record } = setup();
     store.revoke(record.sessionId);

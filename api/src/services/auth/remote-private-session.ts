@@ -76,10 +76,22 @@ export function createRemoteSessionAuthority(directory: string) {
       if ('userId' in record && record.userId === userId) revoke(record.sessionId);
     }
   }
+  function signCurrent(sid: string, tokenHash: string,
+    login: { sub: string; authTime: number; sessionVersion: number }, operation: () => string): string {
+    return locked(sid, () => {
+      const current = find(sid);
+      if (!current || current.revoked || !current.login.mfaVerified || current.userId !== login.sub
+        || current.sessionTokenHash !== tokenHash || current.login.authTime !== login.authTime
+        || current.login.sessionVersion !== login.sessionVersion || current.expiresAt <= Date.now() + 5000)
+        throw new RemoteAuthorityError('authentication_required');
+      // The callback is synchronous: revocation and signing share this durable fence across processes.
+      return operation();
+    });
+  }
   return { find(sid: string) {
     if (existsSync(`${path(sid)}.lock`)) throw new RemoteAuthorityError('authority_unavailable');
     return find(sid);
-  }, create, rotate, revoke, revokeUser };
+  }, create, rotate, revoke, revokeUser, signCurrent };
 }
 
 export function getRemoteSessionAuthority() {
