@@ -67,6 +67,7 @@
   - [x] Remove client entries from the visual export snapshot; retarget moved host export assertions to the runtime wildcard entry.
   - [ ] Move draft/attachment/projection/controller/session/checkpoint/local-tool implementation and tests; delete original implementations.
   - [x] Relocate the existing draft/attachment/projection/controller/session implementation and core parity tests unchanged.
+  - [x] Relocate local-tool store, checkpoints, steer/scope helpers and principal-scoped view-marker persistence with existing tests.
   - [ ] Migrate inventoried web/Chrome/VSCode/cowork imports and active tooling links.
   - [ ] Split neutral contracts and optional module state from views; runtime never imports a view implementation.
   - [ ] Qualify breaking chat-ui version and initial runtime version against registry; update lockfiles.
