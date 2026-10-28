@@ -89,6 +89,7 @@
   - [x] Define a data-only conversation snapshot/command port; allow StreamMessage to render injected segment events without a transport.
   - [x] Add runtime-owned authorization before platform execution, explicit default `() => false`, bounded permission wait and per-call execution/result deduplication.
   - [x] Expose session-owned history-event hydration and steer commands without exposing controller construction to views.
+  - [x] Implement runtime conversation commands for full payload/model/context/attachments and retry/stop/edit/feedback/steer through the real session runtime.
   - [ ] Replace component runtime creation/disposal with normalized snapshot and command props/declarations.
   - [ ] Bind full send/model/context/tools/attachments, history, retry/stop/edit/feedback/steer and active modules.
   - [ ] Enforce visible permission pending/denied state; approval executes/posts once; no adapter, denial and timeout execute zero times.
