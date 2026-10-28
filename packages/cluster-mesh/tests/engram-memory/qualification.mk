@@ -73,7 +73,7 @@ installed-memory-locked:
 	          && npm ci --ignore-scripts --no-audit --no-fund'; \
 	    pg_image="$$($(ARTIFACTS_COMPOSE) ps -q postgres | xargs -r docker inspect --format '{{.Image}}' 2>/dev/null)"; \
 	    test -n "$$pg_image" || { echo 'postgres image identity is required'; exit 1; }; \
-	    qual_image="$$($(ARTIFACTS_COMPOSE) images -q qualification 2>/dev/null | head -1)"; \
+	    qual_image="$$($(ARTIFACTS_COMPOSE) config --images 2>/dev/null | grep '^node:24' | head -1 | xargs -r docker image inspect --format '{{.Id}}' 2>/dev/null)"; \
 	    test -n "$$qual_image" || { echo 'qualification image identity is required'; exit 1; }; \
 	    mesh_list_sha="$$(cat "$(INSTALLED_DIR)/artifacts/mesh-file-list.sha256")"; \
 	    $(ARTIFACTS_COMPOSE) run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
