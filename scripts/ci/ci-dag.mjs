@@ -62,7 +62,7 @@ export function checkDag(workflow, context) {
   };
   for (const publisher of ['publish-api-image', 'publish-ui-image']) {
     const parents = ancestors(publisher);
-    for (const name of ['typecheck-lint-ui', 'typecheck-lint-api', 'security-sast-sca', 'security-container']) {
+    for (const name of ['typecheck-lint-ui', 'typecheck-lint-api', 'security-sast-sca', 'security-iac', 'security-container']) {
       if (!parents.has(name)) errors.push(`${publisher}: missing release barrier ${name}`);
     }
   }
