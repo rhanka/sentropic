@@ -42,6 +42,9 @@
   - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] BR1-R2-scope: clarify P1 fixture/package completion versus the frozen P2 production cutover; the app continues to consume the extracted controller until P2.
+- [x] BR1-R2-package: export the comment runtime factory at the root, remove orphaned formatting docs and restrict the necessary chat-server test dependency link to test tasks; cleanup removes only that owned link.
+- [x] BR1-R2-types: document the supported high-level TypeScript UI/runtime pair and independent wire subpaths; optional peer does not introduce visual value imports. A new contracts-package redesign is outside the frozen P1 pair.
 - [x] BR1-R2-packed: strengthen clean qualification with installed public runtime behavior: real HTTP payload/commands, subscription remount, default denial/denial/timeout and approved exactly-once result posting; no command stubs.
 - [x] BR1-R2-native-timeout: bound native permission waits too; expiry denies through the real controller and disposal cancels expiry. Add native timeout/disposal proofs with zero execution or successful result.
 - [x] BR1-R2-native: accept the native permission review finding; settle approved only after execution, preserve preflight grants for native continuation, record native denial and guard stale native callbacks after disposal. Keep only the latest resolved status plus pending prompts.

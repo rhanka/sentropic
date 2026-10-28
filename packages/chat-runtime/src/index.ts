@@ -26,6 +26,7 @@ export * from './utils/localToolStreamSync.js';
 export * from './checkpoints/index.js';
 export * from './comments/host.js';
 export * from './comments/state.js';
+export * from './comments/runtime.js';
 export * from './comments/utils.js';
 export * from './context/context-entry.js';
 export * from './context/module.js';
