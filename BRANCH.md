@@ -92,6 +92,7 @@
   - [x] Code-review OIDC end_session restore regression authored; OAuth revocation adapters and federated login minting must share the canonical session lifecycle.
   - [x] Unknown wire versions now produce unsupported_version/426 independently of schema/kind errors.
   - [x] OAuth single/bulk revocation persists the same private tombstone before DB deletion; federation uses canonical signed session/refresh minting without adding MFA.
+  - [x] Review-r2 regressions authored for late private creation after bulk revoke and revocation/deadline changes during asynchronous evidence preparation.
   - [ ] api/tests/unit/auth/remote-evidence.test.ts: repeated actions/switch, logout/revoke/expiry, wrong sid/version/MFA/audience/key, replay and workload separation.
   - [ ] Closed EvidenceRequest; issuer-derived identity and original authentication time; per-operation EdDSA evidence with pinned audiences.
 - [ ] **Lot 2 — Consent and authorization, RED then GREEN**

@@ -1,5 +1,5 @@
-import { generateKeyPairSync } from 'node:crypto';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { createHash, generateKeyPairSync } from 'node:crypto';
+import { mkdtempSync, rmSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
@@ -10,6 +10,8 @@ import { users, userSessions } from '../../../src/db/schema';
 import { createSession, refreshSession, revokeAllSessions, revokeSession } from '../../../src/services/session-manager';
 import { resolveRemoteLogin, reserveRemoteEvidence } from '../../../src/services/auth/remote-session';
 import { createRemoteEvidenceIssuer } from '../../../src/services/auth/remote-evidence';
+import { getRemoteSessionAuthority } from '../../../src/services/auth/remote-private-session';
+import { getSentropicOAuthPorts } from '../../../src/routes/auth/oauth';
 
 const keys = generateKeyPairSync('ed25519');
 let userId: string;
@@ -41,6 +43,18 @@ async function setup() {
 }
 
 describe('RC1 current issuer session store', () => {
+  it('should fence the late private creation of a session deleted by actual OAuth bulk revoke', async () => {
+    const { tokens } = await setup();
+    const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
+    const store = getRemoteSessionAuthority()!;
+    const pending = store.find(tokens.sessionId)!;
+    // Reproduce the committed DB insert while its private-create continuation is paused.
+    unlinkSync(join(directory, `${createHash('sha256').update(tokens.sessionId).digest('hex')}.json`));
+    expect(await getSentropicOAuthPorts().sessions.revokeAllForUser(userId)).toBe(1);
+    expect(() => store.create(pending)).toThrow();
+    await db.insert(userSessions).values(row);
+    expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
+  });
   it('should preserve OIDC end_session logout after shared-row restoration', async () => {
     const { tokens } = await setup();
     const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
