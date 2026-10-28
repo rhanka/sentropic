@@ -70,5 +70,6 @@ test('should reproduce the actual candidate tuple with every file bound and all 
   assert(first.slots.filter((slot) => slot.status === 'PENDING').every((slot) => slot.reason.length > 0));
   assert.equal(first.slots[14].observed.c6.finalBytesSha256, null);
   assert.equal(first.slots[15].observed.equivalence.status, 'not-covered');
+  assert(first.files['consumer/installed-hydration.mjs']);
   assert(Object.values(first.handoff).every((gate) => gate.status === 'PENDING'));
 });
