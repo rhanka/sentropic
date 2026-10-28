@@ -102,6 +102,7 @@
   - [x] Add real-runtime permission parity tests for missing adapter/executor, denial, timeout, late approval, disposal and exactly-once approved execution/result posting.
   - [x] Relocate the web-host factory and session-history assembly with their existing tests; keep view implementations in chat-ui.
   - [x] Inject the visual renderer into the runtime web-host factory; fix the parity SSE adapter's delayed connection with synchronous test-adapter reconnect.
+  - [x] Retarget visual label/panel/context contracts to the relocated public runtime host factory.
   - [x] Resolve typecheck evidence: import canonical comment formatting, normalize wire attachment source/IDs and keep ES2022-compatible lookup.
   - [ ] Replace component runtime creation/disposal with normalized snapshot and command props/declarations.
   - [ ] Bind full send/model/context/tools/attachments, history, retry/stop/edit/feedback/steer and active modules.
