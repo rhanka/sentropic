@@ -76,6 +76,17 @@ describe('RC1 D2 session evidence', () => {
     await expect(issue(request)).rejects.toMatchObject({ code: 'replay_refused' });
   });
 
+  it('should refuse unknown or regressing issuer clocks', async () => {
+    const { issue, state } = setup();
+    await issue(request);
+    state.now -= 1;
+    await expect(issue({ ...request, actionId: 'BBBBBBBBBBBBBBBBBBBBBA' }))
+      .rejects.toMatchObject({ code: 'authority_unavailable' });
+    state.now = NaN;
+    await expect(issue({ ...request, actionId: 'CCCCCCCCCCCCCCCCCCCCCA' }))
+      .rejects.toMatchObject({ code: 'authority_unavailable' });
+  });
+
   it('should sign EdDSA with the pinned IdP key and exact action binding', async () => {
     const evidence = await setup().issue(request);
     const { payload, protectedHeader } = await jwtVerify(evidence, keys.publicKey, {
