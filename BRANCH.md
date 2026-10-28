@@ -9,7 +9,8 @@
 - [ ] Engram candidate is read-only: `@sentropic/engram` `0.22.0` tarball `/home/antoinefa/src/graphify-wt-mcpl4/.graphify/scratch/l4-r4-artifacts/sentropic-engram-0.22.0.tgz`, sha256 `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10`; P3 manifest sha256 `1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730`. No write in that repository.
 - [ ] Candidate cluster-mesh tarball is built from this branch head at the committed workspace version `0.24.0-dev.1` with no version stamping in the lane; the tarball is bound by sha256 in the receipt.
 - [ ] Host driver closure is the installed `pg` package plus the installed cluster-mesh bytes; no sibling source resolution, no workspace links.
-- [ ] E10 authored scope only: `packages/cluster-mesh/tests/engram-memory/installed-memory.mjs`, `packages/cluster-mesh/tests/engram-memory/installed-host-bridge.mjs`, `packages/cluster-mesh/tests/engram-memory/installed-memory-types.ts`, `packages/cluster-mesh/tests/engram-memory/qualification.mk`, `packages/cluster-mesh/tests/engram-memory/installed-receipt.json`, `packages/cluster-mesh/tests/engram-memory/installed-consumer-package.json`, `packages/cluster-mesh/tests/engram-memory/installed-consumer-package-lock.json`, plus `BRANCH.md` and `PLAN.md`. Inherited batch files below stay unchanged unless BR10-EX1 is declared.
+- [ ] E10 authored scope only: `packages/cluster-mesh/tests/engram-memory/installed-memory.mjs`, `packages/cluster-mesh/tests/engram-memory/installed-memory-types.ts`, `packages/cluster-mesh/tests/engram-memory/qualification.mk`, `packages/cluster-mesh/tests/engram-memory/installed-receipt.json`, `packages/cluster-mesh/tests/engram-memory/installed-consumer-package.json`, `packages/cluster-mesh/tests/engram-memory/installed-consumer-package-lock.json`, plus `BRANCH.md` and `PLAN.md`. Inherited batch files below stay unchanged unless BR10-EX1 is declared.
+- [x] E10a follow-up (conductor decision 2026-10-28, option (a)): merge `feat/cluster-mesh-engram-e10a` (PR #808) into this branch; memory is constructed only through the installed `@sentropic/cluster-mesh/engram-memory` export (`createMemoryNeutralHandle`); the host-authored `installed-host-bridge.mjs` is deleted.
 - [ ] Ports reserved for this branch only: API 8791, UI 5191, Maildev UI 1091; qualification PostgreSQL publishes no host port; `ENV=test-mem-e10` last.
 - [x] Owner-directed batch: merge commits only, no rebase, no publication, conductor merges the draft PR.
 - [x] Worktree `tmp/worktrees/mem-batch1`; branch `feat/engram-e2-batch1`; base `978fb67c0`.
@@ -55,6 +56,8 @@
   - `.cursor/rules/**`
   - `.track/**`
   - `ui/**`
+  - `api/**`
+  - `.github/workflows/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `packages/engram/**` (not activated)
   - [x] Already committed origin/main changes are inherited; check authored merge resolution against that parent.
@@ -75,7 +78,7 @@
   - [x] Extend `packages/cluster-mesh/tests/engram-memory/qualification.mk` with the `installed-memory` lane: candidate pack at `0.24.0-dev.1`, clean consumer staging outside the repository, strict lock install, runtime run, strict typecheck and receipt capture.
   - [x] Lot gate: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make -f Makefile -f packages/cluster-mesh/tests/engram-memory/qualification.mk installed-memory API_PORT=8791 UI_PORT=5191 MAILDEV_UI_PORT=1091 ENV=test-mem-e10`, then `make down ENV=test-mem-e10`.
 - [x] **Lot E10-2 — Receipt and handoff**
-  - [x] Retain `packages/cluster-mesh/tests/engram-memory/installed-receipt.json` from the green run: archive hashes, runtime and type closure, engine, configuration and migration identities, five-profile equivalence and refusal outcomes.
+  - [x] Retain `packages/cluster-mesh/tests/engram-memory/installed-receipt.json` from the green run: archive hashes, runtime and type closure, engine, configuration and migration identities, declared profile claims plus `not-covered` equivalence and refusal outcomes.
   - [x] Record the receipt path and its sha256 in the PR body; list the exact E11 inputs so `e2-host-tuple/v1` can be generated from this head without new qualification.
   - [ ] Push and keep the draft PR current; require CI on the exact head before marking ready.
 - [ ] **Lot E10-3 — Takeover: merge integration and Opus r1 fixes**
@@ -88,6 +91,13 @@
   - [x] Remove version stamping in the lane; assert the committed workspace version equals `0.24.0-dev.1`; bind the cluster-mesh tarball by sha256.
   - [x] Lot 6 evidence from #709: `missing source` in this branch unless transferred; record the conductor disposition in the PR body.
   - [x] Rerun the installed lane on the exact head, retain the receipt, push, and require CI green on the exact head.
+- [ ] **Lot E10-4 — E10a installed-bytes takeover (conductor decision 2026-10-28, option (a))**
+  - [x] Merge `feat/cluster-mesh-engram-e10a` (PR #808) into this branch; no rebase.
+  - [x] Delete `installed-host-bridge.mjs`; construct memory only via the installed `createMemoryNeutralHandle` export at pack-only version `0.24.0-dev.2`.
+  - [ ] Rerun the E10 installed lane end to end on the exact head and regenerate the receipt with no `hostGlue` and `tupleCoverage` `full`.
+  - [ ] Retain the regenerated cluster-mesh tarball with the candidate artifacts and record its sha256.
+  - [ ] Record the Lot 6 disposition and the exact E11 input list in the PR body.
+  - [ ] Push and require CI green on the exact head.
 - [ ] **Lot 1 — Ordered merges**
   - [x] Merge #758, #763, #765, #775, #779, #764, #793, #792, #790; all heads retained; no lot excluded.
   - [x] Preserve P3 manifest 1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730 and Engram 0.22.0 tarball 26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10; both checked with sha256sum.
@@ -100,11 +110,12 @@
   - [ ] Require pull_request ci.yml completed/success on exact head; append READY-BATCH only afterward.
 
 ## Feedback Loop
-- [x] E10 installed lane green on `b8bb6fa6a`: exit=0, cleanup=0; capture, admission, record read, restart and exact replay pass on the injected PostgreSQL; five refusals recorded (missing driver, missing pool, wrong driver identity, storage without provider, missing profile). Receipt `packages/cluster-mesh/tests/engram-memory/installed-receipt.json` sha256 `703c39bc514881361436868b94fc417f72cce15ecf0e3e8cb2b1f2ca054955d5`; campaign receipts under `tmp/installed-memory-e10/`.
+- [x] E10 installed lane green on `b8bb6fa6a` (superseded by the `1eb052fe6` takeover run and then by the E10a installed-bytes run): exit=0, cleanup=0; capture, admission, record read, restart and exact replay pass on the injected PostgreSQL; five refusals recorded (missing driver, missing pool, wrong driver identity, storage without provider, missing profile). Receipt `packages/cluster-mesh/tests/engram-memory/installed-receipt.json` sha256 `703c39bc514881361436868b94fc417f72cce15ecf0e3e8cb2b1f2ca054955d5`; campaign receipts under `tmp/installed-memory-e10/`.
 - [x] E10 takeover lane green on `1eb052fe6`: exit=0, cleanup=0; write and reopen in two processes on the injected PostgreSQL; exact u64 epoch advance `1` to `2`; seven typed refusals recorded (missing driver, missing pool, wrong driver identity, storage without provider, live wrong driver, assembly missing driver, missing profile). Receipt `packages/cluster-mesh/tests/engram-memory/installed-receipt.json` sha256 `8bb6ad1a3fff5a6e657c148f41db97834df118e10fccd7f277b154d4115d6225`; cluster-mesh tarball sha256 `4799bcc39944b7d487cf1f4b6d5b628a5c4556a068918a5ffb36db54348bd8cc`; campaign receipts under `tmp/installed-memory-e10/`.
 - [x] Lot 6 evidence from #709: dedicated evidence artifact is `missing source` in this branch; the E6 successor files transferred through the integration merge are the retained transfer, and no separate Lot 6 evidence file is claimed. Conductor disposition is recorded in the PR body.
 - [x] Five profiles are `declared` only in the receipt; `fiveProfileEquivalence` is `not-covered` (Stage B blocked, E9 #790, 23 cases); the neutral handle glue is `host-authored-not-installed` and the tuple coverage for that glue is `partial`.
-- [x] E10 bridge finding: the frozen substrate persists K7/K8 proofs and journal events in snake-case wire form while the installed kernel validator checks the camel-case proof model and an intent hash. The installed bridge translates those values in both directions (K7/K8 aggregates, journal intent hash carried only in stored bytes, K7 receipt digest rejoined from the pending control at read). No source change; the equivalent validator-side adaptation remains with the E6/E9 owners.
+- [x] E10 bridge finding: the frozen substrate persists K7/K8 proofs and journal events in snake-case wire form while the installed kernel validator checks the camel-case proof model and an intent hash. The installed bridge translates those values in both directions (K7/K8 aggregates, journal intent hash carried only in stored bytes, K7 receipt digest rejoined from the pending control at read).
+- [x] E10a resolution (conductor decision 2026-10-28, option (a)): the fenced neutral-handle factory and the K7/K8 plus intent-hash adaptation now ship in `packages/cluster-mesh/src/engram-memory/` (PR #808, pack-only `0.24.0-dev.2`) and are exported through `./engram-memory`; `installed-host-bridge.mjs` is deleted and the regenerated receipt carries no `hostGlue`.
 - [x] Owner authorization covers all listed approved lots and the E9 API adaptation.
 - [x] BR1-EX1 implemented: existing qualification routes accept test-mem-batch1, preserve Compose cleanup and guard the exact approved P3 bytes; no Compose/workflow file changes.
 - [x] All nine lot heads are ancestors of the batch; E2/E3/E4 were already present through E7. No lot excluded for a content conflict.
