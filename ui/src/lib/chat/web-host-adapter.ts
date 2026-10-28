@@ -7,7 +7,7 @@ import {
   type ChatUiLabelResolver,
   type ChatUiWebHost,
   type CreateWebHostInput,
-} from '@sentropic/chat-ui/hosts/createWebHost';
+} from '@sentropic/chat-runtime/hosts/createWebHost';
 import type { ChatCoreTransport } from '@sentropic/chat-runtime/client/transport';
 import { createRendererRegistry } from '@sentropic/chat-ui/renderers/registry';
 import type { LocalToolsAdapter } from '@sentropic/chat-ui/hosts/types';
