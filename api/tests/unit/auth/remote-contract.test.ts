@@ -55,7 +55,7 @@ describe('RC1 strict wire and key separation', () => {
   });
   it('should give the standalone IdP a session secret absent from the product deployment', () => {
     const idp = readFileSync(new URL('../../../../deploy/k8s/base/35-auth-idp.yaml', import.meta.url), 'utf8');
-    const product = readFileSync(new URL('../../../../deploy/k8s/base/10-api.yaml', import.meta.url), 'utf8');
+    const product = readFileSync(new URL('../../../../deploy/k8s/base/30-api.yaml', import.meta.url), 'utf8');
     expect(idp).toMatch(/name: JWT_SECRET\s+valueFrom:\s+secretKeyRef:\s+name: auth-idp-session-signing/);
     expect(product).not.toContain('auth-idp-session-signing');
   });
