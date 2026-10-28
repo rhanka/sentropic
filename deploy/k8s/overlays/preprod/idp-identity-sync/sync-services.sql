@@ -1,8 +1,6 @@
--- Policy-only convergence for the workload client (2-IdP, R2).
--- Updates ONLY service_clients.exchange_policy on pre-existing local rows.
--- Never touches id, client_secret_hash or any other column, and never creates a row:
--- a missing workload row is reported as services_skipped_missing (its secret is
--- provisioned through the established protected channel, never minted here).
+-- Policy-only pass, after register-workload.sql applies the named Secret hash.
+-- This pass preserves ids/hashes; registration/rekey occurs before services_before.
+-- Without a Secret, missing rows remain services_skipped_missing; nothing is minted.
 WITH written AS (
   UPDATE service_clients c SET exchange_policy = t.exchange_policy
   FROM transformed_service_policy t WHERE c.client_id = t.client_id

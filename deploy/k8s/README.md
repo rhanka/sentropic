@@ -271,15 +271,18 @@ The `allow-pgbackup-to-postgres` NetworkPolicy lets the job reach postgres.
 ```bash
 # Trigger an immediate backup Job and wait for completion:
 make k8s-pgbackup-now KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37c
-# Restore a chosen dump into a scratch DB (non-destructive to the app DB):
+# Restore a chosen dump into the ISOLATED restore namespace (never the live DB):
 make k8s-pgbackup-restore PG_BACKUP_KEY=pg/<ts>.sql.gz \
-  KUBECONFIG=$HOME/.kube/poc.yaml ENV=test-feat-deploy-poc-k8s-37c
+  PG_BACKUP_SHA256=<64-hex-digest-of-the-object> \
+  RESTORE_KUBECONFIG=<path-to-restore-namespace-kubeconfig> ENV=test-feat-deploy-poc-k8s-37c
 ```
 
-`k8s-pgbackup-restore` runs a throwaway pod that reads `S3_BUCKET`/`S3_ENDPOINT`/
-`S3_REGION` + creds from the SealedSecret (no host env dependency), downloads the
-dump, restores it into a scratch `restore_check` DB, runs a sanity `SELECT`, then
-drops the scratch DB.
+Never point `RESTORE_KUBECONFIG` at an admin, prod, or preprod kubeconfig
+(e.g. `$HOME/.kube/poc.yaml`): the target refuses default kubeconfigs and any
+identity holding live-cluster rights. `k8s-pgbackup-restore` downloads the dump
+with an init container, restores it into the isolated `app_cm_restore` DB with
+pipefail/`ON_ERROR_STOP`, requires and verifies `PG_BACKUP_SHA256`, then prints
+the B03 manifest block (`MANIFEST-BEGIN` … `MANIFEST-END`).
 
 ## Public ingress / TLS
 
@@ -369,6 +372,94 @@ The `05-*` (`sentropic-api`) and `06-*` (`sentropic-postgres` / pgbackup)
 SealedSecret resource files are produced by the operator from the real secret
 values after the controller is installed; they are intentionally **not**
 authored as part of this manifest/tooling change.
+
+### Radar preprod MCP workload: RFC 8693
+
+Owner actions only; this preparation does not deploy or generate a credential.
+The IdP already implements and advertises token exchange. The existing identity
+sync rewrites the reviewed workload policy to these exact bindings:
+
+| Setting | Required value |
+|---|---|
+| Confidential service client / `act.sub` | `immo-mcp-workload` |
+| Authentication / grant | `client_secret_basic` / `urn:ietf:params:oauth:grant-type:token-exchange` only |
+| Subject client / audience | `immo-mcp` / `https://preprod.immo.sent-tech.ca/mcp` |
+| Target audience / scope | `https://preprod.immo.sent-tech.ca` / `immo:search` |
+| Lifetime | At most 300 seconds, bounded by the human token expiry |
+| Token endpoint | `https://preprod.auth.sent-tech.ca/api/v1/auth/oauth/token` |
+
+1. In the approved secret manager, generate **32 random bytes**, encoded as
+   64 hexadecimal characters without a trailing newline. Store it as the
+   preprod `immo-mcp-workload` credential. Never reuse a production/development
+   credential or place the value in Git, CLI arguments, logs or a PR.
+   First inspect row presence and metadata through an approved read-only DB
+   console (never select the hash):
+
+   ```sql
+   SELECT client_id, revoked_at, allowed_scopes, resource_indicators, exchange_policy
+   FROM service_clients WHERE client_id = 'immo-mcp-workload';
+   ```
+
+   No row means bootstrap is needed. An active row will be rekeyed if the Secret
+   changes; a revoked row remains revoked and never blocks identity sync.
+2. Materialize an Opaque Secret **by name** in `sentropic-preprod`:
+   `immo-mcp-workload`, key `IMMO_MCP_WORKLOAD_CLIENT_SECRET`, through the
+   approved Kubernetes secret-management interface. Transfer the same credential
+   to radar out of band. Radar creates Secret `immo-mcp-workload` with the same
+   key in `radar-immobilier-preprod`, as radar's
+   `RUNBOOK-PREPROD-MCP-RACCORDEMENTS.md` steps 3–4 require.
+   No cross-namespace Secret reference is possible; these are two local copies.
+   This sync is the only preprod creation/rotation path; do not run the generic
+   provisioning/rotation Make targets against this preprod registry.
+3. Merge the qualified PR to `main`; normal CI pins and rolls out the preprod
+   API/IdP images and the sync ConfigMap/CronJob. Verify `deploy-preprod` succeeds.
+   For an explicitly approved manual rollout from that exact main checkout:
+
+   ```sh
+   rtk make k8s-deploy-preprod KUBECONFIG=/secure/preprod-kubeconfig ENV=test-idp-token-exchange
+   ```
+
+   This command changes preprod. Do not execute it during code preparation.
+4. In GitHub Actions, dispatch **IdP identity sync** on `main`, first with
+   `DRY_RUN=true`, empty `ALLOWED_REKEY`, and `ALLOWED_CLIENTS=immo-mcp` if the
+   public connector must also be synchronized. Review the counts and confirm
+   `outcome=rolled_back`. Then dispatch with `DRY_RUN=false`, the same reviewed
+   allowlists, and `CONFIRM=idp-sync-YYYY-MM-DD` for the current UTC date;
+   confirm `outcome=committed`. This established workflow also triggers the
+   restricted prod identity export and creates a preprod backup before import;
+   its protected environment approvals still apply.
+   The import Job validates exactly 64 lowercase hex characters without a newline,
+   hashes in its shell process, unsets the plaintext, and sends only the hash to
+   Postgres. It creates/rekeys only the reviewed workload inside the transaction.
+   Invalid input reports `workload_credential_invalid` before SQL execution.
+   The Secret reference is optional so unrelated identity sync continues before
+   bootstrap; an absent Secret plus absent row leaves exchange unavailable.
+5. Confirm the preprod service registry contains `immo-mcp-workload`, is not
+   revoked, and has the exact policy above (inspect metadata only, never the
+   stored hash). Confirm both discovery documents advertise RFC 8693 and Basic
+   auth. With an approved active human MCP token, qualify the token endpoint:
+   success preserves human `sub`, sets singleton API `aud`, `client_id` and
+   `act.sub` to the workload, has no nested actor/`cnf`, and satisfies the TTL.
+   Wrong subject/target audiences, unknown clients, form-only credentials and
+   `client_credentials` for this workload must fail. Radar then completes its
+   digest-bound A2 qualification before arming its receiver.
+
+For rotation (at least every 90 days), pause scheduled identity-sync dispatches
+so they cannot race the dry-run. Replace the source Secret through the
+approved manager, repeat step 4's dry-run and commit, then update radar's copy
+and reload/restart its consumer. Commit replaces the active row's hash: the new
+credential authenticates and the old credential is revoked immediately (no grace
+period). Verify both results before recording success. Keep the source Secret
+aligned with every rotation; do not rotate the DB independently. For revocation,
+the owner sets `revoked_at` through the approved credential process and removes
+both Secret copies. A leftover Secret cannot reactivate the row or block sync.
+Resume scheduled dispatches after verification.
+
+Exchange becomes available as soon as registration commits and radar has the
+matching Secret. Allow **10–20 minutes for the owner-operated sync/rollout**
+after the main revision and images are approved, excluding CI builds, runner/
+approval queues and radar's separate A2 qualification. The already served IdP
+implements the grant; no additional OAuth implementation is required.
 
 ### Disaster recovery — back up the controller sealing key
 
