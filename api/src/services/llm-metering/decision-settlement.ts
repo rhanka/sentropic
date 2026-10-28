@@ -40,8 +40,12 @@ export const settleDecision = async (database: LedgerDatabase, cost: CostContext
     const state = pending ? 'pending' : 'none';
     const priceRevision = receipt.cost.status === 'not-incurred' ? null : receipt.cost.priceRevision;
     if (!priceRevision || !hold.pricing_versions.includes(priceRevision)) throw new Error('Decision price mismatch');
+    const attempts = JSON.stringify([{ attempts: receipt.attempts, evaluator: receipt.evaluator,
+      servedEvaluator: receipt.servedEvaluator, cost: receipt.cost, usage: receipt.usage, experimental: receipt.experimental === true }]);
     if (correcting) {
       await tx.execute(sql`UPDATE control.cost_ledger SET cost_micro_usd = ${amount.toString()},
+        operation = 'decision', provider_id = ${receipt.evaluator!.providerId}, model_id = ${receipt.servedModelId ?? 'unknown'},
+        pricing_version = ${priceRevision}, attempts = ${attempts}::jsonb,
         input_tokens = ${inputTokens}, output_tokens = ${outputTokens}, total_tokens = ${receipt.usage.tokens.total.value},
         result = ${result}, reconciliation_state = 'reconciled' WHERE idempotency_key = ${receipt.callId}`);
     } else {
@@ -53,9 +57,7 @@ export const settleDecision = async (database: LedgerDatabase, cost: CostContext
           ${cost.workspaceId}, ${cost.tenantId}, 'decision', ${receipt.evaluator!.providerId},
           ${receipt.servedModelId ?? 'unknown'}, ${inputTokens}, ${outputTokens}, ${receipt.usage.tokens.total.value},
           ${amount.toString()}, ${principal.kind}, ${principal.key}, ${hold.budget_strategy_id}, ${priceRevision},
-          ${result}, ${hold.id}, ${hold.quote_ref}, ${state}, ${JSON.stringify([{ attempts: receipt.attempts,
-            evaluator: receipt.evaluator, servedEvaluator: receipt.servedEvaluator, cost: receipt.cost,
-            usage: receipt.usage, experimental: receipt.experimental === true }])}::jsonb)`);
+          ${result}, ${hold.id}, ${hold.quote_ref}, ${state}, ${attempts}::jsonb)`);
     }
     await lockBudgets(tx, hold.budget_ids);
     const open = ['held', 'dispatched'].includes(hold.status);
