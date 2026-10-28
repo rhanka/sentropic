@@ -101,6 +101,14 @@ spec:
                 name: api
             - secretRef:
                 name: sentropic-api
+          # FIRST-IMMO/W3.e/W5 gate: image, config and secret updates stay closed.
+          env:
+            - name: APP_ARTIFACT_HOST_ENABLED
+              value: "0"
+            - name: APP_ARTIFACT_CONTENT_ENABLED
+              value: "0"
+            - name: APP_ARTIFACT_READER_ENABLED
+              value: "0"
           ports:
             - name: http
               containerPort: 8787
