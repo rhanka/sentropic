@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM node:24-alpine3.23 AS base
+FROM node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2 AS dependencies
 # Security: Pin npm to a known-good version (reproducible build) to fix glob vulnerabilities in npm dependencies
 RUN npm install -g npm@11.16.0
 # Security: Patch npm's bundled brace-expansion for CVE-2026-102276 / CVE-2026-102278
@@ -103,6 +103,8 @@ RUN if [ -f package-lock.json ]; then npm ci --workspaces --include-workspace-ro
 # (GHSA allowlist + expiry) — see .security/audit-gate.mjs + vulnerability-register.yaml.
 COPY .security/audit-gate.mjs .security/audit-allowlist.json ./.security/
 RUN node .security/audit-gate.mjs --omit=dev --workspaces --include-workspace-root
+
+FROM dependencies AS base
 # Explicit production inputs only (fix/api-image-canonical-artifact): no blind
 # `COPY . .`, so unhashed sources (ui/**, e2e suites, non-consumed packages)
 # can never perturb the canonical tag. Every source below is hashed into
@@ -164,7 +166,8 @@ RUN mkdir -p /patched && \
 
 # CI runners retain npm, devDependencies, test sources and built workspaces.
 # This target is a toolbox only; the production target is the shipped SUT.
-FROM development AS ci-tools
+# Keep npm/esbuild preparation independent of source-dependent workspace builds.
+FROM dependencies AS ci-tool-base
 COPY --from=ci-esbuild /patched /patched
 RUN test "$(node -p "require('/workspace/node_modules/esbuild/package.json').version")" = 0.19.12 && \
     test "$(node -p "require('/workspace/node_modules/@esbuild-kit/core-utils/node_modules/esbuild/package.json').version")" = 0.18.20 && \
@@ -186,14 +189,30 @@ RUN mkdir -p /tmp/tool-npm-patches && \
       tar -xzf "/tmp/tool-npm-patches/$package-$version.tgz" --strip-components=1 \
         -C "/usr/local/lib/node_modules/npm/node_modules/$package" || exit 1; \
     done && rm -rf /tmp/tool-npm-patches /root/.npm
-RUN apk add --no-cache chromium && \
-    npm --prefix /workspace/e2e ci --ignore-scripts
+
+# Non-browser API checks need no Chromium or duplicate Playwright installation.
+# The screen smoke uses the separately qualified E2E image's browser instead.
+FROM node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2 AS ci-tools
+WORKDIR /workspace
+# Copy the prepared filesystem, not the install/cache history of its layers.
+RUN rm -rf /usr/local/lib/node_modules/npm
+COPY --from=ci-tool-base /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+COPY --from=ci-tool-base /workspace/node_modules /workspace/node_modules
+COPY --from=ci-tool-base /workspace/package.json /workspace/package-lock.json /workspace/
+COPY --from=ci-tool-base /workspace/ui /workspace/ui
+COPY --from=ci-tool-base /workspace/.security /workspace/.security
+COPY --from=base /workspace/api /workspace/api
+COPY --from=base /workspace/packages /workspace/packages
+COPY --from=base /workspace/apps /workspace/apps
+COPY --from=base /workspace/e2e /workspace/e2e
+WORKDIR /workspace/api
+CMD ["npm", "run", "dev"]
 
 # BR-39 deploy (D4-a) — IdP screens build stage. Self-contained, mirrors
 # apps/auth-idp/web/Dockerfile (NOT a root workspace member; pulls @sentropic/auth-ui
 # via the relative `file:` dependency). Output: apps/auth-idp/web/build, COPYed into
 # the production stage so the SAME api image can serve the IdP login/consent screens.
-FROM node:24-alpine3.23 AS idp-web-build
+FROM node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2 AS idp-web-build
 WORKDIR /workspace
 COPY packages/auth-ui ./packages/auth-ui
 COPY apps/auth-idp/web/package.json apps/auth-idp/web/package-lock.json* ./apps/auth-idp/web/
@@ -226,12 +245,18 @@ RUN npx esbuild ../apps/auth-idp/index.ts \
     --external:isolated-vm --external:docx --external:pptxgenjs --external:zod \
     --external:@aws-sdk/* --external:@smithy/* --sourcemap
 
-FROM base AS production
+FROM base AS production-dependencies
 WORKDIR /workspace
 ENV NODE_ENV=production
 RUN npm prune --omit=dev --workspaces --include-workspace-root
 # Exception-aware gate (inherits .security/ from the base stage's COPY . .).
 RUN node .security/audit-gate.mjs --omit=dev --workspaces --include-workspace-root
+
+# A fresh runtime omits deleted devDependencies and npm download-cache layers.
+FROM node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2 AS production
+WORKDIR /workspace
+ENV NODE_ENV=production
+COPY --from=production-dependencies /workspace /workspace
 # Runtime entrypoints and boot migrations use Node directly, never npm/npx.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /root/.npm && \
     ! command -v npm && ! command -v npx && test ! -e /root/.npm
