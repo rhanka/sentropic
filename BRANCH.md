@@ -49,6 +49,7 @@
   - [x] Add installed consumer routing with source-free runtime/assets, remove unconditional skips, and add a separate Stage B CI lane; qualification remains pending until all behaviors pass.
   - [x] First installed run: 16/23 behaviors pass; fix adapter Number narrowing using E2 U64AtomicUnit, align fixture store identity, and exercise bijection after releasing the live holder. No Engram change identified.
   - [ ] Replace fixture handle with shipped factory; run durable-memory.spec.ts (all 23 behaviors) from a clean packed consumer with real PostgreSQL, including independent crash/ownership processes.
+  - [x] Installed dev.7 run d1726c309: 23 behaviors + inventory pass, zero skip/todo; stage-b.status exit=0 cleanup=0; archive SHA-256 7aeb92cf…395e271. Retain JSON result and exact archive for tuple binding.
   - [ ] Stop and write exact Engram-owner request if a producer change is required; never promote a blocked profile.
 - [ ] **Lot E11b-1 — Package and tuple**
   - [ ] Pack dev.7 with standalone neutral declaration; bind slot 15 SHA-256 and derive neutralContract.status from slot 15.
@@ -57,6 +58,7 @@
   - [ ] Regenerate/check/test tuple, retain archive and SHA-256 in shared e10-artifacts; C9 request explicitly names dff737ce → dd0cccbd under 1.0.0.
 - [ ] **Lot E11b-2 — Validation and draft PR**
   - [ ] Typecheck/lint affected cluster-mesh paths; memory-e11-test and memory-e11-check run in CI.
+  - [x] Vendor historical input inventory excerpt, reservation and producer record so CI needs no owner-local Markdown files; these records do not promote current qualification.
   - [ ] Draft PR to feat/engram-e2-integration; completed/success exact-head CI retained externally; no merge/publication.
 - [x] **Lot E11-4 — Integration refresh**
   - [x] Diagnose run 40741738278: common lane fails resolving AWS core ^3.978.7 at 18:45:38 UTC; registry publication occurred at 18:47:57 UTC. Unmodified common target passes locally (11 tests).
