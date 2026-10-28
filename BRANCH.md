@@ -58,6 +58,7 @@
   - [ ] api/tests/unit/auth/remote-evidence.test.ts: repeated actions/switch, logout/revoke/expiry, wrong sid/version/MFA/audience/key, replay and workload separation.
   - [ ] Closed EvidenceRequest; issuer-derived identity and original authentication time; per-operation EdDSA evidence with pinned audiences.
 - [ ] **Lot 2 — Consent and authorization, RED then GREEN**
+  - [x] api/tests/unit/auth/remote-native-proof.test.ts authored for exact current CLI proof and substitution/expiry/key refusals.
   - [ ] api/tests/unit/auth/remote-authority.test.ts: owner-only, exact workspace membership/role/scopes/consent/epoch, signed attestation, source/read separation.
   - [ ] Separate IdP/app/mesh key and workload references; current native-proof port; no per-action MFA or new unlock.
 - [ ] **Lot 3 — Internal IdP composition, RED then GREEN**
