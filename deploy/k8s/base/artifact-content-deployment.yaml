@@ -29,6 +29,7 @@ spec:
         runAsNonRoot: true
         runAsUser: 1000
         runAsGroup: 1000
+        fsGroup: 1000
         seccompProfile:
           type: RuntimeDefault
       containers:
@@ -92,7 +93,7 @@ spec:
           secret:
             secretName: artifact-content-signing
             optional: true
-            defaultMode: 0444
+            defaultMode: 0440
             items:
               - key: key
                 path: key
