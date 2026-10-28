@@ -27,6 +27,7 @@ node_modules/
 api/dist/
 api/.tsbuildinfo
 packages/*/dist/
+packages/cowork-desktop/build/
 api/templates/.~lock*
 ui/build/
 ui/.svelte-kit/
