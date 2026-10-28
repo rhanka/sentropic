@@ -47,18 +47,6 @@
   - `.track/**`
   - `plan/NN-BRANCH_*.md`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.dockerignore` (BR822-EX4: inherited main merge only)
-  - `api/Dockerfile` (BR822-EX4: inherited main merge only)
-  - `e2e/Dockerfile` (BR822-EX4: inherited main merge only)
-  - `ui/Dockerfile` (BR822-EX4: inherited main merge only)
-  - `e2e/tests/07_comment_assistant.spec.ts` (BR822-EX4: inherited main merge only)
-  - `plan/64-BRANCH_perf-ci-image-artifacts.md` (BR822-EX4: inherited main merge only)
-  - `scripts/check-ci-version-filters.sh` (BR822-EX4: inherited main merge only)
-  - `scripts/ci/ci-expected-results.test.mjs` (BR822-EX4: inherited main merge only)
-  - `scripts/ci/image-receipt.mjs` (BR822-EX4: inherited main merge only)
-  - `scripts/ci/image-receipt.test.mjs` (BR822-EX4: inherited main merge only)
-  - `scripts/test-api-tooling.sh` (BR822-EX4: inherited main merge only)
-  - `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md` (BR822-EX4: inherited main merge only)
   - `Makefile` (BR822-EX3: Decision secret names only)
   - `docker-compose.yml` (BR822-EX3: Decision environment names only)
   - `deploy/k8s/base/30-api.yaml` (BR822-EX3: optional Decision secret references only)
@@ -69,7 +57,8 @@
 
 ## Feedback Loop
 - [x] H1-R1-MERGE — Retain both manual workflow inputs, guarded inherited secrets, main's image cache configuration and the Decision plan while merging c8ec01237; no Track writes.
-- [x] BR822-EX4 — Merge origin/main c8ec01237 to resolve the workflow conflict blocking pull_request CI; no rebase. Impact: inherit the already reviewed CI-image changes, retain Decision guards and this plan; integration-only paths above permit no authored edits. Rollback: revert the merge. Parent Track logs are byte-identical; verify event containment before committing; acceptance writes remain with the designated conductor.
+- [x] BR822-EX4 — Merged origin/main c8ec01237 in 93de7e1ee to resolve the workflow conflict blocking pull_request CI; no rebase. Impact: inherited reviewed CI-image changes, retained Decision guards and this plan; temporary integration allowances removed. Rollback: revert the merge. Both parent event logs retain all 370 event IDs; acceptance writes remain with the designated conductor.
+- [x] H1-R1-CI-03 — Full endpoints shard reproduced absent Compose profile becoming an invalid empty profile (five Decision route assertions). Pass DECISION_EXECUTION_PROFILE by name: Compose config verifies absence remains unset, preserving production refusal; explicit empty/unknown values remain unavailable. All 136 wiring tests pass; full PR rerun remains H1-R1-F1.
 - [x] H1-R1-CI-02 — Full PR run 40735442415 reproduced three cluster-mesh tuple mismatches: frozen 0.32.0 vs candidate 0.32.1. Aligned the test tuple and selected lock to the guarded candidate archive; all 1,228 locally enabled cluster-mesh tests passed (138 environment-dependent skips). Integrity enforcement and every gate retained.
 - [x] BR822-EX3 — Owner-requested Decision provisioning in Compose, k8s-bundle-secret and the API env template. Impact: pass JEV_API_KEY and DECISION_EXECUTION_PROFILE by name only; missing values stay unavailable, production refuses; no deployment or credential provisioning. Rollback: remove these two entries/references from each surface.
 - [x] H1-R1-F2 — Exclude fixture dispatch from deployment, release verification and inherited secrets; main dispatch regression reproduced deployment access, then all 135 workflow wiring tests passed without weakening ordinary gates.
