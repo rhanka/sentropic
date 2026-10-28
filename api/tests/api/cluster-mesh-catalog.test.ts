@@ -1,6 +1,6 @@
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { and, eq } from 'drizzle-orm';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -13,7 +13,7 @@ import { db } from '../../src/db/client';
 import { chatMessages, chatSessions, tenantMemberships, userSessions } from '../../src/db/schema';
 import { resolveHttpCatalogContext } from '../../src/services/catalog/request-authority';
 import { revalidateCatalogInvocation } from '../../src/services/catalog/request-context';
-import { resolveFoundationChatTools, executeFoundationSearchCatalog } from '../../src/services/skills/catalog';
+import { compositeCatalogRegistry, resolveFoundationChatTools, executeFoundationSearchCatalog } from '../../src/services/skills/catalog';
 import { productArtifactTransport } from '../../src/services/artifacts/instance';
 import { testCatalogContext } from '../services/catalog/test-context';
 import { chatService } from '../../src/services/chat-service';
@@ -144,6 +144,8 @@ describe('cluster mesh catalog product authority', () => {
     const [session] = await db.select().from(userSessions).where(eq(userSessions.userId, user.id));
     const context = await resolveHttpCatalogContext({ userId: user.id, sessionId: session.id,
       workspaceId: user.workspaceId!, role: 'editor' });
+    expect(compositeCatalogRegistry.getSources(context).filter(source => source.kind === 'mcp')
+      .map(source => source.id)).toEqual(['host-registry']);
     const names = [...(await productArtifactTransport.ready).tools.keys()];
     const response = await authenticatedRequest(productApp, 'GET',
       '/api/v1/catalog/entries?sourceId=host-registry', user.sessionToken!);
@@ -346,5 +348,14 @@ describe('cluster mesh catalog product authority', () => {
       new URL('../../src/routes/namespaces/catalog-product-ports.ts', import.meta.url), 'utf8',
     );
     expect(productPorts).not.toMatch(/execution-seam|resource-plane|connector-host|mcp-source/);
+  });
+
+  it('should contain no legacy MCP source, sanitizer or registration entry point', () => {
+    const sources = new URL('../../src/services/catalog/sources/', import.meta.url);
+    const contents = readdirSync(sources).filter(file => file.endsWith('.ts'))
+      .map(file => readFileSync(new URL(file, sources), 'utf8')).join('\n');
+    expect(contents).not.toMatch(/McpCatalogSource|sanitizeMcpToolName/);
+    const facade = readFileSync(new URL('../../src/services/skills/catalog.ts', import.meta.url), 'utf8');
+    expect(facade).not.toMatch(/registerMcpSource|mcp-source/);
   });
 });

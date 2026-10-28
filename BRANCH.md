@@ -16,10 +16,14 @@
   - `BRANCH.md`
   - `api/src/services/catalog/sources/host-registry-source.ts`
   - `api/src/services/catalog/request-authority.ts`
+  - `api/src/services/catalog/execution-seam.ts`
+  - `api/src/services/catalog/sources/mcp-source.ts`
+  - `api/src/services/catalog/sources/standalone-tool-source.ts`
   - `api/src/services/skills/catalog.ts`
   - `api/src/services/chat-service.ts`
   - `api/src/services/artifacts/credentials.ts`
   - `api/tests/services/catalog/host-registry-source.spec.ts`
+  - `api/tests/services/catalog/mcp-source.spec.ts`
   - `api/tests/services/catalog/host-registry-turn.integration.test.ts`
   - `api/tests/api/cluster-mesh-catalog.test.ts`
   - `api/tests/api/artifacts-host-credentials.test.ts`
@@ -40,6 +44,9 @@
 - [x] Record rationale, impact and rollback in Feedback Loop before expansion.
 
 ## Feedback Loop
+- [x] BR-W4B-EX3: retire the unused sanitizing MCP source and its tests, move ToolHandlerSource to execution-seam.ts, remove runtime registration and correct standalone-source comments. Rationale: W4.b requires one compiled-registry MCP source and the owner forbids legacy fallback. Impact: removes dormant exports only; production uses host-registry. Rollback: revert this bounded retirement series, restoring the old files and wiring together.
+- [x] P2-1: intended W4.a boundary: turn effects are bound to conversation + current account/tenant/workspace membership, not login-session liveness; logout or login-session expiry does not revoke a running turn. Conversation deletion/move, disabled account and membership revocation still deny effects. W3.a/W5.c may tighten this separately; no session policy change in W4.b.
+- [ ] P1 revision: guard the sole MCP source and remove the legacy source/tests in atomic commits below 150 changed lines, then rerun exact-head qualification.
 - [x] BR-W4B-EX1: integration PRs do not trigger ci.yml. Add branch-specific exact-head qualification using existing make targets and teardown, without publication/deployment. Rollback removes workflow.
 - [x] Exact-head CI workflow authored with catalog, context, credential, registry, installation and HTTP/MCP regression suites, API types/lint and unconditional isolated-stack teardown.
 - [x] Acceptance tests committed before implementation (`a91ca8139`, `02d74a6b3`); initial execution queued behind the machine-wide Docker lock. Implemented source and workspace-bound turn reader while awaiting the serialized test lane; no observed red result claimed.
