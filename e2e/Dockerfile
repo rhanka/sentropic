@@ -8,13 +8,16 @@ ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 RUN npm install -g npm@11.16.0 && \
     mkdir -p /tmp/npm-patches && \
     for dependency in brace-expansion@5.0.12 undici@6.29.1 http-cache-semantics@4.3.0 \
-      glob@11.1.0 tar@7.5.22 minimatch@10.2.4 ip-address@10.3.1 pacote@21.5.1; do \
+      glob@11.1.0 tar@7.5.22 minimatch@10.2.4 ip-address@10.3.1 pacote@21.5.1 picomatch@4.0.4; do \
       package="${dependency%@*}"; version="${dependency##*@}"; \
+      destination="/usr/local/lib/node_modules/npm/node_modules/$package"; \
+      if [ "$package" = picomatch ]; then \
+        destination=/usr/local/lib/node_modules/npm/node_modules/tinyglobby/node_modules/picomatch; \
+      fi; \
       npm pack "$dependency" --pack-destination /tmp/npm-patches && \
-      rm -rf "/usr/local/lib/node_modules/npm/node_modules/$package" && \
-      mkdir -p "/usr/local/lib/node_modules/npm/node_modules/$package" && \
+      rm -rf "$destination" && mkdir -p "$destination" && \
       tar -xzf "/tmp/npm-patches/$package-$version.tgz" --strip-components=1 \
-        -C "/usr/local/lib/node_modules/npm/node_modules/$package" || exit 1; \
+        -C "$destination" || exit 1; \
     done && rm -rf /tmp/npm-patches /root/.npm
 
 COPY package.json package-lock.json ./

@@ -1797,6 +1797,7 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: security-container-results
+          include-hidden-files: true
           path: |
             .security/container-*.json
             .security/container-*-parsed.yaml
