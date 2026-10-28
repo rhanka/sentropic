@@ -1171,3 +1171,143 @@ describe('chat-loop-controller: host lifecycle (slice 1D)', () => {
 
     await ctrl.setFeedback('a1', 'down');
 
+    expect(calls.setFeedback).toEqual([{ messageId: 'a1', vote: 'down' }]);
+    const msg = ctrl.getSnapshot().messages.find((m) => m.id === 'a1') as Msg & { feedbackVote?: number | null };
+    expect(msg?.feedbackVote).toBe(-1);
+  });
+
+  it('10k-clear: setFeedback(clear) calls host and patches feedbackVote=null', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    const { transport, calls } = makeFakeTransport();
+    ctrl.attachHost({ transport });
+    ctrl.setMessages([assistantMsg('a1', { _localStatus: 'completed', feedbackVote: 1 } as Partial<Msg>)]);
+
+    await ctrl.setFeedback('a1', 'clear');
+
+    expect(calls.setFeedback).toEqual([{ messageId: 'a1', vote: 'clear' }]);
+    const msg = ctrl.getSnapshot().messages.find((m) => m.id === 'a1') as Msg & { feedbackVote?: number | null };
+    expect(msg?.feedbackVote).toBeNull();
+  });
+
+  // 10l. send/retry/stop/edit/setFeedback throw when no transport attached
+  it('10l: lifecycle methods throw when no transport is attached', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    ctrl.attachStream({
+      streamClient: makeFakeStreamClient(),
+      pollJob: makeFakePollJob(['completed']),
+    });
+
+    await expect(
+      ctrl.send({ content: 'x' }, {
+        buildUserMessage: () => userMsg('u1'),
+        buildAssistantMessage: makeFactory(),
+      }),
+    ).rejects.toThrow(/no host transport/);
+
+    await expect(ctrl.retry('u1', {
+      providerId: 'openai',
+      model: 'gpt-4',
+      buildAssistantMessage: makeFactory(),
+    })).rejects.toThrow(/no host transport/);
+
+    await expect(ctrl.stop('msg-1')).rejects.toThrow(/no host transport/);
+    await expect(ctrl.edit('msg-1', 'x')).rejects.toThrow(/no host transport/);
+    await expect(ctrl.setFeedback('msg-1', 'up')).rejects.toThrow(/no host transport/);
+  });
+
+  // 10m. bootstrapRun result exposes assistantMessage for app-side scroll/checkpoint
+  it('10m: bootstrapRun returns the assistantMessage so app can use it for scroll/checkpoint', () => {
+    const ctrl = createChatLoopController<Msg>();
+    ctrl.attachStream({
+      streamClient: makeFakeStreamClient(),
+      pollJob: makeFakePollJob(['completed']),
+      pollInitialDelayMs: 0,
+      pollIntervalMs: 0,
+    });
+
+    const result = ctrl.bootstrapRun({
+      sessionId: 'sess-m',
+      assistantMessageId: 'a-m',
+      streamId: 'stream-m',
+      jobId: 'job-m',
+      buildAssistantMessage: makeFactory('gpt-m'),
+    });
+
+    expect(result.assistantMessage.id).toBe('a-m');
+    expect(result.assistantMessage._streamId).toBe('stream-m');
+    expect(result.assistantMessage._localStatus).toBe('processing');
+    expect(result.handle.sessionId).toBe('sess-m');
+    expect(result.handle.jobId).toBe('job-m');
+  });
+
+  // 10n. send golden: full orchestration — user+assistant ids match host response
+  it('10n: send golden — full orchestration matches host-returned ids', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    const { transport } = makeFakeTransport({
+      sendMessageResponse: {
+        sessionId: 'sess-gold',
+        userMessageId: 'u-gold',
+        assistantMessageId: 'a-gold',
+        streamId: 'stream-gold',
+        jobId: 'job-gold',
+      },
+    });
+    ctrl.attachHost({ transport });
+    ctrl.attachStream({
+      streamClient: makeFakeStreamClient(),
+      pollJob: makeFakePollJob(['completed']),
+      pollInitialDelayMs: 0,
+      pollIntervalMs: 0,
+    });
+
+    const { handle, assistantMessage } = await ctrl.send(
+      { content: 'golden test' },
+      {
+        buildUserMessage: (h) => userMsg(h.userMessageId, 'golden test'),
+        buildAssistantMessage: makeFactory('gpt-gold'),
+      },
+    );
+
+    // Handle matches host response
+    expect(handle.sessionId).toBe('sess-gold');
+    expect(handle.userMessageId).toBe('u-gold');
+    expect(handle.assistantMessageId).toBe('a-gold');
+    expect(handle.streamId).toBe('stream-gold');
+    expect(handle.jobId).toBe('job-gold');
+
+    // Assistant message has the correct ids
+    expect(assistantMessage.id).toBe('a-gold');
+    expect(assistantMessage._streamId).toBe('stream-gold');
+    expect(assistantMessage._localStatus).toBe('processing');
+
+    // Both messages in the list
+    const msgs = ctrl.getSnapshot().messages;
+    expect(msgs.map((m) => m.id)).toEqual(['u-gold', 'a-gold']);
+  });
+
+  // 10o. buildAssistantMessage receives correct sessionId from bootstrapRun input
+  it('10o: buildAssistantMessage factory receives sessionId from the handle', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    const { transport } = makeFakeTransport({
+      sendMessageResponse: { sessionId: 'sess-factory', userMessageId: 'u1', assistantMessageId: 'a1', streamId: 's1', jobId: 'j1' },
+    });
+    ctrl.attachHost({ transport });
+    ctrl.attachStream({
+      streamClient: makeFakeStreamClient(),
+      pollJob: makeFakePollJob(['completed']),
+      pollInitialDelayMs: 0,
+      pollIntervalMs: 0,
+    });
+
+    let capturedSessionId = '';
+    await ctrl.send({ content: 'x' }, {
+      buildUserMessage: (h) => userMsg(h.userMessageId),
+      buildAssistantMessage: (base) => {
+        capturedSessionId = base.sessionId;
+        return { ...base } as Msg;
+      },
+    });
+
+    // The factory must receive the real sessionId from the host response.
+    expect(capturedSessionId).toBe('sess-factory');
+  });
