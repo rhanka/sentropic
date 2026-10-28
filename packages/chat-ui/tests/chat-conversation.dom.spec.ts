@@ -47,7 +47,9 @@ it('should preserve feature defaults and render optional modules only when enabl
   expect(region.getAttribute('data-feature-steer')).toBe('false');
 });
 
-    // Timeline is present
-    expect(container.querySelector('.chat-conversation-timeline')).not.toBeNull();
-  });
+it('should use the injected label resolver', async () => {
+  const host = await fixture();
+  const view = render(ConversationView, { runtime: host.runtime,
+    labels: (key) => key === 'chat.composer.send' ? 'Send message' : key });
+  expect(view.getByRole('button', { name: 'Send message' })).toBeTruthy();
 });
