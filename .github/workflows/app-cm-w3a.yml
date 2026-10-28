@@ -33,7 +33,7 @@ jobs:
       - name: Qualify reader authority and shared activation vectors
         run: >-
           flock /tmp/sentropic-docker.lock make test-api-endpoints
-          SCOPE="tests/api/artifacts-reader-activation.test.ts tests/api/artifacts-host-activation-store.test.ts tests/api/artifacts-host-publication.test.ts tests/api/app-artifacts-transport.test.ts tests/api/app-mcp-registry.test.ts"
+          SCOPE="tests/api/artifacts-reader-activation.test.ts tests/api/artifacts-host-activation-store.test.ts tests/api/artifacts-host-publication.test.ts tests/api/app-artifacts-transport.test.ts tests/api/app-mcp-registry.test.ts tests/api/cluster-mesh-resources.test.ts tests/api/cluster-mesh-namespace-inventory.test.ts tests/api/cluster-mesh-session.test.ts tests/unit/auth/session-manager.test.ts"
           API_TEST_WORKERS=1 API_TEST_ARGS="--no-file-parallelism"
           ENV=test-app-w3a
       - name: Check API types and lint
