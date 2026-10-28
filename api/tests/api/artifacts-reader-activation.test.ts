@@ -222,9 +222,11 @@ describe('trusted app reader activation', () => {
     const issued = await reader().issue(session, target);
     const uncertain = { query: pool.query.bind(pool), async connect() {
       const client = await pool.connect();
+      let consumed = false;
       return { async query(sql: string, values?: unknown[]) {
         const result = await client.query(sql, values);
-        if (sql === 'COMMIT') throw new Error('injected commit acknowledgement loss');
+        if (sql.includes('DELETE FROM artifact_host.activation_tickets t')) consumed = true;
+        if (sql === 'COMMIT' && consumed) throw new Error('injected commit acknowledgement loss');
         return result;
       }, release(destroy?: boolean) { client.release(destroy); } };
     } } as unknown as Pool;
