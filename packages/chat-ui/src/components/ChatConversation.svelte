@@ -27,12 +27,12 @@
   } from '../hosts/createWebHost.js';
   import type { ChatContextProvider } from '../state/chat-context.js';
   import type { RendererRegistry } from '../renderers/registry.js';
-  import type { ModelCatalogGroup, ModelCatalogModel } from '../utils/model-selection.js';
-  import type { ControllerHostTransport, ControllerRunHandle } from '../state/chatLoopController.js';
+  import type { ModelCatalogGroup, ModelCatalogModel } from '@sentropic/chat-runtime/utils/model-selection';
+  import type { ControllerHostTransport, ControllerRunHandle } from '@sentropic/chat-runtime/state/chatLoopController';
 
   import { onDestroy } from 'svelte';
-  import { createChatLoopController } from '../state/chatLoopController.js';
-  import { isLocalToolName } from '../stores/localTools.js';
+  import { createChatLoopController } from '@sentropic/chat-runtime/state/chatLoopController';
+  import { isLocalToolName } from '@sentropic/chat-runtime/stores/localTools';
   import { createRendererRegistry } from '../renderers/registry.js';
 
   import ChatPanel from './ChatPanel.svelte';
@@ -44,7 +44,7 @@
   import StreamMessage from './StreamMessage.svelte';
 
   import type { ChatContextEntry } from '../state/chat-context.js';
-  import type { ChatProjectedTimelineItem } from '../state/chatProjection.js';
+  import type { ChatProjectedTimelineItem } from '@sentropic/chat-runtime/state/chatProjection';
 
   // ---------------------------------------------------------------------------
   // Feature flags type — all default OFF except steer/retry/stop
