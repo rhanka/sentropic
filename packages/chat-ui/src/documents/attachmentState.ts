@@ -75,7 +75,7 @@ export function composerAttachmentListReducer(
 // buildSentAttachments
 // ---------------------------------------------------------------------------
 
-import type { ChatMessageAttachment } from '../state/chatProjection.js';
+import type { ChatMessageAttachment } from '@sentropic/chat-runtime/state/chatProjection';
 
 /**
  * Build the array of ChatMessageAttachment[] to send with a chat message.

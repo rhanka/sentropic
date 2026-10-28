@@ -2,7 +2,7 @@ import type { Component, Snippet } from 'svelte';
 import type { CommentHost } from '../comments/host.js';
 import type { CommentThreadSummary } from '../comments/types.js';
 import type { ChatGeneratedFileCard } from '../documents/generated-file-cards.js';
-import type { ChatProjectedTimelineItem } from '../state/chatProjection.js';
+import type { ChatProjectedTimelineItem } from '@sentropic/chat-runtime/state/chatProjection';
 
 export type ChatPanelShellTimelineItem = ChatProjectedTimelineItem<any, any>;
 
