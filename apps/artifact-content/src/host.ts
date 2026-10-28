@@ -101,6 +101,7 @@ export function createContentHost(options: ContentHostOptions) {
     const result = await handler.handle({ method: request.method, host: url.host,
       path: url.pathname, cookie: request.headers.get('cookie') ?? undefined });
     if (result.status === 200) {
+      if (origin.kind === 'stable' && (await options.publication.getCurrent(origin.artifactId))?.releaseId !== claims.releaseId) return fail(401);
       try { options.grants.verify(token); } catch { return fail(401); }
       if (!options.enabled() || !await options.current(claims)) return fail(404);
     }
@@ -108,6 +109,8 @@ export function createContentHost(options: ContentHostOptions) {
       { status: result.status, headers: result.headers });
   }
   return { async fetch(request: Request) {
-    try { return await fetch(request); } catch { return fail(500); }
+    let response: Response;
+    try { response = await fetch(request); } catch { response = fail(500); }
+    return request.method === 'HEAD' ? new Response(null, { status: response.status, headers: response.headers }) : response;
   } };
 }
