@@ -48,13 +48,7 @@
     uploadDocument,
     type ContextDocumentItem,
   } from '$lib/utils/documents';
-  import {
-    createComposerAttachmentId,
-    buildAttachmentBandItems,
-    buildSentAttachments,
-    handleComposerPasteImages,
-    composerAttachmentListReducer,
-  } from '@sentropic/chat-ui/documents';
+  import { createComposerAttachmentId, buildAttachmentBandItems, buildSentAttachments, handleComposerPasteImages, composerAttachmentListReducer } from '@sentropic/chat-runtime/documents';
   import type { UnifiedAttachmentItem, ChatGeneratedFileCard } from '@sentropic/chat-ui/documents';
   import { createDocumentHostAdapter } from '$lib/chat/documentHostAdapter';
   import {
@@ -66,10 +60,7 @@
   } from '$lib/utils/google-drive';
   import { openGoogleDrivePicker as openGoogleDrivePickerDialog } from '$lib/utils/google-drive-picker';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
-  import {
-    createContextModule,
-    type ContextModule,
-  } from '@sentropic/chat-ui/context';
+  import { createContextModule, type ContextModule } from '@sentropic/chat-runtime/context';
   import type { ChatContextEntry } from '@sentropic/chat-runtime/state/chat-context';
   import {
     createContextHost,

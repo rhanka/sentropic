@@ -1,3 +1,4 @@
+import { getGeneratedFileFormatLabel } from '@sentropic/chat-ui/documents';
 /**
  * documents/generatedFileCards.test.ts
  *
@@ -9,7 +10,6 @@ import {
   normalizeGeneratedFileCard,
   extractGeneratedFileCardsFromRuntimeSummary,
   extractGeneratedFileCardsFromEvents,
-  getGeneratedFileFormatLabel,
 } from '../src/documents/generatedFileCards.js';
 import type { ChatGeneratedFileCard } from '../src/documents/types.js';
 
