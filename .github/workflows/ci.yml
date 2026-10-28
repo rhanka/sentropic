@@ -270,6 +270,8 @@ jobs:
               - 'docker-compose.ci.yml'
               - 'tools/**'
               - 'scripts/test-api-tooling.sh'
+              - 'scripts/ci/image-receipt.mjs'
+              - 'scripts/ci/image-receipt.test.mjs'
               - 'scripts/publish-api-image.sh'
               - 'scripts/test-api-tag-guard.sh'
               - 'scripts/resolve-api-image.sh'
