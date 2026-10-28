@@ -37,7 +37,7 @@ export type StreamMessageTodoRuntimeUpdate = {
 };
 
 export type StreamMessageProps = {
-  streamClient: StreamMessageClient;
+  streamClient?: StreamMessageClient;
   labels?: StreamMessageLabelResolver;
   streamId: string;
   status: string | undefined;
