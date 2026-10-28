@@ -284,7 +284,7 @@ export const enrichOrganization = async (
 
   const finalStreamId = streamId || `organization_enrich_${Date.now()}`;
   const { content } = await executeWithToolsStream(prompt, {
-    model: model || 'gpt-4.1-nano',
+    model: model || 'gpt-5.4-nano',
     useWebSearch: true,
     useDocuments: !!opts?.useDocuments,
     documentsContext:

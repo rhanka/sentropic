@@ -64,7 +64,7 @@ describe('execution features (spec §16.3)', () => {
 
   it('defers unpinned targets to the plan-time account check', () => {
     // Quoting is account-independent (a superset): an unpinned target cannot
-    // be judged, so it stays. `selectRouteCandidates` enforces per account
+    // be decisiond, so it stays. `selectRouteCandidates` enforces per account
     // before acquisition.
     expect(transportSupportsExecutionFeatures(undefined, ['named-tool-choice'])).toBe(true);
   });

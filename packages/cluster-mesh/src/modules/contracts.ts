@@ -3,10 +3,14 @@ import type { ClusterMeshModuleUnavailableReason } from './errors.js';
 
 /** Provider modules delivered by this release, each with a static leaf and a loader. */
 export const CLUSTER_MESH_PROVIDER_MODULE_IDS = [
+  'speech',
   'llm-mesh',
   'llm-mesh/facade',
   'llm-mesh/enrollment',
   'llm-mesh/node',
+  'llm-mesh/decision',
+  'llm-mesh/decision/host',
+  'llm-mesh/transport/jev',
   'llm-mesh/transport/cloud-code',
   'gateway',
   'gateway/auth',

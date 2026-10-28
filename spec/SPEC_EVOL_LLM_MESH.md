@@ -834,3 +834,49 @@ Normative detail lives in `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md` §16.3/§
   council listing (owner request 2026-10-14); same `gemini-3.8-flash` pattern
   (`gemini-4-argon-low|medium|high` resolve per effort through the generic Cloud Code
   wire suffix, no transport change).
+
+## Generic Decision Capability (BR96 Evolution)
+
+V4-L5 adds exact criterion/policy readiness, explicit experimental qualification profiles,
+protocol-bound finite pricing, and deterministic offline assessment validation. Production
+admission requires contract, identity, billing, price, accessible transport and matching
+calibration independently; receipt v1 remains unchanged. Execution changes invalidate evidence,
+while evidence-only updates can qualify the same candidate digest. The public discovery surface
+never publishes universal readiness from a single passing rubric. See the
+[record/report contract and L6 handoff](decision/v4l5-qualification.md).
+
+Generic evaluation contracts, portable client execution, and trusted JEV hosting are established under `@sentropic/llm-mesh/decision`, `@sentropic/llm-mesh/decision/host`, and `@sentropic/llm-mesh/transport/jev` (pre-V4-L2 `judge` imports, §12 migration history).
+
+V4-L3 adds the separately registered `openai-decisions` backend through the existing host subpath and cluster
+Decision host loader. One mesh call emits one named native predicate/choice/score question to the fixed
+`https://api.openai.com/v1/decisions` endpoint. It never invokes Responses, Codex or a prompted fallback.
+The dated standard/no-cache tariff is $0.10/M input and no output charge, independently bound to the host's
+`control.model_pricing` protocol/revision. Explicit cache mode without breakpoints disables implicit caching;
+current GA documentation adds cache charges beyond the spec's earlier beta observation.
+Missing/duplicate/foreign answers, mismatched discriminators, typed-choice coercion, malformed usage and
+served identity mismatches refuse independently. A native refusal is a non-evaluation retaining valid usage.
+The JEV 1.13.0 discriminator correction preserves closed schemas and the pinned baseline.
+Both candidates remain unqualified; fixture conformance does not establish access, liability, identity or calibration.
+Dated source/qualification gaps live in [JEV](decision/jev-v4l3-candidate.md) and
+[OpenAI Decisions](decision/openai-v4l3-candidate.md) packets. OD-5 remains open; L4/L5/L6 remain separate lots.
+
+### 1. Phase-Aware Retryability & Advisory Hints
+- **Literal lifecycle phases**: Errors record the exact lifecycle phase: `preflight`, `admission`, `dispatch`, or `settlement`.
+- **Retryability rules**: Failures in `settlement` or after provider result are strictly non-retryable (`retryable: false`). Unknown wire error codes or phases fail closed as non-retryable `MESH_UNAVAILABLE` or `TRANSPORT_FAILED`.
+- **Advisory hint ceiling**: Backoff hints are purely advisory and capped at 60 seconds (60 000 ms). Hints exceeding 60s, non-finite values, or negative numbers are rejected or clamped.
+
+### 2. Strict Normalization & Input Validation
+- **Unsafe-key prohibition**: JSON payloads containing prototype pollution vectors (`__proto__`, `constructor`, `prototype`) are rejected across inputs, criteria, and decision configs.
+- **Canonical MicroUsd digit policy**: Currency amounts (`inputMicroUsdPerMtok`, `outputMicroUsdPerMtok`, `minimumMicroUsd`) must be canonical non-negative integer digit strings without fractions, signs, or exponents.
+- **Null-only candidate decision**: Candidate payloads support explicit null for `inputs.output` and `inputs.state` (output-only null, state-only null, or both null), preserving field presence. Absent or undefined fields fail closed with `REQUEST_INVALID`.
+
+### 3. Client & Server Deadline Semantics
+- **Client grace margin**: Client transport timeout strictly exceeds the server deadline by a 1 000 ms grace margin (default client timeout 11 000 ms for a 10 000 ms server deadline, capped at 61 000 ms for a 60 000 ms server deadline) when client-level `options.timeoutMs` is omitted or ≥ server timeout + 1 000 ms. If the caller provides an explicit `options.timeoutMs`, the client bounds effective timeout with `Math.min(options.timeoutMs, serverTimeout + 1 000)`.
+- **Semantics rationale**: The earlier conductor phrase "client deadline strictly below server" was erroneous; the client waits longer so the server's own timeout receipt and financial reconciliation can reach the client before client-side transport abort.
+- **Post-dispatch timeout**: If the server deadline expires during or after dispatch:
+  - If deadline expires before or during provider dispatch/settlement, the service persists a durable `TIMEOUT` receipt and records `TIMEOUT` in the settlement ledger.
+  - If deadline expires while persisting a settled verdict (persist completes after the deadline), the durable receipt and settlement ledger retain `verdict/settled`, while the returned receipt to the caller is mapped to `error/TIMEOUT` with `budget.state: 'pending-reconciliation'` and `retryable: false` sharing the same `callId`.
+
+### 4. Receipt Correlation Test-Only Scope
+- In lot 1.23 integration tests, `effectRef` (`receipt:${callId}:metadata`) is constructed by the test helper and echoed by the emitter, and dedup is provided by the mock port; the real surface under test is the deterministic `receiptId` and generation-policy refusal.
+- Production `effectRef` derivation and routing remain assigned to future host lot 2.08.
