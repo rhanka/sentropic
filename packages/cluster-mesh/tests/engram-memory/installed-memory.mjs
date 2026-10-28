@@ -6,7 +6,6 @@ import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { createHash, randomBytes } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
-import { createInstalledHostBridge } from './installed-host-bridge.mjs';
 
 const phase = process.argv[2];
 assert.ok(phase === 'write' || phase === 'reopen', 'usage: installed-memory.mjs write|reopen');
@@ -52,7 +51,7 @@ const meshPkg = JSON.parse(await readFile(
 const engramPkg = JSON.parse(await readFile(
   new URL('./node_modules/@sentropic/engram/package.json', import.meta.url), 'utf8'));
 assert.equal(engramPkg.version, '0.22.0');
-assert.equal(meshPkg.version, '0.24.0-dev.1', 'candidate mesh tarball version');
+assert.equal(meshPkg.version, '0.24.0-dev.2', 'candidate mesh tarball version');
 
 const pg = (await import('pg')).default;
 const meshMemory = await import('@sentropic/cluster-mesh/engram-memory');
@@ -190,20 +189,19 @@ const hostHistory = phase === 'write'
   ? await hostDriver.transaction({ readOnly: true, deadlineMs: 5000 }, (session) => history.read(session))
   : priorState.hostHistory;
 
-// Host wire bridge lives in the retained consumer file
-// installed-host-bridge.mjs (host-authored, not installed bytes).
-const kernelRef = { current: null };
-const bridge = createInstalledHostBridge({ meshMemory, hostDriver, schemaName, scope, binding, kernelRef });
-const handle = bridge.handle;
+// Memory is constructed only through the installed cluster-mesh export:
+// the fenced neutral handle comes from the installed bytes, with the host
+// driver, the assembled binding and the opened kernel injected.
+const kernel = await meshPg.createPostgresKernel({ ...registration, moduleId: 'engram-memory',
+  driver: provider.pool, layout, history, cursorSecret: 'installed-memory-secret',
+  canonicalOwnership: { leaseMs: 30000 } });
+const installed = meshMemory.createMemoryNeutralHandle({ kernel, binding, driver: hostDriver, schemaName, scope });
+const handle = installed.handle;
 const scopeBinding = { scope, store_id: storeId,
   resolveScope: (ref) => (ref === 'installed-memory-scope' ? scope : null) };
 let clockNow = '2026-10-27T00:00:00.000Z';
 let store;
 const openStore = async () => {
-  kernelRef.current = await meshPg.createPostgresKernel({ ...registration, moduleId: 'engram-memory',
-    driver: provider.pool, layout, history, cursorSecret: 'installed-memory-secret',
-    canonicalOwnership: { leaseMs: 30000 } });
-  const kernel = kernelRef.current;
   await kernel.bindNew(binding.memoryGrant);
   await kernel.bindNew(binding.maintainGrant);
   const opened = await substrate.openModuleStorageCanonicalMemoryStoreV1({ handle,
@@ -305,7 +303,7 @@ const operations = priorState?.operations ?? {};
 try {
   if (phase === 'write') {
     await openStore();
-    const fenceEpochWrite = bridge.getFence()?.epoch;
+    const fenceEpochWrite = installed.getFence()?.epoch;
     assert.ok(typeof fenceEpochWrite === 'string', 'write fence epoch retained');
     const engine = makeEngine();
     const captured = valueOf(await engine.capture(captureRequest));
@@ -339,7 +337,7 @@ try {
     const { captureProof, firstOutcome, journalBefore, original, captured, admitted, candidate } = priorState;
     clockNow = '2026-10-27T00:30:00.000Z';
     await openStore();
-    const fenceEpochReopen = bridge.getFence()?.epoch;
+    const fenceEpochReopen = installed.getFence()?.epoch;
     assert.ok(typeof fenceEpochReopen === 'string', 'reopen fence epoch retained');
     assert.equal(BigInt(fenceEpochReopen), BigInt(priorState.fenceEpochWrite) + 1n,
       'exact u64 epoch advance across processes');
@@ -385,11 +383,7 @@ const receipt = {
     fileListSha256: process.env.INSTALLED_MESH_FILELIST_SHA256 ?? null },
   p3ManifestSha256: P3_MANIFEST_SHA256,
   qualificationImage: process.env.INSTALLED_QUAL_IMAGE ?? null,
-  hostGlue: { file: 'installed-host-bridge.mjs',
-    sha256: await sha256File(new URL('./installed-host-bridge.mjs', import.meta.url)),
-    status: 'host-authored-not-installed',
-    derivedFrom: ['tests/engram-memory/memory-pg-host.ts', 'tests/engram-memory/memory-neutral.ts'],
-    tupleCoverage: 'partial' },
+  tupleCoverage: 'full',
   postgres: { serverVersion, image: process.env.INSTALLED_PG_IMAGE ?? null,
     driver: provider.identity, statements: (priorState?.statements ?? 0) + statements,
     transactions: (priorState?.transactions ?? 0) + transactions },
