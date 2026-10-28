@@ -21,6 +21,7 @@
   - `api/src/services/decision*.ts`
   - `api/src/services/llm-metering/decision*.ts`
   - `api/src/db/control-schema.ts`
+  - `api/vitest.config.ts`
   - `api/drizzle/control/*decision*.sql`
   - `api/drizzle/control/meta/_journal.json`
   - `api/tests/unit/decision*.test.ts`
@@ -58,7 +59,7 @@
   - [x] Create requested worktree and mechanically pass harness check branch.
   - [x] Record allowed paths, environment, ports and no-spend restriction.
 - [ ] **H1 — API host junction**
-  - [ ] Compose the Decision host lazily through cluster-mesh and add authenticated POST /api/v1/llm-mesh/decision.
+  - [x] Compose the Decision host lazily through cluster-mesh and add authenticated POST /api/v1/llm-mesh/decision.
   - [ ] Resolve verified workspace authorization and financial ownership outside caller JSON.
   - [ ] Reuse OPENAI_API_KEY; resolve the new JEV_API_KEY connection without logging secrets.
   - [ ] Implement durable Decision budget and receipt ports over llm-metering, including overrun disable and pending liability.
