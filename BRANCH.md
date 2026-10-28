@@ -39,7 +39,7 @@
 - [x] Lot 0: read W3.b row, sections 2/3/4/5, rules and template; mechanical branch check and port availability pass.
 - [x] Lot 1: acceptance tests committed before host implementation; execution pending the shared Docker lock.
 - [x] Runtime acceptance added first: real isolated PG, W3.a consume race, new process instance, membership/ACL denial and key rotation.
-- [ ] Lot 2: apps/artifact-content/src/{host,runtime,index}.ts reuse package content/PG/S3 ports and W3.a consume; no publication dispatcher.
+- [x] Lot 2: host/runtime/index reuse package content/PG/S3 ports and W3.a consume; separate default-closed listener, no publication dispatcher.
 - [x] Host/runtime implemented over upstream reads and W3.a; signing key and live authority are rechecked after blob waits.
 - [x] Listener tests added before entrypoint: default-closed real TCP request and enabled configuration refusal before listening.
 - [ ] Lot 3: typecheck/lint, focused content and W3.a regressions, HTTP listener smoke; scope checks; isolated teardown.
