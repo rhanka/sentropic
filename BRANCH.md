@@ -77,5 +77,5 @@
   - [ ] Complete independent harness review; reconcile findings in the evidence note.
   - [x] API/UI/E2E behavior tests: no test files changed; future adoption witness commands stay pending.
   - [x] Create draft PR to main with this exact file as body and add the 3–6 step plan comment.
-  - [ ] Verify CI completed/success at exact final head; report PR URL and head SHA.
+  - [x] Correction head `495a35734c8657a0bbf24e9c96c0b8ba6b736312`: [CI 40741239069](https://github.com/rhanka/sentropic/actions/runs/40741239069) completed/success, including ci-gate; receipt-only final head must also pass before handoff with PR URL and SHA.
   - [x] Leave BRANCH.md and branch intact for the draft handoff; no merge.
