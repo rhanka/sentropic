@@ -25,6 +25,8 @@ cp "$inputs/e10-artifacts/sentropic-engram-0.22.0.tgz" "$out/engram.tgz"
 cp "$inputs/e10-artifacts/sentropic-cluster-mesh-0.24.0-dev.5.tgz" "$out/mesh.tgz"
 cp "$inputs/RESERVATION.md" "$out/reservation.md"
 cp "$repo/.h2a/reviews/pr803_opus_r3.md" "$out/review-r3.md"
+cp "$inputs/evidence/engram-e2-format-README.md" "$out/format.md"
+cp "$inputs/validator/scripts/memory-mcp-e2-manifest.mjs" "$out/receiving-validator.mjs"
 # Retained closure only; preparation performs neither npm install nor qualification.
 cp -a "$repo/tmp/worktrees/mem-e10-fin/tmp/installed-memory-e10/consumer/node_modules" "$out/consumer/"
 cp "$repo/tmp/worktrees/mem-e10-fin/tmp/installed-memory-e10/consumer/"{installed-memory.mjs,installed-hydration.mjs,installed-memory-types.ts,package.json,package-lock.json} "$out/consumer/"

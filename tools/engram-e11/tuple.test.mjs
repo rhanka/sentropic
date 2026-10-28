@@ -66,6 +66,13 @@ test('should reproduce the actual candidate tuple with every file bound and all 
   assert.equal(canonical(first), canonical(second));
   assert.equal(verifyTuple(first, second), report(first).tupleSha256);
   assert.equal(first.slots.length, 21);
+  assert.equal(first.backend.sha256, first.files[first.backend.archive].sha256);
+  assert.equal(first.neutralContract.path, null);
+  assert.equal(first.neutralContract.version, '1.0.0');
+  assert.deepEqual(first.profiles, []);
+  assert.equal(first.requiredProfiles.length, 5);
+  assert.match(first.nodeImage, /^node:24-bookworm-slim@sha256:[a-f0-9]{64}$/);
+  assert(first.locks.every((lock) => first.files[lock.path].sha256 === lock.sha256));
   assert(first.slots.every((slot) => first.files[slot.file]));
   assert(first.slots.filter((slot) => slot.status === 'PENDING').every((slot) => slot.reason.length > 0));
   assert.equal(first.slots[14].observed.c6.finalBytesSha256, null);
