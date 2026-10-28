@@ -2151,3 +2151,143 @@ describe('chat-loop-controller: steer (slice 1F)', () => {
 const fakeCatalog = {
   providers: [
     { provider_id: 'openai', label: 'OpenAI', status: 'ready' as const },
+    { provider_id: 'gemini', label: 'Google Gemini', status: 'ready' as const },
+  ],
+  models: [
+    { provider_id: 'openai', model_id: 'gpt-4', label: 'GPT-4', default_contexts: [] },
+    { provider_id: 'openai', model_id: 'gpt-3.5-turbo', label: 'GPT-3.5', default_contexts: [] },
+    { provider_id: 'gemini', model_id: 'gemini-pro', label: 'Gemini Pro', default_contexts: [] },
+  ],
+  defaults: { provider_id: 'openai', model_id: 'gpt-4' },
+};
+
+describe('chat-loop-controller: model catalog (slice 1F)', () => {
+  // 13a. Providers + models + groups populated
+  it('13a: loadModelCatalog populates providers, models, and groups', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await ctrl.loadModelCatalog(async () => fakeCatalog);
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.modelCatalogProviders).toHaveLength(2);
+    expect(snap.modelCatalogModels).toHaveLength(3);
+    expect(snap.modelCatalogGroups).toHaveLength(2);
+    expect(snap.modelCatalogGroups[0]?.provider.provider_id).toBe('openai');
+    expect(snap.modelCatalogGroups[0]?.models).toHaveLength(2);
+    expect(snap.modelCatalogGroups[1]?.provider.provider_id).toBe('gemini');
+    expect(snap.modelCatalogGroups[1]?.models).toHaveLength(1);
+  });
+
+  // 13b. Selection defaults to catalog defaults
+  it('13b: loadModelCatalog sets selection to catalog defaults', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await ctrl.loadModelCatalog(async () => fakeCatalog);
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.selectedProviderId).toBe('openai');
+    expect(snap.selectedModelId).toBe('gpt-4');
+    expect(snap.defaultProviderIdForNewSession).toBe('openai');
+    expect(snap.defaultModelIdForNewSession).toBe('gpt-4');
+  });
+
+  // 13c. Coerce invalid selection to valid entry after catalog loads
+  it('13c: loadModelCatalog coerces invalid selection to first valid entry', async () => {
+    const ctrl = createChatLoopController<Msg>();
+
+    // Load catalog with a default that doesn't exist → should coerce to something valid
+    await ctrl.loadModelCatalog(async () => ({
+      ...fakeCatalog,
+      defaults: { provider_id: 'openai', model_id: 'nonexistent-model' },
+    }));
+
+    const snap = ctrl.getSnapshot();
+    // coerceSelectionToValidEntry: no exact match, no model match, provider match → first openai model
+    expect(snap.selectedProviderId).toBe('openai');
+    expect(['gpt-4', 'gpt-3.5-turbo']).toContain(snap.selectedModelId);
+  });
+
+  // 13d. setModelSelection updates selection
+  it('13d: setModelSelection updates selectedProviderId + selectedModelId', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await ctrl.loadModelCatalog(async () => fakeCatalog);
+
+    ctrl.setModelSelection('gemini', 'gemini-pro');
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.selectedProviderId).toBe('gemini');
+    expect(snap.selectedModelId).toBe('gemini-pro');
+  });
+
+  // 13e. applyUserDefaults: exact match → updates defaults + current (no session)
+  it('13e: applyUserDefaults(exact match, no session) updates defaults and current selection', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await ctrl.loadModelCatalog(async () => fakeCatalog);
+
+    ctrl.applyUserDefaults('gemini', 'gemini-pro', { sessionId: null });
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.defaultProviderIdForNewSession).toBe('gemini');
+    expect(snap.defaultModelIdForNewSession).toBe('gemini-pro');
+    expect(snap.selectedProviderId).toBe('gemini');
+    expect(snap.selectedModelId).toBe('gemini-pro');
+  });
+
+  // 13f. applyUserDefaults: model-only match → uses that entry's provider
+  it('13f: applyUserDefaults with model-only match uses the entry provider', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await ctrl.loadModelCatalog(async () => fakeCatalog);
+
+    // gpt-4 is openai, but we pass gemini as provider (wrong) → should resolve to openai
+    ctrl.applyUserDefaults('gemini', 'gpt-4', { sessionId: null });
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.defaultProviderIdForNewSession).toBe('openai');
+    expect(snap.defaultModelIdForNewSession).toBe('gpt-4');
+  });
+
+  // 13g. applyUserDefaults: no match → first provider entry
+  it('13g: applyUserDefaults with no match falls back to first model for the provider', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await ctrl.loadModelCatalog(async () => fakeCatalog);
+
+    // Completely unknown model
+    ctrl.applyUserDefaults('openai', 'totally-unknown', { sessionId: null });
+
+    const snap = ctrl.getSnapshot();
+    // No model match → first openai model
+    expect(snap.defaultProviderIdForNewSession).toBe('openai');
+    expect(['gpt-4', 'gpt-3.5-turbo']).toContain(snap.defaultModelIdForNewSession);
+  });
+
+  // 13h. applyUserDefaults: with active session → updates defaults but NOT current selection
+  it('13h: applyUserDefaults with active sessionId updates defaults but not current selection', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await ctrl.loadModelCatalog(async () => fakeCatalog);
+    // Current selection is gpt-4 (from defaults)
+    expect(ctrl.getSnapshot().selectedModelId).toBe('gpt-4');
+
+    ctrl.applyUserDefaults('gemini', 'gemini-pro', { sessionId: 'active-session' });
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.defaultProviderIdForNewSession).toBe('gemini');
+    expect(snap.defaultModelIdForNewSession).toBe('gemini-pro');
+    // Current selection unchanged (session is active)
+    expect(snap.selectedProviderId).toBe('openai');
+    expect(snap.selectedModelId).toBe('gpt-4');
+  });
+
+  // 13i. resetModelSelectionToDefaults reverts to stored defaults
+  it('13i: resetModelSelectionToDefaults restores selection to defaults', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await ctrl.loadModelCatalog(async () => fakeCatalog);
+    // Change selection
+    ctrl.setModelSelection('gemini', 'gemini-pro');
+    expect(ctrl.getSnapshot().selectedModelId).toBe('gemini-pro');
+
+    ctrl.resetModelSelectionToDefaults();
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.selectedProviderId).toBe('openai');
+    expect(snap.selectedModelId).toBe('gpt-4');
+  });
+
+  // 13j. Snapshot exposes all catalog + selection fields
