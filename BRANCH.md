@@ -51,14 +51,14 @@
   - [x] Read MASTER/workflow/testing/subagents, README/TODO/PLAN, branch template, W3.c row and cited policy/dependency sections.
   - [x] Read W3.b entrypoint/runtime and #712 Dockerfile, resolver, publisher, canonical tests, hash inputs and CI filters.
   - [x] Create isolated worktree and pass `harness check branch` before work.
-- [ ] **Lot 1 — Content hash and build inputs**
+- [x] **Lot 1 — Content hash and build inputs**
   - [x] Add failing content-only invalidation and CI-filter tests in `scripts/test-artifact-content-image.sh`: both fail on the missing content input/filter.
-  - [ ] Extend canonical required-input inventory in `scripts/test-api-image-canonical.sh`.
-  - [ ] Hash/copy content sources, exclude generated bundles and align `.github/workflows/ci.yml` filters.
-  - [ ] Gate: scoped static image/hash/filter tests turn red then green.
+  - [x] Extend canonical required-input inventory in `scripts/test-api-image-canonical.sh`.
+  - [x] Hash/copy content sources, exclude generated bundles and align `.github/workflows/ci.yml` filters.
+  - [x] Gate: scoped static image/hash/filter tests turned red then green; CI filter guard passes.
 - [ ] **Lot 2 — Production entrypoint**
   - [x] Add real-image test for pruned dependencies, Node startup, health, denial and shutdown; assembly test fails because content sources are not copied.
-  - [ ] Compile/copy content bundle in `api/Dockerfile`, retaining existing API/IdP commands and single image resolver.
+  - [x] Compile/copy content bundle in `api/Dockerfile`, retaining existing API/IdP commands and single image resolver.
   - [ ] Gate: build canonical image once, run content process with no activation/DB/storage credentials, verify health and denial.
 - [ ] **Lot 3 — Artifact identity and CI**
   - [ ] Test content image receipt equality and collision refusal using #712 canonical resolver/publisher and promotion pins.
