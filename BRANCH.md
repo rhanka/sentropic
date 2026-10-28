@@ -39,20 +39,27 @@
   - `package-lock.json`
   - `spec/decision/api-host.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
-  - `docker-compose*.yml`
+  - `Makefile` (except BRH-EX3)
+  - `docker-compose*.yml` (except BRH-EX3)
   - `.cursor/rules/**`
   - `.track/**`
   - `plan/NN-BRANCH_*.md`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile` (BRH-EX3: Decision secret names only)
+  - `docker-compose.yml` (BRH-EX3: Decision environment names only)
+  - `deploy/k8s/base/30-api.yaml` (BRH-EX3: optional Decision secret references only)
   - `api/drizzle/*.sql` (maximum one migration; control uses its existing migration lane)
   - `.github/workflows/**`
 - **Exception process**:
   - [x] Declare BRH-EXn with reason, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] BRH-EX3 — Owner-requested Decision provisioning in Compose, k8s-bundle-secret and the API env template. Impact: pass JEV_API_KEY and DECISION_EXECUTION_PROFILE by name only; missing values stay unavailable, production refuses; no deployment or credential provisioning. Rollback: remove these two entries/references from each surface.
+- [x] H1-R1-F2 — Exclude fixture dispatch from deployment, release verification and inherited secrets; main dispatch regression reproduced deployment access, then all 135 workflow wiring tests passed without weakening ordinary gates.
+- [ ] H1-R1-F5 — Wire Decision environment names through Compose and Kubernetes with fail-closed absence.
+- [ ] H1-R1-F1 — Push corrections and complete full pull_request CI with successful ci-gate on the exact final head; fixture-only success is insufficient.
 - [x] Track source artifact only: concurrent root .track changes belong to the designated conductor.
-- [ ] H1-CI-01 — Run the explicit manual Decision fixture mode without provider credentials; ordinary live API/E2E acceptance remains outside this no-spend lot.
+- [x] H1-CI-01 — Fixture-only run 40729849776 passed; full PR CI is required separately by H1-R1-F1.
 - [x] H1-CI-02 — The fixture job cannot authenticate canonical registry-tag reuse. Use the official build-api-image-fresh target for its intentional local production build; the API checks and 146 fixture tests passed before that build in run 40724315953.
 - [x] H1-CI-03 — The cluster runner accepts one literal filter; tests/decision- selects both fixture files (9 tests passed locally). Run 40726186707 passed API checks, production build and llm-mesh before rejecting the prior two-path filter.
 - [x] BRH-EX1 — Add an explicit manual fixture-only mode to .github/workflows/ci.yml to fulfill the requested no-spend CI. Impact: dedicated API/mesh checks with no publication; ordinary PR/main runs unchanged. Rollback: remove that input, job and mode guards.
