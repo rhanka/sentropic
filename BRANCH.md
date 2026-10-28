@@ -169,6 +169,7 @@
   - [ ] Run package typecheck, unit/DOM tests, app typecheck/lint and affected app tests.
   - [ ] Pack both candidates and prove runtime-free UI and standalone installed consumption.
 - [ ] **Lot 4 — Docs consolidation and review**
+  - [x] Resolve CI graph/pack gates: include runtime validation in final receipts/gate, pack each candidate once with an explicit context/environment, then qualify those exact archives.
   - [x] Pass explicit test environments to every command in the chat CI validation lane.
   - [x] Resolve the publisher wiring gate: give runtime its own real validation job and require that job before its publisher, while retaining UI/runtime pair validation ordering.
   - [x] Document runtime composition, permission adapter semantics, public module ownership and guarded release/bootstrap prerequisites.

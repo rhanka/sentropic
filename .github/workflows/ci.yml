@@ -942,12 +942,6 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Typecheck and test Chat Runtime
         run: make typecheck-chat-runtime test-chat-runtime ENV=test-ci-chat-runtime
-      - name: Pack Chat Runtime
-        env:
-          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
-          CI_MANIFEST_EVENT: ${{ github.event_name }}
-          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-chat-runtime ENV=test-ci-chat-runtime
   validate-chat-ui:
     runs-on: ubuntu-latest
     needs: [changes, validate-chat-runtime]
@@ -970,14 +964,14 @@ jobs:
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make pack-chat-ui PACK_DESTINATION=tmp/chat-pair/ui ENV=test-ci-chat-ui
-      - name: Qualify installed Chat pair
+      - name: Pack Chat Runtime
         env:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: |
-          make pack-chat-runtime PACK_DESTINATION=tmp/chat-pair/runtime ENV=test-ci-chat-ui
-          make qualify-chat-pair UI_ARCHIVE=tmp/chat-pair/ui/sentropic-chat-ui-1.0.0.tgz RUNTIME_ARCHIVE=tmp/chat-pair/runtime/sentropic-chat-runtime-0.1.0.tgz REPORT_DIR=tmp/chat-pair/report ENV=test-ci-chat-ui
+        run: make pack-chat-runtime PACK_DESTINATION=tmp/chat-pair/runtime ENV=test-ci-chat-ui
+      - name: Qualify installed Chat pair
+        run: make qualify-chat-pair UI_ARCHIVE=tmp/chat-pair/ui/sentropic-chat-ui-1.0.0.tgz RUNTIME_ARCHIVE=tmp/chat-pair/runtime/sentropic-chat-runtime-0.1.0.tgz REPORT_DIR=tmp/chat-pair/report ENV=test-ci-chat-ui
       - name: Retain installed Chat pair evidence
         uses: actions/upload-artifact@v7
         with:
@@ -3114,6 +3108,7 @@ jobs:
       - validate-llm-mesh
       - validate-cluster-mesh
       - validate-llm-gateway
+      - validate-chat-runtime
       - validate-chat-ui
       - validate-cited-source-viewer
       - validate-cowork-bridge
@@ -3229,7 +3224,7 @@ jobs:
       actions: read
     needs: [changes, package-candidates, enforce-package-bump, build-e2e, typecheck-lint-ui, typecheck-lint-api,
       validate-idp-sync, validate-llm-mesh, validate-cluster-mesh, validate-llm-gateway,
-      validate-chat-ui, validate-cited-source-viewer, validate-cowork-bridge, validate-oauth-verify,
+      validate-chat-runtime, validate-chat-ui, validate-cited-source-viewer, validate-cowork-bridge, validate-oauth-verify,
       validate-mcp-auth, validate-mcp-platform, validate-auth-hono, validate-auth-client,
       validate-auth-ui, validate-cowork-desktop, validate-contracts, validate-events,
       validate-chat-core, validate-chat-server, validate-comments, validate-live-speech, validate-skills, validate-flow,
