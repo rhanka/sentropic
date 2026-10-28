@@ -227,3 +227,82 @@ describe('computeModelSelectorWidthCh', () => {
     const groups = groupModelsByProvider(PROVIDERS, MODELS);
     const result = computeModelSelectorWidthCh(groups, MODELS, 'openai', 'gpt-4.1-nano');
     // Longest label: 'Claude Opus 4' = 13 chars → 13 + 4 = 17, which is < 18, so minimum = 18
+    // Actually 'Gemini 2.0 Flash' = 16 chars → 16 + 4 = 20 > 18
+    expect(result).toBe(20);
+  });
+
+  it('should fall back to selected model label when groups is empty', () => {
+    // When groups is empty, uses the selectedModel label length
+    const result = computeModelSelectorWidthCh([], MODELS, 'openai', 'gpt-4.1-nano');
+    // 'GPT-4.1 Nano'.length = 12, 12 + 4 = 16, min 18 => 18
+    expect(result).toBe(18);
+  });
+
+  it('should use minimum 18 even when longest label is short', () => {
+    const shortModels: ModelCatalogModel[] = [
+      { provider_id: 'openai', model_id: 'gpt', label: 'GPT', default_contexts: [] },
+    ];
+    const shortProviders: ModelCatalogProvider[] = [
+      { provider_id: 'openai', label: 'OpenAI', status: 'ready' },
+    ];
+    const groups = groupModelsByProvider(shortProviders, shortModels);
+    // 'GPT'.length = 3, 3 + 4 = 7, min 18 => 18
+    expect(computeModelSelectorWidthCh(groups, shortModels, 'openai', 'gpt')).toBe(18);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// providerGroupLabel
+// ---------------------------------------------------------------------------
+
+describe('providerGroupLabel', () => {
+  it('should return the plain label for a ready provider', () => {
+    const p: ModelCatalogProvider = { provider_id: 'openai', label: 'OpenAI', status: 'ready' };
+    expect(providerGroupLabel(p)).toBe('OpenAI');
+  });
+
+  it('should append the status in parentheses for non-ready providers', () => {
+    const p: ModelCatalogProvider = { provider_id: 'gemini', label: 'Gemini', status: 'planned' };
+    expect(providerGroupLabel(p)).toBe('Gemini (planned)');
+  });
+});
+
+describe('resolveHydratedModelSelection (gold shell S2)', () => {
+  const CATALOG: ModelCatalogModel[] = [
+    { provider_id: 'openai', model_id: 'gpt-5.5', label: 'GPT-5.5' },
+    { provider_id: 'anthropic', model_id: 'claude-opus', label: 'Claude Opus' },
+  ] as ModelCatalogModel[];
+
+  it('selects the catalog entry of the LAST assistant message carrying a model', () => {
+    const entry = resolveHydratedModelSelection(
+      [
+        { role: 'assistant', model: 'claude-opus' },
+        { role: 'user' },
+        { role: 'assistant', model: 'gpt-5.5' },
+      ],
+      CATALOG,
+    );
+    expect(entry).toMatchObject({ provider_id: 'openai', model_id: 'gpt-5.5' });
+  });
+
+  it('skips assistant messages without a model', () => {
+    const entry = resolveHydratedModelSelection(
+      [
+        { role: 'assistant', model: 'claude-opus' },
+        { role: 'assistant', model: null },
+      ],
+      CATALOG,
+    );
+    expect(entry).toMatchObject({ model_id: 'claude-opus' });
+  });
+
+  it('returns null when the model is absent from the live catalog (dead id never re-selected)', () => {
+    expect(
+      resolveHydratedModelSelection([{ role: 'assistant', model: 'gone-model' }], CATALOG),
+    ).toBeNull();
+  });
+
+  it('returns null when no assistant message carries a model', () => {
+    expect(resolveHydratedModelSelection([{ role: 'user' }], CATALOG)).toBeNull();
+  });
+});
