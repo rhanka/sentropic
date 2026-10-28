@@ -87,3 +87,143 @@ describe('formatModelSelectionKey', () => {
     expect(formatModelSelectionKey('openai', 'gpt-4o')).toBe('openai::gpt-4o');
     expect(formatModelSelectionKey('anthropic', 'claude-opus-4')).toBe('anthropic::claude-opus-4');
   });
+
+  it('should be round-trippable with parseModelSelectionKey', () => {
+    const key = formatModelSelectionKey('gemini', 'gemini-2.0-flash');
+    expect(parseModelSelectionKey(key)).toEqual({
+      providerId: 'gemini',
+      modelId: 'gemini-2.0-flash',
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// groupModelsByProvider
+// ---------------------------------------------------------------------------
+
+describe('groupModelsByProvider', () => {
+  it('should group models by provider in provider order', () => {
+    const groups = groupModelsByProvider(PROVIDERS, MODELS);
+    expect(groups).toHaveLength(3);
+    expect(groups[0].provider.provider_id).toBe('openai');
+    expect(groups[0].models).toHaveLength(2);
+    expect(groups[1].provider.provider_id).toBe('anthropic');
+    expect(groups[1].models).toHaveLength(1);
+    expect(groups[2].provider.provider_id).toBe('gemini');
+    expect(groups[2].models).toHaveLength(1);
+  });
+
+  it('should omit providers with no models', () => {
+    const provs: ModelCatalogProvider[] = [
+      { provider_id: 'cohere', label: 'Cohere', status: 'planned' },
+      ...PROVIDERS,
+    ];
+    const groups = groupModelsByProvider(provs, MODELS);
+    const ids = groups.map((g) => g.provider.provider_id);
+    expect(ids).not.toContain('cohere');
+  });
+
+  it('should return an empty array when models list is empty', () => {
+    expect(groupModelsByProvider(PROVIDERS, [])).toEqual([]);
+  });
+
+  it('should return an empty array when providers list is empty', () => {
+    expect(groupModelsByProvider([], MODELS)).toEqual([]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resolveFallbackModelOption
+// ---------------------------------------------------------------------------
+
+describe('resolveFallbackModelOption', () => {
+  it('should return exact match when provider and model both match', () => {
+    const result = resolveFallbackModelOption(MODELS, 'openai', 'gpt-4.1-nano');
+    expect(result?.model_id).toBe('gpt-4.1-nano');
+    expect(result?.provider_id).toBe('openai');
+  });
+
+  it('should fall back to model-only match when provider differs', () => {
+    // Simulate a model that moved provider (e.g. openai -> anthropic)
+    const result = resolveFallbackModelOption(MODELS, 'openai', 'claude-opus-4');
+    expect(result?.model_id).toBe('claude-opus-4');
+  });
+
+  it('should return null when neither provider+model nor model-only match exists', () => {
+    const result = resolveFallbackModelOption(MODELS, 'openai', 'nonexistent-model');
+    expect(result).toBeNull();
+  });
+
+  it('should return null when models list is empty', () => {
+    expect(resolveFallbackModelOption([], 'openai', 'gpt-4o')).toBeNull();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// coerceSelectionToValidEntry
+// ---------------------------------------------------------------------------
+
+describe('coerceSelectionToValidEntry', () => {
+  it('should return the selection unchanged when an exact match exists', () => {
+    const result = coerceSelectionToValidEntry(MODELS, 'openai', 'gpt-4o');
+    expect(result).toEqual({ providerId: 'openai', modelId: 'gpt-4o' });
+  });
+
+  it('should migrate to correct provider when model moved provider', () => {
+    // claude-opus-4 belongs to anthropic; if selectedProviderId is openai, it should fix
+    const result = coerceSelectionToValidEntry(MODELS, 'openai', 'claude-opus-4');
+    expect(result).toEqual({ providerId: 'anthropic', modelId: 'claude-opus-4' });
+  });
+
+  it('should fall back to first model for provider when model not found', () => {
+    const result = coerceSelectionToValidEntry(MODELS, 'openai', 'nonexistent');
+    // Should fall back to first model for 'openai'
+    expect(result.providerId).toBe('openai');
+    expect(['gpt-4.1-nano', 'gpt-4o']).toContain(result.modelId);
+  });
+
+  it('should fall back to first catalog model when provider has no models', () => {
+    const modelsWithoutAnthropicAndGemini: ModelCatalogModel[] = [
+      { provider_id: 'openai', model_id: 'gpt-4.1-nano', label: 'GPT-4.1 Nano', default_contexts: [] },
+    ];
+    const result = coerceSelectionToValidEntry(modelsWithoutAnthropicAndGemini, 'anthropic', 'nonexistent');
+    expect(result).toEqual({ providerId: 'openai', modelId: 'gpt-4.1-nano' });
+  });
+
+  it('should return the original pair unchanged when catalog is empty', () => {
+    const result = coerceSelectionToValidEntry([], 'openai', 'gpt-4o');
+    expect(result).toEqual({ providerId: 'openai', modelId: 'gpt-4o' });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getSelectedModelLabel
+// ---------------------------------------------------------------------------
+
+describe('getSelectedModelLabel', () => {
+  it('should return the label for an exact match', () => {
+    expect(getSelectedModelLabel(MODELS, 'openai', 'gpt-4.1-nano')).toBe('GPT-4.1 Nano');
+  });
+
+  it('should fall back to the raw modelId when catalog is empty', () => {
+    expect(getSelectedModelLabel([], 'openai', 'gpt-4o')).toBe('gpt-4o');
+  });
+
+  it('should fall back to the raw modelId when model is not in catalog', () => {
+    expect(getSelectedModelLabel(MODELS, 'openai', 'unknown-model')).toBe('unknown-model');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// computeModelSelectorWidthCh
+// ---------------------------------------------------------------------------
+
+describe('computeModelSelectorWidthCh', () => {
+  it('should return at least 18 ch as minimum', () => {
+    expect(computeModelSelectorWidthCh([], [], 'openai', 'x')).toBeGreaterThanOrEqual(18);
+  });
+
+  it('should use longest label + 4 when groups have labels', () => {
+    const groups = groupModelsByProvider(PROVIDERS, MODELS);
+    const result = computeModelSelectorWidthCh(groups, MODELS, 'openai', 'gpt-4.1-nano');
+    // Longest label: 'Claude Opus 4' = 13 chars → 13 + 4 = 17, which is < 18, so minimum = 18
