@@ -1,12 +1,14 @@
 import { verify, type KeyObject } from 'node:crypto';
 import { z } from 'zod';
 import { RemoteAuthorityError, remoteCliBodySchema, remoteCliProofSchema,
-  remoteSignedBytes, requireRemoteDeadline } from './remote-contract';
+  remoteSignedBytes, requireRemoteDeadline, requireRemoteVersion } from './remote-contract';
 import { remoteCanonicalJson } from './remote-json';
 
 // Supplied by the current approved-source/managed-session port, never from the proof body.
 export type RemoteNativeProofState = z.infer<typeof remoteCliBodySchema> & { key: KeyObject; now: number; revoked?: boolean };
 export function verifyRemoteCliProof(input: unknown, current: RemoteNativeProofState) {
+  const wrapper = z.object({ body: z.unknown() }).passthrough().safeParse(input);
+  if (wrapper.success) requireRemoteVersion(wrapper.data.body);
   const parsed = remoteCliProofSchema.safeParse(input);
   if (!parsed.success) throw new RemoteAuthorityError('session_proof_invalid');
   const proof = parsed.data;

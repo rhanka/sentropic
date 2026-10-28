@@ -2,7 +2,7 @@ import { randomBytes, type KeyObject } from 'node:crypto';
 import { SignJWT } from 'jose';
 import { z } from 'zod';
 import { RemoteAuthorityError, remoteCounter, remoteEvidenceRequestSchema, remoteId,
-  requireRemoteDeadline } from './remote-contract';
+  requireRemoteDeadline, requireRemoteVersion } from './remote-contract';
 export { verifyRemoteEvidence } from './remote-evidence-verify';
 
 export const remoteLoginSchema = z.object({
@@ -20,6 +20,7 @@ export interface RemoteEvidenceIssuerPorts {
 export function createRemoteEvidenceIssuer(ports: RemoteEvidenceIssuerPorts) {
   let lastNow = -1;
   return async (input: unknown): Promise<string> => {
+    requireRemoteVersion(input);
     const parsed = remoteEvidenceRequestSchema.safeParse(input);
     if (!parsed.success) throw new RemoteAuthorityError('invalid_request');
     const request = parsed.data;

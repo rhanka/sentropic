@@ -88,6 +88,7 @@
   - [x] Explicit unsupported-version versus invalid-kind refusal vectors added for issuer and internal route.
   - [x] First GREEN pass: 118 unit cases passed and 16 API cases passed; fixed a missing test-local workload mock binding before rerun.
   - [x] Code-review OIDC end_session restore regression authored; OAuth revocation adapters and federated login minting must share the canonical session lifecycle.
+  - [x] Unknown wire versions now produce unsupported_version/426 independently of schema/kind errors.
   - [ ] api/tests/unit/auth/remote-evidence.test.ts: repeated actions/switch, logout/revoke/expiry, wrong sid/version/MFA/audience/key, replay and workload separation.
   - [ ] Closed EvidenceRequest; issuer-derived identity and original authentication time; per-operation EdDSA evidence with pinned audiences.
 - [ ] **Lot 2 — Consent and authorization, RED then GREEN**

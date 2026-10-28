@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { RemoteAuthorityError, parseRemoteJson, remoteEvidenceRequestSchema,
-  type RemoteEvidenceRequest } from '../../services/auth/remote-contract';
+  requireRemoteVersion, type RemoteEvidenceRequest } from '../../services/auth/remote-contract';
 
 export interface RemoteEvidenceRoutePorts {
   expectedWorkload: string;
@@ -45,6 +45,7 @@ export function createRemoteEvidenceRouter(options: { role: 'auth-idp' | 'produc
       let value: unknown;
       try { value = parseRemoteJson(bytes); }
       catch { throw new RemoteAuthorityError('invalid_request'); }
+      requireRemoteVersion(value);
       const parsed = remoteEvidenceRequestSchema.safeParse(value);
       if (!parsed.success) throw new RemoteAuthorityError('invalid_request');
       const evidence = await options.issue(parsed.data);
@@ -54,7 +55,7 @@ export function createRemoteEvidenceRouter(options: { role: 'auth-idp' | 'produc
       const code = error instanceof RemoteAuthorityError ? error.code : 'authority_unavailable';
       const status = code === 'invalid_request' ? 400 : code === 'authentication_required' ? 401
         : code === 'authority_refused' ? 403 : code === 'replay_refused' ? 409
-          : code === 'expired' ? 410 : code === 'oversize' ? 413 : 503;
+          : code === 'expired' ? 410 : code === 'oversize' ? 413 : code === 'unsupported_version' ? 426 : 503;
       return c.json({ error: code }, status);
     }
   });
