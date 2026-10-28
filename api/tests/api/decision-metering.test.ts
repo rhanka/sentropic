@@ -176,4 +176,18 @@ describe('Decision durable metering and authoritative pricing', () => {
     expect(String(bucket.spent_micro_usd)).toBe('42');
     expect(f.jev.send).toHaveBeenCalledOnce();
   });
+  it('should release an unsent hold when its pinned tariff expires before dispatch marking', async () => {
+    await seed();
+    const f = fixture();
+    const mark = f.metering.budget.markDispatched.bind(f.metering.budget);
+    vi.spyOn(f.metering.budget, 'markDispatched').mockImplementation(async (input) => {
+      const id = descriptors[0].priceProtocol.revision;
+      await db.execute(sql`UPDATE control.model_pricing SET effective_to = now() WHERE id = ${id}`);
+      try { return await mark(input); }
+      finally { await db.execute(sql`UPDATE control.model_pricing SET effective_to = NULL WHERE id = ${id}`); }
+    });
+    expect(await f.client.decide(decisionRequest({ evaluator: descriptors[0].evaluator })))
+      .toMatchObject({ ok: false, error: { code: 'BUDGET_UNAVAILABLE' }, receipt: { attempts: 0, budget: { state: 'released' } } });
+    expect(f.jev.send).not.toHaveBeenCalled();
+  });
 });

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { sql } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { app } from '../../src/app';
 import { db } from '../../src/db/client';
 import { jevDescriptor } from '@sentropic/llm-mesh/decision/host';
@@ -29,6 +31,18 @@ describe('Decision route through the actual product cluster-mesh composition', (
   it('should require authentication on the mounted route', async () => {
     const response = await app.request(path, { method: 'POST', body: '{}' });
     expect(response.status).toBe(401);
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+  it('should apply the exact consolidated Decision migration through the control migration mechanism', async () => {
+    const hash = createHash('sha256').update(readFileSync('drizzle/control/0012_decision_host.sql')).digest('hex');
+    expect((await db.execute(sql`SELECT hash FROM public.__drizzle_control_migrations WHERE hash = ${hash}`)).rows).toHaveLength(1);
+  });
+  it.each(['tenant', 'workspace'])('should refuse revoked %s authority before service admission', async (authority) => {
+    if (authority === 'tenant') await db.execute(sql`UPDATE tenant_memberships SET status = 'suspended' WHERE user_id = ${user.id}`);
+    else await db.execute(sql`UPDATE workspace_memberships SET role = 'viewer' WHERE user_id = ${user.id}`);
+    const response = await authenticatedRequest(app, 'POST', path, user.sessionToken!, decisionRequest({ evaluator: jevDescriptor.evaluator }));
+    expect(response.status).toBe(403);
+    expect((await db.execute(sql`SELECT id FROM control.budget_holds WHERE principal_key = ${user.id}`)).rows).toHaveLength(0);
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
   it('should discover both unavailable production evaluators without provider access', async () => {
