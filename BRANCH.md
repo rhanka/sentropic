@@ -62,7 +62,7 @@
   - [x] Fix environment, Docker lock, scope and atomic commit policy.
 - [ ] **Lot 1 — Runtime package and physical ownership**
   - [x] Create `packages/chat-runtime/package.json`, `tsconfig.json` and public entrypoints.
-  - [ ] Move client transport/replay/history/stream hub and their tests without behavior changes.
+  - [x] Move client transport/replay/history/stream hub and their tests without behavior changes.
   - [ ] Move draft/attachment/projection/controller/session/checkpoint/local-tool implementation and tests; delete original implementations.
   - [ ] Migrate inventoried web/Chrome/VSCode/cowork imports and active tooling links.
   - [ ] Split neutral contracts and optional module state from views; runtime never imports a view implementation.
