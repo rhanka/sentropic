@@ -46,7 +46,7 @@ jobs:
           flock /tmp/sentropic-docker.lock make exec-api CMD="npm exec -- tsc --project ../apps/artifact-content/tsconfig.json" ENV=test-app-w3b
           flock /tmp/sentropic-docker.lock make typecheck-api lint-api -o prepare-node-workspace ENV=test-app-w3b
       - name: Content lint
-        run: flock /tmp/sentropic-docker.lock make exec-api CMD="npm exec -- eslint --config ../apps/artifact-content/eslint.config.cjs ../apps/artifact-content/src ../apps/artifact-content/tests" ENV=test-app-w3b
+        run: flock /tmp/sentropic-docker.lock make exec-api CMD="cd /workspace/apps/artifact-content && npm exec -- eslint src tests" ENV=test-app-w3b
       - name: Runtime diagnostics
         if: always()
         run: make logs-api ENV=test-app-w3b
