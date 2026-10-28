@@ -303,3 +303,60 @@ describe('comments module — utility functions', () => {
     });
 
     it('should match by email', () => {
+      const matches = getMentionMatches(members, 'bob', presentation);
+      expect(matches.some((m) => m.userId === 'u2')).toBe(true);
+    });
+
+    it('should return empty array when no match', () => {
+      expect(getMentionMatches(members, 'xyz', presentation)).toHaveLength(0);
+    });
+  });
+
+  describe('buildCommentThreads', () => {
+    it('should group comments into threads', () => {
+      const items: CommentItem[] = [
+        makeItem({ id: 'c1', thread_id: 'thread_1', content: 'First' }),
+        makeItem({ id: 'c2', thread_id: 'thread_1', content: 'Reply' }),
+        makeItem({ id: 'c3', thread_id: 'thread_2', content: 'Other' }),
+      ];
+      const { threads, map } = buildCommentThreads(items, presentation);
+      expect(threads).toHaveLength(2);
+      expect(map.get('thread_1')).toHaveLength(2);
+      expect(map.get('thread_2')).toHaveLength(1);
+    });
+
+    it('should return empty arrays for empty input', () => {
+      const { threads, map } = buildCommentThreads([], presentation);
+      expect(threads).toHaveLength(0);
+      expect(map.size).toBe(0);
+    });
+  });
+
+  describe('isCommentByUser', () => {
+    it('should return true when created_by matches user id', () => {
+      const comment = makeItem({ created_by: 'user_1' });
+      expect(isCommentByUser(comment, { id: 'user_1' })).toBe(true);
+    });
+
+    it('should return false when created_by does not match', () => {
+      const comment = makeItem({
+        created_by: 'user_2',
+        created_by_user: { id: 'user_2', email: 'other@example.com', displayName: 'Other' },
+      });
+      expect(isCommentByUser(comment, { id: 'user_1' })).toBe(false);
+    });
+
+    it('should return false when user is null', () => {
+      const comment = makeItem({ created_by: 'user_1' });
+      expect(isCommentByUser(comment, null)).toBe(false);
+    });
+
+    it('should match by email when id not present', () => {
+      const comment = makeItem({
+        created_by: 'user@example.com',
+        created_by_user: { id: 'user_x', email: 'user@example.com', displayName: 'User' },
+      });
+      expect(isCommentByUser(comment, { email: 'user@example.com' })).toBe(true);
+    });
+  });
+});
