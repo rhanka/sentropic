@@ -71,6 +71,7 @@
   - [x] Reference neutral visual contracts through public type exports; the runtime imports no visual implementation.
   - [x] Redirect visual timeline/composer model consumers to relocated public runtime contracts.
   - [x] Migrate app and cowork execution consumers and corresponding import-boundary assertions to runtime.
+  - [x] Move raw stream fixtures and the checkpoint barrel with runtime parity tests; preserve fixture bytes.
   - [ ] Migrate inventoried web/Chrome/VSCode/cowork imports and active tooling links.
   - [ ] Split neutral contracts and optional module state from views; runtime never imports a view implementation.
   - [ ] Qualify breaking chat-ui version and initial runtime version against registry; update lockfiles.
