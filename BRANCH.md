@@ -15,6 +15,8 @@
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
+  - `.github/workflows/ci.yml`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
   - `api/src/routes/namespaces/llm-mesh.ts`
   - `api/src/routes/namespaces/llm-mesh-cutover.ts`
   - `api/src/routes/namespaces/decision*.ts`
@@ -50,7 +52,8 @@
 
 ## Feedback Loop
 - [x] Track source artifact only: concurrent root .track changes belong to the designated conductor.
-- [ ] H1-CI-01 — Owner decision pending: the existing CI supplies live provider keys to AI API/E2E suites. Preserve no-spend with a draft CI hold until a scoped credential-free CI path is authorized; no remote CI success claimed.
+- [ ] H1-CI-01 — Run the explicit manual Decision fixture mode without provider credentials; ordinary live API/E2E acceptance remains outside this no-spend lot.
+- [x] BRH-EX1 — Add an explicit manual fixture-only mode to .github/workflows/ci.yml to fulfill the requested no-spend CI. Impact: dedicated API/mesh checks with no publication; ordinary PR/main runs unchanged. Rollback: remove that input, job and mode guards.
 - [ ] H1-REV-01 — Conductor handoff: review selection failed because discovery supplies no exact reviewer models; select two complementary host/model tuples before merge. Local dossier: root .tmp/decision-h1-review/selection.md; no consensus verdict.
 
 ## AI Flaky tests
@@ -67,7 +70,7 @@
   - [x] Read MASTER, workflow, spec-v4 deferred host lot, Decision ports, qualification gates and branch template.
   - [x] Create requested worktree and mechanically pass harness check branch.
   - [x] Record allowed paths, environment, ports and no-spend restriction.
-- [ ] **H1 — API host junction**
+- [x] **H1 — API host junction**
   - [x] Compose the Decision host lazily through cluster-mesh and add authenticated POST /api/v1/llm-mesh/decision.
   - [x] Resolve verified workspace authorization and financial ownership outside caller JSON.
   - [x] Reuse OPENAI_API_KEY; resolve the new JEV_API_KEY connection without logging secrets.
@@ -86,7 +89,7 @@
   - [x] API integration tests: api/tests/api/decision-metering.test.ts (15 passed); api/tests/api/decision-api.test.ts (7 passed).
   - [x] Actual product composition refuses anonymous ingress, discovers both unqualified evaluators and persists production refusal without a hold or fetch.
   - [x] Recreate the disposable database and verify the exact consolidated migration hash plus tenant/workspace revocations in api/tests/api/decision-api.test.ts (7 passed).
-- [ ] **H2 — Authoritative pricing**
+- [x] **H2 — Authoritative pricing**
   - [x] Verify and cite the published JEV tariff at its primary source.
   - [x] Add both immutable control.model_pricing rows using the existing control migration lane.
   - [x] Move JEV price authority from its synthetic fixture to control.model_pricing and bump llm-mesh to 0.31.1 (npm view: 0.31.0).
@@ -100,16 +103,18 @@
   - [x] Serialize pricing with its existing writer, pin the exact hold revision and recheck tariff validity before dispatch marking.
   - [x] Preserve pending admission liability when a hold commits but its acknowledgement is lost; never report a proved absence of a hold on a store exception.
   - [x] Scope pricing windows by protocol so OpenAI Decisions never replaces the existing GPT-6 Luna generation tariff.
-  - [ ] Verify native and generation prices coexist at one timestamp in api/tests/api/decision-metering.test.ts and retain the pricing writer/schema regressions.
-  - [ ] Run api/tests/api/llm-budget-ledger.test.ts and api/tests/unit/llm-budget-admission-native.test.ts after the protocol-specific pricing change.
+  - [x] Verify native and generation prices coexist at one timestamp in api/tests/api/decision-metering.test.ts (17 passed); schema upgrade/restore and expanded Decision operation (20 passed).
+  - [x] Run api/tests/api/llm-budget-ledger.test.ts (38 passed) and api/tests/unit/llm-budget-admission-native.test.ts (26 passed) after the protocol-specific pricing change.
 - [x] **Docs consolidation**
   - [x] Document route, profiles, readiness limits, tariff sources and provisioned environment names in spec/decision/api-host.md.
 - [ ] **Final validation**
-  - [ ] Scoped fixture tests, API typecheck/lint and affected mesh checks under the Docker lock.
+  - [x] Scoped API fixtures: 124 tests passed across scoped runs; API typecheck and lint passed under the Docker lock.
   - [x] llm-mesh: 1,529 tests passed; cluster-mesh Decision composition/receipts: 9 tests passed.
   - [x] API unit host/HTTP: 16 tests passed; actual API/migration/revocation: 7 tests passed.
   - [ ] Review with two independent complementary peers and reconcile findings.
   - [ ] Inspect every diff hunk; pass make scope-check before each atomic commit.
   - [ ] Open a draft PR to main using this plan as its body and add the implementation plan comment.
   - [ ] Verify completed/success CI on the exact final head.
+  - [ ] Add and run the explicit manual Decision fixture workflow mode; distinguish it from ordinary live-suite acceptance.
+  - [x] Retain CI selection/publication safeguards: 135 wiring tests, 23 expected-result tests and ci-capacity-policy passed.
   - [ ] Run make down and report PR, exact head, environment variable names only.

@@ -8,6 +8,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, dependencyFloor, publishFilter, waitForVersion } from './publishable-manifests.mjs';
+import { evaluateSelection } from './ci-expected-results.mjs';
 // Register the S1 contracts in the existing required, credential-free Node validation lane.
 import '../security/daily/schema.test.mjs';
 import '../security/daily/inventory.test.mjs';
@@ -60,7 +61,7 @@ test('dedicated manifest_guard filter: scripts/ci never fans out through global,
 test('inventory job is always scheduled, credential-free and never a publisher/bootstrap dependency', () => {
   const job = jobs['validate-publishable-manifests'];
   assert.deepEqual(needsOf('validate-publishable-manifests'), ['changes']);
-  assert.equal(job.if, 'always() && !cancelled()');
+  assert.equal(job.if, 'always() && !cancelled() && inputs.decision_fixtures_only != true');
   assert.deepEqual(job.permissions, { contents: 'read' });
   assert.equal(job.env.CI_MANIFEST_CHANGES_RESULT, '${{ needs.changes.result }}');
   for (const [k, v] of Object.entries(CTX)) assert.equal(job.env[k], v);
@@ -79,17 +80,33 @@ test('inventory job is always scheduled, credential-free and never a publisher/b
   }
 });
 
-test('ci-gate aggregates every PR job, stays unconditional and is a leaf', () => {
+test('ci-gate aggregates every PR job, stays unconditional for normal runs and is a leaf', () => {
   const mainOnly = ['bootstrap-publish', 'verify-train-lock-integrity', 'deploy-preprod'];
   const excluded = (name) => name === 'ci-gate' || name.startsWith('publish-') || mainOnly.includes(name);
   const gate = jobs['ci-gate'];
-  assert.equal(gate.if, 'always()', 'the gate must report failure after upstream failure or cancellation');
+  assert.equal(gate.if, 'always() && inputs.decision_fixtures_only != true');
   assert.equal(gate.name, undefined, 'the required context must stay ci-gate');
   assert.deepEqual(gate.permissions, { contents: 'read' });
   assert.deepEqual([...needsOf('ci-gate')].sort(), Object.keys(jobs).filter((name) => !excluded(name)).sort(), 'every PR job must be in ci-gate.needs');
   for (const name of Object.keys(jobs)) {
     assert.ok(!needsOf(name).includes('ci-gate'), `${name} must not need ci-gate`);
     if (excluded(name) && name !== 'ci-gate') assert.match(String(jobs[name].if ?? ''), /github\.ref == 'refs\/heads\/main'/, `${name} must stay main-only to be excluded`);
+  }
+});
+
+test('Decision offline mode is explicit, credential-free and cannot publish, while normal gates remain selected', () => {
+  const offline = jobs['decision-offline'];
+  assert.deepEqual(offline.permissions, { contents: 'read' });
+  assert.ok(!JSON.stringify(offline).includes('secrets.'));
+  for (const key of ['OPENAI_API_KEY', 'JEV_API_KEY']) assert.equal(offline.env[key], '');
+  for (const value of [undefined, false, true]) {
+    const lookup = (key) => key === 'inputs.decision_fixtures_only' ? value ?? 'none'
+      : key === 'github.event_name' ? 'workflow_dispatch' : key === 'github.ref' ? 'refs/heads/main'
+      : key === 'inputs.bootstrap_publish_target' ? 'llm-mesh' : '';
+    assert.equal(evaluateSelection(offline.if, lookup), value === true);
+    for (const name of ['changes', 'validate-publishable-manifests', 'ci-gate', 'bootstrap-publish']) {
+      assert.equal(evaluateSelection(jobs[name].if, lookup), value !== true, name);
+    }
   }
 });
 
