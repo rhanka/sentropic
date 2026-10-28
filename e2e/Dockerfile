@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM node:24-trixie-slim@sha256:89c5244bc22a9bc3287d89ebc7e49b9cb5bb84cd40e6175ac3421d5a9f68b95a AS prepared
+FROM node:24-alpine3.24@sha256:e67514e5d0f6c46656005e1b693b2ec9d52e80b641307de684d4a015ba7a4eaf AS prepared
 
 WORKDIR /app
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
@@ -24,16 +24,17 @@ COPY package.json package-lock.json ./
 COPY playwright.config.ts ./
 COPY global.setup.ts ./
 
-# Retain full Chromium for IdP/extension checks and its default headless shell.
-# All selected browser tests run headless; no X server is needed in this image.
+# Use maintained native browsers/libraries instead of Debian's unfixed packages.
+# Preserve both full Chromium and the headless shell, plus video recording.
 RUN npm ci --legacy-peer-deps --ignore-scripts && \
-    npx playwright install --with-deps chromium && \
-    apt-get update && apt-get upgrade -y && \
-    apt-get purge -y xvfb xserver-common && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* /root/.npm /tmp/*
+    apk add --no-cache chromium=155.0.8059.84-r0 \
+      chromium-headless-shell=155.0.8059.84-r0 ffmpeg=8.1.3-r0 && \
+    node -e 'const fs=require("node:fs"),path=require("node:path"); const {registry}=require(path.join(path.dirname(require.resolve("playwright-core/package.json")),"lib/server/registry/index.js")); for(const [name,binary] of [["chromium","/usr/bin/chromium"],["chromium-headless-shell","/usr/bin/chromium-headless-shell"],["ffmpeg","/usr/bin/ffmpeg"]]){const executable=registry.findExecutable(name).executablePath(); fs.mkdirSync(path.dirname(executable),{recursive:true}); fs.symlinkSync(binary,executable); console.log(name,executable,"->",binary);}' && \
+    node --input-type=module -e 'import {chromium} from "playwright"; import assert from "node:assert/strict"; import {stat} from "node:fs/promises"; for(const channel of [undefined,"chromium"]){const browser=await chromium.launch({channel}); console.log("Qualified Chromium:",channel??"headless shell",browser.version()); const context=await browser.newContext({recordVideo:{dir:"/tmp/browser-probe"}}); const page=await context.newPage(); await page.setContent("<title>BR78 browser probe</title>"); assert.equal(await page.title(),"BR78 browser probe"); await page.screenshot({path:"/tmp/browser-probe.png"}); const video=page.video(); await context.close(); assert.ok((await stat(await video.path())).size>0); await browser.close();}' && \
+    rm -rf /root/.npm /tmp/*
 
 # Flatten the prepared filesystem so removed packages/download caches are absent
-# from transported layers. Keep dpkg metadata for the existing container scanner.
+# from transported layers. Keep apk metadata for the existing container scanner.
 FROM scratch AS base
 COPY --from=prepared / /
 ENV PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
