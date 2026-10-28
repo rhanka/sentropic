@@ -6,3 +6,143 @@ import {
 import { syncDraftFromInput, type ChatDraftState } from './chatDraft.js';
 import {
   createChatLoopController,
+  type AttachLocalToolMachineOptions,
+  type ChatLoopController,
+  type ControllerHostTransport,
+  type ControllerLocalToolPermissionPrompt,
+  type ControllerPollJob,
+  type ControllerSendPayload,
+  type ControllerStreamClient,
+  type ControllerStreamEvent,
+  type SendSteerOptions,
+} from './chatLoopController.js';
+import type {
+  ChatProjectedTimelineItem,
+  ChatProjectionMessage,
+} from './chatProjection.js';
+import {
+  normalizeHydratedMessage,
+  upsertSequencedMessage,
+  type SessionHistoryMetaLine,
+} from './chatSessionHydration.js';
+
+export type ChatSessionRuntimeMessage = ChatProjectionMessage & {
+  sessionId?: string;
+  createdAt?: string;
+  sequence?: number | string | null;
+  [key: string]: unknown;
+};
+
+export type ChatSessionJsonPrimitive = string | number | boolean | null;
+
+export type ChatSessionJsonValue =
+  | ChatSessionJsonPrimitive
+  | ChatSessionJsonValue[]
+  | { [key: string]: ChatSessionJsonValue };
+
+export type ChatSessionJsonObject = {
+  [key: string]: ChatSessionJsonValue;
+};
+
+export type ChatSessionAttachment = ChatComposerAttachmentDraft;
+export type ChatSessionCheckpoint = ChatSessionJsonObject;
+export type ChatSessionTodo = ChatSessionJsonObject;
+export type ChatSessionPendingTool = ControllerLocalToolPermissionPrompt;
+
+export type ChatSessionRuntimeHost = {
+  transport: ControllerHostTransport;
+  streamClient?: ControllerStreamClient;
+  checkpointHost?: unknown;
+  localToolMachine?: AttachLocalToolMachineOptions;
+};
+
+export type ChatSessionRuntimeConfig<
+  Message extends ChatSessionRuntimeMessage = ChatSessionRuntimeMessage,
+> = {
+  initialMessages?: readonly Message[];
+  initialDraft?: string;
+  initialAttachments?: readonly ChatSessionAttachment[];
+  initialCheckpoints?: readonly ChatSessionCheckpoint[];
+  initialTodo?: ChatSessionTodo | null;
+  initialLastAppliedSequence?: number;
+  pollJob?: ControllerPollJob;
+  pollTimeoutMs?: number;
+  pollInitialDelayMs?: number;
+  pollIntervalMs?: number;
+  onProjectionEvent?: (streamId: string) => void;
+  onTerminal?: (streamId: string, outcome: 'done' | 'error') => void;
+};
+
+export type ChatSessionSnapshot<
+  Message extends ChatSessionRuntimeMessage = ChatSessionRuntimeMessage,
+> = {
+  readonly sessionId: string;
+  readonly messages: readonly Readonly<Message>[];
+  readonly projectedTimelineItems: readonly ChatProjectedTimelineItem<Message, unknown>[];
+  readonly draft: string;
+  readonly input: string;
+  readonly attachments: readonly Readonly<ChatSessionAttachment>[];
+  readonly attachmentSummary: ComposerAttachmentSummary;
+  readonly checkpoints: readonly Readonly<ChatSessionCheckpoint>[];
+  readonly todo: Readonly<ChatSessionTodo> | null;
+  readonly pendingLocalToolPermissionPrompts: readonly Readonly<ChatSessionPendingTool>[];
+  readonly lastAppliedSequence: number;
+  readonly attachGeneration: number;
+  readonly viewBindings: number;
+  readonly disposed: boolean;
+};
+
+export type ChatSessionSnapshotSerializable<
+  Message extends ChatSessionRuntimeMessage = ChatSessionRuntimeMessage,
+> = {
+  sessionId: string;
+  messages: readonly Message[];
+  draft: string;
+  attachments: readonly ChatSessionAttachment[];
+  checkpoints: readonly ChatSessionCheckpoint[];
+  todo: ChatSessionTodo | null;
+  lastAppliedSequence: number;
+};
+
+type ChatSessionSendOptions<
+  Message extends ChatSessionRuntimeMessage,
+> = Parameters<ChatLoopController<Message, unknown>['send']>[1];
+
+type ChatSessionRetryOptions<
+  Message extends ChatSessionRuntimeMessage,
+> = Parameters<ChatLoopController<Message, unknown>['retry']>[1];
+
+export type ChatSessionRuntime<
+  Message extends ChatSessionRuntimeMessage = ChatSessionRuntimeMessage,
+> = {
+  snapshot(): ChatSessionSnapshot<Message>;
+  subscribe(cb: (s: ChatSessionSnapshot<Message>) => void): () => void;
+  setDraft(value: string): void;
+  setAttachments(attachments: readonly ChatSessionAttachment[]): void;
+  setMessages(messages: readonly Message[]): void;
+  appendMessage(message: Message): void;
+  hydrateMessages(
+    messages: readonly Message[],
+    meta?: Pick<SessionHistoryMetaLine, 'checkpoints' | 'todoRuntime'>,
+  ): void;
+  setCheckpoints(checkpoints: readonly ChatSessionCheckpoint[]): void;
+  setTodo(todo: ChatSessionTodo | null): void;
+  setLastAppliedSequence(sequence: number): void;
+  attach(host: ChatSessionRuntimeHost): void;
+  bindView(): () => void;
+  send(payload: ControllerSendPayload, opts: ChatSessionSendOptions<Message>): Promise<void>;
+  retry(messageId: string, opts: ChatSessionRetryOptions<Message>): Promise<void>;
+  stop(messageId: string): Promise<void>;
+  edit(messageId: string, content: string): Promise<void>;
+  setFeedback(messageId: string, vote: 'up' | 'down' | 'clear'): Promise<void>;
+  mergeHistoryEvents(messageId: string, events: ControllerStreamEvent[]): void;
+  sendSteer(text: string, streamId: string, options: SendSteerOptions): Promise<void>;
+  decideLocalToolPermission(
+    prompt: ChatSessionPendingTool,
+    decision: string,
+  ): Promise<void>;
+  serialize(): ChatSessionSnapshotSerializable<Message>;
+  restore(snapshot: ChatSessionSnapshotSerializable<Message>): void;
+  dispose(): void;
+};
+
