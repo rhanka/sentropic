@@ -15,29 +15,44 @@ Exhaustive tracked matches outside the package/spec/plan at the pinned baseline.
 | `.graphify/cache/ee0e5fc7ec71f833110c1256693f2832e18f2955667007e8fa59be35e83e24e9.json` | H: documentation/build owner; update active links or mark history |
 | `.graphify/graph.html` | H: documentation/build owner; update active links or mark history |
 | `.graphify/graph.json` | H: documentation/build owner; update active links or mark history |
+| `.graphify/manifest.json` | H: documentation/build owner; update active links or mark history |
+| `.tmp/live-stt/l0/scope-release.md` | H: historical lane/release evidence; retain as history |
 | `.track/events.jsonl` | H: conductor's immutable append-only evidence; never rewrite historic package names |
 | `Makefile` | H: Sentropic build/release owner; M3 source-link deletion |
 | `PLAN.md` | H: documentation/build owner; update active links or mark history |
 | `README.md` | H: documentation/build owner; update active links or mark history |
 | `TODO.md` | H: documentation/build owner; update active links or mark history |
 | `TRANSITION.md` | H: documentation/build owner; update active links or mark history |
+| `api/src/services/resource-plane/index.ts` | H: API/resource-plane owner; retained domain-boundary comment, no DS runtime transfer |
+| `docs/comments-annotations/evidence/owner-decisions.md` | H: domain owner decision evidence; retain historical authority verbatim |
 | `docs/comments-annotations/plan/BRANCH_P1_TEMPLATE.md` | H: documentation/build owner; update active links or mark history |
 | `docs/comments-annotations/plan/PLAN_COMMENTS_ANNOTATIONS.md` | H: documentation/build owner; update active links or mark history |
 | `docs/sentropic-app-capitalisation-inventory.md` | H: documentation/build owner; update active links or mark history |
 | `docs/specs/decisions/cluster-mesh-r14/dossier.json` | H: documentation/build owner; update active links or mark history |
 | `docs/uat/2026-06-03-chat-tools-fk-forensics.md` | H: documentation/build owner; update active links or mark history |
+| `e2e/tests/03-chat-mobile-docked-nav.spec.ts` | H: app E2E owner; preserve placement/v1 storage-key behavior and migration tests |
+| `e2e/tests/09-chat-freeze-terminal.spec.ts` | H: app E2E owner; preserve version-sensitive terminal/stream regression coverage |
+| `e2e/tests/09-chat-multitool-demo.spec.ts` | H: app E2E owner; preserve version-sensitive tool-stream regression coverage |
 | `package-lock.json` | H: consumer/release owner; replace active source links with qualified UI/runtime pair in M3 |
+| `packages/chat-server/tests/wire-contract.spec.ts` | H: chat-server contract-test owner; preserve canonical transport-route assertions against runtime break |
 | `packages/cited-source-viewer/README.md` | H: corresponding package owner; audit public contracts |
+| `packages/cited-source-viewer/scripts/make-publish-pkgjson.mjs` | H: corresponding package owner; audit public contracts |
 | `packages/cited-source-viewer/src/index.ts` | H: corresponding package owner; audit public contracts |
+| `packages/cited-source-viewer/svelte.config.js` | H: corresponding package owner; audit public contracts |
+| `packages/cited-source-viewer/vitest.dom.config.ts` | H: corresponding package owner; audit public contracts |
 | `packages/cowork-bridge/README.md` | H: cowork bridge owner; preserve handoff contract |
 | `packages/cowork-bridge/package.json` | H: cowork bridge owner; preserve handoff contract |
 | `packages/cowork-bridge/src/index.ts` | H: cowork bridge owner; preserve handoff contract |
+| `packages/cowork-bridge/src/tools/types.ts` | H: cowork bridge owner; preserve handoff contract |
 | `packages/cowork-desktop/README.md` | H: cowork desktop owner; runtime import and packaging migration |
 | `packages/cowork-desktop/package.json` | H: cowork desktop owner; runtime import and packaging migration |
 | `packages/cowork-desktop/packaging/entry.mjs` | H: cowork desktop owner; runtime import and packaging migration |
 | `packages/cowork-desktop/packaging/esbuild.config.mjs` | H: cowork desktop owner; runtime import and packaging migration |
+| `packages/cowork-desktop/packaging/package-windows.mjs` | H: cowork desktop owner; runtime import and packaging migration |
 | `packages/cowork-desktop/src/runner/cowork-runner.ts` | H: cowork desktop owner; runtime import and packaging migration |
+| `scripts/ci/publishable-ci-wiring.test.mjs` | H: Sentropic build/release owner; M3 source-link deletion |
 | `scripts/ci/publishable-classification.test.mjs` | H: Sentropic build/release owner; M3 source-link deletion |
+| `scripts/ci/publishable-manifests.mjs` | H: Sentropic build/release owner; M3 source-link deletion |
 | `scripts/ci/publishable-pack.test.mjs` | H: Sentropic build/release owner; M3 source-link deletion |
 | `scripts/test-api-image-canonical.sh` | H: Sentropic build/release owner; M3 source-link deletion |
 | `tools/memory-mcp-l5/artifacts/lock-snapshots/3bdcfa350d278ce118ae64486bbb3bde197797f56cbad3ca06517c469419da12.package-lock.json` | H: documentation/build owner; update active links or mark history |
@@ -92,3 +107,5 @@ Exhaustive tracked matches outside the package/spec/plan at the pinned baseline.
 | `ui/tests/vscode-ext/tool-permissions.test.ts` | H: app/extension qualification owner; migrate imports/assertions |
 | `ui/vscode-ext/local-tools-adapter.ts` | H: web/Chrome/VSCode integration owner; adapt public UI/runtime ports |
 | `ui/vscode-ext/webview-entry.ts` | H: web/Chrome/VSCode integration owner; adapt public UI/runtime ports |
+
+The match is the case-insensitive string `chat-ui`, including bare package lists, placement storage keys, comparative comments and historical records, not only npm specifiers/source paths. Immutable Track/qualification snapshots remain historical evidence. Release manifests and wiring assertions are active sending-pipeline dependencies; E2E placement keys are host behavior contracts.
