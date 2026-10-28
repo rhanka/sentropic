@@ -8,7 +8,7 @@ No Design System repository write, registry publication, owner UAT GO or transfe
 | Draft | Bounded change | Remaining P1 acceptance |
 | --- | --- | --- |
 | P1a, `feat/chat-convergence-p1` | Introduce runtime package; relocate transport/replay/stream assembly, loop/session/draft/attachment/projection state, local-tool store, checkpoints and persistence with existing tests; migrate active imports. | Optional-module split and injected conversation are completed by P1b. |
-| P1b, successor branch | Split comments/documents/context and mixed helpers; complete injected ChatConversation commands and deny-by-default permission continuation. | Full standalone/app-shaped parity and packed boundary qualification. |
+| P1b, `feat/chat-convergence-p1b` | Split comments/documents/context and mixed helpers; inject ChatConversation snapshots/commands; complete permission, attachment, checkpoint and optional-module bindings. | Final review, exact-head CI and retained final candidate qualification. |
 
 Successors retain P1a ancestry; integration uses merges only. Drafts target main and remain unmerged.
 P1a is a migration foundation, not a claim that the transferable UI is runtime-free yet.
@@ -18,6 +18,7 @@ P1a is a migration foundation, not a claim that the transferable UI is runtime-f
 - `@sentropic/chat-ui@1.0.0`: explicit major break; registry was `0.34.1` at entry.
 - `@sentropic/chat-runtime@0.1.0`: new independently versioned Sentropic package; registry lookup returned E404.
 - `@sentropic/cowork-desktop@0.2.1`: runtime import migration; registry was `0.2.0` before bump.
+- `@sentropic/cowork-bridge@0.1.2`: runtime SSE peer/guidance migration; registry was `0.1.1` before bump.
 - All runtime implementations remain in Sentropic. The new package is never imported into DS custody.
 - Runtime construction/disposal moves to hosts; the final visual view receives normalized data and commands.
 - Source manifests remain workspace source form; guarded packs transform exports to compiled dist form.
@@ -74,3 +75,30 @@ tools, post no successful result and never continue as allowed. Approval execute
 
 The final packed visual candidate must contain no runtime implementation or private source import;
 install the exact UI/runtime candidates in a consumer without the Sentropic source tree.
+
+## P1b implementation and observed checks
+
+The host creates `createConversationRuntime(sessionId, options)` and injects it as `snapshots`, alongside
+`runtime.commands`. View subscriptions only bind/unbind a view. Session disposal, authorization waits,
+uploads/previews and history hydration remain runtime-owned. Optional comments use host-owned
+`createCommentRuntime(host, presentation)`; pure formatting helpers are injected from the visual package.
+
+The shared fixture uses the real chat-server, transport, stream hub, loop/session and chat-core history
+projection. Standalone/app-shaped views exercise full payload, live markdown/plan results, IME input,
+history restart, edit/retry/stop/feedback/steer, document failure/retry/preview/remove/download,
+checkpoint preserve/restore ordering, comments and state continuity during remount. Platform data I/O
+uses in-memory adapters; production runtime commands are never stubbed.
+
+Observed gates: runtime typecheck and 447 tests; UI typecheck, 524 unit tests and 206 DOM tests;
+cowork-bridge typecheck and 27 tests; 201 publication-wiring/manifest tests. App typecheck reports
+0 errors, lint passes, the affected comment adapter has 4 passing tests, and the production image
+build completes for web/Chrome/VSCode. The app typecheck also reports 6 warnings in 5 files.
+
+Guarded candidate packs pass. The clean installed-pair probe mounts only the archives and its probe:
+Svelte typecheck has 0 errors/warnings, Vite production bundling succeeds, and the visual archive has
+no runtime implementation paths. Final archive hashes/head are retained in its report after final review.
+These checks are technical evidence; GitHub CI completion and owner U0 remain separately recorded gates.
+
+Runtime release preparation includes guarded OIDC/bootstrap targets and one explicit bootstrap choice.
+Only package paths select publication; UI publication waits for a selected runtime publisher. No publish
+target or workflow dispatch is executed by P1. The npm administrator still owns initial registry/OIDC setup.
