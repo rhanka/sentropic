@@ -9,7 +9,11 @@ r.typeClosure = lines.filter((line) => line.includes('/node_modules/') && line.e
   .map((line) => line.slice('/evidence/consumer/'.length)).sort();
 r.consumer.npmVersion = readFileSync(`${root}/npm-version.txt`, 'utf8').trim();
 assert.equal(r.consumer.lockSha256, sha256(readFileSync(`${root}/consumer-lock.json`)));
-const substrate = await import(`file://${root}/consumer/node_modules/@sentropic/engram/dist/memory-substrate.js`);
+// The producer manifest function is internal. Expose it only in this in-memory
+// inspection module, leaving every installed/archive byte unchanged.
+const source = readFileSync(`${root}/consumer/node_modules/@sentropic/engram/dist/memory-substrate.js`, 'utf8');
+const inspection = Buffer.from(source + '\nexport { memoryContractManifest };\n').toString('base64');
+const substrate = await import(`data:text/javascript;base64,${inspection}`);
 const canonicalize = (v) => JSON.stringify(v, (_, x) => x && typeof x === 'object' && !Array.isArray(x)
   ? Object.fromEntries(Object.entries(x).sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0)) : x);
 assert.equal(canonicalize(substrate.memoryContractManifest()), readFileSync(`${root}/neutral-contract-1.0.0.jcs.json`, 'utf8'));

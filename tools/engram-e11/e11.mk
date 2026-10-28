@@ -45,4 +45,9 @@ memory-e11-lock:
 memory-e11-installed:
 	@test "$(ENV)" = test-mem-e11
 	@bash tools/engram-e11/installed.sh "$(E11_INPUT)" "$(ARTIFACTS_COMPOSE)"
+	@$(MAKE) -f Makefile -f $(E11_DIR)/e11.mk memory-e11-finalize ENV=$(ENV)
+
+.PHONY: memory-e11-finalize
+memory-e11-finalize:
+	@test "$(ENV)" = test-mem-e11
 	@$(E11_RUN) node tools/engram-e11/finalize.mjs /evidence
