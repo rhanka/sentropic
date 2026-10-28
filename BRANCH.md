@@ -1,61 +1,86 @@
-# Fix: Refuse expired TUF roots and intra-set metadata parent-pin mismatches
+# Feature: P1 — Complete ChatConversation and separate the client runtime
 
 ## Objective
-Extract the inline Sigstore TUF freshness and version-link checks into an exported pure validator with unit-tested expiry and intra-set parent-pin mismatch refusal (items 2 and 11 slice; prior-trusted-state rollback history stays open).
+- [ ] Complete P1 under `spec/CHAT_MIGRATION_P0*.md`: preserve supported behavior while separating Sentropic runtime from the injected conversation view.
 
 ## Scope / Guardrails
-- Scope limited to validator extraction, its unit tests, and fail-closed-strengthening wiring (strict integer and positive versions, null and array guards, finite verification time, coverage-blocked errors, validate-after-read ordering; not identical behavior).
-- Make-only workflow, no direct Docker commands.
-- Branch development in isolated worktree `tmp/sec5a-trust-expiry`.
-- Automated test campaigns on dedicated environment (`ENV=test-sec5a-expiry`), never on root `dev`.
-- In every `make` command, `ENV=<env>` passed as the last argument.
-- All new text in English.
-- No daily scheduling, auto-merge, publishing, package source, or admission flag changes.
-- No secret, no registry credential, no network; pure local validation.
+- [x] Branch `feat/chat-convergence-p1`, based on `origin/main`; worktree `tmp/worktrees/chat-p1`.
+- [x] Environment `test-chat-p1`; API_PORT=8796 UI_PORT=5196 MAILDEV_UI_PORT=1096; ENV always last.
+- [x] Serialize Docker work with `/home/antoinefa/.cache-tmp/sentropic-docker.lock`; run `make down` after each step.
+- [x] Make targets only; no Python, dev tests, clean-all, rebase, force-push, publication or merge.
+- [x] Selective staging and `make commit`; each commit at most 150 changed lines, excluding unchanged renames.
+- [x] Keep the explicit `() => false` as the default authorization predicate; missing approval must deny execution.
+- [x] Draft sequence to main: P1a runtime foundation/import migration; P1b injected conversation/optional-module boundary and parity.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `scripts/security/daily/qualify-trust-receipt.mjs`
-  - `scripts/security/daily/toolchain-contract.test.mjs`
+  - `packages/chat-runtime/**`
+  - `packages/chat-ui/**`
+  - `packages/chat-server/tests/wire-contract.spec.ts`
+  - `packages/cowork-bridge/**`
+  - `packages/cowork-desktop/**`
+  - `ui/src/**`
+  - `ui/tests/**`
+  - `ui/vscode-ext/**`
+  - `ui/package.json`
+  - `ui/package-lock.json`
+  - `package-lock.json`
+  - `scripts/ci/**`
+  - `spec/CHAT_MIGRATION_P1.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
-  - `docker-compose*.yml`
+  - `.track/**`
   - `.cursor/rules/**`
-  - `.github/workflows/**`
-  - `.security/**`
-  - `docs/security/sec5a-trust-custody.json`
+  - `api/src/**`
+  - `api/drizzle/**`
+  - `spec/CHAT_MIGRATION_P0*.md`
+  - `docker-compose*.yml`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - None
+  - `Makefile`
+  - `.github/workflows/ci.yml`
 - **Exception process**:
-  - No new exception declared. Inherited unchanged from main: BRLOCK-EX1 review_by=2026-11-30T00:00:00Z (owner CI maintainers, removal on PR 846 closure); this branch changes no lockfile path.
+  - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
-- `attention`: items 2 and 11 stay OPEN after this slice; only expiry and intra-set parent-pin mismatch refusal at receipt validation are added, independent content/verifier admission remains required; a fully self-consistent older, unexpired set still passes (no prior trusted state).
+- [x] BRP1-EX1: allow additive Makefile runtime build/typecheck/test/pack targets and necessary chat dependency wiring; impact is package tooling only; rollback restores existing targets and removes runtime targets.
+- [x] BRP1-EX2: allow CI runtime validation and package release wiring; impact is required runtime gates/bootstrap preparation; rollback removes this additive lane, without publication.
+- [x] Track is single-writer: maintain this mergeable branch artifact; conductor imports it into Track.
 
 ## AI Flaky tests
-- Acceptance rule: none apply; no AI/provider-dependent tests in scope.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single coherent gate with unit tests, no UI/E2E surface.
+- [x] Multi-branch draft sequence when necessary; author owns implementation and integration; merge only.
+
+## UAT Management (in orchestration context)
+- [x] Automated qualification uses the isolated test environment; personal owner UAT/transfer GO remains U0.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read COMMON-RULES, packet, PR #850 comment 6514874779, and `qualify-trust-receipt.mjs` metadata checks.
-  - [x] Confirm isolated worktree `tmp/sec5a-trust-expiry` on branch `fix/sec5a-trust-expiry`.
-  - [x] Capture make target: `make test-security-daily ENV=test-sec5a-expiry`.
-  - [x] Confirm scope boundaries, no EXn.
-- [x] **Lot 1 — TUF expiry and intra-set parent-pin refusal**
-  - [x] Add exported `validateTufMetadata(documents, digests, verifiedAt)` to `scripts/security/daily/qualify-trust-receipt.mjs`.
-  - [x] Call it from `createTrustReceipt` as a fail-closed strengthening (see Scope).
-  - [x] Add unit tests in `scripts/security/daily/toolchain-contract.test.mjs` (fresh pass, expired root, wrong type, parent-pin version mismatch, parent-pin digest mismatch, malformed, non-integer version, snapshot-targets digest replay refusal).
-  - [x] Lot gate:
-    - [x] `make scope-check ENV=test-sec5a-expiry`
-    - [x] Focused `toolchain-contract.test.mjs` green in Docker (15/15, retained-evidence replay passes).
-  - [x] Lot gate:
-    - [x] `make test-security-daily ENV=test-sec5a-expiry` (140/140).
-- [x] **Lot 2 — Review and PR**
-  - [x] Muse Wonder full xhigh legs (correctness r1, risk r2), receipts `.h2a/reviews/sec5a-expiry_muse_{r1,r2}.md`; final: APPROVE + APPROVE.
-  - [ ] Open PR with `BRANCH.md` as body; record head; leave merge to owner.
+  - [x] Read master/workflow/testing rules, P0 ownership/closure and P1 row.
+  - [x] Create requested worktree and pass `harness check branch`.
+  - [x] Fix environment, Docker lock, scope and atomic commit policy.
+- [ ] **Lot 1 — Runtime package and physical ownership**
+  - [ ] Create `packages/chat-runtime/package.json`, `tsconfig.json` and public entrypoints.
+  - [ ] Move client transport/replay/history/stream hub and their tests without behavior changes.
+  - [ ] Move draft/attachment/projection/controller/session/checkpoint/local-tool implementation and tests; delete original implementations.
+  - [ ] Migrate inventoried web/Chrome/VSCode/cowork imports and active tooling links.
+  - [ ] Split neutral contracts and optional module state from views; runtime never imports a view implementation.
+  - [ ] Qualify breaking chat-ui version and initial runtime version against registry; update lockfiles.
+- [ ] **Lot 2 — Injected conversation and complete command binding**
+  - [ ] Replace component runtime creation/disposal with normalized snapshot and command props/declarations.
+  - [ ] Bind full send/model/context/tools/attachments, history, retry/stop/edit/feedback/steer and active modules.
+  - [ ] Enforce visible permission pending/denied state; approval executes/posts once; no adapter, denial and timeout execute zero times.
+  - [ ] Preserve host lifetime across remounts; retain explicit default `() => false` authorization.
+- [ ] **Lot 3 — Parity and packed boundary qualification**
+  - [ ] Runtime tests: relocated `transport.test.ts`, `replay.test.ts`, `streamHub.test.ts`, `stream-history-bounds.test.ts`, `stream-throughput.test.ts`, `chat-core-host.spec.ts`.
+  - [ ] Runtime tests: relocated `chat-loop-controller.spec.ts`, `chat-session-runtime.test.ts`, `chat-session-hydration.test.ts`, `chat-projection.test.ts`, `projection.golden.spec.ts`.
+  - [ ] Runtime tests: relocated `chat-draft.test.ts`, `chat-attachments.test.ts`, `local-tools-store.test.ts`, `checkpoints.spec.ts`, `model-selection.spec.ts`, `agents-view-markers.test.ts`.
+  - [ ] Optional module tests: `comments-module.spec.ts`, `documents-module.spec.ts`, `documents-attachment-state.test.ts`, `documents-generated-file-cards.test.ts`, `context.spec.ts`, `chat-context.spec.ts`, `web-host.test.ts`, `host-adapter-types.test.ts`.
+  - [ ] UI tests: `chat-conversation-functional.dom.spec.ts`, `chat-conversation.dom.spec.ts`, `chat-conversation.spec.ts`; injected standalone and app-shaped fixtures use the same runtime.
+  - [ ] Add runtime permission/continuation and remount parity tests with real controller/projection; no command stubs in parity fixtures.
+  - [ ] Run package typecheck, unit/DOM tests, app typecheck/lint and affected app tests.
+  - [ ] Pack both candidates and prove runtime-free UI and standalone installed consumption.
+- [ ] **Lot 4 — Docs consolidation and review**
+  - [ ] Record pair versions, breaking imports, package bootstrap/OIDC prerequisites and consumer notices in `spec/CHAT_MIGRATION_P1.md`.
+- [ ] **Lot 5 — Draft handoff**
+  - [ ] Run `make down ENV=test-chat-p1` and report PR URLs and head SHAs.
