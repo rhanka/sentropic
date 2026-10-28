@@ -572,6 +572,27 @@ describe('mistral session lifecycle', () => {
     }
   });
 
+  it('should refuse a served model outside the 3.0 preview generation', async () => {
+    const socket = new GateSocket([frameCreated('voxtral-mini-transcribe-realtime-2602')]);
+    const sink = new RecordingSink();
+    const session = await openMistralTranscriptionSession(sttConfig, {
+      request: sessionRequest(),
+      admission: admission(),
+      bearerToken: 'bearer-fixture',
+      connect: async () => socket,
+      usage: sink,
+      schedule: () => () => undefined,
+    });
+    try {
+      await expect(session.write(frame('u1', 10))).rejects.toMatchObject({ code: 'transport' });
+      // The refused stream never became current and metered nothing.
+      await expect(session.write(frame('u1', 10))).rejects.toMatchObject({ code: 'transport' });
+      expect(sink.records).toHaveLength(0);
+    } finally {
+      await session.close();
+    }
+  });
+
   it('should refuse to connect when the signal is already aborted', async () => {
     let connected = 0;
     const controller = new AbortController();
