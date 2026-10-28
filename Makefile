@@ -59,7 +59,7 @@ export WEBAUTHN_RP_ID ?= localhost
 export CORS_ALLOWED_ORIGINS ?= http://localhost:$(UI_PORT),http://127.0.0.1:$(UI_PORT),http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*
 
 export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/artifacts packages/auth-client packages/auth-hono packages/auth-ui packages/chat-core packages/chat-server packages/cluster-mesh packages/comments packages/connector-host packages/contracts packages/events packages/flow packages/llm-gateway packages/llm-mesh packages/mcp-auth packages/mcp-connector-google packages/mcp-platform packages/oauth-verify packages/skills packages/ubo-contracts api apps/auth-idp apps/llm-gateway e2e/package.json e2e/package-lock.json e2e/tests/fixtures ui/package.json scripts/ci/locked-tools.mjs scripts/ci/tool-locks.json .security/audit-gate.mjs .security/audit-allowlist.json .dockerignore" | tr ' ' '\n' | xargs -I '{}' find {} -type f ! -path '*/node_modules/*' ! -path '*/dist/*' ! -path '*/build/*' ! -name 'data.db' | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
-export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs packages/cowork-desktop/bin packages/cowork-desktop/src packages/cowork-desktop/packaging packages/cowork-desktop/package.json packages/cowork-desktop/tsconfig.json packages/cowork-bridge/src packages/cowork-bridge/package.json packages/cowork-bridge/tsconfig.json packages/chat-ui/src packages/chat-ui/package.json packages/chat-ui/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs packages/cowork-desktop/bin packages/cowork-desktop/src packages/cowork-desktop/packaging packages/cowork-desktop/package.json packages/cowork-desktop/tsconfig.json packages/cowork-bridge/src packages/cowork-bridge/package.json packages/cowork-bridge/tsconfig.json packages/chat-ui/src packages/chat-ui/package.json packages/chat-ui/tsconfig.json packages/chat-runtime/src packages/chat-runtime/package.json packages/chat-runtime/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export E2E_VERSION    ?= $(shell echo "e2e/tests e2e/helpers e2e/global.setup.ts e2e/package.json e2e/package-lock.json e2e/npm-toolchain e2e/Dockerfile e2e/playwright.config.ts" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_IMAGE_NAME ?= sentropic-api
 API_IMAGE_RECEIPT ?= .tmp/ci-prod-image/api-image-id
@@ -1411,7 +1411,11 @@ typecheck-chat-runtime build-chat-runtime test-chat-runtime:
 pack-chat-runtime: build-chat-runtime
 	$(call manifest_guard_pack,chat-runtime,$(MANIFEST_DIST_FORM))
 chat-migration-registry:
-	@docker run --rm $(LLM_MESH_NODE_IMAGE) sh -lc 'npm view @sentropic/chat-ui version; npm view @sentropic/chat-runtime version || test "$$?" = 1'
+	@docker run --rm $(LLM_MESH_NODE_IMAGE) sh -lc 'npm view @sentropic/chat-ui version; npm view @sentropic/cowork-desktop version; npm view @sentropic/chat-runtime version || test "$$?" = 1'
+
+.PHONY: chat-migration-lockfiles
+chat-migration-lockfiles:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; npm install --package-lock-only --ignore-scripts --audit=false --fund=false; cd ui; npm install --package-lock-only --ignore-scripts --audit=false --fund=false --workspaces=false'
 
 .PHONY: typecheck-chat-ui
 typecheck-chat-ui: ## Run @sentropic/chat-ui type checks
@@ -2084,17 +2088,17 @@ endif
 .PHONY: typecheck-cowork-desktop
 typecheck-cowork-desktop: ## Run @sentropic/cowork-desktop type checks
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn ../../../cowork-bridge node_modules/@sentropic/cowork-bridge; ln -sfn ../../../chat-ui node_modules/@sentropic/chat-ui; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types;ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn ../../../cowork-bridge node_modules/@sentropic/cowork-bridge; ln -sfn ../../../chat-runtime node_modules/@sentropic/chat-runtime; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types;ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 
 .PHONY: test-cowork-desktop
 test-cowork-desktop: ## Run @sentropic/cowork-desktop tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn ../../../cowork-bridge node_modules/@sentropic/cowork-bridge; ln -sfn ../../../chat-ui node_modules/@sentropic/chat-ui; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types;ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn ../../../cowork-bridge node_modules/@sentropic/cowork-bridge; ln -sfn ../../../chat-runtime node_modules/@sentropic/chat-runtime; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types;ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
 
 .PHONY: build-cowork-desktop
 build-cowork-desktop: ## Build @sentropic/cowork-desktop dist package
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn ../../../cowork-bridge node_modules/@sentropic/cowork-bridge; ln -sfn ../../../chat-ui node_modules/@sentropic/chat-ui; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types;ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn ../../../cowork-bridge node_modules/@sentropic/cowork-bridge; ln -sfn ../../../chat-runtime node_modules/@sentropic/chat-runtime; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types;ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 
 .PHONY: pack-cowork-desktop
 pack-cowork-desktop: build-cowork-desktop ## Validate @sentropic/cowork-desktop npm package contents without publishing
@@ -2157,7 +2161,7 @@ package-desktop-windows: ## Build the signable single Windows .exe for @sentropi
 			node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund esbuild@0.25.10 @yao-pkg/pkg@6.9.0 typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; \
 			mkdir -p node_modules/@sentropic node_modules/.bin; \
 			ln -sfn ../../../cowork-bridge node_modules/@sentropic/cowork-bridge; \
-			ln -sfn ../../../chat-ui node_modules/@sentropic/chat-ui; \
+			ln -sfn ../../../chat-runtime node_modules/@sentropic/chat-runtime; \
 			ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; \
 			ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; \
 			ln -sfn "$$tool_dir/node_modules/esbuild" node_modules/esbuild; \
