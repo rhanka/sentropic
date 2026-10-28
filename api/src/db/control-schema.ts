@@ -385,7 +385,7 @@ export const costLedger = controlSchema.table(
     runId: text('run_id'),                                // reserved
 
     // Call descriptor.
-    operation: text('operation').notNull(),               // 'generate' | 'stream'
+    operation: text('operation').notNull(),               // 'generate' | 'stream' | 'decision'
     providerId: text('provider_id').notNull(),
     modelId: text('model_id').notNull(),
     credentialSource: text('credential_source'),          // ResolvedProviderCredential.source
@@ -424,7 +424,7 @@ export const costLedger = controlSchema.table(
     createdAtIdx: index('cost_ledger_created_at_idx').on(table.createdAt),
     operationCheck: check(
       'cost_ledger_operation_check',
-      sql`${table.operation} IN ('generate', 'stream')`,
+      sql`${table.operation} IN ('generate', 'stream', 'decision')`,
     ),
     principalKindCheck: check(
       'cost_ledger_principal_kind_check',
