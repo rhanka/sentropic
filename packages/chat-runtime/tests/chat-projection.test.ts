@@ -364,3 +364,31 @@ describe('chat projection live terminal outcome (freeze regression)', () => {
     for (const item of assistantItems) {
       expect(item).toMatchObject({ isTerminal: false });
     }
+  });
+
+  it('explicit _localStatus still wins (processing stays non-terminal even with stale done)', () => {
+    const projectedProcessing = buildProjectedTimeline({
+      timeline: [assistant('a1', { _streamId: 's1', _localStatus: 'processing' })],
+      // No terminal event in the projected events.
+      getAssistantComputation: () => liveComputation(midStreamEvents),
+    });
+    for (const item of projectedProcessing) {
+      if (item.kind === 'assistant-segment') {
+        expect(item.isTerminal).toBe(false);
+      }
+    }
+
+    // Explicit completed status keeps terminal even with no terminal event.
+    const projectedCompleted = buildProjectedTimeline({
+      timeline: [assistant('a1', { _streamId: 's1', _localStatus: 'completed' })],
+      getAssistantComputation: () => liveComputation(midStreamEvents),
+    });
+    const completedAssistants = projectedCompleted.filter(
+      (item) => item.kind === 'assistant-segment',
+    );
+    expect(completedAssistants.length).toBeGreaterThan(0);
+    for (const item of completedAssistants) {
+      expect(item.isTerminal).toBe(true);
+    }
+  });
+});
