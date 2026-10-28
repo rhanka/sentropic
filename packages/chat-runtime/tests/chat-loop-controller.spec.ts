@@ -891,3 +891,143 @@ describe('chat-loop-controller: host lifecycle (slice 1D)', () => {
     const payload = { content: 'Hello', sessionId: 'sess-x', model: 'gpt-4' };
     await ctrl.send(payload, {
       buildUserMessage: (h) => userMsg(h.userMessageId, payload.content),
+      buildAssistantMessage: makeFactory(),
+    });
+
+    expect(calls.sendMessage).toHaveLength(1);
+    expect(calls.sendMessage[0]).toMatchObject({ content: 'Hello', sessionId: 'sess-x', model: 'gpt-4' });
+  });
+
+  // 10b. send: optimistic user + assistant messages inserted; _streamId wired; startJobPoll fires
+  it('10b: send inserts user + assistant messages with correct ids and _streamId', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    const { transport } = makeFakeTransport({
+      sendMessageResponse: {
+        userMessageId: 'u-opt',
+        assistantMessageId: 'a-opt',
+        streamId: 'stream-opt',
+        sessionId: 'sess-opt',
+        jobId: 'job-opt',
+      },
+    });
+    ctrl.attachHost({ transport });
+    ctrl.attachStream({
+      streamClient: makeFakeStreamClient(),
+      pollJob: makeFakePollJob(['completed']),
+      pollInitialDelayMs: 0,
+      pollIntervalMs: 0,
+    });
+
+    await ctrl.send({ content: 'go' }, {
+      buildUserMessage: (h) => userMsg(h.userMessageId, 'go'),
+      buildAssistantMessage: makeFactory(),
+    });
+
+    const msgs = ctrl.getSnapshot().messages;
+    expect(msgs).toHaveLength(2);
+
+    const uMsg = msgs.find((m) => m.role === 'user');
+    expect(uMsg?.id).toBe('u-opt');
+
+    const aMsg = msgs.find((m) => m.role === 'assistant');
+    expect(aMsg?.id).toBe('a-opt');
+    expect(aMsg?._streamId).toBe('stream-opt');
+    expect(aMsg?._localStatus).toBe('processing');
+  });
+
+  // 10c. send: returned handle matches host response
+  it('10c: send returns a handle matching the host response', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    const { transport } = makeFakeTransport({
+      sendMessageResponse: {
+        sessionId: 'sess-ret',
+        userMessageId: 'u-ret',
+        assistantMessageId: 'a-ret',
+        streamId: 'stream-ret',
+        jobId: 'job-ret',
+      },
+    });
+    ctrl.attachHost({ transport });
+    ctrl.attachStream({
+      streamClient: makeFakeStreamClient(),
+      pollJob: makeFakePollJob(['completed']),
+      pollInitialDelayMs: 0,
+      pollIntervalMs: 0,
+    });
+
+    const result = await ctrl.send({ content: 'x' }, {
+      buildUserMessage: (h) => userMsg(h.userMessageId),
+      buildAssistantMessage: makeFactory(),
+    });
+
+    expect(result.handle.sessionId).toBe('sess-ret');
+    expect(result.handle.userMessageId).toBe('u-ret');
+    expect(result.handle.assistantMessageId).toBe('a-ret');
+    expect(result.handle.streamId).toBe('stream-ret');
+    expect(result.handle.jobId).toBe('job-ret');
+  });
+
+  // 10d. bootstrapRun: userMessage path — both messages appended
+  it('10d: bootstrapRun with userMessage appends user + assistant at the end', () => {
+    const ctrl = createChatLoopController<Msg>();
+    ctrl.attachStream({
+      streamClient: makeFakeStreamClient(),
+      pollJob: makeFakePollJob(['completed']),
+      pollInitialDelayMs: 0,
+      pollIntervalMs: 0,
+    });
+    const user = userMsg('u1', 'hi');
+    ctrl.bootstrapRun({
+      sessionId: 'sess-1',
+      assistantMessageId: 'a1',
+      streamId: 'stream-1',
+      jobId: 'job-1',
+      buildAssistantMessage: makeFactory(),
+      userMessage: user,
+    });
+
+    const msgs = ctrl.getSnapshot().messages;
+    expect(msgs).toHaveLength(2);
+    expect(msgs[0]?.id).toBe('u1');
+    expect(msgs[1]?.id).toBe('a1');
+    expect(msgs[1]?._localStatus).toBe('processing');
+    expect(msgs[1]?._streamId).toBe('stream-1');
+  });
+
+  // 10e. bootstrapRun: truncateAfterMessageId path — messages truncated correctly
+  it('10e: bootstrapRun with truncateAfterMessageId truncates messages and appends assistant', () => {
+    const ctrl = createChatLoopController<Msg>();
+    ctrl.attachStream({
+      streamClient: makeFakeStreamClient(),
+      pollJob: makeFakePollJob(['completed']),
+      pollInitialDelayMs: 0,
+      pollIntervalMs: 0,
+    });
+    ctrl.setMessages([
+      userMsg('u1'),
+      assistantMsg('a1', { _localStatus: 'completed', content: 'first' }),
+      userMsg('u2'),
+      assistantMsg('a2', { _localStatus: 'completed', content: 'second' }),
+    ]);
+
+    ctrl.bootstrapRun({
+      sessionId: 'sess-1',
+      assistantMessageId: 'a-new',
+      streamId: 'stream-new',
+      jobId: 'job-new',
+      buildAssistantMessage: makeFactory(),
+      truncateAfterMessageId: 'u2',
+    });
+
+    const msgs = ctrl.getSnapshot().messages;
+    // Messages up to u2 (inclusive) + new assistant
+    expect(msgs.map((m) => m.id)).toEqual(['u1', 'a1', 'u2', 'a-new']);
+    expect(msgs[3]?._streamId).toBe('stream-new');
+    expect(msgs[3]?._localStatus).toBe('processing');
+  });
+
+  // 10f. bootstrapRun: append path — assistant appended at the end
+  it('10f: bootstrapRun with no userMessage/truncate appends assistant at end', () => {
+    const ctrl = createChatLoopController<Msg>();
+    ctrl.attachStream({
+      streamClient: makeFakeStreamClient(),
