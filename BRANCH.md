@@ -42,6 +42,7 @@
   - [x] Emit resolved contract path/hash/digest and installed-candidate provenance; retain the separate L5 exclusion and pack source head.
   - [x] Update receiving shape/refusal checks for resolved JCS bytes and explicit remaining slots 15/16/21; reject manual promotion.
   - [x] First campaign passed runtime/types and cleanup; finalizer caught a relative tsc entry path. Pass the absolute consumer entry, retaining the strict closure guard, and rerun.
+  - [x] Replace historical receiving checklist with exact 0.21.3/dev.6/contract/image values, independent qualification gaps and ordered release/ACK handoff.
 - [x] **Lot E11-0 — Baseline and scope**
   - [x] Read MASTER/workflow, plan E11, PR #803 E11 inputs, Opus r3 21-entry inventory, RESERVATION.md and Docker lock packet; mechanical branch PASS.
 - [x] **Lot E11-1 — Generator and checker**
