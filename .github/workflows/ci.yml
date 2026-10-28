@@ -2981,11 +2981,15 @@ jobs:
           # in the registry first (docker manifest inspect via check-{api,ui}-image) and
           # fail this job with a clear error, rather than deploying an unverified reference.
           make check-api-image check-ui-image
+      - uses: azure/setup-kubectl@v4
+        with:
+          version: 'v1.35.0'
       - name: Deploy to the sentropic-preprod namespace (immutable image pin)
         env:
           KUBECONFIG: ${{ github.workspace }}/kubeconfig-preprod.yaml
         run: |
           set -eu
+          node --input-type=module -e "import { checkPreprodIdp } from './deploy/ci/idp-identity-sync/session-preflight.mjs'; checkPreprodIdp();"
           make k8s-deploy-preprod KUBECONFIG="${KUBECONFIG}" ENV=ci-preprod
 
   # Aggregate every PR validation job so path-filtered skips satisfy one required check.
