@@ -65,6 +65,7 @@
   - [x] Add control migration and schema for metadata receipts and persistent evaluator disable evidence.
   - [x] Add bounded database transactions, evaluator-first locks and owner-fenced hold/receipt persistence.
   - [x] Adapt existing all-bucket admission with pinned prices, evaluator disable checks and durable dispatch marking.
+  - [x] Implement atomic Decision ledger settlement, pending-liability charges, overrun disable evidence and outbox receipts.
   - [ ] Keep production refusing; expose experimental qualification only to application admins.
   - [ ] API unit tests: api/tests/unit/decision-host.test.ts; api/tests/unit/decision-route.test.ts.
   - [ ] API integration tests: api/tests/api/decision-metering.test.ts.
