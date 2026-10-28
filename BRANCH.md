@@ -33,7 +33,7 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot E11-4 — Integration refresh**
   - [x] Merge integration after #821/#803, never rebase; retain E11 plan and union all Makefile environment selectors. No `.track` changes on either side of this merge.
-  - [ ] Generate/check the 0.21.3/dev.6 tuple and receiving checklist; preserve evidenced Stage B gaps.
+  - [x] Generate/check the 0.21.3/dev.6 tuple and receiving checklist; preserve evidenced Stage B gaps.
   - [x] Stage published Engram and retained dev.6; adapt only E10 consumer version/archive assertions, never package bytes or artifacts sources.
   - [x] Add make-owned E2 lock freeze and strict fresh npm-ci campaign with source/PG identity, lock comparison, type/runtime proof and automatic owned-stack cleanup.
   - [x] Pin integration source/tree, 0.21.3 SHA-256/SRI, dev.6 SHA-256/SRI and the producer neutral JCS bytes.
@@ -48,6 +48,8 @@
   - [x] Producer extraction passes. First tuple test exposed the mesh manifest wrapper; compare its manifest, canonical bytes, byte hash and digest rather than the enclosing metadata object.
   - [x] Freeze successful E2 receipt, package/lock, campaign log/status and adaptation hashes as checker anchors; successor reruns require an explicit reviewed evidence update.
   - [x] E10 final-head CI `cfd45de4d54651626e97113494b9d7bd108998c8` completed/success in run 40727760123; bind that exact receipt as slot 21. E11 exact-head CI stays a separate post-push receipt to avoid self-reference.
+  - [x] Nine tests pass, generation/check exit 0, cleanup 0; tuple SHA-256 `66fa8eeef276dfd73fdb9440f589dbdeff33417e8650b55ac354e894cd547527`; complete bundle retained in `.tmp/engram-e2-host-tuple/e11-current/`.
+  - [ ] Push final head; completed/success CI recorded outside git after push; no publication or ACK.
 - [x] **Lot E11-0 — Baseline and scope**
   - [x] Read MASTER/workflow, plan E11, PR #803 E11 inputs, Opus r3 21-entry inventory, RESERVATION.md and Docker lock packet; mechanical branch PASS.
 - [x] **Lot E11-1 — Generator and checker**
