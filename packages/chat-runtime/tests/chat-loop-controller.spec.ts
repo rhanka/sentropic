@@ -751,3 +751,143 @@ describe('chat-loop-controller: stream subscription (slice 1C)', () => {
     expect(client1.hasAnyHandler()).toBe(false);
     // Second client is now active
     expect(client2.hasAnyHandler()).toBe(true);
+
+    // Events from client2 land in the controller; client1 events are ignored
+    client2.emit({ type: 'content_delta', streamId, sequence: 1, data: { delta: 'hi' } });
+    expect(ctrl.getSnapshot().projectedStreamEventsById.get(streamId)).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. Zero sentropic domain strings — runtime scan of controller module source
+// ---------------------------------------------------------------------------
+describe('chat-loop-controller: sentropic-string scan', () => {
+  it('controller source contains zero sentropic domain strings', () => {
+    const controllerPath = path.join(
+      process.cwd(),
+      'src',
+      'state',
+      'chatLoopController.ts',
+    );
+    const source = fs.readFileSync(controllerPath, 'utf8');
+
+    const forbidden = [
+      'organization',
+      'folder',
+      'initiative',
+      'usecase',
+      'session_adapter',
+      'workspace',
+      'organization_update',
+      'folder_update',
+    ];
+
+    for (const term of forbidden) {
+      // Allow the term only in comments (lines starting with // or * )
+      const lines = source.split('\n');
+      const codeLines = lines.filter(
+        (line) => !/^\s*(\/\/|\*)/.test(line),
+      );
+      const codeBlock = codeLines.join('\n');
+      expect(
+        codeBlock.includes(term),
+        `Domain string "${term}" found in non-comment code`,
+      ).toBe(false);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. Host lifecycle (slice 1D) — send / bootstrapRun / retry / stop / edit / setFeedback
+//
+// Strategy: inject a FAKE host transport (records calls) and assert:
+//   10a. attachHost wires the transport; send calls host.sendMessage with right payload
+//   10b. send: optimistic user + assistant messages inserted; _streamId wired; startJobPoll fires
+//   10c. send: returned handle matches host response
+//   10d. bootstrapRun: userMessage path — both messages appended
+//   10e. bootstrapRun: truncateAfterMessageId path — messages truncated correctly
+//   10f. bootstrapRun: append path — assistant appended at the end
+//   10g. retry: calls host.retryMessage with right args; truncates messages; returns handle
+//   10h. retry: optimistic assistant inserted with processing status + _streamId
+//   10i. stop: calls host.stopMessage with the message id
+//   10j. edit: calls host.editMessage + patches content in message list
+//   10k. setFeedback: calls host.setFeedback + patches feedbackVote (up→1, down→-1, clear→null)
+//   10l. send/retry/stop/edit/setFeedback throw when no transport attached
+// ---------------------------------------------------------------------------
+
+/**
+ * Fake host transport: records calls, returns deterministic responses.
+ */
+function makeFakeTransport(
+  overrides: Partial<{
+    sendMessageResponse: Partial<import('../src/state/chatLoopController.js').ControllerRunHandle>;
+    retryMessageResponse: Partial<import('../src/state/chatLoopController.js').ControllerRunHandle>;
+  }> = {},
+) {
+  const defaultHandle = {
+    sessionId: 'sess-1',
+    userMessageId: 'user-1',
+    assistantMessageId: 'asst-1',
+    streamId: 'stream-1',
+    jobId: 'job-1',
+  };
+  const calls = {
+    sendMessage: [] as unknown[],
+    retryMessage: [] as Array<{ messageId: string; opts: { providerId: string; model: string } }>,
+    stopMessage: [] as string[],
+    editMessage: [] as Array<{ messageId: string; content: string }>,
+    setFeedback: [] as Array<{ messageId: string; vote: string }>,
+  };
+  return {
+    calls,
+    transport: {
+      async sendMessage(payload: unknown) {
+        calls.sendMessage.push(payload);
+        return { ...defaultHandle, ...(overrides.sendMessageResponse ?? {}) };
+      },
+      async retryMessage(messageId: string, opts: { providerId: string; model: string }) {
+        calls.retryMessage.push({ messageId, opts });
+        return { ...defaultHandle, ...(overrides.retryMessageResponse ?? {}) };
+      },
+      async stopMessage(messageId: string) {
+        calls.stopMessage.push(messageId);
+      },
+      async editMessage(messageId: string, content: string) {
+        calls.editMessage.push({ messageId, content });
+      },
+      async setFeedback(messageId: string, vote: string) {
+        calls.setFeedback.push({ messageId, vote });
+      },
+    },
+  };
+}
+
+/** Minimal assistant message factory (stamps model from closure). */
+function makeFactory(model = 'gpt-test') {
+  return (base: {
+    id: string;
+    sessionId: string;
+    _streamId: string;
+    _localStatus: 'processing';
+    role: 'assistant';
+    content: null;
+    createdAt: string;
+  }): Msg => ({ ...base, model } as Msg & { model: string });
+}
+
+describe('chat-loop-controller: host lifecycle (slice 1D)', () => {
+  // 10a. attachHost wires the transport; send calls host.sendMessage with right payload
+  it('10a: send calls host.sendMessage with the given payload', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    const { transport, calls } = makeFakeTransport();
+    ctrl.attachHost({ transport });
+    ctrl.attachStream({
+      streamClient: makeFakeStreamClient(),
+      pollJob: makeFakePollJob(['completed']),
+      pollInitialDelayMs: 0,
+      pollIntervalMs: 0,
+    });
+
+    const payload = { content: 'Hello', sessionId: 'sess-x', model: 'gpt-4' };
+    await ctrl.send(payload, {
+      buildUserMessage: (h) => userMsg(h.userMessageId, payload.content),
