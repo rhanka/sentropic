@@ -58,7 +58,7 @@
   - [x] Read project rules, template, approved plan and r2 review; verify plan hash.
   - [x] Create isolated branch/worktree and mechanically check its exact branch with harness.
   - [x] Record documentation-only environment, scope and existing source baseline.
-- [ ] **Lot P0a — Inventory and classify**
+- [x] **Lot P0a — Inventory and classify**
   - [x] Enumerate 125 global CSS selector blocks affecting chat and inherited host styling.
   - [x] Inventory all package files/exports, consumers, styling overrides and app widget snippets.
   - [x] Record appendix: symbols inventory.
@@ -74,12 +74,12 @@
   - [x] Inspect published DS theme/Drawer artifacts and name canonical DS chat primitives; assign missing DropZone to F15.
   - [x] Record all section 6 conductor defaults and owner-held gates without impersonating owner decisions.
   - [x] Integrate r2 notes: runtime package/semver break, proposed C-03 owner/copy changes, M1b release dependency, split estimate.
-  - [ ] Record domain acknowledgement state and bounded next-owner acceptance criteria.
+  - [x] Record domain acknowledgement state and bounded next-owner acceptance criteria.
 - [ ] **Lot P0c — Final validation and draft PR**
-  - [ ] Validate exhaustive inventories against the pinned source; inspect every diff hunk.
+  - [x] Validate exhaustive inventories against the pinned source; inspect every diff hunk.
   - [ ] Verify whitespace and allowed paths; mechanically check branch/scope before each commit.
   - [ ] Independent contract/evidence reviews and finding reconciliation.
-  - [ ] Create draft PR to `main`, body from this checklist, with execution-plan comment.
+  - [x] Create draft PR to `main`, body from this checklist, with execution-plan comment (PR #816).
   - [ ] Push and verify CI completed/success on exact final head; report PR and full SHA.
   - [x] API/UI/E2E test files: none changed; documentation-only checks plus repository CI qualify P0.
   - [x] No package version bump required; no `packages/*/src/**` changes.
