@@ -38,6 +38,14 @@ if (files.status !== 0 || /package\/(src|dist\/(client|checkpoints|stores\/local
   || /chatLoopController|chatSessionRuntime|chatSessionHydration|localToolStreamSync/.test(files.stdout)) {
   throw new Error('Visual archive contains a source/runtime implementation path');
 }
+// Executable visual artifacts must not load runtime code, including helpers under new paths.
+for (const file of files.stdout.split('\n').filter((name) => /\.(?:[cm]?js|svelte)$/.test(name))) {
+  const content = spawnSync('tar', ['-xOf', '/input/ui.tgz', file], { encoding: 'utf8' });
+  if (content.status !== 0) throw new Error(`Cannot inspect visual artifact ${file}`);
+  if (/(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)['"]@sentropic\/chat-runtime(?:\/[^'"]*)?['"]/.test(content.stdout)) {
+    throw new Error(`Visual artifact loads runtime execution code: ${file}`);
+  }
+}
 const hashes = Object.fromEntries(['ui', 'runtime'].map((name) => [name,
   createHash('sha256').update(readFileSync(`/input/${name}.tgz`)).digest('hex')]));
 writeFileSync('/reports/chat-pair.json', JSON.stringify({ status: 'passed', head: process.env.QUALIFY_HEAD_SHA, hashes, checks: ['installed public contracts', 'Svelte typecheck', 'Vite production build', 'installed payload/commands/remount/permissions', 'visual archive ownership'] }, null, 2));
