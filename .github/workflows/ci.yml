@@ -260,6 +260,7 @@ jobs:
               - 'scripts/test-api-tag-guard.sh'
               - 'scripts/resolve-api-image.sh'
               - 'scripts/test-api-image-canonical.sh'
+              - 'scripts/test-artifact-content-image.sh'
               - 'scripts/test-pgbackup-restore-isolation.sh'
               - '.github/workflows/ci.yml'
               - 'e2e/**'
@@ -270,6 +271,7 @@ jobs:
             api:
               - 'api/**'
               - 'apps/auth-idp/**'
+              - 'apps/artifact-content/**'
               - 'apps/llm-gateway/**'
               - 'package.json'
               - 'package-lock.json'
@@ -1249,6 +1251,9 @@ jobs:
       - name: Test canonical API image artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make test-ci-api-image-canonical ENV=test-ci-api
+      - name: Verify the production artifact content entrypoint
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make test-artifact-content-image ENV=test-ci-api
       - name: Save API image as artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make save-api
