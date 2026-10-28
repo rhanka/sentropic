@@ -90,7 +90,7 @@ describe('documents module — type dedup re-export chain', () => {
   });
 
   it('should load state/chatAttachments without error (re-export chain)', async () => {
-    const mod = await import('../src/state/chatAttachments.js');
+    const mod = await import('@sentropic/chat-runtime/state/chatAttachments');
     // Verify the helper functions still exist at the old path
     expect(typeof mod.createImageAttachmentDraft).toBe('function');
     expect(typeof mod.summarizeComposerAttachments).toBe('function');
