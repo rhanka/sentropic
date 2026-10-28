@@ -17,9 +17,10 @@ export function createConversationDocuments(session: ChatSessionRuntime, host?: 
   };
   const upload = async (draft: ChatComposerAttachmentDraft, file: File) => {
     if (!host) throw new Error('Attachment host unavailable');
-    update({ ...draft, state: 'uploading', error: undefined });
+    const { error: _previousError, ...clean } = draft;
+    update({ ...clean, state: 'uploading' });
     try {
-      let next = await host.uploadFile({ ...draft, state: 'uploading', error: undefined }, file);
+      let next = await host.uploadFile({ ...clean, state: 'uploading' }, file);
       if (disposed || !session.snapshot().attachments.some((entry) => entry.id === draft.id)) {
         if (next.documentId) await host.deleteUploadedFile(next.documentId);
         return;
@@ -46,7 +47,7 @@ export function createConversationDocuments(session: ChatSessionRuntime, host?: 
         files.set(id, file);
         if (previewUrl) urls.set(id, previewUrl);
         const draft: ChatComposerAttachmentDraft = { id, kind: file.type.startsWith('image/') ? 'image' : 'file',
-          source, fileName: file.name, mimeType: file.type, sizeBytes: file.size, state: 'pending', previewUrl };
+          source, fileName: file.name, mimeType: file.type, sizeBytes: file.size, state: 'pending', ...(previewUrl ? { previewUrl } : {}) };
         session.setAttachments([...session.snapshot().attachments, draft]);
         await upload(draft, file);
       }
