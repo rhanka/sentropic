@@ -49,7 +49,7 @@
 - [x] Current package evidence: `docs/baselines/app-cm-w0/published-tuple.json` and `payload-equivalence-2026-10-27.json` bind artifacts 0.2.4 (124 payload paths) to integrity `sha512-AMXfnuKVx5gdeFppZ4iSgb0KxmfH+qSOotm/cXGBKGEdhyv9R/D05jMhefP5pIW9HwD/jbEWqcU9Gv3KTxJSQQ==` and exact workspace payload equivalence, including the activation adapter, SQL and vectors. Earlier 0.2.1/0.2.3 observations are superseded.
 - [x] UP-T-1 closure: package adapter uses `createPostgresActivationStore`, SQL asset `@sentropic/artifacts/sql/0001_activation.sql`, SHA-256 `13767c826a62aa5f880809ca2ebc60bdc638b2e59f983e195d4351356b282d8b`; host only composes those contracts.
 - [x] R1 P2: replace raw write/take/remove ports with frozen ticket/flow peek ports plus configured issue, consume, cleanup and invalidate. New facade test fails on the former spread (`/tmp/w1c-r1-tests.log`) and passes after restriction. Document separate ticket/flow transactions: flow-write failure rejects issuance; the unused ticket cannot activate without a flow and expires within 60 seconds.
-- [x] PR routing: owner requests feat/app-cm-integration; inherited W1.a records main as its CI-trigger-only PR base. Verify the available CI trigger when delivery becomes executable; no merge authorized to either base.
+- [x] R1 exact-head CI: `.github/workflows/app-cm-w1c.yml` triggers on pushes to `feat/app-cm-w1c`, checks out and asserts `github.sha`, then runs the same six receiving suites, API typecheck/lint and unconditional teardown through existing make targets. No publication/deployment and no PR retargeting; wait for the exact-head GitHub receipt before delivery.
 
 ## AI Flaky tests
 - [x] No AI tests or accepted flakes in this lot; no timeout increases.
