@@ -1,96 +1,106 @@
-# Feature: Freeze the chat migration contract (P0)
+# Feature: P1a — Extract the Sentropic chat runtime foundation
 
 ## Objective
-- [ ] Freeze the approved P0 behavior, ownership, consumer and styling contract without changing implementation.
-- [x] Source: approved 2026-10-28 plan, SHA-256 `daf1d8373fa0eaedc3514c452e8161cd597b9c3a749772ca94334e5cede08790`; Opus r2 APPROVE.
+- [ ] Complete P1 under `spec/CHAT_MIGRATION_P0*.md`: preserve supported behavior while separating Sentropic runtime from the injected conversation view.
 
 ## Scope / Guardrails
-- [x] Documentation only under `spec/`; branch execution checklist in `BRANCH.md`.
-- [x] Branch `feat/chat-convergence-p0` from `origin/main`; worktree `tmp/worktrees/chat-p0`.
-- [x] Base `ea20bd9c026e9717d911514e763f8911b6981dde`; no runtime, UI, dependency, release or data change.
-- [x] Make-only commands; `ENV=test-chat-p0` last; no containers or port allocation required.
-- [x] Root workspace and its uncommitted Track state remain untouched.
-- [x] Atomic commits of at most 150 changed lines via `make commit`; selective staging; no AI trailers.
-- [x] Merge only if integration becomes necessary; never rebase; deliver a draft PR without merging.
-- [x] All new documentation, commit and PR text in English.
-- [x] Owner tests, UAT GO, transfer GO and npm authorization remain separate gates.
+- [x] Branch `feat/chat-convergence-p1`, based on `origin/main`; worktree `tmp/worktrees/chat-p1`.
+- [x] Environment `test-chat-p1`; API_PORT=8796 UI_PORT=5196 MAILDEV_UI_PORT=1096; ENV always last.
+- [x] Serialize Docker work with `/home/antoinefa/.cache-tmp/sentropic-docker.lock`; run `make down` after each step.
+- [x] Make targets only; no Python, dev tests, clean-all, rebase, force-push, publication or merge.
+- [x] Selective staging and `make commit`; each commit at most 150 changed lines, excluding unchanged renames.
+- [x] Keep the explicit `() => false` as the default authorization predicate; missing approval must deny execution.
+- [x] Draft sequence to main: P1a runtime foundation/import migration; P1b injected conversation/optional-module boundary and parity.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [x] **Allowed Paths (implementation scope)**:
-  - [x] `BRANCH.md`
-  - [x] `spec/CHAT_MIGRATION_P0*.md`
-- [x] **Forbidden Paths (must not change in this branch)**:
-  - [x] `Makefile`
-  - [x] `docker-compose*.yml`
-  - [x] `.cursor/rules/**`
-  - [x] `plan/**`
-  - [x] `packages/**`
-  - [x] `ui/**`
-  - [x] `api/**`
-  - [x] `.github/**`
-  - [x] `.track/**`
-  - [x] Receiving DS repository (read-only evidence).
-- [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [x] None authorized; a newly required path needs a bounded `BRP0-EXn` first.
-- [x] **Exception process**:
-  - [x] Record rationale, impact and rollback in Feedback Loop before any exception edit.
+- **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
+  - `packages/chat-runtime/**`
+  - `packages/chat-ui/**`
+  - `packages/chat-server/tests/wire-contract.spec.ts`
+  - `packages/cowork-bridge/**`
+  - `packages/cowork-desktop/**`
+  - `ui/src/**`
+  - `ui/tests/**`
+  - `ui/vscode-ext/**`
+  - `ui/package.json`
+  - `ui/package-lock.json`
+  - `package-lock.json`
+  - `scripts/ci/**`
+  - `spec/CHAT_MIGRATION_P1.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `.track/**`
+  - `.cursor/rules/**`
+  - `api/src/**`
+  - `api/drizzle/**`
+  - `spec/CHAT_MIGRATION_P0*.md`
+  - `docker-compose*.yml`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile`
+  - `.github/workflows/ci.yml`
+- **Exception process**:
+  - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
-- [x] `BRP0-N1` clarification: P0 documents a proposed C-03 amendment; only DS may edit its contract.
-- [x] `BRP0-N2` clarification: the plan author/reviewer evidence does not acknowledge this new contract for either domain maintainer.
-- [x] `BRP0-N3` clarification: inventory and draft PR are authorized; no owner UAT or transfer approval is inferred.
-- [x] `BRP0-N4` clarification: local scope gate uses installed host harness through an external make overlay and skips `build-harness`; no tracked Makefile edit or Docker needed.
-- [x] `BRP0-R1` acknowledge: boundary review APPROVE; clarify scope refinements versus approved summary, and split mixed DOM/stream-fixture test custody (conductor refresh before P1).
-- [x] `BRP0-R2a` acknowledge: broaden consumer census to all case-insensitive chat-ui references; add CI manifests/wiring, E2E storage/regressions and retained historical mentions.
-- [x] `BRP0-R2b` acknowledge: all 125 selector locations now identify the first selector token; both atomic correction slices complete.
-- [x] `BRP0-R2c` acknowledge: inventory the semicolon hover-variant directive separately from CSS selector blocks.
-- [x] `BRP0-R3` acknowledge: both final independent review legs APPROVE on 64521846e; receipt/checklist-only handoff follows.
-- [x] `BRP0-PR816-R1` resolve: replace human-effort figures and dependent references with lot scope, order and dependencies per the owner's 2026-10-28 rule; align PR body and qualification comment.
-- [ ] `BRP0-ACK` attention: DS/Sentropic/architect co-freeze and conductor Track trace remain external acceptance; no acknowledgement manufactured.
+- [x] BR1-cowork-check: regenerate the workspace lock for the semver dependency; cowork-desktop typecheck, all 52 tests and strict packed/source manifest guard pass after the correction.
+- [x] BR1-cowork-pack: strict packed/source manifest guard reproduced a forbidden cowork-bridge file dependency in the changed desktop consumer; replace it with published-compatible ^0.1.1, retaining the already reserved desktop 0.2.1 release.
+- [x] BR1-R1: boundary review APPROVE; packaging findings accepted: include LICENSE, make the temporary UI type peer optional and explicitly enumerate runtime subpaths; align the host export test and handle string-valued export entries.
+- [x] BR1-R1-check: corrected runtime export test 23/23 and guarded pack pass; regenerate optional-peer metadata; P1a UI/runtime source behavior remains unchanged.
+- [x] BR1-EX1: allow additive Makefile runtime build/typecheck/test/pack targets and necessary chat dependency wiring; impact is package tooling only; rollback restores existing targets and removes runtime targets.
+- [x] BR1-EX2: allow CI runtime validation and package release wiring; impact is required runtime gates/bootstrap preparation; rollback removes this additive lane, without publication.
+- [x] BR1-N1 resolved: harness requires numeric exception IDs; corrected P1-prefixed IDs after the first advisory scope failure.
+- [x] Track is single-writer: maintain this mergeable branch artifact; conductor imports it into Track.
 
 ## AI Flaky tests
-- [x] Not applicable: no application tests changed or executed; no flaky acceptance requested.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch**: one documentation author; independent review is read-only; no cherry-pick.
-- [ ] **Multi-branch**: not required for this single lot.
-- [x] Rationale: one approved P0 contract with several evidence appendices.
+- [x] Multi-branch draft sequence when necessary; author owns implementation and integration; merge only.
 
 ## UAT Management (in orchestration context)
-- [x] Web, Chrome and VSCode behavior unchanged; P0 UAT is documentary inspection.
-- [x] Future U0 retains the owner's personal tests on exact integrated artifacts and two verbatim GO decisions.
+- [x] Automated qualification uses the isolated test environment; personal owner UAT/transfer GO remains U0.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read project rules, template, approved plan and r2 review; verify plan hash.
-  - [x] Create isolated branch/worktree and mechanically check its exact branch with harness.
-  - [x] Record documentation-only environment, scope and existing source baseline.
-- [x] **Lot P0a — Inventory and classify**
-  - [x] Enumerate 125 global CSS selector blocks affecting chat and inherited host styling.
-  - [x] Inventory all package files/exports, consumers, styling overrides and app widget snippets.
-  - [x] Record appendix: symbols inventory.
-  - [x] Record appendix: edges inventory.
-  - [x] Record appendix: consumers inventory.
-  - [x] Record appendix: support inventory.
-  - [x] Record appendix: exports inventory.
-  - [x] Record appendix: sources inventory.
-  - [x] Assign reusable visual, Sentropic runtime or justified host responsibility to every path.
-  - [x] Build behavior/owner/test matrix and transitive runtime relocation map.
-- [ ] **Lot P0b — Reconcile and freeze**
-  - [x] Reconcile ECOSYSTEM, TURNKEY, SURFACES, PLAN_CHAT_SURFACES, AGENTS_SURFACE and #602/UAT-1.
-  - [x] Inspect published DS theme/Drawer artifacts and name canonical DS chat primitives; assign missing DropZone to F15.
-  - [x] Record all section 6 conductor defaults and owner-held gates without impersonating owner decisions.
-  - [x] Integrate r2 notes: runtime package/semver break, proposed C-03 owner/copy changes, M1b release dependency, physical-split scope and dependencies.
-  - [x] Record domain acknowledgement state and bounded next-owner acceptance criteria.
-  - [ ] Obtain domain co-freeze acknowledgements and conductor Track trace on the same contract revision.
-- [ ] **Lot P0c — Final validation and draft PR**
-  - [x] Validate exhaustive inventories against the pinned source; inspect every diff hunk.
-  - [x] Verify whitespace and allowed paths; mechanically check branch/scope before each commit.
-  - [x] Independent contract/evidence reviews and finding reconciliation; final 2/2 APPROVE.
-  - [x] Create draft PR to `main`, body from this checklist, with execution-plan comment (PR #816).
-  - [ ] Push and verify CI completed/success on exact final head; report PR and full SHA.
-  - [x] Commit the qualification receipt; exact final-head CI completion is recorded externally in the PR after the last push.
-  - [x] API/UI/E2E test files: none changed; documentation-only checks plus repository CI qualify P0.
-  - [x] No package version bump required; no `packages/*/src/**` changes.
-  - [x] No Docker lifecycle required; no containers started.
-  - [x] Keep `BRANCH.md` for draft review; deletion/merge is outside this delivery.
+  - [x] Read master/workflow/testing rules, P0 ownership/closure and P1 row.
+  - [x] Create requested worktree and pass `harness check branch`.
+  - [x] Fix environment, Docker lock, scope and atomic commit policy.
+- [ ] **Lot 1 — Runtime package and physical ownership**
+  - [x] Create `packages/chat-runtime/package.json`, `tsconfig.json` and public entrypoints.
+  - [x] Move client transport/replay/history/stream hub and their tests without behavior changes.
+  - [x] Migrate client consumers to public runtime subpaths; reserve chat-ui 1.0.0 above registry 0.34.1; runtime registry returns 404.
+  - [x] Remove client entries from the visual export snapshot; retarget moved host export assertions to the runtime wildcard entry.
+  - [ ] Move draft/attachment/projection/controller/session/checkpoint/local-tool implementation and tests; delete original implementations.
+  - [x] Relocate the existing draft/attachment/projection/controller/session implementation and core parity tests unchanged.
+  - [x] Relocate local-tool store, checkpoints, steer/scope helpers and principal-scoped view-marker persistence with existing tests.
+  - [x] Reference neutral visual contracts through public type exports; the runtime imports no visual implementation.
+  - [x] Redirect visual timeline/composer model consumers to relocated public runtime contracts.
+  - [x] Migrate app and cowork execution consumers and corresponding import-boundary assertions to runtime.
+  - [x] Move raw stream fixtures and the checkpoint barrel with runtime parity tests; preserve fixture bytes.
+  - [x] Remove session/controller/projection exports from the visual manifest snapshot.
+  - [x] Remove local-tool/persistence exports from the visual snapshot; runtime typecheck and 301 tests pass.
+  - [x] Migrate VSCode and package test imports to runtime tool/projection modules.
+  - [x] Resolve visual export failures: remove relocated checkpoint export, migrate consumers and align major-version assertions; keep consumer scan strict.
+  - [x] Gate runtime typecheck/tests/pack in the existing chat CI lane; register the guarded runtime pack target without publishing.
+  - [x] Reserve cowork-desktop 0.2.1 above registry 0.2.0 for its runtime import migration; visual unit tests 676/676 and DOM tests 219/219 pass.
+  - [ ] Migrate inventoried web/Chrome/VSCode/cowork imports and active tooling links.
+  - [ ] Split neutral contracts and optional module state from views; runtime never imports a view implementation.
+  - [ ] Qualify breaking chat-ui version and initial runtime version against registry; update lockfiles.
+- [ ] **Lot 2 — Injected conversation and complete command binding**
+  - [ ] Replace component runtime creation/disposal with normalized snapshot and command props/declarations.
+  - [ ] Bind full send/model/context/tools/attachments, history, retry/stop/edit/feedback/steer and active modules.
+  - [ ] Enforce visible permission pending/denied state; approval executes/posts once; no adapter, denial and timeout execute zero times.
+  - [ ] Preserve host lifetime across remounts; retain explicit default `() => false` authorization.
+- [ ] **Lot 3 — Parity and packed boundary qualification**
+  - [ ] Runtime tests: relocated `transport.test.ts`, `replay.test.ts`, `streamHub.test.ts`, `stream-history-bounds.test.ts`, `stream-throughput.test.ts`, `chat-core-host.spec.ts`.
+  - [ ] Runtime tests: relocated `chat-loop-controller.spec.ts`, `chat-session-runtime.test.ts`, `chat-session-hydration.test.ts`, `chat-projection.test.ts`, `projection.golden.spec.ts`.
+  - [ ] Runtime tests: relocated `chat-draft.test.ts`, `chat-attachments.test.ts`, `local-tools-store.test.ts`, `checkpoints.spec.ts`, `model-selection.spec.ts`, `agents-view-markers.test.ts`.
+  - [ ] Optional module tests: `comments-module.spec.ts`, `documents-module.spec.ts`, `documents-attachment-state.test.ts`, `documents-generated-file-cards.test.ts`, `context.spec.ts`, `chat-context.spec.ts`, `web-host.test.ts`, `host-adapter-types.test.ts`.
+  - [ ] UI tests: `chat-conversation-functional.dom.spec.ts`, `chat-conversation.dom.spec.ts`, `chat-conversation.spec.ts`; injected standalone and app-shaped fixtures use the same runtime.
+  - [ ] Add runtime permission/continuation and remount parity tests with real controller/projection; no command stubs in parity fixtures.
+  - [ ] Run package typecheck, unit/DOM tests, app typecheck/lint and affected app tests.
+  - [ ] Pack both candidates and prove runtime-free UI and standalone installed consumption.
+- [ ] **Lot 4 — Docs consolidation and review**
+  - [ ] Record pair versions, breaking imports, package bootstrap/OIDC prerequisites and consumer notices in `spec/CHAT_MIGRATION_P1.md`.
+  - [x] Document P1a candidate versions/import notices and the remaining P1b acceptance boundary in `spec/CHAT_MIGRATION_P1.md`.
+- [ ] **Lot 5 — Draft handoff**
+  - [ ] Run `make down ENV=test-chat-p1` and report PR URLs and head SHAs.

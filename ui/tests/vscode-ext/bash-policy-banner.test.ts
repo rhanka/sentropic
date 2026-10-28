@@ -5,7 +5,7 @@ import {
   decideLocalToolPermission,
   executeLocalTool,
   setLocalToolsAdapter,
-} from '@sentropic/chat-ui/stores/localTools';
+} from '@sentropic/chat-runtime/stores/localTools';
 
 describe('vscode bash policy banner bridge', () => {
   beforeEach(() => {

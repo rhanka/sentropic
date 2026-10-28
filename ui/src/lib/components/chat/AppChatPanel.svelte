@@ -16,7 +16,7 @@
   import {
     createChatLoopController,
     type ControllerLocalToolPermissionPrompt,
-  } from '@sentropic/chat-ui/state/chatLoopController';
+  } from '@sentropic/chat-runtime/state/chatLoopController';
 
   // ChatCoreHost instance — wraps the existing API utils (auth-aware) with the
   // ChatCoreHost contract. Zero behavior change: same requests, same error shapes.
@@ -98,7 +98,7 @@
     LocalToolPermissionRequiredError,
     type LocalToolPermissionDecision,
     type LocalToolName,
-  } from '@sentropic/chat-ui/stores/localTools';
+  } from '@sentropic/chat-runtime/stores/localTools';
   import ChatContextPicker from '@sentropic/chat-ui/components/ChatContextPicker.svelte';
   // ChatContextEntry from @sentropic/chat-ui/state/chat-context imported above via context-adapter chain.
   import {
@@ -106,7 +106,7 @@
     type ModelProviderId,
     type ModelCatalogModel,
     type ModelCatalogGroup,
-  } from '@sentropic/chat-ui/utils/model-selection';
+  } from '@sentropic/chat-runtime/utils/model-selection';
 
   import {
     Send,
@@ -151,7 +151,7 @@
     computeToolToggleDefaults,
     computeVisibleToolToggleIds,
     isExtensionRestrictedToolsetMode as computeIsExtensionRestrictedToolsetMode,
-  } from '@sentropic/chat-ui/utils/chat-tool-scope';
+  } from '@sentropic/chat-runtime/utils/chat-tool-scope';
   import {
     EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
     VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
@@ -165,29 +165,29 @@
     getCheckpointMutationPreviewItems,
     applySessionCheckpoints as applySessionCheckpointsFromModule,
     getCheckpointForUserMessage as getCheckpointForUserMessageFromModule,
-  } from '@sentropic/chat-ui/checkpoints';
+  } from '@sentropic/chat-runtime/checkpoints';
   import { createCheckpointHost } from '$lib/adapters/checkpointHostAdapter';
   import {
     mergeProjectionHistoryEvents,
     type ProjectedRunSegment,
-  } from '@sentropic/chat-ui/utils/chat-run-projection';
+  } from '@sentropic/chat-runtime/utils/chat-run-projection';
   import type {
     ChatMessageAttachment,
     ChatProjectedTimelineItem,
-  } from '@sentropic/chat-ui/state/chatProjection';
+  } from '@sentropic/chat-runtime/state/chatProjection';
   import {
     createImageAttachmentDraft,
     isSupportedImageAttachmentMimeType,
     summarizeComposerAttachments,
     type ChatComposerAttachmentDraft,
-  } from '@sentropic/chat-ui/state/chatAttachments';
+  } from '@sentropic/chat-runtime/state/chatAttachments';
   import {
     resolveComposerHeightState,
     resolveComposerPrimaryAction,
     shouldShowSteerAction,
     syncDraftFromInput as syncChatDraftFromInput,
     type ComposerPrimaryActionState,
-  } from '@sentropic/chat-ui/state/chatDraft';
+  } from '@sentropic/chat-runtime/state/chatDraft';
 
   type ChatSession = {
     id: string;

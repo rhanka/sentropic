@@ -5,7 +5,7 @@
  * 1. A fake host literal that `satisfies ChatCoreHost` — compile-time proof.
  * 2. Trivial runtime assertion that the fake host methods exist and return
  *    the right shapes.
- * 3. Export-surface registration (package.json + export-manifest.json).
+ * 3. Explicit public subpath registration (package.json).
  * 4. Sentropic-string scan — ZERO domain strings in the contract source file.
  *
  * Environment: node (no DOM, no Svelte rendering).
@@ -215,7 +215,7 @@ describe('ChatCoreHost — fake host compile + runtime proof', () => {
 });
 
 // ---------------------------------------------------------------------------
-// 3. Export surface — package.json + export-manifest.json registration
+// 3. Export surface — public runtime subpath registration
 // ---------------------------------------------------------------------------
 
 describe('ChatCoreHost — export surface registration', () => {
@@ -223,32 +223,20 @@ describe('ChatCoreHost — export surface registration', () => {
   const pkgJson = JSON.parse(
     fs.readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8'),
   ) as { version: string; exports: Record<string, unknown> };
-  const manifest = JSON.parse(
-    fs.readFileSync(path.join(PACKAGE_ROOT, 'export-manifest.json'), 'utf8'),
-  ) as { _version: string; subpaths: Record<string, unknown> };
-
   const SUBPATH = './client/chat-core-host';
 
   it('should export the chat-core-host subpath in package.json', () => {
     expect(Object.keys(pkgJson.exports)).toContain(SUBPATH);
   });
 
-  it('should list chat-core-host in export-manifest.json subpaths', () => {
-    expect(Object.keys(manifest.subpaths)).toContain(SUBPATH);
-  });
-
-  it('should have version 0.34.1 in package.json', () => {
-    expect(pkgJson.version).toBe('0.34.1');
-  });
-
-  it('should have _version 0.34.1 in export-manifest.json', () => {
-    expect(manifest._version).toBe('0.34.1');
+  it('should identify the initial runtime candidate version', () => {
+    expect(pkgJson.version).toBe('0.1.0');
   });
 
   it('should resolve the chat-core-host source file to an existing path', () => {
     const entry = pkgJson.exports[SUBPATH] as Record<string, string> | undefined;
     expect(entry).toBeTruthy();
-    const file = (entry?.['import'] ?? entry?.['types']) as string;
+    const file = (entry?.['import'] ?? entry?.['types'])?.replace('*', SUBPATH.slice(2)) as string;
     expect(file).toBeTruthy();
     const abs = path.resolve(PACKAGE_ROOT, file);
     expect(fs.existsSync(abs)).toBe(true);
