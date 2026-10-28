@@ -66,7 +66,7 @@
   - [x] Compile typed binary/choice/graded questions and validate pinned native output, independent usage and identity.
   - [ ] Preserve host allowlist, receipt, budget and qualification gates; no general chat registration.
 - [ ] **Lot 5 — Fixture acceptance**
-  - [ ] `packages/llm-mesh/tests/decision-kev-inventory.test.ts`: P26 wrong file/revision/hash/runtime and P27 execution changes.
+  - [x] `packages/llm-mesh/tests/decision-kev-inventory.test.ts`: P26 wrong file/revision/hash/runtime and P27 execution changes.
   - [ ] `packages/llm-mesh/tests/decision-kev-transport.test.ts`: fixed endpoint, identity, redirects, bounds, cancellation.
   - [ ] `packages/llm-mesh/tests/decision-kev-routing.test.ts`: P28 no egress, native kinds and served-model receipt.
   - [ ] Scoped make test-llm-mesh while evolving these files.
