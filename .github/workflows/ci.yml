@@ -1499,9 +1499,7 @@ jobs:
           compression-level: 0
       - name: Build UI
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        run: make build-ui
-        env:
-          VITE_API_BASE_URL: https://sentropic.sent-tech.ca/api/v1
+        run: make ci-build-ui-static ENV=test-ci-images
       - name: Upload static files as artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
         id: deployment
