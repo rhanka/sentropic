@@ -137,6 +137,71 @@ export const createInstalledHostBridge = ({ meshMemory, hostDriver, schemaName, 
   };
   let fence;
   let acquired = false;
+  const units = [];
+  const castGrant = (grant) => {
+    if (grant.moduleId !== 'engram-memory' || grant.scope.tenantId !== scope.tenantId
+      || grant.scope.workspaceId !== scope.workspaceId)
+      throw Object.assign(new Error('grant differs from the bound memory scope'), { code: 'unauthorized' });
+    return grant;
+  };
+  const kernel = () => kernelRef.current;
+  const handle = Object.freeze({
+    moduleId: 'engram-memory', backend: 'postgres', descriptor: meshMemory.MEMORY_DESCRIPTOR,
+    profiles: meshMemory.MEMORY_PINNED_PROFILES.filter((claim) =>
+      meshMemory.MEMORY_DESCRIPTOR.requiredProfiles.includes(claim.name)),
+    acquireFence: (input) => guarded(async () => {
+      if (JSON.stringify(input.scope) !== JSON.stringify(scope))
+        throw Object.assign(new Error('foreign acquisition scope'), { code: 'unauthorized' });
+      await kernel().bind(castGrant(input.grant));
+      await hostDriver.transaction({ readOnly: false, deadlineMs: 5000 }, async (session) => {
+        await kernel().ownership.verify(session);
+        await session.execute({ text: `INSERT INTO "${schemaName}".host_memory_identity(scope,store_id) VALUES($1,$2)
+          ON CONFLICT DO NOTHING`, values: [JSON.stringify(scope), input.store_id] });
+        const rows = await session.execute({ text: `SELECT scope,store_id FROM "${schemaName}".host_memory_identity
+          WHERE scope=$1 OR store_id=$2`, values: [JSON.stringify(scope), input.store_id] });
+        if (rows.rows.length !== 1 || rows.rows[0].scope !== JSON.stringify(scope) || rows.rows[0].store_id !== input.store_id)
+          throw Object.assign(new Error('store_id and scope must be bijective'), { code: 'fence-conflict' });
+        await kernel().ownership.verify(session);
+      });
+      if (acquired) throw Object.assign(new Error('a live canonical holder already owns this host handle'), { code: 'fence-conflict' });
+      fence = { fenceId: kernel().ownership.handle.instanceId, epoch: kernel().ownership.handle.storageEpoch };
+      await kernel().provisionFence(binding.memoryGrant, fence);
+      acquired = true;
+      return fence;
+    }),
+    checkFence: (grant, supplied) => guarded(async () => {
+      await kernel().bind(castGrant(grant));
+      if (!fence || supplied.fenceId !== fence.fenceId || supplied.epoch !== fence.epoch)
+        throw Object.assign(new Error('canonical fence differs'), { code: 'fence-lost' });
+    }),
+    releaseFence: (supplied) => guarded(async () => {
+      if (fence?.fenceId === supplied.fenceId && fence?.epoch === supplied.epoch) {
+        await kernel().ownership.release(); acquired = false;
+      }
+    }),
+    transact: (options, operation) => guarded(async () => {
+      const bound = await kernel().bind(castGrant(options.grant));
+      return bound.transact(options, (tx) => operation(neutralTransaction(tx, units, options.idempotencyKey)));
+    }),
+    readAggregate: (kind, key, grant) => guarded(async () => {
+      const bound = await kernel().bind(castGrant(grant));
+      const row = await bound.readAggregate(key);
+      if (!row) return null;
+      const value = await withCaptureReceipt(key, row.value, async (controlKey) => {
+        const control = await bound.readAggregate(controlKey);
+        return control?.value ?? null;
+      });
+      return { kind, key, version: String(row.version), value };
+    }),
+    readCommitResult: (identity, grant) => guarded(async () =>
+      (await (await kernel().bind(castGrant(grant)))).readCommitResult(identity, fence)),
+    query: (name, encoded, grant) => guarded(async () => {
+      const input = JSON.parse(encoded.data);
+      const bound = await kernel().bind(castGrant(grant));
+      const page = await bound.query(name, input, { limit: input.limit ?? input.max_candidates ?? 2000 });
+      return neutralQueryResult(name, page.records);
+    }),
+  });
   return { memoryFailure, guarded, neutralTransaction, neutralQueryResult, withCaptureReceipt,
-    hostDriver, schemaName, scope, binding, kernelRef };
+    hostDriver, schemaName, scope, binding, kernelRef, handle, getFence: () => fence, units };
 };
