@@ -103,8 +103,9 @@ describe('comments module — module loading', () => {
 // 3. CommentHost fake-host harness
 // ---------------------------------------------------------------------------
 
-import type { CommentHost, CommentItem, MentionMember, CommentCurrentUser } from '../src/comments/index.js';
-import { createCommentState } from '../src/comments/index.js';
+import type { CommentHost } from '@sentropic/chat-runtime/comments';
+import type { CommentItem, MentionMember, CommentCurrentUser } from '@sentropic/chat-ui/comments';
+import { createCommentState } from '@sentropic/chat-runtime/comments';
 
 const makeItem = (overrides: Partial<CommentItem> = {}): CommentItem => ({
   id: 'c1',
