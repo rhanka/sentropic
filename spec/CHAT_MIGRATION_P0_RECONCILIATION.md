@@ -32,7 +32,7 @@ Effective migration interpretation: 2026-10-28, against `ea20bd9c026e9717d911514
 | D2 implementer | Current app/chat integration lead plus UI/runtime maintainer, not historical session identity. |
 | D3 1:1 | Preserve supported floating/bubble, docked and inline; no inline-only scope reduction. |
 | D4 attachments | Consume shipped tray/lightbox/upload for matching capability; preserve existing host attachments. |
-| D5 terms | Parity-complete adoption before transfer; runtime-import break explicitly versioned; same candidate pair across siblings; revised estimate in the contract. |
+| D5 terms | Parity-complete adoption before transfer; runtime-import break explicitly versioned; same candidate pair across siblings; lot scope, order and dependencies in the contract. |
 | D6 theme | One DS token/preset axis, Sentropic small density; other presets use the same components. |
 
 ## #602 and owner UAT entry
