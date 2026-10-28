@@ -1,6 +1,6 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -31,6 +31,8 @@ writeFileSync(join(root, 'tsconfig.json'), JSON.stringify({ compilerOptions: {
 }, include: ['App.svelte'] }));
 run(join(root, 'node_modules/.bin/svelte-check'), ['--tsconfig', './tsconfig.json', '--fail-on-warnings']);
 run(join(root, 'node_modules/.bin/vite'), ['build']);
+copyFileSync('/runtime-probe.mjs', join(root, 'runtime-probe.mjs'));
+run('node', ['runtime-probe.mjs']);
 const files = spawnSync('tar', ['-tzf', '/input/ui.tgz'], { encoding: 'utf8' });
 if (files.status !== 0 || /package\/(src|dist\/(client|checkpoints|stores\/localTools))\//.test(files.stdout)
   || /chatLoopController|chatSessionRuntime|chatSessionHydration|localToolStreamSync/.test(files.stdout)) {
@@ -38,5 +40,5 @@ if (files.status !== 0 || /package\/(src|dist\/(client|checkpoints|stores\/local
 }
 const hashes = Object.fromEntries(['ui', 'runtime'].map((name) => [name,
   createHash('sha256').update(readFileSync(`/input/${name}.tgz`)).digest('hex')]));
-writeFileSync('/reports/chat-pair.json', JSON.stringify({ status: 'passed', head: process.env.QUALIFY_HEAD_SHA, hashes, checks: ['installed public contracts', 'Svelte typecheck', 'Vite production build', 'visual archive ownership'] }, null, 2));
+writeFileSync('/reports/chat-pair.json', JSON.stringify({ status: 'passed', head: process.env.QUALIFY_HEAD_SHA, hashes, checks: ['installed public contracts', 'Svelte typecheck', 'Vite production build', 'installed payload/commands/remount/permissions', 'visual archive ownership'] }, null, 2));
 console.log(`PASS installed chat pair ${JSON.stringify(hashes)}`);
