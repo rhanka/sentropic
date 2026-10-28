@@ -133,3 +133,48 @@ export const mistralTranscriptionCapabilities = (
     usageUnits: ['audio-seconds', 'session-seconds'],
   };
 };
+
+/**
+ * Exact `session.update` body. `turn_detection` is omitted (server turn
+ * detection unsupported); the provider fixes settings at the first audio.
+ */
+export const buildMistralSessionUpdate = (
+  config: MistralTranscriptionProfileConfig,
+): Record<string, unknown> => {
+  // Reuse the capability gate so the wire can never carry an unvalidated profile.
+  mistralTranscriptionCapabilities(config);
+  return {
+    type: 'session.update',
+    session: {
+      audio_format: { encoding: 'pcm_s16le', sample_rate: TRANSCRIPTION_FORMAT.sampleRateHz },
+      target_streaming_delay_ms: config.targetStreamingDelayMs,
+      ...(config.language ? { language: config.language } : {}),
+    },
+  };
+};
+
+export class MistralTranscriptionError extends Error {
+  readonly code: 'unknown-model' | 'invalid-config' | 'admission' | 'ceiling' | 'closed'
+    | 'aborted' | 'transport' | 'invalid-format' | 'unsupported-command';
+  constructor(code: MistralTranscriptionError['code'], message: string) {
+    super(message);
+    this.name = 'MistralTranscriptionError';
+  }
+}
+
+/** Portable base64 for PCM payloads (no node:buffer; mesh stays runtime-agnostic). */
+const base64Of = (payload: Uint8Array): string => {
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+  let out = '';
+  for (let i = 0; i < payload.length; i += 3) {
+    const a = payload[i] ?? 0;
+    const b = payload[i + 1] ?? 0;
+    const c = payload[i + 2] ?? 0;
+    const triple = (a << 16) | (b << 8) | c;
+    out += alphabet[(triple >> 18) & 63] + alphabet[(triple >> 12) & 63]
+      + (i + 1 < payload.length ? alphabet[(triple >> 6) & 63] : '=')
+      + (i + 2 < payload.length ? alphabet[triple & 63] : '=');
+  }
+  return out;
+};
+
