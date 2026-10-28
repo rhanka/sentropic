@@ -38,6 +38,15 @@
   - `packages/cluster-mesh/tests/decision-receipts.spec.ts`
   - `package-lock.json`
   - `spec/decision/api-host.md`
+  - `api/tests/unit/gateway-package-version.test.ts`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/src/modules/catalog.ts`
+  - `packages/cluster-mesh/tests/**`
+  - `packages/llm-gateway/package.json`
+  - `packages/llm-mesh/bench/l13-mistral.receipt.json`
+  - `packages/llm-mesh/src/speech/**`
+  - `packages/llm-mesh/tests/fixtures/mistral-frames.ts`
+  - `packages/llm-mesh/tests/speech-mistral.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -54,6 +63,7 @@
 - [x] Track source artifact only: concurrent root .track changes belong to the designated conductor.
 - [ ] H1-CI-01 — Run the explicit manual Decision fixture mode without provider credentials; ordinary live API/E2E acceptance remains outside this no-spend lot.
 - [x] BRH-EX1 — Add an explicit manual fixture-only mode to .github/workflows/ci.yml to fulfill the requested no-spend CI. Impact: dedicated API/mesh checks with no publication; ordinary PR/main runs unchanged. Rollback: remove that input, job and mode guards.
+- [x] BRH-EX2 — Merge origin/main 5e986a0b6 without rebase; retain the H1/H2 plan and incoming speech/release changes unchanged. Temporary merge-only allowances above admit inherited files; remove them after the merge. Authored scope is checked separately against the second parent. Rollback: revert the merge. Both parent event logs retain all 370 event IDs; Track acceptance remains with its designated conductor.
 - [ ] H1-REV-01 — Conductor handoff: review selection failed because discovery supplies no exact reviewer models; select two complementary host/model tuples before merge. Local dossier: root .tmp/decision-h1-review/selection.md; no consensus verdict.
 
 ## AI Flaky tests
