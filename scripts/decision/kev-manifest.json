@@ -1,0 +1,31 @@
+{
+  "model": {
+    "repository": "ggml-org/Kev-4B-GGUF",
+    "revision": "f4624b6bb7072f1bab726a622c1cad3f96030b9e",
+    "file": "Kev-4B-Q8_0.gguf",
+    "bytes": 4483801504,
+    "sha256": "7c2ebed90560522c2801389db482ac1dc4c36d828f201f6074c1d60e433948da",
+    "quantization": "Q8_0",
+    "license": "Apache-2.0",
+    "sources": ["jaredpalmer/kev-4b", "Qwen/Qwen3.5-4B-Base"],
+    "conversion": "ggml-org/convert; exact conversion revision unverified"
+  },
+  "runtime": {
+    "repository": "ggml-org/llama.cpp",
+    "revision": "f1a7dea99aae1623bad10c4ce31fe220033ab7f6",
+    "release": "b11954",
+    "archive": "llama-b11954-bin-ubuntu-x64.tar.gz",
+    "sha256": "9e43757438fe70dee5ca759c718bf0b17df7760916c3714092a3a63e22e11fbc",
+    "backend": "CPU",
+    "platform": "linux-x64",
+    "license": "MIT",
+    "provenance": "GitHub release asset digest; independent build attestation unverified"
+  },
+  "serving": {
+    "endpoint": "http://127.0.0.1:8797/v1/systemone",
+    "contextTokens": 2048,
+    "parallel": 1,
+    "threads": 4,
+    "readout": "llama.cpp-systemone-b11954"
+  }
+}

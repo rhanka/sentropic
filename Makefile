@@ -4342,3 +4342,4 @@ smoke-mcp-broker-github: ## Run the REAL live-network github-through-the-generic
 	@docker run --rm -e GITHUB_TOKEN -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund tsx@4.19.2 >/dev/null; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsx" scripts/smoke-broker-github.mjs'
 
 -include packages/live-speech/verify.mk
+include scripts/decision/kev-local.mk
