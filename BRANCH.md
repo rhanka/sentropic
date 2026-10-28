@@ -66,6 +66,7 @@
   - [x] Add bounded database transactions, evaluator-first locks and owner-fenced hold/receipt persistence.
   - [x] Adapt existing all-bucket admission with pinned prices, evaluator disable checks and durable dispatch marking.
   - [x] Implement atomic Decision ledger settlement, pending-liability charges, overrun disable evidence and outbox receipts.
+  - [x] Compose both remote adapters, explicit profiles, environment auth and protocol-bound authoritative pricing ports.
   - [ ] Keep production refusing; expose experimental qualification only to application admins.
   - [ ] API unit tests: api/tests/unit/decision-host.test.ts; api/tests/unit/decision-route.test.ts.
   - [ ] API integration tests: api/tests/api/decision-metering.test.ts.
