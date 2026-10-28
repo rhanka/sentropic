@@ -6,6 +6,7 @@ import type { ChatContextEntry } from './chat-context.js';
 import type { ControllerSendPayload } from './chatLoopController.js';
 import type { ChatSessionRuntime } from './chatSessionRuntime.js';
 import type { createConversationDocuments } from './conversationDocuments.js';
+import type { createConversationCheckpoints } from './conversationCheckpoints.js';
 
 export type ConversationCommandState = {
   session: ChatSessionRuntime;
@@ -16,6 +17,7 @@ export type ConversationCommandState = {
   error: string | null;
   documents?: DocumentHost;
   documentCommands: ReturnType<typeof createConversationDocuments>;
+  checkpointCommands: ReturnType<typeof createConversationCheckpoints>;
   sendPayload?: () => Partial<ControllerSendPayload>;
   decidePermission?: (id: string, allow: boolean) => Promise<void>;
   notify(): void;
@@ -49,22 +51,24 @@ export function createConversationCommands(state: ConversationCommandState): Cha
           fileName: attachment.fileName, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes,
         }));
       try {
+        let userMessageId = '';
         await state.session.send({
           ...state.sendPayload?.(), ...selection(),
           sessionId: current.sessionId, content: current.draft.trim(), contexts,
           ...(primary ? { primaryContextType: primary.contextType, primaryContextId: primary.contextId } : {}),
           attachments,
         }, {
-          buildUserMessage: (handle) => ({
+          buildUserMessage: (handle) => { userMessageId = handle.userMessageId; return ({
             id: handle.userMessageId, role: 'user', content: current.draft.trim(),
             sessionId: current.sessionId, createdAt: new Date().toISOString(),
             attachments, _localStatus: 'completed',
-          }),
+          }); },
           buildAssistantMessage: (base) => ({ ...base }),
         });
         if (state.session.snapshot().draft === current.draft) state.session.setDraft('');
         const submitted = new Set(current.attachments.map((attachment) => attachment.id));
         state.session.setAttachments(state.session.snapshot().attachments.filter((attachment) => !submitted.has(attachment.id)));
+        await state.checkpointCommands.create(userMessageId);
       } finally { state.sending = false; }
     }),
     retry: (messageId) => run(async () => {
@@ -74,13 +78,15 @@ export function createConversationCommands(state: ConversationCommandState): Cha
         ? messages.slice(0, at).reverse().find((message) => message.role === 'user')?.id : messageId;
       if (!target) return;
       const selected = selection();
-      await state.session.retry(target, {
+      await state.checkpointCommands.request('retry', target, () => state.session.retry(target, {
         providerId: selected.providerId ?? '', model: selected.model ?? '',
         buildAssistantMessage: (base) => ({ ...base }),
-      });
+      }));
     }),
     stop: (id) => run(() => state.session.stop(id)),
-    edit: (id, content) => run(() => state.session.edit(id, content)),
+    edit: (id, content) => run(() => state.checkpointCommands.request('edit', id, () => state.session.edit(id, content))),
+    restoreCheckpoint: (id) => run(() => state.checkpointCommands.request('restore', id)),
+    decideCheckpoint: (restore) => run(() => state.checkpointCommands.decide(restore)),
     setFeedback: (id, vote) => run(() => state.session.setFeedback(id, vote)),
     steer: () => run(async () => {
       const current = state.session.snapshot();
