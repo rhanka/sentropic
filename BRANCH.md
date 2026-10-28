@@ -45,6 +45,7 @@
 - [x] Additional acceptance before correction: stable-pointer movement during blob wait must discard bytes; denied HEAD must have no body.
 - [x] First execution: 26/29 pass; pointer race (200 vs 401) and denied HEAD body reproduced. Added post-read pointer check and universal HEAD body suppression; listener bootstrap diagnosis remains active.
 - [x] Contract edge tests added before hardening: ambiguous/flooded grant cookies, service-worker fetch/CSP and reserved reader routes.
+- [x] Real listener passes after fixture sends the ingress Host explicitly and uses APP-P1 compiled digest. Three edge regressions reproduced before bounded-cookie, worker and route hardening; typecheck found a heterogeneous test table, now explicitly typed.
 - [x] Configuration/bridge ownership documented; exact-head CI reuses existing Make targets and always tears down its isolated stack.
 - [x] Content lint/type configuration includes the new app and its tests explicitly; package/API manifests remain unchanged.
 - [x] Extended runtime acceptance: account/tenant/lifecycle/release denials plus enabled real listener, read-only S3 adapter and mounted-key rotation.
