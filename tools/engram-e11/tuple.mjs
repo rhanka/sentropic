@@ -11,17 +11,15 @@ export function build(root) {
   const b = bindings(root);
   const observed = validate(b);
   for (const file of ['bindings.mjs', 'candidates.mjs', 'slots.mjs', 'validate.mjs', 'tuple.mjs', 'stage.mjs',
-    'finalize.mjs', 'e11.mk', 'installed.sh', 'prepare.sh']) {
+    'finalize.mjs', 'profiles.mjs', 'e11.mk', 'installed.sh', 'prepare.sh']) {
     const bytes = b.read(file);
     assert.equal(sha256(bytes), sha256(readFileSync(new URL(`./${file}`, import.meta.url))), `tool snapshot drift: ${file}`);
   }
   const body = b.read('pr803.md').toString();
   assert(body.includes('## E11 inputs (exact, from this head)'));
-  const delivery = json(b.read('e10a3-delivery.json'));
-  assert.equal(delivery.tarball.sha256, candidate.mesh.sha256);
-  assert.equal(delivery.engram.integrity, candidate.engram.integrity);
-  assert.equal(delivery.ci.status, 'completed');
-  assert.equal(delivery.ci.conclusion, 'success');
+  const pack = json(b.read('pack-receipt.json'));
+  assert.equal(pack.tarball_sha256, candidate.mesh.sha256);
+  assert.equal(pack.head_sha, candidate.snapshotHead);
   const lot6 = body.match(/## Lot 6 disposition \(#709\)\n([\s\S]*?)(?=\n## )/)?.[1];
   assert(lot6?.includes('missing source') && lot6.includes('option (a)'));
   const review = b.read('review-r3.md').toString();
@@ -47,14 +45,15 @@ export function build(root) {
       archive: mesh.file, sha256: mesh.sha256, integrity: mesh.integrity },
     engram: cleanArchive(observed.engram),
     neutralContract: { name: c6.name, version: c6.version, path: c6.path, sha256: c6.finalBytesSha256,
-      contractDigest: c6.contractDigest, requiredArchiveMember: c6.declaration, status: 'VERIFIED-CANDIDATE',
+      contractDigest: c6.contractDigest, requiredArchiveMember: c6.declaration, status: inputSlots[14].status,
       standaloneDeclarationSha256: c6.standaloneDeclarationSha256 },
     locks: ['consumer-lock.json', 'source/package-lock.json'].map((path) => ({ path, sha256: b.files[path].sha256 })),
     nodeImage: `node:24-bookworm-slim@${receipt.qualificationImage}`,
-    profiles: [], requiredProfiles: receipt.requiredProfiles,
+    profiles: observed.qualifiedProfiles.map((claim) => claim.name),
+    profileQualifications: observed.qualifiedProfiles, requiredProfiles: receipt.requiredProfiles,
     finalGeneratorOwner: 'gr-conductor', provenance: { inputList: 'PR #821 producer/archive inputs and #803 lane, adapted for E2', inventory: 'Opus r3, 21 categories',
       snapshotHead: candidate.snapshotHead, formatEvidence: 'format.md', receivingValidator: 'receiving-validator.mjs',
-      reviewDisposition: 'Historical dev.4/dev.5 anchors superseded by #821 dev.6 and published 0.21.3',
+      reviewDisposition: 'Historical dev.4/dev.5/dev.6 anchors superseded by installed dev.7 Stage B qualification and published 0.21.3',
       excludedL5Candidate: 'L4 MCP 0.22.0 is separate L5 scope; plan E11 after E10 does not require it',
       packedSourceHead: json(b.read('pack-receipt.json')).head_sha },
     slots: inputSlots, handoff, files: b.files };
