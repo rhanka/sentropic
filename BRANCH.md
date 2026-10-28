@@ -52,6 +52,7 @@
   - [ ] Capture a real baseline with run/attempt/job IDs, source SHA, workflow SHA, cache state, runner class, spans, selected endpoints, and executed test identities.
   - [ ] Declare exceptions above; names marked new below are deliverables to create, not existing commands or evidence.
 - [ ] **Lot 1 — Explicit executable dependency graph**
+  - [x] Define artifact dependencies, scan lanes, complete-join checks and negative rollback fixtures; qualification follows workflow wiring.
   - [ ] Add `ci-dag.mjs` and `ci-dag.test.mjs` (new): actual artifact dependencies, matrix membership, parallel API/UI/toolbox scan lanes, and a complete expected-result join.
   - [ ] Update `ci-expected-results.mjs` and its test: static/SAST failures must still block promotion even if browser work has finished; absent scan reports and unexpected skips fail closed.
   - [ ] Lot gate: new `make test-ci-dag ENV=test-ci-parallel-dag` and `make test-ci-expected-results test-security-parser ENV=test-ci-parallel-dag`; negative fixtures prove result completeness without triggering a release.
