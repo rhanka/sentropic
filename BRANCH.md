@@ -100,6 +100,7 @@
   - [x] Add standalone/app-shaped visual fixtures that receive the same host-created runtime and real command implementation.
   - [x] Add `packages/chat-ui/tests/conversation-runtime-parity.dom.spec.ts`: complete payload/markdown, remount state, command HTTP parity and visible default denial.
   - [x] Resolve parity evidence: supply the composer's required floating snippet, register the fixture's custom local tool and ignore execution callbacks after machine disposal.
+  - [x] Fix the evidenced send-completion race: clear only the submitted draft/attachments, preserving edits and uploads made while the send finishes; await the send's settled state in payload assertions.
   - [x] Add real-runtime permission parity tests for missing adapter/executor, denial, timeout, late approval, disposal and exactly-once approved execution/result posting.
   - [x] Wire pending permission decisions through the host authorization adapter and native continuation; view commands cannot grant permission without that adapter.
   - [x] Relocate the web-host factory and session-history assembly with their existing tests; keep view implementations in chat-ui.

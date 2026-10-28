@@ -60,8 +60,9 @@ export function createConversationCommands(state: ConversationCommandState): Cha
           }),
           buildAssistantMessage: (base) => ({ ...base }),
         });
-        state.session.setDraft('');
-        state.session.setAttachments([]);
+        if (state.session.snapshot().draft === current.draft) state.session.setDraft('');
+        const submitted = new Set(current.attachments.map((attachment) => attachment.id));
+        state.session.setAttachments(state.session.snapshot().attachments.filter((attachment) => !submitted.has(attachment.id)));
       } finally { state.sending = false; }
     }),
     retry: (messageId) => run(async () => {
@@ -86,7 +87,7 @@ export function createConversationCommands(state: ConversationCommandState): Cha
       await state.session.sendSteer(current.draft.trim(), active._streamId ?? active.id, {
         sessionId: current.sessionId, targetAssistantMessageId: active.id, ackMessage: current.draft.trim(),
       });
-      state.session.setDraft('');
+      if (state.session.snapshot().draft === current.draft) state.session.setDraft('');
     }),
     selectModel(value) { if (parseModelSelectionKey(value)) state.selectedModel = value; state.notify(); },
     toggleContext(key, enabled) {
