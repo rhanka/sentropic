@@ -2802,7 +2802,8 @@ smoke-idp-screens-ci: ci-test-env ## Run the screen smoke using the qualified E2
 		-e IDP_BASE_URL=http://auth-idp:8787 -e USER_ID="$$user_id" -e SESSION_TOKEN="$$session_token" \
 		-e SCREEN_SMOKE_REDIRECT_URI=https://ci-rp.invalid/auth/oauth/callback \
 		-e SCREEN_SMOKE_EMAIL="$$smoke_email" \
-		$(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) node ./idp-screen-smoke.ts
+		$(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) node --input-type=module -e \
+		'import { chromium } from "playwright"; process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH = chromium.executablePath(); console.log("IdP Chromium:", chromium.executablePath()); await import("./idp-screen-smoke.ts");'
 
 .PHONY: up-ui
 up-ui: ## Start the ui stack in detached mode
