@@ -59,14 +59,14 @@
   - [ ] Inventory Docker/source/lock/toolchain/profile/embedded inputs and current gate membership.
 - [ ] **Lot 1 — Persistent build cache**
   - [x] Scope BuildKit cache import/export by runtime/tools/UI/E2E and architecture; preserve source-dependent keys and build arguments; remove forced UI cache bypass.
-  - [ ] Update scripts/test-api-tooling.sh and scripts/check-ci-version-filters.sh as required.
+  - [x] Update scripts/test-api-tooling.sh for persistent/cold cache recipes and verified toolbox transport; retain filter coverage checks.
   - [ ] Gate: make test-ci-api-tooling check-ci-version-filters ENV=test-ci-br78.
 - [ ] **Lot 2 — Digest-addressed transport**
   - [x] Implement scripts/ci/image-receipt.mjs and image-receipt.test.mjs; negative tests cover stale/wrong/missing receipts, modified archives and loaded image substitution.
   - [ ] Verify source/workflow/inputs/cache identity, archive digest and loaded image ID for every consumer (Make transport now verifies before and after loading).
   - [ ] Gate: make test-ci-image-receipts test-ci-api-runtime test-ci-api-tag-guard test-ci-api-tool-runtime ENV=test-ci-br78.
 - [ ] **Lot 3 — UAT and measured acceptance**
-  - [ ] Real warm/cold runs for four producers, scanners and restore; include embedded prerequisites/export/compression/upload/download/load.
+  - [ ] Real warm/cold runs for four producers, scanners and restore; workflow dispatch exposes explicit cold rebuilds; include embedded prerequisites/export/compression/upload/download/load.
   - [ ] Verify production smoke/limits, npm-absent runtime, tag collisions, IdP screens and both UI profiles with embedded Chrome/VSCode/desktop assets.
   - [ ] Rollback drill with scoped invalidation and fresh verified artifacts.
 - [ ] **Lot 4 — Docs consolidation**

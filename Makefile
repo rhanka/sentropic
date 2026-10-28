@@ -2549,13 +2549,11 @@ build-e2e:
 
 .PHONY: save-e2e
 save-e2e:
-	@echo "💾 Saving E2E image as artifact..."
-	@docker save $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) -o e2e-image.tar
+	@$(MAKE) ci-save-image IMAGE_KIND=e2e IMAGE_REF=$(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) ENV=$(ENV)
 
 .PHONY: load-e2e
 load-e2e:
-	@echo "📦 Loading E2E image from artifact..."
-	@docker load -i e2e-image.tar
+	@$(MAKE) ci-load-image IMAGE_KIND=e2e IMAGE_REF=$(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) ENV=$(ENV)
 
 .PHONY: run-e2e
 run-e2e:
