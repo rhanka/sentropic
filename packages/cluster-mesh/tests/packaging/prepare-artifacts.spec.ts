@@ -53,16 +53,18 @@ const checkCandidateAlignment = (
 
 describe('isPackOnlyDevBump', () => {
   it.each([
-    ['0.24.0-dev.1', '0.22.4', '0.24.0', true],
-    ['0.24.0-dev.99', '0.22.4', '0.24.0', true],
-    ['0.22.1', '0.22.4', '0.24.0', false],
-    ['0.22.4', '0.22.4', '0.24.0', false],
-    ['0.25.0-dev.1', '0.22.4', '0.24.0', false],
-    ['0.23.0-dev.14', '0.22.4', '0.24.0', false],
-    ['0.24.0-dev.1', '0.22.4', '0.25.0', false],
+    ['0.24.0-dev.1', '0.23.2', '0.24.0', true],
+    ['0.24.0-dev.2', '0.23.2', '0.24.0', true],
+    ['0.24.0-dev.99', '0.23.2', '0.24.0', true],
+    ['0.22.1', '0.23.2', '0.24.0', false],
+    ['0.23.2', '0.23.2', '0.24.0', false],
+    ['0.25.0-dev.1', '0.23.2', '0.24.0', false],
+    ['0.23.0-dev.14', '0.23.2', '0.24.0', false],
+    ['0.24.0-dev.1', '0.23.2', '0.25.0', false],
     ['0.24.0-dev.1', '0.22.1', '0.24.0', false],
+    ['0.24.0-dev.2', '0.22.4', '0.24.0', false],
     ['0.24.0-dev.1', '0.24.0', '0.24.0', false],
-    ['0.24.0-rc.1', '0.22.4', '0.24.0', false],
+    ['0.24.0-rc.1', '0.23.2', '0.24.0', false],
   ])('isPackOnlyDevBump(%s, %s, %s) === %s', (workspaceVersion, publishedPin, reservedNext, expected) => {
     expect(isPackOnlyDevBump(workspaceVersion, publishedPin, reservedNext)).toBe(expected);
   });
@@ -129,7 +131,7 @@ describe('pack-only dev alignment', () => {
   });
 });
 
-it('should install only compatible packed artifacts and exclude an incompatible optional tuple without registry access', () => {
+it('should install only compatible packed artifacts and exclude an incompatible optional tuple with only the frozen cluster-mesh pin requested from the registry', () => {
   const root = mkdtempSync(join(tmpdir(), 'prepare-artifacts-'));
   const work = join(root, 'work');
   try {
@@ -154,8 +156,10 @@ if (args[0] === 'pack') {
       encoding: 'utf8',
     });
     expect(result.status, result.stderr).toBe(0);
-    expect(readFileSync(join(work, 'pack-requests.txt'), 'utf8'))
-      .not.toContain('@sentropic/cluster-mesh@');
+    const requests = readFileSync(join(work, 'pack-requests.txt'), 'utf8').trim().split('\n')
+      .map((line) => JSON.parse(line) as string[]);
+    expect(requests.flatMap((args) => args.filter((arg) => arg.startsWith('@sentropic/cluster-mesh@'))))
+      .toEqual([`@sentropic/cluster-mesh@${LATEST_PUBLISHED_CLUSTER_MESH}`]);
     const dependency = (fixture: string) => JSON.parse(readFileSync(join(work, fixture, 'package.json'), 'utf8'))
       .dependencies['@sentropic/artifacts'] as string;
     if (!artifactsCompatible) {
