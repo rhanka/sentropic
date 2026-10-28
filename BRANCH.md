@@ -29,6 +29,8 @@
   - `packages/llm-mesh/src/decision/descriptor.ts`
   - `packages/llm-mesh/package.json`
   - `packages/llm-mesh/tests/decision-fixtures.ts`
+  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
+  - `packages/cluster-mesh/tests/decision-receipts.spec.ts`
   - `package-lock.json`
   - `spec/decision/api-host.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -76,8 +78,9 @@
   - [x] Add no-spend host tests for both backends, production refusal, missing credentials, authorization, price and input limits.
   - [x] Host fixture gate: 9 tests passed; align the typed PostgreSQL hold projection with Drizzle's row contract.
   - [x] Add HTTP controls for authentication, qualification admin restrictions, workspace refusal, outages and bounded bodies.
-  - [x] API integration tests: api/tests/api/decision-metering.test.ts (14 passed); api/tests/api/decision-api.test.ts (4 passed).
+  - [x] API integration tests: api/tests/api/decision-metering.test.ts (15 passed); api/tests/api/decision-api.test.ts (7 passed).
   - [x] Actual product composition refuses anonymous ingress, discovers both unqualified evaluators and persists production refusal without a hold or fetch.
+  - [x] Recreate the disposable database and verify the exact consolidated migration hash plus tenant/workspace revocations in api/tests/api/decision-api.test.ts (7 passed).
 - [ ] **H2 — Authoritative pricing**
   - [x] Verify and cite the published JEV tariff at its primary source.
   - [x] Add both immutable control.model_pricing rows using the existing control migration lane.
@@ -87,6 +90,9 @@
   - [x] Add all-bucket cap, pending-liability and durable overrun-disable regression controls; bind dispatch to the held evaluator.
   - [x] Readiness checks credentials, the tenant's strategy/bucket and each evaluator's durable disable state.
   - [x] Reaper reconciliation restores Decision attribution and corrects conservative spend once without provider replay.
+  - [x] Align the existing public-surface release assertion with the required 0.31.1 patch bump.
+  - [x] Keep the cluster-mesh receipt fixture's synthetic price protocol explicit after JEV moves to control pricing.
+  - [x] Serialize pricing with its existing writer, pin the exact hold revision and recheck tariff validity before dispatch marking.
 - [ ] **Docs consolidation**
   - [x] Document route, profiles, readiness limits, tariff sources and provisioned environment names in spec/decision/api-host.md.
 - [ ] **Final validation**

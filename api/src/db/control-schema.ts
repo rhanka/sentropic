@@ -529,11 +529,7 @@ export const budgets = controlSchema.table(
   }),
 );
 
-/**
- * Immutable effective-dated component rates (micro-USD). Non-overlap per (provider, model) is
- * enforced by the unique key plus the single-writer checked insert (B0-A4); only `effective_to`
- * of the open predecessor may be closed by that writer. No btree_gist / extension.
- */
+/** Decision accounting metadata and durable evaluator disable evidence. */
 export const decisionEvaluatorState = controlSchema.table('decision_evaluator_state', {
   evaluatorKey: text('evaluator_key').primaryKey(),
   disabled: boolean('disabled').notNull().default(false),
@@ -552,6 +548,11 @@ export const decisionCalls = controlSchema.table('decision_calls', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
 });
 
+/**
+ * Immutable effective-dated component rates (micro-USD). Non-overlap per (provider, model) is
+ * enforced by the unique key plus the single-writer checked insert (B0-A4); only `effective_to`
+ * of the open predecessor may be closed by that writer. No btree_gist / extension.
+ */
 export const modelPricing = controlSchema.table(
   'model_pricing',
   {
