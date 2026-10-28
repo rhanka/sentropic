@@ -25,10 +25,10 @@
   - `api/src/routes/namespaces/artifacts.ts`
   - `api/src/routes/namespaces/resources-module.ts`
   - `api/tests/api/artifacts-reader-activation.test.ts`
+  - `.github/workflows/app-cm-w3a.yml`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
-  - `.github/workflows/**`
   - `.cursor/rules/**`
   - `packages/**`
   - `api/drizzle/**`
@@ -36,10 +36,12 @@
   - `.track/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `spec/**`
+  - `.github/workflows/**`
 - **Exception process**:
   - [x] Record BRW3A-EXn reason, impact and rollback before any scope extension.
 
 ## Feedback Loop
+- [x] BRW3A-EX1 — exact-head CI is required; ci.yml excludes the app integration base. Add only `.github/workflows/app-cm-w3a.yml`, following W1.c's isolated qualification workflow. Impact: branch-only tests/typecheck/lint, no publish/deploy. Rollback: remove this workflow.
 - [x] Track remains conductor-owned; this branch updates its mergeable BRANCH source only.
 - [x] W3.b owns content cookies/browser handshake; W3.e owns real HTTPS/browser acceptance after FIRST-IMMO.
 
