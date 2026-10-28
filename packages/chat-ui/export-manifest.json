@@ -273,7 +273,8 @@
       "exports": [
         "ChatContextEntry",
         "ChatContextProvider",
-        "ReadableStore"
+        "ReadableStore",
+        "createNoopChatContextProvider"
       ]
     },
     "./documents": {
@@ -335,6 +336,11 @@
       "file": "src/comments/CommentsPanel.svelte",
       "exists": true,
       "_propSnapshot": "Props: state (CommentState, required injected snapshots/actions), host (CommentHost), contextType? (string|null), contextId? (string|null), sectionKey? (string|null), sectionLabel? (string|null), commentThreadId? (string|null, bindable), workspaceCanComment? (boolean), commentLoading? (boolean, bindable), labels? (fn), formatTimestamp? (fn), renderComposerInput? (Snippet), renderEditForm? (Snippet), renderSendButton? (Snippet), renderThreadMenuPopover? (Snippet)"
+    },
+    "./utils/model-selection": {
+      "kind": "ts",
+      "file": "dist/utils/model-selection.js",
+      "exports": ["ModelProviderId", "ModelCatalogProvider", "ModelCatalogModel", "ModelCatalogGroup", "ParsedModelKey", "parseModelSelectionKey", "formatModelSelectionKey", "groupModelsByProvider", "resolveFallbackModelOption", "getSelectedModelLabel", "computeModelSelectorWidthCh", "providerGroupLabel"]
     },
     "./theme.css": {
       "kind": "css",
