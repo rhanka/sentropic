@@ -66,7 +66,7 @@
   - [x] Record appendix: exports inventory.
   - [x] Record appendix: sources inventory.
   - [ ] Assign reusable visual, Sentropic runtime or justified host responsibility to every path.
-  - [ ] Build behavior/owner/test matrix and transitive runtime relocation map.
+  - [x] Build behavior/owner/test matrix and transitive runtime relocation map.
 - [ ] **Lot P0b — Reconcile and freeze**
   - [ ] Reconcile ECOSYSTEM, TURNKEY, SURFACES, PLAN_CHAT_SURFACES, AGENTS_SURFACE and #602/UAT-1.
   - [ ] Inspect published DS theme/Drawer artifacts and name canonical DS chat primitives; assign missing DropZone to F15.
