@@ -20,7 +20,7 @@ import { createJwksAdapter } from '../../services/auth/jwks-adapter';
 import { createOauthStateStoreAdapter } from '../../services/auth/oauth-state-adapter';
 import { createServiceTenantAdapter } from '../../services/auth/service-tenant-adapter';
 import { authHonoCookiePort } from '../../services/auth/session-adapter';
-import { getRemoteSessionAuthority } from '../../services/auth/remote-private-session';
+import { tombstoneRemoteSessions } from '../../services/auth/remote-revocation';
 import { deriveDisplayNameFromEmail } from '../../utils/display-name';
 
 /**
@@ -281,15 +281,13 @@ const createSentropicOAuthPorts = (): AuthHonoPorts => ({
       return rows.map(toAuthHonoSessionRecord);
     },
     async revoke(sessionId) {
-      getRemoteSessionAuthority()?.revoke(sessionId);
       const deleted = await db.delete(userSessions).where(eq(userSessions.id, sessionId)).returning({ id: userSessions.id });
+      await tombstoneRemoteSessions({ sessionIds: [sessionId] });
       return deleted.length > 0;
     },
     async revokeAllForUser(userId) {
-      const authority = getRemoteSessionAuthority();
-      authority?.revokeUser(userId);
       const deleted = await db.delete(userSessions).where(eq(userSessions.userId, userId)).returning({ id: userSessions.id });
-      for (const row of deleted) authority?.revoke(row.id);
+      await tombstoneRemoteSessions({ sessionIds: deleted.map(row => row.id), userId });
       return deleted.length;
     },
     async touch(sessionId, now) {

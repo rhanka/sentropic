@@ -13,11 +13,22 @@ export type RemoteSessionAuthority = z.infer<typeof stateSchema>;
 const storedStateSchema = z.union([stateSchema,
   z.object({ sessionId: remoteId, revoked: z.literal(true) }).strict()]);
 type StoredAuthority = z.infer<typeof storedStateSchema>;
+const closedDirectories = new Set<string>();
+
+export function closeRemoteSessionAuthority(): void {
+  const directory = process.env.REMOTE_ACTION_SESSION_STATE_DIR;
+  if (directory) closedDirectories.add(directory);
+}
 
 // This directory is an issuer-only durable volume, never a product DB or product mount.
 export function createRemoteSessionAuthority(directory: string) {
   if (!isAbsolute(directory)) throw new RemoteAuthorityError('authority_unavailable');
-  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  function requireAvailable() {
+    if (closedDirectories.has(directory) || !statSync(directory).isDirectory())
+      throw new RemoteAuthorityError('authority_unavailable');
+  }
+  // The mount must already exist; never recreate a lost PVC as ephemeral local storage.
+  try { requireAvailable(); } catch { throw new RemoteAuthorityError('authority_unavailable'); }
   const path = (sid: string) => join(directory, `${remoteRawHash(remoteId.parse(sid))}.json`);
   function find(sid: string): StoredAuthority | null {
     const file = path(sid);
@@ -28,6 +39,7 @@ export function createRemoteSessionAuthority(directory: string) {
     return record;
   }
   function locked<T>(sid: string, operation: () => T): T {
+    requireAvailable();
     const lock = `${path(sid)}.lock`;
     // A crash leaves a closed fence. Never guess that an interrupted writer did not commit.
     mkdirSync(lock, { mode: 0o700 });
@@ -67,6 +79,7 @@ export function createRemoteSessionAuthority(directory: string) {
     });
   }
   function revokeUser(userId: string): void {
+    requireAvailable();
     for (const entry of readdirSync(directory)) {
       if (!/^[a-f0-9]{64}\.json$/.test(entry)) continue;
       const file = join(directory, entry);
@@ -89,6 +102,7 @@ export function createRemoteSessionAuthority(directory: string) {
     });
   }
   return { find(sid: string) {
+    requireAvailable();
     if (existsSync(`${path(sid)}.lock`)) throw new RemoteAuthorityError('authority_unavailable');
     return find(sid);
   }, create, rotate, revoke, revokeUser, signCurrent };
