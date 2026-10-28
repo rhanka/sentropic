@@ -74,7 +74,7 @@ export function verifyCandidateArchives(dir, index, { semver } = {}) {
   return index;
 }
 
-export async function produceCandidates({ root, dir, roots, tuple, tsc, env = process.env }) {
+export async function produceCandidates({ root, dir, roots, tuple, tsc, env = process.env, pack = commandPack }) {
   if (fs.existsSync(path.join(dir, 'candidates.json'))) {
     return verifyCandidates(dir, tuple, roots, { root });
   }
@@ -86,7 +86,7 @@ export async function produceCandidates({ root, dir, roots, tuple, tsc, env = pr
     const cwd = path.join(root, 'packages', slug);
     run(tsc, ['--typeRoots', '/tmp/cm-tools/node_modules/@types', '-p', 'tsconfig.json'], cwd);
     const destination = path.join(dir, slug), reports = path.join(dir, 'reports');
-    const code = await commandPack({ slug, destination, 'report-dir': reports }, { cwd,
+    const code = await pack({ slug, destination, 'report-dir': reports }, { cwd,
       env: { ...env, MANIFEST_HEAD_SHA: tuple.head_sha, PACK_DESTINATION_HOST: destination } });
     if (code !== 0) fail(`candidate guard failed: ${slug}`);
     const receipt = json(path.join(reports, `${slug}.receipt.json`));

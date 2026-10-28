@@ -855,6 +855,12 @@ test-qualify-published-install: ## Run clean-consumer qualification fixture test
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
 		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test scripts/ci/qualify-published-install.test.mjs'
 
+.PHONY: test-ci-package-candidate test-ci-package-qualification-dag
+test-ci-package-candidate:
+	@$(MAKE) test-publishable-manifests SCOPE=scripts/ci/package-candidate.test.mjs ENV=$(ENV)
+test-ci-package-qualification-dag:
+	@$(MAKE) test-publishable-manifests SCOPE=scripts/ci/package-qualification-dag.test.mjs ENV=$(ENV)
+
 # Make-level gate (no shell expansion of the values): PACKAGE is one word without a quote and SIBLING_DIR
 # is exactly tmp/ci-manifest-guard/siblings/$(PACKAGE); the slug charset is then checked in single quotes.
 SIBLING_ARGS_GATE = $(if $(and $(filter 1,$(words $(PACKAGE))),$(if $(findstring ',$(PACKAGE)),,ok),$(findstring tmp/ci-manifest-guard/siblings/$(PACKAGE),$(SIBLING_DIR)),$(findstring $(SIBLING_DIR),tmp/ci-manifest-guard/siblings/$(PACKAGE))),,$(error PACKAGE=<slug> and SIBLING_DIR=tmp/ci-manifest-guard/siblings/<slug> are required))
