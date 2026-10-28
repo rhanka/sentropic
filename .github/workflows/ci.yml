@@ -2792,7 +2792,7 @@ jobs:
   # deploy-preprod (main-only deployment); none validates a PR before merge.
   ci-gate:
     runs-on: ubuntu-latest
-    if: always() && inputs.decision_fixtures_only != true
+    if: always()
     permissions:
       contents: read
       actions: read
@@ -2844,6 +2844,12 @@ jobs:
       - ci-capacity-receipts
       - validate-ci-capacity-metrics
     steps:
+      - name: Reject fixture-only merge evidence
+        if: inputs.decision_fixtures_only == true
+        shell: bash
+        run: |
+          echo "::error::Fixture-only run is not merge evidence"
+          exit 1
       - uses: actions/checkout@v6
       - uses: actions/download-artifact@v4
         with:

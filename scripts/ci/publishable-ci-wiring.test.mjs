@@ -89,7 +89,7 @@ test('ci-gate aggregates every PR job, stays unconditional for normal runs and i
   const mainOnly = ['bootstrap-publish', 'verify-train-lock-integrity', 'deploy-preprod'];
   const excluded = (name) => name === 'ci-gate' || name.startsWith('publish-') || mainOnly.includes(name);
   const gate = jobs['ci-gate'];
-  assert.equal(gate.if, 'always() && inputs.decision_fixtures_only != true');
+  assert.equal(gate.if, 'always()');
   assert.equal(gate.name, undefined, 'the required context must stay ci-gate');
   assert.deepEqual(gate.permissions, { contents: 'read', actions: 'read' });
   assert.deepEqual([...needsOf('ci-gate')].sort(), Object.keys(jobs).filter((name) => !excluded(name)).sort(), 'every PR job must be in ci-gate.needs');
@@ -109,7 +109,8 @@ test('Decision offline mode is explicit, credential-free and cannot publish, whi
       : key === 'github.event_name' ? 'workflow_dispatch' : key === 'github.ref' ? 'refs/heads/main'
       : key === 'inputs.bootstrap_publish_target' ? 'llm-mesh' : '';
     assert.equal(evaluateSelection(offline.if, lookup), value === true);
-    for (const name of ['changes', 'validate-publishable-manifests', 'ci-gate', 'bootstrap-publish']) {
+    assert.equal(evaluateSelection(jobs['ci-gate'].if, lookup), true, 'the required gate must always run');
+    for (const name of ['changes', 'validate-publishable-manifests', 'bootstrap-publish']) {
       assert.equal(evaluateSelection(jobs[name].if, lookup), value !== true, name);
     }
     const releaseLookup = (key) => key === 'needs.changes.result' ? 'success'
@@ -131,6 +132,28 @@ test('Decision offline mode is explicit, credential-free and cannot publish, whi
     if (!JSON.stringify(job).includes('secrets.') && !name.startsWith('publish-')) continue;
     assert.equal(evaluateSelection(job.if, fixtureLookup), false, `${name}: fixture dispatch cannot access secrets or publish`);
   }
+});
+
+test('Decision fixture dispatch fails the required ci-gate before checkout or artifact access', () => {
+  const gate = jobs['ci-gate'];
+  assert.equal(gate.if, 'always()');
+  assert.equal(gate['continue-on-error'], undefined);
+  const refusal = gate.steps[0];
+  assert.equal(refusal.if, 'inputs.decision_fixtures_only == true');
+  assert.equal(refusal['continue-on-error'], undefined);
+  assert.equal(refusal.shell, 'bash');
+  for (const ref of ['refs/heads/main', 'refs/heads/feat/decision-host-h1']) {
+    for (const value of [undefined, false, true]) {
+      const lookup = (key) => key === 'inputs.decision_fixtures_only' ? value ?? 'none'
+        : key === 'github.ref' ? ref : key === 'github.event_name' ? 'workflow_dispatch'
+        : key.endsWith('.result') ? 'skipped' : '';
+      assert.equal(evaluateSelection(gate.if, lookup), true);
+      assert.equal(evaluateSelection(refusal.if, lookup), value === true);
+    }
+  }
+  const result = spawnSync('bash', ['-e', '-c', refusal.run], { encoding: 'utf8' });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stdout, /::error::Fixture-only run is not merge evidence/);
 });
 
 test('Decision provisioning passes names through Compose and optional Kubernetes secret references without credentials or activation defaults', () => {

@@ -56,6 +56,7 @@
   - [x] Declare BRH-EXn with reason, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] H1-R2-F7 — Fixture dispatch always runs ci-gate and fails before checkout or artifacts with an explicit refusal; ordinary gate evaluation is unchanged. Regression reproduced the skipped gate, then all 137 Docker-hosted workflow wiring tests passed, including execution of the refusal step.
 - [x] H1-R1-MERGE — Retain both manual workflow inputs, guarded inherited secrets, main's image cache configuration and the Decision plan while merging c8ec01237; no Track writes.
 - [x] BR822-EX4 — Merged origin/main c8ec01237 in 93de7e1ee to resolve the workflow conflict blocking pull_request CI; no rebase. Impact: inherited reviewed CI-image changes, retained Decision guards and this plan; temporary integration allowances removed. Rollback: revert the merge. Both parent event logs retain all 370 event IDs; acceptance writes remain with the designated conductor.
 - [x] H1-R1-CI-03 — Full endpoints shard reproduced absent Compose profile becoming an invalid empty profile (five Decision route assertions). Pass DECISION_EXECUTION_PROFILE by name: Compose config verifies absence remains unset, preserving production refusal; explicit empty/unknown values remain unavailable. All 136 wiring tests pass; full PR rerun remains H1-R1-F1.
