@@ -41,6 +41,7 @@
 - [x] CI accepted baseline `05cecaa6f`; rerun CI on the revision head before handoff.
 - [x] Opus r1 P2-D: enforce R-G3-1 second-holder refusal before side effects, including concurrent acquisitions; refresh ownership at checkFence per binding §§9.3–9.6 and test release/failure cleanup.
 - [x] Opus r1 P1/P2-E: assert the adapted commit digest equals Engram's expectedIntentHash and round-trips through findIdempotency; typecheck the real PostgreSQL kernel/driver without casts and refuse binary memory reads.
+- [x] Opus r1 P2-F: bound readChain buffering and stop paging at the requested post-allocation limit; refuse malformed/non-canonical cursors and invalid read bounds with typed schema refusals.
 - [x] BRE10a-EX1: owner-authorized PR #808 CI repair in `tmp/worktrees/mem-e10a-ci`, `ENV=test-mem-e10a-ci`; rationale: a frozen prerelease pin breaks pack-only alignment after the dev bump; impact: pin the selected fixture and lock to `0.23.2`, the latest published release whose dependency and peer metadata equals the candidate's (0.23.3/0.23.4 peer ranges differ), align the mirrored contract and assert only that frozen registry request; rollback: revert this repair commit. Registry reconfirmed `0.23.4` on 2026-10-28.
 - Frozen-surface gates from the pack-only tolerance and the Comments gate lines must still pass on this branch; any failure is blocking for this lot.
 
@@ -71,7 +72,7 @@
   - [x] Add unit tests for fence, grant and driver refusals.
   - [x] Lot gate: scoped cluster-mesh tests plus typecheck and lint for cluster-mesh.
 - [ ] **Lot E10a-3 — Pack-only version and handoff**
-  - [x] Increment the pack-only version from `0.24.0-dev.1` to the next dev increment in the package manifest and the workspace lock.
+  - [x] Increment the pack-only version to `0.24.0-dev.3` in the package manifest and the workspace lock for the reviewed fixes.
   - [x] Repair the stable selected fixture/lock pin; shared-lock `ENV=test-mem-e10a-ci` runs: targeted packaging 17 passed; full cluster-mesh 1361 passed, 268 conditional skips, no type errors; `make down` after each step.
   - [x] Run `make scope-check` and the frozen-surface gates before every commit.
   - [x] Push and open the draft PR against `feat/engram-e2-integration` with `BRANCH.md` as the PR body.
