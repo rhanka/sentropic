@@ -1,10 +1,19 @@
 import { describe, expect, it } from 'vitest';
+import { readFileSync } from 'node:fs';
 import { createKevAdapter, createKevQualificationDescriptor, KEV_INVENTORY, kevDescriptor,
   decisionExecutionDigest, decisionQualificationScope, discoverDecisionEvaluator } from '../src/decision/host.js';
 import { parseKevDescriptor } from '../src/decision/kev-descriptor.js';
 import { kevFixture } from './decision-kev-fixtures.js';
 
 describe('Kev exact inventory and qualification scope', () => {
+  it('should bind the checked-in runtime manifest to the library inventory', () => {
+    const manifest = JSON.parse(readFileSync(new URL('../../../scripts/decision/kev-manifest.json', import.meta.url), 'utf8'));
+    for (const [key, value] of Object.entries(KEV_INVENTORY.model)) expect(manifest.model[key]).toEqual(value);
+    for (const [key, value] of Object.entries(KEV_INVENTORY.runtime)) {
+      expect(key === 'archiveSha256' ? manifest.runtime.sha256 : manifest.runtime[key] ?? manifest.serving[key]).toEqual(value);
+    }
+    expect(manifest.serving.readout).toBe(KEV_INVENTORY.readout);
+  });
   it.each([
     { model: { ...KEV_INVENTORY.model, file: 'Kev-4B-Q4_K_M.gguf' } },
     { model: { ...KEV_INVENTORY.model, revision: '0'.repeat(40) } },

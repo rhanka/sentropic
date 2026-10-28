@@ -37,6 +37,7 @@
 ## Feedback Loop
 - [x] BR04-EX1 (Makefile): include `scripts/decision/kev-local.mk` for explicit opt-in local targets; no default dependency; rollback removes include and targets.
 - [x] Track single writer: update this source artifact only; conductor owns sidecar import.
+- [x] Native smoke attempt 1 stopped in local inventory verification before POST; diagnose custody without inference, then use the two remaining smoke attempts for binary/choice; graded remains fixture-covered.
 - [x] Source LFS tuple verified 2026-10-28: selected revision/file, 4483801504 bytes, SHA-256 7c2ebed90560522c2801389db482ac1dc4c36d828f201f6074c1d60e433948da; model card Apache-2.0.
 
 ## AI Flaky tests

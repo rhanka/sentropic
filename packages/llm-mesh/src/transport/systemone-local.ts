@@ -5,7 +5,7 @@ import { hasOnlyKeys, isRecord, snapshotBoundedJson } from '../decision/validati
 
 export const SYSTEMONE_LOCAL_ENDPOINT = 'http://127.0.0.1:8797/v1/systemone';
 export type SystemOneLocalResult = { ok: true; body: unknown; servedModelId: string }
-  | { ok: false; error: DecisionError };
+  | { ok: false; error: DecisionError; body?: unknown };
 export interface SystemOneLocalTransport {
   send(bodyJson: string, token: string, call?: { signal?: AbortSignal; timeoutMs?: number }): Promise<SystemOneLocalResult>;
 }
@@ -18,8 +18,10 @@ export interface SystemOneLocalOptions {
 /** Fixed loopback origin, one POST, no redirects/retries. A model alias alone is never an attestation. */
 export function createSystemOneLocalTransport(options: SystemOneLocalOptions): SystemOneLocalTransport {
   return { async send(bodyJson, token, call = {}) {
+    let dispatchedBody: unknown;
     const failed = (code: Parameters<typeof createDecisionError>[0]): SystemOneLocalResult =>
-      ({ ok: false, error: createDecisionError(code, 'dispatch') });
+      ({ ok: false, error: createDecisionError(code, 'dispatch'),
+        ...(dispatchedBody === undefined ? {} : { body: dispatchedBody }) });
     const timeout = call.timeoutMs ?? 10000;
     if (!Number.isSafeInteger(timeout) || timeout < 1 || timeout > 60000
       || new TextEncoder().encode(bodyJson).length > 256 * 1024) return failed('REQUEST_INVALID');
@@ -94,6 +96,7 @@ export function createSystemOneLocalTransport(options: SystemOneLocalOptions): S
         if (!await inventory()) return failed('SERVED_IDENTITY_MISMATCH');
         active();
         const body = await read(SYSTEMONE_LOCAL_ENDPOINT, bodyJson);
+        dispatchedBody = body;
         active();
         if (!await inventory()) return failed('SERVED_IDENTITY_MISMATCH');
         active();
