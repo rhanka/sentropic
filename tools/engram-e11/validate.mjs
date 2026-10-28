@@ -97,7 +97,10 @@ export function validate(b) {
   for (const file of ['installed-memory.mjs', 'installed-memory-types.ts', 'qualification.mk', 'installed-hydration.mjs']) b.read(`source/packages/cluster-mesh/tests/engram-memory/${file}`);
   const inventory = json(mesh.member('assets/storage/engram-memory/neutral-asset-inventory.json'));
   const manifest = json(mesh.member('assets/storage/engram-memory/contract-manifest.json'));
-  assert.deepEqual(manifest, json(contractBytes));
+  assert.deepEqual(manifest.manifest, json(contractBytes));
+  assert.equal(manifest.canonicalManifest, contractBytes.toString());
+  assert.equal(manifest.canonicalManifestSha256, sha256(contractBytes));
+  assert.equal(manifest.contractDigest, contractDigest);
   assert.equal(inventory.contractDigest, contractDigest);
   assert.equal(inventory.asset.version, '1.0.0');
   mesh.member('dist/engram-memory/neutral-contract.d.ts');
