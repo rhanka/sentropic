@@ -38,6 +38,7 @@
   - [x] Add make-owned E2 lock freeze and strict fresh npm-ci campaign with source/PG identity, lock comparison, type/runtime proof and automatic owned-stack cleanup.
   - [x] Pin integration source/tree, 0.21.3 SHA-256/SRI, dev.6 SHA-256/SRI and the producer neutral JCS bytes.
   - [x] Checker recomputes the domain-separated contract digest, compares mesh/producer manifest bytes and validates the explicit E10 consumer adaptation and installed closure.
+  - [x] Resolve all 0.21.3-dependent slot reasons; preserve independent Stage B, standalone declaration, CI and release/ACK gates explicitly.
 - [x] **Lot E11-0 — Baseline and scope**
   - [x] Read MASTER/workflow, plan E11, PR #803 E11 inputs, Opus r3 21-entry inventory, RESERVATION.md and Docker lock packet; mechanical branch PASS.
 - [x] **Lot E11-1 — Generator and checker**
