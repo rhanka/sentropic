@@ -1,0 +1,80 @@
+{
+  "createdAt": "2026-10-27T12:00:00Z",
+  "kind": "l6a-g-native-receipt",
+  "lot": "L6a",
+  "spec": "r3 §8.1 (L6a row: shared TTS + voice loop)",
+  "status": "blocked",
+  "note": "L6a adds no native build and no new npm dependency. The runtime digest checks (refuse on unpinned helper, at every synth/play call) are implemented and unit-covered, but the TTS helper has never been measured and the playback helper digest is host-only: until every digest and trace below is real, this receipt stays blocked, never claimed. No audio file is written by L6a at any point: espeak-ng renders to stdout and aplay consumes stdin, with bounded RAM buffers only.",
+  "toolchain": {
+    "testImage": "node:24-bookworm-slim (tag only; image digest not pinned — no lane exposes it, ad-hoc docker inspection is forbidden)",
+    "arch": "amd64",
+    "pythonInImage": "none (verified: no python/python3 on PATH)",
+    "nodeGyp": "never invoked in live-speech install, build, test, synth or playback paths",
+    "nativeBuild": "none — no native module on the L6a path; faster-whisper-ts stays an optional L3 peer"
+  },
+  "packageDependencies": {
+    "runtime": [],
+    "optionalPeer": ["faster-whisper-ts@1.2.1 (L3, unused by L6a)"],
+    "dev": ["typescript@5.4.5", "@types/node@^22.10.10", "vitest@4.0.18 (via make lane)"],
+    "note": "Zero runtime dependencies: tts-registry/playback/voice-loop import only node:child_process, node:crypto, node:fs, node:os, node:path and node builtins (plus an L1c type import)."
+  },
+  "helpers": {
+    "aplay": {
+      "role": "playback backend (AplayPlayback)",
+      "binary": "/usr/bin/aplay",
+      "package": "alsa-utils 1.2.15.2-1ubuntu1",
+      "version": "aplay: version 1.2.15.2",
+      "hostDigest": "sha256:4436d05a3f9ce9d92432ea73dd5b6233f69d6243a6cfb3b6b1b8852622cb26c5",
+      "hostDigestScope": "measured on the Ubuntu qualification host — byte-identical to the vetted arecord build (dual alsa-utils binary, verified with cmp); NOT the node:24-bookworm-slim image, which ships no alsa-utils",
+      "imageDigest": "missing — blocked: no lane provisions aplay inside the pinned image",
+      "license": "GPL-2 (separate native executable, subprocess aggregation — same treatment as the L4 arecord binary)",
+      "invocation": "aplay [-D <device>] with the WAV on stdin, header-autodetected (explicit argv, shell:false; SIGTERM then SIGKILL at 100 ms + reap on cancel, bounded by the 150 ms gate)",
+      "runtimeEnforcement": "AplayPlayback.play resolves the binary to an absolute path, hashes it, and refuses anything outside APLAY_SHA256_PINS plus constructor/APLAY_DIGESTS allowlist (PlaybackError on mismatch, PlaybackError when missing); cancel is sticky across the pre-spawn window via a generation counter"
+    },
+    "espeak-ng": {
+      "role": "TTS backend (EspeakNgEngine) — UNWIRED",
+      "binary": "espeak-ng (NOT FOUND: absent from the Ubuntu qualification host and from node:24-bookworm-slim)",
+      "presentOnHost": {
+        "libespeak-ng1": "1.1.51 (shared library, no CLI)",
+        "espeak-ng-data": "1.52.0 (voice data, no CLI)"
+      },
+      "hostDigest": "missing — blocked: no binary anywhere to measure; ESPEAK_SHA256_PINS is empty by design (no digest is ever invented)",
+      "imageDigest": "missing — blocked",
+      "license": "GPL-3.0 (Debian espeak-ng-data 1.52.0 copyright; separate native executable, subprocess aggregation once provisioned)",
+      "invocation": "espeak-ng --stdin -v <voice> -s <wpm> --stdout with narration text on stdin (explicit argv carries no text; WAV collected from stdout into a bounded 8 MB buffer, child killed on abort)",
+      "runtimeEnforcement": "EspeakNgEngine.synthesize verifies the digest before spawn and refuses with TtsUnsupportedError while zero pins exist (provision via ESPEAK_DIGESTS allowlist); empty/oversize text and out-of-range speed fail closed without spawning; test doubles bypass verification (production never injects a runner)"
+    }
+  },
+  "networkPosture": {
+    "microphone": false,
+    "paidApi": false,
+    "runtimeDownloads": "none — audio helpers are preinstalled system binaries or refused when absent; no npm TTS dependency added",
+    "audioInTests": "synthetic PCM and byte-stub WAVs only via FakeDevice, FakePort and node fixtures; no audio files written, no audio payload in events or logs (counts, ids, chunk indexes and text length only)"
+  },
+  "latencyBounds": {
+    "fenceCancel": "150 ms or less from barge to reaped child on the SIGTERM path (asserted in playback and voice-loop tests against the §9 gate)",
+    "sigkillEscalation": "bounded 500 ms for children that ignore SIGTERM (100 ms escalation plus CI margin; exceeds the 150 ms gate for hung children only)"
+  },
+  "trustBoundary": {
+    "hashThenExec": "digest verified immediately before spawn, executed by path (TOCTOU inherited from the L4 arecord pattern and accepted there); ESPEAK_DIGESTS/APLAY_DIGESTS/APLAY_BIN/ESPEAK_BIN env overrides allow operator-chosen binaries and are therefore trusted operator input, recorded here",
+    "narrationText": "text travels on espeak stdin (never argv, never /proc cmdline); WAV bytes travel espeak-stdout to aplay-stdin with no filesystem copy; RAM buffers are dropped after close"
+  },
+  "sbom": {
+    "status": "measured",
+    "delta": "empty — L6a adds zero packages to package.json/package-lock.json; SBOM is the unchanged L3 set plus hashed system binaries"
+  },
+  "blocked": {
+    "liveTtsVoice": {
+      "status": "blocked",
+      "detail": "No qualified espeak-ng binary exists on the host or in the pinned image (only lib + voice data are present). The TTS entry refuses until a digest-pinned binary is provisioned; no silent fallback, no invented digest."
+    },
+    "openMicEcho": {
+      "status": "blocked",
+      "detail": "Speaker playback plus open-mic VAD may self-trigger barge-in on the loop's own narration (no AEC reference — see L4 receipt). Headset-only until a qualified AEC reference exists; key mode is unaffected."
+    },
+    "inImageHelpers": {
+      "status": "blocked",
+      "detail": "aplay/espeak-ng are absent from node:24-bookworm-slim and no lane may provision them (ad-hoc docker work is forbidden). Exact missing §8.1 items: (1) pinned image digest for node:24-bookworm-slim, (2) in-image aplay + espeak-ng digests, (3) offline execution trace inside that image, (4) network-denial log for that provisioning."
+    }
+  }
+}
