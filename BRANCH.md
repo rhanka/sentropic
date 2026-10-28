@@ -43,6 +43,7 @@
 - [x] Host/runtime implemented over upstream reads and W3.a; signing key and live authority are rechecked after blob waits.
 - [x] Listener tests added before entrypoint: default-closed real TCP request and enabled configuration refusal before listening.
 - [x] Additional acceptance before correction: stable-pointer movement during blob wait must discard bytes; denied HEAD must have no body.
+- [x] Configuration/bridge ownership documented; exact-head CI reuses existing Make targets and always tears down its isolated stack.
 - [ ] Lot 3: typecheck/lint, focused content and W3.a regressions, HTTP listener smoke; scope checks; isolated teardown.
 - [ ] Lot 4: draft PR against feat/app-cm-integration, BRANCH.md body, first plan comment, push and green CI on exact head; report PR and SHA.
 
