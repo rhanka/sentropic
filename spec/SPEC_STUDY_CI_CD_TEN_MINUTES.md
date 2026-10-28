@@ -421,7 +421,33 @@ Direct archive inspection verifies identical fresh desktop bytes in production
 and static output (`7fddf56e1ede19ffc9cb125f871eb2a0c76edfaa42f2537402307028f36e2aab`)
 and nonempty Chrome/VSCode downloads in both profiles. The full run is still
 blocked by group-e 122724595102: the comment journey requests its seeded folder
-under an unrelated personal workspace and gets 404 before any AI assertion.
+under an unrelated workspace and gets 404 before any AI assertion.
 BR78-EX5 moves its workspace initialization before application startup; no
 assertion, membership, retry or timeout is relaxed. A fresh exact-head full run
 must qualify that setup correction and measure reuse of both compiler profiles.
+
+At `8f9cf1d9b`, UI 122735162130 in run 40664255786 completes in 296s:
+production 25s (compiled layer cached), fresh tests 68s, static profile 142s,
+desktop 28s. The test target lacked an external parent-cache import and reran
+npm ci in 28.7s; the subsequent static profile rebuilt in 69.7s and exported
+cache for 70.5s. The correction imports the producer's parent UI cache into
+the test build while still forcing `ui-tests` execution and exporting no test
+result cache. Cold mode imports nothing. Both the comment journey and the
+unchanged container gate pass on this head; complete new warm/cold receipts
+must verify the cache correction before accepting a timing budget.
+
+Both full runs at GitHub head `8f9cf1d9ba28c0a2ede50f75f1a1956618231df1`
+complete successfully (attempt 1). The PR checkout source is
+`ab093d0227f20b23cea7b42b089aba7bc492bb1e`; cold dispatch checks out the branch
+head. These receipts qualify all selected assertions and the unchanged gates,
+including native browser coverage, independently of the unmet timing budget.
+
+| Producer / consumer | PR 40664255786 job / seconds | Cold 40664434461 job / seconds |
+| --- | --- | --- |
+| API | 122735162037 / 81 | 122736863314 / 229 |
+| Toolbox | 122735161913 / 91 | 122736863245 / 244 |
+| Full UI | 122735162130 / 296 | 122736863560 / 330 |
+| Browser | 122735161374 / 83 | 122736862454 / 145 |
+| Container gate | 122741299974 / 165 | 122744107853 / 190 |
+| Restore | 122739165320 / 191 | 122743353511 / 196 |
+| ci-gate | 122744805201 / 19 | 122748541061 / 19 |
