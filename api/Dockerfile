@@ -192,12 +192,21 @@ RUN mkdir -p /tmp/tool-npm-patches && \
 
 # Non-browser API checks need no Chromium or duplicate Playwright installation.
 # The screen smoke uses the separately qualified E2E image's browser instead.
-FROM ci-tool-base AS ci-tools
+FROM node:24-alpine3.23 AS ci-tools
+WORKDIR /workspace
+# Copy the prepared filesystem, not the install/cache history of its layers.
+RUN rm -rf /usr/local/lib/node_modules/npm
+COPY --from=ci-tool-base /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
+COPY --from=ci-tool-base /workspace/node_modules /workspace/node_modules
+COPY --from=ci-tool-base /workspace/package.json /workspace/package-lock.json /workspace/
+COPY --from=ci-tool-base /workspace/ui /workspace/ui
+COPY --from=ci-tool-base /workspace/.security /workspace/.security
 COPY --from=base /workspace/api /workspace/api
 COPY --from=base /workspace/packages /workspace/packages
 COPY --from=base /workspace/apps /workspace/apps
 COPY --from=base /workspace/e2e /workspace/e2e
 WORKDIR /workspace/api
+CMD ["npm", "run", "dev"]
 
 # BR-39 deploy (D4-a) — IdP screens build stage. Self-contained, mirrors
 # apps/auth-idp/web/Dockerfile (NOT a root workspace member; pulls @sentropic/auth-ui
@@ -236,12 +245,18 @@ RUN npx esbuild ../apps/auth-idp/index.ts \
     --external:isolated-vm --external:docx --external:pptxgenjs --external:zod \
     --external:@aws-sdk/* --external:@smithy/* --sourcemap
 
-FROM base AS production
+FROM base AS production-dependencies
 WORKDIR /workspace
 ENV NODE_ENV=production
 RUN npm prune --omit=dev --workspaces --include-workspace-root
 # Exception-aware gate (inherits .security/ from the base stage's COPY . .).
 RUN node .security/audit-gate.mjs --omit=dev --workspaces --include-workspace-root
+
+# A fresh runtime omits deleted devDependencies and npm download-cache layers.
+FROM node:24-alpine3.23 AS production
+WORKDIR /workspace
+ENV NODE_ENV=production
+COPY --from=production-dependencies /workspace /workspace
 # Runtime entrypoints and boot migrations use Node directly, never npm/npx.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /root/.npm && \
     ! command -v npm && ! command -v npx && test ! -e /root/.npm
