@@ -79,4 +79,81 @@ describe('Decision durable metering and authoritative pricing', () => {
     expect(JSON.stringify(receipts)).not.toMatch(/synthetic candidate|fixture-.*-token|"verdict":/);
     expect(await query(sql`SELECT id FROM control.event_outbox WHERE tenant_id = ${tenant}`)).toHaveLength(1);
   });
+  it.each(['tenant', 'workspace', 'principal', 'model'])('should enforce the %s cap before provider dispatch', async (scope) => {
+    await seed(scope === 'tenant' ? 1 : 100_000);
+    if (scope !== 'tenant') {
+      const key = scope === 'workspace' ? cost.workspaceId : scope === 'principal' ? cost.principalId : 'typesafe/jev-1.13.0';
+      await db.execute(sql`INSERT INTO control.budgets
+        (id, tenant_id, workspace_id, scope_kind, scope_key, cap_micro_usd, reset_at)
+        VALUES (${`${tenant}-${scope}`}, ${tenant}, ${scope === 'workspace' ? cost.workspaceId : null},
+          ${scope}, ${key}, 1, now() + interval '1 month')`);
+    }
+    const f = fixture();
+    expect(await f.client.decide(decisionRequest({ evaluator: descriptors[0].evaluator })))
+      .toMatchObject({ ok: false, error: { code: 'BUDGET_EXHAUSTED' }, receipt: { attempts: 0 } });
+    expect(f.jev.send).not.toHaveBeenCalled();
+    expect(await query(sql`SELECT id FROM control.budget_holds WHERE tenant_id = ${tenant}`)).toHaveLength(0);
+  });
+  it('should retain unknown provider usage as pending conservative spend', async () => {
+    await seed();
+    const f = fixture();
+    f.jev.send.mockRejectedValueOnce(new Error('fixture-uncertain-provider-dispatch'));
+    const result = await f.client.decide(decisionRequest({ evaluator: descriptors[0].evaluator }));
+    expect(result).toMatchObject({ ok: false, receipt: { budget: { state: 'pending-reconciliation' },
+      cost: { amountMicroUsd: '2753', source: 'reserved-liability' }, attempts: 1 } });
+    const [row] = await query<{ cost_micro_usd: string; reconciliation_state: string; input_tokens: null }>(sql`
+      SELECT cost_micro_usd, reconciliation_state, input_tokens FROM control.cost_ledger WHERE tenant_id = ${tenant}`);
+    expect(row).toEqual({ cost_micro_usd: '2753', reconciliation_state: 'pending', input_tokens: null });
+    const [bucket] = await query<{ spent_micro_usd: string; reserved_micro_usd: string }>(sql`
+      SELECT spent_micro_usd, reserved_micro_usd FROM control.budgets WHERE id = ${tenant}`);
+    expect(bucket).toEqual({ spent_micro_usd: '2753', reserved_micro_usd: '0' });
+  });
+  it('should charge an overrun fully and disable its evaluator across host reconstruction', async () => {
+    await seed();
+    const f = fixture();
+    f.jev.send.mockResolvedValueOnce({ ok: true, body: { ...jevResponse(), model: 'jev-1.13.0',
+      usage: { input_tokens: 100_000, output_tokens: 0 } } });
+    const result = await f.client.decide(decisionRequest({ evaluator: descriptors[0].evaluator }));
+    expect(result.receipt.budget.overrun).toBe(true);
+    const [row] = await query<{ spent_micro_usd: string }>(sql`SELECT spent_micro_usd FROM control.budgets WHERE id = ${tenant}`);
+    expect(String(row.spent_micro_usd)).toBe('4200');
+    const restarted = fixture();
+    expect(await restarted.client.decide(decisionRequest({ evaluator: descriptors[0].evaluator })))
+      .toMatchObject({ ok: false, error: { code: 'PROVIDER_UNAVAILABLE' }, receipt: { attempts: 0 } });
+    expect(restarted.jev.send).not.toHaveBeenCalled();
+    expect(await restarted.metering.probe(descriptors[0].evaluator)).toBe(false);
+    expect(await restarted.metering.probe(descriptors[1].evaluator)).toBe(true);
+  });
+  it('should refuse readiness and admission when tenant financial authority is absent', async () => {
+    const f = fixture();
+    expect(await f.metering.probe()).toBe(false);
+    expect(await f.client.decide(decisionRequest({ evaluator: descriptors[0].evaluator })))
+      .toMatchObject({ ok: false, error: { code: 'BUDGET_UNAVAILABLE' }, receipt: { attempts: 0 } });
+    expect(f.jev.send).not.toHaveBeenCalled();
+  });
+  it('should release an unsent hold when its evaluator is disabled between admission and dispatch', async () => {
+    await seed();
+    const f = fixture();
+    const admit = f.metering.budget.admit.bind(f.metering.budget);
+    vi.spyOn(f.metering.budget, 'admit').mockImplementation(async (input) => {
+      const result = await admit(input);
+      await db.execute(sql`UPDATE control.decision_evaluator_state SET disabled = true
+        WHERE evaluator_key = ${evaluatorKey(input.evaluator)}`);
+      return result;
+    });
+    expect(await f.client.decide(decisionRequest({ evaluator: descriptors[0].evaluator })))
+      .toMatchObject({ ok: false, error: { code: 'PROVIDER_UNAVAILABLE' }, receipt: { budget: { state: 'released' }, attempts: 0 } });
+    expect(f.jev.send).not.toHaveBeenCalled();
+    expect(await query(sql`SELECT id FROM control.cost_ledger WHERE tenant_id = ${tenant}`)).toHaveLength(0);
+  });
+  it('should retain liability when dispatch marking names a different evaluator', async () => {
+    await seed();
+    const f = fixture();
+    const mark = f.metering.budget.markDispatched.bind(f.metering.budget);
+    vi.spyOn(f.metering.budget, 'markDispatched').mockImplementation((input) => mark({ ...input, evaluator: descriptors[1].evaluator }));
+    expect(await f.client.decide(decisionRequest({ evaluator: descriptors[0].evaluator })))
+      .toMatchObject({ ok: false, error: { code: 'PROVIDER_UNAVAILABLE' }, receipt: { attempts: 0,
+        budget: { state: 'pending-reconciliation' } } });
+    expect(f.jev.send).not.toHaveBeenCalled();
+  });
 });

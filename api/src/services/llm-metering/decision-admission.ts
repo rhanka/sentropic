@@ -47,10 +47,12 @@ export const createDecisionAdmission = (database: LedgerDatabase, cost: CostCont
   async markDispatched(input: { holdId: string; callId: string; evaluator: DecisionAdmission['evaluator']; deadlineAt: number }): Promise<DecisionDispatchResult> {
     try {
       return await decisionTransaction(database, async (tx): Promise<DecisionDispatchResult> => {
-        if (!await lockDecisionEvaluator(tx, evaluatorKey(input.evaluator))) {
-          return { ok: false, code: 'PROVIDER_UNAVAILABLE', provenUnsent: true };
-        }
+        const key = evaluatorKey(input.evaluator);
+        const enabled = await lockDecisionEvaluator(tx, key);
         const hold = await lockDecisionHold(tx, cost, input.holdId, input.callId);
+        if (hold.evaluator_key !== key) return { ok: false, code: 'PROVIDER_UNAVAILABLE', provenUnsent: false };
+        if (!enabled) return { ok: false, code: 'PROVIDER_UNAVAILABLE',
+          provenUnsent: hold.status === 'held' && hold.dispatch_started_at === null };
         if (hold.status !== 'held' || Date.now() >= Math.min(input.deadlineAt, new Date(hold.deadline_at).getTime())) {
           return { ok: false, code: 'BUDGET_UNAVAILABLE', provenUnsent: hold.status === 'held' };
         }
