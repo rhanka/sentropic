@@ -1,7 +1,8 @@
 import type { ChatCoreTransport } from '@sentropic/chat-runtime/client/transport';
 import type { StreamHubClient } from '@sentropic/chat-runtime/client/streamTypes';
 import type { RendererRegistry } from '@sentropic/chat-ui/renderers/registry';
-import type { LocalToolsAdapter, WebHostAdapter } from '@sentropic/chat-ui/hosts/types';
+import type { WebHostAdapter } from '@sentropic/chat-ui/hosts/types';
+import type { LocalToolsAdapter } from './types.js';
 
 export type ChatUiLabelValue =
   | string
