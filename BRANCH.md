@@ -75,6 +75,7 @@
   - [ ] API unit tests: api/tests/unit/decision-host.test.ts; api/tests/unit/decision-route.test.ts.
   - [x] Add no-spend host tests for both backends, production refusal, missing credentials, authorization, price and input limits.
   - [x] Host fixture gate: 9 tests passed; align the typed PostgreSQL hold projection with Drizzle's row contract.
+  - [x] Add HTTP controls for authentication, qualification admin restrictions, workspace refusal, outages and bounded bodies.
   - [ ] API integration tests: api/tests/api/decision-metering.test.ts.
 - [ ] **H2 — Authoritative pricing**
   - [x] Verify and cite the published JEV tariff at its primary source.
