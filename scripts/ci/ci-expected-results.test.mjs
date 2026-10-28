@@ -110,7 +110,8 @@ test('should allow unrelated npm releases when another package fails', () => {
     const own = name.replace('publish-', 'validate-');
     const prerequisite = { 'publish-mcp-auth': 'publish-oauth-verify',
       'publish-chat-ui': 'publish-chat-runtime' }[name];
-    const pairValidation = name === 'publish-chat-runtime' ? ['validate-chat-ui'] : [];
+    const pairValidation = { 'publish-chat-runtime': ['validate-chat-ui'],
+      'publish-chat-ui': ['validate-chat-runtime'] }[name] ?? [];
     const required = ['changes', own, ...pairValidation, ...(prerequisite ? [prerequisite] : [])];
     assert.deepEqual(job.needs, required, name);
     assert.ok(!job.if.includes('failure()'), name);
