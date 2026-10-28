@@ -132,3 +132,143 @@ import {
 } from './chatProjection.js';
 
 import {
+  type ComposerSteerAck,
+  createComposerSteerAck,
+  createOptimisticSteerMessage,
+  shouldClearComposerSteerAck,
+} from './chatDraft.js';
+
+import {
+  groupModelsByProvider,
+  type ModelCatalogGroup,
+  type ModelCatalogModel,
+  type ModelCatalogProvider,
+  type ModelProviderId,
+} from '@sentropic/chat-ui/utils/model-selection';
+import { coerceSelectionToValidEntry } from '../utils/modelSelectionPolicy.js';
+
+// ---------------------------------------------------------------------------
+// Opaque stream event — matches AppChatPanel's internal StreamEvent shape.
+// Using ProjectionStreamEvent alias for the projection helpers; the controller
+// accepts the same shape from callers.
+// ---------------------------------------------------------------------------
+export type ControllerStreamEvent = ProjectionStreamEvent;
+
+// ---------------------------------------------------------------------------
+// Stream subscription API — slice 1C
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal stream client surface the controller needs for subscription lifecycle.
+ * Structurally compatible with StreamHubClient from '@sentropic/chat-runtime/client/streamTypes'.
+ * Using a structural subtype here keeps the controller independent of the
+ * StreamHubClient import (allows testing with a plain fake object).
+ *
+ * The event handler accepts `unknown` so the controller can be wired to any
+ * host event emitter without importing the host's concrete event type.
+ * Internally, the controller casts the event to a record and reads fields
+ * defensively (String(raw.streamId ?? '')).
+ */
+export type ControllerStreamClient = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  set(key: string, onEvent: (event: any) => void): void;
+  delete(key: string): void;
+};
+
+/**
+ * Job-poll function injected by the host (maps to ChatCoreHost.pollJob).
+ * The controller calls this as a fallback when SSE terminal events are missed.
+ */
+export type ControllerPollJob = (jobId: string) => Promise<{ status?: string }>;
+
+/**
+ * Options for attachStream.
+ *
+ * - streamClient: the host StreamHub (or any compatible set/delete client)
+ * - pollJob:      host's pollJob function (fallback when SSE terminal is missed)
+ * - onProjectionEvent: optional callback invoked AFTER each event is appended
+ *     to the controller's projectedStreamEventsById. Use for scroll scheduling.
+ * - onTerminal:   optional callback invoked AFTER the target message is patched
+ *     to completed/failed. Use for forced-scroll scheduling.
+ * - pollTimeoutMs: max ms to poll before giving up (default 60 000).
+ * - pollInitialDelayMs: delay before first poll attempt (default 750).
+ * - pollIntervalMs: interval between poll attempts (default 800).
+ */
+export type AttachStreamOptions = {
+  streamClient: ControllerStreamClient;
+  pollJob: ControllerPollJob;
+  onProjectionEvent?: (streamId: string) => void;
+  onTerminal?: (streamId: string, outcome: 'done' | 'error') => void;
+  pollTimeoutMs?: number;
+  pollInitialDelayMs?: number;
+  pollIntervalMs?: number;
+};
+
+// ---------------------------------------------------------------------------
+// Host transport surface — slice 1D
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal payload for sending a new message.
+ * Structurally compatible with ChatCoreHost.sendMessage payload.
+ * Using a structural subtype keeps the controller independent of the
+ * concrete host import.
+ */
+export type ControllerSendPayload = {
+  sessionId?: string;
+  content: string;
+  providerId?: string;
+  model?: string;
+  primaryContextType?: string;
+  primaryContextId?: string;
+  contexts?: Array<{ contextType: string; contextId: string }>;
+  tools?: string[];
+  localToolDefinitions?: Array<{
+    name: string;
+    description: string;
+    parameters: Record<string, unknown>;
+  }>;
+  attachments?: Array<{
+    kind: 'image' | 'file';
+    source: 'context_document';
+    documentId: string;
+    fileName?: string;
+    mimeType?: string;
+    sizeBytes?: number;
+  }>;
+};
+
+/**
+ * Handle returned by sendMessage / retryMessage on the host transport.
+ * Structurally compatible with ChatCoreHost RunHandle.
+ */
+export type ControllerRunHandle = {
+  sessionId: string;
+  userMessageId: string;
+  assistantMessageId: string;
+  streamId: string;
+  jobId: string;
+};
+
+/**
+ * Minimal host transport surface the controller needs for message lifecycle.
+ * Structurally compatible with ChatCoreHost — the controller does NOT import
+ * ChatCoreHost directly so it stays host-agnostic.
+ */
+export type ControllerHostTransport = {
+  sendMessage(payload: ControllerSendPayload): Promise<ControllerRunHandle>;
+  retryMessage(
+    messageId: string,
+    opts: { providerId: string; model: string },
+  ): Promise<ControllerRunHandle>;
+  stopMessage(messageId: string): Promise<void>;
+  editMessage(messageId: string, content: string): Promise<void>;
+  setFeedback(messageId: string, vote: 'up' | 'down' | 'clear'): Promise<void>;
+  /**
+   * Post a steer message to a running assistant stream (slice 1F).
+   * Structurally compatible with ChatCoreHost.postSteer.
+   */
+  postSteer(streamId: string, message: string): Promise<void>;
+};
+
+/**
