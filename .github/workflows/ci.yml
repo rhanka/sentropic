@@ -99,7 +99,7 @@ jobs:
       - name: Validate llm-mesh
         run: make typecheck-llm-mesh lint-llm-mesh test-llm-mesh ENV=test-decision-h1
       - name: Validate cluster Decision composition and receipts
-        run: make test-cluster-mesh SCOPE="tests/decision-compose.spec.ts tests/decision-receipts.spec.ts" ENV=test-decision-h1
+        run: make test-cluster-mesh SCOPE=tests/decision- ENV=test-decision-h1
       - name: Tear down isolated services
         if: always()
         run: make down ENV=test-decision-h1

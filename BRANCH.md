@@ -54,6 +54,7 @@
 - [x] Track source artifact only: concurrent root .track changes belong to the designated conductor.
 - [ ] H1-CI-01 — Run the explicit manual Decision fixture mode without provider credentials; ordinary live API/E2E acceptance remains outside this no-spend lot.
 - [x] H1-CI-02 — The fixture job cannot authenticate canonical registry-tag reuse. Use the official build-api-image-fresh target for its intentional local production build; the API checks and 146 fixture tests passed before that build in run 40724315953.
+- [x] H1-CI-03 — The cluster runner accepts one literal filter; tests/decision- selects both fixture files (9 tests passed locally). Run 40726186707 passed API checks, production build and llm-mesh before rejecting the prior two-path filter.
 - [x] BRH-EX1 — Add an explicit manual fixture-only mode to .github/workflows/ci.yml to fulfill the requested no-spend CI. Impact: dedicated API/mesh checks with no publication; ordinary PR/main runs unchanged. Rollback: remove that input, job and mode guards.
 - [x] BRH-EX2 — Merge origin/main 5e986a0b6 without rebase; retain the H1/H2 plan and incoming speech/release changes unchanged. Temporary merge-only allowances removed after fc2e12047; authored scope passed separately against the second parent. Rollback: revert the merge. Both parent event logs retain all 370 event IDs; Track acceptance remains with its designated conductor.
 - [ ] H1-REV-01 — Conductor handoff: review selection failed because discovery supplies no exact reviewer models; select two complementary host/model tuples before merge. Local dossier: root .tmp/decision-h1-review/selection.md; no consensus verdict.
@@ -113,7 +114,7 @@
 - [ ] **Final validation**
   - [x] After merging main, 146 scoped API tests passed in one run, including tests/unit/gateway-package-version.test.ts; API typecheck/lint passed.
   - [x] llm-mesh public package/consumer surface: 4 tests passed with the final 0.32.1 tuple.
-  - [x] llm-mesh: 1,529 tests passed; cluster-mesh Decision composition/receipts: 9 tests passed.
+  - [x] llm-mesh: 1,566 tests passed after merging main; cluster-mesh Decision composition/receipts: 9 tests passed with the corrected runner filter.
   - [x] API unit host/HTTP: 16 tests passed; actual API/migration/revocation: 7 tests passed.
   - [ ] Review with two independent complementary peers and reconcile findings.
   - [x] Inspect every diff hunk; pass make scope-check before each atomic commit.
