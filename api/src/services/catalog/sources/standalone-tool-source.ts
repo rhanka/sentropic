@@ -14,17 +14,15 @@
  *   Skill-owned tools are NOT represented here. A skill entry already carries
  *   all of its tools inside `skill.tools`; duplicating them as standalone
  *   entries would violate the single-owner model and break collision resolution
- *   in `CompositeCatalogRegistry`. Only genuinely-standalone tools (MCP tools,
- *   code tools not attached to any skill) are registered via this source.
+ *   in `CompositeCatalogRegistry`. Only code tools not attached to any skill
+ *   are registered via this source; MCP tools belong to host-registry.
  *
- * In Lot 2 the source starts EMPTY — no standalone tools are pre-registered.
- * The point of this lot is the type plumbing + the execution seam prerequisite
- * for Lot 5 (MCP), which will call `register()` when tools/list results arrive.
+ * The source starts empty; standalone code tools can be registered explicitly.
  *
  * Source id convention: `'standalone'` (default); can be overridden at
- * construction time to support named sources (e.g. `'mcp:my-server'`).
+ * construction time to support named code-tool sources.
  * Source kind: `'static'` (in-process registration, no async refresh needed
- * for standalone code tools; `McpCatalogSource` in Lot 5 will use `'mcp'`).
+ * for standalone code tools; host-registry uses `'mcp'`).
  */
 
 import type { SkillTool } from '../../../../../packages/skills/src/index.js';
@@ -66,7 +64,7 @@ export interface StandaloneToolRegistration {
   readonly tool: SkillTool;
   /**
    * Original provider name when it differs from the public `metadata.name`
-   * (e.g. MCP `mcp:server/tool` → sanitized public id + rawName mapping).
+   * This is optional metadata for standalone code tools, with no MCP renaming.
    * Omit for code-defined tools whose names are already provider-safe.
    */
   readonly rawName?: string;
@@ -108,7 +106,7 @@ export class StandaloneToolSource implements CatalogSource {
 
   /**
    * @param id  Source identifier. Defaults to `'standalone'`.
-   *            Use a scoped id for named sources (e.g. `'mcp:my-server'`).
+   *            Use a scoped id for named code-tool sources.
    */
   constructor(id = 'standalone') {
     this.id = id;
@@ -206,8 +204,7 @@ export class StandaloneToolSource implements CatalogSource {
 
 /**
  * Global singleton standalone tool source.
- * Empty in Lot 2; Lot 5 (MCP) will call `register()` on it as MCP tools
- * are discovered from connected servers.
+ * Empty by default; callers explicitly register standalone code tools.
  *
  * Wire this source into `CompositeCatalogRegistry` in `catalog.ts` to make
  * standalone tools visible to the live-chat tool resolve path.
