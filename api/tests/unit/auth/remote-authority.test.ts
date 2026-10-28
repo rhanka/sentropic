@@ -15,7 +15,7 @@ const authority = {
   membershipTenantId: 'tenant', membershipWorkspaceId: 'workspace', role: 'member', membershipRevision: 1,
   consent: { bindingId: 'binding', consentPolicyId: 'policy', consentRevision: 1, ownerIssuer: 'idp',
     ownerSub: 'owner', actionScopes: ['remote.input', 'remote.permission.respond'],
-    scopeDigest: 'b1b05c4a85989f99f673906e8c26b7b926db64ac58a7662c13c6cb6c013baab1' },
+    scopeDigest: '9e7e0335aa6ae45dde9dde594d8ee686d92dd545796ac9254c1849eea480a523' },
   expectedConsentRevision: 1, enabled: true, remoteControlEpoch: 1, expectedRemoteControlEpoch: 1,
   controlPolicyRevision: 1, operation: 'input', permissionMode: 'interactive', autoApprovePolicyDigest: null,
 };
