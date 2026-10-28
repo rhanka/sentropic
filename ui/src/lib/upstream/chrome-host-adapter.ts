@@ -14,7 +14,7 @@
  * on this adapter — it talks directly to the bridge iframe over
  * `window.postMessage`.
  */
-import type { LocalToolsAdapter } from '@sentropic/chat-ui/hosts/types';
+import type { LocalToolsAdapter } from '@sentropic/chat-runtime/hosts/types';
 
 const RUNTIME_ID_FALLBACK = 'topai.chrome.runtime';
 

@@ -27,6 +27,7 @@
     "./state/chat-context": { "types": "./src/state/chat-context.ts", "import": "./src/state/chat-context.ts" },
     "./state/conversationRuntime": { "types": "./src/state/conversationRuntime.ts", "import": "./src/state/conversationRuntime.ts" },
     "./hosts/createWebHost": { "types": "./src/hosts/createWebHost.ts", "import": "./src/hosts/createWebHost.ts" },
+    "./hosts/types": { "types": "./src/hosts/types.ts", "import": "./src/hosts/types.ts" },
     "./state/sessionList": { "types": "./src/state/sessionList.ts", "import": "./src/state/sessionList.ts" },
     "./state/streamMessageProjection": { "types": "./src/state/streamMessageProjection.ts", "import": "./src/state/streamMessageProjection.ts" },
     "./checkpoints/checkpointState": { "types": "./src/checkpoints/checkpointState.ts", "import": "./src/checkpoints/checkpointState.ts" },
