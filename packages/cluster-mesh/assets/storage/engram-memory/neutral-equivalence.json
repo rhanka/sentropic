@@ -6,24 +6,24 @@
     "document": "HANDOFF-c2-c6-c7-to-sentropic.md",
     "sha256": "f3bcbfcb26baa1d3b2fc6195b347caacf57c9b4493605cb40497a0b186ef05ea",
     "originalPackageVersion": "0.21.0",
-    "disposition": "semantic inventory retained; original package identity superseded by exact 0.21.1 declarations below"
+    "disposition": "semantic inventory retained; original package identity superseded by exact 0.21.3 declarations below"
   },
   "installedTarget": {
     "package": "@sentropic/engram",
-    "version": "0.21.1",
-    "gitHead": "b97c959644d94e6181e8313b573014786df5d45a",
-    "tarball": "https://registry.npmjs.org/@sentropic/engram/-/engram-0.21.1.tgz",
-    "shasum": "4730cb501e0433e3ae0a5f6a897e457bdcaf61f3",
-    "integrity": "sha512-gPusyy3JyLyajkUEYMUwBOx/Uf5Yia9XWKmOPmF8MYWdopChIbd3YT8fa0a+zcBu+qX9FP2I396F8jKWYDLtew==",
+    "version": "0.21.3",
+    "gitHead": "8b93ba6b834f83fddbcf76091054efea2e188cf1",
+    "tarball": "https://registry.npmjs.org/@sentropic/engram/-/engram-0.21.3.tgz",
+    "shasum": "c3ca3750b35573504c6f3af7c8806835ebd817fc",
+    "integrity": "sha512-eGoBIutpeISKgN4HOS3NSIj7K6rMtT6Y/FbBvoXMykLu0wbaKEaO1pjCLDxVFfdA6Zlj9zg2v2Ft7DIr5Vf7aw==",
     "declaration": "dist/memory-substrate.d.ts",
-    "declarationSha256": "09eabd29b8a619d18b8f8ac67058096d8a4fffd602070c8c81e2bf0203acfe5a",
+    "declarationSha256": "81785a4318c56237e8ae848a54cf1cfd1779df97b41d8f0ebbeea69a4a82c073",
     "declarationClosure": ["dist/memory-substrate.d.ts", "dist/index.d-CBiOxdRj.d.ts", "dist/engine.d-r-XJzQTq.d.ts"],
     "closureSha256": {
-      "memory-substrate.d.ts": "09eabd29b8a619d18b8f8ac67058096d8a4fffd602070c8c81e2bf0203acfe5a",
+      "memory-substrate.d.ts": "81785a4318c56237e8ae848a54cf1cfd1779df97b41d8f0ebbeea69a4a82c073",
       "index.d-CBiOxdRj.d.ts": "a1054a37e3f31ca17687a418b8203b91ae50f9583c07093027658496d5ae55b1",
       "engine.d-r-XJzQTq.d.ts": "83cf291746f3992f81308a4a27b269390feda23dfffac8b44c1eec5d7cfbecff"
     },
-    "inspection": "tarball SHA-1/SHA-512 recomputed 2026-10-26; declaration hash is an input receipt, never the C6 emitted-byte hash"
+    "inspection": "tarball SHA-1/SHA-512 recomputed 2026-10-28; declaration hash is an input receipt, never the C6 emitted-byte hash"
   },
   "structuralProof": {
     "fixture": "tests/engram-memory/neutral-contract-types.ts",
@@ -36,7 +36,7 @@
     "profiles": "equivalence.json",
     "additive": "neutral-asset-inventory.json#additiveMapping",
     "genericIdentity": {"name": "l3a-generic-module-storage-port", "version": "v4.1", "digest": "c7111c9e7293ee270a0b4dde277f1cfc40fa3c863c3915c6f9ccdd6935c46294"},
-    "moduleDigest": "sha256:dff737ced37d801ef48bb4d7088fc4fbc92021d21fe2034ff33ea643b49bec28",
+    "moduleDigest": "sha256:dd0cccbd6e5e29766fbc9c48351ffe58f5b0a3162152f5ff02da0798c3244fee",
     "counterDomain": "canonical u64 for aggregate versions, guards, cursors, allocations and epochs; E1/E2 persist exact full range",
     "errors": "structural code mapping from installed mapStorageError; no instanceof dependency or Engram runtime import"
   },
