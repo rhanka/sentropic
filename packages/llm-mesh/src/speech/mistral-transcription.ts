@@ -452,6 +452,8 @@ export class MistralTranscriptionSession implements SpeechSession {
   private pumps = 0;
   private readonly pumpPromises = new Set<Promise<void>>();
   private current?: TurnStream;
+  /** UtteranceIds with an emitted final: commit is a no-op, writes refuse. */
+  private readonly finalizedIds = new Set<string>();
   private usageRevision = 0;
 
   constructor(
@@ -559,6 +561,7 @@ export class MistralTranscriptionSession implements SpeechSession {
   private emitEmptyFinal(utteranceId: string): void {
     // A commit with no audio since the last turn boundary: the provider
     // would confirm an empty transcript, so the final carries no window.
+    this.finalizedIds.add(utteranceId);
     this.sequence += 1;
     const final: SpeechTranscriptFinal = {
       schemaVersion: 1,
@@ -588,6 +591,15 @@ export class MistralTranscriptionSession implements SpeechSession {
       || frame.format.channels !== TRANSCRIPTION_FORMAT.channels) {
       throw new MistralTranscriptionError('invalid-format', 'only pcm16-le 24kHz mono is admitted');
     }
+    // Refused audio is never metered: the utterance checks run before the
+    // reservation, and a failed stream open rolls the reservation back.
+    const open = this.current;
+    if (open && !open.abandoned && !open.donePending && open.utteranceId !== frame.utteranceId) {
+      throw new MistralTranscriptionError('invalid-format', 'new utteranceId requires a committed or cleared turn');
+    }
+    if (this.finalizedIds.has(frame.utteranceId)) {
+      throw new MistralTranscriptionError('invalid-format', 'utteranceId already finalized');
+    }
     if (monotonicNow(this.nowMs) - this.openedAtMs >= this.effectiveMaxMs) {
       throw new MistralTranscriptionError('ceiling', 'session duration bound reached');
     }
@@ -596,14 +608,20 @@ export class MistralTranscriptionSession implements SpeechSession {
       throw new MistralTranscriptionError('ceiling', 'admitted audio ceiling reached');
     }
     this.audioSeconds += seconds;
-    const open = this.current;
-    if (open && !open.abandoned && !open.donePending && open.utteranceId !== frame.utteranceId) {
-      throw new MistralTranscriptionError('invalid-format', 'new utteranceId requires a committed or cleared turn');
-    }
     let stream = this.current;
     if (!stream || stream.abandoned || stream.donePending) {
-      stream = await this.openStream(frame.utteranceId, frame.capturedAtMs);
-      if (this.settled) throw new MistralTranscriptionError('closed', 'session is closed');
+      try {
+        stream = await this.openStream(frame.utteranceId, frame.capturedAtMs);
+      } catch (error) {
+        this.audioSeconds -= seconds;
+        throw error;
+      }
+      if (this.settled) {
+        stream.abandoned = true;
+        this.audioSeconds -= seconds;
+        await stream.socket.close().catch(() => undefined);
+        throw new MistralTranscriptionError('closed', 'session is closed');
+      }
     }
     // Capture-domain turn window for the final's audioInterval. The window
     // lives on the per-turn stream, so a later turn can never stretch it.
@@ -624,6 +642,9 @@ export class MistralTranscriptionSession implements SpeechSession {
         if (monotonicNow(this.nowMs) - this.openedAtMs >= this.effectiveMaxMs) {
           throw new MistralTranscriptionError('ceiling', 'session duration bound reached');
         }
+        // Re-committing a finalized turn is an idempotent no-op: no second
+        // final, no usage record. The record stays single per utteranceId.
+        if (this.finalizedIds.has(command.utteranceId)) return;
         const stream = this.current;
         if (!stream || stream.abandoned) {
           this.emitEmptyFinal(command.utteranceId);
@@ -853,6 +874,7 @@ export class MistralTranscriptionSession implements SpeechSession {
 
   private onDone(stream: TurnStream, text: string, language: unknown): void {
     if (stream.abandoned) return;
+    this.finalizedIds.add(stream.utteranceId);
     if (stream.doneReceived) {
       this.pushError('invalid-format', true);
       return;
