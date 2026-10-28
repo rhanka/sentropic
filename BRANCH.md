@@ -45,6 +45,7 @@
 - [x] Acceptance tests committed before implementation (`a91ca8139`, `02d74a6b3`); initial execution queued behind the machine-wide Docker lock. Implemented source and workspace-bound turn reader while awaiting the serialized test lane; no observed red result claimed.
 - [x] Turn execution must retain conversation authority through the final host transaction. Extend only the existing credential reader with a workspace-bound turn credential; host authorization remains the sole effect guard. Rollback removes credential kind and source wiring.
 - [x] BR-W4B-EX2: `chat-service.ts:2776` intersects turn authority with foundation-only names, excluding the host plan before real model selection. Add the existing compiled plan's names to that server-owned discovery allowlist and qualify real `runAssistantGeneration` in a unique catalog integration suite. No client/model-supplied names or effect changes; rollback removes this caller addition. This directly blocks W4.b model discovery and stays within section 5's W4 caller ownership.
+- [x] Real-generation regression fails before caller correction (`/tmp/app-w4b-turn-red.log`, missing all four artifacts tools). Minimal caller change adds only compiled plan names; final green qualification required below.
 
 ## AI Flaky tests
 - [x] No AI-dependent acceptance or timeout increases.
