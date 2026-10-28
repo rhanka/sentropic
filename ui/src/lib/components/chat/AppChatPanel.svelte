@@ -27,6 +27,7 @@
   import { session } from '$lib/stores/session';
   import type { CommentContextType } from '$lib/utils/comments';
   import CommentsPanel from '@sentropic/chat-ui/comments/CommentsPanel.svelte';
+  import { createCommentRuntime } from '@sentropic/chat-runtime/comments';
   import type { CommentThreadSummary } from '@sentropic/chat-ui/comments';
   import { createSentropicCommentHost } from '$lib/chat/comment-host-adapter';
   import ChatPanelShell from '@sentropic/chat-ui/components/ChatPanelShell.svelte';
@@ -69,7 +70,7 @@
     createContextModule,
     type ContextModule,
   } from '@sentropic/chat-ui/context';
-  import type { ChatContextEntry } from '@sentropic/chat-ui/state/chat-context';
+  import type { ChatContextEntry } from '@sentropic/chat-runtime/state/chat-context';
   import {
     createContextHost,
     buildStoreLookup,
@@ -1281,6 +1282,7 @@
 
   // commentHost: sentropic-wired CommentHost, instantiated once at mount.
   const commentHost = createSentropicCommentHost((key: string) => $_(key));
+  const commentRuntime = createCommentRuntime(commentHost);
 
   const loadSessionDocs = async () => {
     if (!sessionId) return;
@@ -3079,6 +3081,7 @@
   }
 
   onDestroy(() => {
+    commentRuntime.dispose();
     if (sessionDocsReloadTimer) clearTimeout(sessionDocsReloadTimer);
     sessionDocsReloadTimer = null;
     if (sessionDocsSseKey) streamHub.delete(sessionDocsSseKey);
@@ -3389,6 +3392,7 @@
   streamClient={streamHub}
   labels={(k: string, o?: Record<string, unknown>) => $_(k, o as Parameters<typeof $_>[1])}
   commentHost={commentHost}
+  commentState={commentRuntime}
   workspaceCanComment={$workspaceCanComment}
   {commentContextType}
   {commentContextId}

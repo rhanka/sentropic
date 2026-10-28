@@ -91,6 +91,7 @@
   - [x] Expose session-owned history-event hydration and steer commands without exposing controller construction to views.
   - [x] Implement runtime conversation commands for full payload/model/context/attachments and retry/stop/edit/feedback/steer through the real session runtime.
   - [x] Add host-owned conversation snapshots, incremental history hydration and explicit lifetime independent of view subscriptions.
+  - [x] Move comment-state construction and update-subscription lifetime to a host-owned comment runtime.
   - [x] Resolve typecheck evidence: import canonical comment formatting, normalize wire attachment source/IDs and keep ES2022-compatible lookup.
   - [ ] Replace component runtime creation/disposal with normalized snapshot and command props/declarations.
   - [ ] Bind full send/model/context/tools/attachments, history, retry/stop/edit/feedback/steer and active modules.

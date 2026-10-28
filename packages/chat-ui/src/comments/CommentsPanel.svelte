@@ -14,18 +14,19 @@
    * CommentsPanel is entirely self-managed — it does not share scroll/composer
    * state with the AI surface.
    */
-  import { onDestroy, onMount, tick } from 'svelte';
+  import { tick } from 'svelte';
   import type { Snippet } from 'svelte';
-  import type { CommentHost } from './host.js';
+  import type { CommentHost } from '@sentropic/chat-runtime/comments/host';
   import type { CommentItem, CommentThreadSummary, MentionMember } from './types.js';
-  import { createCommentState } from './state.js';
-  import { getMentionLabel } from './utils.js';
+  import type { CommentState } from '@sentropic/chat-runtime/comments';
+  import { getMentionLabel } from './presentation.js';
 
   // ---------------------------------------------------------------------------
   // Props
   // ---------------------------------------------------------------------------
 
   export let host: CommentHost;
+  export let state: CommentState;
 
   export let contextType: string | null = null;
   export let contextId: string | null = null;
@@ -97,9 +98,7 @@
   // State
   // ---------------------------------------------------------------------------
 
-  const state = createCommentState(host);
-  let snap = $state;
-  state.subscribe((s) => { snap = s; });
+  $: snap = $state;
 
   // Sync context props into state.
   $: state.actions.setContext({ contextType, contextId, sectionKey });
@@ -112,32 +111,8 @@
   $: commentLoading = snap.commentLoading;
 
   // ---------------------------------------------------------------------------
-  // Lifecycle
-  // ---------------------------------------------------------------------------
+  // Presentation helpers
 
-  let unsubUpdates: (() => void) | null = null;
-
-  onMount(() => {
-    void state.actions.loadMentionMembers();
-    unsubUpdates = state.actions.subscribeUpdates();
-  });
-
-  onDestroy(() => {
-    unsubUpdates?.();
-  });
-
-  // Re-subscribe when context changes.
-  $: {
-    contextType;
-    contextId;
-    if (unsubUpdates) {
-      unsubUpdates();
-      unsubUpdates = null;
-    }
-    unsubUpdates = state.actions.subscribeUpdates();
-  }
-
-  // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
 

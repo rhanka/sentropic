@@ -22,7 +22,7 @@ import ChatConversation from '../src/components/ChatConversation.svelte';
 import StreamMessage from '../src/components/StreamMessage.svelte';
 import type { ChatUiWebHost } from '../src/hosts/createWebHost.js';
 import { createRendererRegistry } from '../src/renderers/registry.js';
-import { createNoopChatContextProvider } from '../src/state/chat-context.js';
+import { createNoopChatContextProvider } from '@sentropic/chat-runtime/state/chat-context';
 
 // ---------------------------------------------------------------------------
 // Mock host factory — minimal stub satisfying ChatUiWebHost
