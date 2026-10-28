@@ -81,7 +81,7 @@ describe('memory neutral-handle factory refusals', () => {
   ])('should refuse malformed %s through installed Engram without reconciliation', async (prefix, proof) => {
     const { handle, assembly } = make();
     const limits = { maxAppends: 10, maxRecords: 10, maxEncodedBytes: 4096 };
-    const unit: NeutralAtomicUnit = { guards: [], records: [], appends: [], relationships: [],
+    const unit: NeutralAtomicUnit = { intentHash: 'malformed-proof', guards: [], records: [], appends: [], relationships: [],
       barriers: [], purgeIntents: [], indexWrites: [], updates: [{ kind: 'proof',
         key: JSON.stringify([prefix, 'cand-1']), value: memoryJcs(proof), version: '1' }] };
     await expect(handle.transact({ limits, grant }, (tx) => tx.apply(unit)))
