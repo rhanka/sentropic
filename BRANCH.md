@@ -1,7 +1,7 @@
 # Feature: W4.b authorized host registry catalog source
 
 ## Objective
-- [ ] Project the single compiled app registry into the existing catalog and delegate authorized calls to the existing artifact transport.
+- [x] Project the single compiled app registry into the existing catalog and delegate authorized calls to the existing artifact transport.
 
 ## Scope / Guardrails
 - [x] Owner deliverable 2, plan-v2.md W4.b line 147 and sections 2–5; dependencies W2.a and W4.a merged in base `21bf636d9`.
@@ -46,6 +46,9 @@
 - [x] Turn execution must retain conversation authority through the final host transaction. Extend only the existing credential reader with a workspace-bound turn credential; host authorization remains the sole effect guard. Rollback removes credential kind and source wiring.
 - [x] BR-W4B-EX2: `chat-service.ts:2776` intersects turn authority with foundation-only names, excluding the host plan before real model selection. Add the existing compiled plan's names to that server-owned discovery allowlist and qualify real `runAssistantGeneration` in a unique catalog integration suite. No client/model-supplied names or effect changes; rollback removes this caller addition. This directly blocks W4.b model discovery and stays within section 5's W4 caller ownership.
 - [x] Real-generation regression fails before caller correction (`/tmp/app-w4b-turn-red.log`, missing all four artifacts tools). Minimal caller change adds only compiled plan names; final green qualification required below.
+- [x] Final local qualification: 380/380 tests across 22 suites, API typecheck passes, lint has 0 errors/220 warnings (`/tmp/app-w4b-final-qualification.log`). Includes source/search/execution, real generation, mounted HTTP, durable replay, moved/revoked turns and all selected catalog/transport regressions. Runtime log inspection shows healthy 200 probes (`/tmp/app-w4b-runtime.log`).
+- [x] CI on earlier head `04bece0ed8e4266f759ad7dbc0c1f204abfc5627` passed: https://github.com/rhanka/sentropic/actions/runs/40619906074 . It does not qualify the later caller correction; the final pushed SHA must pass its own run before author delivery.
+- [ ] Integration gate: independent final-head reviews remain conductor-owned after this code-author draft delivery; no merge clearance is claimed.
 
 ## AI Flaky tests
 - [x] No AI-dependent acceptance or timeout increases.
@@ -62,5 +65,5 @@
 - [x] Lot 2 — Implement source; register once in `skills/catalog.ts`; await public compiled plan in `request-authority.ts`; no private cache.
 - [x] Lot 3 — Workspace-bound turn, durable source/transport replay and revocation pass with the existing reader extended; first source/credential run 29/29. Added conversation-move-during-publication-wait regression for final qualification.
 - [x] Lot 4 — Mounted discovery, model selection, chat-service/executor and revoked retry pass: `cluster-mesh-catalog.test.ts` 12/12; no transport effect after denial.
-- [ ] Lot 5 — Scoped catalog/registry/transport/credential suites, API typecheck/lint, logs and down; exact-head CI workflow; reconcile independent reviews.
-- [ ] Lot 6 — Scope-check each commit, push, draft PR from this file and first plan comment; CI green on reported head; no merge or activation.
+- [x] Lot 5 — Scoped catalog/registry/transport/credential suites and real generation pass 380/380; API typecheck/lint pass; runtime logs inspected. Shared-lock `make down ENV=test-app-w4b` is queued and its completed receipt is required before delivery.
+- [x] Lot 6 — Scope-check passes for each selective commit; draft PR #807 targets `feat/app-cm-integration`, with this file as body and a four-step first comment. Push this receipt/caller head and require green CI on its exact SHA plus completed teardown in the final PR/owner report; no merge or activation.
