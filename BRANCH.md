@@ -63,12 +63,12 @@
 - [x] **Lot E10a-2.0 — Resume and split contract**
   - [x] Read project rules, blocker, Docker lock and review gate; mechanical harness branch check passed.
   - [x] Record condition 2 deviation and initial K7 version rule; do not change intentHash computation.
-- [ ] **Lot E10a-2.1 — Lossless row and byte regression**
+- [x] **Lot E10a-2.1 — Lossless row and byte regression**
   - [x] Preserve K7 fields in `src/engram-memory/wire-adaptation.ts`; delete cross-row receipt rejoin from transaction and neutral-handle reads.
-  - [ ] `tests/engram-memory/wire-adaptation.spec.ts`: byte round trips in both directions for created/completed K7, K8, journal add/strip; immutable capture fields and no control read.
-- [ ] **Lot E10a-2.2 — Installed producer hydration**
-  - [ ] Add `tests/engram-memory/receipt-hydration.spec.ts`: matching entry/control receipts reopen; differing valid receipt digests refuse with `JOURNAL_CORRUPT` through real installed Engram.
-  - [ ] Execute with frozen Engram 0.22.0 archive SHA-256 `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10`; retain evidence outside tracked sources.
+  - [x] `tests/engram-memory/wire-adaptation.spec.ts`: 41 passed, including byte round trips in both directions for created/completed K7, K8, journal add/strip and no control read.
+- [x] **Lot E10a-2.2 — Installed producer hydration**
+  - [x] `tests/engram-memory/receipt-hydration.spec.ts` and its host fixture: matching entry/control receipts reopen; differing valid receipt digests refuse with `JOURNAL_CORRUPT`, for created and completed captures, through real installed Engram.
+  - [x] Frozen Engram 0.22.0 archive SHA-256 `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10`; 2 passed, no skips. [Installed-lane log](/home/antoinefa/src/sentropic/.tmp/mem-e10a2-evidence/installed-engram-022-hydration.log). The ordinary CI lane retains its installed 0.21.1 baseline and also executes these tests; the 0.22.0 archive is unpublished and is supplied only to the qualification command.
 - [ ] **Lot E10a-2.3 — Pack and draft handoff**
   - [x] Bump pack-only package/workspace lock to `0.24.0-dev.5` (`dev.4` reserved for #803); no publication. npm latest verified `0.23.4` on 2026-10-28.
   - [ ] Scoped tests, cluster-mesh typecheck/lint/full tests and frozen-surface packaging gates; scope check before each commit; tear down after Docker steps.
