@@ -1,5 +1,5 @@
 // BR-79: artifact readiness and release barriers are separate contracts.
-import { workflowExpected } from './ci-expected-results.mjs';
+import { evaluateExpected, workflowExpected } from './ci-expected-results.mjs';
 
 export const runtimeInputs = {
   'test-e2e': ['changes', 'build-api-image', 'build-ui', 'build-e2e'],
@@ -10,6 +10,19 @@ export const runtimeInputs = {
 export const scanInputs = { api: 'build-api-image', 'api-tool': 'build-api-tool-image',
   ui: 'build-ui', e2e: 'build-e2e' };
 const needsOf = job => [job?.needs ?? []].flat();
+
+export function securityJoin(needs, category) {
+  const changes = needs.changes?.outputs ?? {};
+  const api = changes.api === 'true' || changes.global === 'true';
+  const ui = changes.ui === 'true' || changes.global === 'true';
+  const selected = category === 'container' ? { api, 'api-tool': api, ui, e2e: api || ui }
+    : { api, ui };
+  const expected = Object.entries(selected).map(([service, selected]) => ({
+    job: `security-${category}-${service}`, selected,
+  }));
+  return evaluateExpected({ expected, executed: Object.entries(needs).map(([job, row]) =>
+    ({ job, conclusion: row.result })) });
+}
 
 export function checkDag(workflow, context) {
   const errors = [];
@@ -64,4 +77,10 @@ export function readiness(jobs, dependencies = runtimeInputs) {
         admissionSeconds: ready !== null && job.runner_id && job.started_at
           ? (Date.parse(job.started_at) - ready) / 1000 : null })) };
   });
+}
+
+if (process.argv[1]?.endsWith('/ci-dag.mjs') && process.argv.includes('--security-join')) {
+  const verdict = securityJoin(JSON.parse(process.env.CI_SECURITY_NEEDS), process.env.CI_SECURITY_CATEGORY);
+  console.log(JSON.stringify(verdict, null, 2));
+  process.exit(verdict.ok ? 0 : 1);
 }
