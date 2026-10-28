@@ -5,6 +5,7 @@ import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { createHash } from 'crypto';
 import { logger } from '../logger';
 import { env } from '../config/env';
+import { getRemoteSessionAuthority } from './auth/remote-private-session';
 
 /**
  * Session Manager Service
@@ -128,6 +129,8 @@ export async function createSession(
     createdAt: now,
     lastActivityAt: now,
   });
+  getRemoteSessionAuthority()?.create({ sessionId, userId, login, revoked: false,
+    sessionTokenHash: hashToken(sessionToken), refreshTokenHash: hashToken(refreshToken), expiresAt: expiresAt.getTime() });
   
   logger.info({ 
     userId, 
@@ -341,6 +344,9 @@ export async function refreshSession(
     );
     
     // Update session with new tokens
+    getRemoteSessionAuthority()?.rotate(refreshHash, { sessionId: session.id, userId: session.userId,
+      login, revoked: false, sessionTokenHash: hashToken(newSessionToken),
+      refreshTokenHash: hashToken(newRefreshToken), expiresAt: newExpiresAt.getTime() });
     const updated = await db
       .update(userSessions)
       .set({
@@ -376,6 +382,7 @@ export async function refreshSession(
  * @param sessionId - Session ID to revoke
  */
 export async function revokeSession(sessionId: string): Promise<void> {
+  getRemoteSessionAuthority()?.revoke(sessionId);
   await db
     .delete(userSessions)
     .where(eq(userSessions.id, sessionId));
@@ -417,6 +424,7 @@ export async function listUserSessions(userId: string) {
  * @param userId - User ID
  */
 export async function revokeAllSessions(userId: string): Promise<void> {
+  getRemoteSessionAuthority()?.revokeUser(userId);
   const deleted = await db
     .delete(userSessions)
     .where(eq(userSessions.userId, userId))

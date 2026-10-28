@@ -5,6 +5,7 @@ import { oauthDpopProofs } from '../../db/schema';
 import { authHonoSessionService } from './session-adapter';
 import { remoteCounter, remoteRawHash } from './remote-contract';
 import type { RemoteLogin } from './remote-evidence';
+import { getRemoteSessionAuthority } from './remote-private-session';
 
 const signedLogin = z.object({
   mfaVerified: z.boolean(), authTime: remoteCounter, sessionVersion: remoteCounter,
@@ -19,14 +20,20 @@ export async function resolveRemoteLogin(credential: string): Promise<RemoteLogi
   if (!parsed.success) return null;
   const login = parsed.data;
   const record = validated.sessionRecord;
+  const privateState = getRemoteSessionAuthority()?.find(record.id);
+  if (!privateState || privateState.revoked || privateState.userId !== record.userId
+    || privateState.sessionTokenHash !== remoteRawHash(credential)
+    || privateState.expiresAt <= Date.now()) return null;
   if (record.userId !== payload.userId || record.id !== payload.sessionId
     || record.userId !== validated.session.userId
+    || !privateState.login.mfaVerified || privateState.login.authTime !== login.authTime
+    || privateState.login.sessionVersion !== login.sessionVersion
     || !login.mfaVerified || !record.mfaVerified || login.sessionVersion !== record.createdAt.getTime()
     || login.authTime !== Math.floor(record.createdAt.getTime() / 1000)
     || typeof payload.exp !== 'number') return null;
   return {
     sub: record.userId, sid: record.id, sessionVersion: login.sessionVersion, authTime: login.authTime,
-    amr: ['hwk', 'user', 'mfa'], expiresAt: Math.min(record.expiresAt.getTime(), payload.exp * 1000),
+    amr: ['hwk', 'user', 'mfa'], expiresAt: Math.min(record.expiresAt.getTime(), payload.exp * 1000, privateState.expiresAt),
   };
 }
 

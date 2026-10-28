@@ -80,6 +80,7 @@
   - [x] api/tests/unit/auth/remote-private-session.test.ts authored before private-store implementation: restart, revocation/DB restore, refresh CAS and immutable lineage.
   - [x] Review-vector RED: 111 passing cases, three required failures (revoked IdP/source keys and separate manifest secret), plus missing private-store suite; explicit key revocation now refused.
   - [x] Issuer-private authority stores only signed-lineage/hash metadata with fsync/atomic replacement, per-session writer fences and retained revocation tombstones.
+  - [x] Login/refresh/revoke hooks update issuer-private metadata; resolver requires both credential validity and current private authority, so a restored shared row cannot revive logout.
   - [ ] api/tests/unit/auth/remote-evidence.test.ts: repeated actions/switch, logout/revoke/expiry, wrong sid/version/MFA/audience/key, replay and workload separation.
   - [ ] Closed EvidenceRequest; issuer-derived identity and original authentication time; per-operation EdDSA evidence with pinned audiences.
 - [ ] **Lot 2 — Consent and authorization, RED then GREEN**
