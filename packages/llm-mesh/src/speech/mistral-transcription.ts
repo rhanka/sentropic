@@ -85,7 +85,8 @@ const isNonEmptyString = (value: unknown): value is string =>
   typeof value === 'string' && value.length > 0;
 
 const isDelayMs = (value: unknown): value is number =>
-  Number.isSafeInteger(value) && ((value >= MISTRAL_TRANSCRIPTION_DELAY_MIN_MS
+  typeof value === 'number' && Number.isSafeInteger(value)
+  && ((value >= MISTRAL_TRANSCRIPTION_DELAY_MIN_MS
     && value <= MISTRAL_TRANSCRIPTION_DELAY_MAX_MS) || value === MISTRAL_TRANSCRIPTION_DELAY_SLOW_MS);
 
 const isLanguageCode = (value: unknown): value is string =>
@@ -159,6 +160,7 @@ export class MistralTranscriptionError extends Error {
   constructor(code: MistralTranscriptionError['code'], message: string) {
     super(message);
     this.name = 'MistralTranscriptionError';
+    this.code = code;
   }
 }
 
