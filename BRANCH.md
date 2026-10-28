@@ -63,6 +63,7 @@
 - [ ] **Lot 1 — Runtime package and physical ownership**
   - [x] Create `packages/chat-runtime/package.json`, `tsconfig.json` and public entrypoints.
   - [x] Move client transport/replay/history/stream hub and their tests without behavior changes.
+  - [x] Migrate client consumers to public runtime subpaths; reserve chat-ui 1.0.0 above registry 0.34.1; runtime registry returns 404.
   - [ ] Move draft/attachment/projection/controller/session/checkpoint/local-tool implementation and tests; delete original implementations.
   - [ ] Migrate inventoried web/Chrome/VSCode/cowork imports and active tooling links.
   - [ ] Split neutral contracts and optional module state from views; runtime never imports a view implementation.
