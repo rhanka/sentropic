@@ -27,6 +27,13 @@ export async function createConversationFixture(overrides: Partial<ConversationR
   let failUpload = false;
   const deps = createInMemoryChatServerDeps({ assistantReply: 'Reply **markdown**' });
   const readHistory = deps.sessions!.getSessionHistory.bind(deps.sessions);
+  const createCheckpoint = deps.messages.createCheckpoint!.bind(deps.messages);
+  deps.messages.createCheckpoint = async (input) => {
+    const checkpoint = await createCheckpoint(input);
+    const history = await readHistory({ sessionId: input.sessionId, userId: input.userId, detailMode: 'full' });
+    const anchor = (history.items as ChatHistoryMessage[]).find((message) => message.id === input.anchorMessageId);
+    return Object.assign(checkpoint as object, { anchorMessageId: input.anchorMessageId, anchorSequence: Number(anchor?.sequence ?? 0) });
+  };
   deps.sessions!.getSessionHistory = async (input) => {
     const history = await readHistory(input);
     const events = await deps.stream.readSessionEvents({ sessionId: input.sessionId, fromSeq: 0, userId: input.userId });
