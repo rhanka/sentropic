@@ -174,6 +174,12 @@ test('inventory: a changed skills package selects its guarded candidate pack lan
   assert.equal(r.blockFile, 'skills\n');
 });
 
+test('inventory: changed live-speech selects its existing guarded pack lane', async () => {
+  const r = await inventory({ packages: { 'live-speech': { name: '@sentropic/live-speech', version: '0.1.0' } }, env: inventoryEnv(['packages/live-speech/src/index.ts'], []) });
+  assert.equal(r.code, 0);
+  assert.equal(r.blockFile, 'live-speech\n');
+});
+
 test('inventory: non-boolean private and invalid JSON are structural errors; context is mandatory', async () => {
   const r = await inventory({ packages: { a: { name: 'a', version: '1.0.0', private: 'yes' }, b: '{' }, env: inventoryEnv([], []) });
   assert.equal(r.code, 1);

@@ -1,232 +1,57 @@
-// Playback tests (r3 L6a): natural end over a stdin pipe, exact-bytes proof,
-// fence cancel with reap, sticky pre-spawn cancel, latency bound, nonzero
-// exit, digest refusal and argv exactness. The node fixture plays the aplay
-// role; no speaker, no audio files, no audio payload anywhere.
 import { describe, expect, it } from 'vitest';
-import { createHash } from 'node:crypto';
-import { readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
-import {
-  AplayPlayback,
-  APLAY_SHA256_PINS,
-  buildAplayArgs,
-  PlaybackCancelledError,
-  PlaybackError,
-} from '../src/node/playback.js';
+import { Playback } from '../src/core/playback.js';
 
-const FAKE_APLAY = fileURLToPath(new URL('./fixtures/fake-aplay.mjs', import.meta.url));
+const frame = (sequence = 0, sampleOffset = 0) => ({
+  speechSessionId: 'speech-1', streamId: 'stream-1',
+  connectionEpoch: 1, turnEpoch: 1, outputItemId: 'output-1', responseId: 'response-1',
+  sequence, sampleOffset, sampleCount: 480, format: { codec: 'pcm16-le', sampleRateHz: 24000, channels: 1 } as const,
+  payload: new Uint8Array(960),
+});
 
-function digestOf(path: string): string {
-  return createHash('sha256').update(readFileSync(path)).digest('hex');
-}
-
-/** Pids the fixture logged at spawn time, one per line. Throws ENOENT when nothing spawned. */
-function readSpawnLog(path: string): number[] {
-  return readFileSync(path, 'utf8')
-    .split('\n')
-    .filter((line) => line.length > 0)
-    .map(Number);
-}
-
-async function withMode<T>(mode: string | undefined, run: () => Promise<T>): Promise<T> {
-  const key = 'FAKE_APLAY_MODE';
-  const prior = process.env[key];
-  try {
-    if (mode === undefined) delete process.env[key];
-    else process.env[key] = mode;
-    return await run();
-  } finally {
-    if (prior === undefined) delete process.env[key];
-    else process.env[key] = prior;
-  }
-}
-
-async function withEnv<T>(vars: Record<string, string>, run: () => Promise<T>): Promise<T> {
-  const prior: Record<string, string | undefined> = {};
-  for (const [key, value] of Object.entries(vars)) {
-    prior[key] = process.env[key];
-    process.env[key] = value;
-  }
-  try {
-    return await run();
-  } finally {
-    for (const [key, value] of Object.entries(prior)) {
-      if (value === undefined) delete process.env[key];
-      else process.env[key] = value;
-    }
-  }
-}
-
-const STUB = Buffer.from([82, 73, 70, 70, 36, 0, 0, 0, 87, 65, 86, 69]);
-const STUB_HEX = STUB.toString('hex');
-
-/** Wait until the fixture child has booted (pidfile written), then proceed. */
-async function waitForBoot(pidFile: string, timeoutMs = 10000): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      readFileSync(pidFile, 'utf8');
-      return;
-    } catch {
-      await new Promise((resolve) => setTimeout(resolve, 10));
-    }
-  }
-  throw new Error(`fixture child never booted: ${pidFile}`);
-}
-
-describe('playback', () => {
-  it('should build an exact stdin aplay argv with no shell metacharacters', () => {
-    expect(buildAplayArgs({})).toEqual([]);
-    expect(buildAplayArgs({ device: 'hw:0,0' })).toEqual(['-D', 'hw:0,0']);
+describe('heard prefix and stale output', () => {
+  it('should measure rendered samples and never equate generation done with heard audio', () => {
+    const p = new Playback('speech-1', 1, 1);
+    expect(p.enqueue(frame())).toBe(true);
+    expect(p.enqueue(frame(1, 480))).toBe(true);
+    p.generatedDone('output-1');
+    expect(p.progress('output-1')).toMatchObject({ playedSamples: 0, generatedSamples: 960 });
+    p.rendered('output-1', 700, 10);
+    p.rendered('output-1', 100, 0);
+    expect(p.progress('output-1')).toMatchObject({ playedSamples: 700, uncertaintySamples: 10 });
+    p.rendered('output-1', 2000, 5);
+    expect(p.progress('output-1')?.playedSamples).toBe(960);
   });
 
-  it('should pin the vetted alsa-utils bytes like the arecord backend', () => {
-    expect(APLAY_SHA256_PINS).toEqual(['4436d05a3f9ce9d92432ea73dd5b6233f69d6243a6cfb3b6b1b8852622cb26c5']);
+  it('should clear immediately and reject late old-epoch output across channel reordering', () => {
+    const p = new Playback('speech-1', 1, 1);
+    p.enqueue(frame());
+    expect(p.clear()).toEqual([{ outputItemId: 'output-1', playedSamples: 0, uncertaintySamples: 0 }]);
+    expect(p.take()).toBeUndefined();
+    expect(p.enqueue(frame(1, 480))).toBe(false);
+    p.bind(2, 2);
+    expect(p.enqueue(frame())).toBe(false);
+    expect(p.enqueue({ ...frame(), connectionEpoch: 2, turnEpoch: 2 })).toBe(true);
+    expect(() => p.bind(1, 3)).toThrow('epoch');
   });
 
-  it('should refuse an unpinned binary with a digest mismatch before spawning', async () => {
-    const playback = new AplayPlayback(FAKE_APLAY, ['f'.repeat(64)]);
-    await expect(playback.play(STUB)).rejects.toThrow(PlaybackError);
-    await expect(playback.play(STUB)).rejects.toThrow(/digest mismatch/);
-    expect(playback.playing).toBe(false);
+  it('should refuse duplicates, gaps, invalid payloads and queues over 250ms', () => {
+    const p = new Playback('speech-1', 1, 1);
+    expect(p.enqueue(frame())).toBe(true);
+    expect(p.enqueue(frame())).toBe(false);
+    expect(p.enqueue(frame(2, 960))).toBe(false);
+    expect(p.enqueue({ ...frame(1, 480), payload: new Uint8Array(2) })).toBe(false);
+    for (let i = 1; i < 12; i++) expect(p.enqueue(frame(i, i * 480))).toBe(true);
+    expect(p.enqueue(frame(12, 5760))).toBe(false);
+    p.take();
+    expect(p.enqueue(frame(12, 5760))).toBe(true);
   });
 
-  it('should pipe exact bytes to natural end with no audio files', async () => {
-    await withMode(undefined, async () => {
-      await withEnv({ FAKE_APLAY_EXPECT_HEX: STUB_HEX }, async () => {
-        const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
-        await playback.play(STUB);
-        expect(playback.playing).toBe(false);
-      });
-    });
-  });
-
-  it('should fail a byte mismatch instead of playing the wrong audio', async () => {
-    await withMode(undefined, async () => {
-      await withEnv({ FAKE_APLAY_EXPECT_HEX: 'deadbeef' }, async () => {
-        const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
-        await expect(playback.play(STUB)).rejects.toThrow(PlaybackError);
-        await expect(playback.play(STUB)).rejects.toThrow(/exited 4/);
-      });
-    });
-  });
-
-  it('should fail a nonzero backend exit without hanging', async () => {
-    await withMode('fail', async () => {
-      const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
-      await expect(playback.play(STUB)).rejects.toThrow(PlaybackError);
-      await expect(playback.play(STUB)).rejects.toThrow(/exited 3/);
-    });
-  });
-
-  it('should cancel within the fence and leave no orphan behind', async () => {
-    const pidFile = join(tmpdir(), `fake-aplay-${process.pid}.pid`);
-    rmSync(pidFile, { force: true });
-    try {
-      await withEnv({ FAKE_APLAY_PIDFILE: pidFile }, async () => {
-        await withMode('hang', async () => {
-          const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
-          const pending = playback.play(STUB);
-          const deadline = Date.now() + 10000;
-          while (!playback.playing && Date.now() < deadline) {
-            await new Promise((resolve) => setTimeout(resolve, 10));
-          }
-          expect(playback.playing).toBe(true);
-          // Wait for boot: cancelling a child that has not exec'd yet would
-          // reap it before it writes the pidfile, making the proof vacuous.
-          await waitForBoot(pidFile);
-          const start = Date.now();
-          playback.cancel();
-          await expect(pending).rejects.toThrow(PlaybackCancelledError);
-          // Bounded by the §9 150 ms stop-to-silence gate.
-          expect(Date.now() - start).toBeLessThanOrEqual(150);
-          expect(playback.playing).toBe(false);
-          const pid = Number(readFileSync(pidFile, 'utf8').trim());
-          expect(Number.isInteger(pid) && pid > 0).toBe(true);
-          expect(() => process.kill(pid, 0)).toThrow(/ESRCH/);
-        });
-      });
-    } finally {
-      rmSync(pidFile, { force: true });
-    }
-  });
-
-  it('should escalate to SIGKILL for a child that ignores SIGTERM', async () => {
-    const pidFile = join(tmpdir(), `fake-aplay-sigkill-${process.pid}.pid`);
-    rmSync(pidFile, { force: true });
-    try {
-      await withEnv({ FAKE_APLAY_PIDFILE: pidFile }, async () => {
-        await withMode('hang-ignore-term', async () => {
-          const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
-          const pending = playback.play(STUB);
-          const deadline = Date.now() + 10000;
-          while (!playback.playing && Date.now() < deadline) {
-            await new Promise((resolve) => setTimeout(resolve, 10));
-          }
-          expect(playback.playing).toBe(true);
-          await waitForBoot(pidFile);
-          const start = Date.now();
-          playback.cancel();
-          await expect(pending).rejects.toThrow(PlaybackCancelledError);
-          // Escalation at 100 ms plus CI margin; recorded in the receipt as
-          // exceeding the 150 ms gate for hung children only.
-          expect(Date.now() - start).toBeLessThanOrEqual(500);
-          const pid = Number(readFileSync(pidFile, 'utf8').trim());
-          expect(() => process.kill(pid, 0)).toThrow(/ESRCH/);
-        });
-      });
-    } finally {
-      rmSync(pidFile, { force: true });
-    }
-  });
-
-  it('should never spawn after a cancel that lands before the spawn', async () => {
-    const pidFile = join(tmpdir(), `fake-aplay-prespawn-${process.pid}.pid`);
-    const spawnLog = join(tmpdir(), `fake-aplay-prespawn-${process.pid}.log`);
-    rmSync(pidFile, { force: true });
-    rmSync(spawnLog, { force: true });
-    try {
-      await withEnv({ FAKE_APLAY_PIDFILE: pidFile, FAKE_APLAY_SPAWNLOG: spawnLog }, async () => {
-      await withMode('hang', async () => {
-        const playback = new AplayPlayback(FAKE_APLAY, [digestOf(FAKE_APLAY)]);
-        const pending = playback.play(STUB);
-        // Cancel synchronously: the async verification has not finished, so
-        // no child can exist yet. The play must reject without ever spawning
-        // — the fixture logs every spawn before reading stdin, so even a
-        // stdin-held orphan would show up in the log.
-        playback.cancel();
-        await expect(pending).rejects.toThrow(PlaybackCancelledError);
-        expect(playback.playing).toBe(false);
-        await expect(
-          (async () => readFileSync(pidFile, 'utf8'))(),
-        ).rejects.toThrow(/ENOENT/);
-        expect(() => readSpawnLog(spawnLog)).toThrow(/ENOENT/);
-        // Positive control: the same setup without the early cancel spawns
-        // and the pidfile appears, so the absence above is meaningful. The
-        // control boots after any orphan would have; exactly one log line —
-        // the control pid — proves the cancelled play spawned nothing.
-        await withEnv({ FAKE_APLAY_PIDFILE: pidFile, FAKE_APLAY_SPAWNLOG: spawnLog }, async () => {
-          const second = playback.play(STUB);
-          const deadline = Date.now() + 10000;
-          while (!playback.playing && Date.now() < deadline) {
-            await new Promise((resolve) => setTimeout(resolve, 10));
-          }
-          expect(playback.playing).toBe(true);
-          await waitForBoot(pidFile);
-          const pid = Number(readFileSync(pidFile, 'utf8').trim());
-          expect(Number.isInteger(pid) && pid > 0).toBe(true);
-          playback.cancel();
-          await expect(second).rejects.toThrow(PlaybackCancelledError);
-          expect(readSpawnLog(spawnLog)).toEqual([pid]);
-          expect(() => process.kill(pid, 0)).toThrow(/ESRCH/);
-        });
-      });
-      });
-    } finally {
-      rmSync(pidFile, { force: true });
-      rmSync(spawnLog, { force: true });
-    }
+  it('should isolate sessions and order each stream independently across output items', () => {
+    const p = new Playback('speech-1', 1, 1);
+    expect(p.enqueue({ ...frame(), speechSessionId: 'other-session' })).toBe(false);
+    expect(p.enqueue(frame())).toBe(true);
+    expect(p.enqueue({ ...frame(1), outputItemId: 'output-2' })).toBe(true);
+    expect(p.enqueue({ ...frame(), streamId: 'stream-2', outputItemId: 'output-3' })).toBe(true);
+    expect(p.enqueue({ ...frame(2, 480), streamId: 'stream-2' })).toBe(false);
   });
 });

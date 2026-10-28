@@ -1,0 +1,41 @@
+{
+  "schemaVersion": 1,
+  "capturedAt": "2026-10-27",
+  "source": "Preserved h2a harness r5 snapshot, independently measured in the approved analysis",
+  "governanceCommit": "cfc60833120c3eaa2677a045d550bdc3c63e1547",
+  "baseCommit": "80b140557393667d468a0a99363a6bec99ed9150",
+  "analysisSha256": "2631f0cfde59c34fc1afd95822ada5be19fd3a2f8ff8c77eb35494f8b72abf8e",
+  "originalInputSha256": {
+    "dossier.json": "5478de43fa30404a3c0ce64fc47a8f6dc9af7d4a0deec1766e0098f6fda66dd0",
+    "harness-scenes.json": "719cf8476193929da3cbcbcf7348ca75114f5cc95aedeed0ffdbbba7c4a19873",
+    "harness-content.json": "6b7ce7e7ec9c21648a6cfb59edca83edcefa785a5adbc3a9acda061fc65235a0",
+    "package-lock.json": "9f8454d2352554a194537c6303e1dd97dc5a28b1b804396600557cff607d9a3d"
+  },
+  "currentLockSha256": "f061d485fee9496727bcb6fdc6f7944b8d26cccbf7ac648cdc8bb43958aa1700",
+  "canonicalInputSha256": {
+    "rule": "jq -cS output including final newline; matches original and committed compacted values",
+    "dossier.json": "8dc96dda67f201d8974e071e7aa1080d39f26de60a59f933f8dd7e6a93806532",
+    "harness-scenes.json": "bcf5af8d633ca53243e4d6e8a4a7211e91540270c11d63f111c9a57dc5090b0f",
+    "harness-content.json": "3d7afbada7d66372690eff0039721aedd1e6ee29d679469f5bc8ddcce5cc99d6"
+  },
+  "toolchain": {
+    "nodeImage": "node:24.22.1-bookworm-slim",
+    "nodeCurrent": "24.22.1",
+    "svelte": "5.56.4",
+    "viteBefore": "7.3.6",
+    "viteCurrent": "7.3.7",
+    "minifier": "esbuild 0.28.2",
+    "rollup": "4.63.1",
+    "designSystem": "0.34.69",
+    "themes": "0.11.0"
+  },
+  "referenceClass": {"diagrams": 2, "nodes": [3, 6], "groups": [3, 2], "foldStatesPerConfiguration": 12, "questions": 2, "options": 6, "inventoryRows": 24, "gaps": 8},
+  "focusReference": {"bytes": 357891, "renderer": "0.98.7", "validator": "0.5.0", "inputRelation": "Same dossier, different renderer and composition; not a byte-identical rebuild target"},
+  "attributionBefore": {"jsBytes": 3669190, "routes": 3115306, "dictionaryMinimum": 301739, "summaryLayouts": 26018, "remaining": 226127},
+  "notes": [
+    "Fixture JSON is compacted without changing values; compare canonical digests in fresh build receipts.",
+    "Preserved outputs are evidence, not a new execution receipt. Fresh builds record actual Node/toolchain versions and output hashes.",
+    "Vite 7.3.7 and current shared diagram sources explain possible byte differences from the preserved 7.3.6 slim output.",
+    "The A2UI L1 DS 0.36.0/chart template and hosted multi-file publication require their own qualification."
+  ]
+}
