@@ -1,5 +1,6 @@
+import type { CommentState } from '@sentropic/chat-runtime/comments';
 import type { Component, Snippet } from 'svelte';
-import type { CommentHost } from '../comments/host.js';
+import type { CommentHost } from '@sentropic/chat-runtime/comments/host';
 import type { CommentThreadSummary } from '../comments/types.js';
 import type { ChatGeneratedFileCard } from '../documents/generated-file-cards.js';
 import type { ChatProjectedTimelineItem } from '@sentropic/chat-runtime/state/chatProjection';
@@ -31,6 +32,7 @@ export type ChatPanelShellProps = {
   panelEl?: HTMLDivElement | null;
   // comments mode
   commentHost?: CommentHost | null;
+  commentState?: CommentState | null;
   commentContextType?: string | null;
   commentContextId?: string | null;
   commentSectionKey?: string | null;
