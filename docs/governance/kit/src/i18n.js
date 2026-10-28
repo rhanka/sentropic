@@ -1,5 +1,7 @@
 import { writable } from 'svelte/store';
-import english from './i18n-en.json' with { type: 'json' };
+let english = {};
+// A consumer installs only the dictionary for its rendered dossier.
+export function configureTranslations(dictionary) { english = dictionary; }
 
 const storageKey = 'governance-dossier-language';
 let initial = 'fr';

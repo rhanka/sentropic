@@ -11,9 +11,11 @@
   import briefSource from './decision-brief.json';
   import ArchitectureFigure from './ArchitectureFigure.svelte';
   import presentation from './presentation-scenes.json';
+  import { bindGovernanceScene } from './governance-input.js';
   const dossier = $derived(localize(dossierSource, $language));
   const brief = $derived(localize(briefSource, $language));
-  const architectureScenes = $derived(presentation[$language].architectureScenes);
+  const architectureScenes = $derived(Object.fromEntries(Object.entries(presentation[$language].architectureScenes)
+    .map(([id, scene]) => [id, id === 'central' ? bindGovernanceScene(scene) : scene])));
   const decisionScenes = $derived(presentation[$language].decisionScenes);
   const ROUTED_NEEDS = $derived(localize(presentation.navigation.needs, $language));
   const GIGOGNE_VIEWS = $derived(localize(presentation.navigation.views, $language));
