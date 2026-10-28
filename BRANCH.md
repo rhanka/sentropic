@@ -44,6 +44,8 @@
 - [x] `BRP0-R2a` acknowledge: broaden consumer census to all case-insensitive chat-ui references; add CI manifests/wiring, E2E storage/regressions and retained historical mentions.
 - [x] `BRP0-R2b` acknowledge: all 125 selector locations now identify the first selector token; both atomic correction slices complete.
 - [x] `BRP0-R2c` acknowledge: inventory the semicolon hover-variant directive separately from CSS selector blocks.
+- [x] `BRP0-R3` acknowledge: both final independent review legs APPROVE on 64521846e; receipt/checklist-only handoff follows.
+- [ ] `BRP0-ACK` attention: DS/Sentropic/architect co-freeze and conductor Track trace remain external acceptance; no acknowledgement manufactured.
 
 ## AI Flaky tests
 - [x] Not applicable: no application tests changed or executed; no flaky acceptance requested.
@@ -79,12 +81,14 @@
   - [x] Record all section 6 conductor defaults and owner-held gates without impersonating owner decisions.
   - [x] Integrate r2 notes: runtime package/semver break, proposed C-03 owner/copy changes, M1b release dependency, split estimate.
   - [x] Record domain acknowledgement state and bounded next-owner acceptance criteria.
+  - [ ] Obtain domain co-freeze acknowledgements and conductor Track trace on the same contract revision.
 - [ ] **Lot P0c — Final validation and draft PR**
   - [x] Validate exhaustive inventories against the pinned source; inspect every diff hunk.
-  - [ ] Verify whitespace and allowed paths; mechanically check branch/scope before each commit.
-  - [ ] Independent contract/evidence reviews and finding reconciliation.
+  - [x] Verify whitespace and allowed paths; mechanically check branch/scope before each commit.
+  - [x] Independent contract/evidence reviews and finding reconciliation; final 2/2 APPROVE.
   - [x] Create draft PR to `main`, body from this checklist, with execution-plan comment (PR #816).
   - [ ] Push and verify CI completed/success on exact final head; report PR and full SHA.
+  - [x] Commit the qualification receipt; exact final-head CI completion is recorded externally in the PR after the last push.
   - [x] API/UI/E2E test files: none changed; documentation-only checks plus repository CI qualify P0.
   - [x] No package version bump required; no `packages/*/src/**` changes.
   - [x] No Docker lifecycle required; no containers started.
