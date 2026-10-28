@@ -616,3 +616,117 @@ describe('mistral session lifecycle', () => {
   });
 
   it('should abandon the turn on clear and drop its late frames', async () => {
+    const driven = await openMistralDriven();
+    await driven.write('u_drop', 10);
+    const dropped = driven.lastSocket();
+    await driven.session.command(clearCommand('u_drop'));
+    expect(dropped.closed).toBe(true);
+    // The late done for the cleared turn arrives on the abandoned stream.
+    dropped.push(frameDone('dropped transcript'));
+    await flush();
+    await driven.write('u3', 100);
+    await driven.commit('u3', [frameDone('third turn')]);
+    const events = await driven.collect();
+    const finals = events.filter((event) => event.type === 'transcript.final');
+    expect(finals).toHaveLength(1);
+    const final = finals[0] as unknown as Record<string, unknown>;
+    expect(final?.utteranceId).toBe('u3');
+    expect(final?.text).toBe('third turn');
+    expect(final?.audioInterval).toEqual({ startMs: 100, endMs: 120 });
+    expect(events.filter((event) => event.type === 'error')).toHaveLength(0);
+  });
+
+  it('should resolve a pending commit with no final when cleared or closed', async () => {
+    const driven = await openMistralDriven();
+    await driven.write('u1', 10);
+    const pending = driven.session.command(commitCommand('u1'));
+    await flush();
+    await driven.session.command(clearCommand('u1'));
+    await pending;
+    const events = await driven.collect();
+    expect(events.filter((event) => event.type === 'transcript.final')).toHaveLength(0);
+    expect(events.filter((event) => event.type === 'error')).toHaveLength(0);
+    expect(driven.sink.settles).toEqual([{ operationId: 'op-1', outcome: 'completed' }]);
+  });
+
+  it('should suppress frames that arrive after close', async () => {
+    // The held frames are released from inside close(), after the session
+    // settled: without the settled guards they would surface as events.
+    const socket = new PostCloseSocket([frameCreated()]);
+    const driven = await openMistralDriven(sttConfig, { connect: async () => socket });
+    await driven.session.write(frame('u1', 10));
+    socket.push(frameDelta('late but open'));
+    await flush();
+    socket.hold(frameDelta('after close'), frameDone('after close'));
+    await driven.session.close();
+    expect(socket.closed).toBe(true);
+    const out: SpeechEvent[] = [];
+    for await (const event of driven.session.events) out.push(event);
+    expect(out.filter((event) => event.type === 'transcript.partial')).toHaveLength(1);
+    expect(out.filter((event) => event.type === 'transcript.final')).toHaveLength(0);
+    expect(out.filter((event) => event.type === 'error')).toHaveLength(0);
+    expect(driven.sink.settles).toEqual([{ operationId: 'op-1', outcome: 'completed' }]);
+  });
+
+  it('should keep profiles independent on separate sockets and sinks', async () => {
+    const enConfig: MistralTranscriptionProfileConfig = {
+      modelId: 'voxtral-mini-transcribe-realtime-3',
+      modelRevision: 'rev-3-2026-10-28',
+      targetStreamingDelayMs: 2400,
+    };
+    const [fr, en] = await Promise.all([openMistralDriven(sttConfig), openMistralDriven(enConfig)]);
+    await fr.write('u_fr', 10);
+    await fr.commit('u_fr', frameScriptFr);
+    await en.write('u_en', 10);
+    await en.commit('u_en', [frameDone('hello')]);
+    const [frEvents, enEvents] = await Promise.all([fr.collect(), en.collect()]);
+    expect(frEvents.filter((event) => event.type === 'transcript.final')).toHaveLength(1);
+    expect(enEvents.filter((event) => event.type === 'transcript.final')).toHaveLength(1);
+    expect(fr.sockets).not.toBe(en.sockets);
+    expect(JSON.parse(en.sockets[0].sent[0]).session).not.toHaveProperty('language');
+    expect(fr.sink.settles).toHaveLength(1);
+    expect(en.sink.settles).toHaveLength(1);
+  });
+
+  it('should redact the Bearer [REDACTED] from failures and store no audio', async () => {
+    const token = 'bearer-secret-fixture';
+    const failingConnect = async () => {
+      throw new Error("provider connect failed (status 401, Bearer " + token + ")");
+    };
+    const session = await openMistralTranscriptionSession(sttConfig, {
+      request: sessionRequest(),
+      admission: admission(),
+      bearerToken: token,
+      connect: failingConnect,
+      usage: new RecordingSink(),
+      schedule: () => () => undefined,
+    });
+    try {
+      await session.write(frame('u1', 10, 24));
+      expect.unreachable();
+    } catch (error) {
+      expect(String(error)).not.toContain(token);
+      expect(String(error)).toContain('[REDACTED]');
+    } finally {
+      await session.close();
+    }
+    const driven = await openMistralDriven(sttConfig, { bearerToken: token });
+    await driven.write('u1', 10);
+    await driven.commit('u1', [frameDone('one')]);
+    const appends = driven.lastSocket().sent.filter((message) => JSON.parse(message).type === 'input_audio.append');
+    expect(appends).toHaveLength(1);
+    expect(JSON.parse(appends[0]).audio).toBe('A'.repeat(1280));
+    expect(driven.session).not.toHaveProperty('bearerToken');
+    expect(JSON.stringify(driven.sink)).not.toContain('transcript');
+    await driven.session.close();
+  });
+  it('should refuse utteranceId switches without a boundary', async () => {
+    const driven = await openMistralDriven();
+    await driven.write('u1', 10);
+    await expect(driven.session.write(frame('u2', 30))).rejects.toMatchObject({ code: 'invalid-format' });
+    await expect(driven.session.command(commitCommand('u2'))).rejects.toMatchObject({ code: 'invalid-format' });
+    await driven.commit('u1', [frameDone('one')]);
+    const events = await driven.collect();
+    expect(events.filter((event) => event.type === 'transcript.final')).toHaveLength(1);
+  });
+});
