@@ -408,3 +408,118 @@ describe('checkpointState', () => {
       { id: 'cp2', anchorMessageId: 'msg-2', anchorSequence: 2, title: 'Valid' },
     );
     const map = applySessionCheckpoints(cps);
+    expect(map.size).toBe(1);
+    expect(map.get('msg-2')).toMatchObject({ id: 'cp2' });
+  });
+
+  it('getCheckpointForUserMessage returns the correct checkpoint', () => {
+    const cps = makeCheckpoints(
+      { id: 'cp1', anchorMessageId: 'msg-1', anchorSequence: 1, title: 'First' },
+    );
+    const map = applySessionCheckpoints(cps);
+    const result = getCheckpointForUserMessage(map, 'msg-1');
+    expect(result).toMatchObject({ id: 'cp1' });
+  });
+
+  it('getCheckpointForUserMessage returns null for unknown id', () => {
+    const map = applySessionCheckpoints([]);
+    expect(getCheckpointForUserMessage(map, 'unknown')).toBeNull();
+  });
+
+  it('getCheckpointForUserMessage returns null for empty id', () => {
+    const map = applySessionCheckpoints([]);
+    expect(getCheckpointForUserMessage(map, '')).toBeNull();
+  });
+
+  it('openCheckpointPrompt builds a restore prompt', () => {
+    const cp: CP = { id: 'cp1', anchorMessageId: 'msg-1', anchorSequence: 1, title: 'T' };
+    const prompt = openCheckpointPrompt(cp, 'msg-1', 'restore');
+    expect(prompt).toEqual({ kind: 'restore', checkpoint: cp, userMessageId: 'msg-1' });
+  });
+
+  it('openCheckpointPrompt builds a retry prompt with assistantMessageId', () => {
+    const cp: CP = { id: 'cp1', anchorMessageId: 'msg-1', anchorSequence: 1, title: 'T' };
+    const prompt = openCheckpointPrompt(cp, 'msg-1', 'retry', 'asst-1');
+    expect(prompt).toEqual({
+      kind: 'retry',
+      checkpoint: cp,
+      userMessageId: 'msg-1',
+      assistantMessageId: 'asst-1',
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. Fake-host harness: end-to-end
+// ---------------------------------------------------------------------------
+describe('fake-host harness (end-to-end)', () => {
+  /**
+   * Simulates an app using CheckpointHost hooks without any Svelte or network.
+   * Proves the classifier + state modules compose correctly.
+   */
+  const fakeHost = {
+    isMutatingTool: (name: string) =>
+      ['_create', '_update', '_delete'].some((s) => name.toLowerCase().endsWith(s)),
+    humanizeMutation: (name: string, argsText: string): string | null => {
+      let id = '';
+      try {
+        const p = JSON.parse(argsText) as Record<string, unknown>;
+        id = String(p?.folderId ?? p?.id ?? '').trim();
+      } catch { /**/ }
+      const entity = name.replace(/_(create|update|delete)$/i, '');
+      const action = name.split('_').pop() ?? '';
+      return id ? `${entity.replace(/_/g, ' ')} ${action}: ${id}` : null;
+    },
+  };
+
+  it('applies checkpoints, looks up by user message, classifies mutation', () => {
+    const cpList = [
+      { id: 'cp1', anchorMessageId: 'u1', anchorSequence: 1 },
+    ];
+    const map = applySessionCheckpoints(cpList);
+    const cp = getCheckpointForUserMessage(map, 'u1');
+    expect(cp).toMatchObject({ id: 'cp1' });
+
+    const events = makeEvents({
+      id: 'a1',
+      events: [toolCallStartEvent('tc1', 'folder_update', '{"folderId":"fld_99"}')],
+    });
+    const msgs: Msg[] = [
+      { id: 'u1', role: 'user', sequence: 1 },
+      { id: 'a1', role: 'assistant', sequence: 2 },
+    ];
+
+    expect(hasCheckpointMutationDelta(cp, msgs, events, fakeHost)).toBe(true);
+    const preview = getCheckpointMutationPreviewItems(cp, msgs, events, fakeHost);
+    expect(preview).toEqual(['folder update: fld_99']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. Zero sentropic domain strings in src/checkpoints/
+// ---------------------------------------------------------------------------
+describe('sentropic-string scan', () => {
+  const CHECKPOINTS_SRC = path.join(process.cwd(), 'src', 'checkpoints');
+  const DOMAIN_STRINGS = [
+    'organization',
+    'folder',
+    'initiative',
+    'usecase',
+    'workspaceId',
+    'folderId',
+    'organizationId',
+  ];
+
+  const sourceFiles = fs
+    .readdirSync(CHECKPOINTS_SRC)
+    .filter((f) => f.endsWith('.ts'))
+    .map((f) => path.join(CHECKPOINTS_SRC, f));
+
+  for (const filePath of sourceFiles) {
+    it(`${path.basename(filePath)} must contain zero sentropic domain strings`, () => {
+      const source = fs.readFileSync(filePath, 'utf8');
+      const found = DOMAIN_STRINGS.filter((s) => source.includes(s));
+      expect(found, `Found domain strings [${found.join(', ')}] in ${path.basename(filePath)}`).toEqual([]);
+    });
+  }
+});
