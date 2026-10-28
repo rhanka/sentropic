@@ -1793,20 +1793,24 @@ jobs:
   # Security: IaC scans (infrastructure configuration)
   security-iac:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     needs: [changes]
     if: needs.changes.outputs.global == 'true'
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Setup Docker
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Run IaC security scan
         run: make test-security-iac
         continue-on-error: false
       - name: Upload security scan results (IaC)
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: security-iac-results
+          include-hidden-files: true
+          if-no-files-found: error
           path: |
             .security/iac-infra.json
             .security/iac-infra-parsed.yaml

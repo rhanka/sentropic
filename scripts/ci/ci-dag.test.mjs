@@ -67,8 +67,13 @@ test('should block image promotion after a static or scan failure even with succ
 test('should retain exact membership when restoring old runtime wait edges for rollback', () => {
   const rollback = structuredClone(workflow);
   for (const name of Object.keys(runtimeInputs)) rollback.jobs[name].needs.push('security-sast-sca');
+  rollback.jobs['build-ui'].needs.push('test-ui', 'build-ui-static');
   assert.deepEqual(workflowExpected(rollback, context), workflowExpected(workflow, context));
   assert.equal(checkDag(rollback, context).ok, false);
+  const expected = workflowExpected(rollback, context);
+  const executed = expected.filter(row => row.selected).map(row => ({ job: row.job,
+    conclusion: row.job === 'security-container-api' ? 'failure' : 'success' }));
+  assert.equal(evaluateExpected({ expected, executed }).ok, false);
 });
 
 test('should publish measured readiness and preserve missing or unexecuted spans', () => {
