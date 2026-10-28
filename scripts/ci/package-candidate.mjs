@@ -102,6 +102,20 @@ export async function main([command, dir, ...roots]) {
   if (command === 'produce') return produceCandidates({ root, dir, roots, tuple,
     tsc: '/tmp/cm-tools/node_modules/.bin/tsc' });
   if (command === 'verify') return verifyCandidates(dir, tuple, roots);
+  if (command === 'seal') {
+    const index = verifyCandidates(dir, tuple, roots);
+    index.prepared = { file: 'prepared.tgz', sha256: sha256File(path.join(dir, 'prepared.tgz')) };
+    fs.writeFileSync(path.join(dir, 'candidates.json'), `${JSON.stringify(index, null, 2)}\n`);
+    return index;
+  }
+  if (command === 'verify-prepared') {
+    // Verify the prepared archive before extraction; package bytes are checked after tools restore.
+    const index = json(path.join(dir, 'candidates.json'));
+    if (JSON.stringify(index.tuple) !== JSON.stringify(tuple)
+      || index.prepared?.file !== 'prepared.tgz'
+      || sha256File(path.join(dir, 'prepared.tgz')) !== index.prepared.sha256) fail('prepared candidate hash/tuple mismatch');
+    return index;
+  }
   fail('expected produce|verify DIR ROOT...');
 }
 if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.argv[1])) {

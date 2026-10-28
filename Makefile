@@ -1007,11 +1007,18 @@ build-cluster-mesh: ## Build @sentropic/cluster-mesh without persistent dependen
 	@$(MAKE) cluster-mesh-workspace CM_ACTION=build ENV=$(ENV)
 
 .PHONY: cluster-mesh-workspace
+# BR80-EX2: one immutable preparation, copied into fresh container storage per lane.
+CI_PACKAGE_CANDIDATES ?=
+.PHONY: ci-package-candidate
+ci-package-candidate:
+	@$(MAKE) cluster-mesh-workspace CM_ACTION=candidate CI_PACKAGE_CANDIDATES=tmp/ci-package-candidates ENV=$(ENV)
 cluster-mesh-workspace:
 	@$(CM_RUN) -u "$$(id -u):$$(id -g)" \
 		-e HOME=/tmp -e CM_ACTION="$(CM_ACTION)" -e CM_PEER_TOOLS="$(CLUSTER_MESH_PEER_TOOLS)" \
 		-e CM_SCOPE="$(patsubst packages/cluster-mesh/%,%,$(SCOPE))" \
 		-e CM_PG_URL="$(CM_PG_URL)" -e CM_PG_CRASH_PHASE="$(CM_PG_CRASH_PHASE)" \
+		-e CI_PACKAGE_CANDIDATES="$(if $(CI_PACKAGE_CANDIDATES),/source/$(CI_PACKAGE_CANDIDATES))" \
+		-e CANDIDATE_NODE_IMAGE="$(LLM_MESH_NODE_IMAGE)" $(MANIFEST_GUARD_ENV) \
 		-v "$(CURDIR):/source" $(CM_RUN_IMAGE) \
 		sh /source/packages/cluster-mesh/tests/storage/cold-workspace.sh
 

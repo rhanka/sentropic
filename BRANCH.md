@@ -66,6 +66,7 @@
   - [ ] Update the named manifest/pack/install scripts and tests: wrong SHA/hash, absent archive/sibling, registry failure, and a modified packed manifest must fail; clean consumers receive tarballs, never source `node_modules`.
   - [ ] Lot gate: new `make test-ci-package-candidate ENV=test-ci-package-candidates` plus `make test-publishable-manifests test-qualify-published-install ENV=test-ci-package-candidates`.
 - [ ] **Lot 2 — Independent qualification lanes**
+  - [x] Add a candidate preparation action and immutable prepared archive; each source/storage lane restores it into its own disposable container, with source/tool identity and hash verification before extraction. CI fan-out remains to wire.
   - [ ] Refactor the four named cluster preparation/Make files; separate static/source, PostgreSQL conformance, comments storage, crash recovery, candidate packing, and installed lanes; each mutating lane owns its workspace/database/ports.
   - [ ] Preserve existing `postgres-crashes.spec.ts`, `installed-major-upgrade.mjs`, `installed-bare.mjs`, and all packaging suite membership; maintain seed → crash/restart → verify inside each crash fixture.
   - [ ] Add `package-qualification-dag.test.mjs` (new): no installed check before packing, no second candidate build, distinct mutable fixture roots, lazy bare/selected-peer/latest-in-range/global-consumer cases retained.
