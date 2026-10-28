@@ -1,3 +1,5 @@
+import { getCommentAuthorLabel, getMentionLabel, getInitials, isSameDay } from '@sentropic/chat-ui/comments';
+const presentation = { getCommentAuthorLabel, getMentionLabel };
 /**
  * comments-module.spec.ts
  *
@@ -202,7 +204,7 @@ describe('comments module — FakeCommentHost harness (CommentHost interface)', 
 describe('comments module — createCommentState factory', () => {
   it('should create a state object with subscribe + actions', () => {
     const host = new FakeCommentHost();
-    const state = createCommentState(host);
+    const state = createCommentState(host, presentation);
     expect(typeof state.subscribe).toBe('function');
     expect(typeof state.actions).toBe('object');
     expect(typeof state.actions.loadCommentThreads).toBe('function');
@@ -212,7 +214,7 @@ describe('comments module — createCommentState factory', () => {
 
   it('initial snapshot should have empty threads and messages', () => {
     const host = new FakeCommentHost();
-    const state = createCommentState(host);
+    const state = createCommentState(host, presentation);
     let snap: import('../src/comments/state.js').CommentStateSnapshot | null = null;
     state.subscribe((s) => { snap = s; })();
     expect(snap).not.toBeNull();
@@ -226,7 +228,7 @@ describe('comments module — createCommentState factory', () => {
   it('setContext should trigger a load and update context fields', async () => {
     const host = new FakeCommentHost();
     host.comments = [makeItem({ thread_id: 'thread_1' })];
-    const state = createCommentState(host);
+    const state = createCommentState(host, presentation);
     let snap: import('../src/comments/state.js').CommentStateSnapshot | null = null;
     state.subscribe((s) => { snap = s; });
     // setContext triggers loadCommentThreads internally
@@ -239,7 +241,7 @@ describe('comments module — createCommentState factory', () => {
   it('loadCommentThreads should load from host and build threads', async () => {
     const host = new FakeCommentHost();
     host.comments = [makeItem({ thread_id: 'thread_1' })];
-    const state = createCommentState(host);
+    const state = createCommentState(host, presentation);
     let snap: import('../src/comments/state.js').CommentStateSnapshot | null = null;
     state.subscribe((s) => { snap = s; });
     state.actions.setContext({ contextType: 'project', contextId: 'proj_1' });
@@ -251,7 +253,7 @@ describe('comments module — createCommentState factory', () => {
   it('subscribe should notify on state change', async () => {
     const host = new FakeCommentHost();
     host.comments = [makeItem()];
-    const state = createCommentState(host);
+    const state = createCommentState(host, presentation);
     let notified = 0;
     const unsub = state.subscribe(() => { notified += 1; });
     state.actions.setContext({ contextType: 'project', contextId: 'proj_1' });
@@ -266,11 +268,9 @@ describe('comments module — createCommentState factory', () => {
 // ---------------------------------------------------------------------------
 
 import {
-  getInitials,
   getMentionCandidate,
   getMentionMatches,
   buildCommentThreads,
-  isSameDay,
   isCommentByUser,
 } from '../src/comments/utils.js';
 
@@ -312,17 +312,17 @@ describe('comments module — utility functions', () => {
     ];
 
     it('should match by displayName', () => {
-      const matches = getMentionMatches(members, 'ali');
+      const matches = getMentionMatches(members, 'ali', presentation);
       expect(matches.some((m) => m.userId === 'u1')).toBe(true);
     });
 
     it('should match by email', () => {
-      const matches = getMentionMatches(members, 'bob');
+      const matches = getMentionMatches(members, 'bob', presentation);
       expect(matches.some((m) => m.userId === 'u2')).toBe(true);
     });
 
     it('should return empty array when no match', () => {
-      expect(getMentionMatches(members, 'xyz')).toHaveLength(0);
+      expect(getMentionMatches(members, 'xyz', presentation)).toHaveLength(0);
     });
   });
 
@@ -333,14 +333,14 @@ describe('comments module — utility functions', () => {
         makeItem({ id: 'c2', thread_id: 'thread_1', content: 'Reply' }),
         makeItem({ id: 'c3', thread_id: 'thread_2', content: 'Other' }),
       ];
-      const { threads, map } = buildCommentThreads(items);
+      const { threads, map } = buildCommentThreads(items, presentation);
       expect(threads).toHaveLength(2);
       expect(map.get('thread_1')).toHaveLength(2);
       expect(map.get('thread_2')).toHaveLength(1);
     });
 
     it('should return empty arrays for empty input', () => {
-      const { threads, map } = buildCommentThreads([]);
+      const { threads, map } = buildCommentThreads([], presentation);
       expect(threads).toHaveLength(0);
       expect(map.size).toBe(0);
     });
