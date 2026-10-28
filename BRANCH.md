@@ -41,6 +41,7 @@
 - [x] `BRP0-N3` clarification: inventory and draft PR are authorized; no owner UAT or transfer approval is inferred.
 - [x] `BRP0-N4` clarification: local scope gate uses installed host harness through an external make overlay and skips `build-harness`; no tracked Makefile edit or Docker needed.
 - [x] `BRP0-R1` acknowledge: boundary review APPROVE; clarify estimate proposal versus approved summary, and split mixed DOM/stream-fixture test custody (conductor refresh before P1).
+- [x] `BRP0-R2a` acknowledge: broaden consumer census to all case-insensitive chat-ui references; add CI manifests/wiring, E2E storage/regressions and retained historical mentions.
 
 ## AI Flaky tests
 - [x] Not applicable: no application tests changed or executed; no flaky acceptance requested.
