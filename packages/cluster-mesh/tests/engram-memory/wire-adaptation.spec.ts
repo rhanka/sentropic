@@ -1,14 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { canonicalizeMemoryJcs, memoryJcs } from '../../src/engram-memory/codec.js';
-import { captureProofToKernel, captureProofToWire, createMemoryNeutralTransaction, journalBytesWithIntentHash, memoryCommitIndexKey, neutralQueryResult, neutralUnitToPg, stripJournalIntentHash, translateMemoryAggregateRead, translateMemoryUpdateWrite, withMemoryCaptureReceipt, type MemoryKernelTransactionPort } from '../../src/engram-memory/wire-adaptation.js';
+import { captureProofToKernel, captureProofToWire, createMemoryNeutralTransaction, journalBytesWithIntentHash, memoryCommitIndexKey, neutralQueryResult, neutralUnitToPg, stripJournalIntentHash, translateMemoryAggregateRead, translateMemoryUpdateWrite, type MemoryKernelTransactionPort } from '../../src/engram-memory/wire-adaptation.js';
 import type { NeutralAtomicUnit } from '../../src/engram-memory/neutral-contract.js';
 import { validateAdmissionTransition, validateCaptureTransition } from '../../src/engram-memory/validation.js';
 
 const captureKey = JSON.stringify(['memory-capture-idempotency-v1', 'cand-1']);
 const outcomeKey = JSON.stringify(['memory-admission-outcome-v1', 'cand-1']);
-const snakeCapture = { candidate_id: 'cand-1', content: 'body', cursor: '7' };
+const snakeCapture = { candidate_id: 'cand-1', content: 'body', cursor: '7',
+  receipt_digest: 'sha256:receipt', extension: { text: 'é𐐀', values: [null, false, 0] } };
 const snakeDone = { ...snakeCapture, record_digest: 'sha256:digest' };
-const kernelDone = { candidateId: 'cand-1', revision: 2, recordDigest: 'sha256:digest', createdCursor: '7', proof: { candidate_id: 'cand-1', content: 'body', cursor: '7' } };
+const kernelDone = { candidateId: 'cand-1', revision: 2, recordDigest: 'sha256:digest', createdCursor: '7', proof: snakeCapture };
 const unit = (over: Partial<NeutralAtomicUnit> = {}): NeutralAtomicUnit => ({ guards: [], records: [], appends: [], updates: [], relationships: [], barriers: [], purgeIntents: [], indexWrites: [], ...over });
 
 describe('memory K7/K8 wire adaptation', () => {
@@ -47,7 +48,7 @@ describe('memory K7/K8 wire adaptation', () => {
   it('translates a created capture proof to the kernel model and back', () => {
     expect(captureProofToKernel(snakeCapture)).toEqual({
       candidateId: 'cand-1', revision: 1, recordDigest: null, createdCursor: '7',
-      proof: { candidate_id: 'cand-1', content: 'body', cursor: '7' },
+      proof: snakeCapture,
     });
     const row = { kind: 'capture', key: captureKey, value: memoryJcs(snakeCapture), version: '1' };
     const written = translateMemoryUpdateWrite(row);
@@ -69,6 +70,22 @@ describe('memory K7/K8 wire adaptation', () => {
       .toEqual({ candidateId: 'cand-1', outcome: 'accepted', proof: snakeOutcome });
     expect(JSON.parse(translateMemoryAggregateRead(outcomeKey, written.value).data)).toEqual(snakeOutcome);
   });
+  it.each([
+    [captureKey, snakeCapture, { ...kernelDone, revision: 1, recordDigest: null }],
+    [captureKey, snakeDone, kernelDone],
+    [outcomeKey, { candidate_id: 'cand-1', status: 'accepted', extra: 'é𐐀' },
+      { candidateId: 'cand-1', outcome: 'accepted', proof: { candidate_id: 'cand-1', status: 'accepted', extra: 'é𐐀' } }],
+  ])('should preserve canonical UTF-8 bytes in both directions for %s %j', (key, proof, expectedKernel) => {
+    const wire = memoryJcs(proof);
+    const row = { kind: 'proof', key, value: wire, version: '1' };
+    const kernel = translateMemoryUpdateWrite(row);
+    const kernelBytes = memoryJcs(expectedKernel);
+    expect(Buffer.from(kernel.value.data, 'utf8')).toEqual(Buffer.from(kernelBytes.data, 'utf8'));
+    const read = translateMemoryAggregateRead(key, kernelBytes);
+    expect(Buffer.from(read.data, 'utf8')).toEqual(Buffer.from(wire.data, 'utf8'));
+    const rewritten = translateMemoryUpdateWrite({ ...row, value: read });
+    expect(Buffer.from(rewritten.value.data, 'utf8')).toEqual(Buffer.from(kernelBytes.data, 'utf8'));
+  });
   it('leaves foreign keys and already-translated values unchanged', () => {
     const foreign = { kind: 'x', key: '["other-v1","cand-1"]', value: memoryJcs(snakeCapture), version: '1' };
     expect(translateMemoryUpdateWrite(foreign)).toBe(foreign);
@@ -77,22 +94,6 @@ describe('memory K7/K8 wire adaptation', () => {
     expect(translateMemoryAggregateRead('["other-v1","cand-1"]', memoryJcs(snakeCapture)))
       .toEqual(memoryJcs(snakeCapture));
   });
-  it('rejoins the capture receipt digest from the pending control only', async () => {
-    const stored = memoryJcs({ candidateId: 'cand-1', revision: 1, recordDigest: null, createdCursor: '7', proof: { ...snakeCapture } });
-    let calls = 0;
-    const joined = await withMemoryCaptureReceipt(captureKey, stored, async () => {
-      calls += 1; return memoryJcs({ capture_receipt_digest: 'sha256:receipt' });
-    });
-    expect(JSON.parse(joined.data)).toEqual({ ...snakeCapture, receipt_digest: 'sha256:receipt' });
-    const absent = await withMemoryCaptureReceipt(captureKey, stored, async () => null);
-    expect(JSON.parse(absent.data)).toEqual(snakeCapture);
-    const present = await withMemoryCaptureReceipt(captureKey,
-      memoryJcs({ candidateId: 'cand-1', revision: 1, recordDigest: null, createdCursor: '7',
-        proof: { ...snakeCapture, receipt_digest: 'sha256:kept' } }),
-      async () => { calls += 1; return memoryJcs({ capture_receipt_digest: 'sha256:other' }); });
-    expect(JSON.parse(present.data).receipt_digest).toBe('sha256:kept');
-    expect(calls).toBe(1);
-  });
   it('carries the journal intent hash in stored bytes and strips it on read', () => {
     const carried = journalBytesWithIntentHash('{"event_digest":"sha256:ev","event_id":"e1"}', 'hash-1');
     expect(JSON.parse(carried)).toEqual({ event_digest: 'sha256:ev', event_id: 'e1', intent_hash: 'sha256:ev' });
@@ -100,6 +101,19 @@ describe('memory K7/K8 wire adaptation', () => {
     const existing = '{"event_id":"e1","intent_hash":"sha256:kept"}';
     expect(journalBytesWithIntentHash(existing, 'hash-1')).toBe(existing);
     expect(JSON.parse(stripJournalIntentHash(carried))).toEqual({ event_digest: 'sha256:ev', event_id: 'e1' });
+  });
+  it.each([
+    [{ event_id: 'e1', event_digest: 'sha256:ev', extra: 'é𐐀' }, 'sha256:ev'],
+    [{ event_id: 'e2', extra: [null, false, 0] }, 'fallback'],
+  ])('should preserve canonical journal UTF-8 bytes through add/strip both ways (%j)', (event, intentHash) => {
+    const wire = memoryJcs(event).data;
+    const stored = memoryJcs({ ...event, intent_hash: intentHash }).data;
+    const carried = journalBytesWithIntentHash(wire, 'fallback');
+    expect(Buffer.from(carried, 'utf8')).toEqual(Buffer.from(stored, 'utf8'));
+    expect(Buffer.from(stripJournalIntentHash(carried), 'utf8')).toEqual(Buffer.from(wire, 'utf8'));
+    const stripped = stripJournalIntentHash(stored);
+    expect(Buffer.from(journalBytesWithIntentHash(stripped, 'fallback'), 'utf8')).toEqual(Buffer.from(stored, 'utf8'));
+    expect(Buffer.from(journalBytesWithIntentHash(stored, 'ignored'), 'utf8')).toEqual(Buffer.from(stored, 'utf8'));
   });
   it('refuses unsupported effects and non-JSON wire values', () => {
     expect(() => neutralUnitToPg(unit({ relationships: [{ kind: 'add' }] })))
@@ -147,6 +161,15 @@ describe('memory neutral transaction', () => {
     };
     return { tx, applied };
   };
+  it('should read capture bytes from that row alone without consulting control', async () => {
+    const { tx } = fakeTx();
+    const keys: string[] = [];
+    const read = tx.readAggregate;
+    tx.readAggregate = async (key) => { keys.push(key); return read(key); };
+    const result = await createMemoryNeutralTransaction(tx).readAggregate('capture', captureKey);
+    expect(Buffer.from(result!.value.data)).toEqual(Buffer.from(memoryJcs(snakeDone).data));
+    expect(keys).toEqual([captureKey]);
+  });
   it('should refuse binary aggregate and record bytes at the UTF-8 memory boundary', async () => {
     const value = { format: 'base64' as const, data: 'e30=' };
     expect(() => translateMemoryAggregateRead(captureKey, value))
@@ -156,7 +179,7 @@ describe('memory neutral transaction', () => {
     await expect(createMemoryNeutralTransaction(tx).readRecords('record', ['r1']))
       .rejects.toMatchObject({ code: 'invalid-command' });
   });
-  it('reads aggregates with the receipt rejoined and chains without intent hashes', async () => {
+  it('reads capture receipts from their row and chains without intent hashes', async () => {
     const { tx } = fakeTx();
     const neutral = createMemoryNeutralTransaction(tx, {});
     const read = await neutral.readAggregate('capture', captureKey);

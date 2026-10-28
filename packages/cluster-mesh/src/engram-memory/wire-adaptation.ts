@@ -67,12 +67,14 @@ const requireKernel = (entry: Record<string, unknown>, capture: boolean): void =
 /** K7 write direction: snake-case substrate proof to camel-case kernel proof. */
 export const captureProofToKernel = (entry: Record<string, unknown>): Record<string, unknown> => {
   requireSnake(entry, true);
+  // Only the completion field is mutable; keep every other producer field.
+  const { record_digest: recordDigest, ...proof } = entry;
   return {
     candidateId: entry['candidate_id'],
-    revision: entry['record_digest'] ? 2 : 1,
-    recordDigest: entry['record_digest'] ?? null,
+    revision: recordDigest !== undefined ? 2 : 1,
+    recordDigest: recordDigest ?? null,
     createdCursor: entry['cursor'],
-    proof: { candidate_id: entry['candidate_id'], content: entry['content'], cursor: entry['cursor'] },
+    proof,
   };
 };
 
@@ -80,7 +82,7 @@ export const captureProofToKernel = (entry: Record<string, unknown>): Record<str
 export const captureProofToWire = (stored: Record<string, unknown>): Record<string, unknown> => {
   requireKernel(stored, true);
   const proof = (stored['proof'] ?? {}) as Record<string, unknown>;
-  return { ...proof, ...(stored['recordDigest'] ? { record_digest: stored['recordDigest'] } : {}) };
+  return { ...proof, ...(stored['recordDigest'] !== null ? { record_digest: stored['recordDigest'] } : {}) };
 };
 
 export const translateMemoryUpdateWrite = (row: NeutralAggregateUpdate): NeutralAggregateUpdate => {
@@ -110,24 +112,6 @@ export const translateMemoryAggregateRead = (
     return memoryJcs(captureProofToWire(parsed));
   }
   return memoryJcs(parsed['proof']);
-};
-
-/** Rejoin the K7 receipt digest carried only in the pending control bytes. */
-export const withMemoryCaptureReceipt = async (
-  key: string,
-  value: EncodedValue,
-  readControl: (controlKey: string) => Promise<EncodedValue | null>,
-): Promise<MemoryEncodedValue> => {
-  const translated = translateMemoryAggregateRead(key, value);
-  if (!isMemoryCaptureKey(key)) return translated;
-  const entry = parseStored(translated.data);
-  if (typeof entry['receipt_digest'] === 'string') return translated;
-  const candidateId = (JSON.parse(key) as unknown[])[1];
-  const control = await readControl(JSON.stringify(['memory-pending-control-v1', candidateId]));
-  if (!control) return translated;
-  const receiptDigest = parseStored(requireMemoryUtf8(control).data)['capture_receipt_digest'];
-  return typeof receiptDigest === 'string'
-    ? memoryJcs({ ...entry, receipt_digest: receiptDigest }) : translated;
 };
 
 /** Journal append bytes: carry the intent hash in stored bytes only. */
@@ -195,10 +179,7 @@ export const createMemoryNeutralTransaction = (
   readAggregate: async (kind, key) => {
     const found = await tx.readAggregate(key);
     if (found === null) return null;
-    const value = await withMemoryCaptureReceipt(key, found.value, async (controlKey) => {
-      const row = await tx.readAggregate(controlKey);
-      return row?.value ?? null;
-    });
+    const value = translateMemoryAggregateRead(key, found.value);
     return { kind, key, version: String(found.version), value };
   },
   readRecords: async (kind, keys) => (await tx.readRecords(keys, { maxRecords: 2000, maxEncodedBytes: 1048576 }))
