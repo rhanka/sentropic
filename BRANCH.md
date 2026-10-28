@@ -42,6 +42,7 @@
   - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] BR1-cowork-pack: strict packed/source manifest guard reproduced a forbidden cowork-bridge file dependency in the changed desktop consumer; replace it with published-compatible ^0.1.1, retaining the already reserved desktop 0.2.1 release.
 - [x] BR1-R1: boundary review APPROVE; packaging findings accepted: include LICENSE, make the temporary UI type peer optional and explicitly enumerate runtime subpaths; align the host export test and handle string-valued export entries.
 - [x] BR1-R1-check: corrected runtime export test 23/23 and guarded pack pass; regenerate optional-peer metadata; P1a UI/runtime source behavior remains unchanged.
 - [x] BR1-EX1: allow additive Makefile runtime build/typecheck/test/pack targets and necessary chat dependency wiring; impact is package tooling only; rollback restores existing targets and removes runtime targets.
