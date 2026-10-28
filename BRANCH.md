@@ -84,6 +84,7 @@
   - [x] BRRC1-EX1 manifest isolates the IdP session secret and durable volume; an interrupted private writer leaves reads closed until recovery.
   - [x] spec/REMOTE_CONTROL_RC1.md documents exact ports, private authority/configuration, D2 trust limits and native/installed qualification handoff.
   - [x] Explicit unsupported-version versus invalid-kind refusal vectors added for issuer and internal route.
+  - [x] First GREEN pass: 118 unit cases passed and 16 API cases passed; fixed a missing test-local workload mock binding before rerun.
   - [ ] api/tests/unit/auth/remote-evidence.test.ts: repeated actions/switch, logout/revoke/expiry, wrong sid/version/MFA/audience/key, replay and workload separation.
   - [ ] Closed EvidenceRequest; issuer-derived identity and original authentication time; per-operation EdDSA evidence with pinned audiences.
 - [ ] **Lot 2 — Consent and authorization, RED then GREEN**
