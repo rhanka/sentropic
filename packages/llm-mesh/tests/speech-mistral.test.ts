@@ -237,3 +237,102 @@ const openMistralDriven = async (config = sttConfig, overrides: Record<string, u
   };
 };
 
+describe('mistral profile and session.update', () => {
+  it('should pin the 3.0 realtime model and refuse the 2602 generation', () => {
+    const capabilities = mistralTranscriptionCapabilities(sttConfig);
+    expect(capabilities.binding).toMatchObject({ providerId: 'mistral', modelId: 'voxtral-mini-transcribe-realtime-3' });
+    expect(() => mistralTranscriptionCapabilities({ ...sttConfig, modelId: 'voxtral-mini-transcribe-realtime-2602' as never }))
+      .toThrowError(MistralTranscriptionError);
+  });
+
+  it('should build the exact session.update body', () => {
+    expect(buildMistralSessionUpdate(sttConfig)).toEqual({
+      type: 'session.update',
+      session: {
+        audio_format: { encoding: 'pcm_s16le', sample_rate: 24000 },
+        target_streaming_delay_ms: 480,
+        language: 'fr',
+      },
+    });
+  });
+
+  it('should bound the streaming delay and the language code', () => {
+    for (const delay of [80, 1200, 2400]) {
+      expect(() => mistralTranscriptionCapabilities({ ...sttConfig, targetStreamingDelayMs: delay })).not.toThrow();
+    }
+    for (const delay of [79, 1201, 2399, 2401, Number.NaN]) {
+      expect(() => mistralTranscriptionCapabilities({ ...sttConfig, targetStreamingDelayMs: delay as number }))
+        .toThrowError(/targetStreamingDelayMs/);
+    }
+    expect(() => mistralTranscriptionCapabilities({ ...sttConfig, language: 'fra' })).toThrowError(/language/);
+    expect(() => mistralTranscriptionCapabilities({ ...sttConfig, turnDetection: 'server' as never }))
+      .toThrowError(/turn detection/);
+    expect(() => mistralTranscriptionCapabilities({ ...sttConfig, modelRevision: '' })).toThrowError(/modelRevision/);
+  });
+
+  it('should refuse TTS selection on the STT profile', async () => {
+    const capabilities = mistralTranscriptionCapabilities(sttConfig);
+    expect(capabilities.features.tts).toBe('unsupported');
+    expect(capabilities.features.serverVad).toBe('unsupported');
+    const driven = await openMistralDriven();
+    await expect(openMistralTranscriptionSession(sttConfig, {
+      request: { ...sessionRequest(), bindings: { stt: sttBinding(), tts: { ...sttBinding(), modelId: 'voxtral-mini-tts-3-0' } } },
+      admission: admission(),
+      bearerToken: 'bearer-fixture',
+      connect: async () => new GateSocket(),
+      usage: new RecordingSink(),
+    })).rejects.toMatchObject({ code: 'invalid-config' });
+    await driven.session.close();
+  });
+});
+
+describe('mistral TTS binding', () => {
+  it('should expose the pinned TTS selection without an implicit voice', () => {
+    const capabilities = mistralTtsCapabilities('tts-rev-1', 'fr');
+    expect(capabilities.binding).toMatchObject({ providerId: 'mistral', modelId: 'voxtral-mini-tts-3-0' });
+    expect(capabilities.features.tts).toBe('supported');
+    expect(capabilities.features.streamingStt).toBe('unsupported');
+    expect(capabilities.usageUnits).toEqual(['characters']);
+    expect(capabilities.voices).toContain('voice_592');
+    expect(capabilities.languages).toEqual(['fr']);
+    // No implicit voice: an explicit voice_id is required at request build.
+    expect(() => buildMistralTtsRequest({ voiceId: 'voice_592', input: '', responseFormat: 'mp3' }))
+      .toThrowError(/non-empty/);
+  });
+
+  it('should negotiate documented voices and refuse unknown selectors', () => {
+    const capabilities = mistralTtsCapabilities('tts-rev-1');
+    expect(capabilities.voices).toHaveLength(mistralTtsVoices.length);
+    const accepted = negotiateSpeech(capabilities, {
+      binding: { ...capabilities.binding, voice: 'voice_592', language: 'fr' },
+      required: ['tts'],
+    });
+    expect(accepted).toMatchObject({ ok: true });
+    expect(negotiateSpeech(capabilities, {
+      binding: { ...capabilities.binding, voice: 'voice_unknown' },
+      required: ['tts'],
+    })).toEqual({ ok: false, reason: 'selector', selector: 'voice' });
+    // No documented API region: an explicit region refuses fail-closed.
+    expect(negotiateSpeech(capabilities, {
+      binding: { ...capabilities.binding, voice: 'voice_592', region: 'eu' },
+      required: ['tts'],
+    })).toEqual({ ok: false, reason: 'selector', selector: 'region' });
+    expect(negotiateSpeech(capabilities, {
+      binding: capabilities.binding,
+      required: ['streamingStt'],
+    })).toMatchObject({ ok: false, reason: 'capability', capability: 'streamingStt' });
+  });
+
+  it('should build the exact speech request body', () => {
+    expect(buildMistralTtsRequest({ voiceId: 'voice_592', input: 'Bonjour.', responseFormat: 'mp3' })).toEqual({
+      model: 'voxtral-mini-tts-3-0',
+      input: 'Bonjour.',
+      voice_id: 'voice_592',
+      response_format: 'mp3',
+    });
+    expect(() => buildMistralTtsRequest({ voiceId: 'voice_unknown', input: 'Hi.', responseFormat: 'mp3' }))
+      .toThrowError(/unknown.*voice/);
+    expect(() => buildMistralTtsRequest({ voiceId: 'voice_592', input: 'Hi.', responseFormat: 'ogg' as never }))
+      .toThrowError(/responseFormat/);
+  });
+});
