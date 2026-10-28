@@ -1672,3 +1672,143 @@ export function createChatLoopController<
   /**
    * Internal: get stream ids eligible for local-tool execution.
    * Mirrors AppChatPanel's getLocalToolEligibleStreamIds — reads controller messages.
+   */
+  const ltGetLocalToolEligibleStreamIds = (): Set<string> =>
+    new Set(
+      messages
+        .filter((message) => {
+          if (message.role !== 'assistant') return false;
+          const status = message._localStatus;
+          if (status === 'failed') return false;
+          if (status === 'processing') return true;
+          // Not failed, not processing — eligible if no content (empty completion)
+          const content = message.content;
+          return !(content && typeof content === 'string' && content.trim().length > 0);
+        })
+        .map((message) => message._streamId ?? message.id),
+    );
+
+  /**
+   * Internal: mirrors AppChatPanel's isKnownAssistantStream.
+   * Returns true if streamId is tracked by a non-failed assistant message.
+   */
+  const ltIsKnownAssistantStream = (streamId: string): boolean =>
+    messages.some(
+      (message) =>
+        message.role === 'assistant' &&
+        (message._streamId ?? message.id) === streamId &&
+        message._localStatus !== 'failed',
+    );
+
+  /**
+   * Internal: mirrors AppChatPanel's hasPendingPermissionPromptForStream.
+   */
+  const ltHasPendingPermissionPromptForStream = (
+    streamId: string,
+    exceptToolCallId?: string,
+  ): boolean =>
+    ltPendingLocalToolPermissionPrompts.some(
+      (item) =>
+        item.streamId === streamId &&
+        (!exceptToolCallId || item.toolCallId !== exceptToolCallId),
+    );
+
+  /**
+   * Internal: mirrors AppChatPanel's hasInFlightToolForStream.
+   */
+  const ltHasInFlightToolForStream = (
+    streamId: string,
+    exceptToolCallId?: string,
+  ): boolean => {
+    for (const inFlightToolCallId of ltLocalToolInFlight) {
+      if (exceptToolCallId && inFlightToolCallId === exceptToolCallId) continue;
+      const state = ltLocalToolStatesById.get(inFlightToolCallId);
+      if (!state) continue;
+      if (state.streamId === streamId) return true;
+    }
+    return false;
+  };
+
+  /**
+   * Internal: mirrors AppChatPanel's getNextPendingToolCallIdForStream.
+   */
+  const ltGetNextPendingToolCallIdForStream = (streamId: string): string | null => {
+    const pending = Array.from(ltLocalToolStatesById.entries())
+      .filter(([_, state]) => state.streamId === streamId && !state.executed)
+      .sort(([, a], [, b]) => {
+        if (a.firstSeenAt !== b.firstSeenAt) {
+          return a.firstSeenAt - b.firstSeenAt;
+        }
+        return a.lastSequence - b.lastSequence;
+      });
+    return pending[0]?.[0] ?? null;
+  };
+
+  /**
+   * Internal: parse buffered JSON tool args (may be streaming / incomplete).
+   * Mirrors AppChatPanel's parseBufferedToolArgs.
+   */
+  const ltParseBufferedToolArgs = (rawArgs: string): { ready: boolean; value: unknown } => {
+    const trimmed = rawArgs.trim();
+    if (!trimmed) return { ready: true, value: {} };
+    try {
+      return { ready: true, value: JSON.parse(trimmed) };
+    } catch {
+      return { ready: false, value: null };
+    }
+  };
+
+  /** Notify + rebuild snapshot after local-tool state mutation. */
+  const ltNotify = (): void => {
+    notify();
+  };
+
+  /**
+   * Internal: schedule execution of a buffered local tool.
+   * Mirrors AppChatPanel's scheduleBufferedLocalToolExecution.
+   */
+  const ltScheduleBufferedLocalToolExecution = (toolCallId: string, delayMs = 120): void => {
+    const existing = ltLocalToolExecutionTimersById.get(toolCallId);
+    if (existing) clearTimeout(existing);
+    const timerId = setTimeout(() => {
+      ltLocalToolExecutionTimersById.delete(toolCallId);
+      void ltTryExecuteBufferedLocalTool(toolCallId);
+    }, delayMs);
+    ltLocalToolExecutionTimersById.set(toolCallId, timerId);
+  };
+
+  /**
+   * Internal: schedule the next pending tool for a stream.
+   * Mirrors AppChatPanel's scheduleNextToolForStream.
+   */
+  const ltScheduleNextToolForStream = (streamId: string, delayMs = 80): void => {
+    const nextToolCallId = ltGetNextPendingToolCallIdForStream(streamId);
+    if (!nextToolCallId) return;
+    ltScheduleBufferedLocalToolExecution(nextToolCallId, delayMs);
+  };
+
+  /**
+   * Internal: clear all local-tool state for a specific stream.
+   * Mirrors AppChatPanel's clearLocalToolStateForStream.
+   */
+  const ltClearLocalToolStateForStream = (streamId: string): void => {
+    let changed = false;
+    for (const [toolCallId, state] of ltLocalToolStatesById.entries()) {
+      if (state.streamId !== streamId) continue;
+      const timerId = ltLocalToolExecutionTimersById.get(toolCallId);
+      if (timerId) clearTimeout(timerId);
+      ltLocalToolExecutionTimersById.delete(toolCallId);
+      ltLocalToolStatesById.delete(toolCallId);
+      ltLocalToolInFlight.delete(toolCallId);
+      ltLocalToolPermissionRetriesInFlight.delete(toolCallId);
+      changed = true;
+    }
+    const before = ltPendingLocalToolPermissionPrompts.length;
+    ltPendingLocalToolPermissionPrompts = ltPendingLocalToolPermissionPrompts.filter(
+      (prompt) => prompt.streamId !== streamId,
+    );
+    if (changed || ltPendingLocalToolPermissionPrompts.length !== before) {
+      ltNotify();
+    }
+  };
+
