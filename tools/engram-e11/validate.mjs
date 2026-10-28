@@ -27,6 +27,8 @@ export function validate(b) {
   assert.equal(r.clusterMesh.fileListSha256, mesh.fileListSha256);
   const lock = json(b.read('consumer-lock.json'));
   const pkg = json(b.read('consumer-package.json'));
+  assert.equal(sha256(b.read('consumer/package.json')), sha256(b.read('consumer-package.json')));
+  assert.equal(sha256(b.read('consumer/package-lock.json')), sha256(b.read('consumer-lock.json')));
   assert.equal(r.consumer.lockSha256, sha256(b.read('consumer-lock.json')));
   for (const archive of [engram, mesh]) {
     const entry = lock.packages[`node_modules/${archive.name}`];
@@ -54,8 +56,9 @@ export function validate(b) {
   assert(b.read('source/docker-compose.immo-861.yml').toString().includes(`node:24-bookworm-slim@${r.qualificationImage}`));
   const closure = { runtime: r.runtimeClosure, types: r.typeClosure };
   for (const file of new Set([...closure.runtime, ...closure.types])) {
-    assert(file.startsWith('node_modules/'), `closure outside consumer: ${file}`);
+    assert(file.startsWith('node_modules/') || ['installed-memory.mjs', 'installed-hydration.mjs'].includes(file), `unexpected consumer closure member: ${file}`);
     const bytes = b.read(`consumer/${file}`);
+    if (!file.startsWith('node_modules/')) assert.equal(sha256(bytes), sha256(b.read(`source/packages/cluster-mesh/tests/engram-memory/${file}`)));
     const archive = file.startsWith('node_modules/@sentropic/engram/') ? engram
       : file.startsWith('node_modules/@sentropic/cluster-mesh/') ? mesh : null;
     if (archive) assert.equal(sha256(bytes), sha256(archive.member(file.slice(`node_modules/${archive.name}/`.length))), `installed bytes differ: ${file}`);

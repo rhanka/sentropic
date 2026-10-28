@@ -27,6 +27,7 @@ cp "$inputs/RESERVATION.md" "$out/reservation.md"
 cp "$repo/.h2a/reviews/pr803_opus_r3.md" "$out/review-r3.md"
 # Retained closure only; preparation performs neither npm install nor qualification.
 cp -a "$repo/tmp/worktrees/mem-e10-fin/tmp/installed-memory-e10/consumer/node_modules" "$out/consumer/"
+cp "$repo/tmp/worktrees/mem-e10-fin/tmp/installed-memory-e10/consumer/"{installed-memory.mjs,installed-hydration.mjs,installed-memory-types.ts,package.json,package-lock.json} "$out/consumer/"
 gh pr view 803 --repo rhanka/sentropic --json body --jq .body > "$out/pr803.md"
 gh api "repos/rhanka/sentropic/actions/runs?head_sha=$snapshot&event=pull_request&per_page=100" > "$out/ci.json"
 cp tools/engram-e11/{candidates,bindings,slots,validate,tuple}.mjs "$out/"
