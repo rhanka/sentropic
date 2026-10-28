@@ -30,3 +30,143 @@ import {
 // Minimal hand-rolled store (no svelte/store import)
 // ---------------------------------------------------------------------------
 
+type Subscriber<T> = (value: T) => void;
+type Unsubscriber = () => void;
+
+type HandWritable<T> = {
+  subscribe(run: Subscriber<T>): Unsubscriber;
+  set(value: T): void;
+  update(fn: (current: T) => T): void;
+  get(): T;
+};
+
+function createWritable<T>(initial: T): HandWritable<T> {
+  let current = initial;
+  const subs = new Set<Subscriber<T>>();
+  return {
+    subscribe(run) {
+      subs.add(run);
+      run(current);
+      return () => subs.delete(run);
+    },
+    set(value) {
+      current = value;
+      for (const sub of subs) sub(current);
+    },
+    update(fn) {
+      current = fn(current);
+      for (const sub of subs) sub(current);
+    },
+    get() {
+      return current;
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Public shape
+// ---------------------------------------------------------------------------
+
+export type CommentStateSnapshot = {
+  /** Flat list of all comment items for the current context. */
+  commentMessages: CommentItem[];
+  /** Thread summaries derived from commentMessages. */
+  commentThreads: CommentThreadSummary[];
+  /** Per-thread item map. */
+  commentItemsByThread: Map<string, CommentItem[]>;
+  /** Currently selected thread id. */
+  commentThreadId: string | null;
+  /** Currently selected section key. */
+  commentSectionKey: string | null;
+  /** Whether the active thread is resolved (status === 'closed'). */
+  commentThreadResolved: boolean;
+  /** updated_at / created_at of root comment (for "resolved at" display). */
+  commentThreadResolvedAt: string | null;
+  /** Root comment of the active thread. */
+  currentCommentRoot: CommentItem | null;
+  /** Whether the loading spinner should be shown. */
+  commentLoading: boolean;
+  /** Error string (REST failure). */
+  commentError: string | null;
+  /** Current comment input text. */
+  commentInput: string;
+  /** Pending @-mention assignee (userId). */
+  assignedToUserId: string | null;
+  /** Pending @-mention assignee label. */
+  assignedToLabel: string | null;
+  /** @-mention popup open. */
+  showMentionMenu: boolean;
+  /** Current @-mention query. */
+  mentionQuery: string;
+  /** Mention members matching the current query. */
+  mentionMatches: MentionMember[];
+  /** All loaded mention members. */
+  mentionMembers: MentionMember[];
+  mentionLoading: boolean;
+  mentionError: string | null;
+  mentionDelayElapsed: boolean;
+  /** Whether resolved threads are shown in the thread picker. */
+  showResolvedComments: boolean;
+  /** Resolved thread count. */
+  resolvedCount: number;
+  /** The threads visible in the picker (filtered by showResolvedComments). */
+  visibleCommentThreads: CommentThreadSummary[];
+  /** Index of the active thread within visibleCommentThreads. */
+  commentThreadIndex: number;
+  hasPreviousThread: boolean;
+  hasNextThread: boolean;
+  /** Id of the comment currently being edited. */
+  editingCommentId: string | null;
+  editingCommentContent: string;
+  /** Last editable comment id (the most recent comment authored by currentUser). */
+  lastEditableCommentId: string | null;
+};
+
+export type CommentStateActions = {
+  /** Load all comments for the current context (does a full reload). */
+  loadCommentThreads(opts?: { silent?: boolean }): Promise<void>;
+  /** Send the current commentInput as a new or reply comment. */
+  sendComment(): Promise<void>;
+  /** Select a thread by summary. */
+  selectThread(thread: CommentThreadSummary): void;
+  /** Start a new thread (clear selected thread). */
+  newThread(): void;
+  /** Navigate prev/next thread in the visible list. */
+  goToRelativeThread(direction: -1 | 1): void;
+  /** Toggle resolve/reopen for the active thread root. */
+  resolveThread(): Promise<void>;
+  /** Delete the active thread. */
+  deleteThread(): Promise<void>;
+  /** Start editing a comment. */
+  startEditComment(comment: CommentItem): void;
+  /** Cancel editing. */
+  cancelEditComment(): void;
+  /** Commit the edited comment. */
+  commitEditComment(): Promise<void>;
+  /** Select a mention member (inserts @label into input). */
+  selectMentionMember(member: MentionMember): void;
+  /** Update the comment input (called from composer on:change). */
+  setCommentInput(value: string): void;
+  /** Update section-key context (triggers reload). */
+  setContext(params: {
+    contextType: string | null;
+    contextId: string | null;
+    sectionKey?: string | null;
+  }): void;
+  /** Update thread id (e.g. from parent prop). */
+  setThreadId(threadId: string | null): void;
+  /** Toggle showResolvedComments. */
+  toggleShowResolved(): void;
+  /** Subscribe to real-time updates for the current context. Returns unsub. */
+  subscribeUpdates(): () => void;
+  /** Load mention members (lazy, deduped). */
+  loadMentionMembers(): Promise<void>;
+  /** Reset the assignee chip. */
+  clearAssignment(): void;
+};
+
+export type CommentState = {
+  /** Subscribe to the full snapshot (Svelte-compatible store). */
+  subscribe: HandWritable<CommentStateSnapshot>['subscribe'];
+  /** All state actions. */
+  actions: CommentStateActions;
