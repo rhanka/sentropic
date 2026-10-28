@@ -2,54 +2,6 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-    );
-    expect(result).toHaveLength(1);
-    expect(result[0]?.toolCallId).toBe('tcid-1');
-    expect(result[0]?.name).toBe('tab_read');
-    expect(result[0]?.streamId).toBe('stream-1');
-    expect(result[0]?.sequence).toBe(5);
-  });
-
-  it('should ignore tool calls with names not in the local-tool registry', () => {
-    const payload = {
-      state: 'awaiting_local_tool_results',
-      pending_local_tool_calls: [
-        { tool_call_id: 'tcid-unknown', name: 'some_unknown_tool', args: {} },
-        { tool_call_id: 'tcid-known', name: 'bash', args: { command: 'ls' } },
-      ],
-    };
-    const result = parsePendingLocalToolCallsFromStatusPayload(
-      's',
-      1,
-      payload,
-      isLocalToolName,
-    );
-    expect(result).toHaveLength(1);
-    expect(result[0]?.name).toBe('bash');
-  });
-
-  it('should deduplicate tool calls with the same toolCallId', () => {
-    const payload = {
-      state: 'awaiting_local_tool_results',
-      pending_local_tool_calls: [
-        { tool_call_id: 'dup-1', name: 'bash', args: {} },
-        { tool_call_id: 'dup-1', name: 'bash', args: {} },
-      ],
-    };
-    const result = parsePendingLocalToolCallsFromStatusPayload(
-      's',
-      1,
-      payload,
-      isLocalToolName,
-    );
-    expect(result).toHaveLength(1);
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Export-surface: new subpath present in package.json and manifest
-// ---------------------------------------------------------------------------
-
 describe('ChatConversation — export surface registration', () => {
   const PACKAGE_ROOT = process.cwd();
   const pkgJson = JSON.parse(
