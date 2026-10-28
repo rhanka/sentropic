@@ -677,6 +677,7 @@ ci-build-ui-target:
 .PHONY: ci-test-ui
 ci-test-ui: ci-test-env
 	@docker buildx build --platform $(IMAGE_PLATFORM) --no-cache-filter=ui-tests \
+		$(if $(filter 1,$(CI_IMAGE_CACHE)),--cache-from type=gha$(comma)scope=br78-v1-ui-$(IMAGE_PLATFORM)) \
 		--target ui-test-output --output type=local,dest=.tmp/ci-ui-tests -f ui/Dockerfile \
 		--build-arg VITE_API_BASE_URL=$(VITE_API_BASE_URL) \
 		--build-arg VITE_EXTENSION_PROFILE=$(VITE_EXTENSION_PROFILE) \
