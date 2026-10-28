@@ -101,6 +101,7 @@ export async function resolveDecisionAuth(descriptor: DecisionEvaluatorDescripto
       || !material.token.trim() || material.token !== material.token.trim() || /[\r\n]/.test(material.token)
       || typeof material.envVar !== 'string' || !material.envVar.trim()
       || (isJev && material.envVar !== 'JEV_API_KEY')
+      || (descriptor.protocol === 'systemone-local' && material.envVar !== 'KEV_LOCAL_API_KEY')
       || (descriptor.protocol === 'openai-decisions' && material.envVar !== 'OPENAI_API_KEY')) {
       return { ok: false, code: 'CREDENTIAL_MISSING' };
     }
