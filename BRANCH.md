@@ -47,6 +47,8 @@
 
 ## Feedback Loop
 - [x] Track source artifact only: concurrent root .track changes belong to the designated conductor.
+- [ ] H1-CI-01 — Owner decision pending: the existing CI supplies live provider keys to AI API/E2E suites. Preserve no-spend with a draft CI hold until a scoped credential-free CI path is authorized; no remote CI success claimed.
+- [ ] H1-REV-01 — Conductor handoff: review selection failed because discovery supplies no exact reviewer models; select two complementary host/model tuples before merge. Local dossier: root .tmp/decision-h1-review/selection.md; no consensus verdict.
 
 ## AI Flaky tests
 - [x] Provider calls are forbidden in this lot; fixtures and fakes only; no flaky acceptance requested.
@@ -93,10 +95,13 @@
   - [x] Align the existing public-surface release assertion with the required 0.31.1 patch bump.
   - [x] Keep the cluster-mesh receipt fixture's synthetic price protocol explicit after JEV moves to control pricing.
   - [x] Serialize pricing with its existing writer, pin the exact hold revision and recheck tariff validity before dispatch marking.
-- [ ] **Docs consolidation**
+  - [x] Preserve pending admission liability when a hold commits but its acknowledgement is lost; never report a proved absence of a hold on a store exception.
+- [x] **Docs consolidation**
   - [x] Document route, profiles, readiness limits, tariff sources and provisioned environment names in spec/decision/api-host.md.
 - [ ] **Final validation**
   - [ ] Scoped fixture tests, API typecheck/lint and affected mesh checks under the Docker lock.
+  - [x] llm-mesh: 1,529 tests passed; cluster-mesh Decision composition/receipts: 9 tests passed.
+  - [x] API unit host/HTTP: 16 tests passed; actual API/migration/revocation: 7 tests passed.
   - [ ] Review with two independent complementary peers and reconcile findings.
   - [ ] Inspect every diff hunk; pass make scope-check before each atomic commit.
   - [ ] Open a draft PR to main using this plan as its body and add the implementation plan comment.
