@@ -42,132 +42,68 @@
   };
 </script>
 
-      jobs: resolvedFeatures.jobs,
-      workspaceScope: resolvedFeatures.workspaceScope,
-    }}
-    rendererRegistry={effectiveRenderers}
-  >
+<div class="chat-conversation chat-conversation-{layout} flex h-full min-h-0 flex-col"
+  data-session-id={state.sessionId} data-layout={layout} data-feature-steer={flags.steer}
+  data-feature-retry={flags.retry} data-feature-stop={flags.stop} role="region" aria-label={labels('chat.panel.label')}>
+  <ChatPanel {labels} featureFlags={flags}>
     {#snippet renderHeader()}
-      {#if hasContextProvider || hasModels}
+      {#if state.contextEntries.length || state.models.length || state.modelGroups.length}
         <div class="chat-conversation-header flex items-center gap-2 border-b border-slate-200 px-3 py-1.5">
-          {#if hasContextProvider}
-            <ChatContextPicker
-              entries={contextEntries}
-              labels={effectiveLabels}
-            />
+          {#if state.contextEntries.length}
+            <ChatContextPicker entries={state.contextEntries} {labels}
+              onToggle={(entry) => commands.toggleContext(`${entry.type}:${entry.id ?? ''}`, entry.active === false)} />
           {/if}
-          {#if hasModels}
-            <div class="ml-auto">
-              <ModelSelector
-                value={selectedModel}
-                groups={modelGroups}
-                models={models}
-                labels={effectiveLabels}
-                onChange={(payload) => {
-                  selectedModel = `${payload.providerId}::${payload.modelId}`;
-                }}
-              />
-            </div>
+          {#if state.models.length || state.modelGroups.length}
+            <div class="ml-auto"><ModelSelector value={state.selectedModel} groups={state.modelGroups} models={state.models}
+              {labels} onChange={(value) => commands.selectModel(`${value.providerId}::${value.modelId}`)} /></div>
           {/if}
         </div>
       {/if}
+      {#if flags.workspaceScope && renderWorkspaceScope}{@render renderWorkspaceScope()}{/if}
+      {#if flags.jobs && renderJobs}{@render renderJobs()}{/if}
+      {#if flags.documents && renderDocuments}{@render renderDocuments()}{/if}
     {/snippet}
-
     {#snippet renderTimeline()}
       <div class="chat-conversation-timeline flex min-h-0 flex-1 flex-col overflow-y-auto">
-        {#if projectedItems.length === 0}
-          <div class="flex flex-1 items-center justify-center p-6 text-xs text-slate-400">
-            {resolveLabel('chat.sessions.none')}
-          </div>
+        {#if flags.comments && renderComments}
+          {@render renderComments()}
+        {:else if state.items.length === 0}
+          <div class="flex flex-1 items-center justify-center p-6 text-xs text-slate-400">{labels('chat.sessions.none')}</div>
         {:else}
-          <ChatTimeline
-            items={projectedItems}
-          >
+          <ChatTimeline items={[...state.items]}>
             {#snippet renderUserMessage(item)}
               <div class="chat-conversation-user-message px-4 py-2">
-                <div class="ml-auto max-w-[80%] rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-900">
-                  {item.message.content ?? ''}
-                </div>
-                {#if resolvedFeatures.retry || resolvedFeatures.stop}
-                  <MessageActions
-                    role="user"
-                    streamStatus={item.message._localStatus === 'processing' ? 'processing' : 'completed'}
-                    isCopied={copiedKey === item.key}
-                    labels={effectiveLabels}
-                    onCopy={() => handleCopy(item.message.content, item.key)}
-                  />
+                {#if editingId === item.message.id}
+                  <textarea aria-label={labels('chat.message.edit')} bind:value={editingContent}></textarea>
+                  <button type="button" on:click={async () => { await commands.edit(item.message.id, editingContent); editingId = null; }}>{labels('common.save')}</button>
+                  <button type="button" on:click={() => editingId = null}>{labels('common.cancel')}</button>
+                {:else}
+                  <div class="ml-auto max-w-[80%] rounded-lg bg-slate-100 px-3 py-2 text-sm text-slate-900">{item.message.content ?? ''}</div>
                 {/if}
+                {#if item.message.attachments?.length}<MessageAttachments attachments={[...item.message.attachments]} />{/if}
+                <MessageActions role="user" {labels} isCopied={copiedKey === item.key}
+                  onCopy={() => void copy(item.message.content ?? '', item.key)}
+                  onEdit={() => { editingId = item.message.id; editingContent = item.message.content ?? ''; }} />
               </div>
             {/snippet}
-
             {#snippet renderAssistantSegment(item)}
               {#if item.kind === 'assistant-segment'}
                 <div class="chat-conversation-assistant-segment px-4 py-2">
-                  {#if host?.streamClient && item.message._streamId}
-                    <!--
-                      Live assistant-segment streaming via StreamMessage.
-                      Uses variant="chat" for markdown rendering via svelte-streamdown.
-                      Only active when the message carries a _streamId and host.streamClient
-                      is available — otherwise falls back to static text rendering below.
-                    -->
-                    <StreamMessage
-                      streamClient={host.streamClient}
-                      streamId={item.message._streamId}
-                      status={item.isTerminal ? 'completed' : 'processing'}
-                      labels={effectiveLabels}
-                      variant="chat"
-                      subscriptionMode={item.isTerminal ? 'passive' : 'live'}
-                      finalContent={item.isTerminal ? (item.segment.content ?? null) : undefined}
-                    />
-                  {:else}
-                    <div class="text-sm text-slate-900">
-                      {item.segment.content ?? ''}
-                    </div>
-                  {/if}
-                  {#if item.isLastAssistantSegment && resolvedFeatures.retry}
-                    <MessageActions
-                      role="assistant"
-                      streamStatus={item.isTerminal ? 'completed' : 'processing'}
-                      isLastAssistantSegment={item.isLastAssistantSegment}
-                      isCopied={copiedKey === item.key}
-                      labels={effectiveLabels}
-                      onCopy={() => handleCopy(item.segment.content, item.key)}
-                    />
+                  <StreamMessage streamId={item.streamId} status={item.isTerminal ? 'completed' : 'processing'}
+                    {labels} variant="chat" subscriptionMode="passive" initialEvents={[...item.segment.events]}
+                    finalContent={item.isTerminal ? item.segment.content : undefined} />
+                  {#if item.isLastAssistantSegment}
+                    <MessageActions role="assistant" {labels} isLastAssistantSegment={true}
+                      streamStatus={item.isTerminal ? 'completed' : 'processing'} isCopied={copiedKey === item.key}
+                      onCopy={() => void copy(item.segment.content, item.key)}
+                      onRegenerate={flags.retry ? () => void commands.retry(item.message.id) : undefined}
+                      onFeedback={(vote) => void commands.setFeedback(item.message.id, vote)} />
                   {/if}
                 </div>
               {/if}
             {/snippet}
-
             {#snippet renderRuntimeSegment(item)}
               {#if item.kind === 'runtime-segment'}
-                {#if host?.streamClient}
-                  <!--
-                    Live streaming via StreamMessage (svelte-streamdown markdown).
-                    Only rendered when host.streamClient is available — consumers
-                    without a streamClient fall back to the static placeholder below.
-                  -->
-                  <div
-                    class="chat-conversation-runtime-segment px-4 py-2"
-                    data-stream-id={item.streamId}
-                    data-active={item.isActiveRuntimeSegment}
-                  >
-                    <StreamMessage
-                      streamClient={host.streamClient}
-                      streamId={item.streamId}
-                      status={item.isActiveRuntimeSegment ? 'processing' : 'completed'}
-                      labels={effectiveLabels}
-                      variant="chat"
-                      subscriptionMode={item.isActiveRuntimeSegment ? 'live' : 'passive'}
-                    />
-                  </div>
-                {:else}
-                  <!--
-                    Static placeholder — used when host.streamClient is not supplied.
-                    The `data-stream-id` and `data-active` attributes allow host-side
-                    progressive enhancement and testing.
-                  -->
-                  <div
-                    class="chat-conversation-runtime-segment px-4 py-2 text-xs text-slate-400"
                     data-stream-id={item.streamId}
                     data-active={item.isActiveRuntimeSegment}
                   >
