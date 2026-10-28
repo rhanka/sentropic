@@ -50,6 +50,17 @@ describe('resources reader activation port', () => {
     expect(transport).not.toHaveBeenCalled();
   });
 
+  it('should load the default-closed product reader without origin or storage configuration', async () => {
+    vi.stubEnv('APP_ARTIFACT_READER_ENABLED', '0');
+    vi.stubEnv('UI_BASE_URL', undefined);
+    vi.stubEnv('APP_ARTIFACT_CONTENT_BASE_DOMAIN', undefined);
+    try {
+      const product = await import('../../src/services/artifacts/instance');
+      expect(product.productArtifactReaderPort.enabled()).toBe(false);
+      expect(() => product.getProductArtifactReader()).toThrow(/disabled/);
+    } finally { vi.unstubAllEnvs(); }
+  });
+
   it('should stay closed by default and require an authenticated exact-origin request', async () => {
     expect((await route(false).post()).status).toBe(404);
     expect((await route(true, false).post()).status).toBe(401);
