@@ -79,7 +79,7 @@ export const jevDescriptor: DecisionEvaluatorDescriptor = {
   probabilityTolerance: 1e-4, scoreNativeKeys: 'index-string', nativeDecision: false,
   confidence: { meaning: 'provider-confidence', meaningRef: 'https://docs.typesafe.ai/confidence.md', min: 0, max: 1 },
   compilation: { templateDigest: '0'.repeat(64), schemaDigest: '1'.repeat(64), readout: 'jev-native-v1' },
-  priceProtocol: { authority: 'fixture:synthetic-tariff', revision: 'fixture-price-v1' },
+  priceProtocol: { authority: 'control.model_pricing', revision: 'jev-1.13.0-standard-2026-10-28' },
   registeredCriteria: [],
   retention: { status: 'unknown', basis: 'published-policy', retentionDays: null,
     gap: 'unknown (source-gap)', evidenceRefs: ['https://docs.typesafe.ai/legal.md',

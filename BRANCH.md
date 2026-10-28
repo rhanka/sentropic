@@ -28,6 +28,8 @@
   - `api/tests/api/decision*.test.ts`
   - `packages/llm-mesh/src/decision/descriptor.ts`
   - `packages/llm-mesh/package.json`
+  - `packages/llm-mesh/tests/decision-fixtures.ts`
+  - `package-lock.json`
   - `spec/decision/api-host.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -75,12 +77,12 @@
   - [x] Host fixture gate: 9 tests passed; align the typed PostgreSQL hold projection with Drizzle's row contract.
   - [ ] API integration tests: api/tests/api/decision-metering.test.ts.
 - [ ] **H2 — Authoritative pricing**
-  - [ ] Verify and cite the published JEV tariff at its primary source.
-  - [ ] Add both immutable control.model_pricing rows using the existing control migration lane.
-  - [ ] Move JEV price authority from its synthetic fixture to control.model_pricing and bump llm-mesh.
+  - [x] Verify and cite the published JEV tariff at its primary source.
+  - [x] Add both immutable control.model_pricing rows using the existing control migration lane.
+  - [x] Move JEV price authority from its synthetic fixture to control.model_pricing and bump llm-mesh to 0.31.1 (npm view: 0.31.0).
   - [ ] Test exact revision/protocol resolution and missing or stale price refusal.
 - [ ] **Docs consolidation**
-  - [ ] Document route, profiles, readiness limits, tariff sources and provisioned environment names in spec/decision/api-host.md.
+  - [x] Document route, profiles, readiness limits, tariff sources and provisioned environment names in spec/decision/api-host.md.
 - [ ] **Final validation**
   - [ ] Scoped fixture tests, API typecheck/lint and affected mesh checks under the Docker lock.
   - [ ] Review with two independent complementary peers and reconcile findings.
