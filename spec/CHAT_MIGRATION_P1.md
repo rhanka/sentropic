@@ -12,6 +12,9 @@ No Design System repository write, registry publication, owner UAT GO or transfe
 
 Successors retain P1a ancestry; integration uses merges only. Drafts target main and remain unmerged.
 P1a is a migration foundation, not a claim that the transferable UI is runtime-free yet.
+P1b completes the transferable package boundary and fixture parity. The production AppChatPanel still
+consumes the extracted controller through runtime imports; P2 owns its single cutover to ChatConversation.
+P1 does not claim that the production application already mounts the injected conversation view.
 
 ## Candidate versions and release prerequisites
 

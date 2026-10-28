@@ -1,5 +1,5 @@
 /**
- * @sentropic/chat-ui/documents — generated file card helpers.
+ * @sentropic/chat-runtime/documents — generated file card helpers.
  *
  * Moved from ui/src/lib/chat/document-adapter.ts.
  * All functions are parameterized so they contain ZERO sentropic domain strings
@@ -116,11 +116,3 @@ export function extractGeneratedFileCardsFromEvents(
   return cards;
 }
 
-// ---------------------------------------------------------------------------
-// getFormatLabel
-// ---------------------------------------------------------------------------
-
-/**
- * Return a human-readable label for a generated file format.
- * Falls back to 'FILE' for missing or empty format strings.
- */
