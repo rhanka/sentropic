@@ -61,6 +61,8 @@ The test target exercises missing/tampered files, escaping paths, integrity subs
 | 20 | Lot 6 disposition | VERIFIED-CANDIDATE: verbatim #803 section; missing source, option (a) |
 | 21 | CI | PENDING: exact final E10/E11 heads and completed/success |
 
+The top-level `backend`, `neutralContract`, `locks`, `nodeImage` and `profiles` follow the documented receiving vocabulary (retained as `format.md` with the receiving validator). The dev backend version, null neutral-contract path/hash and empty qualified `profiles` intentionally fail that validator's final-delivery gate. All five required names and their declared digests remain in `requiredProfiles` and slot 16. This preparation must not be submitted as a complete host delivery.
+
 The C6 source inventory announces `contracts/engram-memory-neutral-contract-v1.d.ts`, version 1.0.0, but that member is absent from dev.5. The tuple records the actual emitted `dist/engram-memory/neutral-contract.d.ts` hash separately and leaves `finalBytesSha256: null`. Neither that candidate hash nor the semantic `contractDigest` substitutes for the final standalone declaration bytes.
 
 ## Receiving checklist — future finalization only

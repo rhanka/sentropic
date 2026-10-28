@@ -38,6 +38,7 @@
   - [x] Encode all 21 input categories and independent receiving gates with explicit PENDING reasons.
   - [x] Validate source/package, tarball identities, retained locks, installed closure, migration bytes, engines and exact profile statuses.
   - [x] First real fixture run exposed a root-level hydration helper in E10 runtimeClosure; bind its retained bytes to the committed lane snapshot and compare installed locks byte-for-byte.
+  - [x] Preserve documented receiving top-level fields; null C6 final path/hash and empty qualified profiles deliberately retain source-gap; bind format/receiving-validator evidence.
   - [ ] Add `tools/engram-e11/{tuple,bindings,slots}.mjs` and candidate spec; hash files/tarballs/backend/C6/locks; reject drift and status promotion.
   - [x] Add `tools/engram-e11/e11.mk`: pinned Node 24, temporary evidence, deterministic dry-run/check; no lock regeneration.
   - [x] Add `tools/engram-e11/tuple.test.mjs`: tampering, missing input, pending/final refusal, deterministic output.
