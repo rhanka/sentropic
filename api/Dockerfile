@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM node:24-alpine3.23 AS dependencies
+FROM node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2 AS dependencies
 # Security: Pin npm to a known-good version (reproducible build) to fix glob vulnerabilities in npm dependencies
 RUN npm install -g npm@11.16.0
 # Security: Patch npm's bundled brace-expansion for CVE-2026-102276 / CVE-2026-102278
@@ -192,7 +192,7 @@ RUN mkdir -p /tmp/tool-npm-patches && \
 
 # Non-browser API checks need no Chromium or duplicate Playwright installation.
 # The screen smoke uses the separately qualified E2E image's browser instead.
-FROM node:24-alpine3.23 AS ci-tools
+FROM node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2 AS ci-tools
 WORKDIR /workspace
 # Copy the prepared filesystem, not the install/cache history of its layers.
 RUN rm -rf /usr/local/lib/node_modules/npm
@@ -212,7 +212,7 @@ CMD ["npm", "run", "dev"]
 # apps/auth-idp/web/Dockerfile (NOT a root workspace member; pulls @sentropic/auth-ui
 # via the relative `file:` dependency). Output: apps/auth-idp/web/build, COPYed into
 # the production stage so the SAME api image can serve the IdP login/consent screens.
-FROM node:24-alpine3.23 AS idp-web-build
+FROM node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2 AS idp-web-build
 WORKDIR /workspace
 COPY packages/auth-ui ./packages/auth-ui
 COPY apps/auth-idp/web/package.json apps/auth-idp/web/package-lock.json* ./apps/auth-idp/web/
@@ -253,7 +253,7 @@ RUN npm prune --omit=dev --workspaces --include-workspace-root
 RUN node .security/audit-gate.mjs --omit=dev --workspaces --include-workspace-root
 
 # A fresh runtime omits deleted devDependencies and npm download-cache layers.
-FROM node:24-alpine3.23 AS production
+FROM node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2 AS production
 WORKDIR /workspace
 ENV NODE_ENV=production
 COPY --from=production-dependencies /workspace /workspace
