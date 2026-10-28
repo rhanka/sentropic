@@ -3,7 +3,7 @@ import { createDefaultTransport } from '../../src/client/transport.js';
 import { createStreamHub } from '../../src/client/streamHub.js';
 import { createConversationRuntime, type ConversationRuntimeOptions } from '../../src/state/conversationRuntime.js';
 import type { DocumentHost } from '@sentropic/chat-ui/documents';
-import { registerLocalTool, unregisterLocalTool } from '../../src/stores/localTools.js';
+import { registerLocalTool, unregisterLocalTool, LocalToolPermissionRequiredError } from '../../src/stores/localTools.js';
 import { buildChatHistoryTimeline, type ChatHistoryMessage } from '../../../chat-core/src/history.js';
 import type { CheckpointHost } from '../../src/checkpoints/index.js';
 
@@ -17,11 +17,12 @@ class FixtureEventSource extends EventTarget {
 }
 
 /** Real server, transport, stream hub, controller and session; only platform I/O is in memory. */
-export async function createConversationFixture(overrides: Partial<ConversationRuntimeOptions> = {}) {
+export async function createConversationFixture(overrides: Partial<ConversationRuntimeOptions> = {}, platform: { nativePermissions?: boolean } = {}) {
   registerLocalTool({ name: 'render_mermaid', description: 'Diagram', parameters: {} });
   const requests: Array<{ method: string; path: string; body: unknown }> = [];
   const executions: Array<{ id: string; name: string; args: unknown }> = [];
   const decisions: Array<{ id: string; value: string }> = [];
+  const nativeDecisions = new Map<string, boolean>();
   const docs = new Map<string, File>();
   const uploads: string[] = [];
   let failUpload = false;
@@ -100,10 +101,14 @@ export async function createConversationFixture(overrides: Partial<ConversationR
     host, documents, checkpointHost,
     localTools: {
       isLocalToolName: (name) => name === 'render_mermaid', isLocalToolRuntimeAvailable: () => true,
-      isLocalToolPermissionRequired: () => false,
-      getPermissionRequest: () => ({ requestId: 'native', toolName: 'render_mermaid', origin: 'fixture' }),
-      async executeLocalTool(id, name, args) { executions.push({ id, name, args }); return { rendered: true }; },
-      async decideLocalToolPermission(id, value) { decisions.push({ id, value }); },
+      isLocalToolPermissionRequired: (error) => error instanceof LocalToolPermissionRequiredError,
+      getPermissionRequest: (error) => (error as LocalToolPermissionRequiredError).request,
+      async executeLocalTool(id, name, args) {
+        if (platform.nativePermissions && !nativeDecisions.has(id)) throw new LocalToolPermissionRequiredError({ requestId: id, toolName: name, origin: 'fixture' });
+        if (nativeDecisions.get(id) === false) throw new Error('Native permission denied');
+        executions.push({ id, name, args }); return { rendered: true };
+      },
+      async decideLocalToolPermission(id, value) { decisions.push({ id, value }); nativeDecisions.set(id, value.startsWith('allow')); },
       postLocalToolResult: transport.postLocalToolResult,
     },
     ...overrides,
