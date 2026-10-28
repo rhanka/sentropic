@@ -645,6 +645,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Gate rendered bundles and run controls
         run: make test-idp-sync-selftest ENV=test-idp-sync
+      - name: Gate default-closed artifact content overlays
+        run: make test-artifact-content-manifests ENV=test-app-w3d
       - name: Gate transactional SQL on a disposable database
         run: make test-idp-sync-sql ENV=test-idp-sync
 
