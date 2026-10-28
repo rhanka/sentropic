@@ -2291,3 +2291,57 @@ describe('chat-loop-controller: model catalog (slice 1F)', () => {
   });
 
   // 13j. Snapshot exposes all catalog + selection fields
+  it('13j: snapshot exposes all catalog and selection fields with correct types', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const snap = ctrl.getSnapshot();
+
+    // Catalog
+    expect(Array.isArray(snap.modelCatalogProviders)).toBe(true);
+    expect(Array.isArray(snap.modelCatalogModels)).toBe(true);
+    expect(Array.isArray(snap.modelCatalogGroups)).toBe(true);
+
+    // Selection
+    expect(typeof snap.selectedProviderId).toBe('string');
+    expect(typeof snap.selectedModelId).toBe('string');
+    expect(typeof snap.defaultProviderIdForNewSession).toBe('string');
+    expect(typeof snap.defaultModelIdForNewSession).toBe('string');
+
+    // Steer
+    expect(Array.isArray(snap.optimisticSteerMessages)).toBe(true);
+    expect(snap.composerSteerAck).toBeNull();
+  });
+
+  // 13k. sentropic-string scan: 1F additions contain zero domain strings
+  it('13k: controller source (with 1F additions) still contains zero sentropic domain strings', () => {
+    const controllerPath = path.join(
+      process.cwd(),
+      'src',
+      'state',
+      'chatLoopController.ts',
+    );
+    const source = fs.readFileSync(controllerPath, 'utf8');
+
+    const forbidden = [
+      'organization',
+      'folder',
+      'initiative',
+      'usecase',
+      'session_adapter',
+      'workspace',
+      'organization_update',
+      'folder_update',
+    ];
+
+    for (const term of forbidden) {
+      const lines = source.split('\n');
+      const codeLines = lines.filter(
+        (line) => !/^\s*(\/\/|\*)/.test(line),
+      );
+      const codeBlock = codeLines.join('\n');
+      expect(
+        codeBlock.includes(term),
+        `Domain string "${term}" found in non-comment code`,
+      ).toBe(false);
+    }
+  });
+});
