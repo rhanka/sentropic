@@ -8,7 +8,7 @@ import type { ScopeGrant } from '../storage/authority.js';
 import type { MemoryHostBinding } from './binding.js';
 import {
   createMemoryNeutralTransaction, memoryNeutralFailure, neutralQueryResult,
-  requireMemoryUtf8, withMemoryCaptureReceipt, type MemoryKernelTransactionPort,
+  requireMemoryUtf8, translateMemoryAggregateRead, type MemoryKernelTransactionPort,
 } from './wire-adaptation.js';
 import type {
   NeutralAtomicUnit, NeutralCommitReceipt, NeutralMemoryHandle, NeutralScopeGrant, NeutralWriterFence,
@@ -145,10 +145,7 @@ export const createMemoryNeutralHandle = (input: CreateMemoryNeutralHandleInput)
       const bound = await kernel.bind(castGrant(grant));
       const row = await bound.readAggregate(key);
       if (!row) return null;
-      const value = await withMemoryCaptureReceipt(key, row.value, async (controlKey) => {
-        const control = await bound.readAggregate(controlKey);
-        return control?.value ?? null;
-      });
+      const value = translateMemoryAggregateRead(key, row.value);
       return { kind, key, version: String(row.version), value };
     }),
     readCommitResult: (identity, grant) => guarded(async () => {
