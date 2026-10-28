@@ -11,6 +11,7 @@ import { BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, dependencyFlo
 // Register the S1 contracts in the existing required, credential-free Node validation lane.
 import '../security/daily/schema.test.mjs';
 import '../security/daily/inventory.test.mjs';
+import '../security/daily/scan.test.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const YAML = createRequire(path.join(process.env.MANIFEST_GUARD_TOOL_DIR, 'package.json'))('yaml');
