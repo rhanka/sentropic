@@ -313,7 +313,8 @@ export class TranscriptionSession implements SpeechSession {
   private expiryCancel?: () => void;
   private inPump = false;
   private turnAudioStartMs?: number;
-  private lastCapturedAtMs = 0;
+  /** End of the last frame written in the open turn (capture + frame duration). */
+  private turnAudioEndMs?: number;
   private openTurnUtteranceId?: string;
   private readonly turns: PendingTurn[] = [];
   private readonly bindings = new Map<string, PendingTurn>();
@@ -420,11 +421,13 @@ export class TranscriptionSession implements SpeechSession {
     }
     this.audioSeconds += seconds;
     this.openTurnUtteranceId = frame.utteranceId;
-    // Capture-domain turn window for the final's audioInterval (approximation
-    // for sequential client turns; dispatch ordering stays with L2).
+    // Capture-domain turn window for the final's audioInterval: the window
+    // belongs to the open turn only, never to a session-wide maximum (a later
+    // turn must not stretch an earlier turn's interval). Dispatch ordering
+    // stays with L2.
     if (Number.isFinite(frame.capturedAtMs) && frame.capturedAtMs >= 0) {
       this.turnAudioStartMs ??= frame.capturedAtMs;
-      this.lastCapturedAtMs = Math.max(this.lastCapturedAtMs, frame.capturedAtMs);
+      this.turnAudioEndMs = frame.capturedAtMs + (frame.sampleCount / frame.format.sampleRateHz) * 1000;
     }
     // The payload is encoded and released here; the adapter retains only counters.
     const audio = base64Of(frame.payload);
@@ -444,9 +447,10 @@ export class TranscriptionSession implements SpeechSession {
         this.turns.push({
           utteranceId: command.utteranceId,
           startMs: this.turnAudioStartMs ?? 0,
-          endMs: this.lastCapturedAtMs,
+          endMs: this.turnAudioEndMs ?? this.turnAudioStartMs ?? 0,
         });
         this.turnAudioStartMs = undefined;
+        this.turnAudioEndMs = undefined;
         this.openTurnUtteranceId = undefined;
         // Cumulative operational totals (L8 sums incremental events per eventId,
         // so a per-turn total would double-count); the composition settles from these.
@@ -538,7 +542,7 @@ export class TranscriptionSession implements SpeechSession {
       return {
         utteranceId: this.openTurnUtteranceId,
         startMs: this.turnAudioStartMs ?? 0,
-        endMs: this.lastCapturedAtMs,
+        endMs: this.turnAudioEndMs ?? this.turnAudioStartMs ?? 0,
       };
     }
     return undefined;
@@ -573,7 +577,7 @@ export class TranscriptionSession implements SpeechSession {
     if (item && !item.finalized) {
       item.utteranceId = turn.utteranceId;
       item.audioStartMs = turn.startMs;
-      item.audioEndMs = Math.max(turn.endMs, this.lastCapturedAtMs);
+      item.audioEndMs = turn.endMs;
     }
   }
 
@@ -639,7 +643,8 @@ export class TranscriptionSession implements SpeechSession {
     item.finalized = true;
     this.finalizedIds.add(itemId);
     item.revision += 1;
-    item.audioEndMs = Math.max(item.audioEndMs, this.lastCapturedAtMs);
+    // The window stays the bound turn's: every path into onCompleted (live
+    // hypothesis, bind alignment, completed-only creation) already carries it.
     this.sequence += 1;
     let language = this.binding.language;
     if (!language && Array.isArray(languages)) {

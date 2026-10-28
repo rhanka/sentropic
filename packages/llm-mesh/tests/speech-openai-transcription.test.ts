@@ -313,7 +313,7 @@ describe('openai transcript mapping', () => {
     expect(final.text).toBe("Bonjour, pouvez-vous m'entendre ?");
     expect(final.language).toBe('fr');
     expect(final.revision).toBe(4);
-    expect(final.audioInterval).toEqual({ startMs: 10, endMs: 10 });
+    expect(final.audioInterval).toEqual({ startMs: 10, endMs: 30 });
     let rebuilt: SpeechTranscript | undefined;
     for (const event of events) {
       if (event.type === 'transcript.partial' || event.type === 'transcript.final') {
@@ -335,20 +335,29 @@ describe('openai transcript mapping', () => {
   });
 
   it('should keep out-of-order completions keyed by item', async () => {
+    // u_b is spaced far from u_a: a session-wide window would stretch u_a to
+    // u_b's capture time ({10, 100}); each final must carry its own turn.
     const driven = await openDriven();
     await driven.turn('u_a', 10);
-    await driven.turn('u_b', 30);
+    await driven.turn('u_b', 100);
     driven.socket.push(...frameScriptOutOfOrder);
     const events = await driven.collect();
     const finals = events
       .filter((event) => event.type === 'transcript.final')
       .map((event) => {
-        const final = event as unknown as { utteranceId: string; text: string; revision: number };
-        return { utteranceId: final.utteranceId, text: final.text, revision: final.revision };
+        const final = event as unknown as {
+          utteranceId: string; text: string; revision: number; audioInterval: unknown;
+        };
+        return {
+          utteranceId: final.utteranceId,
+          text: final.text,
+          revision: final.revision,
+          audioInterval: final.audioInterval,
+        };
       });
     expect(finals).toEqual([
-      { utteranceId: 'u_b', text: 'second tour', revision: 2 },
-      { utteranceId: 'u_a', text: 'premier tour', revision: 3 },
+      { utteranceId: 'u_b', text: 'second tour', revision: 2, audioInterval: { startMs: 100, endMs: 120 } },
+      { utteranceId: 'u_a', text: 'premier tour', revision: 3, audioInterval: { startMs: 10, endMs: 30 } },
     ]);
   });
 
