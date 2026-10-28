@@ -32,6 +32,7 @@
   - [x] Declare reason, impact and rollback before edits in Feedback Loop.
 
 ## Feedback Loop
+- [x] BR84-R5 — Requalified clean post-merge `a0172ce326f890c21f1c7e236fd5e9907ba3de5a` under the shared Docker lock; this receipt-only follow-up updates `qualification.json` and the plan. Typical: 291943 B portable / 249234 B JS, 124617 estimated agent tokens; baseline 3734180 B. Fourteen tests, 2496 exact figure/route comparisons, 1758 geometry scenes and eight offline browser configurations passed. Docker cleanup complete. Also preserved intermediate review heads at `backup/pr801-intermediate-c14fe7723` and `backup/pr801-intermediate-57fa94d93`.
 - [x] BR84-R4 — Document the 72-byte CSP addition, approximately 5% governance headroom, direct main comparison and post-merge receipt binding; retain the original qualification history through the remote backup refs.
 - [x] BR84-R2 — Direct deterministic comparison executes main `5016fa36a9da25d22972ae092d13bd4357e65e58` and current SVG/projection/collapse implementations: both languages, all figures, navigation highlights, prepared folds and plans. Compare exact SVG hashes/byte counts plus canonical graph hashes; retain per-case receipts under `.cache/artifact-weight/governance-equivalence.json`.
 - [x] BR84-R1 — Budget now enforces single-file inline resources and CSP `connect-src 'none'` on the measured portable; report includes the owner's non-gating token estimate. Governance ceilings: 5200000 B portable/closure/release and 5120000 B JS, approximately 5% above the r1 measurement (4936759 / 4874332 B).
@@ -60,7 +61,7 @@
   - [x] Read project rules, approved analysis/review and Docker lock; verify branch mechanically.
   - [x] Pin harness r5 input/dependency hashes, renderer/toolchain and preserved before/slim/Focus output hashes in `docs/governance/kit/fixtures/artifact-weight/baseline.json`.
   - [x] Preserve the representative two-diagram, two-question/six-option, 24-row/eight-gap fixture and its source provenance.
-  - [x] Rebuild the baseline and scoped fixture after the Docker reservation; explain differences from preserved outputs. Node 24.22.1 pinned; 12 tests pass; baseline 3734108 B / typical 291871 B HTML, JS 3691474 B / 249234 B; hash-bound `fixtures/artifact-weight/qualification.json` receipt.
+  - [x] Rebuild the baseline and scoped fixture after the Docker reservation; explain differences from preserved outputs. Node 24.22.1 pinned; 14 tests pass; baseline 3734180 B / typical 291943 B HTML, JS 3691474 B / 249234 B; hash-bound post-merge `fixtures/artifact-weight/qualification.json` receipt.
   - [x] Record the read-before-publication contract, corrected source anchors and separate L1/host qualification limits in `docs/governance/kit/ARTIFACT_BUDGET.md`.
 - [x] **W1 — Dossier data boundary**
   - [x] Remove global route/summary imports from the diagram engine; explicitly bind governance data in its consumer and preparation scripts.
