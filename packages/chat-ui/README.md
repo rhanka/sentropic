@@ -25,52 +25,46 @@ mounts and dispose it when the host releases the session, rather than when the v
 <ChatConversation {snapshots} {commands} features={{ attachments: true, documents: true }} />
 ```
 
-Notes:
+The snapshot contains normalized timeline items, catalog/context choices, attachments and permission
+states. Commands bind sending, model/context selection, edit/retry/stop/feedback/steer, upload/removal,
+generated-file download and permission decisions. The view never creates or disposes the runtime.
+Missing host permission approval denies local execution in the runtime.
 
-- The registry is **module/process scoped** (consistent with `setLocalToolsAdapter`
-  and `localToolsStore`). Multiple chat instances on one page share it. Under SSR
-  or in tests, call `clearRegisteredLocalTools()` to reset between
-  requests/cases.
-- Registration affects **recognition and advertised definitions only**, never
-  transport — executing a registered tool still requires the host-injected
-  executor to handle that name.
-- `LocalToolName` is now `(typeof BUILTIN_LOCAL_TOOL_NAMES)[number] | (string & {})`
-  (mirrors `StreamHubEventType`): additive at runtime, type-widening at compile
-  time.
+## Public surface
 
-## Stream Replay Behavior
+- `components/ChatConversation.svelte`: injected conversation assembly, optional module snippets.
+- `conversation`: data-only snapshot and command types.
+- `components/ChatWidget.svelte`, `ChatWidgetPager.svelte`, `ChatDock.svelte`: shell, routing and placement.
+- `components/ChatPanel.svelte`, `ChatTimeline.svelte`, `ChatComposer.svelte`: visual composition primitives.
+- `components/StreamMessage.svelte`: markdown/reasoning/tool rendering; passive injected events need no transport.
+- `renderers/registry`: pure host-configured tool-result renderers.
+- `comments`: normalized comment types and pure formatting; `comments/CommentsPanel.svelte` receives host-owned state/actions.
+- `documents`: attachment/card types and format labels; attachment trays, generated cards and lightbox are views.
+- `context`: normalized chip/picker data types. Context selection/retrieval lives in the runtime.
+- `stores/chatWidgetLayout` and `state/chatPlacement*`: visual layout and placement intent.
+- `theme.css`: opt-in compiled theme stylesheet; see `THEMING.md`.
 
-`createReplayClient(transport)` opens an `EventSource` from the chat-core endpoint at the supplied `{ sessionId, fromSeq }` cursor and yields each raw `MessageEvent.data` payload through an `AsyncIterable`. Consumers parse the JSON envelope and route it to the projection pipeline.
+The package export map and `export-manifest.json` are the exact public inventory.
+Host-specific renderers, OAuth, workspace resolution and platform execution remain host concerns.
 
-- The replay cursor (`fromSeq`) lets consumers resync after navigation, refresh, or transient SSE drops without re-fetching the full bootstrap.
-- The transport returns an async iterable that closes cleanly on `EventSource` error and yields a final `done` sentinel through the underlying stream contract.
-- Wire event types (per `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`): `reasoning_delta`, `content_delta`, `tool_call_start`, `tool_call_delta`, `tool_call_result`, `status`, `error`, `done`.
+## Shell snippets
 
-## Renderer Registry Behavior
+ChatWidget accepts typed header/content/pager snippets. Render `renderContentGate`'s ready body once
+after host onboarding succeeds. Header actions and tabs remain outside that gate. Pass agent rows and
+callbacks through `agentsList`; pass host navigation state through `agentsView`.
+The separate ChatPanel `renderShell` contract remains available.
 
-`createRendererRegistry()` returns a `Map`-backed registry consumers can configure per surface:
+## Development and artifacts
 
-- `registry.register(toolName, renderer)` registers a typed renderer for a tool name.
-- `registry.get(toolName)` resolves the renderer; unknown tool names fall through to `registry.default`.
-- The default fallback is `JSON.stringify`, suitable for development and unknown tools; product surfaces are expected to register concrete renderers.
-- Renderers are pure functions over the tool result payload; they MUST NOT reach into app-specific stores. App-specific renderers (initiatives, folders, comments, document cards, Chrome tab actions, VSCode local tools) are registered by hosts and never imported by the package.
-
-## Dependency Rules
-
-- Consumes only `@sentropic/chat-core` wire contracts via HTTP/SSE.
-- No runtime dependency on `@sentropic/llm-mesh`, API source, or app-owned stores.
-- Peer dependency: `svelte ^5.0.0`.
-- TypeScript exports compile to `dist/` via `tsc -p tsconfig.json`; published tarball includes both `dist/` and `src/` so SvelteKit consumers can resolve `.svelte` source through the workspace `"svelte"` export condition while Node consumers resolve `.js`/`.d.ts` from `dist/`.
-
-## Local Development
-
-This package is consumed as a workspace dependency by `ui/` (per BR-14a Lot 3). Validation targets (run from repository root):
+Run the repository Make targets with an isolated test environment:
 
 ```sh
-make typecheck-chat-ui ENV=<branch-env>
-make test-chat-ui ENV=<branch-env>
-make build-chat-ui ENV=<branch-env>
-make pack-chat-ui ENV=<branch-env>
+make typecheck-chat-ui ENV=test-chat
+make test-chat-ui ENV=test-chat
+make test-chat-ui-dom ENV=test-chat
+make pack-chat-ui ENV=test-chat
 ```
 
-Publication is wired to GitHub Actions via the `validate-chat-ui` and main-only `publish-chat-ui` jobs (OIDC trusted publishing with skip-if-version-exists safety).
+Guarded packing preprocesses Svelte components and produces public `dist` entrypoints. Clean-consumer
+qualification installs the exact UI/runtime archives together. Publication requires Sentropic CI and
+the package release owner's grant; this migration does not transfer custody to the Design System.
