@@ -1,7 +1,7 @@
 {
   "name": "@sentropic/chat-ui",
   "version": "1.0.0",
-  "description": "Svelte reference UI package for @sentropic/* chat sessions: stream rendering, optimistic client state, local-tool handoff, renderer registry, and host adapter contracts. Consumes @sentropic/chat-core wire contracts over HTTP/SSE only.",
+  "description": "Svelte chat views, normalized snapshot/command ports, renderer registry and presentation helpers. Client execution lives in @sentropic/chat-runtime.",
   "type": "module",
   "license": "MIT",
   "repository": {
