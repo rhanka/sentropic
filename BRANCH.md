@@ -80,12 +80,12 @@
   - [ ] Push and keep the draft PR current; require CI on the exact head before marking ready.
 - [ ] **Lot E10-3 — Takeover: merge integration and Opus r1 fixes**
   - [x] Merge `origin/feat/engram-e2-integration` at `ef585a6b1` (integration #802 and re-pin #805, version `0.24.0-dev.1`); union the Makefile `test-mem-e10` and `test-artifacts-022` selectors; no rebase.
-  - [ ] Move the neutral handle bridge into retained consumer file `installed-host-bridge.mjs`; receipt records `hostGlue` as `host-authored-not-installed` with its sha256 and derivation; the installed tuple claim stays `partial` for that glue.
-  - [ ] Receipt states profiles per status: `declaredProfileClaims`, `fiveProfileEquivalence` `not-covered` (Stage B blocked, E9 #790, 23 cases); never claim qualified profiles.
-  - [ ] Pin `@types/node` `22.20.1`, remove `skipLibCheck`, surface type diagnostics; pin `pg` `8.22.0`; typed driver errors; live wrong-driver case; assembly-level refusal.
-  - [ ] Split restart into a second process (`write` then `reopen`); assert exact u64 epoch advance with decimal `BigInt` comparison; drop schema only after phase 2.
-  - [ ] Clean consumer and artifacts before staging; retain consumer `package.json` and `package-lock.json` next to the receipt; record `npm --version`; clean `dist` before pack; no fallback PG image; record qualification image ID; assert every type file stays under `/consumer/`.
-  - [ ] Remove version stamping in the lane; assert the committed workspace version equals `0.24.0-dev.1`; bind the cluster-mesh tarball by sha256.
+  - [x] Move the neutral handle bridge into retained consumer file `installed-host-bridge.mjs`; receipt records `hostGlue` as `host-authored-not-installed` with its sha256 and derivation; the installed tuple claim stays `partial` for that glue.
+  - [x] Receipt states profiles per status: `declaredProfileClaims`, `fiveProfileEquivalence` `not-covered` (Stage B blocked, E9 #790, 23 cases); never claim qualified profiles.
+  - [x] Pin `@types/node` `22.20.1`, remove `skipLibCheck`, surface type diagnostics; pin `pg` `8.22.0`; typed driver errors; live wrong-driver case; assembly-level refusal.
+  - [x] Split restart into a second process (`write` then `reopen`); assert exact u64 epoch advance with decimal `BigInt` comparison; drop schema only after phase 2.
+  - [x] Clean consumer and artifacts before staging; retain consumer `package.json` and `package-lock.json` next to the receipt; record `npm --version`; clean `dist` before pack; no fallback PG image; record qualification image ID; assert every type file stays under `/consumer/`.
+  - [x] Remove version stamping in the lane; assert the committed workspace version equals `0.24.0-dev.1`; bind the cluster-mesh tarball by sha256.
   - [ ] Lot 6 evidence from #709: `missing source` in this branch unless transferred; record the conductor disposition in the PR body.
   - [ ] Rerun the installed lane on the exact head, retain the receipt, push, and require CI green on the exact head.
 - [ ] **Lot 1 — Ordered merges**
