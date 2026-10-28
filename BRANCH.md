@@ -81,7 +81,7 @@ Mesh `speech/mistral-transcription.ts` with the Voxtral realtime STT adapter (3.
   - [x] Worktree `tmp/worktrees/stt-l13`, branch `feat/live-stt-l13`, base `origin/feat/live-stt-l8` at 82b24e2b3.
   - [x] Harness plan event recorded; `harness check branch` PASS C1.
   - [x] Lot gate: base head verified, scope boundaries declared, no exception needed.
-- [ ] **Lot 1 — STT adapter `speech/mistral-transcription.ts`**
+- [x] **Lot 1 — STT adapter `speech/mistral-transcription.ts` (9 slices + 2 fixes; typecheck green; mutation-proven)****
   - [ ] Profile config `mistral-voxtral-realtime-3`: model pin `voxtral-mini-transcribe-realtime-3`, delay `target_streaming_delay_ms`, language fr/en, format pcm16/24k mono, placement cloud-relay; server turn_detection pinned off (client commits drive turns).
   - [ ] `session.update` builder: `session` object with audio_format/language/delay; refuse unsupported fields at open (fail-closed).
   - [ ] Transport port (injectable WS): append base64 pcm16, no audio persisted, no key in logs/errors.
@@ -90,12 +90,12 @@ Mesh `speech/mistral-transcription.ts` with the Voxtral realtime STT adapter (3.
   - [ ] Metering: admission receipt required; injectable expiry timer (min(admission, request maxDurationMs)); cumulative usage records under a stable eventId; settle without providerRevision.
   - [ ] TTS exclusion from the STT adapter: no synthesis field, no implicit voice.
   - [ ] Lot gate: `make typecheck-llm-mesh` green on the lot head.
-- [ ] **Lot 2 — TTS binding/registry**
+- [x] **Lot 2 — TTS binding/registry (in-adapter; voices/languages pinned, request builder, no transport)**
   - [ ] Mistral TTS binding: provider mistral, model `voxtral-mini-tts-3-0`, preset voices (Voxtral 3 list incl. fr Marie/Manon/Lea/Camille, en US/UK), response_format; no implicit voice (explicit voice_id required).
   - [ ] Capabilities entry: tts supported, stt refused on the TTS binding and vice versa; usageUnits characters (price separation from audio-seconds); regions unset (explicit region refused fail-closed, no documented API region).
   - [ ] Request-shape fixture pins `POST /v1/audio/speech` fields from docs (no live call).
   - [ ] Lot gate: negotiation tests green (accept documented voice+language, refuse unknown voice/region/format).
-- [ ] **Lot 3 — Fixtures + gate tests**
+- [x] **Lot 3 — Fixtures + gate tests (28/28 scoped; window + post-close mutation-proven)**
   - [ ] `tests/fixtures/mistral-frames.ts`: recorded session.created/updated, delta scripts, done records, turn events, invalid/error frames; no live call.
   - [ ] `tests/speech-mistral.test.ts`: endpoint/final mapping, cancel/flush, no double count, late-frame suppression (incl. post-close), Bearer redaction, per-turn windows, completed-only done, orphan/empty-turn behavior.
   - [ ] Lot gate: `make test-llm-mesh` green (SCOPE=file then full) on the lot head.
