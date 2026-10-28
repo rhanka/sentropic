@@ -82,6 +82,7 @@
   - [x] Issuer-private authority stores only signed-lineage/hash metadata with fsync/atomic replacement, per-session writer fences and retained revocation tombstones.
   - [x] Login/refresh/revoke hooks update issuer-private metadata; resolver requires both credential validity and current private authority, so a restored shared row cannot revive logout.
   - [x] BRRC1-EX1 manifest isolates the IdP session secret and durable volume; an interrupted private writer leaves reads closed until recovery.
+  - [x] spec/REMOTE_CONTROL_RC1.md documents exact ports, private authority/configuration, D2 trust limits and native/installed qualification handoff.
   - [ ] api/tests/unit/auth/remote-evidence.test.ts: repeated actions/switch, logout/revoke/expiry, wrong sid/version/MFA/audience/key, replay and workload separation.
   - [ ] Closed EvidenceRequest; issuer-derived identity and original authentication time; per-operation EdDSA evidence with pinned audiences.
 - [ ] **Lot 2 — Consent and authorization, RED then GREEN**
