@@ -1,40 +1,7 @@
 <script lang="ts">
-  /**
-   * ChatConversation.svelte — turnkey, app-agnostic 1:1 chat dialogue.
-   *
-   * Slice 1G (R5): ChatConversation now collapses onto the chat-loop controller.
-   * The previous parallel loop (handleSend / subscribeToStream / inline local-tool
-   * dispatch) is DELETED. All state is owned by createChatLoopController().
-   *
-   * Composes the already-published @sentropic/chat-ui primitives:
-   *   ChatPanel (shell) -> ChatTimeline -> StreamMessage -> ChatComposer
-   *   -> ModelSelector (when models supplied) -> MessageActions (per message)
-   *   -> ChatContextPicker (when contextProvider supplied)
-   *
-   * All app-coupled concerns (comments, documents, jobs, workspaceScope,
-   * attachments) default OFF — enabled only when the caller supplies the
-   * matching flag + adapter.
-   *
-   * No app store is imported.  No hardcoded user-facing string.  All labels
-   * go through the injected `labels` resolver.
-   *
-   * Baseline: chat-ui@0.14.0 (controller-backed, R5 — no 3rd loop).
-   */
-
-  import type {
-    ChatUiLabelResolver,
-    ChatUiWebHost,
-  } from '../hosts/createWebHost.js';
-  import type { ChatContextProvider } from '../state/chat-context.js';
-  import type { RendererRegistry } from '../renderers/registry.js';
-  import type { ModelCatalogGroup, ModelCatalogModel } from '@sentropic/chat-runtime/utils/model-selection';
-  import type { ControllerHostTransport, ControllerRunHandle } from '@sentropic/chat-runtime/state/chatLoopController';
-
-  import { onDestroy } from 'svelte';
-  import { createChatLoopController } from '@sentropic/chat-runtime/state/chatLoopController';
-  import { isLocalToolName } from '@sentropic/chat-runtime/stores/localTools';
-  import { createRendererRegistry } from '../renderers/registry.js';
-
+  import type { Snippet } from 'svelte';
+  import type { ChatConversationSnapshots, ChatConversationCommands } from '../conversation.js';
+  import type { ChatUiLabelResolver } from '../hosts/createWebHost.js';
   import ChatPanel from './ChatPanel.svelte';
   import ChatTimeline from './ChatTimeline.svelte';
   import ChatComposer from './ChatComposer.svelte';
