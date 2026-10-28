@@ -73,7 +73,13 @@ layers() {
   make -n ci-build-api CI_IMAGE_CACHE=0 ENV="$ENV" > "$scratch/cold"
   grep -F -- '--no-cache --load' "$scratch/cold"
   if grep -Fq -- '--cache-from' "$scratch/cold"; then return 1; fi
+  for cache_enabled in 0 1; do
+    make -n ci-test-ui CI_IMAGE_CACHE="$cache_enabled" ENV="$ENV" > "$scratch/ui-tests"
+    grep -F -- '--no-cache-filter=ui-tests' "$scratch/ui-tests"
+    grep -F -- '--target ui-test-output' "$scratch/ui-tests"
+  done
   echo 'PASS: distinct persistent layer scopes and explicit cold-cache mode'
+  echo 'PASS: UI tests execute afresh in both warm and cold image modes'
 }
 
 case "${1:-all}" in
