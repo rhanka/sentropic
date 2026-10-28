@@ -195,3 +195,45 @@ export interface ChatCoreHost {
 
   /**
    * Post a local tool result back to the server for the given stream + toolCallId.
+   * Implements the local-tool result channel (R1 — local-tool result lifecycle).
+   * Call-site: AppChatPanel:796-827 `postLocalToolResultWithRetry` →
+   *   `apiPost(chatMessageToolResultsUrl(streamId), { toolCallId, result })`
+   * Note: the retry loop (12 attempts, 150ms*attempt back-off for 400/race)
+   * is an app-level concern — the host may or may not implement it internally.
+   */
+  postLocalToolResult(
+    streamId: string,
+    toolCallId: string,
+    result: unknown,
+  ): Promise<void>;
+
+  /**
+   * Fetch the model catalog (providers + models + defaults).
+   * Call-site: AppChatPanel:4142 `apiGet<ModelCatalogPayload>('/models/catalog')`
+   */
+  fetchModelCatalog(): Promise<ModelCatalog>;
+
+  /**
+   * Post a steer message to a running assistant stream.
+   * Implements the steer channel (R1 — steer).
+   * Call-site: AppChatPanel:3338 `postChatSteer(apiPost, targetStreamId, steerText)`
+   *   → `apiPost('/chat/messages/:streamId/steer', { message })`
+   */
+  postSteer(streamId: string, message: string): Promise<void>;
+
+  // -------------------------------------------------------------------------
+  // StreamHub — stream client surface (R1 — StreamHub/transport)
+  // -------------------------------------------------------------------------
+
+  /**
+   * The StreamHub client used for SSE subscriptions.
+   * Provides: set / setStream / setJobUpdates / delete / reset / clearCaches.
+   * Call-site: AppChatPanel imports `streamHub` from '$lib/stores/streamHub'
+   * and passes it to createSentropicWebHost as `streamClient: streamHub`.
+   * The component then calls e.g. `host.streamClient.setStream(...)`.
+   *
+   * This is a required field (not a factory) — matching today's ChatUiWebHost
+   * shape and how the real web host wires the stream connection.
+   */
+  streamClient: StreamHubClient;
+}
