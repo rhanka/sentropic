@@ -34,10 +34,11 @@ export interface DecisionHold extends Record<string, unknown> {
   id: string; status: string; request_id: string; tenant_id: string; workspace_id: string;
   principal_key: string; budget_ids: string[]; liability_micro_usd: string; budget_strategy_id: string;
   pricing_versions: string[]; deadline_at: Date; quote_ref: string; dispatch_started_at: Date | null;
+  evaluator_key: string;
 }
 
 export const lockDecisionHold = async (tx: LedgerTx, cost: CostContext, holdId: string, callId: string) => {
-  const [hold] = (await tx.execute(sql`SELECT h.* FROM control.budget_holds h
+  const [hold] = (await tx.execute(sql`SELECT h.*, c.evaluator_key FROM control.budget_holds h
     JOIN control.decision_calls c ON c.hold_id = h.id AND c.call_id = h.request_id
     WHERE h.id = ${holdId} AND h.request_id = ${callId} AND h.tenant_id = ${cost.tenantId}
       AND h.workspace_id = ${cost.workspaceId} AND h.principal_key = ${cost.principalId} FOR UPDATE OF h`)).rows as DecisionHold[];

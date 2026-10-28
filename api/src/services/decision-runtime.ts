@@ -31,20 +31,22 @@ export const createDecisionRuntime = (input: LlmMeshRouterInput, jev: JevTranspo
     if (!cost) return undefined;
     const metering = createDecisionMetering(db, cost, descriptors);
     const environment = { OPENAI_API_KEY: env.OPENAI_API_KEY, JEV_API_KEY: process.env.JEV_API_KEY };
+    const resolveAuth = createDecisionAuth(environment);
     const client = createDecisionHost({ host, mesh: input.llmMesh, jev, fetch: globalThis.fetch, profile, descriptors,
-      ports: { ...metering, resolveAuth: createDecisionAuth(environment), authorize: async () => {
+      ports: { ...metering, resolveAuth, authorize: async () => {
         const current = await resolveCaller(user, profile);
         return !!current && current.tenantId === cost.tenantId && current.workspaceId === cost.workspaceId;
       } } });
     return { client, async readiness() {
-      const storeReady = await metering.probe();
       const evaluators = await Promise.all(descriptors.map(async (descriptor) => {
-        const key = descriptor.evaluator.providerId === 'openai' ? 'OPENAI_API_KEY' : 'JEV_API_KEY';
+        const storeReady = await metering.probe(descriptor.evaluator);
+        const auth = await resolveAuth({ providerId: descriptor.evaluator.providerId });
         const price = await metering.resolvePrice({ providerId: descriptor.evaluator.providerId, modelId: descriptor.wireModel,
           protocol: descriptor.protocol ?? 'jev-native', authority: descriptor.priceProtocol.authority,
           priceRevision: descriptor.priceProtocol.revision });
         return { ...host.discoverDecisionEvaluator(descriptor), productionReady: false,
-          availability: profile === 'qualification' && storeReady && !!environment[key] && !!price ? 'available' : 'unavailable' };
+          availability: profile === 'qualification' && storeReady && auth.material.type === 'environment-token' && !!price
+            ? 'available' : 'unavailable' };
       }));
       return { profile, productionReady: false, evaluators };
     } };
