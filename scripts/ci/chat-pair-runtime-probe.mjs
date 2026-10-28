@@ -37,7 +37,8 @@ for (const scenario of ['missing', 'denial', 'timeout', 'approval']) {
   const authorizeLocalTool = scenario === 'missing' ? undefined : scenario === 'denial' ? () => false
     : scenario === 'timeout' ? () => new Promise(() => {}) : (request) => request.decision === 'allow' ? true : 'pending';
   const runtime = createConversationRuntime('session', {
-    host: { ...createDefaultTransport(base), streamClient: hub }, authorizeLocalTool, permissionTimeoutMs: 10,
+    host: { ...createDefaultTransport(base), streamClient: hub }, authorizeLocalTool,
+    ...(scenario === 'timeout' ? { permissionTimeoutMs: 10 } : {}),
     contextProvider: { context: { subscribe(run) { run([{ type: 'folder', id: 'folder', label: 'Folder', active: true }]); return () => {}; } } },
     sendPayload: () => ({ tools: ['web_search'], localToolDefinitions: [{ name: 'bash', description: 'Platform', parameters: {} }] }),
     documents: { uploadFile: async (draft) => ({ ...draft, state: 'ready', documentId: 'document' }), deleteUploadedFile: async () => {},

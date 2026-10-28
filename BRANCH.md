@@ -150,6 +150,7 @@
   - [x] Conversation view source slice 18 committed within the atomic limit.
   - [x] Conversation view source slice 19 committed within the atomic limit.
 - [ ] **Lot 3 — Parity and packed boundary qualification**
+  - [x] Limit the probe's short domain permission deadline to the explicit timeout case; approval uses the production policy deadline, with unchanged assertion wait bounds.
   - [x] Add native-platform permission parity through the real session/controller/HTTP fixture: pending visibility, native allow/deny, zero denied execution and exactly-once replay/result posting.
   - [x] Clean installed pair passes Svelte typecheck with 0 errors/warnings and Vite production build; wire the exact-archive probe and retained head/hash report into CI.
   - [x] Add standalone/app-shaped live plan-result rendering and IME Enter parity through the real runtime; composing text cannot accidentally submit.
