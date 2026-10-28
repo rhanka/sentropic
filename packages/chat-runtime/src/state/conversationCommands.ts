@@ -1,7 +1,6 @@
 import type { ChatConversationCommands } from '@sentropic/chat-ui/conversation';
 import type { DocumentHost } from '@sentropic/chat-ui/documents';
 import type { ChatCoreHost } from '../client/chat-core-host.js';
-import { buildSentAttachments } from '../documents/attachmentState.js';
 import { parseModelSelectionKey } from '../utils/model-selection.js';
 import type { ChatContextEntry } from './chat-context.js';
 import type { ControllerSendPayload } from './chatLoopController.js';
@@ -42,17 +41,22 @@ export function createConversationCommands(state: ConversationCommandState): Cha
       const contexts = state.contextEntries.filter((entry) => entry.active !== false && entry.id)
         .map((entry) => ({ contextType: entry.type, contextId: entry.id! }));
       const primary = contexts.at(-1);
+      const attachments = current.attachments.filter((attachment) => attachment.state === 'ready' && attachment.documentId)
+        .map((attachment) => ({
+          kind: attachment.kind, source: 'context_document' as const, documentId: attachment.documentId!,
+          fileName: attachment.fileName, mimeType: attachment.mimeType, sizeBytes: attachment.sizeBytes,
+        }));
       try {
         await state.session.send({
           ...state.sendPayload?.(), ...selection(),
           sessionId: current.sessionId, content: current.draft.trim(), contexts,
           ...(primary ? { primaryContextType: primary.contextType, primaryContextId: primary.contextId } : {}),
-          attachments: buildSentAttachments(current.attachments),
+          attachments,
         }, {
           buildUserMessage: (handle) => ({
             id: handle.userMessageId, role: 'user', content: current.draft.trim(),
             sessionId: current.sessionId, createdAt: new Date().toISOString(),
-            attachments: buildSentAttachments(current.attachments), _localStatus: 'completed',
+            attachments, _localStatus: 'completed',
           }),
           buildAssistantMessage: (base) => ({ ...base }),
         });
@@ -64,7 +68,7 @@ export function createConversationCommands(state: ConversationCommandState): Cha
       const messages = state.session.snapshot().messages;
       const at = messages.findIndex((message) => message.id === messageId);
       const target = messages[at]?.role === 'assistant'
-        ? messages.slice(0, at).findLast((message) => message.role === 'user')?.id : messageId;
+        ? messages.slice(0, at).reverse().find((message) => message.role === 'user')?.id : messageId;
       if (!target) return;
       const selected = selection();
       await state.session.retry(target, {

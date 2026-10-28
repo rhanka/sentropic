@@ -23,9 +23,8 @@ import {
   getMentionCandidate,
   getMentionMatches,
   findAssignedMentionFromText,
-  getMentionLabel,
-  getCommentAuthorLabel,
 } from './utils.js';
+import { getMentionLabel, getCommentAuthorLabel } from '@sentropic/chat-ui/comments';
 
 // ---------------------------------------------------------------------------
 // Minimal hand-rolled store (no svelte/store import)
