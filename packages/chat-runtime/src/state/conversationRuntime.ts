@@ -86,3 +86,26 @@ export function createConversationRuntime(sessionId: string, options: Conversati
   });
   const commands = createConversationCommands(state);
   return {
+    session, commands, snapshot,
+    subscribe(listener: (value: ChatConversationSnapshot) => void) {
+      if (disposed) throw new Error('Conversation runtime disposed');
+      const unbind = session.bindView();
+      listeners.add(listener); listener(snapshot());
+      return () => { listeners.delete(listener); unbind(); };
+    },
+    async initialize() {
+      const generation = ++historyGeneration;
+      try {
+        const [nextCatalog] = await Promise.all([
+          catalog ? Promise.resolve(catalog) : options.host.fetchModelCatalog(),
+          hydrateConversationHistory(session, options.host, () => !disposed && historyGeneration === generation),
+        ]);
+        if (disposed || historyGeneration !== generation) return;
+        catalog = nextCatalog;
+        if (!state.selectedModel) state.selectedModel = `${catalog.defaults?.provider_id ?? catalog.models[0]?.provider_id ?? ''}::${catalog.defaults?.model_id ?? catalog.models[0]?.model_id ?? ''}`;
+      } catch (error) { if (!disposed) state.error = error instanceof Error ? error.message : String(error); }
+      notify();
+    },
+    dispose() { disposed = true; historyGeneration++; checkpoints.dispose(); documents.dispose(); authorization.dispose(); unsubscribeContext?.(); unsubscribeSession(); session.dispose(); listeners.clear(); },
+  };
+}
