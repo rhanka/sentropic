@@ -118,6 +118,24 @@ guard_collision() {
   echo "PASS: same tag with different identity is still refused and never pushed"
 }
 
+receipt_identity() {
+  mkdir -p "$scratch/receipt"
+  printf '%s\n' "$PULLED_DIGEST" > "$scratch/receipt/api-image-id"
+  : > "$scratch/calls"
+  for local_digest in "$PULLED_DIGEST" "$OTHER_DIGEST"; do
+    if PATH="$PWD/$scratch:$PATH" DOCKER_CALL_LOG="$PWD/$scratch/calls" \
+      MOCK_LOCAL_DIGEST="$local_digest" \
+      make --no-print-directory verify-api-image REGISTRY="$TEST_REGISTRY" API_VERSION="$TEST_TAG" \
+      API_IMAGE_RECEIPT="$PWD/$scratch/receipt/api-image-id" ENV="${ENV:?}" > "$scratch/output" 2>&1; then
+      test "$local_digest" = "$PULLED_DIGEST" || { echo 'FAIL: transported image identity mismatch was accepted' >&2; return 1; }
+    else
+      test "$local_digest" = "$OTHER_DIGEST" || { cat "$scratch/output" >&2; return 1; }
+      grep -Fq 'Production artifact identity mismatch' "$scratch/output" || return 1
+    fi
+  done
+  echo 'PASS: transported canonical image matches the tested receipt; a substituted artifact is refused'
+}
+
 hash_inputs() {
   sed -n 's/^export API_VERSION[[:space:]]*?=.*echo "\([^"]*\)".*/\1/p' Makefile | tr ' ' '\n' | sed '/^$/d'
 }
@@ -324,6 +342,7 @@ case "${1:-all}" in
   resolve-network-error) resolve_fail_closed network-error ;;
   resolve-stdout-unknown) resolve_fail_closed stdout-unknown ;;
   guard-collision) guard_collision ;;
+  receipt-identity) receipt_identity ;;
   tag-inputs-cover-builds) tag_inputs_cover_builds ;;
   tag-inputs-exclude-global) tag_inputs_exclude_global ;;
   copy-sources-hashed) copy_sources_hashed ;;
@@ -362,6 +381,7 @@ case "${1:-all}" in
     resolve_fail_closed network-error
     resolve_fail_closed stdout-unknown
     guard_collision
+    receipt_identity
     tag_inputs_cover_builds
     tag_inputs_exclude_global
     copy_sources_hashed
