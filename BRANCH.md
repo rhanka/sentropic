@@ -74,6 +74,7 @@
   - [x] Integrity RED: all three signed-lineage/MFA-elevation/version tests fail against session-manager before correction.
   - [x] Session and refresh credentials now bind immutable MFA/auth_time/version; refresh validates them and rotates with a hash CAS.
   - [x] Manifest test resolves the actual product deployment path 30-api.yaml.
+  - [x] Native verifier fake retains one-use jti state across reconstruction; acknowledged IdP rotation and reciprocal operation scopes covered.
   - [ ] api/tests/unit/auth/remote-evidence.test.ts: repeated actions/switch, logout/revoke/expiry, wrong sid/version/MFA/audience/key, replay and workload separation.
   - [ ] Closed EvidenceRequest; issuer-derived identity and original authentication time; per-operation EdDSA evidence with pinned audiences.
 - [ ] **Lot 2 — Consent and authorization, RED then GREEN**
