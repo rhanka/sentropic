@@ -142,6 +142,7 @@
   - [x] Conversation view source slice 18 committed within the atomic limit.
   - [x] Conversation view source slice 19 committed within the atomic limit.
 - [ ] **Lot 3 — Parity and packed boundary qualification**
+  - [x] Add a clean installed-pair probe that mounts only exact archives: public-contract Svelte typecheck, production bundle and visual archive ownership scan, with retained SHA-256 evidence.
   - [x] Enrich the in-memory checkpoint data adapter with persisted anchor metadata, matching the production checkpoint contract rather than bypassing the mutation classifier.
   - [x] Compose the real comment runtime/panel in both conversation fixtures; verify draft retention, send persistence and one host update subscription across remounts.
   - [x] Exercise checkpoint create/fetch/restore through the real chat-server HTTP routes; standalone/app-shaped fixtures retain the choice across remount and prove restore-before-retry versus preserve-and-retry ordering.
