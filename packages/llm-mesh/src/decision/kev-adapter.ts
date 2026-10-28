@@ -37,7 +37,7 @@ export class KevAdapter implements ProviderAdapter {
   async stream(_request: StreamRequest): Promise<StreamResult> { throw new Error('Kev does not support chat.'); }
   normalizeError(_error: unknown) { return { providerId: 'local' as const, message: 'Kev operation failed.', retryable: false }; }
   async decision(request: DecisionRequest, context?: ProviderRuntimeContext & { signal?: AbortSignal }): Promise<DecisionAdapterResult> {
-    const failed = (code: Parameters<typeof createDecisionError>[0], phase: 'preflight' | 'dispatch' | 'parse' = 'preflight'): DecisionAdapterResult =>
+    const failed = (code: Parameters<typeof createDecisionError>[0], phase: 'preflight' | 'dispatch' | 'parse' = 'preflight'): Extract<DecisionAdapterResult, { ok: false }> =>
       ({ ok: false, error: createDecisionError(code, phase), servedEvaluator: null, servedModelId: null,
         usage: unreportedDecisionUsage(phase === 'preflight' ? 'not-dispatched' : 'unknown') });
     const encoded = encodeJevRequest(request, this.descriptor);
