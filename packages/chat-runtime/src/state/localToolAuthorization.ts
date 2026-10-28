@@ -21,13 +21,14 @@ export function createAuthorizedLocalToolMachine(options: {
   permissionTimeoutMs?: number;
   postResult: AttachLocalToolMachineOptions['postLocalToolResult'];
   onChange(): void;
+  onNativeTimeout(requestId: string): Promise<void>;
 }) {
   const authorize = options.authorize ?? (() => false);
   const permissions = new Map<string, ConversationPermission>();
   const executions = new Map<string, Promise<unknown>>();
   const posts = new Map<string, Promise<void>>();
   const grants = new Set<string>();
-  const nativeRequests = new Map<string, LocalToolAuthorizationRequest>();
+  const nativeRequests = new Map<string, { request: LocalToolAuthorizationRequest; timer: ReturnType<typeof setTimeout> }>();
   const decisions = new Map<string, { request: LocalToolAuthorizationRequest; resolve(value: boolean): void }>();
   const abort = new AbortController();
   const setStatus = (request: LocalToolAuthorizationRequest, status: ConversationPermission['status']) => {
@@ -81,7 +82,9 @@ export function createAuthorizedLocalToolMachine(options: {
     void pending.catch((error) => {
       if (options.machine?.isLocalToolPermissionRequired(error)) {
         executions.delete(key);
-        nativeRequests.set(options.machine.getPermissionRequest(error).requestId, request);
+        const requestId = options.machine.getPermissionRequest(error).requestId;
+        const timer = setTimeout(() => { void options.onNativeTimeout(requestId); }, options.permissionTimeoutMs ?? 30_000);
+        nativeRequests.set(requestId, { request, timer });
       } else setStatus(request, 'denied');
     });
     return pending;
@@ -93,8 +96,10 @@ export function createAuthorizedLocalToolMachine(options: {
     getPermissionRequest: options.machine?.getPermissionRequest ?? (() => ({ requestId: '', toolName: '', origin: '' })),
     async decideLocalToolPermission(requestId, decision) {
       if (abort.signal.aborted) return;
+      const native = nativeRequests.get(requestId);
+      if (native) clearTimeout(native.timer);
       await options.machine?.decideLocalToolPermission(requestId, decision);
-      const request = nativeRequests.get(requestId);
+      const request = native?.request;
       nativeRequests.delete(requestId);
       if (request && decision.startsWith('deny')) {
         const key = `${request.streamId}:${request.toolCallId}`;
@@ -120,7 +125,8 @@ export function createAuthorizedLocalToolMachine(options: {
     },
   };
   return {
-    machine, snapshot: () => [...permissions.values()], dispose: () => abort.abort(),
+    machine, snapshot: () => [...permissions.values()],
+    dispose() { abort.abort(); for (const entry of nativeRequests.values()) clearTimeout(entry.timer); nativeRequests.clear(); },
     async decide(id: string, allow: boolean) {
       const pending = decisions.get(id);
       if (!pending || abort.signal.aborted) return;
