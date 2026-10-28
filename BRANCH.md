@@ -42,6 +42,7 @@
   - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] BR1-CI-review-F1: accept the review's transitive UI publication gap; explicitly require runtime validation success for UI publication too, including when its runtime publisher was skipped. Extend the fixture dependency-failure matrix.
 - [x] BR1-CI-capacity: reproduce the independent-validator policy failure and stale publication-DAG fixtures; dispatch runtime/UI validators independently, require both before runtime publication, retain installed-pair qualification and runtime-before-UI release ordering.
 - [x] BR1-R2-consensus: two eligible complementary peers approve exact runtime/visual source 54df2098; subsequent consumer manifest repair is separately qualified. Runtime 451/451 and UI DOM 206/206 pass after corrections; final installed pair passes its public HTTP/permission matrix.
 - [x] BR1-checks: package gates pass (201 manifest/CI tests, runtime 451, UI 524 unit/206 DOM, cowork-bridge 27); app typecheck/lint, all 489 app tests and production web/Chrome/VSCode build pass. Post-correction full runtime/DOM regression and final installed hash report pass.
