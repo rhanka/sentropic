@@ -1629,7 +1629,7 @@ jobs:
   # API/unit suite never exercised the served consent screen end-to-end.
   smoke-idp-screens:
     runs-on: ubuntu-latest
-    needs: [changes, typecheck-lint-api, build-api-image, build-api-tool-image, security-sast-sca]
+    needs: [changes, typecheck-lint-api, build-api-image, build-api-tool-image, build-e2e, security-sast-sca]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     env:
       DOCKER_USERNAME: nologin
@@ -1656,6 +1656,13 @@ jobs:
           path: .
       - name: Load CI toolbox
         run: make load-api-tool ENV=test-ci-idp
+      - name: Download qualified browser image
+        uses: actions/download-artifact@v7
+        with:
+          name: e2e-image
+          path: .
+      - name: Load qualified browser image
+        run: make load-e2e ENV=test-ci-idp
       - name: Start standalone IdP (screens + API on shared DB)
         run: make up-idp-sut ENV=test-ci-idp
       - name: Screen-driven SSO smoke (served login + consent screens)
