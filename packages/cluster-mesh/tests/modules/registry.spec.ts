@@ -112,7 +112,7 @@ describe('module registry', () => {
   });
 
   it.each([
-    ['0.31.0', '0.31.0'],
+    ['0.32.0', '0.32.0'],
     ['0.21.2', '0.21.2'],
     ['0.22.1-rc.1', '0.22.1-rc.1'],
   ])('should refuse llm-mesh %s as incompatible_version', async (version, installedVersion) => {
@@ -123,8 +123,8 @@ describe('module registry', () => {
     expect(evaluations()).toEqual([]);
   });
 
-  it('should admit the calibrated Decision mesh minor 0.30.0', async () => {
-    tree.install('app', fakeMesh('mesh', '0.30.0'));
+  it('should admit the calibrated Decision mesh minor 0.31.0', async () => {
+    tree.install('app', fakeMesh('mesh', '0.31.0'));
     await expect(registry().load('llm-mesh')).resolves.toBeDefined();
   });
   it('should admit llm-mesh 0.26.0 inside the #662 union range', async () => {
