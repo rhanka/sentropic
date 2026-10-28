@@ -21,6 +21,17 @@ function request(fixture: Awaited<ReturnType<typeof createConversationFixture>>,
 }
 
 describe('conversation permission boundary through the real runtime and HTTP server', () => {
+  it('should execute only after a pending view command is approved by the host adapter', async () => {
+    const { fixture, streamId } = await start({ authorizeLocalTool: (call) => call.decision === 'allow' ? true : 'pending' });
+    request(fixture, streamId);
+    await vi.advanceTimersByTimeAsync(121);
+    expect(fixture.executions).toHaveLength(0);
+    expect(fixture.runtime.snapshot().permissions[0]?.status).toBe('pending');
+    await fixture.runtime.commands.decidePermission(`${streamId}:tool-1`, true);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fixture.executions).toHaveLength(1);
+    expect(fixture.requests.filter((entry) => entry.path.endsWith('/tool-results'))).toHaveLength(1);
+  });
   it.each([
     ['missing permission adapter', {}],
     ['explicit denial', { authorizeLocalTool: () => false }],

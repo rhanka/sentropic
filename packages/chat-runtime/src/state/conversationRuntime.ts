@@ -35,7 +35,12 @@ export function createConversationRuntime(sessionId: string, options: Conversati
   const state: ConversationCommandState = {
     session, host: options.host, selectedModel: options.selectedModel ?? '', contextEntries: [],
     sending: false, error: null, documents: options.documents, sendPayload: options.sendPayload,
-    decidePermission: options.decidePermission, notify,
+    async decidePermission(id, allow) {
+      const prompt = session.snapshot().pendingLocalToolPermissionPrompts.find((entry) => `native:${entry.streamId}:${entry.toolCallId}` === id);
+      if (prompt) await session.decideLocalToolPermission(prompt, allow ? 'allow_once' : 'deny_once');
+      else if (options.decidePermission) await options.decidePermission(id, allow);
+      else await authorization.decide(id, allow);
+    }, notify,
   };
   const authorization = createAuthorizedLocalToolMachine({
     machine: options.localTools, authorize: options.authorizeLocalTool,
@@ -51,7 +56,10 @@ export function createConversationRuntime(sessionId: string, options: Conversati
       models: (catalog?.models ?? []) as ModelCatalogModel[],
       modelGroups: groupModelsByProvider((catalog?.providers ?? []) as ModelCatalogProvider[], (catalog?.models ?? []) as ModelCatalogModel[]),
       contextEntries: state.contextEntries.map((entry) => ({ ...entry })),
-      attachments: buildAttachmentBandItems(current.attachments), permissions: authorization.snapshot(),
+      attachments: buildAttachmentBandItems(current.attachments), permissions: [
+        ...authorization.snapshot().filter((entry) => !current.pendingLocalToolPermissionPrompts.some((prompt) => `${prompt.streamId}:${prompt.toolCallId}` === entry.id)),
+        ...current.pendingLocalToolPermissionPrompts.map((prompt) => ({ id: `native:${prompt.streamId}:${prompt.toolCallId}`, name: prompt.name, status: 'pending' as const })),
+      ],
       activeMessageId: active?.id ?? null, activeStreamId: active ? active._streamId ?? active.id : null,
     };
   };
