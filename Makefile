@@ -681,7 +681,7 @@ ci-build-ui-static-target:
 	@docker buildx build --platform $(IMAGE_PLATFORM) $(CI_IMAGE_CACHE_FLAGS) \
 		$(if $(filter 1,$(CI_IMAGE_CACHE)),--cache-from type=gha$(comma)scope=br78-v1-ui-$(IMAGE_PLATFORM)) \
 		--target static-output --output type=local,dest=ui/build -f ui/Dockerfile \
-		--build-arg VITE_API_BASE_URL=https://sentropic.sent-tech.ca/api/v1 \
+		--build-arg VITE_API_BASE_URL=$(VITE_API_BASE_URL) \
 		--build-arg VITE_EXTENSION_PROFILE=$(VITE_EXTENSION_PROFILE) \
 		--build-arg VITE_EXTENSION_API_BASE_URL=$(VITE_EXTENSION_API_BASE_URL) \
 		--build-arg VITE_EXTENSION_APP_BASE_URL=$(VITE_EXTENSION_APP_BASE_URL) \
