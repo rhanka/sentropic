@@ -80,7 +80,7 @@
         {:else}
           <ChatTimeline items={[...state.items]}>
             {#snippet renderUserMessage(item)}
-              <div class="chat-conversation-user-message px-4 py-2">
+              <div class="chat-conversation-user-message group px-4 py-2">
                 {#if editingId === item.message.id}
                   <textarea aria-label={labels('chat.message.edit')} bind:value={editingContent}></textarea>
                   <button type="button" on:click={async () => { await commands.edit(item.message.id, editingContent); editingId = null; }}>{labels('common.save')}</button>
@@ -93,11 +93,16 @@
                 <MessageActions role="user" {labels} isCopied={copiedKey === item.key}
                   onCopy={() => void copy(item.message.content ?? '', item.key)}
                   onEdit={() => { editingId = item.message.id; editingContent = item.message.content ?? ''; }} />
+                {#if state.restorableMessageIds.includes(item.message.id)}
+                  <button type="button" disabled={state.checkpointBusy} on:click={() => void commands.restoreCheckpoint(item.message.id)}>
+                    {labels('chat.checkpoints.restoreFromMessage')}
+                  </button>
+                {/if}
               </div>
             {/snippet}
             {#snippet renderAssistantSegment(item)}
               {#if item.kind === 'assistant-segment'}
-                <div class="chat-conversation-assistant-segment px-4 py-2">
+                <div class="chat-conversation-assistant-segment group px-4 py-2">
                   <StreamMessage streamId={item.streamId} status={item.isTerminal ? 'completed' : 'processing'}
                     {labels} variant="chat" subscriptionMode="passive" initialEvents={[...item.segment.events]}
                     finalContent={item.isTerminal ? item.segment.content : undefined} />
@@ -125,6 +130,17 @@
         {#if flags.documents}
           <GeneratedFileCardTray cards={state.generatedFiles} onDownload={(card) => void commands.downloadGeneratedFile(card)}
             downloadLabel={labels('common.download')} />
+        {/if}
+        {#if state.checkpointPrompt}
+          <div role="dialog" aria-label={labels('chat.checkpoints.confirmRestoreBeforeAction')}>
+            {#each state.checkpointPrompt.mutations as mutation}<p>{mutation}</p>{/each}
+            <button type="button" disabled={state.checkpointBusy} on:click={() => void commands.decideCheckpoint(true)}>
+              {labels('chat.checkpoints.restoreCta')}
+            </button>
+            <button type="button" disabled={state.checkpointBusy} on:click={() => void commands.decideCheckpoint(false)}>
+              {labels(state.checkpointPrompt.kind === 'retry' ? 'chat.checkpoints.retryWithoutRestore' : 'chat.checkpoints.continueWithoutRestore')}
+            </button>
+          </div>
         {/if}
         {#each state.permissions as permission (permission.id)}
           <div role="status" data-permission-status={permission.status}>
