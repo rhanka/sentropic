@@ -1,75 +1,80 @@
-# Feature: STT L9 — OpenAI streaming STT profiles
+# Feature: Freeze the chat migration contract (P0)
 
 ## Objective
-Mesh `speech/openai-transcription.ts` with two independently configured OpenAI streaming-STT profiles (live-transcribe, realtime-whisper) behind the speech contract, admitted and metered by L8 caps; TTS stays separately selected.
+- [ ] Freeze the approved P0 behavior, ownership, consumer and styling contract without changing implementation.
+- [x] Source: approved 2026-10-28 plan, SHA-256 `daf1d8373fa0eaedc3514c452e8161cd597b9c3a749772ca94334e5cede08790`; Opus r2 APPROVE.
 
 ## Scope / Guardrails
-- Scope limited to `packages/llm-mesh/src/speech/`, `packages/llm-mesh/tests/`, bench receipt, `BRANCH.md`, version bump.
-- Make-only workflow, flock-wrapped lanes, no ad-hoc docker.
-- Branch development in `tmp/worktrees/stt-l9`, ENV=test-stt-l9 last, never ENV=dev.
-- 0 Python. No live provider call in CI (recorded fixtures only). No key leakage, no audio payload persisted.
-- All new text in English.
+- [x] Documentation only under `spec/`; branch execution checklist in `BRANCH.md`.
+- [x] Branch `feat/chat-convergence-p0` from `origin/main`; worktree `tmp/worktrees/chat-p0`.
+- [x] Base `ea20bd9c026e9717d911514e763f8911b6981dde`; no runtime, UI, dependency, release or data change.
+- [x] Make-only commands; `ENV=test-chat-p0` last; no containers or port allocation required.
+- [x] Root workspace and its uncommitted Track state remain untouched.
+- [x] Atomic commits of at most 150 changed lines via `make commit`; selective staging; no AI trailers.
+- [x] Merge only if integration becomes necessary; never rebase; deliver a draft PR without merging.
+- [x] All new documentation, commit and PR text in English.
+- [x] Owner tests, UAT GO, transfer GO and npm authorization remain separate gates.
 
 ## Branch Scope Boundaries (MANDATORY)
-- **Allowed Paths (implementation scope)**:
-  - `packages/llm-mesh/src/speech/openai-transcription.ts`
-  - `packages/llm-mesh/src/speech/index.ts`
-  - `packages/llm-mesh/tests/speech-openai-transcription.test.ts`
-  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
-  - `packages/llm-mesh/tests/fixtures/openai-transcription-frames.ts`
-  - `packages/llm-mesh/bench/l9-openai-stt.receipt.json`
-  - `packages/llm-mesh/package.json`
-  - `packages/llm-gateway/package.json`
-  - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/src/modules/catalog.ts`
-  - `packages/cluster-mesh/tests/fixtures/train.ts`
-  - `packages/cluster-mesh/tests/speech-peer.spec.ts`
-  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
-  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `api/tests/unit/gateway-package-version.test.ts`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `package-lock.json`
-  - `BRANCH.md`
-- **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
-  - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `packages/llm-gateway/**`
-  - `packages/live-speech/**`
-  - `packages/llm-mesh/src/**` (except `src/speech/openai-transcription.ts`, `src/speech/index.ts`, `src/speech/catalog.ts`)
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/**`
-- **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+- [x] **Allowed Paths (implementation scope)**:
+  - [x] `BRANCH.md`
+  - [x] `spec/CHAT_MIGRATION_P0*.md`
+- [x] **Forbidden Paths (must not change in this branch)**:
+  - [x] `Makefile`
+  - [x] `docker-compose*.yml`
+  - [x] `.cursor/rules/**`
+  - [x] `plan/**`
+  - [x] `packages/**`
+  - [x] `ui/**`
+  - [x] `api/**`
+  - [x] `.github/**`
+  - [x] `.track/**`
+  - [x] Receiving DS repository (read-only evidence).
+- [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - [x] None authorized; a newly required path needs a bounded `BRP0-EXn` first.
+- [x] **Exception process**:
+  - [x] Record rationale, impact and rollback in Feedback Loop before any exception edit.
 
 ## Feedback Loop
-- [x] Integration qualification: full mesh 1529/1529, cluster-mesh 1223 passed with 138 qualification-specific tests skipped by the unit lane, manifest guards 201/201; both BLOCK archives pass and the official selected-lock refresh succeeds with artifacts 0.1.4 retained. Gateway archive SHA-256 `9baacd3f80ea65c5929f6139565cb8fc40c413749cbe2c96d42732b8d3800c4f`; mesh archive `19a028e45925fc5f88a7c57f0dfe7d09741f9999bf678d11cf466213f38fb266`.
-- [x] Integration fixture: the gateway's retained L8 minimum is 0.28.0; align the existing dependency-floor CLI assertion with that range while preserving all version-selection checks.
-- [x] Integration authorized by the existing Opus r3 APPROVE on bc5c72d18 (`.h2a/reviews/pr804_opus_r3.md`). Preserve the reviewed adapter and main's L8 functionality; use mesh 0.31.0 / gateway 0.22.1 / cluster 0.23.4, preserving the gateway speech floor 0.28 and extending its supported mesh range to 0.31. Regenerate verified archive locks while retaining the unrelated artifacts 0.1.4 baseline.
-- `acknowledge`: P2-A/C/D from L6a r5 go to a follow-up before Lp1/L6b, not this lot (conductor 2026-10-27).
+- [x] `BRP0-N1` clarification: P0 documents a proposed C-03 amendment; only DS may edit its contract.
+- [x] `BRP0-N2` clarification: the plan author/reviewer evidence does not acknowledge this new contract for either domain maintainer.
+- [x] `BRP0-N3` clarification: inventory and draft PR are authorized; no owner UAT or transfer approval is inferred.
+- [x] `BRP0-N4` clarification: local scope gate uses installed host harness through an external make overlay and skips `build-harness`; no tracked Makefile edit or Docker needed.
 
 ## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
+- [x] Not applicable: no application tests changed or executed; no flaky acceptance requested.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single mesh adapter, one test file, one lane.
+- [x] **Mono-branch**: one documentation author; independent review is read-only; no cherry-pick.
+- [ ] **Multi-branch**: not required for this single lot.
+- [x] Rationale: one approved P0 contract with several evidence appendices.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI change in this lot: no UAT.
+- [x] Web, Chrome and VSCode behavior unchanged; P0 UAT is documentary inspection.
+- [x] Future U0 retains the owner's personal tests on exact integrated artifacts and two verbatim GO decisions.
+
+## Plan / Todo (lot-based)
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read project rules, template, approved plan and r2 review; verify plan hash.
+  - [x] Create isolated branch/worktree and mechanically check its exact branch with harness.
+  - [x] Record documentation-only environment, scope and existing source baseline.
+- [ ] **Lot P0a — Inventory and classify**
+  - [ ] Inventory all package files/exports, consumers, styling overrides and app widget snippets.
+  - [ ] Assign reusable visual, Sentropic runtime or justified host responsibility to every path.
+  - [ ] Build behavior/owner/test matrix and transitive runtime relocation map.
+- [ ] **Lot P0b — Reconcile and freeze**
+  - [ ] Reconcile ECOSYSTEM, TURNKEY, SURFACES, PLAN_CHAT_SURFACES, AGENTS_SURFACE and #602/UAT-1.
+  - [ ] Inspect published DS theme/Drawer artifacts and name canonical DS chat primitives; assign missing DropZone to F15.
+  - [ ] Record all section 6 conductor defaults and owner-held gates without impersonating owner decisions.
+  - [ ] Integrate r2 notes: runtime package/semver break, proposed C-03 owner/copy changes, M1b release dependency, split estimate.
+  - [ ] Record domain acknowledgement state and bounded next-owner acceptance criteria.
+- [ ] **Lot P0c — Final validation and draft PR**
+  - [ ] Validate exhaustive inventories against the pinned source; inspect every diff hunk.
+  - [ ] Verify whitespace and allowed paths; mechanically check branch/scope before each commit.
+  - [ ] Independent contract/evidence reviews and finding reconciliation.
+  - [ ] Create draft PR to `main`, body from this checklist, with execution-plan comment.
+  - [ ] Push and verify CI completed/success on exact final head; report PR and full SHA.
+  - [x] API/UI/E2E test files: none changed; documentation-only checks plus repository CI qualify P0.
+  - [x] No package version bump required; no `packages/*/src/**` changes.
+  - [x] No Docker lifecycle required; no containers started.
+  - [x] Keep `BRANCH.md` for draft review; deletion/merge is outside this delivery.
