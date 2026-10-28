@@ -110,6 +110,42 @@ class GateSocket implements OpenAiTranscriptionSocket {
   }
 }
 
+/**
+ * Releases held frames from inside close(), after the session settled: models
+ * a provider racing teardown. Frames pushed before close flow normally.
+ */
+class PostCloseSocket implements OpenAiTranscriptionSocket {
+  sent: string[] = [];
+  closed = false;
+  private frames: string[] = [];
+  private held: string[] = [];
+  private waiters: Array<() => void> = [];
+  send(message: string): void {
+    this.sent.push(message);
+  }
+  push(...frames: string[]): void {
+    this.frames.push(...frames);
+    const waiters = this.waiters.splice(0);
+    for (const resolve of waiters) resolve();
+  }
+  hold(...frames: string[]): void {
+    this.held.push(...frames);
+  }
+  async *messages(): AsyncGenerator<string> {
+    let index = 0;
+    for (;;) {
+      while (index < this.frames.length) yield this.frames[index++] as string;
+      await new Promise<void>((resolve) => this.waiters.push(resolve));
+    }
+  }
+  async close(): Promise<void> {
+    this.closed = true;
+    this.push(...this.held.splice(0));
+    // Let the pump observe the released frames (and drop them) before close resolves.
+    await new Promise((resolve) => setTimeout(resolve, 20));
+  }
+}
+
 /** Never yields until closed: models a live provider stream for abort tests. */
 class HangSocket implements OpenAiTranscriptionSocket {
   sent: string[] = [];
@@ -522,6 +558,29 @@ describe('openai session lifecycle', () => {
     // No usage attached: the composition settles from the cumulative records.
     expect(sink.settles).toEqual([{ operationId: 'op-1', outcome: 'cancelled' }]);
     await expect(session.write(frame('u1', 10))).rejects.toMatchObject({ code: 'closed' });
+  });
+
+  it('should suppress frames that arrive after close', async () => {
+    // The held frames are released from inside close(), after the session
+    // settled: without the settled guards the orphan bind and completion
+    // would surface as error events.
+    const socket = new PostCloseSocket();
+    const driven = await openDriven(liveConfig, { connect: async () => socket });
+    await driven.turn('u1', 10);
+    socket.push(frameCommitted('item_1'), frameCompleted('item_1', 'one'));
+    await flush();
+    socket.hold(
+      frameCommitted('item_2'),
+      frameCompleted('item_2', 'two'),
+      frameDelta('item_1', 'late'),
+    );
+    await driven.session.close();
+    expect(socket.closed).toBe(true);
+    const out: SpeechEvent[] = [];
+    for await (const event of driven.session.events) out.push(event);
+    expect(out.filter((event) => event.type === 'transcript.final')).toHaveLength(1);
+    expect(out.filter((event) => event.type === 'error')).toHaveLength(0);
+    expect(driven.sink.settles).toEqual([{ operationId: 'op-1', outcome: 'completed' }]);
   });
 
   it('should enforce maxDurationMs with an injectable scheduler', async () => {
