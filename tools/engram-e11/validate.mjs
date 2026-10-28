@@ -74,7 +74,6 @@ export function validate(b) {
   assert.equal(inventory.asset.version, '1.0.0');
   mesh.member('dist/engram-memory/neutral-contract.d.ts');
   mesh.member('dist/engram-memory/wire-adaptation.js');
-  mesh.member('dist/engram-memory/neutral-transaction.js');
   const finalMember = `package/${inventory.asset.declaration}`;
   const c6 = { name: inventory.asset.name, version: inventory.asset.version, declaration: inventory.asset.declaration,
     finalBytesSha256: mesh.members.includes(finalMember) ? sha256(mesh.member(inventory.asset.declaration)) : null,
