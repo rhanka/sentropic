@@ -2797,13 +2797,12 @@ smoke-idp-screens-ci: ci-test-env ## Run the screen smoke using the qualified E2
 	$(CI_COMPOSE) run --rm --no-deps -w /workspace -e SCREEN_SMOKE_EMAIL="$$smoke_email" api npx --no-install tsx apps/auth-idp/screen-smoke-seed.ts > "$$seed"; \
 	user_id="$$(sed -n 's/^USER_ID=//p' "$$seed")"; session_token="$$(sed -n 's/^SESSION_TOKEN=//p' "$$seed")"; \
 	test -n "$$user_id"; test -n "$$session_token"; \
-	cp apps/auth-idp/screen-smoke.ts e2e/idp-screen-smoke.ts; \
-	trap 'rm -f "$$seed" e2e/idp-screen-smoke.ts' EXIT; \
-	$(CI_COMPOSE) run --rm --no-deps -w /app \
+	docker run --rm --network "$(COMPOSE_PROJECT_NAME)_default" -w /app \
+		-v "$(CURDIR)/apps/auth-idp/screen-smoke.ts:/app/idp-screen-smoke.ts:ro" \
 		-e IDP_BASE_URL=http://auth-idp:8787 -e USER_ID="$$user_id" -e SESSION_TOKEN="$$session_token" \
 		-e SCREEN_SMOKE_REDIRECT_URI=https://ci-rp.invalid/auth/oauth/callback \
 		-e SCREEN_SMOKE_EMAIL="$$smoke_email" \
-		e2e node ./idp-screen-smoke.ts
+		$(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) node ./idp-screen-smoke.ts
 
 .PHONY: up-ui
 up-ui: ## Start the ui stack in detached mode
