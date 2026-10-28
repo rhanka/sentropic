@@ -40,6 +40,7 @@
 - [ ] Independent peer review awaits owner permission required by `rules/subagents.md`; no agents launched and no consensus claimed.
 - [x] Native smoke attempt 1 stopped in local inventory verification before POST; diagnose custody without inference, then use the two remaining smoke attempts for binary/choice; graded remains fixture-covered.
 - [x] Source LFS tuple verified 2026-10-28: selected revision/file, 4483801504 bytes, SHA-256 7c2ebed90560522c2801389db482ac1dc4c36d828f201f6074c1d60e433948da; model card Apache-2.0.
+- [x] Upstream archive distribution attestation cryptographically verified with pinned GitHub CLI 2.103.3; publication workflow provenance recorded separately from unverified compilation reproducibility.
 
 ## AI Flaky tests
 - [x] No flaky acceptance or timeout increase planned; protocol failures block completion.
