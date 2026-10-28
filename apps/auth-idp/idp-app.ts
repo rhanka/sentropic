@@ -39,6 +39,7 @@ import {
 import { idpAuthPlugin } from '../../api/src/routes/namespaces/auth';
 import { createRemoteEvidenceRouter, type RemoteEvidenceRoutePorts } from '../../api/src/routes/auth/remote-evidence';
 import { createRemoteIdpEvidencePorts } from '../../api/src/services/auth/remote-idp';
+import { createRemoteRevocationRouter } from '../../api/src/routes/auth/remote-revocation';
 
 // BR-39m A0-bis — the human-facing login/register/magic-link/consent screens are
 // a minimal SvelteKit static front (apps/auth-idp/web) built to `web/build` with
@@ -162,6 +163,7 @@ export const createIdpApp = (options: { remoteEvidence?: RemoteEvidenceRoutePort
   // Same limiters as the product API (shared module, not a copy) — this public
   // host had none at all before.
   applyAuthRateLimiters(app);
+  app.route('/api/v1/auth/session/remote-revocations', createRemoteRevocationRouter());
   app.route('/api/v1/auth/session/remote-action-evidence', createRemoteEvidenceRouter({
     role: 'auth-idp', ...(options.remoteEvidence ?? createRemoteIdpEvidencePorts()),
   }));

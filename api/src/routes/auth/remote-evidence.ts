@@ -7,7 +7,7 @@ export interface RemoteEvidenceRoutePorts {
   authenticateWorkload(request: Request): Promise<{ workload: string } | null>;
   issue(request: RemoteEvidenceRequest): Promise<string>;
 }
-async function boundedBody(request: Request): Promise<Uint8Array> {
+export async function boundedBody(request: Request): Promise<Uint8Array> {
   const declared = request.headers.get('content-length');
   if (declared && (!/^\d+$/.test(declared) || Number(declared) > 8192))
     throw new RemoteAuthorityError('oversize');

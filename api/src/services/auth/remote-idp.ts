@@ -44,7 +44,10 @@ export function createRemoteIdpEvidencePorts(
     async issue(request) {
       const trustFile = process.env.REMOTE_ACTION_TRUST_FILE;
       const workload = process.env.REMOTE_ACTION_WORKLOAD_ID;
-      if (!trustFile || !workload || !nativeTarget) throw new RemoteAuthorityError('authority_unavailable');
+      if (!trustFile || !workload || !nativeTarget || !process.env.REMOTE_ACTION_REVOCATION_CLIENT_ID
+        || !process.env.REMOTE_ACTION_REVOCATION_RESOURCE || !process.env.OAUTH_ISSUER_URL
+        || process.env.REMOTE_ACTION_REVOCATION_ISSUER?.replace(/\/$/, '') !== process.env.OAUTH_ISSUER_URL.replace(/\/$/, ''))
+        throw new RemoteAuthorityError('authority_unavailable');
       const trust = trustSchema.parse(parseRemoteJson(readFileSync(trustFile)));
       if (trust.attestation.workload !== clientId) throw new RemoteAuthorityError('authority_unavailable');
       const signer = loadRemoteSigner(trust, 'idp', workload, (ref) => readFileSync(ref, 'utf8'));
