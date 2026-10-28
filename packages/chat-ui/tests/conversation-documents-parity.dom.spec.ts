@@ -20,9 +20,9 @@ it.each([false, true])('should retain failed uploads across remount, retry, prev
   await waitFor(() => expect(host.runtime.snapshot().attachments[0]?.status).toBe('ready'));
   expect(host.uploads).toEqual(['preview.png', 'preview.png']);
   await fireEvent.click(second.getByRole('button', { name: 'common.enlarge' }));
-  expect(second.getByRole('dialog')).toBeTruthy();
+  expect(second.getByTestId('chat-image-lightbox')).toBeTruthy();
   await fireEvent.keyDown(window, { key: 'Escape' });
-  await waitFor(() => expect(second.queryByRole('dialog')).toBeNull());
+  await waitFor(() => expect(second.queryByTestId('chat-image-lightbox')).toBeNull());
   await fireEvent.click(second.getByRole('button', { name: 'common.remove' }));
   await waitFor(() => expect(host.runtime.snapshot().attachments).toHaveLength(0));
   expect(host.docs.size).toBe(0);
@@ -32,6 +32,8 @@ it('should hydrate real history and render/download generated documents after ru
   const host = await createConversationFixture(); fixtures.push(host);
   host.runtime.commands.setDraft('History survives'); await host.runtime.commands.send();
   await host.restart();
+  expect(host.runtime.snapshot().error).toBeNull();
+  expect(host.runtime.session.snapshot().messages.map((message) => message.content)).toContain('History survives');
   const view = render(ConversationView, { runtime: host.runtime, appShaped: true, features: { documents: true } });
   expect(view.getByText('History survives')).toBeTruthy();
   await waitFor(() => expect(view.container.querySelector('strong')?.textContent).toBe('markdown'));
