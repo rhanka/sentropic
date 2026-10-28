@@ -5,6 +5,7 @@ import { parseModelSelectionKey } from '../utils/model-selection.js';
 import type { ChatContextEntry } from './chat-context.js';
 import type { ControllerSendPayload } from './chatLoopController.js';
 import type { ChatSessionRuntime } from './chatSessionRuntime.js';
+import type { createConversationDocuments } from './conversationDocuments.js';
 
 export type ConversationCommandState = {
   session: ChatSessionRuntime;
@@ -14,6 +15,7 @@ export type ConversationCommandState = {
   sending: boolean;
   error: string | null;
   documents?: DocumentHost;
+  documentCommands: ReturnType<typeof createConversationDocuments>;
   sendPayload?: () => Partial<ControllerSendPayload>;
   decidePermission?: (id: string, allow: boolean) => Promise<void>;
   notify(): void;
@@ -94,21 +96,12 @@ export function createConversationCommands(state: ConversationCommandState): Cha
       state.contextEntries = state.contextEntries.map((entry) => `${entry.type}:${entry.id ?? ''}` === key ? { ...entry, active: enabled } : entry);
       state.notify();
     },
-    attachFiles: (files) => run(async () => {
-      if (!state.documents) throw new Error('Attachment host unavailable');
-      for (const file of files) {
-        const draft = await state.documents.uploadFile({
-          id: crypto.randomUUID(), kind: file.type.startsWith('image/') ? 'image' : 'file',
-          source: 'upload', fileName: file.name, mimeType: file.type, sizeBytes: file.size, state: 'pending',
-        }, file);
-        state.session.setAttachments([...state.session.snapshot().attachments, draft]);
-      }
-    }),
-    removeAttachment: (id) => run(async () => {
-      const current = state.session.snapshot().attachments;
-      const attachment = current.find((entry) => entry.id === id);
-      if (attachment?.documentId) await state.documents?.deleteUploadedFile(attachment.documentId);
-      state.session.setAttachments(current.filter((entry) => entry.id !== id));
+    attachFiles: (files, source) => run(() => state.documentCommands.attach(files, source)),
+    retryAttachment: (id) => run(() => state.documentCommands.retry(id)),
+    removeAttachment: (id) => run(() => state.documentCommands.remove(id)),
+    downloadGeneratedFile: (card) => run(async () => {
+      if (!state.documents) throw new Error('Document host unavailable');
+      await state.documents.downloadGeneratedFile(card);
     }),
     decidePermission: (id, allow) => run(async () => {
       if (state.decidePermission) await state.decidePermission(id, allow);
