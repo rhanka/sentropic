@@ -52,7 +52,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0 — Read rules, template, W4.b row and cited sections; create assigned worktree; mechanical branch check passes.
-- [ ] Lot 1 — Tests first in `api/tests/services/catalog/host-registry-source.spec.ts`: exact names/schema, denied contexts, read-only, interleaved views, filtering before ranking/serialization and one execution.
+- [ ] Lot 1 — Tests authored first in `api/tests/services/catalog/host-registry-source.spec.ts`: exact names/schema, denied contexts, read-only, interleaved views, filtering before ranking/serialization and one execution; initial run pending stack readiness.
 - [ ] Lot 2 — Implement source; register once in `skills/catalog.ts`; await public compiled plan in `request-authority.ts`; no private cache.
 - [ ] Lot 3 — Tests first in `artifacts-host-credentials.test.ts` for workspace-bound turn and revocation; extend existing credential reader.
 - [ ] Lot 4 — Extend `cluster-mesh-catalog.test.ts`: mounted discovery, model/executor, durable single effect and revocation; preserve HTTP/MCP regressions.
