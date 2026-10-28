@@ -1,4 +1,4 @@
-# Feature: P1 — Complete ChatConversation and separate the client runtime
+# Feature: P1a — Extract the Sentropic chat runtime foundation
 
 ## Objective
 - [ ] Complete P1 under `spec/CHAT_MIGRATION_P0*.md`: preserve supported behavior while separating Sentropic runtime from the injected conversation view.
@@ -97,5 +97,6 @@
   - [ ] Pack both candidates and prove runtime-free UI and standalone installed consumption.
 - [ ] **Lot 4 — Docs consolidation and review**
   - [ ] Record pair versions, breaking imports, package bootstrap/OIDC prerequisites and consumer notices in `spec/CHAT_MIGRATION_P1.md`.
+  - [x] Document P1a candidate versions/import notices and the remaining P1b acceptance boundary in `spec/CHAT_MIGRATION_P1.md`.
 - [ ] **Lot 5 — Draft handoff**
   - [ ] Run `make down ENV=test-chat-p1` and report PR URLs and head SHAs.
