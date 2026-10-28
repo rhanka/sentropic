@@ -1,9 +1,20 @@
 #!/bin/sh
 # Run inside Docker. Copy sources, never host dependencies, into disposable storage.
 set -eu
-workspace=$(mktemp -d)
+workspace=/tmp/cm-workspace
+export CANDIDATE_NPM_VERSION="$(npm --version)"
+prepared=0
+if [ -n "${CI_PACKAGE_CANDIDATES:-}" ] && [ "$CM_ACTION" != candidate ]; then
+  cd /source
+  MANIFEST_GUARD_TOOL_DIR=/tmp/cm-tools node scripts/ci/package-candidate.mjs verify-prepared "$CI_PACKAGE_CANDIDATES" cluster-mesh
+  tar -xzf "$CI_PACKAGE_CANDIDATES/prepared.tgz" -C /tmp
+  MANIFEST_GUARD_TOOL_DIR=/tmp/cm-tools node scripts/ci/package-candidate.mjs verify "$CI_PACKAGE_CANDIDATES" cluster-mesh
+  prepared=1
+else
+mkdir -p "$workspace"
 cd /source
 tar --exclude=.git --exclude=node_modules --exclude=dist --exclude=tmp \
+  --exclude='.env*' --exclude=.npmrc --exclude=.aws --exclude=.codex --exclude=.agents \
   --exclude=.tmp --exclude=.h2a --exclude=.remote -cf - . | tar -xf - -C "$workspace"
 cd "$workspace"
 test ! -d node_modules
@@ -15,7 +26,7 @@ npm_config_cache=/tmp/npm-cache npm install --prefix /tmp/cm-tools --no-save \
   --ignore-scripts --no-audit --no-fund --install-strategy=shallow typescript@5.4.5 @types/node \
   vitest@4.1.5 pg@8.16.3 @stablelib/sha256@2.0.1 \
   @modelcontextprotocol/sdk@1.31.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 \
-  $CM_PEER_TOOLS >/dev/null
+  esbuild@0.25.12 $CM_PEER_TOOLS >/dev/null
 ln -s /tmp/cm-tools/node_modules node_modules
 export NODE_PATH=/tmp/cm-tools/node_modules
 mkdir -p node_modules/@sentropic
@@ -24,9 +35,20 @@ for package in packages/*; do
   ln -s "$workspace/$package" "node_modules/@sentropic/${package##*/}"
 done
 tsc=/tmp/cm-tools/node_modules/.bin/tsc
+if [ "$CM_ACTION" = candidate ]; then
+  export MANIFEST_GUARD_TOOL_DIR=/tmp/cm-tools
+  node scripts/ci/package-candidate.mjs produce "$CI_PACKAGE_CANDIDATES" cluster-mesh
+  tar -czf "$CI_PACKAGE_CANDIDATES/prepared.tgz" -C /tmp cm-workspace cm-tools
+  node scripts/ci/package-candidate.mjs seal "$CI_PACKAGE_CANDIDATES" cluster-mesh
+  exit 0
+fi
 for package in contracts events llm-mesh oauth-verify mcp-auth auth-hono llm-gateway mcp-platform artifacts comments; do
   "$tsc" --typeRoots /tmp/cm-tools/node_modules/@types -p "packages/$package/tsconfig.json"
 done
+fi
+cd "$workspace"
+export NODE_PATH=/tmp/cm-tools/node_modules
+tsc=/tmp/cm-tools/node_modules/.bin/tsc
 cd packages/cluster-mesh
 mkdir -p ../../.h2a
 if [ -f /source/.h2a/pg-crash-witness.json ]; then
@@ -37,13 +59,13 @@ case "$CM_ACTION" in
     cd ../mcp-platform
     /tmp/cm-tools/node_modules/.bin/vitest run "${CM_SCOPE:-tests}" --environment node --maxWorkers=1 ;;
   stateful-consumer)
-    "$tsc" -p tsconfig.json
+    if [ "$prepared" = 0 ]; then "$tsc" -p tsconfig.json; fi
     sh tests/packaging/stateful-consumer.sh ;;
   typecheck)
     "$tsc" --noEmit -p tsconfig.json
     "$tsc" --noEmit -p tsconfig.test.json ;;
   build)
-    "$tsc" -p tsconfig.json
+    if [ "$prepared" = 0 ]; then "$tsc" -p tsconfig.json; fi
     node tests/engram-memory/package-contract.mjs
     rm -rf /source/packages/cluster-mesh/dist
     cp -R dist /source/packages/cluster-mesh/dist
