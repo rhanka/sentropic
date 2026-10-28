@@ -2,13 +2,14 @@ import {Worker,isMainThread,parentPort} from 'node:worker_threads';
 import {readFileSync,writeFileSync,appendFileSync} from 'node:fs';
 import {createHash} from 'node:crypto';
 import {collapseGovernanceScene} from '../src/governance-collapse.js';
+import {bindGovernanceScene} from '../src/governance-input.js';
 const presentation=JSON.parse(readFileSync('src/presentation-scenes.json'));
 const routes=JSON.parse(readFileSync('src/governance-routes.json'));
 if(!isMainThread) {
  parentPort.on('message',job=>{
   if(!job){parentPort.close();return;}
   try {
-   const scene={...presentation[job.language].architectureScenes.central,projectionKey:'overview',edges:routes[job.language].overview};
+   const scene={...bindGovernanceScene(presentation[job.language].architectureScenes.central),projectionKey:'overview',edges:routes[job.language].overview};
    const ids=scene.groups.filter((g,i)=>job.mask&(1<<i)).map(g=>g.id);
    const result=collapseGovernanceScene(scene,ids,false,job.hint);
    if(!result.routingPlan)throw Error('Missing route plan');
