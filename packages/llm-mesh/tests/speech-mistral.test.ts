@@ -482,13 +482,8 @@ describe('mistral transcript mapping', () => {
     const events = await driven.collect();
     expect(events.filter((event) => event.type === 'transcript.final')).toHaveLength(0);
     expect(events.filter((event) => event.type === 'error')).toMatchObject([{ reason: 'transport' }]);
-    // The dead turn is gone: the next turn opens a fresh stream.
-    await driven.write('u2', 100);
-    await driven.commit('u2', [frameDone('second')]);
-    const finals = (await driven.collect())
-      .filter((event) => event.type === 'transcript.final')
-      .map((event) => (event as unknown as { utteranceId: string }).utteranceId);
-    expect(finals).toEqual(['u2']);
+    // The transport is gone: the session is closed, so a ghost turn cannot reuse it.
+    await expect(driven.write('u2', 100)).rejects.toThrowError(/closed/);
   });
 
   it('should emit no second final when committing after a spontaneous done', async () => {
