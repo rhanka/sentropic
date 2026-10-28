@@ -68,7 +68,7 @@
 - [ ] **Lot 5 — Fixture acceptance**
   - [x] `packages/llm-mesh/tests/decision-kev-inventory.test.ts`: P26 wrong file/revision/hash/runtime and P27 execution changes.
   - [ ] `packages/llm-mesh/tests/decision-kev-transport.test.ts`: fixed endpoint, identity, redirects, bounds, cancellation.
-  - [ ] `packages/llm-mesh/tests/decision-kev-routing.test.ts`: P28 no egress, native kinds and served-model receipt.
+  - [x] `packages/llm-mesh/tests/decision-kev-routing.test.ts`: P28 no egress, native kinds and served-model receipt.
   - [ ] Scoped make test-llm-mesh while evolving these files.
 - [ ] **Lot 6 — Local native qualification**
   - [ ] Download exact selected model once; validate all bytes and pinned runtime before inference.
