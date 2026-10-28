@@ -1,6 +1,8 @@
 import type { ChatConversationSnapshot } from '@sentropic/chat-ui/conversation';
 import type { DocumentHost } from '@sentropic/chat-ui/documents';
 import type { ChatCoreHost, ModelCatalog } from '../client/chat-core-host.js';
+import type { CheckpointHost } from '../checkpoints/index.js';
+import { createConversationCheckpoints } from './conversationCheckpoints.js';
 import { buildAttachmentBandItems } from '../documents/attachmentState.js';
 import { extractGeneratedFileCardsFromEvents } from '../documents/generatedFileCards.js';
 import { createConversationDocuments } from './conversationDocuments.js';
@@ -19,6 +21,7 @@ export type ConversationRuntimeOptions = {
   catalog?: ModelCatalog;
   contextProvider?: ChatContextProvider;
   documents?: DocumentHost;
+  checkpointHost?: CheckpointHost;
   sendPayload?: () => Partial<ControllerSendPayload>;
   localTools?: AttachLocalToolMachineOptions;
   authorizeLocalTool?: LocalToolAuthorization;
@@ -35,9 +38,11 @@ export function createConversationRuntime(sessionId: string, options: Conversati
   let historyGeneration = 0;
   let catalog = options.catalog;
   const notify = () => { if (!disposed && listeners.size) for (const listener of [...listeners]) listener(snapshot()); };
+  const checkpoints = createConversationCheckpoints(session, { host: options.checkpointHost, notify,
+    reload: () => hydrateConversationHistory(session, options.host, () => !disposed) });
   const state: ConversationCommandState = {
     session, host: options.host, selectedModel: options.selectedModel ?? '', contextEntries: [],
-    sending: false, error: null, documents: options.documents, documentCommands: documents, sendPayload: options.sendPayload,
+    sending: false, error: null, documents: options.documents, documentCommands: documents, checkpointCommands: checkpoints, sendPayload: options.sendPayload,
     async decidePermission(id, allow) {
       const prompt = session.snapshot().pendingLocalToolPermissionPrompts.find((entry) => `native:${entry.streamId}:${entry.toolCallId}` === id);
       if (prompt) await session.decideLocalToolPermission(prompt, allow ? 'allow_once' : 'deny_once');
@@ -53,7 +58,9 @@ export function createConversationRuntime(sessionId: string, options: Conversati
   const snapshot = (): ChatConversationSnapshot => {
     const current = session.snapshot();
     const active = [...current.messages].reverse().find((message) => message.role === 'assistant' && message._localStatus === 'processing');
+    const checkpointState = checkpoints.snapshot();
     return {
+      checkpointPrompt: checkpointState.prompt, checkpointBusy: checkpointState.busy, restorableMessageIds: checkpointState.messageIds,
       sessionId: current.sessionId, items: current.projectedTimelineItems, draft: current.draft,
       sending: state.sending, error: state.error, selectedModel: state.selectedModel,
       models: (catalog?.models ?? []) as ModelCatalogModel[],
@@ -95,6 +102,6 @@ export function createConversationRuntime(sessionId: string, options: Conversati
       } catch (error) { if (!disposed) state.error = error instanceof Error ? error.message : String(error); }
       notify();
     },
-    dispose() { disposed = true; historyGeneration++; documents.dispose(); authorization.dispose(); unsubscribeContext?.(); unsubscribeSession(); session.dispose(); listeners.clear(); },
+    dispose() { disposed = true; historyGeneration++; checkpoints.dispose(); documents.dispose(); authorization.dispose(); unsubscribeContext?.(); unsubscribeSession(); session.dispose(); listeners.clear(); },
   };
 }
