@@ -1,0 +1,46 @@
+name: App W4.b registry catalog
+
+on:
+  push:
+    branches: [feat/app-cm-w4b]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-w4b-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify-host-catalog:
+    runs-on: ubuntu-latest
+    env:
+      REGISTRY: localhost
+      TARGET: development
+      API_PORT: '8802'
+      UI_PORT: '5188'
+      MAILDEV_UI_PORT: '1095'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - name: Verify the exact pushed head
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: docker/setup-buildx-action@v4
+      - name: Start isolated host executor
+        run: flock /tmp/sentropic-docker.lock make up-api-test ENV=test-app-w4b
+      - name: Qualify catalog views and shared effect dispatch
+        run: >-
+          flock /tmp/sentropic-docker.lock make test-api-endpoints
+          SCOPE="tests/services/catalog tests/services/catalog-characterization.spec.ts tests/api/cluster-mesh-catalog.test.ts tests/api/catalog-auth-context.test.ts tests/api/artifacts-host-credentials.test.ts tests/api/app-mcp-registry.test.ts tests/api/app-mcp-installed.test.ts tests/api/app-artifacts-transport.test.ts"
+          API_TEST_WORKERS=1 API_TEST_ARGS="--no-file-parallelism"
+          ENV=test-app-w4b
+      - name: Check API types and lint
+        run: flock /tmp/sentropic-docker.lock make typecheck-api lint-api -o prepare-node-workspace ENV=test-app-w4b
+      - name: Runtime diagnostics
+        if: always()
+        run: make logs-api ENV=test-app-w4b
+      - name: Remove isolated stack
+        if: always()
+        run: flock /tmp/sentropic-docker.lock make down ENV=test-app-w4b
