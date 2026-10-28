@@ -61,6 +61,6 @@
   - [x] Lot gate: scoped cluster-mesh tests plus typecheck and lint for cluster-mesh.
 - [ ] **Lot E10a-3 — Pack-only version and handoff**
   - [x] Increment the pack-only version from `0.24.0-dev.1` to the next dev increment in the package manifest and the workspace lock.
-  - [ ] Run `make scope-check` and the frozen-surface gates before every commit.
-  - [ ] Push and open the draft PR against `feat/engram-e2-integration` with `BRANCH.md` as the PR body.
+  - [x] Run `make scope-check` and the frozen-surface gates before every commit.
+  - [x] Push and open the draft PR against `feat/engram-e2-integration` with `BRANCH.md` as the PR body.
   - [ ] Require CI on the exact head before marking ready.
