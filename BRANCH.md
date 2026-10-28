@@ -60,10 +60,10 @@
 - [x] **Lot 2 — B1 real-content corpus**
   - [x] Add API and UI JSON fixtures for prose, lists, matrix, three composers, plain fields and citations.
   - [x] Identify source provenance, intended parity and profile differences requiring owner acceptance.
-- [ ] **Lot 3 — Transfer register and gates**
-  - [ ] Create N1–N8 receipts with source hashes, owners, consumers, exports, witnesses, disposition and deletion fields.
-  - [ ] Add N8 correspondence; supersede older tree-binding and snapshot-only recovery wording.
-  - [ ] Record installed-lock DS versions/digests, prerequisites and unqualified publication gates.
+- [x] **Lot 3 — Transfer register and gates**
+  - [x] Create N1–N8 receipts with source hashes, owners, consumers, exports, witnesses, disposition and deletion fields.
+  - [x] Add N8 correspondence; supersede older tree-binding and snapshot-only recovery wording.
+  - [x] Record installed-lock DS versions/digests, prerequisites and unqualified publication gates.
 - [ ] **Lot 4 — Docs consolidation and validation**
   - [ ] Validate fixture JSON, byte hashes, corpus coverage, mount uniqueness/counts, receipt completeness and source references.
   - [ ] Check diff contains only documentation/fixtures; `make scope-check` before each commit.
