@@ -53,8 +53,8 @@ Mesh `speech/mistral-transcription.ts` with the Voxtral realtime STT adapter (3.
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- `acknowledge`: mesh 0.30.0 → 0.31.0 collides numerically with L9's 0.31.0 (different content, unmerged draft #804). Train rhythm kept; conductor sequences the merges (merge-time bump resolves).
-- `acknowledge`: Mistral wire grounded in docs 2026-10-28: realtime `wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-3`, TTS `POST /v1/audio/speech` model `voxtral-mini-tts-3-0`. 2602 models deprecated, kept separate. No live call made; receipt stays blocked.
+- `acknowledge`: mesh 0.30.0 → 0.31.0 collided numerically with L9's merged 0.31.0. Resolved: PR #809 retargeted to `main`, merged `origin/main`, mesh 0.32.0 / cluster 0.23.5 (0.31.0/0.23.4 taken on main); tuple ranges widened to `<0.33.0`; selected fixture + root lock rebound via the sanctioned make pack/refresh path.
+- `acknowledge`: Mistral wire grounded in docs 2026-10-28: realtime `wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-3`, TTS `POST /v1/audio/speech` model `voxtral-mini-tts-3-0`. 2602 generation not served (separate license/price, see the L13 receipt). No live call made; receipt stays blocked.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -76,36 +76,36 @@ Mesh `speech/mistral-transcription.ts` with the Voxtral realtime STT adapter (3.
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read spec-plan L13 row, §7-8.1, §9-10, L8 gateway caps.
-  - [x] Fetch live Mistral wire [O8]: realtime endpoint/model, session.update fields, append/end, delta/done, turn events, TTS endpoint/voices.
+  - [x] Fetch Mistral Studio audio docs: realtime endpoint/model, session.update fields, append/end, delta/done, turn events, TTS endpoint/voices.
   - [x] Seam: mesh dependency-free; admission as data + injected usage sink; TTS = selection/binding only (no synthesis transport in mesh).
-  - [x] Worktree `tmp/worktrees/stt-l13`, branch `feat/live-stt-l13`, base `origin/feat/live-stt-l8` at 82b24e2b3.
+  - [x] Worktree `tmp/worktrees/stt-l13`, branch `feat/live-stt-l13`, base `origin/main` (retargeted after L8/L9 merged; PR #809 draft).
   - [x] Harness plan event recorded; `harness check branch` PASS C1.
   - [x] Lot gate: base head verified, scope boundaries declared, no exception needed.
-- [x] **Lot 1 — STT adapter `speech/mistral-transcription.ts` (9 slices + 2 fixes; typecheck green; mutation-proven)****
-  - [ ] Profile config `mistral-voxtral-realtime-3`: model pin `voxtral-mini-transcribe-realtime-3`, delay `target_streaming_delay_ms`, language fr/en, format pcm16/24k mono, placement cloud-relay; server turn_detection pinned off (client commits drive turns).
-  - [ ] `session.update` builder: `session` object with audio_format/language/delay; refuse unsupported fields at open (fail-closed).
-  - [ ] Transport port (injectable WS): append base64 pcm16, no audio persisted, no key in logs/errors.
-  - [ ] Turn mapping: one provider stream per client turn; `input.commit` sends `input_audio.end` and emits the final from `transcription.done` (record); lazy reopen on next write; `input.clear` abandons the stream (close + drop, no final); uncommitted trailing audio emits no final at close.
-  - [ ] Event mapping: `transcription.text.delta` append-only partials under the client utteranceId; per-turn audioInterval from the open-turn capture window; `transcription.done` final; `error{code,message}` to session error; unknown events tolerated.
-  - [ ] Metering: admission receipt required; injectable expiry timer (min(admission, request maxDurationMs)); cumulative usage records under a stable eventId; settle without providerRevision.
-  - [ ] TTS exclusion from the STT adapter: no synthesis field, no implicit voice.
-  - [ ] Lot gate: `make typecheck-llm-mesh` green on the lot head.
+- [x] **Lot 1 — STT adapter `speech/mistral-transcription.ts` (9 slices + 2 fixes; typecheck green; mutation-proven)**
+  - [x] Profile config `mistral-voxtral-realtime-3`: model pin `voxtral-mini-transcribe-realtime-3`, delay `target_streaming_delay_ms`, language fr/en, format pcm16/24k mono, placement cloud-relay; server turn_detection pinned off (client commits drive turns).
+  - [x] `session.update` builder: `session` object with audio_format/language/delay; refuse unsupported fields at open (fail-closed).
+  - [x] Transport port (injectable WS): append base64 pcm16, no audio persisted, no key in logs/errors.
+  - [x] Turn mapping: one provider stream per client turn; `input.commit` sends `input_audio.end` and emits the final from `transcription.done` (record); lazy reopen on next write; `input.clear` abandons the stream (close + drop, no final); uncommitted trailing audio emits no final at close.
+  - [x] Event mapping: `transcription.text.delta` append-only partials under the client utteranceId; per-turn audioInterval from the open-turn capture window; `transcription.done` final; `error{code,message}` to session error; unknown events tolerated.
+  - [x] Metering: admission receipt required; injectable expiry timer (min(admission, request maxDurationMs)); cumulative usage records under a stable eventId; settle without providerRevision.
+  - [x] TTS exclusion from the STT adapter: no synthesis field, no implicit voice.
+  - [x] Lot gate: `make typecheck-llm-mesh` green on the lot head.
 - [x] **Lot 2 — TTS binding/registry (in-adapter; voices/languages pinned, request builder, no transport)**
-  - [ ] Mistral TTS binding: provider mistral, model `voxtral-mini-tts-3-0`, preset voices (Voxtral 3 list incl. fr Marie/Manon/Lea/Camille, en US/UK), response_format; no implicit voice (explicit voice_id required).
-  - [ ] Capabilities entry: tts supported, stt refused on the TTS binding and vice versa; usageUnits characters (price separation from audio-seconds); regions unset (explicit region refused fail-closed, no documented API region).
-  - [ ] Request-shape fixture pins `POST /v1/audio/speech` fields from docs (no live call).
-  - [ ] Lot gate: negotiation tests green (accept documented voice+language, refuse unknown voice/region/format).
+  - [x] Mistral TTS binding: provider mistral, model `voxtral-mini-tts-3-0`, preset voices (Voxtral 3 list incl. fr Marie/Manon/Lea/Camille, en US/UK), response_format; no implicit voice (explicit voice_id required).
+  - [x] Capabilities entry: tts supported, stt refused on the TTS binding and vice versa; usageUnits characters (price separation from audio-seconds); regions unset (explicit region refused fail-closed, no documented API region).
+  - [x] Request-shape fixture pins `POST /v1/audio/speech` fields from docs (no live call).
+  - [x] Lot gate: negotiation tests green (accept documented voice+language, refuse unknown voice/region/format).
 - [x] **Lot 3 — Fixtures + gate tests (28/28 scoped; window + post-close mutation-proven)**
-  - [ ] `tests/fixtures/mistral-frames.ts`: recorded session.created/updated, delta scripts, done records, turn events, invalid/error frames; no live call.
-  - [ ] `tests/speech-mistral.test.ts`: endpoint/final mapping, cancel/flush, no double count, late-frame suppression (incl. post-close), Bearer redaction, per-turn windows, completed-only done, orphan/empty-turn behavior.
-  - [ ] Lot gate: `make test-llm-mesh` green (SCOPE=file then full) on the lot head.
-- [x] **Lot 4 — Receipt + version (mesh 0.31.0, cluster 0.23.4, fixture rebind via make packs + sha512, root lock; lanes green)**
-  - [ ] `bench/l13-mistral.receipt.json`: status blocked, exact missing G-CLOUD/§10 items, price revision unpinned, no live evidence claimed.
-  - [ ] Bump `packages/llm-mesh/package.json` to 0.31.0 (train rhythm; collision with L9 noted above); cascade tuple ranges/fixtures/lock integrity via sanctioned refresh only.
-  - [ ] Lot gate: receipt present and blocked, version bumped, `make build-llm-mesh` + `make pack-llm-mesh` green.
-- [x] **Lot N — Final validation (scope-check PASS C2; draft PR, CI green, report, down)**
+  - [x] `tests/fixtures/mistral-frames.ts`: recorded session.created/updated, delta scripts, done records, turn events, invalid/error frames; no live call.
+  - [x] `tests/speech-mistral.test.ts`: endpoint/final mapping, cancel/flush, no double count, late-frame suppression (incl. post-close), Bearer redaction, per-turn windows, completed-only done, orphan/empty-turn behavior.
+  - [x] Lot gate: `make test-llm-mesh` green (SCOPE=file then full) on the lot head.
+- [x] **Lot 4 — Receipt + version (mesh 0.32.0, cluster 0.23.5, fixture rebind via make packs + sha512, root lock; lanes green)**
+  - [x] `bench/l13-mistral.receipt.json`: status blocked, exact missing G-CLOUD/§10 items, price revision unpinned, no live evidence claimed.
+  - [x] Bump `packages/llm-mesh/package.json` to 0.32.0 and cluster-mesh to 0.23.5 (0.31.0/0.23.4 taken on main); cascade tuple ranges/fixtures/lock integrity via sanctioned refresh only.
+  - [x] Lot gate: receipt present and blocked, version bumped, `make build-llm-mesh` + `make pack-llm-mesh` green.
+- [ ] **Lot N — Final validation (scope-check, draft PR #809 to main, CI green, report, down)**
   - [ ] `make scope-check` (harness) green.
-  - [ ] Push, draft PR against `feat/live-stt-l8`, CI green on the exact head.
+  - [ ] Push, draft PR #809 against `main`, CI green on the exact head.
   - [ ] Report PR number, head SHA, CI URL without merging.
   - [ ] `make down ENV=test-stt-l13`.
 

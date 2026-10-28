@@ -1,5 +1,5 @@
 // Recorded Mistral Voxtral realtime frames (L13 fixtures). Shapes follow the
-// Studio audio docs [O8]: `session.created` first, `session.updated` echo,
+// Mistral Studio audio docs: `session.created` first, `session.updated` echo,
 // append-only `transcription.text.delta`, `transcription.done` with the
 // transcript of record, `error{code,message}`. One provider stream serves one
 // client turn: `input_audio.end` finishes the stream. No live provider call.
