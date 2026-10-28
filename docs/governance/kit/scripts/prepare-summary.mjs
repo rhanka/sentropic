@@ -5,7 +5,7 @@ import {aggregateTopLevel} from '../src/governance-summary.js';
 import {groupContent,frameHeaderContent} from '../src/architecture-layout.js';
 import {CARD_WIDTH,COLLAPSED_CARD_HEIGHT} from '../src/governance-layout.js';
 import {routeScene} from '../src/architecture-routing.js';
-import {localize} from '../src/i18n.js';
+import {localize} from '../src/governance-input.js';
 import {withLegend} from '../src/governance-legend.js';
 const elk=new ELK();
 const layouts={};
