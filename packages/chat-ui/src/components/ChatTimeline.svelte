@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { ChatProjectedTimelineItem } from '../state/chatProjection.js';
+  import type { ChatProjectedTimelineItem } from '@sentropic/chat-runtime/state/chatProjection';
 
   type TimelineItem = ChatProjectedTimelineItem<any, any>;
 

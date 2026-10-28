@@ -9,7 +9,7 @@
    *
    * ZERO sentropic domain strings. ZERO google-drive code.
    */
-  import type { ChatMessageAttachment } from '../state/chatProjection.js';
+  import type { ChatMessageAttachment } from '@sentropic/chat-runtime/state/chatProjection';
 
   interface Props {
     /** The sent message's attachments to render. */
