@@ -9,7 +9,7 @@
 
 import type { CheckpointHost } from '@sentropic/chat-ui/checkpoints';
 import { apiGet, apiPost } from '$lib/utils/api';
-import { isLocalToolName } from '@sentropic/chat-ui/stores/localTools';
+import { isLocalToolName } from '@sentropic/chat-runtime/stores/localTools';
 import {
   chatSessionCheckpointsUrl,
   chatSessionCheckpointCreateUrl,
