@@ -70,3 +70,13 @@ export const createImageAttachmentDraft = (input: {
   ...(input.error ? { error: input.error } : {}),
 });
 
+export const summarizeComposerAttachments = (
+  attachments: readonly ChatComposerAttachmentDraft[],
+): ComposerAttachmentSummary => ({
+  total: attachments.length,
+  ready: attachments.filter((attachment) => attachment.state === 'ready').length,
+  pending: attachments.filter((attachment) => attachment.state === 'pending').length,
+  uploading: attachments.filter((attachment) => attachment.state === 'uploading').length,
+  failed: attachments.filter((attachment) => attachment.state === 'failed').length,
+  images: attachments.filter((attachment) => attachment.kind === 'image').length,
+});
