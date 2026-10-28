@@ -95,10 +95,26 @@ describe('RC1 D2 session evidence', () => {
     expect(protectedHeader).toEqual({ alg: 'EdDSA', kid: 'idp-1' });
     expect(payload).toMatchObject({ actionId: request.actionId, targetDigest: request.targetDigest,
       payloadDigest: request.payloadDigest, nonceId: 'nonce-1', operation: 'input' });
+    await expect(verifyRemoteEvidence(evidence, { key: keys.publicKey, issuer: 'idp', kid: 'idp-1',
+      audience: 'native-b', tenantId: 'tenant-1', workspaceId: 'workspace-1', now, request, login }))
+      .resolves.toMatchObject({ sub: 'owner', actionId: request.actionId });
     await expect(verifyRemoteEvidence(evidence, { key: generateKeyPairSync('ed25519').publicKey,
       issuer: 'idp', kid: 'idp-1', audience: 'native-b', tenantId: 'tenant-1', workspaceId: 'workspace-1',
       now, request, login }))
       .rejects.toMatchObject({ code: 'authority_refused' });
+  });
+
+  it('should refuse revoked and unknown IdP keys and message-selected trust roots', async () => {
+    const evidence = await setup().issue(request);
+    const trust = { key: keys.publicKey, issuer: 'idp', kid: 'idp-1', audience: 'native-b',
+      tenantId: 'tenant-1', workspaceId: 'workspace-1', now, request, login };
+    await expect(verifyRemoteEvidence(evidence, { ...trust, revoked: true }))
+      .rejects.toMatchObject({ code: 'authority_refused' });
+    for (const header of [{ alg: 'EdDSA', kid: 'unknown' },
+      { alg: 'EdDSA', kid: 'idp-1', jku: 'https://attacker.test/keys' }]) {
+      const token = await new SignJWT(decodeJwt(evidence)).setProtectedHeader(header).sign(keys.privateKey);
+      await expect(verifyRemoteEvidence(token, trust)).rejects.toMatchObject({ code: 'authority_refused' });
+    }
   });
 
   it.each([
@@ -108,6 +124,7 @@ describe('RC1 D2 session evidence', () => {
     { payloadDigest: 'd'.repeat(64) }, { actionId: 'BBBBBBBBBBBBBBBBBBBBBA' },
     { operation: 'permission-response' }, { nonceId: 'other' },
     { iat: now / 1000 - 120, exp: now / 1000 + 60 }, { exp: now / 1000 },
+    { iat: now / 1000 + 1 }, { iat: now / 1000 + 0.5 }, { exp: null },
   ])('should refuse signed IdP claim substitution %j', async (change) => {
     const payload = decodeJwt(await setup().issue(request));
     const evidence = await new SignJWT({ ...payload, ...change })
