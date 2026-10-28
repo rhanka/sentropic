@@ -58,7 +58,7 @@
   - [x] Freeze scope, exception, environment and ports; leave other lanes untouched.
 - [ ] **Lot 1 — Tests first**
   - [ ] Add `deploy/ci/artifact-content/{tests.mk,bundle-checks.mjs,bundle.selftest.mjs}` (workload assertions and render target added).
-  - [ ] Prove red: missing content resources; then render both full overlays without kubeconfig/network access.
+  - [x] Prove red: rendered overlays fail `Deployment/artifact-content must occur once` (0 vs 1), before any content manifest exists.
   - [ ] Test closed gates despite enabled secret values, least privilege, network peer namespace isolation, both TLS wildcard depths and exact app route precedence.
   - [ ] Test synthetic digest replacement across API/IdP/content, unchanged backup/restore access and mutation denials.
 - [ ] **Lot 2 — Workload and default closure**
@@ -69,7 +69,7 @@
   - [ ] Add prod/preprod content ingress, explicit Certificate and domain patches/registrations.
   - [ ] Both stable and pinned wildcard SANs, dedicated TLS secret, HTTPS-only route; no catch-all/identity headers.
 - [ ] **Lot 4 — Handoff and final validation**
-  - [ ] Document tenant DNS/TLS/storage/restore/digest evidence and FIRST-IMMO activation gate in runbook.
+  - [x] Document tenant DNS/TLS/storage/restore/digest evidence and FIRST-IMMO activation gate in runbook.
   - [ ] Pass `make test-artifact-content-manifests API_PORT=8806 UI_PORT=5192 MAILDEV_UI_PORT=1099 ENV=test-app-w3d`.
   - [ ] Pass inherited IdP parent-overlay regression and W3.c static image checks as applicable.
   - [ ] Complete independent review, scope check and diff inspection; address blocking findings.
