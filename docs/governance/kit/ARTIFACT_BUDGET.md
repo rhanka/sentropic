@@ -31,11 +31,11 @@ No tracked source or architecture hash is rewritten.
 
 | Metric | Typical dossier | Full bilingual governance |
 |---|---:|---:|
-| Portable HTML | 409600 B | 8388608 B |
-| Hosted initial closure | 409600 B | 8388608 B |
-| Initial executable JS | 307200 B | 7340032 B |
+| Portable HTML | 409600 B | 5200000 B |
+| Hosted initial closure | 409600 B | 5200000 B |
+| Initial executable JS | 307200 B | 5120000 B |
 | Each optional JS chunk | 131072 B | 131072 B |
-| Full hosted release | 524288 B | 9437184 B |
+| Full hosted release | 524288 B | 5200000 B |
 
 The typical reference contains two diagrams (3/6 nodes, 3/2 groups), two questions,
 six options, 24 inventory rows, eight gaps, themes, controls and downloads. Its
@@ -43,6 +43,9 @@ fixtures preserve the approved harness r5 inputs, compacted without value change
 The separate governance profile preserves the existing large bilingual dossier,
 33 navigation needs and prepared routing tables. Its explicit ceiling cannot relax
 the typical gate; both profiles are reported and enforced on every budget run.
+Governance measured 4936831 B portable / 4874332 B JS after the CSP addition.
+Its ceilings allow approximately 5% growth for runtime/toolchain changes; they
+must be reviewed against fresh measurements rather than raised automatically.
 
 The Vite manifest determines static and dynamic closures. A cold browser probe adds
 every request through the first usable typical dossier to the initial closure,
@@ -54,8 +57,9 @@ startup dependencies and runtime source maps fail. Every file reports raw, gzip,
 Brotli and SHA-256; Rollup module attribution is explicitly before final
 minification. Module compressed sizes are not additive.
 
-The portable builder rejects remaining asset URLs and dynamic `import()` calls,
-including `assets/` paths and sibling chunks. The browser opens the file offline, exercises all folds on desktop
+The portable builder inserts CSP `connect-src 'none'`. Both the builder and the
+budget measurement assert that policy, inline resources and no dynamic `import()`
+calls, including `assets/` paths and sibling chunks. The browser opens the file offline, exercises all folds on desktop
 and mobile in both themes, zoom, choices, table totals and JSON downloads.
 
 Reports live at `.cache/artifact-weight/<profile>/artifact-size-report.{json,md}`.
@@ -65,6 +69,15 @@ existing artifacts package/template paths. Publication filters are unchanged.
 Negative tests cover corpus reimport, startup-fetch excess, deferred chunk excess,
 static-import sums, missing files and unused deployed data. The baseline build
 deliberately retains the governance corpus and must fail the typical JS budget.
+
+`check-governance-equivalence.mjs` executes both the pinned main renderer
+(`5016fa36a9da25d22972ae092d13bd4357e65e58`) and the current renderer with identical
+dependencies (lockfile equality is required). It compares exact generated SVG
+hashes/byte counts and canonical groups/nodes/edges hashes, in FR and EN, for
+every figure, navigation highlight, prepared fold and overview routing plan.
+The per-case receipt is `.cache/artifact-weight/governance-equivalence.json`,
+uploaded in CI. This directly compares figures/routes against main; the offline
+browser probes additionally cover runtime integration in light and dark themes.
 
 ## Baseline and publication read cost
 
@@ -79,17 +92,18 @@ Fresh reports record actual Node, Svelte, Vite, Rollup, minifier and DS versions
 input digests, commit and output hashes. Current Vite is 7.3.7; the preserved harness
 used 7.3.6. Fresh baseline and typical builds use the same current renderer and lock.
 
-The local qualification receipt is `fixtures/artifact-weight/qualification.json`,
-bound to code commit `ca81d9392f19313bab70bab3b2a5fd17496df84f`:
+The local qualification receipt is `fixtures/artifact-weight/qualification.json`;
+its `codeCommit` identifies the qualified post-merge code ancestor. The subsequent
+receipt-only commit records these outputs without changing the renderer:
 
 | Metric | Fresh corpus baseline | Scoped dossier |
 |---|---:|---:|
-| Portable HTML | 3734108 B | 291871 B |
+| Portable HTML | 3734180 B | 291943 B |
 | Initial executable JS | 3691474 B | 249234 B |
-| Agent read cost, portable | 3734108 B | 291871 B |
+| Agent read cost, portable | 3734180 B | 291943 B |
 
 This removes 92.2% of portable bytes. Both fresh variants include the current
-renderer, bounded fold preparation and exact font notices. Twelve unit/negative
+renderer, bounded fold preparation, CSP and exact font notices. Fourteen unit/negative
 tests, 1758 geometry scenes, four typical offline configurations and four full
 governance language/theme configurations passed; the cold startup closure is
 291870 B. These receipts do not substitute for CI on a later commit.
@@ -102,6 +116,11 @@ the whole file before publishing it … If Claude cannot read the file, it does 
 publish it.” This confirms the agent-publication constraint; no fixed code-read
 byte threshold was documented. The 16 MiB rendered-file ceiling is a separate
 platform limit, not this project's performance budget.
+
+The report also estimates **coût de lecture agent ≈ 0,5 token par octet de JS minifié**
+(h-cond, 2026-10-27): `round(inlineExecutableJs * 0.5)`, or 124617 tokens for the
+typical fixture. This estimate is non-gating; base64 fonts/images are decoded for
+inspection rather than read as source text.
 
 The source anchors corrected by review P2-4 are the preserved harness
 `ArchitectureFigure.svelte:6` (DS import) and `evidence/provenance.md:5` (requested
