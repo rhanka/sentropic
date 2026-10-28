@@ -37,9 +37,14 @@
  */
 
 import type { CompositeCatalogRegistry } from './composite-registry.js';
-import type { StandaloneToolSource } from './sources/standalone-tool-source.js';
-import type { ToolHandlerSource } from './sources/mcp-source.js';
+import type { StandaloneToolHandler } from './sources/standalone-tool-source.js';
 import { revalidateCatalogInvocation, type CatalogRequestContext } from './request-context.js';
+
+/** Minimal handler lookup shared by standalone and compiled host-registry sources. */
+export interface ToolHandlerSource {
+  readonly id: string;
+  getHandler(name: string): StandaloneToolHandler | undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Result shape — mirrors ExecuteFoundationSkillToolResult
@@ -72,38 +77,15 @@ export interface ExecutionSeamResult {
  */
 export class CatalogExecutionSeam {
   private readonly registry: CompositeCatalogRegistry;
-  /**
-   * Sources that expose a `getHandler()` lookup.
-   * Accepts `StandaloneToolSource` (Lot 2) and `McpCatalogSource` (Lot 5);
-   * both implement the `ToolHandlerSource` interface.
-   * The `StandaloneToolSource` type is a subtype of `ToolHandlerSource`, so
-   * existing `[standaloneToolSource]` wiring continues to compile unchanged.
-   *
-   * Mutable (not readonly): additional handler sources (e.g. MCP sources) can
-   * be added after construction via `addHandlerSource()` without rebuilding
-   * the seam instance.
-   */
-  private readonly handlerSources: ToolHandlerSource[];
+  /** Handler sources are fixed at construction; host-registry is the sole MCP source. */
+  private readonly handlerSources: readonly ToolHandlerSource[];
 
   constructor(
     registry: CompositeCatalogRegistry,
-    handlerSources: (StandaloneToolSource | ToolHandlerSource)[],
+    handlerSources: readonly ToolHandlerSource[],
   ) {
     this.registry = registry;
     this.handlerSources = [...handlerSources];
-  }
-
-  /**
-   * Add a handler source that will be consulted on every `execute()` call.
-   * Used by `catalog.ts` when a new MCP source is registered at runtime
-   * (Lot 5 default-off wiring).
-   *
-   * Idempotent with respect to the same instance: adding the same source
-   * twice will result in redundant lookups (handlers are returned on the first
-   * match, so correctness is preserved).
-   */
-  addHandlerSource(source: ToolHandlerSource): void {
-    this.handlerSources.push(source);
   }
 
   hasTool(name: string): boolean {
