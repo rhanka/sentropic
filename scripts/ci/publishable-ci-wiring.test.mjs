@@ -85,7 +85,7 @@ test('ci-gate aggregates every PR job, stays unconditional and is a leaf', () =>
   const gate = jobs['ci-gate'];
   assert.equal(gate.if, 'always()', 'the gate must report failure after upstream failure or cancellation');
   assert.equal(gate.name, undefined, 'the required context must stay ci-gate');
-  assert.deepEqual(gate.permissions, { contents: 'read', actions: 'read' });
+  assert.deepEqual(gate.permissions, { contents: 'read' });
   assert.deepEqual([...needsOf('ci-gate')].sort(), Object.keys(jobs).filter((name) => !excluded(name)).sort(), 'every PR job must be in ci-gate.needs');
   for (const name of Object.keys(jobs)) {
     assert.ok(!needsOf(name).includes('ci-gate'), `${name} must not need ci-gate`);
