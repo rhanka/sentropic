@@ -17,7 +17,7 @@ import type {
   CommentCurrentUser,
   CommentThreadSummary,
   MentionMember,
-} from './types.js';
+} from '@sentropic/chat-ui/comments';
 import {
   buildCommentThreads,
   getMentionCandidate,
