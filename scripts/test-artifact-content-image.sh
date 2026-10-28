@@ -51,6 +51,21 @@ content_build() {
   echo 'PASS: canonical Dockerfile compiles and retains the content entrypoint'
 }
 
+content_ci_identity() {
+  local build_job publish_job test_line save_line
+  # Read the whole job, stopping at the next job rather than at nested steps.
+  build_job=$(awk '/^  build-api-image:$/ { found=1; next } found && /^  [a-z].*:$/ { exit } found { print }' .github/workflows/ci.yml)
+  test_line=$(grep -n 'run: make test-artifact-content-image .*ENV=test-ci-api' <<< "$build_job" | cut -d: -f1 || true)
+  save_line=$(grep -n 'run: make save-api' <<< "$build_job" | cut -d: -f1)
+  [ -n "$test_line" ] && [ -n "$save_line" ] && [ "$test_line" -lt "$save_line" ] || fail 'CI does not qualify content before transporting the canonical image'
+  publish_job=$(awk '/^  publish-api-image:$/ { found=1; next } found && /^  [a-z].*:$/ { exit } found { print }' .github/workflows/ci.yml)
+  grep -Fq 'name: api-image' <<< "$publish_job" || fail 'publisher does not consume the tested image artifact'
+  grep -Fq 'make load-api' <<< "$publish_job" || fail 'publisher does not verify the transported image receipt'
+  ! grep -Eq 'make (build-api|build-api-image)' <<< "$publish_job" || fail 'publisher rebuilds the tested artifact'
+  grep -Fq '$(API_IMAGE_NAME):$(API_VERSION)' Makefile || fail 'promotion does not retain the canonical API tag'
+  echo 'PASS: CI tests content before transport, publishes the verified receipt without rebuilding and retains canonical promotion tags'
+}
+
 content_runtime() {
   make --no-print-directory verify-api-image ENV="${ENV:?}"
   # Run the recorded production artifact, with no source mounts, ports or service dependencies.
@@ -111,8 +126,9 @@ case "${1:-static}" in
   hash) content_hash ;;
   filters) content_filters ;;
   build) content_build ;;
+  identity) content_ci_identity ;;
   static) content_hash; content_filters; content_build ;;
   runtime) content_runtime ;;
-  all) content_hash; content_filters; content_build; content_runtime ;;
-  *) fail 'Expected hash, filters, build, static, runtime or all' ;;
+  all) content_hash; content_filters; content_build; content_ci_identity; content_runtime ;;
+  *) fail 'Expected hash, filters, build, identity, static, runtime or all' ;;
 esac
