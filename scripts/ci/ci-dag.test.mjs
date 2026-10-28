@@ -12,7 +12,7 @@ const context = { changes: { global: 'true' }, event: 'pull_request', ref: 'refs
 
 test('should reject a missing or failed selected scan while allowing unselected lanes', () => {
   for (const changes of [{ global: 'true' }, { api: 'true' }, { ui: 'true' }]) {
-    const needs = { changes: { result: 'success', outputs: changes } };
+    const needs = { changes: { result: 'success', outputs: { api: 'false', ui: 'false', global: 'false', ...changes } } };
     for (const kind of Object.keys(scanInputs)) {
       const selected = changes.global || (kind === 'ui' ? changes.ui : kind === 'e2e' ? changes.api || changes.ui : changes.api);
       needs[`security-container-${kind}`] = { result: selected ? 'success' : 'skipped' };
@@ -26,6 +26,9 @@ test('should reject a missing or failed selected scan while allowing unselected 
       assert.equal(securityJoin(missing, 'container').ok, false);
     }
   }
+  assert.equal(securityJoin({}, 'container').ok, false);
+  assert.equal(securityJoin({ changes: { result: 'success', outputs: {} } }, 'container').ok, false);
+  assert.throws(() => securityJoin({}, 'unknown'), /Unknown scan category/);
 });
 
 test('should start runtime and scan consumers at their actual artifact barriers', () => {
