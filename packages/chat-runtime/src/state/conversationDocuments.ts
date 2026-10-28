@@ -57,3 +57,13 @@ export function createConversationDocuments(session: ChatSessionRuntime, host?: 
       const draft = session.snapshot().attachments.find((entry) => entry.id === id);
       const file = files.get(id);
       if (draft && file && draft.state === 'failed') await upload(draft, file);
+    },
+    async remove(id: string) {
+      const draft = session.snapshot().attachments.find((entry) => entry.id === id);
+      if (!draft || disposed) return;
+      if (draft.documentId) await host?.deleteUploadedFile(draft.documentId);
+      if (!disposed) session.setAttachments(session.snapshot().attachments.filter((entry) => entry.id !== id));
+    },
+    dispose() { disposed = true; unsubscribe(); for (const id of files.keys()) release(id); },
+  };
+}
