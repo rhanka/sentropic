@@ -1,9 +1,14 @@
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
+import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Pool } from 'pg';
+import { S3Client } from '@aws-sdk/client-s3';
 import { runMigrations } from '../../../api/src/db/run-migrations';
 import { createArtifactReaderActivation } from '../../../api/src/services/artifacts/reader-activation';
 import { createContentRuntime } from '../src/runtime';
+import { startContentServer } from '../src/index';
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL });
 const database = `test_w3b_${randomUUID().replaceAll('-', '')}`;
@@ -66,7 +71,57 @@ describe('durable app content composition', () => {
     await pool.query(`DELETE FROM artifacts.artifact_access WHERE principal_id='reader'`);
     expect((await read()).status).toBe(404);
     await pool.query(`INSERT INTO artifacts.artifact_access(artifact_id,principal_id,permission) VALUES ($1,'reader','read')`, [artifactId]);
+    for (const [deny, restore] of [
+      [`UPDATE users SET disabled_at=clock_timestamp() WHERE id='reader'`, `UPDATE users SET disabled_at=NULL WHERE id='reader'`],
+      [`UPDATE tenant_memberships SET status='pending' WHERE user_id='reader'`, `UPDATE tenant_memberships SET status='approved' WHERE user_id='reader'`],
+      [`UPDATE artifacts.artifacts SET lifecycle_state='withdrawn' WHERE id='${artifactId}'`, `UPDATE artifacts.artifacts SET lifecycle_state='active' WHERE id='${artifactId}'`],
+      [`UPDATE artifacts.releases SET state='purged' WHERE id='${releaseId}'`, `UPDATE artifacts.releases SET state='ready' WHERE id='${releaseId}'`],
+    ]) {
+      await pool.query(deny);
+      expect((await read()).status).toBe(404);
+      await pool.query(restore);
+    }
     key = 'b'.repeat(64);
     expect((await read()).status).toBe(401);
+  });
+
+  it('should serve the enabled real listener with private S3 reads and a rotating mounted key', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'w3b-key-'));
+    const keyFile = join(dir, 'key'); writeFileSync(keyFile, key);
+    const send = vi.spyOn(S3Client.prototype, 'send').mockImplementation((async (command: { constructor: { name: string } }) => {
+      if (command.constructor.name === 'GetPublicAccessBlockCommand') return { PublicAccessBlockConfiguration: {
+        BlockPublicAcls:true, IgnorePublicAcls:true, BlockPublicPolicy:true, RestrictPublicBuckets:true } };
+      if (command.constructor.name === 'GetObjectCommand') return { Body: { transformToByteArray: async () => bytes } };
+      throw new Error('Content process attempted a non-read object operation');
+    }) as never);
+    const url = new URL(process.env.DATABASE_URL!); url.pathname = `/${database}`;
+    const server = await startContentServer({ hostname:'127.0.0.1',port:0,env: {
+      APP_ARTIFACT_CONTENT_ENABLED:'1', APP_ARTIFACT_READER_ENABLED:'1', DATABASE_URL:url.toString(),
+      APP_ARTIFACT_CONTENT_BASE_DOMAIN:config.baseDomain,APP_ARTIFACT_CONTENT_SIGNING_KEY_FILE:keyFile,
+      APP_ARTIFACT_S3_BUCKET:'private',APP_ARTIFACT_S3_REGION:'test',
+      APP_ARTIFACT_S3_ACCESS_KEY_ID:'test',APP_ARTIFACT_S3_SECRET_ACCESS_KEY:'test',
+    } });
+    try {
+      const address = server.address();
+      if (!address || typeof address === 'string') throw new Error('TCP listener required');
+      const local = `http://127.0.0.1:${address.port}`;
+      const headers = { host:new URL(origin).host };
+      const started = await fetch(`${local}/_reader/nonce`, {headers});
+      const { nonce } = await started.json();
+      const issued = await createArtifactReaderActivation({ pool,...config }).issue(session,
+        {artifactId,releaseId,channel:'stable',targetOrigin:origin,nonce});
+      const activated = await fetch(`${local}/_reader/activate`, {method:'POST',headers: {
+        ...headers,origin,'content-type':'application/json','x-artifact-activation':'1',cookie:started.headers.get('set-cookie')! },
+      body:JSON.stringify({flowId:issued.flow.flowId,ticketId:issued.ticket.ticketId})});
+      expect(activated.status).toBe(204);
+      const readHeaders = {...headers,cookie:activated.headers.get('set-cookie')!};
+      expect(await (await fetch(local,{headers:readHeaders})).text()).toBe('<h1>Private runtime</h1>');
+      writeFileSync(keyFile,'c'.repeat(64));
+      expect((await fetch(local,{headers:readHeaders})).status).toBe(401);
+      expect(send).toHaveBeenCalled();
+    } finally {
+      await new Promise<void>((resolve,reject) => server.close(error => error ? reject(error) : resolve()));
+      send.mockRestore(); rmSync(dir,{recursive:true,force:true});
+    }
   });
 });
