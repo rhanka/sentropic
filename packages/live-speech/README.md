@@ -102,7 +102,16 @@ no audio in logs — only sample counts, revisions and text cross the seam.
 - `src/node/utterance-buffer.ts` — sample accumulation and rolling windows.
 - `src/node/reconciler.ts` — committed-hypothesis stitching with overlap dedupe.
 - `src/node/worker-port.ts` — `NodeWorkerClient` transport over `worker_threads`.
-- `src/node/model-pins.ts` — profile-to-artifact binding, hash-verified at load.
+- `src/node/device.ts` — OS audio-device port; `ArecordDevice` spawns the vetted
+  `arecord` binary with an explicit argv (no shell), S16_LE stdout to frames.
+- `src/node/capture.ts` — mic session: mic-off default, mute independent of VAD,
+  dBFS level meter, bounded mailbox with drop counter, device-loss auto-close.
+- `src/node/terminal-control.ts` — key controller on its own TTY: toggle (`m`),
+  explicit on/off (`[`/`]`), immediate stop (`s`), open-mic request (`o`);
+  modes `toggle`/`start-end` work on a plain TTY, `hold` needs a real
+  hold-source object (down/up edges) and fails closed without one; keys
+  dispatch per code point so coalesced chunks never lose stop; never forwards
+  keys, restores raw mode.
 - `src/node/profiles.ts` — independently pinned `local-tiny` / `local-base`.
 - `src/node/engines/faster-whisper.mjs` — the real engine behind the worker.
 - `bench/` — session-level bench plus §8.1 receipts.
