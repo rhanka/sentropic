@@ -48,6 +48,7 @@
   - [x] Declare BRL8-EXn with reason, impact and rollback before sensitive changes.
 
 ## Feedback Loop
+- [x] Integration evidence: gateway 0.22.0 BLOCK archive SHA-256 `cbf4ef6c51536ed0b26bb2a9f29901c927ef1a986d1d8039e7c44d8394fdb54b`; official `refresh-lazy-package-lock` passes with the verified sibling and current mesh 0.30.0; full gateway suite passes 1370 tests / 78 files with `ENV=test-integrator-stt-l8` under the shared Docker lock.
 - [x] Integration: retain main's llm-mesh 0.30 support with the L8 speech floor 0.28 and gateway 0.22.0; use cluster-mesh 0.23.3 above published 0.23.2. Regenerate the selected release lock through the official verified-sibling qualification target; remove the obsolete L2 PR-base filter now that PR798 targets main.
 - [x] BRL8-EX7: owner authorizes updating only the API gateway release-tuple test from 0.21.3 to feature version 0.22.0. Run 40511994178 imports 0.22.0 and fails the old equality assertion; unrelated id errors are not its failure. Run the targeted test before the unchanged full API unit suite in GitHub CI; no local Docker before 21:00 UTC. Rollback restores the expectation and removes the targeted CI step with the gateway bump.
 - [x] BRL8-EX6: run 40505571158 proves the runtime gateway range and frozen selected tuple still reject gateway 0.22.0. Align only catalog/train ranges, affected test expectations and fixture package/lock; use the verified CI gateway archive's SHA-512. Cluster 0.23.1 supplies the required source bugfix bump. Rollback restores the old ranges/tuple with gateway 0.21.3.
@@ -112,6 +113,6 @@
   - [x] Prepare .tmp/live-stt/l8/local-gate.sh: 21:00 UTC guard, exact-head/clean-worktree checks, one package run, locked cleanup and persisted exit receipts.
   - [x] Push feat/live-stt-l8; open draft PR798 against feat/live-stt-l2 with this plan as body and post implementation plan.
   - [ ] Monitor exact-head GitHub CI: lint/typecheck/test/build/pack; resolve branch failures.
-  - [ ] After 21:00 UTC only: flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make test-llm-gateway ENV=test-stt-l8 once.
+  - [x] After 21:00 UTC: full `make test-llm-gateway ENV=test-integrator-stt-l8` passes under the shared flock (1370 tests / 78 files).
   - [ ] Cleanup: flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make down ENV=test-stt-l8.
   - [ ] Report draft PR, head, CI and any remaining G-LEDGER owner gate; preserve BRANCH.md, no merge.
