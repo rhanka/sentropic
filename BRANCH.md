@@ -116,10 +116,10 @@
   - [x] llm-mesh: 1,529 tests passed; cluster-mesh Decision composition/receipts: 9 tests passed.
   - [x] API unit host/HTTP: 16 tests passed; actual API/migration/revocation: 7 tests passed.
   - [ ] Review with two independent complementary peers and reconcile findings.
-  - [ ] Inspect every diff hunk; pass make scope-check before each atomic commit.
-  - [ ] Open a draft PR to main using this plan as its body and add the implementation plan comment.
+  - [x] Inspect every diff hunk; pass make scope-check before each atomic commit.
+  - [x] Open draft PR #822 to main using this plan as its body and add the implementation plan comment.
   - [ ] Verify completed/success CI on the exact final head.
-  - [ ] Add and run the explicit manual Decision fixture workflow mode; distinguish it from ordinary live-suite acceptance.
+  - [x] Add and run the explicit manual Decision fixture workflow mode; distinguish it from ordinary live-suite acceptance.
   - [x] Local Docker stack torn down after validation; runtime health logs contain no errors.
   - [x] Retain CI selection/publication safeguards: 135 wiring tests, 23 expected-result tests and ci-capacity-policy passed.
   - [ ] Run make down and report PR, exact head, environment variable names only.
