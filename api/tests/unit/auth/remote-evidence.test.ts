@@ -21,6 +21,7 @@ function setup() {
   const issue = createRemoteEvidenceIssuer({
     issuer: 'idp', kid: 'idp-1', key: keys.privateKey, now: () => state.now,
     session: async (credential) => credential === 'credential-1' ? state.login : null,
+    commit: (_login, _request, operation) => operation(),
     approvedTarget: async (digest, actor) => {
       state.afterTarget?.();
       return actor.sub === 'owner' && /^[ac]{64}$/.test(digest)

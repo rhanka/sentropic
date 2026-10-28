@@ -9,7 +9,7 @@ import { tenantMemberships, workspaceMemberships, workspaces } from '../../db/sc
 import { RemoteAuthorityError, parseRemoteJson, remoteId } from './remote-contract';
 import { createRemoteEvidenceIssuer, type RemoteEvidenceIssuerPorts } from './remote-evidence';
 import { loadRemoteSigner } from './remote-keys';
-import { reserveRemoteEvidence, resolveRemoteLogin } from './remote-session';
+import { commitRemoteEvidence, reserveRemoteEvidence, resolveRemoteLogin } from './remote-session';
 
 const pin = z.object({ issuer: remoteId, kid: remoteId, workload: remoteId, secretRef: z.string().min(1).max(512),
   publicKeyPem: z.string().min(1).max(2048), revoked: z.boolean().optional() }).strict();
@@ -49,7 +49,7 @@ export function createRemoteIdpEvidencePorts(
       if (trust.attestation.workload !== clientId) throw new RemoteAuthorityError('authority_unavailable');
       const signer = loadRemoteSigner(trust, 'idp', workload, (ref) => readFileSync(ref, 'utf8'));
       return createRemoteEvidenceIssuer({ ...signer, now, session: resolveRemoteLogin,
-        reserve: reserveRemoteEvidence,
+        reserve: reserveRemoteEvidence, commit: commitRemoteEvidence,
         async approvedTarget(digest, actor) {
           const approved = await nativeTarget(digest, actor);
           if (!approved) return null;
