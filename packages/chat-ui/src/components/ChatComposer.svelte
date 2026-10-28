@@ -11,6 +11,7 @@
   export let surfaceEnabled = true;
   export let surfaceDisabled = false;
   export let ariaLabel = '';
+  export let surfaceRole: 'textbox' | 'group' = 'textbox';
   export let tabIndex = 0;
   export let composerElement: HTMLDivElement | null = null;
   export let onKeyDown: ((event: KeyboardEvent) => void) | undefined = undefined;
@@ -122,7 +123,7 @@
         data-auto-grow={autoGrow}
         style={`max-height: ${surfaceMaxHeight}px;`}
         bind:this={composerElement}
-        role="textbox"
+        role={surfaceRole}
         aria-label={ariaLabel}
         aria-disabled={disabled}
         tabindex={tabIndex}
