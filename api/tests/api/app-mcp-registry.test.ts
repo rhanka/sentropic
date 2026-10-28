@@ -18,7 +18,7 @@ function fixture() {
   };
   return { artifacts, execute, createInvocation, selection: ['sentropic.artifacts'],
     configurations: { 'sentropic.artifacts': {} }, bindings: {}, compatibility: {
-      'sentropic.artifacts': { manifestDigest: 'ccf8a4ddd9365537741eb0550efa49954d86a0c2d1ee808fb18ca81ef7090e9a' },
+      'sentropic.artifacts': { manifestDigest: '020aacfec500d754b76c90d3ad4a05097e0f996b8b9282145ca458917ea6fb27' },
     } };
 }
 
@@ -56,11 +56,31 @@ describe('app MCP registry compilation', () => {
     expect(input.createInvocation).not.toHaveBeenCalled();
   });
 
+  it('should refuse the superseded artifacts 0.2.1 compatibility receipt', async () => {
+    const input = fixture();
+    input.compatibility['sentropic.artifacts'].manifestDigest =
+      'ccf8a4ddd9365537741eb0550efa49954d86a0c2d1ee808fb18ca81ef7090e9a';
+    const result = await compileAppMcpRegistry(input);
+    expect(result.ok).toBe(false);
+    expect(result).not.toHaveProperty('registry');
+    expect(input.execute).not.toHaveBeenCalled();
+  });
+
   it('should refuse a missing artifacts compatibility receipt without exposing a registry', async () => {
     const result = await compileAppMcpRegistry({ ...fixture(), compatibility: {} });
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.diagnostics[0].code).toBe('missing_compatibility');
     expect(result).not.toHaveProperty('registry');
+  });
+
+  it('should refuse the superseded artifacts 0.2.3 compatibility receipt', async () => {
+    const input = fixture();
+    input.compatibility['sentropic.artifacts'].manifestDigest =
+      '80ca4b067a010690dc71036a3237a70b91d99d7c025ded7173566d0ae55b1600';
+    const result = await compileAppMcpRegistry(input);
+    expect(result.ok).toBe(false);
+    expect(result).not.toHaveProperty('registry');
+    expect(input.execute).not.toHaveBeenCalled();
   });
 
   it('should expose nothing and not load artifacts when selection is explicitly empty', async () => {
