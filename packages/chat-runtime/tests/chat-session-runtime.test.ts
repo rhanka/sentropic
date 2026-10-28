@@ -93,3 +93,143 @@ const createLocalToolMachine = () => {
         calls.post.push(result);
       }),
       isLocalToolName: (name: string) => name === 'tab_read',
+      isLocalToolRuntimeAvailable: () => true,
+      isLocalToolPermissionRequired: (error: unknown) => error instanceof PermissionRequiredError,
+      getPermissionRequest: (error: unknown) => (error as PermissionRequiredError).request,
+    },
+  };
+};
+
+describe('ChatSessionRuntime', () => {
+  it('should attach live IO idempotently when called twice with the same host', () => {
+    const streamClient = createStreamClient();
+    const runtime = createChatSessionRuntime('session-1');
+    const host = { transport: createTransport(), streamClient };
+
+    runtime.attach(host);
+    runtime.attach(host);
+
+    expect(streamClient.set).toHaveBeenCalledTimes(1);
+    expect(streamClient.delete).toHaveBeenCalledTimes(0);
+    expect(streamClient.activeHandlers.size).toBe(1);
+    expect(runtime.snapshot().attachGeneration).toBe(1);
+  });
+
+  it('should project registered stream events through the controller state', () => {
+    const streamClient = createStreamClient();
+    const runtime = createChatSessionRuntime('session-1');
+    runtime.setMessages([createAssistant('assistant-1', 'stream-1')]);
+    runtime.attach({ transport: createTransport(), streamClient });
+
+    expect(streamClient.set).toHaveBeenCalledTimes(1);
+    const emit = [...streamClient.activeHandlers.values()][0]!;
+    emit({ streamId: 'stream-1', type: 'content_delta', sequence: 1, data: { delta: 'controller text' } });
+    emit({ streamId: 'stream-1', type: 'done', sequence: 2, data: {} });
+
+    const snapshot = runtime.snapshot();
+    expect(snapshot.messages[0]?._localStatus).toBe('completed');
+    const segment = snapshot.projectedTimelineItems.find(
+      (item) => item.kind === 'assistant-segment',
+    );
+    expect(segment?.kind === 'assistant-segment' ? segment.segment.content : '').toBe('controller text');
+  });
+
+  it('should expose every controller prompt and route permission decisions to its machine', async () => {
+    vi.useFakeTimers();
+    try {
+      const streamClient = createStreamClient();
+      const machine = createLocalToolMachine();
+      const runtime = createChatSessionRuntime('session-1');
+      runtime.setMessages([
+        createAssistant('assistant-1', 'stream-1'),
+        createAssistant('assistant-2', 'stream-2'),
+      ]);
+      runtime.attach({ transport: createTransport(), streamClient, localToolMachine: machine.options });
+      const emit = [...streamClient.activeHandlers.values()][0]!;
+
+      emit({ streamId: 'stream-1', type: 'tool_call_start', sequence: 1, data: { tool_call_id: 'tool-1', name: 'tab_read', args: '{}' } });
+      emit({ streamId: 'stream-2', type: 'tool_call_start', sequence: 1, data: { tool_call_id: 'tool-2', name: 'tab_read', args: '{}' } });
+      await vi.runAllTimersAsync();
+
+      const prompts = runtime.snapshot().pendingLocalToolPermissionPrompts;
+      expect(prompts).toHaveLength(2);
+      await runtime.decideLocalToolPermission(prompts[0]!, 'allow_once');
+
+      expect(machine.calls.decide).toEqual(['request-tool-1']);
+      expect(machine.calls.execute).toEqual(['tool-1', 'tool-2', 'tool-1']);
+      expect(machine.calls.post).toEqual([{ status: 'ok' }]);
+      expect(runtime.snapshot().pendingLocalToolPermissionPrompts).toHaveLength(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('should detach before re-attaching when host references change', () => {
+    const firstStream = createStreamClient();
+    const secondStream = createStreamClient();
+    const runtime = createChatSessionRuntime('session-1');
+
+    runtime.attach({ transport: createTransport(), streamClient: firstStream });
+    runtime.attach({ transport: createTransport(), streamClient: secondStream });
+
+    expect(firstStream.set).toHaveBeenCalledTimes(1);
+    expect(firstStream.delete).toHaveBeenCalledTimes(1);
+    expect(secondStream.set).toHaveBeenCalledTimes(1);
+    expect(secondStream.delete).toHaveBeenCalledTimes(0);
+  });
+
+  it('should keep one stream registration across view remounts and remove it only on dispose', () => {
+    const streamClient = createStreamClient();
+    const runtime = createChatSessionRuntime('session-1');
+    runtime.attach({ transport: createTransport(), streamClient });
+
+    const unbindFirst = runtime.bindView();
+    unbindFirst();
+    runtime.bindView();
+
+    expect(streamClient.set).toHaveBeenCalledTimes(1);
+    expect(streamClient.delete).toHaveBeenCalledTimes(0);
+    expect(streamClient.activeHandlers.size).toBe(1);
+
+    runtime.dispose();
+    runtime.dispose();
+    expect(streamClient.delete).toHaveBeenCalledTimes(1);
+  });
+
+  it('should forward every interactive command without exposing a controller handle', async () => {
+    const transport = createTransport();
+    const runtime = createChatSessionRuntime('session-1');
+    runtime.attach({ transport });
+    const buildAssistantMessage = (base: {
+      id: string;
+      sessionId: string;
+      _streamId: string;
+      _localStatus: 'processing';
+      role: 'assistant';
+      content: null;
+      createdAt: string;
+    }) => base;
+
+    const sendResult = await runtime.send(
+      { content: 'Hello' },
+      {
+        buildUserMessage: (handle) => ({ id: handle.userMessageId, role: 'user', content: 'Hello' }),
+        buildAssistantMessage,
+      },
+    );
+    await runtime.retry('user-1', { providerId: 'provider', model: 'model', buildAssistantMessage });
+    await runtime.stop('assistant-1');
+    await runtime.edit('user-1', 'Edited');
+    await runtime.setFeedback('assistant-1', 'up');
+
+    expect(sendResult).toBeUndefined();
+    expect(transport.sendMessage).toHaveBeenCalledTimes(1);
+    expect(transport.retryMessage).toHaveBeenCalledWith('user-1', { providerId: 'provider', model: 'model' });
+    expect(transport.stopMessage).toHaveBeenCalledWith('assistant-1');
+    expect(transport.editMessage).toHaveBeenCalledWith('user-1', 'Edited');
+    expect(transport.setFeedback).toHaveBeenCalledWith('assistant-1', 'up');
+    expect(runtime.snapshot().messages.find((message) => message.id === 'user-1')?.content).toBe('Edited');
+  });
+
+  it('should reject non-JSON-safe messages returned by send builders', async () => {
+    const runtime = createChatSessionRuntime('session-1');
