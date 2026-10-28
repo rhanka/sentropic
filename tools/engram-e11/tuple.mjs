@@ -22,6 +22,8 @@ export function build(root) {
   assert(lot6?.includes('missing source') && lot6.includes('option (a)'));
   const review = b.read('review-r3.md').toString();
   assert(review.includes('## Final E11 input list (exact)'));
+  b.read('format.md');
+  b.read('receiving-validator.mjs');
   const reservation = b.read('reservation.md').toString();
   assert(reservation.includes('New reserved stable release: `@sentropic/cluster-mesh@0.24.0`'));
   const runs = json(b.read('ci.json')).workflow_runs;
@@ -33,9 +35,19 @@ export function build(root) {
   const inputSlots = slots({ ...observed, engram: cleanArchive(observed.engram), mesh: cleanArchive(observed.mesh), ci, lot6 });
   assert.equal(inputSlots.length, 21);
   assert(inputSlots.every((slot) => b.files[slot.file]));
+  const { mesh, c6, receipt } = observed;
   const tuple = { format: 'e2-host-tuple/v1', status: 'PENDING', mode: 'preparation-only',
+    backend: { name: mesh.name, version: mesh.version, sourceHead: receipt.head,
+      archive: mesh.file, sha256: mesh.sha256, integrity: mesh.integrity },
+    engram: cleanArchive(observed.engram),
+    neutralContract: { name: c6.name, version: c6.version, path: null, sha256: c6.finalBytesSha256,
+      requiredArchiveMember: c6.declaration, status: 'PENDING' },
+    locks: ['consumer-lock.json', 'source/package-lock.json'].map((path) => ({ path, sha256: b.files[path].sha256 })),
+    nodeImage: `node:24-bookworm-slim@${receipt.qualificationImage}`,
+    profiles: [], requiredProfiles: receipt.requiredProfiles,
     finalGeneratorOwner: 'gr-conductor', provenance: { inputList: 'PR #803 E11 inputs', inventory: 'Opus r3, 21 categories',
-      snapshotHead: candidate.snapshotHead, reviewDisposition: 'r3 historical dev.4 anchors superseded by current dev.5 PR inputs' },
+      snapshotHead: candidate.snapshotHead, formatEvidence: 'format.md', receivingValidator: 'receiving-validator.mjs',
+      reviewDisposition: 'r3 historical dev.4 anchors superseded by current dev.5 PR inputs' },
     slots: inputSlots, handoff, files: b.files };
   return tuple;
 }
