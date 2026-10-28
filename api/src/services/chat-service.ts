@@ -46,6 +46,7 @@ import {
 } from './tools';
 import {
   resolveFoundationChatTools,
+  prepareHostRegistryCatalog,
 } from './skills/catalog';
 import { executeFoundationSkillTool } from './skills/foundation-executor';
 import { resolveTurnCatalogContext } from './catalog/request-authority';
@@ -2771,9 +2772,11 @@ export class ChatService {
     };
     let catalogAvailable = false;
     try {
+      const hostRegistry = await prepareHostRegistryCatalog();
       const catalogContext = await resolveTurnCatalogContext({ userId: options.userId,
         sessionId: options.sessionId, workspaceId: sessionWorkspaceId, readOnly,
-        allowedTools: ['search_skills', 'search_catalog', ...allowedSkillToolNames] });
+        allowedTools: ['search_skills', 'search_catalog', ...allowedSkillToolNames,
+          ...(hostRegistry?.tools.keys() ?? [])] });
       addResolvedTools(
         resolveFoundationChatTools({
           userId: options.userId,
