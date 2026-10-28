@@ -79,7 +79,7 @@ Mesh `speech/openai-transcription.ts` with two independently configured OpenAI s
   - [x] Worktree `tmp/worktrees/stt-l9`, branch `feat/live-stt-l9`, base `feat/live-stt-l8` at b4b559c63, merged origin/main (merge 54c7dcbe4) per r1 P1-1.
   - [x] Lanes: `make typecheck-llm-mesh`, `make test-llm-mesh`, `make build-llm-mesh`, CI `validate-llm-mesh`, all under flock, ENV=test-stt-l9 last.
   - [x] Lot gate: base head verified b4b559c63, scope boundaries declared, no exception needed.
-- [x] **Lot 1 — Adapter `speech/openai-transcription.ts`****
+- [x] **Lot 1 — Adapter `speech/openai-transcription.ts`**
   - [x] Profile configs `gpt-live-transcribe` / `gpt-realtime-whisper`: model pin, delay, language, format pcm16/24k mono, placement cloud-relay; independent selection, no shared mutable state.
   - [x] `SpeechCapabilities` per profile: streamingStt + partialTranscript + clientVad + manualCommit supported; serverVad + nativeDuplex + tts unsupported; languages/regions selectors; usageUnits session-seconds + audio-seconds.
   - [x] `session.update` builder: `type transcription`, `turn_detection` null refused otherwise, unsupported VAD options rejected at open (fail-closed).
@@ -103,6 +103,12 @@ Mesh `speech/openai-transcription.ts` with two independently configured OpenAI s
   - [x] P1-4: client-utterance binding via committed FIFO; per-turn windows; input.clear sends provider clear + tombstones.
   - [x] P2: settled guards + tombstones; bearer redaction proven; completed-only; Allowed Paths fixed; Lot 1 text updated; commits ≤150 with feat:/test:/docs: subjects (two pre-r1 violations stand, no rewrite).
   - [x] Lot gate: `make test-llm-mesh` green on the R1 head (SCOPE=file 26/26, full 87 files / 1527 tests), build + pack 0.31.0 green.
+- [x] **Lot R2 — Opus r2 review fixes (N1/N2/N3 + lock fixture rebind)**
+  - [x] N1: `audioInterval` is strictly per-turn (open-turn frame end at commit; no session-wide max in `onCommitted`/`onCompleted`); out-of-order test spaces u_b at 100 and pins per-turn windows ({10,30} / {100,120}).
+  - [x] N2: clear after commit keeps a FIFO tombstone; the late provider bind is consumed and dropped instead of stealing the next turn (single final for u3 proven).
+  - [x] N3: `PostCloseSocket` releases held frames from inside `close()`; no event surfaces after the settle.
+  - [x] Lock fixture: `fixtures/selected/package-lock.json` rebound via `refresh-lazy-package-lock` with same-PR sibling receipts (registry URL + sibling-bytes integrity, no check weakening).
+  - [x] Lot gate: `make test-llm-mesh` SCOPE=file green on the R2 head; commits ≤150 lines.
 - [ ] **Lot N — Final validation**
   - [ ] `make scope-check` (harness) green.
   - [ ] Push, draft PR against `feat/live-stt-l8`, CI `validate-llm-mesh` + `ci-gate` green on the exact head.
