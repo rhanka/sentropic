@@ -52,6 +52,7 @@ Mesh `speech/openai-transcription.ts` with two independently configured OpenAI s
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] Integration authorized by the existing Opus r3 APPROVE on bc5c72d18 (`.h2a/reviews/pr804_opus_r3.md`). Preserve the reviewed adapter and main's L8 functionality; use mesh 0.31.0 / gateway 0.22.1 / cluster 0.23.4, preserving the gateway speech floor 0.28 and extending its supported mesh range to 0.31. Regenerate verified archive locks while retaining the unrelated artifacts 0.1.4 baseline.
 - `acknowledge`: P2-A/C/D from L6a r5 go to a follow-up before Lp1/L6b, not this lot (conductor 2026-10-27).
 
 ## AI Flaky tests
