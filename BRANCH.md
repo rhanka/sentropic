@@ -7,7 +7,7 @@
 ## Scope / Guardrails
 - [x] Base: `origin/main` at `5e986a0b6cd2dfecfbde6a588d30055271124696`; branch `feat/canvas-live-h0`.
 - [x] Isolated worktree: `tmp/worktrees/canvas-h0`; root dev/UAT stays reserved for the owner.
-- [x] English documents and data only; no migrations, dependencies, runtime code or Python.
+- [x] English documents and data only; no migrations, dependencies, runtime code or Python files.
 - [x] Make-only commands, `ENV` last; selective staging then separate `make commit`; each commit at most 150 changed lines.
 - [x] Merge only when later authorized; never rebase; no AI trailers.
 - [x] No service stack required; reserved test mapping: `ENV=test-canvas-h0`, API `9400`, UI `5600`, Maildev UI `1500` (not started).
@@ -39,6 +39,8 @@
 - [x] DS publication, export qualification and N1–N8 deletion evidence remain pending until measured by their adoption owners.
 - [x] Apply Opus r2 notes touching H0: B-BRIDGE-1…7 traceability, cross-lot RED-first, `ports.ts:70–72`.
 - [x] Review F1–F6 accepted and corrected (owner: H0 author): normalize only actual text paths, distinguish list arrays/context passthrough and single-key override; repair provenance and evidence hashes.
+- [x] Review R3-1/R3-2 accepted and corrected (owner: H0 author): explicitly inbound-only normalization assertion; cite/hash list codec; assert manifest count.
+- [x] Procedure exception recorded (owner: H0 author): reviewer reported one prohibited Python call, repeated with jq; no artifact/result depends on it. Owner informed; no zero-Python review-process claim.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky acceptance requested for this documentation and fixture lot.
@@ -70,6 +72,6 @@
   - [x] Check diff contains only documentation/fixtures; `make scope-check` before each commit.
   - [ ] Complete independent harness review; reconcile findings in the evidence note.
   - [x] API/UI/E2E behavior tests: no test files changed; future adoption witness commands stay pending.
-  - [ ] Create draft PR to main with this exact file as body and add the 3–6 step plan comment.
+  - [x] Create draft PR to main with this exact file as body and add the 3–6 step plan comment.
   - [ ] Verify CI completed/success at exact final head; report PR URL and head SHA.
-  - [ ] Leave BRANCH.md and branch intact for the draft handoff; no merge.
+  - [x] Leave BRANCH.md and branch intact for the draft handoff; no merge.

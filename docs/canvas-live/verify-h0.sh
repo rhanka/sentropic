@@ -3,6 +3,7 @@
 set -euo pipefail
 rtk harness check branch
 rtk proxy sha256sum -c docs/canvas-live/h0-inputs.sha256
+[[ $(rtk wc -l < docs/canvas-live/h0-inputs.sha256) -eq 46 ]]
 rtk git diff --check
 corpus=ui/tests/fixtures/canvas-live/b1-content.json
 payloads=api/tests/fixtures/canvas-live/b1-save-payloads.json
@@ -62,4 +63,4 @@ while IFS= read -r path; do
     *) printf 'Out-of-scope path: %s\n' "$path" >&2; exit 1 ;;
   esac
 done < <(rtk proxy git diff --name-only 5e986a0b6cd2dfecfbde6a588d30055271124696)
-printf '%s\n' 'PASS H0: 45 input hashes; 29 UI cases; 12 payload cases; 24 unique mounts / 10 files / 7 plain; 8 receipts; scope unchanged.'
+printf '%s\n' 'PASS H0: 46 input hashes; 29 UI cases; 12 payload cases; 24 unique mounts / 10 files / 7 plain; 8 receipts; scope unchanged.'
