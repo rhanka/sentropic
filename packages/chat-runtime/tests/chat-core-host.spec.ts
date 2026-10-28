@@ -5,7 +5,7 @@
  * 1. A fake host literal that `satisfies ChatCoreHost` — compile-time proof.
  * 2. Trivial runtime assertion that the fake host methods exist and return
  *    the right shapes.
- * 3. Export-surface registration (package.json + export-manifest.json).
+ * 3. Explicit public subpath registration (package.json).
  * 4. Sentropic-string scan — ZERO domain strings in the contract source file.
  *
  * Environment: node (no DOM, no Svelte rendering).
@@ -226,7 +226,7 @@ describe('ChatCoreHost — export surface registration', () => {
   const SUBPATH = './client/chat-core-host';
 
   it('should export the chat-core-host subpath in package.json', () => {
-    expect(Object.keys(pkgJson.exports)).toContain('./*');
+    expect(Object.keys(pkgJson.exports)).toContain(SUBPATH);
   });
 
   it('should identify the initial runtime candidate version', () => {
@@ -234,7 +234,7 @@ describe('ChatCoreHost — export surface registration', () => {
   });
 
   it('should resolve the chat-core-host source file to an existing path', () => {
-    const entry = pkgJson.exports['./*'] as Record<string, string> | undefined;
+    const entry = pkgJson.exports[SUBPATH] as Record<string, string> | undefined;
     expect(entry).toBeTruthy();
     const file = (entry?.['import'] ?? entry?.['types'])?.replace('*', SUBPATH.slice(2)) as string;
     expect(file).toBeTruthy();
