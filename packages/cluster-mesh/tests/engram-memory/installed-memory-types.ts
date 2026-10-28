@@ -10,9 +10,11 @@ import type {
 } from '@sentropic/engram/memory-substrate';
 import { createMemoryPortV2, openModuleStorageCanonicalMemoryStoreV1 } from '@sentropic/engram/memory-substrate';
 import type {
+  CreateMemoryNeutralHandleInput,
   MemoryHostBinding,
   MemoryMaintainGrant,
   MemoryNeutralGrant,
+  MemoryNeutralHandleAssembly,
   MemoryPostgresDriverProvider,
   MemoryProfileClaim,
 } from '@sentropic/cluster-mesh/engram-memory';
@@ -22,6 +24,7 @@ import {
   MEMORY_REQUIRED_PROFILES,
   assembleMemoryHostBinding,
   checkMemoryPostgresDriver,
+  createMemoryNeutralHandle,
 } from '@sentropic/cluster-mesh/engram-memory';
 
 // The pinned five required profiles are a closed, versioned claim set.
@@ -44,6 +47,11 @@ const maintainAsNeutral: MemoryNeutralGrant = binding.maintainGrant;
 
 // @ts-expect-error a neutral read/write grant cannot open host maintenance ports
 const neutralAsMaintain: MemoryMaintainGrant = binding.memoryGrant;
+
+// The installed factory builds the neutral handle from installed bytes.
+declare const neutralInput: CreateMemoryNeutralHandleInput;
+const installedAssembly: MemoryNeutralHandleAssembly = createMemoryNeutralHandle(neutralInput);
+const installedNeutralHandle: ModuleStorageMemoryStoreOptionsV1['handle'] = installedAssembly.handle;
 
 // The constructor consumes the assembled binding's neutral grant only.
 type InstalledHandle = ModuleStorageMemoryStoreOptionsV1['handle'];
@@ -77,6 +85,7 @@ declare const assembleInput: Parameters<typeof assembleMemoryHostBinding>[0];
 const assembled: MemoryHostBinding = assembleMemoryHostBinding(assembleInput);
 
 export const installedTypeProof = {
+  installedNeutralHandle,
   requiredNames,
   descriptorDigest,
   neutralOperations,
