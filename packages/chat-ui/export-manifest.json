@@ -331,24 +331,6 @@
         "projectRestoredTimeline"
       ]
     },
-    "./checkpoints": {
-      "kind": "ts",
-      "file": "dist/checkpoints/index.js",
-      "exports": [
-        "CheckpointSummaryLike",
-        "CheckpointMessageLike",
-        "CheckpointStreamEventLike",
-        "hasCheckpointMutationDelta",
-        "getCheckpointMutationPreviewItems",
-        "CheckpointItem",
-        "PendingCheckpointPrompt",
-        "applySessionCheckpoints",
-        "getCheckpointForUserMessage",
-        "openCheckpointPrompt",
-        "Checkpoint",
-        "CheckpointHost"
-      ]
-    },
     "./context": {
       "kind": "ts",
       "file": "dist/context/index.js",
