@@ -38,6 +38,7 @@ export function createConversationCommands(state: ConversationCommandState): Cha
     setDraft: (value) => state.session.setDraft(value),
     send: () => run(async () => {
       const current = state.session.snapshot();
+      if (state.checkpointCommands.snapshot().prompt || state.checkpointCommands.snapshot().busy) return;
       if (state.sending || (!current.draft.trim() && !current.attachmentSummary.ready)) return;
       if (current.attachmentSummary.pending || current.attachmentSummary.uploading) return;
       state.sending = true;
