@@ -52,10 +52,11 @@ export const pgTextArray = (values: readonly string[]) =>
 const perMtok =(tokens: number, rate: bigint): bigint => (BigInt(Math.max(0, Math.ceil(tokens))) * rate + 999_999n) / 1_000_000n;
 
 /** Pricing row in force at `at` for one provider/model, or undefined (fail closed). */
-export const loadPricing = async (tx: LedgerTx, providerId: string, modelId: string, at: Date): Promise<PricingRow | undefined> => {
+export const loadPricing = async (tx: LedgerTx, providerId: string, modelId: string, at: Date, protocol = 'generation'): Promise<PricingRow | undefined> => {
   const [row] = (await tx.execute(sql`SELECT id, provider_id, model_id, input_micro_usd_per_mtok, output_micro_usd_per_mtok,
       reasoning_micro_usd_per_mtok, image_micro_usd_per_unit, tool_call_micro_usd_per_unit, min_charge_micro_usd
     FROM control.model_pricing WHERE provider_id = ${providerId} AND model_id = ${modelId}
+      AND protocol = ${protocol}
       AND effective_from <= ${at} AND (effective_to IS NULL OR effective_to > ${at})
     ORDER BY effective_from DESC LIMIT 1`)).rows as Array<Record<string, unknown>>;
   return row ? {
@@ -173,6 +174,7 @@ export interface BudgetAdmissionOptions {
   readonly holdTtlMs?: number;
   readonly inputMarginPercent?: number;
   readonly maxOutputTokensFor?: (providerId: string, modelId: string) => number | undefined;
+  readonly pricingProtocol?: string;
 }
 
 const profileMaxOutput = (providerId: string, modelId: string): number | undefined =>
@@ -225,7 +227,7 @@ export const createBudgetAdmission = (options: BudgetAdmissionOptions): BudgetAd
     let maxCandidate = 0n;
     const pricingVersions = new Set<string>();
     for (const candidate of quote.candidates) {
-      const price = await loadPricing(tx, candidate.providerId, candidate.modelId, now);
+      const price = await loadPricing(tx, candidate.providerId, candidate.modelId, now, options.pricingProtocol);
       if (!price) { await block('no_pricing', { strategyId }); return { kind: 'unavailable' }; }
       pricingVersions.add(price.id);
       const allowance = { ...candidate.allowance, inputTokens: Math.ceil(candidate.allowance.inputTokens * (100 + margin) / 100) };

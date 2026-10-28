@@ -16,14 +16,14 @@ export const createDecisionAdmission = (database: LedgerDatabase, cost: CostCont
         const descriptor = descriptors.find((item) => evaluatorKey(item.evaluator) === key);
         const price = input.quote.price;
         await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${input.evaluator.providerId}), hashtext(${price.modelId}))`);
-        const current = await loadPricing(tx, input.evaluator.providerId, price.modelId, new Date());
+        const current = await loadPricing(tx, input.evaluator.providerId, price.modelId, new Date(), price.protocol);
         if (!descriptor || !current || current.id !== price.priceRevision
           || current.input.toString() !== price.inputMicroUsdPerMtok || current.output.toString() !== price.outputMicroUsdPerMtok
           || current.minCharge.toString() !== price.minimumMicroUsd) return { ok: false, code: 'BUDGET_UNAVAILABLE' };
         // Reuse the existing all-bucket admission in this evaluator-locked transaction.
         const inner: LedgerDatabase = { execute: tx.execute.bind(tx), transaction: (run) => run(tx) };
         const budget = createBudgetAdmission({ database: inner, ownerRef: 'product-api:decision', inputMarginPercent: 0,
-          holdTtlMs: Math.max(1, input.deadlineAt - Date.now()) });
+          holdTtlMs: Math.max(1, input.deadlineAt - Date.now()), pricingProtocol: price.protocol });
         const admitted = await budget.admit({ requestId: input.callId, cost, wire: 'openai-chat-completions', quote: {
           quoteRef: `decision:${input.callId}`, requestedModel: descriptor.wireModel, maxAttempts: 1,
           quotedAt: new Date().toISOString(), policyRevision: 'decision-host-v1', councilRevision: 'none',
@@ -64,7 +64,7 @@ export const createDecisionAdmission = (database: LedgerDatabase, cost: CostCont
         if (hold.status !== 'held' || Date.now() >= Math.min(input.deadlineAt, new Date(hold.deadline_at).getTime())) {
           return { ok: false, code: 'BUDGET_UNAVAILABLE', provenUnsent: hold.status === 'held' };
         }
-        const price = await loadPricing(tx, input.evaluator.providerId, descriptor.wireModel, new Date());
+        const price = await loadPricing(tx, input.evaluator.providerId, descriptor.wireModel, new Date(), descriptor.protocol ?? 'jev-native');
         if (!price || price.id !== descriptor.priceProtocol.revision || !hold.pricing_versions.includes(price.id)) {
           return { ok: false, code: 'BUDGET_UNAVAILABLE', provenUnsent: true };
         }
