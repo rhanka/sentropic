@@ -54,9 +54,9 @@
   - [x] Read MASTER, workflow, testing, harness and approved H0; verify input plan hash.
   - [x] Fetch main, create requested worktree, run `harness check branch` (PASS C1).
   - [x] Declare scope and prepare this file from `plan/BRANCH_TEMPLATE.md`.
-- [ ] **Lot 1 — Mount and server inventory**
-  - [ ] Record drift and all 24 mounts in 10 files, exactly one class and save authority per mount.
-  - [ ] Inventory server descriptors, payloads, routes and settings/chat authorization without client lock gates.
+- [x] **Lot 1 — Mount and server inventory**
+  - [x] Record drift and all 24 mounts in 10 files, exactly one class and save authority per mount.
+  - [x] Inventory server descriptors, payloads, routes and settings/chat authorization without client lock gates.
 - [ ] **Lot 2 — B1 real-content corpus**
   - [ ] Add API and UI JSON fixtures for prose, lists, matrix, three composers, plain fields and citations.
   - [ ] Identify source provenance, intended parity and profile differences requiring owner acceptance.
