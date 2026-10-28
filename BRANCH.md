@@ -38,6 +38,7 @@
 - [x] Track remains single-writer: update this mergeable plan; conductor owns import and independent final acceptance.
 - [x] Review P2-2 — integration close-out owner: conductor. Remove `.github/workflows/app-cm-w3*.yml` before `feat/app-cm-integration` merges into `main`. That integration PR is the first real execution of the `ci.yml` content gate through `make build-api` (canonical resolver reuse path, real registry); shared CI must pass on its exact head.
 - [x] Merge #813 from `origin/feat/app-cm-integration` at `b0e60eb34`, retaining this W3.c plan for the BRANCH.md conflict; no rebase or force-push.
+- [x] Review P2-1 — replaced symlinked hash inputs with hard links; equality with canonical API_VERSION (`eeb755`) and invalidation/restoration for both content-only and API-only edits pass. Old probe failed the new equality assertion; `CONTENT_IMAGE_CASE=static`, `check-ci-version-filters` and scope checks pass, worktree sources unchanged. Scoped `make down` and empty `make ps` verified.
 
 ## AI Flaky tests
 - [x] No AI/provider behavior changes or accepted flaky tests; all selected checks must pass.
