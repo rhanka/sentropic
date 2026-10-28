@@ -8,6 +8,7 @@ import { createDecisionAuth, createDecisionHost, decisionDescriptors } from '../
 import { createDecisionMetering } from '../../src/services/llm-metering/decision';
 import { evaluatorKey } from '../../src/services/llm-metering/decision-store';
 import { resolveDecisionPrice } from '../../src/services/llm-metering/decision-pricing';
+import { reapExpiredHolds } from '../../src/services/llm-metering/reservation-reaper';
 import { decisionRequest, jevResponse } from '../../../packages/llm-mesh/tests/decision-fixtures';
 
 const tenant = `decision-${randomUUID().slice(0, 8)}`;
@@ -155,5 +156,24 @@ describe('Decision durable metering and authoritative pricing', () => {
       .toMatchObject({ ok: false, error: { code: 'PROVIDER_UNAVAILABLE' }, receipt: { attempts: 0,
         budget: { state: 'pending-reconciliation' } } });
     expect(f.jev.send).not.toHaveBeenCalled();
+  });
+  it('should reconcile a reaper charge once without replaying the provider or losing Decision attribution', async () => {
+    await seed();
+    const f = fixture();
+    f.jev.send.mockImplementationOnce(async () => {
+      expect(await reapExpiredHolds({ database: db, now: new Date(Date.now() + 60_000) }))
+        .toMatchObject({ reconciled: 1, failed: 0 });
+      return { ok: true, body: { ...jevResponse(), model: 'jev-1.13.0' } };
+    });
+    const settle = vi.spyOn(f.metering.budget, 'settle');
+    const result = await f.client.decide(decisionRequest({ evaluator: descriptors[0].evaluator }));
+    expect(result.ok).toBe(true);
+    await f.metering.budget.settle(settle.mock.calls[0][0]);
+    const [ledger] = await query<{ operation: string; provider_id: string; cost_micro_usd: string; reconciliation_state: string }>(sql`
+      SELECT operation, provider_id, cost_micro_usd, reconciliation_state FROM control.cost_ledger WHERE tenant_id = ${tenant}`);
+    expect(ledger).toEqual({ operation: 'decision', provider_id: 'typesafe', cost_micro_usd: '42', reconciliation_state: 'reconciled' });
+    const [bucket] = await query<{ spent_micro_usd: string }>(sql`SELECT spent_micro_usd FROM control.budgets WHERE id = ${tenant}`);
+    expect(String(bucket.spent_micro_usd)).toBe('42');
+    expect(f.jev.send).toHaveBeenCalledOnce();
   });
 });
