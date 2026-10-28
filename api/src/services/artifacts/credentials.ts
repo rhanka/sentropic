@@ -52,10 +52,27 @@ export function artifactCredential(kind: 'session' | 'oauth', id: string, jkt: s
   return JSON.stringify([kind, id, jkt, requiredScopes]);
 }
 
+/** A conversation is bound to its workspace; it is never accepted as a login session. */
+export function artifactTurnCredential(sessionId: string, workspaceId: string): string {
+  if (!sessionId || !workspaceId) throw new Error('Artifact turn binding required');
+  return JSON.stringify(['turn', sessionId, workspaceId, []]);
+}
+
 export function createCurrentArtifactIdentity(resource: string): CurrentArtifactIdentity {
   return async (client, identity) => {
     let parts: unknown;
     try { parts = JSON.parse(identity.credentialId); } catch { return denied; }
+    if (Array.isArray(parts) && parts.length === 4 && parts[0] === 'turn') {
+      if (identity.clientId !== 'sentropic-turn' || typeof parts[1] !== 'string' || !parts[1] ||
+        typeof parts[2] !== 'string' || !parts[2] || !Array.isArray(parts[3]) || parts[3].length) return denied;
+      const params = [parts[1], identity.subject, parts[2]];
+      const query = `SELECT id FROM chat_sessions WHERE id = $1 AND user_id = $2 AND workspace_id = $3`;
+      const locked = await client.query(`${query} FOR SHARE`, params);
+      if (locked.rowCount !== 1) return denied;
+      // A fresh statement observes a deletion or workspace change committed during a lock wait.
+      const active = await client.query(query, params);
+      return { readable: active.rowCount === 1, writable: active.rowCount === 1 };
+    }
     if (!Array.isArray(parts) || parts.length !== 4 || !['session', 'oauth'].includes(parts[0]) ||
       typeof parts[1] !== 'string' || !parts[1] || (parts[2] !== null && typeof parts[2] !== 'string') ||
       !Array.isArray(parts[3]) || parts[3].some(scope => typeof scope !== 'string' || !scope)) return denied;
