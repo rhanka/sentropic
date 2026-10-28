@@ -2,10 +2,10 @@
 
 ## Engram E2 — E10 registration (2026-10-27)
 
-- E10: `feat/cluster-mesh-engram-e10`, targeting `feat/engram-e2-batch1` (PR #802, base `4bd435349`).
-- Worktree: `tmp/worktrees/mem-e10`; [branch plan](tmp/worktrees/mem-e10/BRANCH.md).
-- Scope: installed injection proof only — `installed-memory.mjs`, `installed-memory-types.ts`, `qualification.mk` lane and `installed-receipt.json` under `packages/cluster-mesh/tests/engram-memory/`.
-- Bindings: Engram `0.22.0` tarball sha256 `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10`; candidate mesh tarball stamped `0.24.0-dev.1` in staging; merge the integrator re-pin when it lands, never rebase.
+- E10: `feat/cluster-mesh-engram-e10`, targeting `feat/engram-e2-integration` (integration #802 and re-pin #805 merged at `ef585a6b1`, PR #803).
+- Worktree: `tmp/worktrees/mem-e10b` (takeover); [branch plan](tmp/worktrees/mem-e10b/BRANCH.md).
+- Scope: installed injection proof only — `installed-memory.mjs`, `installed-host-bridge.mjs`, `installed-memory-types.ts`, `qualification.mk` lane, `installed-receipt.json` and retained consumer lock under `packages/cluster-mesh/tests/engram-memory/`.
+- Bindings: Engram `0.22.0` tarball sha256 `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10`; candidate mesh tarball built at the committed workspace version `0.24.0-dev.1` with no stamping and bound by sha256 in the receipt; merge only, never rebase.
 - Environment owner: E10 author, `ENV=test-mem-e10`, ports API 8791, UI 5191, Maildev UI 1091; shared Docker lock; `make down ENV=test-mem-e10` after each container step.
 - Downstream: E11 generates `e2-host-tuple/v1` from the E10 receipt without new qualification.
 
