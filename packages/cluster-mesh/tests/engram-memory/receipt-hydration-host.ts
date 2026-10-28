@@ -10,6 +10,7 @@ export const receiptHydrationHost = () => {
   const grant = g1Grant();
   const scopeBinding = g1ScopeBinding();
   const aggregates = new Map<string, AtomicUnit['updates'][number]>();
+  const indexes = new Map<string, AtomicUnit['indexWrites'][number]>();
   const journal: { id: string; hash: string; bytes: string }[] = [];
   const binding = { memoryGrant: grant } as MemoryHostBinding;
   const driver: MemoryNeutralHostDriver = {
@@ -29,10 +30,11 @@ export const receiptHydrationHost = () => {
       transact: async (_options, operation) => ({ value: await operation({
         readAggregate, readRecords: async () => [],
         readChain: async () => ({ records: journal }),
-        findIdempotency: async () => null,
+        findIdempotency: async ({ key }) => indexes.get(key) ?? null,
         apply: async (unit) => {
           for (const row of unit.updates) aggregates.set(row.key, structuredClone(row));
           for (const row of unit.appends) journal.push(structuredClone(row.record));
+          for (const row of unit.indexWrites) indexes.set(row.key, structuredClone(row));
         },
       }), receipt: {} }),
       query: async (name, input) => {
@@ -59,9 +61,9 @@ export const receiptHydrationHost = () => {
     delete entry.receipt_digest;
     if (receiptDigest !== undefined) entry.receipt_digest = receiptDigest;
     await assembly.handle.transact({ grant, limits: { maxAppends: 0, maxRecords: 1, maxEncodedBytes: 4096 } },
-      (tx) => tx.apply({ guards: [], records: [], appends: [], relationships: [], barriers: [],
+      (tx) => tx.apply({ intentHash: 'corrupt-capture', guards: [], records: [], appends: [], relationships: [], barriers: [],
         purgeIntents: [], indexWrites: [], updates: [{ key, kind: found.kind,
           version: String(BigInt(found.version) + 1n), value: memoryJcs(entry) }] }));
   };
-  return { ...assembly, grant, scopeBinding, aggregates, corruptCapture };
+  return { ...assembly, grant, scopeBinding, aggregates, indexes, corruptCapture };
 };

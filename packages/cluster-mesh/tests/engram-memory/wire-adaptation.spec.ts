@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canonicalizeMemoryJcs, memoryJcs } from '../../src/engram-memory/codec.js';
+import { memoryJcs } from '../../src/engram-memory/codec.js';
 import { captureProofToKernel, captureProofToWire, createMemoryNeutralTransaction, journalBytesWithIntentHash, memoryCommitIndexKey, neutralQueryResult, neutralUnitToPg, stripJournalIntentHash, translateMemoryAggregateRead, translateMemoryUpdateWrite, type MemoryKernelTransactionPort } from '../../src/engram-memory/wire-adaptation.js';
 import type { NeutralAtomicUnit } from '../../src/engram-memory/neutral-contract.js';
 import { validateAdmissionTransition, validateCaptureTransition } from '../../src/engram-memory/validation.js';
@@ -10,7 +10,7 @@ const snakeCapture = { candidate_id: 'cand-1', content: 'body', cursor: '7',
   receipt_digest: 'sha256:receipt', extension: { text: 'é𐐀', values: [null, false, 0] } };
 const snakeDone = { ...snakeCapture, record_digest: 'sha256:digest' };
 const kernelDone = { candidateId: 'cand-1', revision: 2, recordDigest: 'sha256:digest', createdCursor: '7', proof: snakeCapture };
-const unit = (over: Partial<NeutralAtomicUnit> = {}): NeutralAtomicUnit => ({ guards: [], records: [], appends: [], updates: [], relationships: [], barriers: [], purgeIntents: [], indexWrites: [], ...over });
+const unit = (over: Partial<NeutralAtomicUnit> = {}): NeutralAtomicUnit => ({ intentHash: 'producer-intent', guards: [], records: [], appends: [], updates: [], relationships: [], barriers: [], purgeIntents: [], indexWrites: [], ...over });
 
 describe('memory K7/K8 wire adaptation', () => {
   it.each([
@@ -195,7 +195,9 @@ describe('memory neutral transaction', () => {
     const { tx, applied } = fakeTx();
     const units: NeutralAtomicUnit[] = [];
     const neutral = createMemoryNeutralTransaction(tx, { units, identity: 'commit-1' });
+    const suppliedIntentHash = ' producer\u0000 e\u0301𐐀\n';
     await neutral.apply(unit({
+      intentHash: suppliedIntentHash,
       updates: [{ kind: 'capture', key: captureKey, value: memoryJcs(snakeDone), version: '2' }],
       appends: [{ chain: 'memory-journal', kind: 'event', id: 'e1', hash: 'h1',
         value: memoryJcs({ event_id: 'e1', event_digest: 'sha256:ev' }),
@@ -206,13 +208,11 @@ describe('memory neutral transaction', () => {
     expect(JSON.parse(written.updates[0]!.value.data)).toEqual(kernelDone);
     expect(JSON.parse(written.appends[0]!.record.bytes).intent_hash).toBe('sha256:ev');
     expect(written.indexWrites.at(-1)!.key).toBe(memoryCommitIndexKey('commit-1'));
-    // Engram expectedIntentHash(unit): append ids also prefix the update keys.
-    const expectedIntentHash = canonicalizeMemoryJcs({ appends: ['e1'], updates: ['e1', captureKey] });
     const index = written.indexWrites.at(-1)!;
-    expect(index.digest).toBe(expectedIntentHash);
+    expect(Buffer.from(index.digest)).toEqual(Buffer.from(suppliedIntentHash));
     tx.findIdempotency = async ({ key }) => key === index.key ? index : null;
     const replay = await neutral.findIdempotency({ commitIdentity: 'commit-1' });
-    expect(replay!.intentHash).toBe(expectedIntentHash);
+    expect(replay!.intentHash).toBe(suppliedIntentHash);
     expect(units).toHaveLength(1);
   });
   it('should stop paging as soon as the requested records past the allocation are collected', async () => {
