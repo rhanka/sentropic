@@ -39,6 +39,7 @@
 
 ## Feedback Loop
 - [x] BR-W4B-EX1: integration PRs do not trigger ci.yml. Add branch-specific exact-head qualification using existing make targets and teardown, without publication/deployment. Rollback removes workflow.
+- [x] Exact-head CI workflow authored with catalog, context, credential, registry, installation and HTTP/MCP regression suites, API types/lint and unconditional isolated-stack teardown.
 - [x] Turn execution must retain conversation authority through the final host transaction. Extend only the existing credential reader with a workspace-bound turn credential; host authorization remains the sole effect guard. Rollback removes credential kind and source wiring.
 
 ## AI Flaky tests
