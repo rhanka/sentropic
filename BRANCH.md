@@ -20,9 +20,12 @@
   - `deploy/k8s/base/artifact-content-*.yaml`
   - `deploy/k8s/base/kustomization.yaml`
   - `deploy/k8s/base/30-api.yaml`
-  - `deploy/k8s/overlays/{preprod,prod}/kustomization.yaml`
-  - `deploy/k8s/overlays/{preprod,prod}/artifact-content-*.yaml`
-  - `deploy/k8s/overlays/{preprod,prod}/patch-artifact-content-config.yaml`
+  - `deploy/k8s/overlays/preprod/kustomization.yaml`
+  - `deploy/k8s/overlays/prod/kustomization.yaml`
+  - `deploy/k8s/overlays/preprod/artifact-content-*.yaml`
+  - `deploy/k8s/overlays/prod/artifact-content-*.yaml`
+  - `deploy/k8s/overlays/preprod/patch-artifact-content-config.yaml`
+  - `deploy/k8s/overlays/prod/patch-artifact-content-config.yaml`
   - `deploy/ci/artifact-content/**`
   - `docs/runbooks/app-artifact-content-infrastructure.md`
 - [x] **Forbidden Paths (must not change in this branch)**:
@@ -65,9 +68,9 @@
   - [x] Add content Deployment/Service/ConfigMap/NetworkPolicies and base registration; pin API gate env values explicitly.
   - [x] Dedicated unprivileged ServiceAccount, read-only root, bounded resources/probes, no migration command or broad app secret.
   - [x] Keep storage egress closed pending tenant-specific network/IAM receipts; health can run without secrets.
-- [ ] **Lot 3 — Environment routes and certificates**
-  - [ ] Add prod/preprod content ingress, explicit Certificate and domain patches/registrations (prod added).
-  - [ ] Both stable and pinned wildcard SANs, dedicated TLS secret, HTTPS-only route; no catch-all/identity headers.
+- [x] **Lot 3 — Environment routes and certificates**
+  - [x] Add prod/preprod content ingress, explicit Certificate and domain patches/registrations.
+  - [x] Both stable and pinned wildcard SANs, dedicated TLS secret, HTTPS-only route; no catch-all/identity headers.
 - [ ] **Lot 4 — Handoff and final validation**
   - [x] Document tenant DNS/TLS/storage/restore/digest evidence and FIRST-IMMO activation gate in runbook.
   - [ ] Pass `make test-artifact-content-manifests API_PORT=8806 UI_PORT=5192 MAILDEV_UI_PORT=1099 ENV=test-app-w3d`.
