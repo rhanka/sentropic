@@ -2,13 +2,13 @@
 //
 // The E2 integration reserves `RESERVED_NEXT` (today `0.24.0`) for its release
 // line: lot workspaces carry `<reservedNext>-dev.N` by plan. The frozen
-// published compatibility pin (`LATEST_PUBLISHED_CLUSTER_MESH`, `0.22.4`)
+// published compatibility pin (`LATEST_PUBLISHED_CLUSTER_MESH`, `0.23.2`)
 // stays separate from the selected local candidate. This mirrors the contract
 // in tests/fixtures/reserved-versions.ts (#767), duplicated here because the
 // bare probe runs as plain node `.mjs`. Keep both constants aligned here
 // and there; moving the reservation does not move the frozen published pin.
 export const RESERVED_NEXT = '0.24.0';
-export const LATEST_PUBLISHED_CLUSTER_MESH = '0.22.4';
+export const LATEST_PUBLISHED_CLUSTER_MESH = '0.23.2';
 export const PACK_ONLY_PACKAGE = '@sentropic/cluster-mesh';
 
 const devBumpPattern = (reservedNext) =>
