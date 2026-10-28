@@ -331,3 +331,143 @@ describe('chat-loop-controller: event accumulation', () => {
 describe('chat-loop-controller: message mutations', () => {
   it('setMessages replaces the list', () => {
     const ctrl = createChatLoopController<Msg>();
+    ctrl.setMessages([userMsg('u1'), assistantMsg('a1')]);
+    expect(ctrl.getSnapshot().messages).toHaveLength(2);
+    ctrl.setMessages([userMsg('u2')]);
+    expect(ctrl.getSnapshot().messages).toHaveLength(1);
+    expect(ctrl.getSnapshot().messages[0]?.id).toBe('u2');
+  });
+
+  it('appendMessage adds to the end', () => {
+    const ctrl = createChatLoopController<Msg>();
+    ctrl.setMessages([userMsg('u1')]);
+    ctrl.appendMessage(assistantMsg('a1', { _localStatus: 'processing' }));
+    expect(ctrl.getSnapshot().messages).toHaveLength(2);
+    expect(ctrl.getSnapshot().messages[1]?.id).toBe('a1');
+  });
+
+  it('patchMessage updates matching message by id', () => {
+    const ctrl = createChatLoopController<Msg>();
+    ctrl.setMessages([assistantMsg('a1', { _localStatus: 'processing' })]);
+    const found = ctrl.patchMessage('a1', { _localStatus: 'completed', content: 'Done.' });
+    expect(found).toBe(true);
+    const msg = ctrl.getSnapshot().messages.find((m) => m.id === 'a1');
+    expect(msg?._localStatus).toBe('completed');
+    expect(msg?.content).toBe('Done.');
+  });
+
+  it('patchMessage returns false when id not found', () => {
+    const ctrl = createChatLoopController<Msg>();
+    ctrl.setMessages([userMsg('u1')]);
+    const found = ctrl.patchMessage('nonexistent', { content: 'x' });
+    expect(found).toBe(false);
+    expect(ctrl.getSnapshot().messages).toHaveLength(1);
+  });
+
+  it('filterMessages removes messages not in the keep set', () => {
+    const ctrl = createChatLoopController<Msg>();
+    ctrl.setMessages([userMsg('u1'), userMsg('u2'), assistantMsg('a1')]);
+    ctrl.filterMessages(new Set(['u1', 'a1']));
+    expect(ctrl.getSnapshot().messages.map((m) => m.id)).toEqual(['u1', 'a1']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. isTrackedAssistantStreamId
+// ---------------------------------------------------------------------------
+describe('chat-loop-controller: isTrackedAssistantStreamId', () => {
+  it('returns true when an assistant message matches by _streamId', () => {
+    const ctrl = createChatLoopController<Msg>();
+    ctrl.setMessages([
+      assistantMsg('a1', { _streamId: 'stream-xyz', _localStatus: 'processing' }),
+    ]);
+    expect(ctrl.isTrackedAssistantStreamId('stream-xyz')).toBe(true);
+    expect(ctrl.isTrackedAssistantStreamId('unknown')).toBe(false);
+  });
+
+  it('falls back to message.id when _streamId is absent', () => {
+    const ctrl = createChatLoopController<Msg>();
+    ctrl.setMessages([assistantMsg('a1', { _localStatus: 'processing' })]);
+    expect(ctrl.isTrackedAssistantStreamId('a1')).toBe(true);
+  });
+
+  it('returns false for user messages', () => {
+    const ctrl = createChatLoopController<Msg>();
+    ctrl.setMessages([userMsg('u1')]);
+    expect(ctrl.isTrackedAssistantStreamId('u1')).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. getProjectionEventsForMessage priority: projected > history
+// ---------------------------------------------------------------------------
+describe('chat-loop-controller: getProjectionEventsForMessage', () => {
+  it('prefers projectedStreamEventsById over initialEventsByMessageId', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const streamId = 'stream-priority-1';
+    const msgId = streamId;
+
+    // History: one event
+    ctrl.mergeHistoryEvents(msgId, [
+      { eventType: 'status', sequence: 1, data: { from: 'history' } },
+    ]);
+    // Live: different event at same sequence (override)
+    ctrl.appendProjectedLiveEvent(streamId, {
+      eventType: 'status',
+      sequence: 1,
+      data: { from: 'live' },
+    });
+
+    const asst = assistantMsg(msgId, { _streamId: streamId });
+    ctrl.setMessages([asst]);
+
+    const events = ctrl.getProjectionEventsForMessage(asst);
+    // Should return live events (projected), not history
+    expect(events[0]?.data?.from).toBe('live');
+  });
+
+  it('falls back to initialEventsByMessageId when projected is empty', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const msgId = 'msg-fallback-1';
+
+    ctrl.mergeHistoryEvents(msgId, [
+      { eventType: 'status', sequence: 1, data: { from: 'history' } },
+    ]);
+
+    const asst = assistantMsg(msgId);
+    ctrl.setMessages([asst]);
+
+    const events = ctrl.getProjectionEventsForMessage(asst);
+    expect(events[0]?.data?.from).toBe('history');
+  });
+
+  it('returns empty array when no events are registered', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const asst = assistantMsg('a-empty');
+    ctrl.setMessages([asst]);
+    expect(ctrl.getProjectionEventsForMessage(asst)).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. attachStream / detachStream — stream subscription lifecycle (slice 1C)
+//
+// Strategy: inject a fake streamClient + fake pollJob to feed deterministic
+// event sequences and assert:
+//   9a. Projection events are appended correctly from subscription
+//   9b. Terminal events (done/error) patch the message _localStatus
+//   9c. onProjectionEvent callback fires AFTER state is updated
+//   9d. onTerminal callback fires AFTER message is patched
+//   9e. detachStream removes the subscription
+//   9f. job-poll fallback marks terminal when SSE is missed (done + error)
+//   9g. job-poll does not run when message is already terminal
+//   9h. attachStream hot-swap detaches previous subscription
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal fake stream client for testing — records hub registrations.
+ */
+function makeFakeStreamClient() {
+  const handlers = new Map<string, (event: unknown) => void>();
+  return {
+    set(key: string, handler: (event: unknown) => void) {
