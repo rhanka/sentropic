@@ -39,6 +39,7 @@
 ## Feedback Loop
 - [x] Opus r1 P1: reproduce nine malformed-proof failures; validate K7/K8 before translation and map canonical JSON errors to `invalid-schema`; exercise the installed Engram commit loop with no reconcile.
 - [x] CI accepted baseline `05cecaa6f`; rerun CI on the revision head before handoff.
+- [x] Opus r1 P2-D: enforce R-G3-1 second-holder refusal before side effects, including concurrent acquisitions; refresh ownership at checkFence per binding §§9.3–9.6 and test release/failure cleanup.
 - [x] BRE10a-EX1: owner-authorized PR #808 CI repair in `tmp/worktrees/mem-e10a-ci`, `ENV=test-mem-e10a-ci`; rationale: a frozen prerelease pin breaks pack-only alignment after the dev bump; impact: pin the selected fixture and lock to published stable `0.23.2` (matching this candidate's dependency metadata), align the mirrored contract and assert only that frozen registry request; rollback: revert this repair commit. Registry probes returned 404 for `0.23.4` and `0.23.5`.
 - Frozen-surface gates from the pack-only tolerance and the Comments gate lines must still pass on this branch; any failure is blocking for this lot.
 

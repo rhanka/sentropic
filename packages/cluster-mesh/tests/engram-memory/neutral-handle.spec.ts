@@ -135,15 +135,54 @@ describe('memory neutral-handle fence', () => {
     expect(fence).toEqual({ fenceId: 'instance-1', epoch: '3' });
     expect(assembly.getFence()).toEqual(fence);
     expect(state.provisioned).toHaveLength(1);
+    const beforeRefusal = state.verified;
     await expect(handle.acquireFence({ scope, store_id: 'store-1', grant }))
       .rejects.toMatchObject({ code: 'fence-conflict' });
+    expect(state.verified).toBe(beforeRefusal);
     await handle.checkFence(grant, fence);
+    expect(state.verified).toBe(beforeRefusal + 1);
     await expect(handle.checkFence(grant, { fenceId: 'instance-1', epoch: '9' }))
       .rejects.toMatchObject({ code: 'fence-lost' });
     await handle.releaseFence(fence);
     expect(state.released).toBe(1);
     await handle.releaseFence(fence);
     expect(state.released).toBe(1);
+  });
+  it('should refuse a concurrent holder on the same kernel before driver side effects', async () => {
+    const { kernel, driver } = harness();
+    const transaction = vi.spyOn(driver, 'transaction');
+    const first = createMemoryNeutralHandle({ kernel, driver, binding, schemaName: 'host_schema' });
+    const second = createMemoryNeutralHandle({ kernel, driver, binding, schemaName: 'host_schema' });
+    const acquiring = first.handle.acquireFence({ scope, store_id: 'store-1', grant });
+    await expect(second.handle.acquireFence({ scope, store_id: 'store-1', grant }))
+      .rejects.toMatchObject({ code: 'fence-conflict' });
+    const fence = await acquiring;
+    expect(transaction).toHaveBeenCalledTimes(1);
+    await expect(second.handle.acquireFence({ scope, store_id: 'store-1', grant }))
+      .rejects.toMatchObject({ code: 'fence-conflict' });
+    expect(transaction).toHaveBeenCalledTimes(1);
+    await first.handle.releaseFence(fence);
+    const successor = await second.handle.acquireFence({ scope, store_id: 'store-1', grant });
+    await first.handle.releaseFence(fence);
+    await second.handle.checkFence(grant, successor);
+    await second.handle.releaseFence(successor);
+  });
+  it('should recheck ownership and refuse a lost fence', async () => {
+    const { handle, kernel, driver } = make();
+    const fence = await handle.acquireFence({ scope, store_id: 'store-1', grant });
+    const transaction = vi.spyOn(driver, 'transaction');
+    vi.spyOn(kernel.ownership!, 'verify').mockRejectedValueOnce(
+      Object.assign(new Error('ownership lost'), { code: 'stale-epoch' }));
+    await expect(handle.checkFence(grant, fence)).rejects.toMatchObject({ code: 'fence-lost' });
+    expect(transaction).toHaveBeenCalledWith(
+      { isolation: 'serializable', readOnly: true, deadlineMs: 5000 }, expect.any(Function));
+  });
+  it('should clear a failed acquisition reservation', async () => {
+    const { handle, kernel } = make();
+    vi.spyOn(kernel, 'provisionFence').mockRejectedValueOnce(new Error('provision failed'));
+    await expect(handle.acquireFence({ scope, store_id: 'store-1', grant })).rejects.toThrow('provision failed');
+    await expect(handle.acquireFence({ scope, store_id: 'store-1', grant }))
+      .resolves.toEqual({ fenceId: 'instance-1', epoch: '3' });
   });
   it('refuses a second store identity for the bound scope', async () => {
     const parts = harness();
@@ -153,7 +192,8 @@ describe('memory neutral-handle fence', () => {
     const second = createMemoryNeutralHandle({
       kernel: parts.kernel, binding, driver: parts.driver, schemaName: 'host_schema',
     });
-    await first.handle.acquireFence({ scope, store_id: 'store-1', grant });
+    const fence = await first.handle.acquireFence({ scope, store_id: 'store-1', grant });
+    await first.handle.releaseFence(fence);
     await expect(second.handle.acquireFence({ scope, store_id: 'store-2', grant }))
       .rejects.toMatchObject({ code: 'fence-conflict' });
   });
