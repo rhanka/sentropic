@@ -20,13 +20,13 @@
     ModelCatalogGroup,
     ModelCatalogModel,
     ModelProviderId,
-  } from '@sentropic/chat-runtime/utils/model-selection';
+  } from '@sentropic/chat-ui/utils/model-selection';
   import {
     formatModelSelectionKey,
     parseModelSelectionKey,
     providerGroupLabel,
     resolveFallbackModelOption,
-  } from '@sentropic/chat-runtime/utils/model-selection';
+  } from '@sentropic/chat-ui/utils/model-selection';
 
   /** The currently-selected 'provider::model' composite key (bindable). */
   export let value: string = '';

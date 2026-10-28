@@ -42,6 +42,7 @@
   - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] BR1-R3-model-presentation: visual model key/catalog/label helpers have one neutral UI implementation; runtime retains selection/hydration policy and consumes that existing public utility seam. Runtime is an optional type peer of UI.
 - [x] BR1-R3-context-fallback: move the empty visual context provider and its behavior suite into chat-ui; runtime context owns selection/loading only.
 - [x] BR1-R3-stream-presentation: move record/task normalization beside its only consumers in visual stream presentation; remove the orphan runtime module and exports.
 - [x] BR1-R3-documents-host: runtime owns DocumentHost upload/delete/download I/O; the visual package retains only normalized attachment/card declarations.

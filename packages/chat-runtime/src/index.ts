@@ -14,7 +14,7 @@ export * from './state/chatProjection.js';
 export * from './state/chatSessionHydration.js';
 export * from './state/chatSessionRuntime.js';
 export * from './utils/chat-run-projection.js';
-export * from './utils/model-selection.js';
+export * from './utils/modelSelectionPolicy.js';
 export * from './checkpoints/checkpointState.js';
 export * from './checkpoints/classifier.js';
 export * from './state/agentsViewMarkers.js';

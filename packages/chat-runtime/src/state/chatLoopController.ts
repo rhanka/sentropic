@@ -139,13 +139,13 @@ import {
 } from './chatDraft.js';
 
 import {
-  coerceSelectionToValidEntry,
   groupModelsByProvider,
   type ModelCatalogGroup,
   type ModelCatalogModel,
   type ModelCatalogProvider,
   type ModelProviderId,
-} from '../utils/model-selection.js';
+} from '@sentropic/chat-ui/utils/model-selection';
+import { coerceSelectionToValidEntry } from '../utils/modelSelectionPolicy.js';
 
 // ---------------------------------------------------------------------------
 // Opaque stream event — matches AppChatPanel's internal StreamEvent shape.

@@ -12,6 +12,10 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
+    "./utils/model-selection": {
+      "types": "./src/utils/model-selection.ts",
+      "import": "./src/utils/model-selection.ts"
+    },
     ".": {
       "types": "./src/index.ts",
       "svelte": "./src/index.ts",
@@ -266,6 +270,9 @@
     "typescript": "5.4.5"
   },
   "peerDependenciesMeta": {
+    "@sentropic/chat-runtime": {
+      "optional": true
+    },
     "@sentropic/design-system-svelte": {
       "optional": true
     }

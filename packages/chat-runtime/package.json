@@ -51,7 +51,7 @@
     "./utils/chat-steer": { "types": "./src/utils/chat-steer.ts", "import": "./src/utils/chat-steer.ts" },
     "./utils/chat-tool-scope": { "types": "./src/utils/chat-tool-scope.ts", "import": "./src/utils/chat-tool-scope.ts" },
     "./utils/localToolStreamSync": { "types": "./src/utils/localToolStreamSync.ts", "import": "./src/utils/localToolStreamSync.ts" },
-    "./utils/model-selection": { "types": "./src/utils/model-selection.ts", "import": "./src/utils/model-selection.ts" }
+    "./utils/model-selection": { "types": "./src/utils/modelSelectionPolicy.ts", "import": "./src/utils/modelSelectionPolicy.ts" }
   },
   "files": ["dist", "README.md", "LICENSE"],
   "sideEffects": false,

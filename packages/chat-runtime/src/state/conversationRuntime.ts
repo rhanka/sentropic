@@ -6,7 +6,7 @@ import { createConversationCheckpoints } from './conversationCheckpoints.js';
 import { buildAttachmentBandItems } from '../documents/attachmentState.js';
 import { extractGeneratedFileCardsFromEvents } from '../documents/generatedFileCards.js';
 import { createConversationDocuments } from './conversationDocuments.js';
-import { groupModelsByProvider, type ModelCatalogModel, type ModelCatalogProvider } from '../utils/model-selection.js';
+import { groupModelsByProvider, type ModelCatalogModel, type ModelCatalogProvider } from '@sentropic/chat-ui/utils/model-selection';
 import type { AttachLocalToolMachineOptions, ControllerSendPayload } from './chatLoopController.js';
 import { createChatSessionRuntime, type ChatSessionRuntime } from './chatSessionRuntime.js';
 import type { ChatContextProvider } from './chat-context.js';

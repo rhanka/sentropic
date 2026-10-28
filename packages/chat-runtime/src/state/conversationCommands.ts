@@ -1,7 +1,7 @@
 import type { ChatConversationCommands } from '@sentropic/chat-runtime/conversation';
 import type { DocumentHost } from '@sentropic/chat-runtime/documents';
 import type { ChatCoreHost } from '../client/chat-core-host.js';
-import { parseModelSelectionKey } from '../utils/model-selection.js';
+import { parseModelSelectionKey } from '@sentropic/chat-ui/utils/model-selection';
 import type { ChatContextEntry } from './chat-context.js';
 import type { ControllerSendPayload } from './chatLoopController.js';
 import type { ChatSessionRuntime } from './chatSessionRuntime.js';

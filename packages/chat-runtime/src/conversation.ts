@@ -1,6 +1,6 @@
 import type { ChatProjectedTimelineItem } from '@sentropic/chat-runtime/state/chatProjection';
 import type { ChatSessionRuntimeMessage } from '@sentropic/chat-runtime/state/chatSessionRuntime';
-import type { ModelCatalogGroup, ModelCatalogModel } from '@sentropic/chat-runtime/utils/model-selection';
+import type { ModelCatalogGroup, ModelCatalogModel } from '@sentropic/chat-ui/utils/model-selection';
 import type { ChatContextEntry, ReadableStore } from '@sentropic/chat-runtime/state/chat-context';
 import type { UnifiedAttachmentItem, ChatGeneratedFileCard } from '@sentropic/chat-ui/documents';
 
