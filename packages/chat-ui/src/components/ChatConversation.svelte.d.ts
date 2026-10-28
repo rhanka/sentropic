@@ -1,6 +1,6 @@
 import type { Component, Snippet } from 'svelte';
 import type { ChatConversationSnapshots, ChatConversationCommands } from '../conversation.js';
-import type { ChatUiLabelResolver } from '../hosts/createWebHost.js';
+import type { ChatUiLabelResolver } from '@sentropic/chat-runtime/hosts/createWebHost';
 
 export type ChatConversationFeatures = {
   attachments?: boolean;

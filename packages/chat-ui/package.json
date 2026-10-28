@@ -57,11 +57,6 @@
       "svelte": "./src/hosts/types.ts",
       "import": "./src/hosts/types.ts"
     },
-    "./hosts/createWebHost": {
-      "types": "./src/hosts/createWebHost.ts",
-      "svelte": "./src/hosts/createWebHost.ts",
-      "import": "./src/hosts/createWebHost.ts"
-    },
     "./stores/chatWidgetLayout": {
       "types": "./src/stores/chatWidgetLayout.ts",
       "svelte": "./src/stores/chatWidgetLayout.ts",
@@ -161,11 +156,6 @@
       "types": "./src/components/SessionList.svelte.d.ts",
       "svelte": "./src/components/SessionList.svelte",
       "import": "./src/components/SessionList.svelte"
-    },
-    "./state/sessionList": {
-      "types": "./src/state/sessionList.ts",
-      "svelte": "./src/state/sessionList.ts",
-      "import": "./src/state/sessionList.ts"
     },
     "./context": {
       "types": "./src/context/index.ts",

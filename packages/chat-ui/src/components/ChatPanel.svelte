@@ -6,7 +6,7 @@
   import type {
     ChatUiLabelResolver,
     ChatUiWebHost,
-  } from '../hosts/createWebHost.js';
+  } from '@sentropic/chat-runtime/hosts/createWebHost';
 
   export let host: ChatUiWebHost | undefined = undefined;
   export let transport: ChatCoreTransport | undefined = undefined;

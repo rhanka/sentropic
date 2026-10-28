@@ -5,7 +5,7 @@ import type { RendererRegistry } from '../renderers/registry.js';
 import type {
   ChatUiLabelResolver,
   ChatUiWebHost,
-} from '../hosts/createWebHost.js';
+} from '@sentropic/chat-runtime/hosts/createWebHost';
 
 export type ChatPanelProps = {
   host?: ChatUiWebHost;
