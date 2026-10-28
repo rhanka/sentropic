@@ -38,6 +38,7 @@
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read W3.b row, sections 2/3/4/5, rules and template; mechanical branch check and port availability pass.
 - [x] Lot 1: acceptance tests committed before host implementation; execution pending the shared Docker lock.
+- [x] Runtime acceptance added first: real isolated PG, W3.a consume race, new process instance, membership/ACL denial and key rotation.
 - [ ] Lot 2: apps/artifact-content/src/{host,runtime,index}.ts reuse package content/PG/S3 ports and W3.a consume; no publication dispatcher.
 - [ ] Lot 3: typecheck/lint, focused content and W3.a regressions, HTTP listener smoke; scope checks; isolated teardown.
 - [ ] Lot 4: draft PR against feat/app-cm-integration, BRANCH.md body, first plan comment, push and green CI on exact head; report PR and SHA.
