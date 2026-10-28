@@ -38,9 +38,12 @@
   - [x] `.dockerignore` — BR78-EX3, exclude new transport artifacts from build inputs.
   - [x] `scripts/ci/publishable-ci-wiring.test.mjs` — BR78-EX4, preserve filter isolation with exact image-guard exceptions.
   - [x] `e2e/tests/07_comment_assistant.spec.ts` — BR78-EX5, deterministic workspace initialization for the unchanged blocking journey.
+  - [x] `spec/CHAT_MIGRATION_P0*.md` — BR78-EX6, unchanged upstream documents in the main integration merge only.
 - [x] Exception process: record rationale, impact and rollback before edits; additional paths require bounded exceptions.
 
 ## Feedback Loop
+- [x] Merge main de7ab8d3157b1859648e0404b78c182ea9cd21e4 after GitHub reports the PR conflicted at 257180a6f. Retain this branch's BRANCH.md in the sole plan conflict; incoming chat design documents are unchanged upstream content. No image, gate, test or package source conflict; no rebase or history rewrite. Requalify the resulting exact head.
+- [x] BR78-EX6: mechanical scope check identifies 16 incoming spec/CHAT_MIGRATION_P0*.md documents. Permit their unchanged main versions for this integration merge only, without authoring chat design changes. Impact: scope declaration only; rollback: reverse the main merge with a new commit if rejected, never rewrite published history.
 - [x] BR78-EX1 authorized by owner packet: producers and image consumers need persistent caches and verified transport. Impact: artifact production/loading; gate dependencies and blocking power retained. Rollback: revert workflow transport/cache hunks and invalidate br78 cache scopes.
 - [x] BR78-EX1 includes IdP's browser consumer: reuse the exact E2E artifact instead of adding Chromium to every API toolbox; add build-e2e to IdP prerequisites, retain screen assertions. Rollback: restore browser toolbox recipe and IdP command together.
 - [x] IdP browser runs through its official Make target with --rm on the isolated Compose network and a read-only script mount; the ordinary E2E service uses host networking, which cannot resolve auth-idp.
