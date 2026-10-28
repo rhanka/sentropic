@@ -128,6 +128,7 @@ COPY packages/oauth-verify ./packages/oauth-verify
 COPY packages/skills ./packages/skills
 COPY packages/ubo-contracts ./packages/ubo-contracts
 COPY apps/auth-idp ./apps/auth-idp
+COPY apps/artifact-content ./apps/artifact-content
 COPY apps/llm-gateway ./apps/llm-gateway
 COPY e2e/package.json e2e/package-lock.json ./e2e/
 COPY e2e/tests/fixtures ./e2e/tests/fixtures
@@ -226,6 +227,13 @@ RUN npx esbuild ../apps/auth-idp/index.ts \
     --external:isolated-vm --external:docx --external:pptxgenjs --external:zod \
     --external:@aws-sdk/* --external:@smithy/* --sourcemap
 
+# The content role shares the canonical artifact and pruned workspace dependencies.
+# Keep artifacts external: its SQL assets resolve relative to the installed package.
+RUN npx esbuild ../apps/artifact-content/src/index.ts \
+    --bundle --platform=node --target=node20 --format=esm \
+    --outfile=../apps/artifact-content/dist/index.js \
+    --external:@sentropic/artifacts --external:pg --external:@aws-sdk/* --external:@smithy/* --sourcemap
+
 FROM base AS production
 WORKDIR /workspace
 ENV NODE_ENV=production
@@ -242,6 +250,7 @@ COPY --from=build /workspace/api/dist /workspace/api/dist
 # override run from /workspace (so IDP_WEB_BUILD_DIR=apps/auth-idp/web/build
 # resolves relative to that cwd). One image, two Deployments, one publish pipeline.
 COPY --from=build /workspace/apps/auth-idp/dist /workspace/apps/auth-idp/dist
+COPY --from=build /workspace/apps/artifact-content/dist /workspace/apps/artifact-content/dist
 COPY --from=idp-web-build /workspace/apps/auth-idp/web/build /workspace/apps/auth-idp/web/build
 WORKDIR /workspace/api
 CMD ["node", "dist/index.js"]

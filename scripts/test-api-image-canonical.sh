@@ -139,7 +139,7 @@ tag_inputs_cover_builds() {
     esac
   done < <(grep -o 'npm --workspace @sentropic/[a-z0-9-]* run build' api/Dockerfile)
   test "$missing" -eq 0 || return 1
-  for required in api apps/auth-idp apps/llm-gateway e2e/tests/fixtures ui/package.json packages/auth-ui packages/skills packages/mcp-platform packages/llm-gateway .security/audit-gate.mjs .security/audit-allowlist.json .dockerignore package.json package-lock.json; do
+  for required in api apps/auth-idp apps/artifact-content apps/llm-gateway e2e/tests/fixtures ui/package.json packages/auth-ui packages/skills packages/mcp-platform packages/llm-gateway .security/audit-gate.mjs .security/audit-allowlist.json .dockerignore package.json package-lock.json; do
     grep -Fxq "$required" <<< "$inputs" || { echo "FAIL: shipped build input '$required' missing from API_VERSION" >&2; return 1; }
   done
   echo "PASS: every shipped build input is hashed into the canonical tag (runtime change -> new tag)"
@@ -255,7 +255,7 @@ ci_filter_block() {
 
 trigger_coverage() {
   local script
-  for script in scripts/resolve-api-image.sh scripts/test-api-image-canonical.sh; do
+  for script in scripts/resolve-api-image.sh scripts/test-api-image-canonical.sh scripts/test-artifact-content-image.sh; do
     if ! ci_filter_block global | grep -Fxq "$script"; then
       if ! ci_filter_block api | grep -Fxq "$script"; then
         echo "FAIL: '$script' matches no filter running the canonical-image tests" >&2
@@ -274,7 +274,7 @@ retained_exclusions() {
   fi
   local image="${registry}/${API_IMAGE_NAME:-sentropic-api}:${version}"
   local missing=0 path
-  for path in api/package.json e2e/package.json e2e/tests/fixtures apps/llm-gateway apps/auth-idp ui/package.json .security/audit-gate.mjs; do
+  for path in api/package.json e2e/package.json e2e/tests/fixtures apps/llm-gateway apps/auth-idp apps/artifact-content/dist/index.js ui/package.json .security/audit-gate.mjs; do
     if ! docker run --rm "$image" sh -ec "test -e '/workspace/$path'" >/dev/null 2>&1; then
       echo "FAIL: retained input '$path' missing from the canonical image" >&2
       missing=1
