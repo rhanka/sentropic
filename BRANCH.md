@@ -60,7 +60,7 @@
   - [x] Bind file, revision, bytes, quantization, runtime archive/readout and compilation into evaluator definition.
   - [ ] Keep shipped candidate unqualified; explicit local qualification composition only.
 - [ ] **Lot 3 — Fixed local transport**
-  - [ ] Verify host inventory and single served native model before/after one System One POST.
+  - [x] Verify host inventory and single served native model before/after one System One POST.
   - [ ] Bound request, response, timeout and cancellation; reject redirects and identity gaps without replay.
 - [ ] **Lot 4 — Native adapter and host exports**
   - [ ] Compile typed binary/choice/graded questions and validate pinned native output, independent usage and identity.
