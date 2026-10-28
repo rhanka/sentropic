@@ -1,69 +1,83 @@
-# Feature: W1.c compose the shared PostgreSQL activation store
+# Feature: W3.a trusted artifact reader activation
 
 ## Objective
-- [x] Compose the upstream activation adapter with the trusted app pool, opaque scope, at-most-60-second ticket/flow policy and W1.a migration receipt.
+- [ ] Deliver session-bound reader activation on the shared PostgreSQL store after W1.c/W2.b.
+- [ ] Recheck current authority before consume; expose no production activation.
 
 ## Scope / Guardrails
-- [x] Owner dispatch: W1.c of `.tmp/app-switch-week/plan-v2.md`; draft delivery, green CI, no merge or live activation.
-- [x] Worktree `tmp/worktrees/app-w1c`, branch `feat/app-cm-w1c`; merge W1.d `8729aff22` and W2.b `d0ce8aeb0` as assigned; no rebase.
-- [x] Owner refresh: consume the frozen workspace tuple's `@sentropic/artifacts` 0.2.4 through `file:../packages/artifacts`; UP-T owns implementation, SQL and conformance vectors. Drop W1.c's separate registry 0.2.3 pin.
-- [x] No host PostgreSQL activation algorithm, duplicate SQL, app authority proof, route mounting or live activation; W3.a retains current-authority proof.
-- [x] Make-only development; lock every build/test/start with `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock`, release between steps and run matching down.
-- [x] Dedicated `ENV=test-app-w1c` last in every make command; API/UI/Maildev UI ports 8799/5185/1092; check ownership before starting services.
-- [x] Tests first; atomic commits below 150 lines via `make commit MSG="..."`; selective staging and scope-check before each commit; no attribution trailers.
+- [x] Source: `.tmp/app-switch-week/plan-v2.md` W3.a, sections 2/3, and remote v2.4 M1-P P2/S1.
+- [x] Base: `origin/feat/app-cm-integration`; branch `feat/app-cm-w3a`; worktree `tmp/worktrees/app-w3a`.
+- [x] Dependencies inherited: W1.a/b/c/d, W2.a/b, W4.a, W0-close.d refresh #796.
+- [x] ENV `test-app-w3a`; API_PORT=8801 UI_PORT=5187 MAILDEV_UI_PORT=1094.
+- [x] All make commands end with ENV=test-app-w3a; Docker/test commands use the shared flock.
+- [x] Merge only; never rebase, force-push, clean-all, ENV=dev or production activation.
+- [x] Reuse upstream activation adapter/SQL unchanged; no package or migration edits.
+- [x] Selective staging; make commit; fewer than 150 changed lines per commit; no AI trailers.
+- [x] English source and Markdown; no new dependencies.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `api/src/services/artifacts/activation-storage.ts`
-  - `api/tests/api/artifacts-host-activation-store.test.ts`
-  - `api/package.json`
-  - `api/package-lock.json`
-  - `package-lock.json`
-  - `api/src/services/artifacts/host-storage.ts`
-  - `api/tests/api/artifacts-host-migrations.test.ts`
-  - `.github/workflows/app-cm-w1c.yml`
+  - `api/src/services/artifacts/reader-activation.ts`
+  - `api/src/services/artifacts/authorization.ts`
+  - `api/src/services/artifacts/instance.ts`
+  - `api/src/routes/namespaces/resources.ts`
+  - `api/src/routes/namespaces/artifacts.ts`
+  - `api/src/routes/namespaces/resources-module.ts`
+  - `api/tests/api/artifacts-reader-activation.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
+  - `.github/workflows/**`
   - `.cursor/rules/**`
   - `packages/**`
-  - `api/src/db/run-migrations.ts`
   - `api/drizzle/**`
-  - `package.json`
-  - `plan/**`
+  - `deploy/**`
   - `.track/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/**`
-- [x] Exception process: record BR-W1C-EXn, rationale, impact and rollback before any scope expansion.
+  - `spec/**`
+- **Exception process**:
+  - [x] Record BRW3A-EXn reason, impact and rollback before any scope extension.
 
 ## Feedback Loop
-- [x] BR-W1C-EX2 — owner requires exact-head CI on PR #794. Add a branch-specific workflow using existing make targets, exact pushed-SHA checkout, activation/migration/recovery/APP-P1 suites, typecheck/lint and unconditional teardown. No publishing or deployment; rollback removes this workflow.
-- [x] R1 base refresh: merge `origin/feat/app-cm-integration` at `ea8e8443134c641b99628ce2c99787a785d8c827`, preserving W1.c's BRANCH.md and restoring the tuple's API manifest and both locks unchanged. APP-P1 receipt stays `020aacfec500d754b76c90d3ad4a05097e0f996b8b9282145ca458917ea6fb27`. Inherited merge paths are advisory in `/tmp/w1c-merge-scope.log`; merge delta exceeds 150 lines solely through unchanged base imports. Both parents and the candidate share event-log blob `edb32e21829db7d28a3576dffbe22495cb162dc8`; no Track events lost or authored.
-- [x] BR-W1C-EX1 — initial owner-authorized 0.2.3 registry pin is superseded by R1's shared workspace 0.2.4 tuple. Keep the activation asset registration, required relations and migration regression counts. No executor algorithm or SQL changes; rollback is reverting W1.c registration before activation.
-- [x] Base-only merges imported W1.d/W2.b unchanged; scope-check reported inherited paths outside W1.c. Authored commits are checked separately after both merges.
-- [x] UP-T-2 — imported 0.2.4 `runPostgresActivationConformance` and `POSTGRES_ACTIVATION_VECTOR_IDS`: all 16/16 vectors pass on the W1.a-installed pool in a disposable `test_w1c_` database. Every required hook is wired; missing DATABASE_URL fails at import. Receipt: `/tmp/w1c-r1-green.log`.
-- [x] PIN-1 — #796 merged the qualified workspace tuple into integration. W1.c removed its separate 0.2.3 API registry dependency and consumes the shared 0.2.4 workspace package. The frozen APP-P1 digest remains `020aacfec500d754b76c90d3ad4a05097e0f996b8b9282145ca458917ea6fb27`; receiving registry/runtime qualification pending below.
-- [x] R1 receiving qualification: 86/86 tests in six suites pass in `/tmp/w1c-r1-green.log`: activation 19 (including all 16 imported vectors), migrations 16, recovery 20, registry 21, physical installation 2 and transport 8. APP-P1 and physical API/mesh package equality pass with 0.2.4. Earlier PIN-1 failure receipts are superseded; no live activation.
-- [x] UP-T-1 — adapter/flow/SQL/hash availability resolved by published 0.2.3 and the owner-requested API pin; imported activation vectors remain UP-T-2.
-- [x] Current package evidence: `docs/baselines/app-cm-w0/published-tuple.json` and `payload-equivalence-2026-10-27.json` bind artifacts 0.2.4 (124 payload paths) to integrity `sha512-AMXfnuKVx5gdeFppZ4iSgb0KxmfH+qSOotm/cXGBKGEdhyv9R/D05jMhefP5pIW9HwD/jbEWqcU9Gv3KTxJSQQ==` and exact workspace payload equivalence, including the activation adapter, SQL and vectors. Earlier 0.2.1/0.2.3 observations are superseded.
-- [x] UP-T-1 closure: package adapter uses `createPostgresActivationStore`, SQL asset `@sentropic/artifacts/sql/0001_activation.sql`, SHA-256 `13767c826a62aa5f880809ca2ebc60bdc638b2e59f983e195d4351356b282d8b`; host only composes those contracts.
-- [x] R1 P2: replace raw write/take/remove ports with frozen ticket/flow peek ports plus configured issue, consume, cleanup and invalidate. New facade test fails on the former spread (`/tmp/w1c-r1-tests.log`) and passes after restriction. Document separate ticket/flow transactions: flow-write failure rejects issuance; the unused ticket cannot activate without a flow and expires within 60 seconds.
-- [x] R1 exact-head CI: `.github/workflows/app-cm-w1c.yml` triggers on pushes to `feat/app-cm-w1c`, checks out and asserts `github.sha`, then runs the same six receiving suites, API typecheck/lint and unconditional teardown through existing make targets. No publication/deployment and no PR retargeting; wait for the exact-head GitHub receipt before delivery.
+- [x] Track remains conductor-owned; this branch updates its mergeable BRANCH source only.
+- [x] W3.b owns content cookies/browser handshake; W3.e owns real HTTPS/browser acceptance after FIRST-IMMO.
 
 ## AI Flaky tests
-- [x] No AI tests or accepted flakes in this lot; no timeout increases.
+- [x] No AI-dependent acceptance; all new tests must pass without an exception.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch: one author for W1.c; package ownership remains upstream.
+- [x] Mono-branch; no copied commits; independent reviewers read the same final target.
+- [ ] Multi-branch.
 
 ## UAT Management (in orchestration context)
-- [x] Backend storage composition only; no web, Chrome or VSCode surface change. No root-dev UAT or live activation.
+- [x] Backend-only lot; automated isolated route/service tests cover this delivery.
+- [x] No live activation or root dev UAT; browser/DNS/TLS qualification belongs to W3.b–e.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 0 — Read Docker lock first, full owner plan, MASTER/workflow/testing, template and W1.a; create worktree on the assigned base; `harness check branch` passes.
-- [x] Lot 1 — Host tests first in `api/tests/api/artifacts-host-activation-store.test.ts`: namespace/TTL/receipt, authority delegation, expiry, restore and uncertain commit. Initial red on missing `activation-storage` import, `/tmp/w1c-red-2.log`. R1 adds all 16 imported vectors and a red-to-green facade regression.
-- [x] Lot 2 — `activation-storage.ts` composes workspace artifacts 0.2.4, explicit trusted namespace and integer ticket/flow TTLs in 1..60 seconds (flow <= ticket). `issue` derives both deadlines from PostgreSQL issuance time; frozen reads, consume and maintenance preserve authority/commit-error semantics without raw writes. W1.a registers the unchanged SQL and checks required activation relations.
-- [x] Lot 3 — R1: all six receiving suites pass (86/86, including 16/16 imported vectors); API typecheck passes and lint has 0 errors/220 warnings (`/tmp/w1c-r1-quality.log`). Inspect runtime logs and down the isolated stack. No UI/E2E/AI tests apply to this unmounted composition.
-- [x] W3.a handoff: await `createArtifactHostActivationStorage({ pool, namespace, ticketTtlSeconds, flowTtlSeconds })` after the sole migration executor; namespace comes from the verified opaque workspace mapping. Use `issue(binding)` for database-time deadlines; `consume(input, authorize)` must lock/recheck current session, ACL, release/channel/origin and stable-pointer policy on the supplied client through COMMIT. Sign/set cookies only after acknowledged success; `ActivationCommitUnknownError` requires a fresh flow. Supply `cleanup`/`invalidate` to W1.d; fence serving and retire signing authority before reopening after restore. PIN-1 and imported-vector gates are resolved; W3/W5 retain live activation qualification.
-- [x] Lot 4 — R1 findings reconciled; scope-check passes for each selective authored commit (82 and 48 lines). PR #794 remains on `feat/app-cm-integration`. Exact-head W1.c CI passes on `fd8db52705771b0ed58372ce80e105f763daa997`: https://github.com/rhanka/sentropic/actions/runs/40610926409 (86/86 tests, all 16 vectors, typecheck/lint and teardown). This receipt-only commit must also receive a fresh exact-head CI result before delivery; report the final SHA and CI URL, with no merge or live activation.
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read MASTER/workflow/testing/API/architecture rules, README/TODO, template and cited contracts.
+  - [x] Create isolated worktree and pass `harness check branch`.
+  - [x] Read W1.c adapter, W2.b transport and current session/ACL authority.
+  - [x] Freeze file scope, ports, cleanup and no-production guardrails.
+- [ ] **Lot 1 — Tests before implementation**
+  - [ ] Add `api/tests/api/artifacts-reader-activation.test.ts` using real PostgreSQL and host migrations.
+  - [ ] Prove one consume, wrong browser/session/subject, replay, DB expiry and revocation.
+  - [ ] Prove release/channel/origin/profile/policy binding and stable-pointer fencing after waits.
+  - [ ] Prove commit failure/uncertainty returns no grant and current-session fresh-flow recovery needs no MFA.
+  - [ ] Prove authenticated resources route refuses forged identity and stays default-closed.
+  - [ ] Record focused red runs before adding each behavior.
+- [ ] **Lot 2 — Trusted host composition**
+  - [ ] Add reader service over W1.c; lock current session, memberships, ACL, release and stable pointer until commit.
+  - [ ] Return grant permission only after acknowledged package consume; never issue browser effects in callbacks.
+  - [ ] Mount distinct internal reader issuance port under the existing resources author fence.
+  - [ ] Keep APP-P1 public discovery/tool selection unchanged.
+- [ ] **Lot 3 — Final validation and handoff**
+  - [ ] Run scoped activation/store/publication and resources/MCP/auth regression suites.
+  - [ ] Run API typecheck/lint and review every diff hunk.
+  - [ ] Obtain independent reviews on the final implementation and reconcile findings.
+  - [ ] Pass mechanical scope checks before each commit.
+  - [ ] Push and create draft PR against `feat/app-cm-integration` with this file as body.
+  - [ ] Post the execution plan as the first PR comment.
+  - [ ] Verify CI green on the exact pushed head.
+  - [ ] Run make down and verify no remaining test services; report PR and head.
