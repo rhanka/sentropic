@@ -95,10 +95,13 @@ if (process.argv[1]?.endsWith('/ci-dag.mjs') && process.argv.includes('--readine
   const capture = JSON.parse(fs.readFileSync(process.argv[process.argv.indexOf('--readiness') + 1], 'utf8'));
   const run = capture.run;
   const complete = run.status === 'completed';
+  const unmeasuredJobs = capture.jobs.filter(job => job.conclusion !== 'skipped'
+    && (!job.runner_id || !job.started_at || !job.completed_at)).map(job => ({ jobId: job.id, name: job.name }));
+  const measuredRunnerMinutes = capture.jobs.reduce((sum, job) => sum + (job.runner_id && job.started_at && job.completed_at
+    ? (Date.parse(job.completed_at) - Date.parse(job.started_at)) / 60000 : 0), 0);
   const receipt = { runId: run.id, attempt: run.run_attempt, headSha: run.head_sha,
     complete, conclusion: run.conclusion, artifactReadiness: readiness(capture.jobs),
-    runnerMinutes: capture.jobs.reduce((sum, job) => sum + (job.runner_id && job.started_at && job.completed_at
-      ? (Date.parse(job.completed_at) - Date.parse(job.started_at)) / 60000 : 0), 0),
+    runnerMinutes: unmeasuredJobs.length ? null : measuredRunnerMinutes, measuredRunnerMinutes, unmeasuredJobs,
     note: 'Cache hits are not inferred; retain producer step logs. Admission includes hosted-runner queueing.' };
   console.log(JSON.stringify(receipt, null, 2));
   process.exit(complete ? 0 : 1);

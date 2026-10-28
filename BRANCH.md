@@ -28,11 +28,13 @@
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
-- [ ] BR79-EX1 — Planned workflow exception: split `build-ui` children and scans, remove non-runtime prerequisites from `test-e2e`, `e2e-vscode`, `smoke-idp-screens`, and `test-smoke-restore`; keep the complete final join. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
-- [ ] BR79-EX2 — Planned Makefile exception: expose independent extension, desktop, UI test/profile, scanner, and runtime startup targets; preserve build-input ordering. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [x] BR79-EX1 — Planned workflow exception: split `build-ui` children and scans, remove non-runtime prerequisites from `test-e2e`, `e2e-vscode`, `smoke-idp-screens`, and `test-smoke-restore`; keep the complete final join. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
+- [x] BR79-EX2 — Planned Makefile exception: expose independent extension, desktop, UI test/profile, scanner, and runtime startup targets; preserve build-input ordering. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 - [x] Owner author identity: codex / gpt-6.1-sol / high; no Python, no AI trailers, commits <=150 changed lines. BR-78 Lots 3/5 and unmet 255s UI readiness remain open.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
+- [x] Extended local pass: 6 DAG / 24 expected-result / 134 publication tests, all report-parser negatives, capacity shape, version filters and the 56-spec E2E inventory pass. Capacity reports 64 PR / 63 main ready slots against a 17-slot observed lower bound; admission/timing acceptance remains unqualified.
+- [ ] Main baseline job validate-comments 122989014482 fails packaging at 18:02:00Z with npm ECONNRESET after 102 tests pass. Its log and raw job/step receipts are retained; this run cannot supply a successful baseline verdict. Owner: CI train author; compare complete spans without treating this failure as a pass.
 - [x] First local locked qualification: `make test-ci-dag test-ci-expected-results test-security-parser API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-br79` passes 6 DAG / 23 expected-result tests and all parser fixtures; repeat after final edits. Isolated cleanup requested under the same lock.
 - [ ] Baseline main run 40736913130 attempt 1 at c8ec01237 is still incomplete; raw attempt/job/step receipts are in `.tmp/ci-br79/receipts/40736913130/`. Do not infer a completed verdict or duration.
 - [ ] Chrome/VSCode fan-out needs the owner's pending BR79-EX3 decision for `ui/Dockerfile`; current builds still preserve both embedded extension assertions and separate profile endpoints.
@@ -62,17 +64,17 @@
   - [x] Add UI/browser container scan lanes; retain all four images, existing severity/compliance checks and native reports (BR79-EX1).
   - [x] Add independently selected API/toolbox container scans at their producer barriers with mandatory native reports (BR79-EX1).
   - [x] Define artifact dependencies, scan lanes, complete-join checks and negative rollback fixtures; qualification follows workflow wiring.
-  - [ ] Add `ci-dag.mjs` and `ci-dag.test.mjs` (new): actual artifact dependencies, matrix membership, parallel API/UI/toolbox scan lanes, and a complete expected-result join.
-  - [ ] Update `ci-expected-results.mjs` and its test: static/SAST failures must still block promotion even if browser work has finished; absent scan reports and unexpected skips fail closed.
-  - [ ] Lot gate: new `make test-ci-dag ENV=test-ci-parallel-dag` and `make test-ci-expected-results test-security-parser ENV=test-ci-parallel-dag`; negative fixtures prove result completeness without triggering a release.
+  - [x] Add `ci-dag.mjs` and `ci-dag.test.mjs` (new): actual artifact dependencies, matrix membership, parallel API/UI/toolbox scan lanes, and a complete expected-result join.
+  - [x] Update `ci-expected-results.mjs` and its test: static/SAST failures must still block promotion even if browser work has finished; absent scan reports and unexpected skips fail closed.
+  - [ ] Lot gate: new `make test-ci-dag ENV=test-ci-br79` and `make test-ci-expected-results test-security-parser ENV=test-ci-br79`; negative fixtures prove result completeness without triggering a release.
 - [ ] **Lot 2 — Independent UI and runtime lanes**
   - [x] Separate desktop, fresh UI tests, runtime image and static profile; both image publishers retain UI test/profile requirements (BR79-EX1/EX2).
   - [x] Remove static/SAST wait edges from browser, VSCode, IdP and restore; preserve static/SAST barriers explicitly at both image publishers (BR79-EX1).
   - [ ] Fan out Chrome extension, VSCode extension, desktop, and UI tests after their prepared inputs; UI image waits for the assets actually embedded in `ui/static`.
   - [ ] Reuse a Vite output only when every profile input matches; retain separate application/static-site builds when API base URLs differ.
   - [ ] Dispatch browser/VSCode/IdP/restore at artifact readiness; keep real IdP native form POST, redirects/codes, restore, and production runtime assertions.
-  - [ ] Lot gate: real PR/main runs plus `make check-ci-version-filters check-e2e-inventory ENV=test-ci-parallel-dag`; run existing SAST/SCA/container scans and `test-smoke-restore` through their unchanged assertion sets.
-  - [ ] Pre-UAT static gate: `make typecheck-api lint-api typecheck-ui lint-ui API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-parallel-dag`; independent scheduling must preserve both consumers' compiler/linter verdicts before Lot 3.
+  - [ ] Lot gate: real PR/main runs plus `make check-ci-version-filters check-e2e-inventory ENV=test-ci-br79`; run existing SAST/SCA/container scans and `test-smoke-restore` through their unchanged assertion sets.
+  - [ ] Pre-UAT static gate: `make typecheck-api lint-api typecheck-ui lint-ui API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-br79`; independent scheduling must preserve both consumers' compiler/linter verdicts before Lot 3.
 - [ ] **Lot 3 — UAT and measured acceptance**
   - [x] Rollback fixture restores serial UI grouping and static/security runtime waits without changing selected membership; an injected failed API scan still blocks the verdict. IaC native report upload is mandatory.
   - [x] Add an identified complete-run readiness receipt; preserve absent spans and expose admission delay and runner-minutes separately from execution.
@@ -84,12 +86,12 @@
   - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
-  - [ ] Static: `make typecheck-api lint-api typecheck-ui lint-ui API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-parallel-dag`; `make test-ci-dag test-ci-expected-results test-security-parser ENV=test-ci-parallel-dag` must still reject failed or missing static/security results.
-  - [ ] Build: `make build-api build-ui-image API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=e2e-ci-parallel-dag`; verify separate Chrome/VSCode/desktop outputs and that UI image assembly waits for every embedded prerequisite.
-  - [ ] API regression: `make test-api API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-parallel-dag`; preserve production runtime/limits and restore membership when dispatch edges change.
-  - [ ] UI regression: `make test-ui API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-parallel-dag`; retain independent unit/DOM and profile-build results in the required verdict.
-  - [ ] E2E regression: `make clean test-e2e API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=e2e-ci-parallel-dag` and `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=e2e-ci-parallel-dag`; reconcile exact browser/VSCode/IdP/restore membership and image receipts, then repeat the negative scan that blocks promotion.
+  - [ ] Static: `make typecheck-api lint-api typecheck-ui lint-ui API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-br79`; `make test-ci-dag test-ci-expected-results test-security-parser ENV=test-ci-br79` must still reject failed or missing static/security results.
+  - [ ] Build: `make build-api build-ui-image API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-br79`; verify separate Chrome/VSCode/desktop outputs and that UI image assembly waits for every embedded prerequisite.
+  - [ ] API regression: `make test-api API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-br79`; preserve production runtime/limits and restore membership when dispatch edges change.
+  - [ ] UI regression: `make test-ui API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-br79`; retain independent unit/DOM and profile-build results in the required verdict.
+  - [ ] E2E regression: `make clean test-e2e API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-br79` and `make test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-br79`; reconcile exact browser/VSCode/IdP/restore membership and image receipts, then repeat the negative scan that blocks promotion.
   - [ ] Run local service gates sequentially on slot 0, stopping the prior environment before reusing its ports; concurrent CI lanes need separately registered environments and port tuples.
   - [ ] Apply required package version bumps and lock refresh if package source changes; qualify exact candidate bytes; no source-change bump is waived.
-  - [ ] Run `make scope-check ENV=test-ci-parallel-dag` before each commit; end isolated service lots with `make down ENV=test-ci-parallel-dag` and `make down ENV=e2e-ci-parallel-dag`.
+  - [ ] Run `make scope-check ENV=test-ci-br79` before each commit; end isolated service lots with `make down ENV=test-ci-br79` and `make down ENV=test-ci-br79`.
   - [ ] Create/update the PR using `BRANCH.md`; obtain review and green CI/UAT on the same head; only then hand off to the authorized merge operator for branch-plan removal and merge.
