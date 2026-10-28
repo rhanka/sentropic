@@ -29,6 +29,7 @@ Mesh `speech/openai-transcription.ts` with two independently configured OpenAI s
   - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
   - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
   - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `api/tests/unit/gateway-package-version.test.ts`
