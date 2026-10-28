@@ -1,5 +1,5 @@
 import { createHash, generateKeyPairSync } from 'node:crypto';
-import { mkdtempSync, rmSync, unlinkSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
@@ -7,7 +7,7 @@ import { decodeJwt } from 'jose';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../../../src/db/client';
 import { users, userSessions } from '../../../src/db/schema';
-import { createSession, refreshSession, revokeAllSessions, revokeSession } from '../../../src/services/session-manager';
+import { createSession, refreshSession, revokeAllSessions, revokeSession, validateSession } from '../../../src/services/session-manager';
 import { commitRemoteEvidence, resolveRemoteLogin, reserveRemoteEvidence } from '../../../src/services/auth/remote-session';
 import { createRemoteEvidenceIssuer } from '../../../src/services/auth/remote-evidence';
 import { getRemoteSessionAuthority } from '../../../src/services/auth/remote-private-session';
@@ -43,6 +43,27 @@ async function setup() {
 }
 
 describe('RC1 current issuer session store', () => {
+  it.each(['logout', 'revoke-all', 'oauth-logout', 'oauth-revoke-all'].flatMap(operation =>
+    ['lock', 'corrupt-foreign-file', 'missing-pvc'].map(failure => ({ operation, failure }))))
+  ('should complete $operation and refuse authority after $failure', async ({ operation, failure }) => {
+    const { tokens, request, issue } = await setup();
+    const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
+    if (failure === 'lock') mkdirSync(join(directory, `${createHash('sha256').update(tokens.sessionId).digest('hex')}.json.lock`));
+    if (failure === 'corrupt-foreign-file') writeFileSync(join(directory, `${'0'.repeat(64)}.json`), '{');
+    if (failure === 'missing-pvc') rmSync(directory, { recursive: true });
+    const ports = getSentropicOAuthPorts().sessions;
+    if (operation === 'logout') await expect(revokeSession(tokens.sessionId)).resolves.toBeUndefined();
+    if (operation === 'revoke-all') await expect(revokeAllSessions(userId)).resolves.toBeUndefined();
+    if (operation === 'oauth-logout') await expect(ports.revoke(tokens.sessionId)).resolves.toBe(true);
+    if (operation === 'oauth-revoke-all') await expect(ports.revokeAllForUser(userId)).resolves.toBe(1);
+    expect(await db.select().from(userSessions).where(eq(userSessions.userId, userId))).toEqual([]);
+    expect(await validateSession(tokens.sessionToken)).toBeNull();
+    await expect(issue(request)).rejects.toMatchObject({ code: 'authentication_required' });
+    // Recovery of shared DB/files alone must not reopen authority in the issuer process.
+    mkdirSync(directory, { recursive: true });
+    await db.insert(userSessions).values(row);
+    await expect(issue(request)).rejects.toHaveProperty('code');
+  });
   it('should fence the late private creation of a session deleted by actual OAuth bulk revoke', async () => {
     const { tokens } = await setup();
     const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
