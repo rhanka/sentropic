@@ -91,7 +91,7 @@ installed-memory-locked:
 	        cp /workspace/$(INSTALLED_DIR)/artifacts/sentropic-cluster-mesh-$(INSTALLED_MESH_VERSION).tgz /consumer/artifacts/; \
 	        npm --version > npm-version.txt; \
 	        ./node_modules/.bin/tsc --noEmit --strict --target es2022 --module nodenext --moduleResolution nodenext \
-	          --listFiles installed-memory-types.ts > type-files.txt || { cat type-files.txt; exit 1; }; \
+	          --listFiles /consumer/installed-memory-types.ts > type-files.txt || { cat type-files.txt; exit 1; }; \
 	        node installed-memory.mjs write; \
 	        node installed-memory.mjs reopen; \
 	        node -e "const fs=require(\"fs\");const lines=fs.readFileSync(\"/consumer/type-files.txt\",\"utf8\").split(\"\\n\").filter(Boolean);for(const line of lines){if(!line.startsWith(\"/consumer/\"))throw new Error(\"type file outside consumer: \"+line)}const receipt=JSON.parse(fs.readFileSync(\"/consumer/installed-receipt.json\",\"utf8\"));receipt.typeClosure=lines.filter((line)=>line.includes(\"/node_modules/\")&&line.endsWith(\".d.ts\")).map((line)=>line.slice(\"/consumer/\".length)).sort();receipt.consumer.npmVersion=fs.readFileSync(\"/consumer/npm-version.txt\",\"utf8\").trim();fs.writeFileSync(\"/consumer/installed-receipt.json\",JSON.stringify(receipt,null,2)+\"\\n\")"'; \
