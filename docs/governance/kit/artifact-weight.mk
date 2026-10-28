@@ -1,7 +1,7 @@
 # BR84-EX1: isolated, removable artifact qualification lane; no application services.
 ARTIFACT_NODE_IMAGE ?= node:24.22.1-bookworm-slim
 ARTIFACT_PROBE_IMAGE ?= mcr.microsoft.com/playwright:v1.63.0
-ARTIFACT_MAIN_REF ?= 96dbc2120103cc800713d28dc397da2823ff6627
+ARTIFACT_MAIN_REF ?= ae5d28a56ced63a8d01cd26f1c54a61a093924be
 ARTIFACT_RUN = docker run --rm --cpus=2 --memory=2048m --pids-limit=256 -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/docs/governance/kit
 
 .PHONY: check-artifact-budget build-artifact-budget probe-artifact-budget
