@@ -241,6 +241,12 @@ interface PendingTurn {
   readonly utteranceId: string;
   readonly startMs: number;
   readonly endMs: number;
+  /**
+   * Clear arrived after commit but before the provider bind: the late
+   * `committed` frame is consumed here (and dropped) instead of binding
+   * the next turn.
+   */
+  readonly cleared?: boolean;
 }
 
 const assertAdmission = (admission: OpenAiTranscriptionAdmission): void => {
@@ -471,7 +477,10 @@ export class TranscriptionSession implements SpeechSession {
         // of the client utterance so late provider frames cannot resurrect it.
         this.socket.send(JSON.stringify({ type: 'input_audio_buffer.clear' }));
         for (let index = this.turns.length - 1; index >= 0; index--) {
-          if (this.turns[index]?.utteranceId === command.utteranceId) this.turns.splice(index, 1);
+          const turn = this.turns[index];
+          if (turn && turn.utteranceId === command.utteranceId && !turn.cleared) {
+            this.turns[index] = { ...turn, cleared: true };
+          }
         }
         for (const [itemId, turn] of this.bindings) {
           if (turn.utteranceId === command.utteranceId) {
@@ -569,6 +578,12 @@ export class TranscriptionSession implements SpeechSession {
     const turn = this.turns.shift();
     if (!turn) {
       this.pushError('invalid-format', true);
+      return;
+    }
+    // A clear landed after the commit but before this bind: consume the
+    // tombstone and drop the late item instead of binding the next turn.
+    if (turn.cleared) {
+      this.clearedIds.add(itemId);
       return;
     }
     this.bindings.set(itemId, turn);
