@@ -27,9 +27,11 @@ the real entrypoint refuses enabled startup with incomplete credentials.
 | Production | `sentropic` | `*.sentropic.sent-tech.ca` | `*.pinned.sentropic.sent-tech.ca` |
 | Preprod | `sentropic-preprod` | `*.preprod.sentropic.sent-tech.ca` | `*.pinned.preprod.sentropic.sent-tech.ca` |
 
-The tenant operator must supply DNS-01/Cloudflare issuance receipts for both SANs
-in each namespace's `artifact-content-tls` secret, through the existing
-`letsencrypt-prod` ClusterIssuer. A stable wildcard does not cover the pinned
+Ingress-shim requests both SANs in each namespace's `artifact-content-tls` secret
+through `letsencrypt-prod`, with private-key rotation `Always`. The first preprod
+apply starts DNS-01/Cloudflare issuance automatically through cert-manager's own
+identity; the CI deployer needs no Certificate writes. The tenant supplies issuance
+receipts and gates traffic through DNS records. A stable wildcard does not cover the pinned
 depth. Supply DNS records to the platform Traefik load balancer and measure
 propagation separately. No address or issuance completion is assumed here.
 The dedicated Ingress uses only `websecure`, preserves Host and has priority `1`
