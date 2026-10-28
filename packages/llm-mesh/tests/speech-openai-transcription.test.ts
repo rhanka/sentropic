@@ -432,6 +432,34 @@ describe('openai transcript mapping', () => {
     expect(final?.utteranceId).toBe('u_keep');
   });
 
+  it('should drop a cleared turn even when its bind arrives after the next commit', async () => {
+    // The provider `committed` for the cleared turn lands one RTT after the
+    // clear: without the FIFO tombstone it would bind item_drop to u3.
+    const driven = await openDriven();
+    await driven.turn('u_drop', 10);
+    await driven.session.command({
+      schemaVersion: 1, speechSessionId: 'speech-op-1', connectionEpoch: 3,
+      eventId: 'cmd-clear', sequence: 2, clock: { id: 'test', monotonicMs: 1 },
+      type: 'input.clear', utteranceId: 'u_drop',
+    });
+    await driven.turn('u3', 100);
+    driven.socket.push(
+      frameCommitted('item_drop'),
+      frameDelta('item_drop', 'dropped '),
+      frameCompleted('item_drop', 'dropped transcript'),
+      frameCommitted('item_3'),
+      frameCompleted('item_3', 'third turn'),
+    );
+    const events = await driven.collect();
+    const finals = events.filter((event) => event.type === 'transcript.final');
+    expect(finals).toHaveLength(1);
+    const final = finals[0] as unknown as Record<string, unknown>;
+    expect(final?.utteranceId).toBe('u3');
+    expect(final?.text).toBe('third turn');
+    expect(final?.audioInterval).toEqual({ startMs: 100, endMs: 120 });
+    expect(events.filter((event) => event.type === 'error')).toHaveLength(0);
+  });
+
   it('should error on an orphan completion with no client turn', async () => {
     const driven = await openDriven();
     driven.socket.push(frameCompleted('item_orphan', 'nowhere'));
