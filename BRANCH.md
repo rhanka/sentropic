@@ -20,12 +20,15 @@
   - `api/src/routes/namespaces/decision*.ts`
   - `api/src/services/decision*.ts`
   - `api/src/services/llm-metering/decision*.ts`
+  - `api/src/services/llm-metering/budget-admission.ts`
+  - `api/src/services/llm-metering/model-pricing-writer.ts`
   - `api/src/db/control-schema.ts`
   - `api/vitest.config.ts`
   - `api/drizzle/control/*decision*.sql`
   - `api/drizzle/control/meta/_journal.json`
   - `api/tests/unit/decision*.test.ts`
   - `api/tests/api/decision*.test.ts`
+  - `api/tests/api/llm-admission-schema.test.ts`
   - `packages/llm-mesh/src/decision/descriptor.ts`
   - `packages/llm-mesh/package.json`
   - `packages/llm-mesh/tests/decision-fixtures.ts`
@@ -96,6 +99,9 @@
   - [x] Keep the cluster-mesh receipt fixture's synthetic price protocol explicit after JEV moves to control pricing.
   - [x] Serialize pricing with its existing writer, pin the exact hold revision and recheck tariff validity before dispatch marking.
   - [x] Preserve pending admission liability when a hold commits but its acknowledgement is lost; never report a proved absence of a hold on a store exception.
+  - [x] Scope pricing windows by protocol so OpenAI Decisions never replaces the existing GPT-6 Luna generation tariff.
+  - [ ] Verify native and generation prices coexist at one timestamp in api/tests/api/decision-metering.test.ts and retain the pricing writer/schema regressions.
+  - [ ] Run api/tests/api/llm-budget-ledger.test.ts and api/tests/unit/llm-budget-admission-native.test.ts after the protocol-specific pricing change.
 - [x] **Docs consolidation**
   - [x] Document route, profiles, readiness limits, tariff sources and provisioned environment names in spec/decision/api-host.md.
 - [ ] **Final validation**
