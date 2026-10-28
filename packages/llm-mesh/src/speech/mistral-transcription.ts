@@ -478,6 +478,8 @@ export class MistralTranscriptionSession implements SpeechSession {
   private expiryCancel?: () => void;
   /** In-flight per-turn pumps; external close() joins them. */
   private readonly pumpPromises = new Set<Promise<void>>();
+  /** Sockets still opening (phase 1, not yet current); close() tears them down so the join cannot hang. */
+  private readonly opening = new Set<MistralTranscriptionSocket>();
   private current?: TurnStream;
   /** UtteranceIds with an emitted final: commit is a no-op, writes refuse. */
   private readonly finalizedIds = new Set<string>();
@@ -684,6 +686,10 @@ export class MistralTranscriptionSession implements SpeechSession {
           await this.recordUsage();
           return;
         }
+        // A commit racing its own pending commit throws instead of joining
+        // it: after done the same call is an idempotent no-op, but while the
+        // turn is still open the caller holds the wrong turn state, so the
+        // refusal surfaces the race instead of silently merging two commits.
         if (stream.donePending) {
           throw new MistralTranscriptionError('invalid-format', 'turn already committed');
         }
@@ -743,6 +749,11 @@ export class MistralTranscriptionSession implements SpeechSession {
     }
     try {
       if (stream) await stream.socket.close();
+      // A stream still opening is not current yet: close its socket too, so
+      // its phase-1 pump ends and the join below cannot wait on the provider.
+      for (const opening of [...this.opening]) {
+        await opening.close().catch(() => undefined);
+      }
     } finally {
       // No usage attached: locally measured seconds are operational estimates,
       // not provider-attested finals. The composition settles from the recorded
@@ -809,6 +820,7 @@ export class MistralTranscriptionSession implements SpeechSession {
       rejectReady = reject;
     });
     const stream = this.makeStream(socket, utteranceId, audioStartMs, resolveReady, rejectReady);
+    this.opening.add(socket);
     try {
       // The update leaves only after the provider created the session.
       await readyPromise;
@@ -819,6 +831,8 @@ export class MistralTranscriptionSession implements SpeechSession {
       if (error instanceof MistralTranscriptionError) throw error;
       const detail = error instanceof Error ? error.message : 'unknown';
       throw new MistralTranscriptionError('transport', `session update failed: ${this.redact(detail)}`);
+    } finally {
+      this.opening.delete(socket);
     }
     const open = this.current;
     if (open && open !== stream && !open.abandoned && !open.donePending) {
