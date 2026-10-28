@@ -34,7 +34,7 @@
 
 ## Feedback Loop
 - [x] BR10-EX1: allow runtime-only Makefile validation/pack/bootstrap targets and CI registration; impact is one additive package lane, rollback removes only that lane; consumers and gates remain unchanged.
-- [ ] BR10-contracts: verify the #819 package against unchanged main; its high-level runtime imports the new `@sentropic/chat-ui/conversation` contract absent from main and declares optional UI peer ^1.0.0.
+- [x] BR10-contracts: reproduced TS2307 against unchanged main; #819 now owns its data-only conversation ports in runtime and accepts the existing UI type peer, preserving port shapes and consumer isolation.
 
 ## AI Flaky tests
 
@@ -50,9 +50,9 @@
 - [ ] **Lot 1 — Runtime package**
   - [ ] Import #819 runtime sources, tests, scripts, manifest and license without consumer changes.
   - [ ] Verify typecheck/tests against unchanged main and retain the package ownership/export tests.
-- [ ] **Lot 2 — Publication wiring**
-  - [ ] Register runtime-only validation, pack and guarded OIDC/token bootstrap targets; retain manifest/CI gates.
-  - [ ] Verify bootstrap `CI` (`.github/workflows/ci.yml`), ref `main`, input `bootstrap_publish_target=chat-runtime`, all other inputs default.
+- [x] **Lot 2 — Publication wiring**
+  - [x] Register runtime-only validation, pack and guarded OIDC/token bootstrap targets; retain manifest/CI gates; 201 manifest fixtures and 23 CI fixtures pass.
+  - [x] Verify bootstrap `CI` (`.github/workflows/ci.yml`), ref `main`, input `bootstrap_publish_target=chat-runtime`, all other inputs default.
 - [ ] **Lot 3 — Draft handoff**
   - [ ] Run runtime typecheck, full unit tests, guarded pack and relevant manifest/CI tests.
   - [ ] Open draft PR to main using this file as body; record exact head and completed/success CI.
