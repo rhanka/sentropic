@@ -11,6 +11,6 @@ decision-kev-smoke:
 .PHONY: decision-kev-smoke-client
 decision-kev-smoke-client:
 	@test "$(ENV)" = test-decision-l4 && test -z "$$CI" && test -z "$$GITHUB_ACTIONS"
-	@docker run --rm --network host -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e KEV_CACHE_HOST \
+	@docker run --rm --network host -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e KEV_CACHE_HOST -e KEV_VERIFY_ONLY \
 		-v "$(CURDIR):/workspace:ro" -v "$(KEV_CACHE):/kev-cache" -v /proc:/kev-host-proc:ro \
 		-w /workspace $(LLM_MESH_NODE_IMAGE) node scripts/decision/kev-smoke.mjs

@@ -73,14 +73,14 @@
   - [x] `packages/llm-mesh/tests/decision-kev-routing.test.ts`: P28 no egress, native kinds and served-model receipt.
   - [x] Scoped make test-llm-mesh passed all 38 Kev fixtures; public feature-version assertion updated for 0.32.0.
 - [ ] **Lot 6 — Local native qualification**
-  - [ ] Download exact selected model once; validate all bytes and pinned runtime before inference.
+  - [x] Download exact selected model once; validate all bytes and pinned runtime before inference.
   - [ ] Run at most three protocol/identity smokes through native process plus Docker Node client; record usage, memory/latency, wrong-selection refusal and cache path.
   - [ ] Report calibration/production limits separately from protocol evidence.
 - [ ] **Lot 7 — Documentation and publication**
   - [x] Consolidate manifest, provenance gaps, bounded cost plan and runtime update/rollback in `spec/decision/kev-v4l4-candidate.md`.
   - [x] Bump mesh package and lock to 0.32.0, above npm published version 0.31.0 verified 2026-10-28.
 - [ ] **Lot 8 — Final validation and draft PR**
-  - [ ] make typecheck-llm-mesh, lint-llm-mesh, test-llm-mesh, build-llm-mesh under flock.
+  - [x] make typecheck-llm-mesh, lint-llm-mesh, test-llm-mesh (90 files / 1569 tests), build-llm-mesh under flock.
   - [ ] Two-peer review; reconcile findings and verify final scope.
   - [ ] Draft PR body from this plan; first comment records execution steps.
   - [ ] Exact-head CI completed/success; report PR URL and head; leave draft unmerged.

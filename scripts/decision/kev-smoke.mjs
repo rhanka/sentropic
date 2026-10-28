@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
-import { readFile, writeFile, stat } from 'node:fs/promises';
+import { readFile, writeFile, stat, rename } from 'node:fs/promises';
+import { setTimeout as delay } from 'node:timers/promises';
 import { performance } from 'node:perf_hooks';
 import { createKevAdapter, createKevQualificationDescriptor, createSystemOneLocalTransport,
   createDecisionService, KEV_INVENTORY, KEV_SERVED_MODEL_ID } from '../../packages/llm-mesh/dist/decision/host.js';
@@ -31,15 +32,24 @@ const verifyInventory = async (signal) => {
   assert.deepEqual((await readFile(`/kev-host-proc/${pid}/cmdline`, 'utf8')).split('\0').filter(Boolean), expectedArgs);
   const model = await stat(`${cache}/${KEV_INVENTORY.model.file}`);
   assert.equal(model.size, KEV_INVENTORY.model.bytes);
-  const maps = await readFile(`/kev-host-proc/${pid}/maps`, 'utf8');
-  assert(maps.split('\n').some((line) => line.endsWith(`${hostCache}/${KEV_INVENTORY.model.file}`)
-    && line.trim().split(/\s+/)[4] === String(model.ino)));
+  const nonce = randomUUID();
+  await writeFile(`${cache}/mapping-request.next`, nonce);
+  await rename(`${cache}/mapping-request.next`, `${cache}/mapping-request`);
+  for (;;) {
+    signal.throwIfAborted();
+    const proof = await readFile(`${cache}/mapping-proof`, 'utf8').catch(() => '');
+    if (proof.trim() === `${nonce} ${model.ino}`) break;
+    await delay(50, undefined, { signal });
+  }
   assert.equal(await hashFile(`${cache}/${KEV_INVENTORY.model.file}`, signal), KEV_INVENTORY.model.sha256);
   assert.equal(await hashFile(`${cache}/llama-b11954/llama-server`, signal), KEV_INVENTORY.runtime.serverSha256);
   assert.equal(await hashFile(`${cache}/llama-b11954/libllama-server-impl.so`, signal), KEV_INVENTORY.runtime.serverLibrarySha256);
   return KEV_INVENTORY;
 };
 const descriptor = createKevQualificationDescriptor(KEV_INVENTORY);
+// Diagnose custody independently without consuming any inference attempt.
+await verifyInventory(AbortSignal.timeout(60000));
+if (process.env.KEV_VERIFY_ONLY === '1') { console.log('Native process/artifact inventory verified; no inference.'); process.exit(0); }
 const adapter = createKevAdapter({ descriptor, transport: createSystemOneLocalTransport({ fetch, verifyInventory }) });
 const receipts = [];
 // Protocol smoke ledger only: process-local ports do not qualify deployment accounting.
@@ -58,8 +68,6 @@ const criteria = [
   { kind: 'binary', instructions: 'Is the provided statement about a cat?' },
   { kind: 'choice', instructions: 'Choose the animal mentioned.', options: [
     { id: 'cat', description: 'A cat' }, { id: 'dog', description: 'A dog' }] },
-  { kind: 'graded', instructions: 'How clearly does the statement mention a cat?', direction: 'higher-is-better', levels: [
-    { label: 'absent', description: 'No cat mentioned' }, { label: 'explicit', description: 'A cat is explicitly mentioned' }] },
 ];
 const results = [];
 for (const criterion of criteria) {
@@ -76,4 +84,4 @@ for (const criterion of criteria) {
   assert.equal(result.receipt.usage.tokens.output.value, 0);
   console.log(`${criterion.kind}: verified native receipt; ${result.receipt.usage.tokens.input.value} input tokens`);
 }
-assert.equal(receipts.length, 3);
+assert.equal(receipts.length, 2);

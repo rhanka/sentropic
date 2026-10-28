@@ -15,7 +15,9 @@ tar -xzf "$cache/$archive" --to-command='cmp - "$KEV_VERIFY_ROOT/$TAR_FILENAME"'
 umask 077
 head -c 32 /dev/urandom | base64 > "$cache/api-key"
 supervisor=
+verifier=
 cleanup() {
+  if [ -n "$verifier" ]; then kill -TERM "$verifier" 2>/dev/null || true; wait "$verifier" || true; fi
   if [ -n "$supervisor" ]; then kill -TERM "$supervisor" 2>/dev/null || true; wait "$supervisor" || true; fi
   rm -f "$cache/api-key"
 }
@@ -35,5 +37,23 @@ done
 test "$ready" = true
 native_pid=$(pgrep -P "$supervisor")
 printf '%s\n' "$native_pid" > "$cache/server-pid"
-make decision-kev-smoke-client KEV_CACHE_HOST="$cache" API_PORT=8797 UI_PORT=5197 MAILDEV_UI_PORT=1097 ENV=test-decision-l4
+# Host ptrace policy keeps /proc/maps private from the container. Answer fresh
+# nonce-bound mapping checks here, under the same lifecycle and machine lock.
+verify_mapping() {
+  prior=
+  while kill -0 "$native_pid" 2>/dev/null; do
+    nonce=$(cat "$cache/mapping-request" 2>/dev/null || true)
+    if [[ "$nonce" =~ ^[0-9a-f-]{36}$ && "$nonce" != "$prior" ]]; then
+      inode=$(stat -c %i "$cache/$file")
+      awk -v inode="$inode" -v model="$cache/$file" '$5 == inode && $NF == model { found=1 } END { exit !found }' "/proc/$native_pid/maps"
+      printf '%s %s\n' "$nonce" "$inode" > "$cache/mapping-proof.next"
+      mv "$cache/mapping-proof.next" "$cache/mapping-proof"
+      prior=$nonce
+    fi
+    sleep 0.05
+  done
+}
+verify_mapping &
+verifier=$!
+make decision-kev-smoke-client KEV_CACHE_HOST="$cache" KEV_VERIFY_ONLY="${KEV_VERIFY_ONLY:-}" API_PORT=8797 UI_PORT=5197 MAILDEV_UI_PORT=1097 ENV=test-decision-l4
 awk '/VmHWM|VmRSS|Threads/' "/proc/$native_pid/status" > "$cache/resource.txt"
