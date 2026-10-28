@@ -4,7 +4,7 @@ Scope: approved host plan H0 only, based on `5e986a0b6cd2dfecfbde6a588d300552711
 
 ## Reproduce locally
 
-Use the repository make workflow. An external task makefile avoids changing the forbidden repository `Makefile`:
+Use the repository make workflow. `/tmp/canvas-h0.mk` below is a disposable external task makefile, not a branch worktree or artifact location; it avoids changing the forbidden repository `Makefile`:
 
 ```make
 SHELL := /bin/bash
@@ -27,3 +27,5 @@ Input authority hashes were recomputed: approved host plan `f130f04c4597b483b089
 Independent public-source reviews of `919c34c19550f613b4fcb9c954ab8c8e4a37f8ac` returned APPROVE and CHANGES. Source verification accepted F1–F6: remap prose normalizer cases, separately assert list arrays and folder-context passthrough, document the single-key `saveValue` override, repair provenance ranges, and hash extensions/package requests. Reviews of correction head `4bb5a2199d0d7158370d37e3a0115aa87c17bd03` accepted those six fixes, but one requested an explicit inbound-only assertion boundary and a hashed list-codec behavior source. Both refinements are included here; the literal normalized string is never claimed as a top-level HTTP-body oracle. These changes affect fixture expectations and evidence only. Final review and exact-head CI receipts attach to draft PR #823 when measured. The draft remains unmerged with BRANCH.md retained; no Track work was created or duplicated.
 
 Review procedure exception: the Sonnet correction reviewer reported one prohibited Python invocation during an intermediate fixture check, then repeated the check with `jq`. It left no repository artifact, and no accepted result depends on it. This violated the owner's execution constraint and is preserved in the review record and reported to the owner; no zero-Python execution claim is made for the review process. The author checker uses Bash/jq, and no Python file is introduced. Requested reviewer identities are Claude/`claude-opus-5`/high and Claude/`claude-sonnet-5`/high, complementary to the declared Codex/`gpt-6.1-sol`/high author; requested identity does not attest effective post-routing identity.
+
+PR #823 Opus r1 on `42548d0e53d09517d9b0b41b0269a8ca500f0e52`: F1/F2 accepted and corrected on 2026-10-28 using the owner's direct Q-CL-1 answer. Gates, corpus, N7 and removals now require DS full-profile coverage before one 24-site adoption. Former D-LIST/D-PRESERVED/D-PASTE fixture oracles are P coverage obligations; P-MATRIX-DECISION retains parity pending Q-B1-4. Only oracle metadata and its input hash change; content, counts, routes, authorities and runtime behavior stay unchanged. Independent re-review and CI on the correction head must be measured separately; this receipt does not claim approval of these corrections.
