@@ -12,7 +12,7 @@ Test names below are relative to `packages/chat-ui/`. R tests stay in Sentropic 
 | `README.md` | R+V: Sentropic integration/release + DS visual split |
 | `THEMING.md` | V: DS visual maintainer after U0 |
 | `chat-ui-reference-validation.json` | R+V: Sentropic integration/release + DS visual split |
-| `export-manifest.json` | V: DS visual maintainer after U0 |
+| `export-manifest.json` | R+V: release owners split runtime exports from the visual manifest in P1 |
 | `package.json` | R+V: Sentropic integration/release + DS visual split |
 | `scripts/gen-theme-css.mjs` | V: DS visual maintainer after U0 |
 | `scripts/make-publish-pkgjson.mjs` | R+V: Sentropic integration/release + DS visual split |
@@ -26,7 +26,7 @@ Test names below are relative to `packages/chat-ui/`. R tests stay in Sentropic 
 | `tests/agents-view-markers.test.ts` | R: principal-scoped storage/runtime tests stay in Sentropic |
 | `tests/chat-attachments.test.ts` | R: runtime maintainer; relocate with implementation |
 | `tests/chat-composer-boundary.test.ts` | V: DS visual maintainer after U0 |
-| `tests/chat-context-picker.dom.spec.ts` | R: runtime maintainer; relocate with implementation |
+| `tests/chat-context-picker.dom.spec.ts` | R+V: neutral picker DOM/focus fixtures follow visuals; module-state integration stays Sentropic |
 | `tests/chat-context.spec.ts` | R: runtime maintainer; relocate with implementation |
 | `tests/chat-conversation-functional.dom.spec.ts` | R+V: Sentropic integration/release + DS visual split |
 | `tests/chat-conversation.dom.spec.ts` | V: DS visual maintainer after U0 |
@@ -47,7 +47,7 @@ Test names below are relative to `packages/chat-ui/`. R tests stay in Sentropic 
 | `tests/chat-projection.test.ts` | R: runtime maintainer; relocate with implementation |
 | `tests/chat-session-hydration.test.ts` | R: runtime maintainer; relocate with implementation |
 | `tests/chat-session-runtime.test.ts` | R: runtime maintainer; relocate with implementation |
-| `tests/chat-sessions-bar.dom.spec.ts` | R: runtime maintainer; relocate with implementation |
+| `tests/chat-sessions-bar.dom.spec.ts` | R+V: neutral menu/header DOM fixtures follow visuals; session/history integration stays Sentropic |
 | `tests/chat-timeline-boundary.test.ts` | V: DS visual maintainer after U0 |
 | `tests/chat-widget-assembly.dom.spec.ts` | R+V: Sentropic integration/release + DS visual split |
 | `tests/chat-widget-boundary.test.ts` | V: DS visual maintainer after U0 |
@@ -71,9 +71,9 @@ Test names below are relative to `packages/chat-ui/`. R tests stay in Sentropic 
 | `tests/fixtures/ProductionChatPanelMock.svelte` | V: DS visual maintainer after U0 |
 | `tests/fixtures/ProductionWidgetHarness.svelte` | V: DS visual maintainer after U0 |
 | `tests/fixtures/production-widget-snippets.ts` | R+V: Sentropic integration/release + DS visual split |
-| `tests/fixtures/streams/reasoning-then-content.ndjson` | V: DS visual maintainer after U0 |
-| `tests/fixtures/streams/simple-assistant-response.ndjson` | V: DS visual maintainer after U0 |
-| `tests/fixtures/streams/tool-call-and-result.ndjson` | V: DS visual maintainer after U0 |
+| `tests/fixtures/streams/reasoning-then-content.ndjson` | R: raw stream/replay fixture; DS receives separately normalized rendering snapshots |
+| `tests/fixtures/streams/simple-assistant-response.ndjson` | R: raw stream/replay fixture; DS receives separately normalized rendering snapshots |
+| `tests/fixtures/streams/tool-call-and-result.ndjson` | R: raw stream/replay fixture; DS receives separately normalized rendering snapshots |
 | `tests/host-adapter-types.test.ts` | R+V: Sentropic integration/release + DS visual split |
 | `tests/image-lightbox.dom.spec.ts` | V: DS visual maintainer after U0 |
 | `tests/local-tools-store.test.ts` | R: runtime maintainer; relocate with implementation |
