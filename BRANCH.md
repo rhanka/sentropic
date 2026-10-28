@@ -69,7 +69,7 @@
   - [ ] Prove commit failure/uncertainty returns no grant and current-session fresh-flow recovery needs no MFA.
   - [x] Cover PG acquisition/consume failure and wrong flow/ticket association without granting or burning valid state.
   - [ ] Prove authenticated resources route refuses forged identity and stays default-closed.
-  - [ ] Record focused red runs before adding each behavior.
+  - [x] Commit acceptance tests before service/route implementation (2943216c0, 0140c78d2, 2c5493946).
 - [ ] **Lot 2 — Trusted host composition**
   - [x] Implement transaction-bound current authority using the package ACL/lifecycle evaluator.
   - [x] Add reader service over W1.c; lock current session, memberships, ACL, release and stable pointer until commit.
@@ -78,6 +78,9 @@
   - [x] Keep APP-P1 public discovery/tool selection unchanged.
 - [ ] **Lot 3 — Final validation and handoff**
   - [ ] Run scoped activation/store/publication and resources/MCP/auth regression suites.
+    - [ ] `artifacts-reader-activation.test.ts`, `artifacts-host-activation-store.test.ts`, `artifacts-host-publication.test.ts`.
+    - [ ] `app-artifacts-transport.test.ts`, `app-mcp-registry.test.ts`, `cluster-mesh-resources.test.ts`.
+    - [ ] `cluster-mesh-namespace-inventory.test.ts`, `cluster-mesh-session.test.ts`, `tests/unit/auth/session-manager.test.ts`.
   - [ ] Run API typecheck/lint and review every diff hunk.
   - [ ] Obtain independent reviews on the final implementation and reconcile findings.
   - [ ] Pass mechanical scope checks before each commit.
