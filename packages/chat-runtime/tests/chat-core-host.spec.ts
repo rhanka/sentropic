@@ -43,3 +43,143 @@ const SESSION_A: SessionSummary = {
 };
 
 const RUN_HANDLE: RunHandle = {
+  sessionId: 'session-a',
+  userMessageId: 'user-msg-1',
+  assistantMessageId: 'asst-msg-1',
+  streamId: 'stream-1',
+  jobId: 'job-1',
+};
+
+const MODEL_CATALOG: ModelCatalog = {
+  providers: [{ provider_id: 'openai', label: 'OpenAI', status: 'ready' }],
+  models: [{ provider_id: 'openai', model_id: 'gpt-4o', label: 'GPT-4o', default_contexts: [] }],
+  defaults: { provider_id: 'openai', model_id: 'gpt-4o' },
+};
+
+/**
+ * This object literal uses `satisfies ChatCoreHost` — TypeScript will error
+ * at compile time if any method is missing or has an incompatible signature.
+ * This is the primary compile proof.
+ */
+const fakeChatCoreHost = {
+  fetchSessions: async () => ({ sessions: [SESSION_A] }),
+
+  fetchSessionHistory: async (_sessionId: string, _detail: 'summary' | 'full') =>
+    new Response('{"type":"session_meta"}\n', {
+      headers: { 'content-type': 'application/x-ndjson' },
+    }),
+
+  sendMessage: async (_payload: SendMessagePayload) => ({ ...RUN_HANDLE }),
+
+  retryMessage: async (
+    _messageId: string,
+    _opts: { providerId: string; model: string },
+  ) => ({ ...RUN_HANDLE }),
+
+  stopMessage: async (_messageId: string) => {},
+
+  editMessage: async (_messageId: string, _content: string) => {},
+
+  setFeedback: async (
+    _messageId: string,
+    _vote: 'up' | 'down' | 'clear',
+  ) => {},
+
+  deleteSession: async (_sessionId: string) => {},
+
+  pollJob: async (_jobId: string) => ({ status: 'completed' as string | undefined }),
+
+  postLocalToolResult: async (
+    _streamId: string,
+    _toolCallId: string,
+    _result: unknown,
+  ) => {},
+
+  fetchModelCatalog: async () => ({ ...MODEL_CATALOG }),
+
+  postSteer: async (_streamId: string, _message: string) => {},
+
+  streamClient: fakeStreamClient,
+} satisfies ChatCoreHost;
+
+// ---------------------------------------------------------------------------
+// 2. Runtime assertions
+// ---------------------------------------------------------------------------
+
+describe('ChatCoreHost — fake host compile + runtime proof', () => {
+  it('should have all required method keys', () => {
+    const requiredKeys: Array<keyof ChatCoreHost> = [
+      'fetchSessions',
+      'fetchSessionHistory',
+      'sendMessage',
+      'retryMessage',
+      'stopMessage',
+      'editMessage',
+      'setFeedback',
+      'deleteSession',
+      'pollJob',
+      'postLocalToolResult',
+      'fetchModelCatalog',
+      'postSteer',
+      'streamClient',
+    ];
+    for (const key of requiredKeys) {
+      expect(key in fakeChatCoreHost, `Missing key: ${key}`).toBe(true);
+    }
+  });
+
+  it('fetchSessions should return sessions array', async () => {
+    const result = await fakeChatCoreHost.fetchSessions();
+    expect(result.sessions).toHaveLength(1);
+    expect(result.sessions[0]?.id).toBe('session-a');
+  });
+
+  it('fetchSessionHistory should return a Response', async () => {
+    const response = await fakeChatCoreHost.fetchSessionHistory('session-a', 'summary');
+    expect(response).toBeInstanceOf(Response);
+  });
+
+  it('sendMessage should return a RunHandle', async () => {
+    const payload: SendMessagePayload = { content: 'hello' };
+    const result = await fakeChatCoreHost.sendMessage(payload);
+    expect(result.sessionId).toBe('session-a');
+    expect(result.streamId).toBe('stream-1');
+    expect(result.jobId).toBe('job-1');
+  });
+
+  it('retryMessage should return a RunHandle', async () => {
+    const result = await fakeChatCoreHost.retryMessage('msg-1', {
+      providerId: 'openai',
+      model: 'gpt-4o',
+    });
+    expect(result.assistantMessageId).toBe('asst-msg-1');
+  });
+
+  it('stopMessage should resolve without value', async () => {
+    const result = await fakeChatCoreHost.stopMessage('msg-1');
+    expect(result).toBeUndefined();
+  });
+
+  it('editMessage should resolve without value', async () => {
+    const result = await fakeChatCoreHost.editMessage('msg-1', 'updated text');
+    expect(result).toBeUndefined();
+  });
+
+  it('setFeedback should resolve without value for all vote values', async () => {
+    for (const vote of ['up', 'down', 'clear'] as const) {
+      const result = await fakeChatCoreHost.setFeedback('msg-1', vote);
+      expect(result).toBeUndefined();
+    }
+  });
+
+  it('deleteSession should resolve without value', async () => {
+    const result = await fakeChatCoreHost.deleteSession('session-a');
+    expect(result).toBeUndefined();
+  });
+
+  it('pollJob should return an object with status', async () => {
+    const result = await fakeChatCoreHost.pollJob('job-1');
+    expect(result.status).toBe('completed');
+  });
+
+  it('postLocalToolResult should resolve without value', async () => {
