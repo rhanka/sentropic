@@ -1,6 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { createContentHandler, type ContentHandlerDeps } from '@sentropic/artifacts/content/handler';
-import { contentHeaders, grantCookie, parseGrantCookie } from '@sentropic/artifacts/content/headers';
+import { contentHeaders, GRANT_COOKIE_NAME, grantCookie, parseGrantCookie } from '@sentropic/artifacts/content/headers';
 import { CONTENT_GRANT_TTL_SECONDS, type ContentGrantClaims, type GrantSigner, type TicketRecord } from '@sentropic/artifacts/content/grants';
 import { parseContentHost } from '@sentropic/artifacts/content/routing';
 
@@ -53,6 +53,9 @@ export function createContentHost(options: ContentHostOptions) {
     const origin = parseContentHost(url.host, options.baseDomain);
     if (!options.enabled() || url.protocol !== 'https:' || url.port || !origin ||
       (request.headers.has('host') && request.headers.get('host') !== url.host)) return fail(404);
+    const cookies = request.headers.get('cookie') ?? '';
+    if (cookies.length > 4096) return fail(400);
+    if (request.headers.has('service-worker')) return fail(404);
     if (url.pathname === '/_reader/nonce' && request.method === 'GET') {
       if (request.headers.has('origin') && request.headers.get('origin') !== url.origin) return fail(403);
       const nonce = randomBytes(32).toString('base64url');
@@ -92,8 +95,9 @@ export function createContentHost(options: ContentHostOptions) {
         return json(204, null, { 'set-cookie': grantCookie(token, CONTENT_GRANT_TTL_SECONDS) });
       } catch { return fail(403); }
     }
-    if (!['GET', 'HEAD'].includes(request.method)) return fail(404);
-    const token = parseGrantCookie(request.headers.get('cookie') ?? undefined);
+    if (url.pathname === '/_reader' || url.pathname.startsWith('/_reader/') || !['GET', 'HEAD'].includes(request.method)) return fail(404);
+    if (cookies.split(';').filter(part => part.trim().startsWith(`${GRANT_COOKIE_NAME}=`)).length !== 1) return fail(401);
+    const token = parseGrantCookie(cookies);
     if (!token) return fail(401);
     let claims: ContentGrantClaims;
     try { claims = options.grants.verify(token); } catch { return fail(401); }
@@ -105,6 +109,7 @@ export function createContentHost(options: ContentHostOptions) {
       try { options.grants.verify(token); } catch { return fail(401); }
       if (!options.enabled() || !await options.current(claims)) return fail(404);
     }
+    if (result.headers['content-security-policy']) result.headers['content-security-policy'] += "; worker-src 'none'";
     return new Response(request.method === 'HEAD' ? null : result.bytes ? Buffer.from(result.bytes) : JSON.stringify(result.body),
       { status: result.status, headers: result.headers });
   }
