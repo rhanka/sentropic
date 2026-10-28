@@ -1,30 +1,12 @@
 {
   "_comment": "Committed snapshot of @sentropic/chat-ui export surface. There is no manifest generator in this package; update this file from package.json exports, runtime Svelte props, and published .svelte.d.ts contracts whenever a public export changes. 0.34.0 breaking change: ChatWidget whole-shell override removed; use typed header/content/pager snippets. ChatPanel override remains.",
   "_generated": "2026-07-25",
-  "_version": "0.34.1",
+  "_version": "1.0.0",
   "subpaths": {
     ".": {
       "kind": "ts",
       "file": "dist/index.js",
       "exports": [
-        "ChatCoreTransport",
-        "ChatCoreTransportFactory",
-        "createDefaultTransport",
-        "ReplayCursor",
-        "ReplayClient",
-        "createReplayClient",
-        "StreamHubEvent",
-        "StreamHubEventHandler",
-        "GeneratedFileFormat",
-        "GeneratedFileCard",
-        "StreamHubSubscription",
-        "STREAM_HUB_EVENT_TYPES",
-        "RuntimePortLike",
-        "StreamHubOptions",
-        "StreamHubClient",
-        "createStreamHub",
-        "StreamHistoryOptions",
-        "StreamHistory",
         "ChatDraftMode",
         "ChatDraftState",
         "SyncDraftInput",
@@ -144,65 +126,6 @@
         "PermissionPromptShape",
         "shouldResetLocalToolStateForFreshRound",
         "filterPermissionPromptsForPendingStream"
-      ]
-    },
-    "./client/chat-core-host": {
-      "kind": "ts",
-      "file": "dist/client/chat-core-host.js",
-      "exports": [
-        "SessionSummary",
-        "SendMessagePayload",
-        "RunHandle",
-        "ModelCatalog",
-        "ChatCoreHost"
-      ]
-    },
-    "./client/transport": {
-      "kind": "ts",
-      "file": "dist/client/transport.js",
-      "exports": [
-        "ChatCoreTransport",
-        "ChatCoreTransportFactory",
-        "createDefaultTransport"
-      ]
-    },
-    "./client/replay": {
-      "kind": "ts",
-      "file": "dist/client/replay.js",
-      "exports": [
-        "ReplayCursor",
-        "ReplayClient",
-        "createReplayClient"
-      ]
-    },
-    "./client/streamTypes": {
-      "kind": "ts",
-      "file": "dist/client/streamTypes.js",
-      "exports": [
-        "StreamHubEvent",
-        "StreamHubEventHandler",
-        "GeneratedFileFormat",
-        "GeneratedFileCard",
-        "StreamHubSubscription",
-        "STREAM_HUB_EVENT_TYPES",
-        "RuntimePortLike",
-        "StreamHubOptions",
-        "StreamHubClient"
-      ]
-    },
-    "./client/streamHistory": {
-      "kind": "ts",
-      "file": "dist/client/streamHistory.js",
-      "exports": [
-        "StreamHistoryOptions",
-        "StreamHistory"
-      ]
-    },
-    "./client/streamHub": {
-      "kind": "ts",
-      "file": "dist/client/streamHub.js",
-      "exports": [
-        "createStreamHub"
       ]
     },
     "./state/chatDraft": {
