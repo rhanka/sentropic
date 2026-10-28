@@ -29,6 +29,7 @@
   let editingContent = '';
   let copiedKey: string | null = null;
   $: state = $snapshots;
+  $: composerText = state.draft;
   $: flags = { attachments: false, comments: false, documents: false, jobs: false,
     workspaceScope: false, steer: true, retry: true, stop: true, ...features };
   const copy = async (content: string, key: string) => {
@@ -135,7 +136,7 @@
         {#snippet renderComposerSurface()}
           <div class="w-full text-sm text-slate-900 outline-none" contenteditable="plaintext-only" role="textbox"
             aria-label={labels('chat.composer.placeholder.chat')} aria-multiline="false"
-            textContent={state.draft} on:input={(event) => commands.setDraft(event.currentTarget.textContent ?? '')}></div>
+            bind:textContent={composerText} on:input={(event) => commands.setDraft(event.currentTarget.textContent ?? '')}></div>
         {/snippet}
         {#snippet renderFloatingLayer()}<span></span>{/snippet}
         {#snippet renderLeftControls()}
