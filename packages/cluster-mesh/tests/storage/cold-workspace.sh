@@ -47,8 +47,26 @@ case "$CM_ACTION" in
     rm -rf /source/packages/cluster-mesh/dist
     cp -R dist /source/packages/cluster-mesh/dist ;;
   test)
+    if [ "${CM_SCOPE:-}" = tests/engram-memory/durable-memory.spec.ts ]; then
+      "$tsc" -p tsconfig.json
+      consumer=$(mktemp -d)
+      npm pack --loglevel error --pack-destination "$consumer" >/dev/null
+      cp -R tests "$consumer/tests"
+      cd "$consumer"
+      printf '%s\n' '{"private":true,"type":"module"}' > package.json
+      npm install --ignore-scripts --no-audit --no-fund ./sentropic-cluster-mesh-*.tgz \
+        @sentropic/engram@0.21.3 vitest@4.1.5 pg@8.22.0 >/dev/null
+      # Fixture relative paths target installed declarations/runtime/assets.
+      # No checkout sources are copied into this consumer.
+      ln -s node_modules/@sentropic/cluster-mesh/dist src
+      ln -s node_modules/@sentropic/cluster-mesh/assets assets
+      export MEMORY_INSTALLED_ROOT="$consumer"
+      ./node_modules/.bin/vitest run tests/engram-memory/durable-memory.spec.ts \
+        --environment node --maxWorkers=1
+      exit
+    fi
     /tmp/cm-tools/node_modules/.bin/vitest run "${CM_SCOPE:-tests}" \
-      --environment node --maxWorkers=1
+      --exclude tests/engram-memory/durable-memory.spec.ts --environment node --maxWorkers=1
     if [ "$CM_PG_CRASH_PHASE" = seed ]; then
       mkdir -p /source/.h2a
       cp ../../.h2a/pg-crash-witness.json /source/.h2a/
