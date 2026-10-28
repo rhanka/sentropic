@@ -6,7 +6,7 @@
 ## Scope / Guardrails
 - [x] Branch `feat/chat-convergence-p1b`, based on P1a `d9a849e5d`; worktree `tmp/worktrees/chat-p1b`; draft predecessor #817 targets main.
 - [x] Environment `test-chat-p1`; API_PORT=8796 UI_PORT=5196 MAILDEV_UI_PORT=1096; ENV always last.
-- [x] Serialize Docker work with `/home/antoinefa/.cache-tmp/sentropic-docker.lock`; run `make down` after each step.
+- [x] Serialize Docker work with `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; run `make down` after each step.
 - [x] Make targets only; no Python, dev tests, clean-all, rebase, force-push, publication or merge.
 - [x] Selective staging and `make commit`; each commit at most 150 changed lines, excluding unchanged renames.
 - [x] Keep the explicit `() => false` as the default authorization predicate; missing approval must deny execution.
@@ -42,6 +42,7 @@
   - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] BR1-R3-replay: assert the resolved permission row survives native/domain replay, with no pending prompt, extra execution or duplicate result.
 - [x] BR1-CI-review-F1: accept the review's transitive UI publication gap; explicitly require runtime validation success for UI publication too, including when its runtime publisher was skipped. Extend the fixture dependency-failure matrix.
 - [x] BR1-CI-capacity: reproduce the independent-validator policy failure and stale publication-DAG fixtures; dispatch runtime/UI validators independently, require both before runtime publication, retain installed-pair qualification and runtime-before-UI release ordering.
 - [x] BR1-R2-consensus: two eligible complementary peers approve exact runtime/visual source 54df2098; subsequent consumer manifest repair is separately qualified. Runtime 451/451 and UI DOM 206/206 pass after corrections; final installed pair passes its public HTTP/permission matrix.
