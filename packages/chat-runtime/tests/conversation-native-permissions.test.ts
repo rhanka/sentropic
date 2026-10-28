@@ -18,6 +18,9 @@ it.each([false, true])('should settle native allow=%s without false approval or 
   expect(fixture.runtime.snapshot().permissions[0]?.status).toBe(allow ? 'approved' : 'denied');
   expect(fixture.executions).toHaveLength(allow ? 1 : 0);
   request(5); await vi.advanceTimersByTimeAsync(200);
+  expect(fixture.runtime.snapshot().permissions).toEqual([
+    { id: `${streamId}:native`, name: 'render_mermaid', status: allow ? 'approved' : 'denied' },
+  ]);
   expect(fixture.executions).toHaveLength(allow ? 1 : 0);
   const results = fixture.requests.filter((entry) => entry.path.endsWith('/tool-results'));
   expect(results).toHaveLength(1);
