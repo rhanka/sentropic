@@ -13,6 +13,9 @@ const expected = { schema: 1, kind: 'api', ref: 'registry/api:test', sourceSha: 
 const receipt = { ...expected, imageId: id, archiveDigest: id, producer: { job: 'build-api-image', attempt: '1' } };
 
 test('should accept an exact producer receipt', () => assert.equal(validate(receipt, expected), receipt));
+test('should reject a receipt written by the wrong producer', () => {
+  assert.throws(() => validate({ ...receipt, producer: { job: 'unrelated', attempt: '1' } }, expected), /Wrong producer/);
+});
 for (const key of Object.keys(expected)) {
   test(`should reject missing or different ${key}`, () => {
     const missing = { ...receipt }; delete missing[key];
