@@ -1,5 +1,15 @@
 # PLAN - Orchestrated Roadmap
 
+## Engram E2 — E10 registration (updated 2026-10-28)
+
+- E10: `feat/cluster-mesh-engram-e10`, targeting `feat/engram-e2-integration` (current integration base `7abd70fd3`, #821 merged, PR #803); merge only, never rebase.
+- Worktree: `tmp/worktrees/mem-e10-fin`; [branch plan](tmp/worktrees/mem-e10-fin/BRANCH.md).
+- Scope: installed injection proof only — `installed-memory.mjs`, `installed-hydration.mjs`, `installed-memory-types.ts`, `qualification.mk` lane, `installed-receipt.json` and retained consumer `package.json`/lock under `packages/cluster-mesh/tests/engram-memory/`, plus `packages/cluster-mesh/docs/engram-memory-k7.md`.
+- Historical E10 bindings: Engram `0.22.0` tarball sha256 `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10`; candidate mesh `0.24.0-dev.5` built from source head `cf1e537a8` without stamping, tarball sha256 `11a8fe858d1abecde50e003c191a8600db4880f4382c8ce3ffa2bb44c09df8e4`.
+- Inherited #821: Engram `0.21.3` supplies the producer-owned intentHash carrier; cluster-mesh `0.24.0-dev.6` persists and returns it unchanged. The E10 installed receipt is retained without rerun.
+- Environment owner: E10 author, `ENV=test-mem-e10`, ports API 8791, UI 5191, Maildev UI 1091; shared Docker lock; `make down ENV=test-mem-e10` after each container step.
+- Downstream: E11 regenerates the final `e2-host-tuple/v1` on cluster-mesh `0.24.0-dev.6` + Engram `0.21.3` (+ L4 `0.22.0` candidate when re-qualified); E10 dev.5/0.22.0 evidence remains historical.
+
 ## Engram E2 — E0 registration (2026-10-26)
 
 - E0: `feat/cluster-mesh-engram-e0`, targeting `feat/engram-e2-integration`.
