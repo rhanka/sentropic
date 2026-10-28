@@ -1,0 +1,36 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: artifact-content
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    traefik.ingress.kubernetes.io/router.priority: "1"
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts:
+        - "*.preprod.sentropic.sent-tech.ca"
+        - "*.pinned.preprod.sentropic.sent-tech.ca"
+      secretName: artifact-content-tls
+  rules:
+    - host: "*.preprod.sentropic.sent-tech.ca"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: artifact-content
+                port:
+                  name: http
+    - host: "*.pinned.preprod.sentropic.sent-tech.ca"
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: artifact-content
+                port:
+                  name: http
