@@ -39,8 +39,8 @@
     "test": "vitest run tests"
   },
   "dependencies": {
-    "@sentropic/chat-ui": "^0.34.1",
-    "@sentropic/cowork-bridge": "^0.1.1"
+    "@sentropic/chat-runtime": "^0.1.0",
+    "@sentropic/cowork-bridge": "file:../cowork-bridge"
   },
   "optionalDependencies": {
     "screenshot-desktop": "^1.15.0",
