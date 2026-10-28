@@ -168,3 +168,143 @@ const collectToolCallsFromEvents = (
 
     if (event.eventType === 'status') {
       const pendingCalls = parsePendingLocalToolCallsFromStatusPayload(
+        'checkpoint',
+        Number(event.sequence ?? 0),
+        event.data,
+        isLocalToolName,
+      );
+      for (const call of pendingCalls) {
+        toolCalls.set(call.toolCallId, {
+          name: call.name,
+          argsText: call.argsText,
+        });
+      }
+    }
+  }
+
+  return [...toolCalls.values()].filter((tc) => tc.name.trim().length > 0);
+};
+
+const getGitMutationPreviewItems = (argsText: string): string[] => {
+  const record = parseArgsRecord(argsText);
+  const action = String(record?.action ?? '').trim().toLowerCase();
+  if (!action || READ_ONLY_GIT_ACTIONS.has(action)) return [];
+  const paths = Array.isArray(record?.paths)
+    ? record.paths.map((value) => String(value ?? '').trim()).filter(Boolean)
+    : [];
+  const path = String(record?.path ?? '').trim();
+  const labels = [...paths, ...(path ? [path] : [])];
+  if (labels.length > 0) {
+    return labels.map((value) => `git ${action}: ${value}`);
+  }
+  return [`git ${action}`];
+};
+
+const getBashMutationPreviewItems = (argsText: string): string[] => {
+  const record = parseArgsRecord(argsText);
+  const command = String(record?.command ?? '').trim();
+  if (!command || !isMutatingBashCommand(argsText)) return [];
+  const normalized = command.replace(/\s+/g, ' ');
+  const pathMatch =
+    normalized.match(/\b(?:mv|cp|rm|mkdir|touch|chmod|chown)\s+([^\s]+)/i) ??
+    normalized.match(/\bsed\s+-i(?:\s+['"][^'"]*['"])?\s+([^\s]+)/i);
+  if (pathMatch?.[1]) {
+    return [pathMatch[1]];
+  }
+  return [normalized.length > 72 ? `${normalized.slice(0, 69)}...` : normalized];
+};
+
+const getToolCallPreviewItems = (
+  toolName: string,
+  argsText: string,
+  opts?: ClassifierOpts,
+): string[] => {
+  const normalized = toolName.trim().toLowerCase();
+  if (!isMutatingToolCall(normalized, argsText, opts)) return [];
+  if (normalized === 'file_edit') {
+    const record = parseArgsRecord(argsText);
+    const path = String(record?.path ?? '').trim();
+    return path ? [path] : ['file edit'];
+  }
+  if (normalized === 'git') return getGitMutationPreviewItems(argsText);
+  if (normalized === 'bash') return getBashMutationPreviewItems(argsText);
+  if (opts?.humanizeMutation) {
+    const label = opts.humanizeMutation(normalized, argsText);
+    if (label) return [label];
+  }
+  return [normalized.replace(/_/g, ' ')];
+};
+
+/**
+ * Returns true if the checkpoint covers assistant messages that contain mutating
+ * tool calls (git commit, bash rm, file_edit, or host-custom mutating tools).
+ *
+ * @param checkpoint - The checkpoint to test (must have anchorSequence > 0).
+ * @param messages - Full message list for the session.
+ * @param initialEventsByMessageId - Stream events keyed by message id / streamId.
+ * @param opts - Optional host hooks: isMutatingTool, isLocalToolName, humanizeMutation.
+ */
+export const hasCheckpointMutationDelta = (
+  checkpoint: CheckpointSummaryLike | null | undefined,
+  messages: CheckpointMessageLike[],
+  initialEventsByMessageId: Map<string, CheckpointStreamEventLike[]>,
+  opts?: ClassifierOpts,
+): boolean => {
+  if (!checkpoint) return false;
+  const anchorSequence = Number(checkpoint.anchorSequence ?? 0);
+  if (!Number.isFinite(anchorSequence) || anchorSequence <= 0) return false;
+
+  const isLocal = opts?.isLocalToolName ?? DEFAULT_IS_LOCAL_TOOL_NAME;
+
+  const assistantMessagesAfterAnchor = messages.filter((message) => {
+    if (message.role !== 'assistant') return false;
+    const sequence = Number(message.sequence ?? 0);
+    return Number.isFinite(sequence) && sequence > anchorSequence;
+  });
+
+  for (const message of assistantMessagesAfterAnchor) {
+    const streamId = String(message._streamId ?? message.id ?? '').trim();
+    if (!streamId) continue;
+    const events = initialEventsByMessageId.get(streamId) ?? [];
+    if (events.length === 0) continue;
+    for (const toolCall of collectToolCallsFromEvents(events, isLocal)) {
+      if (isMutatingToolCall(toolCall.name, toolCall.argsText, opts)) return true;
+    }
+  }
+
+  return false;
+};
+
+/**
+ * Returns a deduplicated list (up to 8) of human-readable mutation preview items
+ * for a checkpoint — for use in tooltip/title rendering.
+ */
+export const getCheckpointMutationPreviewItems = (
+  checkpoint: CheckpointSummaryLike | null | undefined,
+  messages: CheckpointMessageLike[],
+  initialEventsByMessageId: Map<string, CheckpointStreamEventLike[]>,
+  opts?: ClassifierOpts,
+): string[] => {
+  if (!checkpoint) return [];
+  const anchorSequence = Number(checkpoint.anchorSequence ?? 0);
+  if (!Number.isFinite(anchorSequence) || anchorSequence <= 0) return [];
+
+  const isLocal = opts?.isLocalToolName ?? DEFAULT_IS_LOCAL_TOOL_NAME;
+  const items = new Set<string>();
+
+  const assistantMessagesAfterAnchor = messages.filter((message) => {
+    if (message.role !== 'assistant') return false;
+    const sequence = Number(message.sequence ?? 0);
+    return Number.isFinite(sequence) && sequence > anchorSequence;
+  });
+
+  for (const message of assistantMessagesAfterAnchor) {
+    const streamId = String(message._streamId ?? message.id ?? '').trim();
+    if (!streamId) continue;
+    const events = initialEventsByMessageId.get(streamId) ?? [];
+    if (events.length === 0) continue;
+    for (const toolCall of collectToolCallsFromEvents(events, isLocal)) {
+      for (const item of getToolCallPreviewItems(toolCall.name, toolCall.argsText, opts)) {
+        items.add(item);
+        if (items.size >= 8) return [...items];
+      }
