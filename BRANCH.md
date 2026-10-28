@@ -43,6 +43,7 @@
 - [x] Host/runtime implemented over upstream reads and W3.a; signing key and live authority are rechecked after blob waits.
 - [x] Listener tests added before entrypoint: default-closed real TCP request and enabled configuration refusal before listening.
 - [x] Additional acceptance before correction: stable-pointer movement during blob wait must discard bytes; denied HEAD must have no body.
+- [x] First execution: 26/29 pass; pointer race (200 vs 401) and denied HEAD body reproduced. Added post-read pointer check and universal HEAD body suppression; listener bootstrap diagnosis remains active.
 - [x] Configuration/bridge ownership documented; exact-head CI reuses existing Make targets and always tears down its isolated stack.
 - [x] Content lint/type configuration includes the new app and its tests explicitly; package/API manifests remain unchanged.
 - [x] Extended runtime acceptance: account/tenant/lifecycle/release denials plus enabled real listener, read-only S3 adapter and mounted-key rotation.
