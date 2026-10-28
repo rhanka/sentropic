@@ -268,3 +268,143 @@ describe('classifier — isLocalToolName default equivalence', () => {
    * any status event with pending_local_tool_calls will produce ZERO calls when
    * isLocalToolName = ()=>false, regardless of the tool name.
    *
+   * For environments with no local tools: status events have no
+   * pending_local_tool_calls, so the filter is never invoked — the two are
+   * equivalent.
+   *
+   * For environments with local tools but NOT passing isLocalToolName: local
+   * tool calls in status events are silently ignored (safe: they're redundant
+   * with tool_call_start/delta events for the mutation scan).
+   *
+   * The tests below prove both cases produce identical results.
+   */
+
+  const msgs: Msg[] = [
+    { id: 'u1', role: 'user', sequence: 1 },
+    { id: 'a1', role: 'assistant', sequence: 2 },
+  ];
+
+  it('status event with no pending_local_tool_calls: default and explicit ()=>false are identical', () => {
+    const eventsMap = makeEvents({
+      id: 'a1',
+      events: [
+        {
+          eventType: 'status',
+          data: { state: 'processing' },
+          sequence: 5,
+        },
+        toolCallStartEvent('tc1', 'file_edit', '{"path":"x.ts"}', 10),
+      ],
+    });
+
+    const withDefault = hasCheckpointMutationDelta({ anchorSequence: 1 }, msgs, eventsMap);
+    const withExplicitFalse = hasCheckpointMutationDelta(
+      { anchorSequence: 1 },
+      msgs,
+      eventsMap,
+      { isLocalToolName: () => false },
+    );
+    expect(withDefault).toBe(true);
+    expect(withExplicitFalse).toBe(true);
+    expect(withDefault).toBe(withExplicitFalse);
+  });
+
+  it('status event with awaiting_local_tool_results + default: local calls are NOT included', () => {
+    // A mutating "bash rm" injected via status event — with default ()=>false guard,
+    // it is NOT included (parsePendingLocalToolCallsFromStatusPayload filters it out).
+    const eventsMapStatusOnly = makeEvents({
+      id: 'a1',
+      events: [
+        statusEventWithLocalTool('tc-local', 'bash', { command: 'rm -rf /tmp/x' }, 5),
+      ],
+    });
+    const withDefault = hasCheckpointMutationDelta(
+      { anchorSequence: 1 },
+      msgs,
+      eventsMapStatusOnly,
+    );
+    // No tool_call_start event, status local call is filtered — result is false.
+    expect(withDefault).toBe(false);
+  });
+
+  it('status event with awaiting_local_tool_results + real guard: local calls ARE included', () => {
+    // Same event as above but with isLocalToolName = () => true — local call included.
+    const eventsMapStatusOnly = makeEvents({
+      id: 'a1',
+      events: [
+        statusEventWithLocalTool('tc-local', 'bash', { command: 'rm -rf /tmp/x' }, 5),
+      ],
+    });
+    const withRealGuard = hasCheckpointMutationDelta(
+      { anchorSequence: 1 },
+      msgs,
+      eventsMapStatusOnly,
+      { isLocalToolName: () => true },
+    );
+    // bash rm is mutating, local call IS included — result is true.
+    expect(withRealGuard).toBe(true);
+  });
+
+  it('for non-local tool environments: both defaults produce identical results for all event shapes', () => {
+    // Non-local environment: no status events with pending_local_tool_calls at all.
+    // The isLocalToolName guard is never invoked — default and explicit are equivalent.
+    const scenarios: Array<{ name: string; events: Event[] }> = [
+      { name: 'file_edit', events: [toolCallStartEvent('tc1', 'file_edit', '{"path":"x.ts"}')] },
+      { name: 'git commit', events: [toolCallStartEvent('tc1', 'git', '{"action":"commit"}')] },
+      { name: 'git status', events: [toolCallStartEvent('tc1', 'git', '{"action":"status"}')] },
+      { name: 'bash echo', events: [toolCallStartEvent('tc1', 'bash', '{"command":"echo hi"}')] },
+    ];
+
+    for (const { name, events } of scenarios) {
+      const eventsMap = makeEvents({ id: 'a1', events });
+      const withDefault = hasCheckpointMutationDelta({ anchorSequence: 1 }, msgs, eventsMap);
+      const withExplicit = hasCheckpointMutationDelta(
+        { anchorSequence: 1 },
+        msgs,
+        eventsMap,
+        { isLocalToolName: () => false },
+      );
+      expect(withDefault, `${name}: default !== explicit false`).toBe(withExplicit);
+    }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. checkpointState.ts
+// ---------------------------------------------------------------------------
+describe('checkpointState', () => {
+  type CP = { id: string; anchorMessageId: string; anchorSequence: number; title: string };
+
+  const makeCheckpoints = (...cps: CP[]): CP[] => cps;
+
+  it('applySessionCheckpoints indexes by anchorMessageId', () => {
+    const cps = makeCheckpoints(
+      { id: 'cp1', anchorMessageId: 'msg-1', anchorSequence: 1, title: 'First' },
+      { id: 'cp2', anchorMessageId: 'msg-2', anchorSequence: 3, title: 'Second' },
+    );
+    const map = applySessionCheckpoints(cps);
+    expect(map.size).toBe(2);
+    expect(map.get('msg-1')).toMatchObject({ id: 'cp1' });
+    expect(map.get('msg-2')).toMatchObject({ id: 'cp2' });
+  });
+
+  it('applySessionCheckpoints: first checkpoint per anchor wins (dedup)', () => {
+    const cps = makeCheckpoints(
+      { id: 'cp1', anchorMessageId: 'msg-1', anchorSequence: 1, title: 'First' },
+      { id: 'cp2', anchorMessageId: 'msg-1', anchorSequence: 1, title: 'Duplicate' },
+    );
+    const map = applySessionCheckpoints(cps);
+    expect(map.size).toBe(1);
+    expect(map.get('msg-1')).toMatchObject({ id: 'cp1' });
+  });
+
+  it('applySessionCheckpoints: empty input returns empty map', () => {
+    expect(applySessionCheckpoints([])).toEqual(new Map());
+  });
+
+  it('applySessionCheckpoints: skips entries with empty anchorMessageId', () => {
+    const cps = makeCheckpoints(
+      { id: 'cp1', anchorMessageId: '', anchorSequence: 1, title: 'Empty' },
+      { id: 'cp2', anchorMessageId: 'msg-2', anchorSequence: 2, title: 'Valid' },
+    );
+    const map = applySessionCheckpoints(cps);
