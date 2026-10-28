@@ -827,9 +827,19 @@ export class MistralTranscriptionSession implements SpeechSession {
         return;
       }
       // Phase 2: turn frames until the done, an abandonment, or the close.
+      // A provider close without `done` ends the pending commit with a
+      // transport error instead of hanging it until the session expiry.
       for (;;) {
         const next = await iterator.next();
-        if (next.done) return;
+        if (next.done) {
+          if (!this.settled && !stream.abandoned && !stream.doneReceived) {
+            stream.abandoned = true;
+            stream.resolveDone(undefined);
+            if (this.current === stream) this.current = undefined;
+            this.pushError('transport', true);
+          }
+          return;
+        }
         if (this.settled || stream.abandoned) return;
         this.onFrame(stream, next.value);
         if (stream.doneReceived) {

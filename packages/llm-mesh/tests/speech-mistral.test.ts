@@ -115,6 +115,12 @@ class GateSocket implements MistralTranscriptionSocket {
     const waiters = this.waiters.splice(0);
     for (const resolve of waiters) resolve();
   }
+  /** Provider-side close: the stream ends without further frames. */
+  end(): void {
+    this.ended = true;
+    const waiters = this.waiters.splice(0);
+    for (const resolve of waiters) resolve();
+  }
 }
 
 /**
@@ -464,6 +470,25 @@ describe('mistral transcript mapping', () => {
     const finals = events.filter((event) => event.type === 'transcript.final');
     expect(finals).toHaveLength(1);
     expect(driven.sink.records).toHaveLength(1);
+  });
+
+  it('should end a pending commit when the provider closes without done', async () => {
+    const driven = await openMistralDriven();
+    await driven.write('u1', 10);
+    const pending = driven.session.command(commitCommand('u1'));
+    await flush();
+    driven.lastSocket().end();
+    await pending;
+    const events = await driven.collect();
+    expect(events.filter((event) => event.type === 'transcript.final')).toHaveLength(0);
+    expect(events.filter((event) => event.type === 'error')).toMatchObject([{ reason: 'transport' }]);
+    // The dead turn is gone: the next turn opens a fresh stream.
+    await driven.write('u2', 100);
+    await driven.commit('u2', [frameDone('second')]);
+    const finals = (await driven.collect())
+      .filter((event) => event.type === 'transcript.final')
+      .map((event) => (event as unknown as { utteranceId: string }).utteranceId);
+    expect(finals).toEqual(['u2']);
   });
 
   it('should emit no second final when committing after a spontaneous done', async () => {
