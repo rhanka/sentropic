@@ -96,6 +96,7 @@
   - [x] Move comment-state construction and update-subscription lifetime to a host-owned comment runtime.
   - [x] Migrate mixed optional-module imports in app adapters and existing tests to the correct visual/runtime public entrypoints.
   - [x] Split the mixed comment tests: visual export/manifest assertions stay in UI; runtime tests retain state behavior and explicit runtime export registration.
+  - [x] Add a shared parity fixture using the real Hono chat server, default transport, stream hub, session runtime and platform I/O adapters.
   - [x] Resolve typecheck evidence: import canonical comment formatting, normalize wire attachment source/IDs and keep ES2022-compatible lookup.
   - [ ] Replace component runtime creation/disposal with normalized snapshot and command props/declarations.
   - [ ] Bind full send/model/context/tools/attachments, history, retry/stop/edit/feedback/steer and active modules.
