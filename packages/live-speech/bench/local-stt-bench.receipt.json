@@ -1,0 +1,136 @@
+{
+  "status": "measured",
+  "lot": "L3",
+  "createdAt": "2026-10-27T02:00:38.690Z",
+  "note": "Functional pipeline timings through worker + session on eSpeak NG fixtures resampled to 16 kHz in-process; quality and latency budgets belong to the M1 campaign with real speech fixtures.",
+  "node": "v22.22.1 linux x64",
+  "engine": "faster-whisper-ts@1.2.1",
+  "pinned": {
+    "tiny": "sha256:dcb76c6586fc06cbdac6dd21f14cfd129cc4cdd9dce19bf4ffa62e59cbe6e6d1",
+    "base": "sha256:d01c3014881c9c6f3133c182f3d2887eb6ca1c789a7538c5c007196857a0a6a9",
+    "engineVersion": "1.2.1"
+  },
+  "modelsDir": "/home/antoinefa/src/faster-whisper/test-models",
+  "engineId": "faster-whisper-ts/1.2.1",
+  "espeak": {
+    "binary": "/tmp/espeak-root/usr/bin/espeak-ng",
+    "version": "eSpeak NG text-to-speech: 1.52.0  Data at: /usr/lib/x86_64-linux-gnu/espeak-ng-data"
+  },
+  "provisioned": {
+    "faster-whisper-ts": {
+      "version": "1.2.1",
+      "resolved": "https://registry.npmjs.org/faster-whisper-ts/-/faster-whisper-ts-1.2.1.tgz",
+      "integrity": "sha512-3oGN11mPfJ6duavNpEt3i/1pQ89eaE18j9FJ8fNsMCHrt+xX55XRWO96rFuz9sRxMStskXLXZX+A5YYPkXlQ0g==",
+      "hasInstallScript": true,
+      "license": "MIT",
+      "dependencies": {
+        "@ffmpeg/core": "^0.11.0",
+        "@ffmpeg/ffmpeg": "^0.11.6",
+        "@ffmpeg/util": "^0.12.2",
+        "@huggingface/tokenizers": "^0.1.3",
+        "koffi": "^2.15.6",
+        "onnxruntime-node": "^1.24.3"
+      },
+      "engines": {
+        "node": ">=20"
+      }
+    },
+    "onnxruntime-node": {
+      "version": "1.24.3",
+      "resolved": "https://registry.npmjs.org/onnxruntime-node/-/onnxruntime-node-1.24.3.tgz",
+      "integrity": "sha512-JH7+czbc8ALA819vlTgcV+Q214/+VjGeBHDjX81+ZCD0PCVCIFGFNtT0V4sXG/1JXypKPgScQcB3ij/hk3YnTg==",
+      "hasInstallScript": true,
+      "license": "MIT",
+      "os": [
+        "win32",
+        "darwin",
+        "linux"
+      ],
+      "dependencies": {
+        "adm-zip": "^0.5.16",
+        "global-agent": "^3.0.0",
+        "onnxruntime-common": "1.24.3"
+      }
+    },
+    "koffi": {
+      "version": "2.16.3",
+      "resolved": "https://registry.npmjs.org/koffi/-/koffi-2.16.3.tgz",
+      "integrity": "sha512-E9y1AsgYGlaxMhcZzHr8y96QF2U5XzA12GGVAfbWqIubTwPNMXQarfBzePNXHe0xtIEtNd6ifAv3GAKYGUeBAQ==",
+      "hasInstallScript": true,
+      "license": "MIT",
+      "funding": {
+        "url": "https://liberapay.com/Koromix"
+      }
+    },
+    "@huggingface/tokenizers": {
+      "version": "0.1.3",
+      "resolved": "https://registry.npmjs.org/@huggingface/tokenizers/-/tokenizers-0.1.3.tgz",
+      "integrity": "sha512-8rF/RRT10u+kn7YuUbUg0OF30K8rjTc78aHpxT+qJ1uWSqxT1MHi8+9ltwYfkFYJzT/oS+qw3JVfHtNMGAdqyA==",
+      "license": "Apache-2.0"
+    }
+  },
+  "results": {
+    "local-tiny": {
+      "fixture": {
+        "lang": "en",
+        "text": "The quick brown fox jumps over the lazy dog. The quick brown fox jumps over the lazy dog.",
+        "voice": "en",
+        "speed": 175,
+        "wavDigest": "sha256:935a8bf911427409293d0e3d232ff48df233cf53f8d63cdc40b437effd561583"
+      },
+      "runs": [
+        {
+          "loadMs": 195.4,
+          "fixture": "espeak",
+          "samples": 89118,
+          "elapsedMs": 6683,
+          "finals": 1,
+          "partials": 1,
+          "chars": 87,
+          "errors": []
+        },
+        {
+          "loadMs": 217.2,
+          "fixture": "silence",
+          "samples": 16000,
+          "elapsedMs": 1007,
+          "finals": 0,
+          "partials": 0,
+          "chars": 0,
+          "errors": []
+        }
+      ]
+    },
+    "local-base": {
+      "fixture": {
+        "lang": "fr",
+        "text": "Bonjour, comment allez vous ? Bonjour, comment allez vous ? Bonjour, comment allez vous ?",
+        "voice": "fr",
+        "speed": 120,
+        "wavDigest": "sha256:bd1f2295a83b271e823a36c4b6077e1e3aeee19084b4655f102a6325c657caef"
+      },
+      "runs": [
+        {
+          "loadMs": 304.6,
+          "fixture": "espeak",
+          "samples": 122390,
+          "elapsedMs": 7586.3,
+          "finals": 1,
+          "partials": 2,
+          "chars": 26,
+          "errors": []
+        },
+        {
+          "loadMs": 346.3,
+          "fixture": "silence",
+          "samples": 16000,
+          "elapsedMs": 1009,
+          "finals": 0,
+          "partials": 0,
+          "chars": 0,
+          "errors": []
+        }
+      ]
+    }
+  }
+}
