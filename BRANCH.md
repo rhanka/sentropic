@@ -28,6 +28,7 @@
   - [x] None beyond BR11-EX1.
 - **Exception process**:
   - [x] BR11-EX1: add only test-mem-e11 to host scope-check selector, avoiding an unrelated harness build; impact validation routing; rollback remove selector.
+  - [x] BR11-EX2: owner-requested 0.21.3/dev.6 clean install proof uses existing qualification Compose, PostgreSQL and down selectors for test-mem-e11; rollback those three selector entries together. No package/source/lock edits.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot E11-4 — Integration refresh**
