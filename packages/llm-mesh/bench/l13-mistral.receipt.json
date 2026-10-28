@@ -16,12 +16,21 @@
       "modelId": "voxtral-mini-tts-3-0",
       "modelRevision": "unpinned — blocked: same pinning rule",
       "placement": "cloud-relay",
-      "wire": "POST https://api.mistral.ai/v1/audio/speech with model/input/voice_id/response_format; selection data only in mesh, HTTPS at composition"
+      "wire": "POST https://api.mistral.ai/v1/audio/speech with model/input/voice_id/response_format; selection data only in mesh, HTTPS at composition",
+      "outputFormat": "capabilities advertise pcm16-le 24 kHz and the builder accepts pcm; the pcm sample rate is unverified — no measured capture"
     }
   },
   "price": {
     "observation": "not observed — blocked: no contractual quote recorded; STT meters audio-seconds, TTS meters characters (separate priced dimensions via L8)",
     "pinnedRevision": "missing — blocked: price() must be pinned at admission via the L8 gateway before any cloud call"
+  },
+  "license": {
+    "voxtral-3-preview": "hosted API only — no open-weights license; status unverified, never claimed",
+    "voxtral-2602": "not admitted — Apache-2.0 per the 2602 model card; not transferred, unused by this adapter"
+  },
+  "priceList": {
+    "voxtral-3-preview": "STT $0.008/min, TTS $13/1M chars (published list, unverified — no contractual quote recorded)",
+    "voxtral-2602": "not admitted — $0.006/min list (unverified); not transferred, unused by this adapter"
   },
   "missing": [
     { "item": "provider credentials and entitlement for the Mistral account", "status": "blocked" },
