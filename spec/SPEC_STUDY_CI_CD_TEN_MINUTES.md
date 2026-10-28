@@ -451,3 +451,44 @@ including native browser coverage, independently of the unmet timing budget.
 | Container gate | 122741299974 / 165 | 122744107853 / 190 |
 | Restore | 122739165320 / 191 | 122743353511 / 196 |
 | ci-gate | 122744805201 / 19 | 122748541061 / 19 |
+
+### BR-78 reviewed head and carried acceptance
+
+At head `d072d24ecc4caf30dba18e4476366efd58a4d2bb`, PR run
+[40713883861](https://github.com/rhanka/sentropic/actions/runs/40713883861),
+attempt 1, is completed/success in 1465s wall-clock. These are cache-enabled
+job durations, including job setup, embedded prerequisites, builds and transfers:
+
+| Job | Job ID | Seconds |
+| --- | --- | --- |
+| API | 122906441972 | 111 |
+| Toolbox | 122906442347 | 121 |
+| Full UI | 122906441859 | 255 |
+| Browser | 122906441182 | 73 |
+| Container gate | 122909971487 | 209 |
+| Restore | 122909971457 | 196 |
+| IdP screens | 122913533033 | 290 |
+| VSCode | 122913532961 | 142 |
+| E2E a / b / c / d / e | 122909358820 / 122909359737 / 122909358919 / 122909358935 / 122909358946 | 270 / 154 / 303 / 200 / 211 |
+| Capacity receipts | 122918555558 | 17 |
+| ci-gate | 122919004635 | 18 |
+
+Full UI is **255s versus the 180s warm target**, a 75s breach. No cold run
+exists at this reviewed head; the older 330s cold sample at `8f9cf1d9b`
+cannot qualify the parent-cache correction. The final pushed head receives a
+forced-cold dispatch (`image_cache_mode=cold`, no image cache import/export)
+and its own PR qualification. After completion, full run/attempt/job/step JSON,
+per-job durations, actual head/checkout provenance and target comparisons are
+recorded in `.tmp/ci-br78/receipts/<run-id>/` and the final head/run handoff.
+
+Lots 3 and 5 explicitly carry to a follow-up (CI train owner; number pending):
+repeated warm/cold acceptance, API-case UI ≤120/150s, full readiness ≤180/210s,
+the scoped rollback drill and exhaustive listed final validation. This PR's
+exact final head must still pass CI. Its delivered cache/transport/browser
+remediation does not close performance or BR77 acceptance.
+
+Exact apk pins fail closed when Alpine retires a package version; maintainers
+must explicitly repin Chromium/headless-shell, FFmpeg and libcrypto3/libssl3,
+then repeat browser probes, journeys and the unchanged container gate. The
+new runtime/cache action is pinned to the source-verified v3 commit
+`3cb05d89e1f492524af3d41a1c98c83bc3025124` at all four call sites.

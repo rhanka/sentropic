@@ -605,7 +605,7 @@ jobs:
       - name: Setup Docker
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: docker/setup-buildx-action@v4
-      - uses: crazy-max/ghaction-github-runtime@v3
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
       - name: Build and save exact E2E candidate
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
@@ -1292,7 +1292,7 @@ jobs:
       - name: Setup Docker
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: docker/setup-buildx-action@v4
-      - uses: crazy-max/ghaction-github-runtime@v3
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
       - name: Build API image
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
@@ -1337,7 +1337,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Test toolbox image references, cache fallback and hash inputs
         run: make test-ci-api-tooling ENV=test-ci-api
-      - uses: crazy-max/ghaction-github-runtime@v3
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
       - name: Build CI toolbox
         run: make ci-build-api-tool ENV=test-ci-images
       - name: Verify toolbox runner and compiler interfaces
@@ -1470,7 +1470,7 @@ jobs:
       - name: Setup Docker
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: docker/setup-buildx-action@v4
-      - uses: crazy-max/ghaction-github-runtime@v3
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
       - name: Build Cowork desktop binary
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'

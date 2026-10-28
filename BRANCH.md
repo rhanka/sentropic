@@ -43,6 +43,11 @@
 - [x] Exception process: record rationale, impact and rollback before edits; additional paths require bounded exceptions.
 
 ## Feedback Loop
+- [x] PR #811 Opus r1 APPROVE at d072d24ec: close the action pin, record exact-head measurements, and explicitly carry remaining Lot 3/5 acceptance to a follow-up; owner retains merge authority.
+- [x] BR78-EX1 names crazy-max/ghaction-github-runtime, exporting GitHub runtime/cache credentials to image producers. All four uses pin 3cb05d89e1f492524af3d41a1c98c83bc3025124 with a v3 comment; upstream refs/tags/v3 resolves directly to that commit via both GitHub API and git ls-remote (2026-10-28). Impact: immutable action source; rollback: revert these four pins with the transport/cache rollback.
+- [x] Run 40713883861 attempt 1 at d072d24ecc4caf30dba18e4476366efd58a4d2bb is completed/success (1465s wall-clock). API/tools/UI/browser/scan/restore take 111/121/255/73/209/196s; IdP 290s, VSCode 142s, E2E a/b/c/d/e 270/154/303/200/211s, capacity 17s, gate 18s. Study section 11 records job IDs. Full UI warm 255s exceeds 180s by 75s; final-head cold and API-case UI targets must be measured, never inferred.
+- [x] Final pushed-head PR and image_cache_mode=cold dispatch receipts are captured after completion under .tmp/ci-br78/receipts/<run-id>/ in the owner workspace, with full run/attempt/job/step JSON, per-job durations and target comparisons in the final handoff. A prior-head green verdict does not qualify the final head.
+- [x] Maintenance: exact apk pins for Chromium/headless-shell 155.0.8059.84-r0, FFmpeg 8.1.3-r0 and libcrypto3/libssl3 3.5.9-r0 fail closed when Alpine retires those versions. Future rebuilds then require explicit repinning and fresh browser DOM/screenshot/video probes, journeys and unchanged container scans; never float versions to bypass the failure.
 - [x] Receipt-fix follow-up: f3cc9f668 / PR run 40704275592 captures the final receipt successfully (ci-gate 122894637302); the verdict correctly rejects validate-publishable-manifests 122874516639 because its existing wiring fixture still expects contents-only permissions. Align that exact assertion with job-local contents/actions read, retaining every dependency and fail-closed check; BR78-EX4 covers this existing fixture path. Under the shared Docker lock, make test-publishable-manifests SCOPE='scripts/ci/publishable-ci-wiring.test.mjs scripts/ci/ci-expected-results.test.mjs' API_PORT=9390 UI_PORT=5590 MAILDEV_UI_PORT=1490 ENV=test-ci-br78 passes all 157 tests; make down completes. Mechanical branch/scope and whitespace checks pass.
 - [x] BR78-EX7 authorized by the owner's receipt-failure fix request: update the existing gate capture fixture to require job-local contents/actions read permissions, authenticated attempt/pagination calls and fail-closed API errors. Impact: regression coverage only; rollback: revert this fixture together with the workflow authentication fix.
 - [x] Receipt diagnosis at 04f0d1497: PR 40670667401 attempt 1, ci-gate 122851492883 fails at 13:41:35Z on its first anonymous run-attempt GET with HTTP 403. Main de7ab8d315 / green 40667783628 / ci-gate 122763272082 uses the identical capture and contents-only token (12s). No response headers/body were logged, so secondary throttling is unproven; github-script retry inputs do not govern raw fetch. Use its authenticated Actions client with job-local actions: read, matching ci-capacity-receipts (122851195668, success, 19s); retain current-attempt pagination, mandatory receipt and unchanged verdict.
@@ -103,15 +108,20 @@
   - [x] Implement scripts/ci/image-receipt.mjs and image-receipt.test.mjs; negative tests cover stale/wrong/missing receipts, modified archives and loaded image substitution.
   - [x] Verify source/workflow/inputs/cache identity, archive digest and loaded image ID at every load; E2E/VSCode use exact UI/E2E artifacts instead of registry tags.
   - [ ] Gate: make test-ci-image-receipts test-ci-api-runtime test-ci-api-tag-guard test-ci-api-tool-runtime ENV=test-ci-br78.
-- [ ] **Lot 3 — UAT and measured acceptance**
+- [ ] **Lot 3 — Carried to follow-up: UAT and measured acceptance**
   - [ ] Real warm/cold runs for four producers, scanners and restore; workflow dispatch exposes explicit cold rebuilds; include embedded prerequisites/export/compression/upload/download/load.
   - [ ] Verify production smoke/limits, npm-absent runtime, tag collisions, IdP screens and both UI profiles with embedded Chrome/VSCode/desktop assets.
   - [ ] Rollback drill with scoped invalidation and fresh verified artifacts.
 - [ ] **Lot 4 — Docs consolidation**
   - [x] Record baseline, cache-population/cold measurements, byte counts, exact producer/restore tuple, rejected native experiment and remaining gaps in plan/64 and study section 11; timing/IdP acceptance remains open.
-- [ ] **Lot 5 — Final validation**
+- [ ] **Lot 5 — Carried to follow-up: remaining final validation**
   - [x] Head 9d7c58cab full PR run 40643738039 attempt 1 succeeds, including ci-gate 122674614619, all selected browser/VSCode/API/static/security/restore lanes; 1313s workflow wall-clock. Later E2E scan coverage must qualify on its own head; timing/review acceptance stays open.
   - [ ] Exact-head changed-file tests, typecheck-api lint-api typecheck-ui lint-ui and image/runtime guards through CI.
   - [ ] Exact-head API/UI/E2E/VSCode, container scans, smoke and restore; selected membership unchanged.
   - [ ] make scope-check before every make commit; selective staging; cleanup isolated environments.
   - [ ] Draft PR to main using this file as body; independent reviews, CI and measured head handoff; owner retains merge authority.
+
+## Deferred to follow-up (owner: CI train owner; number to be assigned)
+- [x] Lot 3 carry-over is explicit, not completed acceptance: complete the repeated warm/cold campaign including embedded prerequisites and all transfers, measure API-case UI, meet full readiness ≤180/210s and API-case UI ≤120/150s, and perform the scoped cache-invalidation/verified-artifact rollback drill. Keep all production, IdP, restore, profile and embedded-output assertions; verify through real run/attempt/job receipts.
+- [x] Lot 5 carry-over is explicit, not completed acceptance: repeat the exhaustive listed local/static/build/runtime/regression commands and expected/executed membership comparison for the follow-up's final SHA, complete measured acceptance and independent review, then hand off closure to the merge operator. This PR still requires completed/success CI on its exact final head; performance targets and the rollback drill stay open.
+- [x] Merged BR78 scope: persistent source-keyed image caches, digest-verified same-run artifact transport, source-level browser remediation, compiler/desktop cache isolation and bounded blocking regression fixes. No timing-budget or BR77 acceptance closure is claimed; the open Lot 2 aggregate local gate is not relabelled as passed.
