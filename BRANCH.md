@@ -40,9 +40,11 @@
   - [x] `e2e/tests/07_comment_assistant.spec.ts` — BR78-EX5, deterministic workspace initialization for the unchanged blocking journey.
   - [x] `spec/CHAT_MIGRATION_P0*.md` — BR78-EX6, unchanged upstream documents in the main integration merge only.
   - [x] `scripts/ci/ci-expected-results.test.mjs` — BR78-EX7, authenticated gate capture regression.
+  - [x] `api/tests/unit/gateway-package-version.test.ts`, `package-lock.json`, `packages/cluster-mesh/**`, `packages/llm-gateway/package.json`, `packages/llm-mesh/**` — BR78-EX8, unchanged upstream content in the main integration merge only.
 - [x] Exception process: record rationale, impact and rollback before edits; additional paths require bounded exceptions.
 
 ## Feedback Loop
+- [x] BR78-EX8: integrate main 5e986a0b6 via merge to resolve GitHub's sole BRANCH.md conflict, retaining the BR78 plan. Incoming live-STT L13 package/test/lock/receipt files remain byte-identical to main; no STT changes are authored here. Impact: upstream integration only; rollback: reverse this merge with a new commit, never rewrite history. Requalify PR and cold dispatch on the resulting exact head.
 - [x] PR #811 Opus r1 APPROVE at d072d24ec: close the action pin, record exact-head measurements, and explicitly carry remaining Lot 3/5 acceptance to a follow-up; owner retains merge authority.
 - [x] BR78-EX1 names crazy-max/ghaction-github-runtime, exporting GitHub runtime/cache credentials to image producers. All four uses pin 3cb05d89e1f492524af3d41a1c98c83bc3025124 with a v3 comment; upstream refs/tags/v3 resolves directly to that commit via both GitHub API and git ls-remote (2026-10-28). Impact: immutable action source; rollback: revert these four pins with the transport/cache rollback.
 - [x] Run 40713883861 attempt 1 at d072d24ecc4caf30dba18e4476366efd58a4d2bb is completed/success (1465s wall-clock). API/tools/UI/browser/scan/restore take 111/121/255/73/209/196s; IdP 290s, VSCode 142s, E2E a/b/c/d/e 270/154/303/200/211s, capacity 17s, gate 18s. Study section 11 records job IDs. Full UI warm 255s exceeds 180s by 75s; final-head cold and API-case UI targets must be measured, never inferred.
