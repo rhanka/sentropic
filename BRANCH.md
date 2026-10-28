@@ -1,7 +1,7 @@
 # Feature: Canvas live H0 contract and consumer preparation
 
 ## Objective
-- [x] Execute only H0 of the approved host plan (SHA-256 `f130f04c4597b483b089ef5b3b6d6d9502b61a36111859f62f835b37c9bc19e2`).
+- [x] Execute only H0 of approved host plan r3 (SHA-256 `a48f54be6ce82b05e697f1c3f7dbc433ed60b69f5c2e377b6fb71faad9ababe7`).
 - [x] Prepare evidence for existing Canvas L2-CB3 integration; no behavior change or adoption claim.
 
 ## Scope / Guardrails
@@ -37,7 +37,8 @@
 ## Feedback Loop
 - [x] Q-CL-1 **ANSWERED**, owner, 2026-10-28: « On fait un tiptap complet pas 59 migrations ». DS must cover every feature used by Sentropic editable surfaces, then all 24 sites migrate in one pass; no migration per field class.
 - [x] Q-B1-4, DS full editor-profile publication/B1 qualification and FE-3/FE-6 remain gates; a missing editing/paste capability means the DS editor-profile lot is incomplete.
-- [x] Conductor plan delta: replace H7/H8 editor adoption by class with one 24-site cutover after the DS full editor-profile lot; H6 norm/catalog preparation and H1–H5 preparation retain their prerequisites.
+- [x] Approved plan r3: one 24-site CL-5 editor/FieldCard cutover after CL-2F; badge replacement stays H7/CL-1B with its own parity witness. H6 and H1–H5 retain their prerequisites.
+- [x] PR823 Opus r2 F2/F3 corrected (owner: H0 author, 2026-10-28): separate badge adoption and require the entire configured StarterKit 3.31.3 schema, editing/paste interactions and tiptap-markdown round-trip; tables/images alone have a DS raw-preservation guarantee. F1 requires CI success on the final exact head.
 - [x] PR823 Opus r1 F1/F2 corrected (owner: H0 author, 2026-10-28): record owner answer, require full-profile coverage and align N7/deletions with the single-pass adoption; independent re-review remains pending.
 - [x] DS publication, export qualification and N1–N8 deletion evidence remain pending until measured by their adoption owners.
 - [x] Apply Opus r2 notes touching H0: B-BRIDGE-1…7 traceability, cross-lot RED-first, `ports.ts:70–72`.
