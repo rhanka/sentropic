@@ -62,6 +62,15 @@ export function validate(b) {
   assert.match(r.consumer.node, /^v24\./);
   assert.equal(r.qualificationImage, 'sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6');
   assert(b.read('source/docker-compose.immo-861.yml').toString().includes(`node:24-bookworm-slim@${r.qualificationImage}`));
+  const adaptations = [];
+  for (const name of ['installed-memory.mjs', 'installed-hydration.mjs', 'installed-memory-types.ts']) {
+    const original = b.read(`source/packages/cluster-mesh/tests/engram-memory/${name}`).toString();
+    const staged = original.replaceAll('0.22.0', '0.21.3').replaceAll('0.24.0-dev.5', '0.24.0-dev.6')
+      .replaceAll('26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10', engram.sha256);
+    assert.equal(sha256(b.read(`consumer/${name}`)), sha256(staged), `unreviewed lane adaptation: ${name}`);
+    adaptations.push({ name, sourceSha256: sha256(original), stagedSha256: sha256(staged) });
+  }
+  assert.deepEqual(json(b.read('lane-adaptation.json')), adaptations);
   const closure = { runtime: r.runtimeClosure, types: r.typeClosure };
   for (const file of new Set([...closure.runtime, ...closure.types])) {
     assert(file.startsWith('node_modules/') || ['installed-memory.mjs', 'installed-hydration.mjs'].includes(file), `unexpected consumer closure member: ${file}`);
