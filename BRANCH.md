@@ -76,7 +76,7 @@
   - [ ] Report calibration/production limits separately from protocol evidence.
 - [ ] **Lot 7 — Documentation and publication**
   - [ ] Consolidate manifest, provenance gaps, bounded cost plan and runtime update/rollback in `spec/decision/kev-v4l4-candidate.md`.
-  - [ ] Bump mesh package and lock to 0.32.0, above npm published version.
+  - [x] Bump mesh package and lock to 0.32.0, above npm published version 0.31.0 verified 2026-10-28.
 - [ ] **Lot 8 — Final validation and draft PR**
   - [ ] make typecheck-llm-mesh, lint-llm-mesh, test-llm-mesh, build-llm-mesh under flock.
   - [ ] Two-peer review; reconcile findings and verify final scope.
