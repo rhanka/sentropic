@@ -45,9 +45,10 @@
 - [x] Lot 1: P2-1 route content activation through W3.a and package flow peek; cover expired flows and content-origin/session binding in api/tests/api/artifacts-reader-activation.test.ts.
 - [x] Lot 2: P2-2 enforce storage-scope org equality on reverse lookup; cross-org denial in apps/artifact-content/tests/runtime.test.ts (reproduced 200 before correction, now 404).
 - [x] Lot 3: P2-3 real-PG republication rejects stable A grant with 401 and activates pinned A with 200; restore pointer after test.
-- [ ] Lot 4: P2-4 document grant-expiry session revocation bound in apps/artifact-content/README.md.
-- [ ] Final validation: content suite; reader-activation/host-activation-store/host-recovery/app-artifacts-transport regressions; API/content typecheck and lint; logs; scope check; isolated teardown.
-- [ ] Draft PR: BRANCH.md body, first plan comment, push, exact-head CI green; retain BRANCH.md for draft handoff.
+- [x] Lot 4: P2-4 document grant-expiry session revocation bound in apps/artifact-content/README.md.
+- [x] Final validation: 32 content tests + 114 app regressions (16/16 PG vectors); API/content typecheck pass; lint has 0 errors (220 API warnings, 1 content warning); logs inspected; harness branch/scope pass.
+- [x] Cleanup: make down ENV=test-app-w3bfu and make ps confirms no services.
+- [x] Draft PR preparation: BRANCH.md body, first plan comment and exact-head branch CI configured; retain BRANCH.md for draft handoff and require green pushed-head CI before delivery.
 
 ## Inherited main qualification record
 
