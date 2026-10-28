@@ -33,6 +33,7 @@ on:
           - chat-core
           - chat-server
           - comments
+          - chat-runtime
           - chat-ui
           - oauth-verify
           - mcp-auth
@@ -232,6 +233,7 @@ jobs:
       engram_e2: ${{ steps.engram_e2_scope.outputs.selected }}
       cluster_mesh_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.cluster_mesh_publish }}
       llm_gateway: ${{ steps.filter.outputs.llm_gateway }}
+      chat_runtime: ${{ steps.filter.outputs.chat_runtime }}
       chat_ui: ${{ steps.filter.outputs.chat_ui }}
       cited_source_viewer: ${{ steps.filter.outputs.cited_source_viewer }}
       cowork_bridge: ${{ steps.filter.outputs.cowork_bridge }}
@@ -255,6 +257,7 @@ jobs:
       artifacts: ${{ steps.filter.outputs.artifacts }}
       llm_mesh_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.llm_mesh_publish }}
       llm_gateway_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.llm_gateway_publish }}
+      chat_runtime_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.chat_runtime_publish }}
       chat_ui_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.chat_ui_publish }}
       cited_source_viewer_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.cited_source_viewer_publish }}
       oauth_verify_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.oauth_verify_publish }}
@@ -399,6 +402,15 @@ jobs:
               - 'packages/llm-mesh/**'
             llm_gateway_publish:
               - 'packages/llm-gateway/**'
+            chat_runtime:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/chat-runtime/**'
+              - 'packages/chat-ui/**'
+              - '.github/workflows/ci.yml'
+            chat_runtime_publish:
+              - 'packages/chat-runtime/**'
             chat_ui:
               - 'Makefile'
               - 'package.json'
@@ -868,6 +880,31 @@ jobs:
           name: llm-gateway-candidate
           path: tmp/ci-manifest-guard/candidate/llm-gateway/*.tgz
           retention-days: 7
+          if-no-files-found: error
+
+  validate-chat-runtime:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.chat_runtime == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck and test Chat Runtime
+        run: make typecheck-chat-runtime test-chat-runtime ENV=test-ci-chat-runtime
+      - name: Pack Chat Runtime
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-chat-runtime PACK_DESTINATION=tmp/chat-runtime-package ENV=test-ci-chat-runtime
+      - name: Qualify standalone Chat Runtime against published peers
+        run: make qualify-published-install TARBALL=tmp/chat-runtime-package/sentropic-chat-runtime-0.1.0.tgz REPORT_DIR=tmp/chat-runtime-package/qualification QUALIFY_HEAD_SHA=${{ github.event.pull_request.head.sha || github.sha }} ENV=test-ci-chat-runtime
+      - name: Retain standalone Chat Runtime evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: chat-runtime-qualification
+          path: tmp/chat-runtime-package/qualification
           if-no-files-found: error
 
   validate-chat-ui:
@@ -2056,6 +2093,29 @@ jobs:
         if: inputs.capacity_publish_dry_run != true
         run: make publish-llm-gateway
 
+  publish-chat-runtime:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-chat-runtime]
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-runtime.result == 'success' && (needs.changes.outputs.chat_runtime_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=chat-runtime ENV=test-ci-capacity
+      - name: Publish Chat Runtime
+        if: inputs.capacity_publish_dry_run != true
+        run: make publish-chat-runtime
+
   publish-chat-ui:
     runs-on: ubuntu-latest
     needs: [changes, validate-chat-ui]
@@ -2630,7 +2690,7 @@ jobs:
         run: |
           set -eu
           case "$BOOTSTRAP_TARGET" in
-            contracts|events|chat-core|chat-server|comments|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|harness|llm-gateway|cluster-mesh|cited-source-viewer|artifacts) ;;
+            contracts|events|chat-core|chat-server|comments|chat-runtime|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|harness|llm-gateway|cluster-mesh|cited-source-viewer|artifacts) ;;
             *) echo "::error title=Bootstrap publish::target '${BOOTSTRAP_TARGET}' is not one explicit declared package (no 'all' bootstrap)"; exit 1 ;;
           esac
       - uses: actions/checkout@v6
@@ -2658,6 +2718,9 @@ jobs:
       - name: Bootstrap publish comments
         if: inputs.bootstrap_publish_target == 'comments'
         run: make publish-comments-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish chat-runtime
+        if: inputs.bootstrap_publish_target == 'chat-runtime'
+        run: make publish-chat-runtime-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish chat-ui
         if: inputs.bootstrap_publish_target == 'chat-ui'
         run: make publish-chat-ui-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
@@ -2809,6 +2872,7 @@ jobs:
       - validate-llm-mesh
       - validate-cluster-mesh
       - validate-llm-gateway
+      - validate-chat-runtime
       - validate-chat-ui
       - validate-cited-source-viewer
       - validate-cowork-bridge
@@ -2884,7 +2948,7 @@ jobs:
       actions: read
     needs: [changes, enforce-package-bump, build-e2e, typecheck-lint-ui, typecheck-lint-api,
       validate-idp-sync, validate-llm-mesh, validate-cluster-mesh, validate-llm-gateway,
-      validate-chat-ui, validate-cited-source-viewer, validate-cowork-bridge, validate-oauth-verify,
+      validate-chat-runtime, validate-chat-ui, validate-cited-source-viewer, validate-cowork-bridge, validate-oauth-verify,
       validate-mcp-auth, validate-mcp-platform, validate-auth-hono, validate-auth-client,
       validate-auth-ui, validate-cowork-desktop, validate-contracts, validate-events,
       validate-chat-core, validate-chat-server, validate-comments, validate-live-speech, validate-skills, validate-flow,
@@ -2892,7 +2956,7 @@ jobs:
       test-api-unit-integration, build-ui, test-e2e, e2e-vscode, smoke-idp-screens,
       security-sast-sca, security-iac, security-container, test-smoke-restore, validate-ci-capacity-metrics,
       publish-api-image, publish-ui-image, deploy-preprod, publish-cluster-mesh,
-      publish-llm-mesh, publish-llm-gateway, publish-chat-ui, publish-cited-source-viewer,
+      publish-llm-mesh, publish-llm-gateway, publish-chat-runtime, publish-chat-ui, publish-cited-source-viewer,
       publish-cowork-bridge, publish-oauth-verify, publish-mcp-auth, publish-mcp-platform,
       publish-artifacts, publish-auth-hono, publish-auth-client, publish-auth-ui,
       publish-cowork-desktop, publish-contracts, publish-events, publish-chat-core,
