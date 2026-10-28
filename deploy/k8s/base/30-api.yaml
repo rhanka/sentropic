@@ -114,6 +114,9 @@ spec:
                 name: api
             - secretRef:
                 name: sentropic-api
+          env:
+            - name: REMOTE_ACTION_ROLE
+              value: product
           ports:
             - name: http
               containerPort: 8787
