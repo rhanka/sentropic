@@ -28,7 +28,7 @@ describe('AppChatPanel boundary', () => {
 
   it('wires host-managed image attachments from composer to chat message payloads', () => {
     const source = readFileSync(appPanelPath, 'utf8');
-    expect(source).toContain("@sentropic/chat-ui/state/chatAttachments");
+    expect(source).toContain("@sentropic/chat-runtime/state/chatAttachments");
     expect(source).toContain('let composerAttachments');
     expect(source).toContain('handleComposerPaste');
     expect(source).toContain('addGoogleDriveComposerAttachments');

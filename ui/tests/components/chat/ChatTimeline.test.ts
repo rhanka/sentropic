@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildProjectedTimeline,
   type ChatProjectionMessage,
-} from '@sentropic/chat-ui/state/chatProjection';
-import type { ProjectedRunSegment } from '@sentropic/chat-ui/utils/chat-run-projection';
+} from '@sentropic/chat-runtime/state/chatProjection';
+import type { ProjectedRunSegment } from '@sentropic/chat-runtime/utils/chat-run-projection';
 
 type Message = ChatProjectionMessage & { sequence: number };
 

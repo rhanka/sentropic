@@ -9,7 +9,7 @@ import {
   isLocalToolName,
   localToolsStore,
   setLocalToolsAdapter,
-} from '@sentropic/chat-ui/stores/localTools';
+} from '@sentropic/chat-runtime/stores/localTools';
 
 const resetLocalToolsState = () => {
   localToolsStore.set({
