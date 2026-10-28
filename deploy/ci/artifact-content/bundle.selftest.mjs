@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { checkActivationImage, checkWorkload, closed, component, object } from './bundle-checks.mjs';
 import { checkConnectivity } from './network.selftest.mjs';
+import { checkReservedHosts } from './routing.selftest.mjs';
 const { parseAllDocuments } = createRequire('/tmp/content-tools/package.json')('yaml');
 const load = file => parseAllDocuments(readFileSync(file, 'utf8')).map(doc => {
   assert.deepEqual(doc.errors, []); return doc.toJS();
@@ -50,6 +51,7 @@ function checkNetwork(objects) {
 }
 for (const tier of ['prod', 'preprod']) {
   const objects = load(`/rendered/${tier}.yaml`);
+  check(`${tier}: real host parser denies reserved wildcard labels`, () => checkReservedHosts(objects));
   const qualify = values => { checkWorkload(values, tier); checkRoutes(values, tier); checkNetwork(values); };
   check(`${tier}: closed workload, TLS routes, scoped network and restore access`, () => qualify(objects));
   check(`${tier}: one digest replacement covers API, IdP and content`, () => {
@@ -87,6 +89,8 @@ for (const tier of ['prod', 'preprod']) {
   deny('explicit certificate requiring CD write permissions', o => { o.push({ kind: 'Certificate', metadata: { name: 'unexpected', namespace: o[0].metadata.namespace } }); });
   deny('wildcard outranks exact app routes', o => { object(o, 'Ingress', 'artifact-content').metadata.annotations['traefik.ingress.kubernetes.io/router.priority'] = '999'; });
   deny('independent content image', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].image = 'other:latest'; });
+  deny('world-readable signing key', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.volumes[0].secret.defaultMode = 292; });
+  deny('missing signing-key group access', o => { delete object(o, 'Deployment', 'artifact-content').spec.template.spec.securityContext.fsGroup; });
 }
 const combined = [...load('/rendered/prod.yaml'), ...load('/rendered/preprod.yaml')];
 check('both environments: effective additive network reachability and denial matrix', () => checkConnectivity(combined));
