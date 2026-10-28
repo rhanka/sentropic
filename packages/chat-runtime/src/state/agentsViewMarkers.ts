@@ -95,3 +95,5 @@ export const createAgentsViewMarkers = (
     });
   };
 
+  return { read, markViewed, apply };
+};
