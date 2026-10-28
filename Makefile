@@ -1928,7 +1928,9 @@ test-idp-sync-sql: ## Test isolated IdP SQL and imported-client authorize accept
 		sh -ec 'npm install --prefix /tmp/idp-tools --ignore-scripts --no-audit --no-fund tsx@4.20.6 >/dev/null; /tmp/idp-tools/node_modules/.bin/tsx deploy/ci/idp-identity-sync/authorize.selftest.mjs'
 
 .PHONY: scope-check
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-artifacts-021 test-artifacts-022 test-sec-zod4 test-resync-752 test-llm-judge),)
+include docs/governance/kit/artifact-weight.mk
+
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-artifacts-021 test-artifacts-022 test-sec-zod4 test-resync-752 test-llm-judge test-artifact-weight),)
 scope-check: ## Advisory C2 scope-check via the installed host harness (BR861-EX1, BR01-EX2)
 	@files="$$( { git diff --cached --name-only $(SCOPE_BASE); git diff --name-only $(SCOPE_BASE); } | sort -u | paste -sd, - )"; \
 	harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
@@ -2358,6 +2360,18 @@ test: test-api test-ui test-e2e ## Run all tests
 .PHONY: test-llm-mesh
 test-llm-mesh: ## Run @sentropic/llm-mesh tests
 	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-mesh/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; if [ -n "$$scope" ]; then NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+
+# BR04-EX1 — @sentropic/live-speech bench (r3 L3 bench lane; P1-5/P2-1).
+# Compiles the session to a scratch dist (never committed), installs the pinned
+# engine stack with --ignore-scripts (no cmake in the pinned image, so the native
+# bridge cannot build there), then runs bench/run-local-bench.mjs. Without a
+# provisioned models directory the bench records pending with the exact blocker
+# (exit 2); a measured row requires the qualified host provisioning documented in
+# bench/l3-g-native.receipt.json. OUT= selects the receipt path (default /tmp,
+# outside the repo, so manual runs never dirty the tree).
+.PHONY: bench-live-speech
+bench-live-speech: ## Run @sentropic/live-speech bench (OUT=<receipt path>)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/live-speech $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; out="$(OUT)"; out="$${out:-/tmp/live-speech-docker-bench.receipt.json}"; tool_dir="$$(mktemp -d)"; trap "rm -rf $$tool_dir" EXIT; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund typescript@5.4.5 @types/node faster-whisper-ts@1.2.1 onnxruntime-node@1.24.3 >/dev/null; npm install --prefix "$$tool_dir" --package-lock-only --ignore-scripts --no-audit --no-fund >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json --rootDir . --outDir "$$tool_dir/dist" --declaration false --sourceMap false --declarationMap false --typeRoots "$$tool_dir/node_modules/@types" || true; test -f "$$tool_dir/dist/src/node/local-stt.js" || { echo "bench: tsc emit failed" >&2; exit 1; }; mkdir -p "$$tool_dir/dist/src/node/engines"; cp src/node/stt-worker.mjs "$$tool_dir/dist/src/node/stt-worker.mjs"; cp src/node/engines/faster-whisper.mjs "$$tool_dir/dist/src/node/engines/"; node bench/run-local-bench.mjs --dist "$$tool_dir/dist/src" --install-lock "$$tool_dir/package-lock.json" --out "$$out"'
 
 # BR-LB-EX1 — @sentropic/llm-gateway tests (WP16 Layer-B; owner-approved 2026-06-22).
 # Mirrors test-auth-hono: build the sibling @sentropic/llm-mesh dist, symlink it + hono +
@@ -3307,6 +3321,20 @@ test-%-security-sca: ## Run SCA scan (Trivy) on service (usage: make test-api-se
 test-security-parser: ## Verify security reports fail closed and preserve real findings
 	@bash -n scripts/security/security-parser.sh scripts/security/security-compliance.sh scripts/security/security-parser-test.sh
 	@bash scripts/security/security-parser-test.sh
+
+# SECDAILY-EX1: raw daily adapter; immutable scanner/DB and native SAST await S2b/S2c.
+.PHONY: security-daily-scan test-security-daily
+security-daily-scan: ## Emit a local raw receipt; incomplete coverage exits nonzero
+	@set -eu; source_sha="$$(git rev-parse --verify HEAD)"; \
+		tree_status="$$(git status --porcelain --untracked-files=normal)"; \
+		if [ -n "$$tree_status" ]; then echo 'incomplete-scan: clean source tree required (including untracked files)' >&2; exit 1; fi; \
+		docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges --memory=512m --cpus=1 --tmpfs /tmp:rw,nosuid,nodev,size=128m \
+		-u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -e SECURITY_DAILY_SOURCE_SHA="$$source_sha" \
+		-v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) \
+		sh -ec 'tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund yaml@2.8.1 semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node scripts/security/daily/scan.mjs'
+
+test-security-daily: ## Run daily inventory, schema and adapter regressions in the approved pinned Node lane
+	@$(MAKE) test-publishable-manifests MANIFEST_GUARD_IMAGE="$(MEMORY_L5_NODE_IMAGE)" SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs scripts/security/daily/scan.test.mjs" ENV=$(ENV)
 
 .PHONY: test-%-security-container
 test-%-security-container: ## Run container scan (Trivy) on service image (usage: make test-api-security-container, make test-ui-security-container)
