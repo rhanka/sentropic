@@ -42,6 +42,7 @@
   - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] BR1-R3-local-host: move the canonical LocalToolsAdapter contract to runtime and retarget Chrome, VSCode, app and runtime consumers; no visual re-export remains.
 - [x] BR1-R3-replay: assert the resolved permission row survives native/domain replay, with no pending prompt, extra execution or duplicate result.
 - [x] BR1-CI-review-F1: accept the review's transitive UI publication gap; explicitly require runtime validation success for UI publication too, including when its runtime publisher was skipped. Extend the fixture dependency-failure matrix.
 - [x] BR1-CI-capacity: reproduce the independent-validator policy failure and stale publication-DAG fixtures; dispatch runtime/UI validators independently, require both before runtime publication, retain installed-pair qualification and runtime-before-UI release ordering.

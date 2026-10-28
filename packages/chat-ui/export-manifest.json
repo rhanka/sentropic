@@ -33,7 +33,6 @@
         "ChromeHostAdapter",
         "VsCodeHostAdapter",
         "AnyHostAdapter",
-        "LocalToolsAdapter",
         "ChatWidgetDisplayMode",
         "ChatWidgetDrawerSide",
         "ChatWidgetLayoutState",
@@ -116,8 +115,7 @@
         "WebHostAdapter",
         "ChromeHostAdapter",
         "VsCodeHostAdapter",
-        "AnyHostAdapter",
-        "LocalToolsAdapter"
+        "AnyHostAdapter"
       ]
     },
     "./stores/chatWidgetLayout": {
