@@ -1,13 +1,13 @@
 // Pack-only dev tolerance for the installed-comments bare probe.
 //
-// The E2 integration reserves `RESERVED_NEXT` (today `0.23.0`) for its release
-// line: lot workspaces carry `<reservedNext>-dev.N` by plan while the frozen
-// packaging fixture keeps pinning the latest published release
-// (`LATEST_PUBLISHED_CLUSTER_MESH`, today `0.22.4`). This mirrors the contract
+// The E2 integration reserves `RESERVED_NEXT` (today `0.24.0`) for its release
+// line: lot workspaces carry `<reservedNext>-dev.N` by plan. The frozen
+// published compatibility pin (`LATEST_PUBLISHED_CLUSTER_MESH`, `0.22.4`)
+// stays separate from the selected local candidate. This mirrors the contract
 // in tests/fixtures/reserved-versions.ts (#767), duplicated here because the
-// bare probe runs as plain node `.mjs`. Bump the two versions together here
-// and there.
-export const RESERVED_NEXT = '0.23.0';
+// bare probe runs as plain node `.mjs`. Keep both constants aligned here
+// and there; moving the reservation does not move the frozen published pin.
+export const RESERVED_NEXT = '0.24.0';
 export const LATEST_PUBLISHED_CLUSTER_MESH = '0.22.4';
 export const PACK_ONLY_PACKAGE = '@sentropic/cluster-mesh';
 
@@ -16,8 +16,7 @@ const devBumpPattern = (reservedNext) =>
 
 // The tolerance applies to the exact package and version pair only, read from
 // the refusal itself: the refused package must be cluster-mesh itself at a
-// `<reservedNext>-dev.N` prerelease while the frozen pin is still the latest
-// published release.
+// `<reservedNext>-dev.N` prerelease with the exact frozen published pin.
 export const isPackOnlyDevBump = (packageName, workspaceVersion, publishedPin, reservedNext) =>
   packageName === PACK_ONLY_PACKAGE &&
   typeof workspaceVersion === 'string' &&

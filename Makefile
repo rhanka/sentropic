@@ -15,7 +15,7 @@ MANIFEST_PACK_RUN = $(MANIFEST_GUARD_RUN)
 MANIFEST_PACK_IMAGE = $(MANIFEST_GUARD_IMAGE)
 CM_RUN = docker run --rm --init $(CM_DOCKER_NETWORK)
 CM_RUN_IMAGE = $(LLM_MESH_NODE_IMAGE)
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-artifacts-021 test-llm-judge),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-artifacts-021 test-artifacts-022 test-llm-judge),)
 ARTIFACTS_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.immo-861.yml
 ARTIFACTS_RUN = $(ARTIFACTS_COMPOSE) run --rm --no-deps
 ARTIFACTS_RUN_IMAGE = qualification
@@ -825,12 +825,47 @@ check-eradicated-packages: ## Fail if cli, build-cli or focus return as sentropi
 .PHONY: ci-run-metrics ci-expected-results ci-expected-manifest test-ci-run-metrics test-ci-expected-results
 CI_METRICS_DIR ?= tmp/ci-capacity
 CI_EXPECTED_TOOLS = tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund yaml@2.8.1 >/dev/null; export CI_EXPECTED_TOOL_DIR="$$tool_dir"
+# BR77-EX2: check per-run dispatch shape; measured timing is a separate proof.
+.PHONY: ci-capacity-policy
+ci-capacity-policy: ## Check independent dispatch and matrix widths (account admission requires live evidence)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file .github/workflows/ci.yml --capacity-policy $(if $(filter 1,$(CI_REQUIRE_CAPACITY_PROOF)),--require-proof) $(foreach file,$(CI_POLICY_RUN_FILES),--proof-file $(file))'
+CI_RUN_ATTEMPT ?= 1
+CI_CAPACITY_REF ?= $(shell git branch --show-current)
+.PHONY: ci-capacity-dispatch ci-capacity-runs ci-capacity-status
+ci-capacity-dispatch: ## Dispatch this branch's package publication dry-run (never main)
+	@test -n "$(CI_CAPACITY_REF)" && test "$(CI_CAPACITY_REF)" != main
+	@gh workflow run ci.yml --repo rhanka/sentropic --ref "$(CI_CAPACITY_REF)" -f bootstrap_publish_target=none -f capacity_publish_dry_run=true
+ci-capacity-runs: ## List identified policy runs on the qualification branch
+	@gh run list --repo rhanka/sentropic --workflow ci.yml --branch "$(CI_CAPACITY_REF)" --limit 5 --json databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url
+ci-capacity-status: ## Inspect CI_RUN_ID without cancelling or retrying any job
+	@printf '%s\n' '$(CI_RUN_ID)' | awk '!/^[1-9][0-9]*$$/ { bad=1 } END { exit bad }'
+	@gh run view $(CI_RUN_ID) --repo rhanka/sentropic --json databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,jobs --jq '{databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,pendingOrFailed: [.jobs[] | select(.conclusion != "success" and .conclusion != "skipped") | {databaseId,name,status,conclusion,startedAt,completedAt}]}'
+.PHONY: ci-capacity-publish-dry-run
+ci-capacity-publish-dry-run: ## Exercise a publisher's real guarded pack without registry writes
+	@case '$(PACKAGE)' in llm-mesh|llm-gateway|cluster-mesh|chat-ui|cited-source-viewer|cowork-bridge|cowork-desktop|oauth-verify|mcp-auth|mcp-platform|artifacts|auth-hono|auth-client|auth-ui|contracts|events|chat-core|chat-server|comments|flow|harness) ;; *) echo 'Invalid dry-run package'; exit 1;; esac
+	@$(MAKE) --no-print-directory pack-$(PACKAGE) MANIFEST_REPORT_DIR=tmp/ci-capacity/publish-$(PACKAGE) ENV=$(ENV)
+	@jq -n --arg package '$(PACKAGE)' --arg run "$$GITHUB_RUN_ID" --arg sha "$$GITHUB_SHA" '{package: $$package, runId: $$run, headSha: $$sha, mode: "guarded-pack-no-publication", completed: true}' | tee tmp/ci-capacity/publish-$(PACKAGE)/dry-run.json
+CI_EXPECTED_ATTEMPT ?= $(CI_RUN_ATTEMPT)
+CI_CAPTURE_DIR ?= tmp/ci-capacity/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)
+.PHONY: ci-capacity-capture
+ci-capacity-capture: ## Capture identified completed run/attempt CI_RUN_ID=<id> and emit BR-76-format metrics
+	@printf '%s\n' '$(CI_RUN_ID)' '$(CI_RUN_ATTEMPT)' '$(CI_EXPECTED_ATTEMPT)' | awk '!/^[1-9][0-9]*$$/ { bad=1 } END { exit bad }'
+	@mkdir -p "$(CI_CAPTURE_DIR)"
+	@gh api repos/rhanka/sentropic/actions/runs/$(CI_RUN_ID)/attempts/$(CI_RUN_ATTEMPT) > "$(CI_CAPTURE_DIR)/run.json"
+	@gh api --paginate 'repos/rhanka/sentropic/actions/runs/$(CI_RUN_ID)/attempts/$(CI_RUN_ATTEMPT)/jobs?per_page=100' > "$(CI_CAPTURE_DIR)/job-pages.json"
+	@jq -s '[.[].jobs[]]' "$(CI_CAPTURE_DIR)/job-pages.json" > "$(CI_CAPTURE_DIR)/jobs.json"
+	@gh api "repos/rhanka/sentropic/contents/.github/workflows/ci.yml?ref=$$(jq -r .head_sha '$(CI_CAPTURE_DIR)/run.json')" --jq .content | base64 -d > "$(CI_CAPTURE_DIR)/workflow.yml"
+	@rm -f "$(CI_CAPTURE_DIR)/expected.json"
+	@gh run download $(CI_RUN_ID) --name ci-expected-$(CI_RUN_ID)-$(CI_EXPECTED_ATTEMPT) --dir "$(CI_CAPTURE_DIR)"
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -v "$(abspath $(CI_CAPTURE_DIR)):/receipts" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file /receipts/workflow.yml --capture-dir /receipts'
+	@$(MAKE) --no-print-directory ci-run-metrics RUN_FILE=$(CI_CAPTURE_DIR)/capture.json ENV=$(ENV) > "$(CI_CAPTURE_DIR)/metrics.json"
+	@echo "Capacity receipts: $(CI_CAPTURE_DIR)/metrics.json"
 ci-expected-manifest: ## Retain the selected workflow/member manifest before dispatch (BR76-EX2)
 	@mkdir -p "$(CI_METRICS_DIR)"
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e CI_SELECTION_CONTEXT -v "$(CURDIR):/workspace:ro" -v "$(abspath $(CI_METRICS_DIR)):/receipts" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file .github/workflows/ci.yml --manifest-file /receipts/expected.json'
 	@if [ -n "$$GITHUB_OUTPUT" ]; then printf 'attempt=%s\n' "$$GITHUB_RUN_ATTEMPT" >> "$$GITHUB_OUTPUT"; fi
 ci-run-metrics: ## Summarize one captured CI run file RUN_FILE=<path> (BR76-EX2)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-run-metrics.mjs $(if $(RUN_FILE),--run-file $(RUN_FILE),--help)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-run-metrics.mjs $(if $(RUN_FILE),--run-file $(RUN_FILE),--help) $(foreach file,$(CI_COMPETING_FILES),--competing-file $(file))
 ci-expected-results: ## Evaluate expected vs executed results EXPECTED_FILE=<json> EXECUTED_FILE=<json> (BR76-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e CI_GATE_NEEDS -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-expected-results.mjs $(if $(EXPECTED_FILE),--expected-file $(EXPECTED_FILE),--help) $(if $(EXECUTED_FILE),--executed-file $(EXECUTED_FILE),)
 test-ci-run-metrics: ## Run ci-run-metrics fixture tests in Docker (BR76-EX2)
@@ -1495,7 +1530,7 @@ build-mcp-platform: install-internal-packages ## Build @sentropic/mcp-platform d
 
 .PHONY: immo-861-build-mcp-platform freeze-types
 immo-861-build-mcp-platform: install-internal-packages
-	@case "$(ENV)" in test-861-int|test-861-gaps|test-artifacts-021) ;; *) exit 1 ;; esac
+	@case "$(ENV)" in test-861-int|test-861-gaps|test-artifacts-021|test-artifacts-022) ;; *) exit 1 ;; esac
 	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; rm -rf dist node_modules; tool_dir="$$(mktemp -d)"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 
 freeze-types:
@@ -1889,7 +1924,7 @@ test-idp-sync-sql: ## Test isolated IdP SQL and imported-client authorize accept
 		sh -ec 'npm install --prefix /tmp/idp-tools --ignore-scripts --no-audit --no-fund tsx@4.20.6 >/dev/null; /tmp/idp-tools/node_modules/.bin/tsx deploy/ci/idp-identity-sync/authorize.selftest.mjs'
 
 .PHONY: scope-check
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-sec-zod4 test-artifacts-021 test-e2-int test-mem-batch1 test-resync-752 test-llm-judge),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-sec-zod4 test-artifacts-021 test-artifacts-022 test-e2-int test-mem-batch1 test-resync-752 test-llm-judge),)
 scope-check: ## Advisory C2 scope-check via the installed host harness (BR861-EX1, BR01-EX2)
 	@files="$$( { git diff --cached --name-only $(SCOPE_BASE); git diff --name-only $(SCOPE_BASE); } | sort -u | paste -sd, - )"; \
 	harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
@@ -2706,7 +2741,7 @@ up-ui: ## Start the ui stack in detached mode
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-artifacts-021 test-llm-judge),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-artifacts-021 test-artifacts-022 test-llm-judge),)
 	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans
 else
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down
@@ -3727,35 +3762,122 @@ k8s-pgbackup-now: ## Trigger an immediate Postgres backup Job from the CronJob a
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) logs "job/$$job" -c upload --tail=10 ; \
 	echo "==> Backup Job $$job complete."
 
-k8s-pgbackup-restore: ## Restore a dump from S3 into a scratch DB for verification (PG_BACKUP_KEY=pg/<ts>.sql.gz)
-	@test -n "$(PG_BACKUP_KEY)" || { echo "ERROR: set PG_BACKUP_KEY=pg/<timestamp>.sql.gz (see: make k8s-pgbackup-list)" >&2; exit 1; }
-	@set -eu ; pod="pgbackup-restore-$$(date -u +%Y%m%d%H%M%S)" ; \
-	echo "==> Restoring $(PG_BACKUP_KEY) into scratch DB restore_check on postgres (non-destructive to app DB)" ; \
-	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) run "$$pod" --rm -i --restart=Never --image=postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 \
+# --- Isolated pgbackup restore (W0-close.b, W0-EX1 lease; operator-side) ----
+# Restores ONE backup object into the ISOLATED namespace/PG/DB only and prints
+# the B03 backup/object manifest (key, bytes, sha256, etag, versions, counts).
+# It refuses the default/prod/preprod identities, namespaces, PG hosts, DB
+# names and unsafe values, ALL BEFORE any kubectl write. Guard lines
+# interpolate untrusted values only inside single quotes and never print them;
+# only charset-validated values reach the later lines. The source bucket is
+# intentionally the live backup bucket (read-only credential). The tenant
+# confirms every actual allocated name/credential (referenced by name only,
+# never printed) before running. `k8s-db-restore-preprod` is excluded/untouched.
+RESTORE_NAMESPACE ?= sentropic-restore-app-cm
+RESTORE_PGHOST ?= postgres-restore
+RESTORE_PGPORT ?= 5432
+RESTORE_PGUSER ?= app_cm_restore
+RESTORE_PGDB ?= app_cm_restore
+RESTORE_PG_SECRET ?= postgres-restore
+RESTORE_READ_SECRET ?= app-cm-restore-backup-ro
+RESTORE_KEEP_DB ?= false
+PG_BACKUP_SHA256 ?=
+RESTORE_KUBECONFIG ?=
+
+k8s-pgbackup-restore: ## Restore a dump from S3 into the ISOLATED restore PG/DB and print the B03 manifest [PG_BACKUP_KEY=pg/<ts>.sql.gz, RESTORE_KUBECONFIG=<restore kubeconfig>]
+	@test -n "$(RESTORE_KUBECONFIG)" || { echo "ERROR: RESTORE_KUBECONFIG is required: set it to the dedicated restore-namespace kubeconfig (credential referenced by name only, never printed)" >&2; exit 1; }
+	@echo '$(RESTORE_KUBECONFIG)' | grep -Eq '^/[A-Za-z0-9._/-]+$$' || { echo "ERROR: RESTORE_KUBECONFIG must be an absolute path" >&2; exit 1; }
+	@test -f '$(RESTORE_KUBECONFIG)' || { echo "ERROR: RESTORE_KUBECONFIG file not found" >&2; exit 1; }
+	@test '$(RESTORE_KUBECONFIG)' != "$(HOME)/.kube/poc.yaml" || { echo "ERROR: refusing default kubeconfig: it carries the production admin identity" >&2; exit 1; }
+	@echo '$(PG_BACKUP_KEY)' | grep -Eq '^pg/[0-9]{8}T[0-9]{6}Z\.sql\.gz$$' || { echo "ERROR: PG_BACKUP_KEY must match ^pg/<YYYYMMDD>T<HHMMSS>Z.sql.gz (the CronJob object format)" >&2; exit 1; }
+	@echo '$(RESTORE_NAMESPACE)' | grep -Eq '^[a-z0-9-]+$$' || { echo "ERROR: RESTORE_NAMESPACE must be a lowercase DNS name" >&2; exit 1; }
+	@test '$(RESTORE_NAMESPACE)' != '$(K8S_NAMESPACE)' || { echo "ERROR: refusing production namespace" >&2; exit 1; }
+	@test '$(RESTORE_NAMESPACE)' != '$(K8S_PREPROD_NAMESPACE)' || { echo "ERROR: refusing preprod namespace" >&2; exit 1; }
+	@case '$(RESTORE_NAMESPACE)' in sentropic|sentropic-preprod) echo "ERROR: refusing reserved live namespace" >&2; exit 1 ;; esac
+	@case '$(RESTORE_NAMESPACE)' in sentropic-restore-*) ;; *) echo "ERROR: RESTORE_NAMESPACE is not an isolated restore namespace (expected sentropic-restore-*)" >&2; exit 1 ;; esac
+	@echo '$(RESTORE_PGHOST)' | grep -Eq '^[A-Za-z0-9.-]+$$' || { echo "ERROR: RESTORE_PGHOST must be a bare hostname" >&2; exit 1; }
+	@set -eu ; \
+	host_lc="$$(printf '%s' '$(RESTORE_PGHOST)' | tr '[:upper:]' '[:lower:]')" ; \
+	case "$$host_lc" in postgres|postgres.sentropic*|postgres.sentropic-preprod*) echo "ERROR: refusing live Postgres host (proposed: postgres-restore)" >&2; exit 1 ;; esac ; \
+	case "$$host_lc" in *[/:]*) echo "ERROR: RESTORE_PGHOST must be a bare hostname" >&2; exit 1 ;; esac ; \
+	if echo "$$host_lc" | grep -Eq '^[0-9.]+$$'; then echo "ERROR: refusing IP-literal Postgres host" >&2; exit 1; fi ; \
+	case "$$host_lc" in *0x*) echo "ERROR: refusing hex IP-literal Postgres host" >&2; exit 1 ;; esac ; \
+	if echo "$$host_lc" | grep -Eq '\.'; then \
+	  echo "$$host_lc" | grep -Eq '^[a-z0-9.-]+$$' || { echo "ERROR: RESTORE_PGHOST has illegal characters" >&2; exit 1; } ; \
+	  case "$$host_lc" in *."$(RESTORE_NAMESPACE)".svc|*."$(RESTORE_NAMESPACE)".svc.cluster.local) ;; *) echo "ERROR: FQDN restore host must end in .$(RESTORE_NAMESPACE).svc[.cluster.local]" >&2; exit 1 ;; esac ; \
+	else \
+	  echo "$$host_lc" | grep -Eq '^[a-z][a-z0-9-]*$$' || { echo "ERROR: RESTORE_PGHOST has illegal characters" >&2; exit 1; } ; \
+	fi
+	@case '$(RESTORE_PGDB)' in app|postgres|template0|template1) echo "ERROR: refusing live database name (proposed: app_cm_restore)" >&2; exit 1 ;; esac
+	@echo '$(RESTORE_PGDB)' | grep -Eq '^[a-z_]+_restore$$' || { echo "ERROR: RESTORE_PGDB must be lowercase with a _restore suffix (proposed: app_cm_restore)" >&2; exit 1; }
+	@echo '$(RESTORE_PGPORT)' | grep -Eq '^[0-9]+$$' || { echo "ERROR: RESTORE_PGPORT must be numeric" >&2; exit 1; }
+	@echo '$(RESTORE_PGUSER)' | grep -Eq '^[a-z0-9_-]+$$' || { echo "ERROR: RESTORE_PGUSER must be a valid role name" >&2; exit 1; }
+	@echo '$(RESTORE_READ_SECRET)' | grep -Eq '^[a-z0-9-]+$$' || { echo "ERROR: RESTORE_READ_SECRET must be a valid secret name" >&2; exit 1; }
+	@echo '$(RESTORE_PG_SECRET)' | grep -Eq '^[a-z0-9-]+$$' || { echo "ERROR: RESTORE_PG_SECRET must be a valid secret name" >&2; exit 1; }
+	@test -n '$(PG_BACKUP_SHA256)' || { echo "ERROR: PG_BACKUP_SHA256 is required: pass the B03 object digest" >&2; exit 1; } ;
+	@echo '$(PG_BACKUP_SHA256)' | grep -Eq '^[0-9a-f]{64}$$' || { echo "ERROR: PG_BACKUP_SHA256 must be a 64-char hex digest" >&2; exit 1; } ;
+	@set -eu ; \
+	echo "==> Isolated restore of $(PG_BACKUP_KEY) into $(RESTORE_NAMESPACE) / $(RESTORE_PGHOST):$(RESTORE_PGDB)" ; \
+	KC="$(RESTORE_KUBECONFIG)" ; \
+	can_i="$$(KUBECONFIG="$$KC" kubectl -n "$(RESTORE_NAMESPACE)" auth can-i create pods --request-timeout=15s)" || { echo "ERROR: cannot check identity for the restore namespace (failing closed)" >&2; exit 1; } ; \
+	test "$$can_i" = "yes" || { echo "ERROR: this identity cannot create pods in the restore namespace" >&2; exit 1; } ; \
+	for scope in sentropic sentropic-preprod "$(K8S_NAMESPACE)" "$(K8S_PREPROD_NAMESPACE)"; do \
+	  for verb in "create pods" "get secrets"; do \
+	    ans="$$(KUBECONFIG="$$KC" kubectl -n "$$scope" auth can-i $$verb --request-timeout=15s)" || { echo "ERROR: cannot verify absence of live-cluster rights (failing closed)" >&2; exit 1; } ; \
+	    test "$$ans" = "no" || { echo "ERROR: refusing admin-capable identity: it holds live-cluster rights" >&2; exit 1; } ; \
+	  done ; \
+	done ; \
+	src_b64="$$(KUBECONFIG="$$KC" kubectl -n "$(RESTORE_NAMESPACE)" get secret "$(RESTORE_READ_SECRET)" -o jsonpath='{.data.S3_BUCKET}')" || { echo "ERROR: cannot read backup credential in the restore namespace (failing closed)" >&2; exit 1; } ; \
+	src_bucket="$$(printf '%s' "$$src_b64" | base64 -d)" ; \
+	test -n "$$src_bucket" || { echo "ERROR: backup credential exposes no S3_BUCKET in the restore namespace" >&2; exit 1; } ; \
+	printf '%s' "$$src_bucket" | grep -Eq '^[a-z0-9.-]+$$' || { echo "ERROR: backup credential exposes an invalid S3_BUCKET" >&2; exit 1; } ; \
+	pod="pgbackup-restore-$$(date -u +%Y%m%d%H%M%S)" ; \
+	echo "==> Running restore pod $$pod in namespace $(RESTORE_NAMESPACE)" ; \
+	KUBECONFIG="$$KC" kubectl -n "$(RESTORE_NAMESPACE)" run "$$pod" --rm -i --restart=Never --image=postgres:17-alpine@sha256:b0f9560a2de083e2cc7382e75f808c7381a32852a7ec49117deedb300e552b24 \
 	  --labels="app.kubernetes.io/name=sentropic,app.kubernetes.io/component=pgbackup" \
-	  --env PGHOST=postgres --env PGPORT=5432 --env PGUSER=app --env PGDATABASE=app \
+	  --env PGHOST=$(RESTORE_PGHOST) --env PGPORT=$(RESTORE_PGPORT) --env PGUSER=$(RESTORE_PGUSER) --env PGDATABASE=$(RESTORE_PGDB) \
+	  --env PG_BACKUP_KEY="$(PG_BACKUP_KEY)" --env PG_BACKUP_SHA256="$(PG_BACKUP_SHA256)" --env SRC_BUCKET="$$src_bucket" --env KEEP_DB="$(RESTORE_KEEP_DB)" --env RESTORE_NAMESPACE="$(RESTORE_NAMESPACE)" \
 	  --override-type=strategic --overrides="$$(printf '%s' \
 	    '{"spec":{' \
 	    '"volumes":[{"name":"work","emptyDir":{}}],' \
 	    '"initContainers":[{"name":"download",' \
 	      '"image":"peakcom/s5cmd:v2.2.2@sha256:6e551552f7c6ffde461e3cfe6fab82cd3345b574bd256193194081fd9022da4a",' \
 	      '"resources":{"requests":{"cpu":"20m","memory":"32Mi"},"limits":{"cpu":"200m","memory":"128Mi"}},' \
-	      '"args":["--endpoint-url","$$(S3_ENDPOINT)","cp","s3://$$(S3_BUCKET)/$(PG_BACKUP_KEY)","/work/d.sql.gz"],' \
+	      '"command":["sh","-c","set -e; set -f; /s5cmd --endpoint-url $$S3_ENDPOINT cp s3://$$S3_BUCKET/$$PG_BACKUP_KEY /work/d.sql.gz; test -s /work/d.sql.gz; /s5cmd --endpoint-url $$S3_ENDPOINT ls --etag s3://$$S3_BUCKET/$$PG_BACKUP_KEY > /work/listing; test -s /work/listing; if /s5cmd --endpoint-url $$S3_ENDPOINT ls --all-versions s3://$$S3_BUCKET/$$PG_BACKUP_KEY > /work/versions 2>/dev/null; then :; else echo VERSIONS_NOT_LISTED > /work/versions; fi"],' \
 	      '"env":[' \
-	        '{"name":"AWS_ACCESS_KEY_ID","valueFrom":{"secretKeyRef":{"name":"sentropic-pgbackup","key":"S3_ACCESS_KEY"}}},' \
-	        '{"name":"AWS_SECRET_ACCESS_KEY","valueFrom":{"secretKeyRef":{"name":"sentropic-pgbackup","key":"S3_SECRET_KEY"}}},' \
-	        '{"name":"AWS_REGION","valueFrom":{"secretKeyRef":{"name":"sentropic-pgbackup","key":"S3_REGION"}}},' \
-	        '{"name":"S3_BUCKET","valueFrom":{"secretKeyRef":{"name":"sentropic-pgbackup","key":"S3_BUCKET"}}},' \
-	        '{"name":"S3_ENDPOINT","valueFrom":{"secretKeyRef":{"name":"sentropic-pgbackup","key":"S3_ENDPOINT"}}}],' \
+	        '{"name":"AWS_ACCESS_KEY_ID","valueFrom":{"secretKeyRef":{"name":"$(RESTORE_READ_SECRET)","key":"S3_ACCESS_KEY"}}},' \
+	        '{"name":"AWS_SECRET_ACCESS_KEY","valueFrom":{"secretKeyRef":{"name":"$(RESTORE_READ_SECRET)","key":"S3_SECRET_KEY"}}},' \
+	        '{"name":"AWS_REGION","valueFrom":{"secretKeyRef":{"name":"$(RESTORE_READ_SECRET)","key":"S3_REGION"}}},' \
+	        '{"name":"S3_BUCKET","valueFrom":{"secretKeyRef":{"name":"$(RESTORE_READ_SECRET)","key":"S3_BUCKET"}}},' \
+	        '{"name":"S3_ENDPOINT","valueFrom":{"secretKeyRef":{"name":"$(RESTORE_READ_SECRET)","key":"S3_ENDPOINT"}}},' \
+	        '{"name":"PG_BACKUP_KEY","value":"$(PG_BACKUP_KEY)"}],' \
 	      '"volumeMounts":[{"name":"work","mountPath":"/work"}]}],' \
 	    '"containers":[{"name":"'"$$pod"'",' \
-	      '"env":[{"name":"PGPASSWORD","valueFrom":{"secretKeyRef":{"name":"sentropic-postgres","key":"POSTGRES_PASSWORD"}}}],' \
+	      '"env":[' \
+	        '{"name":"PGPASSWORD","valueFrom":{"secretKeyRef":{"name":"$(RESTORE_PG_SECRET)","key":"POSTGRES_PASSWORD"}}}],' \
 	      '"volumeMounts":[{"name":"work","mountPath":"/work"}]}]}}')" \
-	  --command -- sh -c 'set -e; \
-	    psql -c "DROP DATABASE IF EXISTS restore_check;" -c "CREATE DATABASE restore_check;"; \
-	    gunzip -c /work/d.sql.gz | psql -d restore_check; \
-	    psql -d restore_check -c "SELECT count(*) AS organizations FROM organizations;" || true; \
-	    psql -c "DROP DATABASE restore_check;"; echo "restore verification OK"'
+	  --command -- sh -c 'set -e; set -o pipefail; set -f; \
+	    test -s /work/d.sql.gz; test -s /work/listing; \
+	    stat -c%s /work/d.sql.gz > /work/bytes; sha256sum /work/d.sql.gz | cut -d" " -f1 > /work/sha256; \
+	    bytes=$$(cat /work/bytes); sha=$$(cat /work/sha256); test -n "$$sha"; \
+	    test "$$PG_BACKUP_SHA256" = "$$sha" || { echo "ERROR: sha256 mismatch" >&2; exit 1; }; sha_checked=true; \
+	    gzip -t /work/d.sql.gz; \
+	    gunzip -c /work/d.sql.gz > /work/restore.sql; test -s /work/restore.sql; \
+	    psql -d postgres -c "DROP DATABASE IF EXISTS $$PGDATABASE;" -c "CREATE DATABASE $$PGDATABASE;"; \
+	    psql -v ON_ERROR_STOP=1 --single-transaction -d "$$PGDATABASE" -f /work/restore.sql; \
+	    orgs=$$(psql -d "$$PGDATABASE" -tA -c "SELECT count(*) FROM organizations;"); \
+	    set -- $$(cat /work/listing); etag="$$3"; test -n "$$etag"; \
+	    listing=$$(tr -d "\n" < /work/listing); \
+	    versions=$$(tr -d "\042\012" < /work/versions | head -c 512); test -n "$$versions"; \
+	    at=$$(date -u +%Y-%m-%dT%H:%M:%SZ); \
+	    echo MANIFEST-BEGIN; \
+    printf "{\\042manifest\\042:\\042b03-backup-object\\042,\\042key\\042:\\042%s\\042,\\042bucket\\042:\\042%s\\042,\\042bytes\\042:%s,\\042sha256\\042:\\042%s\\042,\\042sha256_checked\\042:true,\\042etag\\042:\\042%s\\042,\\042versions\\042:\\042%s\\042,\\042listing\\042:\\042%s\\042,\\042restore_namespace\\042:\\042%s\\042,\\042pg_host\\042:\\042%s\\042,\\042pg_db\\042:\\042%s\\042,\\042organizations\\042:%s,\\042pod\\042:\\042%s\\042,\\042at\\042:\\042%s\\042}\\n" "$$PG_BACKUP_KEY" "$$SRC_BUCKET" "$$bytes" "$$sha" "$$etag" "$$versions" "$$listing" "$$RESTORE_NAMESPACE" "$$PGHOST" "$$PGDATABASE" "$$orgs" "$$HOSTNAME" "$$at"; \
+	    echo MANIFEST-END; \
+	    if [ "$$KEEP_DB" != "true" ]; then psql -d postgres -c "DROP DATABASE $$PGDATABASE;"; fi; \
+	    echo \"restore verification OK\"'
+
+.PHONY: test-pgbackup-restore-isolation
+test-pgbackup-restore-isolation: ## Run pgbackup restore isolation guard tests (fake kubectl, no cluster)
+	@bash scripts/test-pgbackup-restore-isolation.sh
 
 # --- Public DNS/TLS smoke (BR37c-EX1, append-only; operator-side) --------------
 # Verify the public host reaches the cluster through the shared Traefik LB with a

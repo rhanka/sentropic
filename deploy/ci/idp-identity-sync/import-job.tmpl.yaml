@@ -74,6 +74,7 @@ spec:
             - { name: DRY_RUN, value: "${DRY_RUN}" }
             - { name: ALLOWED_REKEY, value: "${ALLOWED_REKEY}" }
             - { name: ALLOWED_CLIENTS, value: "${ALLOWED_CLIENTS}" }
+            - { name: IMMO_MCP_WORKLOAD_CLIENT_SECRET, valueFrom: { secretKeyRef: { name: immo-mcp-workload, key: IMMO_MCP_WORKLOAD_CLIENT_SECRET, optional: true } } }
             - { name: MAX_SNAPSHOT_AGE_S, value: "${MAX_SNAPSHOT_AGE_S}" }
           volumeMounts: [{ name: work, mountPath: /work }, { name: sql, mountPath: /sql, readOnly: true }]
           securityContext: { allowPrivilegeEscalation: false, capabilities: { drop: [ALL] } }
