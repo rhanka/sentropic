@@ -1112,3 +1112,143 @@ export function createChatLoopController<
 
   // -------------------------------------------------------------------------
   // Timeline recomputation (called after any state mutation)
+  // -------------------------------------------------------------------------
+  const recomputeTimeline = (opts?: {
+    optimisticSteerMessages?: Message[];
+    runtimeSummariesByMessageId?: ReadonlyMap<string, RuntimeSummary>;
+    composerSteerAck?: ChatProjectionSteerAck | null;
+  }) => {
+    projectedTimelineItems = buildProjectedTimeline<Message, RuntimeSummary>({
+      timeline: messages,
+      optimisticSteerMessages: opts?.optimisticSteerMessages,
+      runtimeSummariesByMessageId: opts?.runtimeSummariesByMessageId,
+      composerSteerAck: opts?.composerSteerAck,
+      getAssistantComputation: getProjectedAssistantComputation,
+    });
+  };
+
+  // -------------------------------------------------------------------------
+  // Projection helpers (internal — no domain strings)
+  // -------------------------------------------------------------------------
+  const buildComputationSignature = (message: Message, events: ControllerStreamEvent[]): string => {
+    const lastSequence =
+      events.length > 0 ? Number(events[events.length - 1]?.sequence ?? 0) : 0;
+    return [
+      message._streamId ?? message.id,
+      message._localStatus ?? '',
+      message.content ? message.content.length : 0,
+      events.length,
+      Number.isFinite(lastSequence) ? lastSequence : 0,
+    ].join(':');
+  };
+
+  const getProjectionEventsForMessage = (message: Message): ControllerStreamEvent[] => {
+    const streamId = message._streamId ?? message.id;
+    const projected = projectedStreamEventsById.get(streamId);
+    if (projected && projected.length > 0) return projected;
+    const hydrated = initialEventsByMessageId.get(streamId);
+    if (hydrated && hydrated.length > 0) return hydrated;
+    return [];
+  };
+
+  const getProjectedAssistantComputation = (
+    message: Message,
+  ): ChatProjectionComputation => {
+    const messageId = String(message.id ?? '').trim();
+    const projectionEvents = getProjectionEventsForMessage(message);
+    const signature = buildComputationSignature(message, projectionEvents);
+    const cached = projectedAssistantComputationByMessageId.get(messageId);
+    if (cached?.signature === signature) {
+      return {
+        segments: cached.segments,
+        linkedSteerCount: cached.linkedSteerCount,
+        terminalOutcome: cached.terminalOutcome,
+      };
+    }
+
+    const segments = projectAssistantRunSegments(projectionEvents);
+    const next: ProjectedAssistantComputationCached = {
+      signature,
+      segments,
+      linkedSteerCount: countLinkedSteerMessages(projectionEvents),
+      terminalOutcome: getProjectedRunTerminalOutcome(projectionEvents),
+    };
+    projectedAssistantComputationByMessageId = new Map(
+      projectedAssistantComputationByMessageId,
+    );
+    projectedAssistantComputationByMessageId.set(messageId, next);
+    return {
+      segments: next.segments,
+      linkedSteerCount: next.linkedSteerCount,
+      terminalOutcome: next.terminalOutcome,
+    };
+  };
+
+  // -------------------------------------------------------------------------
+  // Stream subscription helpers (slice 1C — framework-neutral, no domain strings)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Internal: called when the stream client emits an event.
+   * Mirrors AppChatPanel's handleProjectionStreamEvent:
+   *   - guard: must have a streamId + finite sequence + be a tracked stream
+   *   - append the event to projectedStreamEventsById
+   *   - on terminal (done/error): patch the target message + call onTerminal
+   *   - call onProjectionEvent after each append (for host-side scroll scheduling)
+   */
+  const handleIncomingStreamEvent = (rawUnknown: unknown): void => {
+    const raw =
+      rawUnknown && typeof rawUnknown === 'object'
+        ? (rawUnknown as Record<string, unknown>)
+        : ({} as Record<string, unknown>);
+    const streamId = String(raw.streamId ?? '').trim();
+    if (!streamId || !isTrackedAssistantStreamId(streamId)) return;
+    const sequence = Number(raw.sequence);
+    if (!Number.isFinite(sequence)) return;
+
+    const eventType = String(raw.type ?? '').trim();
+    appendProjectedLiveEvent(streamId, {
+      eventType,
+      data: (raw.data as Record<string, unknown>) ?? {},
+      sequence,
+      createdAt: undefined,
+    });
+
+    // Call the host callback AFTER the state mutation (scroll scheduling)
+    attachedOnProjectionEvent?.(streamId);
+
+    if (eventType === 'done' || eventType === 'error') {
+      handleStreamTerminal(streamId, eventType as 'done' | 'error');
+    }
+  };
+
+  /**
+   * Internal: marks the matching assistant message as completed/failed.
+   * Mirrors AppChatPanel's handleAssistantTerminal.
+   */
+  const handleStreamTerminal = (streamId: string, outcome: 'done' | 'error'): void => {
+    const target = messages.find((m) => (m._streamId ?? m.id) === streamId);
+    if (target) {
+      patchMessage(target.id, {
+        _localStatus: outcome === 'done' ? 'completed' : 'failed',
+      } as Partial<Message>);
+    }
+    // Call the host callback AFTER the state mutation (force-scroll scheduling)
+    attachedOnTerminal?.(streamId, outcome);
+  };
+
+  /**
+   * Internal: job-poll fallback loop.
+   * Mirrors AppChatPanel's pollJobUntilTerminal.
+   * Exits early if:
+   *   - the message is already hydrated (has content) or terminal
+   *   - the job reaches completed/failed status from the poll endpoint
+   *   - the timeout elapses
+   */
+  const runJobPollLoop = async (
+    jobId: string,
+    streamId: string,
+    opts?: { timeoutMs?: number },
+  ): Promise<void> => {
+    if (!jobId || !streamId) return;
+    if (jobPollInFlight.has(jobId)) return;
