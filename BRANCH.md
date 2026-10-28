@@ -50,17 +50,17 @@
   - [x] Create isolated worktree `tmp/worktrees/mem-e10a` on `feat/cluster-mesh-engram-e10a` from `origin/feat/engram-e2-integration` at `ef585a6b1164923929add4dfee2c8a64390da267`.
   - [x] Confirm ports API 8792, UI 5192, Maildev UI 1092 and `ENV=test-mem-e10a` last.
   - [x] Declare the additive `./engram-memory` export with rationale, impact and rollback in Scope / Guardrails.
-- [ ] **Lot E10a-1 — Wire adaptation**
-  - [ ] Add pure K7/K8 snake-case and camel-case adaptation both ways plus journal intent-hash carry and strip in `packages/cluster-mesh/src/engram-memory/`.
-  - [ ] Add unit tests for the adaptation both ways and for each refusal.
-  - [ ] Lot gate: scoped cluster-mesh tests for the new spec files.
-- [ ] **Lot E10a-2 — Neutral-handle factory**
-  - [ ] Add the fenced neutral-handle factory with fence acquire, check and release, transact, query, readCommitResult and host DDL/SQL through the injected driver.
-  - [ ] Export the factory and the adaptation through `./engram-memory` without changing existing exports, digests or descriptors.
-  - [ ] Add unit tests for fence, grant and driver refusals.
-  - [ ] Lot gate: scoped cluster-mesh tests plus typecheck and lint for cluster-mesh.
+- [x] **Lot E10a-1 — Wire adaptation**
+  - [x] Add pure K7/K8 snake-case and camel-case adaptation both ways plus journal intent-hash carry and strip in `packages/cluster-mesh/src/engram-memory/`.
+  - [x] Add unit tests for the adaptation both ways and for each refusal.
+  - [x] Lot gate: scoped cluster-mesh tests for the new spec files.
+- [x] **Lot E10a-2 — Neutral-handle factory**
+  - [x] Add the fenced neutral-handle factory with fence acquire, check and release, transact, query, readCommitResult and host DDL/SQL through the injected driver.
+  - [x] Export the factory and the adaptation through `./engram-memory` without changing existing exports, digests or descriptors.
+  - [x] Add unit tests for fence, grant and driver refusals.
+  - [x] Lot gate: scoped cluster-mesh tests plus typecheck and lint for cluster-mesh.
 - [ ] **Lot E10a-3 — Pack-only version and handoff**
-  - [ ] Increment the pack-only version from `0.24.0-dev.1` to the next dev increment in the package manifest and the workspace lock.
+  - [x] Increment the pack-only version from `0.24.0-dev.1` to the next dev increment in the package manifest and the workspace lock.
   - [ ] Run `make scope-check` and the frozen-surface gates before every commit.
   - [ ] Push and open the draft PR against `feat/engram-e2-integration` with `BRANCH.md` as the PR body.
   - [ ] Require CI on the exact head before marking ready.
