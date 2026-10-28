@@ -28,9 +28,16 @@ export async function createArtifactHostActivationStorage(options: {
   if (rows.length !== 1 || rows[0].hash !== ACTIVATION_SQL_ASSET_SHA256) {
     throw new Error('Artifact activation migration receipt mismatch');
   }
-  return Object.freeze({ ...store,
+  return Object.freeze({
+    tickets: Object.freeze({ peek: store.tickets.peek }),
+    flows: Object.freeze({ peek: store.flows.peek }),
+    consume: store.consume,
+    cleanup: store.cleanup,
+    invalidate: store.invalidate,
     async issue(binding: BrowserFlowBinding) {
       const snapshot = { ...binding };
+      // Ticket and flow commit separately. A failed flow write rejects issuance;
+      // its orphan ticket cannot activate without a flow and expires within 60 seconds.
       const ticket = await store.tickets.issue!({ ...snapshot, ticketId: randomUUID() }, ticketTtlSeconds * 1000);
       // Both deadlines derive from the package's PostgreSQL issuance time, never the host clock.
       const flow = { ...snapshot, ...ticket, flowId: randomUUID(),

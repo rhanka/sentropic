@@ -1,11 +1,13 @@
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
-import { ACTIVATION_SQL_ASSET, ACTIVATION_SQL_ASSET_SHA256, ActivationCommitUnknownError } from '@sentropic/artifacts/adapters/postgres-activation';
+import { createPostgresActivationStore, ACTIVATION_SQL_ASSET, ACTIVATION_SQL_ASSET_SHA256, ActivationCommitUnknownError } from '@sentropic/artifacts/adapters/postgres-activation';
+import { runPostgresActivationConformance, POSTGRES_ACTIVATION_VECTOR_IDS } from '@sentropic/artifacts/adapters/postgres-activation/vectors';
 import { runMigrations } from '../../src/db/run-migrations';
 import { artifactMigrationAssets, installArtifactPackageAssets } from '../../src/services/artifacts/host-storage';
 import { createArtifactHostActivationStorage } from '../../src/services/artifacts/activation-storage';
 
+if (!process.env.DATABASE_URL) throw new Error('Activation conformance requires a wired PostgreSQL executor');
 const admin = new Pool({ connectionString: process.env.DATABASE_URL });
 let pool: Pool;
 let database: string;
@@ -15,7 +17,7 @@ const binding = { subjectId: 'reader', artifactId: 'artifact', releaseId: 'relea
 const options = () => ({ pool, namespace: 'opaque-workspace', ticketTtlSeconds: 60, flowTtlSeconds: 30 });
 
 beforeEach(async () => {
-  database = `w1c_${randomUUID().replaceAll('-', '')}`;
+  database = `test_w1c_${randomUUID().replaceAll('-', '')}`;
   await admin.query(`CREATE DATABASE "${database}"`);
   const url = new URL(process.env.DATABASE_URL!);
   url.pathname = `/${database}`;
@@ -30,6 +32,44 @@ afterEach(async () => {
 afterAll(() => admin.end());
 
 describe('artifact host activation storage', () => {
+  it('should run all 16 imported activation vectors on the host migration executor', async () => {
+    const { rows } = await pool.query<{ name: string }>('SELECT current_database() AS name');
+    expect(rows[0].name).toBe(database);
+    await createArtifactHostActivationStorage(options());
+    const observed: string[] = [];
+    const passed = await runPostgresActivationConformance({
+      disposable: { confirmed: true, databaseName: rows[0].name },
+      createStore: namespace => createPostgresActivationStore({ pool, namespace }),
+      wait: async (ms, client) => { await (client ?? pool).query('SELECT pg_sleep($1)', [ms / 1000]); },
+      async inspectTicket(namespace, ticketId) {
+        const { rows } = await pool.query(`SELECT issued_ms, expires_ms,
+          floor(extract(epoch FROM clock_timestamp()) * 1000) AS db_now
+          FROM artifact_host.activation_tickets WHERE namespace=$1 AND ticket_id=$2`, [namespace, ticketId]);
+        return { issuedAt: Number(rows[0].issued_ms), expiresAt: Number(rows[0].expires_ms), now: Number(rows[0].db_now) };
+      },
+      createStoreWithCommitAckLoss(namespace) {
+        const uncertainPool = { async connect() {
+          const client = await pool.connect();
+          return {
+            async query(sql: string, params?: unknown[]) {
+              const result = await client.query(sql, params);
+              if (sql === 'COMMIT') throw new Error('injected acknowledgement loss');
+              return result;
+            },
+            release(destroy?: boolean) { client.release(destroy); },
+          };
+        } };
+        // The package transaction executor leases only connect/query/release from this fault injector.
+        return createPostgresActivationStore({ pool: uncertainPool as unknown as Pool, namespace });
+      },
+      onPass: id => observed.push(id),
+    });
+    expect(POSTGRES_ACTIVATION_VECTOR_IDS).toHaveLength(16);
+    expect(passed).toEqual(POSTGRES_ACTIVATION_VECTOR_IDS);
+    expect(observed).toEqual(POSTGRES_ACTIVATION_VECTOR_IDS);
+    console.info(`Host activation conformance: ${passed.length}/16 vectors passed`, passed);
+  });
+
   it('should install the unchanged activation asset through the host migration executor', async () => {
     const asset = artifactMigrationAssets.find(asset => asset.id === ACTIVATION_SQL_ASSET)!;
     expect(createHash('sha256').update(asset.read()).digest('hex')).toBe(ACTIVATION_SQL_ASSET_SHA256);
@@ -67,6 +107,13 @@ describe('artifact host activation storage', () => {
     await expect(createArtifactHostActivationStorage({ ...options(), flowTtlSeconds: 60, ticketTtlSeconds: 30 }))
       .rejects.toThrow(/lifetime/);
     await expect(createArtifactHostActivationStorage({ ...options(), namespace: '' })).rejects.toThrow();
+  });
+
+  it('should expose policy-controlled issuance, reads, consume and maintenance without raw write ports', async () => {
+    const store = await createArtifactHostActivationStorage(options());
+    expect(Object.keys(store).sort()).toEqual(['cleanup', 'consume', 'flows', 'invalidate', 'issue', 'tickets']);
+    expect(Object.keys(store.tickets)).toEqual(['peek']);
+    expect(Object.keys(store.flows)).toEqual(['peek']);
   });
 
   it.each(['missing', 'changed'])('should refuse a %s installation receipt without installing it', async damage => {
