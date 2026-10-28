@@ -8,7 +8,7 @@
 - [x] Integrated origin/main 8d37455df7f019cb42699257d343abbcc7ac2f68 by merge 6d603530d; only BRANCH.md conflicted; Track contains all 370 original event IDs; narrow implementation scope restored.
 - [x] Frozen interface SHA-256: 104e64761f957c12291ad86bc8553359d63bf15135660d7f53ddbdccded17032; plan: 31d6257d70fc87877e4a2076e4cbf0e58ffc33adc24b9d288590e6059f8d4256.
 - [x] ENV=test-rc1 last; API_PORT=8799 UI_PORT=5199 MAILDEV_UI_PORT=1099; shared Docker locks; make down after execution.
-- [x] Make-only; no production changes; no frozen-directory writes; merge only; atomic commits at most 150 lines; no trailers.
+- [x] Make-only; no live production operation; no frozen-directory writes; merge only; atomic commits at most 150 lines; no trailers.
 - [x] RC2 transport/provider/capsule and K-app journal/claim/effects remain separate; native contribution requested through conductor with test fake behind the port.
 - [x] D2 central signer/login-credential trust and bounded offline revocation remain as frozen; no claim of a trusted display or fresh human click.
 - [x] BRRC0-EX1 preserves mechanism-only release dependencies and single-writer leases; artifact gates remain closed.
@@ -98,6 +98,7 @@
   - [x] Bulk logout fences every deleted session, including a private create that has not completed; unknown-session tombstones prevent late recreation.
   - [x] Issuer-private synchronous signing boundary shares the revocation fence and validates current immutable login/hash/deadline before signing.
   - [x] Evidence revalidates login after asynchronous work and signs standard compact EdDSA synchronously inside the mandatory private fence; original deadlines never extend.
+  - [x] Pre-integration validation: 172 cases passed, API typecheck/lint and IdP typecheck passed. Final runner prepares dependencies before starting the API to avoid transient module removal during live reload.
   - [ ] api/tests/unit/auth/remote-evidence.test.ts: repeated actions/switch, logout/revoke/expiry, wrong sid/version/MFA/audience/key, replay and workload separation.
   - [ ] Closed EvidenceRequest; issuer-derived identity and original authentication time; per-operation EdDSA evidence with pinned audiences.
 - [ ] **Lot 2 — Consent and authorization, RED then GREEN**
