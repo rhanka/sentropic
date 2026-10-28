@@ -62,6 +62,7 @@
   - [ ] Resolve verified workspace authorization and financial ownership outside caller JSON.
   - [ ] Reuse OPENAI_API_KEY; resolve the new JEV_API_KEY connection without logging secrets.
   - [ ] Implement durable Decision budget and receipt ports over llm-metering, including overrun disable and pending liability.
+  - [x] Add control migration and schema for metadata receipts and persistent evaluator disable evidence.
   - [ ] Keep production refusing; expose experimental qualification only to application admins.
   - [ ] API unit tests: api/tests/unit/decision-host.test.ts; api/tests/unit/decision-route.test.ts.
   - [ ] API integration tests: api/tests/api/decision-metering.test.ts.

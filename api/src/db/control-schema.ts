@@ -534,6 +534,24 @@ export const budgets = controlSchema.table(
  * enforced by the unique key plus the single-writer checked insert (B0-A4); only `effective_to`
  * of the open predecessor may be closed by that writer. No btree_gist / extension.
  */
+export const decisionEvaluatorState = controlSchema.table('decision_evaluator_state', {
+  evaluatorKey: text('evaluator_key').primaryKey(),
+  disabled: boolean('disabled').notNull().default(false),
+  evidence: jsonb('evidence'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+export const decisionCalls = controlSchema.table('decision_calls', {
+  callId: text('call_id').primaryKey(),
+  tenantId: text('tenant_id').notNull(),
+  workspaceId: text('workspace_id').notNull(),
+  principalKey: text('principal_key').notNull(),
+  evaluatorKey: text('evaluator_key'),
+  holdId: text('hold_id').unique().references(() => budgetHolds.id),
+  receipt: jsonb('receipt'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+});
+
 export const modelPricing = controlSchema.table(
   'model_pricing',
   {
