@@ -34,7 +34,7 @@ memory-stage-b-locked:
 # E10 installed injection proof: clean consumer outside repository resolution.
 INSTALLED_DIR ?= tmp/installed-memory-e10
 INSTALLED_ENGRAM_TGZ ?= /home/antoinefa/src/graphify-wt-mcpl4/.graphify/scratch/l4-r4-artifacts/sentropic-engram-0.22.0.tgz
-INSTALLED_MESH_VERSION ?= 0.24.0-dev.1
+INSTALLED_MESH_VERSION ?= 0.24.0-dev.2
 INSTALLED_RECEIPTS ?= $(INSTALLED_DIR)
 .PHONY: installed-memory installed-memory-locked
 installed-memory:
@@ -67,7 +67,7 @@ installed-memory-locked:
 	        node -e "const fs=require(\"fs\");const j=JSON.parse(fs.readFileSync(\"$(INSTALLED_DIR)/pack/package.json\",\"utf8\"));if(j.version!==\"$(INSTALLED_MESH_VERSION)\"){console.error(\"workspace version \"+j.version+\" != $(INSTALLED_MESH_VERSION)\");process.exit(1)}"; \
 	        (cd $(INSTALLED_DIR)/pack && npm pack --pack-destination ../artifacts >/dev/null); \
 	        tar -tzf $(INSTALLED_DIR)/artifacts/sentropic-cluster-mesh-$(INSTALLED_MESH_VERSION).tgz | LC_ALL=C sort | sha256sum | cut -d" " -f1 > $(INSTALLED_DIR)/artifacts/mesh-file-list.sha256; \
-	        cp packages/cluster-mesh/tests/engram-memory/installed-memory.mjs packages/cluster-mesh/tests/engram-memory/installed-host-bridge.mjs packages/cluster-mesh/tests/engram-memory/installed-memory-types.ts $(INSTALLED_DIR)/consumer/; \
+	        cp packages/cluster-mesh/tests/engram-memory/installed-memory.mjs packages/cluster-mesh/tests/engram-memory/installed-memory-types.ts $(INSTALLED_DIR)/consumer/; \
 	        printf "%s\n" "{\"name\":\"engram-e10-installed-consumer\",\"version\":\"1.0.0\",\"private\":true,\"type\":\"module\",\"dependencies\":{\"@sentropic/engram\":\"file:../artifacts/sentropic-engram-0.22.0.tgz\",\"@sentropic/cluster-mesh\":\"file:../artifacts/sentropic-cluster-mesh-$(INSTALLED_MESH_VERSION).tgz\",\"pg\":\"8.22.0\"},\"devDependencies\":{\"typescript\":\"5.4.5\",\"@types/node\":\"22.20.1\"}}" > $(INSTALLED_DIR)/consumer/package.json; \
 	        cd $(INSTALLED_DIR)/consumer && npm install --package-lock-only --ignore-scripts --no-audit --no-fund \
 	          && npm ci --ignore-scripts --no-audit --no-fund'; \
