@@ -63,7 +63,7 @@
   - [x] Verify host inventory and single served native model before/after one System One POST.
   - [ ] Bound request, response, timeout and cancellation; reject redirects and identity gaps without replay.
 - [ ] **Lot 4 — Native adapter and host exports**
-  - [ ] Compile typed binary/choice/graded questions and validate pinned native output, independent usage and identity.
+  - [x] Compile typed binary/choice/graded questions and validate pinned native output, independent usage and identity.
   - [ ] Preserve host allowlist, receipt, budget and qualification gates; no general chat registration.
 - [ ] **Lot 5 — Fixture acceptance**
   - [ ] `packages/llm-mesh/tests/decision-kev-inventory.test.ts`: P26 wrong file/revision/hash/runtime and P27 execution changes.
