@@ -1,10 +1,8 @@
-import type { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
 import type { SkillTool } from '../../../../../packages/skills/src/index.js';
 import type { StandaloneToolHandler } from './standalone-tool-source.js';
 import type { CatalogSource } from '../source.js';
 import type { CatalogEntry, ToolEntry } from '../types.js';
-export type { StandaloneToolHandler as McpToolHandler };
 export function sanitizeMcpToolName(rawName: string): string {
   return rawName
     .toLowerCase()
@@ -18,18 +16,13 @@ export interface McpSourceConfig {
   readonly allowedTools?: ReadonlyArray<string>;
   readonly deniedTools?: ReadonlyArray<string>;
 }
-export interface ToolHandlerSource {
-  readonly id: string;
-  getHandler(name: string): StandaloneToolHandler | undefined;
-}
-export class McpCatalogSource implements CatalogSource, ToolHandlerSource {
+export class McpCatalogSource implements CatalogSource {
   readonly id: string;
   readonly kind = 'mcp' as const;
   private readonly config: McpSourceConfig;
   private readonly transportFactory: () => Transport;
   private _entries: ToolEntry[] = [];
   private readonly _handlers = new Map<string, StandaloneToolHandler>();
-  private _initialized = false;
   constructor(config: McpSourceConfig, transportFactory: () => Transport) {
     this.config = config;
     this.transportFactory = transportFactory;
@@ -38,36 +31,8 @@ export class McpCatalogSource implements CatalogSource, ToolHandlerSource {
   snapshot(): ReadonlyArray<CatalogEntry> {
     return this._entries;
   }
-  async refresh(): Promise<void> {
-    const { Client } = await import('@modelcontextprotocol/sdk/client/index.js');
-    const transport = this.transportFactory();
-    const client: McpClient = new Client(
-      { name: this.id, version: '1.0.0' },
-      { capabilities: {} },
-    );
-    await client.connect(transport);
-    try {
-      const { tools: rawTools } = await client.listTools();
-      this._applyToolList(rawTools);
-      this._initialized = true;
-    } finally {
-      await client.close();
-    }
-  }
-  async health(): Promise<{ ok: boolean; detail?: string }> {
-    if (!this._initialized) {
-      return { ok: false, detail: 'not yet refreshed' };
-    }
-    return { ok: true, detail: `${this._entries.length} tools loaded` };
-  }
   getHandler(name: string): StandaloneToolHandler | undefined {
     return this._handlers.get(name);
-  }
-  get size(): number {
-    return this._entries.length;
-  }
-  get initialized(): boolean {
-    return this._initialized;
   }
   private _applyToolList(
     rawTools: Array<{
@@ -131,7 +96,7 @@ export class McpCatalogSource implements CatalogSource, ToolHandlerSource {
           '@modelcontextprotocol/sdk/client/index.js'
         );
         const callTransport = this.transportFactory();
-        const callClient: McpClient = new Client(
+        const callClient = new Client(
           { name: sourceId, version: '1.0.0' },
           { capabilities: {} },
         );
