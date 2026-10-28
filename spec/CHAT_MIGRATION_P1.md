@@ -2,6 +2,8 @@
 
 Contract: `CHAT_MIGRATION_P0*.md`, merged in #816. P1 implements the approved ownership boundary in Sentropic.
 No Design System repository write, registry publication, owner UAT GO or transfer GO is authorized here.
+The conductor splits release sequencing: merge the runtime-only P1-0 precursor first, bootstrap
+`chat-runtime` on main, then merge main into #819 again before any consumer release. #817 is superseded.
 
 ## Draft sequence
 
@@ -50,10 +52,16 @@ it does not claim recipient acknowledgement or external consumer qualification.
 | `@sentropic/chat-ui/state/agentsViewMarkers` | `@sentropic/chat-runtime/state/agentsViewMarkers` |
 | `@sentropic/chat-ui/stores/localTools` | `@sentropic/chat-runtime/stores/localTools` |
 | `@sentropic/chat-ui/checkpoints` | `@sentropic/chat-runtime/checkpoints` |
-| Runtime `utils/chat-*`, `utils/localToolStreamSync`, `utils/model-selection` | Same suffix under `@sentropic/chat-runtime` |
+| Runtime `utils/chat-*`, `utils/localToolStreamSync` | Same suffix under `@sentropic/chat-runtime` |
+| Model selection/hydration policy | `@sentropic/chat-runtime/utils/model-selection` |
+| Neutral model keys, catalog grouping and display labels | `@sentropic/chat-ui/utils/model-selection` |
+| `LocalToolsAdapter` / `DocumentHost` | `@sentropic/chat-runtime/hosts/types` / `@sentropic/chat-runtime/documents` |
 
-Neutral visual contracts remain available through public type exports. Runtime imports no visual
-implementation. P1a temporarily retains the existing conversation wiring to preserve a green step;
+Neutral visual contracts remain available through public type exports. Runtime imports neutral model
+utilities, never view implementations. Conversation snapshots/commands are type-only ports exported
+by `@sentropic/chat-runtime/conversation`; visual files have no runtime value imports. The UI's runtime
+peer is optional. Record/task rendering helpers and the empty context fallback belong to chat-ui.
+P1a temporarily retains the existing conversation wiring to preserve a green step;
 P1b completes that boundary without a migration flag or fallback implementation.
 
 ## P1a qualification
@@ -73,7 +81,7 @@ modules. Remount the view while streaming and verify draft/attachments/checkpoin
 survive, with one active runtime and one result continuation.
 
 Local tools require explicit host approval. Keep the owner's explicit `() => false` default
-authorization predicate. Missing adapter, denial and timeout expose pending/denied state, execute zero
+`authorize` predicate. Missing adapter, denial and timeout expose pending/denied state, execute zero
 tools, post no successful result and never continue as allowed. Approval executes and posts once.
 
 The final packed visual candidate must contain no runtime implementation or private source import;
@@ -100,8 +108,11 @@ build completes for web/Chrome/VSCode. The app typecheck also reports 6 warnings
 Guarded candidate packs pass. The clean installed-pair probe mounts only the archives and its probe:
 Svelte typecheck has 0 errors/warnings, Vite production bundling succeeds, and the visual archive has
 no runtime implementation paths. Final archive hashes/head are retained in its report after final review.
-Native allow/deny/timeout/disposal is additionally covered through the real runtime/controller; denied
-native prompts cannot reappear as approved. Two complementary r2 source reviews approve the corrections.
+Native allow/deny/timeout/disposal is additionally covered through the real runtime/controller.
+Native and domain replays retain exactly one resolved denied row, with zero execution or duplicate result.
+The exact archive scan rejects runtime imports in every executable JS/Svelte visual file.
+After review corrections, runtime 440, UI 533 unit and 206 DOM tests pass; both package typechecks pass.
+Two complementary r2 source reviews approved the earlier implementation; the current corrections need review.
 These checks are technical evidence; GitHub CI completion and owner U0 remain separately recorded gates.
 
 Final unpublished candidate qualification at source head `2da73456f44a069905d7e2736ffd211b4a1b6e2d`:
