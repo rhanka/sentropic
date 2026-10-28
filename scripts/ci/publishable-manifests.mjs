@@ -33,6 +33,7 @@ export const BOOTSTRAP_TARGETS = [
 ];
 // Explicit full candidate pack lanes (`make pack-<slug>`).
 export const PACK_TARGETS = [
+  'chat-runtime',
   'cluster-mesh', 'llm-mesh', 'llm-gateway', 'chat-ui', 'cited-source-viewer', 'auth-hono', 'auth-client',
   'oauth-verify', 'mcp-auth', 'mcp-platform', 'auth-ui', 'cowork-bridge', 'cowork-desktop',
   'harness', 'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'flow', 'artifacts', 'skills', 'live-speech',

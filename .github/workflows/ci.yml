@@ -400,6 +400,7 @@ jobs:
               - 'packages/ubo-contracts/**'
             ui:
               - 'ui/**'
+              - 'packages/chat-runtime/**'
               - 'packages/chat-ui/**'
               - 'packages/cowork-desktop/**'
               - 'packages/cowork-bridge/**'
@@ -432,6 +433,7 @@ jobs:
               - 'Makefile'
               - 'package.json'
               - 'package-lock.json'
+              - 'packages/chat-runtime/**'
               - 'packages/chat-ui/**'
               - '.github/workflows/ci.yml'
             chat_ui_publish:
@@ -458,6 +460,7 @@ jobs:
               - 'package-lock.json'
               - 'packages/cowork-desktop/**'
               - 'packages/cowork-bridge/**'
+              - 'packages/chat-runtime/**'
               - 'packages/chat-ui/**'
               - '.github/workflows/ci.yml'
             cowork_desktop_publish:
@@ -933,6 +936,14 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Typecheck and test Chat Runtime
+        run: make typecheck-chat-runtime test-chat-runtime ENV=test-ci-chat-runtime
+      - name: Pack Chat Runtime
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-chat-runtime ENV=test-ci-chat-runtime
       - name: Typecheck Chat UI
         run: make typecheck-chat-ui
       - name: Test Chat UI
