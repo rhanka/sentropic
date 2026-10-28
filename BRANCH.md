@@ -59,7 +59,7 @@
 - [x] CI on earlier head `04bece0ed8e4266f759ad7dbc0c1f204abfc5627` passed: https://github.com/rhanka/sentropic/actions/runs/40619906074 . It does not qualify the later caller correction; the final pushed SHA must pass its own run before author delivery.
 - [ ] Integration gate: independent final-head reviews remain conductor-owned after this code-author draft delivery; no merge clearance is claimed.
 
-- [x] P1 retirement progress: 4 bounded removal commits; final deletion and qualification pending.
+- [x] P1 retirement progress: 5 bounded removal commits; final deletion and qualification pending.
 
 ## AI Flaky tests
 - [x] No AI-dependent acceptance or timeout increases.
