@@ -191,3 +191,143 @@ describe('chat-loop-controller: signature cache', () => {
     const comp1 = ctrl.getProjectedAssistantComputation(asst);
     // Second call — must return same object reference (cached)
     const comp2 = ctrl.getProjectedAssistantComputation(asst);
+
+    expect(comp1.segments).toStrictEqual(comp2.segments);
+    expect(comp1.linkedSteerCount).toBe(comp2.linkedSteerCount);
+  });
+
+  it('recomputes when new events are appended', () => {
+    const msgId = 'msg-cache-2';
+    const streamId = msgId;
+
+    const ctrl = createChatLoopController<Msg>();
+    const asst = assistantMsg(msgId, { _localStatus: 'processing' });
+    ctrl.setMessages([asst]);
+
+    // No events yet → segments empty
+    const comp1 = ctrl.getProjectedAssistantComputation(asst);
+    expect(comp1.segments).toHaveLength(0);
+
+    // Add an event
+    ctrl.appendProjectedLiveEvent(streamId, {
+      eventType: 'status',
+      sequence: 1,
+      data: { state: 'started' },
+    });
+
+    const comp2 = ctrl.getProjectedAssistantComputation(asst);
+    expect(comp2.segments.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3. subscribe() — store contract
+// ---------------------------------------------------------------------------
+describe('chat-loop-controller: subscribe()', () => {
+  it('emits current state immediately on subscribe', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const listener = vi.fn();
+    const unsub = ctrl.subscribe(listener);
+    expect(listener).toHaveBeenCalledTimes(1);
+    expect(listener.mock.calls[0][0].messages).toHaveLength(0);
+    unsub();
+  });
+
+  it('emits on setMessages', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const snapshots: number[] = [];
+    const unsub = ctrl.subscribe((s) => snapshots.push(s.messages.length));
+
+    ctrl.setMessages([userMsg('u1'), assistantMsg('a1')]);
+    expect(snapshots).toEqual([0, 2]);
+    unsub();
+  });
+
+  it('emits on appendProjectedLiveEvent and bumps projectionEventsVersion', () => {
+    const ctrl = createChatLoopController<Msg>();
+    ctrl.setMessages([assistantMsg('a1', { _streamId: 's1', _localStatus: 'processing' })]);
+
+    const versions: number[] = [];
+    const unsub = ctrl.subscribe((s) => versions.push(s.projectionEventsVersion));
+
+    ctrl.appendProjectedLiveEvent('s1', { eventType: 'status', sequence: 1, data: {} });
+    ctrl.appendProjectedLiveEvent('s1', { eventType: 'content_delta', sequence: 2, data: { delta: 'hi' } });
+
+    // versions[0] = initial, versions[1] after first event, versions[2] after second
+    expect(versions.length).toBe(3);
+    expect(versions[2]).toBe(2);
+    unsub();
+  });
+
+  it('unsubscribe stops future emissions', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const calls: number[] = [];
+    const unsub = ctrl.subscribe((s) => calls.push(s.messages.length));
+    unsub();
+    ctrl.setMessages([userMsg('u1')]);
+    // Only the initial emission before unsubscribe
+    expect(calls).toHaveLength(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. Event accumulation helpers
+// ---------------------------------------------------------------------------
+describe('chat-loop-controller: event accumulation', () => {
+  it('mergeHistoryEvents deduplicates by sequence and sorts ascending', () => {
+    const ctrl = createChatLoopController<Msg>();
+    ctrl.mergeHistoryEvents('msgA', [
+      { eventType: 'status', sequence: 1, data: {} },
+      { eventType: 'content_delta', sequence: 3, data: { delta: 'a' } },
+    ]);
+    ctrl.mergeHistoryEvents('msgA', [
+      { eventType: 'content_delta', sequence: 3, data: { delta: 'a-updated' } },
+      { eventType: 'done', sequence: 5, data: {} },
+    ]);
+
+    const events = ctrl.getSnapshot().initialEventsByMessageId.get('msgA')!;
+    expect(events).toHaveLength(3);
+    expect(events.map((e) => e.sequence)).toEqual([1, 3, 5]);
+    expect(events[1].data).toEqual({ delta: 'a-updated' });
+  });
+
+  it('appendProjectedLiveEvent does not add duplicate sequence', () => {
+    const ctrl = createChatLoopController<Msg>();
+    ctrl.appendProjectedLiveEvent('s1', { eventType: 'status', sequence: 1, data: {} });
+    ctrl.appendProjectedLiveEvent('s1', { eventType: 'status', sequence: 1, data: { extra: true } });
+
+    const events = ctrl.getSnapshot().projectedStreamEventsById.get('s1')!;
+    expect(events).toHaveLength(1);
+  });
+
+  it('clearProjectedEventsForStream removes only the target stream', () => {
+    const ctrl = createChatLoopController<Msg>();
+    ctrl.appendProjectedLiveEvent('s1', { eventType: 'status', sequence: 1, data: {} });
+    ctrl.appendProjectedLiveEvent('s2', { eventType: 'status', sequence: 1, data: {} });
+
+    ctrl.clearProjectedEventsForStream('s1');
+
+    expect(ctrl.getSnapshot().projectedStreamEventsById.has('s1')).toBe(false);
+    expect(ctrl.getSnapshot().projectedStreamEventsById.has('s2')).toBe(true);
+  });
+
+  it('resetProjectionState clears all maps and resets version to 0', () => {
+    const ctrl = createChatLoopController<Msg>();
+    ctrl.appendProjectedLiveEvent('s1', { eventType: 'status', sequence: 1, data: {} });
+    ctrl.mergeHistoryEvents('m1', [{ eventType: 'status', sequence: 1, data: {} }]);
+
+    ctrl.resetProjectionState();
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.projectedStreamEventsById.size).toBe(0);
+    expect(snap.initialEventsByMessageId.size).toBe(0);
+    expect(snap.projectionEventsVersion).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. Message mutations
+// ---------------------------------------------------------------------------
+describe('chat-loop-controller: message mutations', () => {
+  it('setMessages replaces the list', () => {
+    const ctrl = createChatLoopController<Msg>();
