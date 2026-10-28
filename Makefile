@@ -675,6 +675,11 @@ ci-build-ui-target:
 		--build-arg VITE_EXTENSION_APP_BASE_URL=$(VITE_EXTENSION_APP_BASE_URL_BUILD) \
 		--build-arg VITE_EXTENSION_WS_BASE_URL=$(VITE_EXTENSION_WS_BASE_URL_BUILD) .
 .PHONY: ci-test-ui
+.PHONY: ci-build-desktop
+ci-build-desktop: ci-test-env ## Independent embedded desktop producer (BR79-EX2)
+	@$(MAKE) package-desktop-windows ENV=$(ENV)
+	@test -s ui/static/cowork-desktop/cowork.exe && test -s ui/static/cowork-desktop/cowork-desktop-metadata.json
+
 ci-test-ui: ci-test-env
 	@docker buildx build --platform $(IMAGE_PLATFORM) --no-cache-filter=ui-tests \
 		$(if $(filter 1,$(CI_IMAGE_CACHE)),--cache-from type=gha$(comma)scope=br78-v1-ui-$(IMAGE_PLATFORM)) \
