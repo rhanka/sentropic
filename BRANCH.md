@@ -50,6 +50,7 @@
   - [ ] Stop and write exact Engram-owner request if a producer change is required; never promote a blocked profile.
 - [ ] **Lot E11b-1 — Package and tuple**
   - [ ] Pack dev.7 with standalone neutral declaration; bind slot 15 SHA-256 and derive neutralContract.status from slot 15.
+  - [x] Add build-time standalone C6 emission from tsc declarations; no external imports; expected SHA-256 5a8c13c5…773229, verified against dev.6 declaration with only its source-map comment removed.
   - [ ] Update installed-memory.mjs/qualification.mk to 0.21.3/dev.7, retain locks and installed receipt, qualify five profiles from zero-skip evidence.
   - [ ] Regenerate/check/test tuple, retain archive and SHA-256 in shared e10-artifacts; C9 request explicitly names dff737ce → dd0cccbd under 1.0.0.
 - [ ] **Lot E11b-2 — Validation and draft PR**

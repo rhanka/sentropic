@@ -44,11 +44,15 @@ case "$CM_ACTION" in
     "$tsc" --noEmit -p tsconfig.test.json ;;
   build)
     "$tsc" -p tsconfig.json
+    node tests/engram-memory/package-contract.mjs
     rm -rf /source/packages/cluster-mesh/dist
-    cp -R dist /source/packages/cluster-mesh/dist ;;
+    cp -R dist /source/packages/cluster-mesh/dist
+    mkdir -p /source/packages/cluster-mesh/contracts
+    cp contracts/engram-memory-neutral-contract-v1.d.ts /source/packages/cluster-mesh/contracts/ ;;
   test)
     if [ "${CM_SCOPE:-}" = tests/engram-memory/durable-memory.spec.ts ]; then
       "$tsc" -p tsconfig.json
+      node tests/engram-memory/package-contract.mjs
       consumer=$(mktemp -d)
       npm pack --loglevel error --pack-destination "$consumer" >/dev/null
       cp -R tests "$consumer/tests"
