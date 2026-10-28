@@ -1,4 +1,4 @@
-import { generateKeyPairSync, verify } from 'node:crypto';
+import { createHash, generateKeyPairSync, verify } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { authorizeRemoteAction, signRemoteAttestation } from '../../../src/services/auth/remote-authority';
 import { remoteSignedBytes } from '../../../src/services/auth/remote-contract';
@@ -52,6 +52,14 @@ describe('RC1 owner and consent predicate', () => {
   it('should keep permission response independent of input mode', () => {
     expect(() => authorizeRemoteAction({ ...authority, operation: 'permission-response',
       permissionMode: 'auto-approve' })).not.toThrow();
+  });
+  it.each([
+    ['input', ['remote.permission.respond']], ['permission-response', ['remote.input']],
+  ])('should refuse %s when only the other operation is consented', (operation, actionScopes) => {
+    const scopeDigest = createHash('sha256').update(JSON.stringify(actionScopes)).digest('hex');
+    expect(() => authorizeRemoteAction({ ...authority, operation,
+      consent: { ...authority.consent, actionScopes, scopeDigest } }))
+      .toThrowError(expect.objectContaining({ code: 'action_scope_refused' }));
   });
   it('should refuse tampered scope digests and source identities', () => {
     expect(() => authorizeRemoteAction({ ...authority,

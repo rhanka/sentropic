@@ -117,6 +117,36 @@ describe('RC1 D2 session evidence', () => {
     }
   });
 
+  it('should accept an acknowledged rotated key and refuse the old purpose ring', async () => {
+    const pair = generateKeyPairSync('ed25519');
+    const payload = decodeJwt(await setup().issue(request));
+    const token = await new SignJWT(payload).setProtectedHeader({ alg: 'EdDSA', kid: 'idp-2' }).sign(pair.privateKey);
+    const trust = { key: pair.publicKey, issuer: 'idp', kid: 'idp-2', audience: 'native-b',
+      tenantId: 'tenant-1', workspaceId: 'workspace-1', now, request, login };
+    await expect(verifyRemoteEvidence(token, trust)).resolves.toMatchObject({ sub: 'owner' });
+    await expect(verifyRemoteEvidence(token, { ...trust, key: keys.publicKey, kid: 'idp-1' }))
+      .rejects.toMatchObject({ code: 'authority_refused' });
+  });
+
+  it('should refuse captured jti replay through the injected native verifier fake after restart', async () => {
+    const evidence = await setup().issue(request);
+    const consumed = new Set<string>();
+    const nativePort = () => ({ async verifyAndConsume(token: string, intent: typeof request) {
+      const proof = await verifyRemoteEvidence(token, { key: keys.publicKey, issuer: 'idp', kid: 'idp-1',
+        audience: 'native-b', tenantId: 'tenant-1', workspaceId: 'workspace-1', now, request: intent, login });
+      if (consumed.has(proof.jti)) throw Object.assign(new Error('replay_refused'), { code: 'replay_refused' });
+      consumed.add(proof.jti);
+      return proof.actionId;
+    } });
+    await expect(nativePort().verifyAndConsume(evidence, request)).resolves.toBe(request.actionId);
+    await expect(nativePort().verifyAndConsume(evidence, request)).rejects.toMatchObject({ code: 'replay_refused' });
+    const next = { ...request, actionId: 'BBBBBBBBBBBBBBBBBBBBBA' };
+    const replay = await new SignJWT({ ...decodeJwt(evidence), actionId: next.actionId })
+      .setProtectedHeader({ alg: 'EdDSA', kid: 'idp-1' }).sign(keys.privateKey);
+    await expect(nativePort().verifyAndConsume(replay, next)).rejects.toMatchObject({ code: 'replay_refused' });
+    expect(consumed.size).toBe(1);
+  });
+
   it.each([
     { iss: 'other-idp' }, { sub: 'other-owner' }, { sid: 'other-login' }, { sessionVersion: 2 },
     { aud: 'other-native' }, { amr: ['pwd'] }, { auth_time: now / 1000 }, { jti: '' },
