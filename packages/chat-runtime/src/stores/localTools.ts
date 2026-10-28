@@ -38,7 +38,7 @@
  */
 import { writable } from 'svelte/store';
 
-import type { LocalToolsAdapter } from '../hosts/types.js';
+import type { LocalToolsAdapter } from '@sentropic/chat-ui/hosts/types';
 
 /**
  * Closed set of local tool names shipped by sentropic (Chrome tab tools +
