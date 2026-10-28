@@ -77,7 +77,7 @@ async function currentPolicy(client: PoolClient, pool: Pool, namespace: string,
   // Session expiry is evaluated last, after every object/pointer/ACL/membership wait.
   const authority = createArtifactAuthorization({ pool, workspaceId: session.workspaceId, storageScopeId: namespace,
     identity: { subject: session.subjectId, tenantId: session.tenantId, clientId: ARTIFACT_SESSION_CLIENT,
-      credentialId: session.sessionId }, currentIdentity: createArtifactCredentialReader({ kind: 'session', resource: '' }) });
+      credentialId: session.sessionId }, currentIdentity: createArtifactCredentialReader({ kind: 'session', resource: '', jkt: null }) });
   const current = await authority.currentOn(artifactReadClient(client));
   return current.readable ? digest(JSON.stringify([current.revision, artifact.rows[0].revision, grants.rows, pointerRevision])) : undefined;
 }

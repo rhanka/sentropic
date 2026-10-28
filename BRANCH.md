@@ -42,6 +42,7 @@
   - [x] Record BRW3A-EXn reason, impact and rollback before any scope extension.
 
 ## Feedback Loop
+- [x] Local second campaign: 136/136 tests across nine suites, including all 16 imported PG vectors, pass (`/tmp/w3a-suite-2.log`). Typecheck identifies the required session credential `jkt: null`; supply it explicitly without changing session behavior.
 - [x] Resources regression inventory must declare the additive reader path: first campaign failed its exact path assertion. Bounded test-only scope extension; no namespace author or resource verb changes.
 - [x] First campaign reproduces the stable A-to-B-to-A gap. Bind the stable pointer row revision into the existing policy fence; pinned releases retain their immutable-release policy.
 - [x] BRW3A-EX1 — exact-head CI is required; ci.yml excludes the app integration base. Add only `.github/workflows/app-cm-w3a.yml`, following W1.c's isolated qualification workflow. Impact: branch-only tests/typecheck/lint, no publish/deploy. Rollback: remove this workflow.
