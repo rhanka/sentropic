@@ -15,6 +15,7 @@ export const createDecisionAdmission = (database: LedgerDatabase, cost: CostCont
         if (Date.now() >= input.deadlineAt) return { ok: false, code: 'BUDGET_UNAVAILABLE' };
         const descriptor = descriptors.find((item) => evaluatorKey(item.evaluator) === key);
         const price = input.quote.price;
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${input.evaluator.providerId}), hashtext(${price.modelId}))`);
         const current = await loadPricing(tx, input.evaluator.providerId, price.modelId, new Date());
         if (!descriptor || !current || current.id !== price.priceRevision
           || current.input.toString() !== price.inputMicroUsdPerMtok || current.output.toString() !== price.outputMicroUsdPerMtok
@@ -32,9 +33,10 @@ export const createDecisionAdmission = (database: LedgerDatabase, cost: CostCont
         } });
         if (admitted.kind !== 'admitted') return { ok: false,
           code: admitted.kind === 'over-budget' ? 'BUDGET_EXHAUSTED' : 'BUDGET_UNAVAILABLE' };
-        const [hold] = (await tx.execute(sql`SELECT liability_micro_usd FROM control.budget_holds
-          WHERE id = ${admitted.holdRef}`)).rows as Array<{ liability_micro_usd: string }>;
-        if (!hold || String(hold.liability_micro_usd) !== input.quote.reservedMicroUsd) {
+        const [hold] = (await tx.execute(sql`SELECT liability_micro_usd, pricing_versions FROM control.budget_holds
+          WHERE id = ${admitted.holdRef}`)).rows as Array<{ liability_micro_usd: string; pricing_versions: string[] }>;
+        if (!hold || String(hold.liability_micro_usd) !== input.quote.reservedMicroUsd
+          || hold.pricing_versions.length !== 1 || hold.pricing_versions[0] !== price.priceRevision) {
           throw new Error('Decision liability mismatch');
         }
         await tx.execute(sql`INSERT INTO control.decision_calls
@@ -49,12 +51,19 @@ export const createDecisionAdmission = (database: LedgerDatabase, cost: CostCont
       return await decisionTransaction(database, async (tx): Promise<DecisionDispatchResult> => {
         const key = evaluatorKey(input.evaluator);
         const enabled = await lockDecisionEvaluator(tx, key);
+        const descriptor = descriptors.find((item) => evaluatorKey(item.evaluator) === key);
+        if (!descriptor) return { ok: false, code: 'PROVIDER_UNAVAILABLE', provenUnsent: false };
+        await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${input.evaluator.providerId}), hashtext(${descriptor.wireModel}))`);
         const hold = await lockDecisionHold(tx, cost, input.holdId, input.callId);
         if (hold.evaluator_key !== key) return { ok: false, code: 'PROVIDER_UNAVAILABLE', provenUnsent: false };
         if (!enabled) return { ok: false, code: 'PROVIDER_UNAVAILABLE',
           provenUnsent: hold.status === 'held' && hold.dispatch_started_at === null };
         if (hold.status !== 'held' || Date.now() >= Math.min(input.deadlineAt, new Date(hold.deadline_at).getTime())) {
           return { ok: false, code: 'BUDGET_UNAVAILABLE', provenUnsent: hold.status === 'held' };
+        }
+        const price = await loadPricing(tx, input.evaluator.providerId, descriptor.wireModel, new Date());
+        if (!price || price.id !== descriptor.priceProtocol.revision || !hold.pricing_versions.includes(price.id)) {
+          return { ok: false, code: 'BUDGET_UNAVAILABLE', provenUnsent: true };
         }
         await tx.execute(sql`UPDATE control.budget_holds SET status = 'dispatched', dispatch_started_at = now(),
           dispatched_attempts = 1, fence = fence + 1, updated_at = now() WHERE id = ${input.holdId}`);
