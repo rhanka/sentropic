@@ -39,7 +39,7 @@
 
 ## Feedback Loop
 - [x] BR78-EX1 authorized by owner packet: producers and image consumers need persistent caches and verified transport. Impact: artifact production/loading; gate dependencies and blocking power retained. Rollback: revert workflow transport/cache hunks and invalidate br78 cache scopes.
-- [x] BR78-EX2 authorized by owner packet: Make image cache/build/save/load recipes, API_TOOL_VERSION and receipt tests. Impact: named image entry points only. Rollback: revert recipes and requalify previous artifacts; never bypass identity or runtime checks.
+- [x] BR78-EX2 authorized by owner packet: Make image cache/build/save/load recipes, API_TOOL_VERSION and receipt tests. Lightweight Node receipt CLI in CI avoids downloading a compiler/browser image just to hash bytes. Impact: named image entry points only. Rollback: revert recipes and requalify previous artifacts; never bypass identity or runtime checks.
 - [x] BR77 timing remains open: capacity.md requires first actual-main attempt and strict PR/main ≤2288s proof; green correctness alone does not qualify timing. BR78 does not close BR77 acceptance.
 - [ ] Record every real run ID/attempt/SHA, job duration, queue/cache state, failure, retry and budget breach.
 

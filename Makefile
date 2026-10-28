@@ -613,6 +613,10 @@ api-tool-version: ## Print the content-addressed CI toolbox tag
 test-ci-api-tooling: ci-test-env ## Regress toolbox references, cache fallback logs and hash inputs
 	@bash scripts/test-api-tooling.sh $(or $(CI_TOOLING_CASE),all)
 
+.PHONY: test-ci-image-receipts
+test-ci-image-receipts: ci-test-env ## Reject incorrect source, workflow, archive and loaded-image identities
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/image-receipt.test.mjs
+
 .PHONY: test-ci-api-tool-runtime
 test-ci-api-tool-runtime: ci-test-env ## Verify npm runners and rebuilt esbuild Node interfaces
 	@docker run --rm $(API_TOOL_IMAGE) node -e 'const {execFileSync}=require("node:child_process"); execFileSync("npm",["--version"],{stdio:"inherit"}); execFileSync("npx",["--no-install","vitest","--version"],{stdio:"inherit"}); for(const path of ["/workspace/node_modules/esbuild","/workspace/node_modules/@esbuild-kit/core-utils/node_modules/esbuild"]){const tool=require(path); const result={exports:null}; new Function("module",tool.transformSync("module.exports = 6 * 7 as number",{loader:"ts"}).code)(result); if(result.exports!==42)throw Error("esbuild transform failed: "+path); console.log("PASS: esbuild",tool.version,"TypeScript transform and Node protocol");}'
