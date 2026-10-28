@@ -10,23 +10,23 @@ export type {
   CheckpointSummaryLike,
   CheckpointMessageLike,
   CheckpointStreamEventLike,
-} from './classifier.js';
+} from '@sentropic/chat-runtime/checkpoints/classifier';
 
 export {
   hasCheckpointMutationDelta,
   getCheckpointMutationPreviewItems,
-} from './classifier.js';
+} from '@sentropic/chat-runtime/checkpoints/classifier';
 
 export type {
   CheckpointItem,
   PendingCheckpointPrompt,
-} from './checkpointState.js';
+} from '@sentropic/chat-runtime/checkpoints/checkpointState';
 
 export {
   applySessionCheckpoints,
   getCheckpointForUserMessage,
   openCheckpointPrompt,
-} from './checkpointState.js';
+} from '@sentropic/chat-runtime/checkpoints/checkpointState';
 
 /**
  * Checkpoint represents a minimal checkpoint record as understood by the module.
