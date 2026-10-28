@@ -72,7 +72,7 @@ export function runtimeRefusalViolations(probe: Probe, entries: readonly string[
   for (const entry of entries) topology(entry, probe.entries[entry]);
   const load = probe.load;
   if (typeof load !== 'object' || load.code !== 'cluster_mesh_module_unavailable' || load.reason !== 'incompatible_version'
-    || load.packageName !== '@sentropic/llm-gateway' || load.requiredRange !== '>=0.19.0 <0.22.0'
+    || load.packageName !== '@sentropic/llm-gateway' || load.requiredRange !== '>=0.19.0 <0.23.0'
     || !tuple.gateway.test(load.installedVersion ?? '')) {
     out.push(`load('gateway') not refused with incompatible_version: ${JSON.stringify(load)}`);
   }

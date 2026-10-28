@@ -795,7 +795,14 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-llm-gateway ENV=test-ci-llm-gateway
+        run: make pack-llm-gateway PACK_DESTINATION=tmp/ci-manifest-guard/candidate/llm-gateway ENV=test-ci-llm-gateway
+      - name: Upload verified LLM Gateway candidate
+        uses: actions/upload-artifact@v4
+        with:
+          name: llm-gateway-candidate
+          path: tmp/ci-manifest-guard/candidate/llm-gateway/*.tgz
+          retention-days: 7
+          if-no-files-found: error
 
   validate-chat-ui:
     runs-on: ubuntu-latest
@@ -1423,6 +1430,9 @@ jobs:
           COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
           TAVILY_API_KEY: ${{ secrets.TAVILY_API_KEY }}
           MUSE_API_KEY: ${{ secrets.MUSE_API_KEY }} # BR75-EX4
+      - name: Test API gateway package version evidence
+        if: matrix.suite == 'unit'
+        run: make test-api-unit SCOPE=tests/unit/gateway-package-version.test.ts ENV=test-ci-api
       - name: Test API (${{ matrix.suite }})
         run: |
           if [ "${{ matrix.suite }}" = "endpoints" ]; then
