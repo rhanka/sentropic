@@ -28,7 +28,7 @@ export function decodeJevResponse(candidate: unknown, request: DecisionRequest, 
   const usage = parseDecisionUsage({ tokens: { input: token(input), output: token(output),
     total: total === null ? token(null) : { value: total, source: 'derived-sum' } },
     evaluatorCalls: answered ? 1 : null, explanations: answered ? 0 : null }) ?? unreportedDecisionUsage('unknown');
-  const identityMatches = servedModelId !== null && descriptor.qualification.servedIdentity === 'qualified'
+  const identityMatches = servedModelId !== null
     && descriptor.acceptedServedModelIds.includes(servedModelId);
   const evidence = { usage, servedModelId, servedEvaluator: identityMatches ? { ...descriptor.evaluator } : null,
     ...(providerRequestId === null ? {} : { providerRequestId }) };
@@ -38,7 +38,11 @@ export function decodeJevResponse(candidate: unknown, request: DecisionRequest, 
     return { ok: false, error: createDecisionError('USAGE_INVALID', 'parse'), ...evidence };
   }
   if (!answered) return { ok: false, error: createDecisionError('VERDICT_INVALID', 'parse'), ...evidence };
-  const verdict = decodeJevVerdict((body.answers as Record<string, unknown>).verdict, request, descriptor);
+  const answer = (body.answers as Record<string, unknown>).verdict;
+  if (!isRecord(answer) || !has(answer, 'type')) {
+    return { ok: false, error: createDecisionError('VERDICT_INVALID', 'parse'), ...evidence };
+  }
+  const verdict = decodeJevVerdict(answer, request, descriptor);
   return verdict.ok ? { ok: true, verdict: verdict.verdict, ...evidence }
     : { ok: false, error: createDecisionError(verdict.code, 'parse'), ...evidence };
 }

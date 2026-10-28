@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createRemoteDecisionClient as createClient } from '../src/decision/client.js';
 import { createDecisionService } from '../src/decision/service.js';
+import { decisionWireFixture } from './decision-wire-fixtures.js';
+import { productionFixture } from './decision-production-fixtures.js';
 import { decisionRequest, decisionServiceFixture, qualifiedDescriptor, trustedNativeContext } from './decision-fixtures.js';
 const createRemoteDecisionClient: typeof createClient = (options) =>
   createClient({ validationContext: ((snapshot) => trustedNativeContext(snapshot)) as never, ...options });
@@ -45,10 +47,9 @@ const choiceVerdict = () => ({
 
 const rawBytes = (data: unknown) => new TextEncoder().encode(JSON.stringify(data)).byteLength;
 
-/** Serve a real service result through the remote client over a JSON wire. */
+/** Exercise the production wire codec with explicitly fabricated evidence. */
 const roundTrip = async (request: DecisionRequest) => {
-  const service = createDecisionService(decisionServiceFixture().options);
-  const served = await service.decide(request);
+  const served = await decisionWireFixture(request);
   const fetch = vi.fn(async () => new Response(JSON.stringify(served),
     { status: 200, headers: { 'content-type': 'application/json' } }));
   const client = createRemoteDecisionClient({ baseUrl: 'https://mesh.internal',
@@ -923,10 +924,10 @@ describe('remote decision client', () => {
   });
 
   it('retains non-retryable timeout across service-to-client round trip when admitted liability is pending reconciliation', async () => {
-    const f = decisionServiceFixture();
+    const f = productionFixture();
     f.transport.send.mockImplementationOnce(() => new Promise(() => {}));
     const service = createDecisionService({ ...f.options, policy: { timeoutMs: 5 } });
-    const request = decisionRequest({ correlationId: 'rt-pending-timeout', policy: { timeoutMs: 5 } });
+    const request = { ...f.request, correlationId: 'rt-pending-timeout', policy: { timeoutMs: 5 } };
     const served = await service.decide(request);
     expect(served).toMatchObject({
       kind: 'error', ok: false,
