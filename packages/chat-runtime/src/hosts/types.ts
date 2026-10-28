@@ -20,3 +20,10 @@ export interface LocalToolsAdapter {
    */
   sendMessage?: (message: unknown) => Promise<{
     ok?: boolean;
+    result?: unknown;
+    error?: string;
+    permissionRequest?: unknown;
+    items?: unknown;
+    item?: unknown;
+  }>;
+}
