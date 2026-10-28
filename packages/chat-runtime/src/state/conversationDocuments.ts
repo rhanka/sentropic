@@ -1,4 +1,5 @@
-import type { ChatComposerAttachmentDraft, DocumentHost } from '@sentropic/chat-ui/documents';
+import type { ChatComposerAttachmentDraft } from '@sentropic/chat-ui/documents';
+import type { DocumentHost } from '../documents/host.js';
 import type { ChatSessionRuntime } from './chatSessionRuntime.js';
 
 /** Retain upload inputs and owned preview URLs with the session, never with a view. */
