@@ -1,0 +1,39 @@
+# Explicit local opt-in only; neither provisioning nor inference is a CI prerequisite.
+KEV_CACHE := $(abspath $(shell git rev-parse --git-common-dir)/../tmp/cache/decision-v4l4)
+.PHONY: decision-kev-provision decision-kev-smoke
+decision-kev-provision:
+	@test "$(ENV)" = test-decision-l4 && test -z "$$CI" && test -z "$$GITHUB_ACTIONS"
+	@flock /home/antoinefa/.cache-tmp/sentropic-docker.lock bash scripts/decision/kev-provision.sh "$(KEV_CACHE)"
+decision-kev-smoke:
+	@test "$(ENV)" = test-decision-l4 && test -z "$$CI" && test -z "$$GITHUB_ACTIONS"
+	@flock /home/antoinefa/.cache-tmp/sentropic-docker.lock bash scripts/decision/kev-smoke.sh "$(KEV_CACHE)"
+
+.PHONY: decision-kev-smoke-client
+decision-kev-smoke-client:
+	@test "$(ENV)" = test-decision-l4 && test -z "$$CI" && test -z "$$GITHUB_ACTIONS"
+	@docker run --rm --network host -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e KEV_CACHE_HOST -e KEV_VERIFY_ONLY \
+		-v "$(CURDIR):/workspace:ro" -v "$(KEV_CACHE):/kev-cache" -v /proc:/kev-host-proc:ro \
+		-w /workspace $(LLM_MESH_NODE_IMAGE) node scripts/decision/kev-smoke.mjs
+
+.PHONY: decision-kev-verify-provenance
+decision-kev-verify-provenance:
+	@test "$(ENV)" = test-decision-l4 && test -z "$$CI" && test -z "$$GITHUB_ACTIONS"
+	@flock /home/antoinefa/.cache-tmp/sentropic-docker.lock bash scripts/decision/kev-attestation.sh "$(KEV_CACHE)"
+
+.PHONY: decision-kev-lock-root decision-kev-lock-check
+decision-kev-lock-root:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) \
+		npm install --package-lock-only --workspaces --include-workspace-root --ignore-scripts --no-audit --no-fund
+decision-kev-lock-check:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) \
+		sh -ec 'probe="$$(mktemp -d)"; mkdir -p "$$probe/api" "$$probe/ui" "$$probe/packages/cluster-mesh" "$$probe/packages/llm-mesh"; \
+		cp package.json package-lock.json "$$probe/"; for package in api ui packages/cluster-mesh packages/llm-mesh; do cp "$$package/package.json" "$$probe/$$package/"; done; \
+		cd "$$probe"; npm ci --dry-run --workspaces --include-workspace-root --ignore-scripts --no-audit --no-fund'
+
+.PHONY: decision-kev-freeze-train
+decision-kev-freeze-train:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) node scripts/decision/kev-freeze-train.mjs
+

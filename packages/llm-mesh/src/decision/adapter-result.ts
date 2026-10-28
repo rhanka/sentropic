@@ -95,13 +95,14 @@ export function parseDecisionAdapterResult(candidate: unknown, request: Decision
       score: structuredClone(verdict.score), decision: structuredClone(verdict.decision), label: structuredClone(verdict.label),
       rationale: null, confidence: structuredClone(verdict.confidence), distribution: structuredClone(verdict.distribution) }, ...evidence };
   }
-  if ((descriptor.protocol ?? 'jev-native') !== 'jev-native') {
+  if ((descriptor.protocol ?? 'jev-native') !== 'jev-native' && descriptor.protocol !== 'systemone-local') {
     const closed = parseStructuredHostVerdict(value.verdict, request, descriptor);
     if (!closed) return failed('VERDICT_INVALID');
     return { ok: true, verdict: closed.verdict, ...evidence };
   }
   const encoded = encodeJevRequest(request, descriptor);
   const verdict = value.verdict;
+  if (descriptor.protocol === 'systemone-local' && isRecord(verdict) && Object.hasOwn(verdict, 'providerRaw')) return failed('VERDICT_INVALID');
   if (!encoded.ok || !isRecord(verdict)) return failed('VERDICT_INVALID');
   let native: unknown;
   if (encoded.criterion.kind === 'binary') {

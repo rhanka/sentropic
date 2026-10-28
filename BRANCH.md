@@ -1,96 +1,102 @@
-# Feature: Freeze the chat migration contract (P0)
+# Feature: Decision V4-L4 Kev native local candidate
 
 ## Objective
-- [ ] Freeze the approved P0 behavior, ownership, consumer and styling contract without changing implementation.
-- [x] Source: approved 2026-10-28 plan, SHA-256 `daf1d8373fa0eaedc3514c452e8161cd597b9c3a749772ca94334e5cede08790`; Opus r2 APPROVE.
+- [x] Implement owner-selected Kev Q8_0 through a fixed local System One transport in `@sentropic/llm-mesh/decision`.
 
 ## Scope / Guardrails
-- [x] Documentation only under `spec/`; branch execution checklist in `BRANCH.md`.
-- [x] Branch `feat/chat-convergence-p0` from `origin/main`; worktree `tmp/worktrees/chat-p0`.
-- [x] Base `ea20bd9c026e9717d911514e763f8911b6981dde`; no runtime, UI, dependency, release or data change.
-- [x] Make-only commands; `ENV=test-chat-p0` last; no containers or port allocation required.
-- [x] Root workspace and its uncommitted Track state remain untouched.
-- [x] Atomic commits of at most 150 changed lines via `make commit`; selective staging; no AI trailers.
-- [x] Merge only if integration becomes necessary; never rebase; deliver a draft PR without merging.
-- [x] All new documentation, commit and PR text in English.
-- [x] Owner tests, UAT GO, transfer GO and npm authorization remain separate gates.
+- [x] Owner decision 2026-10-28: L4-A, local native llama.cpp; no Python.
+- [x] Branch `feat/decision-v4l4`, base `origin/main`, worktree `tmp/worktrees/decision-v4l4`.
+- [x] Make-only; shared Docker flock `/home/antoinefa/.cache-tmp/sentropic-docker.lock` for containers, downloads and inference.
+- [x] `ENV=test-decision-l4` last; API_PORT=8797 UI_PORT=5197 MAILDEV_UI_PORT=1097; teardown after campaigns.
+- [x] Store model once in ignored `tmp/cache/decision-v4l4` in the primary checkout; delete nothing else.
+- [x] Runtime hosting outside library; fixtures in default CI; no model download or inference by default.
+- [x] Atomic commits at most 150 lines; make commit; no trailers; merge only, never rebase.
+- [x] Draft PR to main; retain BRANCH.md; verify completed successful CI on exact head.
 
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**:
-  - [x] `BRANCH.md`
-  - [x] `spec/CHAT_MIGRATION_P0*.md`
+  - `BRANCH.md`
+  - `packages/llm-mesh/src/decision/**`
+  - `packages/llm-mesh/src/transport/systemone-local.ts`
+  - `packages/llm-mesh/tests/decision-kev*.ts`
+  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
+  - `packages/llm-mesh/package.json`
+  - `packages/llm-gateway/package.json`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/src/modules/catalog.ts`
+  - `packages/cluster-mesh/tests/fixtures/train.ts`
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
+  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
+  - `packages/cluster-mesh/tests/speech-peer.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package*.json`
+  - `package-lock.json`
+  - `scripts/decision/**`
+  - `spec/decision/kev-v4l4-candidate.md`
 - [x] **Forbidden Paths (must not change in this branch)**:
-  - [x] `Makefile`
-  - [x] `docker-compose*.yml`
-  - [x] `.cursor/rules/**`
-  - [x] `plan/**`
-  - [x] `packages/**`
-  - [x] `ui/**`
-  - [x] `api/**`
-  - [x] `.github/**`
-  - [x] `.track/**`
-  - [x] Receiving DS repository (read-only evidence).
-- [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [x] None authorized; a newly required path needs a bounded `BRP0-EXn` first.
-- [x] **Exception process**:
-  - [x] Record rationale, impact and rollback in Feedback Loop before any exception edit.
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `.track/**`
+  - `plan/**`
+- [x] **Conditional Paths (allowed only with explicit exception)**:
+  - `Makefile` under BR04-EX1 only.
+  - `.github/workflows/**` remains unchanged.
+- [x] **Exception process**: declare rationale, impact and rollback before edits.
 
 ## Feedback Loop
-- [x] `BRP0-N1` clarification: P0 documents a proposed C-03 amendment; only DS may edit its contract.
-- [x] `BRP0-N2` clarification: the plan author/reviewer evidence does not acknowledge this new contract for either domain maintainer.
-- [x] `BRP0-N3` clarification: inventory and draft PR are authorized; no owner UAT or transfer approval is inferred.
-- [x] `BRP0-N4` clarification: local scope gate uses installed host harness through an external make overlay and skips `build-harness`; no tracked Makefile edit or Docker needed.
-- [x] `BRP0-R1` acknowledge: boundary review APPROVE; clarify scope refinements versus approved summary, and split mixed DOM/stream-fixture test custody (conductor refresh before P1).
-- [x] `BRP0-R2a` acknowledge: broaden consumer census to all case-insensitive chat-ui references; add CI manifests/wiring, E2E storage/regressions and retained historical mentions.
-- [x] `BRP0-R2b` acknowledge: all 125 selector locations now identify the first selector token; both atomic correction slices complete.
-- [x] `BRP0-R2c` acknowledge: inventory the semicolon hover-variant directive separately from CSS selector blocks.
-- [x] `BRP0-R3` acknowledge: both final independent review legs APPROVE on 64521846e; receipt/checklist-only handoff follows.
-- [x] `BRP0-PR816-R1` resolve: replace human-effort figures and dependent references with lot scope, order and dependencies per the owner's 2026-10-28 rule; align PR body and qualification comment.
-- [ ] `BRP0-ACK` attention: DS/Sentropic/architect co-freeze and conductor Track trace remain external acceptance; no acknowledgement manufactured.
+- [x] BR04-EX1 (Makefile): include `scripts/decision/kev-local.mk` for explicit opt-in local targets; no default dependency; rollback removes include and targets.
+- [x] Track single writer: update this source artifact only; conductor owns sidecar import.
+- [ ] Independent peer review awaits owner permission required by `rules/subagents.md`; no agents launched and no consensus claimed.
+- [x] Native smoke attempt 1 stopped in local inventory verification before POST; diagnose custody without inference, then use the two remaining smoke attempts for binary/choice; graded remains fixture-covered.
+- [x] Source LFS tuple verified 2026-10-28: selected revision/file, 4483801504 bytes, SHA-256 7c2ebed90560522c2801389db482ac1dc4c36d828f201f6074c1d60e433948da; model card Apache-2.0.
+- [x] Upstream archive distribution attestation cryptographically verified with pinned GitHub CLI 2.103.3; publication workflow provenance recorded separately from unverified compilation reproducibility.
+- [x] CI install regression resolved: gateway/cluster compatibility, guards and train fixtures admit additive mesh 0.32; root lock and exact UI Docker manifest subset pass npm ci dry-run. Gateway 1370 tests and cluster 1225 tests pass; frozen lock binds actual candidate archives. Rollback restores this compatibility tuple with the mesh bump.
 
 ## AI Flaky tests
-- [x] Not applicable: no application tests changed or executed; no flaky acceptance requested.
+- [x] No flaky acceptance or timeout increase planned; protocol failures block completion.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch**: one documentation author; independent review is read-only; no cherry-pick.
-- [ ] **Multi-branch**: not required for this single lot.
-- [x] Rationale: one approved P0 contract with several evidence appendices.
+- [x] Mono-branch; author implements; independent peers review the completed diff.
+- [ ] Multi-branch.
 
 ## UAT Management (in orchestration context)
-- [x] Web, Chrome and VSCode behavior unchanged; P0 UAT is documentary inspection.
-- [x] Future U0 retains the owner's personal tests on exact integrated artifacts and two verbatim GO decisions.
+- [x] Library-only surface; no web, Chrome or VSCode UAT required.
+- [x] Local native smoke evidence and fixture receipt verification passed; binary/choice receipts verified; graded fixture coverage.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read project rules, template, approved plan and r2 review; verify plan hash.
-  - [x] Create isolated branch/worktree and mechanically check its exact branch with harness.
-  - [x] Record documentation-only environment, scope and existing source baseline.
-- [x] **Lot P0a — Inventory and classify**
-  - [x] Enumerate 125 global CSS selector blocks affecting chat and inherited host styling.
-  - [x] Inventory all package files/exports, consumers, styling overrides and app widget snippets.
-  - [x] Record appendix: symbols inventory.
-  - [x] Record appendix: edges inventory.
-  - [x] Record appendix: consumers inventory.
-  - [x] Record appendix: support inventory.
-  - [x] Record appendix: exports inventory.
-  - [x] Record appendix: sources inventory.
-  - [x] Assign reusable visual, Sentropic runtime or justified host responsibility to every path.
-  - [x] Build behavior/owner/test matrix and transitive runtime relocation map.
-- [ ] **Lot P0b — Reconcile and freeze**
-  - [x] Reconcile ECOSYSTEM, TURNKEY, SURFACES, PLAN_CHAT_SURFACES, AGENTS_SURFACE and #602/UAT-1.
-  - [x] Inspect published DS theme/Drawer artifacts and name canonical DS chat primitives; assign missing DropZone to F15.
-  - [x] Record all section 6 conductor defaults and owner-held gates without impersonating owner decisions.
-  - [x] Integrate r2 notes: runtime package/semver break, proposed C-03 owner/copy changes, M1b release dependency, physical-split scope and dependencies.
-  - [x] Record domain acknowledgement state and bounded next-owner acceptance criteria.
-  - [ ] Obtain domain co-freeze acknowledgements and conductor Track trace on the same contract revision.
-- [ ] **Lot P0c — Final validation and draft PR**
-  - [x] Validate exhaustive inventories against the pinned source; inspect every diff hunk.
-  - [x] Verify whitespace and allowed paths; mechanically check branch/scope before each commit.
-  - [x] Independent contract/evidence reviews and finding reconciliation; final 2/2 APPROVE.
-  - [x] Create draft PR to `main`, body from this checklist, with execution-plan comment (PR #816).
-  - [ ] Push and verify CI completed/success on exact final head; report PR and full SHA.
-  - [x] Commit the qualification receipt; exact final-head CI completion is recorded externally in the PR after the last push.
-  - [x] API/UI/E2E test files: none changed; documentation-only checks plus repository CI qualify P0.
-  - [x] No package version bump required; no `packages/*/src/**` changes.
-  - [x] No Docker lifecycle required; no containers started.
-  - [x] Keep `BRANCH.md` for draft review; deletion/merge is outside this delivery.
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read rules, V4 spec, dossier and merged L3/L5 contracts; harness branch check passed.
+  - [x] Confirm published mesh version 0.31.0; feature bump will be 0.32.0.
+- [x] **Lot 1 — Immutable runtime and artifact manifest**
+  - [x] Pin upstream native CPU release/source/archive; verify provenance, licence and model LFS source before use.
+  - [x] Add opt-in Make provisioning target; one shared cache; verified native archive contents.
+- [x] **Lot 2 — Inventory and descriptor**
+  - [x] Bind file, revision, bytes, quantization, runtime archive/readout and compilation into evaluator definition.
+  - [x] Keep shipped candidate unqualified; explicit local qualification composition only.
+- [x] **Lot 3 — Fixed local transport**
+  - [x] Verify host inventory and single served native model before/after one System One POST.
+  - [x] Bound request, response, timeout and cancellation; reject redirects and identity gaps without replay; explicit positive local call-rate tariff.
+- [x] **Lot 4 — Native adapter and host exports**
+  - [x] Compile typed binary/choice/graded questions and validate pinned native output, independent usage and identity.
+  - [x] Preserve host allowlist, receipt, budget and qualification gates; no general chat registration.
+- [x] **Lot 5 — Fixture acceptance**
+  - [x] `packages/llm-mesh/tests/decision-kev-inventory.test.ts`: P26 wrong file/revision/hash/runtime and P27 execution changes.
+  - [x] `packages/llm-mesh/tests/decision-kev-transport.test.ts`: fixed endpoint, identity, redirects, bounds, cancellation.
+  - [x] `packages/llm-mesh/tests/decision-kev-routing.test.ts`: P28 no egress, native kinds and served-model receipt.
+  - [x] Scoped make test-llm-mesh passed all 38 Kev fixtures; public feature-version assertion updated for 0.32.0.
+- [x] **Lot 6 — Local native qualification**
+  - [x] Download exact selected model once; validate all bytes and pinned runtime before inference.
+  - [x] Three attempted calls total: one inventory refusal before POST, then binary/choice successes; receipts, 4.45 GiB RSS and cache recorded in spec; native process stopped and make down completed.
+  - [x] Report calibration/production limits separately from protocol evidence.
+- [x] **Lot 7 — Documentation and publication**
+  - [x] Consolidate manifest, provenance gaps, bounded cost plan and runtime update/rollback in `spec/decision/kev-v4l4-candidate.md`.
+  - [x] Bump mesh package and lock to 0.32.0, above npm published version 0.31.0 verified 2026-10-28.
+- [ ] **Lot 8 — Final validation and draft PR**
+  - [x] Compatibility gate: cluster catalog/train/registry/topology fixtures and selected consumer lock follow mesh 0.32, gateway 0.22.2, cluster 0.23.5; typecheck/tests for both consumers and Docker install subset dry-run pass.
+  - [x] make typecheck-llm-mesh, lint-llm-mesh, test-llm-mesh (90 files / 1569 tests), build-llm-mesh under flock.
+  - [ ] Two-peer review; reconcile findings and verify final scope.
+  - [x] Draft PR #820 opened to main with this plan as body; first comment records execution steps and local evidence.
+  - [ ] Exact-head CI completed/success; report PR URL and head; leave draft unmerged.
