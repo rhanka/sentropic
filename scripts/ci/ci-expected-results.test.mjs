@@ -56,7 +56,7 @@ test('should keep validators independent without static capacity mutexes', () =>
   const validators = Object.entries(workflow.jobs).filter(([name]) =>
     /^validate-/.test(name) && !['validate-publishable-manifests', 'validate-ci-capacity-metrics', 'validate-idp-sync'].includes(name)
     || name === 'memory-l5-qualification');
-  assert.equal(validators.length, 24);
+  assert.equal(validators.length, 25);
   for (const [name, job] of validators) {
     assert.deepEqual(job.needs, ['changes'], name);
     assert.equal(job.concurrency, undefined, name);
@@ -97,7 +97,7 @@ test('should exercise the real publication DAG on a branch without running regis
   const changes = Object.fromEntries(Object.keys(workflow.jobs.changes.outputs).map(key => [key, key === 'engram_e2' ? 'false' : 'true']));
   const context = { changes, ref: 'refs/heads/topic', event: 'workflow_dispatch', inputs: { capacity_publish_dry_run: true } };
   const selected = workflowExpected(workflow, context).filter(row => row.selected && row.job.startsWith('publish-'));
-  assert.equal(selected.length, 21);
+  assert.equal(selected.length, 22);
   for (const { job: name } of selected) {
     const steps = workflow.jobs[name].steps;
     const dry = steps.find(step => step.name === 'Dry-run package publication');
