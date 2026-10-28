@@ -117,3 +117,143 @@ class StreamHub implements StreamHubClient {
         this.extensionPort.onDisconnect.removeListener(this.extensionPortOnDisconnect);
         this.extensionPortOnDisconnect = null;
       }
+      try {
+        this.extensionPort.disconnect();
+      } catch {
+        // noop
+      }
+      this.extensionPort = null;
+    }
+    this.currentUrl = null;
+  }
+
+  private getTrackedStreamIds(): string[] {
+    return Array.from(
+      new Set(
+        Array.from(this.subs.values())
+          .map((sub) => sub.streamId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ).sort();
+  }
+
+  private handleSseEvent(type: string, parsed: unknown): void {
+    const payload = asRecord(parsed);
+    if (type === 'job_update') {
+      this.dispatch({
+        type,
+        jobId: String(payload.jobId ?? ''),
+        data: payload.data,
+      });
+      return;
+    }
+    // Domain event types — dispatched via the open StreamHubEvent member.
+    // The extra fields (organizationId, folderId, etc.) are preserved in the
+    // event object for app-side consumers and the StreamHistory cache.
+    // Cast is safe: the open `{ type: string; data: unknown }` member covers them.
+    if (type === 'organization_update') {
+      this.dispatch({ type, organizationId: String(payload.organizationId ?? ''), data: payload.data } as StreamHubEvent);
+      return;
+    }
+    if (type === 'folder_update') {
+      this.dispatch({ type, folderId: String(payload.folderId ?? ''), data: payload.data } as StreamHubEvent);
+      return;
+    }
+    if (type === 'usecase_update') {
+      this.dispatch({ type, useCaseId: String(payload.useCaseId ?? ''), data: payload.data } as StreamHubEvent);
+      return;
+    }
+    if (type === 'comment_update') {
+      this.dispatch({ type, contextType: String(payload.contextType ?? ''), contextId: String(payload.contextId ?? ''), data: payload.data } as StreamHubEvent);
+      return;
+    }
+    if (type === 'lock_update') {
+      this.dispatch({ type, objectType: String(payload.objectType ?? ''), objectId: String(payload.objectId ?? ''), data: payload.data } as StreamHubEvent);
+      return;
+    }
+    if (type === 'presence_update') {
+      this.dispatch({ type, objectType: String(payload.objectType ?? ''), objectId: String(payload.objectId ?? ''), data: payload.data } as StreamHubEvent);
+      return;
+    }
+    if (type === 'workspace_update') {
+      this.dispatch({ type, workspaceId: String(payload.workspaceId ?? ''), data: payload.data } as StreamHubEvent);
+      return;
+    }
+    if (type === 'workspace_membership_update') {
+      this.dispatch({
+        type,
+        workspaceId: String(payload.workspaceId ?? ''),
+        userId: typeof payload.userId === 'string' ? payload.userId : undefined,
+        data: payload.data,
+      } as StreamHubEvent);
+      return;
+    }
+    if (type === 'ping') {
+      this.dispatch({ type, data: parsed });
+      return;
+    }
+
+    const streamId = String(payload.streamId ?? '');
+    const sequence = Number(payload.sequence);
+    if (streamId && Number.isFinite(sequence)) {
+      this.dispatch({ type, streamId, sequence, data: payload.data });
+    }
+  }
+
+  private connectExtensionProxySse(
+    baseUrl: string,
+    workspaceId: string | null,
+    streamIds: string[],
+  ): boolean {
+    const port = this.options.extensionPortFactory?.() ?? null;
+    if (!port) return false;
+
+    this.extensionPort = port;
+    this.extensionPortOnMessage = (message: unknown) => {
+      const payload = asRecord(message);
+      if (payload.type === 'sse_event' && typeof payload.eventType === 'string') {
+        this.handleSseEvent(payload.eventType, payload.payload);
+        return;
+      }
+      if (payload.type === 'sse_error' || payload.type === 'sse_closed') {
+        this.scheduleReconnect();
+      }
+    };
+    this.extensionPortOnDisconnect = () => {
+      if (this.extensionPort !== port) return;
+      this.extensionPort = null;
+      this.extensionPortOnMessage = null;
+      this.extensionPortOnDisconnect = null;
+      this.scheduleReconnect();
+    };
+
+    port.onMessage.addListener(this.extensionPortOnMessage);
+    port.onDisconnect.addListener(this.extensionPortOnDisconnect);
+
+    try {
+      port.postMessage({
+        type: 'stream_proxy_start',
+        payload: {
+          baseUrl,
+          workspaceId,
+          streamIds,
+        },
+      });
+      return true;
+    } catch {
+      try {
+        port.disconnect();
+      } catch {
+        // noop
+      }
+      this.extensionPort = null;
+      this.extensionPortOnMessage = null;
+      this.extensionPortOnDisconnect = null;
+      return false;
+    }
+  }
+
+  private dispatch(event: StreamHubEvent): void {
+    this.history.record(event);
+    this.dispatchBrowserEvents(event);
+
