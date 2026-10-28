@@ -30,6 +30,7 @@ Mesh `speech/openai-transcription.ts` with two independently configured OpenAI s
   - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
   - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
   - `api/tests/unit/gateway-package-version.test.ts`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
   - `package-lock.json`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
