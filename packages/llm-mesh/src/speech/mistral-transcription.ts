@@ -697,3 +697,135 @@ export class MistralTranscriptionSession implements SpeechSession {
     }
   }
 
+  private trackPump(promise: Promise<void>): void {
+    this.pumpPromises.add(promise);
+    void promise.finally(() => {
+      this.pumpPromises.delete(promise);
+    });
+  }
+
+  private makeStream(
+    socket: MistralTranscriptionSocket,
+    utteranceId: string,
+    audioStartMs: number,
+    resolveReady: () => void,
+    rejectReady: (error: unknown) => void,
+  ): TurnStream {
+    let resolveDone!: (text: string | undefined) => void;
+    const donePromise = new Promise<string | undefined>((resolve) => {
+      resolveDone = resolve;
+    });
+    const stream: TurnStream = {
+      socket,
+      utteranceId,
+      audioStartMs,
+      audioEndMs: audioStartMs,
+      text: '',
+      revision: 0,
+      donePending: false,
+      abandoned: false,
+      doneReceived: false,
+      resolveDone,
+      donePromise,
+    };
+    this.trackPump(this.runTurn(stream, resolveReady, rejectReady));
+    return stream;
+  }
+
+  private async openStream(utteranceId: string, audioStartMs: number): Promise<TurnStream> {
+    let socket: MistralTranscriptionSocket;
+    try {
+      socket = await this.connect(MISTRAL_TRANSCRIPTION_WS_URL, {
+        authorization: `Bearer ${this.bearerToken}`,
+        originator: this.originator,
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'unknown';
+      throw new MistralTranscriptionError('transport', `provider connect failed: ${redactBearer(detail, this.bearerToken)}`);
+    }
+    let resolveReady!: () => void;
+    let rejectReady!: (error: unknown) => void;
+    // The pump resolves once `session.created` arrives; a close ends the
+    // socket iteration, so this never awaits past the session teardown.
+    const readyPromise = new Promise<void>((resolve, reject) => {
+      resolveReady = resolve;
+      rejectReady = reject;
+    });
+    const stream = this.makeStream(socket, utteranceId, audioStartMs, resolveReady, rejectReady);
+    try {
+      // The update leaves only after the provider created the session.
+      await readyPromise;
+      socket.send(JSON.stringify(buildMistralSessionUpdate(this.config)));
+    } catch (error) {
+      stream.abandoned = true;
+      await socket.close().catch(() => undefined);
+      if (error instanceof MistralTranscriptionError) throw error;
+      const detail = error instanceof Error ? error.message : 'unknown';
+      throw new MistralTranscriptionError('transport', `session update failed: ${redactBearer(detail, this.bearerToken)}`);
+    }
+    const open = this.current;
+    if (open && open !== stream && !open.abandoned && !open.donePending) {
+      // A concurrent write opened a usable stream first: drop this one.
+      stream.abandoned = true;
+      stream.resolveDone(undefined);
+      await socket.close().catch(() => undefined);
+      return open;
+    }
+    this.current = stream;
+    return stream;
+  }
+
+  private async runTurn(
+    stream: TurnStream,
+    resolveReady: () => void,
+    rejectReady: (error: unknown) => void,
+  ): Promise<void> {
+    this.pumps += 1;
+    try {
+      const iterator = stream.socket.messages()[Symbol.asyncIterator]();
+      // Phase 1: the provider opens with `session.created`; anything else
+      // first is a protocol violation and the stream never becomes current.
+      for (;;) {
+        const next = await iterator.next();
+        if (next.done) {
+          rejectReady(new MistralTranscriptionError('transport', 'provider closed before session.created'));
+          return;
+        }
+        let first: unknown;
+        try {
+          first = JSON.parse(next.value) as unknown;
+        } catch {
+          rejectReady(new MistralTranscriptionError('transport', 'provider sent a non-JSON frame'));
+          return;
+        }
+        if (typeof first === 'object' && first !== null
+          && (first as Record<string, unknown>).type === 'session.created') {
+          resolveReady();
+          break;
+        }
+        rejectReady(new MistralTranscriptionError('transport', 'expected session.created first'));
+        return;
+      }
+      // Phase 2: turn frames until the done, an abandonment, or the close.
+      for (;;) {
+        const next = await iterator.next();
+        if (next.done) return;
+        if (this.settled || stream.abandoned) return;
+        this.onFrame(stream, next.value);
+        if (stream.doneReceived) {
+          await stream.socket.close().catch(() => undefined);
+          return;
+        }
+      }
+    } catch (error) {
+      rejectReady(error);
+      if (!this.settled && !stream.abandoned) {
+        this.outcome = 'failed';
+        this.pushError('transport', false);
+        void this.close();
+      }
+    } finally {
+      this.pumps -= 1;
+    }
+  }
+
