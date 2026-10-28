@@ -1,5 +1,6 @@
 // BR-79: artifact readiness and release barriers are separate contracts.
 import { evaluateExpected, workflowExpected } from './ci-expected-results.mjs';
+import fs from 'node:fs';
 
 export const runtimeInputs = {
   'test-e2e': ['changes', 'build-api-image', 'build-ui', 'build-e2e'],
@@ -88,4 +89,17 @@ if (process.argv[1]?.endsWith('/ci-dag.mjs') && process.argv.includes('--securit
   const verdict = securityJoin(JSON.parse(process.env.CI_SECURITY_NEEDS), process.env.CI_SECURITY_CATEGORY);
   console.log(JSON.stringify(verdict, null, 2));
   process.exit(verdict.ok ? 0 : 1);
+}
+
+if (process.argv[1]?.endsWith('/ci-dag.mjs') && process.argv.includes('--readiness')) {
+  const capture = JSON.parse(fs.readFileSync(process.argv[process.argv.indexOf('--readiness') + 1], 'utf8'));
+  const run = capture.run;
+  const complete = run.status === 'completed';
+  const receipt = { runId: run.id, attempt: run.run_attempt, headSha: run.head_sha,
+    complete, conclusion: run.conclusion, artifactReadiness: readiness(capture.jobs),
+    runnerMinutes: capture.jobs.reduce((sum, job) => sum + (job.runner_id && job.started_at && job.completed_at
+      ? (Date.parse(job.completed_at) - Date.parse(job.started_at)) / 60000 : 0), 0),
+    note: 'Cache hits are not inferred; retain producer step logs. Admission includes hosted-runner queueing.' };
+  console.log(JSON.stringify(receipt, null, 2));
+  process.exit(complete ? 0 : 1);
 }
