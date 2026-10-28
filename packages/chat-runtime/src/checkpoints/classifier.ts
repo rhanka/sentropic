@@ -308,3 +308,8 @@ export const getCheckpointMutationPreviewItems = (
         items.add(item);
         if (items.size >= 8) return [...items];
       }
+    }
+  }
+
+  return [...items];
+};
