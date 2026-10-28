@@ -42,6 +42,7 @@
   - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] BR1-checks: package gates pass (201 manifest/CI tests, runtime 447 plus native 4, UI 524 unit/206 DOM, cowork-bridge 27); app typecheck/lint, all 489 app tests and production web/Chrome/VSCode build pass. Post-correction full regression and final hash report are retained separately.
 - [x] BR1-R2-scope: clarify P1 fixture/package completion versus the frozen P2 production cutover; the app continues to consume the extracted controller until P2.
 - [x] BR1-R2-package: export the comment runtime factory at the root, remove orphaned formatting docs and restrict the necessary chat-server test dependency link to test tasks; cleanup removes only that owned link.
 - [x] BR1-R2-types: document the supported high-level TypeScript UI/runtime pair and independent wire subpaths; optional peer does not introduce visual value imports. A new contracts-package redesign is outside the frozen P1 pair.
@@ -69,7 +70,7 @@
   - [x] Read master/workflow/testing rules, P0 ownership/closure and P1 row.
   - [x] Create requested worktree and pass `harness check branch`.
   - [x] Fix environment, Docker lock, scope and atomic commit policy.
-- [ ] **Lot 1 — Runtime package and physical ownership**
+- [x] **Lot 1 — Runtime package and physical ownership**
   - [x] Refresh root/UI lockfiles for cowork-bridge 0.1.2 and its runtime peer after registry verification.
   - [x] Migrate cowork-bridge's public SSE dependency/guidance to runtime; registry 0.1.1 verified before reserving 0.1.2.
   - [x] Remove optional-module and tool-normalization runtime symbols from the visual export snapshot; document the injected conversation/comment and composer role props.
@@ -77,8 +78,8 @@
   - [x] Create `packages/chat-runtime/package.json`, `tsconfig.json` and public entrypoints.
   - [x] Move client transport/replay/history/stream hub and their tests without behavior changes.
   - [x] Migrate client consumers to public runtime subpaths; reserve chat-ui 1.0.0 above registry 0.34.1; runtime registry returns 404.
-  - [x] Remove client entries from the visual export snapshot; retarget moved host export assertions to the runtime wildcard entry.
-  - [ ] Move draft/attachment/projection/controller/session/checkpoint/local-tool implementation and tests; delete original implementations.
+  - [x] Remove client entries from the visual export snapshot; retarget moved host export assertions to explicit runtime entries.
+  - [x] Move draft/attachment/projection/controller/session/checkpoint/local-tool implementation and tests; delete original implementations.
   - [x] Relocate the existing draft/attachment/projection/controller/session implementation and core parity tests unchanged.
   - [x] Relocate local-tool store, checkpoints, steer/scope helpers and principal-scoped view-marker persistence with existing tests.
   - [x] Reference neutral visual contracts through public type exports; the runtime imports no visual implementation.
@@ -91,14 +92,14 @@
   - [x] Resolve visual export failures: remove relocated checkpoint export, migrate consumers and align major-version assertions; keep consumer scan strict.
   - [x] Gate runtime typecheck/tests/pack in the existing chat CI lane; register the guarded runtime pack target without publishing.
   - [x] Reserve cowork-desktop 0.2.1 above registry 0.2.0 for its runtime import migration; visual unit tests 676/676 and DOM tests 219/219 pass.
-  - [ ] Migrate inventoried web/Chrome/VSCode/cowork imports and active tooling links.
-  - [ ] Split neutral contracts and optional module state from views; runtime never imports a view implementation.
+  - [x] Migrate inventoried web/Chrome/VSCode/cowork imports and active tooling links.
+  - [x] Split neutral contracts and optional module state from views; runtime never imports a view implementation.
   - [x] Relocate context selection, comment retrieval/state and document assembly with their existing behavioral tests.
   - [x] Split comment formatting into the visual package; remove comment runtime forwarding exports.
   - [x] Keep file-format labels in the visual package; document attachment/generated-event assembly lives in runtime.
   - [x] Expose runtime optional-module entrypoints; visual context barrel exports only normalized types.
-  - [ ] Qualify breaking chat-ui version and initial runtime version against registry; update lockfiles.
-- [ ] **Lot 2 — Injected conversation and complete command binding**
+  - [x] Qualify breaking chat-ui version and initial runtime version against registry; update lockfiles.
+- [x] **Lot 2 — Injected conversation and complete command binding**
   - [x] Render injected checkpoint restore/preserve choices and mutation preview; disable duplicate checkpoint actions in runtime state.
   - [x] Route send checkpoint creation and edit/retry/restore choices through the same runtime commands; reload history after an authorized restore.
   - [x] Add runtime-owned checkpoint mutation choices and create/fetch/restore I/O through the existing CheckpointHost contract; no view-owned checkpoint lifecycle.
@@ -126,10 +127,10 @@
   - [x] Remove host-factory/history/context-runtime entries from the visual export snapshot.
   - [x] Split tool-result normalization into runtime; retain markdown/text formatting and smoothing in the visual package.
   - [x] Resolve typecheck evidence: import canonical comment formatting, normalize wire attachment source/IDs and keep ES2022-compatible lookup.
-  - [ ] Replace component runtime creation/disposal with normalized snapshot and command props/declarations.
-  - [ ] Bind full send/model/context/tools/attachments, history, retry/stop/edit/feedback/steer and active modules.
-  - [ ] Enforce visible permission pending/denied state; approval executes/posts once; no adapter, denial and timeout execute zero times.
-  - [ ] Preserve host lifetime across remounts; retain explicit default `() => false` authorization.
+  - [x] Replace component runtime creation/disposal with normalized snapshot and command props/declarations.
+  - [x] Bind full send/model/context/tools/attachments, history, retry/stop/edit/feedback/steer and active modules.
+  - [x] Enforce visible permission pending/denied state; approval executes/posts once; no adapter, denial and timeout execute zero times.
+  - [x] Preserve host lifetime across remounts; retain explicit default `() => false` authorization.
   - [x] Conversation view source slice 1 committed within the atomic limit.
   - [x] Conversation view source slice 2 committed within the atomic limit.
   - [x] Conversation view source slice 3 committed within the atomic limit.
@@ -169,13 +170,13 @@
   - [x] Resolve duplicate textbox roles found by layout tests; the editable input owns textbox semantics and the composer wrapper is a group.
   - [x] Migrate layout, accessibility, feature defaults, optional slots and label assertions to a host-created real runtime fixture.
   - [x] Bind the contenteditable text property so a remounted view renders the retained runtime draft; assert both stored and displayed content.
-  - [ ] Runtime tests: relocated `transport.test.ts`, `replay.test.ts`, `streamHub.test.ts`, `stream-history-bounds.test.ts`, `stream-throughput.test.ts`, `chat-core-host.spec.ts`.
-  - [ ] Runtime tests: relocated `chat-loop-controller.spec.ts`, `chat-session-runtime.test.ts`, `chat-session-hydration.test.ts`, `chat-projection.test.ts`, `projection.golden.spec.ts`.
-  - [ ] Runtime tests: relocated `chat-draft.test.ts`, `chat-attachments.test.ts`, `local-tools-store.test.ts`, `checkpoints.spec.ts`, `model-selection.spec.ts`, `agents-view-markers.test.ts`.
-  - [ ] Optional module tests: `comments-module.spec.ts`, `documents-module.spec.ts`, `documents-attachment-state.test.ts`, `documents-generated-file-cards.test.ts`, `context.spec.ts`, `chat-context.spec.ts`, `web-host.test.ts`, `host-adapter-types.test.ts`.
-  - [ ] UI tests: `chat-conversation-functional.dom.spec.ts`, `chat-conversation.dom.spec.ts`, `chat-conversation.spec.ts`; injected standalone and app-shaped fixtures use the same runtime.
-  - [ ] Add runtime permission/continuation and remount parity tests with real controller/projection; no command stubs in parity fixtures.
-  - [ ] Run package typecheck, unit/DOM tests, app typecheck/lint and affected app tests.
+  - [x] Runtime tests: relocated `transport.test.ts`, `replay.test.ts`, `streamHub.test.ts`, `stream-history-bounds.test.ts`, `stream-throughput.test.ts`, `chat-core-host.spec.ts`.
+  - [x] Runtime tests: relocated `chat-loop-controller.spec.ts`, `chat-session-runtime.test.ts`, `chat-session-hydration.test.ts`, `chat-projection.test.ts`, `projection.golden.spec.ts`.
+  - [x] Runtime tests: relocated `chat-draft.test.ts`, `chat-attachments.test.ts`, `local-tools-store.test.ts`, `checkpoints.spec.ts`, `model-selection.spec.ts`, `agents-view-markers.test.ts`.
+  - [x] Optional module tests: `comments-module.spec.ts`, `documents-attachment-state.test.ts`, `documents-generated-file-cards.test.ts`, `context.spec.ts`, `chat-context.spec.ts`, `web-host.test.ts`. Visual contract metadata: `documents-module.spec.ts`, `host-adapter-types.test.ts` remain in UI.
+  - [x] UI tests: `chat-conversation-functional.dom.spec.ts`, `chat-conversation.dom.spec.ts`, `chat-conversation.spec.ts`; injected standalone and app-shaped fixtures use the same runtime.
+  - [x] Add runtime permission/continuation and remount parity tests with real controller/projection; no command stubs in parity fixtures.
+  - [x] Run package typecheck, unit/DOM tests, app typecheck/lint and affected app tests.
   - [ ] Pack both candidates and prove runtime-free UI and standalone installed consumption.
 - [ ] **Lot 4 — Docs consolidation and review**
   - [x] Consolidate implemented boundaries, real parity fixtures, observed package/app gates and release prerequisites in the P1 specification; CI/owner acceptance remain separate.
@@ -185,7 +186,7 @@
   - [x] Document runtime composition, permission adapter semantics, public module ownership and guarded release/bootstrap prerequisites.
   - [x] Declare runtime-only CI publication filters, guarded publisher ordering and an explicit single-package bootstrap target/allowlist; draft validation cannot publish.
   - [x] Prepare runtime OIDC/token-bootstrap Make targets by copying the guarded existing package publisher pattern; no publication executed or authorized.
-  - [ ] Record pair versions, breaking imports, package bootstrap/OIDC prerequisites and consumer notices in `spec/CHAT_MIGRATION_P1.md`.
+  - [x] Record pair versions, breaking imports, package bootstrap/OIDC prerequisites and consumer notices in `spec/CHAT_MIGRATION_P1.md`.
   - [x] Document P1a candidate versions/import notices and the remaining P1b acceptance boundary in `spec/CHAT_MIGRATION_P1.md`.
 - [ ] **Lot 5 — Draft handoff**
   - [ ] Run `make down ENV=test-chat-p1` and report PR URLs and head SHAs.
