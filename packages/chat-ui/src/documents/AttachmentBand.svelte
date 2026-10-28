@@ -31,6 +31,8 @@
      * Called when the user clicks the X button on a chip.
      */
     onRemove?: (item: UnifiedAttachmentItem) => void;
+    onRetry?: (item: UnifiedAttachmentItem) => void;
+    retryLabel?: string;
 
     /** Label for the remove button. Defaults to 'Remove'. */
     removeLabel?: string;
@@ -50,6 +52,8 @@
     onResolveSrc,
     onEnlarge,
     onRemove,
+    onRetry,
+    retryLabel = 'Retry',
     removeLabel = 'Remove',
     enlargeLabel = 'Enlarge',
     loadingLabel = 'Loading',
@@ -134,6 +138,9 @@
           <div class="truncate text-slate-400">{getStatusLabel(item)}</div>
         </div>
 
+        {#if item.status === 'failed' && onRetry}
+          <button type="button" aria-label={retryLabel} onclick={() => onRetry(item)}>{retryLabel}</button>
+        {/if}
         {#if onRemove}
           <button
             class="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700"

@@ -10,6 +10,8 @@ export type AttachmentBandProps = {
   onEnlarge?: (item: UnifiedAttachmentItem, src: string) => void;
   /** Remove an attachment from the composer. */
   onRemove?: (item: UnifiedAttachmentItem) => void;
+  onRetry?: (item: UnifiedAttachmentItem) => void;
+  retryLabel?: string;
   /** Label for the remove button. Defaults to 'Remove'. */
   removeLabel?: string;
   /** Label for the enlarge button. Defaults to 'Enlarge'. */
