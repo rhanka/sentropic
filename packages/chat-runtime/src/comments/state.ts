@@ -170,3 +170,143 @@ export type CommentState = {
   subscribe: HandWritable<CommentStateSnapshot>['subscribe'];
   /** All state actions. */
   actions: CommentStateActions;
+};
+
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
+
+export function createCommentState(host: CommentHost, presentation: CommentPresentation): CommentState {
+  const { getMentionLabel, getCommentAuthorLabel } = presentation;
+  // -- internal mutable state -----------------------------------------------
+
+  let contextType: string | null = null;
+  let contextId: string | null = null;
+  let sectionKey: string | null = null;
+  let lastContextKey = '';
+  let lastSectionKey: string | null = null;
+
+  let commentMessages: CommentItem[] = [];
+  let commentThreads: CommentThreadSummary[] = [];
+  let commentItemsByThread = new Map<string, CommentItem[]>();
+  let commentThreadId: string | null = null;
+  let commentSectionKey: string | null = null;
+  let commentThreadResolved = false;
+  let commentThreadResolvedAt: string | null = null;
+  let currentCommentRoot: CommentItem | null = null;
+  let commentLoading = false;
+  let commentError: string | null = null;
+  let commentInput = '';
+  let assignedToUserId: string | null = null;
+  let assignedToLabel: string | null = null;
+  let showMentionMenu = false;
+  let mentionQuery = '';
+  let mentionMatches: MentionMember[] = [];
+  let mentionMembers: MentionMember[] = [];
+  let mentionLoading = false;
+  let mentionError: string | null = null;
+  let mentionDelayElapsed = false;
+  let mentionDelayTimer: ReturnType<typeof setTimeout> | null = null;
+  let mentionWorkspaceLoaded = false;
+  let mentionSuppressUntilChange = false;
+  let mentionSuppressValue = '';
+  let showResolvedComments = false;
+  let editingCommentId: string | null = null;
+  let editingCommentContent = '';
+  let lastCommentKey = '';
+  let lastCommentThreadId: string | null = null;
+  let lastCommentMessageCount = 0;
+  let lastSelectedCommentThreadId: string | null = null;
+  let commentReloadTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // -- derived helpers -------------------------------------------------------
+
+  const computeThreadRoot = (threadId: string | null): CommentItem | null =>
+    threadId ? (commentItemsByThread.get(threadId)?.[0] ?? null) : null;
+
+  const computeLastEditableId = (
+    threadId: string | null,
+    messages: CommentItem[],
+    user: CommentCurrentUser | null,
+  ): string | null => {
+    if (!threadId || !user) return null;
+    const last = messages.length > 0 ? messages[messages.length - 1] : null;
+    if (!last) return null;
+    const byId = user.id && last.created_by === user.id;
+    const byEmail =
+      user.email && last.created_by_user?.email === user.email;
+    return byId || byEmail ? last.id : null;
+  };
+
+  const buildSnapshot = (): CommentStateSnapshot => {
+    const resolvedThreads = commentThreads.filter((t) => t.status === 'closed');
+    const resolvedCount = resolvedThreads.length;
+    const visibleCommentThreads = showResolvedComments
+      ? commentThreads
+      : commentThreads.filter((t) => t.status !== 'closed');
+    const commentThreadIndex = commentThreadId
+      ? visibleCommentThreads.findIndex((t) => t.id === commentThreadId)
+      : -1;
+    const hasPreviousThread = commentThreadIndex > 0;
+    const hasNextThread =
+      commentThreadIndex >= 0 &&
+      commentThreadIndex < visibleCommentThreads.length - 1;
+    const user = host.currentUser();
+    const lastEditableCommentId = computeLastEditableId(
+      commentThreadId,
+      commentMessages,
+      user,
+    );
+    return {
+      commentMessages,
+      commentThreads,
+      commentItemsByThread,
+      commentThreadId,
+      commentSectionKey,
+      commentThreadResolved,
+      commentThreadResolvedAt,
+      currentCommentRoot,
+      commentLoading,
+      commentError,
+      commentInput,
+      assignedToUserId,
+      assignedToLabel,
+      showMentionMenu,
+      mentionQuery,
+      mentionMatches,
+      mentionMembers,
+      mentionLoading,
+      mentionError,
+      mentionDelayElapsed,
+      showResolvedComments,
+      resolvedCount,
+      visibleCommentThreads,
+      commentThreadIndex,
+      hasPreviousThread,
+      hasNextThread,
+      editingCommentId,
+      editingCommentContent,
+      lastEditableCommentId,
+    };
+  };
+
+  const store = createWritable<CommentStateSnapshot>(buildSnapshot());
+  const notify = () => store.set(buildSnapshot());
+
+  // -- thread-root / resolved sync ------------------------------------------
+
+  const syncThreadRoot = () => {
+    const root = computeThreadRoot(commentThreadId);
+    currentCommentRoot = root;
+    commentThreadResolved = root?.status === 'closed';
+    commentThreadResolvedAt =
+      (root?.updated_at ?? root?.created_at ?? null) as string | null;
+  };
+
+  // -- actions ---------------------------------------------------------------
+
+  const loadCommentThreads = async (
+    opts?: { silent?: boolean },
+  ): Promise<void> => {
+    if (!contextType || !contextId) {
+      commentThreads = [];
