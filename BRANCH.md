@@ -35,7 +35,10 @@
 - [x] **Exception process**: record `BRH0-EXn`, rationale, impact and rollback before any exception; none required.
 
 ## Feedback Loop
-- [x] Q-CL-1, Q-B1-4, list profile, FE-3/FE-6 and preserved-block eligibility remain adoption gates; H0 must not settle them.
+- [x] Q-CL-1 **ANSWERED**, owner, 2026-10-28: « On fait un tiptap complet pas 59 migrations ». DS must cover every feature used by Sentropic editable surfaces, then all 24 sites migrate in one pass; no migration per field class.
+- [x] Q-B1-4, DS full editor-profile publication/B1 qualification and FE-3/FE-6 remain gates; a missing editing/paste capability means the DS editor-profile lot is incomplete.
+- [x] Conductor plan delta: replace H7/H8 editor adoption by class with one 24-site cutover after the DS full editor-profile lot; H6 norm/catalog preparation and H1–H5 preparation retain their prerequisites.
+- [x] PR823 Opus r1 F1/F2 corrected (owner: H0 author, 2026-10-28): record owner answer, require full-profile coverage and align N7/deletions with the single-pass adoption; independent re-review remains pending.
 - [x] DS publication, export qualification and N1–N8 deletion evidence remain pending until measured by their adoption owners.
 - [x] Apply Opus r2 notes touching H0: B-BRIDGE-1…7 traceability, cross-lot RED-first, `ports.ts:70–72`.
 - [x] Review F1–F6 accepted and corrected (owner: H0 author): normalize only actual text paths, distinguish list arrays/context passthrough and single-key override; repair provenance and evidence hashes.
@@ -62,7 +65,7 @@
   - [x] Inventory server descriptors, payloads, routes and settings/chat authorization without client lock gates.
 - [x] **Lot 2 — B1 real-content corpus**
   - [x] Add API and UI JSON fixtures for prose, lists, matrix, three composers, plain fields and citations.
-  - [x] Identify source provenance, intended parity and profile differences requiring owner acceptance.
+  - [x] Identify source provenance, required full-profile parity and remaining Q-B1-4 decision; no accepted P0 editing/paste narrowing.
 - [x] **Lot 3 — Transfer register and gates**
   - [x] Create N1–N8 receipts with source hashes, owners, consumers, exports, witnesses, disposition and deletion fields.
   - [x] Add N8 correspondence; supersede older tree-binding and snapshot-only recovery wording.
