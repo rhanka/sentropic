@@ -268,3 +268,9 @@ export const resolveComposerSteerState = (
   const steerReady =
     typeof steerStreamId === 'string' && steerStreamId.trim().length > 0;
   return {
+    activeAssistantIndex,
+    steerStreamId,
+    steerReady,
+    runInFlight: sending || steerReady,
+  };
+};
