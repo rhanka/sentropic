@@ -10,7 +10,7 @@
  * R2: subscribeCommentUpdates provides the streamHub integration seam.
  */
 
-import type { CommentItem, CommentCurrentUser, MentionMember } from './types.js';
+import type { CommentItem, CommentCurrentUser, MentionMember } from '@sentropic/chat-ui/comments';
 
 export type { CommentItem, CommentCurrentUser, MentionMember };
 
