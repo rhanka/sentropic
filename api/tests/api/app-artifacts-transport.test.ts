@@ -16,6 +16,12 @@ function fixture() {
 }
 
 describe('compiled app artifact transports', () => {
+  it('should become ready with the refreshed APP-P1 before binding a request', async () => {
+    const { transport, bind } = fixture();
+    const registry = await transport.ready;
+    expect([...registry.tools.keys()]).toEqual(['artifacts_ensure', 'artifacts_get', 'artifacts_list', 'artifacts_publish']);
+    expect(bind).not.toHaveBeenCalled();
+  });
   it('should dispatch exact compiled names once with verified identity and workspace', async () => {
     const { transport, bind, mcp } = fixture();
     const args = { bindingName: 'report', idempotencyKey: 'key-a' };

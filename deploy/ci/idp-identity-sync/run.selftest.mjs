@@ -172,6 +172,7 @@ export async function runTests(load, bundles) {
     const pod = message => ({ stdout: JSON.stringify({ items: [{ status: { containerStatuses: [{ name: 'import-preprod', state: { terminated: { message } } }] } }] }) });
     assert.equal(failureVerdict('synthetic', args => { assert.ok(!args.includes('logs')); return pod(JSON.stringify(value)); }), `job/synthetic failed: rekey_not_allowed (${pair})`);
     assert.equal(failureVerdict('synthetic', () => pod('{"outcome":"failed","code":"sql_error"}')), 'job/synthetic failed: sql_error');
+    assert.equal(failureVerdict('synthetic', () => pod('{"outcome":"failed","code":"workload_credential_invalid"}')), 'job/synthetic failed: workload_credential_invalid');
     const pair2 = '00000000-0000-4000-8000-000000000003>00000000-0000-4000-8000-000000000004';
     const multi = JSON.stringify({ ...value, rejected_rekey_pairs: [pair, pair2] });
     assert.equal(failureVerdict('synthetic', () => pod(multi)), `job/synthetic failed: rekey_not_allowed (${pair},${pair2})`);

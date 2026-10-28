@@ -12,6 +12,7 @@
  * serve unit tests and the Postgres/S3 adapters serve integration.
  */
 import { createHash } from 'node:crypto';
+import { assertBlobPrefix } from './blob-prefix.js';
 import { canonicalManifest, manifestDigest } from '../codecs.js';
 import type { JsonValue } from '../contracts.js';
 import type { IntentStore } from './object-intents.js';
@@ -99,8 +100,9 @@ export function createMemoryBlobStore(): PublicationBlobStore {
     getBlob(key: string): Promise<Uint8Array | undefined> {
       return Promise.resolve(blobs.get(key));
     },
-    listKeys(prefix: string): Promise<string[]> {
-      return Promise.resolve([...blobs.keys()].filter((key) => key.startsWith(prefix)).sort());
+    async listKeys(prefix: string): Promise<string[]> {
+      assertBlobPrefix(prefix);
+      return [...blobs.keys()].filter((key) => key.startsWith(prefix)).sort();
     },
     deleteBlob(key: string): Promise<void> {
       if (!blobs.has(key)) throw new Error(`unknown blob: ${key}`);
