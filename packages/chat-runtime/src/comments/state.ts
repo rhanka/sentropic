@@ -590,3 +590,143 @@ export function createCommentState(host: CommentHost, presentation: CommentPrese
       } else {
         await host.closeComment(currentCommentRoot.id);
       }
+      await loadCommentThreads({ silent: true });
+      if (!wasClosed && currentThreadId) {
+        selectNextOpenThreadAfterResolve(currentThreadId, previousOpenOrder);
+        syncThreadRoot();
+        if (commentThreadId && commentItemsByThread.has(commentThreadId)) {
+          commentMessages = commentItemsByThread.get(commentThreadId) ?? [];
+        }
+        notify();
+      }
+    } catch (e) {
+      commentError = e instanceof Error ? e.message : String(e);
+      notify();
+    }
+  };
+
+  const deleteThread = async (): Promise<void> => {
+    if (!currentCommentRoot) return;
+    try {
+      await host.deleteComment(currentCommentRoot.id);
+      commentThreadId = null;
+      await loadCommentThreads({ silent: true });
+    } catch (e) {
+      commentError = e instanceof Error ? e.message : String(e);
+      notify();
+    }
+  };
+
+  const startEditComment = (comment: CommentItem) => {
+    editingCommentId = comment.id;
+    editingCommentContent = comment.content;
+    notify();
+  };
+
+  const cancelEditComment = () => {
+    editingCommentId = null;
+    editingCommentContent = '';
+    notify();
+  };
+
+  const commitEditComment = async (): Promise<void> => {
+    if (!editingCommentId) return;
+    const trimmed = editingCommentContent.trim();
+    if (!trimmed) return;
+    try {
+      await host.updateComment(editingCommentId, { content: trimmed });
+      await loadCommentThreads();
+    } catch (e) {
+      commentError = e instanceof Error ? e.message : String(e);
+      notify();
+    }
+    cancelEditComment();
+  };
+
+  const selectMentionMember = (member: MentionMember) => {
+    const candidate = getMentionCandidate(commentInput);
+    if (!candidate) return;
+    const label = getMentionLabel(member);
+    const nextInput = `${commentInput.slice(0, candidate.start)}@${label} ${commentInput.slice(candidate.end)}`;
+    commentInput = nextInput;
+    assignedToUserId = member.userId;
+    assignedToLabel = label;
+    showMentionMenu = false;
+    mentionQuery = '';
+    mentionMatches = [];
+    mentionSuppressUntilChange = true;
+    mentionSuppressValue = nextInput.trimEnd();
+    notify();
+  };
+
+  const setCommentInput = (value: string) => {
+    commentInput = value;
+
+    // Mention suppress logic
+    if (mentionSuppressUntilChange) {
+      if (commentInput.trimEnd() === mentionSuppressValue) {
+        mentionQuery = '';
+        showMentionMenu = false;
+        mentionMatches = [];
+        notify();
+        return;
+      } else {
+        mentionSuppressUntilChange = false;
+        mentionSuppressValue = '';
+      }
+    }
+
+    const candidate = getMentionCandidate(commentInput);
+    if (candidate) {
+      mentionQuery = candidate.query;
+      showMentionMenu = true;
+      void loadMentionMembers();
+    } else {
+      mentionQuery = '';
+      showMentionMenu = false;
+    }
+    mentionMatches = showMentionMenu
+      ? getMentionMatches(mentionMembers, mentionQuery, presentation)
+      : [];
+    notify();
+  };
+
+  const setContext = (params: {
+    contextType: string | null;
+    contextId: string | null;
+    sectionKey?: string | null;
+  }) => {
+    const prevContextKey = lastContextKey;
+    const nextKey = `${params.contextType || ''}:${params.contextId || ''}:${params.sectionKey ?? ''}`;
+
+    // Section key changed → reset thread lists.
+    if (
+      params.sectionKey !== lastSectionKey &&
+      params.sectionKey !== undefined
+    ) {
+      lastSectionKey = params.sectionKey ?? null;
+      commentThreads = [];
+      commentMessages = [];
+      commentItemsByThread = new Map();
+      lastCommentThreadId = null;
+      lastCommentMessageCount = 0;
+    }
+
+    contextType = params.contextType;
+    contextId = params.contextId;
+    sectionKey = params.sectionKey ?? null;
+
+    if (nextKey !== prevContextKey) {
+      lastContextKey = nextKey;
+      void loadCommentThreads();
+    }
+  };
+
+  const setThreadId = (threadId: string | null) => {
+    if (commentThreadId === threadId) return;
+    commentThreadId = threadId;
+    commentSectionKey = sectionKey;
+    syncThreadRoot();
+    if (threadId !== lastSelectedCommentThreadId) {
+      lastSelectedCommentThreadId = threadId;
+      lastCommentThreadId = threadId;
