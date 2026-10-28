@@ -61,14 +61,18 @@ test('should reject a changed tuple or manually promoted profile', () => {
   assert.throws(() => verifyTuple({ ...tuple, status: 'FINAL' }, tuple, true), /differs from recomputed/);
 });
 
-test('should reproduce the actual candidate tuple with every file bound and all gates pending', () => {
+test('should reproduce E2 bytes while refusing unqualified profiles and stable-release acceptance', () => {
   const first = build('/evidence');
   const second = build('/evidence');
   assert.equal(canonical(first), canonical(second));
   assert.equal(verifyTuple(first, second), report(first).tupleSha256);
   assert.equal(first.slots.length, 21);
   assert.equal(first.backend.sha256, first.files[first.backend.archive].sha256);
-  assert.equal(first.neutralContract.path, null);
+  assert.equal(first.neutralContract.path, 'neutral-contract-1.0.0.jcs.json');
+  assert.equal(first.neutralContract.sha256, '55f8d4572db7100e4dba0a135331cdeb1186458711f0c7202e5f0cd93a6dc759');
+  assert.equal(first.neutralContract.contractDigest, 'sha256:dd0cccbd6e5e29766fbc9c48351ffe58f5b0a3162152f5ff02da0798c3244fee');
+  assert.equal(first.engram.version, '0.21.3');
+  assert.equal(first.backend.version, '0.24.0-dev.6');
   assert.equal(first.neutralContract.version, '1.0.0');
   assert.deepEqual(first.profiles, []);
   assert.equal(first.requiredProfiles.length, 5);
@@ -76,7 +80,9 @@ test('should reproduce the actual candidate tuple with every file bound and all 
   assert(first.locks.every((lock) => first.files[lock.path].sha256 === lock.sha256));
   assert(first.slots.every((slot) => first.files[slot.file]));
   assert(first.slots.filter((slot) => slot.status === 'PENDING').every((slot) => slot.reason.length > 0));
-  assert.equal(first.slots[14].observed.c6.finalBytesSha256, null);
+  assert.equal(first.slots[14].observed.c6.finalBytesSha256, first.neutralContract.sha256);
+  assert.equal(first.slots[14].observed.c6.standaloneDeclarationSha256, null);
+  assert.deepEqual(first.slots.filter((s) => s.status === 'PENDING').map((s) => s.id), [15, 16, 21]);
   assert.equal(first.slots[15].observed.equivalence.status, 'not-covered');
   assert(first.files['consumer/installed-hydration.mjs']);
   assert(Object.values(first.handoff).every((gate) => gate.status === 'PENDING'));
@@ -90,6 +96,6 @@ test('should reproduce the actual candidate tuple with every file bound and all 
     const readHostTuple = runInNewContext(`${receivingSource.slice(start, end)}\nreadHostTuple;`, {
       assert, readFileSync, resolve: (file) => file,
     });
-    assert.throws(() => readHostTuple(path), /source-gap: host tuple is incomplete.*backend closure.*neutral contract.*profiles/s);
+    assert.throws(() => readHostTuple(path), /source-gap: host tuple is incomplete.*backend closure.*profiles/s);
   });
 });
