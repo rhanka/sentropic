@@ -83,6 +83,7 @@
   - [ ] Preserve missing durations as **to measure**; publish all failures, cancellations, retries, queue time, runner-minutes, and threshold breaches alongside successes.
   - [ ] Rollback drill: restore previous dependency edges and build grouping while retaining exact result membership; prove a negative scan still prevents promotion.
 - [ ] **Lot 4 — Docs consolidation**
+  - [x] Record current architecture, local checks and identified incomplete/failed runs in plan/65 and study section 12; final measurements remain pending.
   - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
