@@ -12,6 +12,8 @@ namespace: sentropic-preprod
 resources:
   - ../../base
   - ingress.yaml
+  - artifact-content-ingress.yaml
+  - artifact-content-certificate.yaml
   - idp-identity-sync
 # Images use the base default (:main) today, matching prod. The preprod CD pipeline
 # (BR-55c, cd.yml main→preprod) repins immutable per-release tags/digests here, e.g.:
@@ -22,6 +24,7 @@ resources:
 # identity). Strategic-merge patches override only the listed ConfigMap keys; the
 # distinct KEK/DB/signing-key SealedSecrets are operator-authored per ns (D6), not here.
 patches:
+  - path: patch-artifact-content-config.yaml
   - path: patch-api-config.yaml
   - path: patch-auth-idp-config.yaml
   - path: patch-postgres-storageclass.yaml
