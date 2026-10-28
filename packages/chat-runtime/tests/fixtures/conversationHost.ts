@@ -21,6 +21,8 @@ export async function createConversationFixture(overrides: Partial<ConversationR
   const executions: Array<{ id: string; name: string; args: unknown }> = [];
   const decisions: Array<{ id: string; value: string }> = [];
   const docs = new Map<string, File>();
+  const uploads: string[] = [];
+  let failUpload = false;
   const deps = createInMemoryChatServerDeps({ assistantReply: 'Reply **markdown**' });
   const server = createChatServer(deps, { routes: 'app-contract' });
   server.get('/models/catalog', (c) => c.json({
@@ -30,6 +32,7 @@ export async function createConversationFixture(overrides: Partial<ConversationR
     defaults: { provider_id: 'openai', model_id: 'model-a' },
   }));
   server.get('/queue/jobs/:id', (c) => c.json({ status: 'completed' }));
+  server.get('/documents/:id/content', (c) => c.text('Generated document'));
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
@@ -49,6 +52,8 @@ export async function createConversationFixture(overrides: Partial<ConversationR
   });
   const documents: DocumentHost = {
     async uploadFile(draft, file) {
+      uploads.push(file.name);
+      if (failUpload) { failUpload = false; throw new Error('Upload failed'); }
       const documentId = `doc:${draft.id}`;
       docs.set(documentId, file);
       return { ...draft, documentId, state: 'ready' };
@@ -60,8 +65,9 @@ export async function createConversationFixture(overrides: Partial<ConversationR
       if (!response.ok) throw new Error('Download failed');
     },
   };
-  const runtime = createConversationRuntime(sessionId, {
-    host: { ...transport, streamClient }, documents,
+  const host = { ...transport, streamClient };
+  const runtimeOptions: ConversationRuntimeOptions = {
+    host, documents,
     localTools: {
       isLocalToolName: (name) => name === 'render_mermaid', isLocalToolRuntimeAvailable: () => true,
       isLocalToolPermissionRequired: () => false,
@@ -71,10 +77,13 @@ export async function createConversationFixture(overrides: Partial<ConversationR
       postLocalToolResult: transport.postLocalToolResult,
     },
     ...overrides,
-  });
+  };
+  let runtime = createConversationRuntime(sessionId, runtimeOptions);
   await runtime.initialize();
   return {
-    runtime, transport, deps, server, requests, executions, decisions, docs, sessionId,
+    get runtime() { return runtime; }, transport, deps, server, requests, executions, decisions, docs, uploads, sessionId,
+    failNextUpload() { failUpload = true; },
+    async restart() { runtime.dispose(); runtime = createConversationRuntime(sessionId, runtimeOptions); await runtime.initialize(); },
     emit(streamId: string, type: string, data: Record<string, unknown>, sequence: number) {
       source!.publish(type, { streamId, data, sequence });
     },
