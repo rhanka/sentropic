@@ -104,7 +104,7 @@ export function createArtifactReaderActivation(options: {
     if (Object.values(session).length !== 4 || Object.values(session).some(v => typeof v !== 'string' || !v)) throw denied();
     return session;
   };
-  return {
+  const authority = {
     async issue(value: ArtifactReaderSession, input: ArtifactReaderTarget) {
       const session = verifiedSession(value);
       const target = Object.freeze({ ...input });
@@ -147,6 +147,33 @@ export function createArtifactReaderActivation(options: {
         nonceDigest: nonce, targetOrigin: request.targetOrigin, profileDigest };
       return store.consume({ flowId: request.flowId, ticketId: request.ticketId, expected }, async ({ client, flow: locked }) =>
         await currentPolicy(client, pool, namespace, session, locked, baseDomain) === locked.policyRevision);
+    },
+  };
+  return { ...authority,
+    /** Resolve issuing authority through the package flow port, never package-owned SQL. */
+    async consumeForContentOrigin(input: Parameters<typeof authority.consume>[1]) {
+      const request = Object.freeze({ ...input });
+      const url = new URL(request.targetOrigin);
+      if (url.protocol !== 'https:' || url.origin !== request.targetOrigin || url.port) return undefined;
+      const origin = parseContentHost(url.host, baseDomain);
+      if (!origin) return undefined;
+      const artifacts = createPostgresArtifactStore(pool);
+      const artifactId = origin.kind === 'stable' ? origin.artifactId : (await artifacts.getRelease(origin.releaseId))?.artifactId;
+      if (!artifactId) return undefined;
+      const namespace = (await artifacts.getArtifactAcl(artifactId))?.storageScopeId;
+      if (!namespace) return undefined;
+      const { rows } = await pool.query<{ key: string }>(
+        `SELECT kv.key FROM control.artifact_host_kv kv JOIN artifacts.storage_scopes s
+         ON s.id=kv.value AND s.org_id=(kv.key::jsonb->>0)
+         WHERE kv.storage_scope_id='app-artifact-scopes/v1' AND kv.value=$1`, [namespace]);
+      if (rows.length !== 1) return undefined;
+      const bound: unknown = JSON.parse(rows[0].key);
+      if (!Array.isArray(bound) || bound.length !== 2 || bound.some(part => typeof part !== 'string' || !part)) return undefined;
+      // Package peek enforces expiry and namespace generation before resolving subject/session.
+      const flow = await (await storage(namespace)).flows.peek(request.flowId);
+      if (!flow || flow.artifactId !== artifactId || flow.targetOrigin !== request.targetOrigin) return undefined;
+      return authority.consume({ tenantId: bound[0] as string, workspaceId: bound[1] as string,
+        subjectId: flow.subjectId, sessionId: flow.sessionId }, request);
     },
   };
 }
