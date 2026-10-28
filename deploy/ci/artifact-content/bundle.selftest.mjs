@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { checkWorkload, component, object } from './bundle-checks.mjs';
+import { checkConnectivity } from './network.selftest.mjs';
 const { parseAllDocuments } = createRequire('/tmp/content-tools/package.json')('yaml');
 const load = file => parseAllDocuments(readFileSync(file, 'utf8')).map(doc => {
   assert.deepEqual(doc.errors, []); return doc.toJS();
@@ -55,7 +56,7 @@ for (const tier of ['prod', 'preprod']) {
     const pinned = load(`/rendered/${tier}-pinned.yaml`);
     qualify(pinned);
     assert.equal(object(pinned, 'Deployment', 'artifact-content').spec.template.spec.containers[0].image,
-      `rg.fr-par.scw.cloud/nc-reg/sentropic-api:main@sha256:${'a'.repeat(64)}`);
+      `rg.fr-par.scw.cloud/nc-reg/sentropic-api@sha256:${'a'.repeat(64)}`);
   });
   const deny = (name, mutation) => check(`${tier}: reject ${name}`, () => {
     const copy = structuredClone(objects); mutation(copy); assert.throws(() => qualify(copy));
@@ -69,4 +70,12 @@ for (const tier of ['prod', 'preprod']) {
   deny('wildcard outranks exact app routes', o => { object(o, 'Ingress', 'artifact-content').metadata.annotations['traefik.ingress.kubernetes.io/router.priority'] = '999'; });
   deny('independent content image', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].image = 'other:latest'; });
 }
+const combined = [...load('/rendered/prod.yaml'), ...load('/rendered/preprod.yaml')];
+check('both environments: effective additive network reachability and denial matrix', () => checkConnectivity(combined));
+check('reject an extra policy opening content across namespaces', () => {
+  const copy = structuredClone(combined);
+  copy.push({ kind: 'NetworkPolicy', metadata: { name: 'accidental-open', namespace: 'sentropic' },
+    spec: { podSelector: { matchLabels: component('artifact-content') }, policyTypes: ['Ingress'], ingress: [{}] } });
+  assert.throws(() => checkConnectivity(copy));
+});
 console.log(`${passed} PASS, 0 failures`);
