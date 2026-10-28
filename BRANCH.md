@@ -22,6 +22,8 @@
   - `apps/auth-idp/idp-app.ts`
   - `api/src/app.ts`
   - `api/src/services/session-manager.ts`
+  - `api/src/routes/auth/oauth.ts`
+  - `api/src/routes/namespaces/auth/federation.ts`
   - `deploy/k8s/base/35-auth-idp.yaml`
   - `spec/REMOTE_CONTROL_RC1.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -85,6 +87,7 @@
   - [x] spec/REMOTE_CONTROL_RC1.md documents exact ports, private authority/configuration, D2 trust limits and native/installed qualification handoff.
   - [x] Explicit unsupported-version versus invalid-kind refusal vectors added for issuer and internal route.
   - [x] First GREEN pass: 118 unit cases passed and 16 API cases passed; fixed a missing test-local workload mock binding before rerun.
+  - [x] Code-review OIDC end_session restore regression authored; OAuth revocation adapters and federated login minting must share the canonical session lifecycle.
   - [ ] api/tests/unit/auth/remote-evidence.test.ts: repeated actions/switch, logout/revoke/expiry, wrong sid/version/MFA/audience/key, replay and workload separation.
   - [ ] Closed EvidenceRequest; issuer-derived identity and original authentication time; per-operation EdDSA evidence with pinned audiences.
 - [ ] **Lot 2 — Consent and authorization, RED then GREEN**

@@ -41,6 +41,18 @@ async function setup() {
 }
 
 describe('RC1 current issuer session store', () => {
+  it('should preserve OIDC end_session logout after shared-row restoration', async () => {
+    const { tokens } = await setup();
+    const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
+    const { createIdpApp } = await import('../../../../apps/auth-idp/idp-app');
+    const result = await createIdpApp().request('https://idp/api/v1/auth/oauth/end_session', {
+      headers: { cookie: `session=${tokens.sessionToken}`, 'sec-fetch-mode': 'navigate' },
+    });
+    expect(result.status).toBe(200);
+    expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
+    await db.insert(userSessions).values(row);
+    expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
+  });
   it('should refuse restored shared-DB authority after issuer logout', async () => {
     const { tokens, request, issue } = await setup();
     const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
