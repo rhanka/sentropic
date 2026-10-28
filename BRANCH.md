@@ -5,7 +5,7 @@
 
 ## Scope / Guardrails
 - [x] Branch `feat/cluster-mesh-engram-e11` from integration `52936121af9a67e3605f5c09c0e70c021b8da1d9`; worktree `tmp/worktrees/mem-e11`; merge only, never rebase.
-- [x] Preparation only: no publication, version bump, artifacts source edits or receiving ACK.
+- [x] Owner-directed E11 generation on integration `32dd911be`; no publication, version bump, artifacts source edits or receiving ACK.
 - [x] Read-only candidates: Engram 0.22.0 `26a0edd5…`; mesh 0.24.0-dev.5 `11a8fe85…`; pending Engram 0.21.3 intentHash and successor mesh pack.
 - [x] Node 24 through make and Docker flock; no Python; ENV=test-mem-e11 last; make down after each Docker step.
 - [x] No services or host ports required; API 9055, UI 5255, Maildev 1155 reserved if needed; owner environments untouched.
@@ -30,6 +30,9 @@
   - [x] BR11-EX1: add only test-mem-e11 to host scope-check selector, avoiding an unrelated harness build; impact validation routing; rollback remove selector.
 
 ## Plan / Todo (lot-based)
+- [x] **Lot E11-4 — Integration refresh**
+  - [x] Merge integration after #821/#803, never rebase; retain E11 plan and union all Makefile environment selectors. No `.track` changes on either side of this merge.
+  - [ ] Generate/check the 0.21.3/dev.6 tuple and receiving checklist; preserve evidenced Stage B gaps.
 - [x] **Lot E11-0 — Baseline and scope**
   - [x] Read MASTER/workflow, plan E11, PR #803 E11 inputs, Opus r3 21-entry inventory, RESERVATION.md and Docker lock packet; mechanical branch PASS.
 - [x] **Lot E11-1 — Generator and checker**
