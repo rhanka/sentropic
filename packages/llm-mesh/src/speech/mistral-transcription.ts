@@ -431,9 +431,8 @@ export class MistralTranscriptionSession implements SpeechSession {
   private readonly admission: MistralTranscriptionAdmission;
   private readonly usage: MistralTranscriptionUsageSink;
   private readonly config: MistralTranscriptionProfileConfig;
-  private readonly connect: MistralTranscriptionConnect;
-  private readonly bearerToken: string;
-  private readonly originator: string;
+  /** Bound provider dial (URL + handshake); the session holds no key material. */
+  private readonly openProviderStream: () => Promise<MistralTranscriptionSocket>;
   private readonly nowMs?: () => number;
   private readonly openedAtMs: number;
   private readonly queue: SpeechEvent[] = [];
@@ -459,9 +458,7 @@ export class MistralTranscriptionSession implements SpeechSession {
     admission: MistralTranscriptionAdmission,
     usage: MistralTranscriptionUsageSink,
     config: MistralTranscriptionProfileConfig,
-    connect: MistralTranscriptionConnect,
-    bearerToken: string,
-    originator: string | undefined,
+    openProviderStream: () => Promise<MistralTranscriptionSocket>,
     nowMs: (() => number) | undefined,
     signal: AbortSignal | undefined,
     schedule: ((delayMs: number, fn: () => void) => () => void) | undefined,
@@ -472,9 +469,7 @@ export class MistralTranscriptionSession implements SpeechSession {
     this.admission = admission;
     this.usage = usage;
     this.config = config;
-    this.connect = connect;
-    this.bearerToken = bearerToken;
-    this.originator = originator ?? 'sentropic-llm-mesh';
+    this.openProviderStream = openProviderStream;
     this.nowMs = nowMs;
     this.signal = signal;
     this.openedAtMs = monotonicNow(nowMs);
@@ -735,16 +730,8 @@ export class MistralTranscriptionSession implements SpeechSession {
   }
 
   private async openStream(utteranceId: string, audioStartMs: number): Promise<TurnStream> {
-    let socket: MistralTranscriptionSocket;
-    try {
-      socket = await this.connect(MISTRAL_TRANSCRIPTION_WS_URL, {
-        authorization: `Bearer ${this.bearerToken}`,
-        originator: this.originator,
-      });
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : 'unknown';
-      throw new MistralTranscriptionError('transport', `provider connect failed: ${redactBearer(detail, this.bearerToken)}`);
-    }
+    // The bound dial redacts handshake failures itself; no key reaches this scope.
+    const socket = await this.openProviderStream();
     let resolveReady!: () => void;
     let rejectReady!: (error: unknown) => void;
     // The pump resolves once `session.created` arrives; a close ends the
@@ -998,9 +985,22 @@ export const openMistralTranscriptionSession = async (
     stages: { stt: capabilities },
     inputFormat: TRANSCRIPTION_FORMAT,
   };
+  // Bind the handshake (URL + authorization) once: per-turn dials reuse it,
+  // handshake failures are redacted here, and the session holds no key.
+  const bearerToken = options.bearerToken;
+  const openProviderStream = async (): Promise<MistralTranscriptionSocket> => {
+    try {
+      return await options.connect(MISTRAL_TRANSCRIPTION_WS_URL, {
+        authorization: `Bearer ${bearerToken}`,
+        originator: options.originator ?? 'sentropic-llm-mesh',
+      });
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'unknown';
+      throw new MistralTranscriptionError('transport', `provider connect failed: ${redactBearer(detail, bearerToken)}`);
+    }
+  };
   return new MistralTranscriptionSession(
-    receipt, binding, options.admission, options.usage, config, options.connect,
-    options.bearerToken, options.originator, options.nowMs, options.signal,
-    options.schedule, request.maxDurationMs,
+    receipt, binding, options.admission, options.usage, config, openProviderStream,
+    options.nowMs, options.signal, options.schedule, request.maxDurationMs,
   );
 };
