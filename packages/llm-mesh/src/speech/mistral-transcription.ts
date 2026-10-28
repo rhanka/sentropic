@@ -476,8 +476,7 @@ export class MistralTranscriptionSession implements SpeechSession {
   private readonly effectiveMaxMs: number;
   private abortHandler?: () => void;
   private expiryCancel?: () => void;
-  /** Active per-turn pumps; close() joins them unless called from a pump. */
-  private pumps = 0;
+  /** In-flight per-turn pumps; external close() joins them. */
   private readonly pumpPromises = new Set<Promise<void>>();
   private current?: TurnStream;
   /** UtteranceIds with an emitted final: commit is a no-op, writes refuse. */
@@ -720,7 +719,12 @@ export class MistralTranscriptionSession implements SpeechSession {
     }
   }
 
-  async close(): Promise<void> {
+  /**
+   * External close joins the turn pumps after tearing the stream down; a
+   * close from inside a pump (runTurn catch) skips the join — awaiting its
+   * own pump set would hang (L9 mirrors this with its inPump flag).
+   */
+  async close(fromPump = false): Promise<void> {
     if (this.settled) return;
     this.settled = true;
     this.expiryCancel?.();
@@ -744,7 +748,7 @@ export class MistralTranscriptionSession implements SpeechSession {
         outcome: this.outcome,
       });
       while (this.waiters.length > 0) this.waiters.shift()?.();
-      if (this.pumps === 0) await Promise.allSettled([...this.pumpPromises]);
+      if (!fromPump) await Promise.allSettled([...this.pumpPromises]);
     }
   }
 
@@ -828,7 +832,6 @@ export class MistralTranscriptionSession implements SpeechSession {
     resolveReady: () => void,
     rejectReady: (error: unknown) => void,
   ): Promise<void> {
-    this.pumps += 1;
     try {
       const iterator = stream.socket.messages()[Symbol.asyncIterator]();
       // Phase 1: the provider opens with `session.created`; anything else
@@ -892,10 +895,8 @@ export class MistralTranscriptionSession implements SpeechSession {
       if (!this.settled && !stream.abandoned) {
         this.outcome = 'failed';
         this.pushError('transport', false);
-        void this.close();
+        void this.close(true);
       }
-    } finally {
-      this.pumps -= 1;
     }
   }
 

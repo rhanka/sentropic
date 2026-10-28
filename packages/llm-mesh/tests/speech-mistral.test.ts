@@ -482,6 +482,17 @@ describe('mistral transcript mapping', () => {
     expect(driven.sink.records).toHaveLength(1);
   });
 
+  it('should emit one final with no partials when done carries the whole turn', async () => {
+    const driven = await openMistralDriven();
+    await driven.write('u_solo', 10);
+    await driven.commit('u_solo', [frameDone('solo')]);
+    const events = await driven.collect();
+    expect(events.filter((event) => event.type === 'transcript.partial')).toHaveLength(0);
+    const finals = events.filter((event) => event.type === 'transcript.final');
+    expect(finals).toHaveLength(1);
+    expect(finals[0]).toMatchObject({ utteranceId: 'u_solo', text: 'solo', revision: 1 });
+  });
+
   it('should end a pending commit when the provider closes without done', async () => {
     const driven = await openMistralDriven();
     await driven.write('u1', 10);
