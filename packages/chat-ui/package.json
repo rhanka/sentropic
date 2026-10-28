@@ -18,11 +18,6 @@
       "import": "./src/index.ts"
     },
     "./theme.css": "./src/theme/chat-ui.css",
-    "./checkpoints": {
-      "types": "./src/checkpoints/index.ts",
-      "svelte": "./src/checkpoints/index.ts",
-      "import": "./src/checkpoints/index.ts"
-    },
     "./state/chatWidgetShell": {
       "types": "./src/state/chatWidgetShell.ts",
       "svelte": "./src/state/chatWidgetShell.ts",

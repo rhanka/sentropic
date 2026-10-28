@@ -165,7 +165,7 @@
     getCheckpointMutationPreviewItems,
     applySessionCheckpoints as applySessionCheckpointsFromModule,
     getCheckpointForUserMessage as getCheckpointForUserMessageFromModule,
-  } from '@sentropic/chat-ui/checkpoints';
+  } from '@sentropic/chat-runtime/checkpoints';
   import { createCheckpointHost } from '$lib/adapters/checkpointHostAdapter';
   import {
     mergeProjectionHistoryEvents,
