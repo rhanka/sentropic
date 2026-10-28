@@ -4,6 +4,7 @@ import { createStreamHub } from '../../src/client/streamHub.js';
 import { createConversationRuntime, type ConversationRuntimeOptions } from '../../src/state/conversationRuntime.js';
 import type { DocumentHost } from '@sentropic/chat-ui/documents';
 import { registerLocalTool, unregisterLocalTool } from '../../src/stores/localTools.js';
+import { buildChatHistoryTimeline, type ChatHistoryMessage } from '../../../chat-core/src/history.js';
 
 class FixtureEventSource extends EventTarget {
   closed = false;
@@ -24,6 +25,14 @@ export async function createConversationFixture(overrides: Partial<ConversationR
   const uploads: string[] = [];
   let failUpload = false;
   const deps = createInMemoryChatServerDeps({ assistantReply: 'Reply **markdown**' });
+  const readHistory = deps.sessions!.getSessionHistory.bind(deps.sessions);
+  deps.sessions!.getSessionHistory = async (input) => {
+    const history = await readHistory(input);
+    const events = await deps.stream.readSessionEvents({ sessionId: input.sessionId, fromSeq: 0, userId: input.userId });
+    const byStream = new Map<string, typeof events>();
+    for (const event of events) byStream.set(event.streamId, [...(byStream.get(event.streamId) ?? []), event]);
+    return { ...history, items: buildChatHistoryTimeline(history.items as ChatHistoryMessage[], byStream) };
+  };
   const server = createChatServer(deps, { routes: 'app-contract' });
   server.get('/models/catalog', (c) => c.json({
     providers: [{ provider_id: 'openai', label: 'OpenAI', status: 'ready' }],
