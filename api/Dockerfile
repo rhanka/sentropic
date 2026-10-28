@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-FROM node:24-alpine3.23 AS base
+FROM node:24-alpine3.23 AS dependencies
 # Security: Pin npm to a known-good version (reproducible build) to fix glob vulnerabilities in npm dependencies
 RUN npm install -g npm@11.16.0
 # Security: Patch npm's bundled brace-expansion for CVE-2026-102276 / CVE-2026-102278
@@ -103,6 +103,8 @@ RUN if [ -f package-lock.json ]; then npm ci --workspaces --include-workspace-ro
 # (GHSA allowlist + expiry) — see .security/audit-gate.mjs + vulnerability-register.yaml.
 COPY .security/audit-gate.mjs .security/audit-allowlist.json ./.security/
 RUN node .security/audit-gate.mjs --omit=dev --workspaces --include-workspace-root
+
+FROM dependencies AS base
 # Explicit production inputs only (fix/api-image-canonical-artifact): no blind
 # `COPY . .`, so unhashed sources (ui/**, e2e suites, non-consumed packages)
 # can never perturb the canonical tag. Every source below is hashed into
@@ -164,7 +166,8 @@ RUN mkdir -p /patched && \
 
 # CI runners retain npm, devDependencies, test sources and built workspaces.
 # This target is a toolbox only; the production target is the shipped SUT.
-FROM development AS ci-tools
+# Keep npm/esbuild preparation independent of source-dependent workspace builds.
+FROM dependencies AS ci-tool-base
 COPY --from=ci-esbuild /patched /patched
 RUN test "$(node -p "require('/workspace/node_modules/esbuild/package.json').version")" = 0.19.12 && \
     test "$(node -p "require('/workspace/node_modules/@esbuild-kit/core-utils/node_modules/esbuild/package.json').version")" = 0.18.20 && \
@@ -186,8 +189,15 @@ RUN mkdir -p /tmp/tool-npm-patches && \
       tar -xzf "/tmp/tool-npm-patches/$package-$version.tgz" --strip-components=1 \
         -C "/usr/local/lib/node_modules/npm/node_modules/$package" || exit 1; \
     done && rm -rf /tmp/tool-npm-patches /root/.npm
-RUN apk add --no-cache chromium && \
-    npm --prefix /workspace/e2e ci --ignore-scripts
+
+# Non-browser API checks need no Chromium or duplicate Playwright installation.
+# The screen smoke uses the separately qualified E2E image's browser instead.
+FROM ci-tool-base AS ci-tools
+COPY --from=base /workspace/api /workspace/api
+COPY --from=base /workspace/packages /workspace/packages
+COPY --from=base /workspace/apps /workspace/apps
+COPY --from=base /workspace/e2e /workspace/e2e
+WORKDIR /workspace/api
 
 # BR-39 deploy (D4-a) — IdP screens build stage. Self-contained, mirrors
 # apps/auth-idp/web/Dockerfile (NOT a root workspace member; pulls @sentropic/auth-ui
