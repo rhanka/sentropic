@@ -914,7 +914,7 @@ ci-capacity-status: ## Inspect CI_RUN_ID without cancelling or retrying any job
 	@gh run view $(CI_RUN_ID) --repo rhanka/sentropic --json databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,jobs --jq '{databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,pendingOrFailed: [.jobs[] | select(.conclusion != "success" and .conclusion != "skipped") | {databaseId,name,status,conclusion,startedAt,completedAt}]}'
 .PHONY: ci-capacity-publish-dry-run
 ci-capacity-publish-dry-run: ## Exercise a publisher's real guarded pack without registry writes
-	@case '$(PACKAGE)' in llm-mesh|llm-gateway|cluster-mesh|chat-ui|cited-source-viewer|cowork-bridge|cowork-desktop|oauth-verify|mcp-auth|mcp-platform|artifacts|auth-hono|auth-client|auth-ui|contracts|events|chat-core|chat-server|comments|flow|harness) ;; *) echo 'Invalid dry-run package'; exit 1;; esac
+	@case '$(PACKAGE)' in llm-mesh|llm-gateway|cluster-mesh|chat-runtime|chat-ui|cited-source-viewer|cowork-bridge|cowork-desktop|oauth-verify|mcp-auth|mcp-platform|artifacts|auth-hono|auth-client|auth-ui|contracts|events|chat-core|chat-server|comments|flow|harness) ;; *) echo 'Invalid dry-run package'; exit 1;; esac
 	@$(MAKE) --no-print-directory pack-$(PACKAGE) MANIFEST_REPORT_DIR=tmp/ci-capacity/publish-$(PACKAGE) ENV=$(ENV)
 	@jq -n --arg package '$(PACKAGE)' --arg run "$$GITHUB_RUN_ID" --arg sha "$$GITHUB_SHA" '{package: $$package, runId: $$run, headSha: $$sha, mode: "guarded-pack-no-publication", completed: true}' | tee tmp/ci-capacity/publish-$(PACKAGE)/dry-run.json
 CI_EXPECTED_ATTEMPT ?= $(CI_RUN_ATTEMPT)
@@ -1354,6 +1354,12 @@ publish-llm-mesh-token: verify-llm-mesh-cloud-code-oauth ## Publish @sentropic/l
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/llm-mesh \
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,llm-mesh,--access public --provenance=false)'
+
+.PHONY: typecheck-chat-runtime build-chat-runtime test-chat-runtime pack-chat-runtime
+typecheck-chat-runtime build-chat-runtime test-chat-runtime:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e SCOPE="$(SCOPE)" -v "$(CURDIR):/workspace" -w /workspace/packages/chat-runtime $(LLM_MESH_NODE_IMAGE) sh scripts/run.sh $(patsubst %-chat-runtime,%,$@)
+pack-chat-runtime: build-chat-runtime
+	$(call manifest_guard_pack,chat-runtime,$(MANIFEST_DIST_FORM))
 
 .PHONY: typecheck-chat-ui
 typecheck-chat-ui: ## Run @sentropic/chat-ui type checks
@@ -1827,6 +1833,43 @@ publish-auth-ui-token: build-auth-ui ## Publish @sentropic/auth-ui using NPM_TOK
 # BR-PKG-EX1 (Makefile exception): publish-chat-ui transiently rewrites package.json to dist-form,
 # runs the guarded tarball publication (BRCI-EX1), then restores the src-form package.json.
 # The committed repo package.json always stays src-form (exports -> ./src/...).
+.PHONY: publish-chat-runtime
+publish-chat-runtime: build-chat-runtime ## Publish @sentropic/chat-runtime from CI OIDC trusted publishing (dist-form tarball via transient package.json rewrite — BR-PKG-EX1)
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e GITHUB_ACTIONS \
+		-e GITHUB_REPOSITORY \
+		-e GITHUB_REF \
+		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
+		-e ACTIONS_ID_TOKEN_REQUEST_URL \
+		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/chat-runtime \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/tmp/pkg-src-backup.json; $(call manifest_guard_publish,chat-runtime,--access public)'
+
+.PHONY: publish-chat-runtime-token
+publish-chat-runtime-token: build-chat-runtime ## Publish @sentropic/chat-runtime using a token read from NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-chat-runtime in CI)
+	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" \
+		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
+		-w /workspace/packages/chat-runtime \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/tmp/pkg-src-backup.json; $(call manifest_guard_publish,chat-runtime,--access public --provenance=false)'
+
 .PHONY: publish-chat-ui
 publish-chat-ui: build-chat-ui ## Publish @sentropic/chat-ui from CI OIDC trusted publishing (dist-form tarball via transient package.json rewrite — BR-PKG-EX1)
 	@docker run --rm \
