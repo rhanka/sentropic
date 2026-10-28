@@ -5,10 +5,14 @@ import { Hono } from 'hono';
 import { createMemoryBlobStore } from '@sentropic/artifacts/server/publication';
 import { runMigrations } from '../../src/db/run-migrations';
 import { createArtifactHost } from '../../src/services/artifacts/composition';
-import { createArtifactCredentialReader, createCurrentArtifactIdentity, artifactCredential } from '../../src/services/artifacts/credentials';
+import { createArtifactCredentialReader, createCurrentArtifactIdentity, artifactCredential, artifactTurnCredential } from '../../src/services/artifacts/credentials';
 import { createArtifactTransport } from '../../src/services/artifacts/transport';
 import { createArtifactHttpRouter } from '../../src/routes/namespaces/artifacts';
 import { createRegistryDispatchRouter } from '../../src/services/mcp/registry-dispatch';
+import { createHostRegistryCatalogSource } from '../../src/services/catalog/sources/host-registry-source';
+import { CompositeCatalogRegistry } from '../../src/services/catalog/composite-registry';
+import { CatalogExecutionSeam } from '../../src/services/catalog/execution-seam';
+import { createCatalogContextResolver } from '../../src/services/catalog/request-context';
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL });
 const resource = 'https://app.example/api/v1/mcp';
@@ -47,6 +51,63 @@ afterEach(async () => {
   await admin.query(`DROP DATABASE "${database}"`);
 });
 afterAll(() => admin.end());
+
+it('should bind a conversation credential to its subject and workspace through the host effect guard', async () => {
+  await pool.query(`INSERT INTO chat_sessions (id, user_id, workspace_id)
+    VALUES ('turn-a', 'alice', 'workspace-a')`);
+  const host = createArtifactHost({ pool, blobs: createMemoryBlobStore(), quotaBytes: 262144,
+    currentIdentity: createCurrentArtifactIdentity(resource) });
+  const identity = { subject: 'alice', tenantId: 'tenant-a', clientId: 'sentropic-turn',
+    credentialId: artifactTurnCredential('turn-a', 'workspace-a') };
+  const bound = await host.bind(identity, 'workspace-a');
+  const transport = createArtifactTransport(host);
+  const plan = await transport.ready;
+  const source = createHostRegistryCatalogSource({ registry: () => plan, transport: async () => transport });
+  const seam = new CatalogExecutionSeam(new CompositeCatalogRegistry().addSource(source), [source]);
+  const context = await createCatalogContextResolver(async () => ({ tenantId: 'tenant-a',
+    membershipRef: 'member', consentRef: 'consent', policyVersion: 'v1', readOnly: false,
+    allowedTools: ['artifacts_ensure'] }))({ kind: 'turn', userId: 'alice', sessionId: 'turn-a',
+    workspaceId: 'workspace-a', allowedTools: ['artifacts_ensure'] });
+  const args = { bindingName: 'turn-report', idempotencyKey: 'turn-ensure' };
+  expect(await seam.execute('artifacts_ensure', args, context)).toMatchObject({ handled: true, result: { status: 201 } });
+  expect((await bound.mcp({ tool: 'artifacts_ensure', args })).body).toMatchObject({ replayed: true });
+  for (const override of [{ subject: 'bob' }, { clientId: 'sentropic-session' },
+    { credentialId: artifactCredential('session', 'turn-a') },
+    { credentialId: artifactTurnCredential('turn-a', 'foreign-workspace') }]) {
+    await expect(host.bind({ ...identity, ...override }, 'workspace-a')).rejects.toThrow();
+  }
+  await pool.query(`DELETE FROM chat_sessions WHERE id = 'turn-a'`);
+  expect(await seam.execute('artifacts_ensure', { bindingName: 'denied', idempotencyKey: 'denied' }, context))
+    .toMatchObject({ handled: true, result: { status: 403 } });
+  expect((await bound.mcp({ tool: 'artifacts_ensure', args: {
+    bindingName: 'revoked', idempotencyKey: 'after-revoke' } })).status).toBe(403);
+  expect((await pool.query('SELECT count(*)::int AS n FROM artifacts.artifacts')).rows).toEqual([{ n: 1 }]);
+  expect((await pool.query('SELECT count(*)::int AS n FROM artifacts.operation_receipts')).rows).toEqual([{ n: 1 }]);
+});
+
+it('should deny a conversation moved while publication waits without persisting another effect', async () => {
+  await pool.query(`INSERT INTO chat_sessions (id, user_id, workspace_id) VALUES ('turn-a', 'alice', 'workspace-a')`);
+  const host = createArtifactHost({ pool, blobs: createMemoryBlobStore(), quotaBytes: 262144,
+    currentIdentity: createCurrentArtifactIdentity(resource) });
+  const bound = await host.bind({ subject: 'alice', tenantId: 'tenant-a', clientId: 'sentropic-turn',
+    credentialId: artifactTurnCredential('turn-a', 'workspace-a') }, 'workspace-a');
+  const ensured = await bound.mcp({ tool: 'artifacts_ensure', args: { bindingName: 'report', idempotencyKey: 'ensure' } });
+  const artifactId = (ensured.body as { artifactId: string }).artifactId;
+  const blocker = await pool.connect();
+  await blocker.query('BEGIN');
+  await blocker.query('SELECT id FROM artifacts.artifacts WHERE id = $1 FOR UPDATE', [artifactId]);
+  const pending = bound.mcp({ tool: 'artifacts_publish', args: { artifactId, idempotencyKey: 'publish',
+    files: [{ path: 'index.html', mimeType: 'text/html', text: 'A' }] } });
+  try {
+    await vi.waitFor(async () => expect((await pool.query(`SELECT 1 FROM pg_stat_activity
+      WHERE datname = current_database() AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()`))
+      .rowCount).toBeGreaterThan(0));
+    await pool.query(`UPDATE chat_sessions SET workspace_id = NULL WHERE id = 'turn-a'`);
+  } finally { await blocker.query('ROLLBACK'); blocker.release(); }
+  expect((await pending).status).toBe(403);
+  expect((await pool.query('SELECT count(*)::int AS n FROM artifacts.releases')).rows).toEqual([{ n: 0 }]);
+  expect((await pool.query('SELECT count(*)::int AS n FROM artifacts.operation_receipts')).rows).toEqual([{ n: 1 }]);
+});
 
 it('should commit one HTTP/MCP effect using the current session and OAuth readers', async () => {
   const host = createArtifactHost({ pool, blobs: createMemoryBlobStore(), quotaBytes: 262144,

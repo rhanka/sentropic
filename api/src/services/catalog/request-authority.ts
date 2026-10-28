@@ -2,11 +2,13 @@ import { createHash } from 'node:crypto';
 import type { AuthUser } from '../../middleware/auth';
 import { pool } from '../../db/client';
 import { resolveTenantAuthoritatively } from '../tenancy/resolve-tenant';
-import { compositeCatalogRegistry } from '../skills/catalog';
+import { compositeCatalogRegistry, prepareHostRegistryCatalog } from '../skills/catalog';
 import { createCatalogContextResolver, type CatalogContextInput } from './request-context';
 
 /** First-party HTTP sessions and verified conversation turns have separate session authorities.
  * OAuth consent is not borrowed from a first-party session. Provider grants remain provider-owned.
+ * W4.a intentionally binds turns to conversation + current account/memberships, not login liveness:
+ * logout or login expiry does not stop a running turn; conversation/account/membership revocation does.
  */
 const resolve = createCatalogContextResolver(async input => {
   const tenant = await resolveTenantAuthoritatively({ workspaceId: input.workspaceId, userId: input.userId });
@@ -33,9 +35,8 @@ const resolve = createCatalogContextResolver(async input => {
     entry.kind === 'skill' ? entry.skill.tools.map(tool => tool.name)
       : entry.kind === 'tool' ? [entry.metadata.name] : []);
   if (process.env.APP_ARTIFACT_HOST_ENABLED === '1') {
-    const { productArtifactTransport } = await import('../artifacts/instance');
     // The compiled registry owns public identifiers; never sanitize or reconstruct them here.
-    names.push(...(await productArtifactTransport.ready).tools.keys());
+    names.push(...(await prepareHostRegistryCatalog())!.tools.keys());
   }
   return { tenantId: tenant.tenantId, membershipRef: `${input.workspaceId}:${input.userId}:${row.role}`,
     consentRef: `first-party:${input.kind}:${input.sessionId}`,
