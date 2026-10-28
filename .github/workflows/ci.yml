@@ -2001,8 +2001,21 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    needs: [changes, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-e2e, e2e-vscode, security-container]
-    if: (needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true') && github.ref == 'refs/heads/main'
+    needs: [changes, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-e2e, e2e-vscode, security-container, security-iac]
+    if: >-
+      !cancelled() &&
+      github.ref == 'refs/heads/main' &&
+      (needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true') &&
+      needs.changes.result == 'success' &&
+      needs.typecheck-lint-api.result == 'success' &&
+      needs.typecheck-lint-ui.result == 'success' &&
+      needs.security-sast-sca.result == 'success' &&
+      needs.test-ui.result == 'success' &&
+      needs.build-ui-static.result == 'success' &&
+      needs.test-e2e.result == 'success' &&
+      needs.e2e-vscode.result == 'success' &&
+      needs.security-container.result == 'success' &&
+      (needs.security-iac.result == 'success' || (needs.security-iac.result == 'skipped' && needs.changes.outputs.global != 'true'))
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}
@@ -2042,8 +2055,24 @@ jobs:
     concurrency:
       group: api-image-publication
       cancel-in-progress: false
-    needs: [changes, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container]
-    if: (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') && github.ref == 'refs/heads/main'
+    needs: [changes, typecheck-lint-api, typecheck-lint-ui, security-sast-sca, test-ui, build-ui-static, test-api-unit-integration, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container, security-iac]
+    if: >-
+      !cancelled() &&
+      github.ref == 'refs/heads/main' &&
+      (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') &&
+      needs.changes.result == 'success' &&
+      needs.typecheck-lint-api.result == 'success' &&
+      needs.typecheck-lint-ui.result == 'success' &&
+      needs.security-sast-sca.result == 'success' &&
+      (needs.test-ui.result == 'success' || (needs.test-ui.result == 'skipped' && needs.changes.outputs.ui != 'true' && needs.changes.outputs.global != 'true')) &&
+      (needs.build-ui-static.result == 'success' || (needs.build-ui-static.result == 'skipped' && needs.changes.outputs.ui != 'true' && needs.changes.outputs.global != 'true')) &&
+      needs.test-api-unit-integration.result == 'success' &&
+      needs.test-e2e.result == 'success' &&
+      needs.e2e-vscode.result == 'success' &&
+      needs.smoke-idp-screens.result == 'success' &&
+      needs.test-smoke-restore.result == 'success' &&
+      needs.security-container.result == 'success' &&
+      (needs.security-iac.result == 'success' || (needs.security-iac.result == 'skipped' && needs.changes.outputs.global != 'true'))
     env:
       DOCKER_USERNAME: nologin
       DOCKER_PASSWORD: ${{ secrets.SCW_SECRET_KEY }}

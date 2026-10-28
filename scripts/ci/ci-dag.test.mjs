@@ -4,11 +4,47 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import test from 'node:test';
 import { checkDag, readiness, runtimeInputs, scanInputs, securityJoin } from './ci-dag.mjs';
-import { evaluateExpected, workflowExpected } from './ci-expected-results.mjs';
+import { evaluateExpected, evaluateSelection, workflowExpected } from './ci-expected-results.mjs';
 
 const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
 const workflow = YAML.parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
 const context = { changes: { global: 'true' }, event: 'pull_request', ref: 'refs/pull/79/merge' };
+
+// GitHub implicitly requires success() unless a status function is explicit.
+function publisherDispatch(name, changes, overrides = {}) {
+  const job = workflow.jobs[name];
+  const results = Object.fromEntries(job.needs.map(parent => [parent, 'success']));
+  if (changes.global !== 'true') results['security-iac'] = 'skipped';
+  if (changes.ui !== 'true' && changes.global !== 'true') {
+    results['test-ui'] = 'skipped'; results['build-ui-static'] = 'skipped';
+  }
+  Object.assign(results, overrides);
+  if (!/(always|cancelled|failure|success)\(\)/.test(job.if)
+    && job.needs.some(parent => results[parent] !== 'success')) return false;
+  return evaluateSelection(job.if, key => {
+    if (key === 'github.ref') return 'refs/heads/main';
+    if (key.startsWith('needs.changes.outputs.')) return changes[key.slice(22)] ?? 'false';
+    const parent = key.match(/^needs\.([\w-]+)\.result$/)?.[1];
+    if (parent) return results[parent];
+    throw Error(`Unknown publisher context: ${key}`);
+  });
+}
+
+test('should publish API-only changes with unselected UI jobs and reject every selected failed barrier', () => {
+  for (const changes of [{ api: 'true' }, { ui: 'true' }, { global: 'true' }]) {
+    for (const name of ['publish-api-image', 'publish-ui-image']) {
+      if (changes.global !== 'true' && changes[name === 'publish-api-image' ? 'api' : 'ui'] !== 'true') continue;
+      assert.equal(publisherDispatch(name, changes), true, `${name}: ${JSON.stringify(changes)}`);
+      for (const parent of workflow.jobs[name].needs) {
+        if (['test-ui', 'build-ui-static'].includes(parent) && !changes.ui && !changes.global) continue;
+        if (parent === 'security-iac' && !changes.global) continue;
+        for (const result of ['failure', 'cancelled', 'skipped']) {
+          assert.equal(publisherDispatch(name, changes, { [parent]: result }), false, `${name}: ${parent}=${result}`);
+        }
+      }
+    }
+  }
+});
 
 test('should reject a missing or failed selected scan while allowing unselected lanes', () => {
   for (const changes of [{ global: 'true' }, { api: 'true' }, { ui: 'true' }]) {
