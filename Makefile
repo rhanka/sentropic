@@ -1859,6 +1859,7 @@ publish-harness-token: build-harness ## Publish @sentropic/harness using NPM_TOK
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,harness,--access public --provenance=false)'
 
 IDP_SYNC_KUBECTL_IMAGE := registry.k8s.io/kubectl:v1.35.0@sha256:0bb95b2a450875fc8ceaea2f9987a99fe27c228846e2e00b93b65ebb0d59034e
+include deploy/ci/artifact-content/tests.mk
 .PHONY: test-idp-sync-selftest
 test-idp-sync-selftest: ## Build and check the IdP sync bundles locally without cluster access (BR45-EX1)
 	@case "$(ENV)" in test-*) ;; *) echo "ERROR: use ENV=test-*"; exit 1 ;; esac
