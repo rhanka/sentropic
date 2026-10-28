@@ -64,6 +64,7 @@
   - [ ] api/tests/unit/auth/remote-authority.test.ts: owner-only, exact workspace membership/role/scopes/consent/epoch, signed attestation, source/read separation.
   - [ ] Separate IdP/app/mesh key and workload references; current native-proof port; no per-action MFA or new unlock.
 - [ ] **Lot 3 — Internal IdP composition, RED then GREEN**
+  - [x] api/tests/api/auth/remote-session.test.ts authored for durable issuer login/refresh/revocation/version/replay behavior.
   - [ ] api/tests/api/auth/remote-evidence.test.ts: internal workload before body, browser/product denial, bounded strict body, no-store and sanitized failures.
   - [ ] Real session-store adapter preserves sid/version/auth_time across refresh and revalidates logout/revocation/expiry.
 - [ ] **Lot 4 — Documentation and validation**
