@@ -501,3 +501,61 @@ describe('createContextModule — savePrefs', () => {
 // ---------------------------------------------------------------------------
 
 describe('domain neutrality: zero sentropic domain strings in src/context/', () => {
+  const contextDir = path.resolve(process.cwd(), 'src', 'context');
+  const DOMAIN_STRINGS = [
+    'organization',
+    'folder',
+    'initiative',
+    'usecase',
+    'executive_summary',
+  ];
+
+  it('src/context/ directory exists', () => {
+    expect(fs.existsSync(contextDir)).toBe(true);
+  });
+
+  for (const term of DOMAIN_STRINGS) {
+    it(`no "${term}" string literal in src/context/ source files`, () => {
+      const files = fs.readdirSync(contextDir).filter((f) => f.endsWith('.ts'));
+      for (const file of files) {
+        const content = fs.readFileSync(path.join(contextDir, file), 'utf8');
+        // Check for string literal occurrences: 'term' or "term" in source
+        const singleQuote = new RegExp(`'${term}'`);
+        const doubleQuote = new RegExp(`"${term}"`);
+        expect(singleQuote.test(content), `'${term}' string literal found in ${file}`).toBe(false);
+        expect(doubleQuote.test(content), `"${term}" string literal found in ${file}`).toBe(false);
+      }
+    });
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 10. index barrel re-exports
+// ---------------------------------------------------------------------------
+
+describe('context/index.ts re-exports', () => {
+  it('exports createContextModule', async () => {
+    const mod = await import('../src/context/index.js');
+    expect(typeof mod.createContextModule).toBe('function');
+  });
+
+  it('exports toChatRouteContextKey', async () => {
+    const mod = await import('../src/context/index.js');
+    expect(typeof mod.toChatRouteContextKey).toBe('function');
+  });
+
+  it('exports upsertRouteContextEntry', async () => {
+    const mod = await import('../src/context/index.js');
+    expect(typeof mod.upsertRouteContextEntry).toBe('function');
+  });
+
+  it('exports selectActiveChatContexts', async () => {
+    const mod = await import('../src/context/index.js');
+    expect(typeof mod.selectActiveChatContexts).toBe('function');
+  });
+
+  it('keeps the visual noop provider outside the runtime', async () => {
+    const mod = await import('../src/context/index.js');
+    expect(mod).not.toHaveProperty('createNoopChatContextProvider');
+  });
+});
