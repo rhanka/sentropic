@@ -618,3 +618,75 @@ export async function decideLocalToolPermission(
   const response = await sendMessage({
     type: 'tool_permission_decide',
     payload: {
+      requestId,
+      decision,
+    },
+  });
+  if (!response?.ok) {
+    throw new Error(
+      response?.error ?? 'Unable to save local tool permission decision.',
+    );
+  }
+}
+
+export async function listLocalToolPermissionPolicies(): Promise<
+  LocalToolPermissionPolicyEntry[]
+> {
+  const runtime = getRuntimeWithMessaging();
+  const sendMessage = runtime.sendMessage as NonNullable<
+    LocalToolsAdapter['sendMessage']
+  >;
+  const response = await sendMessage({
+    type: 'extension_tool_permissions_list',
+  });
+  if (!response?.ok) {
+    throw new Error(
+      response?.error ?? 'Unable to load extension tool permissions.',
+    );
+  }
+  return Array.isArray(response.items)
+    ? (response.items as LocalToolPermissionPolicyEntry[])
+    : [];
+}
+
+export async function upsertLocalToolPermissionPolicy(input: {
+  toolName: string;
+  origin: string;
+  policy: LocalToolPermissionPolicy;
+  pathPattern?: string;
+}): Promise<LocalToolPermissionPolicyEntry> {
+  const runtime = getRuntimeWithMessaging();
+  const sendMessage = runtime.sendMessage as NonNullable<
+    LocalToolsAdapter['sendMessage']
+  >;
+  const response = await sendMessage({
+    type: 'extension_tool_permissions_upsert',
+    payload: input,
+  });
+  if (!response?.ok || !response.item) {
+    throw new Error(
+      response?.error ?? 'Unable to update extension tool permission.',
+    );
+  }
+  return response.item as LocalToolPermissionPolicyEntry;
+}
+
+export async function deleteLocalToolPermissionPolicy(input: {
+  toolName: string;
+  origin: string;
+  pathPattern?: string;
+}): Promise<void> {
+  const runtime = getRuntimeWithMessaging();
+  const sendMessage = runtime.sendMessage as NonNullable<
+    LocalToolsAdapter['sendMessage']
+  >;
+  const response = await sendMessage({
+    type: 'extension_tool_permissions_delete',
+    payload: input,
+  });
+  if (!response?.ok) {
+    throw new Error(
+      response?.error ?? 'Unable to delete extension tool permission.',
+    );
+  }
+}
