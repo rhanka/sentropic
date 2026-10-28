@@ -7,6 +7,8 @@
 // in tests/fixtures/reserved-versions.ts (#767), duplicated here because the
 // bare probe runs as plain node `.mjs`. Keep both constants aligned here
 // and there; moving the reservation does not move the frozen published pin.
+// The pin is the latest published release whose dependency and peer metadata
+// equals the candidate's (0.23.3/0.23.4 peer ranges differ).
 export const RESERVED_NEXT = '0.24.0';
 export const LATEST_PUBLISHED_CLUSTER_MESH = '0.23.2';
 export const PACK_ONLY_PACKAGE = '@sentropic/cluster-mesh';

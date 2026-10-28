@@ -8,6 +8,7 @@ import { MemoryCanonicalJsonError, memoryJcs, type MemoryEncodedValue } from './
 import { isMemoryAdmissionOutcome, isMemoryCaptureProof } from './validation.js';
 import { StorageInvalidCommandError } from '../storage/errors.js';
 import type { AtomicUnit } from '../storage/atomic.js';
+import type { EncodedValue } from '../storage/contracts.js';
 import type {
   NeutralAggregateUpdate, NeutralAtomicUnit, NeutralModuleTransaction,
 } from './neutral-contract.js';
@@ -42,6 +43,11 @@ const parseStored = (data: string): Record<string, unknown> => {
     if (error instanceof StorageInvalidCommandError) throw error;
     throw new StorageInvalidCommandError('memory wire value must be JSON bytes');
   }
+};
+
+export const requireMemoryUtf8 = (value: EncodedValue): MemoryEncodedValue => {
+  if (value.format !== 'utf8') throw new StorageInvalidCommandError('memory wire value must be UTF-8');
+  return { format: 'utf8', data: value.data };
 };
 
 const requireWire = (ok: boolean, what: string): void => {
@@ -91,8 +97,9 @@ export const translateMemoryUpdateWrite = (row: NeutralAggregateUpdate): Neutral
 };
 
 export const translateMemoryAggregateRead = (
-  key: string, value: MemoryEncodedValue,
+  key: string, storedValue: EncodedValue,
 ): MemoryEncodedValue => {
+  const value = requireMemoryUtf8(storedValue);
   if (!isMemoryCaptureKey(key) && !isMemoryOutcomeKey(key)) return value;
   const parsed = parseStored(value.data);
   if (typeof parsed['candidate_id'] === 'string') {
@@ -108,8 +115,8 @@ export const translateMemoryAggregateRead = (
 /** Rejoin the K7 receipt digest carried only in the pending control bytes. */
 export const withMemoryCaptureReceipt = async (
   key: string,
-  value: MemoryEncodedValue,
-  readControl: (controlKey: string) => Promise<MemoryEncodedValue | null>,
+  value: EncodedValue,
+  readControl: (controlKey: string) => Promise<EncodedValue | null>,
 ): Promise<MemoryEncodedValue> => {
   const translated = translateMemoryAggregateRead(key, value);
   if (!isMemoryCaptureKey(key)) return translated;
@@ -118,7 +125,7 @@ export const withMemoryCaptureReceipt = async (
   const candidateId = (JSON.parse(key) as unknown[])[1];
   const control = await readControl(JSON.stringify(['memory-pending-control-v1', candidateId]));
   if (!control) return translated;
-  const receiptDigest = parseStored(control.data)['capture_receipt_digest'];
+  const receiptDigest = parseStored(requireMemoryUtf8(control).data)['capture_receipt_digest'];
   return typeof receiptDigest === 'string'
     ? memoryJcs({ ...entry, receipt_digest: receiptDigest }) : translated;
 };
@@ -168,10 +175,10 @@ export const neutralUnitToPg = (unit: NeutralAtomicUnit): AtomicUnit => {
 
 /** Structural kernel transaction port consumed by the neutral transaction. */
 export interface MemoryKernelTransactionPort {
-  readAggregate(key: string): Promise<{ readonly version: number; readonly value: MemoryEncodedValue } | null>;
+  readAggregate(key: string): Promise<{ readonly version: number; readonly value: EncodedValue } | null>;
   readRecords(
     keys: readonly string[], limits: { readonly maxRecords: number; readonly maxEncodedBytes: number },
-  ): Promise<readonly { readonly key: string; readonly bytes: MemoryEncodedValue; readonly contentHash: string }[]>;
+  ): Promise<readonly { readonly key: string; readonly bytes: EncodedValue; readonly contentHash: string }[]>;
   readChain(input: {
     readonly chainId: string; readonly limit: number; readonly cursor?: unknown; readonly maxEncodedBytes: number;
   }): Promise<{ readonly records: readonly { readonly id: string; readonly hash: string; readonly bytes: string }[];
@@ -195,7 +202,7 @@ export const createMemoryNeutralTransaction = (
     return { kind, key, version: String(found.version), value };
   },
   readRecords: async (kind, keys) => (await tx.readRecords(keys, { maxRecords: 2000, maxEncodedBytes: 1048576 }))
-    .map((row) => ({ kind, key: row.key, value: row.bytes, contentHash: row.contentHash })),
+    .map((row) => ({ kind, key: row.key, value: requireMemoryUtf8(row.bytes), contentHash: row.contentHash })),
   readChain: async ({ chain, afterAllocation = '0', limit }) => {
     const all: { readonly id: string; readonly hash: string; readonly bytes: string }[] = [];
     let cursor: unknown;

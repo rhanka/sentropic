@@ -131,7 +131,7 @@ describe('pack-only dev alignment', () => {
   });
 });
 
-it('should install only compatible packed artifacts and exclude an incompatible optional tuple without registry access', () => {
+it('should install only compatible packed artifacts and exclude an incompatible optional tuple with only the frozen cluster-mesh pin requested from the registry', () => {
   const root = mkdtempSync(join(tmpdir(), 'prepare-artifacts-'));
   const work = join(root, 'work');
   try {
