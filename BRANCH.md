@@ -63,7 +63,7 @@
   - [ ] Gate: make test-ci-api-tooling check-ci-version-filters ENV=test-ci-br78.
 - [ ] **Lot 2 — Digest-addressed transport**
   - [x] Implement scripts/ci/image-receipt.mjs and image-receipt.test.mjs; negative tests cover stale/wrong/missing receipts, modified archives and loaded image substitution.
-  - [ ] Verify source/workflow/inputs/cache identity, archive digest and loaded image ID for every consumer.
+  - [ ] Verify source/workflow/inputs/cache identity, archive digest and loaded image ID for every consumer (Make transport now verifies before and after loading).
   - [ ] Gate: make test-ci-image-receipts test-ci-api-runtime test-ci-api-tag-guard test-ci-api-tool-runtime ENV=test-ci-br78.
 - [ ] **Lot 3 — UAT and measured acceptance**
   - [ ] Real warm/cold runs for four producers, scanners and restore; include embedded prerequisites/export/compression/upload/download/load.
