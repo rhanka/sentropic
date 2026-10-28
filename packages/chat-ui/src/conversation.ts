@@ -12,6 +12,9 @@ export type ConversationPermission = {
 };
 
 export type ChatConversationSnapshot = {
+  checkpointPrompt: { kind: 'retry' | 'edit' | 'restore'; checkpointId: string; messageId: string; mutations: string[] } | null;
+  checkpointBusy: boolean;
+  restorableMessageIds: string[];
   sessionId: string;
   items: readonly ChatProjectedTimelineItem<ChatSessionRuntimeMessage, unknown>[];
   draft: string;
@@ -29,6 +32,8 @@ export type ChatConversationSnapshot = {
 };
 
 export type ChatConversationCommands = {
+  restoreCheckpoint(messageId: string): Promise<void>;
+  decideCheckpoint(restore: boolean): Promise<void>;
   setDraft(value: string): void;
   send(): Promise<void>;
   retry(messageId: string): Promise<void>;

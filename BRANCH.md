@@ -91,6 +91,7 @@
   - [x] Expose runtime optional-module entrypoints; visual context barrel exports only normalized types.
   - [ ] Qualify breaking chat-ui version and initial runtime version against registry; update lockfiles.
 - [ ] **Lot 2 — Injected conversation and complete command binding**
+  - [x] Add runtime-owned checkpoint mutation choices and create/fetch/restore I/O through the existing CheckpointHost contract; no view-owned checkpoint lifecycle.
   - [x] Bind attachment retry/paste, preview/lightbox and generated-file download controls to injected data/commands; visual state contains no upload or extraction implementation.
   - [x] Retain upload inputs/previews with the runtime; expose pending/failure/retry/removal, paste source and generated-file extraction/download commands through the injected port.
   - [x] Define a data-only conversation snapshot/command port; allow StreamMessage to render injected segment events without a transport.
