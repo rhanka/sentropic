@@ -58,10 +58,12 @@ async function currentPolicy(client: PoolClient, pool: Pool, namespace: string,
     `SELECT id FROM artifacts.releases WHERE id=$1 AND artifact_id=$2 AND state IN ('ready','retired') FOR SHARE`,
     [target.releaseId, target.artifactId]);
   if (release.rowCount !== 1) return undefined;
+  let pointerRevision = 'pinned';
   if (target.channel === 'stable') {
-    const current = await client.query<{ release_id: string }>(
-      'SELECT release_id FROM artifacts.artifact_current WHERE artifact_id=$1 FOR SHARE', [target.artifactId]);
+    const current = await client.query<{ release_id: string; revision: string }>(
+      'SELECT release_id, xmin::text AS revision FROM artifacts.artifact_current WHERE artifact_id=$1 FOR SHARE', [target.artifactId]);
     if (current.rows[0]?.release_id !== target.releaseId) return undefined;
+    pointerRevision = current.rows[0].revision;
   }
   // Lock an existing grant against deletion; absent grants cannot authorize this reader.
   const grants = await client.query<{ revision: string }>(
@@ -77,7 +79,7 @@ async function currentPolicy(client: PoolClient, pool: Pool, namespace: string,
     identity: { subject: session.subjectId, tenantId: session.tenantId, clientId: ARTIFACT_SESSION_CLIENT,
       credentialId: session.sessionId }, currentIdentity: createArtifactCredentialReader({ kind: 'session', resource: '' }) });
   const current = await authority.currentOn(artifactReadClient(client));
-  return current.readable ? digest(JSON.stringify([current.revision, artifact.rows[0].revision, grants.rows])) : undefined;
+  return current.readable ? digest(JSON.stringify([current.revision, artifact.rows[0].revision, grants.rows, pointerRevision])) : undefined;
 }
 
 /** No listeners, cookies, signing or MFA. W3.b may sign only an acknowledged consume result. */
