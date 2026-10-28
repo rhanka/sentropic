@@ -95,7 +95,7 @@ jobs:
           tests/api/decision-metering.test.ts tests/api/llm-admission-schema.test.ts
           tests/api/llm-budget-ledger.test.ts" ENV=test-decision-h1
       - name: Build shipped API
-        run: make build-api ENV=test-decision-h1
+        run: make build-api-image-fresh ENV=test-decision-h1
       - name: Validate llm-mesh
         run: make typecheck-llm-mesh lint-llm-mesh test-llm-mesh ENV=test-decision-h1
       - name: Validate cluster Decision composition and receipts
