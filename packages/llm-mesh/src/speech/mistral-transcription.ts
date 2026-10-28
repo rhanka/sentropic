@@ -1,6 +1,6 @@
 // Mistral streaming STT (L13): `mistral-voxtral-realtime-3` behind the mesh
 // speech contract, plus the Mistral TTS binding/registry entry. Wire facts are
-// grounded in the Mistral Studio audio docs [O8]
+// grounded in the Mistral Studio audio docs (URLs below, fetched 2026-10-28)
 // (https://docs.mistral.ai/studio/audio/speech-to-text/transcribe-in-realtime
 // and https://docs.mistral.ai/studio/audio/text-to-speech/generate-speech,
 // fetched 2026-10-28):
@@ -12,8 +12,9 @@
 // language), `session.updated` echo, PCM audio via `input_audio.append`,
 // append-only `transcription.text.delta` finals (no correction), then
 // `input_audio.end` and `transcription.done` with the transcript of record.
-// `turn_detection` stays off: client commits drive turns. The 2602 models are
-// deprecated and refused here; the 3.0 preview is pinned exactly.
+// `turn_detection` stays off: client commits drive turns. The 2602 generation
+// is not served by this adapter (separate license/price, see the L13 receipt);
+// the 3.0 preview is pinned exactly.
 // TTS is selection/binding only: `POST /v1/audio/speech` with model
 // `voxtral-mini-tts-3-0`, voice_id and response_format. The mesh holds no
 // synthesis transport; the HTTPS call happens at composition. Recorded
@@ -45,6 +46,17 @@ export const MISTRAL_TRANSCRIPTION_WS_URL =
 /** The only STT model this adapter serves. The 2602 generation is refused. */
 export const mistralTranscriptionModels = ['voxtral-mini-transcribe-realtime-3'] as const;
 export type MistralTranscriptionModelId = (typeof mistralTranscriptionModels)[number];
+
+/**
+ * Served-model check (P2-2): the realtime docs address the wire alias
+ * `voxtral-mini-transcribe-realtime-3`, while the model page names the exact
+ * preview `voxtral-mini-transcribe-realtime-3-0`. Both name the 3.0 preview
+ * generation; anything else served (2602 or unknown) refuses fail-closed.
+ */
+export const mistralTranscriptionServedModels = [
+  'voxtral-mini-transcribe-realtime-3',
+  'voxtral-mini-transcribe-realtime-3-0',
+] as const;
 
 /**
  * Trade speed for accuracy per session. Bounds follow the docs: 80 to 1200,
@@ -820,6 +832,18 @@ export class MistralTranscriptionSession implements SpeechSession {
         }
         if (typeof first === 'object' && first !== null
           && (first as Record<string, unknown>).type === 'session.created') {
+          const session = (first as Record<string, unknown>).session;
+          const served = typeof session === 'object' && session !== null
+            && 'model' in session
+            ? (session as Record<string, unknown>).model
+            : undefined;
+          if (served !== undefined
+            && !(typeof served === 'string'
+              && (mistralTranscriptionServedModels as readonly string[]).includes(served))) {
+            rejectReady(new MistralTranscriptionError('transport',
+              `refused served model: ${String(served)}`));
+            return;
+          }
           resolveReady();
           break;
         }
