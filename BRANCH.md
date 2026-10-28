@@ -39,24 +39,23 @@
   - `package-lock.json`
   - `spec/decision/api-host.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile` (except BRH-EX3)
-  - `docker-compose*.yml` (except BRH-EX3)
+  - `docker-compose.*.yml`
   - `.cursor/rules/**`
   - `.track/**`
   - `plan/NN-BRANCH_*.md`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `Makefile` (BRH-EX3: Decision secret names only)
-  - `docker-compose.yml` (BRH-EX3: Decision environment names only)
-  - `deploy/k8s/base/30-api.yaml` (BRH-EX3: optional Decision secret references only)
+  - `Makefile` (BR822-EX3: Decision secret names only)
+  - `docker-compose.yml` (BR822-EX3: Decision environment names only)
+  - `deploy/k8s/base/30-api.yaml` (BR822-EX3: optional Decision secret references only)
   - `api/drizzle/*.sql` (maximum one migration; control uses its existing migration lane)
   - `.github/workflows/**`
 - **Exception process**:
   - [x] Declare BRH-EXn with reason, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
-- [x] BRH-EX3 — Owner-requested Decision provisioning in Compose, k8s-bundle-secret and the API env template. Impact: pass JEV_API_KEY and DECISION_EXECUTION_PROFILE by name only; missing values stay unavailable, production refuses; no deployment or credential provisioning. Rollback: remove these two entries/references from each surface.
+- [x] BR822-EX3 — Owner-requested Decision provisioning in Compose, k8s-bundle-secret and the API env template. Impact: pass JEV_API_KEY and DECISION_EXECUTION_PROFILE by name only; missing values stay unavailable, production refuses; no deployment or credential provisioning. Rollback: remove these two entries/references from each surface.
 - [x] H1-R1-F2 — Exclude fixture dispatch from deployment, release verification and inherited secrets; main dispatch regression reproduced deployment access, then all 135 workflow wiring tests passed without weakening ordinary gates.
-- [ ] H1-R1-F5 — Wire Decision environment names through Compose and Kubernetes with fail-closed absence.
+- [x] H1-R1-F5 — Compose and Kubernetes pass Decision names only, with optional secret references and no activation default; all 136 workflow/provisioning tests passed, including fail-closed wiring assertions.
 - [ ] H1-R1-F1 — Push corrections and complete full pull_request CI with successful ci-gate on the exact final head; fixture-only success is insufficient.
 - [x] Track source artifact only: concurrent root .track changes belong to the designated conductor.
 - [x] H1-CI-01 — Fixture-only run 40729849776 passed; full PR CI is required separately by H1-R1-F1.
