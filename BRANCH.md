@@ -86,6 +86,7 @@
   - [x] Expose runtime optional-module entrypoints; visual context barrel exports only normalized types.
   - [ ] Qualify breaking chat-ui version and initial runtime version against registry; update lockfiles.
 - [ ] **Lot 2 — Injected conversation and complete command binding**
+  - [x] Define a data-only conversation snapshot/command port; allow StreamMessage to render injected segment events without a transport.
   - [ ] Replace component runtime creation/disposal with normalized snapshot and command props/declarations.
   - [ ] Bind full send/model/context/tools/attachments, history, retry/stop/edit/feedback/steer and active modules.
   - [ ] Enforce visible permission pending/denied state; approval executes/posts once; no adapter, denial and timeout execute zero times.
