@@ -42,9 +42,9 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read rules, review and template; create isolated worktree; mechanical harness branch check passes.
-- [ ] Lot 1: P2-1 route content activation through W3.a and package flow peek; cover expired flows and content-origin/session binding in api/tests/api/artifacts-reader-activation.test.ts.
-- [ ] Lot 2: P2-2 enforce storage-scope org equality on reverse lookup; cross-org denial in apps/artifact-content/tests/runtime.test.ts.
-- [ ] Lot 3: P2-3 real-PG republication rejects stable A grant with 401 and activates pinned A with 200; restore pointer after test.
+- [x] Lot 1: P2-1 route content activation through W3.a and package flow peek; cover expired flows and content-origin/session binding in api/tests/api/artifacts-reader-activation.test.ts.
+- [x] Lot 2: P2-2 enforce storage-scope org equality on reverse lookup; cross-org denial in apps/artifact-content/tests/runtime.test.ts (reproduced 200 before correction, now 404).
+- [x] Lot 3: P2-3 real-PG republication rejects stable A grant with 401 and activates pinned A with 200; restore pointer after test.
 - [ ] Lot 4: P2-4 document grant-expiry session revocation bound in apps/artifact-content/README.md.
 - [ ] Final validation: content suite; reader-activation/host-activation-store/host-recovery/app-artifacts-transport regressions; API/content typecheck and lint; logs; scope check; isolated teardown.
 - [ ] Draft PR: BRANCH.md body, first plan comment, push, exact-head CI green; retain BRANCH.md for draft handoff.
