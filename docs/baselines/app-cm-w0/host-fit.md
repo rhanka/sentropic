@@ -2,7 +2,11 @@
 
 The original 18 October assembly/prototype below is historical, frozen by [published-tuple.json](published-tuple.json). This section supersedes its release/selection/lock ownership assumptions for plan-v2. Preserve Google Drive/Gmail's local registrations and current readers; a guessed connector registry selector is not a dependency.
 
-## Current published/source freeze — 26 October
+## Current W0-close.d authority — 28 October reconciliation
+
+Use [#796's host fit at ea8e84431](https://github.com/rhanka/sentropic/blob/ea8e84431/docs/baselines/app-cm-w0/host-fit.md), its [tuple](https://github.com/rhanka/sentropic/blob/ea8e84431/docs/baselines/app-cm-w0/published-tuple.json) and [qualification](https://github.com/rhanka/sentropic/blob/ea8e84431/docs/baselines/app-cm-w0/tuple-refresh-2026-10-27.md). Artifacts 0.2.4 / cluster-mesh 0.22.4 replace the dated selections below; APP-P1 manifest is `020aacfec500d754b76c90d3ad4a05097e0f996b8b9282145ca458917ea6fb27`. UP-T's durable adapter/SQL is delivered in published artifacts 0.2.4; host authority/restart/conformance remains receiving qualification. No tuple or integration implementation is copied here. The following 18/26 October observations, including the then-missing UP-T handoff, remain historical.
+
+## Historical published/source freeze — 26 October
 
 Workspace-source base: `fbfe68f0e40d386e6b3429abc2ea8f868fcdd3f6`, merged without rebase at `79a4f2703ffd34ad2b66999d3daf8b7516e90735`. [Current tuple](published-tuple-2026-10-26.json) pins artifacts **0.2.0**, mesh **0.22.1**, platform **0.4.0**, Comments **0.3.0**, gateway **0.21.0**, llm-mesh **0.27.1**, auth-hono **0.16.0**, mcp-auth **0.2.2** and external peers. The complete root workspace resolution is the immutable base's entire `package-lock.json.packages` map (**1700 entries**, exact Git blob/SHA-256 in the tuple); member declarations include API/UI/apps and every package. This is lock metadata, not a claimed installed/pruned image. API's standalone lock still resolves gateway **0.19.1** and links mesh from source; **W2.b alone** reconciles both locks and final physical resolution.
 

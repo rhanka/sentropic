@@ -4,7 +4,15 @@ Source authority: `9ed96eb83cd77da710f1adeb83a19e425d6c4910` (initial HEAD = ori
 
 19 October follow-up: origin/main `cf0ad8ee44f9bb7cf4ad1222a468172f0f77fc2d` was integrated unchanged at fe26214df under the owner's explicit instruction. The [verbatim Q1–Q4 answers](owner-decisions.md) supersede the original plan's staffing/window and signer/key choices. No PR merge or deployment is authorized. The initial source/lock/package observations retain their original source SHA and collection date; they are not observations of the integrated main or its published packages.
 
-## Current W0-close.a/d extension — 26 October
+## Current W0-close.d reference — 28 October reconciliation
+
+The accepted d refresh is [PR #796](https://github.com/rhanka/sentropic/pull/796), merged into `feat/app-cm-integration` at `ea8e84431`: consume its immutable [tuple](https://github.com/rhanka/sentropic/blob/ea8e84431/docs/baselines/app-cm-w0/published-tuple.json), [host fit](https://github.com/rhanka/sentropic/blob/ea8e84431/docs/baselines/app-cm-w0/host-fit.md) and [qualification receipt](https://github.com/rhanka/sentropic/blob/ea8e84431/docs/baselines/app-cm-w0/tuple-refresh-2026-10-27.md). Artifacts **0.2.4**, cluster-mesh **0.22.4**, llm-mesh **0.28.1**, gateway **0.21.3**; APP-P1 manifest **`020aacfec500d754b76c90d3ad4a05097e0f996b8b9282145ca458917ea6fb27`**. These links supersede the 18/26 October d selection; no tuple, package, lock or integration code is copied into #702. This branch's local tuple files remain historical evidence, not the current integration inputs.
+
+W0-close.b is supplied by [#756](https://github.com/rhanka/sentropic/pull/756), merged into main at [ab981b16d](https://github.com/rhanka/sentropic/commit/ab981b16d); the existing [restore runbook](../../runbooks/app-cm-baseline-restore.md) and guarded make target arrive through the requested main merge. Its different target and the W1–W4 gate-order deviation are recorded with dispositions in [BRANCH.md](../../../BRANCH.md).
+
+**W0-close.c / B03: BLOCKED.** Isolated kubeconfig, namespace `sentropic-restore-app-cm`, Service/Secret `postgres-restore`, Secret `app-cm-restore-backup-ro`, production/preprod-denying RBAC/NetworkPolicy, and selected backup key/sha256/ETag/version were requested from the k8s session on **2026-10-28**. No restore receipt exists. After provision/run: record grants/revoked readers and organization/B02 counts, recovery duration, credential revocation/rotation, then index the external receipt path/hash here. W0 acceptance and production authorization remain closed.
+
+## Historical W0-close.a/d extension — 26 October
 
 Current main `fbfe68f0e40d386e6b3429abc2ea8f868fcdd3f6` was merged without rebase at `79a4f2703ffd34ad2b66999d3daf8b7516e90735`; only BRANCH.md conflicted. [Published/source tuple](published-tuple-2026-10-26.json) selects artifacts 0.2.0 / mesh 0.22.1 and retains the full workspace-lock reference and whole installed published tree. Old observations below keep their original dates/source pins.
 
