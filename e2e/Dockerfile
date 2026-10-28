@@ -26,7 +26,7 @@ COPY global.setup.ts ./
 
 # Retain full Chromium for IdP/extension checks and its default headless shell.
 # All selected browser tests run headless; no X server is needed in this image.
-RUN npm ci --legacy-peer-deps && \
+RUN npm ci --legacy-peer-deps --ignore-scripts && \
     npx playwright install --with-deps chromium && \
     apt-get update && apt-get upgrade -y && \
     apt-get purge -y xvfb xserver-common && \
