@@ -16,6 +16,8 @@ services:
       # undecryptable. Setting a real value is a data migration, not a config edit.
       - SECRET_ENCRYPTION_KEY=${SECRET_ENCRYPTION_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - JEV_API_KEY=${JEV_API_KEY:-}
+      - DECISION_EXECUTION_PROFILE=${DECISION_EXECUTION_PROFILE:-}
       - GEMINI_API_KEY=${GEMINI_API_KEY}
       # GCP (Gemini-on-GCP / Model Garden) — native passthrough like GEMINI_API_KEY.
       # project/location are plain config; the bearer is minted server-side from ADC.

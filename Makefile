@@ -3588,6 +3588,7 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	  --from-literal=POSTGRES_PASSWORD="$$POSTGRES_PASSWORD" \
 	  --dry-run=client -o yaml | KUBECONFIG=$(KUBECONFIG) kubectl apply -f - ; \
 	OPENAI=$$(get OPENAI_API_KEY) ; ANTHROPIC=$$(get ANTHROPIC_API_KEY) ; GEMINI=$$(get GEMINI_API_KEY) ; \
+	JEV=$$(get JEV_API_KEY) ; DECISION_PROFILE=$$(get DECISION_EXECUTION_PROFILE) ; \
 	MISTRAL=$$(get MISTRAL_API_KEY) ; COHERE=$$(get COHERE_API_KEY) ; TAVILY=$$(get TAVILY_API_KEY) ; \
 	GD_CID=$$(get GOOGLE_DRIVE_CLIENT_ID) ; GD_CS=$$(get GOOGLE_DRIVE_CLIENT_SECRET) ; \
 	GD_PK=$$(get GOOGLE_DRIVE_PICKER_API_KEY) ; GD_PID=$$(get GOOGLE_DRIVE_PICKER_APP_ID) ; \
@@ -3611,6 +3612,8 @@ k8s-bundle-secret: ## Create/update the namespace Secrets from $(K8S_ENV_FILE) (
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_NAMESPACE) create secret generic sentropic-api \
 	  --from-literal=DATABASE_URL="$$DATABASE_URL" \
 	  --from-literal=OPENAI_API_KEY="$$OPENAI" \
+	  --from-literal=JEV_API_KEY="$$JEV" \
+	  --from-literal=DECISION_EXECUTION_PROFILE="$$DECISION_PROFILE" \
 	  --from-literal=ANTHROPIC_API_KEY="$$ANTHROPIC" \
 	  --from-literal=GEMINI_API_KEY="$$GEMINI" \
 	  --from-literal=MISTRAL_API_KEY="$$MISTRAL" \

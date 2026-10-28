@@ -15,8 +15,10 @@ It never advertises production readiness. Local native hosting remains deferred.
 
 The operator provisions `OPENAI_API_KEY` (the existing OpenAI environment connection) and the new
 `JEV_API_KEY` for TypeSafe, plus `DECISION_EXECUTION_PROFILE` when qualification is intended.
-These names must be injected into the API process by the deployment owner. Missing or malformed
-keys fail closed. Requests and logs never carry key material. This lot performs no live call,
+Compose forwards these names; `k8s-bundle-secret` reads them from the operator's env file and
+the API template uses optional secret references. No values are provisioned by this change.
+An absent key is unavailable; an unset profile defaults to production refusal, while an empty
+or unknown profile makes the endpoint unavailable. Requests and logs never carry key material. This lot performs no live call,
 entitlement probe, provider inventory request or paid assessment.
 
 ## Financial bound

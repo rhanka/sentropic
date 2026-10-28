@@ -128,6 +128,21 @@ test('Decision offline mode is explicit, credential-free and cannot publish, whi
   }
 });
 
+test('Decision provisioning passes names through Compose and optional Kubernetes secret references without credentials or activation defaults', () => {
+  const compose = YAML.parse(fs.readFileSync(path.join(root, 'docker-compose.yml'), 'utf8'));
+  const deployment = YAML.parseAllDocuments(fs.readFileSync(path.join(root, 'deploy/k8s/base/30-api.yaml'), 'utf8'))
+    .map((doc) => doc.toJSON()).find((doc) => doc.kind === 'Deployment');
+  const api = deployment.spec.template.spec.containers.find((container) => container.name === 'api');
+  for (const [name, variable] of [['JEV_API_KEY', 'JEV'], ['DECISION_EXECUTION_PROFILE', 'DECISION_PROFILE']]) {
+    assert.ok(compose.services.api.environment.includes(`${name}=\${${name}:-}`));
+    assert.deepEqual(api.env.find((entry) => entry.name === name), {
+      name, valueFrom: { secretKeyRef: { name: 'sentropic-api', key: name, optional: true } },
+    });
+    assert.ok(recipe('k8s-bundle-secret').includes(`${variable}=$$(get ${name})`));
+    assert.ok(recipe('k8s-bundle-secret').includes(`--from-literal=${name}="$$${variable}"`));
+  }
+});
+
 test('publication filters: only packages/<slug>/** triggers a publisher, never root package.json or lockfile', () => {
   const filters = YAML.parse(jobs.changes.steps.find((s) => s.id === 'filter').with.filters);
   const publish = Object.keys(filters).filter((n) => n.endsWith('_publish'));
