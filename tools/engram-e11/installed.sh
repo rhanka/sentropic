@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# Caller holds the shared Docker lock. Only the test-mem-e11 project is used.
+# Caller holds the shared Docker lock; the selected test project is removed.
 set -euo pipefail
 out="$1"
 read -ra compose <<< "$2"
-head=32dd911be19f0874459a1b4e697d7175bb6b433f
-tree=9dcd865487004e28649f3d68c842f328cc4d1952
-trap 'rc=$?; trap - EXIT; set +e; make down ENV=test-mem-e11 >> "$out/campaign.log" 2>&1; cleanup=$?;
+env="$3"
+head="$(jq -r .qualifiedHead "$out/source-identity.json")"
+tree="$(jq -r .qualifiedTree "$out/source-identity.json")"
+trap 'rc=$?; trap - EXIT; set +e; make down ENV="$env" >> "$out/campaign.log" 2>&1; cleanup=$?;
   printf "exit=%s\ncleanup=%s\n" "$rc" "$cleanup" > "$out/campaign.status"; test "$rc" -eq 0 && test "$cleanup" -eq 0' EXIT
 exec > >(tee "$out/campaign.log") 2>&1
 printf 'head=%s\ntree=%s\n' "$head" "$tree"
-make engram-e2-postgres-up API_PORT=9055 UI_PORT=5255 MAILDEV_UI_PORT=1155 ENV=test-mem-e11
+make engram-e2-postgres-up API_PORT=9056 UI_PORT=5256 MAILDEV_UI_PORT=1156 ENV="$env"
 pg_image="$("${compose[@]}" ps -q postgres | xargs -r docker inspect --format '{{.Image}}')"
 test -n "$pg_image"
 mesh_list="$(tar -tzf "$out/mesh.tgz" | LC_ALL=C sort | sha256sum | cut -d' ' -f1)"
@@ -26,7 +27,9 @@ mesh_list="$(tar -tzf "$out/mesh.tgz" | LC_ALL=C sort | sha256sum | cut -d' ' -f
     rm -rf node_modules; npm ci --ignore-scripts --no-audit --no-fund;
     sha256sum -c /evidence/lock-before.sha256;
     ./node_modules/.bin/tsc --noEmit --strict --target es2022 --module nodenext --moduleResolution nodenext \
-      --listFiles /evidence/consumer/installed-memory-types.ts > /evidence/type-files.txt || { cat /evidence/type-files.txt; exit 1; };
+      --listFiles /evidence/consumer/installed-memory-types.ts \
+      /evidence/consumer/node_modules/@sentropic/cluster-mesh/contracts/engram-memory-neutral-contract-v1.d.ts \
+      > /evidence/type-files.txt || { cat /evidence/type-files.txt; exit 1; };
     npm --version > /evidence/npm-version.txt;
     node installed-memory.mjs write; node installed-memory.mjs reopen'
 cp "$out/consumer/package.json" "$out/consumer-package.json"
