@@ -433,6 +433,8 @@ export class MistralTranscriptionSession implements SpeechSession {
   private readonly config: MistralTranscriptionProfileConfig;
   /** Bound provider dial (URL + handshake); the session holds no key material. */
   private readonly openProviderStream: () => Promise<MistralTranscriptionSocket>;
+  /** Redaction bound at open; handshake failures never echo the token. */
+  private readonly redact: (message: string) => string;
   private readonly nowMs?: () => number;
   private readonly openedAtMs: number;
   private readonly queue: SpeechEvent[] = [];
@@ -459,6 +461,7 @@ export class MistralTranscriptionSession implements SpeechSession {
     usage: MistralTranscriptionUsageSink,
     config: MistralTranscriptionProfileConfig,
     openProviderStream: () => Promise<MistralTranscriptionSocket>,
+    redact: (message: string) => string,
     nowMs: (() => number) | undefined,
     signal: AbortSignal | undefined,
     schedule: ((delayMs: number, fn: () => void) => () => void) | undefined,
@@ -470,6 +473,7 @@ export class MistralTranscriptionSession implements SpeechSession {
     this.usage = usage;
     this.config = config;
     this.openProviderStream = openProviderStream;
+    this.redact = redact;
     this.nowMs = nowMs;
     this.signal = signal;
     this.openedAtMs = monotonicNow(nowMs);
@@ -730,8 +734,13 @@ export class MistralTranscriptionSession implements SpeechSession {
   }
 
   private async openStream(utteranceId: string, audioStartMs: number): Promise<TurnStream> {
-    // The bound dial redacts handshake failures itself; no key reaches this scope.
-    const socket = await this.openProviderStream();
+    let socket: MistralTranscriptionSocket;
+    try {
+      socket = await this.openProviderStream();
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : 'unknown';
+      throw new MistralTranscriptionError('transport', `provider connect failed: ${this.redact(detail)}`);
+    }
     let resolveReady!: () => void;
     let rejectReady!: (error: unknown) => void;
     // The pump resolves once `session.created` arrives; a close ends the
@@ -750,7 +759,7 @@ export class MistralTranscriptionSession implements SpeechSession {
       await socket.close().catch(() => undefined);
       if (error instanceof MistralTranscriptionError) throw error;
       const detail = error instanceof Error ? error.message : 'unknown';
-      throw new MistralTranscriptionError('transport', `session update failed: ${redactBearer(detail, this.bearerToken)}`);
+      throw new MistralTranscriptionError('transport', `session update failed: ${this.redact(detail)}`);
     }
     const open = this.current;
     if (open && open !== stream && !open.abandoned && !open.donePending) {
@@ -985,22 +994,17 @@ export const openMistralTranscriptionSession = async (
     stages: { stt: capabilities },
     inputFormat: TRANSCRIPTION_FORMAT,
   };
-  // Bind the handshake (URL + authorization) once: per-turn dials reuse it,
-  // handshake failures are redacted here, and the session holds no key.
+  // Bind the handshake (URL + authorization) once: per-turn dials reuse it.
+  // The session holds no key: failures are redacted through this closure.
   const bearerToken = options.bearerToken;
-  const openProviderStream = async (): Promise<MistralTranscriptionSocket> => {
-    try {
-      return await options.connect(MISTRAL_TRANSCRIPTION_WS_URL, {
-        authorization: `Bearer ${bearerToken}`,
-        originator: options.originator ?? 'sentropic-llm-mesh',
-      });
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : 'unknown';
-      throw new MistralTranscriptionError('transport', `provider connect failed: ${redactBearer(detail, bearerToken)}`);
-    }
-  };
+  const openProviderStream = async (): Promise<MistralTranscriptionSocket> =>
+    options.connect(MISTRAL_TRANSCRIPTION_WS_URL, {
+      authorization: `Bearer ${bearerToken}`,
+      originator: options.originator ?? 'sentropic-llm-mesh',
+    });
+  const redact = (message: string): string => redactBearer(message, bearerToken);
   return new MistralTranscriptionSession(
-    receipt, binding, options.admission, options.usage, config, openProviderStream,
+    receipt, binding, options.admission, options.usage, config, openProviderStream, redact,
     options.nowMs, options.signal, options.schedule, request.maxDurationMs,
   );
 };
