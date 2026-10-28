@@ -311,7 +311,7 @@ test('should derive selected expanded members before dispatch independently of r
 test('all-success selected sets pass', () => {
   const verdict = evaluateExpected({
     expected: [selected('build-api-image'), selected('ci-gate')],
-    executed: [ran('build-api-image', 'success'), ran('ci-gate', 'neutral')],
+    executed: [ran('build-api-image', 'success'), ran('ci-gate', 'success')],
   });
   assert.equal(verdict.ok, true);
   assert.deepEqual(verdict.failures, []);
