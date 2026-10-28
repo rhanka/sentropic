@@ -1252,3 +1252,143 @@ export function createChatLoopController<
   ): Promise<void> => {
     if (!jobId || !streamId) return;
     if (jobPollInFlight.has(jobId)) return;
+    const pollFn = attachedPollJob;
+    if (!pollFn) return;
+
+    jobPollInFlight.add(jobId);
+    const timeoutMs = opts?.timeoutMs ?? attachedPollTimeoutMs;
+    const startedAt = Date.now();
+
+    try {
+      // Small initial delay — if SSE arrives first, avoid unnecessary polling.
+      await new Promise<void>((r) => setTimeout(r, attachedPollInitialDelayMs));
+
+      while (Date.now() - startedAt < timeoutMs) {
+        const current = messages.find((m) => (m._streamId ?? m.id) === streamId);
+        if (!current) return;
+        // Already hydrated or terminal — stop polling
+        if (current.content && current.content.trim().length > 0) return;
+        if (
+          current._localStatus === 'completed' ||
+          current._localStatus === 'failed'
+        )
+          return;
+
+        const job = await pollFn(jobId);
+        const status = String(job.status ?? 'unknown');
+
+        if (status === 'completed') {
+          handleStreamTerminal(streamId, 'done');
+          return;
+        }
+        if (status === 'failed') {
+          handleStreamTerminal(streamId, 'error');
+          return;
+        }
+        // pending/processing — wait before next attempt
+        await new Promise<void>((r) => setTimeout(r, attachedPollIntervalMs));
+      }
+    } catch {
+      // ignore — poll is best-effort fallback
+    } finally {
+      jobPollInFlight.delete(jobId);
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // Public API
+  // -------------------------------------------------------------------------
+
+  const subscribe = (
+    listener: (state: ChatLoopProjectionState<Message, RuntimeSummary>) => void,
+  ): (() => void) => {
+    listeners.add(listener);
+    // Emit current state immediately (Svelte store contract)
+    listener(currentSnapshot);
+    return () => listeners.delete(listener);
+  };
+
+  const getSnapshot = (): ChatLoopProjectionState<Message, RuntimeSummary> =>
+    currentSnapshot;
+
+  // -- Message mutations -----------------------------------------------------
+
+  const setMessages = (next: Message[]): void => {
+    messages = next;
+    recomputeTimeline();
+    notify();
+  };
+
+  const appendMessage = (message: Message): void => {
+    messages = [...messages, message];
+    recomputeTimeline();
+    notify();
+  };
+
+  const patchMessage = (id: string, patch: Partial<Message>): boolean => {
+    const idx = messages.findIndex((m) => m.id === id);
+    if (idx < 0) return false;
+    const updated = { ...messages[idx], ...patch } as Message;
+    messages = [...messages.slice(0, idx), updated, ...messages.slice(idx + 1)];
+    recomputeTimeline();
+    notify();
+    return true;
+  };
+
+  const filterMessages = (keepIds: Set<string>): void => {
+    messages = messages.filter((m) => keepIds.has(m.id));
+    recomputeTimeline();
+    notify();
+  };
+
+  // -- Projection event mutations --------------------------------------------
+
+  const mergeHistoryEvents = (
+    messageId: string,
+    events: ControllerStreamEvent[],
+  ): void => {
+    if (!messageId) return;
+    initialEventsByMessageId = new Map(initialEventsByMessageId);
+    initialEventsByMessageId.set(
+      messageId,
+      mergeProjectionHistoryEvents(
+        initialEventsByMessageId.get(messageId) ?? [],
+        events,
+      ),
+    );
+    // Invalidate cached computation so next call recomputes
+    projectedAssistantComputationByMessageId = new Map(
+      projectedAssistantComputationByMessageId,
+    );
+    projectedAssistantComputationByMessageId.delete(messageId);
+    projectionEventsVersion += 1;
+    recomputeTimeline();
+    notify();
+  };
+
+  const mergeProjectedHistoryForStream = (
+    streamId: string,
+    events: ControllerStreamEvent[],
+  ): void => {
+    if (!streamId) return;
+    projectedStreamEventsById = new Map(projectedStreamEventsById);
+    projectedStreamEventsById.set(
+      streamId,
+      mergeProjectionHistoryEvents(
+        projectedStreamEventsById.get(streamId) ?? [],
+        events,
+      ),
+    );
+    projectionEventsVersion += 1;
+    recomputeTimeline();
+    notify();
+  };
+
+  const appendProjectedLiveEvent = (
+    streamId: string,
+    event: ControllerStreamEvent,
+  ): void => {
+    if (!streamId) return;
+    projectedStreamEventsById = new Map(projectedStreamEventsById);
+    projectedStreamEventsById.set(
+      streamId,
