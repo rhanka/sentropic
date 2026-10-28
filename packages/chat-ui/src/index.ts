@@ -16,5 +16,4 @@ export * from './state/streamMessageProjection.js';
 export * from './state/streamMessageSmoothing.js';
 export * from './renderers/registry.js';
 export * from './hosts/types.js';
-export * from './hosts/createWebHost.js';
 export * from './stores/chatWidgetLayout.js';
