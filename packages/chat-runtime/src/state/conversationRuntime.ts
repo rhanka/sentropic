@@ -2,6 +2,8 @@ import type { ChatConversationSnapshot } from '@sentropic/chat-ui/conversation';
 import type { DocumentHost } from '@sentropic/chat-ui/documents';
 import type { ChatCoreHost, ModelCatalog } from '../client/chat-core-host.js';
 import { buildAttachmentBandItems } from '../documents/attachmentState.js';
+import { extractGeneratedFileCardsFromEvents } from '../documents/generatedFileCards.js';
+import { createConversationDocuments } from './conversationDocuments.js';
 import { groupModelsByProvider, type ModelCatalogModel, type ModelCatalogProvider } from '../utils/model-selection.js';
 import type { AttachLocalToolMachineOptions, ControllerSendPayload } from './chatLoopController.js';
 import { createChatSessionRuntime, type ChatSessionRuntime } from './chatSessionRuntime.js';
@@ -27,6 +29,7 @@ export type ConversationRuntimeOptions = {
 /** Host-owned runtime binding. Subscribing a view never constructs or disposes a session. */
 export function createConversationRuntime(sessionId: string, options: ConversationRuntimeOptions) {
   const session = options.session ?? createChatSessionRuntime(sessionId);
+  const documents = createConversationDocuments(session, options.documents);
   const listeners = new Set<(snapshot: ChatConversationSnapshot) => void>();
   let disposed = false;
   let historyGeneration = 0;
@@ -34,7 +37,7 @@ export function createConversationRuntime(sessionId: string, options: Conversati
   const notify = () => { if (!disposed && listeners.size) for (const listener of [...listeners]) listener(snapshot()); };
   const state: ConversationCommandState = {
     session, host: options.host, selectedModel: options.selectedModel ?? '', contextEntries: [],
-    sending: false, error: null, documents: options.documents, sendPayload: options.sendPayload,
+    sending: false, error: null, documents: options.documents, documentCommands: documents, sendPayload: options.sendPayload,
     async decidePermission(id, allow) {
       const prompt = session.snapshot().pendingLocalToolPermissionPrompts.find((entry) => `native:${entry.streamId}:${entry.toolCallId}` === id);
       if (prompt) await session.decideLocalToolPermission(prompt, allow ? 'allow_once' : 'deny_once');
@@ -56,6 +59,8 @@ export function createConversationRuntime(sessionId: string, options: Conversati
       models: (catalog?.models ?? []) as ModelCatalogModel[],
       modelGroups: groupModelsByProvider((catalog?.providers ?? []) as ModelCatalogProvider[], (catalog?.models ?? []) as ModelCatalogModel[]),
       contextEntries: state.contextEntries.map((entry) => ({ ...entry })),
+      generatedFiles: [...new Map(current.projectedTimelineItems.flatMap((item) => item.kind === 'message' ? []
+        : extractGeneratedFileCardsFromEvents(item.segment.events)).map((card) => [card.jobId, card])).values()],
       attachments: buildAttachmentBandItems(current.attachments), permissions: [
         ...authorization.snapshot().filter((entry) => !current.pendingLocalToolPermissionPrompts.some((prompt) => `${prompt.streamId}:${prompt.toolCallId}` === entry.id)),
         ...current.pendingLocalToolPermissionPrompts.map((prompt) => ({ id: `native:${prompt.streamId}:${prompt.toolCallId}`, name: prompt.name, status: 'pending' as const })),
@@ -90,6 +95,6 @@ export function createConversationRuntime(sessionId: string, options: Conversati
       } catch (error) { if (!disposed) state.error = error instanceof Error ? error.message : String(error); }
       notify();
     },
-    dispose() { disposed = true; historyGeneration++; authorization.dispose(); unsubscribeContext?.(); unsubscribeSession(); session.dispose(); listeners.clear(); },
+    dispose() { disposed = true; historyGeneration++; documents.dispose(); authorization.dispose(); unsubscribeContext?.(); unsubscribeSession(); session.dispose(); listeners.clear(); },
   };
 }
