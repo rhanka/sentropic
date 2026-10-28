@@ -64,6 +64,7 @@
   - [x] Create `packages/chat-runtime/package.json`, `tsconfig.json` and public entrypoints.
   - [x] Move client transport/replay/history/stream hub and their tests without behavior changes.
   - [x] Migrate client consumers to public runtime subpaths; reserve chat-ui 1.0.0 above registry 0.34.1; runtime registry returns 404.
+  - [x] Remove client entries from the visual export snapshot; retarget moved host export assertions to the runtime wildcard entry.
   - [ ] Move draft/attachment/projection/controller/session/checkpoint/local-tool implementation and tests; delete original implementations.
   - [x] Relocate the existing draft/attachment/projection/controller/session implementation and core parity tests unchanged.
   - [ ] Migrate inventoried web/Chrome/VSCode/cowork imports and active tooling links.
