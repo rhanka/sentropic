@@ -301,58 +301,74 @@ const captureRequest = {
   deadline_at: DEADLINE, cancellation_ref: 'cancel-installed-1',
 };
 
-const operations = {};
+const operations = priorState?.operations ?? {};
 try {
-  await openStore();
-  let engine = makeEngine();
-  const captured = valueOf(await engine.capture(captureRequest));
-  assert.equal(captured.status, 'committed_pending');
-  const candidate = { candidate_id: captured.candidate_id };
-  const captureProof = valueOf(await store.readCaptureIdempotency(candidate));
-  assert.ok(captureProof.record_digest, 'capture proof retained');
-  const admitted = valueOf(await engine.requestAdmission({ ...candidate,
-    authorization: { credential: 'credential-installed' }, deadline_at: DEADLINE }));
-  assert.equal(admitted.status, 'accepted');
-  assert.equal(destroyedTotal, 1, 'admission destroys the sealed envelope key');
-  const firstOutcome = valueOf(await store.readAdmissionOutcome(candidate));
-  const record = valueOf(await store.readRecord({ record_id: firstOutcome.record_id,
-    system_as_of: '2', authorization_receipt_digest: DIGEST }));
-  assert.equal(record.scope_ref, 'installed-memory-scope');
-  const journalBefore = valueOf(await store.readJournal({ after: '0', limit: 10 }));
-  assert.equal(journalBefore.length, 2);
-  const original = await handle.readCommitResult(journalBefore.at(-1).event_id, binding.memoryGrant);
-  assert.equal(JSON.parse(original.data).receipt_digest, admitted.transaction_receipt_digest);
-  operations.capture = { candidate_id: captured.candidate_id, record_digest: captureProof.record_digest,
-    transaction_receipt_digest: captured.transaction_receipt_digest };
-  operations.admission = { status: admitted.status, record_id: firstOutcome.record_id,
-    transaction_receipt_digest: admitted.transaction_receipt_digest };
-  operations.journal = { events: journalBefore.length, last_event: journalBefore.at(-1).event_id };
-
-  // Restart: close the store, reopen a new kernel and store on the same
-  // PostgreSQL schema, then read the retained proofs and replay exactly.
-  await store.close();
-  clockNow = '2026-10-27T00:30:00.000Z';
-  await openStore();
-  assert.deepEqual(valueOf(await store.readCaptureIdempotency(candidate)), captureProof);
-  assert.deepEqual(valueOf(await store.readAdmissionOutcome(candidate)), firstOutcome);
-  assert.deepEqual(valueOf(await store.readJournal({ after: '0', limit: 10 })), journalBefore);
-  assert.deepEqual(await handle.readCommitResult(journalBefore.at(-1).event_id, binding.memoryGrant), original);
-  engine = makeEngine();
-  const replay = valueOf(await engine.capture(captureRequest));
-  assert.equal(replay.status, 'duplicate_exact');
-  assert.equal(replay.transaction_receipt_digest, captured.transaction_receipt_digest);
-  assert.deepEqual(valueOf(await engine.requestAdmission({ ...candidate,
-    authorization: { credential: 'credential-installed' }, deadline_at: DEADLINE })), admitted);
-  assert.equal(destroyedTotal, 1, 'restart replay must not destroy a second key');
-  operations.restart = { capture_replay: replay.status, record_id: firstOutcome.record_id,
-    journal_events: journalBefore.length };
-  await store.close();
+  if (phase === 'write') {
+    await openStore();
+    const fenceEpochWrite = bridge.getFence()?.epoch;
+    assert.ok(typeof fenceEpochWrite === 'string', 'write fence epoch retained');
+    const engine = makeEngine();
+    const captured = valueOf(await engine.capture(captureRequest));
+    assert.equal(captured.status, 'committed_pending');
+    const candidate = { candidate_id: captured.candidate_id };
+    const captureProof = valueOf(await store.readCaptureIdempotency(candidate));
+    assert.ok(captureProof.record_digest, 'capture proof retained');
+    const admitted = valueOf(await engine.requestAdmission({ ...candidate,
+      authorization: { credential: 'credential-installed' }, deadline_at: DEADLINE }));
+    assert.equal(admitted.status, 'accepted');
+    assert.equal(destroyedTotal, 1, 'admission destroys the sealed envelope key');
+    const firstOutcome = valueOf(await store.readAdmissionOutcome(candidate));
+    const record = valueOf(await store.readRecord({ record_id: firstOutcome.record_id,
+      system_as_of: '2', authorization_receipt_digest: DIGEST }));
+    assert.equal(record.scope_ref, 'installed-memory-scope');
+    const journalBefore = valueOf(await store.readJournal({ after: '0', limit: 10 }));
+    assert.equal(journalBefore.length, 2);
+    const original = await handle.readCommitResult(journalBefore.at(-1).event_id, binding.memoryGrant);
+    assert.equal(JSON.parse(original.data).receipt_digest, admitted.transaction_receipt_digest);
+    operations.capture = { candidate_id: captured.candidate_id, record_digest: captureProof.record_digest,
+      transaction_receipt_digest: captured.transaction_receipt_digest };
+    operations.admission = { status: admitted.status, record_id: firstOutcome.record_id,
+      transaction_receipt_digest: admitted.transaction_receipt_digest };
+    operations.journal = { events: journalBefore.length, last_event: journalBefore.at(-1).event_id };
+    await store.close();
+    await writeFile(statePath, `${JSON.stringify({ schemaName, refusals, hostHistory, operations,
+      captureProof, firstOutcome, journalBefore, original, captured, admitted, candidate,
+      fenceEpochWrite, statements, transactions }, null, 2)}\n`);
+    console.log(JSON.stringify({ ok: true, phase, schemaName, fenceEpochWrite }));
+  } else {
+    const { captureProof, firstOutcome, journalBefore, original, captured, admitted, candidate } = priorState;
+    clockNow = '2026-10-27T00:30:00.000Z';
+    await openStore();
+    const fenceEpochReopen = bridge.getFence()?.epoch;
+    assert.ok(typeof fenceEpochReopen === 'string', 'reopen fence epoch retained');
+    assert.equal(BigInt(fenceEpochReopen), BigInt(priorState.fenceEpochWrite) + 1n,
+      'exact u64 epoch advance across processes');
+    operations.epochs = { write: priorState.fenceEpochWrite, reopen: fenceEpochReopen,
+      advance: (BigInt(fenceEpochReopen) - BigInt(priorState.fenceEpochWrite)).toString() };
+    assert.deepEqual(valueOf(await store.readCaptureIdempotency(candidate)), captureProof);
+    assert.deepEqual(valueOf(await store.readAdmissionOutcome(candidate)), firstOutcome);
+    assert.deepEqual(valueOf(await store.readJournal({ after: '0', limit: 10 })), journalBefore);
+    assert.deepEqual(await handle.readCommitResult(journalBefore.at(-1).event_id, binding.memoryGrant), original);
+    const engine = makeEngine();
+    const replay = valueOf(await engine.capture(captureRequest));
+    assert.equal(replay.status, 'duplicate_exact');
+    assert.equal(replay.transaction_receipt_digest, captured.transaction_receipt_digest);
+    assert.deepEqual(valueOf(await engine.requestAdmission({ ...candidate,
+      authorization: { credential: 'credential-installed' }, deadline_at: DEADLINE })), admitted);
+    assert.equal(destroyedTotal, 0, 'restart replay must not destroy a second key');
+    operations.restart = { capture_replay: replay.status, record_id: firstOutcome.record_id,
+      journal_events: journalBefore.length, processes: 2 };
+    await store.close();
+  }
 } finally {
-  await hostDriver.transaction({ readOnly: false, deadlineMs: 30000 }, (session) =>
-    session.execute({ text: `DROP SCHEMA "${schemaName}_projection" CASCADE; DROP SCHEMA "${schemaName}" CASCADE`, values: [] }))
-    .catch(() => undefined);
+  if (phase === 'reopen') {
+    await hostDriver.transaction({ readOnly: false, deadlineMs: 30000 }, (session) =>
+      session.execute({ text: `DROP SCHEMA "${schemaName}_projection" CASCADE; DROP SCHEMA "${schemaName}" CASCADE`, values: [] }))
+      .catch(() => undefined);
+  }
   await pool.end();
 }
+if (phase === 'write') process.exit(0);
 
 const runtimeClosure = [...new Set(resolutions.filter((url) => url.startsWith('file://'))
   .map((url) => url.slice(`file://${consumerRoot}/`.length)))].sort();
@@ -362,15 +378,25 @@ const receipt = {
   head: process.env.INSTALLED_HEAD ?? null,
   tree: process.env.INSTALLED_TREE ?? null,
   consumer: { node: process.version, platform: process.platform, arch: process.arch,
-    root: 'clean-consumer-outside-repository', lockSha256: await sha256File(new URL('./package-lock.json', import.meta.url)) },
+    root: 'clean-consumer-outside-repository', lockSha256: await sha256File(new URL('./package-lock.json', import.meta.url)),
+    npmVersion: null },
   engram: { version: engramPkg.version, tarballSha256: engramSha256, integrity: await integrityOf(engramTgz) },
-  clusterMesh: { version: meshPkg.version, tarballSha256: meshSha256, integrity: await integrityOf(meshTgz) },
+  clusterMesh: { version: meshPkg.version, tarballSha256: meshSha256, integrity: await integrityOf(meshTgz),
+    fileListSha256: process.env.INSTALLED_MESH_FILELIST_SHA256 ?? null },
   p3ManifestSha256: P3_MANIFEST_SHA256,
+  qualificationImage: process.env.INSTALLED_QUAL_IMAGE ?? null,
+  hostGlue: { file: 'installed-host-bridge.mjs',
+    sha256: await sha256File(new URL('./installed-host-bridge.mjs', import.meta.url)),
+    status: 'host-authored-not-installed',
+    derivedFrom: ['tests/engram-memory/memory-pg-host.ts', 'tests/engram-memory/memory-neutral.ts'],
+    tupleCoverage: 'partial' },
   postgres: { serverVersion, image: process.env.INSTALLED_PG_IMAGE ?? null,
-    driver: provider.identity, statements, transactions },
+    driver: provider.identity, statements: (priorState?.statements ?? 0) + statements,
+    transactions: (priorState?.transactions ?? 0) + transactions },
   migrations: registration.assets.map((asset) => ({ id: asset.id, checksum: asset.checksum })),
   hostHistory: hostHistory.map((row) => row.id),
-  profiles: handle.profiles.map((claim) => ({ ...claim })),
+  declaredProfileClaims: handle.profiles.map((claim) => ({ ...claim, status: 'declared' })),
+  fiveProfileEquivalence: { status: 'not-covered', reason: 'Stage B blocked (E9 #790, 23 cases)' },
   requiredProfiles: [...MEMORY_DESCRIPTOR.requiredProfiles],
   contractDigest: MEMORY_DESCRIPTOR.contractDigest,
   refusals,
