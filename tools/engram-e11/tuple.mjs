@@ -10,14 +10,18 @@ export function build(root) {
   assert.equal(process.versions.node.split('.')[0], '24', 'E11 requires Node 24');
   const b = bindings(root);
   const observed = validate(b);
-  for (const file of ['bindings', 'candidates', 'slots', 'validate', 'tuple']) {
-    const bytes = b.read(`${file}.mjs`);
-    assert.equal(sha256(bytes), sha256(readFileSync(new URL(`./${file}.mjs`, import.meta.url))), `tool snapshot drift: ${file}`);
+  for (const file of ['bindings.mjs', 'candidates.mjs', 'slots.mjs', 'validate.mjs', 'tuple.mjs', 'stage.mjs',
+    'finalize.mjs', 'e11.mk', 'installed.sh', 'prepare.sh']) {
+    const bytes = b.read(file);
+    assert.equal(sha256(bytes), sha256(readFileSync(new URL(`./${file}`, import.meta.url))), `tool snapshot drift: ${file}`);
   }
   const body = b.read('pr803.md').toString();
   assert(body.includes('## E11 inputs (exact, from this head)'));
-  assert(body.includes(candidate.mesh.sha256) && body.includes(candidate.qualifiedHead));
-  assert(body.includes(candidate.anchors['receipt.json']));
+  const delivery = json(b.read('e10a3-delivery.json'));
+  assert.equal(delivery.tarball.sha256, candidate.mesh.sha256);
+  assert.equal(delivery.engram.integrity, candidate.engram.integrity);
+  assert.equal(delivery.ci.status, 'completed');
+  assert.equal(delivery.ci.conclusion, 'success');
   const lot6 = body.match(/## Lot 6 disposition \(#709\)\n([\s\S]*?)(?=\n## )/)?.[1];
   assert(lot6?.includes('missing source') && lot6.includes('option (a)'));
   const review = b.read('review-r3.md').toString();
@@ -36,18 +40,21 @@ export function build(root) {
   assert.equal(inputSlots.length, 21);
   assert(inputSlots.every((slot) => b.files[slot.file]));
   const { mesh, c6, receipt } = observed;
-  const tuple = { format: 'e2-host-tuple/v1', status: 'PENDING', mode: 'preparation-only',
+  const tuple = { format: 'e2-host-tuple/v1', status: 'PENDING', mode: 'E2-installed-candidate',
     backend: { name: mesh.name, version: mesh.version, sourceHead: receipt.head,
       archive: mesh.file, sha256: mesh.sha256, integrity: mesh.integrity },
     engram: cleanArchive(observed.engram),
-    neutralContract: { name: c6.name, version: c6.version, path: null, sha256: c6.finalBytesSha256,
-      requiredArchiveMember: c6.declaration, status: 'PENDING' },
+    neutralContract: { name: c6.name, version: c6.version, path: c6.path, sha256: c6.finalBytesSha256,
+      contractDigest: c6.contractDigest, requiredArchiveMember: c6.declaration, status: 'VERIFIED-CANDIDATE',
+      standaloneDeclarationSha256: c6.standaloneDeclarationSha256 },
     locks: ['consumer-lock.json', 'source/package-lock.json'].map((path) => ({ path, sha256: b.files[path].sha256 })),
     nodeImage: `node:24-bookworm-slim@${receipt.qualificationImage}`,
     profiles: [], requiredProfiles: receipt.requiredProfiles,
-    finalGeneratorOwner: 'gr-conductor', provenance: { inputList: 'PR #803 E11 inputs', inventory: 'Opus r3, 21 categories',
+    finalGeneratorOwner: 'gr-conductor', provenance: { inputList: 'PR #821 producer/archive inputs and #803 lane, adapted for E2', inventory: 'Opus r3, 21 categories',
       snapshotHead: candidate.snapshotHead, formatEvidence: 'format.md', receivingValidator: 'receiving-validator.mjs',
-      reviewDisposition: 'r3 historical dev.4 anchors superseded by current dev.5 PR inputs' },
+      reviewDisposition: 'Historical dev.4/dev.5 anchors superseded by #821 dev.6 and published 0.21.3',
+      excludedL5Candidate: 'L4 MCP 0.22.0 is separate L5 scope; plan E11 after E10 does not require it',
+      packedSourceHead: json(b.read('pack-receipt.json')).head_sha },
     slots: inputSlots, handoff, files: b.files };
   return tuple;
 }

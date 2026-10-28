@@ -29,6 +29,11 @@ memory-e11-retain:
 	@mkdir -p "$(E11_RETAIN)"
 	@cp -a "$(E11_INPUT)/." "$(E11_RETAIN)/"
 
+.PHONY: memory-e11-snapshot
+memory-e11-snapshot:
+	@test "$(ENV)" = test-mem-e11
+	@cp $(E11_DIR)/*.mjs $(E11_DIR)/*.sh $(E11_DIR)/e11.mk "$(E11_INPUT)/"
+
 # First freeze a new E2 consumer lock; qualification thereafter only uses npm ci.
 .PHONY: memory-e11-lock memory-e11-installed
 memory-e11-lock:
