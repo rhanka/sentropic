@@ -56,7 +56,7 @@ test('should keep validators independent without static capacity mutexes', () =>
   const validators = Object.entries(workflow.jobs).filter(([name]) =>
     /^validate-/.test(name) && !['validate-publishable-manifests', 'validate-ci-capacity-metrics', 'validate-idp-sync'].includes(name)
     || name === 'memory-l5-qualification');
-  assert.equal(validators.length, 24);
+  assert.equal(validators.length, 25);
   for (const [name, job] of validators) {
     assert.deepEqual(job.needs, ['changes'], name);
     assert.equal(job.concurrency, undefined, name);
@@ -94,10 +94,12 @@ test('should allow unrelated npm releases when another package fails', () => {
 });
 
 test('should exercise the real publication DAG on a branch without running registry writers', () => {
+  const makefile = fs.readFileSync('Makefile', 'utf8');
+  const dryRunPackages = makefile.match(/@case '\$\(PACKAGE\)' in ([a-z0-9|\-]+)\) ;;/)?.[1].split('|') ?? [];
   const changes = Object.fromEntries(Object.keys(workflow.jobs.changes.outputs).map(key => [key, key === 'engram_e2' ? 'false' : 'true']));
   const context = { changes, ref: 'refs/heads/topic', event: 'workflow_dispatch', inputs: { capacity_publish_dry_run: true } };
   const selected = workflowExpected(workflow, context).filter(row => row.selected && row.job.startsWith('publish-'));
-  assert.equal(selected.length, 21);
+  assert.equal(selected.length, 22);
   for (const { job: name } of selected) {
     const steps = workflow.jobs[name].steps;
     const dry = steps.find(step => step.name === 'Dry-run package publication');
@@ -108,6 +110,7 @@ test('should exercise the real publication DAG on a branch without running regis
       CI_MANIFEST_BOOTSTRAP_TARGET: "${{ inputs.bootstrap_publish_target || 'none' }}",
     }, name);
     assert.equal(dry.run, `make ci-capacity-publish-dry-run PACKAGE=${name.slice(8)} ENV=test-ci-capacity`);
+    assert.ok(dryRunPackages.includes(name.slice(8)), `${name}: accepted dry-run package`);
     for (const step of steps.filter(step => /^Publish |^Qualify published /.test(step.name ?? ''))) {
       assert.equal(step.if, 'inputs.capacity_publish_dry_run != true', `${name}/${step.name}`);
     }
@@ -144,27 +147,47 @@ test('should capture only selected delivery endpoints and reject cross-head rece
   assert.throws(() => capacityCapture(workflow, { ...run, head_sha: 'wrong' }, [], manifest), /identity/);
 });
 
-test('should capture every page of the current attempt at the actual gate and fail on API errors', async () => {
-  const script = workflow.jobs['ci-gate'].steps.find((step) => step.name === 'Capture the current attempt for the final verdict').with.script;
-  const execute = new (Object.getPrototypeOf(async function () {}).constructor)('require', 'context', 'fetch', 'process', script);
+test('should authenticate current-attempt receipts with read-only permissions and fail closed on API errors', async () => {
+  const gate = workflow.jobs['ci-gate'];
+  assert.deepEqual(gate.permissions, { contents: 'read', actions: 'read' });
+  const script = gate.steps.find((step) => step.name === 'Capture the current attempt for the final verdict').with.script;
+  const execute = new (Object.getPrototypeOf(async function () {}).constructor)('require', 'context', 'github', 'process', script);
   const requests = [];
   let captured;
   const files = { writeFileSync: (_file, value) => { captured = JSON.parse(value); } };
   const context = { repo: { owner: 'rhanka', repo: 'sentropic' }, runId: 7 };
-  const fetch = async (url) => {
-    requests.push(url);
-    return { ok: true, json: async () => url.includes('/jobs?')
-      ? { jobs: [{ id: requests.length, run_id: 7, run_attempt: 3 }], total_count: 2 }
-      : { id: 7, run_attempt: 3, head_sha: 'abc' } };
+  const params = { ...context.repo, run_id: 7, attempt_number: 3 };
+  const actions = {
+    getWorkflowRunAttempt: async (input) => {
+      requests.push(input);
+      return { data: { id: 7, run_attempt: 3, head_sha: 'abc' } };
+    },
+    listJobsForWorkflowRunAttempt: Symbol('authenticated job-list endpoint'),
   };
-  await execute(() => files, context, fetch, { env: { GITHUB_RUN_ATTEMPT: '3' } });
-  assert.equal(captured.jobs.length, 2);
+  const github = { rest: { actions }, paginate: async (endpoint, input) => {
+    assert.equal(endpoint, actions.listJobsForWorkflowRunAttempt);
+    requests.push(input);
+    // Octokit's paginator returns the flattened members of all pages.
+    return [1, 2].map(id => ({ id, run_id: 7, run_attempt: 3 }));
+  } };
+  const process = { env: { GITHUB_RUN_ATTEMPT: '3', GITHUB_WORKFLOW_SHA: 'workflow' } };
+  await execute(() => files, context, github, process);
+  assert.deepEqual(requests, [params, { ...params, per_page: 100 }]);
+  assert.deepEqual(captured.jobs.map(job => job.id), [1, 2]);
   assert.equal(captured.run.run_attempt, 3);
-  assert.match(requests[0], /\/attempts\/3$/);
-  assert.match(requests[1], /\/attempts\/3\/jobs\?per_page=100&page=1$/);
-  assert.match(requests[2], /page=2$/);
-  await assert.rejects(execute(() => files, context, async () => ({ ok: false, status: 503 }),
-    { env: { GITHUB_RUN_ATTEMPT: '3' } }), /HTTP 503/);
+  assert.equal(captured.sourceSha, 'abc');
+  assert.equal(captured.workflowSha, 'workflow');
+  for (const status of [403, 503]) {
+    const reject = async () => { throw new Error(`HTTP ${status}`); };
+    for (const client of [
+      { ...github, rest: { actions: { ...actions, getWorkflowRunAttempt: reject } } },
+      { ...github, paginate: reject },
+    ]) {
+      captured = undefined;
+      await assert.rejects(execute(() => files, context, client, process), new RegExp(`HTTP ${status}`));
+      assert.equal(captured, undefined, 'an API error must never produce a receipt');
+    }
+  }
 });
 
 test('should reject incomplete real gate contexts and missing expanded receipts through its exact script', () => {
