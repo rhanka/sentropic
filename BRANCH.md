@@ -48,6 +48,7 @@
   - [x] Declare BRL8-EXn with reason, impact and rollback before sensitive changes.
 
 ## Feedback Loop
+- [x] CI 40624700431 passed on 82b24e2b3; main then advanced through PR801 to d86b627f8. Merge that main without source conflicts (retain this branch plan), and require fresh exact-head CI before READY.
 - [x] Integration regression (CI 40621929792): official lock refresh also advanced the unrelated artifacts baseline to 0.2.4. Restore the exact published 0.1.4 entry from main, preserving the L8 gateway archive and cluster/mesh tuple; `artifacts-tuple.spec.ts` explicitly requires that baseline.
 - [x] Integration evidence: gateway 0.22.0 BLOCK archive SHA-256 `cbf4ef6c51536ed0b26bb2a9f29901c927ef1a986d1d8039e7c44d8394fdb54b`; official `refresh-lazy-package-lock` passes with the verified sibling and current mesh 0.30.0; full gateway suite passes 1370 tests / 78 files with `ENV=test-integrator-stt-l8` under the shared Docker lock.
 - [x] Integration: retain main's llm-mesh 0.30 support with the L8 speech floor 0.28 and gateway 0.22.0; use cluster-mesh 0.23.3 above published 0.23.2. Regenerate the selected release lock through the official verified-sibling qualification target; remove the obsolete L2 PR-base filter now that PR798 targets main.
