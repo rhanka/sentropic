@@ -1451,3 +1451,143 @@ describe('chat-loop-controller: local-tool state machine (slice 1E)', () => {
 
   // 11b. tool_call_delta appends to args text
   it('11b: tool_call_delta appends args to existing state entry', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const { opts } = makeFakeLocalToolMachine();
+    ctrl.attachLocalToolMachine(opts);
+    ctrl.setMessages([assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' })]);
+
+    emitToolCallStart(ctrl, 'stream-1', 'tc-1', 'bash', '{"cmd":', 1);
+    emitToolCallDelta(ctrl, 'stream-1', 'tc-1', '"ls"}', 2);
+
+    const state = ctrl.getSnapshot().localToolStatesById.get('tc-1')!;
+    expect(state.argsText).toBe('{"cmd":"ls"}');
+    expect(state.lastSequence).toBe(2);
+  });
+
+  // 11c+11d. Complete args → executor fires → poster called with result
+  it('11c+11d: executor fires and poster is called with exact args after complete JSON', async () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = createChatLoopController<Msg>();
+      const { opts, calls } = makeFakeLocalToolMachine({
+        executeResult: { status: 'ok', output: 'hello' },
+      });
+      ctrl.attachLocalToolMachine(opts);
+      ctrl.setMessages([assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' })]);
+
+      // Complete JSON in one shot
+      emitToolCallStart(ctrl, 'stream-1', 'tc-1', 'bash', '{"cmd":"ls"}', 1);
+
+      // Let timers fire (scheduleBufferedLocalToolExecution uses setTimeout)
+      await vi.runAllTimersAsync();
+
+      expect(calls.execute).toHaveLength(1);
+      expect(calls.execute[0]?.toolCallId).toBe('tc-1');
+      expect(calls.execute[0]?.name).toBe('bash');
+      expect(calls.execute[0]?.args).toEqual({ cmd: 'ls' });
+      expect(calls.execute[0]?.streamId).toBe('stream-1');
+
+      expect(calls.poster).toHaveLength(1);
+      expect(calls.poster[0]?.streamId).toBe('stream-1');
+      expect(calls.poster[0]?.toolCallId).toBe('tc-1');
+      expect(calls.poster[0]?.result).toEqual({ status: 'ok', output: 'hello' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 11e. Permission-required error → prompt queued
+  it('11e: LocalToolPermissionRequiredError queues a permission prompt', async () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = createChatLoopController<Msg>();
+      const permReq = { requestId: 'req-1', toolName: 'bash', origin: 'localhost' };
+      const { opts, calls } = makeFakeLocalToolMachine({
+        executeThrows: new FakePermissionRequiredError(permReq),
+      });
+      ctrl.attachLocalToolMachine(opts);
+      ctrl.setMessages([assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' })]);
+
+      emitToolCallStart(ctrl, 'stream-1', 'tc-1', 'bash', '{"cmd":"rm -rf"}', 1);
+      await vi.runAllTimersAsync();
+
+      // Executor called, permission required → prompt queued
+      expect(calls.execute).toHaveLength(1);
+      expect(calls.poster).toHaveLength(0);
+
+      const snap = ctrl.getSnapshot();
+      expect(snap.pendingLocalToolPermissionPrompts).toHaveLength(1);
+      const prompt = snap.pendingLocalToolPermissionPrompts[0]!;
+      expect(prompt.toolCallId).toBe('tc-1');
+      expect(prompt.name).toBe('bash');
+      expect(prompt.request.requestId).toBe('req-1');
+      expect(prompt.streamId).toBe('stream-1');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 11f. decideLocalToolPermission(allow_once) re-executes + posts result
+  it('11f: decideLocalToolPermission(allow_once) re-executes tool and posts result', async () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = createChatLoopController<Msg>();
+      const permReq = { requestId: 'req-2', toolName: 'bash', origin: 'localhost' };
+      let callCount = 0;
+      // First call throws permission error; second returns success
+      const { opts, calls } = makeFakeLocalToolMachine();
+      opts.executeLocalTool = vi.fn(async (toolCallId, name, args, o) => {
+        calls.execute.push({ toolCallId, name, args, streamId: o.streamId });
+        callCount += 1;
+        if (callCount === 1) throw new FakePermissionRequiredError(permReq);
+        return { status: 'ok' };
+      });
+      ctrl.attachLocalToolMachine(opts);
+      ctrl.setMessages([assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' })]);
+
+      emitToolCallStart(ctrl, 'stream-1', 'tc-2', 'bash', '{}', 1);
+      await vi.runAllTimersAsync();
+
+      // Permission prompt queued
+      expect(ctrl.getSnapshot().pendingLocalToolPermissionPrompts).toHaveLength(1);
+      const prompt = ctrl.getSnapshot().pendingLocalToolPermissionPrompts[0]!;
+
+      // User allows
+      await ctrl.decideLocalToolPermission(prompt, 'allow_once');
+      await vi.runAllTimersAsync();
+
+      // Decider called
+      expect(calls.decide).toHaveLength(1);
+      expect(calls.decide[0]?.requestId).toBe('req-2');
+      expect(calls.decide[0]?.decision).toBe('allow_once');
+
+      // Executor called twice (first threw, second succeeded)
+      expect(calls.execute).toHaveLength(2);
+
+      // Poster called once with success result
+      expect(calls.poster).toHaveLength(1);
+      expect(calls.poster[0]?.result).toEqual({ status: 'ok' });
+
+      // Prompt removed
+      expect(ctrl.getSnapshot().pendingLocalToolPermissionPrompts).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 11g. decideLocalToolPermission(deny_once) posts error result directly
+  it('11g: decideLocalToolPermission(deny_once) posts error result without re-executing', async () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = createChatLoopController<Msg>();
+      const permReq = { requestId: 'req-3', toolName: 'bash', origin: 'localhost' };
+      const { opts, calls } = makeFakeLocalToolMachine({
+        executeThrows: new FakePermissionRequiredError(permReq),
+      });
+      ctrl.attachLocalToolMachine(opts);
+      ctrl.setMessages([assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' })]);
+
+      emitToolCallStart(ctrl, 'stream-1', 'tc-3', 'bash', '{}', 1);
+      await vi.runAllTimersAsync();
+
+      const prompt = ctrl.getSnapshot().pendingLocalToolPermissionPrompts[0]!;
