@@ -44,8 +44,8 @@ on:
           - artifacts
 
 env:
-  REGISTRY: ${{ secrets.REGISTRY }}
-  ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+  REGISTRY: ${{ inputs.decision_fixtures_only != true && secrets.REGISTRY || 'local' }}
+  ADMIN_EMAIL: ${{ inputs.decision_fixtures_only != true && secrets.ADMIN_EMAIL || 'decision-test@example.test' }}
 
 # BR76-EX1 — capacity reservation: cancel only superseded PR attempts; main
 # releases are never cancelled and serialize on one group (no release overlap).
@@ -2583,7 +2583,7 @@ jobs:
     needs: [changes, publish-llm-mesh, publish-llm-gateway]
     # `!cancelled()` (not `always()`): a manual cancel stops the chain (deviation from design section 5).
     if: >-
-      !cancelled() && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && (needs.publish-llm-mesh.result == 'success' || needs.publish-llm-gateway.result == 'success')
+      !cancelled() && inputs.decision_fixtures_only != true && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && (needs.publish-llm-mesh.result == 'success' || needs.publish-llm-gateway.result == 'success')
     permissions:
       contents: read
     steps:
@@ -2733,6 +2733,7 @@ jobs:
     # only skip if a publish job actually FAILED.
     if: >-
       always() && github.ref == 'refs/heads/main' && !cancelled()
+      && inputs.decision_fixtures_only != true
       && needs.publish-api-image.result != 'failure'
       && needs.publish-ui-image.result != 'failure'
     steps:

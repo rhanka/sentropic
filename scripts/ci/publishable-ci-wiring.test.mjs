@@ -107,6 +107,24 @@ test('Decision offline mode is explicit, credential-free and cannot publish, whi
     for (const name of ['changes', 'validate-publishable-manifests', 'ci-gate', 'bootstrap-publish']) {
       assert.equal(evaluateSelection(jobs[name].if, lookup), value !== true, name);
     }
+    const releaseLookup = (key) => key === 'needs.changes.result' ? 'success'
+      : /^needs\..+\.result$/.test(key) ? 'success' : lookup(key);
+    for (const name of ['deploy-preprod', 'verify-train-lock-integrity']) {
+      assert.equal(evaluateSelection(jobs[name].if, releaseLookup), value !== true, name);
+    }
+    // Skipped publishers must still deploy ordinary main changes, never fixtures.
+    const skippedLookup = (key) => /^needs\..+\.result$/.test(key) ? 'skipped' : lookup(key);
+    assert.equal(evaluateSelection(jobs['deploy-preprod'].if, skippedLookup), value !== true);
+  }
+  for (const expression of Object.values(ci.env)) {
+    assert.match(expression, /inputs\.decision_fixtures_only != true && secrets\./);
+  }
+  const fixtureLookup = (key) => key === 'inputs.decision_fixtures_only' ? true
+    : key === 'github.ref' ? 'refs/heads/main' : key === 'github.event_name' ? 'workflow_dispatch'
+    : key.endsWith('.result') ? 'skipped' : '';
+  for (const [name, job] of Object.entries(jobs)) {
+    if (!JSON.stringify(job).includes('secrets.') && !name.startsWith('publish-')) continue;
+    assert.equal(evaluateSelection(job.if, fixtureLookup), false, `${name}: fixture dispatch cannot access secrets or publish`);
   }
 });
 
@@ -327,7 +345,7 @@ test('release train: validation barrier, strict chain, serialization, lock-sync 
   assert.match(sync.run, /if \[ "\$manifest" != "\$locked" \]; then\n\s*echo "::error [^\n]*"\n\s*exit 1/);
   const verify = jobs['verify-train-lock-integrity'];
   assert.deepEqual(needsOf('verify-train-lock-integrity'), ['changes', 'publish-llm-mesh', 'publish-llm-gateway']);
-  assert.equal(verify.if, "!cancelled() && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && (needs.publish-llm-mesh.result == 'success' || needs.publish-llm-gateway.result == 'success')");
+  assert.equal(verify.if, "!cancelled() && inputs.decision_fixtures_only != true && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && (needs.publish-llm-mesh.result == 'success' || needs.publish-llm-gateway.result == 'success')");
   assert.deepEqual(verify.permissions, { contents: 'read' });
   const check = verify.steps.find((s) => /check-train-lock-integrity/.test(s.run ?? ''));
   assert.deepEqual(check.env, { LLM_MESH_PUBLISH_RESULT: '${{ needs.publish-llm-mesh.result }}', LLM_GATEWAY_PUBLISH_RESULT: '${{ needs.publish-llm-gateway.result }}' });
