@@ -10,6 +10,10 @@ export type RemoteRefusal = 'invalid_request' | 'unsupported_version' | 'authent
 export class RemoteAuthorityError extends Error {
   constructor(readonly code: RemoteRefusal) { super(code); }
 }
+export function requireRemoteVersion(value: unknown): void {
+  if (value && typeof value === 'object' && 'version' in value && typeof value.version === 'string'
+    && value.version !== 'remote-action-v1') throw new RemoteAuthorityError('unsupported_version');
+}
 export const remoteId = z.string().min(1).max(128).regex(/^[\x21-\x7e]+$/);
 export const remoteCounter = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 export const remoteHash = z.string().regex(/^[a-f0-9]{64}$/);
