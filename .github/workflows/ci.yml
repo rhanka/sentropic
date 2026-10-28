@@ -1722,42 +1722,73 @@ jobs:
         if: always()
         run: make down-api-ci ENV=test-ci-idp
 
-  # Security: SAST and SCA scans (code and dependencies)
-  security-sast-sca:
+  security-code-api:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+    if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scan: sast
+          - scan: sca
     steps:
-      - uses: actions/checkout@v6
-      - name: Setup Docker
-        uses: docker/setup-buildx-action@v4
-      - name: Run SAST scan on API
-        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-api-security-sast
-        continue-on-error: false
-      - name: Run SCA scan on API
-        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-api-security-sca
-        continue-on-error: false
-      - name: Run SAST scan on UI
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-ui-security-sast
-        continue-on-error: false
-      - name: Run SCA scan on UI
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-ui-security-sca
-        continue-on-error: false
-      - name: Upload security scan results (SAST/SCA)
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Run unchanged security gate
+        run: make test-api-security-${{ matrix.scan }} ENV=test-ci-br79
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
-        uses: actions/upload-artifact@v7
         with:
-          name: security-sast-sca-results
-          path: |
-            .security/sast-*.json
-            .security/sast-*-parsed.yaml
-            .security/sca-*.json
-            .security/sca-*-parsed.yaml
+          name: security-code-api-${{ matrix.scan }}-results
+          include-hidden-files: true
+          path: .security/${{ matrix.scan }}-api*
+          if-no-files-found: error
           retention-days: 30
+
+  security-code-ui:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - scan: sast
+          - scan: sca
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Run unchanged security gate
+        run: make test-ui-security-${{ matrix.scan }} ENV=test-ci-br79
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: security-code-ui-${{ matrix.scan }}-results
+          include-hidden-files: true
+          path: .security/${{ matrix.scan }}-ui*
+          if-no-files-found: error
+          retention-days: 30
+
+  security-sast-sca:
+    runs-on: ubuntu-latest
+    needs: [changes, security-code-api, security-code-ui]
+    if: >-
+      !cancelled() &&
+      (needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true')
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Require every selected SAST and SCA scan
+        env:
+          CI_SECURITY_NEEDS: ${{ toJSON(needs) }}
+          CI_SECURITY_CATEGORY: code
+        run: make ci-security-join ENV=test-ci-br79
 
   # Security: IaC scans (infrastructure configuration)
   security-iac:
@@ -2888,6 +2919,8 @@ jobs:
       - e2e-vscode
       - smoke-idp-screens
       - security-sast-sca
+      - security-code-api
+      - security-code-ui
       - security-iac
       - security-container
       - security-container-e2e
@@ -2938,7 +2971,7 @@ jobs:
       validate-chat-core, validate-chat-server, validate-comments, validate-live-speech, validate-skills, validate-flow,
       validate-artifacts, validate-harness, build-api-image, build-api-tool-image,
       test-api-unit-integration, build-ui, build-desktop, test-ui, build-ui-static, test-e2e, e2e-vscode, smoke-idp-screens,
-      security-sast-sca, security-iac, security-container, security-container-e2e, security-container-ui, security-container-api-tool, security-container-api, test-smoke-restore, validate-ci-capacity-metrics,
+      security-sast-sca, security-code-api, security-code-ui, security-iac, security-container, security-container-e2e, security-container-ui, security-container-api-tool, security-container-api, test-smoke-restore, validate-ci-capacity-metrics,
       publish-api-image, publish-ui-image, deploy-preprod, publish-cluster-mesh,
       publish-llm-mesh, publish-llm-gateway, publish-chat-ui, publish-cited-source-viewer,
       publish-cowork-bridge, publish-oauth-verify, publish-mcp-auth, publish-mcp-platform,
