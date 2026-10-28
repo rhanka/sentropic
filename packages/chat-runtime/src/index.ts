@@ -20,3 +20,4 @@ export * from './stores/localTools.js';
 export * from './utils/chat-steer.js';
 export * from './utils/chat-tool-scope.js';
 export * from './utils/localToolStreamSync.js';
+export * from './checkpoints/index.js';
