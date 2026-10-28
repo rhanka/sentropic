@@ -1,12 +1,12 @@
-# Feature: Engram E10a installed neutral handle
+# Fix: Engram E10a-2 lossless K7 capture carriage
 
 ## Objective
-- Ship the fenced neutral-handle factory and the K7/K8 wire adaptation in the installed cluster-mesh bytes so durable memory runs from installed bytes only, with no host-authored bridge.
+- Preserve every Engram K7 field, remove receipt reconstruction, pin canonical byte round trips and prove installed Engram hydration refuses divergent entry/control receipts.
 
 ## Scope / Guardrails
-- Base `feat/engram-e2-integration` at `ef585a6b1164923929add4dfee2c8a64390da267`; branch `feat/cluster-mesh-engram-e10a`; revision worktree `tmp/worktrees/mem-e10a-ci`; draft PR against `feat/engram-e2-integration`; merge only, never rebase, never force-push.
-- Ports reserved for this branch only: API 8792, UI 5192, Maildev UI 1092; `ENV=test-mem-e10a-ci` last; never `ENV=dev`; never `make clean-all`; 0 Python.
-- One Docker build at a time under the shared Docker lock; `make down ENV=test-mem-e10a-ci` after each Docker step.
+- Base `origin/feat/engram-e2-integration` at `d08d44b78`; branch `feat/cluster-mesh-engram-e10a2`; worktree `tmp/worktrees/mem-e10a2`; draft PR against `feat/engram-e2-integration`; merge only, never rebase, never force-push.
+- Ports: API 8792, UI 5192, Maildev UI 1092; no service stack required; `ENV=test-mem-e10a2` last; never `ENV=dev`; never `make clean-all`; 0 Python.
+- One Docker step at a time under `/home/antoinefa/.cache-tmp/sentropic-docker.lock`; `make down ENV=test-mem-e10a2` after each Docker step.
 - Commits under 150 lines via `make commit`, specific `git add` only, no AI trailers.
 - Additive export only on the frozen `./engram-memory` surface: rationale is that the installed export has no neutral-handle factory and the frozen Engram substrate speaks snake-case K7/K8 wire while the kernel validator expects the camel-case proof model; impact is new exported factory and pure adaptation helpers with no change to existing exported behavior, digests or descriptors; rollback is removal of the new modules, their exports and the pack-only version increment.
 
@@ -37,6 +37,9 @@
   - No exception declared; the additive `./engram-memory` export is declared above with rationale, impact and rollback.
 
 ## Feedback Loop
+- [x] Conductor split (2026-10-28): **temporary, fail-closed deviation from gr-conductor condition 2**. Leave the existing intentHash computation unchanged pending an Engram producer change; producer 0.22.0 supplies no intentHash carrier at `transaction.apply`. No claim of condition 2 compliance or E10 qualification; promotion remains blocked until producer-owned intent carriage is verified. [Contract blocker](/home/antoinefa/src/sentropic/.tmp/mem-e10a2-contract-blocker.md); [review gate](/home/antoinefa/src/sentropic/.tmp/packets/mem-E10a2-review-gate.md).
+- [x] K7 layout: preserve all snake fields other than `record_digest` in `proof`, including `receipt_digest` and unknown extensions; preserve `record_digest` separately as `recordDigest` so only it can change on completion. Read the entry from that row alone. No new kernel digest or renaming of Engram digest values.
+- [x] Initial K7 version rule: Engram 0.22.0 selects `record_digest !== undefined ? '2' : '1'` when no previous row exists; subsequent writes use previous version + 1 (frozen substrate line 5684). The adapter's semantic revision follows presence of `record_digest`; aggregate version remains the producer's supplied value. Kernel transition validation still requires creation before completion.
 - [x] Opus r1 P1: reproduce nine malformed-proof failures; validate K7/K8 before translation and map canonical JSON errors to `invalid-schema`; exercise the installed Engram commit loop with no reconcile.
 - [x] CI accepted baseline `05cecaa6f`; rerun CI on the revision head before handoff.
 - [x] Opus r1 P2-D: enforce R-G3-1 second-holder refusal before side effects, including concurrent acquisitions; refresh ownership at checkFence per binding §§9.3–9.6 and test release/failure cleanup.
@@ -57,6 +60,21 @@
 - Rationale: single additive module lot with unit tests and one pack-only version increment.
 
 ## Plan / Todo (lot-based)
+- [x] **Lot E10a-2.0 — Resume and split contract**
+  - [x] Read project rules, blocker, Docker lock and review gate; mechanical harness branch check passed.
+  - [x] Record condition 2 deviation and initial K7 version rule; do not change intentHash computation.
+- [ ] **Lot E10a-2.1 — Lossless row and byte regression**
+  - [x] Preserve K7 fields in `src/engram-memory/wire-adaptation.ts`; delete cross-row receipt rejoin from transaction and neutral-handle reads.
+  - [ ] `tests/engram-memory/wire-adaptation.spec.ts`: byte round trips in both directions for created/completed K7, K8, journal add/strip; immutable capture fields and no control read.
+- [ ] **Lot E10a-2.2 — Installed producer hydration**
+  - [ ] Add `tests/engram-memory/receipt-hydration.spec.ts`: matching entry/control receipts reopen; differing valid receipt digests refuse with `JOURNAL_CORRUPT` through real installed Engram.
+  - [ ] Execute with frozen Engram 0.22.0 archive SHA-256 `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10`; retain evidence outside tracked sources.
+- [ ] **Lot E10a-2.3 — Pack and draft handoff**
+  - [x] Bump pack-only package/workspace lock to `0.24.0-dev.5` (`dev.4` reserved for #803); no publication. npm latest verified `0.23.4` on 2026-10-28.
+  - [ ] Scoped tests, cluster-mesh typecheck/lint/full tests and frozen-surface packaging gates; scope check before each commit; tear down after Docker steps.
+  - [ ] Pack/copy tarball to `/home/antoinefa/src/sentropic/.tmp/engram-e2-host-tuple/e10-artifacts/`; report SHA-256.
+  - [ ] Draft PR with this file as body; CI completed/success on exact head; relay handoff via conductor only.
+- [x] **Inherited E10a history below — baseline evidence only**
 - [x] **Lot E10a-0 — Baseline and constraints**
   - [x] Read `rules/MASTER.md`, `plan/BRANCH_TEMPLATE.md` and the E10a conductor packet.
   - [x] Create isolated worktree `tmp/worktrees/mem-e10a` on `feat/cluster-mesh-engram-e10a` from `origin/feat/engram-e2-integration` at `ef585a6b1164923929add4dfee2c8a64390da267`.
