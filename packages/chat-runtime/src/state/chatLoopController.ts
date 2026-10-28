@@ -160,7 +160,7 @@ export type ControllerStreamEvent = ProjectionStreamEvent;
 
 /**
  * Minimal stream client surface the controller needs for subscription lifecycle.
- * Structurally compatible with StreamHubClient from '@sentropic/chat-ui/client'.
+ * Structurally compatible with StreamHubClient from '@sentropic/chat-runtime/client/streamTypes'.
  * Using a structural subtype here keeps the controller independent of the
  * StreamHubClient import (allows testing with a plain fake object).
  *
