@@ -1311,3 +1311,143 @@ describe('chat-loop-controller: host lifecycle (slice 1D)', () => {
     // The factory must receive the real sessionId from the host response.
     expect(capturedSessionId).toBe('sess-factory');
   });
+});
+
+// ---------------------------------------------------------------------------
+// 11. Local-tool state machine (slice 1E)
+//
+// Strategy: inject a FAKE local-tool machine (executor, decider, poster) into
+// the controller via attachLocalToolMachine, drive it with fixed stream event
+// sequences, and assert:
+//   11a. tool_call_start creates state entry + args buffered correctly
+//   11b. tool_call_delta appends to args text (same toolCallId)
+//   11c. tryExecuteBufferedLocalTool fires executor + posts result after args complete
+//   11d. executor + postLocalToolResult called with exact args
+//   11e. Permission-required error → prompt queued in pendingLocalToolPermissionPrompts
+//   11f. decideLocalToolPermission(allow_once) re-executes and posts result
+//   11g. decideLocalToolPermission(deny_once) posts error result directly
+//   11h. done/error event clears local-tool state for the stream
+//   11i. local_tool_result_received status event clears the specific toolCallId
+//   11j. awaiting_local_tool_results filters permission prompts for pending stream
+//   11k. fresh-round detection: executed tool reset when sequence advances
+//   11l. tab_type missing-args wait (1500ms) — uses fake timers
+//   11m. sequential ordering: second tool waits for first to complete
+//   11n. detachLocalToolMachine clears all state + injections
+//   11o. resetLocalToolMachineState clears state but keeps injections
+//   11p. snapshot exposes localToolStatesById + pendingLocalToolPermissionPrompts
+//   11q. sentropic-string scan: local-tool additions contain zero domain strings
+// ---------------------------------------------------------------------------
+
+class FakePermissionRequiredError extends Error {
+  request: { requestId: string; toolName: string; origin: string };
+  constructor(request: { requestId: string; toolName: string; origin: string }) {
+    super('Permission required');
+    this.request = request;
+  }
+}
+
+function makeFakeLocalToolMachine(overrides: {
+  executeResult?: unknown;
+  executeThrows?: Error;
+  decideThrows?: Error;
+  posterThrows?: Error;
+} = {}) {
+  const calls = {
+    execute: [] as Array<{ toolCallId: string; name: string; args: unknown; streamId: string }>,
+    decide: [] as Array<{ requestId: string; decision: string }>,
+    poster: [] as Array<{ streamId: string; toolCallId: string; result: unknown }>,
+  };
+
+  return {
+    calls,
+    opts: {
+      executeLocalTool: vi.fn(async (toolCallId: string, name: string, args: unknown, opts: { streamId: string }) => {
+        calls.execute.push({ toolCallId, name, args, streamId: opts.streamId });
+        if (overrides.executeThrows) throw overrides.executeThrows;
+        return overrides.executeResult ?? { status: 'ok', output: 'result' };
+      }),
+      decideLocalToolPermission: vi.fn(async (requestId: string, decision: string) => {
+        calls.decide.push({ requestId, decision });
+        if (overrides.decideThrows) throw overrides.decideThrows;
+      }),
+      postLocalToolResult: vi.fn(async (streamId: string, toolCallId: string, result: unknown) => {
+        calls.poster.push({ streamId, toolCallId, result });
+        if (overrides.posterThrows) throw overrides.posterThrows;
+      }),
+      isLocalToolName: (name: string) => ['bash', 'tab_read', 'tab_type', 'tab_action'].includes(name),
+      isLocalToolRuntimeAvailable: () => true,
+      isLocalToolPermissionRequired: (error: unknown) => error instanceof FakePermissionRequiredError,
+      getPermissionRequest: (error: unknown) => (error as FakePermissionRequiredError).request,
+    },
+  };
+}
+
+/** Emit a tool_call_start event through the controller's handleLocalToolStreamEvent. */
+function emitToolCallStart(
+  ctrl: ReturnType<typeof createChatLoopController<Msg>>,
+  streamId: string,
+  toolCallId: string,
+  name: string,
+  args: string,
+  sequence: number,
+) {
+  ctrl.handleLocalToolStreamEvent({
+    type: 'tool_call_start',
+    streamId,
+    sequence,
+    data: { tool_call_id: toolCallId, name, args },
+  });
+}
+
+function emitToolCallDelta(
+  ctrl: ReturnType<typeof createChatLoopController<Msg>>,
+  streamId: string,
+  toolCallId: string,
+  delta: string,
+  sequence: number,
+) {
+  ctrl.handleLocalToolStreamEvent({
+    type: 'tool_call_delta',
+    streamId,
+    sequence,
+    data: { tool_call_id: toolCallId, delta },
+  });
+}
+
+function emitStatusEvent(
+  ctrl: ReturnType<typeof createChatLoopController<Msg>>,
+  streamId: string,
+  state: string,
+  sequence: number,
+  extra: Record<string, unknown> = {},
+) {
+  ctrl.handleLocalToolStreamEvent({
+    type: 'status',
+    streamId,
+    sequence,
+    data: { state, ...extra },
+  });
+}
+
+describe('chat-loop-controller: local-tool state machine (slice 1E)', () => {
+  // 11a. tool_call_start creates state entry
+  it('11a: tool_call_start creates state entry in localToolStatesById', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const { opts } = makeFakeLocalToolMachine();
+    ctrl.attachLocalToolMachine(opts);
+    // Add a processing assistant message so the stream is eligible
+    ctrl.setMessages([assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' })]);
+
+    emitToolCallStart(ctrl, 'stream-1', 'tc-1', 'bash', '{"cmd":"ls"}', 1);
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.localToolStatesById.has('tc-1')).toBe(true);
+    const state = snap.localToolStatesById.get('tc-1')!;
+    expect(state.name).toBe('bash');
+    expect(state.streamId).toBe('stream-1');
+    expect(state.argsText).toBe('{"cmd":"ls"}');
+    expect(state.executed).toBe(false);
+  });
+
+  // 11b. tool_call_delta appends to args text
+  it('11b: tool_call_delta appends args to existing state entry', () => {
