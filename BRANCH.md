@@ -26,6 +26,7 @@
   - `api/src/routes/auth/oauth.ts`
   - `api/src/routes/namespaces/auth/federation.ts`
   - `deploy/k8s/base/35-auth-idp.yaml`
+  - `deploy/k8s/base/30-api.yaml`
   - `.github/workflows/ci.yml`
   - `.github/workflows/idp-session-secret.yml`
   - `deploy/ci/idp-identity-sync/session-*`
@@ -46,6 +47,7 @@
   - [x] Declare BRRC1-EXn with rationale, impact and rollback before any conditional edit.
 
 ## Feedback Loop
+- [x] BRRC1-EX4: F4 requires the deployed API to pin product role explicitly, and preflight to require the shared S2S revocation configuration before apply. Impact: incomplete pairing blocks deployment with running workloads untouched; prevents silent product-only fallback beside the isolated issuer. Rollback: revert the role pin/check together with remote authority; no credential or data mutation.
 - [x] BRRC1-EX3: F1 authorizes pre-apply Secret/KEK/PVC checks and an IdP session Secret provisioning workflow matching idp-workload-secret.yml. Impact: missing prerequisites fail CD before any apply; conductor owns key generation/storage. Rollback: revert workflow/checks together with the isolated manifest, without changing stored credentials.
 - [x] Opus r1 F1: provision isolated signing through sentropic-idp-run; verify Secret/KEK/Bound PVC before deploy; selftests cover absent/invalid prerequisites and pre-apply ordering.
 - [x] Opus r1 F2/F4: DB deletion survives private-store errors; all four product revocation ports write issuer tombstones; lock/corrupt/missing-PVC, delivery retry and restored-row regressions pass.
@@ -54,7 +56,7 @@
 - [x] F2/F3 GREEN: 129 RC1 unit and 32 API cases pass; test-rc1 removed (RC1-opus-green.log).
 - [x] F4 regressions: all four product revocation ports traverse the actual IdP router/store and refuse shared-row restoration; wrong S2S claims and delivery failure pass (129 unit + 43 API cases).
 - [x] F4 additional coverage: issuer-store lock/corrupt/missing-PVC failures, retry after DB removal, browser/body refusals and missing active-product configuration; evidence requires the revocation composition.
-- [x] Opus r1 final local gates: 219 passing cases (129 RC1 unit, 56 RC1 API, 11 session-manager, 2 passkey-MFA, 10 federation cookies, 11 API sessions); API typecheck/lint, IdP typecheck and 60 IdP pipeline selftests pass. Receipts: RC1-opus-final.log and RC1-opus-quality.log; make down removed test-rc1.
+- [x] Opus r1 final local gates: 219 passing cases (129 RC1 unit, 56 RC1 API, 11 session-manager, 2 passkey-MFA, 10 federation cookies, 11 API sessions); API typecheck/lint, IdP typecheck and 68 IdP pipeline selftests pass. Receipts: RC1-opus-final.log, RC1-opus-quality.log and RC1-opus-pairing.log; make down removed test-rc1.
 - [x] F4 RED: eleven expected failures (RC1-opus-f4-red.log). Product revocation now awaits issuer-only tombstones through HTTPS, exact S2S client/resource and remote.sessions.revoke scope; delivery failure is explicit after committed DB removal.
 - [x] Opus r1 F3: D2-JWS none/HS256(public bytes)/ES256/RS256/PS256 and EdDSA with EC trust key explicitly require authority_refused; existing exact EdDSA header/key pin enforces all other algorithms.
 - [x] BRRC1-EX2: temporary scope for byte-preserving import of origin/main 8d37455df7f019cb42699257d343abbcc7ac2f68 by merge. Reason: main advanced and BRANCH.md conflicts prevent PR CI. Impact: import accepted upstream build/CI/chat-runtime commits; no RC1 edits to those files. Resolve only BRANCH.md, verify Track containment, then immediately restore narrow scope. Rollback: revert the integration merge without rewriting history. The 150-line author-change limit remains on authored patches; this merge preserves upstream commit identities.
