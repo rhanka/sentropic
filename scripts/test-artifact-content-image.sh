@@ -74,7 +74,8 @@ content_runtime() {
   API_IMAGE_REF=$(cat "${API_IMAGE_RECEIPT:-.tmp/ci-prod-image/api-image-id}") \
     docker compose -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.ci.yml \
     run --rm --no-deps -T --entrypoint sh api-sut -ec '
-      ! command -v npm && ! command -v npx && test ! -e /workspace/node_modules/.bin/tsx
+      if command -v npm || command -v npx; then exit 1; fi
+      test ! -e /workspace/node_modules/.bin/tsx
       test -f /workspace/apps/artifact-content/dist/index.js
       env -i PATH="$PATH" NODE_ENV=production node --input-type=module
     ' <<'NODE'
