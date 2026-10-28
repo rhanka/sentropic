@@ -18,6 +18,8 @@ function checkRoutes(objects, tier) {
   const ingress = object(objects, 'Ingress', 'artifact-content');
   assert.equal(ingress.spec.ingressClassName, 'traefik');
   assert.deepEqual(ingress.metadata.annotations, {
+    'cert-manager.io/cluster-issuer': 'letsencrypt-prod',
+    'cert-manager.io/private-key-rotation-policy': 'Always',
     'traefik.ingress.kubernetes.io/router.entrypoints': 'websecure',
     'traefik.ingress.kubernetes.io/router.tls': 'true',
     // Exact app/preprod/IdP routes must outrank the content wildcard.
@@ -26,9 +28,7 @@ function checkRoutes(objects, tier) {
   assert.deepEqual(ingress.spec.tls, [{ hosts, secretName: 'artifact-content-tls' }]);
   assert.deepEqual(ingress.spec.rules, hosts.map(host => ({ host, http: { paths: [{ path: '/', pathType: 'Prefix',
     backend: { service: { name: 'artifact-content', port: { name: 'http' } } } }] } })));
-  const cert = object(objects, 'Certificate', 'artifact-content').spec;
-  assert.deepEqual(cert, { secretName: 'artifact-content-tls', issuerRef: { name: 'letsencrypt-prod', kind: 'ClusterIssuer' },
-    dnsNames: hosts, privateKey: { rotationPolicy: 'Always' } });
+  assert(!objects.some(o => o.kind === 'Certificate'), 'CD overlays must delegate certificate writes to ingress-shim');
   assert.equal(object(objects, 'Ingress', 'sentropic').spec.rules[0].host, domain);
   assert.equal(object(objects, 'Ingress', 'sentropic').spec.rules[0].http.paths[0].backend.service.name, 'ui');
 }
@@ -66,7 +66,8 @@ for (const tier of ['prod', 'preprod']) {
   deny('broad app credentials', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].envFrom[1].secretRef.name = 'sentropic-api'; });
   deny('cross-environment PG access', o => { object(o, 'NetworkPolicy', 'artifact-content').spec.egress[1].to[0].namespaceSelector = {}; });
   deny('unrestricted object-store egress', o => { object(o, 'NetworkPolicy', 'artifact-content').spec.egress.push({}); });
-  deny('missing pinned wildcard TLS', o => { object(o, 'Certificate', 'artifact-content').spec.dnsNames.pop(); });
+  deny('missing pinned wildcard TLS', o => { object(o, 'Ingress', 'artifact-content').spec.tls[0].hosts.pop(); });
+  deny('explicit certificate requiring CD write permissions', o => { o.push({ kind: 'Certificate', metadata: { name: 'unexpected', namespace: o[0].metadata.namespace } }); });
   deny('wildcard outranks exact app routes', o => { object(o, 'Ingress', 'artifact-content').metadata.annotations['traefik.ingress.kubernetes.io/router.priority'] = '999'; });
   deny('independent content image', o => { object(o, 'Deployment', 'artifact-content').spec.template.spec.containers[0].image = 'other:latest'; });
 }

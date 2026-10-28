@@ -5,7 +5,6 @@ resources:
   - ../../base
   - ingress.yaml
   - artifact-content-ingress.yaml
-  - artifact-content-certificate.yaml
   - idp-identity-sync
 # Images use the base default (:main) today, matching the live cluster. The release
 # pipeline pins immutable per-release tags/digests here (BR-55c/d), e.g.:
