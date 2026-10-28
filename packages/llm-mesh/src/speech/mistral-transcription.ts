@@ -829,3 +829,60 @@ export class MistralTranscriptionSession implements SpeechSession {
     }
   }
 
+  private onDelta(stream: TurnStream, text: string): void {
+    if (stream.abandoned || stream.doneReceived) return;
+    // Deltas are final on arrival (no correction pass): append only.
+    const start = stream.text.length;
+    stream.text += text;
+    stream.revision += 1;
+    this.sequence += 1;
+    const partial: SpeechTranscriptPartial = {
+      schemaVersion: 1,
+      speechSessionId: this.receipt.speechSessionId,
+      connectionEpoch: this.receipt.connectionEpoch,
+      eventId: this.nextId(),
+      sequence: this.sequence,
+      clock: this.clock(),
+      type: 'transcript.partial',
+      binding: this.binding,
+      utteranceId: stream.utteranceId,
+      revision: stream.revision,
+      replaces: { start, end: start },
+      text,
+    };
+    this.emit(partial);
+  }
+
+  private onDone(stream: TurnStream, text: string, language: unknown): void {
+    if (stream.abandoned) return;
+    if (stream.doneReceived) {
+      this.pushError('invalid-format', true);
+      return;
+    }
+    stream.doneReceived = true;
+    stream.revision += 1;
+    this.sequence += 1;
+    let resolved = this.config.language ?? 'und';
+    if (!this.config.language && typeof language === 'string' && language) resolved = language;
+    const final: SpeechTranscriptFinal = {
+      schemaVersion: 1,
+      speechSessionId: this.receipt.speechSessionId,
+      connectionEpoch: this.receipt.connectionEpoch,
+      eventId: this.nextId(),
+      sequence: this.sequence,
+      clock: this.clock(),
+      type: 'transcript.final',
+      binding: this.binding,
+      utteranceId: stream.utteranceId,
+      revision: stream.revision,
+      text,
+      language: resolved,
+      audioInterval: { startMs: stream.audioStartMs, endMs: stream.audioEndMs },
+    };
+    if (this.current === stream) this.current = undefined;
+    stream.resolveDone(text);
+    // The turn stream served its single turn; teardown is best-effort.
+    void stream.socket.close().catch(() => undefined);
+    this.emit(final);
+  }
+
