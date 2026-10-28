@@ -37,6 +37,12 @@ propagation separately. No address or issuance completion is assumed here.
 The dedicated Ingress uses only `websecure`, preserves Host and has priority `1`
 so existing exact app/IdP/preprod routes retain precedence over the wildcard.
 Unknown labels are denied by the content host; no forwarded identity is trusted.
+The prod stable wildcard also matches the preprod app host. Exact preprod routing
+takes precedence while its Ingress exists; during a preprod rebuild/delete, requests
+can reach the prod content workload. Its UUID-only parser denies `preprod`, `pinned`
+and `auth` labels before private access, as the offline parser regression verifies.
+The prod wildcard certificate also covers that preprod hostname; it is not a
+separate certificate boundary between these hosts.
 
 ## Credentials, storage and network receipts
 
@@ -46,7 +52,7 @@ Provision namespace-local `artifact-content-runtime` with `DATABASE_URL`,
 `APP_ARTIFACT_S3_SECRET_ACCESS_KEY`. Use a dedicated bucket-read credential;
 never reuse app, backup, D2, production or cross-environment credentials. Supply a
 separate `artifact-content-signing` secret whose `key` is at least 32 random bytes.
-The projected file is group-readable by UID/GID 1000 and mounted read-only. Record
+The projected file uses `0440`, with pod `fsGroup: 1000`, and is mounted read-only. Record
 rotation/revocation receipts without copying secret values into this repository.
 
 The tenant database role must support content reads/current authority checks and

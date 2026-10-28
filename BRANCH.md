@@ -79,9 +79,10 @@
   - [x] Both stable and pinned wildcard SANs, dedicated TLS secret, HTTPS-only route; no catch-all/identity headers.
 - [ ] **Lot 4 — Handoff and final validation**
   - [x] Document tenant DNS/TLS/storage/restore/digest evidence and FIRST-IMMO activation gate in runbook.
-  - [x] Pass `make test-artifact-content-manifests API_PORT=8806 UI_PORT=5192 MAILDEV_UI_PORT=1099 ENV=test-app-w3d`: 22 deterministic checks, including additive-policy mutation and both namespace reachability matrices.
+  - [x] Opus r1 P3-1/P3-2/P3-3: document wildcard overlap/automatic issuance, test the real parser's reserved-label denials, and restrict signing-key projection to `0440` with `fsGroup: 1000`.
+  - [x] Pass `make test-artifact-content-manifests API_PORT=8806 UI_PORT=5192 MAILDEV_UI_PORT=1099 ENV=test-app-w3d`: 54 checks covering ingress-shim, digest-opening mutations, key permissions, host parser and existing network/restore controls.
   - [x] Pass inherited IdP parent-overlay regression (47 checks) and W3.c static image checks (canonical hash `eeb755`, API/content-only invalidation, filters, compilation/copy).
   - [x] Mechanical scope checks and whitespace/diff inspection pass; exception uses BR03d-EX1 and explicit overlay paths.
-  - [ ] Independent receiving review: conductor-owned before merge; selection failed here because the required live model catalog is unavailable. No peer launched or consensus claimed; `.tmp/app-w3d-review.md` records this limitation.
+  - [x] Independent receiving review received: Opus r1 at `.h2a/reviews/pr814_opus_r1.md`, head `e6b59ccd0`, CHANGES (P2-1/P2-2); author corrections supplied here. Conductor owns receiving acceptance of the corrected head; no new review consensus claimed.
   - [x] Create draft PR #814 against `feat/app-cm-integration` using this file; final pushed-head CI receipt is recorded in its validation comment. First green run: `40644234492` at `fb170161b29870b439d1e5f36822ab351d3d9e42`.
   - [x] Run locked `make down ps API_PORT=8806 UI_PORT=5192 MAILDEV_UI_PORT=1099 ENV=test-app-w3d`: no services remain.

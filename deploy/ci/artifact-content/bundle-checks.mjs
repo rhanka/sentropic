@@ -30,7 +30,7 @@ export function checkWorkload(objects, tier) {
   assert(!objects.some(o => /RoleBinding$/.test(o.kind) && o.subjects?.some(s => s.name === 'artifact-content')));
   assert.deepEqual(content.command, ['node', 'apps/artifact-content/dist/index.js']);
   assert.equal(content.workingDir, '/workspace');
-  assert.deepEqual(pod.securityContext, { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, seccompProfile: { type: 'RuntimeDefault' } });
+  assert.deepEqual(pod.securityContext, { runAsNonRoot: true, runAsUser: 1000, runAsGroup: 1000, fsGroup: 1000, seccompProfile: { type: 'RuntimeDefault' } });
   assert.deepEqual(content.securityContext, { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ['ALL'] } });
   assert(content.resources.requests.cpu && content.resources.requests.memory && content.resources.limits.cpu && content.resources.limits.memory);
   for (const probe of ['startupProbe', 'readinessProbe', 'livenessProbe']) {
@@ -48,7 +48,7 @@ export function checkWorkload(objects, tier) {
     }
   }
   assert.deepEqual(content.envFrom, [{ configMapRef: { name: 'artifact-content' } }, { secretRef: { name: 'artifact-content-runtime', optional: true } }]);
-  assert.deepEqual(pod.volumes, [{ name: 'signing-key', secret: { secretName: 'artifact-content-signing', optional: true, defaultMode: 292, items: [{ key: 'key', path: 'key' }] } }]);
+  assert.deepEqual(pod.volumes, [{ name: 'signing-key', secret: { secretName: 'artifact-content-signing', optional: true, defaultMode: 288, items: [{ key: 'key', path: 'key' }] } }]);
   assert.deepEqual(content.volumeMounts, [{ name: 'signing-key', mountPath: '/var/run/artifact-content', readOnly: true }]);
   const service = object(objects, 'Service', 'artifact-content').spec;
   assert.equal(service.type, 'ClusterIP');
