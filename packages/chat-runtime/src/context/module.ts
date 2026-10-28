@@ -281,3 +281,52 @@ export function createContextModule(host: ContextHost): ContextModule {
         const entries: ChatContextEntry[] = (parsed['contexts'] as unknown[])
           .filter((c): c is Record<string, unknown> => !!c && typeof c === 'object' && 'type' in c)
           .map((c) => ({
+            type: String(c['type'] ?? ''),
+            id: c['id'] != null ? String(c['id']) : undefined,
+            label: String(c['label'] ?? ''),
+            active: typeof c['active'] === 'boolean' ? c['active'] : undefined,
+            used: typeof c['used'] === 'boolean' ? c['used'] : undefined,
+            lastUsedAt: c['lastUsedAt'] != null ? String(c['lastUsedAt']) : undefined,
+          }))
+          .filter((e) => !!e.type);
+        if (entries.length > 0) {
+          store.set(entries);
+        }
+      }
+      return raw;
+    },
+
+    savePrefs(sessionId, extra) {
+      host.savePrefs(sessionId, {
+        ...(extra ?? {}),
+        contexts: store.get(),
+      });
+    },
+
+    async refreshLabels() {
+      const entries = store.get();
+      await Promise.all(
+        entries.map(async (e) => {
+          if (!e.type || !e.id) return;
+          const key = `${e.type}:${e.id}`;
+          if (labelCache.has(key)) {
+            const label = labelCache.get(key)!;
+            if (label !== e.label) {
+              store.update((es) =>
+                es.map((x) =>
+                  x.type === e.type && x.id === e.id ? { ...x, label } : x,
+                ),
+              );
+            }
+            return;
+          }
+          resolveAndPatchLabel(e.type, e.id);
+        }),
+      );
+    },
+
+    getActiveContexts() {
+      return selectActiveChatContexts(store.get());
+    },
+  };
+}
