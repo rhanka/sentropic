@@ -2779,18 +2779,19 @@ up-idp-sut: up-api-sut ## Start the compiled IdP on the production API's migrate
 	# Production CSP permits HTTPS RP redirects; this callback is intercepted by Playwright.
 	$(CI_COMPOSE) exec -T postgres psql -U app -d app -v ON_ERROR_STOP=1 -c "UPDATE oauth_clients SET redirect_uris=ARRAY['https://ci-rp.invalid/auth/oauth/callback'] WHERE client_id='design-system';"
 	$(CI_COMPOSE) up --no-build -d --wait auth-idp
-smoke-idp-screens-ci: ci-test-env ## Run the existing screen smoke from the cached toolbox against compiled IdP
+smoke-idp-screens-ci: ci-test-env ## Run the screen smoke using the qualified E2E browser against compiled IdP
 	@set -eu; seed="$$(mktemp)"; trap 'rm -f "$$seed"' EXIT; \
 	smoke_email="idp-screen-smoke-$$(date +%s%N)@example.com"; \
 	$(CI_COMPOSE) run --rm --no-deps -w /workspace -e SCREEN_SMOKE_EMAIL="$$smoke_email" api npx --no-install tsx apps/auth-idp/screen-smoke-seed.ts > "$$seed"; \
 	user_id="$$(sed -n 's/^USER_ID=//p' "$$seed")"; session_token="$$(sed -n 's/^SESSION_TOKEN=//p' "$$seed")"; \
 	test -n "$$user_id"; test -n "$$session_token"; \
-	$(CI_COMPOSE) run --rm --no-deps -w /workspace/e2e \
+	cp apps/auth-idp/screen-smoke.ts e2e/idp-screen-smoke.ts; \
+	trap 'rm -f "$$seed" e2e/idp-screen-smoke.ts' EXIT; \
+	$(CI_COMPOSE) run --rm --no-deps -w /app \
 		-e IDP_BASE_URL=http://auth-idp:8787 -e USER_ID="$$user_id" -e SESSION_TOKEN="$$session_token" \
 		-e SCREEN_SMOKE_REDIRECT_URI=https://ci-rp.invalid/auth/oauth/callback \
 		-e SCREEN_SMOKE_EMAIL="$$smoke_email" \
-		-e PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium \
-		api sh -ec 'cp ../apps/auth-idp/screen-smoke.ts ./idp-screen-smoke.ts; node ./idp-screen-smoke.ts'
+		e2e node ./idp-screen-smoke.ts
 
 .PHONY: up-ui
 up-ui: ## Start the ui stack in detached mode
