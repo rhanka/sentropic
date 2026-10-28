@@ -19,7 +19,7 @@ The Sentropic conductor is the accountable single writer for the corresponding T
 | Turnkey D2 / 2026-06-02 | Current app/chat integration role works with package/runtime maintainer counterpart. | P1/P2; do not wait for historical `38etc`. |
 | Turnkey D3 / 2026-06-02 | Preserve existing bubble/floating, docked and inline behavior; new placements are separately gated. | UI/host acceptance leads, P1/P5/U0; no inline-only parity shortcut. |
 | Turnkey D4 / 2026-06-02 | Use shipped attachment tray/lightbox/upload where matching host capability exists; preserve current app attachment behavior. | Runtime/UI/host maintainers, P1/P2; no app duplicate or silent no-op. |
-| Turnkey D5 / 2026-06-02 | Finish parity composition/adoption before transfer; siblings qualify the same artifacts and revised P0–U0 estimates. | UI/runtime release + consumer owners; P1 runtime-import break explicitly versioned, publication separately gated. |
+| Turnkey D5 / 2026-06-02 | Finish parity composition/adoption before transfer; siblings qualify the same artifacts; P0–U0 follows the contract's lot scope, order and dependencies. | UI/runtime release + consumer owners; P1 runtime-import break explicitly versioned, publication separately gated. |
 | Turnkey D6 / 2026-06-02 | DS tokens with Sentropic small density (`sm` where supported); same components support other presets. | DS theme + app integration owners, P3; no parallel exact-only skin. |
 | Runtime package (r2 note 1) | Name canonical Sentropic package **`@sentropic/chat-runtime`**. P1 removes old chat-ui runtime exports in a breaking release and migrates all consumers before U0. | Runtime/UI release owners; notify every inventoried host/sibling owner; new bootstrap/publication still requires npm grant. |
 

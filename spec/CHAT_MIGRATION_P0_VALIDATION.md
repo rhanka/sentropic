@@ -25,7 +25,7 @@ Author metadata supplied by the launch request: host **codex**, model **gpt-6.1-
 
 | Round / requested reviewer | Lens | Result / disposition |
 | --- | --- | --- |
-| r1 / Claude `claude-opus-4-8`, high | Boundary, authority, releases, owner UAT | **APPROVE**; accepted refinements distinguish proposed estimates from the approved owner summary and split mixed DOM/runtime test custody. |
+| r1 / Claude `claude-opus-4-8`, high | Boundary, authority, releases, owner UAT | **APPROVE**; accepted refinements clarify the conductor's owner-summary reconciliation and split mixed DOM/runtime test custody. |
 | r1 / Claude `claude-sonnet-5`, high | Inventory, dependency closure and evidence | **CHANGES**; accepted missing bare-name CI/E2E/reference matches and incorrect selector line offsets. Expanded census and corrected all 125 lines in bounded commits. |
 | r2 / Claude `claude-opus-4-8`, high | Same boundary lens on exact candidate above | **APPROVE**; no blocker; authority and owner-held gates preserved. |
 | r2 / Claude `claude-sonnet-5`, high | Same evidence lens on exact candidate above | **APPROVE**; independently recomputed **99/99** consumers and **125/125** selector locations; no remaining discrepancy. |

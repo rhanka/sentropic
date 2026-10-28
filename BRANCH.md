@@ -40,11 +40,12 @@
 - [x] `BRP0-N2` clarification: the plan author/reviewer evidence does not acknowledge this new contract for either domain maintainer.
 - [x] `BRP0-N3` clarification: inventory and draft PR are authorized; no owner UAT or transfer approval is inferred.
 - [x] `BRP0-N4` clarification: local scope gate uses installed host harness through an external make overlay and skips `build-harness`; no tracked Makefile edit or Docker needed.
-- [x] `BRP0-R1` acknowledge: boundary review APPROVE; clarify estimate proposal versus approved summary, and split mixed DOM/stream-fixture test custody (conductor refresh before P1).
+- [x] `BRP0-R1` acknowledge: boundary review APPROVE; clarify scope refinements versus approved summary, and split mixed DOM/stream-fixture test custody (conductor refresh before P1).
 - [x] `BRP0-R2a` acknowledge: broaden consumer census to all case-insensitive chat-ui references; add CI manifests/wiring, E2E storage/regressions and retained historical mentions.
 - [x] `BRP0-R2b` acknowledge: all 125 selector locations now identify the first selector token; both atomic correction slices complete.
 - [x] `BRP0-R2c` acknowledge: inventory the semicolon hover-variant directive separately from CSS selector blocks.
 - [x] `BRP0-R3` acknowledge: both final independent review legs APPROVE on 64521846e; receipt/checklist-only handoff follows.
+- [x] `BRP0-PR816-R1` resolve: replace human-effort figures and dependent references with lot scope, order and dependencies per the owner's 2026-10-28 rule; align PR body and qualification comment.
 - [ ] `BRP0-ACK` attention: DS/Sentropic/architect co-freeze and conductor Track trace remain external acceptance; no acknowledgement manufactured.
 
 ## AI Flaky tests
@@ -79,7 +80,7 @@
   - [x] Reconcile ECOSYSTEM, TURNKEY, SURFACES, PLAN_CHAT_SURFACES, AGENTS_SURFACE and #602/UAT-1.
   - [x] Inspect published DS theme/Drawer artifacts and name canonical DS chat primitives; assign missing DropZone to F15.
   - [x] Record all section 6 conductor defaults and owner-held gates without impersonating owner decisions.
-  - [x] Integrate r2 notes: runtime package/semver break, proposed C-03 owner/copy changes, M1b release dependency, split estimate.
+  - [x] Integrate r2 notes: runtime package/semver break, proposed C-03 owner/copy changes, M1b release dependency, physical-split scope and dependencies.
   - [x] Record domain acknowledgement state and bounded next-owner acceptance criteria.
   - [ ] Obtain domain co-freeze acknowledgements and conductor Track trace on the same contract revision.
 - [ ] **Lot P0c — Final validation and draft PR**
