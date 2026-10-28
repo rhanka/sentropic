@@ -109,6 +109,18 @@ describe('app private content host', () => {
     expect(await response.text()).not.toContain('Private');
   });
 
+  it('should require fresh stable consent when the pointer advances during a blob wait', async () => {
+    vi.mocked(options.blobs.getBlob).mockImplementation(async () => { currentRelease = releaseB; return bytes; });
+    const response = await request(stable, '/', { headers: { cookie: cookie() } });
+    expect(response.status).toBe(401);
+    expect(await response.text()).not.toContain('Private');
+    expect((await request(pinned, '/', { headers: { cookie: cookie() } })).status).toBe(200);
+  });
+
+  it('should return no body for denied HEAD requests', async () => {
+    expect(await (await request(stable, '/', { method: 'HEAD' })).text()).toBe('');
+  });
+
   it('should fail closed on storage errors and when serving is disabled', async () => {
     vi.mocked(options.blobs.getBlob).mockRejectedValue(new Error('private backend detail'));
     const response = await request(stable, '/', { headers: { cookie: cookie() } });
