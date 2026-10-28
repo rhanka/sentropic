@@ -21,7 +21,8 @@ async function setup() {
   const login = (await resolveRemoteLogin(tokens.sessionToken))!;
   const issue = createRemoteEvidenceIssuer({ issuer: 'idp', kid: 'idp-1', key: keys.privateKey,
     now: Date.now, session: resolveRemoteLogin, reserve: reserveRemoteEvidence,
-    approvedTarget: async () => ({ audience: 'native-b', tenantId: 'tenant', workspaceId: 'workspace' }) });
+    approvedTarget: async (digest) => ({ audience: digest.startsWith('c') ? 'native-c' : 'native-b',
+      tenantId: 'tenant', workspaceId: 'workspace' }) });
   const request = { version: 'remote-action-v1', kind: 'evidence-request', actionId: 'AAAAAAAAAAAAAAAAAAAAAA',
     targetDigest: 'a'.repeat(64), operation: 'input', payloadDigest: 'b'.repeat(64), nonceId: 'nonce',
     sid: login.sid, sessionVersion: login.sessionVersion, sessionCredential: tokens.sessionToken };
@@ -38,9 +39,10 @@ describe('RC1 current issuer session store', () => {
     expect(current.sessionVersion).toBe(login.sessionVersion);
     expect(current.authTime).toBe(login.authTime);
     const next = decodeJwt(await issue({ ...request, actionId: 'BBBBBBBBBBBBBBBBBBBBBA',
-      sessionCredential: refreshed.sessionToken }));
+      targetDigest: 'c'.repeat(64), sessionCredential: refreshed.sessionToken }));
     expect(next.auth_time).toBe(first.auth_time);
     expect(next.amr).toEqual(first.amr);
+    expect(next.aud).toBe('native-c');
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
   });
   it.each(['logout', 'revoke-all', 'expiry', 'version'])('should refuse %s from authoritative state', async (reason) => {

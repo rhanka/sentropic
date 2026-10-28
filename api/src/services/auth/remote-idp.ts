@@ -19,6 +19,13 @@ export function createRemoteIdpEvidencePorts(
   nativeTarget?: RemoteEvidenceIssuerPorts['approvedTarget'],
 ): RemoteEvidenceRoutePorts {
   const clientId = process.env.REMOTE_ACTION_EVIDENCE_CLIENT_ID ?? '';
+  let lastNow = -1;
+  const now = () => {
+    const value = Date.now();
+    if (!Number.isSafeInteger(value) || value < lastNow) throw new RemoteAuthorityError('authority_unavailable');
+    lastNow = value;
+    return value;
+  };
   return {
     expectedWorkload: clientId,
     async authenticateWorkload(request) {
@@ -41,7 +48,7 @@ export function createRemoteIdpEvidencePorts(
       const trust = trustSchema.parse(parseRemoteJson(readFileSync(trustFile)));
       if (trust.attestation.workload !== clientId) throw new RemoteAuthorityError('authority_unavailable');
       const signer = loadRemoteSigner(trust, 'idp', workload, (ref) => readFileSync(ref, 'utf8'));
-      return createRemoteEvidenceIssuer({ ...signer, now: Date.now, session: resolveRemoteLogin,
+      return createRemoteEvidenceIssuer({ ...signer, now, session: resolveRemoteLogin,
         reserve: reserveRemoteEvidence,
         async approvedTarget(digest, actor) {
           const approved = await nativeTarget(digest, actor);
