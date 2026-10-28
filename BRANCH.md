@@ -29,9 +29,13 @@
 - **Exception process**:
   - [x] BR11-EX1: add only test-mem-e11 to host scope-check selector, avoiding an unrelated harness build; impact validation routing; rollback remove selector.
   - [x] BR11-EX2: owner-requested 0.21.3/dev.6 clean install proof uses existing qualification Compose, PostgreSQL and down selectors for test-mem-e11; rollback those three selector entries together. No package/source/lock edits.
+  - [x] BR11-EX3: owner-requested CI diagnosis adds test-mem-e11 to E2 qualification, lint/wiring and packed-platform build selectors, and preserves packed-consumer npm stderr. Impact: run the same gates in the owned Compose environment and expose install failures; rollback these selector/logging changes. No assertion, dependency, lock or workflow changes.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot E11-4 — Integration refresh**
+  - [x] Diagnose run 40741738278: common lane fails resolving AWS core ^3.978.7 at 18:45:38 UTC; registry publication occurred at 18:47:57 UTC. Unmodified common target passes locally (11 tests).
+  - [x] Packed-consumer probe passes in test-mem-e11 through PACKED_ADAPTERS_OK; artifacts tarball SHA-256 matches the failed CI job exactly. Preserve npm stderr for future failures.
+  - [ ] Run complete E2 qualification in test-mem-e11 and recheck the retained tuple; exact-head CI success stays outside git after push.
   - [x] Merge integration after #821/#803, never rebase; retain E11 plan and union all Makefile environment selectors. No `.track` changes on either side of this merge.
   - [x] Generate/check the 0.21.3/dev.6 tuple and receiving checklist; preserve evidenced Stage B gaps.
   - [x] Stage published Engram and retained dev.6; adapt only E10 consumer version/archive assertions, never package bytes or artifacts sources.
