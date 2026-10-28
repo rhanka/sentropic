@@ -67,6 +67,7 @@
   - [x] internal route acceptance tests authored before implementation.
   - [x] signing isolation acceptance tests authored before implementation.
   - [x] authority acceptance tests authored before implementation.
+  - [x] Consent fixture scopeDigest checked against SHA-256 of the exact canonical scope array.
   - [ ] spec/REMOTE_CONTROL_RC1.md: ports, isolation, native request vectors, trust limits and qualification boundaries.
   - [ ] Scoped API tests, retained session/auth regression suites, API typecheck/lint; no UI behavior changed.
   - [ ] Independent review findings reconciled; make scope-check before every commit.
