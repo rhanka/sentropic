@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: artifact-content
+data:
+  NODE_ENV: "production"
+  ARTIFACT_CONTENT_PORT: "8791"
+  APP_ARTIFACT_HOST_ENABLED: "0"
+  APP_ARTIFACT_CONTENT_ENABLED: "0"
+  APP_ARTIFACT_READER_ENABLED: "0"
+  APP_ARTIFACT_CONTENT_SIGNING_KEY_FILE: "/var/run/artifact-content/key"
