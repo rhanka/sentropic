@@ -392,11 +392,15 @@ Their metadata SHA-256 is identical:
 `fd1ad5eb2b08cef0841a7860b112a9c417c750caf406aef5792ee46cd47f75e3`.
 Consequently `COPY ui` misses and both profiles recompile despite unchanged
 tracked sources. The packager resolves native dependency ranges and emits pkg
-bytecode; this evidence establishes unstable output, not which of those mechanisms
-causes it. Owner: desktop-package maintainer, assignment pending. The remaining
-bounded work is a reproducible desktop closure, verified
-by equal output digests on repeated identical inputs and actual Windows runtime
-qualification, then complete warm/cold UI reruns without removing assertions.
+bytecode; this evidence establishes unstable output, not which mechanism causes it.
+The final image boundary excludes desktop bytes from the compiler's source COPY
+using a digest-pinned Dockerfile 1.19 frontend. A separate static-assets stage
+validates present desktop files and copies the fresh bytes into both production
+and static outputs after compilation. A build assertion rejects the executable
+inside compiler inputs. This preserves existing API-only/local optional-desktop
+behavior and the full-UI desktop prerequisite, without changing the Windows
+packager/runtime. New complete warm/cold receipts must qualify this isolation;
+the measurements above precede it and do not establish 180/210s acceptance.
 
 Superseded continuation runs 40651336571, 40651731668, 40654285195 and
 40657002180 remain cancelled. Dispatch 40654322669 is cancelled after browser
