@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync, symlinkSync, rmSync } from 'node:fs';
+import { runInNewContext } from 'node:vm';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bindings, canonical, sha256, verifyTuple } from './bindings.mjs';
@@ -79,4 +80,16 @@ test('should reproduce the actual candidate tuple with every file bound and all 
   assert.equal(first.slots[15].observed.equivalence.status, 'not-covered');
   assert(first.files['consumer/installed-hydration.mjs']);
   assert(Object.values(first.handoff).every((gate) => gate.status === 'PENDING'));
+  fixture((root) => {
+    const path = join(root, 'pending.json');
+    writeFileSync(path, canonical(first));
+    const receivingSource = readFileSync('/evidence/receiving-validator.mjs', 'utf8');
+    const start = receivingSource.indexOf("const HOST_TUPLE_FORMAT = 'e2-host-tuple/v1';");
+    const end = receivingSource.indexOf('function prepareE2(', start);
+    assert(start >= 0 && end > start);
+    const readHostTuple = runInNewContext(`${receivingSource.slice(start, end)}\nreadHostTuple;`, {
+      assert, readFileSync, resolve: (file) => file,
+    });
+    assert.throws(() => readHostTuple(path), /source-gap: host tuple is incomplete.*backend closure.*neutral contract.*profiles/s);
+  });
 });
