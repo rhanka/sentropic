@@ -2,10 +2,11 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import { gzipSync, brotliCompressSync } from 'node:zlib';
+import { assertPortable } from './portable.mjs';
 
 export const profiles = {
   typical: { portable: 409600, initial: 409600, js: 307200, optional: 131072, release: 524288 },
-  governance: { portable: 8388608, initial: 8388608, js: 7340032, optional: 131072, release: 9437184 },
+  governance: { portable: 5200000, initial: 5200000, js: 5120000, optional: 131072, release: 5200000 },
 };
 export function fileReceipt(bytes) {
   return { raw: bytes.length, gzip: gzipSync(bytes, { level: 9 }).length,
@@ -61,6 +62,8 @@ export function measureArtifact({ directory, portablePath, startupPaths = [], pr
       .some(key => manifest[key]?.file === path)).map(([, m]) => m.file) }));
   const sum = predicate => files.filter(predicate).reduce((total, file) => total + file.raw, 0);
   const portableBytes = readFileSync(portablePath);
+  try { assertPortable(portableBytes.toString('utf8')); }
+  catch (error) { violations.push(error.message); }
   const portable = { path: portablePath, ...fileReceipt(portableBytes), inlineExecutableJs: inlineJsBytes(portableBytes.toString('utf8')) };
   const totals = { portable: portable.raw, initial: sum(file => file.initial),
     js: sum(file => file.initial && file.path.endsWith('.js')) + inlineJsBytes(html), release: sum(() => true) };
@@ -76,6 +79,8 @@ export function measureArtifact({ directory, portablePath, startupPaths = [], pr
   }
   return { schemaVersion: 1, profile, limits, totals, portable, files, startupPaths, violations,
     agentReadCost: { portable: portable.raw, hosted: totals.release,
+      estimatedTokens: Math.round(portable.inlineExecutableJs * 0.5),
+      tokenRule: 'h-cond, 2026-10-27: ≈0.5 token per byte of minified JS; non-gating',
       rule: 'Bytes of every file the publishing agent must read; inline JS/data counted inside HTML once; non-gating' } };
 }
 
@@ -83,5 +88,6 @@ export function reportTable(report) {
   return ['| Metric | Raw bytes | Limit |', '|---|---:|---:|',
     ...Object.entries(report.totals).map(([key, value]) => `| ${key} | ${value} | ${report.limits[key]} |`),
     `| agent read cost (portable / hosted; non-gating) | ${report.agentReadCost.portable} / ${report.agentReadCost.hosted} | — |`,
+    '', `coût de lecture agent ≈ 0,5 token par octet de JS minifié — ${report.agentReadCost.estimatedTokens} tokens (h-cond, 2026-10-27; non-gating).`,
     '', ...report.violations.map(message => `- FAIL: ${message}`)].join('\n');
 }
