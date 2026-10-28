@@ -15,10 +15,11 @@ const claims = z.object({
 export interface RemoteEvidenceTrust {
   key: KeyObject; issuer: string; kid: string; audience: string; tenantId: string; workspaceId: string;
   now: number; request: unknown; login: RemoteLogin;
+  revoked?: boolean;
 }
 export async function verifyRemoteEvidence(evidence: string, trust: RemoteEvidenceTrust) {
   try {
-    if (Buffer.byteLength(evidence) > 8192 || trust.key.type !== 'public'
+    if (trust.revoked || Buffer.byteLength(evidence) > 8192 || trust.key.type !== 'public'
       || trust.key.asymmetricKeyType !== 'ed25519') throw new Error();
     const parts = evidence.split('.');
     if (parts.length !== 3 || parts.some((part) => !/^[A-Za-z0-9_-]+$/.test(part)
