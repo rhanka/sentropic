@@ -70,6 +70,7 @@
 - [ ] **Lot E10-5 — Final integration refresh**
   - [x] Merge `origin/feat/engram-e2-integration` at `d08d44b78`, keeping this PR's plan; inherit #808 malformed-proof refusal, intent-hash equality, bounded chain reads and the stable-release packaging fixture fix from #767.
   - [x] Apply max+1 pack-only `0.24.0-dev.4` above integration `dev.3` and E10 `dev.2`; synchronize the workspace lock and installed lane.
+  - [x] Synchronize the installed consumer's candidate-version assertion to `dev.4`; first refresh run refused the old `dev.2` assertion before memory operations, cleanup=0.
   - [x] BR10-EX3: owner authorizes `test-mem-e10-fin` in the existing Makefile qualification/cleanup and host scope-check selectors plus installed lane; impact limited to this disposable environment, rollback by removing that selector. Worktree `tmp/worktrees/mem-e10-fin`; API 8791, UI 5191, Maildev 1091; PostgreSQL publishes no host port.
   - [ ] Rerun installed memory on the clean merged head, retain tarball and receipt hashes with exact profile statuses and no `hostGlue`.
   - [ ] Push, require completed/success pull_request CI on the exact head, and update #803 with receipt and E11 inputs.
