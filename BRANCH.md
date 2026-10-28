@@ -34,6 +34,8 @@ Deliver approved r3 L4: `live-speech/src/node/{capture,device,terminal-control}.
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] Integration validation: 110 tests / 15 files, lint, source/test types and package build pass through the official targets under the shared Docker lock with `ENV=test-integrator-stt-l4`.
+- [x] Integration qualification: L2's isolated gate omitted L4's type-only L1 `SpeechMicMode` contract. Preserve the sibling layout and generate declarations from the canonical mesh sources in scratch storage for typecheck/build; no source contract change or new dependency.
 - [ ] No conditional path touched (no Makefile/CI changes: `test-live-speech` already covers `tests/**`, `validate-live-speech` already gates on `packages/live-speech/**`).
 
 ## AI Flaky tests
