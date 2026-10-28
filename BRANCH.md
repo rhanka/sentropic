@@ -66,7 +66,7 @@
   - [x] Record appendix: support inventory.
   - [x] Record appendix: exports inventory.
   - [x] Record appendix: sources inventory.
-  - [ ] Assign reusable visual, Sentropic runtime or justified host responsibility to every path.
+  - [x] Assign reusable visual, Sentropic runtime or justified host responsibility to every path.
   - [x] Build behavior/owner/test matrix and transitive runtime relocation map.
 - [ ] **Lot P0b — Reconcile and freeze**
   - [x] Reconcile ECOSYSTEM, TURNKEY, SURFACES, PLAN_CHAT_SURFACES, AGENTS_SURFACE and #602/UAT-1.
