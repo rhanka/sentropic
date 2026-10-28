@@ -1472,12 +1472,6 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - uses: crazy-max/ghaction-github-runtime@v3
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-      - name: Build Chrome extension target
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        run: make build-ext-chrome
-      - name: Build VSCode extension target
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        run: make build-ext-vscode
       - name: Build Cowork desktop binary
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
         run: make package-desktop-windows

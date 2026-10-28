@@ -16,6 +16,8 @@ export function validate(receipt, expected) {
   if (!/^sha256:[a-f0-9]{64}$/.test(receipt.imageId)) throw Error('Invalid image ID');
   if (!/^sha256:[a-f0-9]{64}$/.test(receipt.archiveDigest)) throw Error('Invalid archive digest');
   if (!receipt.producer?.job || !receipt.producer?.attempt) throw Error('Missing producer identity');
+  const producer = { api: 'build-api-image', 'api-tool': 'build-api-tool-image', ui: 'build-ui', e2e: 'build-e2e' }[expected.kind];
+  if (expected.runId !== 'local' && receipt.producer.job !== producer) throw Error('Wrong producer job');
   return receipt;
 }
 

@@ -35,7 +35,14 @@ RUN echo "VITE_API_BASE_URL=$VITE_API_BASE_URL"
 RUN echo "VITE_EXTENSION_PROFILE=$VITE_EXTENSION_PROFILE"
 RUN echo "VITE_EXTENSION_API_BASE_URL=$VITE_EXTENSION_API_BASE_URL"
 RUN echo "VITE_EXTENSION_APP_BASE_URL=$VITE_EXTENSION_APP_BASE_URL"
-RUN npm run build
+RUN npm run build && \
+    test -f chrome-ext/dist/manifest.json && \
+    test -f chrome-ext/dist/content.js && \
+    test -f chrome-ext/dist/chrome-ext/popup.html && \
+    test -f chrome-ext/dist/chrome-ext/sidepanel.html && \
+    test -f static/chrome-extension/sentropic-chrome-extension.zip && \
+    test -f static/vscode-extension/sentropic-vscode-extension.vsix && \
+    test -f vscode-ext/dist/extension.cjs
 CMD ["npm", "run", "build"]
 
 # A distinct static profile is exported without rebuilding a development image.
