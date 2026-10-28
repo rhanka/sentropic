@@ -31,7 +31,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import ChatConversation from '../src/components/ChatConversation.svelte';
 import type { ChatUiWebHost } from '../src/hosts/createWebHost.js';
-import type { StreamHubEvent } from '../src/client/streamTypes.js';
+import type { StreamHubEvent } from '@sentropic/chat-runtime/client/streamTypes';
 import { createRendererRegistry } from '../src/renderers/registry.js';
 
 // ---------------------------------------------------------------------------

@@ -1,7 +1,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { ChatCoreTransport } from '../client/transport.js';
-  import type { StreamHubClient } from '../client/streamTypes.js';
+  import type { ChatCoreTransport } from '@sentropic/chat-runtime/client/transport';
+  import type { StreamHubClient } from '@sentropic/chat-runtime/client/streamTypes';
   import type { RendererRegistry } from '../renderers/registry.js';
   import type {
     ChatUiLabelResolver,
