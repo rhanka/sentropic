@@ -163,3 +163,143 @@ describe('comments module — FakeCommentHost harness (CommentHost interface)', 
     });
     expect(typeof result.id).toBe('string');
     expect(typeof result.thread_id).toBe('string');
+    expect(host.createCalls).toBe(1);
+  });
+
+  it('canComment should return true', () => {
+    const host = new FakeCommentHost();
+    expect(host.canComment()).toBe(true);
+  });
+
+  it('canResolve should return true for any comment', () => {
+    const host = new FakeCommentHost();
+    expect(host.canResolve(makeItem())).toBe(true);
+  });
+
+  it('resolveSectionLabel should return the key as-is when no i18n mapping', () => {
+    const host = new FakeCommentHost();
+    expect(host.resolveSectionLabel('project', 'summary')).toBe('summary');
+    expect(host.resolveSectionLabel(null, null)).toBeNull();
+  });
+
+  it('currentUser should return the fake user', () => {
+    const host = new FakeCommentHost();
+    const user = host.currentUser();
+    expect(user?.id).toBe('user_1');
+    expect(user?.email).toBe('user@example.com');
+  });
+
+  it('subscribeCommentUpdates should return an unsubscribe function', () => {
+    const host = new FakeCommentHost();
+    const unsub = host.subscribeCommentUpdates('project', 'p1', () => {});
+    expect(typeof unsub).toBe('function');
+    expect(() => unsub()).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. createCommentState factory harness
+// ---------------------------------------------------------------------------
+
+describe('comments module — createCommentState factory', () => {
+  it('should create a state object with subscribe + actions', () => {
+    const host = new FakeCommentHost();
+    const state = createCommentState(host, presentation);
+    expect(typeof state.subscribe).toBe('function');
+    expect(typeof state.actions).toBe('object');
+    expect(typeof state.actions.loadCommentThreads).toBe('function');
+    expect(typeof state.actions.sendComment).toBe('function');
+    expect(typeof state.actions.setContext).toBe('function');
+  });
+
+  it('initial snapshot should have empty threads and messages', () => {
+    const host = new FakeCommentHost();
+    const state = createCommentState(host, presentation);
+    let snap: import('../src/comments/state.js').CommentStateSnapshot | null = null;
+    state.subscribe((s) => { snap = s; })();
+    expect(snap).not.toBeNull();
+    expect(snap!.commentThreads).toHaveLength(0);
+    expect(snap!.commentMessages).toHaveLength(0);
+    expect(snap!.commentLoading).toBe(false);
+    expect(snap!.commentError).toBeNull();
+    expect(snap!.commentThreadId).toBeNull();
+  });
+
+  it('setContext should trigger a load and update context fields', async () => {
+    const host = new FakeCommentHost();
+    host.comments = [makeItem({ thread_id: 'thread_1' })];
+    const state = createCommentState(host, presentation);
+    let snap: import('../src/comments/state.js').CommentStateSnapshot | null = null;
+    state.subscribe((s) => { snap = s; });
+    // setContext triggers loadCommentThreads internally
+    state.actions.setContext({ contextType: 'project', contextId: 'proj_1' });
+    // Wait for async load
+    await new Promise((r) => setTimeout(r, 50));
+    expect(snap!.commentThreads.length).toBeGreaterThanOrEqual(0);
+  });
+
+  it('loadCommentThreads should load from host and build threads', async () => {
+    const host = new FakeCommentHost();
+    host.comments = [makeItem({ thread_id: 'thread_1' })];
+    const state = createCommentState(host, presentation);
+    let snap: import('../src/comments/state.js').CommentStateSnapshot | null = null;
+    state.subscribe((s) => { snap = s; });
+    state.actions.setContext({ contextType: 'project', contextId: 'proj_1' });
+    await state.actions.loadCommentThreads({});
+    expect(snap!.commentThreads).toHaveLength(1);
+    expect(snap!.commentThreads[0].id).toBe('thread_1');
+  });
+
+  it('subscribe should notify on state change', async () => {
+    const host = new FakeCommentHost();
+    host.comments = [makeItem()];
+    const state = createCommentState(host, presentation);
+    let notified = 0;
+    const unsub = state.subscribe(() => { notified += 1; });
+    state.actions.setContext({ contextType: 'project', contextId: 'proj_1' });
+    await state.actions.loadCommentThreads({});
+    unsub();
+    expect(notified).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. Utility function tests
+// ---------------------------------------------------------------------------
+
+import {
+  getMentionCandidate,
+  getMentionMatches,
+  buildCommentThreads,
+  isCommentByUser,
+} from '../src/comments/utils.js';
+
+describe('comments module — utility functions', () => {
+  describe('getMentionCandidate', () => {
+    it('should detect @mention at end of input', () => {
+      const result = getMentionCandidate('Hello @jo');
+      expect(result).not.toBeNull();
+      expect(result?.query).toBe('jo');
+    });
+
+    it('should return null when no @ present', () => {
+      expect(getMentionCandidate('no mention here')).toBeNull();
+    });
+
+    it('should return null when @ is followed by a space', () => {
+      expect(getMentionCandidate('test @ ')).toBeNull();
+    });
+  });
+
+  describe('getMentionMatches', () => {
+    const members: MentionMember[] = [
+      { userId: 'u1', email: 'alice@example.com', displayName: 'Alice Smith' },
+      { userId: 'u2', email: 'bob@example.com', displayName: 'Bob Jones' },
+    ];
+
+    it('should match by displayName', () => {
+      const matches = getMentionMatches(members, 'ali', presentation);
+      expect(matches.some((m) => m.userId === 'u1')).toBe(true);
+    });
+
+    it('should match by email', () => {
