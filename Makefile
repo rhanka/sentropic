@@ -2359,6 +2359,18 @@ test: test-api test-ui test-e2e ## Run all tests
 test-llm-mesh: ## Run @sentropic/llm-mesh tests
 	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-mesh/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; if [ -n "$$scope" ]; then NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 
+# BR04-EX1 — @sentropic/live-speech bench (r3 L3 bench lane; P1-5/P2-1).
+# Compiles the session to a scratch dist (never committed), installs the pinned
+# engine stack with --ignore-scripts (no cmake in the pinned image, so the native
+# bridge cannot build there), then runs bench/run-local-bench.mjs. Without a
+# provisioned models directory the bench records pending with the exact blocker
+# (exit 2); a measured row requires the qualified host provisioning documented in
+# bench/l3-g-native.receipt.json. OUT= selects the receipt path (default /tmp,
+# outside the repo, so manual runs never dirty the tree).
+.PHONY: bench-live-speech
+bench-live-speech: ## Run @sentropic/live-speech bench (OUT=<receipt path>)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/live-speech $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; out="$(OUT)"; out="$${out:-/tmp/live-speech-docker-bench.receipt.json}"; tool_dir="$$(mktemp -d)"; trap "rm -rf $$tool_dir" EXIT; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund typescript@5.4.5 @types/node faster-whisper-ts@1.2.1 onnxruntime-node@1.24.3 >/dev/null; npm install --prefix "$$tool_dir" --package-lock-only --ignore-scripts --no-audit --no-fund >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json --rootDir . --outDir "$$tool_dir/dist" --declaration false --sourceMap false --declarationMap false --typeRoots "$$tool_dir/node_modules/@types" || true; test -f "$$tool_dir/dist/src/node/local-stt.js" || { echo "bench: tsc emit failed" >&2; exit 1; }; mkdir -p "$$tool_dir/dist/src/node/engines"; cp src/node/stt-worker.mjs "$$tool_dir/dist/src/node/stt-worker.mjs"; cp src/node/engines/faster-whisper.mjs "$$tool_dir/dist/src/node/engines/"; node bench/run-local-bench.mjs --dist "$$tool_dir/dist/src" --install-lock "$$tool_dir/package-lock.json" --out "$$out"'
+
 # BR-LB-EX1 — @sentropic/llm-gateway tests (WP16 Layer-B; owner-approved 2026-06-22).
 # Mirrors test-auth-hono: build the sibling @sentropic/llm-mesh dist, symlink it + hono +
 # vitest into the gateway's node_modules, then run vitest over tests (node env).

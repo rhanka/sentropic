@@ -12,6 +12,7 @@
   },
   "overrides": {
     "dompurify": "3.4.17",
+    "onnxruntime-node": "1.24.3",
     "image-size": "2.0.3",
     "zod": "^4.6.6",
     "@sentropic/track": "0.91.1",
