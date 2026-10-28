@@ -2,7 +2,7 @@ import type { ChatProjectedTimelineItem } from '@sentropic/chat-runtime/state/ch
 import type { ChatSessionRuntimeMessage } from '@sentropic/chat-runtime/state/chatSessionRuntime';
 import type { ModelCatalogGroup, ModelCatalogModel } from '@sentropic/chat-runtime/utils/model-selection';
 import type { ChatContextEntry, ReadableStore } from '@sentropic/chat-runtime/state/chat-context';
-import type { UnifiedAttachmentItem, ChatGeneratedFileCard } from './documents/types.js';
+import type { UnifiedAttachmentItem, ChatGeneratedFileCard } from '@sentropic/chat-ui/documents';
 
 /** Data-only port consumed by the conversation view; no runtime lifecycle is exposed. */
 export type ConversationPermission = {

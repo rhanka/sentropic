@@ -337,11 +337,6 @@
       "exists": true,
       "_propSnapshot": "Props: state (CommentState, required injected snapshots/actions), host (CommentHost), contextType? (string|null), contextId? (string|null), sectionKey? (string|null), sectionLabel? (string|null), commentThreadId? (string|null, bindable), workspaceCanComment? (boolean), commentLoading? (boolean, bindable), labels? (fn), formatTimestamp? (fn), renderComposerInput? (Snippet), renderEditForm? (Snippet), renderSendButton? (Snippet), renderThreadMenuPopover? (Snippet)"
     },
-    "./conversation": {
-      "kind": "ts",
-      "file": "dist/conversation.js",
-      "exports": ["ConversationPermission", "ChatConversationSnapshot", "ChatConversationCommands", "ChatConversationSnapshots"]
-    },
     "./theme.css": {
       "kind": "css",
       "file": "dist/theme/chat-ui.css"

@@ -12,10 +12,6 @@
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
-    "./conversation": {
-      "types": "./src/conversation.ts",
-      "import": "./src/conversation.ts"
-    },
     ".": {
       "types": "./src/index.ts",
       "svelte": "./src/index.ts",

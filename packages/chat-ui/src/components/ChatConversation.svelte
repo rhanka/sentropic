@@ -1,6 +1,6 @@
 <script lang="ts">
   import type { Snippet } from 'svelte';
-  import type { ChatConversationSnapshots, ChatConversationCommands } from '../conversation.js';
+  import type { ChatConversationSnapshots, ChatConversationCommands } from '@sentropic/chat-runtime/conversation';
   import type { ChatUiLabelResolver } from '@sentropic/chat-runtime/hosts/createWebHost';
   import ChatPanel from './ChatPanel.svelte';
   import ChatTimeline from './ChatTimeline.svelte';

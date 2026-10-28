@@ -1,4 +1,4 @@
-import type { ChatConversationCommands } from '@sentropic/chat-ui/conversation';
+import type { ChatConversationCommands } from '@sentropic/chat-runtime/conversation';
 import type { DocumentHost } from '@sentropic/chat-ui/documents';
 import type { ChatCoreHost } from '../client/chat-core-host.js';
 import { parseModelSelectionKey } from '../utils/model-selection.js';
