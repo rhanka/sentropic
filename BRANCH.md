@@ -42,6 +42,7 @@
   - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] BR1-R3-conversation-port: runtime owns the injected conversation port; views import only its types. The optional neutral UI type peer accepts main 0.34.1 and the separated 1.0.0 contract.
 - [x] BR1-R3-local-host: move the canonical LocalToolsAdapter contract to runtime and retarget Chrome, VSCode, app and runtime consumers; no visual re-export remains.
 - [x] BR1-R3-replay: assert the resolved permission row survives native/domain replay, with no pending prompt, extra execution or duplicate result.
 - [x] BR1-CI-review-F1: accept the review's transitive UI publication gap; explicitly require runtime validation success for UI publication too, including when its runtime publisher was skipped. Extend the fixture dependency-failure matrix.

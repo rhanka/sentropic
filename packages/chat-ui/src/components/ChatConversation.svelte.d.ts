@@ -1,5 +1,5 @@
 import type { Component, Snippet } from 'svelte';
-import type { ChatConversationSnapshots, ChatConversationCommands } from '../conversation.js';
+import type { ChatConversationSnapshots, ChatConversationCommands } from '@sentropic/chat-runtime/conversation';
 import type { ChatUiLabelResolver } from '@sentropic/chat-runtime/hosts/createWebHost';
 
 export type ChatConversationFeatures = {
