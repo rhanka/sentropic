@@ -4,7 +4,8 @@
 // helpers translate both ways at the neutral-handle boundary; validation,
 // allocation, durability and authority remain in the real kernel.
 
-import { memoryJcs, type MemoryEncodedValue } from './codec.js';
+import { MemoryCanonicalJsonError, memoryJcs, type MemoryEncodedValue } from './codec.js';
+import { isMemoryAdmissionOutcome, isMemoryCaptureProof } from './validation.js';
 import { StorageInvalidCommandError } from '../storage/errors.js';
 import type { AtomicUnit } from '../storage/atomic.js';
 import type {
@@ -12,7 +13,9 @@ import type {
 } from './neutral-contract.js';
 
 export const memoryNeutralFailure = (error: unknown): never => {
-  const source = (error ?? {}) as { code?: string; message?: string };
+  const source = error instanceof MemoryCanonicalJsonError
+    ? { code: 'invalid-schema', message: error.message }
+    : (error ?? {}) as { code?: string; message?: string };
   const codes: Record<string, string> = {
     denied: 'unauthorized', 'invalid-command': 'invalid-schema', unavailable: 'store-unavailable',
     'capacity-exceeded': 'limit-exceeded', 'idempotency-conflict': 'digest-conflict',
@@ -41,17 +44,35 @@ const parseStored = (data: string): Record<string, unknown> => {
   }
 };
 
+const requireWire = (ok: boolean, what: string): void => {
+  if (!ok) throw new StorageInvalidCommandError(`memory wire proof is malformed: ${what}`);
+};
+const requireSnake = (entry: Record<string, unknown>, capture: boolean): void => {
+  requireWire(typeof entry['candidate_id'] === 'string' && entry['candidate_id'] !== '', 'candidate_id');
+  if (!capture) { requireWire('status' in entry, 'admission outcome'); return; }
+  requireWire(typeof entry['cursor'] === 'string', 'cursor');
+  requireWire('content' in entry, 'content');
+  requireWire(entry['record_digest'] === undefined || typeof entry['record_digest'] === 'string', 'record_digest');
+};
+const requireKernel = (entry: Record<string, unknown>, capture: boolean): void => {
+  requireWire(capture ? isMemoryCaptureProof(entry) : isMemoryAdmissionOutcome(entry), 'stored proof');
+};
+
 /** K7 write direction: snake-case substrate proof to camel-case kernel proof. */
-export const captureProofToKernel = (entry: Record<string, unknown>): Record<string, unknown> => ({
+export const captureProofToKernel = (entry: Record<string, unknown>): Record<string, unknown> => {
+  requireSnake(entry, true);
+  return {
   candidateId: entry['candidate_id'],
   revision: entry['record_digest'] ? 2 : 1,
   recordDigest: entry['record_digest'] ?? null,
   createdCursor: entry['cursor'],
   proof: { candidate_id: entry['candidate_id'], content: entry['content'], cursor: entry['cursor'] },
-});
+  };
+};
 
 /** K7 read direction: camel-case kernel proof back to snake-case wire proof. */
 export const captureProofToWire = (stored: Record<string, unknown>): Record<string, unknown> => {
+  requireKernel(stored, true);
   const proof = (stored['proof'] ?? {}) as Record<string, unknown>;
   return { ...proof, ...(stored['recordDigest'] ? { record_digest: stored['recordDigest'] } : {}) };
 };
@@ -59,11 +80,13 @@ export const captureProofToWire = (stored: Record<string, unknown>): Record<stri
 export const translateMemoryUpdateWrite = (row: NeutralAggregateUpdate): NeutralAggregateUpdate => {
   if (!isMemoryCaptureKey(row.key) && !isMemoryOutcomeKey(row.key)) return row;
   const entry = parseStored(row.value.data);
+  if (typeof entry['candidateId'] === 'string') {
+    requireKernel(entry, isMemoryCaptureKey(row.key)); return row;
+  }
+  requireSnake(entry, isMemoryCaptureKey(row.key));
   if (isMemoryCaptureKey(row.key)) {
-    if (typeof entry['candidateId'] === 'string') return row;
     return { ...row, value: memoryJcs(captureProofToKernel(entry)) };
   }
-  if (typeof entry['candidateId'] === 'string') return row;
   return { ...row, value: memoryJcs({ candidateId: entry['candidate_id'], outcome: entry['status'], proof: entry }) };
 };
 
@@ -72,11 +95,13 @@ export const translateMemoryAggregateRead = (
 ): MemoryEncodedValue => {
   if (!isMemoryCaptureKey(key) && !isMemoryOutcomeKey(key)) return value;
   const parsed = parseStored(value.data);
+  if (typeof parsed['candidate_id'] === 'string') {
+    requireSnake(parsed, isMemoryCaptureKey(key)); return value;
+  }
+  requireKernel(parsed, isMemoryCaptureKey(key));
   if (isMemoryCaptureKey(key)) {
-    if (typeof parsed['candidate_id'] === 'string') return value;
     return memoryJcs(captureProofToWire(parsed));
   }
-  if (typeof parsed['candidate_id'] === 'string') return value;
   return memoryJcs(parsed['proof']);
 };
 

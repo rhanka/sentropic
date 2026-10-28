@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { memoryJcs } from '../../src/engram-memory/codec.js';
+import { describe, expect, it, vi } from 'vitest';
+import { openModuleStorageCanonicalMemoryStoreV1 } from '@sentropic/engram/memory-substrate';
+import type { NeutralAtomicUnit, NeutralWorkLimits } from '../../src/engram-memory/neutral-contract.js';
+import { MemoryCanonicalJsonError, memoryJcs } from '../../src/engram-memory/codec.js';
+import { memoryNeutralFailure } from '../../src/engram-memory/wire-adaptation.js';
 import type { MemoryHostBinding } from '../../src/engram-memory/binding.js';
 import {
   createMemoryNeutralHandle, type MemoryNeutralHostDriver, type MemoryNeutralKernelPort,
@@ -68,6 +71,40 @@ const make = () => {
 };
 
 describe('memory neutral-handle factory refusals', () => {
+  it('should map canonical JSON errors to a terminal schema refusal', () => {
+    expect(() => memoryNeutralFailure(new MemoryCanonicalJsonError()))
+      .toThrow(expect.objectContaining({ code: 'invalid-schema' }));
+  });
+  it.each([
+    ['memory-capture-idempotency-v1', { content: 'body', cursor: '7' }],
+    ['memory-admission-outcome-v1', { candidate_id: 'cand-1' }],
+  ])('should refuse malformed %s through installed Engram without reconciliation', async (prefix, proof) => {
+    const { handle, assembly } = make();
+    const limits = { maxAppends: 10, maxRecords: 10, maxEncodedBytes: 4096 };
+    const unit: NeutralAtomicUnit = { guards: [], records: [], appends: [], relationships: [],
+      barriers: [], purgeIntents: [], indexWrites: [], updates: [{ kind: 'proof',
+        key: JSON.stringify([prefix, 'cand-1']), value: memoryJcs(proof), version: '1' }] };
+    await expect(handle.transact({ limits, grant }, (tx) => tx.apply(unit)))
+      .rejects.toMatchObject({ code: 'invalid-schema' });
+    const opened = await openModuleStorageCanonicalMemoryStoreV1({ handle, grant,
+      scope_binding: { scope, store_id: 'store-1', resolveScope: () => scope },
+      clock: { now: () => '2026-10-28T00:00:00.000Z' }, deadline_at: '2026-10-28T01:00:00.000Z' });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) throw new Error(opened.error.message);
+    // Inject at the installed commit boundary: public input validation cannot
+    // produce malformed K7/K8 bytes. Exercise its real error/reconcile branch.
+    const store = opened.value as unknown as {
+      commitUnit(operation: string, unit: NeutralAtomicUnit, identity: string, limits: NeutralWorkLimits): Promise<unknown>;
+      reconcile(identity: string): Promise<boolean>;
+    };
+    const reconcile = vi.spyOn(store, 'reconcile');
+    try {
+      expect(await store.commitUnit('capture', unit, 'malformed-proof', limits))
+        .toMatchObject({ ok: false, error: { code: 'INVALID_SCHEMA', retryable: false } });
+      expect(reconcile).not.toHaveBeenCalled();
+      expect(assembly.units).toHaveLength(0);
+    } finally { await opened.value.close(); }
+  });
   it('refuses a missing kernel, driver, binding and an invalid schema name', () => {
     const { driver, kernel } = harness();
     const base = { kernel, binding, driver, schemaName: 'host_schema' };

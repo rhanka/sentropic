@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { memoryJcs } from '../../src/engram-memory/codec.js';
 import { captureProofToKernel, captureProofToWire, createMemoryNeutralTransaction, journalBytesWithIntentHash, memoryCommitIndexKey, neutralQueryResult, neutralUnitToPg, stripJournalIntentHash, translateMemoryAggregateRead, translateMemoryUpdateWrite, withMemoryCaptureReceipt, type MemoryKernelTransactionPort } from '../../src/engram-memory/wire-adaptation.js';
 import type { NeutralAtomicUnit } from '../../src/engram-memory/neutral-contract.js';
+import { validateAdmissionTransition, validateCaptureTransition } from '../../src/engram-memory/validation.js';
 
 const captureKey = JSON.stringify(['memory-capture-idempotency-v1', 'cand-1']);
 const outcomeKey = JSON.stringify(['memory-admission-outcome-v1', 'cand-1']);
@@ -11,6 +12,38 @@ const kernelDone = { candidateId: 'cand-1', revision: 2, recordDigest: 'sha256:d
 const unit = (over: Partial<NeutralAtomicUnit> = {}): NeutralAtomicUnit => ({ guards: [], records: [], appends: [], updates: [], relationships: [], barriers: [], purgeIntents: [], indexWrites: [], ...over });
 
 describe('memory K7/K8 wire adaptation', () => {
+  it.each([
+    [captureKey, { content: 'body', cursor: '7' }],
+    [captureKey, { ...snakeCapture, candidate_id: '' }],
+    [captureKey, { ...snakeCapture, cursor: 7 }],
+    [captureKey, { candidate_id: 'cand-1', cursor: '7' }],
+    [captureKey, { ...snakeCapture, record_digest: 7 }],
+    [outcomeKey, { candidate_id: 'cand-1' }],
+    [outcomeKey, { candidate_id: 7, status: 'accepted' }],
+    [captureKey, []], [captureKey, null],
+  ])('should refuse malformed wire proof %s %j', (key, proof) => {
+    expect(() => translateMemoryUpdateWrite({ kind: 'proof', key, value: memoryJcs(proof), version: '1' }))
+      .toThrow(expect.objectContaining({ code: 'invalid-command' }));
+  });
+  it.each([
+    [captureKey, { candidateId: 'cand-1', revision: 1, recordDigest: null, createdCursor: '7' }],
+    [outcomeKey, { candidateId: 'cand-1', outcome: 'accepted' }],
+    [captureKey, []], [outcomeKey, null],
+  ])('should refuse malformed stored proof %s %j in both directions', (key, proof) => {
+    const value = memoryJcs(proof);
+    expect(() => translateMemoryAggregateRead(key, value))
+      .toThrow(expect.objectContaining({ code: 'invalid-command' }));
+    expect(() => translateMemoryUpdateWrite({ kind: 'proof', key, value, version: '1' }))
+      .toThrow(expect.objectContaining({ code: 'invalid-command' }));
+  });
+  it('should satisfy the installed K7 creation/completion and K8 transition validators', () => {
+    const created = captureProofToKernel(snakeCapture);
+    expect(validateCaptureTransition(null, created)).toMatchObject({ ok: true });
+    expect(validateCaptureTransition(created, captureProofToKernel(snakeDone))).toMatchObject({ ok: true });
+    const outcome = translateMemoryUpdateWrite({ kind: 'outcome', key: outcomeKey, version: '1',
+      value: memoryJcs({ candidate_id: 'cand-1', status: 'accepted' }) });
+    expect(validateAdmissionTransition(null, JSON.parse(outcome.value.data))).toMatchObject({ ok: true });
+  });
   it('translates a created capture proof to the kernel model and back', () => {
     expect(captureProofToKernel(snakeCapture)).toEqual({
       candidateId: 'cand-1', revision: 1, recordDigest: null, createdCursor: '7',
