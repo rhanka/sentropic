@@ -143,6 +143,7 @@
   - [x] Conversation view source slice 18 committed within the atomic limit.
   - [x] Conversation view source slice 19 committed within the atomic limit.
 - [ ] **Lot 3 — Parity and packed boundary qualification**
+  - [x] Clean installed pair passes Svelte typecheck with 0 errors/warnings and Vite production build; wire the exact-archive probe and retained head/hash report into CI.
   - [x] Add standalone/app-shaped live plan-result rendering and IME Enter parity through the real runtime; composing text cannot accidentally submit.
   - [x] Add a clean installed-pair probe that mounts only exact archives: public-contract Svelte typecheck, production bundle and visual archive ownership scan, with retained SHA-256 evidence.
   - [x] Enrich the in-memory checkpoint data adapter with persisted anchor metadata, matching the production checkpoint contract rather than bypassing the mutation classifier.

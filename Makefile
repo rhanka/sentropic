@@ -1414,7 +1414,7 @@ pack-chat-runtime: build-chat-runtime
 qualify-chat-pair:
 	@test -f "$(UI_ARCHIVE)" && test -f "$(RUNTIME_ARCHIVE)" || { echo "ERROR: UI_ARCHIVE and RUNTIME_ARCHIVE must name the guarded candidates"; exit 1; }
 	@mkdir -p "$(REPORT_DIR)"
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e QUALIFY_HEAD_SHA="$(QUALIFY_HEAD_SHA)" \
 		-v "$(CURDIR)/scripts/ci/qualify-chat-pair.mjs:/probe.mjs:ro" \
 		-v "$(abspath $(UI_ARCHIVE)):/input/ui.tgz:ro" -v "$(abspath $(RUNTIME_ARCHIVE)):/input/runtime.tgz:ro" \
 		-v "$(abspath $(REPORT_DIR)):/reports" $(LLM_MESH_NODE_IMAGE) node /probe.mjs
