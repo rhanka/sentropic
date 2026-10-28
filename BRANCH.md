@@ -29,12 +29,12 @@
   - `.track/**`
   - `plan/**`
 - [x] **Conditional Paths (allowed only with explicit exception)**:
-  - `Makefile` under BRL4-EX1 only.
+  - `Makefile` under BR04-EX1 only.
   - `.github/workflows/**` remains unchanged.
 - [x] **Exception process**: declare rationale, impact and rollback before edits.
 
 ## Feedback Loop
-- [x] BRL4-EX1: include `scripts/decision/kev-local.mk` from Makefile for explicit opt-in local targets; no default dependency; rollback removes include and targets.
+- [x] BR04-EX1 (Makefile): include `scripts/decision/kev-local.mk` for explicit opt-in local targets; no default dependency; rollback removes include and targets.
 - [x] Track single writer: update this source artifact only; conductor owns sidecar import.
 - [x] Source LFS tuple verified 2026-10-28: selected revision/file, 4483801504 bytes, SHA-256 7c2ebed90560522c2801389db482ac1dc4c36d828f201f6074c1d60e433948da; model card Apache-2.0.
 
@@ -54,7 +54,7 @@
   - [x] Read rules, V4 spec, dossier and merged L3/L5 contracts; harness branch check passed.
   - [x] Confirm published mesh version 0.31.0; feature bump will be 0.32.0.
 - [ ] **Lot 1 — Immutable runtime and artifact manifest**
-  - [ ] Pin upstream native CPU release/source/archive; verify provenance, licence and model LFS source before use.
+  - [x] Pin upstream native CPU release/source/archive; verify provenance, licence and model LFS source before use.
   - [ ] Add opt-in Make provisioning/smoke targets; one shared cache; bounded process and cleanup.
 - [ ] **Lot 2 — Inventory and descriptor**
   - [ ] Bind file, revision, bytes, quantization, binary, runtime/readout and compilation into evaluator definition.
