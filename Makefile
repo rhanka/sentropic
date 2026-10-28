@@ -1410,6 +1410,14 @@ typecheck-chat-runtime build-chat-runtime test-chat-runtime:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e SCOPE="$(SCOPE)" -v "$(CURDIR):/workspace" -w /workspace/packages/chat-runtime $(LLM_MESH_NODE_IMAGE) sh scripts/run.sh $(patsubst %-chat-runtime,%,$@)
 pack-chat-runtime: build-chat-runtime
 	$(call manifest_guard_pack,chat-runtime,$(MANIFEST_DIST_FORM))
+.PHONY: qualify-chat-pair
+qualify-chat-pair:
+	@test -f "$(UI_ARCHIVE)" && test -f "$(RUNTIME_ARCHIVE)" || { echo "ERROR: UI_ARCHIVE and RUNTIME_ARCHIVE must name the guarded candidates"; exit 1; }
+	@mkdir -p "$(REPORT_DIR)"
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
+		-v "$(CURDIR)/scripts/ci/qualify-chat-pair.mjs:/probe.mjs:ro" \
+		-v "$(abspath $(UI_ARCHIVE)):/input/ui.tgz:ro" -v "$(abspath $(RUNTIME_ARCHIVE)):/input/runtime.tgz:ro" \
+		-v "$(abspath $(REPORT_DIR)):/reports" $(LLM_MESH_NODE_IMAGE) node /probe.mjs
 chat-migration-registry:
 	@docker run --rm $(LLM_MESH_NODE_IMAGE) sh -lc 'npm view @sentropic/chat-ui version; npm view @sentropic/cowork-desktop version; npm view @sentropic/cowork-bridge version; npm view @sentropic/chat-runtime version || test "$$?" = 1'
 
