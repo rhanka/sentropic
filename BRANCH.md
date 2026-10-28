@@ -58,7 +58,7 @@
   - [ ] Mechanical harness branch check and baseline capture through BR76 metrics.
   - [ ] Inventory Docker/source/lock/toolchain/profile/embedded inputs and current gate membership.
 - [ ] **Lot 1 — Persistent build cache**
-  - [ ] Scope cache import/export by runtime/tools/UI profile/E2E; preserve source-dependent keys; remove forced UI cache bypass.
+  - [x] Scope BuildKit cache import/export by runtime/tools/UI/E2E and architecture; preserve source-dependent keys and build arguments; remove forced UI cache bypass.
   - [ ] Update scripts/test-api-tooling.sh and scripts/check-ci-version-filters.sh as required.
   - [ ] Gate: make test-ci-api-tooling check-ci-version-filters ENV=test-ci-br78.
 - [ ] **Lot 2 — Digest-addressed transport**
