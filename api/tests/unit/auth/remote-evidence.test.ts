@@ -15,13 +15,17 @@ const login = {
   amr: ['hwk', 'user', 'mfa'], expiresAt: now + 86_400_000,
 };
 function setup() {
-  const state = { login: structuredClone(login) as typeof login | null, now };
+  const state = { login: structuredClone(login) as typeof login | null, now,
+    afterTarget: undefined as (() => void) | undefined };
   const used = new Set<string>();
   const issue = createRemoteEvidenceIssuer({
     issuer: 'idp', kid: 'idp-1', key: keys.privateKey, now: () => state.now,
     session: async (credential) => credential === 'credential-1' ? state.login : null,
-    approvedTarget: async (digest, actor) => actor.sub === 'owner' && /^[ac]{64}$/.test(digest)
-      ? { audience: digest.startsWith('c') ? 'native-c' : 'native-b', tenantId: 'tenant-1', workspaceId: 'workspace-1' } : null,
+    approvedTarget: async (digest, actor) => {
+      state.afterTarget?.();
+      return actor.sub === 'owner' && /^[ac]{64}$/.test(digest)
+        ? { audience: digest.startsWith('c') ? 'native-c' : 'native-b', tenantId: 'tenant-1', workspaceId: 'workspace-1' } : null;
+    },
     reserve: async (sid, actionId) => {
       const key = `${sid}:${actionId}`;
       if (used.has(key)) return false;
@@ -33,6 +37,16 @@ function setup() {
 }
 
 describe('RC1 D2 session evidence', () => {
+  it('should refuse revocation during asynchronous target resolution', async () => {
+    const { issue, state } = setup();
+    state.afterTarget = () => { state.login = null; };
+    await expect(issue(request)).rejects.toMatchObject({ code: 'authentication_required' });
+  });
+  it('should refuse a request delayed beyond its original proof deadline', async () => {
+    const { issue, state } = setup();
+    state.afterTarget = () => { state.now += 60_000; };
+    await expect(issue(request)).rejects.toMatchObject({ code: 'expired' });
+  });
   // R01-R08/R12-R14 are native reply tracking IDs; these remain app-side witnesses or explicit fakes.
   it('should distinguish unsupported versions from invalid kinds', async () => {
     await expect(setup().issue({ ...request, version: 'remote-action-v2' }))

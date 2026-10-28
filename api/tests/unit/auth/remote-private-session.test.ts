@@ -16,6 +16,12 @@ function setup() {
   return { directory, store, record };
 }
 describe('RC1 issuer-private durable authority', () => {
+  it('should fence a session whose private creation finishes after bulk revocation', () => {
+    const { store, record } = setup();
+    store.revoke(record.sessionId);
+    expect(store.find(record.sessionId)?.revoked).toBe(true);
+    expect(() => store.create(record)).toThrow();
+  });
   it('should retain exact login authority across a new issuer instance', () => {
     const { directory, store, record } = setup();
     store.create(record);
