@@ -62,10 +62,10 @@
   - [x] Create isolated worktree and pass mechanical `harness check branch` before work.
   - [x] Freeze scope, exception, environment and ports; leave other lanes untouched.
 - [ ] **Lot 1 — Tests first**
-  - [ ] Add `deploy/ci/artifact-content/{tests.mk,bundle-checks.mjs,bundle.selftest.mjs}` (workload assertions and render target added).
+  - [x] Add `deploy/ci/artifact-content/{tests.mk,bundle-checks.mjs,bundle.selftest.mjs,network.selftest.mjs}`.
   - [x] Prove red: rendered overlays fail `Deployment/artifact-content must occur once` (0 vs 1), before any content manifest exists.
   - [ ] Test closed gates despite enabled secret values, least privilege, network peer namespace isolation, both TLS wildcard depths and exact app route precedence.
-  - [ ] Test synthetic digest replacement across API/IdP/content, unchanged backup/restore access and mutation denials.
+  - [ ] Test synthetic digest replacement across API/IdP/content, unchanged backup/restore access and mutation denials; Kustomize renders digest-only identity (drops the source tag).
 - [x] **Lot 2 — Workload and default closure**
   - [x] Add content Deployment/Service/ConfigMap/NetworkPolicies and base registration; pin API gate env values explicitly.
   - [x] Dedicated unprivileged ServiceAccount, read-only root, bounded resources/probes, no migration command or broad app secret.
