@@ -57,7 +57,7 @@
   - [ ] Hash/copy content sources, exclude generated bundles and align `.github/workflows/ci.yml` filters.
   - [ ] Gate: scoped static image/hash/filter tests turn red then green.
 - [ ] **Lot 2 — Production entrypoint**
-  - [ ] Add failing real-image test: pruned dependencies, Node entrypoint from production working directory, health and default-closed denial.
+  - [x] Add real-image test for pruned dependencies, Node startup, health, denial and shutdown; assembly test fails because content sources are not copied.
   - [ ] Compile/copy content bundle in `api/Dockerfile`, retaining existing API/IdP commands and single image resolver.
   - [ ] Gate: build canonical image once, run content process with no activation/DB/storage credentials, verify health and denial.
 - [ ] **Lot 3 — Artifact identity and CI**
