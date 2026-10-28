@@ -108,11 +108,8 @@ describe('documents module — type dedup re-export chain', () => {
 // 3. DocumentHost fake-host harness
 // ---------------------------------------------------------------------------
 
-import type {
-  DocumentHost,
-  ChatComposerAttachmentDraft,
-  ChatGeneratedFileCard,
-} from '../src/documents/index.js';
+import type { DocumentHost } from '@sentropic/chat-runtime/documents';
+import type { ChatComposerAttachmentDraft, ChatGeneratedFileCard } from '@sentropic/chat-ui/documents';
 
 /**
  * A minimal in-memory DocumentHost implementation for testing.

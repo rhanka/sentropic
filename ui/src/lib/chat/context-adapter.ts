@@ -17,7 +17,7 @@
  *   loadPrefs normalizes all three before returning to the module.
  */
 
-import type { ContextHost } from '@sentropic/chat-ui/context';
+import type { ContextHost } from '@sentropic/chat-runtime/context';
 import { apiGet } from '$lib/utils/api';
 
 // ---------------------------------------------------------------------------

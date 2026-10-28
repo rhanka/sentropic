@@ -1,16 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildCommentThreads,
-  findAssignedMentionFromText,
-  formatCommentTimestamp,
-  getCommentAuthorLabel,
-  getInitials,
-  getMentionCandidate,
-  getMentionLabel,
-  getMentionMatches,
-  isCommentByUser,
-  type CommentItem,
-} from '@sentropic/chat-ui/comments';
+import { buildCommentThreads, findAssignedMentionFromText, getMentionCandidate, getMentionMatches, isCommentByUser } from '@sentropic/chat-runtime/comments';
+import { formatCommentTimestamp, getCommentAuthorLabel, getInitials, getMentionLabel, type CommentItem } from '@sentropic/chat-ui/comments';
 import { getCommentSectionLabel } from '$lib/chat/comment-adapter';
 
 const members = [
