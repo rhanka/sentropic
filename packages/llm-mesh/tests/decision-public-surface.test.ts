@@ -40,9 +40,9 @@ beforeAll(() => {
 });
 
 describe('published decision boundaries', () => {
-  it('exports the three exact subpaths without changing package versions', () => {
+  it('exports the Decision subpaths at the native Decisions feature version', () => {
     const pkg = JSON.parse(readFileSync(resolve('package.json'), 'utf8'));
-    expect(pkg.version).toBe('0.28.1');
+    expect(pkg.version).toBe('0.30.0');
     for (const [name, path] of [['decision', 'decision/index'], ['decision/host', 'decision/host'], ['transport/jev', 'transport/jev']]) {
       expect(pkg.exports[`./${name}`]).toEqual({ types: `./dist/${path}.d.ts`, import: `./dist/${path}.js` });
     }
@@ -58,7 +58,9 @@ describe('published decision boundaries', () => {
       writeFileSync(file, `import type { ProviderAdapter } from '@sentropic/llm-mesh';
 import type { EvaluatorRef, DecisionRequest, DecisionAdapterResult, DecisionResult } from '@sentropic/llm-mesh/decision';
 import { createRemoteDecisionClient } from '@sentropic/llm-mesh/decision';
-import { createDecisionService, createJevAdapter } from '@sentropic/llm-mesh/decision/host';
+import { createDecisionService, createJevAdapter, createOpenAiDecisionsAdapter, createOpenAiDecisionsTransport,
+  openAiDecisionsDescriptor, openAiDecisionsPrice, discoverDecisionEvaluator, assessDecisionCalibration,
+  decisionExecutionDigest, decisionQualificationScope } from '@sentropic/llm-mesh/decision/host';
 import { createJevTransport } from '@sentropic/llm-mesh/transport/jev';
 declare const adapter: ProviderAdapter;
 declare const result: Awaited<ReturnType<NonNullable<typeof adapter.decision>>>;
@@ -68,6 +70,8 @@ const argument: Parameters<NonNullable<typeof adapter.decision>>[0] = request;
 const evaluator: EvaluatorRef = argument.evaluator;
 declare const receipt: DecisionResult;
 void [evidence, evaluator, receipt, createDecisionService, createJevAdapter, createJevTransport, createRemoteDecisionClient];
+void [createOpenAiDecisionsAdapter, createOpenAiDecisionsTransport, openAiDecisionsDescriptor, openAiDecisionsPrice];
+void [discoverDecisionEvaluator, assessDecisionCalibration, decisionExecutionDigest, decisionQualificationScope];
 // @ts-expect-error Consumer contracts must not expose host custody.
 import { createDecisionService as consumerFactory } from '@sentropic/llm-mesh/decision';
 // @ts-expect-error Private decision modules must not have export-map escape hatches.

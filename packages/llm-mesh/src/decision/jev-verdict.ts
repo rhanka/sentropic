@@ -14,8 +14,12 @@ export function decodeJevVerdict(candidate: unknown, request: DecisionRequest, d
   const snapshot = snapshotBoundedJson(candidate);
   const invalid = { ok: false, code: 'VERDICT_INVALID' } as const;
   if (!snapshot.ok || !isRecord(snapshot.value)) return invalid;
-  const answer = snapshot.value;
+  const { type, ...answer } = snapshot.value;
   const { criterion } = encoded;
+  // The pinned System One wire includes a discriminator. Primitive projections
+  // used by host reconstruction omit it; a supplied discriminator is binding.
+  const expectedType = criterion.kind === 'binary' ? 'noul' : criterion.kind === 'graded' ? 'score' : 'choice';
+  if (Object.hasOwn(snapshot.value, 'type') && type !== expectedType) return invalid;
   let score: DecisionVerdict['score'] = null;
   let label: DecisionVerdict['label'] = null;
   let confidence: DecisionVerdict['confidence'] = null;

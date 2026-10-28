@@ -11,6 +11,15 @@
 # sources in sources.txt.
 set -eu
 work="$1"
+if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" = activation ]; then
+  mkdir -p "$work/tools" "$work/artifacts-consumer"
+  npm view @sentropic/artifacts version
+  npm install --prefix "$work/tools" --no-audit --no-fund vitest@4.1.5 typescript@5.9.3 @types/node@22 >/dev/null
+  (cd ../artifacts && npm pack --silent --pack-destination "$work" >/dev/null)
+  printf '{"type":"module","private":true}\n' > "$work/artifacts-consumer/package.json"
+  (cd "$work/artifacts-consumer" && npm install --no-audit --no-fund "$work"/sentropic-artifacts-*.tgz pg@8.22.0 @types/pg@8.20.0 >/dev/null)
+  exit 0
+fi
 here="$(pwd)/tests/packaging"
 fixtures="$here/fixtures"
 # Workspace manifests keep new same-PR siblings selectable while refreshing the old lock.
@@ -58,11 +67,9 @@ if [ -n "$receipt" ]; then
   cp "$receipt" "$tgz"
 fi
 
-# Frozen selected tuple: a pack-only dev pack does not furnish the frozen pin
-# tarball, so fetch the published pin (the frozen consumer qualifies the last
-# release, never the dev leaf). Release branches already carry the file, so
-# this is a no-op for them.
-frozen_pin="$(grep -o 'sentropic-cluster-mesh-[0-9][0-9.]*\.tgz' tests/packaging/fixtures/selected/package.json | head -n 1)"
+# Selected tuple: use its locally packed stable or development tarball when
+# present; fetch a frozen published pin only when the selected file is absent.
+frozen_pin="$(grep -o 'sentropic-cluster-mesh-[0-9][0-9A-Za-z.-]*\.tgz' tests/packaging/fixtures/selected/package.json | head -n 1)"
 if [ ! -f "$work/$frozen_pin" ]; then
   frozen_version="${frozen_pin%.tgz}"; frozen_version="${frozen_version#sentropic-cluster-mesh-}"
   npm pack --silent --pack-destination "$work" "@sentropic/cluster-mesh@$frozen_version" >/dev/null

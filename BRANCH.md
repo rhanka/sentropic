@@ -5,11 +5,11 @@
 - [ ] Retained batch objective below: integrate the approved memory lots into one batch branch and qualify one exact head before conductor merge.
 
 ## Scope / Guardrails
-- [ ] Base `feat/engram-e2-batch1` at `4bd435349b76145a8d1693cd16082ee187d6e4f4` (PR #802); branch `feat/cluster-mesh-engram-e10`; worktree `tmp/worktrees/mem-e10`; draft PR against `feat/engram-e2-batch1`; merge the batch re-pin when it lands, never rebase.
+- [x] Base `feat/engram-e2-integration` at `ef585a6b1164923929add4dfee2c8a64390da267` (integration #802 and re-pin #805 merged); branch `feat/cluster-mesh-engram-e10`; takeover worktree `tmp/worktrees/mem-e10b`; PR #803 against `feat/engram-e2-integration`; merge only, never rebase.
 - [ ] Engram candidate is read-only: `@sentropic/engram` `0.22.0` tarball `/home/antoinefa/src/graphify-wt-mcpl4/.graphify/scratch/l4-r4-artifacts/sentropic-engram-0.22.0.tgz`, sha256 `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10`; P3 manifest sha256 `1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730`. No write in that repository.
-- [ ] Candidate cluster-mesh tarball is built from this branch head with version `0.24.0-dev.1` stamped in the staging copy only; the committed workspace version stays on the batch line until the integrator re-pin is merged.
+- [ ] Candidate cluster-mesh tarball is built from this branch head at the committed workspace version `0.24.0-dev.1` with no version stamping in the lane; the tarball is bound by sha256 in the receipt.
 - [ ] Host driver closure is the installed `pg` package plus the installed cluster-mesh bytes; no sibling source resolution, no workspace links.
-- [ ] E10 authored scope only: `packages/cluster-mesh/tests/engram-memory/installed-memory.mjs`, `packages/cluster-mesh/tests/engram-memory/installed-memory-types.ts`, `packages/cluster-mesh/tests/engram-memory/qualification.mk`, `packages/cluster-mesh/tests/engram-memory/installed-receipt.json`, plus `BRANCH.md` and `PLAN.md`. Inherited batch files below stay unchanged unless BR10-EX1 is declared.
+- [ ] E10 authored scope only: `packages/cluster-mesh/tests/engram-memory/installed-memory.mjs`, `packages/cluster-mesh/tests/engram-memory/installed-host-bridge.mjs`, `packages/cluster-mesh/tests/engram-memory/installed-memory-types.ts`, `packages/cluster-mesh/tests/engram-memory/qualification.mk`, `packages/cluster-mesh/tests/engram-memory/installed-receipt.json`, `packages/cluster-mesh/tests/engram-memory/installed-consumer-package.json`, `packages/cluster-mesh/tests/engram-memory/installed-consumer-package-lock.json`, plus `BRANCH.md` and `PLAN.md`. Inherited batch files below stay unchanged unless BR10-EX1 is declared.
 - [ ] Ports reserved for this branch only: API 8791, UI 5191, Maildev UI 1091; qualification PostgreSQL publishes no host port; `ENV=test-mem-e10` last.
 - [x] Owner-directed batch: merge commits only, no rebase, no publication, conductor merges the draft PR.
 - [x] Worktree `tmp/worktrees/mem-batch1`; branch `feat/engram-e2-batch1`; base `978fb67c0`.
@@ -27,18 +27,41 @@
   - `tools/memory-mcp-l5/**`
   - `spec/evidence/memory-mcp-l5/l0-freeze.json` (inherited #792 P3 evidence)
   - `Makefile` (BR1-EX1: inherit approved #793 PG wiring and adapt existing qualification selectors to the owner-required isolated batch environment)
+  - `tools/memory-mcp-l5/**` (inherited memory integration)
+  - `spec/evidence/memory-mcp-l5/**` (inherited memory integration)
+  - `.github/workflows/ci.yml` (inherited main only)
+  - `.github/workflows/idp-workload-secret.yml` (inherited main only)
+  - `.security/security-fix.json` (inherited main only)
+  - `.tmp/live-stt/**` (inherited main only)
+  - `api/src/scripts/oauth-provision-exchange-client.ts` (inherited main only)
+  - `api/tests/api/auth/oauth-token-exchange.test.ts` (inherited main only)
+  - `api/tests/unit/gateway-package-version.test.ts` (inherited main only)
+  - `deploy/ci/idp-identity-sync/**` (inherited main only)
+  - `deploy/k8s/**` (inherited main only)
+  - `docs/runbooks/app-cm-baseline-restore.md` (inherited main only)
+  - `packages/artifacts/**` (inherited main only)
+  - `packages/llm-gateway/package.json` (inherited main only)
+  - `packages/llm-mesh/**` (inherited main only)
+  - `plan/71-BRANCH_chore-ci-capacity-policy.md` (inherited main only)
+  - `scripts/ci/**` (inherited main only)
+  - `scripts/security/daily/**` (inherited main only)
+  - `scripts/test-pgbackup-restore-isolation.sh` (inherited main only)
+  - `spec/SPEC_EVOL_LLM_MESH.md` (inherited main only)
+  - `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md` (inherited main only)
+  - `spec/ci-cd-ten-minutes/capacity.md` (inherited main only)
+  - `spec/decision/**` (inherited main only)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
-  - `.github/workflows/**`
   - `.cursor/rules/**`
   - `.track/**`
-  - `api/**`
   - `ui/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `packages/engram/**` (not activated)
+  - [x] Already committed origin/main changes are inherited; check authored merge resolution against that parent.
 - **Exception process**:
   - [x] BR1-EX1: inherit #793 Makefile wiring, extend qualification environment selectors only as needed; impact limited to isolated test environment, rollback batch changes to those lines.
   - [x] BR10-EX2: add `test-mem-e10` to the existing ENV filters of the Compose qualification mode, `engram-e2-postgres-up` and `down` in `Makefile` so the E10 installed lane reuses the same Compose project and Node 24 qualification image as `test-mem-batch1`; no other target changes. Impact: one additional isolated test environment name; rollback: remove `test-mem-e10` from those filters.
+  - [x] BR024-EX1: conductor authorizes union of all three Makefile environment selectors, retaining memory and artifacts entries. Impact: qualification/cleanup routing; rollback selectors together.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot E10-0 — Baseline and constraints**
@@ -55,6 +78,16 @@
   - [x] Retain `packages/cluster-mesh/tests/engram-memory/installed-receipt.json` from the green run: archive hashes, runtime and type closure, engine, configuration and migration identities, five-profile equivalence and refusal outcomes.
   - [x] Record the receipt path and its sha256 in the PR body; list the exact E11 inputs so `e2-host-tuple/v1` can be generated from this head without new qualification.
   - [ ] Push and keep the draft PR current; require CI on the exact head before marking ready.
+- [ ] **Lot E10-3 — Takeover: merge integration and Opus r1 fixes**
+  - [x] Merge `origin/feat/engram-e2-integration` at `ef585a6b1` (integration #802 and re-pin #805, version `0.24.0-dev.1`); union the Makefile `test-mem-e10` and `test-artifacts-022` selectors; no rebase.
+  - [ ] Move the neutral handle bridge into retained consumer file `installed-host-bridge.mjs`; receipt records `hostGlue` as `host-authored-not-installed` with its sha256 and derivation; the installed tuple claim stays `partial` for that glue.
+  - [ ] Receipt states profiles per status: `declaredProfileClaims`, `fiveProfileEquivalence` `not-covered` (Stage B blocked, E9 #790, 23 cases); never claim qualified profiles.
+  - [ ] Pin `@types/node` `22.20.1`, remove `skipLibCheck`, surface type diagnostics; pin `pg` `8.22.0`; typed driver errors; live wrong-driver case; assembly-level refusal.
+  - [ ] Split restart into a second process (`write` then `reopen`); assert exact u64 epoch advance with decimal `BigInt` comparison; drop schema only after phase 2.
+  - [ ] Clean consumer and artifacts before staging; retain consumer `package.json` and `package-lock.json` next to the receipt; record `npm --version`; clean `dist` before pack; no fallback PG image; record qualification image ID; assert every type file stays under `/consumer/`.
+  - [ ] Remove version stamping in the lane; assert the committed workspace version equals `0.24.0-dev.1`; bind the cluster-mesh tarball by sha256.
+  - [ ] Lot 6 evidence from #709: `missing source` in this branch unless transferred; record the conductor disposition in the PR body.
+  - [ ] Rerun the installed lane on the exact head, retain the receipt, push, and require CI green on the exact head.
 - [ ] **Lot 1 — Ordered merges**
   - [x] Merge #758, #763, #765, #775, #779, #764, #793, #792, #790; all heads retained; no lot excluded.
   - [x] Preserve P3 manifest 1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730 and Engram 0.22.0 tarball 26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10; both checked with sha256sum.
