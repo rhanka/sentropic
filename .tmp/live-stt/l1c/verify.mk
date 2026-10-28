@@ -1,6 +1,6 @@
 include Makefile
-ifneq ($(ENV),test-live-stt-l1c)
-$(error This adapter requires ENV=test-live-stt-l1c)
+ifeq ($(filter $(ENV),test-live-stt-l1c test-stt-l1c),)
+$(error This adapter requires ENV=test-live-stt-l1c or ENV=test-stt-l1c)
 endif
 L1C_COMPOSE = docker compose -p $(ENV) -f docker-compose.immo-861.yml
 L1C_RUN = $(L1C_COMPOSE) run --rm --no-deps -T
@@ -9,7 +9,7 @@ version:
 	@$(L1C_RUN) qualification sh -ec 'npm view @sentropic/cluster-mesh version; npm view @sentropic/llm-mesh version; npm view @sentropic/llm-gateway version'
 
 scope-check:
-	@files="$$( { git diff --cached --name-only; git diff --name-only; } | sort -u | paste -sd, - )"; harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
+	@files="$$( { git diff --cached --name-only $(SCOPE_BASE); git diff --name-only $(SCOPE_BASE); } | sort -u | paste -sd, - )"; harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
 
 test-cluster-mesh:
 ifeq ($(L1C_PACKED),1)

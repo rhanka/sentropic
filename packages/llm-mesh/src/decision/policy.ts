@@ -2,15 +2,17 @@ import type { DecisionRequest } from './request.js';
 import type { DecisionEvaluatorDescriptor } from './descriptor.js';
 import type { DecisionErrorCode } from './errors.js';
 import { encodeJevRequest } from './jev-codec.js';
+import { encodeOpenAiDecisionsRequest } from './openai-request.js';
+import { canExecuteDecisionCandidate } from './qualification.js';
 
 export interface DecisionHostPolicy { timeoutMs?: number; maxCostMicroUsd?: string; allowRaw?: boolean }
 /** Capability/decision refusal precedes credential acquisition and financial admission. */
 export function validateDecisionPolicy(request: DecisionRequest, descriptor: DecisionEvaluatorDescriptor,
   host: DecisionHostPolicy = {}): DecisionErrorCode | null {
-  const encoded = encodeJevRequest(request, descriptor);
+  const encoded = descriptor.protocol === 'openai-decisions' ? encodeOpenAiDecisionsRequest(request, descriptor) : encodeJevRequest(request, descriptor);
   if (!encoded.ok) return encoded.code;
   const criterion = encoded.criterion;
-  if (descriptor.qualification.servedIdentity !== 'qualified') return 'PROVIDER_UNAVAILABLE';
+  if (!canExecuteDecisionCandidate(descriptor)) return 'PROVIDER_UNAVAILABLE';
   if (request.policy?.explanation === 'required' || request.decision?.kind === 'provider') return 'CAPABILITY_UNSUPPORTED';
   if (request.raw?.mode === 'allowlisted' && host.allowRaw !== true) return 'CAPABILITY_UNSUPPORTED';
   if (criterion.kind === 'choice' && criterion.options.some((option) => ['__proto__', 'constructor', 'prototype'].includes(option.id))) {
