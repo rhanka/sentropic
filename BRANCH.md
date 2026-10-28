@@ -62,21 +62,22 @@
   - [x] Record allowed paths, environment, ports and no-spend restriction.
 - [ ] **H1 — API host junction**
   - [x] Compose the Decision host lazily through cluster-mesh and add authenticated POST /api/v1/llm-mesh/decision.
-  - [ ] Resolve verified workspace authorization and financial ownership outside caller JSON.
-  - [ ] Reuse OPENAI_API_KEY; resolve the new JEV_API_KEY connection without logging secrets.
-  - [ ] Implement durable Decision budget and receipt ports over llm-metering, including overrun disable and pending liability.
+  - [x] Resolve verified workspace authorization and financial ownership outside caller JSON.
+  - [x] Reuse OPENAI_API_KEY; resolve the new JEV_API_KEY connection without logging secrets.
+  - [x] Implement durable Decision budget and receipt ports over llm-metering, including overrun disable and pending liability.
   - [x] Add control migration and schema for metadata receipts and persistent evaluator disable evidence.
   - [x] Add bounded database transactions, evaluator-first locks and owner-fenced hold/receipt persistence.
   - [x] Adapt existing all-bucket admission with pinned prices, evaluator disable checks and durable dispatch marking.
   - [x] Implement atomic Decision ledger settlement, pending-liability charges, overrun disable evidence and outbox receipts.
   - [x] Compose both remote adapters, explicit profiles, environment auth and protocol-bound authoritative pricing ports.
   - [x] Add bounded HTTP parsing and trusted workspace/tenant resolution with authorization repeated before dispatch.
-  - [ ] Keep production refusing; expose experimental qualification only to application admins.
-  - [ ] API unit tests: api/tests/unit/decision-host.test.ts; api/tests/unit/decision-route.test.ts.
+  - [x] Keep production refusing; expose experimental qualification only to application admins.
+  - [x] API unit tests: api/tests/unit/decision-host.test.ts; api/tests/unit/decision-route.test.ts (16 passed).
   - [x] Add no-spend host tests for both backends, production refusal, missing credentials, authorization, price and input limits.
   - [x] Host fixture gate: 9 tests passed; align the typed PostgreSQL hold projection with Drizzle's row contract.
   - [x] Add HTTP controls for authentication, qualification admin restrictions, workspace refusal, outages and bounded bodies.
-  - [ ] API integration tests: api/tests/api/decision-metering.test.ts.
+  - [x] API integration tests: api/tests/api/decision-metering.test.ts (14 passed); api/tests/api/decision-api.test.ts (4 passed).
+  - [x] Actual product composition refuses anonymous ingress, discovers both unqualified evaluators and persists production refusal without a hold or fetch.
 - [ ] **H2 — Authoritative pricing**
   - [x] Verify and cite the published JEV tariff at its primary source.
   - [x] Add both immutable control.model_pricing rows using the existing control migration lane.
