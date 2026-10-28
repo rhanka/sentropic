@@ -953,6 +953,11 @@ test-ci-dag: ## Qualify artifact dispatch, complete verdict and rollback (BR79-E
 ci-security-join: ## Reject missing, failed or unexpectedly skipped scan lanes
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e CI_SECURITY_NEEDS -e CI_SECURITY_CATEGORY -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-dag.mjs --security-join
 
+.PHONY: ci-dag-receipt
+ci-dag-receipt: ## Emit identified runtime readiness from a completed capture
+	@test -n "$(RUN_FILE)"
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-dag.mjs --readiness $(RUN_FILE)
+
 
 .PHONY: typecheck
 .NOTPARALLEL: typecheck
