@@ -3,6 +3,7 @@ import {nodeRect,segmentCrossesRect,edgeSegments,routeScene} from '../src/archit
 import {sceneFrame,frameHeaderContent} from '../src/architecture-layout.js';
 import {aggregateTopLevel} from '../src/governance-summary.js';
 import {collapseGovernanceScene} from '../src/governance-collapse.js';
+import {bindGovernanceScene} from '../src/governance-input.js';
 const baseline=process.argv.includes('--baseline');
 const root=baseline?process.cwd()+'/.cache/baseline':process.cwd();
 const presentation=JSON.parse(readFileSync(root+'/src/presentation-scenes.json','utf8'));
@@ -93,7 +94,7 @@ if(process.argv.includes('--elk')){
  const layouts=JSON.parse(readFileSync(process.cwd()+'/.cache/elk-centred-layouts.json','utf8'));
  for(const [lang,scene]of Object.entries(layouts))check(scene,'elk/'+lang);
 }else for(const language of ['fr','en']){
- const central=presentation[language].architectureScenes.central;
+ const central=bindGovernanceScene(presentation[language].architectureScenes.central);
  for(const [key,edges]of Object.entries(routes[language]))if(Array.isArray(edges)&&key!=='folded')check({...central,edges},language+'/expanded/'+key);
  for(const [i,fold]of routes[language].folded.entries()){
   const [geometry]=JSON.parse(fold.signature),entries=new Map([...central.groups,...central.nodes].map(n=>[n.id,n]));
