@@ -118,7 +118,7 @@ export const createMemoryNeutralHandle = (input: CreateMemoryNeutralHandleInput)
     }),
     releaseFence: (supplied) => guarded(async () => {
       if (fence?.fenceId === supplied.fenceId && fence?.epoch === supplied.epoch) {
-        await kernel.ownership!.release(); acquired = false;
+        await kernel.ownership!.release(); acquired = false; fence = undefined;
       }
     }),
     transact: (options, operation) => guarded(async () => {
