@@ -7,7 +7,7 @@
     StreamHubClient,
     StreamHubEvent,
   } from '@sentropic/chat-runtime/client/streamTypes';
-  import { asRecord, normalizeTaskStatus } from '@sentropic/chat-runtime/state/streamMessageProjection';
+  import { asRecord, normalizeTaskStatus } from '../state/streamMessageProjection.js';
   import {
     buildTodoRuntimeChecklist,
     needsReasoningSectionBreak,
