@@ -1,5 +1,377 @@
 # CI/CD capacity — measured inventory (BR-76)
 
+## BR-77 inventory — 2026-10-26
+
+Base: `440599d04e91bb33e3874588f067c6a90bffd1b3`; BR-76 #705
+merged at `bc4a4a80a732b629da75027a9eb07c7c77cf522a`.
+API receipts collected by the branch author using the existing authenticated
+GitHub CLI (no credentials retained):
+
+| Route | Observed result | Interpretation |
+| --- | --- | --- |
+| `GET /user` | login `rhanka`, `plan: null` | Account quota unavailable. |
+| `GET /repos/rhanka/sentropic/actions/runners` | `total_count: 0`, `runners: []` | No self-hosted reservation to allocate. |
+| `GET /users/rhanka/settings/billing/usage` | HTTP 404; endpoint requires `user` scope | Billed minutes, registry and transfer costs remain to-measure. |
+| `GET /repos/rhanka/sentropic/branches/main` | base SHA above | #760 is still open at inventory time; no unmerged changes are imported. |
+
+BR-76 observed at least 17 simultaneous executions; this is a lower bound,
+not an account quota or a provisioned runner reservation. Review r2 found
+that the former 15 shared job mutexes held ready work behind unrelated
+jobs even with only 2–8 active runners. The owner requested their removal.
+
+`make ci-capacity-policy` now checks independent validators, matrix widths
+15/5, and absence of static capacity mutexes. It reports weighted DAG demand
+(52 PR / 51 main) separately from admission, which remains null until
+measured. Hosted runners schedule that demand; no repository-wide capacity
+reservation is claimed. The expected manifest retains dependencies so queue
+waits can be summed along identified observed critical paths.
+
+## BR-77 policy and live qualification
+
+The revised policy keeps 23 independent package validators ready after
+`changes`, without job capacity mutexes. API/E2E retain widths 15/5 and all
+members; these widths are not a newly measured optimum. Workflow cancellation
+remains PR-only. Ordinary publishers depend on their own validators; the
+existing oauth → mcp-auth and mesh → gateway → cluster registry dependencies
+and the two existing release groups remain.
+
+E2E no longer waits on the 637–656s `typecheck-lint-api` job. The API/IdP
+typecheck, IdP build and API lint steps remain intact, parallel to E2E, and
+required in receipts and `ci-gate`. Both image publishers now depend directly
+on that job to preserve the previous promotion barrier. No required job, matrix
+member or application assertion was removed; timeouts remain unchanged. Qualification of the revised
+policy requires new completed receipts; historical slot-policy timings below
+remain failed evidence.
+
+Static admission is not timing acceptance. Use `CI_REQUIRE_CAPACITY_PROOF=1`
+and `CI_POLICY_RUN_FILES='<pr>/capture.json <main>/capture.json'` with
+`make ci-capacity-policy`. Both identified runs must complete successfully,
+carry the exact workflow policy digest retained before dispatch, and finish
+within the 2288s baseline. Historical captures without that attestation
+remain measurable but cannot qualify the new policy; mismatches fail closed.
+One must be a PR, the other a push on main. Cancelled runs, incomplete
+captures, old-policy main runs and branch dry-runs never qualify this proof.
+The prior 13/10-deep chains are rejected: run `40368572524` was still
+unfinished at 81 minutes. No final-policy timing acceptance is claimed yet.
+
+The completed replacement PR run `40402395319` is a negative timing receipt:
+source `1b5ef536885cf1f8533e88fc54dc40dbbf8c7223`, attempt 1,
+2026-10-26T21:12:34Z to 2026-10-27T02:16:18Z, success with 62 executions
+and 27 skips. Wall-clock is **18224s**, qualification endpoint 18223s,
+aggregate critical-path scheduling **17227s**, queue p50 3040s / max 7640s,
+and own execution peak 5. Classification 26s and verdict 19s also breach
+their budgets. The strict proof command rejects this attested, fresh receipt.
+The path is changes → build-ui → E2E group-c → receipts → gate; validator
+chains are gone, yet queueing still defeats the goal. This policy remains
+unqualified. A new successful PR and actual main run must each meet 2288s.
+
+Concurrent traffic snapshot at 2026-10-26T23:58:02Z retained 25 unfinished
+runs and 19 executing jobs, including two on these qualifications and 17
+elsewhere. The previous-policy main run `40390149749` completed successfully
+in 9728s; it is context, never a final-policy main receipt. Main observed at
+2026-10-27T02:04Z (`365e8b313f1c4c627c87db4f6761847a1e6a5ae7`) lacks this policy.
+
+Dispatch this branch with `capacity_publish_dry_run=true` to exercise all
+21 actual package publication jobs and their dependency guards. Each runs
+`make ci-capacity-publish-dry-run PACKAGE=<slug> ENV=test-ci-capacity`,
+which executes the existing real guarded pack and logs a run/SHA/package
+receipt. Registry writers and registry post-publication qualification steps
+are disabled only in that mode. This proves branch publication wiring after
+completion; it is not a main release receipt.
+
+On dry-run `40408883195`, cowork-desktop job `121963393513` completed its
+guarded pack after the missing-context correction, with the npm writer skipped.
+Its archive guard passed in CI/WARN mode (SHA-256
+`2f32a5346e3f87d3f02f81662197e5b5b1d226d0f8b1d1ed72f4b78f49ac2613`).
+The full chain subsequently completed as recorded below.
+
+### Completed branch publication qualification
+
+Run `40408883195`, attempt 1, source `1b5ef536885cf1f8533e88fc54dc40dbbf8c7223`,
+completed successfully from 2026-10-26T21:59:20Z to 2026-10-27T03:49:06Z:
+82 executions / 7 skips, **20986s wall-clock**, package endpoint 19557s.
+All 21 expected publishers completed their actual guarded packs; their
+identified JSON receipts, archive guards, dry-run steps and skipped registry
+writers/post-publication checks were individually verified from job logs.
+The existing mesh → gateway → cluster and oauth → mcp-auth barriers ran.
+This qualifies branch publication wiring only. It is not a main release or
+a timing pass: classification 24s, verdict 15s and scheduling 19975s all breach
+their budgets; queue p50 is 3725s / max 13700s. The strict two-receipt command
+rejects this run and PR `40402395319`; both are fresh and attested, neither
+meets 2288s, and no actual final-policy main receipt exists.
+
+The final conflict-resolution rebase onto main
+`55431a99c73ae72bcf9404c8de5b1c8375f9e39b` preserves the workflow bytes used
+by these receipts. Scoped checks passed again: 35 metrics, 21 expected-results
+and 90 publication tests. The receipts retain source `1b5ef5368`; later reader
+and documentation commits do not turn the failed timing proof into acceptance.
+
+| Guarded package archive | Job | Archive SHA-256 |
+| --- | --- | --- |
+| `@sentropic/artifacts@0.2.1` | [121971804916](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121971804916) | `fb2887d206bcaf7d5e4d85ad14173ffd3cce700e239dabf540150383c7bfe28f` |
+| `@sentropic/auth-client@0.2.0` | [121941592859](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121941592859) | `d3e3e335b987c6a963ae394836a330210c332b9fb8ff291eb65c1bfce77cce4c` |
+| `@sentropic/auth-hono@0.17.0` | [121941650645](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121941650645) | `6ed1e0353c846dbb494837aa339c096587ceba65a9220a3ed555ebe641cb5db7` |
+| `@sentropic/auth-ui@0.7.7` | [121971902312](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121971902312) | `de60dd0319fbabed2d71f4083f435135112bc8f05f6d367abd48869d862aadf1` |
+| `@sentropic/chat-core@0.1.7` | [121954141074](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121954141074) | `359c4db67acf62933930cd84013f4dbb59f20854fb5c6db6dbd1b64545244a5a` |
+| `@sentropic/chat-server@0.4.0` | [121911004270](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121911004270) | `9d6f7d5e76c477a827e8adba9ae30780b2a2f4d529b1aa45864e3a2cf6de6e92` |
+| `@sentropic/chat-ui@0.34.1` | [121939426498](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121939426498) | `939a18dd701d3f8b506a2316ccf4447eecb91c6598b5a95754fe07903b6932fb` |
+| `@sentropic/cited-source-viewer@0.2.0` | [121963262445](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121963262445) | `7fb68934503927075c40d0da6c6ad2d55f4cae16325c6bcc9f17a703600fc679` |
+| `@sentropic/cluster-mesh@0.22.4` | [121987915280](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121987915280) | `c483e033f8bdc48a1504b3bf0f135564dbd1a727ba0f7519ff762c496c2f4cf0` |
+| `@sentropic/comments@0.3.1` | [121939854960](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121939854960) | `9e40d172e1e7757e617e13b78b3f112af3abe6bf0476f06258b71378e5783769` |
+| `@sentropic/contracts@0.3.0` | [121972633449](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121972633449) | `da9bf950887256c8095a8982b5d98808f26b34b170039bd49561ecfc1daf6371` |
+| `@sentropic/cowork-bridge@0.1.1` | [121926225197](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121926225197) | `2a3ce479abf6c2b740d9ff30eec262a0f15dfba4e560d3c6dfc6ae4f3225c7c8` |
+| `@sentropic/cowork-desktop@0.2.0` | [121963393513](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121963393513) | `2f32a5346e3f87d3f02f81662197e5b5b1d226d0f8b1d1ed72f4b78f49ac2613` |
+| `@sentropic/events@0.2.1` | [121952054807](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121952054807) | `3dedd1bff6ba911460d0b04843681b31b902fe5aaadc2287fc8e4cb043194d22` |
+| `@sentropic/flow@0.2.0` | [121963540197](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121963540197) | `14f0ccc9f9d2370a22b5a52c202192aeb426d8b3f7253de9ded031842bec6c8e` |
+| `@sentropic/harness@0.4.0` | [121972258266](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121972258266) | `206267e1701694c7a2f9933a528c4938464f578c84f82c983e4825b764868a5d` |
+| `@sentropic/llm-gateway@0.21.3` | [121985278488](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121985278488) | `2ca56c61c0d341e7d2bfdc8b99fe5ca29342d47371fc8c60ff8d770903103c74` |
+| `@sentropic/llm-mesh@0.28.1` | [121976490055](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121976490055) | `c4b724f19c4ba35e9a7b7eaff5f3812e1a2513df898552e03fe74a95b871779d` |
+| `@sentropic/mcp-auth@0.2.2` | [121967865997](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121967865997) | `3aa546601a3ad444bae0058c6c21038ec1d12e905e27df1abb628eadc867d926` |
+| `@sentropic/mcp-platform@0.4.0` | [121957810793](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121957810793) | `67c9ab88ae51087a21a596facfc8330dea4c43128878c261a4136b6d458885e5` |
+| `@sentropic/oauth-verify@0.1.0` | [121952524928](https://github.com/rhanka/sentropic/actions/runs/40408883195/job/121952524928) | `91dcee3a51fafec57c34e5a5f771d9b7362e3f16a0132a4d5f90056ac0f90dad` |
+
+### Baselines and historical comparisons
+
+| Receipt | Identified observation | Acceptance |
+| --- | --- | --- |
+| New-base baseline | Main `40341027258`, attempt 1, source `440599d04e91bb33e3874588f067c6a90bffd1b3`: 89 rows, 68 measured, 21 skipped; peak 15; 211.15 runner-minutes; execution queue p50 111s, max 882s. | Jobs API baseline, not the bounded policy's result. |
+| Baseline endpoints | Qualification 2288s; selected images 2128s; preproduction 2254s; cluster publication 1879s from workflow creation. Classification job `121635441567` 18s; gate `121657161589` 14s. | Classification/verdict budgets breached; no fresh npm-publication claim. |
+| Superseded PR | `40352448337`, attempt 1, head `0a1eb32ea873a48b71833d163537719dae1e2bb1`, automatically cancelled when rollback head was pushed; 57 identified cancelled rows. Gate `121681630885` failed as required. Classification `121675860608` 21s; gate 19s. | Cancellation observed; 15s/5s budgets breached. |
+| Conservative rollback | Head `474e023163fd1be0b2f0ac7f33442c2d97dc561c`, run `40353670942`, attempt 1: one package validation lane, API/E2E 1/1; cancelled before completion. Classification `121682062979` 20s. | Drill not accepted; passing metrics job `121682975411` is insufficient. Require a completed drill and record its run ID before ticking. |
+| Concurrent release | Main `40341027258`, attempt 2, same source: completed successfully through both PR supersessions. 89 rows / 68 executions / 21 skipped; peak 12; 210.45 runner-minutes; execution queues p50 383s / max 860s. | All four selected endpoints continuous. Classification `121676338012` 19s; gate `121701213010` 19s; critical-path scheduling 1559s: all three budgets breached. |
+| Concurrent endpoints | Main attempt 2: qualification 2750s; selected images 2359s; preproduction 2534s; selected packages 2477s. Longest qualification-path wait: `smoke-idp-screens` job `121684322205`, 860s. | Completed measured delivery, not a ten-minute result or a fresh npm-publication sample. |
+| New-base release | Main `40356941217`, source `22d8a9e68b1abae2665fedb528526d2a84c6bc4d`, attempt 2 succeeded after retrying the failed 2.7-GB toolbox download in object-registry job `121708995656`; retry job `121742300480` passed. All four selected endpoints continuous; 41 measured rows and 48 skipped. | Classification 17s / verdict 24s breach 15s/5s. Mixed carried-forward execution stamps leave aggregate scheduling to-measure. Package completions before retry creation have null elapsed timing, not a fresh delivery sample. |
+
+The cancelled Jobs API rows include `runner_id: 0` with positive intervals
+(for example job `121676271575`, 15:46:09–15:52:57 UTC). These never received
+a runner: they retain cancellation identity and raw stamps but contribute
+no execution, runner cost, queue sample or peak. Missing/inverted stamps and
+pending timestamps likewise receive no invented measurement.
+
+Reproduce a completed receipt through
+`make ci-capacity-capture CI_RUN_ID=<id> CI_RUN_ATTEMPT=<attempt> ENV=test-ci-capacity`.
+Use `CI_EXPECTED_ATTEMPT` when a rerun carries the original classifier forward.
+The target fetches every Jobs API page, the source workflow and retained
+pre-dispatch manifest; absent artifacts/identity mismatches fail closed.
+It writes BR-76-format `capture.json` and `metrics.json` below
+`tmp/ci-capacity/<run>-<attempt>/`. The actual workflow revision remains null
+when unavailable; the separately identified source workflow is retained.
+
+Combine current PR, main and obsolete captures with `make ci-run-metrics`
+using `RUN_FILE=<current>/capture.json` and
+`CI_COMPETING_FILES='<main>/capture.json <obsolete>/capture.json'`.
+The combined receipt includes execution-overlap witnesses, measured peak,
+admission, superseded cancellation ownership and release continuity.
+Main's slots are already counted in that peak, so its reserve is not
+subtracted twice. Incomplete runs remain to-measure. Critical-path scheduling
+includes workflow admission (workflow creation to root job creation),
+dependency-to-dispatch handoff and queue waits; it is not the
+maximum single-job queue sample.
+
+The conservative rollback waited 189s before root job creation; main attempt
+2 waited 1s. These admission intervals are separate from job-ready queue
+samples. Absent job readiness or request stamps remain null, never replaced
+by the workflow timestamp. Main's 1559s total includes that 1s admission.
+
+Remaining branch-author acceptance: final-head complete CI/security verdict,
+new-base current-main membership and combined admission. Completed main
+attempt 2 already proves selected release continuity and measures the
+1559s scheduling breach. Quota/billed cost
+remain unavailable through the inventoried token. Unmet 15s/5s/60s budgets
+remain open; a green correctness verdict does not satisfy them.
+
+## Completed final-policy timing attempt — 2026-10-27
+
+Measurement source: `dd2737fa486985ecfa756261b26ba2323e73289f`, a merge commit
+with parents `6c95004384b61aada3f9f48d05b4128400dc87b2` and
+`2d6643692389ecbb7e5ac410e7b31a3cfbaa732a` (`origin/main`). The workflow
+policy was unchanged. Harness branch/scope checks and 35 metrics + 21
+expected-results + 90 publication tests passed before push. Both runs used
+attempt 1, completed successfully, and were allowed to finish without a push.
+
+| Receipt | Run | UTC creation → completion | Wall seconds | Qualification scheduling | Qualification execution | Finalization |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| PR | [40460101167](https://github.com/rhanka/sentropic/actions/runs/40460101167) | 06:16:16 → 07:17:17 | **3661** | 2582s | 1078s | 1s |
+| Main-like guarded-pack dry-run | [40460107095](https://github.com/rhanka/sentropic/actions/runs/40460107095) | 06:16:20 → 07:21:48 | **3928** | 2965s | 962s | 1s |
+
+Wall time is run creation to final `updated_at`; qualification ends at the
+completed `ci-gate`. Scheduling includes admission, dependency handoff and
+job creation-to-runner-start waits along that endpoint's identified path.
+Execution is the sum of runner spans on that same path; parallel jobs are
+not summed into wall time. The Jobs API does not separate mutex admission
+from hosted-runner scheduling. First runner starts were 3s/27s after creation.
+Both qualification paths are changes → typecheck-lint-api → E2E D →
+ci-capacity-receipts → ci-gate. PR membership: 89 rows, 62 executions,
+27 skips; dry-run: 89 rows, 82 executions, 7 skips. No missing execution
+timestamps or carried-forward executions; both gates succeeded.
+
+| Hotspot | PR job: queue / execution | Dry-run job: queue / execution |
+| --- | --- | --- |
+| E2E D, shared slot 3 | `122046116611`: 2571s / 357s | `122050390092`: 2119s / 268s |
+| E2E B, shared slot 1 | `122046116679`: 2374s / 264s | `122050390297`: 1830s / 232s |
+| API typecheck/lint | `122042533052`: 2s / 656s | `122042643129`: 812s / 637s |
+| Cluster Mesh validator, slot 1 | `122042534709`: 62s / 782s | `122042642781`: 1376s / 790s |
+| API chat-sync/summary/comment-assistant member | `122043986809`: 2255s / 412s | `122045883430`: 2322s / 290s |
+
+Queue p50/max: PR 223s/2571s; dry-run 834s/2322s. Slots 1/3 are also
+shared with package validators and API matrix members across both runs.
+The measured pair peaked at 15 simultaneous executions (individual peaks
+14/8); combined admission against 17 observed slots passes. This accounts
+for this pair only. A static width bound does not establish latency.
+
+All 21 dry-run publishers succeeded, each with a successful `Dry-run package
+publication` step and skipped registry writers. The package endpoint was
+3304s: 3205s scheduling + 99s execution on changes → validate-mcp-auth →
+publish-mcp-auth (`122042643284` / `122054658384`). Classification/verdict
+were 26s/18s for PR and 18s/18s for dry-run; the 15s/5s budgets still fail.
+The scheduling budget uses the maximum selected endpoint: 2582s/3205s.
+
+Retained pre-dispatch manifests: artifacts `12713454598` / `12714271150`,
+both attesting policy digest
+`26701db9bc29a11f192fccba349d4d95e6d0bfccf792482380e808f32f89466d`.
+Their ZIP SHA-256 values matched GitHub's artifact digests on download.
+Full run/jobs/workflow/manifest/capture/metrics receipts are retained locally
+in `tmp/ci-capacity/40460101167-1/` and `tmp/ci-capacity/40460107095-1/`;
+the canonical `make ci-capacity-capture` command above reproduces them.
+During collection, the CLI's public API route hit its rate limit; complete
+100-row Jobs API pages and artifacts came through the GitHub connector,
+then the unchanged capture/metrics readers ran through Make in Docker.
+
+**P1 remains open:** PR exceeds 2288s by 1373s; dry-run exceeds it by 1640s.
+`make ci-capacity-policy CI_REQUIRE_CAPACITY_PROOF=1` with these two capture
+files rejects both fresh, attested timing receipts. The requested main-like
+run is `workflow_dispatch` on the branch; it does not replace the strict
+reader's actual-main-push requirement or prove main delivery. No policy
+change or acceptance tick follows these measurements; PR #766 stays draft.
+
+## Review r2 completed measurements — 2026-10-27
+
+Source: `0dfeda7b43ffed65af8057fca1a15e7ef209b3e8`, rebased on main
+`72bb2da3d00b036e35c6dc56137aa936b7853673`. All `ci-capacity-*` job
+mutexes are removed; reference matrix widths 15/5, independent validators
+and publishers, PR cancellation and existing release groups remain.
+API/IdP quality runs beside E2E and remains required at the gate and both
+image publishers. No required job or matrix member was removed; timeouts and
+application assertions are unchanged.
+Local checks passed before dispatch: 35 metrics + 22 expected-results + 90
+publication tests, plus harness branch/scope checks.
+
+| Receipt | Run / attempt | UTC creation → completion | Wall | Critical-path scheduling | Critical-path execution | Finalization |
+| --- | --- | --- | ---: | ---: | ---: | ---: |
+| PR | [40476067709 / 2](https://github.com/rhanka/sentropic/actions/runs/40476067709/attempts/2) | 09:21:03 → 10:53:23 | **5540s** | 4765s | 774s | 1s |
+| Main-like guarded-pack dry-run | [40476084177 / 1](https://github.com/rhanka/sentropic/actions/runs/40476084177) | 08:48:23 → 10:43:52 | **6929s** | 5811s | 1117s | 1s |
+
+Both completed successfully with the unchanged 89 expanded job identities:
+PR 62 executions / 27 skips; dry-run 82 / 7. Both have zero timestamp gaps,
+unmeasured executions or carried-forward copies. Both pre-dispatch manifests
+attest policy digest
+`dfb44d98051d4a9a4b47bb9598d29d7db972ff8a1ccea87aa0a11e5611b5d2ff`.
+All 21 dry-run publisher jobs passed their real guarded packs; all registry
+writers and post-publication registry checks were skipped.
+
+PR attempt 1 failed on npm `ECONNRESET` while building the toolbox (job
+`122097352356`). It was cancelled at 09:19:44 UTC and receives no timing
+acceptance. Every job was rerun: attempt 2 is fresh throughout. From the
+original 08:48:15 trigger to the successful attempt's 10:53:23 completion,
+the PR took **7508s**, including the failed attempt and retry interval.
+Pre-rebase dispatch `40475602504` was cancelled and is also excluded.
+
+The dependency cut is observable: all five dry-run E2E members became ready
+at 09:34:02, before API quality job `122098480648` ended at 09:37:05.
+E2E D `122113514738` then waited 978s for a runner and executed for 278s.
+The PR's final critical path instead follows changes → toolbox → API
+initiative/summary member → receipts → gate. Toolbox `122109467046`
+waited 2791s and executed 290s; member `122131569102` waited 1765s and
+executed 432s. The dry-run path follows the existing release validation/train
+barriers; gateway `122118875679` accumulated 2067s of scheduling delay.
+These waits remain measured scheduling, not a claimed account-quota diagnosis.
+
+Classification/verdict: PR 18s/19s, dry-run 22s/16s, still above 15s/5s.
+Per-run executed peaks were 8/8; queue p50/max were 1501s/3214s and
+1365s/2543s. These are observations, not a runner reservation.
+Canonical captures and metrics are retained under
+`tmp/ci-capacity/40476067709-2/` and `tmp/ci-capacity/40476084177-1/`.
+The strict proof command rejects both fresh, attested timing receipts:
+they exceed 2288s by 3252s/4641s, and the branch dispatch is not main delivery.
+**P1 remains unticked; PR #766 stays draft.** No new rollback drill completed;
+its checkbox remains unticked and cancelled run `40353670942` does not qualify.
+
+## Review r3 attribution and best PR receipt — 2026-10-27
+
+Run [40492458247](https://github.com/rhanka/sentropic/actions/runs/40492458247),
+attempt 1, is a successful **PR-only** receipt on source
+`6a6da0e28e7b4e8c26ddcab3d8067c8ee4dd1b2a`: creation
+2026-10-27T10:57:19Z → final completion 2026-10-27T11:36:48Z,
+**2369s wall-clock**, 89 job rows / 62 successes / 27 skips.
+This is the best measured receipt, **81s above 2288s**. No receipt ≤2288s
+and no actual main-push receipt of this policy exists yet.
+The retained `ci-expected-40492458247-1` artifact identifies that source/run
+and attests digest `dfb44d98051d4a9a4b47bb9598d29d7db972ff8a1ccea87aa0a11e5611b5d2ff`.
+Raw run/jobs/manifest receipts are retained in
+`tmp/ci-capacity/40492458247-1/`; the table uses Jobs API timestamps.
+
+| Job | Job ID | Creation → runner wait | Execution |
+| --- | --- | ---: | ---: |
+| Classification | `122149503985` | 16s | 18s |
+| UI build | `122149750268` | 697s | 435s |
+| API quality | `122149749483` | 97s | 642s |
+| Toolbox | `122149750239` | 798s | 129s |
+| API initiative/summary member | `122156404102` | 596s | 530s |
+| E2E A | `122157892739` | 797s | 312s |
+| E2E B | `122157892827` | 911s | 234s |
+| E2E C | `122157892824` | 825s | 262s |
+| E2E D | `122157892777` | 860s | 261s |
+| E2E E | `122157892850` | 820s | 202s |
+| VSCode E2E | `122157892806` | 901s | 251s |
+| Capacity receipts | `122166044557` | 7s | 19s |
+| CI gate | `122166229913` | 3s | 20s |
+
+The qualification path is changes → build-ui → e2e-vscode → receipts → gate:
+**1626s scheduling + 743s execution = 2369s**, including two 1s dependency
+handoffs. Finalization adds 0s. Classification/verdict are 18s/20s, so the
+15s/5s budgets remain unmet; queueing still dominates the best sample.
+
+Attribution correction: dry-run `40476084177` (6929s) already ran without
+per-index mutexes. Its source `0dfeda7b4` has a `ci.yml` byte-identical to
+`6a6da0e28`; only documentation changed between those sources. The same
+policy therefore measured PR attempt 2 at 5540s, dry-run at 6929s, then PR
+at 2369s. The 6929→2369s gap comes from concurrent account load, not the fix.
+Review r3 observed about 15 other active branch runs during 08:30–10:00 UTC,
+with other branches taking 5500–6500s; comparable dispatch `40492061106`
+at 10:54 took 2359s. Removing the mutex regression is established; a timing
+gain over comparable account traffic is not. The old mutex-policy receipts
+remain 3661s/3928s. No workflow change follows from these measurements.
+
+## Strict acceptance after an owner merge GO
+
+P1 remains open. Before merge, the branch author must record a completed
+same-policy PR receipt ≤2288s; the current best is 2369s. An owner GO to
+merge with that condition unmet does not establish timing acceptance.
+The strict PR + actual-main proof can only be produced after merge:
+
+1. The BR-77 branch author captures **attempt 1 of CI on the actual push
+   of PR #766's merge SHA to `main`** using `make ci-capacity-capture
+   CI_RUN_ID=<first-main-run> CI_RUN_ATTEMPT=1 ENV=test-ci-capacity`.
+   Record run ID, merge SHA, digest, job breakdown and all selected image,
+   preproduction and package endpoint results here. Do not replace this
+   sample with a branch dispatch, later run or retry under quieter traffic.
+2. Read `wallClockSeconds`: run `created_at` to completed run `updated_at`,
+   not the sum of job durations. It must be ≤2288s, with successful, complete,
+   fresh executions and the same retained workflow policy digest as the PR.
+   Run `make ci-capacity-policy CI_REQUIRE_CAPACITY_PROOF=1
+   CI_POLICY_RUN_FILES='<pr>/capture.json <main>/capture.json' ENV=test-ci-capacity`.
+   Both receipts must independently meet the unchanged 2288s limit.
+3. **rhanka, repository owner and merge operator**, reads the main receipt,
+   job breakdown and strict command output recorded here before accepting
+   P1. A green correctness gate alone never closes timing acceptance.
+4. **Revert trigger:** the first main-push receipt exceeds 2288s, fails,
+   is cancelled, or lacks complete same-policy evidence. The branch author
+   prepares a bounded revert of BR-77's policy and reports the identified
+   run/reason to rhanka, who owns executing the revert. Preserve every gate;
+   a quiet rerun does not erase the trigger or qualify the first sample.
+
+## BR-76 retained measurements
+
 Status: measurement record with reconciled receipts (metrics +
 expected-results + docs only, per owner split decision 2026-10-19);
 account quota, registry cost, contention budgets, and the rollback drill

@@ -4,8 +4,11 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "lib": [
-      "ES2022"
+      "ES2022",
+      "DOM"
     ],
+    "rootDir": "src",
+    "outDir": "dist",
     "strict": true,
     "declaration": true,
     "declarationMap": true,
@@ -15,7 +18,6 @@
     "forceConsistentCasingInFileNames": true
   },
   "include": [
-    "src/**/*.ts",
-    "tests/**/*.ts"
+    "src/**/*.ts"
   ]
 }

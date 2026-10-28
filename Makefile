@@ -15,7 +15,7 @@ MANIFEST_PACK_RUN = $(MANIFEST_GUARD_RUN)
 MANIFEST_PACK_IMAGE = $(MANIFEST_GUARD_IMAGE)
 CM_RUN = docker run --rm --init $(CM_DOCKER_NETWORK)
 CM_RUN_IMAGE = $(LLM_MESH_NODE_IMAGE)
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-artifacts-021 test-llm-judge),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-artifacts-021 test-artifacts-022 test-llm-judge),)
 ARTIFACTS_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.immo-861.yml
 ARTIFACTS_RUN = $(ARTIFACTS_COMPOSE) run --rm --no-deps
 ARTIFACTS_RUN_IMAGE = qualification
@@ -735,6 +735,10 @@ pack-publishable-manifest: ## Real npm pack + packed-manifest guard for an alrea
 	@printf '%s' "$(PACKAGE)" | grep -Eq '^[a-z0-9][a-z0-9-]*$$' || { echo "ERROR: PACKAGE=<slug> is required"; exit 1; }
 	$(call manifest_guard_pack,$(PACKAGE))
 
+.PHONY: pack-live-speech
+pack-live-speech: ## Build and guard the L2 archive in transient container storage
+	$(call manifest_guard_pack,live-speech,. /workspace/packages/live-speech/pack.sh;)
+
 check-publishable-manifest: ## Strictly inspect one real archive TARBALL=<path> [SOURCE_MANIFEST=<path>]
 	@test -f "$(TARBALL)" || { echo "ERROR: TARBALL=<path> must be an existing file"; exit 1; }
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
@@ -825,12 +829,47 @@ check-eradicated-packages: ## Fail if cli, build-cli or focus return as sentropi
 .PHONY: ci-run-metrics ci-expected-results ci-expected-manifest test-ci-run-metrics test-ci-expected-results
 CI_METRICS_DIR ?= tmp/ci-capacity
 CI_EXPECTED_TOOLS = tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund yaml@2.8.1 >/dev/null; export CI_EXPECTED_TOOL_DIR="$$tool_dir"
+# BR77-EX2: check per-run dispatch shape; measured timing is a separate proof.
+.PHONY: ci-capacity-policy
+ci-capacity-policy: ## Check independent dispatch and matrix widths (account admission requires live evidence)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file .github/workflows/ci.yml --capacity-policy $(if $(filter 1,$(CI_REQUIRE_CAPACITY_PROOF)),--require-proof) $(foreach file,$(CI_POLICY_RUN_FILES),--proof-file $(file))'
+CI_RUN_ATTEMPT ?= 1
+CI_CAPACITY_REF ?= $(shell git branch --show-current)
+.PHONY: ci-capacity-dispatch ci-capacity-runs ci-capacity-status
+ci-capacity-dispatch: ## Dispatch this branch's package publication dry-run (never main)
+	@test -n "$(CI_CAPACITY_REF)" && test "$(CI_CAPACITY_REF)" != main
+	@gh workflow run ci.yml --repo rhanka/sentropic --ref "$(CI_CAPACITY_REF)" -f bootstrap_publish_target=none -f capacity_publish_dry_run=true
+ci-capacity-runs: ## List identified policy runs on the qualification branch
+	@gh run list --repo rhanka/sentropic --workflow ci.yml --branch "$(CI_CAPACITY_REF)" --limit 5 --json databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url
+ci-capacity-status: ## Inspect CI_RUN_ID without cancelling or retrying any job
+	@printf '%s\n' '$(CI_RUN_ID)' | awk '!/^[1-9][0-9]*$$/ { bad=1 } END { exit bad }'
+	@gh run view $(CI_RUN_ID) --repo rhanka/sentropic --json databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,jobs --jq '{databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,pendingOrFailed: [.jobs[] | select(.conclusion != "success" and .conclusion != "skipped") | {databaseId,name,status,conclusion,startedAt,completedAt}]}'
+.PHONY: ci-capacity-publish-dry-run
+ci-capacity-publish-dry-run: ## Exercise a publisher's real guarded pack without registry writes
+	@case '$(PACKAGE)' in llm-mesh|llm-gateway|cluster-mesh|chat-ui|cited-source-viewer|cowork-bridge|cowork-desktop|oauth-verify|mcp-auth|mcp-platform|artifacts|auth-hono|auth-client|auth-ui|contracts|events|chat-core|chat-server|comments|flow|harness) ;; *) echo 'Invalid dry-run package'; exit 1;; esac
+	@$(MAKE) --no-print-directory pack-$(PACKAGE) MANIFEST_REPORT_DIR=tmp/ci-capacity/publish-$(PACKAGE) ENV=$(ENV)
+	@jq -n --arg package '$(PACKAGE)' --arg run "$$GITHUB_RUN_ID" --arg sha "$$GITHUB_SHA" '{package: $$package, runId: $$run, headSha: $$sha, mode: "guarded-pack-no-publication", completed: true}' | tee tmp/ci-capacity/publish-$(PACKAGE)/dry-run.json
+CI_EXPECTED_ATTEMPT ?= $(CI_RUN_ATTEMPT)
+CI_CAPTURE_DIR ?= tmp/ci-capacity/$(CI_RUN_ID)-$(CI_RUN_ATTEMPT)
+.PHONY: ci-capacity-capture
+ci-capacity-capture: ## Capture identified completed run/attempt CI_RUN_ID=<id> and emit BR-76-format metrics
+	@printf '%s\n' '$(CI_RUN_ID)' '$(CI_RUN_ATTEMPT)' '$(CI_EXPECTED_ATTEMPT)' | awk '!/^[1-9][0-9]*$$/ { bad=1 } END { exit bad }'
+	@mkdir -p "$(CI_CAPTURE_DIR)"
+	@gh api repos/rhanka/sentropic/actions/runs/$(CI_RUN_ID)/attempts/$(CI_RUN_ATTEMPT) > "$(CI_CAPTURE_DIR)/run.json"
+	@gh api --paginate 'repos/rhanka/sentropic/actions/runs/$(CI_RUN_ID)/attempts/$(CI_RUN_ATTEMPT)/jobs?per_page=100' > "$(CI_CAPTURE_DIR)/job-pages.json"
+	@jq -s '[.[].jobs[]]' "$(CI_CAPTURE_DIR)/job-pages.json" > "$(CI_CAPTURE_DIR)/jobs.json"
+	@gh api "repos/rhanka/sentropic/contents/.github/workflows/ci.yml?ref=$$(jq -r .head_sha '$(CI_CAPTURE_DIR)/run.json')" --jq .content | base64 -d > "$(CI_CAPTURE_DIR)/workflow.yml"
+	@rm -f "$(CI_CAPTURE_DIR)/expected.json"
+	@gh run download $(CI_RUN_ID) --name ci-expected-$(CI_RUN_ID)-$(CI_EXPECTED_ATTEMPT) --dir "$(CI_CAPTURE_DIR)"
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -v "$(abspath $(CI_CAPTURE_DIR)):/receipts" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file /receipts/workflow.yml --capture-dir /receipts'
+	@$(MAKE) --no-print-directory ci-run-metrics RUN_FILE=$(CI_CAPTURE_DIR)/capture.json ENV=$(ENV) > "$(CI_CAPTURE_DIR)/metrics.json"
+	@echo "Capacity receipts: $(CI_CAPTURE_DIR)/metrics.json"
 ci-expected-manifest: ## Retain the selected workflow/member manifest before dispatch (BR76-EX2)
 	@mkdir -p "$(CI_METRICS_DIR)"
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e CI_SELECTION_CONTEXT -v "$(CURDIR):/workspace:ro" -v "$(abspath $(CI_METRICS_DIR)):/receipts" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node scripts/ci/ci-expected-results.mjs --workflow-file .github/workflows/ci.yml --manifest-file /receipts/expected.json'
 	@if [ -n "$$GITHUB_OUTPUT" ]; then printf 'attempt=%s\n' "$$GITHUB_RUN_ATTEMPT" >> "$$GITHUB_OUTPUT"; fi
 ci-run-metrics: ## Summarize one captured CI run file RUN_FILE=<path> (BR76-EX2)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-run-metrics.mjs $(if $(RUN_FILE),--run-file $(RUN_FILE),--help)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-run-metrics.mjs $(if $(RUN_FILE),--run-file $(RUN_FILE),--help) $(foreach file,$(CI_COMPETING_FILES),--competing-file $(file))
 ci-expected-results: ## Evaluate expected vs executed results EXPECTED_FILE=<json> EXECUTED_FILE=<json> (BR76-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e CI_GATE_NEEDS -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-expected-results.mjs $(if $(EXPECTED_FILE),--expected-file $(EXPECTED_FILE),--help) $(if $(EXECUTED_FILE),--executed-file $(EXECUTED_FILE),)
 test-ci-run-metrics: ## Run ci-run-metrics fixture tests in Docker (BR76-EX2)
@@ -1495,7 +1534,7 @@ build-mcp-platform: install-internal-packages ## Build @sentropic/mcp-platform d
 
 .PHONY: immo-861-build-mcp-platform freeze-types
 immo-861-build-mcp-platform: install-internal-packages
-	@case "$(ENV)" in test-861-int|test-861-gaps|test-artifacts-021) ;; *) exit 1 ;; esac
+	@case "$(ENV)" in test-861-int|test-861-gaps|test-artifacts-021|test-artifacts-022) ;; *) exit 1 ;; esac
 	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; rm -rf dist node_modules; tool_dir="$$(mktemp -d)"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 
 freeze-types:
@@ -1889,7 +1928,9 @@ test-idp-sync-sql: ## Test isolated IdP SQL and imported-client authorize accept
 		sh -ec 'npm install --prefix /tmp/idp-tools --ignore-scripts --no-audit --no-fund tsx@4.20.6 >/dev/null; /tmp/idp-tools/node_modules/.bin/tsx deploy/ci/idp-identity-sync/authorize.selftest.mjs'
 
 .PHONY: scope-check
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-sec-zod4 test-artifacts-021 test-e2-int test-resync-752 test-llm-judge),)
+include docs/governance/kit/artifact-weight.mk
+
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-artifacts-021 test-artifacts-022 test-sec-zod4 test-resync-752 test-llm-judge test-artifact-weight),)
 scope-check: ## Advisory C2 scope-check via the installed host harness (BR861-EX1, BR01-EX2)
 	@files="$$( { git diff --cached --name-only $(SCOPE_BASE); git diff --name-only $(SCOPE_BASE); } | sort -u | paste -sd, - )"; \
 	harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
@@ -2320,13 +2361,6 @@ test: test-api test-ui test-e2e ## Run all tests
 test-llm-mesh: ## Run @sentropic/llm-mesh tests
 	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-mesh/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; if [ -n "$$scope" ]; then NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 
-# BR03-EX1 — @sentropic/live-speech tests (r3 L3 local STT registry adapter).
-# Mirrors test-llm-mesh: typecheck, then vitest over tests (node env). No workspace
-# symlinks: the adapter consumes L1 contract types only and injects its engine port.
-.PHONY: test-live-speech
-test-live-speech: ## Run @sentropic/live-speech tests
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/live-speech $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/live-speech/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
-
 # BR04-EX1 — @sentropic/live-speech bench (r3 L3 bench lane; P1-5/P2-1).
 # Compiles the session to a scratch dist (never committed), installs the pinned
 # engine stack with --ignore-scripts (no cmake in the pinned image, so the native
@@ -2337,7 +2371,7 @@ test-live-speech: ## Run @sentropic/live-speech tests
 # outside the repo, so manual runs never dirty the tree).
 .PHONY: bench-live-speech
 bench-live-speech: ## Run @sentropic/live-speech bench (OUT=<receipt path>)
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/live-speech $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; out="$(OUT)"; out="$${out:-/tmp/live-speech-docker-bench.receipt.json}"; tool_dir="$$(mktemp -d)"; trap "rm -rf $$tool_dir" EXIT; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund typescript@5.4.5 @types/node faster-whisper-ts@1.2.1 onnxruntime-node@1.24.3 >/dev/null; npm install --prefix "$$tool_dir" --package-lock-only --ignore-scripts --no-audit --no-fund >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json --outDir "$$tool_dir/dist" --declaration false --sourceMap false --declarationMap false --typeRoots "$$tool_dir/node_modules/@types" || true; test -f "$$tool_dir/dist/src/node/local-stt.js" || { echo "bench: tsc emit failed" >&2; exit 1; }; mkdir -p "$$tool_dir/dist/src/node/engines"; cp src/node/stt-worker.mjs "$$tool_dir/dist/src/node/stt-worker.mjs"; cp src/node/engines/faster-whisper.mjs "$$tool_dir/dist/src/node/engines/"; node bench/run-local-bench.mjs --dist "$$tool_dir/dist/src" --install-lock "$$tool_dir/package-lock.json" --out "$$out"'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/live-speech $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; out="$(OUT)"; out="$${out:-/tmp/live-speech-docker-bench.receipt.json}"; tool_dir="$$(mktemp -d)"; trap "rm -rf $$tool_dir" EXIT; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund typescript@5.4.5 @types/node faster-whisper-ts@1.2.1 onnxruntime-node@1.24.3 >/dev/null; npm install --prefix "$$tool_dir" --package-lock-only --ignore-scripts --no-audit --no-fund >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json --rootDir . --outDir "$$tool_dir/dist" --declaration false --sourceMap false --declarationMap false --typeRoots "$$tool_dir/node_modules/@types" || true; test -f "$$tool_dir/dist/src/node/local-stt.js" || { echo "bench: tsc emit failed" >&2; exit 1; }; mkdir -p "$$tool_dir/dist/src/node/engines"; cp src/node/stt-worker.mjs "$$tool_dir/dist/src/node/stt-worker.mjs"; cp src/node/engines/faster-whisper.mjs "$$tool_dir/dist/src/node/engines/"; node bench/run-local-bench.mjs --dist "$$tool_dir/dist/src" --install-lock "$$tool_dir/package-lock.json" --out "$$out"'
 
 # BR-LB-EX1 — @sentropic/llm-gateway tests (WP16 Layer-B; owner-approved 2026-06-22).
 # Mirrors test-auth-hono: build the sibling @sentropic/llm-mesh dist, symlink it + hono +
@@ -2725,7 +2759,7 @@ up-ui: ## Start the ui stack in detached mode
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-artifacts-021 test-llm-judge),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-artifacts-021 test-artifacts-022 test-llm-judge),)
 	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans
 else
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down
@@ -3287,6 +3321,20 @@ test-%-security-sca: ## Run SCA scan (Trivy) on service (usage: make test-api-se
 test-security-parser: ## Verify security reports fail closed and preserve real findings
 	@bash -n scripts/security/security-parser.sh scripts/security/security-compliance.sh scripts/security/security-parser-test.sh
 	@bash scripts/security/security-parser-test.sh
+
+# SECDAILY-EX1: raw daily adapter; immutable scanner/DB and native SAST await S2b/S2c.
+.PHONY: security-daily-scan test-security-daily
+security-daily-scan: ## Emit a local raw receipt; incomplete coverage exits nonzero
+	@set -eu; source_sha="$$(git rev-parse --verify HEAD)"; \
+		tree_status="$$(git status --porcelain --untracked-files=normal)"; \
+		if [ -n "$$tree_status" ]; then echo 'incomplete-scan: clean source tree required (including untracked files)' >&2; exit 1; fi; \
+		docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges --memory=512m --cpus=1 --tmpfs /tmp:rw,nosuid,nodev,size=128m \
+		-u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -e SECURITY_DAILY_SOURCE_SHA="$$source_sha" \
+		-v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) \
+		sh -ec 'tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund yaml@2.8.1 semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node scripts/security/daily/scan.mjs'
+
+test-security-daily: ## Run daily inventory, schema and adapter regressions in the approved pinned Node lane
+	@$(MAKE) test-publishable-manifests MANIFEST_GUARD_IMAGE="$(MEMORY_L5_NODE_IMAGE)" SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs scripts/security/daily/scan.test.mjs" ENV=$(ENV)
 
 .PHONY: test-%-security-container
 test-%-security-container: ## Run container scan (Trivy) on service image (usage: make test-api-security-container, make test-ui-security-container)
@@ -4292,3 +4340,5 @@ memory-l5-gate: memory-l5-runtime ## L5 lot gate aggregate: lint, tooling, LOT t
 .PHONY: smoke-mcp-broker-github
 smoke-mcp-broker-github: ## Run the REAL live-network github-through-the-generic-broker smoke (BR-72 DEPTH Lot 2, BR72-EX1) — hits https://api.github.com, not hermetic
 	@docker run --rm -e GITHUB_TOKEN -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund tsx@4.19.2 >/dev/null; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsx" scripts/smoke-broker-github.mjs'
+
+-include packages/live-speech/verify.mk

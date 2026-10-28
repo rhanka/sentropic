@@ -36,8 +36,10 @@ Deliver L6a: `live-speech/src/node/{tts-registry,voice-loop,playback}.ts`, a loc
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] Integration validation: 157 tests / 18 files, source/test types, lint and package build pass through the official targets under the shared Docker flock with `ENV=test-integrator-stt-l6a`.
+- [x] Integration after L2/L4/L8: retain both independent playback suites by moving the L6a driver suite to `tests/node-playback.test.ts` and keeping the L2 core suite at `tests/playback.test.ts`; preserve this branch plan.
 - [x] No conditional path touched (no Makefile/CI changes: `test-live-speech` already covers `tests/**`, `validate-live-speech` already gates on `packages/live-speech/**`; verified with host `harness check scope`, PASS C2).
-- [ ] Docker-yield note: `make scope-check` / `make test-live-speech` start lane containers, so they wait for post-21:00 UTC; meanwhile `harness check scope` runs on the host and GitHub CI is the test gate.
+- [x] Docker-yield ended: official package tests, typecheck, lint and build pass in the integrator's dedicated test environment under the shared lock; scope is checked mechanically before the integration commit.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -68,7 +70,7 @@ Deliver L6a: `live-speech/src/node/{tts-registry,voice-loop,playback}.ts`, a loc
   - [x] Lot gate: lane `validate-live-speech` green on 07330b113 (CI run 40522166118; lane `make` runs post-21:00 UTC).
 - [x] **Lot 2 — Playback driver**
   - [x] `src/node/playback.ts` + `tests/fixtures/fake-aplay.mjs` (mode 0755): aplay backend on stdin (digest pin = vetted alsa-utils bytes, no audio files), sticky pre-spawn cancel, SIGTERM then 100 ms SIGKILL + reap.
-  - [x] `tests/playback.test.ts`: piped natural end with exact-bytes proof, fence cancel ≤150 ms with pid reaped, SIGKILL escalation path, pre-spawn cancel with positive control, nonzero exit, digest refusal.
+  - [x] `tests/node-playback.test.ts`: piped natural end with exact-bytes proof, fence cancel ≤150 ms with pid reaped, SIGKILL escalation path, pre-spawn cancel with positive control, nonzero exit, digest refusal.
   - [x] Lot gate: lane `validate-live-speech` green on 07330b113 (CI run 40522166118; lane `make` runs post-21:00 UTC).
 - [x] **Lot 3 — Voice loop**
   - [x] `src/node/voice-loop.ts`: chunked narration (120-char clause flush, truncated flag), VAD/key/stop barge-in with mic-mode gating, epoch floor (L2 fence seam), default sensitive guard, speak/played/cancelled/error outcomes, hygiene (no retained audio, no files).
