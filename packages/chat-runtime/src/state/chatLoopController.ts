@@ -972,3 +972,143 @@ export type ChatLoopController<
    *   - Updates defaultProviderIdForNewSession + defaultModelIdForNewSession.
    *   - If no session is active, also updates the current selection.
    *
+   * @param sessionId — pass `null` when there is no active session (controls
+   *   whether the current selection is also updated).
+   */
+  applyUserDefaults(
+    providerId: ModelProviderId,
+    modelId: string,
+    opts: { sessionId: string | null },
+  ): void;
+
+  /**
+   * Reset model selection to the stored session defaults (slice 1F).
+   * Call on new-session creation or session deletion.
+   */
+  resetModelSelectionToDefaults(): void;
+};
+
+// ---------------------------------------------------------------------------
+// Implementation
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a headless projection controller for the chat loop.
+ *
+ * This slice owns: messages, initialEventsByMessageId, projectedStreamEventsById,
+ * the signature cache, and the projected timeline.
+ *
+ * Type parameters:
+ *   Message        — extends ChatProjectionMessage (caller's LocalMessage type)
+ *   RuntimeSummary — per-message runtime summary (caller's RuntimeSegmentSummary type)
+ */
+export function createChatLoopController<
+  Message extends ChatProjectionMessage = ChatProjectionMessage,
+  RuntimeSummary = unknown,
+>(): ChatLoopController<Message, RuntimeSummary> {
+  // -------------------------------------------------------------------------
+  // Internal mutable state (not exposed directly — only via snapshot/subscribe)
+  // -------------------------------------------------------------------------
+  let messages: Message[] = [];
+  let initialEventsByMessageId = new Map<string, ControllerStreamEvent[]>();
+  let projectedStreamEventsById = new Map<string, ControllerStreamEvent[]>();
+  let projectedAssistantComputationByMessageId = new Map<
+    string,
+    ProjectedAssistantComputationCached
+  >();
+  let projectionEventsVersion = 0;
+  let projectedTimelineItems: ReadonlyArray<
+    ChatProjectedTimelineItem<Message, RuntimeSummary>
+  > = [];
+
+  // -------------------------------------------------------------------------
+  // Stream subscription state (slice 1C)
+  // -------------------------------------------------------------------------
+  let streamHubKey: string | null = null;
+  let attachedClient: ControllerStreamClient | null = null;
+  let attachedPollJob: ControllerPollJob | null = null;
+  let attachedOnProjectionEvent: ((streamId: string) => void) | null = null;
+  let attachedOnTerminal: ((streamId: string, outcome: 'done' | 'error') => void) | null = null;
+  let attachedPollTimeoutMs = 60_000;
+  let attachedPollInitialDelayMs = 750;
+  let attachedPollIntervalMs = 800;
+  const jobPollInFlight = new Set<string>();
+
+  const listeners = new Set<
+    (state: ChatLoopProjectionState<Message, RuntimeSummary>) => void
+  >();
+
+  // -------------------------------------------------------------------------
+  // Local-tool machine state (slice 1E)
+  // -------------------------------------------------------------------------
+  let ltExecuteLocalTool: ControllerLocalToolExecutorFn | null = null;
+  let ltMachineGeneration = 0;
+  let ltDecideLocalToolPermission: ControllerLocalToolPermissionDeciderFn | null = null;
+  let ltPostLocalToolResult: ControllerLocalToolResultPosterFn | null = null;
+  let ltIsLocalToolName: ((name: string) => boolean) | null = null;
+  let ltIsLocalToolRuntimeAvailable: (() => boolean) | null = null;
+  let ltIsLocalToolPermissionRequired: ((error: unknown) => boolean) | null = null;
+  let ltGetPermissionRequest: ((error: unknown) => ControllerLocalToolPermissionPrompt['request']) | null = null;
+
+  const ltLocalToolStatesById = new Map<string, ControllerLocalToolStreamState>();
+  const ltLocalToolInFlight = new Set<string>();
+  const ltLocalToolExecutionTimersById = new Map<string, ReturnType<typeof setTimeout>>();
+  let ltPendingLocalToolPermissionPrompts: ControllerLocalToolPermissionPrompt[] = [];
+  const ltLocalToolPermissionRetriesInFlight = new Set<string>();
+
+  // -------------------------------------------------------------------------
+  // Steer state (slice 1F)
+  // -------------------------------------------------------------------------
+  let steerOptimisticMessages: ControllerOptimisticSteerMessage[] = [];
+  let steerComposerAck: ComposerSteerAck | null = null;
+  let steerAckTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // -------------------------------------------------------------------------
+  // Model catalog state (slice 1F)
+  // -------------------------------------------------------------------------
+  let mcProviders: ModelCatalogProvider[] = [];
+  let mcModels: ModelCatalogModel[] = [];
+  let mcGroups: ModelCatalogGroup[] = [];
+  let mcSelectedProviderId: ModelProviderId = 'openai';
+  let mcSelectedModelId = 'gpt-4.1-nano';
+  let mcDefaultProviderId: ModelProviderId = 'openai';
+  let mcDefaultModelId = 'gpt-4.1-nano';
+
+  // -------------------------------------------------------------------------
+  // Snapshot construction — always returns a new object reference
+  // -------------------------------------------------------------------------
+  const buildSnapshot = (): ChatLoopProjectionState<Message, RuntimeSummary> => ({
+    messages,
+    initialEventsByMessageId,
+    projectedStreamEventsById,
+    projectionEventsVersion,
+    projectedTimelineItems,
+    localToolStatesById: ltLocalToolStatesById,
+    pendingLocalToolPermissionPrompts: ltPendingLocalToolPermissionPrompts,
+    // Steer (slice 1F)
+    optimisticSteerMessages: steerOptimisticMessages,
+    composerSteerAck: steerComposerAck,
+    // Model catalog (slice 1F)
+    modelCatalogProviders: mcProviders,
+    modelCatalogModels: mcModels,
+    modelCatalogGroups: mcGroups,
+    selectedProviderId: mcSelectedProviderId,
+    selectedModelId: mcSelectedModelId,
+    defaultProviderIdForNewSession: mcDefaultProviderId,
+    defaultModelIdForNewSession: mcDefaultModelId,
+  });
+
+  let currentSnapshot = buildSnapshot();
+
+  // -------------------------------------------------------------------------
+  // Notification — rebuild snapshot, then call all listeners
+  // -------------------------------------------------------------------------
+  const notify = () => {
+    currentSnapshot = buildSnapshot();
+    for (const listener of listeners) {
+      listener(currentSnapshot);
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // Timeline recomputation (called after any state mutation)
