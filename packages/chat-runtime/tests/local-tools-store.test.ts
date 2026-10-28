@@ -327,3 +327,54 @@ describe('@sentropic/chat-ui local tools — external host registration seam', (
       { ...RENDER_MERMAID, name: 'render_mermaid' },
       { ...RENDER_MERMAID, name: 'render_chart', description: 'Chart.' },
     ]);
+    const registered = listRegisteredLocalTools().map((t) => t.name);
+    expect(registered).toEqual(['render_mermaid', 'render_chart']);
+  });
+
+  it('overrides a built-in definition by name without removing recognition', () => {
+    registerLocalTool({
+      name: 'tab_read',
+      description: 'Host-overridden tab_read.',
+      parameters: { type: 'object', properties: {} },
+    });
+    const defs = getLocalToolDefinitions();
+    // No duplicate tab_read entry — deduped by name.
+    expect(defs.filter((t) => t.name === 'tab_read')).toHaveLength(1);
+    expect(defs.find((t) => t.name === 'tab_read')?.description).toBe(
+      'Host-overridden tab_read.',
+    );
+    // Built-in recognition cannot be removed via the registry.
+    unregisterLocalTool('tab_read');
+    expect(isLocalToolName('tab_read')).toBe(true);
+  });
+
+  it('unregister and clear restore the pre-registration recognition state', () => {
+    registerLocalTool(RENDER_MERMAID);
+    expect(isLocalToolName('render_mermaid')).toBe(true);
+    expect(unregisterLocalTool('render_mermaid')).toBe(true);
+    expect(isLocalToolName('render_mermaid')).toBe(false);
+    expect(unregisterLocalTool('render_mermaid')).toBe(false);
+
+    registerLocalTool(RENDER_MERMAID);
+    clearRegisteredLocalTools();
+    expect(isLocalToolName('render_mermaid')).toBe(false);
+    expect(listRegisteredLocalTools()).toEqual([]);
+  });
+
+  it('trims the registration key (whitespace-only names rejected)', () => {
+    registerLocalTool({ ...RENDER_MERMAID, name: '  render_mermaid  ' });
+    expect(isLocalToolName('render_mermaid')).toBe(true);
+    expect(() =>
+      registerLocalTool({ ...RENDER_MERMAID, name: '   ' }),
+    ).toThrow(/non-empty tool name/i);
+  });
+
+  it('returns defensive copies from listRegisteredLocalTools', () => {
+    registerLocalTool(RENDER_MERMAID);
+    const snapshot = listRegisteredLocalTools();
+    snapshot[0]!.description = 'mutated';
+    expect(listRegisteredLocalTools()[0]!.description).toBe(
+      RENDER_MERMAID.description,
+    );
+  });
+});
