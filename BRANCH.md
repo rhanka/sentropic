@@ -86,8 +86,8 @@
   - [x] Split restart into a second process (`write` then `reopen`); assert exact u64 epoch advance with decimal `BigInt` comparison; drop schema only after phase 2.
   - [x] Clean consumer and artifacts before staging; retain consumer `package.json` and `package-lock.json` next to the receipt; record `npm --version`; clean `dist` before pack; no fallback PG image; record qualification image ID; assert every type file stays under `/consumer/`.
   - [x] Remove version stamping in the lane; assert the committed workspace version equals `0.24.0-dev.1`; bind the cluster-mesh tarball by sha256.
-  - [ ] Lot 6 evidence from #709: `missing source` in this branch unless transferred; record the conductor disposition in the PR body.
-  - [ ] Rerun the installed lane on the exact head, retain the receipt, push, and require CI green on the exact head.
+  - [x] Lot 6 evidence from #709: `missing source` in this branch unless transferred; record the conductor disposition in the PR body.
+  - [x] Rerun the installed lane on the exact head, retain the receipt, push, and require CI green on the exact head.
 - [ ] **Lot 1 — Ordered merges**
   - [x] Merge #758, #763, #765, #775, #779, #764, #793, #792, #790; all heads retained; no lot excluded.
   - [x] Preserve P3 manifest 1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730 and Engram 0.22.0 tarball 26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10; both checked with sha256sum.
@@ -101,6 +101,9 @@
 
 ## Feedback Loop
 - [x] E10 installed lane green on `b8bb6fa6a`: exit=0, cleanup=0; capture, admission, record read, restart and exact replay pass on the injected PostgreSQL; five refusals recorded (missing driver, missing pool, wrong driver identity, storage without provider, missing profile). Receipt `packages/cluster-mesh/tests/engram-memory/installed-receipt.json` sha256 `703c39bc514881361436868b94fc417f72cce15ecf0e3e8cb2b1f2ca054955d5`; campaign receipts under `tmp/installed-memory-e10/`.
+- [x] E10 takeover lane green on `1eb052fe6`: exit=0, cleanup=0; write and reopen in two processes on the injected PostgreSQL; exact u64 epoch advance `1` to `2`; seven typed refusals recorded (missing driver, missing pool, wrong driver identity, storage without provider, live wrong driver, assembly missing driver, missing profile). Receipt `packages/cluster-mesh/tests/engram-memory/installed-receipt.json` sha256 `8bb6ad1a3fff5a6e657c148f41db97834df118e10fccd7f277b154d4115d6225`; cluster-mesh tarball sha256 `4799bcc39944b7d487cf1f4b6d5b628a5c4556a068918a5ffb36db54348bd8cc`; campaign receipts under `tmp/installed-memory-e10/`.
+- [x] Lot 6 evidence from #709: dedicated evidence artifact is `missing source` in this branch; the E6 successor files transferred through the integration merge are the retained transfer, and no separate Lot 6 evidence file is claimed. Conductor disposition is recorded in the PR body.
+- [x] Five profiles are `declared` only in the receipt; `fiveProfileEquivalence` is `not-covered` (Stage B blocked, E9 #790, 23 cases); the neutral handle glue is `host-authored-not-installed` and the tuple coverage for that glue is `partial`.
 - [x] E10 bridge finding: the frozen substrate persists K7/K8 proofs and journal events in snake-case wire form while the installed kernel validator checks the camel-case proof model and an intent hash. The installed bridge translates those values in both directions (K7/K8 aggregates, journal intent hash carried only in stored bytes, K7 receipt digest rejoined from the pending control at read). No source change; the equivalent validator-side adaptation remains with the E6/E9 owners.
 - [x] Owner authorization covers all listed approved lots and the E9 API adaptation.
 - [x] BR1-EX1 implemented: existing qualification routes accept test-mem-batch1, preserve Compose cleanup and guard the exact approved P3 bytes; no Compose/workflow file changes.
