@@ -58,3 +58,143 @@ export const BUILTIN_LOCAL_TOOL_NAMES = [
   'ls',
   'rg',
   'file_read',
+  'file_edit',
+  'git',
+  'git_status',
+  'git_diff',
+] as const;
+
+/**
+ * Open local-tool name type. Known built-ins keep IDE autocompletion; the
+ * `(string & {})` member accepts any host-registered tool name (e.g.
+ * `render_mermaid`). Mirrors `StreamHubEventType` in `client/streamTypes.ts`.
+ *
+ * Evolution note: additive at runtime, type-widening at compile time. The 16
+ * built-ins keep working identically; the only compile-time impact is that
+ * `never`-exhaustiveness over `LocalToolName` no longer narrows (the open
+ * member is intentional for the host-extension seam).
+ */
+export type LocalToolName = (typeof BUILTIN_LOCAL_TOOL_NAMES)[number] | (string & {});
+
+export type LocalToolExecutionStatus =
+  | 'pending'
+  | 'executing'
+  | 'awaiting_permission'
+  | 'completed'
+  | 'failed';
+
+export type LocalToolPermissionDecision =
+  | 'allow_once'
+  | 'deny_once'
+  | 'allow_always'
+  | 'deny_always';
+
+export type LocalToolPermissionPolicy = 'allow' | 'deny';
+
+export type LocalToolPermissionRequest = {
+  requestId: string;
+  toolName: string;
+  origin: string;
+  tabId?: number;
+  tabUrl?: string;
+  tabTitle?: string;
+  details?: Record<string, unknown>;
+};
+
+export type LocalToolDefinition = {
+  name: LocalToolName;
+  description: string;
+  parameters: Record<string, unknown>;
+};
+
+export type LocalToolExecution = {
+  toolCallId: string;
+  streamId?: string;
+  name: LocalToolName;
+  args: unknown;
+  status: LocalToolExecutionStatus;
+  result?: unknown;
+  error?: string;
+  permissionRequest?: LocalToolPermissionRequest;
+  updatedAt: number;
+};
+
+export type LocalToolPermissionPolicyEntry = {
+  toolName: string;
+  origin: string;
+  policy: LocalToolPermissionPolicy;
+  pathPattern?: string | null;
+  updatedAt: string;
+};
+
+export class LocalToolPermissionRequiredError extends Error {
+  request: LocalToolPermissionRequest;
+
+  constructor(request: LocalToolPermissionRequest) {
+    super('Local tool execution requires explicit user permission.');
+    this.name = 'LocalToolPermissionRequiredError';
+    this.request = request;
+  }
+}
+
+type LocalToolsState = {
+  available: boolean;
+  tools: LocalToolDefinition[];
+  executions: Record<string, LocalToolExecution>;
+};
+
+const CHROME_LOCAL_TOOL_DEFINITIONS: ReadonlyArray<LocalToolDefinition> = [
+  {
+    name: 'tab_read',
+    description:
+      'Read active-tab data with mode=info|dom|screenshot|elements (screenshot defaults to PNG for readability).',
+    parameters: {
+      type: 'object',
+      properties: {
+        mode: {
+          type: 'string',
+          enum: ['info', 'dom', 'screenshot', 'elements'],
+        },
+        format: {
+          type: 'string',
+          enum: ['png', 'jpeg'],
+        },
+        selector: { type: 'string' },
+        includeHtml: { type: 'boolean' },
+        quality: { type: 'integer', minimum: 1, maximum: 100 },
+        maxElements: { type: 'integer', minimum: 1, maximum: 500 },
+      },
+      required: ['mode'],
+    },
+  },
+  {
+    name: 'tab_action',
+    description: 'Execute one or multiple tab actions (scroll|click|type|wait).',
+    parameters: {
+      type: 'object',
+      properties: {
+        timeoutMs: { type: 'integer', minimum: 1000, maximum: 120000 },
+        action: {
+          type: 'string',
+          enum: ['scroll', 'click', 'type', 'wait'],
+        },
+        waitMs: { type: 'integer', minimum: 0, maximum: 60000 },
+        direction: { type: 'string', enum: ['up', 'down', 'top', 'bottom'] },
+        pixels: { type: 'integer', minimum: 1, maximum: 20000 },
+        selector: { type: 'string' },
+        text: { type: 'string' },
+        exact: { type: 'boolean' },
+        clear: { type: 'boolean' },
+        x: { type: 'number' },
+        y: { type: 'number' },
+        actions: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              action: {
+                type: 'string',
+                enum: ['scroll', 'click', 'type', 'wait'],
+              },
+              waitMs: { type: 'integer', minimum: 0, maximum: 60000 },
+              direction: {
