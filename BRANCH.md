@@ -46,9 +46,10 @@
 ## Feedback Loop
 - [x] BR-W4B-EX3: retire the unused sanitizing MCP source and its tests, move ToolHandlerSource to execution-seam.ts, remove runtime registration and correct standalone-source comments. Rationale: W4.b requires one compiled-registry MCP source and the owner forbids legacy fallback. Impact: removes dormant exports only; production uses host-registry. Rollback: revert this bounded retirement series, restoring the old files and wiring together.
 - [x] P2-1: intended W4.a boundary: turn effects are bound to conversation + current account/tenant/workspace membership, not login-session liveness; logout or login-session expiry does not revoke a running turn. Conversation deletion/move, disabled account and membership revocation still deny effects. W3.a/W5.c may tighten this separately; no session policy change in W4.b.
-- [ ] P1 revision: guard the sole MCP source and remove the legacy source/tests in atomic commits below 150 changed lines, then rerun exact-head qualification.
+- [x] P2-2: retain the two awaits of the same public immutable plan: model selection needs compiled names before freezing its allowlist, while authority resolution/revalidation must initialize independently for HTTP and executor-only callers. Removing the second call would change that initialization contract; no duplicated effect or private view is prepared.
+- [x] P1 revision: sole-source and absence guards added; legacy source/tests and runtime registration deleted in commits below 150 changed lines. Local same-SCOPE qualification passes; final pushed SHA requires its own green CI run before delivery.
 - [x] P1 wiring: ToolHandlerSource belongs to the execution seam; production registers host-registry as the sole MCP source and exposes no runtime MCP registration API.
-- [x] P1 retirement step 1: removed legacy allow/deny, default-off and health tests; host-registry acceptance remains authoritative.
+- [x] Revision qualification: 352/352 tests in 21 suites (the retired source had 29 tests; one absence guard was added), API typecheck passes, lint has 0 errors/220 warnings. Official make scope-check passes, runtime logs inspected, and make down ENV=test-app-w4b completed. Evidence: `/tmp/pr807-revision-qualification.log`; full test/lint summaries retained by RTK recall `3d041a21d8e3` / `bf6ecebcbf37`.
 - [x] BR-W4B-EX1: integration PRs do not trigger ci.yml. Add branch-specific exact-head qualification using existing make targets and teardown, without publication/deployment. Rollback removes workflow.
 - [x] Exact-head CI workflow authored with catalog, context, credential, registry, installation and HTTP/MCP regression suites, API types/lint and unconditional isolated-stack teardown.
 - [x] Acceptance tests committed before implementation (`a91ca8139`, `02d74a6b3`); initial execution queued behind the machine-wide Docker lock. Implemented source and workspace-bound turn reader while awaiting the serialized test lane; no observed red result claimed.
@@ -59,7 +60,7 @@
 - [x] CI on earlier head `04bece0ed8e4266f759ad7dbc0c1f204abfc5627` passed: https://github.com/rhanka/sentropic/actions/runs/40619906074 . It does not qualify the later caller correction; the final pushed SHA must pass its own run before author delivery.
 - [ ] Integration gate: independent final-head reviews remain conductor-owned after this code-author draft delivery; no merge clearance is claimed.
 
-- [x] P1 retirement progress: 9 bounded removal commits; final deletion and qualification pending.
+- [x] P1 retirement complete: 9 bounded removal commits; no legacy MCP source, sanitizer or registration entry point remains in production code.
 
 ## AI Flaky tests
 - [x] No AI-dependent acceptance or timeout increases.
