@@ -316,3 +316,96 @@ HIGH/CRITICAL scan/compliance gate to the browser artifact. This preserves the
 browser coverage formerly provided by the larger API toolbox. Existing scans,
 ci-gate membership and publication/restore barriers remain enforced; no register
 exception, scanner threshold, assertion or timeout is relaxed.
+
+### BR-78 continuation: browser remediation and UI timing
+
+The initial browser-covered head `7b62ad02a` fails the existing HIGH/CRITICAL
+gate: PR [40646332385](https://github.com/rhanka/sentropic/actions/runs/40646332385)
+attempt 1, scan 122678494699, refuses 102 findings. Cold dispatch
+[40646328430](https://github.com/rhanka/sentropic/actions/runs/40646328430)
+also fails that gate. The earlier green `9d7c58cab` does not qualify this coverage.
+
+| Producer / consumer | 7b62 PR job / seconds | 7b62 cold job / seconds |
+| --- | --- | --- |
+| API | 122676009845 / 80 | 122676032511 / 246 |
+| Toolbox | 122676009646 / 87 | 122676032393 / 233 |
+| Full UI | 122676009766 / 421 | 122676032501 / 505 |
+| Browser | 122676009049 / 97 | 122676031311 / 164 |
+| Container gate | 122678494699 / 183, failure | 122680288141 / 329, failure |
+| Restore | 122677167776 / 168 | 122679853836 / 175 |
+| ci-gate | 122682967025 / 28, failure | 122688318784 / 18, failure |
+
+Rejected Trixie candidate `57c5d03fe`, run
+[40652025952](https://github.com/rhanka/sentropic/actions/runs/40652025952)
+attempt 1, fails with 57 OS findings lacking a Debian FixedVersion (scan
+122698285457 / 195s); bundled npm is clean. API/tools/UI/browser/restore jobs
+122694620184/122694620317/122694620385/122694619748/122696016656 take
+87/89/424/343/171s; ci-gate 122701111297 fails in 18s. No exception was added.
+
+The replacement uses pinned Node 24/Alpine 3.24, native Chromium and headless
+shell `155.0.8059.84-r0`, and FFmpeg `8.1.3-r0`. It omits unused engines/Xvfb,
+flattens the prepared filesystem while retaining apk scanner metadata, and
+registers the native executables through the locked Playwright registry.
+Build probes assert both engines' DOM title, screenshot and nonempty video.
+At `8bfd472f7`, job 122704840141 passes these probes; its browser artifact is
+517,331,610 bytes versus 774,218,936 bytes at `7b62ad02a`. First cache export
+still takes 178.8s; this is not a fully warm timing sample.
+
+Run [40655027953](https://github.com/rhanka/sentropic/actions/runs/40655027953)
+attempt 1 is superseded/cancelled after scan 122708320165 / 175s refuses two
+instances of CVE-2026-14456 in inherited libcrypto3/libssl3 3.5.7-r0.
+Trivy's fixed version is 3.5.8-r0; the live Alpine index provides 3.5.9-r0,
+which the Dockerfile now explicitly requires. API/tools/UI/browser/restore
+jobs 122704841279/122704841426/122704841128/122704840141/122706494384 take
+78/85/418/310/180s. ci-gate 122710829111 fails in 19s. The patched candidate
+requires fresh qualification; no register or severity change accepts either CVE.
+Patched producer 122711504732 at `c8d6fd2cc` explicitly upgrades both libraries
+to 3.5.9-r0 and passes the two browser probes; its compressed artifact is
+517,286,222 bytes. Only a completed exact-head scan/journey run can qualify it.
+
+The unchanged 83-file / 489-test UI suite now executes inside BuildKit with
+`--no-cache-filter=ui-tests`, rather than exporting/loading a development
+image. Test-step time falls from 87s to 37s (38s on the first candidate).
+Both profile builds and their embedded-output assertions remain blocking.
+Source COPY excludes API/browser changes and desktop packaging staging files.
+
+Identified cold UI job 122707557109, run
+[40656087209](https://github.com/rhanka/sentropic/actions/runs/40656087209)
+attempt 1 at `8bfd472f7`, completes in **329s**, versus the earlier 505s.
+It includes desktop 28s, production image 113s, fresh tests 36s, static profile
+106s, plus setup/save/uploads/cleanup. Browser 122707555892 takes 124s;
+API/toolbox 122707557086/122707557180 take 237/231s. These completed producer
+measurements do not qualify the old browser's security or meet 210s.
+
+**The full UI timing budget remains unmet.** Even its two cold build steps
+alone total 219s, before fresh tests, desktop packaging or transfer. In the
+cache-enabled 418s UI job, the builds take 180/133s, including 37.5/59.4s
+cache exports; production also spends 51.8s materializing cached dependencies.
+Independent scheduling belongs to BR-79; removing either profile/test is forbidden.
+
+There is also a measured warm-cache blocker: runs 40652025952 and 40655027953
+use the same main base `ea20bd9c026e9717d911514e763f8911b6981dde` and identical
+tracked UI/desktop/package sources, but their published `cowork.exe` SHA-256s
+are `647f409155cf930fdd6c326486c1128cb26162ed0f56dd3932e56e069a685568`
+and `6a6240346f31a27b962d15b47af1feefc9040a92b444ab1e8efa119007df5445`.
+Their metadata SHA-256 is identical:
+`fd1ad5eb2b08cef0841a7860b112a9c417c750caf406aef5792ee46cd47f75e3`.
+Consequently `COPY ui` misses and both profiles recompile despite unchanged
+tracked sources. The packager resolves native dependency ranges and emits pkg
+bytecode; this evidence establishes unstable output, not which of those mechanisms
+causes it. Owner: desktop-package maintainer, assignment pending. The remaining
+bounded work is a reproducible desktop closure, verified
+by equal output digests on repeated identical inputs and actual Windows runtime
+qualification, then complete warm/cold UI reruns without removing assertions.
+
+Superseded continuation runs 40651336571, 40651731668, 40654285195 and
+40657002180 remain cancelled. Dispatch 40654322669 is cancelled after browser
+job 122701728553 fails in 39s on a removed Playwright internal import; the
+locked package's exported coreBundle registry replaces it. Cancelled/unstarted
+jobs are not timing passes. Full run/job/step JSON and per-job TSV receipts are
+retained under `.tmp/ci-br78/receipts/<run-id>/` in the owner workspace; container
+uploads now explicitly retain their hidden `.security` report files.
+Final exact-head run/job/step receipts are generated after completion, alongside
+the workflow's `ci-capacity-<run-id>-<attempt>` artifact. They identify the actual
+head and checkout source separately; a documentation commit never inherits a
+green verdict from the prior head.
