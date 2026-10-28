@@ -9,8 +9,11 @@
 import { cleanup, fireEvent, render } from '@testing-library/svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import ChatPanelShell from '../src/components/ChatPanelShell.svelte';
+import { createCommentRuntime } from '@sentropic/chat-runtime/comments';
+import { getCommentAuthorLabel, getMentionLabel } from '../src/comments/index.js';
 
-afterEach(cleanup);
+const commentRuntimes: ReturnType<typeof createCommentRuntime>[] = [];
+afterEach(() => { cleanup(); for (const runtime of commentRuntimes.splice(0)) runtime.dispose(); });
 
 const LABELS = (key: string) => key;
 
@@ -97,10 +100,13 @@ describe('ChatPanelShell (gold shell assembly)', () => {
       currentUser: () => null,
       subscribeCommentUpdates: () => () => {},
     } as never;
+    const commentState = createCommentRuntime(commentHost, { getCommentAuthorLabel, getMentionLabel });
+    commentRuntimes.push(commentState);
     const props = {
       mode: 'comments' as const,
       labels: LABELS,
       commentHost,
+      commentState,
       workspaceCanComment: false,
       commentContextType: 'initiative',
       commentContextId: 'initiative-1',
