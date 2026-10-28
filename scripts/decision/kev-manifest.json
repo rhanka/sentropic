@@ -21,7 +21,7 @@
     "backend": "CPU",
     "platform": "linux-x64",
     "license": "MIT",
-    "provenance": "GitHub release asset digest; independent build attestation unverified"
+    "provenance": "GitHub release digest and verified distribution attestation; compilation provenance and reproducibility unverified"
   },
   "serving": {
     "endpoint": "http://127.0.0.1:8797/v1/systemone",

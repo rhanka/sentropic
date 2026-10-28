@@ -18,7 +18,7 @@ The machine-readable source is `scripts/decision/kev-manifest.json`. The library
 | Server SHA-256 | `d198b4a5156c34279cf75346451d2e17acafa8188edee4d00e3042a727f01259` |
 | Server implementation SHA-256 | `e9617b6f102a7301dd9b417726e6972234b6fa68e02b14b9874f689abfd8ba7a` |
 
-The provisioning target re-reads the immutable HF LFS pointer and GitHub release metadata, verifies their declared tuple, verifies downloaded bytes, and compares extracted runtime file contents against the verified archive. GitHub's release digest identifies the publisher's archive; an independent build attestation, reproducible build and complete compiler/toolchain provenance are unverified. The archive's MIT notice stays beside its binaries. This release qualification does not transfer an audit of the existing application stack to llama.cpp.
+The provisioning target re-reads the immutable HF LFS pointer and GitHub release metadata, verifies their declared tuple, verifies downloaded bytes, and compares extracted runtime file contents against the verified archive. The separate provenance target verified the archive's GitHub distribution attestation with GitHub CLI 2.103.3, pinned archive SHA-256 `4c806978ffce1cec70853302a56d70ac6da4f19bae7adca4e1a8ab00633dd91d`. Verification constrains the signer repository to `ggml-org/llama.cpp` and rejects self-hosted runners. The signed statement names the selected archive digest and the `release-publish.yml` workflow, invocation `40672258185`, publication workflow commit `e486a4b559617dc88bf79978996f6c670b6bbc9d`. This distribution statement does not independently attest compilation from the release source commit: reproducibility and complete compiler/toolchain provenance remain unverified. The archive's MIT notice stays beside its binaries. This release qualification does not transfer an audit of the existing application stack to llama.cpp.
 
 Sources: [immutable HF LFS pointer](https://huggingface.co/ggml-org/Kev-4B-GGUF/raw/f4624b6bb7072f1bab726a622c1cad3f96030b9e/Kev-4B-Q8_0.gguf), [immutable model card](https://huggingface.co/ggml-org/Kev-4B-GGUF/blob/f4624b6bb7072f1bab726a622c1cad3f96030b9e/README.md), [runtime release](https://github.com/ggml-org/llama.cpp/releases/tag/b11954), [pinned System One contract](https://github.com/ggml-org/llama.cpp/blob/f1a7dea99aae1623bad10c4ce31fe220033ab7f6/tools/server/README.md#post-v1systemone-typesafe-compatible-system-one-api).
 
@@ -42,12 +42,13 @@ Local accounting requires a host-authoritative positive bounded `call-rate` tari
 
 ## Opt-in local procedure
 
-All make invocations use `ENV=test-decision-l4` last and ports `API_PORT=8797 UI_PORT=5197 MAILDEV_UI_PORT=1097`. Run container checks/builds under `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock`; the two local targets acquire that same lock internally. Never wrap these two self-locking targets in another flock.
+All make invocations use `ENV=test-decision-l4` last and ports `API_PORT=8797 UI_PORT=5197 MAILDEV_UI_PORT=1097`. Run container checks/builds under `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock`; the provisioning, provenance and smoke targets acquire that same lock internally. Never wrap these self-locking targets in another flock.
 
 1. `make decision-kev-provision API_PORT=8797 UI_PORT=5197 MAILDEV_UI_PORT=1097 ENV=test-decision-l4`
-2. `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make build-llm-mesh API_PORT=8797 UI_PORT=5197 MAILDEV_UI_PORT=1097 ENV=test-decision-l4`
-3. `make decision-kev-smoke API_PORT=8797 UI_PORT=5197 MAILDEV_UI_PORT=1097 ENV=test-decision-l4`
-4. `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make down API_PORT=8797 UI_PORT=5197 MAILDEV_UI_PORT=1097 ENV=test-decision-l4`
+2. `make decision-kev-verify-provenance API_PORT=8797 UI_PORT=5197 MAILDEV_UI_PORT=1097 ENV=test-decision-l4`
+3. `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make build-llm-mesh API_PORT=8797 UI_PORT=5197 MAILDEV_UI_PORT=1097 ENV=test-decision-l4`
+4. `make decision-kev-smoke API_PORT=8797 UI_PORT=5197 MAILDEV_UI_PORT=1097 ENV=test-decision-l4`
+5. `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make down API_PORT=8797 UI_PORT=5197 MAILDEV_UI_PORT=1097 ENV=test-decision-l4`
 
 The cache is shared across worktrees at `/home/antoinefa/src/sentropic/tmp/cache/decision-v4l4`; the model occupies one file. Provisioning never deletes unrelated cache entries. Local targets reject `CI`/`GITHUB_ACTIONS` and any other environment. The smoke refuses occupied ports, owns one native process with a 180-second lifetime cap, makes at most three typed attempts, removes its own temporary credential and stops its own process on exit. Node executes the integration client in an ephemeral Docker container; llama.cpp itself runs as the native host binary. Fixtures cover CI without downloading weights or running inference.
 
@@ -62,7 +63,7 @@ Model/source/archive checks passed. A first attempted call failed before POST be
 
 Both receipts have one attempt, settled synthetic call accounting and provisional evaluator identity; neither call was truncated. Native process high-water RSS was 4,669,472 KiB (about 4.45 GiB); it had 39 total threads including server workers, with four configured inference/batch threads. This is a two-call protocol smoke, not a throughput or quality benchmark. Graded native decoding is fixture-tested against the pinned documented contract; no extra native graded attempt was made. The owned native process and temporary credential were removed, and `make down` completed.
 
-Raw local evidence stays in the ignored cache: `smoke-results.json`, `resource.txt`, `server.log`, `release.json`, `model-lfs.txt`, `runtime-sha256.txt` and `verified-manifest.json`. The first failed-attempt evidence is represented in this record; the current smoke-results file holds the two successful receipts. Full library validation passed 90 test files / 1,569 tests, plus typecheck, lint and build. P26–P28 are deterministic fixtures, including wrong file/revision/hash/quantization/runtime, post-dispatch inventory changes, changed execution scopes and absent allowlists.
+Raw local evidence stays in the ignored cache: `smoke-results.json`, `resource.txt`, `server.log`, `release.json`, `model-lfs.txt`, `runtime-sha256.txt`, `verified-manifest.json`, `attestation-bundle.json` and `attestation-verification.json`. The first failed-attempt evidence is represented in this record; the current smoke-results file holds the two successful receipts. Full library validation passed 90 test files / 1,569 tests, plus typecheck, lint and build. P26–P28 are deterministic fixtures, including wrong file/revision/hash/quantization/runtime, post-dispatch inventory changes, changed execution scopes and absent allowlists.
 
 ## Qualification and update policy
 
