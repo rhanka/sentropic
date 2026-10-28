@@ -1,10 +1,7 @@
 import type { ChatCoreTransport } from '@sentropic/chat-runtime/client/transport';
 import type { StreamHubClient } from '@sentropic/chat-runtime/client/streamTypes';
-import {
-  createRendererRegistry,
-  type RendererRegistry,
-} from '../renderers/registry.js';
-import type { LocalToolsAdapter, WebHostAdapter } from './types.js';
+import type { RendererRegistry } from '@sentropic/chat-ui/renderers/registry';
+import type { LocalToolsAdapter, WebHostAdapter } from '@sentropic/chat-ui/hosts/types';
 
 export type ChatUiLabelValue =
   | string
@@ -82,7 +79,7 @@ export type CreateWebHostInput = {
   transport: ChatCoreTransport;
   streamClient: StreamHubClient;
   labels?: ChatUiLabelResolver;
-  renderers?: RendererRegistry;
+  renderers: RendererRegistry;
   localTools?: LocalToolsAdapter;
   auth?: ChatUiAuthAdapter;
   navigation?: ChatUiNavigationAdapter;
@@ -104,13 +101,14 @@ const assertAdapter = (value: unknown, name: string): void => {
 export const createWebHost = (input: CreateWebHostInput): ChatUiWebHost => {
   assertAdapter(input.transport, 'transport');
   assertAdapter(input.streamClient, 'streamClient');
+  assertAdapter(input.renderers, 'renderers');
 
   return {
     kind: 'web',
     transport: input.transport,
     streamClient: input.streamClient,
     labels: input.labels ?? defaultLabels,
-    renderers: input.renderers ?? createRendererRegistry(),
+    renderers: input.renderers,
     ...(input.localTools ? { localTools: input.localTools } : {}),
     ...(input.auth ? { auth: input.auth } : {}),
     ...(input.navigation ? { navigation: input.navigation } : {}),

@@ -1,10 +1,10 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
-import { createRendererRegistry } from '../src/renderers/registry';
+import { createRendererRegistry } from '@sentropic/chat-ui/renderers/registry';
 import type { ChatCoreTransport } from '../src/client/transport';
 import type { StreamHubClient } from '../src/client/streamTypes';
-import type { LocalToolsAdapter } from '../src/hosts/types';
+import type { LocalToolsAdapter } from '@sentropic/chat-ui/hosts/types';
 import { createWebHost } from '../src/hosts/createWebHost';
 
 const hostPath = resolve(process.cwd(), 'src/hosts/createWebHost.ts');
@@ -94,10 +94,11 @@ describe('createWebHost', () => {
     });
   });
 
-  it('installs safe default labels and renderer registry when optional adapters are omitted', () => {
+  it('uses safe default labels and the injected visual renderer when optional adapters are omitted', () => {
     const host = createWebHost({
       transport: createTransport(),
       streamClient: createStreamClient(),
+      renderers: createRendererRegistry(),
     });
 
     expect(host.labels('chat.unknown')).toBe('chat.unknown');
