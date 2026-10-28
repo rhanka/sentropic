@@ -24,7 +24,7 @@ beforeEach(async () => {
 });
 afterEach(async () => {
   await pool.end();
-  await admin.query(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
+  await admin.query(`DROP DATABASE "${databaseName}"`);
 });
 afterAll(() => admin.end());
 

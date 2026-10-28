@@ -24,6 +24,7 @@ import {
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { testCatalogContext } from './test-context';
 
 import {
   McpCatalogSource,
@@ -307,7 +308,7 @@ describe('McpCatalogSource — call dispatch via execution seam', () => {
     const seam = new CatalogExecutionSeam(registry, [source]);
 
     // Call the sanitized public name 'greet_user' → must dispatch to MCP.
-    const result = await seam.execute('greet_user', { user_name: 'Alice' });
+    const result = await seam.execute('greet_user', { user_name: 'Alice' }, await testCatalogContext(['greet_user']));
 
     expect(result.handled).toBe(true);
     expect(result.result).toBeDefined();
@@ -333,7 +334,7 @@ describe('McpCatalogSource — call dispatch via execution seam', () => {
     const seam = new CatalogExecutionSeam(registry, [source]);
 
     // The public name is 'mcp_my-server_echo'; the raw MCP name is 'mcp:my-server/echo'.
-    const result = await seam.execute('mcp_my-server_echo', { message: 'hello' });
+    const result = await seam.execute('mcp_my-server_echo', { message: 'hello' }, await testCatalogContext(['mcp_my-server_echo']));
 
     expect(result.handled).toBe(true);
     const body = (result.result as { content: Array<{ text: string }> }).content[0].text;

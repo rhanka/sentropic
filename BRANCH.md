@@ -6,10 +6,10 @@
 ## Scope / Guardrails
 - [x] Owner dispatch: W1.c of `.tmp/app-switch-week/plan-v2.md`; draft delivery, green CI, no merge or live activation.
 - [x] Worktree `tmp/worktrees/app-w1c`, branch `feat/app-cm-w1c`; merge W1.d `8729aff22` and W2.b `d0ce8aeb0` as assigned; no rebase.
-- [x] Owner supersedes the old pin: consume published `@sentropic/artifacts` 0.2.3; UP-T owns implementation, SQL and conformance vectors.
+- [x] Owner refresh: consume the frozen workspace tuple's `@sentropic/artifacts` 0.2.4 through `file:../packages/artifacts`; UP-T owns implementation, SQL and conformance vectors. Drop W1.c's separate registry 0.2.3 pin.
 - [x] No host PostgreSQL activation algorithm, duplicate SQL, app authority proof, route mounting or live activation; W3.a retains current-authority proof.
 - [x] Make-only development; lock every build/test/start with `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock`, release between steps and run matching down.
-- [x] Dedicated `ENV=test-app-w1c` last in every make command; API/UI/Maildev UI ports 8793/5179/1086; check ownership before starting services.
+- [x] Dedicated `ENV=test-app-w1c` last in every make command; API/UI/Maildev UI ports 8799/5185/1092; check ownership before starting services.
 - [x] Tests first; atomic commits below 150 lines via `make commit MSG="..."`; selective staging and scope-check before each commit; no attribution trailers.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -37,6 +37,7 @@
 - [x] Exception process: record BR-W1C-EXn, rationale, impact and rollback before any scope expansion.
 
 ## Feedback Loop
+- [x] R1 base refresh: merge `origin/feat/app-cm-integration` at `ea8e8443134c641b99628ce2c99787a785d8c827`, preserving W1.c's BRANCH.md and restoring the tuple's API manifest and both locks unchanged. APP-P1 receipt stays `020aacfec500d754b76c90d3ad4a05097e0f996b8b9282145ca458917ea6fb27`. Inherited merge paths are advisory in `/tmp/w1c-merge-scope.log`; merge delta exceeds 150 lines solely through unchanged base imports. Both parents and the candidate share event-log blob `edb32e21829db7d28a3576dffbe22495cb162dc8`; no Track events lost or authored.
 - [x] BR-W1C-EX1 — owner-authorized dependency bump and required registration: pin 0.2.3 in API/root locks, append upstream activation asset and required relations to W1.a's executor configuration, update migration regression counts. No executor algorithm or SQL changes; rollback is reverting W1.c registration and dependency delta before activation.
 - [x] Base-only merges imported W1.d/W2.b unchanged; scope-check reported inherited paths outside W1.c. Authored commits are checked separately after both merges.
 - [ ] UP-T-2 — registry 0.2.3 archive has the PG adapter/SQL/hash, but no activation conformance export or vector files among 122 entries. Host tests can run; imported activation vectors require an upstream publication. Do not claim that gate passed.
