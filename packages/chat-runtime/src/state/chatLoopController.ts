@@ -692,3 +692,143 @@ export type ChatLoopController<
    */
   detachStream(): void;
 
+  /**
+   * Trigger the job-poll fallback for a specific job + stream id.
+   * Called by AppChatPanel after sendMessage / retryMessage to start the
+   * background poll loop (matches AppChatPanel's pollJobUntilTerminal call-site).
+   * No-ops if no stream is attached or the job is already being polled.
+   */
+  startJobPoll(
+    jobId: string,
+    streamId: string,
+    opts?: { timeoutMs?: number },
+  ): void;
+
+  // -- Host transport lifecycle (slice 1D) ------------------------------------
+
+  /**
+   * Attach a host transport to the controller (slice 1D).
+   *
+   * The transport provides the REST verbs (sendMessage, retryMessage, stopMessage,
+   * editMessage, setFeedback) that the controller calls when driving lifecycle
+   * methods. Structurally compatible with ChatCoreHost — no concrete import.
+   *
+   * Safe to call multiple times — replaces any previously attached transport.
+   * Safe to call before attachStream (transport and stream are independent).
+   */
+  attachHost(opts: AttachHostOptions): void;
+
+  /**
+   * Detach the host transport. Safe to call when no transport is attached.
+   */
+  detachHost(): void;
+
+  /**
+   * Optimistic assistant message insertion + job-poll start (slice 1D).
+   *
+   * Builds the assistant message using the caller-supplied factory, inserts it
+   * into the message list (append, prepend-with-user, or truncate-after),
+   * and starts the background job-poll fallback.
+   *
+   * App-side responsibilities (AFTER this call returns):
+   *   - followBottom = true + scheduleScrollToBottom
+   *   - createTurnCheckpoint (Lot 2 intercept — keep in AppChatPanel)
+   *   - When truncateAfterMessageId is set, truncate historyTimelineItems
+   *     BEFORE calling bootstrapRun.
+   *
+   * Returns { assistantMessage, handle } so the caller can read the
+   * committed assistant message without re-scanning messages[].
+   */
+  bootstrapRun(
+    input: BootstrapRunInput<Message>,
+  ): BootstrapRunResult<Message>;
+
+  /**
+   * Send a new user message via the host transport and bootstrap the run (slice 1D).
+   *
+   * Orchestration:
+   *   1. Calls host.sendMessage(payload)
+   *   2. Calls bootstrapRun with the RunHandle + caller-supplied userMessage factory
+   *   3. Returns { handle, assistantMessage } for app-side side-effects
+   *
+   * App-side responsibilities after this call resolves:
+   *   - Input clearing / composer height reset / attachment clear
+   *   - sessionId update (res.sessionId may be new)
+   *   - sessions list prepend for new sessions
+   *   - errorMsg on catch
+   *   - sending flag management
+   *   - followBottom + scroll + createTurnCheckpoint (via bootstrapRun return)
+   *
+   * Throws on transport failure — caller wraps in try/catch.
+   */
+  send(
+    payload: ControllerSendPayload,
+    opts: {
+      buildUserMessage: (handle: ControllerRunHandle) => Message;
+      buildAssistantMessage: BootstrapRunInput<Message>['buildAssistantMessage'];
+      pollTimeoutMs?: number;
+    },
+  ): Promise<BootstrapRunResult<Message> & { handle: ControllerRunHandle }>;
+
+  /**
+   * Retry an existing message via the host transport and bootstrap the run (slice 1D).
+   *
+   * Orchestration:
+   *   1. Calls host.retryMessage(messageId, opts)
+   *   2. Calls bootstrapRun with truncateAfterMessageId = messageId
+   *   3. Returns { handle, assistantMessage }
+   *
+   * App-side responsibilities after this call resolves:
+   *   - historyTimelineItems truncation BEFORE calling (must be done before call)
+   *     → Actually: bootstrapRun handles messages[]; app must sync historyTimelineItems
+   *       if needed (retry path: app truncates historyTimelineItems, THEN calls retry)
+   *   - followBottom + scroll + errorMsg on catch
+   *
+   * NOTE: app-side truncates historyTimelineItems before calling retry.
+   *   The controller truncates messages[] inside bootstrapRun.
+   *
+   * Throws on transport failure — caller wraps in try/catch.
+   */
+  retry(
+    messageId: string,
+    opts: {
+      providerId: string;
+      model: string;
+      buildAssistantMessage: BootstrapRunInput<Message>['buildAssistantMessage'];
+      pollTimeoutMs?: number;
+    },
+  ): Promise<BootstrapRunResult<Message>>;
+
+  /**
+   * Stop the active assistant generation via the host transport (slice 1D).
+   *
+   * Calls host.stopMessage(messageId).
+   * App-side manages stoppingMessageId flag + errorMsg on catch.
+   *
+   * Throws on transport failure — caller wraps in try/catch.
+   */
+  stop(messageId: string): Promise<void>;
+
+  /**
+   * Edit a user message content via the host transport (slice 1D).
+   *
+   * Orchestration:
+   *   1. Calls host.editMessage(messageId, content)
+   *   2. Patches the message content in the controller's message list
+   *
+   * App-side calls cancelEditMessage() + retry(messageId) after this resolves.
+   * Throws on transport failure — caller wraps in try/catch.
+   */
+  edit(messageId: string, content: string): Promise<void>;
+
+  /**
+   * Submit feedback on an assistant message via the host transport (slice 1D).
+   *
+   * Orchestration:
+   *   1. Calls host.setFeedback(messageId, vote)
+   *   2. Patches the message feedbackVote in the controller's message list
+   *
+   * App-side manages errorMsg on catch.
+   * Throws on transport failure — caller wraps in try/catch.
+   */
+  setFeedback(messageId: string, vote: 'up' | 'down' | 'clear'): Promise<void>;
