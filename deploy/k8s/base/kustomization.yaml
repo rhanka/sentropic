@@ -7,4 +7,7 @@ resources:
   - 30-api.yaml
   - 35-auth-idp.yaml
   - 40-ui.yaml
+  - artifact-content-deployment.yaml
+  - artifact-content-service.yaml
+  - artifact-content-configmap.yaml
   - 70-pgbackup-cronjob.yaml
