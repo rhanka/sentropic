@@ -71,7 +71,7 @@
   - [ ] Reconcile ECOSYSTEM, TURNKEY, SURFACES, PLAN_CHAT_SURFACES, AGENTS_SURFACE and #602/UAT-1.
   - [ ] Inspect published DS theme/Drawer artifacts and name canonical DS chat primitives; assign missing DropZone to F15.
   - [ ] Record all section 6 conductor defaults and owner-held gates without impersonating owner decisions.
-  - [ ] Integrate r2 notes: runtime package/semver break, proposed C-03 owner/copy changes, M1b release dependency, split estimate.
+  - [x] Integrate r2 notes: runtime package/semver break, proposed C-03 owner/copy changes, M1b release dependency, split estimate.
   - [ ] Record domain acknowledgement state and bounded next-owner acceptance criteria.
 - [ ] **Lot P0c — Final validation and draft PR**
   - [ ] Validate exhaustive inventories against the pinned source; inspect every diff hunk.
