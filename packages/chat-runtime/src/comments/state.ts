@@ -23,8 +23,8 @@ import {
   getMentionCandidate,
   getMentionMatches,
   findAssignedMentionFromText,
+  type CommentPresentation,
 } from './utils.js';
-import { getMentionLabel, getCommentAuthorLabel } from '@sentropic/chat-ui/comments';
 
 // ---------------------------------------------------------------------------
 // Minimal hand-rolled store (no svelte/store import)
@@ -176,7 +176,8 @@ export type CommentState = {
 // Factory
 // ---------------------------------------------------------------------------
 
-export function createCommentState(host: CommentHost): CommentState {
+export function createCommentState(host: CommentHost, presentation: CommentPresentation): CommentState {
+  const { getMentionLabel, getCommentAuthorLabel } = presentation;
   // -- internal mutable state -----------------------------------------------
 
   let contextType: string | null = null;
@@ -328,7 +329,7 @@ export function createCommentState(host: CommentHost): CommentState {
         sectionKey,
       });
       const items = res.items || [];
-      const { threads, map } = buildCommentThreads(items);
+      const { threads, map } = buildCommentThreads(items, presentation);
       commentThreads = threads;
       commentItemsByThread = new Map(map);
 
@@ -405,7 +406,7 @@ export function createCommentState(host: CommentHost): CommentState {
       let resolvedAssigneeId = assignedToUserId;
       let resolvedAssigneeLabel = assignedToLabel;
       if (!resolvedAssigneeId && mentionMembers.length > 0) {
-        const inferred = findAssignedMentionFromText(trimmed, mentionMembers);
+        const inferred = findAssignedMentionFromText(trimmed, mentionMembers, presentation);
         if (inferred) {
           resolvedAssigneeId = inferred.userId;
           resolvedAssigneeLabel = getMentionLabel(inferred);
@@ -685,7 +686,7 @@ export function createCommentState(host: CommentHost): CommentState {
       showMentionMenu = false;
     }
     mentionMatches = showMentionMenu
-      ? getMentionMatches(mentionMembers, mentionQuery)
+      ? getMentionMatches(mentionMembers, mentionQuery, presentation)
       : [];
     notify();
   };
