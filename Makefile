@@ -1405,6 +1405,14 @@ publish-llm-mesh-token: verify-llm-mesh-cloud-code-oauth ## Publish @sentropic/l
 		-w /workspace/packages/llm-mesh \
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,llm-mesh,--access public --provenance=false)'
 
+.PHONY: typecheck-chat-runtime build-chat-runtime test-chat-runtime pack-chat-runtime chat-migration-registry
+typecheck-chat-runtime build-chat-runtime test-chat-runtime:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e SCOPE="$(SCOPE)" -v "$(CURDIR):/workspace" -w /workspace/packages/chat-runtime $(LLM_MESH_NODE_IMAGE) sh scripts/run.sh $(patsubst %-chat-runtime,%,$@)
+pack-chat-runtime: build-chat-runtime
+	$(call manifest_guard_pack,chat-runtime,$(MANIFEST_DIST_FORM))
+chat-migration-registry:
+	@docker run --rm $(LLM_MESH_NODE_IMAGE) sh -lc 'npm view @sentropic/chat-ui version; npm view @sentropic/chat-runtime version || test "$$?" = 1'
+
 .PHONY: typecheck-chat-ui
 typecheck-chat-ui: ## Run @sentropic/chat-ui type checks
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
