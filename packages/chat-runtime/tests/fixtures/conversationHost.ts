@@ -5,6 +5,7 @@ import { createConversationRuntime, type ConversationRuntimeOptions } from '../.
 import type { DocumentHost } from '@sentropic/chat-ui/documents';
 import { registerLocalTool, unregisterLocalTool } from '../../src/stores/localTools.js';
 import { buildChatHistoryTimeline, type ChatHistoryMessage } from '../../../chat-core/src/history.js';
+import type { CheckpointHost } from '../../src/checkpoints/index.js';
 
 class FixtureEventSource extends EventTarget {
   closed = false;
@@ -75,8 +76,21 @@ export async function createConversationFixture(overrides: Partial<ConversationR
     },
   };
   const host = { ...transport, streamClient };
+  const checkpointRequest = async (path: string, body?: unknown) => {
+    const response = await fetch(`http://chat.test/chat/sessions/${sessionId}/checkpoints${path}`, body === undefined ? undefined : {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(`Checkpoint request failed: ${response.status}`);
+    return response.json();
+  };
+  const checkpointHost: CheckpointHost = {
+    fetchCheckpoints: async () => (await checkpointRequest('')).checkpoints,
+    createCheckpoint: async (_sessionId, anchorMessageId) => { await checkpointRequest('', { anchorMessageId }); },
+    restoreCheckpoint: async (_sessionId, checkpointId) => { await checkpointRequest(`/${checkpointId}/restore`, {}); },
+    isMutatingTool: (name) => name.endsWith('_update'),
+  };
   const runtimeOptions: ConversationRuntimeOptions = {
-    host, documents,
+    host, documents, checkpointHost,
     localTools: {
       isLocalToolName: (name) => name === 'render_mermaid', isLocalToolRuntimeAvailable: () => true,
       isLocalToolPermissionRequired: () => false,
