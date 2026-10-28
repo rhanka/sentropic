@@ -18,7 +18,7 @@ export function createEngine(options = {}, modelPath = 'unknown') {
     async preload() {
       if (options.failPreload) throw new Error(options.failPreload);
     },
-    async transcribe(window, { sampleRateHz } = {}) {
+    async transcribe() {
       calls += 1;
       const step = script[calls - 1] ?? script[script.length - 1] ?? { segments: [] };
       if (step.error) throw new Error(step.error);

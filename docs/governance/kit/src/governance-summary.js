@@ -1,4 +1,3 @@
-import layouts from './governance-summary-layouts.json' with {type:'json'};
 // Labels name the dominant flow; membership is always derived from the graph.
 
 export function aggregateTopLevel(scene) {
@@ -20,7 +19,7 @@ export function aggregateTopLevel(scene) {
 }
 
 export function packTopLevel(scene) {
-  const layout = layouts[scene.language ?? 'fr'];
+  const layout = scene.summaryLayout;
   if (!layout) throw new Error('Prepare the bundled ELK summary geometry before building.');
   return {...scene, nodes:[], groups:layout.groups, edges:layout.edges};
 }
