@@ -38,18 +38,6 @@
         "VsCodeHostAdapter",
         "AnyHostAdapter",
         "LocalToolsAdapter",
-        "ChatUiLabelValue",
-        "ChatUiLabelResolver",
-        "ChatUiPanelRenderer",
-        "ChatUiAuthAdapter",
-        "ChatUiNavigationAdapter",
-        "ChatUiStorageAdapter",
-        "ChatUiJobsHostAdapter",
-        "ChatUiCommentsHostAdapter",
-        "ChatUiDocumentHostAdapter",
-        "ChatUiWebHost",
-        "CreateWebHostInput",
-        "createWebHost",
         "ChatWidgetDisplayMode",
         "ChatWidgetDrawerSide",
         "ChatWidgetLayoutState",
@@ -138,24 +126,6 @@
         "VsCodeHostAdapter",
         "AnyHostAdapter",
         "LocalToolsAdapter"
-      ]
-    },
-    "./hosts/createWebHost": {
-      "kind": "ts",
-      "file": "dist/hosts/createWebHost.js",
-      "exports": [
-        "ChatUiLabelValue",
-        "ChatUiLabelResolver",
-        "ChatUiPanelRenderer",
-        "ChatUiAuthAdapter",
-        "ChatUiNavigationAdapter",
-        "ChatUiStorageAdapter",
-        "ChatUiJobsHostAdapter",
-        "ChatUiCommentsHostAdapter",
-        "ChatUiDocumentHostAdapter",
-        "ChatUiWebHost",
-        "CreateWebHostInput",
-        "createWebHost"
       ]
     },
     "./stores/chatWidgetLayout": {
@@ -289,16 +259,6 @@
         "computeAutosizeResult"
       ]
     },
-    "./state/chat-context": {
-      "kind": "ts",
-      "file": "dist/state/chat-context.js",
-      "exports": [
-        "ChatContextEntry",
-        "ReadableStore",
-        "ChatContextProvider",
-        "createNoopChatContextProvider"
-      ]
-    },
     "./components/ContextChips.svelte": {
       "kind": "svelte",
       "file": "dist/components/ContextChips.svelte",
@@ -316,20 +276,6 @@
       "file": "dist/components/SessionList.svelte",
       "exists": true,
       "_propSnapshot": "Props: sessions? (SessionListEntry[]), activeId? (string), labels? (ChatUiLabelResolver), onSelect (fn: sessionId → void), onDelete? (fn: sessionId → void)"
-    },
-    "./state/sessionList": {
-      "kind": "ts",
-      "file": "dist/state/sessionList.js",
-      "exports": [
-        "SessionRow",
-        "SessionListEntry",
-        "projectSessionList",
-        "HistoryMessage",
-        "RestoredTimelineItem",
-        "HistoryEventRaw",
-        "HistoryPayload",
-        "projectRestoredTimeline"
-      ]
     },
     "./context": {
       "kind": "ts",
