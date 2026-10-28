@@ -21,6 +21,7 @@ Deliver approved r3 L3: `live-speech/src/node/local-stt.ts` plus an isolated wor
   - `packages/live-speech/**`
   - `package.json` (BR04-EX1)
   - `package-lock.json` (BR04-EX1)
+  - `scripts/ci/ci-expected-results.test.mjs` (BR06-EX1)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -35,6 +36,7 @@ Deliver approved r3 L3: `live-speech/src/node/local-stt.ts` plus an isolated wor
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] BR06-EX1: update `scripts/ci/ci-expected-results.test.mjs` validator count from 23 to 24 for the added L3 validator. Reason: CI run 40611049316 fails the exact inventory assertion, while all other capacity fixtures pass. Impact: fixture inventory only; no scheduling or gate logic changes. Rollback: revert the count with removal of the L3 job.
 - [x] Integration validation: `test-live-speech` (68 tests / 11 files), `typecheck-live-speech`, `lint-live-speech` and `build-live-speech` pass under the shared Docker lock with `ENV=test-integrator-stt-l3`.
 - [x] Integration lint: the shared L2 lint gate reports unused arguments in the L3 fake engine; omit unused parameters without changing scripted behavior.
 - [x] Integration after L2: retain the root core export and the L3 `/node` export; keep both ordering suites by moving L3 tests to `tests/local-stt-ordering.test.ts`; retain source-only dist compilation and both README contracts.
