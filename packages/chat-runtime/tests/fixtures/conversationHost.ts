@@ -42,7 +42,7 @@ export async function createConversationFixture(overrides: Partial<ConversationR
   const { sessionId } = await created.json() as { sessionId: string };
   let source: FixtureEventSource;
   const streamClient = createStreamHub({
-    getBaseUrl: () => 'http://chat.test', getAuthState: () => true, eventTarget: new EventTarget(),
+    getBaseUrl: () => 'http://chat.test', getAuthState: () => true, eventTarget: new EventTarget(), reconnectDelayMs: 0,
     eventSourceFactory: () => { source = new FixtureEventSource(); return source as unknown as EventSource; },
   });
   const documents: DocumentHost = {
