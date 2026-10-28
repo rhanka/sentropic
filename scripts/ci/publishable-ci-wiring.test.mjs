@@ -139,7 +139,7 @@ test('Decision provisioning passes names through Compose and optional Kubernetes
     .map((doc) => doc.toJSON()).find((doc) => doc.kind === 'Deployment');
   const api = deployment.spec.template.spec.containers.find((container) => container.name === 'api');
   for (const [name, variable] of [['JEV_API_KEY', 'JEV'], ['DECISION_EXECUTION_PROFILE', 'DECISION_PROFILE']]) {
-    assert.ok(compose.services.api.environment.includes(`${name}=\${${name}:-}`));
+    assert.ok(compose.services.api.environment.includes(name === 'JEV_API_KEY' ? `${name}=\${${name}:-}` : name));
     assert.deepEqual(api.env.find((entry) => entry.name === name), {
       name, valueFrom: { secretKeyRef: { name: 'sentropic-api', key: name, optional: true } },
     });
