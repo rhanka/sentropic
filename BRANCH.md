@@ -57,7 +57,7 @@
   - [x] Create isolated worktree and pass mechanical `harness check branch` before work.
   - [x] Freeze scope, exception, environment and ports; leave other lanes untouched.
 - [ ] **Lot 1 — Tests first**
-  - [ ] Add `deploy/ci/artifact-content/{tests.mk,bundle-checks.mjs,bundle.selftest.mjs}`.
+  - [ ] Add `deploy/ci/artifact-content/{tests.mk,bundle-checks.mjs,bundle.selftest.mjs}` (workload assertions and render target added).
   - [ ] Prove red: missing content resources; then render both full overlays without kubeconfig/network access.
   - [ ] Test closed gates despite enabled secret values, least privilege, network peer namespace isolation, both TLS wildcard depths and exact app route precedence.
   - [ ] Test synthetic digest replacement across API/IdP/content, unchanged backup/restore access and mutation denials.
