@@ -1,12 +1,12 @@
 # Feature: Decision API host and authoritative remote pricing
 
 ## Objective
-- [ ] Integrate JEV and OpenAI Decisions into the authenticated API through cluster-mesh, with durable financial ports and fail-closed production readiness.
+- [x] Integrate JEV and OpenAI Decisions into the authenticated API through cluster-mesh, with durable financial ports and fail-closed production readiness.
 
 ## Scope / Guardrails
 - [x] Owner priority 2026-10-28: integrate both remote backends; local hosting remains deferred.
 - [x] Base: origin/main de7ab8d31; branch feat/decision-host-h1; worktree tmp/worktrees/decision-h1.
-- [x] No live provider requests, spend, deployment, merge, rebase, Python or AI commit trailers.
+- [x] No live provider requests, spend, deployment, PR merge, rebase, Python or AI commit trailers.
 - [x] Use existing make targets; ENV=test-decision-h1 last; API_PORT=8798 UI_PORT=5198 MAILDEV_UI_PORT=1098.
 - [x] Serialize Docker steps with flock; tear down the isolated environment after each step.
 - [x] One additive control migration; atomic make commits at most 150 changed lines.
@@ -38,15 +38,6 @@
   - `packages/cluster-mesh/tests/decision-receipts.spec.ts`
   - `package-lock.json`
   - `spec/decision/api-host.md`
-  - `api/tests/unit/gateway-package-version.test.ts`
-  - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/src/modules/catalog.ts`
-  - `packages/cluster-mesh/tests/**`
-  - `packages/llm-gateway/package.json`
-  - `packages/llm-mesh/bench/l13-mistral.receipt.json`
-  - `packages/llm-mesh/src/speech/**`
-  - `packages/llm-mesh/tests/fixtures/mistral-frames.ts`
-  - `packages/llm-mesh/tests/speech-mistral.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -63,14 +54,14 @@
 - [x] Track source artifact only: concurrent root .track changes belong to the designated conductor.
 - [ ] H1-CI-01 — Run the explicit manual Decision fixture mode without provider credentials; ordinary live API/E2E acceptance remains outside this no-spend lot.
 - [x] BRH-EX1 — Add an explicit manual fixture-only mode to .github/workflows/ci.yml to fulfill the requested no-spend CI. Impact: dedicated API/mesh checks with no publication; ordinary PR/main runs unchanged. Rollback: remove that input, job and mode guards.
-- [x] BRH-EX2 — Merge origin/main 5e986a0b6 without rebase; retain the H1/H2 plan and incoming speech/release changes unchanged. Temporary merge-only allowances above admit inherited files; remove them after the merge. Authored scope is checked separately against the second parent. Rollback: revert the merge. Both parent event logs retain all 370 event IDs; Track acceptance remains with its designated conductor.
+- [x] BRH-EX2 — Merge origin/main 5e986a0b6 without rebase; retain the H1/H2 plan and incoming speech/release changes unchanged. Temporary merge-only allowances removed after fc2e12047; authored scope passed separately against the second parent. Rollback: revert the merge. Both parent event logs retain all 370 event IDs; Track acceptance remains with its designated conductor.
 - [ ] H1-REV-01 — Conductor handoff: review selection failed because discovery supplies no exact reviewer models; select two complementary host/model tuples before merge. Local dossier: root .tmp/decision-h1-review/selection.md; no consensus verdict.
 
 ## AI Flaky tests
 - [x] Provider calls are forbidden in this lot; fixtures and fakes only; no flaky acceptance requested.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch, sequential author commits; merge only if subsequently authorized.
+- [x] Mono-branch, sequential author commits; PR merge only if subsequently authorized.
 
 ## UAT Management (in orchestration context)
 - [x] API-only delivery; validate authenticated HTTP behavior with fixtures in the isolated test environment.
@@ -96,13 +87,14 @@
   - [x] Add no-spend host tests for both backends, production refusal, missing credentials, authorization, price and input limits.
   - [x] Host fixture gate: 9 tests passed; align the typed PostgreSQL hold projection with Drizzle's row contract.
   - [x] Add HTTP controls for authentication, qualification admin restrictions, workspace refusal, outages and bounded bodies.
-  - [x] API integration tests: api/tests/api/decision-metering.test.ts (15 passed); api/tests/api/decision-api.test.ts (7 passed).
+  - [x] API integration tests: api/tests/api/decision-metering.test.ts (17 passed); api/tests/api/decision-api.test.ts (7 passed).
   - [x] Actual product composition refuses anonymous ingress, discovers both unqualified evaluators and persists production refusal without a hold or fetch.
   - [x] Recreate the disposable database and verify the exact consolidated migration hash plus tenant/workspace revocations in api/tests/api/decision-api.test.ts (7 passed).
 - [x] **H2 — Authoritative pricing**
   - [x] Verify and cite the published JEV tariff at its primary source.
   - [x] Add both immutable control.model_pricing rows using the existing control migration lane.
   - [x] Move JEV price authority from its synthetic fixture to control.model_pricing and bump llm-mesh to 0.31.1 (npm view: 0.31.0).
+  - [x] After merging main's 0.32.0, advance the patch tuple to 0.32.1; Docker-hosted npm view still reports 0.31.0 before the bump.
   - [x] Add PostgreSQL tests for exact revision/protocol prices, missing prices and one metadata-only settlement per backend.
   - [x] Extend the existing ledger operation CHECK to decision; real-PG regression reproduced the prior constraint refusal.
   - [x] Add all-bucket cap, pending-liability and durable overrun-disable regression controls; bind dispatch to the held evaluator.
@@ -118,7 +110,8 @@
 - [x] **Docs consolidation**
   - [x] Document route, profiles, readiness limits, tariff sources and provisioned environment names in spec/decision/api-host.md.
 - [ ] **Final validation**
-  - [x] Scoped API fixtures: 124 tests passed across scoped runs; API typecheck and lint passed under the Docker lock.
+  - [x] After merging main, 146 scoped API tests passed in one run, including tests/unit/gateway-package-version.test.ts; API typecheck/lint passed.
+  - [x] llm-mesh public package/consumer surface: 4 tests passed with the final 0.32.1 tuple.
   - [x] llm-mesh: 1,529 tests passed; cluster-mesh Decision composition/receipts: 9 tests passed.
   - [x] API unit host/HTTP: 16 tests passed; actual API/migration/revocation: 7 tests passed.
   - [ ] Review with two independent complementary peers and reconcile findings.
@@ -126,5 +119,6 @@
   - [ ] Open a draft PR to main using this plan as its body and add the implementation plan comment.
   - [ ] Verify completed/success CI on the exact final head.
   - [ ] Add and run the explicit manual Decision fixture workflow mode; distinguish it from ordinary live-suite acceptance.
+  - [x] Local Docker stack torn down after validation; runtime health logs contain no errors.
   - [x] Retain CI selection/publication safeguards: 135 wiring tests, 23 expected-result tests and ci-capacity-policy passed.
   - [ ] Run make down and report PR, exact head, environment variable names only.

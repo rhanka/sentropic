@@ -90,7 +90,8 @@ jobs:
         run: >-
           make test-api-unit
           SCOPE="tests/unit/decision-host.test.ts tests/unit/decision-route.test.ts
-          tests/unit/llm-budget-admission-native.test.ts tests/api/decision-api.test.ts
+          tests/unit/llm-budget-admission-native.test.ts tests/unit/gateway-package-version.test.ts
+          tests/api/decision-api.test.ts
           tests/api/decision-metering.test.ts tests/api/llm-admission-schema.test.ts
           tests/api/llm-budget-ledger.test.ts" ENV=test-decision-h1
       - name: Build shipped API
