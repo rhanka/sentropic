@@ -1,7 +1,7 @@
 # Feature: Decision V4-L4 Kev native local candidate
 
 ## Objective
-- [ ] Implement owner-selected Kev Q8_0 through a fixed local System One transport in `@sentropic/llm-mesh/decision`.
+- [x] Implement owner-selected Kev Q8_0 through a fixed local System One transport in `@sentropic/llm-mesh/decision`.
 
 ## Scope / Guardrails
 - [x] Owner decision 2026-10-28: L4-A, local native llama.cpp; no Python.
@@ -37,6 +37,7 @@
 ## Feedback Loop
 - [x] BR04-EX1 (Makefile): include `scripts/decision/kev-local.mk` for explicit opt-in local targets; no default dependency; rollback removes include and targets.
 - [x] Track single writer: update this source artifact only; conductor owns sidecar import.
+- [ ] Independent peer review awaits owner permission required by `rules/subagents.md`; no agents launched and no consensus claimed.
 - [x] Native smoke attempt 1 stopped in local inventory verification before POST; diagnose custody without inference, then use the two remaining smoke attempts for binary/choice; graded remains fixture-covered.
 - [x] Source LFS tuple verified 2026-10-28: selected revision/file, 4483801504 bytes, SHA-256 7c2ebed90560522c2801389db482ac1dc4c36d828f201f6074c1d60e433948da; model card Apache-2.0.
 
@@ -82,5 +83,5 @@
 - [ ] **Lot 8 — Final validation and draft PR**
   - [x] make typecheck-llm-mesh, lint-llm-mesh, test-llm-mesh (90 files / 1569 tests), build-llm-mesh under flock.
   - [ ] Two-peer review; reconcile findings and verify final scope.
-  - [ ] Draft PR body from this plan; first comment records execution steps.
+  - [x] Draft PR #820 opened to main with this plan as body; first comment records execution steps and local evidence.
   - [ ] Exact-head CI completed/success; report PR URL and head; leave draft unmerged.
