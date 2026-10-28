@@ -7,32 +7,6 @@
       "kind": "ts",
       "file": "dist/index.js",
       "exports": [
-        "ChatDraftMode",
-        "ChatDraftState",
-        "SyncDraftInput",
-        "ComposerPrimaryAction",
-        "ComposerPrimaryActionState",
-        "ResolveComposerPrimaryActionInput",
-        "ComposerHeightInput",
-        "ComposerHeightState",
-        "OptimisticSteerMessage",
-        "CreateOptimisticSteerMessageInput",
-        "ComposerSteerAck",
-        "syncDraftFromInput",
-        "shouldShowSteerAction",
-        "resolveComposerPrimaryAction",
-        "resolveComposerHeightState",
-        "createOptimisticSteerMessage",
-        "createComposerSteerAck",
-        "shouldClearComposerSteerAck",
-        "ChatProjectionMessage",
-        "ChatProjectionComputation",
-        "ChatProjectionSteerAck",
-        "ChatProjectionSegment",
-        "ChatProjectedTimelineItem",
-        "BuildProjectedTimelineInput",
-        "buildFallbackProjectedSegments",
-        "buildProjectedTimeline",
         "ChatWidgetTab",
         "ChatWidgetHostMode",
         "ChatWidgetJobBadge",
@@ -105,14 +79,6 @@
         "listLocalToolPermissionPolicies",
         "upsertLocalToolPermissionPolicy",
         "deleteLocalToolPermissionPolicy",
-        "ProjectionStreamEvent",
-        "ProjectedRunSegment",
-        "projectAssistantRunSegments",
-        "countLinkedSteerMessages",
-        "getProjectedRunTerminalOutcome",
-        "getLinkedSteerMessageIds",
-        "mergeProjectionHistoryEvents",
-        "appendLiveProjectionEvent",
         "ChatSteerFeedback",
         "postChatSteer",
         "insertSteerMessageInTimeline",
@@ -126,44 +92,6 @@
         "PermissionPromptShape",
         "shouldResetLocalToolStateForFreshRound",
         "filterPermissionPromptsForPendingStream"
-      ]
-    },
-    "./state/chatDraft": {
-      "kind": "ts",
-      "file": "dist/state/chatDraft.js",
-      "exports": [
-        "ChatDraftMode",
-        "ChatDraftState",
-        "SyncDraftInput",
-        "ComposerPrimaryAction",
-        "ComposerPrimaryActionState",
-        "ResolveComposerPrimaryActionInput",
-        "ComposerHeightInput",
-        "ComposerHeightState",
-        "OptimisticSteerMessage",
-        "CreateOptimisticSteerMessageInput",
-        "ComposerSteerAck",
-        "syncDraftFromInput",
-        "shouldShowSteerAction",
-        "resolveComposerPrimaryAction",
-        "resolveComposerHeightState",
-        "createOptimisticSteerMessage",
-        "createComposerSteerAck",
-        "shouldClearComposerSteerAck"
-      ]
-    },
-    "./state/chatProjection": {
-      "kind": "ts",
-      "file": "dist/state/chatProjection.js",
-      "exports": [
-        "ChatProjectionMessage",
-        "ChatProjectionComputation",
-        "ChatProjectionSteerAck",
-        "ChatProjectionSegment",
-        "ChatProjectedTimelineItem",
-        "BuildProjectedTimelineInput",
-        "buildFallbackProjectedSegments",
-        "buildProjectedTimeline"
       ]
     },
     "./state/chatWidgetShell": {
@@ -333,20 +261,6 @@
         ]
       }
     },
-    "./utils/chat-run-projection": {
-      "kind": "ts",
-      "file": "dist/utils/chat-run-projection.js",
-      "exports": [
-        "ProjectionStreamEvent",
-        "ProjectedRunSegment",
-        "projectAssistantRunSegments",
-        "countLinkedSteerMessages",
-        "getProjectedRunTerminalOutcome",
-        "getLinkedSteerMessageIds",
-        "mergeProjectionHistoryEvents",
-        "appendLiveProjectionEvent"
-      ]
-    },
     "./utils/chat-steer": {
       "kind": "ts",
       "file": "dist/utils/chat-steer.js",
@@ -462,25 +376,6 @@
         "stripTrailingEmptyParagraph",
         "createDefaultRefLink",
         "renderMarkdownWithRefs"
-      ]
-    },
-    "./utils/model-selection": {
-      "kind": "ts",
-      "file": "dist/utils/model-selection.js",
-      "exports": [
-        "ModelProviderId",
-        "ModelCatalogProvider",
-        "ModelCatalogModel",
-        "ModelCatalogGroup",
-        "ParsedModelKey",
-        "parseModelSelectionKey",
-        "formatModelSelectionKey",
-        "groupModelsByProvider",
-        "resolveFallbackModelOption",
-        "coerceSelectionToValidEntry",
-        "getSelectedModelLabel",
-        "computeModelSelectorWidthCh",
-        "providerGroupLabel"
       ]
     },
     "./utils/message-actions": {
@@ -684,26 +579,6 @@
       "file": "dist/components/ChatSessionsBar.svelte",
       "exists": true,
       "_propSnapshot": "Props: sessions? (ChatWidgetSession[]), sessionId? (string|null), loading? (boolean), barLabels (SessionsBarLabels), labels? (translator), onNewSession?/onBack?/onConfirmDelete? (callbacks), backLabel? (string), deleteConfirmPending? (bindable boolean), deleteInFlight? (boolean), renderSessionsMenu? (Snippet), renderPlusIcon?/renderTrashIcon? (Snippets)"
-    },
-    "./state/chatSessionHydration": {
-      "kind": "ts",
-      "file": "dist/state/chatSessionHydration.js",
-      "exists": true,
-      "_propSnapshot": "Exports: SessionHistoryMetaLine/SessionHistoryTimelineLine/SessionHistoryLine types, parseSessionHistoryLine, createNdjsonSplitter, createHydrationGenerations, shouldFlushHistoryStage, normalizeHydratedMessage, upsertSequencedMessage, getTimelineItemSortSequence/Subsequence, compareTimelineItems, mergeTimelineBlockIntoHistory, HistoryScrollRestore + resolveHistoryScrollRestore"
-    },
-    "./state/chatSessionRuntime": {
-      "kind": "ts",
-      "file": "dist/state/chatSessionRuntime.js",
-      "exports": [
-        "ChatSessionRuntimeMessage",
-        "ChatSessionPendingTool",
-        "ChatSessionRuntimeHost",
-        "ChatSessionRuntimeConfig",
-        "ChatSessionSnapshot",
-        "ChatSessionSnapshotSerializable",
-        "ChatSessionRuntime",
-        "createChatSessionRuntime"
-      ]
     },
     "./state/chatPlacement": {
       "kind": "ts",
