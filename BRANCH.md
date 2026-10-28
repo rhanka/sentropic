@@ -35,6 +35,7 @@
   - [x] Merge integration after #821/#803, never rebase; retain E11 plan and union all Makefile environment selectors. No `.track` changes on either side of this merge.
   - [ ] Generate/check the 0.21.3/dev.6 tuple and receiving checklist; preserve evidenced Stage B gaps.
   - [x] Stage published Engram and retained dev.6; adapt only E10 consumer version/archive assertions, never package bytes or artifacts sources.
+  - [x] Add make-owned E2 lock freeze and strict fresh npm-ci campaign with source/PG identity, lock comparison, type/runtime proof and automatic owned-stack cleanup.
 - [x] **Lot E11-0 — Baseline and scope**
   - [x] Read MASTER/workflow, plan E11, PR #803 E11 inputs, Opus r3 21-entry inventory, RESERVATION.md and Docker lock packet; mechanical branch PASS.
 - [x] **Lot E11-1 — Generator and checker**
