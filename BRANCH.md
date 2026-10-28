@@ -67,6 +67,12 @@
   - [x] BR024-EX1: conductor authorizes union of all three Makefile environment selectors, retaining memory and artifacts entries. Impact: qualification/cleanup routing; rollback selectors together.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot E10-6 — Lossless K7 installed rerun after #815**
+  - [x] Merge `origin/feat/engram-e2-integration` at `52936121a` (#815), retaining the E10 plan and adopting pack-only `0.24.0-dev.5`; no rebase or force-push.
+  - [ ] Include created/completed K7 divergence refusal by installed Engram `0.22.0` in the installed lane, alongside durable PostgreSQL capture/admission/restart/replay.
+  - [ ] Document the K7 version rule outside this plan and refusal of dev.3/dev.4 rows missing receipts without migration.
+  - [ ] Regenerate the receipt, retain the candidate archive, push and require completed/success CI on the exact head.
+  - [x] BR10-EX4: owner requires `ENV=test-mem-e10`; add it to the existing host scope-check selector to avoid an unrelated harness image build. Impact: validation routing only; rollback: remove that selector.
 - [ ] **Lot E10-5 — Final integration refresh**
   - [x] Merge `origin/feat/engram-e2-integration` at `d08d44b78`, keeping this PR's plan; inherit #808 malformed-proof refusal, intent-hash equality, bounded chain reads and the stable-release packaging fixture fix from #767.
   - [x] Apply max+1 pack-only `0.24.0-dev.4` above integration `dev.3` and E10 `dev.2`; synchronize the workspace lock and installed lane.
@@ -117,6 +123,8 @@
   - [ ] Require pull_request ci.yml completed/success on exact head; append READY-BATCH only afterward.
 
 ## Feedback Loop
+- [x] Interim intentHash deviation remains fail-closed: Engram `0.22.0` supplies no producer-owned intentHash carrier at `transaction.apply`; retain existing computation pending Engram `0.21.3`, https://github.com/rhanka/engram/issues/410. Review-gate condition 2 is not satisfied and promotion remains blocked; this installed rerun does not waive it.
+- [x] K7 rows written by cluster-mesh dev.3/dev.4 without `receipt_digest` are refused by hydration without migration; no receipt is reconstructed from control rows.
 - [x] Final refresh on `bf87c772a`: installed lane exit=0, cleanup=0; receipt sha256 `50f4731c754b3fb74cd93434e42427ebc0978fd49f6134a95c88e9f5f10ce431`; `dev.4` tarball sha256 `f7d03a4675adaa23d0baca9012fc86127d13bd57b8f136c0cfc802a7d0e6acd3`. Seven refusals, 2 processes, epoch advance 1, no `hostGlue`; five profiles `declared`, equivalence `not-covered`. Supersedes earlier installed receipts below.
 - [x] Packaging regression on `939f0a599`: `make test-cluster-mesh SCOPE=tests/packaging/prepare-artifacts.spec.ts API_PORT=8791 UI_PORT=5191 MAILDEV_UI_PORT=1091 ENV=test-mem-e10-fin` under shared lock: 17/17, no type errors; cleanup=0. Old CI 40635273318 showed the stable-tarball and registry-pin assertions; inherited #808 fixture/pin fix resolves both.
 - [x] E10 installed lane green on `b8bb6fa6a` (superseded by the `1eb052fe6` takeover run and then by the E10a installed-bytes run): exit=0, cleanup=0; capture, admission, record read, restart and exact replay pass on the injected PostgreSQL; five refusals recorded (missing driver, missing pool, wrong driver identity, storage without provider, missing profile). Receipt `packages/cluster-mesh/tests/engram-memory/installed-receipt.json` sha256 `703c39bc514881361436868b94fc417f72cce15ecf0e3e8cb2b1f2ca054955d5`; campaign receipts under `tmp/installed-memory-e10/`.
