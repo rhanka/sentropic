@@ -38,6 +38,10 @@ RUN echo "VITE_EXTENSION_APP_BASE_URL=$VITE_EXTENSION_APP_BASE_URL"
 RUN npm run build
 CMD ["npm", "run", "build"]
 
+# A distinct static profile is exported without rebuilding a development image.
+FROM scratch AS static-output
+COPY --from=build /workspace/ui/build /
+
 FROM nginx:1.31.5-alpine3.24@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3 AS production
 RUN apk update && apk upgrade && rm -rf /var/cache/apk/*
 COPY --from=build /workspace/ui/build /usr/share/nginx/html
