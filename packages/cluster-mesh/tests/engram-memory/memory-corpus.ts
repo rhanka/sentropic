@@ -205,11 +205,11 @@ export const runMemoryCorpus = (open: () => Promise<MemoryCampaignHost>): void =
     scenario('scope-outbox-v1/authority-refusals: should refuse absent foreign and revoked host authority independently', async (h) => {
       expect(() => openMemoryMaintenance(undefined!, undefined!)).toThrow(/assembled binding/);
       expect(() => assembleMemoryHostBinding({ driver: h.binding.provider, maintainGrant: undefined, invocationId: 'inv' })).toThrow(/maintain grant/);
-      const foreign = assembleMemoryHostBinding({ driver: h.binding.provider, maintainGrant: memoryMaintainGrant('foreign'), invocationId: 'foreign' });
+      const foreign = assembleMemoryHostBinding({ driver: h.binding.provider, maintainGrant: memoryMaintainGrant('foreign'), invocationId: 'foreign', storeId: h.scopeBinding.store_id });
       await h.kernel.bindNew(foreign.maintainGrant);
       await expect(verifyHostBinding(h.kernel, foreign, h.scopeBinding.scope)).rejects.toMatchObject({ code: 'denied' });
       const neverIssued = assembleMemoryHostBinding({ driver: h.binding.provider,
-        maintainGrant: { ...h.binding.maintainGrant, token: 'never-issued' }, invocationId: 'unknown' });
+        maintainGrant: { ...h.binding.maintainGrant, token: 'never-issued' }, invocationId: 'unknown', storeId: h.scopeBinding.store_id });
       await expect(verifyHostBinding(h.kernel, neverIssued, h.scopeBinding.scope)).rejects.toMatchObject({ code: 'denied' });
       const fence = await (await h.kernel.bind(h.binding.maintainGrant)).journalFence();
       await h.kernel.revoke(h.binding.maintainGrant.token);
