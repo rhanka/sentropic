@@ -471,3 +471,143 @@ function makeFakeStreamClient() {
   const handlers = new Map<string, (event: unknown) => void>();
   return {
     set(key: string, handler: (event: unknown) => void) {
+      handlers.set(key, handler);
+    },
+    delete(key: string) {
+      handlers.delete(key);
+    },
+    emit(event: unknown) {
+      for (const handler of handlers.values()) {
+        handler(event);
+      }
+    },
+    get size() {
+      return handlers.size;
+    },
+    hasAnyHandler() {
+      return handlers.size > 0;
+    },
+  };
+}
+
+type FakePollJobStatus = 'pending' | 'processing' | 'completed' | 'failed';
+
+/**
+ * Minimal fake pollJob — returns statuses from a queue.
+ * Throws if the queue is empty (test setup issue).
+ */
+function makeFakePollJob(responses: FakePollJobStatus[]) {
+  const queue = [...responses];
+  return async (_jobId: string): Promise<{ status: string }> => {
+    const status = queue.shift();
+    if (!status) throw new Error('makeFakePollJob: queue exhausted');
+    return { status };
+  };
+}
+
+describe('chat-loop-controller: stream subscription (slice 1C)', () => {
+  // 9a. Projection events are appended from subscription
+  it('routes projection events from subscription into projectedStreamEventsById', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const streamId = 'stream-sub-1';
+    const asst = assistantMsg('a1', { _streamId: streamId, _localStatus: 'processing' });
+    ctrl.setMessages([asst]);
+
+    const client = makeFakeStreamClient();
+    ctrl.attachStream({
+      streamClient: client,
+      pollJob: makeFakePollJob(['pending', 'completed']),
+    });
+
+    expect(client.hasAnyHandler()).toBe(true);
+
+    client.emit({ type: 'status', streamId, sequence: 1, data: { state: 'started' } });
+    client.emit({ type: 'content_delta', streamId, sequence: 2, data: { delta: 'Hello' } });
+
+    const events = ctrl.getSnapshot().projectedStreamEventsById.get(streamId);
+    expect(events).toHaveLength(2);
+    expect(events?.[0]?.eventType).toBe('status');
+    expect(events?.[1]?.eventType).toBe('content_delta');
+  });
+
+  // 9b. Terminal 'done' event patches message to completed
+  it("patches message _localStatus to 'completed' on terminal 'done' event", () => {
+    const ctrl = createChatLoopController<Msg>();
+    const streamId = 'stream-done-1';
+    const asst = assistantMsg('a1', { _streamId: streamId, _localStatus: 'processing' });
+    ctrl.setMessages([asst]);
+
+    const client = makeFakeStreamClient();
+    ctrl.attachStream({
+      streamClient: client,
+      pollJob: makeFakePollJob(['completed']),
+    });
+
+    client.emit({ type: 'content_delta', streamId, sequence: 1, data: { delta: 'hi' } });
+    client.emit({ type: 'done', streamId, sequence: 2, data: {} });
+
+    const msg = ctrl.getSnapshot().messages.find((m) => m.id === 'a1');
+    expect(msg?._localStatus).toBe('completed');
+  });
+
+  // 9b. Terminal 'error' event patches message to failed
+  it("patches message _localStatus to 'failed' on terminal 'error' event", () => {
+    const ctrl = createChatLoopController<Msg>();
+    const streamId = 'stream-err-1';
+    const asst = assistantMsg('a1', { _streamId: streamId, _localStatus: 'processing' });
+    ctrl.setMessages([asst]);
+
+    const client = makeFakeStreamClient();
+    ctrl.attachStream({
+      streamClient: client,
+      pollJob: makeFakePollJob(['failed']),
+    });
+
+    client.emit({ type: 'error', streamId, sequence: 1, data: { message: 'oops' } });
+
+    const msg = ctrl.getSnapshot().messages.find((m) => m.id === 'a1');
+    expect(msg?._localStatus).toBe('failed');
+  });
+
+  // 9c. onProjectionEvent callback fires after state is updated
+  it('onProjectionEvent is called with the streamId after event is appended', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const streamId = 'stream-cb-1';
+    const asst = assistantMsg('a1', { _streamId: streamId, _localStatus: 'processing' });
+    ctrl.setMessages([asst]);
+
+    const client = makeFakeStreamClient();
+    const callbackStreamIds: string[] = [];
+    const versionAtCallback: number[] = [];
+
+    ctrl.attachStream({
+      streamClient: client,
+      pollJob: makeFakePollJob(['completed']),
+      onProjectionEvent: (sid) => {
+        callbackStreamIds.push(sid);
+        // State must already be updated when callback fires
+        versionAtCallback.push(ctrl.getSnapshot().projectionEventsVersion);
+      },
+    });
+
+    client.emit({ type: 'content_delta', streamId, sequence: 1, data: { delta: 'a' } });
+    client.emit({ type: 'content_delta', streamId, sequence: 2, data: { delta: 'b' } });
+
+    expect(callbackStreamIds).toEqual([streamId, streamId]);
+    // projectionEventsVersion must have been incremented before each callback
+    expect(versionAtCallback[0]).toBeGreaterThan(0);
+    expect(versionAtCallback[1]).toBeGreaterThan(versionAtCallback[0]!);
+  });
+
+  // 9d. onTerminal callback fires after message is patched
+  it('onTerminal is called with streamId + outcome after message is patched', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const streamId = 'stream-term-cb-1';
+    const asst = assistantMsg('a1', { _streamId: streamId, _localStatus: 'processing' });
+    ctrl.setMessages([asst]);
+
+    const client = makeFakeStreamClient();
+    const terminalCalls: Array<{ streamId: string; outcome: string; status: string | undefined }> = [];
+
+    ctrl.attachStream({
+      streamClient: client,
