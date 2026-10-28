@@ -13,11 +13,31 @@ RUN if [ -f package-lock.json ]; then npm ci --workspaces --include-workspace-ro
 # (GHSA allowlist + expiry) — see .security/audit-gate.mjs + vulnerability-register.yaml.
 COPY .security/audit-gate.mjs .security/audit-allowlist.json ./.security/
 RUN node .security/audit-gate.mjs --omit=dev --workspace sentropic-ui
-COPY . .
+# API/browser sources do not participate in either UI profile.
+COPY ui ./ui
+COPY packages ./packages
 
 FROM base AS development
 WORKDIR /workspace/ui
 CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]
+
+# Execute the existing suite without exporting/loading a development image.
+# CI disables this stage's cache so a warm build still executes every test.
+FROM base AS ui-tests
+WORKDIR /workspace/ui
+ARG VITE_API_BASE_URL=http://localhost:8787/api/v1
+ARG VITE_EXTENSION_PROFILE=uat
+ARG VITE_EXTENSION_API_BASE_URL=http://localhost:8787/api/v1
+ARG VITE_EXTENSION_APP_BASE_URL=http://localhost:5173
+ARG VITE_EXTENSION_WS_BASE_URL=
+COPY api/package-lock.json /workspace/api/package-lock.json
+COPY Makefile docker-compose*.yml /workspace/
+COPY .github/workflows/ci.yml /workspace/.github/workflows/ci.yml
+COPY deploy/k8s/base/30-api.yaml deploy/k8s/base/40-ui.yaml /workspace/deploy/k8s/base/
+RUN npx svelte-kit sync && npm test && mkdir /test-passed && touch /test-passed/ui
+
+FROM scratch AS ui-test-output
+COPY --from=ui-tests /test-passed/ /
 
 FROM base AS build
 WORKDIR /workspace/ui

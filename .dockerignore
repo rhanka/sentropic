@@ -88,6 +88,21 @@ docs/
 rules/
 track/
 deploy/
+# Exact source contracts read by the existing UI suite in BuildKit.
+!Makefile
+!.github/
+.github/*
+!.github/workflows/
+.github/workflows/*
+!.github/workflows/ci.yml
+!deploy/
+deploy/*
+!deploy/k8s/
+deploy/k8s/*
+!deploy/k8s/base/
+deploy/k8s/base/*
+!deploy/k8s/base/30-api.yaml
+!deploy/k8s/base/40-ui.yaml
 # e2e test sources stay out, except the toolbox build manifests and the
 # fixtures imported by api unit tests (document-text-office-extension).
 e2e/*

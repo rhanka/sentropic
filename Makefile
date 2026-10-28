@@ -674,6 +674,15 @@ ci-build-ui-target:
 		--build-arg VITE_EXTENSION_API_BASE_URL=$(VITE_EXTENSION_API_BASE_URL_BUILD) \
 		--build-arg VITE_EXTENSION_APP_BASE_URL=$(VITE_EXTENSION_APP_BASE_URL_BUILD) \
 		--build-arg VITE_EXTENSION_WS_BASE_URL=$(VITE_EXTENSION_WS_BASE_URL_BUILD) .
+.PHONY: ci-test-ui
+ci-test-ui: ci-test-env
+	@docker buildx build --platform $(IMAGE_PLATFORM) --no-cache-filter=ui-tests \
+		--target ui-test-output --output type=local,dest=.tmp/ci-ui-tests -f ui/Dockerfile \
+		--build-arg VITE_API_BASE_URL=$(VITE_API_BASE_URL) \
+		--build-arg VITE_EXTENSION_PROFILE=$(VITE_EXTENSION_PROFILE) \
+		--build-arg VITE_EXTENSION_API_BASE_URL=$(VITE_EXTENSION_API_BASE_URL) \
+		--build-arg VITE_EXTENSION_APP_BASE_URL=$(VITE_EXTENSION_APP_BASE_URL) \
+		--build-arg VITE_EXTENSION_WS_BASE_URL=$(VITE_EXTENSION_WS_BASE_URL) .
 .PHONY: ci-build-ui-static
 ci-build-ui-static:
 	@$(MAKE) ci-build-ui-static-target IMAGE_KIND=ui-static ENV=$(ENV)
