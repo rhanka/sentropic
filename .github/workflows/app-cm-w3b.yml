@@ -1,0 +1,56 @@
+name: App W3.b private content
+
+on:
+  push:
+    branches: [feat/app-cm-w3b]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-w3b-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify-content:
+    runs-on: ubuntu-latest
+    env:
+      REGISTRY: localhost
+      TARGET: development
+      API_PORT: '8803'
+      UI_PORT: '5189'
+      MAILDEV_UI_PORT: '1096'
+      COMPOSE_PARALLEL_LIMIT: '1'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ github.sha }}
+      - name: Verify the exact pushed head
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - uses: docker/setup-buildx-action@v4
+      - name: Prepare isolated executor
+        run: flock /tmp/sentropic-docker.lock make up-api-test ENV=test-app-w3b
+      - name: Qualify private content and durable activation
+        run: >-
+          flock /tmp/sentropic-docker.lock make test-api-endpoints
+          SCOPE=apps/artifact-content/tests
+          API_TEST_ARGS="--config ../apps/artifact-content/vitest.config.ts --no-file-parallelism"
+          API_TEST_WORKERS=1 ENV=test-app-w3b
+      - name: Qualify existing app reader and transport
+        run: >-
+          flock /tmp/sentropic-docker.lock make test-api-endpoints
+          SCOPE="tests/api/artifacts-reader-activation.test.ts tests/api/artifacts-host-activation-store.test.ts tests/api/artifacts-host-recovery.test.ts tests/api/app-artifacts-transport.test.ts"
+          API_TEST_WORKERS=1 API_TEST_ARGS="--no-file-parallelism" ENV=test-app-w3b
+      - name: Check content and API types
+        run: |
+          flock /tmp/sentropic-docker.lock make exec-api CMD="npm exec -- tsc --project ../apps/artifact-content/tsconfig.json" ENV=test-app-w3b
+          flock /tmp/sentropic-docker.lock make typecheck-api lint-api -o prepare-node-workspace ENV=test-app-w3b
+      - name: Content lint
+        run: flock /tmp/sentropic-docker.lock make exec-api CMD="cd /workspace/apps/artifact-content && npm exec -- eslint src tests" ENV=test-app-w3b
+      - name: Runtime diagnostics
+        if: always()
+        run: make logs-api ENV=test-app-w3b
+      - name: Remove isolated stack
+        if: always()
+        run: flock /tmp/sentropic-docker.lock make down ENV=test-app-w3b
