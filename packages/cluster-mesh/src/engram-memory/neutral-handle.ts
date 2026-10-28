@@ -49,6 +49,9 @@ export interface MemoryNeutralHandleAssembly {
   readonly getFence: () => NeutralWriterFence | undefined; readonly units: NeutralAtomicUnit[];
 }
 const SCHEMA_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/;
+// R-G3-1 (neutral-contract.ts): refuse a second live holder, never queue.
+// A reservation also excludes concurrent acquisitions before the first await.
+const liveFences = new WeakMap<MemoryNeutralKernelPort, NeutralWriterFence | symbol>();
 
 export const createMemoryNeutralHandle = (input: CreateMemoryNeutralHandleInput): MemoryNeutralHandleAssembly => {
   if (typeof input?.kernel !== 'object' || input.kernel === null
@@ -83,42 +86,54 @@ export const createMemoryNeutralHandle = (input: CreateMemoryNeutralHandleInput)
     moduleId: 'engram-memory', backend: 'postgres' as const, descriptor: MEMORY_DESCRIPTOR,
     profiles: MEMORY_PINNED_PROFILES.filter((claim) =>
       (MEMORY_DESCRIPTOR.requiredProfiles as readonly string[]).includes(claim.name)),
-    acquireFence: (acquire) => guarded(async () => {
-      if (JSON.stringify(acquire.scope) !== JSON.stringify(scope)) {
-        throw Object.assign(new Error('foreign acquisition scope'), { code: 'unauthorized' });
-      }
-      await kernel.bind(castGrant(acquire.grant));
-      await driver.transaction({ isolation: 'serializable', readOnly: false, deadlineMs: 5000 }, async (session) => {
-        await kernel.ownership!.verify(session);
-        await session.execute({ text: `CREATE TABLE IF NOT EXISTS "${schemaName}".host_memory_identity`
-          + '(scope text PRIMARY KEY,store_id text UNIQUE NOT NULL)', values: [] });
-        await session.execute({ text: `INSERT INTO "${schemaName}".host_memory_identity(scope,store_id)`
-          + ' VALUES($1,$2) ON CONFLICT DO NOTHING', values: [JSON.stringify(scope), acquire.store_id] });
-        const rows = await session.execute({ text: `SELECT scope,store_id FROM "${schemaName}".host_memory_identity`
-          + ' WHERE scope=$1 OR store_id=$2', values: [JSON.stringify(scope), acquire.store_id] });
-        if (rows.rows.length !== 1 || rows.rows[0]!['scope'] !== JSON.stringify(scope)
-          || rows.rows[0]!['store_id'] !== acquire.store_id) {
-          throw Object.assign(new Error('store_id and scope must be bijective'), { code: 'fence-conflict' });
+    acquireFence: (acquire) => {
+      const pending = Symbol('acquiring');
+      return guarded(async () => {
+        if (acquired || liveFences.has(kernel)) {
+          throw Object.assign(new Error('a live canonical holder already owns this kernel'), { code: 'fence-conflict' });
         }
-        await kernel.ownership!.verify(session);
+        liveFences.set(kernel, pending);
+        if (JSON.stringify(acquire.scope) !== JSON.stringify(scope)) {
+          throw Object.assign(new Error('foreign acquisition scope'), { code: 'unauthorized' });
+        }
+        await kernel.bind(castGrant(acquire.grant));
+        await driver.transaction({ isolation: 'serializable', readOnly: false, deadlineMs: 5000 }, async (session) => {
+          await kernel.ownership!.verify(session);
+          await session.execute({ text: `CREATE TABLE IF NOT EXISTS "${schemaName}".host_memory_identity`
+            + '(scope text PRIMARY KEY,store_id text UNIQUE NOT NULL)', values: [] });
+          await session.execute({ text: `INSERT INTO "${schemaName}".host_memory_identity(scope,store_id)`
+            + ' VALUES($1,$2) ON CONFLICT DO NOTHING', values: [JSON.stringify(scope), acquire.store_id] });
+          const rows = await session.execute({ text: `SELECT scope,store_id FROM "${schemaName}".host_memory_identity`
+            + ' WHERE scope=$1 OR store_id=$2', values: [JSON.stringify(scope), acquire.store_id] });
+          if (rows.rows.length !== 1 || rows.rows[0]!['scope'] !== JSON.stringify(scope)
+            || rows.rows[0]!['store_id'] !== acquire.store_id) {
+            throw Object.assign(new Error('store_id and scope must be bijective'), { code: 'fence-conflict' });
+          }
+          await kernel.ownership!.verify(session);
+        });
+        fence = { fenceId: kernel.ownership!.handle.instanceId, epoch: kernel.ownership!.handle.storageEpoch };
+        await kernel.provisionFence(binding.memoryGrant, fence);
+        liveFences.set(kernel, fence);
+        acquired = true;
+        return fence;
+      }).catch((error) => {
+        if (liveFences.get(kernel) === pending) { liveFences.delete(kernel); fence = undefined; }
+        throw error;
       });
-      if (acquired) {
-        throw Object.assign(new Error('a live canonical holder already owns this host handle'), { code: 'fence-conflict' });
-      }
-      fence = { fenceId: kernel.ownership!.handle.instanceId, epoch: kernel.ownership!.handle.storageEpoch };
-      await kernel.provisionFence(binding.memoryGrant, fence);
-      acquired = true;
-      return fence;
-    }),
+    },
     checkFence: (grant, supplied) => guarded(async () => {
       await kernel.bind(castGrant(grant));
       if (!fence || supplied.fenceId !== fence.fenceId || supplied.epoch !== fence.epoch) {
         throw Object.assign(new Error('canonical fence differs'), { code: 'fence-lost' });
       }
+      // Binding §§9.3–9.6 requires a fresh ownership proof on loss/expiry.
+      await driver.transaction({ isolation: 'serializable', readOnly: true, deadlineMs: 5000 },
+        (session) => kernel.ownership!.verify(session));
     }),
     releaseFence: (supplied) => guarded(async () => {
       if (fence?.fenceId === supplied.fenceId && fence?.epoch === supplied.epoch) {
         await kernel.ownership!.release(); acquired = false; fence = undefined;
+        liveFences.delete(kernel);
       }
     }),
     transact: (options, operation) => guarded(async () => {
