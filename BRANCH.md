@@ -137,6 +137,7 @@
   - [x] Conversation view source slice 16 committed within the atomic limit.
   - [x] Conversation view source slice 17 committed within the atomic limit.
 - [ ] **Lot 3 — Parity and packed boundary qualification**
+  - [x] Respect JSON-safe session state in upload transitions: omit absent optional fields instead of inserting undefined; preserve the failed attachment for retry.
   - [x] Add real-runtime document/history parity: failed upload retained across remount, retry/preview/remove, full server history restart and generated-file download through host I/O.
   - [x] Runtime 447/447 and visual unit 524/524 pass; migrate the remaining shell comment fixture to injected host-owned state and forward feedback votes for clear/toggle parity.
   - [x] Align StreamMessage's boundary assertion with optional transport access and keep public docs explicit about host-owned comment/conversation state.
