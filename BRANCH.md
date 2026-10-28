@@ -71,8 +71,8 @@
   - [ ] Record focused red runs before adding each behavior.
 - [ ] **Lot 2 — Trusted host composition**
   - [x] Implement transaction-bound current authority using the package ACL/lifecycle evaluator.
-  - [ ] Add reader service over W1.c; lock current session, memberships, ACL, release and stable pointer until commit.
-  - [ ] Return grant permission only after acknowledged package consume; never issue browser effects in callbacks.
+  - [x] Add reader service over W1.c; lock current session, memberships, ACL, release and stable pointer until commit.
+  - [x] Return grant permission only after acknowledged package consume; never issue browser effects in callbacks.
   - [ ] Mount distinct internal reader issuance port under the existing resources author fence.
   - [ ] Keep APP-P1 public discovery/tool selection unchanged.
 - [ ] **Lot 3 — Final validation and handoff**
