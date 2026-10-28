@@ -187,3 +187,143 @@ describe('@sentropic/chat-ui local tools store', () => {
     const sendMessage = vi
       .fn()
       .mockResolvedValueOnce({
+        ok: true,
+        items: [
+          {
+            toolName: 'ls',
+            origin: 'vscode://workspace',
+            policy: 'allow',
+            pathPattern: 'src/*',
+            updatedAt: '2026-03-03T00:00:00.000Z',
+          },
+        ],
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        item: {
+          toolName: 'file_edit',
+          origin: 'vscode://workspace',
+          policy: 'deny',
+          pathPattern: 'secrets/*',
+          updatedAt: '2026-03-03T00:00:01.000Z',
+        },
+      })
+      .mockResolvedValueOnce({ ok: true });
+    useAdapter({ id: 'sentropic.vscode.runtime', sendMessage });
+
+    const items = await listLocalToolPermissionPolicies();
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ toolName: 'ls', pathPattern: 'src/*' });
+
+    const upserted = await upsertLocalToolPermissionPolicy({
+      toolName: 'file_edit',
+      origin: 'vscode://workspace',
+      policy: 'deny',
+      pathPattern: 'secrets/*',
+    });
+    expect(upserted).toMatchObject({
+      toolName: 'file_edit',
+      pathPattern: 'secrets/*',
+    });
+
+    await deleteLocalToolPermissionPolicy({
+      toolName: 'file_edit',
+      origin: 'vscode://workspace',
+      pathPattern: 'secrets/*',
+    });
+    expect(sendMessage).toHaveBeenNthCalledWith(3, {
+      type: 'extension_tool_permissions_delete',
+      payload: {
+        toolName: 'file_edit',
+        origin: 'vscode://workspace',
+        pathPattern: 'secrets/*',
+      },
+    });
+  });
+
+  it('clears injected adapter when setLocalToolsAdapter(null) is called', () => {
+    useAdapter({ id: 'ext-x', sendMessage: vi.fn() });
+    expect(isLocalToolRuntimeAvailable()).toBe(true);
+    useAdapter(null);
+    expect(isLocalToolRuntimeAvailable()).toBe(false);
+  });
+});
+
+describe('@sentropic/chat-ui local tools — external host registration seam', () => {
+  beforeEach(() => {
+    setLocalToolsAdapter(null);
+    clearRegisteredLocalTools();
+    resetState();
+  });
+
+  afterEach(() => {
+    setLocalToolsAdapter(null);
+    clearRegisteredLocalTools();
+  });
+
+  it('exposes the 16 sentropic built-in names as a frozen-ish const set', () => {
+    expect([...BUILTIN_LOCAL_TOOL_NAMES]).toEqual([
+      'tab_read',
+      'tab_action',
+      'tab_read_dom',
+      'tab_screenshot',
+      'tab_click',
+      'tab_type',
+      'tab_scroll',
+      'tab_info',
+      'bash',
+      'ls',
+      'rg',
+      'file_read',
+      'file_edit',
+      'git',
+      'git_status',
+      'git_diff',
+    ]);
+  });
+
+  it('recognizes a custom name only after the host registers it', () => {
+    expect(isLocalToolName('render_mermaid')).toBe(false);
+    registerLocalTool(RENDER_MERMAID);
+    expect(isLocalToolName('render_mermaid')).toBe(true);
+    // Built-ins keep being recognized — no behavior change for sentropic tools.
+    expect(isLocalToolName('bash')).toBe(true);
+    expect(isLocalToolName('tab_read')).toBe(true);
+    // Unknown unregistered names stay rejected.
+    expect(isLocalToolName('totally_unknown')).toBe(false);
+  });
+
+  it('appends host-registered definitions to runtime built-ins (Chrome mode)', () => {
+    registerLocalTool(RENDER_MERMAID);
+    const names = getLocalToolDefinitions().map((tool) => tool.name);
+    // Chrome built-ins are preserved (additive, not replaced).
+    expect(names).toContain('tab_read');
+    expect(names).toContain('tab_action');
+    expect(names).toContain('render_mermaid');
+    const def = getLocalToolDefinitions().find((t) => t.name === 'render_mermaid');
+    expect(def).toMatchObject({
+      name: 'render_mermaid',
+      description: RENDER_MERMAID.description,
+    });
+  });
+
+  it('appends host-registered definitions to VSCode built-ins too', () => {
+    useAdapter({ id: 'sentropic.vscode.runtime', sendMessage: vi.fn() });
+    registerLocalTool(RENDER_MERMAID);
+    const names = getLocalToolDefinitions().map((tool) => tool.name).sort();
+    expect(names).toEqual([
+      'bash',
+      'file_edit',
+      'file_read',
+      'git',
+      'ls',
+      'render_mermaid',
+      'rg',
+    ]);
+  });
+
+  it('registers multiple tools and preserves registration order', () => {
+    registerLocalTools([
+      { ...RENDER_MERMAID, name: 'render_mermaid' },
+      { ...RENDER_MERMAID, name: 'render_chart', description: 'Chart.' },
+    ]);
