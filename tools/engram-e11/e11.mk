@@ -34,6 +34,11 @@ memory-e11-snapshot:
 	@test "$(ENV)" = test-mem-e11
 	@cp $(E11_DIR)/*.mjs $(E11_DIR)/*.sh $(E11_DIR)/e11.mk "$(E11_INPUT)/"
 
+.PHONY: memory-e11-ci-input
+memory-e11-ci-input:
+	@test "$(ENV)" = test-mem-e11
+	@gh api 'repos/rhanka/sentropic/actions/runs?head_sha=cfd45de4d54651626e97113494b9d7bd108998c8&event=pull_request&per_page=100' > "$(E11_INPUT)/e10-ci.json"
+
 # First freeze a new E2 consumer lock; qualification thereafter only uses npm ci.
 .PHONY: memory-e11-lock memory-e11-installed
 memory-e11-lock:
