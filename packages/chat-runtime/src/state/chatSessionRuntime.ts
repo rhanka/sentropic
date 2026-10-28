@@ -426,3 +426,143 @@ export function createChatSessionRuntime<
     assertActive();
     assertString(value, 'draft');
     draftState = syncDraftFromInput({
+      mode: 'ai',
+      direction: 'input',
+      draft: draftState.draft,
+      input: value,
+      lastDraftApplied: draftState.lastDraftApplied,
+    });
+    notify();
+  };
+
+  const setAttachments = (next: readonly ChatSessionAttachment[]): void => {
+    assertActive();
+    assertJsonSafe(next, 'attachments');
+    attachments = cloneMutableValue([...next]);
+    notify();
+  };
+
+  const setMessages = (messages: readonly Message[]): void => {
+    assertActive();
+    assertJsonSafe(messages, 'messages');
+    controller.setMessages(cloneMessages(messages));
+  };
+
+  const appendMessage = (message: Message): void => {
+    assertActive();
+    assertJsonSafe(message, 'message');
+    controller.appendMessage(cloneMutableValue(message));
+  };
+
+  const hydrateMessages = (
+    messages: readonly Message[],
+    meta?: Pick<SessionHistoryMetaLine, 'checkpoints' | 'todoRuntime'>,
+  ): void => {
+    assertActive();
+    assertJsonSafe(messages, 'messages');
+    if (meta?.checkpoints !== undefined) {
+      assertJsonSafe(meta.checkpoints, 'checkpoints');
+    }
+    if (Object.prototype.hasOwnProperty.call(meta ?? {}, 'todoRuntime')) {
+      assertJsonSafe(meta?.todoRuntime ?? null, 'todo');
+    }
+    if (meta?.checkpoints) {
+      checkpoints = cloneMutableValue([
+        ...meta.checkpoints,
+      ]) as ChatSessionCheckpoint[];
+    }
+    if (Object.prototype.hasOwnProperty.call(meta ?? {}, 'todoRuntime')) {
+      todo = cloneMutableValue(meta?.todoRuntime ?? null) as ChatSessionTodo | null;
+    }
+
+    let next = cloneMessages(controller.getSnapshot().messages);
+    for (const message of messages) {
+      const normalized = normalizeHydratedMessage(cloneMutableValue(message));
+      if (normalized._localStatus === undefined) delete normalized._localStatus;
+      assertJsonSafe(normalized, 'messages');
+      next = upsertSequencedMessage(next, normalized);
+    }
+    controller.setMessages(next);
+  };
+
+  const setCheckpoints = (next: readonly ChatSessionCheckpoint[]): void => {
+    assertActive();
+    assertJsonSafe(next, 'checkpoints');
+    checkpoints = cloneMutableValue([...next]);
+    notify();
+  };
+
+  const setTodo = (next: ChatSessionTodo | null): void => {
+    assertActive();
+    assertJsonSafe(next, 'todo');
+    todo = cloneMutableValue(next);
+    notify();
+  };
+
+  const setLastAppliedSequence = (sequence: number): void => {
+    assertActive();
+    assertFiniteNumber(sequence, 'lastAppliedSequence');
+    lastAppliedSequence = normalizeSequence(sequence);
+    notify();
+  };
+
+  const cloneValidatedMessage = (message: Message, label: string): Message => {
+    assertJsonSafe(message, label);
+    return cloneMutableValue(message);
+  };
+
+  const attach = (host: ChatSessionRuntimeHost): void => {
+    assertActive();
+    if (sameHostRefs(attachedRefs, host)) return;
+
+    if (host.streamClient !== undefined && !isControllerStreamClient(host.streamClient)) {
+      throw new Error(
+        'ChatSessionRuntime.attach requires streamClient.set/delete',
+      );
+    }
+
+    if (streamAttached) {
+      controller.detachStream();
+      streamAttached = false;
+    }
+    if (attachedRefs) controller.detachLocalToolMachine();
+
+    attachGeneration += 1;
+    const generation = attachGeneration;
+    attachedRefs = {
+      transport: host.transport,
+      streamClient: host.streamClient,
+      checkpointHost: host.checkpointHost,
+      localToolMachine: host.localToolMachine,
+    };
+
+    controller.attachHost({ transport: host.transport });
+    if (host.localToolMachine) {
+      controller.attachLocalToolMachine(host.localToolMachine);
+    }
+
+    if (host.streamClient !== undefined) {
+      const streamClient = host.streamClient;
+      controller.attachStream({
+        streamClient: {
+          set(key, onEvent) {
+            streamClient.set(key, (event: unknown) => {
+              onEvent(event);
+              controller.handleLocalToolStreamEvent(event);
+            });
+          },
+          delete(key) {
+            streamClient.delete(key);
+          },
+        },
+        pollJob: resolvePollJob(host.transport, config.pollJob),
+        onProjectionEvent: (streamId) => {
+          if (attachGeneration === generation) {
+            config.onProjectionEvent?.(streamId);
+          }
+        },
+        onTerminal: (streamId, outcome) => {
+          if (attachGeneration === generation) {
+            config.onTerminal?.(streamId, outcome);
+          }
+        },
