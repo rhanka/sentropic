@@ -10,9 +10,10 @@ function setup() {
   const directory = mkdtempSync(join(tmpdir(), 'rc1-issuer-'));
   directories.push(directory);
   const store = createRemoteSessionAuthority(directory);
+  const now = Date.now();
   const record = { sessionId: crypto.randomUUID(), userId: 'owner', sessionTokenHash: 'a'.repeat(64),
-    refreshTokenHash: 'b'.repeat(64), login: { mfaVerified: true, authTime: 1800000000,
-      sessionVersion: 1800000000000 }, expiresAt: 1800086400000, revoked: false };
+    refreshTokenHash: 'b'.repeat(64), login: { mfaVerified: true, authTime: Math.floor(now / 1000),
+      sessionVersion: now }, expiresAt: now + 86_400_000, revoked: false };
   return { directory, store, record };
 }
 describe('RC1 issuer-private durable authority', () => {
