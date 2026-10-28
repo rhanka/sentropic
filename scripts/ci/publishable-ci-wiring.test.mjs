@@ -508,7 +508,7 @@ test('Cluster Mesh publication tolerates registry visibility beyond the old 18-r
 
 test('gateway mesh wait resolves a union range to an exact dependency floor', () => {
   for (const [range, expected] of [['^0.27.0', '0.27.0'], ['^0.27.0 || ^0.28.0', '0.27.0'],
-    ['>=0.28.1 <0.29.0', '0.28.1']]) assert.equal(dependencyFloor(range), expected);
+    ['^0.28.0', '0.28.0'], ['>=0.28.1 <0.29.0', '0.28.1']]) assert.equal(dependencyFloor(range), expected);
   for (const range of ['', 'latest', 'file:../llm-mesh', '>2.0.0 <1.0.0']) {
     assert.throws(() => dependencyFloor(range));
   }
@@ -516,7 +516,7 @@ test('gateway mesh wait resolves a union range to an exact dependency floor', ()
   assert.ok(command, 'execute the real Make version selector without polling the registry');
   const result = spawnSync('sh', ['-ec', command], { cwd: root, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.stdout, '0.27.0');
+  assert.equal(result.stdout, '0.28.0');
 });
 
 test('llm-gateway registry waits bypass caches with the 18 x 10 s budget', () => {
