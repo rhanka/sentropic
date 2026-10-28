@@ -11,8 +11,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import ModelSelector from '../src/components/ModelSelector.svelte';
-import type { ModelCatalogGroup, ModelCatalogModel } from '../src/utils/model-selection.js';
-import { groupModelsByProvider } from '../src/utils/model-selection.js';
+import type { ModelCatalogGroup, ModelCatalogModel } from '@sentropic/chat-runtime/utils/model-selection';
+import { groupModelsByProvider } from '@sentropic/chat-runtime/utils/model-selection';
 
 afterEach(() => cleanup());
 
