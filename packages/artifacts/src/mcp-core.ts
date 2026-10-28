@@ -7,7 +7,7 @@ import { assertArtifactsTransportProfile } from './http.js';
 import { ARTIFACT_CAPABILITY_NAMES, ArtifactProfileInputError,
   type CompiledArtifactsProfile } from './profile/index.js';
 import type { ArtifactInvocationContext } from './server/commit/types.js';
-import { ArtifactOperationError, classifyArtifactFailure, type ArtifactOutcome } from './server/failures.js';
+import { ArtifactOperationError, classifyArtifactFailure, type ArtifactOutcome, type ArtifactHostFailureMapper } from './server/failures.js';
 import { projectArtifactHttpOutcome, projectArtifactMcpOutcome } from './server/outcome-projection.js';
 export * from './profile/index.js';
 export { createRadarKeyDerivation } from './server/command-identity.js';
@@ -15,7 +15,7 @@ export type { ArtifactKeyDerivationBinding } from './server/command-identity.js'
 
 export const ARTIFACTS_PROVIDER_ID = 'sentropic.artifacts';
 export const ARTIFACTS_APP_ID = 'sentropic-artifacts';
-export const ARTIFACTS_PROVIDER_VERSION = '0.2.0';
+export const ARTIFACTS_PROVIDER_VERSION = '0.2.4';
 export const ARTIFACTS_TOOL_NAMES = ARTIFACT_CAPABILITY_NAMES;
 export type ArtifactsToolName = (typeof ARTIFACTS_TOOL_NAMES)[number];
 
@@ -64,13 +64,15 @@ export interface ArtifactsInvokeInput {
   args: unknown;
   idempotencyKey?: string;
 }
-function rejected(cause: unknown, invocationId: string, operation: string): ArtifactOutcome<HttpResponse> {
+function rejected(cause: unknown, invocationId: string, operation: string,
+  mapHostError?: ArtifactHostFailureMapper): ArtifactOutcome<HttpResponse> {
   return { ok: false, failure: classifyArtifactFailure(cause, { invocationId, operation,
     phase: cause instanceof ArtifactProfileInputError ? cause.phase : 'entry', commitState: 'not_committed' },
-  (error) => error instanceof ArtifactProfileInputError ? new ArtifactOperationError(error.category) : undefined) };
+  (error) => error instanceof ArtifactProfileInputError ? new ArtifactOperationError(error.category) : mapHostError?.(error)) };
 }
 
-export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: CompiledArtifactsProfile }) {
+export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: CompiledArtifactsProfile;
+  mapHostError?: ArtifactHostFailureMapper }) {
   assertArtifactsTransportProfile(deps.profile);
   const profile = deps.profile;
   if (deps.app.profileDigest !== profile.profileDigest ||
@@ -90,7 +92,7 @@ export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: 
       }
       return await deps.app.execute({ ...request, actorId: input.invocation.actorId,
         storageScopeId: input.invocation.storageScopeId, idempotencyKey: input.idempotencyKey }, input.invocation);
-    } catch (cause) { return rejected(cause, input.invocation?.invocationId ?? '', input.tool); }
+    } catch (cause) { return rejected(cause, input.invocation?.invocationId ?? '', input.tool, deps.mapHostError); }
   }
   return { execute, async invoke(input: ArtifactsInvokeInput): Promise<HttpResponse> {
     return projectArtifactHttpOutcome(await execute(input));
@@ -98,6 +100,8 @@ export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: 
 }
 
 export interface ArtifactsAdapterOptions extends ArtifactsManifestOptions {
+  /** Trusted mapping for failures in the MCP host binding. */
+  mapHostError?: ArtifactHostFailureMapper;
   app: ArtifactsApp;
   /** Bind verified principal/scope and request authorization in trusted host code. */
   createInvocation(request: AppToolInvocation): ArtifactInvocationContext | Promise<ArtifactInvocationContext>;
@@ -121,7 +125,7 @@ export function createArtifactsAdapter(options: ArtifactsAdapterOptions): AppCon
         if (invocation.actorId !== request.ctx.principal.sub) throw new ArtifactProfileInputError();
         outcome = await executor.execute({ tool: request.capabilityRef, args: request.input,
           invocation, idempotencyKey: request.idempotencyKey });
-      } catch (cause) { outcome = rejected(cause, request.ctx.requestId, request.capabilityRef); }
+      } catch (cause) { outcome = rejected(cause, request.ctx.requestId, request.capabilityRef, options.mapHostError); }
       return projectArtifactMcpOutcome(outcome, request.ctx.auditId);
     },
     readResource: async (request) => ({ ok: false, auditId: request.ctx.auditId, redactionClass: 'low',

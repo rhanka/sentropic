@@ -1,0 +1,33 @@
+name: Live Speech Core
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'packages/live-speech/**'
+      - '.github/workflows/live-speech.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: live-speech-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate-live-speech:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Check source and test types
+        run: make typecheck-live-speech ENV=test-stt-l2
+      - name: Lint core and tests
+        run: make lint-live-speech ENV=test-stt-l2
+      - name: Test interruption, ordering, playback and usage
+        run: make test-live-speech ENV=test-stt-l2
+      - name: Build and verify package exports
+        run: make build-live-speech ENV=test-stt-l2
+      - name: Remove isolated qualification resources
+        if: always()
+        run: make live-speech-down ENV=test-stt-l2

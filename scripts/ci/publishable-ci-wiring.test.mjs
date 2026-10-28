@@ -7,7 +7,11 @@ import { createRequire } from 'node:module';
 import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, publishFilter, waitForVersion } from './publishable-manifests.mjs';
+import { BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, dependencyFloor, publishFilter, waitForVersion } from './publishable-manifests.mjs';
+// Register the S1 contracts in the existing required, credential-free Node validation lane.
+import '../security/daily/schema.test.mjs';
+import '../security/daily/inventory.test.mjs';
+import '../security/daily/scan.test.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const YAML = createRequire(path.join(process.env.MANIFEST_GUARD_TOOL_DIR, 'package.json'))('yaml');
@@ -199,7 +203,16 @@ test('every validation pack step receives the CI context and an explicit ENV', (
       assert.match(step.run, / ENV=test-ci-[a-z-]+$/);
     }
   }
-  assert.equal(count, PACK_TARGETS.length);
+  // Live speech uses the shared inventory's BLOCK pack and a separate deterministic workflow.
+  assert.equal(count, PACK_TARGETS.filter((slug) => slug !== 'live-speech').length);
+  assert.ok(PACK_TARGETS.includes('live-speech'));
+  assert.ok(jobs['validate-publishable-manifests'].steps.some((step) =>
+    step.run === 'make check-publishable-manifests ENV=test-ci-manifests'));
+  const speech = YAML.parse(fs.readFileSync(path.join(root, '.github/workflows/live-speech.yml'), 'utf8'));
+  const speechRuns = speech.jobs['validate-live-speech'].steps.map((step) => step.run);
+  for (const gate of ['typecheck', 'lint', 'test', 'build']) {
+    assert.ok(speechRuns.includes(`make ${gate}-live-speech ENV=test-stt-l2`));
+  }
 });
 
 test('lint wiring follows baseline evidence, independently per package, before typecheck', () => {
@@ -217,7 +230,7 @@ test('lint wiring follows baseline evidence, independently per package, before t
 });
 
 // Release train (BRDP-EX10): every cluster-mesh leaf imports its optional peers (release-matrix tuple).
-const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.22.0,@sentropic/llm-gateway@0.19.0,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.15.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.0';
+const CLUSTER_MESH_PEERS = ' PEERS=@sentropic/llm-mesh@0.30.0,@sentropic/llm-gateway@0.21.5,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1';
 
 test('cluster-mesh qualification installs every declared optional Sentropic peer', () => {
   const manifest = JSON.parse(fs.readFileSync(path.join(root, 'packages/cluster-mesh/package.json'), 'utf8'));
@@ -279,7 +292,7 @@ test('candidate and post-publication qualification for mcp-auth and cluster-mesh
 test('release train: validation barrier, strict chain, serialization, lock-sync and lock integrity (BRDP-EX10)', () => {
   const validated = TRAIN_VALIDATES.map(([job, filter]) => `(needs.${job}.result == 'success' || (needs.${job}.result == 'skipped' && needs.changes.outputs.${filter} != 'true' && needs.changes.outputs.global != 'true'))`);
   for (const [job, upstreams] of Object.entries(TRAIN_UPSTREAMS)) {
-    const cond = jobs[job].if;
+    const cond = jobs[job].if.replaceAll("(github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true)", "github.ref == 'refs/heads/main'");
     const slug = job.slice('publish-'.length);
     // `!cancelled()` instead of design section 5's `always()`: a manual cancel stops the train.
     assert.ok(cond.startsWith(`!cancelled() && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && needs.changes.outputs.${publishFilter(slug)} == 'true' && `), `${job}: barrier prefix`);
@@ -395,7 +408,7 @@ test('sibling Make targets gate PACKAGE/SIBLING_DIR on the host before docker an
   }
   assert.match(recipe('pack-candidate-siblings'), /siblings '\$\(PACKAGE\)' '\$\(SIBLING_DIR\)'/);
   const r = recipe('publishable-sibling-plan');
-  assert.ok(r.indexOf("@case '$(PACKAGE)' in") < r.indexOf('docker run'), 'host slug check before docker run');
+  assert.ok(r.indexOf("@case '$(PACKAGE)' in") < r.indexOf('$(ARTIFACTS_RUN)'), 'host slug check before container launch');
   assert.match(r, /-e PACKAGE="\$\(PACKAGE\)" -e SIBLING_DIR="\$\(SIBLING_DIR\)"/);
   const inner = r.slice(r.indexOf("sh -lc '"));
   assert.ok(!/\$\((?:PACKAGE|SIBLING_DIR)\)/.test(inner), 'no Make interpolation inside the container script');
@@ -493,12 +506,27 @@ test('Cluster Mesh publication tolerates registry visibility beyond the old 18-r
   }
 });
 
+test('gateway mesh wait resolves a union range to an exact dependency floor', () => {
+  for (const [range, expected] of [['^0.27.0', '0.27.0'], ['^0.27.0 || ^0.28.0', '0.27.0'],
+    ['^0.28.0', '0.28.0'], ['>=0.28.1 <0.29.0', '0.28.1']]) assert.equal(dependencyFloor(range), expected);
+  for (const range of ['', 'latest', 'file:../llm-mesh', '>2.0.0 <1.0.0']) {
+    assert.throws(() => dependencyFloor(range));
+  }
+  const command = recipe('wait-llm-gateway-mesh-dependency').match(/version="\$\$\((.*?)\)"; node /)?.[1];
+  assert.ok(command, 'execute the real Make version selector without polling the registry');
+  const result = spawnSync('sh', ['-ec', command], { cwd: root, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, '0.28.0');
+});
+
 test('llm-gateway registry waits bypass caches with the 18 x 10 s budget', () => {
   assert.match(makefile, /^LLM_MESH_REGISTRY_WAIT_ATTEMPTS \?= 18$/m);
   assert.match(makefile, /^LLM_MESH_REGISTRY_WAIT_SECONDS \?= 10$/m);
   const mesh = recipe('wait-llm-gateway-mesh-dependency');
   assert.match(mesh, /publishable-manifests\.mjs wait --spec "@sentropic\/llm-mesh@\$\$version"/);
+  assert.ok(mesh.includes('dependencyFloor'), 'a union range resolves to its exact floor, never a caret-stripped fragment');
   assert.ok(!mesh.includes('npm view'), 'no cached npm view poll');
+  assert.ok(!mesh.includes('#^'), 'the full declared range is resolved, never caret-stripped');
   assert.match(recipe('wait-llm-gateway-auth-dependencies'), /npm_config_prefer_online=true node scripts\/auth-registry\.mjs/);
   assert.match(makefile, /^manifest_guard_publish = .* publish --slug \$\(1\) --wait-attempts "\$\(LLM_MESH_REGISTRY_WAIT_ATTEMPTS\)" --wait-delay "\$\(LLM_MESH_REGISTRY_WAIT_SECONDS\)" -- \$\(2\)$/m, 'publish conflict re-read uses the Make wait budget');
 });

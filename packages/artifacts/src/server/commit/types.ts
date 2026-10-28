@@ -13,6 +13,7 @@
  */
 import type { CommitArrivalObserver, CommitBarrierObserver, CommitBarrierPoint } from '../../testing.js';
 import type { commitFenceBrand, commitTransactionBrand } from './brands.js';
+import type { ArtifactHostFailureMapper } from '../failures.js';
 
 /** Version of the frozen command-codec shape (r2 C6). */
 export const COMMAND_CODEC_VERSION = 'artifacts-command/v1' as const;
@@ -388,6 +389,8 @@ export type FinalizeResult = ArtifactOutcome<StoredCommitReceipt>;
 
 /** Coordinator construction options. */
 export interface CommitCoordinatorOptions {
+  /** Trusted host wrapper classification for failures inside the atomic unit. */
+  readonly mapHostError?: ArtifactHostFailureMapper;
   readonly executor: CommitExecutor;
   readonly policy: CommitPolicyParticipantFactory;
   /** Trusted domain adapters; every call resolves fresh state, including replay. */

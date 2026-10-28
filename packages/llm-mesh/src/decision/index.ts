@@ -1,0 +1,16 @@
+/** Consumer contracts and portable remote mesh client. */
+export type { EvaluatorRef, DecisionRequest, DecisionInputs, DecisionCriterion, DecisionRule, Json, MicroUsd } from './request.js';
+export type { DecisionVerdict, DecisionScore, ScoreScale } from './verdict.js';
+export type { DecisionAdapterResult } from './adapter.js';
+export type { DecisionError, DecisionErrorCode } from './errors.js';
+export type { DecisionClient, DecisionResult, DecisionReceipt, DecisionUsage, DecisionCost, RetentionReceipt,
+  TokenCounter, TotalTokenCounter, DecisionConnectionFailure, RemoteDecisionClient } from './receipt.js';
+export { createRemoteDecisionClient } from './client.js';
+export { validateDecisionResult } from './validate-result.js';
+export type { RemoteDecisionClientOptions } from './client.js';
+export type { ResolvedDecisionCriterion } from './descriptor.js';
+export type { DecisionEvaluatorDiscovery, DecisionOperatingPolicy, DecisionQualificationScope } from './qualification.js';
+export type { DecisionAssessmentReport } from './assessment-types.js';
+export type { DecisionValidationContext, DecisionValidationProfile, DecisionValidationSemantics,
+  DecisionValidationScoreSemantics, DecisionValidationConfidenceSemantics, DecisionRegisteredResolution,
+  DirectDecisionCriterion, DecisionValidationContextResolver } from './validation-context.js';

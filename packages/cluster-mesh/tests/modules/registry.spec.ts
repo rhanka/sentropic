@@ -6,7 +6,7 @@ import {
 } from '../../src/modules/errors.js';
 import { createModuleRegistry } from '../../src/modules/registry.js';
 import { satisfiesRange } from '../../src/modules/semver.js';
-import { evaluations, fakeGateway, fakeMesh, moduleSource, PackageTree } from '../fixtures/package-tree.js';
+import { evaluations, fakeAuthHono, fakeGateway, fakeMesh, moduleSource, PackageTree } from '../fixtures/package-tree.js';
 
 let tree: PackageTree;
 let anchorDir: string;
@@ -22,6 +22,19 @@ const registry = (disabled: readonly string[] = []) =>
   createModuleRegistry({ disabled: disabled as never }, { anchorDir });
 
 describe('module registry', () => {
+  it.each(['0.15.2', '0.16.0', '0.17.0', '0.18.0'])('should enforce the qualified auth-hono boundary for %s', async (version) => {
+    tree.install('app', fakeMesh('mesh'));
+    tree.install('app', fakeGateway('gateway'));
+    tree.install('app', fakeAuthHono('auth', version));
+    const load = registry().load('gateway/auth-hono');
+    if (version === '0.18.0') {
+      await expect(load).rejects.toMatchObject({ reason: 'incompatible_version', packageName: '@sentropic/auth-hono' });
+      expect(evaluations()).toEqual([]);
+    } else {
+      await expect(load).resolves.toHaveProperty('AuthHonoVerifyToken');
+    }
+  });
+
   it('should load Radar 0.19.2 mesh, facade and a gateway sharing that mesh', async () => {
     tree.install('app', fakeMesh('radar', '0.19.2'));
     tree.install('app', fakeGateway('gw'));
@@ -44,7 +57,7 @@ describe('module registry', () => {
   });
 
   it('should refuse the next unqualified comments leaf minor before evaluation', async () => {
-    tree.install('app', { name: '@sentropic/cluster-mesh', version: '0.23.0', exports: {
+    tree.install('app', { name: '@sentropic/cluster-mesh', version: '0.24.0', exports: {
       './comments': { source: moduleSource('comments', ['createCommentsModule', 'createCommentsPostgresStorage']) },
     } });
     await expect(registry().load('comments')).rejects.toMatchObject({
@@ -79,7 +92,7 @@ describe('module registry', () => {
     const modules = registry();
     const failure = modules.load('llm-mesh/facade');
     await expect(failure).rejects.toThrow(
-      'Cluster Mesh module "llm-mesh/facade" is unavailable (not_installed). Install @sentropic/llm-mesh@"0.19.2 || >=0.22.0 <0.28.0" and restart.',
+      'Cluster Mesh module "llm-mesh/facade" is unavailable (not_installed). Install @sentropic/llm-mesh@"0.19.2 || >=0.22.0 <0.32.0" and restart.',
     );
     const error = await failure.catch((caught: unknown) => caught);
     expect(isClusterMeshModuleUnavailableError(error)).toBe(true);
@@ -99,7 +112,7 @@ describe('module registry', () => {
   });
 
   it.each([
-    ['0.28.0', '0.28.0'],
+    ['0.32.0', '0.32.0'],
     ['0.21.2', '0.21.2'],
     ['0.22.1-rc.1', '0.22.1-rc.1'],
   ])('should refuse llm-mesh %s as incompatible_version', async (version, installedVersion) => {
@@ -110,6 +123,10 @@ describe('module registry', () => {
     expect(evaluations()).toEqual([]);
   });
 
+  it('should admit the calibrated Decision mesh minor 0.30.0', async () => {
+    tree.install('app', fakeMesh('mesh', '0.30.0'));
+    await expect(registry().load('llm-mesh')).resolves.toBeDefined();
+  });
   it('should admit llm-mesh 0.26.0 inside the #662 union range', async () => {
     tree.install('app', fakeMesh('mesh', '0.26.0'));
     await expect(registry().load('llm-mesh')).resolves.toBeDefined();
@@ -209,7 +226,7 @@ describe('module registry', () => {
   it('should list the catalog with delivered and source-unavailable entries', () => {
     const catalog = registry().catalog();
     expect(catalog.find((entry) => entry.id === 'gateway/auth')).toMatchObject({
-      status: 'delivered', entry: '@sentropic/llm-gateway/auth', requiredRange: '>=0.19.0 <0.22.0',
+      status: 'delivered', entry: '@sentropic/llm-gateway/auth', requiredRange: '>=0.19.0 <0.23.0',
       peers: [
         { packageName: '@sentropic/mcp-auth', entry: '@sentropic/mcp-auth/hono', requiredRange: '>=0.2.1 <0.3.0' },
         { packageName: 'jose', entry: 'jose', requiredRange: '^5.10.0' },

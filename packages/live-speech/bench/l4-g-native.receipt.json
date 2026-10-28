@@ -1,0 +1,70 @@
+{
+  "createdAt": "2026-10-27T08:31:09Z",
+  "kind": "l4-g-native-receipt",
+  "lot": "L4",
+  "spec": "r3 §5.1 + §8.1",
+  "status": "blocked",
+  "note": "L4 adds no native build and no new npm dependency. The runtime digest check (refuse on mismatch, at open AND at list) is implemented and unit-covered, but the helper digests are host-measured only: they are NOT the pinned CI image's bytes. Until every digest and trace below is real, this receipt stays blocked, never measured.",
+  "toolchain": {
+    "testImage": "node:24-bookworm-slim (tag only; image digest not pinned — no lane exposes it, ad-hoc docker inspection is forbidden)",
+    "arch": "amd64",
+    "pythonInImage": "none (verified: no python/python3 on PATH)",
+    "nodeGyp": "never invoked in live-speech install, build, test or device paths",
+    "nativeBuild": "none — no native module in the L4 path; faster-whisper-ts stays an optional L3 peer"
+  },
+  "packageDependencies": {
+    "runtime": [],
+    "optionalPeer": ["faster-whisper-ts@1.2.1 (L3, unused by L4)"],
+    "dev": ["typescript@5.4.5", "@types/node@^22.10.10", "vitest@4.0.18 (via make lane)"],
+    "note": "Zero runtime dependencies: device/capture/control import only node:child_process, node:crypto, node:fs and node builtins."
+  },
+  "helpers": {
+    "arecord": {
+      "role": "wired backend (ArecordDevice)",
+      "binary": "/usr/bin/arecord",
+      "package": "alsa-utils 1.2.15.2-1ubuntu1",
+      "version": "arecord: version 1.2.15.2",
+      "hostDigest": "sha256:4436d05a3f9ce9d92432ea73dd5b6233f69d6243a6cfb3b6b1b8852622cb26c5",
+      "hostDigestScope": "measured on the Ubuntu qualification host — NOT the node:24-bookworm-slim image, which ships no alsa-utils",
+      "imageDigest": "missing — blocked: no lane provisions arecord inside the pinned image",
+      "license": "GPL-2 (separate native executable, subprocess aggregation — same treatment as the L3 eSpeak NG binary)",
+      "invocation": "arecord -D <id> -f S16_LE -r <rate> -c 1 -t raw (explicit argv, shell:false; stdout streamed as PCM, stderr drained as text, no audio files)",
+      "runtimeEnforcement": "ArecordDevice.open and ArecordDevice.listDevices resolve the binary to an absolute path, hash it, and refuse anything outside ARECORD_SHA256_PINS plus constructor/ARECORD_DIGESTS allowlist (DeviceOpenError on mismatch, DeviceUnavailableError when missing)"
+    }
+  },
+  "removedEntries": {
+    "pw-record": "Removed in r2: the previously recorded digest was a corrupted transcription (62 hex chars, not a real hash). No verified digest exists — neither in-image (no lane provisions pipewire) nor re-measured for claim — so the entry is dropped entirely instead of carrying an unverified hash. pw-record stays an unqualified alternative and is not wired."
+  },
+  "deviceTrace": {
+    "status": "dropped",
+    "detail": "The arecord -l trace was removed in r3: its content is disputed across environments (card vs device naming) and a pasted trace cannot be re-verified by review. Enumeration parsing is instead proven by unit tests over both the English and French locale forms (tests/device.test.ts, real host capture as fixture). No capture was ever attempted — no microphone in this environment, and microphone capture is forbidden in CI tests."
+  },
+  "networkPosture": {
+    "microphone": false,
+    "paidApi": false,
+    "runtimeDownloads": "none — audio helpers are preinstalled system binaries, not fetched artifacts; no npm audio dependency added",
+    "audioInTests": "synthetic PCM only via FakeDevice and the node fixture binary; no audio payload in events or logs (counts, revisions, ids and text only)"
+  },
+  "sbom": {
+    "status": "measured",
+    "delta": "empty — L4 adds zero packages to package.json/package-lock.json; SBOM is the unchanged L3 set plus one hashed system binary"
+  },
+  "blocked": {
+    "liveMicCapture": {
+      "status": "blocked",
+      "detail": "No microphone available on the host or CI runners; live capture stays undelivered. Path: FakeDevice behavior + digest-verified arecord backend."
+    },
+    "speakerAEC": {
+      "status": "blocked",
+      "detail": "Speaker mode needs an output reference (spec §5.1), not just an amplitude threshold. Headset-only profile until a qualified AEC reference exists; speaker mode stays unavailable, never silently muted."
+    },
+    "holdToTalk": {
+      "status": "blocked",
+      "detail": "No qualified native hotkey or browser companion source in this lot: TerminalController hold mode fails closed without a real HoldSource object. Toggle, start-end and open-mic only."
+    },
+    "inImageHelper": {
+      "status": "blocked",
+      "detail": "arecord/pw-record are absent from node:24-bookworm-slim and no lane may provision them (ad-hoc docker work is forbidden). Exact missing §8.1 items: (1) pinned image digest for node:24-bookworm-slim, (2) in-image arecord digest, (3) offline execution trace inside that image, (4) network-denial log for that provisioning."
+    }
+  }
+}

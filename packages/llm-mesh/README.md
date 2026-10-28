@@ -25,6 +25,57 @@ commitment remain outside this package. CLI enrollment uses an encrypted local
 keyring; portal mode remains injection-only. Override the CLI keyring directory
 with `SENTROPIC_LLM_MESH_KEYRING_DIR` when runtime isolation requires it.
 
+## Live speech contract (v1)
+
+`@sentropic/llm-mesh/speech` exports the provider-neutral duplex contract; the
+same surface is available from the package root. This is a contract release;
+engine adapters, configuration projection and runtime qualification follow in
+their own lots.
+
+```ts
+import {
+  negotiateSpeech,
+  isValidSpeechAudioFrame,
+  type SpeechAdapter,
+  type SpeechSessionReceipt,
+} from '@sentropic/llm-mesh/speech';
+```
+
+| Surface | Exports / semantics |
+| --- | --- |
+| Engine selection | `SpeechBinding`, `SpeechPlacement`, `speechPlacements`, `SpeechPipeline`, `SpeechMicMode`, `SpeechStage`; exact provider/model/artifact/adapter revisions and placement, optional opaque account/resource references |
+| Configuration and target | `SpeechConfigurationReference`, `SpeechTarget`; profile/config/policy revision, session/source/controller and consent identity |
+| Media | `SpeechAudioFormat`, `SpeechEventMetadata`, `SpeechInputFrame`, `SpeechOutputFrame`, `SpeechPlaybackProgress`, `isValidSpeechAudioFrame`; binary bytes, explicit clock domain, epochs, sequences and sample accounting |
+| Transcripts | `SpeechTranscriptPartial`, `SpeechTranscriptFinal`, `SpeechTranscript`; UTF-16 replacement range and hypothesis revision, separate immutable final with audio interval/language |
+| Duplex port | `SpeechSessionRequest`, `SpeechSessionReceipt`, `SpeechSessionState`, `SpeechCommand`, `SpeechEvent`, `SpeechSession`, `SpeechAdapter`; admitted receipt before media, async events plus independent write/control paths with AbortSignal |
+| Capabilities | `speechCapabilityNames`, `SpeechCapabilityName`, `SpeechUsageUnit`, `SpeechCapabilities`, `SpeechNegotiationRequest`, `SpeechNegotiationResult`, `negotiateSpeech`; per-tuple evidence and ordered exact-format negotiation |
+
+`getModelSpeechCapabilities(providerId, modelId, catalogue?)` returns all exact
+tuples from an independent `SpeechEngineCatalogue`, through root and speech
+exports. Open `SpeechEngineIdentity` strings accept STT/TTS engines without LLM
+profiles; each model can expose multiple adapters, revisions and placements.
+The default catalogue is empty until engines are qualified. No provider speech
+claim is inherited by chat models. An empty result is unqualified. Audio input does
+not advertise streaming STT, synthesis or duplex output. A required capability
+passes only with `supported`; `partial`, `unknown` and `unsupported` refuse.
+Negotiation never substitutes another engine/model/placement, and performs no
+authorization, account admission, spending or configuration mutation.
+Languages, voices and regions require membership in their declared supported
+sets; account/resource references remain with the selected session binding.
+`reviseSpeechTranscript` applies UTF-16 partial patches to a display projection,
+ignores stale/invalid revisions and preserves the first final. It does not submit
+an agent turn or own the coordinator's durable reconciliation.
+
+PCM16 little-endian mono supports negotiated 16/24/48 kHz; Opus is an explicit
+alternative, never an implicit conversion. Frame validation checks local
+metadata and PCM byte/sample agreement. The coordinator owns monotonic ordering,
+bounded queues, playback clamping, transcript reconciliation and deduplication.
+Provider `audio.output_done` means generation ended, while `provider.cancelled`
+acknowledges only the speech provider. Neither proves playback completion or an
+agent/tool stop. Durable interruption fences and effect outcomes belong to the
+agent-control/core and gateway lots. No provider model is qualified by this
+release; cluster-mesh L1c remains the authoritative configuration surface.
+
 `CloudCodeRuntimeClient` projects function parameter schemas onto the JSON
 Schema subset accepted by the Cloud Code Gemini wire. Tool names, properties,
 required fields and supported constraints are preserved; unsupported
@@ -349,3 +400,134 @@ authority escalation and lineage conflicts. Package enrollment keeps existing id
 `cloudcode-pa` target and `productAccountSource: antigravity`, and refuses the
 `gemini` route. Native profile variants stay unverified until observed; see
 `spec/SPEC_EVOL_CI_SEATS.md` and `tests/enrollment/seat-bundle.test.ts`.
+
+## Generic Decision Capability
+
+`@sentropic/llm-mesh` provides strict decision evaluation contracts, portable client execution, and native JEV/OpenAI Decisions adapters via three distinct export subpaths:
+
+- `@sentropic/llm-mesh/decision`: Consumer contracts (`EvaluatorRef`, `DecisionRequest`, `DecisionResult`, `DecisionVerdict`, `DecisionReceipt`) and portable remote client (`createRemoteDecisionClient`).
+- `@sentropic/llm-mesh/decision/host`: Trusted host factory (`createDecisionService`), JEV adapter (`createJevAdapter`), and dedicated OpenAI Decisions adapter/transport (`createOpenAiDecisionsAdapter`, `createOpenAiDecisionsTransport`).
+- `@sentropic/llm-mesh/transport/jev`: Deterministic JEV transport (`createJevTransport`).
+
+### Consumer usage
+
+```ts
+import { createRemoteDecisionClient } from '@sentropic/llm-mesh/decision';
+
+const client = createRemoteDecisionClient({
+  baseUrl: 'https://llm.sent-tech.ca',
+  authToken: 'secret-bearer-token',
+  validationContext: (snapshot) => ({
+    evaluator: { ...snapshot.evaluator },
+    validationProfile: { profile: 'native-distribution-v1', version: 'v1' },
+    acceptedServedModelIds: ['synthetic-served-model'],
+    semantics: { nativeDecision: false,
+      score: { meaning: 'probability-true', min: 0, max: 1 },
+      confidence: null, rationale: 'forbidden' },
+    definitionDigest: 'a'.repeat(64),
+  }),
+  // Client timeout defaults to server deadline + 1 000 ms margin (11 000 ms default).
+  // Optional: timeoutMs can be provided to bound client wait below server deadline + margin.
+});
+
+const result = await client.decide({
+  schemaVersion: 1,
+  evaluator: { providerId: 'typesafe', evaluatorId: 'jev-1.13.0', revision: 'syn-v1' },
+  inputs: { output: 'Candidate completion', state: null },
+  criterion: { kind: 'binary', instructions: 'Verify output correctness' },
+  decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.5 },
+  correlationId: 'corr-decision-100',
+  policy: { timeoutMs: 10_000 }, // Server deadline: 10 000 ms (client waits 11 000 ms with margin)
+});
+```
+
+### Host usage
+
+```ts
+import { createDecisionService, createJevAdapter, jevDescriptor } from '@sentropic/llm-mesh/decision/host';
+import { createJevTransport } from '@sentropic/llm-mesh/transport/jev';
+import { createProviderRegistry } from '@sentropic/llm-mesh';
+
+const adapter = createJevAdapter({
+  descriptor: jevDescriptor,
+  transport: createJevTransport({ fetch: globalThis.fetch }),
+});
+const service = createDecisionService({
+  registry: createProviderRegistry([adapter]),
+  resolveEvaluator,
+  evaluatorAllowlist: [{ providerId: 'typesafe', evaluatorId: 'jev-1.13.0', revision: 'syn-v1' }],
+  resolvePrice,
+  authorize,
+  budget,
+  receipts,
+  resolveAuth,
+  clock,
+});
+```
+
+### Qualification and production readiness
+
+The default execution profile is production. The host supplies immutable `readiness` evidence
+(`contractConformance`, `transportAccessible`, an exact operating `policy`, and recorded
+`assessments`). Missing criterion calibration refuses admission before credentials or budget.
+`discoverDecisionEvaluator` reports identity, billing, protocol price, transport and calibration
+independently. `productionReady` exists only for a specific request/policy; evaluator discovery
+lists qualified scopes. A passing rubric never qualifies new arbitrary instructions.
+
+An explicitly published `executionProfile: 'qualification'` candidate remains experimental,
+even with provisional expected served IDs. It requires the same explicit profile on
+`createDecisionService` host options; production refuses it. It still needs qualified financial bounds, host
+credentials and one-attempt admission. Success uses `kind: 'experimental-verdict'`; results and
+receipts carry `experimental: true`, and served evaluator IDs carry `provisional: true`.
+Production consumer validation rejects these envelopes and receipts, including errors.
+Deterministic assessments are cached per service and exact scope; price remains a live gate.
+
+The host exports `decisionExecutionDigest`, `decisionQualificationScope` and
+`assessDecisionCalibration` for reproducible offline records. Fixtures cannot qualify semantic
+calibration. See [the assessment contract and L6 requirements](../../spec/decision/v4l5-qualification.md).
+
+### Native OpenAI Decisions
+
+The host subpath exports `openAiDecisionsDescriptor` and the published standard/no-cache rate projection `openAiDecisionsPrice`.
+Register `createOpenAiDecisionsAdapter({ transport: createOpenAiDecisionsTransport({ fetch: globalThis.fetch }) })`
+in a dedicated Decision provider registry and explicitly allowlist its exact evaluator reference. Resolve credentials
+from host-owned `OPENAI_API_KEY` and pricing from `control.model_pricing`; ordinary chat composition is unchanged.
+Consumers keep using `createRemoteDecisionClient` with a trusted `native-distribution-v1` context for that revision.
+
+The adapter sends one named predicate, choice or score question to `/v1/decisions`. It disables implicit caching,
+uses the separate $0.10/M uncached-input tariff with no output charge, and rejects a Responses price row.
+Refusals remain typed errors with independently validated usage; no retry, prompted fallback or CLI route is added.
+JEV stays pinned to 1.13.0 and accepts its documented answer discriminator with closed key validation.
+
+Both built-in candidates remain unqualified with empty accepted served-model sets. Fixtures establish protocol
+conformance only. Identity stability, account access, billing bounds and criterion-specific calibration require
+the separately approved V4-L5/L6 work. See the [JEV](../../spec/decision/jev-v4l3-candidate.md) and
+[OpenAI Decisions](../../spec/decision/openai-v4l3-candidate.md) candidate packets for dated evidence and gaps.
+
+### Deadline & Failure Semantics
+
+- **Deadline margin**: The client waits server deadline + 1 000 ms grace margin (11 000 ms default, 61 000 ms cap) whenever client `options.timeoutMs` is omitted or ≥ server timeout + 1 000 ms, so that the server's own timeout receipt reaches the client before client-side abort. Providing `options.timeoutMs` bounds the client timeout via `Math.min(options.timeoutMs, serverTimeout + 1 000)`.
+- **Phase-aware errors**: `preflight`, `admission`, `dispatch`, `settlement`. Settlement and post-result timeouts have `retryable: false`.
+- **Advisory retry hints**: Bounded strictly to a 60-second ceiling.
+- **Normalization & security**: Unsafe JSON keys (`__proto__`, `constructor`, `prototype`) are rejected. MicroUsd prices use integer strings. Null candidate output/state is accepted; absent/undefined is refused.
+
+### Migration from judge names
+
+V4-L2 renames the capability to Sentropic Decision with no legacy alias. Update imports and call sites together; the wire contract (`schemaVersion: 1`) is unchanged.
+
+| Before | After |
+|---|---|
+| `@sentropic/llm-mesh/judge` | `@sentropic/llm-mesh/decision` |
+| `@sentropic/llm-mesh/judge/host` | `@sentropic/llm-mesh/decision/host` |
+| `createRemoteJudgeClient` | `createRemoteDecisionClient` |
+| `client.judge(request)` | `client.decide(request)` |
+| `adapter.judge(request, context)` | `adapter.decision(request, context)` |
+| `judgeRequest`, `JudgeResult`, `JudgeClient` | `decisionRequest`, `DecisionResult`, `DecisionClient` |
+| `isJudgeOnlyProvider` (api) | `isDecisionOnlyProvider` |
+
+```ts
+import { createRemoteDecisionClient } from '@sentropic/llm-mesh/decision';
+import type { DecisionRequest, DecisionResult } from '@sentropic/llm-mesh/decision';
+```
+
+Callers must pass the explicit trusted context: `validationContext` is required on `createRemoteDecisionClient` so revision-specific validation facts bind the transmitted snapshot; omitted resolvers refuse client-local with zero header/credential resolution. Registered criteria require a trusted resolution; without one they fail closed. The host requires an explicit `evaluatorAllowlist`; absent or unlisted evaluators refuse before credentials or dispatch.

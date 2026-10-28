@@ -13,12 +13,29 @@
 - [x] Root dev 8787/5173/1080 and D2 9381/5581/1481, 9382/5582/1482 remain reserved to their owners.
 - [x] W0 runtime slot: `test-app-cm-w0`, API/UI/Maildev UI 9710/5910/1810; no service listeners started.
 - [x] 26 October follow-up: execute only plan-v2 W0-close.a/d; merge current main without rebasing, preserve historical readings, use `ENV=test-app-w0`; no restore, PR merge or deployment.
+- [x] 28 October resync: worktree `tmp/worktrees/app-w0-resync`, same branch; owner requests merge of current main, #796 reference reconciliation, deviation dispositions, PR-body update, push and successful exact-head CI; W0-close.c stays BLOCKED.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `docs/baselines/app-cm-w0/**`
   - `.h2a/owner-questions-w0.md`
+  - `.github/**`
+  - `.security/**`
+  - `.tmp/**`
+  - `.track/**`
+  - `Makefile`
+  - `api/**`
+  - `deploy/**`
+  - `docs/**`
+  - `package-lock.json`
+  - `package.json`
+  - `packages/**`
+  - `plan/**`
+  - `scripts/**`
+  - `spec/**`
+  - `tools/**`
+  - `ui/**`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -39,6 +56,7 @@
   - [x] `BR142-EX2`: owner follow-up explicitly requested merging origin/main `cf0ad8ee44f9bb7cf4ad1222a468172f0f77fc2d` into W0. Integrated unchanged upstream bytes at fe26214df; temporary allowances removed. Impact: main history and its existing package/lock/CI/spec/plan changes entered this branch; rollback: owner-authorized merge revert. No PR merge or deployment is authorized.
   - [x] `BR142-EX3`: owner requests merging origin/main `fbfe68f0e40d386e6b3429abc2ea8f868fcdd3f6`, including the published artifacts/mesh tuple. All inherited paths are allowed solely for this merge; retain this branch's BRANCH.md on add/add conflict. Impact: unchanged main bytes/history, exceeding the authored-diff limit; rollback: separately authorized merge revert. Track contains all 342 prior branch events and matches main byte-for-byte; acceptance refresh belongs to the designated Track writer.
   - [x] `BR-CM-W0-EX4`: conductor packet `app-W0c.md` explicitly orders the W0-close.c receipt template at `docs/runbooks/app-cm-baseline-restore/receipts/TEMPLATE.md` in this worktree plus the index entry in `docs/baselines/app-cm-w0/baseline.md`. Impact: one template doc + one table cell, no code, no cluster contact; rollback: remove the template file and revert the cell.
+  - [x] `BR142-EX5`: owner 28 October instruction explicitly requests merging origin/main `ea20bd9c026e9717d911514e763f8911b6981dde` into #702, preserving W0's BRANCH.md. Additional Allowed Paths above apply only to unchanged inherited main bytes/history in this merge and are removed in the reconciliation commit. Impact: inherited merge exceeds 150 lines; W0-authored changes remain below 150 lines per commit, with no product edits. Rollback: separately authorized merge revert. All 346 prior branch Track event IDs and all 370 main event IDs survive; acceptance refresh remains with the designated Track writer.
 
 ## Feedback Loop
 - [ ] `attention`: 26 October B01/B02/B04 and B06 number evidence supplied; B03 isolated recovery/checkpoint and B08 exact-head reviews remain open. Missing upstream UP-T durable activation receipt gates W1.c; positive writer fencing gates W2.
@@ -68,6 +86,7 @@
   - [x] Mechanical `harness check branch` passes; branch is clean and starts at pinned main.
   - [x] Follow-up: branch verified, remote pulled with fast-forward only, main integrated under BR142-EX2; identical Track blobs and all 342 event IDs preserved. Track acceptance refresh stays with the designated root writer.
   - [x] 26 October: current main merged under BR142-EX3; only BRANCH.md conflicted, retained W0 plan; no source/lock/package conflict resolution or rebase.
+  - [x] 28 October: origin/main `ea20bd9c0` merged under BR142-EX5; only BRANCH.md conflicted, retained W0 plan; Track event containment passes for both parents, with no Track edits by this author.
   - [x] Record available runtime evidence, pending operator facts, endpoint parity, configured domains and generated-content authorities in `docs/baselines/app-cm-w0/baseline.md`.
   - [x] Pin exact releases, selected peers, integrities and lock/config hashes in `published-tuple.json`.
   - [x] F1/F2 follow-up: add standalone read-only metadata/archive collectors; validate COPY counting with a two-table fixture before recording historical aggregates.

@@ -136,9 +136,13 @@ describe('Google Drive OAuth helpers', () => {
       provider: 'google-drive',
     });
 
-    expect(() => verifyGoogleDriveOAuthState(`${state.slice(0, -2)}xx`)).toThrow(
-      'Invalid Google Drive OAuth state.',
-    );
+    const [payload, signature] = state.split('.');
+    const signatureBytes = Buffer.from(signature, 'base64url');
+    signatureBytes[0] ^= 1;
+    const tamperedState = `${payload}.${signatureBytes.toString('base64url')}`;
+    expect(() =>
+      verifyGoogleDriveOAuthState(tamperedState, { now: new Date('2026-04-21T10:05:00.000Z') }),
+    ).toThrow('Invalid Google Drive OAuth state.');
     expect(() =>
       verifyGoogleDriveOAuthState(state, { now: new Date('2026-04-21T10:11:00.000Z') }),
     ).toThrow('Expired Google Drive OAuth state.');

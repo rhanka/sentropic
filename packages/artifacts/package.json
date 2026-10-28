@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/artifacts",
-  "version": "0.2.0",
+  "version": "0.2.4",
   "description": "Generic configurable artifacts MCP and artifact service: StorageScope/Artifact/Binding/Release model, canonical manifests, object authorization, idempotent intents (spec-v8 §9).",
   "type": "module",
   "license": "MIT",
@@ -41,6 +41,15 @@
       "types": "./dist/adapters/postgres-commit.d.ts",
       "import": "./dist/adapters/postgres-commit.js"
     },
+    "./adapters/postgres-activation": {
+      "types": "./dist/adapters/postgres-activation.d.ts",
+      "import": "./dist/adapters/postgres-activation.js"
+    },
+    "./adapters/postgres-activation/vectors": {
+      "types": "./dist/adapters/postgres-activation-vectors.d.ts",
+      "import": "./dist/adapters/postgres-activation-vectors.js"
+    },
+    "./sql/*": "./sql/*",
     "./migrations/*": "./migrations/*",
     "./server/ports": {
       "types": "./dist/server/ports.d.ts",
@@ -168,6 +177,7 @@
     "l0-freeze",
     "src/contracts.ts",
     "migrations",
+    "sql",
     "docs/migration-l6.md",
     "examples/radar-commit-setup.ts",
     "README.md",
