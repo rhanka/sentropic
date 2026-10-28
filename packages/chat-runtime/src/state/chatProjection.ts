@@ -304,3 +304,28 @@ export const buildProjectedTimeline = <
         runtimeSegmentOrdinal += 1;
         continue;
       }
+
+      projected.push({
+        kind: 'assistant-segment',
+        key: `${message.id}:${segment.id}`,
+        message,
+        streamId,
+        segment,
+        isLastAssistantSegment: index === lastAssistantIndex,
+        isTerminal,
+      });
+    }
+
+    if (steerCursor < combinedSteers.length) {
+      for (const steerMessage of combinedSteers.slice(steerCursor)) {
+        projected.push({
+          kind: 'message',
+          key: `message:${steerMessage.id}`,
+          message: steerMessage,
+        });
+      }
+    }
+  }
+
+  return projected;
+};
