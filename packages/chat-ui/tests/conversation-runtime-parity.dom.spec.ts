@@ -98,3 +98,20 @@ it('should show denied local permission without executing a platform tool', asyn
   await waitFor(() => expect(view.getByText('render_mermaid: chat.permission.denied')).toBeTruthy());
   expect(host.executions).toHaveLength(0);
 });
+
+it.each([false, true])('should render active plan results through the same runtime in app-shaped=%s', async (appShaped) => {
+  const host = await fixture();
+  const view = render(ConversationView, { runtime: host.runtime, appShaped });
+  const input = await type(view.container, 'Plan a release');
+  await fireEvent.keyDown(input, { key: 'Enter', isComposing: true });
+  expect(host.requests.some((entry) => entry.method === 'POST' && entry.path === '/chat/messages')).toBe(false);
+  await fireEvent.keyDown(input, { key: 'Enter' });
+  await waitFor(() => expect(host.runtime.snapshot().activeStreamId).toBeTruthy());
+  const streamId = host.runtime.snapshot().activeStreamId!;
+  host.emit(streamId, 'tool_call_start', { tool_call_id: 'plan', name: 'plan', args: '{}' }, 100);
+  host.emit(streamId, 'tool_call_result', { tool_call_id: 'plan', result: {
+    status: 'completed', todoRuntime: { todo: { title: 'Release plan' }, tasks: [{ id: 'task', title: 'Qualify artifacts', status: 'done' }] },
+  } }, 101);
+  await waitFor(() => expect(view.container.textContent).toContain('Qualify artifacts'));
+  expect(host.runtime.snapshot().error).toBeNull();
+});
