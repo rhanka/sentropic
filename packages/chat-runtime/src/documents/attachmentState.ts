@@ -13,7 +13,7 @@ import type {
   ChatAttachmentSource,
   ChatAttachmentState,
   UnifiedAttachmentItem,
-} from './types.js';
+} from '@sentropic/chat-ui/documents';
 
 // ---------------------------------------------------------------------------
 // ID generation
