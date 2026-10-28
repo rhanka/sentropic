@@ -115,3 +115,24 @@ export function createAuthorizedLocalToolMachine(options: {
       if (abort.signal.aborted) return Promise.resolve();
       const key = `${streamId}:${toolCallId}`;
       const existing = posts.get(key);
+      if (existing) return existing;
+      const pending = options.postResult(streamId, toolCallId, result).catch((error) => {
+        posts.delete(key);
+        throw error;
+      });
+      posts.set(key, pending);
+      return pending;
+    },
+  };
+  return {
+    machine, snapshot: () => [...permissions.values()],
+    dispose() { abort.abort(); for (const entry of nativeRequests.values()) clearTimeout(entry.timer); nativeRequests.clear(); },
+    async decide(id: string, allow: boolean) {
+      const pending = decisions.get(id);
+      if (!pending || abort.signal.aborted) return;
+      if (!allow) { pending.resolve(false); return; }
+      const result = await authorize({ ...pending.request, decision: 'allow' }, abort.signal);
+      if (result !== 'pending') pending.resolve(result === true);
+    },
+  };
+}
