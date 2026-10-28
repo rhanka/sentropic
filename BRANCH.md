@@ -42,6 +42,9 @@
   - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] BR1-R3-checks: runtime 440, visual 533 unit/206 DOM tests and both typechecks pass after ownership changes; refresh locks for optional runtime/type-peer metadata.
+- [x] BR1-R3-scope: main integration's make scope-check reports only inbound main paths; mechanical harness scope against origin/main passes without widening the authored scope.
+- [x] BR1-R3-main: merge origin/main without rebase; keep this PR plan on conflict; Track event bytes are identical on both parents.
 - [x] BR1-R3-packed-boundary: scan every executable JS/Svelte file in the exact visual archive for runtime imports, and synchronize the model/context export snapshot.
 - [x] BR1-R3-model-presentation: visual model key/catalog/label helpers have one neutral UI implementation; runtime retains selection/hydration policy and consumes that existing public utility seam. Runtime is an optional type peer of UI.
 - [x] BR1-R3-context-fallback: move the empty visual context provider and its behavior suite into chat-ui; runtime context owns selection/loading only.
