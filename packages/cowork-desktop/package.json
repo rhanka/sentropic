@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "@sentropic/chat-runtime": "^0.1.0",
-    "@sentropic/cowork-bridge": "file:../cowork-bridge"
+    "@sentropic/cowork-bridge": "^0.1.1"
   },
   "optionalDependencies": {
     "screenshot-desktop": "^1.15.0",
