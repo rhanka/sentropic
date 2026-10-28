@@ -99,6 +99,7 @@
   - [x] Add a shared parity fixture using the real Hono chat server, default transport, stream hub, session runtime and platform I/O adapters.
   - [x] Add standalone/app-shaped visual fixtures that receive the same host-created runtime and real command implementation.
   - [x] Add `packages/chat-ui/tests/conversation-runtime-parity.dom.spec.ts`: complete payload/markdown, remount state, command HTTP parity and visible default denial.
+  - [x] Resolve parity evidence: supply the composer's required floating snippet, register the fixture's custom local tool and ignore execution callbacks after machine disposal.
   - [x] Add real-runtime permission parity tests for missing adapter/executor, denial, timeout, late approval, disposal and exactly-once approved execution/result posting.
   - [x] Relocate the web-host factory and session-history assembly with their existing tests; keep view implementations in chat-ui.
   - [x] Inject the visual renderer into the runtime web-host factory; fix the parity SSE adapter's delayed connection with synchronous test-adapter reconnect.
