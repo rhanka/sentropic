@@ -65,6 +65,7 @@ describe('app private content host', () => {
     expect(await response.text()).toBe('');
     expect(response.headers.get('content-security-policy')).toContain("frame-ancestors 'none'");
     expect(response.headers.get('content-security-policy')).toContain("connect-src 'self'");
+    expect(response.headers.get('content-security-policy')).toContain("worker-src 'none'");
     expect(response.headers.get('cache-control')).toBe('no-store');
     expect(response.headers.get('x-content-type-options')).toBe('nosniff');
     expect(response.headers.get('cross-origin-resource-policy')).toBe('same-origin');
@@ -119,6 +120,20 @@ describe('app private content host', () => {
 
   it('should return no body for denied HEAD requests', async () => {
     expect(await (await request(stable, '/', { method: 'HEAD' })).text()).toBe('');
+  });
+
+  it('should deny ambiguous grant cookies, cookie flooding and service-worker script fetches', async () => {
+    const value = cookie();
+    for (const headers of [{ cookie: value + '; ' + value }, { cookie: value + '; extra=' + 'a'.repeat(8192) },
+      { cookie: value, 'service-worker': 'script' }]) {
+      expect((await request(stable, '/', { headers })).status).not.toBe(200);
+    }
+    expect(options.blobs.getBlob).not.toHaveBeenCalled();
+  });
+
+  it('should reserve every reader path ahead of generated bundle routing', async () => {
+    expect((await request(stable, '/_reader/activate', { headers: { cookie: cookie() } })).status).toBe(404);
+    expect(options.publication.getCurrent).not.toHaveBeenCalled();
   });
 
   it('should fail closed on storage errors and when serving is disabled', async () => {
