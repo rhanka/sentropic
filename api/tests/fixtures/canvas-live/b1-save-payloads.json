@@ -1,7 +1,7 @@
 {
   "purpose": "H0 host save inputs and literal expected payloads, not a production descriptor or wire contract",
   "sourceCommit": "5e986a0b6cd2dfecfbde6a588d30055271124696",
-  "provenance": "Repository values from e2e/tests/07-import-export.spec.ts:30-60, ui/tests/stores/initiatives.test.ts:131-136; synthetic IDs, scores and edits",
+  "provenance": "Repository values from e2e/tests/07-import-export.spec.ts:30-60; list-field shape reference ui/tests/stores/initiatives.test.ts:131-136; synthetic IDs, scores and edits",
   "cases": [
     {
       "id": "nested-text-siblings", "authority": "A-T", "route": "PUT /folders/folder-h0",
