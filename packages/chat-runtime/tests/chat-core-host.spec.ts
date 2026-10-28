@@ -183,3 +183,98 @@ describe('ChatCoreHost — fake host compile + runtime proof', () => {
   });
 
   it('postLocalToolResult should resolve without value', async () => {
+    const result = await fakeChatCoreHost.postLocalToolResult(
+      'stream-1',
+      'tool-call-1',
+      { output: 'done' },
+    );
+    expect(result).toBeUndefined();
+  });
+
+  it('fetchModelCatalog should return providers and models', async () => {
+    const catalog = await fakeChatCoreHost.fetchModelCatalog();
+    expect(catalog.providers).toHaveLength(1);
+    expect(catalog.models).toHaveLength(1);
+    expect(catalog.providers[0]?.provider_id).toBe('openai');
+  });
+
+  it('postSteer should resolve without value', async () => {
+    const result = await fakeChatCoreHost.postSteer('stream-1', 'focus on X');
+    expect(result).toBeUndefined();
+  });
+
+  it('streamClient should have set / setStream / setJobUpdates / delete / reset / clearCaches', () => {
+    const client = fakeChatCoreHost.streamClient;
+    expect(typeof client.set).toBe('function');
+    expect(typeof client.setStream).toBe('function');
+    expect(typeof client.setJobUpdates).toBe('function');
+    expect(typeof client.delete).toBe('function');
+    expect(typeof client.reset).toBe('function');
+    expect(typeof client.clearCaches).toBe('function');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3. Export surface — public runtime subpath registration
+// ---------------------------------------------------------------------------
+
+describe('ChatCoreHost — export surface registration', () => {
+  const PACKAGE_ROOT = process.cwd();
+  const pkgJson = JSON.parse(
+    fs.readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8'),
+  ) as { version: string; exports: Record<string, unknown> };
+  const SUBPATH = './client/chat-core-host';
+
+  it('should export the chat-core-host subpath in package.json', () => {
+    expect(Object.keys(pkgJson.exports)).toContain(SUBPATH);
+  });
+
+  it('should identify the initial runtime candidate version', () => {
+    expect(pkgJson.version).toBe('0.1.0');
+  });
+
+  it('should resolve the chat-core-host source file to an existing path', () => {
+    const entry = pkgJson.exports[SUBPATH] as Record<string, string> | undefined;
+    expect(entry).toBeTruthy();
+    const file = (entry?.['import'] ?? entry?.['types'])?.replace('*', SUBPATH.slice(2)) as string;
+    expect(file).toBeTruthy();
+    const abs = path.resolve(PACKAGE_ROOT, file);
+    expect(fs.existsSync(abs)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. Sentropic-string scan — ZERO domain strings in contract source
+// ---------------------------------------------------------------------------
+
+describe('ChatCoreHost — sentropic-string scan', () => {
+  const PACKAGE_ROOT = process.cwd();
+  const contractSource = fs.readFileSync(
+    path.join(PACKAGE_ROOT, 'src', 'client', 'chat-core-host.ts'),
+    'utf8',
+  );
+
+  /**
+   * Patterns that must NOT appear in a generic contract file.
+   * These are sentropic domain strings — org/folder/initiative/usecase entity
+   * names and policy terms that belong in app adapters, not generic contracts.
+   */
+  const forbiddenPatterns: Array<{ pattern: RegExp; label: string }> = [
+    { pattern: /\borganization\b/i, label: 'organization' },
+    { pattern: /\binitiative\b/i, label: 'initiative' },
+    { pattern: /\busecase\b/i, label: 'usecase' },
+    { pattern: /\bsentropic\b/i, label: 'sentropic' },
+    { pattern: /\brhanka\b/i, label: 'rhanka' },
+    { pattern: /\bworkspaceType\b/, label: 'workspaceType (domain enum)' },
+  ];
+
+  // folder is allowed because `folderId` appears in generic stream event types
+  // (StreamHubEvent has folder_update). We allow 'folder' in types.ts context.
+  // The contract file itself only references StreamHubClient (no folder strings).
+
+  for (const { pattern, label } of forbiddenPatterns) {
+    it(`should contain NO "${label}" domain string`, () => {
+      expect(contractSource, `Found forbidden domain string: ${label}`).not.toMatch(pattern);
+    });
+  }
+});
