@@ -1,6 +1,9 @@
 # SPEC STUDY — BR-39* MCP/NHI/multi-tenant auth: librarization decomposition (adversarial)
 
 Status: STUDY (planning-only, 2026-06-11). No code. Baseline = `main` working tree.
+
+> W4.b supersession (PR #807): `McpCatalogSource` references in F3 and the 39m proposal are historical. That source and runtime MCP registration are retired. `HostRegistryCatalogSource` (`sources/host-registry-source.ts`, id `host-registry`) is the sole MCP catalogue source over the authorized compiled app registry with exact names; extending the deleted source or fixing its former ID derivation is no longer an implementation prerequisite. This update does not decide the study's package proposals.
+
 Builds on: `spec/SPEC_STUDY_39_MCP_AUTHKIT_ELICITATION_GAPS.md` (capability gaps + lots 39l-mcp-authz / 39h+39-nhi-bridge / 39l-dcr / 39i⊕39e-Lot5 / 39m-mcp-registry / 39q-elicitation).
 Mission: challenge the conductor-lane's proposed package mapping and produce the refined `@sentropic/*` split: boundaries, public API surfaces, dependency DAG, semver impact, escalations.
 Constraint honored: IdP↔h2a seam stays opaque (`act.h2a_eng` = uninterpreted reference). Package-boundary decisions are PROPOSALS — final cut is the Transversal Architect's (`codex:sentropic`); the escalation set is §8.

@@ -1,5 +1,7 @@
 # W4 request context handoff
 
+W4.b supersedes the old MCP-source handoff (PR #807): `HostRegistryCatalogSource` (`host-registry`) is the sole MCP catalogue source, preserving the authorized compiled names and using the existing artifact transport. The old `mcp-source.ts`, its tests, sanitizer and runtime registration API are retired.
+
 ## 27 October refreshed receiving freeze
 
 The [current published/source tuple and complete resolved trees](published-tuple.json) consume artifacts **0.2.4**, cluster-mesh **0.22.4**, llm-mesh **0.28.1** and gateway **0.21.3** on the merged W2.b/#702/UP-T source head. [APP-P1/internal ports and loaded Comments/gateway fit](host-fit.md) and the [refresh receipt](tuple-refresh-2026-10-27.md) supersede the earlier receiving freeze. The context signatures/authorization rules below remain required; old line numbers are historical seam locators.
@@ -43,7 +45,7 @@ Both resolvers verify current session validity, workspace membership/non-deletio
 | `services/skills/catalog.ts` | `executeFoundationSearchCatalog({payload,context})`; `resolveFoundationChatTools` selects from the same permitted request-local view |
 | `services/skills/foundation-executor.ts`, bounded `services/chat-service.ts` | Build/pass context from verified turn inputs through model discovery and invocation; refresh live authority at dispatch, rather than trusting the previously advertised model tool list |
 | `services/catalog/{types,source,composite-registry,execution-seam}.ts` | `execute(name,args,context)` authorizes freshly, then calls `handler(args,invocationContext)`; denied/missing-context host calls return handled denial and zero effects |
-| `services/catalog/sources/{standalone-tool-source,mcp-source,host-registry-source}.ts` | Thread context separately from args through `StandaloneToolHandler`/`ToolHandlerSource`; host registry source uses exact compiled names and the W2 service adapter |
+| `services/catalog/sources/{standalone-tool-source,host-registry-source}.ts`, `services/catalog/execution-seam.ts` | Thread context separately from args through `StandaloneToolHandler`/`ToolHandlerSource`; host registry source uses exact compiled names and the W2 service adapter |
 
 Filter metadata, source IDs, counts and search corpus **before** ranking, limiting or serialization. Unauthorized names return the absent-name behavior. Synchronous `CatalogSource.snapshot()` and projection remain I/O-free: async policy lookup happens upstream, then filters immutable descriptors/binding references per request. No singleton retains subject/workspace, mutable request state or credentials; the initial implementation has no shared filtered-view cache.
 
@@ -51,7 +53,7 @@ Revalidate session/membership/consent/provider/resource permissions immediately 
 
 ## File-level acceptance scope
 
-- Extend `api/tests/services/catalog/{composite-registry,execution-seam,search-catalog-tool,standalone-tool-source,mcp-source}.spec.ts`, `api/tests/api/cluster-mesh-catalog.test.ts`, `api/tests/unit/foundation-executor.test.ts`.
+- Extend `api/tests/services/catalog/{composite-registry,execution-seam,search-catalog-tool,standalone-tool-source,host-registry-source}.spec.ts`, `api/tests/services/catalog/host-registry-turn.integration.test.ts`, `api/tests/api/cluster-mesh-catalog.test.ts`, `api/tests/unit/foundation-executor.test.ts`.
 - Add `api/tests/api/catalog-auth-context.test.ts` and `api/tests/services/catalog/chat-context.integration.test.ts`: mounted HTTP and chat-service → real executor → seam → host service, rather than source-only unit calls.
 - Interleave two subjects across tenants/workspaces in one shared source/process; same workspace with unequal permissions; list/get/search/sources; model search/selection; forged identity; missing context; disallowed tool; read-only mutation; revoke after discovery; zero metadata leakage/unauthorized effects; one successful persisted effect.
 - Add `ui/tests/artifacts/host-flow.test.ts`, `ui/tests/catalog/access.test.ts`; W5 browser/chat E2E exercises the same composition. Five existing kinds do not claim the later sixth `app` projection.
