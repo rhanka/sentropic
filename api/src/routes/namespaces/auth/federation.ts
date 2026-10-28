@@ -1,4 +1,4 @@
-import { createAuthSessionService, type AuthHonoDeviceInfo } from '@sentropic/auth-hono';
+import type { AuthHonoDeviceInfo } from '@sentropic/auth-hono';
 import { generateCodeVerifier, generateState } from 'arctic';
 import { randomBytes } from 'node:crypto';
 import { Hono, type Context } from 'hono';
@@ -16,7 +16,7 @@ import type {
   FederationProvider,
 } from '../../../services/auth/federation/types';
 import { verifyValidationToken } from '../../../services/email-verification';
-import { validateSession } from '../../../services/session-manager';
+import { createSession, validateSession } from '../../../services/session-manager';
 import { ensureWorkspaceForUser } from '../../../services/workspace-service';
 import { getSentropicOAuthPorts, resolveOAuthIssuer, resolveOAuthUiBaseUrl } from '../../auth/oauth';
 
@@ -141,7 +141,6 @@ const brokerFor = (
   oauthAuthorizePath: string,
 ) => {
   const ports = getSentropicOAuthPorts();
-  const sessionService = createAuthSessionService({ ports });
   const issuer = resolveOAuthIssuer(c.req.raw);
   const uiBase = resolveOAuthUiBaseUrl(c.req.raw);
 
@@ -158,7 +157,7 @@ const brokerFor = (
     },
     // The federation port is optional on the ports bag; this host always wires it (Lot 0 adapter).
     federation: ports.federation!,
-    mintSession: (input) => sessionService.createSession(input),
+    mintSession: (input) => createSession(input.user.id, input.user.role, input.deviceInfo),
     provider,
     provisionWorkspace: async (userId: string) => {
       await ensureWorkspaceForUser(userId);
