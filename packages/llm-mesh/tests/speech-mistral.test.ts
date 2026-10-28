@@ -304,7 +304,7 @@ describe('mistral TTS binding', () => {
     expect(capabilities.voices).toContain('voice_592');
     expect(capabilities.languages).toEqual(['fr']);
     // No implicit voice: an explicit voice_id is required at request build.
-    expect(() => buildMistralTtsRequest({ voiceId: 'voice_592', input: '', responseFormat: 'mp3' }))
+    expect(() => buildMistralTtsRequest({ voiceId: 'voice_592', input: '', responseFormat: 'mp3', maxInputCharacters: 100 }))
       .toThrowError(/non-empty/);
   });
 
@@ -332,16 +332,26 @@ describe('mistral TTS binding', () => {
   });
 
   it('should build the exact speech request body', () => {
-    expect(buildMistralTtsRequest({ voiceId: 'voice_592', input: 'Bonjour.', responseFormat: 'mp3' })).toEqual({
+    expect(buildMistralTtsRequest({ voiceId: 'voice_592', input: 'Bonjour.', responseFormat: 'mp3', maxInputCharacters: 100 })).toEqual({
       model: 'voxtral-mini-tts-3-0',
       input: 'Bonjour.',
       voice_id: 'voice_592',
       response_format: 'mp3',
     });
-    expect(() => buildMistralTtsRequest({ voiceId: 'voice_unknown', input: 'Hi.', responseFormat: 'mp3' }))
+    expect(() => buildMistralTtsRequest({ voiceId: 'voice_unknown', input: 'Hi.', responseFormat: 'mp3', maxInputCharacters: 100 }))
       .toThrowError(/unknown.*voice/);
-    expect(() => buildMistralTtsRequest({ voiceId: 'voice_592', input: 'Hi.', responseFormat: 'ogg' as never }))
+    expect(() => buildMistralTtsRequest({ voiceId: 'voice_592', input: 'Hi.', responseFormat: 'ogg' as never, maxInputCharacters: 100 }))
       .toThrowError(/responseFormat/);
+  });
+
+  it('should bound TTS input by the admitted character ceiling', () => {
+    // `pcm` covers the advertised pcm16-le output format.
+    expect(buildMistralTtsRequest({ voiceId: 'voice_592', input: 'Bonjour.', responseFormat: 'pcm', maxInputCharacters: 100 }))
+      .toMatchObject({ response_format: 'pcm' });
+    expect(() => buildMistralTtsRequest({ voiceId: 'voice_592', input: 'Too long.', responseFormat: 'mp3', maxInputCharacters: 3 }))
+      .toThrowError(/admitted 3 characters/);
+    expect(() => buildMistralTtsRequest({ voiceId: 'voice_592', input: 'Hi.', responseFormat: 'mp3', maxInputCharacters: 0 }))
+      .toThrowError(/positive ceiling/);
   });
 });
 

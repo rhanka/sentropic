@@ -224,7 +224,11 @@ export const mistralTtsLanguages = [
   'ja', 'ko', 'nl', 'no', 'pl', 'ro', 'ru', 'tr', 'uk', 'vi', 'zh',
 ] as const;
 
-export const mistralTtsResponseFormats = ['mp3', 'wav'] as const;
+/**
+ * Response formats the mesh can build. `pcm` covers the advertised pcm16-le
+ * output; the exact pcm sample rate is unverified (see the L13 receipt).
+ */
+export const mistralTtsResponseFormats = ['mp3', 'wav', 'pcm'] as const;
 export type MistralTtsResponseFormat = (typeof mistralTtsResponseFormats)[number];
 
 export const mistralTtsIdentity = (modelRevision: string): SpeechEngineIdentity => {
@@ -281,6 +285,11 @@ export interface MistralTtsRequestShape {
   readonly voiceId: string;
   readonly input: string;
   readonly responseFormat: MistralTtsResponseFormat;
+  /**
+   * Admitted character ceiling (L8 admission data, passed by the composition).
+   * The mesh never sends unbounded input: longer text refuses here.
+   */
+  readonly maxInputCharacters: number;
 }
 
 /**
@@ -294,6 +303,13 @@ export const buildMistralTtsRequest = (request: MistralTtsRequestShape): Record<
   }
   if (!isNonEmptyString(request.input)) {
     throw new MistralTranscriptionError('invalid-config', 'TTS input must be non-empty text');
+  }
+  if (!(Number.isSafeInteger(request.maxInputCharacters) && request.maxInputCharacters > 0)) {
+    throw new MistralTranscriptionError('invalid-config', 'maxInputCharacters must be a positive ceiling');
+  }
+  if (request.input.length > request.maxInputCharacters) {
+    throw new MistralTranscriptionError('invalid-config',
+      `TTS input exceeds the admitted ${request.maxInputCharacters} characters`);
   }
   if (!mistralTtsResponseFormats.includes(request.responseFormat)) {
     throw new MistralTranscriptionError('invalid-config',
