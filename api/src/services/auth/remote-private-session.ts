@@ -70,7 +70,10 @@ export function createRemoteSessionAuthority(directory: string) {
       if (record.userId === userId) revoke(record.sessionId);
     }
   }
-  return { find, create, rotate, revoke, revokeUser };
+  return { find(sid: string) {
+    if (existsSync(`${path(sid)}.lock`)) throw new RemoteAuthorityError('authority_unavailable');
+    return find(sid);
+  }, create, rotate, revoke, revokeUser };
 }
 
 export function getRemoteSessionAuthority() {
