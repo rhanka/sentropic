@@ -73,7 +73,7 @@ async function currentPolicy(client: PoolClient, pool: Pool, namespace: string,
   const acl = await store.getArtifactAcl(target.artifactId);
   const lifecycle = createLifecycleService(store);
   if (!acl || !lifecycle.canRead({ artifactId: target.artifactId, state: await lifecycle.stateOf(target.artifactId) },
-    acl, session.subjectId, 'read', () => true)) return undefined;
+    acl, session.subjectId, 'read')) return undefined;
   // Session expiry is evaluated last, after every object/pointer/ACL/membership wait.
   const authority = createArtifactAuthorization({ pool, workspaceId: session.workspaceId, storageScopeId: namespace,
     identity: { subject: session.subjectId, tenantId: session.tenantId, clientId: ARTIFACT_SESSION_CLIENT,
@@ -89,9 +89,16 @@ export function createArtifactReaderActivation(options: {
   const { pool, baseDomain, profileDigest, ticketTtlSeconds = 60, flowTtlSeconds = 30 } = options;
   if (!/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(baseDomain) || !baseDomain.includes('.') ||
     !/^[0-9a-f]{64}$/.test(profileDigest)) throw denied();
-  const storage = (namespace: string) => createArtifactHostActivationStorage({
-    pool, namespace, ticketTtlSeconds, flowTtlSeconds,
-  });
+  const stores = new Map<string, ReturnType<typeof createArtifactHostActivationStorage>>();
+  const storage = (namespace: string) => {
+    let store = stores.get(namespace);
+    if (!store) {
+      store = createArtifactHostActivationStorage({ pool, namespace, ticketTtlSeconds, flowTtlSeconds })
+        .catch(error => { stores.delete(namespace); throw error; });
+      stores.set(namespace, store);
+    }
+    return store;
+  };
   const verifiedSession = (value: ArtifactReaderSession) => {
     const session = Object.freeze({ ...value });
     if (Object.values(session).length !== 4 || Object.values(session).some(v => typeof v !== 'string' || !v)) throw denied();
@@ -138,8 +145,8 @@ export function createArtifactReaderActivation(options: {
       if (!flow) return undefined;
       const expected: BrowserFlowBinding = { ...flow, subjectId: session.subjectId, sessionId: session.sessionId,
         nonceDigest: nonce, targetOrigin: request.targetOrigin, profileDigest };
-      return store.consume({ flowId: request.flowId, ticketId: request.ticketId, expected }, async ({ client }) =>
-        await currentPolicy(client, pool, namespace, session, flow, baseDomain) === flow.policyRevision);
+      return store.consume({ flowId: request.flowId, ticketId: request.ticketId, expected }, async ({ client, flow: locked }) =>
+        await currentPolicy(client, pool, namespace, session, locked, baseDomain) === locked.policyRevision);
     },
   };
 }
