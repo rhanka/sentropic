@@ -139,6 +139,7 @@
   - [x] Conversation view source slice 18 committed within the atomic limit.
   - [x] Conversation view source slice 19 committed within the atomic limit.
 - [ ] **Lot 3 — Parity and packed boundary qualification**
+  - [x] Use chat-core's real history projection in the fixture session data adapter, matching the production timeline contract; assert lightbox through its existing public test surface.
   - [x] Respect JSON-safe session state in upload transitions: omit absent optional fields instead of inserting undefined; preserve the failed attachment for retry.
   - [x] Add real-runtime document/history parity: failed upload retained across remount, retry/preview/remove, full server history restart and generated-file download through host I/O.
   - [x] Runtime 447/447 and visual unit 524/524 pass; migrate the remaining shell comment fixture to injected host-owned state and forward feedback votes for clear/toggle parity.
