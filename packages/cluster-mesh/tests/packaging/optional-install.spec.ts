@@ -34,7 +34,7 @@ describe.skipIf(!enabled)('packed optional install', () => {
       message: 'Cluster Mesh module "llm-mesh" is unavailable (not_installed). Install @sentropic/llm-mesh@"0.19.2 || >=0.22.0 <0.31.0" and restart.',
     });
     expect(result.probe).toEqual({
-      gateway: { availability: 'gated', state: 'unavailable', reason: 'not_installed', packageName: '@sentropic/llm-gateway', requiredRange: '>=0.19.0 <0.22.0' },
+      gateway: { availability: 'gated', state: 'unavailable', reason: 'not_installed', packageName: '@sentropic/llm-gateway', requiredRange: '>=0.19.0 <0.23.0' },
       mcpTrack: { availability: 'gated', state: 'unavailable', reason: 'source_unavailable' },
     });
   });

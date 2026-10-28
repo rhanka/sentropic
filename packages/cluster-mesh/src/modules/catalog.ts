@@ -16,7 +16,7 @@ export const ARTIFACTS_PACKAGE = '@sentropic/artifacts';
 export const ARTIFACTS_RANGE = '>=0.2.0 <0.3.0';
 export const LLM_MESH_RANGE = '0.19.2 || >=0.22.0 <0.31.0';
 export const LLM_MESH_SPEECH_RANGE = '>=0.28.0 <0.31.0';
-export const LLM_GATEWAY_RANGE = '>=0.19.0 <0.22.0';
+export const LLM_GATEWAY_RANGE = '>=0.19.0 <0.23.0';
 export const MCP_AUTH_RANGE = '>=0.2.1 <0.3.0';
 export const JOSE_RANGE = '^5.10.0';
 /** Follows llm-gateway's declared optional peer range, including the Zod 4 auth-hono release.
