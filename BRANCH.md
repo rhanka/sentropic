@@ -1,119 +1,113 @@
-# Feature: Live STT L8a gateway speech policy and usage
+# Feature: STT L13 — Mistral streaming STT + TTS binding
 
 ## Objective
-- [ ] Bind bounded speech admission, usage and settlement to the gateway ledger owner.
-- [ ] L8 acceptance is conditional: this PR delivers L8a policy/contracts only, not M1-ready cloud activation.
+Mesh `speech/mistral-transcription.ts` with the Voxtral realtime STT adapter (3.0 preview model, recorded fixtures only) plus the Mistral TTS binding/registry entry, admitted and metered by the L8 caps with the L9 guarantees (duration bound, no double count, client utterance ids, late frames suppressed, no Bearer leak).
 
 ## Scope / Guardrails
-- [x] Base origin/feat/live-stt-l2; branch feat/live-stt-l8; worktree tmp/worktrees/stt-l8.
-- [x] Spec: .tmp/live-stt/spec-plan.md L8, sections 7/11.2; aggregate USD 5 per UTC day / USD 20 campaign.
-- [x] Make-only; ENV=test-stt-l8 last; no containers before 2026-10-27 21:00 UTC; shared flock thereafter.
-- [x] Specific-file staging; make commit; under 150 changed lines per commit; no attribution trailers.
-- [x] No inference, provider credentials, ledger replacement, native dependencies, publication or merge.
+- Scope limited to `packages/llm-mesh/src/speech/`, `packages/llm-mesh/tests/`, bench receipt, `BRANCH.md`, tuple version cascade from the mesh bump.
+- Make-only workflow, flock-wrapped lanes, no ad-hoc docker, no raw `docker run`.
+- Branch development in `tmp/worktrees/stt-l13`, ENV=test-stt-l13 last, never ENV=dev.
+- 0 Python. No live provider call (recorded fixtures only, receipt blocked). No key leakage, no audio payload persisted.
+- All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `BRANCH.md`
-  - `packages/llm-gateway/src/speech/**`
-  - `packages/llm-gateway/tests/speech-*.test.ts`
-  - `packages/llm-gateway/tests/fixtures/speech-*.ts`
+  - `packages/llm-mesh/src/speech/mistral-transcription.ts`
+  - `packages/llm-mesh/src/speech/index.ts`
+  - `packages/llm-mesh/tests/speech-mistral.test.ts`
+  - `packages/llm-mesh/tests/speech-contract.test.ts`
+  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
+  - `packages/llm-mesh/tests/fixtures/mistral-frames.ts`
+  - `packages/llm-mesh/bench/l13-mistral.receipt.json`
+  - `packages/llm-mesh/package.json`
   - `packages/llm-gateway/package.json`
-  - `packages/llm-gateway/README.md`
   - `packages/cluster-mesh/package.json`
   - `packages/cluster-mesh/src/modules/catalog.ts`
   - `packages/cluster-mesh/tests/fixtures/train.ts`
-  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
+  - `packages/cluster-mesh/tests/speech-peer.spec.ts`
   - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
   - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
   - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
+  - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `package-lock.json`
-  - `.tmp/live-stt/l8/**`
-  - `.github/workflows/ci.yml`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
   - `api/tests/unit/gateway-package-version.test.ts`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
+  - `package-lock.json`
+  - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `api/src/**`
-  - `.track/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `packages/llm-gateway/**`
+  - `packages/live-speech/**`
+  - `packages/llm-mesh/src/**` (except `src/speech/mistral-transcription.ts`, `src/speech/index.ts`, `src/speech/catalog.ts`)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
-  - `packages/llm-gateway/src/index.ts`
-  - `package-lock.json`
 - **Exception process**:
-  - [x] Declare BRL8-EXn with reason, impact and rollback before sensitive changes.
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [x] Integration regression (CI 40621929792): official lock refresh also advanced the unrelated artifacts baseline to 0.2.4. Restore the exact published 0.1.4 entry from main, preserving the L8 gateway archive and cluster/mesh tuple; `artifacts-tuple.spec.ts` explicitly requires that baseline.
-- [x] Integration evidence: gateway 0.22.0 BLOCK archive SHA-256 `cbf4ef6c51536ed0b26bb2a9f29901c927ef1a986d1d8039e7c44d8394fdb54b`; official `refresh-lazy-package-lock` passes with the verified sibling and current mesh 0.30.0; full gateway suite passes 1370 tests / 78 files with `ENV=test-integrator-stt-l8` under the shared Docker lock.
-- [x] Integration: retain main's llm-mesh 0.30 support with the L8 speech floor 0.28 and gateway 0.22.0; use cluster-mesh 0.23.3 above published 0.23.2. Regenerate the selected release lock through the official verified-sibling qualification target; remove the obsolete L2 PR-base filter now that PR798 targets main.
-- [x] BRL8-EX7: owner authorizes updating only the API gateway release-tuple test from 0.21.3 to feature version 0.22.0. Run 40511994178 imports 0.22.0 and fails the old equality assertion; unrelated id errors are not its failure. Run the targeted test before the unchanged full API unit suite in GitHub CI; no local Docker before 21:00 UTC. Rollback restores the expectation and removes the targeted CI step with the gateway bump.
-- [x] BRL8-EX6: run 40505571158 proves the runtime gateway range and frozen selected tuple still reject gateway 0.22.0. Align only catalog/train ranges, affected test expectations and fixture package/lock; use the verified CI gateway archive's SHA-512. Cluster 0.23.1 supplies the required source bugfix bump. Rollback restores the old ranges/tuple with gateway 0.21.3.
-- [x] Frozen gateway 0.22.0 lock integrity comes from run 40507121290, llm-gateway-candidate artifact 12735344167; archive SHA-256 30529da3c0230df3787c30b108b6e7d9f2ba10479ecebd5af0b31b7f02588dc8 matches the prior successful BLOCK packs.
-- [x] Run 40509273838 passes gateway (1370 tests, including 27 speech), API/UI typecheck/lint and both BLOCK packs; align the two remaining installed-gateway version assertions via TRAIN_LLM_GATEWAY_VERSION=0.22.0.
-- [x] BRL8-EX5: retain the verified gateway pack as a seven-day CI artifact for the required frozen Cluster Mesh release-lock refresh while local Docker is reserved; no publication, credential, permission or validation change. Rollback removes the artifact upload and pack destination.
-- [x] BRL8-EX4: update the real gateway dependency-floor assertion in scripts/ci/publishable-ci-wiring.test.mjs from 0.27.0 to required speech floor 0.28.0 (run 40504853431); impact is one CI regression expectation, no gate bypass. Rollback restores the assertion with the old dependency range.
-- [x] R1 P1/P2-1: build incremental totals through a mutable dimension map; require llm-mesh >=0.28.0 for speech contracts.
-- [x] R1 manifests: registry latest gateway 0.21.3 / cluster-mesh 0.22.4 on 2026-10-27; gateway feature 0.22.0 and cluster peer-range patch 0.23.1 remain unpublished BLOCK candidates. Mirror versions/ranges in package-lock.json; retain full pack gates.
-- [ ] G-LEDGER (open, 2026-10-27): L8b durable owner-adapter sub-lot, gateway/ledger owner + Sol; outside this PR's api/** scope. Bind SpeechLedgerPort to control.budgets/budget_holds/cost_ledger, allocator receipts and leases; qualify real DB restart, replica concurrency, UTC rollover, crash/replay and unavailable-store refusal before L8 acceptance or cloud activation.
-- [x] R1 P2-2: expose reconcileSpeech on speech/settlement for L7: operation/attempt rows join holds, allocator receipts and usage entries; report duplicate, uncounted and orphan evidence without a new store.
-- [x] R1 reconciliation also detects the same scoped native turn counted under different submit keys/epochs; tenant/session boundaries remain isolated.
-- [x] Docker reservation takes precedence over the container-backed scope target; temporary host Make adapter invokes the same installed harness C2 check before every commit.
-- [x] Registry latest is 0.21.3 (2026-10-27); feature version will be 0.22.0, without publication.
-- [x] BRL8-EX1: gateway 0.22.0 requires widening cluster-mesh's optional gateway peer upper bound from 0.22 to 0.23 and mirroring workspace metadata in package-lock.json. Initial manifest compatibility is completed by BRL8-EX6's runtime range and frozen tuple; rollback restores the previous version/range fields.
-- [x] BRL8-EX2: permit .tmp/live-stt/l8 review/validation receipts only; no raw media, credentials or accounting store.
-- [x] BRL8-EX3: CI ignores pull requests targeting feat/live-stt-l2. Add only that base to the existing pull_request branch filter so PR798 runs standard gates; no job, secret, permission or publication change. Rollback removes the one branch entry.
-- [ ] G-REVIEW: author-complementary peer selection remains pending; .tmp/live-stt/l8/review.md records exact target, requested author tuple and selection failure. No reviewer allocation inferred; no consensus claimed.
-- [x] G-LEDGER handoff delivered through signed h2a to live s-conductor (env:send:a2aaa010-2d5d-444b-9a7f-1de14fb5d355); gateway/ledger named-session discovery returned no matches.
+- `acknowledge`: mesh 0.30.0 → 0.31.0 collides numerically with L9's 0.31.0 (different content, unmerged draft #804). Train rhythm kept; conductor sequences the merges (merge-time bump resolves).
+- `acknowledge`: Mistral wire grounded in docs 2026-10-28: realtime `wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-3`, TTS `POST /v1/audio/speech` model `voxtral-mini-tts-3-0`. 2602 models deprecated, kept separate. No live call made; receipt stays blocked.
 
 ## AI Flaky tests
-- [x] Deterministic fixtures only; no provider calls or waiver.
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch, sequential authoring; shared gateway/ledger owner files remain untouched.
-- [ ] Multi-branch not required.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: single mesh adapter + TTS binding, one test file, one lane.
 
 ## UAT Management (in orchestration context)
-- [x] Library contract fixtures only; device/provider qualification belongs to L9/L13/L7.
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- No UI change in this lot: no UAT.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read Docker lock, project rules, L8 row, M1 receipts and G-LEDGER/G-CLOUD/G-QUOTA.
-  - [x] Fetch L2 head 3b793cb89c4a0427152907f986f9415b9c348122 and pass mechanical harness branch check.
-  - [x] Inspect existing CostContext, pool/budget admission and durable host ledger; no new accounting store.
-  - [x] Reserve ENV=test-stt-l8; package fixtures need no listening ports (reserved API/UI/mail: 9040/5240/1140).
-- [ ] **Lot 1 — Typed usage and pricing**
-  - [x] src/speech/usage.ts: duration/token/character dimensions, revision normalization and pinned USD pricing.
-  - [x] tests/speech-metering.test.ts: cumulative/incremental updates, duplicate/conflicting revisions, absent dimensions and invalid prices.
-- [ ] **Lot 2 — Admission binding**
-  - [x] Pin the campaign across awaits and require connections to end before UTC rollover; bind the authoritative backend operation reference.
-  - [x] Add regression fixtures for UTC-boundary refusal, immutable async identity, payload exclusion and missing bound price dimensions.
-  - [x] Preserve L2's optional native turn ID before acknowledgement while requiring the admitted allocator/submit/backend operation links.
-  - [x] Require the authenticated workspace, matching L2 receipt scope and the M1 identity contract.
-  - [x] Define transaction views over existing owner holds/buckets/allocator receipts; no production store supplied.
-  - [x] src/speech/admission.ts: trusted campaign identity, UTC daily and campaign caps, authoritative allocator links, bounded holds and fail-closed host port.
-  - [x] tests/speech-admission.test.ts: daily/total refusal, provider switching, concurrent reservations, restart/replay, allocator identity and ledger outage.
-- [ ] **Lot 3 — Settlement binding**
-  - [x] Preserve partial overrun evidence and test rollback after both financial entry and budget mutation, before hold closure.
-  - [x] src/speech/settlement.ts: one billable operation, conservative missing-usage estimate, signed true-ups, replay and retained uncertainty.
-  - [x] tests/speech-settlement.test.ts: missing usage, adjustment idempotence, restart, unavailable sink and no duplicate backend counted unit.
-  - [x] tests/fixtures/speech-ledger.ts: deterministic owner transaction fixture; never exported or used as a production ledger.
-- [ ] **Lot 4 — Contract review and integration documentation**
-  - [x] Document ledger-owner binding, dispatch bounds, limitations and G-LEDGER acceptance in README.md.
-  - [x] Export speech subpath and bump package to 0.22.0; shared owner sources change only for BRL8-EX6's bounded compatibility range.
-  - [ ] Reconcile independent correctness and accounting/security reviews; no self-certification of durable host acceptance.
-- [ ] **L8b — Durable owner adapter (gateway/ledger owner + Sol; dated 2026-10-27; separate lot)**
-  - [ ] Supply the real DB SpeechLedgerPort adapter and one trusted cross-provider campaign identity; no production adapter is provided by L8a.
-  - [ ] Pass real DB crash/restart, multi-replica reservations, rollover, adjustment dedupe and store-outage tests; attach evidence to G-LEDGER before accepting L8/M1.
-  - [ ] Keep L9/L13 fixture-only and L8 acceptance conditional until this gate passes; scheduling/owner acknowledgement remains pending.
-- [ ] **Lot 5 — Draft delivery and validation**
-  - [x] Prepare .tmp/live-stt/l8/local-gate.sh: 21:00 UTC guard, exact-head/clean-worktree checks, one package run, locked cleanup and persisted exit receipts.
-  - [x] Push feat/live-stt-l8; open draft PR798 against feat/live-stt-l2 with this plan as body and post implementation plan.
-  - [ ] Monitor exact-head GitHub CI: lint/typecheck/test/build/pack; resolve branch failures.
-  - [x] After 21:00 UTC: full `make test-llm-gateway ENV=test-integrator-stt-l8` passes under the shared flock (1370 tests / 78 files).
-  - [ ] Cleanup: flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make down ENV=test-stt-l8.
-  - [ ] Report draft PR, head, CI and any remaining G-LEDGER owner gate; preserve BRANCH.md, no merge.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read spec-plan L13 row, §7-8.1, §9-10, L8 gateway caps.
+  - [x] Fetch live Mistral wire [O8]: realtime endpoint/model, session.update fields, append/end, delta/done, turn events, TTS endpoint/voices.
+  - [x] Seam: mesh dependency-free; admission as data + injected usage sink; TTS = selection/binding only (no synthesis transport in mesh).
+  - [x] Worktree `tmp/worktrees/stt-l13`, branch `feat/live-stt-l13`, base `origin/feat/live-stt-l8` at 82b24e2b3.
+  - [x] Harness plan event recorded; `harness check branch` PASS C1.
+  - [x] Lot gate: base head verified, scope boundaries declared, no exception needed.
+- [ ] **Lot 1 — STT adapter `speech/mistral-transcription.ts`**
+  - [ ] Profile config `mistral-voxtral-realtime-3`: model pin `voxtral-mini-transcribe-realtime-3`, delay `target_streaming_delay_ms`, language fr/en, format pcm16/24k mono, placement cloud-relay; server turn_detection pinned off (client commits drive turns).
+  - [ ] `session.update` builder: `session` object with audio_format/language/delay; refuse unsupported fields at open (fail-closed).
+  - [ ] Transport port (injectable WS): append base64 pcm16, no audio persisted, no key in logs/errors.
+  - [ ] Turn mapping: one provider stream per client turn; `input.commit` sends `input_audio.end` and emits the final from `transcription.done` (record); lazy reopen on next write; `input.clear` abandons the stream (close + drop, no final); uncommitted trailing audio emits no final at close.
+  - [ ] Event mapping: `transcription.text.delta` append-only partials under the client utteranceId; per-turn audioInterval from the open-turn capture window; `transcription.done` final; `error{code,message}` to session error; unknown events tolerated.
+  - [ ] Metering: admission receipt required; injectable expiry timer (min(admission, request maxDurationMs)); cumulative usage records under a stable eventId; settle without providerRevision.
+  - [ ] TTS exclusion from the STT adapter: no synthesis field, no implicit voice.
+  - [ ] Lot gate: `make typecheck-llm-mesh` green on the lot head.
+- [ ] **Lot 2 — TTS binding/registry**
+  - [ ] Mistral TTS binding: provider mistral, model `voxtral-mini-tts-3-0`, preset voices (Voxtral 3 list incl. fr Marie/Manon/Lea/Camille, en US/UK), response_format; no implicit voice (explicit voice_id required).
+  - [ ] Capabilities entry: tts supported, stt refused on the TTS binding and vice versa; usageUnits characters (price separation from audio-seconds); regions unset (explicit region refused fail-closed, no documented API region).
+  - [ ] Request-shape fixture pins `POST /v1/audio/speech` fields from docs (no live call).
+  - [ ] Lot gate: negotiation tests green (accept documented voice+language, refuse unknown voice/region/format).
+- [ ] **Lot 3 — Fixtures + gate tests**
+  - [ ] `tests/fixtures/mistral-frames.ts`: recorded session.created/updated, delta scripts, done records, turn events, invalid/error frames; no live call.
+  - [ ] `tests/speech-mistral.test.ts`: endpoint/final mapping, cancel/flush, no double count, late-frame suppression (incl. post-close), Bearer redaction, per-turn windows, completed-only done, orphan/empty-turn behavior.
+  - [ ] Lot gate: `make test-llm-mesh` green (SCOPE=file then full) on the lot head.
+- [ ] **Lot 4 — Receipt + version**
+  - [ ] `bench/l13-mistral.receipt.json`: status blocked, exact missing G-CLOUD/§10 items, price revision unpinned, no live evidence claimed.
+  - [ ] Bump `packages/llm-mesh/package.json` to 0.31.0 (train rhythm; collision with L9 noted above); cascade tuple ranges/fixtures/lock integrity via sanctioned refresh only.
+  - [ ] Lot gate: receipt present and blocked, version bumped, `make build-llm-mesh` + `make pack-llm-mesh` green.
+- [ ] **Lot N — Final validation**
+  - [ ] `make scope-check` (harness) green.
+  - [ ] Push, draft PR against `feat/live-stt-l8`, CI green on the exact head.
+  - [ ] Report PR number, head SHA, CI URL without merging.
+  - [ ] `make down ENV=test-stt-l13`.
+
+## Deferred to BR-XX
+- None.
