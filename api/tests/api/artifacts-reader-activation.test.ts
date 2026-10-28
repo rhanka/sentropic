@@ -205,6 +205,17 @@ describe('trusted app reader activation', () => {
     expect(await reader().consume(session, { ...input(pinned), targetOrigin: pinnedTarget.targetOrigin })).toEqual(pinned.ticket);
   });
 
+  it('should refuse an earlier stable flow after the pointer moves away and returns to A', async () => {
+    const issued = await reader().issue(session, target);
+    const b = randomUUID();
+    await pool.query(`INSERT INTO artifacts.releases(id,artifact_id,manifest_digest,manifest) VALUES ($1,$2,'b','{}')`, [b, artifactId]);
+    await pool.query('UPDATE artifacts.artifact_current SET release_id=$1', [b]);
+    await pool.query('UPDATE artifacts.artifact_current SET release_id=$1', [releaseId]);
+    expect(await reader().consume(session, input(issued))).toBeUndefined();
+    const fresh = await reader().issue(session, target);
+    expect(await reader().consume(session, input(fresh))).toEqual(fresh.ticket);
+  });
+
   it.each(['acl', 'pointer', 'session-expiry'])('should recheck %s after a stable-pointer lock wait', async change => {
     const issued = await reader().issue(session, target);
     const blocker = await pool.connect();

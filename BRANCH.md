@@ -66,6 +66,7 @@
   - [x] Add `api/tests/api/artifacts-reader-activation.test.ts` using real PostgreSQL and host migrations.
   - [ ] Prove one consume, wrong browser/session/subject, replay, DB expiry and revocation.
   - [ ] Prove release/channel/origin/profile/policy binding and stable-pointer fencing after waits.
+    - [x] Add an explicit stable A-to-B-to-A pointer regression before strengthening the fence.
   - [ ] Prove commit failure/uncertainty returns no grant and current-session fresh-flow recovery needs no MFA.
   - [x] Cover PG acquisition/consume failure and wrong flow/ticket association without granting or burning valid state.
   - [ ] Prove authenticated resources route refuses forged identity and stays default-closed.
