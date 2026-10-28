@@ -24,7 +24,8 @@ export function createContentRuntime(options: {
   };
   async function scopeBinding(storageScopeId: string) {
     const { rows } = await pool.query<{ key: string }>(
-      `SELECT kv.key FROM control.artifact_host_kv kv JOIN artifacts.storage_scopes s ON s.id=kv.value
+      `SELECT kv.key FROM control.artifact_host_kv kv JOIN artifacts.storage_scopes s
+       ON s.id=kv.value AND s.org_id=(kv.key::jsonb->>0)
        WHERE kv.storage_scope_id='app-artifact-scopes/v1' AND kv.value=$1`, [storageScopeId]);
     if (rows.length !== 1) return undefined;
     const value: unknown = JSON.parse(rows[0].key);
@@ -52,15 +53,6 @@ export function createContentRuntime(options: {
       const releaseId = await store.getCurrentReleaseId(id);
       return releaseId ? store.getRelease(releaseId) : undefined;
     } },
-    async activate(input) {
-      // Resolve the trusted issuing session from durable flow state, never headers/body claims.
-      // W3.a independently rechecks namespace, session, nonce, profile, ACL and pointer in consume.
-      const { rows } = await pool.query<{ namespace: string; payload: { subjectId: string; sessionId: string } }>(
-        'SELECT namespace,payload FROM artifact_host.browser_flows WHERE flow_id=$1', [input.flowId]);
-      if (rows.length !== 1) return undefined;
-      const bound = await scopeBinding(rows[0].namespace);
-      if (!bound) return undefined;
-      return activation.consume({ ...bound, subjectId: rows[0].payload.subjectId, sessionId: rows[0].payload.sessionId }, input);
-    },
+    activate: input => activation.consumeForContentOrigin(input),
   });
 }
