@@ -35,6 +35,7 @@
  */
 
 import type OpenAI from 'openai';
+import type { CompiledMcpRegistry } from '@sentropic/cluster-mesh/mcp/registry';
 import {
   InMemorySkillRegistry,
   SkillsToolRegistry,
@@ -58,6 +59,20 @@ import type { McpCatalogSource } from '../catalog/sources/mcp-source.js';
 import { foundationCatalogSource } from '../catalog/sources/static-source.js';
 import { standaloneToolSource } from '../catalog/sources/standalone-tool-source.js';
 import { workflowSeedSource } from '../catalog/sources/workflow-seed-source.js';
+import { createHostRegistryCatalogSource } from '../catalog/sources/host-registry-source.js';
+
+// Only the public immutable plan is retained; authority/views remain request-local.
+let compiledHostRegistry: CompiledMcpRegistry | undefined;
+export async function prepareHostRegistryCatalog(): Promise<CompiledMcpRegistry | undefined> {
+  if (process.env.APP_ARTIFACT_HOST_ENABLED !== '1') return undefined;
+  const { productArtifactTransport } = await import('../artifacts/instance');
+  compiledHostRegistry = await productArtifactTransport.ready;
+  return compiledHostRegistry;
+}
+const hostRegistrySource = createHostRegistryCatalogSource({
+  registry: () => process.env.APP_ARTIFACT_HOST_ENABLED === '1' ? compiledHostRegistry : undefined,
+  transport: async () => (await import('../artifacts/instance')).productArtifactTransport,
+});
 
 // ---------------------------------------------------------------------------
 // Build the composite registry with all registered sources
@@ -86,6 +101,7 @@ compositeCatalogRegistry.addSource(workflowSeedSource);
 // Lot 6: wire canvas template source (static starters; D-CANVAS — kind/template only, no runtime).
 // Vocabulary: kind='canvas' aligns with CommentTargetKind 'canvas' (packages/comments/src/types.ts:13).
 compositeCatalogRegistry.addSource(canvasTemplateSource);
+compositeCatalogRegistry.addSource(hostRegistrySource);
 
 // ---------------------------------------------------------------------------
 // Catalog execution seam (Lot 2 / Lot 5) — dispatches non-hardcoded tool calls
@@ -110,7 +126,7 @@ compositeCatalogRegistry.addSource(canvasTemplateSource);
  */
 export const catalogExecutionSeam = new CatalogExecutionSeam(
   compositeCatalogRegistry,
-  [standaloneToolSource],
+  [standaloneToolSource, hostRegistrySource],
 );
 
 /**
