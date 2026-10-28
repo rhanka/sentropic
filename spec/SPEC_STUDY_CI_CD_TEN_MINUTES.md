@@ -537,3 +537,27 @@ each UI profile and preserves every embedded-output assertion. Scans <=90s,
 IdP <=150s, cumulative scheduling <=60s, complete UI readiness and the exact
 final-head CI result remain to measure. The historical 255s full UI / 209s
 container / 290s IdP sample at `d072d24ec` is not a new-base acceptance result.
+
+Completed baseline job spans from main run 40736913130 attempt 1 are below.
+Cache import/export is enabled; this mixed cache state is not a fully warm
+qualification. Runner labels are `ubuntu-latest`; full job/step identities and
+timestamps are retained. Workflow SHA-256 is
+`e4a90d83c54dfe5d05ee3f0c80f299e1734e09e4ee6f03ab53c41d57a64e0d18`.
+The run's packaging failure and pending publication prevent whole-run success
+credit; these completed job spans remain valid measurements.
+
+| Baseline job | Job ID | Complete seconds |
+| --- | --- | --- |
+| API image | 122989013828 | 397 |
+| Toolbox | 122989014212 | 437 |
+| Full UI group | 122989014078 | 438 |
+| Browser image | 122989012503 | 487 |
+| Container gate | 123004751193 | 229 |
+| Restore | 123003211852 | 208 |
+| IdP screens | 123003212049 | 213 |
+| VSCode | 123004751285 | 105 |
+
+Initial-head UI job 123006317177 in PR run 40741770463 passes all 83 files /
+489 tests in 188s, including about 122s materializing cached input layers and
+35s executing tests. Moving this work off the runtime-image path preserves
+its cost; it does not qualify complete UI readiness or the final head.
