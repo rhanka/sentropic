@@ -1,100 +1,69 @@
-# Feature: Refresh W0-close.d published workspace tuple
+# Feature: W1.c compose the shared PostgreSQL activation store
 
 ## Objective
-- [x] Freeze artifacts 0.2.4 / cluster-mesh 0.22.4 and qualify APP-P1 at the reconciled workspace head.
+- [x] Compose the upstream activation adapter with the trusted app pool, opaque scope, at-most-60-second ticket/flow policy and W1.a migration receipt.
 
 ## Scope / Guardrails
-- [x] Author codex gpt-6.1-sol high; owner deliverable 2; plan-v2 W0-close.d refresh.
-- [x] Base feat/app-cm-w2b d0ce8aeb0; merge ancestry only; worktree tmp/worktrees/app-w0d-refresh.
-- [x] Draft targets feat/app-cm-integration; no merge or production activation.
-- [x] Review authored refresh from source merge 2c3bf7750; integration diff includes inherited W2.b/#702/UP-T ancestry.
-- [x] Tests first; make-only; Docker flock; ENV=test-app-w0d last; no Python.
-- [x] Dedicated runtime ENV=test-app-w0d; API/UI/Maildev ports 8798/5184/1091; checked free before startup.
-- [x] Selective staging; scope-check before make commit; authored commits under 150 lines; no trailers.
-- [x] Stop if cluster-mesh needs an upstream release to consume artifacts 0.2.4.
-- [x] Preserve historical receipts; dedicated environment teardown after each runtime step.
+- [x] Owner dispatch: W1.c of `.tmp/app-switch-week/plan-v2.md`; draft delivery, green CI, no merge or live activation.
+- [x] Worktree `tmp/worktrees/app-w1c`, branch `feat/app-cm-w1c`; merge W1.d `8729aff22` and W2.b `d0ce8aeb0` as assigned; no rebase.
+- [x] Owner refresh: consume the frozen workspace tuple's `@sentropic/artifacts` 0.2.4 through `file:../packages/artifacts`; UP-T owns implementation, SQL and conformance vectors. Drop W1.c's separate registry 0.2.3 pin.
+- [x] No host PostgreSQL activation algorithm, duplicate SQL, app authority proof, route mounting or live activation; W3.a retains current-authority proof.
+- [x] Make-only development; lock every build/test/start with `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock`, release between steps and run matching down.
+- [x] Dedicated `ENV=test-app-w1c` last in every make command; API/UI/Maildev UI ports 8799/5185/1092; check ownership before starting services.
+- [x] Tests first; atomic commits below 150 lines via `make commit MSG="..."`; selective staging and scope-check before each commit; no attribution trailers.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `docs/baselines/app-cm-w0/**`
-  - `api/src/services/mcp/cluster-registry.ts`
-  - `api/src/services/artifacts/transport.ts`
-  - `api/tests/api/app-artifacts-transport.test.ts`
-  - `api/tests/api/app-mcp-registry.test.ts`
-  - `api/tests/api/app-mcp-installed.test.ts`
-  - `api/tests/smoke/api-health.test.ts`
-  - `api/tests/utils/seed-test-data.ts`
-  - `api/tests/api/root-mount-fence-completeness.test.ts`
-  - `api/tests/api/artifacts-host-recovery.test.ts`
-  - `package-lock.json`
+  - `api/src/services/artifacts/activation-storage.ts`
+  - `api/tests/api/artifacts-host-activation-store.test.ts`
+  - `api/package.json`
   - `api/package-lock.json`
-  - `.h2a/owner-questions-w0.md`
-  - `docs/runbooks/app-cm-baseline-restore/receipts/TEMPLATE.md`
-  - `Makefile`
-  - `packages/artifacts/**`
-  - `packages/cluster-mesh/packaging.mk`
-  - `packages/cluster-mesh/tests/packaging/**`
-  - `.github/workflows/ci.yml`
-  - `api/src/scripts/oauth-provision-exchange-client.ts`
-  - `api/tests/api/auth/oauth-token-exchange.test.ts`
-  - `deploy/**`
-  - `spec/evidence/memory-mcp-l5/**`
-  - `tools/memory-mcp-l5/**`
-  - `api/src/routes/namespaces/catalog*.ts`
-  - `api/src/services/catalog/**`
-  - `api/src/services/chat-service.ts`
-  - `api/src/services/skills/**`
-  - `api/tests/ai/chat-tools.test.ts`
-  - `api/tests/ai/comment-assistant.test.ts`
-  - `api/tests/api/catalog-auth-context.test.ts`
-  - `api/tests/api/cluster-mesh-catalog.test.ts`
-  - `api/tests/services/catalog*/**`
-  - `api/tests/services/catalog-characterization.spec.ts`
-  - `api/tests/unit/chat-service-*.test.ts`
+  - `package-lock.json`
+  - `api/src/services/artifacts/host-storage.ts`
+  - `api/tests/api/artifacts-host-migrations.test.ts`
+  - `.github/workflows/app-cm-w1c.yml`
 - **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.track/**`
+  - `packages/**`
+  - `api/src/db/run-migrations.ts`
+  - `api/drizzle/**`
+  - `package.json`
   - `plan/**`
-- **Conditional Paths (allowed only with explicit exception)**:
+  - `.track/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
-- [x] BR00D-EXn records reason, impact and rollback before expansion.
+- [x] Exception process: record BR-W1C-EXn, rationale, impact and rollback before any scope expansion.
 
 ## Feedback Loop
-- [x] BR00D-EX8: CI endpoints shard 4 passes 263 assertions but forced recovery-test database deletion emits unhandled PostgreSQL 57P01 while a pooled connection closes. Authorize api/tests/api/artifacts-host-recovery.test.ts to use normal DROP DATABASE after pool.end, matching the other Artifacts fixtures. Impact: graceful cleanup preserves leak/error visibility; no assertion or runtime change. Rollback: restore WITH (FORCE) and its observed connection-termination race.
-- [x] BR00D-EX7: CI endpoints shard 2 proves the immutable Resources fence expectation omits W2.b's Artifacts paths. Authorize api/tests/api/root-mount-fence-completeness.test.ts to enumerate the four artifact routes and their guarded prefix. Impact: retain exact path equality and require authentication/author guards on the artifact prefix; no runtime or authorization change. Rollback: restore the outdated expectation and its deterministic CI failure.
-- [x] BR00D-EX6: exact-head CI exposed smoke and E2E fixtures missing approved tenant membership, causing catalog 403 and chat catalog unavailable/zero tools. Authorize api/tests/smoke/api-health.test.ts to reuse its approved user and api/tests/utils/seed-test-data.ts to approve the four active fixture accounts. Impact: restore expected discovery/tool authority without changing production authorization, assertions or timeouts. Rollback: restore the incomplete fixtures and their reproducible authorization failures.
-- [x] BR00D-EX5: merge published artifacts 0.2.4 source 60affbaf6, including its existing packed-vector CI gate; package/packaging/workflow paths are inherited only. Impact is source/published byte alignment and upstream gate coverage; rollback reverts this merge with the tuple refresh. No package release is authored here.
-- [x] BR00D-EX4: owner-requested merge of integration ca3239295 brings W1/W2/W4 catalog and chat ancestry; these paths are merge-only. Impact is the integrated app baseline; rollback reverts the merge. Preserve this PR's BRANCH.md; inherited merge diff is outside the authored 150-line limit.
-- [x] BR00D-EX4 extension (Opus r2 P1): authorize the Makefile prerequisite for build-artifacts in prepare-node-workspace because clean API typecheck/startup needs its dist exports. Impact: canonical dev/test/CI preparation builds artifacts idempotently after mcp-platform; frozen tuple and activation remain unchanged. Rollback: remove this prerequisite; clean consumers then require an explicit artifacts build again.
-- [x] BR00D-EX3: transport.ts carries the frozen APP-P1 digest refreshed by this lot. Share the registry constant and add a transport-readiness regression; impact is startup acceptance of qualified artifacts 0.2.4, with exact compatibility checks retained. Rollback restores the prior qualified tuple, registry pin and transport together.
-- [x] Opus r1 P1: 85/85 transport/credentials/MCP/resource tests; real API listener, HTTP 200/readiness ready and healthy container; locked teardown completed. See runtime-qualification-2026-10-27.md.
-- [x] Opus r1 P2: regenerate 0.2.4 tuple vectors; historical/current w0-record-check passes without weakening. Final-head push/CI evidence is reported in PR #796.
-- [x] BR00D-EX2: merge main 72bb2da3d to consume already-published UP-T; listed inherited paths are merge-only, no author edits. Impact is existing upstream ancestry; rollback reverts the merge.
-- [x] BR00D-EX1: merge #702 evidence and its owner question/restore template; retained evidence only; rollback reverts merge. No author edits outside scope.
-- [ ] Independent reviews and remote CI remain separate from code authorship.
-- [x] Payload receipt preserves union-order-only declaration differences in mesh/root-facade and gateway/request-receipts; all JS/exports/SQL and full artifacts/llm-mesh payloads match bytes.
-- [x] Strict install and runtime tree pass; full development npm ls retains Vitest UI/esbuild/skills Node-types diagnostics, recorded in the complete tree.
-- [x] Qualification: 23/23 registry/installed tests; APP-P1 manifest 020aacfec500d754b76c90d3ad4a05097e0f996b8b9282145ca458917ea6fb27; no upstream bump.
+- [x] BR-W1C-EX2 — owner requires exact-head CI on PR #794. Add a branch-specific workflow using existing make targets, exact pushed-SHA checkout, activation/migration/recovery/APP-P1 suites, typecheck/lint and unconditional teardown. No publishing or deployment; rollback removes this workflow.
+- [x] R1 base refresh: merge `origin/feat/app-cm-integration` at `ea8e8443134c641b99628ce2c99787a785d8c827`, preserving W1.c's BRANCH.md and restoring the tuple's API manifest and both locks unchanged. APP-P1 receipt stays `020aacfec500d754b76c90d3ad4a05097e0f996b8b9282145ca458917ea6fb27`. Inherited merge paths are advisory in `/tmp/w1c-merge-scope.log`; merge delta exceeds 150 lines solely through unchanged base imports. Both parents and the candidate share event-log blob `edb32e21829db7d28a3576dffbe22495cb162dc8`; no Track events lost or authored.
+- [x] BR-W1C-EX1 — initial owner-authorized 0.2.3 registry pin is superseded by R1's shared workspace 0.2.4 tuple. Keep the activation asset registration, required relations and migration regression counts. No executor algorithm or SQL changes; rollback is reverting W1.c registration before activation.
+- [x] Base-only merges imported W1.d/W2.b unchanged; scope-check reported inherited paths outside W1.c. Authored commits are checked separately after both merges.
+- [x] UP-T-2 — imported 0.2.4 `runPostgresActivationConformance` and `POSTGRES_ACTIVATION_VECTOR_IDS`: all 16/16 vectors pass on the W1.a-installed pool in a disposable `test_w1c_` database. Every required hook is wired; missing DATABASE_URL fails at import. Receipt: `/tmp/w1c-r1-green.log`.
+- [x] PIN-1 — #796 merged the qualified workspace tuple into integration. W1.c removed its separate 0.2.3 API registry dependency and consumes the shared 0.2.4 workspace package. The frozen APP-P1 digest remains `020aacfec500d754b76c90d3ad4a05097e0f996b8b9282145ca458917ea6fb27`; receiving registry/runtime qualification pending below.
+- [x] R1 receiving qualification: 86/86 tests in six suites pass in `/tmp/w1c-r1-green.log`: activation 19 (including all 16 imported vectors), migrations 16, recovery 20, registry 21, physical installation 2 and transport 8. APP-P1 and physical API/mesh package equality pass with 0.2.4. Earlier PIN-1 failure receipts are superseded; no live activation.
+- [x] UP-T-1 — adapter/flow/SQL/hash availability resolved by published 0.2.3 and the owner-requested API pin; imported activation vectors remain UP-T-2.
+- [x] Current package evidence: `docs/baselines/app-cm-w0/published-tuple.json` and `payload-equivalence-2026-10-27.json` bind artifacts 0.2.4 (124 payload paths) to integrity `sha512-AMXfnuKVx5gdeFppZ4iSgb0KxmfH+qSOotm/cXGBKGEdhyv9R/D05jMhefP5pIW9HwD/jbEWqcU9Gv3KTxJSQQ==` and exact workspace payload equivalence, including the activation adapter, SQL and vectors. Earlier 0.2.1/0.2.3 observations are superseded.
+- [x] UP-T-1 closure: package adapter uses `createPostgresActivationStore`, SQL asset `@sentropic/artifacts/sql/0001_activation.sql`, SHA-256 `13767c826a62aa5f880809ca2ebc60bdc638b2e59f983e195d4351356b282d8b`; host only composes those contracts.
+- [x] R1 P2: replace raw write/take/remove ports with frozen ticket/flow peek ports plus configured issue, consume, cleanup and invalidate. New facade test fails on the former spread (`/tmp/w1c-r1-tests.log`) and passes after restriction. Document separate ticket/flow transactions: flow-write failure rejects issuance; the unused ticket cannot activate without a flow and expires within 60 seconds.
+- [x] R1 exact-head CI: `.github/workflows/app-cm-w1c.yml` triggers on pushes to `feat/app-cm-w1c`, checks out and asserts `github.sha`, then runs the same six receiving suites, API typecheck/lint and unconditional teardown through existing make targets. No publication/deployment and no PR retargeting; wait for the exact-head GitHub receipt before delivery.
 
 ## AI Flaky tests
-- [x] No AI calls, accepted flakes or timeout increases.
+- [x] No AI tests or accepted flakes in this lot; no timeout increases.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; one author; external independent review.
+- [x] Mono-branch: one author for W1.c; package ownership remains upstream.
 
 ## UAT Management (in orchestration context)
-- [x] Package/registry and real API startup qualification; browser and production acceptance remain downstream.
+- [x] Backend storage composition only; no web, Chrome or VSCode surface change. No root-dev UAT or live activation.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 0: read Docker lock, rules, plan-v2, template and receiving contracts; harness branch check passed.
-- [x] Lot 1: merge #702; published strict consumer first; cluster-mesh resolves artifacts 0.2.4 with Comments/gateway.
-- [x] Lot 2: normalized published payload hashes, clean source equivalence, complete workspace resolution; merge published UP-T ancestry without package author edits.
-- [x] Lot 3: recompute APP-P1 with mcp:tools:invoke; observe old-pin refusal, then update registry and api/tests/api/{app-mcp-registry,app-mcp-installed}.test.ts.
-- [x] Lot 4: refresh reservations.md, host-fit.md, catalog-context.md and published-tuple.json; dated evidence and exact base/lock hashes.
-- [x] Lot 5: installed/profile tests, scope/branch gates, locked make down, empty stack, draft PR and head.
-- [x] Lot 6: resolve Opus r1 startup and record-check findings; #794 must drop its registry pin after #796 lands and retain the qualified workspace source; no #794 edits.
-- [x] Lot 6a: retain all historical signature/source checks; add regenerated current-tuple vectors and exact receipt/lock/source consistency checks for artifacts 0.2.4.
-- [x] Lot 7: resolve Opus r2 P1; clean-worktree canonical API typecheck/lint/startup without manual build-artifacts, repeat preparation and locked teardown. See clean-workspace-qualification-2026-10-27.md; exact-head CI evidence follows in PR #796.
-- [x] Lot 8: reconcile CI tenant fixtures, immutable Resources fences and graceful recovery teardown; smoke, fence/recovery/chat-turn suites and four seeded HTTP/turn approval-revocation-recovery probes pass; locked teardown complete. See ci-fixture-qualification-2026-10-27.md; exact-head CI evidence follows in PR #796.
+- [x] Lot 0 — Read Docker lock first, full owner plan, MASTER/workflow/testing, template and W1.a; create worktree on the assigned base; `harness check branch` passes.
+- [x] Lot 1 — Host tests first in `api/tests/api/artifacts-host-activation-store.test.ts`: namespace/TTL/receipt, authority delegation, expiry, restore and uncertain commit. Initial red on missing `activation-storage` import, `/tmp/w1c-red-2.log`. R1 adds all 16 imported vectors and a red-to-green facade regression.
+- [x] Lot 2 — `activation-storage.ts` composes workspace artifacts 0.2.4, explicit trusted namespace and integer ticket/flow TTLs in 1..60 seconds (flow <= ticket). `issue` derives both deadlines from PostgreSQL issuance time; frozen reads, consume and maintenance preserve authority/commit-error semantics without raw writes. W1.a registers the unchanged SQL and checks required activation relations.
+- [x] Lot 3 — R1: all six receiving suites pass (86/86, including 16/16 imported vectors); API typecheck passes and lint has 0 errors/220 warnings (`/tmp/w1c-r1-quality.log`). Inspect runtime logs and down the isolated stack. No UI/E2E/AI tests apply to this unmounted composition.
+- [x] W3.a handoff: await `createArtifactHostActivationStorage({ pool, namespace, ticketTtlSeconds, flowTtlSeconds })` after the sole migration executor; namespace comes from the verified opaque workspace mapping. Use `issue(binding)` for database-time deadlines; `consume(input, authorize)` must lock/recheck current session, ACL, release/channel/origin and stable-pointer policy on the supplied client through COMMIT. Sign/set cookies only after acknowledged success; `ActivationCommitUnknownError` requires a fresh flow. Supply `cleanup`/`invalidate` to W1.d; fence serving and retire signing authority before reopening after restore. PIN-1 and imported-vector gates are resolved; W3/W5 retain live activation qualification.
+- [x] Lot 4 — R1 findings reconciled; scope-check passes for each selective authored commit (82 and 48 lines). PR #794 remains on `feat/app-cm-integration`. Exact-head W1.c CI passes on `fd8db52705771b0ed58372ce80e105f763daa997`: https://github.com/rhanka/sentropic/actions/runs/40610926409 (86/86 tests, all 16 vectors, typecheck/lint and teardown). This receipt-only commit must also receive a fresh exact-head CI result before delivery; report the final SHA and CI URL, with no merge or live activation.
