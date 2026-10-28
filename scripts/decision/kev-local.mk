@@ -31,3 +31,9 @@ decision-kev-lock-check:
 		sh -ec 'probe="$$(mktemp -d)"; mkdir -p "$$probe/api" "$$probe/ui" "$$probe/packages/cluster-mesh" "$$probe/packages/llm-mesh"; \
 		cp package.json package-lock.json "$$probe/"; for package in api ui packages/cluster-mesh packages/llm-mesh; do cp "$$package/package.json" "$$probe/$$package/"; done; \
 		cd "$$probe"; npm ci --dry-run --workspaces --include-workspace-root --ignore-scripts --no-audit --no-fund'
+
+.PHONY: decision-kev-freeze-train
+decision-kev-freeze-train:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) node scripts/decision/kev-freeze-train.mjs
+

@@ -67,6 +67,10 @@ Raw local evidence stays in the ignored cache: `smoke-results.json`, `resource.t
 
 ## Qualification and update policy
 
+The additive mesh release is `0.32.0`. Its existing workspace consumers require compatibility updates: gateway `0.22.2` admits `^0.32.0`, and cluster `0.23.5` admits the mesh line below `0.33.0` in both its manifest and module guards. Matching train and selected-consumer fixtures follow those versions. The frozen lock records SHA-512 integrities of the actual built candidate archives through the existing train integrity validator. The root lock and the UI Dockerfile's exact manifest subset pass `npm ci --dry-run`; no dependency-resolution bypass is used.
+
+Both consumer typechecks passed. Gateway passed 1,370 tests; cluster passed 1,225 tests, with its existing opt-in database and packed-install lanes remaining separately gated.
+
 The shipped catalogue descriptor remains unqualified and has no accepted served IDs. A verified local tuple can enable only an explicit experimental composition via `createKevQualificationDescriptor`. Contract/identity smoke results do not establish criterion calibration, task quality, production readiness, retention guarantees or measured compute pricing. L5 gates and the L6 held-out human-labelled campaign remain required.
 
 The runtime host owner monitors upstream releases and security notices. An update is a new immutable model/runtime tuple: review the source/release diff and notices, verify provenance, pin all bytes and settings, re-run protocol, identity, wrong-selection and resource checks, and re-run affected calibration before promotion. Never use an auto-updater, mutable tag or on-demand model substitution. Preserve the previously validated tuple and artifact for rollback. A source build is a separate candidate requiring pinned build image/tools/dependencies, CMake options, logs and output digests; it cannot inherit this release-binary qualification.

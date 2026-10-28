@@ -27,6 +27,11 @@
   - `packages/cluster-mesh/tests/fixtures/train.ts`
   - `packages/cluster-mesh/tests/modules/registry.spec.ts`
   - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
+  - `packages/cluster-mesh/tests/speech-peer.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package*.json`
   - `package-lock.json`
   - `scripts/decision/**`
@@ -48,7 +53,7 @@
 - [x] Native smoke attempt 1 stopped in local inventory verification before POST; diagnose custody without inference, then use the two remaining smoke attempts for binary/choice; graded remains fixture-covered.
 - [x] Source LFS tuple verified 2026-10-28: selected revision/file, 4483801504 bytes, SHA-256 7c2ebed90560522c2801389db482ac1dc4c36d828f201f6074c1d60e433948da; model card Apache-2.0.
 - [x] Upstream archive distribution attestation cryptographically verified with pinned GitHub CLI 2.103.3; publication workflow provenance recorded separately from unverified compilation reproducibility.
-- [ ] CI install regression: npm confirms cluster's optional peer rejects workspace mesh 0.32; extend only gateway/cluster manifest compatibility to the additive 0.32 line, patch-bump those manifests and regenerate the root lock. Verify the exact UI Docker manifest subset with npm ci dry-run; rollback restores these metadata changes together with the mesh bump.
+- [x] CI install regression resolved: gateway/cluster compatibility, guards and train fixtures admit additive mesh 0.32; root lock and exact UI Docker manifest subset pass npm ci dry-run. Gateway 1370 tests and cluster 1225 tests pass; frozen lock binds actual candidate archives. Rollback restores this compatibility tuple with the mesh bump.
 
 ## AI Flaky tests
 - [x] No flaky acceptance or timeout increase planned; protocol failures block completion.
@@ -90,7 +95,7 @@
   - [x] Consolidate manifest, provenance gaps, bounded cost plan and runtime update/rollback in `spec/decision/kev-v4l4-candidate.md`.
   - [x] Bump mesh package and lock to 0.32.0, above npm published version 0.31.0 verified 2026-10-28.
 - [ ] **Lot 8 — Final validation and draft PR**
-  - [ ] Compatibility gate: cluster catalog/train/registry/topology fixtures and selected consumer lock follow mesh 0.32, gateway 0.22.2, cluster 0.23.5; run typecheck/test for gateway and cluster plus the Docker install subset dry-run.
+  - [x] Compatibility gate: cluster catalog/train/registry/topology fixtures and selected consumer lock follow mesh 0.32, gateway 0.22.2, cluster 0.23.5; typecheck/tests for both consumers and Docker install subset dry-run pass.
   - [x] make typecheck-llm-mesh, lint-llm-mesh, test-llm-mesh (90 files / 1569 tests), build-llm-mesh under flock.
   - [ ] Two-peer review; reconcile findings and verify final scope.
   - [x] Draft PR #820 opened to main with this plan as body; first comment records execution steps and local evidence.
