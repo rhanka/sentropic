@@ -361,3 +361,143 @@ describe('CRITICAL: prefs migration — legacy epoch-ms + usecase→initiative',
    * normalize legacy stored entries before feeding to module.loadPrefs.
    */
   function normalizeLegacyContextEntry(raw: Record<string, unknown>): Record<string, unknown> {
+    // Field rename: contextType→type, contextId→id
+    const type = String(raw['contextType'] ?? raw['type'] ?? '');
+    const id = raw['contextId'] != null ? String(raw['contextId']) : raw['id'] != null ? String(raw['id']) : undefined;
+    // Type migration: "usecase" → "initiative"
+    const normalizedType = type === 'usecase' ? 'initiative' : type;
+    // lastUsedAt: number (epoch-ms) → ISO-8601 string
+    let lastUsedAt: string | undefined;
+    const rawLastUsed = raw['lastUsedAt'];
+    if (typeof rawLastUsed === 'number' && rawLastUsed > 0) {
+      lastUsedAt = new Date(rawLastUsed).toISOString();
+    } else if (typeof rawLastUsed === 'string') {
+      lastUsedAt = rawLastUsed;
+    }
+    return {
+      type: normalizedType,
+      id,
+      label: String(raw['label'] ?? ''),
+      active: typeof raw['active'] === 'boolean' ? raw['active'] : true,
+      used: typeof raw['used'] === 'boolean' ? raw['used'] : true,
+      lastUsedAt,
+    };
+  }
+
+  it('loads normalized legacy prefs without data loss', () => {
+    // Simulate stored legacy prefs from old AppChatPanel format
+    const LEGACY_EPOCH_MS = 1748822400000; // 2026-06-02T00:00:00.000Z
+    const legacyRaw = {
+      contexts: [
+        // Legacy: contextType/contextId, lastUsedAt as number, type "usecase"
+        {
+          contextType: 'usecase',
+          contextId: 'uc-123',
+          label: 'Q1 Growth Initiative',
+          active: true,
+          used: true,
+          lastUsedAt: LEGACY_EPOCH_MS,
+        },
+        // Legacy: folder, epoch-ms
+        {
+          contextType: 'folder',
+          contextId: 'f-456',
+          label: 'Operations',
+          active: false,
+          used: true,
+          lastUsedAt: 1748736000000,
+        },
+      ],
+      toolEnabledById: { documents: true },
+      extensionRestrictedToolset: false,
+    };
+
+    // Adapter normalizes
+    const normalized = {
+      contexts: legacyRaw.contexts.map(normalizeLegacyContextEntry),
+      toolEnabledById: legacyRaw.toolEnabledById,
+      extensionRestrictedToolset: legacyRaw.extensionRestrictedToolset,
+    };
+
+    // Module receives normalized data via host.loadPrefs
+    const host = makeFakeHost({}, {
+      loadPrefs(_sessionId: string | null) { return normalized; },
+    });
+    const mod = createContextModule(host);
+    mod.loadPrefs('session-1');
+
+    let current: ChatContextEntry[] = [];
+    mod.entries.subscribe((v) => { current = v; })();
+
+    // Verify: two entries loaded
+    expect(current).toHaveLength(2);
+
+    // Entry 1: usecase→initiative migration
+    const initiative = current.find((e) => e.id === 'uc-123');
+    expect(initiative).toBeDefined();
+    expect(initiative!.type).toBe('initiative');
+    expect(initiative!.label).toBe('Q1 Growth Initiative');
+    expect(initiative!.active).toBe(true);
+    expect(initiative!.used).toBe(true);
+    // lastUsedAt must be ISO-8601 string parseable back to original epoch
+    expect(typeof initiative!.lastUsedAt).toBe('string');
+    expect(new Date(initiative!.lastUsedAt!).getTime()).toBe(LEGACY_EPOCH_MS);
+
+    // Entry 2: folder entry preserved
+    const folder = current.find((e) => e.id === 'f-456');
+    expect(folder).toBeDefined();
+    expect(folder!.type).toBe('folder');
+    expect(folder!.active).toBe(false);
+    expect(folder!.used).toBe(true);
+    expect(typeof folder!.lastUsedAt).toBe('string');
+    expect(new Date(folder!.lastUsedAt!).getTime()).toBe(1748736000000);
+  });
+
+  it('handles empty contexts array without error', () => {
+    const host = makeFakeHost({}, {
+      loadPrefs(_sessionId: string | null) {
+        return { contexts: [], toolEnabledById: {} };
+      },
+    });
+    const mod = createContextModule(host);
+    mod.loadPrefs('session-2');
+
+    let current: ChatContextEntry[] = [];
+    mod.entries.subscribe((v) => { current = v; })();
+    expect(current).toHaveLength(0);
+  });
+
+  it('handles null loadPrefs without error', () => {
+    const host = makeFakeHost();
+    const mod = createContextModule(host);
+    expect(() => mod.loadPrefs(null)).not.toThrow();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. savePrefs — merges contexts into prefs object
+// ---------------------------------------------------------------------------
+
+describe('createContextModule — savePrefs', () => {
+  it('includes current entries in saved prefs', () => {
+    const host = makeFakeHost();
+    const mod = createContextModule(host);
+
+    mod.updateFromRoute({ routeId: '/folder/[id]', params: { id: 'f1' } });
+    mod.savePrefs('session-1', { toolEnabledById: { documents: true } });
+
+    const saved = host.savedPrefs as Record<string, unknown>;
+    expect(saved).toBeDefined();
+    const contexts = saved['contexts'] as ChatContextEntry[];
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0].type).toBe('folder');
+    expect(contexts[0].id).toBe('f1');
+    expect(saved['toolEnabledById']).toEqual({ documents: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Zero sentropic domain strings in src/context/
+// ---------------------------------------------------------------------------
+
+describe('domain neutrality: zero sentropic domain strings in src/context/', () => {
