@@ -286,8 +286,10 @@ const createSentropicOAuthPorts = (): AuthHonoPorts => ({
       return deleted.length > 0;
     },
     async revokeAllForUser(userId) {
-      getRemoteSessionAuthority()?.revokeUser(userId);
+      const authority = getRemoteSessionAuthority();
+      authority?.revokeUser(userId);
       const deleted = await db.delete(userSessions).where(eq(userSessions.userId, userId)).returning({ id: userSessions.id });
+      for (const row of deleted) authority?.revoke(row.id);
       return deleted.length;
     },
     async touch(sessionId, now) {
