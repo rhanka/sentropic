@@ -219,10 +219,9 @@ export const createMemoryNeutralTransaction = (
   },
   apply: async (unit) => {
     const translated = neutralUnitToPg(unit);
-    const appends = unit.appends.map((row) => row.id);
     const commitIndex = options.identity ? [{
       key: memoryCommitIndexKey(options.identity),
-      digest: memoryJcs({ appends, updates: [...appends, ...unit.updates.map((row) => row.key)] }).data,
+      digest: unit.intentHash,
       resultIds: [] as string[], resultHash: JSON.stringify(unit.moduleResult ?? memoryJcs(null)),
     }] : [];
     await tx.apply({ ...translated, indexWrites: [...translated.indexWrites, ...commitIndex] });

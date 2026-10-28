@@ -47,6 +47,7 @@
   - [x] Exact 0.21.3 registry integrity verified in regenerated lock; 0.24.0-dev.6 exceeds published 0.23.4; root and peer-tool pins aligned.
 - [x] **Lot 2 — Intent carriage**: delete runtime/test host formula; persist supplied intentHash and return unchanged.
 - [ ] **Lot 3 — Tests**: wire-adaptation, contract-vectors, binding compatibility and receipt host; real 0.21.3 persistence/replay/tamper tests; receipt divergence negative test.
+  - [x] New installed-producer test passes: persisted/returned UTF-8 bytes, Engram's own replay comparison and `DIGEST_CONFLICT` on tampered storage.
 - [ ] **Lot 4 — Validation**: typecheck, lint, cluster-mesh suite, frozen-surface/Comments gates and scope; shared Docker lock and cleanup.
 - [ ] **Lot 5 — Handoff**: pack dev.6, copy tarball and SHA-256 to E10 artifacts; independent review; draft PR with this body; completed/success CI on exact head.
 
