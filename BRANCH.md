@@ -36,6 +36,9 @@
   - `packages/llm-mesh/tests/decision-fixtures.ts`
   - `packages/llm-mesh/tests/decision-public-surface.test.ts`
   - `packages/cluster-mesh/tests/decision-receipts.spec.ts`
+  - `packages/cluster-mesh/tests/fixtures/train.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `package-lock.json`
   - `spec/decision/api-host.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -53,6 +56,7 @@
   - [x] Declare BRH-EXn with reason, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] H1-R1-CI-02 — Full PR run 40735442415 reproduced three cluster-mesh tuple mismatches: frozen 0.32.0 vs candidate 0.32.1. Aligned the test tuple and selected lock to the guarded candidate archive; all 1,228 locally enabled cluster-mesh tests passed (138 environment-dependent skips). Integrity enforcement and every gate retained.
 - [x] BR822-EX3 — Owner-requested Decision provisioning in Compose, k8s-bundle-secret and the API env template. Impact: pass JEV_API_KEY and DECISION_EXECUTION_PROFILE by name only; missing values stay unavailable, production refuses; no deployment or credential provisioning. Rollback: remove these two entries/references from each surface.
 - [x] H1-R1-F2 — Exclude fixture dispatch from deployment, release verification and inherited secrets; main dispatch regression reproduced deployment access, then all 135 workflow wiring tests passed without weakening ordinary gates.
 - [x] H1-R1-F5 — Compose and Kubernetes pass Decision names only, with optional secret references and no activation default; all 136 workflow/provisioning tests passed, including fail-closed wiring assertions.
