@@ -23,26 +23,6 @@
       "svelte": "./src/checkpoints/index.ts",
       "import": "./src/checkpoints/index.ts"
     },
-    "./state/chatDraft": {
-      "types": "./src/state/chatDraft.ts",
-      "svelte": "./src/state/chatDraft.ts",
-      "import": "./src/state/chatDraft.ts"
-    },
-    "./state/chatAttachments": {
-      "types": "./src/state/chatAttachments.ts",
-      "svelte": "./src/state/chatAttachments.ts",
-      "import": "./src/state/chatAttachments.ts"
-    },
-    "./state/chatProjection": {
-      "types": "./src/state/chatProjection.ts",
-      "svelte": "./src/state/chatProjection.ts",
-      "import": "./src/state/chatProjection.ts"
-    },
-    "./state/chatLoopController": {
-      "types": "./src/state/chatLoopController.ts",
-      "svelte": "./src/state/chatLoopController.ts",
-      "import": "./src/state/chatLoopController.ts"
-    },
     "./state/chatWidgetShell": {
       "types": "./src/state/chatWidgetShell.ts",
       "svelte": "./src/state/chatWidgetShell.ts",
@@ -57,11 +37,6 @@
       "types": "./src/state/agentsSort.ts",
       "svelte": "./src/state/agentsSort.ts",
       "import": "./src/state/agentsSort.ts"
-    },
-    "./state/agentsViewMarkers": {
-      "types": "./src/state/agentsViewMarkers.ts",
-      "svelte": "./src/state/agentsViewMarkers.ts",
-      "import": "./src/state/agentsViewMarkers.ts"
     },
     "./state/streamMessageProjection": {
       "types": "./src/state/streamMessageProjection.ts",
@@ -92,31 +67,6 @@
       "types": "./src/stores/chatWidgetLayout.ts",
       "svelte": "./src/stores/chatWidgetLayout.ts",
       "import": "./src/stores/chatWidgetLayout.ts"
-    },
-    "./stores/localTools": {
-      "types": "./src/stores/localTools.ts",
-      "svelte": "./src/stores/localTools.ts",
-      "import": "./src/stores/localTools.ts"
-    },
-    "./utils/chat-run-projection": {
-      "types": "./src/utils/chat-run-projection.ts",
-      "svelte": "./src/utils/chat-run-projection.ts",
-      "import": "./src/utils/chat-run-projection.ts"
-    },
-    "./utils/chat-steer": {
-      "types": "./src/utils/chat-steer.ts",
-      "svelte": "./src/utils/chat-steer.ts",
-      "import": "./src/utils/chat-steer.ts"
-    },
-    "./utils/chat-tool-scope": {
-      "types": "./src/utils/chat-tool-scope.ts",
-      "svelte": "./src/utils/chat-tool-scope.ts",
-      "import": "./src/utils/chat-tool-scope.ts"
-    },
-    "./utils/localToolStreamSync": {
-      "types": "./src/utils/localToolStreamSync.ts",
-      "svelte": "./src/utils/localToolStreamSync.ts",
-      "import": "./src/utils/localToolStreamSync.ts"
     },
     "./components/ChatDock.svelte": {
       "types": "./src/components/ChatDock.svelte.d.ts",
@@ -187,11 +137,6 @@
       "types": "./src/utils/markdown-refs.ts",
       "svelte": "./src/utils/markdown-refs.ts",
       "import": "./src/utils/markdown-refs.ts"
-    },
-    "./utils/model-selection": {
-      "types": "./src/utils/model-selection.ts",
-      "svelte": "./src/utils/model-selection.ts",
-      "import": "./src/utils/model-selection.ts"
     },
     "./utils/message-actions": {
       "types": "./src/utils/message-actions.ts",
@@ -277,16 +222,6 @@
       "types": "./src/components/ChatSessionsBar.svelte.d.ts",
       "svelte": "./src/components/ChatSessionsBar.svelte",
       "import": "./src/components/ChatSessionsBar.svelte"
-    },
-    "./state/chatSessionHydration": {
-      "types": "./src/state/chatSessionHydration.ts",
-      "svelte": "./src/state/chatSessionHydration.ts",
-      "import": "./src/state/chatSessionHydration.ts"
-    },
-    "./state/chatSessionRuntime": {
-      "types": "./src/state/chatSessionRuntime.ts",
-      "svelte": "./src/state/chatSessionRuntime.ts",
-      "import": "./src/state/chatSessionRuntime.ts"
     },
     "./state/chatPlacement": {
       "types": "./src/state/chatPlacement.ts",
