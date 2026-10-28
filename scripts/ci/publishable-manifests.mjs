@@ -20,14 +20,14 @@ export const TRANSIENT_HINT = 're-run, not debt: transient registry or tooling f
 
 // Steady-state npm publisher jobs in ci.yml (slug -> `<slug_with_underscores>_publish` filter).
 export const STEADY_STATE_PUBLISHERS = [
-  'llm-mesh', 'llm-gateway', 'cluster-mesh', 'chat-ui', 'cited-source-viewer', 'cowork-bridge',
+  'llm-mesh', 'llm-gateway', 'cluster-mesh', 'chat-runtime', 'chat-ui', 'cited-source-viewer', 'cowork-bridge',
   'cowork-desktop', 'oauth-verify', 'mcp-auth', 'mcp-platform', 'auth-hono', 'auth-client', 'auth-ui',
   'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'flow', 'harness', 'artifacts',
 ];
 // bootstrap-publish step order in ci.yml (must equal the Bootstrap publish steps, in order).
 // Owner freeze: auth-hono is not a bootstrap target until the owner decides.
 export const BOOTSTRAP_TARGETS = [
-  'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'chat-ui', 'cited-source-viewer',
+  'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'chat-runtime', 'chat-ui', 'cited-source-viewer',
   'oauth-verify', 'mcp-auth', 'mcp-platform', 'auth-client', 'auth-ui', 'flow',
   'cowork-bridge', 'cowork-desktop', 'harness', 'llm-gateway', 'cluster-mesh', 'artifacts',
 ];
