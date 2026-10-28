@@ -62,7 +62,7 @@
   - [ ] Inventory Docker/source/lock/toolchain/profile/embedded inputs and current gate membership.
 - [ ] **Lot 1 — Persistent build cache**
   - [x] Scope BuildKit cache import/export by runtime/tools/UI/E2E and architecture; preserve source-dependent keys and build arguments; remove forced UI cache bypass.
-  - [x] Update scripts/test-api-tooling.sh for persistent/cold cache recipes and verified toolbox transport; retain filter coverage checks.
+  - [x] Update scripts/test-api-tooling.sh for persistent/cold cache recipes and verified toolbox transport; check-ci-version-filters.sh also enforces E2E hash and receipt-guard coverage.
   - [ ] Gate: make test-ci-api-tooling check-ci-version-filters ENV=test-ci-br78.
 - [ ] **Lot 2 — Digest-addressed transport**
   - [x] Implement scripts/ci/image-receipt.mjs and image-receipt.test.mjs; negative tests cover stale/wrong/missing receipts, modified archives and loaded image substitution.
