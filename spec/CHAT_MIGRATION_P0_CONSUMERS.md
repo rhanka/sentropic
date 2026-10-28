@@ -15,7 +15,7 @@ Exhaustive tracked matches outside the package/spec/plan at the pinned baseline.
 | `.graphify/cache/ee0e5fc7ec71f833110c1256693f2832e18f2955667007e8fa59be35e83e24e9.json` | H: documentation/build owner; update active links or mark history |
 | `.graphify/graph.html` | H: documentation/build owner; update active links or mark history |
 | `.graphify/graph.json` | H: documentation/build owner; update active links or mark history |
-| `.track/events.jsonl` | H: documentation/build owner; update active links or mark history |
+| `.track/events.jsonl` | H: conductor's immutable append-only evidence; never rewrite historic package names |
 | `Makefile` | H: Sentropic build/release owner; M3 source-link deletion |
 | `PLAN.md` | H: documentation/build owner; update active links or mark history |
 | `README.md` | H: documentation/build owner; update active links or mark history |
@@ -26,7 +26,7 @@ Exhaustive tracked matches outside the package/spec/plan at the pinned baseline.
 | `docs/sentropic-app-capitalisation-inventory.md` | H: documentation/build owner; update active links or mark history |
 | `docs/specs/decisions/cluster-mesh-r14/dossier.json` | H: documentation/build owner; update active links or mark history |
 | `docs/uat/2026-06-03-chat-tools-fk-forensics.md` | H: documentation/build owner; update active links or mark history |
-| `package-lock.json` | H: documentation/build owner; update active links or mark history |
+| `package-lock.json` | H: consumer/release owner; replace active source links with qualified UI/runtime pair in M3 |
 | `packages/cited-source-viewer/README.md` | H: corresponding package owner; audit public contracts |
 | `packages/cited-source-viewer/src/index.ts` | H: corresponding package owner; audit public contracts |
 | `packages/cowork-bridge/README.md` | H: cowork bridge owner; preserve handoff contract |

@@ -23,7 +23,7 @@ Test names below are relative to `packages/chat-ui/`. R tests stay in Sentropic 
 | `tests/agents-list-source.test.ts` | V: DS visual maintainer after U0 |
 | `tests/agents-list.dom.spec.ts` | V: DS visual maintainer after U0 |
 | `tests/agents-sort.test.ts` | V: DS visual maintainer after U0 |
-| `tests/agents-view-markers.test.ts` | V: DS visual maintainer after U0 |
+| `tests/agents-view-markers.test.ts` | R: principal-scoped storage/runtime tests stay in Sentropic |
 | `tests/chat-attachments.test.ts` | R: runtime maintainer; relocate with implementation |
 | `tests/chat-composer-boundary.test.ts` | V: DS visual maintainer after U0 |
 | `tests/chat-context-picker.dom.spec.ts` | R: runtime maintainer; relocate with implementation |
@@ -88,11 +88,11 @@ Test names below are relative to `packages/chat-ui/`. R tests stay in Sentropic 
 | `tests/renderer-registry.test.ts` | V: DS visual maintainer after U0 |
 | `tests/replay.test.ts` | R: runtime maintainer; relocate with implementation |
 | `tests/session-list.dom.spec.ts` | V: DS visual maintainer after U0 |
-| `tests/session-list.spec.ts` | V: DS visual maintainer after U0 |
+| `tests/session-list.spec.ts` | R+V: history assembly tests stay with runtime; neutral list projection fixtures follow visual contract |
 | `tests/spike.dom.spec.ts` | V: DS visual maintainer after U0 |
 | `tests/stream-history-bounds.test.ts` | R: runtime maintainer; relocate with implementation |
 | `tests/stream-message-boundary.test.ts` | V: DS visual maintainer after U0 |
-| `tests/stream-message-projection.test.ts` | V: DS visual maintainer after U0 |
+| `tests/stream-message-projection.test.ts` | R+V: runtime-result normalization stays Sentropic; pure display-formatting tests follow visual helper |
 | `tests/stream-message-smoothing.test.ts` | V: DS visual maintainer after U0 |
 | `tests/stream-throughput.test.ts` | R: runtime maintainer; relocate with implementation |
 | `tests/streamHub.test.ts` | R: runtime maintainer; relocate with implementation |
