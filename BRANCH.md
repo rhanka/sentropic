@@ -21,6 +21,8 @@
   - `api/tests/api/auth/remote-*`
   - `apps/auth-idp/idp-app.ts`
   - `api/src/app.ts`
+  - `api/src/services/session-manager.ts`
+  - `deploy/k8s/base/35-auth-idp.yaml`
   - `spec/REMOTE_CONTROL_RC1.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -37,6 +39,7 @@
   - [x] Declare BRRC1-EXn with rationale, impact and rollback before any conditional edit.
 
 ## Feedback Loop
+- [x] BRRC1-EX1: isolate IdP session signing in deploy/k8s/base/35-auth-idp.yaml and bind immutable MFA/lineage in session-manager credentials. Reason: shared DB writers must not elevate issuer MFA. Impact: new IdP session-secret reference; pre-upgrade unsigned-lineage credentials cannot control remotely. Rollback: disable remote issuance and restore manifest; no data reversal or gate bypass. User's RC1 login/proof-key isolation mandate authorizes this directly blocking correction; no deployment is run.
 - [ ] Native I2 verifier/proof/capsule contribution: conductor handoff in .tmp/remote-ctl/RC1-requests-to-native.md; use test-only fake pending receipt.
 - [ ] Real enrolled-2FA/installed native acceptance remains separately witnessed; local fake results cannot close RC-SESSION.
 
@@ -69,6 +72,7 @@
   - [ ] api/tests/unit/auth/remote-authority.test.ts: owner-only, exact workspace membership/role/scopes/consent/epoch, signed attestation, source/read separation.
   - [ ] Separate IdP/app/mesh key and workload references; current native-proof port; no per-action MFA or new unlock.
 - [ ] **Lot 3 — Internal IdP composition, RED then GREEN**
+  - [x] api/tests/unit/auth/remote-session-integrity.test.ts authored before session-manager changes to challenge DB-only MFA elevation.
   - [x] api/tests/api/auth/remote-session.test.ts authored for durable issuer login/refresh/revocation/version/replay behavior.
   - [ ] api/tests/api/auth/remote-evidence.test.ts: internal workload before body, browser/product denial, bounded strict body, no-store and sanitized failures.
   - [ ] Real session-store adapter preserves sid/version/auth_time across refresh and revalidates logout/revocation/expiry.
