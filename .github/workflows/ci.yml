@@ -1483,7 +1483,7 @@ jobs:
         run: make save-ui
       - name: Test UI
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-ui
+        run: make ci-test-ui ENV=test-ci-images
       - name: Upload UI image artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: actions/upload-artifact@v7
