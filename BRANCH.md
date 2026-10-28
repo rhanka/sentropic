@@ -128,6 +128,7 @@
   - [x] Conversation view source slice 12 committed within the atomic limit.
   - [x] Conversation view source slice 13 committed within the atomic limit.
   - [x] Conversation view source slice 14 committed within the atomic limit.
+  - [x] Conversation view source slice 15 committed within the atomic limit.
 - [ ] **Lot 3 — Parity and packed boundary qualification**
   - [x] Migrate layout, accessibility, feature defaults, optional slots and label assertions to a host-created real runtime fixture.
   - [x] Bind the contenteditable text property so a remounted view renders the retained runtime draft; assert both stored and displayed content.
