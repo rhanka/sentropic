@@ -72,7 +72,7 @@
   - [ ] Scoped make test-llm-mesh while evolving these files.
 - [ ] **Lot 6 — Local native qualification**
   - [ ] Download exact selected model once; validate all bytes and pinned runtime before inference.
-  - [ ] Run at most three protocol/identity smokes; record usage, memory/latency, wrong-selection refusal and cache path.
+  - [ ] Run at most three protocol/identity smokes through native process plus Docker Node client; record usage, memory/latency, wrong-selection refusal and cache path.
   - [ ] Report calibration/production limits separately from protocol evidence.
 - [ ] **Lot 7 — Documentation and publication**
   - [ ] Consolidate manifest, provenance gaps, bounded cost plan and runtime update/rollback in `spec/decision/kev-v4l4-candidate.md`.
