@@ -59,6 +59,7 @@
   - [x] Create isolated branch/worktree and mechanically check its exact branch with harness.
   - [x] Record documentation-only environment, scope and existing source baseline.
 - [ ] **Lot P0a — Inventory and classify**
+  - [x] Enumerate 125 global CSS selector blocks affecting chat and inherited host styling.
   - [ ] Inventory all package files/exports, consumers, styling overrides and app widget snippets.
   - [x] Record appendix: edges inventory.
   - [x] Record appendix: consumers inventory.
