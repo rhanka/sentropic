@@ -83,6 +83,8 @@
   - [x] Move JEV price authority from its synthetic fixture to control.model_pricing and bump llm-mesh to 0.31.1 (npm view: 0.31.0).
   - [x] Add PostgreSQL tests for exact revision/protocol prices, missing prices and one metadata-only settlement per backend.
   - [x] Extend the existing ledger operation CHECK to decision; real-PG regression reproduced the prior constraint refusal.
+  - [x] Add all-bucket cap, pending-liability and durable overrun-disable regression controls; bind dispatch to the held evaluator.
+  - [x] Readiness checks credentials, the tenant's strategy/bucket and each evaluator's durable disable state.
 - [ ] **Docs consolidation**
   - [x] Document route, profiles, readiness limits, tariff sources and provisioned environment names in spec/decision/api-host.md.
 - [ ] **Final validation**
