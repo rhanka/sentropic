@@ -33,7 +33,27 @@ For the evidence backchannel, provision `REMOTE_ACTION_EVIDENCE_CLIENT_ID`, `REM
 
 RC2's named composition writer supplies `RemoteEvidenceIssuerPorts.approvedTarget(targetDigest, credentialDerivedLogin)` from the approved current-native registration/proof state. It returns only the pinned native audience and exact tenant/workspace or null. The issuer then checks its own current membership. A cannot submit subject, tenant, workspace, audience, callback or socket fields in EvidenceRequest. Missing native contribution refuses issuance; there is no production fake.
 
-The conductor relay request is `.tmp/remote-ctl/RC1-requests-to-native.md`: D2-JWS, CLI-PROOF, owner/scope, key rotation, bounded revocation and content-v3 policy-purpose vectors. Share/amend uses its separately frozen purpose mapping; remote-action evidence is not a sharing proof. Source/read credentials cannot authorize human operations.
+The conductor relay request is `.tmp/remote-ctl/RC1-requests-to-native.md`: D2-JWS, CLI-PROOF, owner/scope, key rotation, bounded revocation and content-v3 policy-purpose vectors. R15 remains open: frozen draft.5 line 140 references S2 share/amend mapping/vector bytes absent from both pinned and current S2. The exact normative change request is `.tmp/remote-ctl/RC1-share-amend-proof.md` (RC1-S2-POLICY-01). Remote-action evidence is not a sharing proof. Source/read credentials cannot authorize human operations.
+
+Native reply IDs below are tracking references only. They preserve the seven original request groups and all frozen wire identifiers. The reply at `/home/antoinefa/src/h2a/tmp/h-cond/rc1-reply.md` has SHA-256 `dc17a5ea3bb8bcf2d080338ac08a4dfd42f06d9259832ae36ed386b31f0b579d`; its analysis has SHA-256 `23669df87d63ee651865bc73d70d3ba350dcfa458911df6849b3f6a7bf5f4ac9`. Local witnesses do not close any native delivery row.
+
+| Native tracking ID | Existing app-side test reference / outstanding native evidence |
+| --- | --- |
+| R01 — AUTH-01 | `api/tests/unit/auth/remote-evidence.test.ts`: repeated actions/source switch. Real login/installed verifier receipt pending. |
+| R02 — D2 lineage | Same suite: signed issuer/subject/sid/sessionVersion substitutions. Native vector/verification pending. |
+| R03 — D2 audience/MFA | Same suite: audience/amr/auth_time substitutions. Qualified native MFA policy pin pending. |
+| R04 — D2 exact bindings | Same suite and `remote-authority.test.ts`/`remote-contract.test.ts`: action/JCS/attestation bindings. Shared byte fixtures and native equality checks pending. |
+| R05 — D2 keys | `remote-evidence.test.ts`: unknown/revoked/wrong IdP key. Native purpose-scoped ring vectors pending. |
+| R06 — D2 algorithm | Same suite: positive pinned EdDSA signing. Shared negative JWS algorithm-substitution fixtures/native verification pending. |
+| R07 — D2 expiry | Same suite: signed time mutations; `remote-native-proof.test.ts`: CLI proof cutoff. Native original-deadline vectors pending. |
+| R08 — D2 replay | `remote-evidence.test.ts`: explicitly injected native fake. Durable native replay/restart/race receipt pending. |
+| R09 — CLI-PROOF | `remote-native-proof.test.ts`: exact signed proof/target comparisons. Actual-host proof producer and capsule lock pending. |
+| R10 — OWNER-ONLY | `remote-authority.test.ts`: owner/membership/role refusals. Paired native refusal witnesses pending. |
+| R11 — consent/scope | Same suite: scope/revision/epoch equality. Native consent-fence/race witnesses pending. |
+| R12 — trust isolation | `remote-contract.test.ts` and `remote-evidence.test.ts`: key/workload/secret separation and rotation. Acknowledged shared trust and actual workload receipts pending. |
+| R13 — revoke/logout | `remote-evidence.test.ts`; `api/tests/api/auth/remote-session.test.ts`: current issuer denial/restore. Observed native denial/real-session receipt pending. |
+| R14 — offline bound | Unit evidence clock refusal and CLI proof minus-5000-ms cutoff. Native immutable claim cutoff and installed <=35 s measurement pending. |
+| R15 — sharing policy-purpose | No successor schema/vector test asserted. Blocked by RC1-S2-POLICY-01; shared policy fixtures and native PolicySessionVerifier remain pending. |
 
 ## Validation and acceptance
 
