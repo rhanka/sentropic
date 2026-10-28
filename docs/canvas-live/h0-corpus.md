@@ -1,0 +1,28 @@
+# B1 host content corpus
+
+The two JSON files are **input fixtures**, not a new public schema, an editor implementation or a passing B1 witness. [UI content](../../ui/tests/fixtures/canvas-live/b1-content.json) contains actual repository test/seed content, labelled derivatives and separate synthetic edge cases. [API payloads](../../api/tests/fixtures/canvas-live/b1-save-payloads.json) preserve business shapes/siblings and creation/composer distinctions. Original French content is retained verbatim as evidence; fixture metadata and new scenarios are English. No production database export or private document was used. Stored-population coverage remains pending in [gates](h0-gates.md).
+
+Source revision is the implementation base, not the older B1 study pin. `repository-content` means a literal from a named repository source; `repository-content-derived` labels list serialization; `repository-content-reused` labels a comment sample reused for message editing. None claims an observed production message. Fixture/input hashes are in [h0-inputs.sha256](h0-inputs.sha256).
+
+## Per-editor observable oracles
+
+Each oracle is a future acceptance obligation, with status **pending execution**. P = parity, D = intentional divergence, G = DS-only guarantee, following B1 §4.2. A product-visible divergence is **specified, pending owner acceptance** through Q-CL-1/Q-B1-4; H0 grants no acceptance. Real browser composition, capture and DOM evidence must be recorded at adoption. All behavior witness work is RED-first: demonstrate the required failure before the implementation that makes it pass.
+
+| Oracle | Witness | Current Sentropic expectation | DS expectation / adoption gate |
+| --- | --- | --- | --- |
+| P-ROUNDTRIP | W1 | Unedited blocks byte-identical; editing middle paragraph leaves neighbours/separators unchanged | Same byte oracle; no bridge equivalence assumed before execution |
+| P-MATRIX | W1/W5 | Short Markdown name/description unchanged; whole-config save preserves siblings | Same retained Markdown behavior unless Q-B1-4 explicitly permits a different class |
+| P-CITATION | W1/W4 | `[1]`/`[2]` remain literal wire text through decoration, typing, capture and remount | Same bytes, host decoration outside document; no new citation node or editor DOM mutation |
+| P-PLAIN | W5 | Native input/textarea semantics, multiline names, single-line industry/workspace, lock/role inertness and unsaved chrome | DS Input/Textarea; creation has zero updates before ID; no rich editor for plain fields |
+| D-LIST | W2 | Existing list editor edits/forces lists; arrays save as arrays | P0 preserves visible non-editable lists byte-for-byte. Editable list adoption requires separate qualified profile; no green list-edit claim before it exists |
+| D-PRESERVED | W1/W2 | Existing editor can edit supported headings/lists/link paragraphs | P0 preserves unsupported blocks and whole link paragraphs, non-editable; neighbour edits retain raw bytes. Q-CL-1 open |
+| D-NORMALIZE | W1 | Host applies literal `expectedHostNormalized` before business saving | Unedited raw DS blocks stay byte-identical; host normalization is a separate boundary, not DS normalization permission |
+| D-MATRIX-DECISION | W1/W5 | Formatting remains available on both axis-name mounts | Keep matrix Markdown class until owner answers Q-B1-4 independently for M1/M2 |
+| D-COMPOSER | W4/B1-L6 | C1 shell disabled, C2 edit/cancel, C3 typeable while sending; no autosave | Controlled string handle with readiness/capture; compose/send waits once, flagged draft never sends, clear only after success, cancel restores draft; qualify all three mounts |
+| D-IME | W4 | Focused local edits win; current raw-offset selection behavior is recorded separately | Paragraph-ID/offset anchor, no dirty overwrite, composition emits once, deferred capture resolves once; unmount rejects once |
+| D-PASTE | W3 | Supported headings/lists accepted; hostile content inert | P0 refuses non-paragraph paste whole, one refusal, unchanged document/selection; hostile script/event/javascript payload inert and remote image dropped |
+| G-REPRESENTABILITY | W1/W4 | No corresponding capture/representability contract; n/a | Empty/whitespace/break-only cases must report representability correctly; preserve flagged local drafts, never silently save/remount |
+
+W5 is cross-cutting: run all adopted modes locked/viewer, via typing/paste/shortcuts, and assert zero mutation/save; inject sentinel locale strings, switch theme/locale without losing caret/scroll. W4 also injects external updates in focused/dirty/blurred/composing states. Corpus mount union covers every inventory row; variants are source sites, not independent production documents.
+
+Execution at H6/H7/H8 must use the exact DS package/profile pin and independent literal oracles. The expected payloads do not assert that current HTTP routes already implement H5 version/base CAS. Add authorized stored exports as a separately labelled set before any population-level eligibility claim. No adoption, deletion, same-block editing, FE-3 or FE-6 success is established by parsing these files.

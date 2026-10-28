@@ -57,9 +57,9 @@
 - [x] **Lot 1 — Mount and server inventory**
   - [x] Record drift and all 24 mounts in 10 files, exactly one class and save authority per mount.
   - [x] Inventory server descriptors, payloads, routes and settings/chat authorization without client lock gates.
-- [ ] **Lot 2 — B1 real-content corpus**
-  - [ ] Add API and UI JSON fixtures for prose, lists, matrix, three composers, plain fields and citations.
-  - [ ] Identify source provenance, intended parity and profile differences requiring owner acceptance.
+- [x] **Lot 2 — B1 real-content corpus**
+  - [x] Add API and UI JSON fixtures for prose, lists, matrix, three composers, plain fields and citations.
+  - [x] Identify source provenance, intended parity and profile differences requiring owner acceptance.
 - [ ] **Lot 3 — Transfer register and gates**
   - [ ] Create N1–N8 receipts with source hashes, owners, consumers, exports, witnesses, disposition and deletion fields.
   - [ ] Add N8 correspondence; supersede older tree-binding and snapshot-only recovery wording.
