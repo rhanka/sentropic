@@ -51,7 +51,7 @@ const meshPkg = JSON.parse(await readFile(
 const engramPkg = JSON.parse(await readFile(
   new URL('./node_modules/@sentropic/engram/package.json', import.meta.url), 'utf8'));
 assert.equal(engramPkg.version, '0.22.0');
-assert.equal(meshPkg.version, '0.24.0-dev.4', 'candidate mesh tarball version');
+assert.equal(meshPkg.version, '0.24.0-dev.5', 'candidate mesh tarball version');
 
 const pg = (await import('pg')).default;
 const meshMemory = await import('@sentropic/cluster-mesh/engram-memory');
@@ -357,6 +357,11 @@ try {
     operations.restart = { capture_replay: replay.status, record_id: firstOutcome.record_id,
       journal_events: journalBefore.length, processes: 2 };
     await store.close();
+  }
+  if (phase === 'reopen') {
+    const { installedHydrationRefusals } = await import('./installed-hydration.mjs');
+    operations.hydration = await installedHydrationRefusals({ grant: binding.memoryGrant,
+      scopeBinding, now: NOW, deadline: DEADLINE, digest: DIGEST });
   }
 } finally {
   if (phase === 'reopen') {
