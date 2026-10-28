@@ -70,7 +70,7 @@
 - [ ] **Lot E10-6 — Lossless K7 installed rerun after #815**
   - [x] Merge `origin/feat/engram-e2-integration` at `52936121a` (#815), retaining the E10 plan and adopting pack-only `0.24.0-dev.5`; no rebase or force-push.
   - [x] Add `installed-hydration.mjs` to the clean consumer: created/completed K7 divergence and missing-receipt refusal by installed Engram `0.22.0`, with matching positive reopen and direct/transactional byte checks; in-memory fault injection is separate from the lane's real PostgreSQL operations.
-  - [ ] Document the K7 version rule outside this plan and refusal of dev.3/dev.4 rows missing receipts without migration.
+  - [x] Document the K7 version rule and refusal of dev.3/dev.4 rows missing receipts without migration in `packages/cluster-mesh/docs/engram-memory-k7.md`; no packed-source change.
   - [ ] Regenerate the receipt, retain the candidate archive, push and require completed/success CI on the exact head.
   - [x] BR10-EX4: owner requires `ENV=test-mem-e10`; add it to the existing host scope-check selector to avoid an unrelated harness image build. Impact: validation routing only; rollback: remove that selector.
 - [ ] **Lot E10-5 — Final integration refresh**
