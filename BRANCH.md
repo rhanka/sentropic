@@ -42,6 +42,7 @@
   - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] BR1-R3-context-fallback: move the empty visual context provider and its behavior suite into chat-ui; runtime context owns selection/loading only.
 - [x] BR1-R3-stream-presentation: move record/task normalization beside its only consumers in visual stream presentation; remove the orphan runtime module and exports.
 - [x] BR1-R3-documents-host: runtime owns DocumentHost upload/delete/download I/O; the visual package retains only normalized attachment/card declarations.
 - [x] BR1-R3-conversation-port: runtime owns the injected conversation port; views import only its types. The optional neutral UI type peer accepts main 0.34.1 and the separated 1.0.0 contract.

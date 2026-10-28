@@ -19,7 +19,7 @@
    * - `onChipClick` — called with the clicked `ChatContextEntry`.
    */
 
-  import { createNoopChatContextProvider, type ChatContextEntry, type ChatContextProvider } from '@sentropic/chat-runtime/state/chat-context';
+  import { createNoopChatContextProvider, type ChatContextEntry, type ChatContextProvider } from '../context/index.js';
   import type { ChatUiLabelResolver } from '@sentropic/chat-runtime/hosts/createWebHost';
 
   // ---------------------------------------------------------------------------

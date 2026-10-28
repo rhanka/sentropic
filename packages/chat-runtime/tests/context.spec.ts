@@ -554,8 +554,8 @@ describe('context/index.ts re-exports', () => {
     expect(typeof mod.selectActiveChatContexts).toBe('function');
   });
 
-  it('exports createNoopChatContextProvider', async () => {
+  it('keeps the visual noop provider outside the runtime', async () => {
     const mod = await import('../src/context/index.js');
-    expect(typeof mod.createNoopChatContextProvider).toBe('function');
+    expect(mod).not.toHaveProperty('createNoopChatContextProvider');
   });
 });
