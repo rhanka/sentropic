@@ -21,7 +21,7 @@ export function slots({ receipt: r, engram, mesh, source, c6, locks, driver, ci,
     ['adaptation', 'mesh.tgz', { k7: 'full receipt_digest carriage in dev.6', intentHash: 'unchanged producer NeutralAtomicUnit.intentHash' }, null],
     ['operations-and-closures', 'receipt.json', { refusals: r.refusals, operations: r.operations, closure }, null],
     ['lot6-disposition', 'pr803.md', lot6, null],
-    ['ci', 'ci.json', ci, 'Exact E11 head CI is retained separately after push to avoid a self-referential tuple hash; integration merge has no E10 pull_request run. CI does not qualify Stage B.'],
+    ['ci', 'e10-ci.json', { e10: ci, e11: 'Exact E11 head CI is retained separately after push to avoid a self-referential tuple hash' }, null],
   ];
   return rows.map(([name, file, observed, reason], index) => ({ id: index + 1, name, file,
     status: reason ? 'PENDING' : 'VERIFIED-CANDIDATE', ...(reason ? { reason } : {}), observed }));
