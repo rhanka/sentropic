@@ -61,7 +61,7 @@
   - [x] Read W1.c adapter, W2.b transport and current session/ACL authority.
   - [x] Freeze file scope, ports, cleanup and no-production guardrails.
 - [ ] **Lot 1 — Tests before implementation**
-  - [ ] Add `api/tests/api/artifacts-reader-activation.test.ts` using real PostgreSQL and host migrations.
+  - [x] Add `api/tests/api/artifacts-reader-activation.test.ts` using real PostgreSQL and host migrations.
   - [ ] Prove one consume, wrong browser/session/subject, replay, DB expiry and revocation.
   - [ ] Prove release/channel/origin/profile/policy binding and stable-pointer fencing after waits.
   - [ ] Prove commit failure/uncertainty returns no grant and current-session fresh-flow recovery needs no MFA.
