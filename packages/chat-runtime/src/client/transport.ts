@@ -182,3 +182,111 @@ export const createDefaultTransport: ChatCoreTransportFactory = (
     },
 
     // -----------------------------------------------------------------------
+    // Business verbs
+    // -----------------------------------------------------------------------
+
+    async fetchSessions() {
+      return doJson<{ sessions: SessionSummary[] }>(
+        joinUrl(baseUrl, '/chat/sessions'),
+        'GET',
+        requestHeaders,
+      );
+    },
+
+    fetchSessionHistory(sessionId, detail) {
+      return fetch(
+        joinUrl(baseUrl, `/chat/sessions/${encodeId(sessionId)}/history?runtimeDetails=${encodeURIComponent(detail)}`),
+        {
+          method: 'GET',
+          headers: { Accept: 'application/x-ndjson', ...requestHeaders },
+        },
+      );
+    },
+
+    async sendMessage(payload) {
+      return doJson<RunHandle>(
+        joinUrl(baseUrl, '/chat/messages'),
+        'POST',
+        requestHeaders,
+        payload,
+      );
+    },
+
+    async retryMessage(messageId, opts) {
+      return doJson<RunHandle>(
+        joinUrl(baseUrl, `/chat/messages/${encodeId(messageId)}/retry`),
+        'POST',
+        requestHeaders,
+        opts,
+      );
+    },
+
+    async stopMessage(messageId) {
+      await doJson(
+        joinUrl(baseUrl, `/chat/messages/${encodeId(messageId)}/stop`),
+        'POST',
+        requestHeaders,
+      );
+    },
+
+    async editMessage(messageId, content) {
+      await doJson(
+        joinUrl(baseUrl, `/chat/messages/${encodeId(messageId)}`),
+        'PATCH',
+        requestHeaders,
+        { content },
+      );
+    },
+
+    async setFeedback(messageId, vote) {
+      await doJson(
+        joinUrl(baseUrl, `/chat/messages/${encodeId(messageId)}/feedback`),
+        'POST',
+        requestHeaders,
+        { vote },
+      );
+    },
+
+    async deleteSession(sessionId) {
+      await doJson(
+        joinUrl(baseUrl, `/chat/sessions/${encodeId(sessionId)}`),
+        'DELETE',
+        requestHeaders,
+      );
+    },
+
+    async pollJob(jobId) {
+      return doJson<{ status?: string }>(
+        joinUrl(baseUrl, `/queue/jobs/${encodeId(jobId)}`),
+        'GET',
+        requestHeaders,
+      );
+    },
+
+    async postLocalToolResult(streamId, toolCallId, result) {
+      await doJson(
+        joinUrl(baseUrl, `/chat/messages/${encodeId(streamId)}/tool-results`),
+        'POST',
+        requestHeaders,
+        { toolCallId, result },
+      );
+    },
+
+    async postSteer(streamId, message) {
+      await doJson(
+        joinUrl(baseUrl, `/chat/messages/${encodeId(streamId)}/steer`),
+        'POST',
+        requestHeaders,
+        { message },
+      );
+    },
+
+    async fetchModelCatalog() {
+      return doJson<ModelCatalog>(
+        joinUrl(baseUrl, '/models/catalog'),
+        'GET',
+        requestHeaders,
+      );
+    },
+  };
+};
