@@ -2,74 +2,74 @@
 
 Pinned baseline: `ea20bd9c026e9717d911514e763f8911b6981dde`. See [presentation contract](CHAT_MIGRATION_P0_PRESENTATION.md).
 
-This is a selector-block inventory, including broad host rules inherited by chat. Remove the chat's dependency on these routes in P3; keep unrelated application rules under their app owner. Scope excludes app-wide restyling. Line is the beginning of the selector's whitespace span.
+This is a selector-block inventory, including broad host rules inherited by chat. Remove the chat's dependency on these routes in P3; keep unrelated application rules under their app owner. Scope excludes app-wide restyling. Line points to the first non-whitespace selector token.
 
 | Source | Existing selector/block | Disposition |
 | --- | --- | --- |
-| `ui/src/app.css:5` | `@theme` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:14` | `@layer base` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:42` | `@utility space-y-1` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:55` | `@utility space-y-2` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:67` | `@utility space-y-3` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:79` | `@utility space-y-4` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:91` | `@utility space-y-6` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:103` | `@layer utilities` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:106` | `[data-chat-widget-tab-bar] .shadow-sm` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:111` | `.bg-black.bg-opacity-40` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:115` | `.outline-none, .focus\:outline-none:focus, .focus-visible\:outline-none:focus-visible` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:123` | `:root` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:208` | `.layout-main > .column-a > .grid > .space-y-6` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:213` | `.layout-main > .column-a > .grid > .space-y-6 > *:last-child` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:218` | `.layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > * + *` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:242` | `.layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:251` | `.layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > .rounded-lg` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:262` | `.layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > .rounded-lg > *:last-child` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:267` | `.layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > *:last-child` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:282` | `.prose a, .markdown-wrapper a, .text-slate-600 a` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:290` | `.prose a:hover, .markdown-wrapper a:hover, .text-slate-600 a:hover` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:296` | `.slim-scroll` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:302` | `.slim-scroll::-webkit-scrollbar` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:306` | `.slim-scroll::-webkit-scrollbar-track` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:309` | `.slim-scroll::-webkit-scrollbar-thumb` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:315` | `.slim-scroll:hover::-webkit-scrollbar-thumb` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:318` | `.topai-theme-dark body` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:324` | `.topai-theme-dark .bg-white` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:328` | `.topai-theme-dark .bg-slate-50, .topai-theme-dark .bg-slate-50\/70` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:333` | `.topai-theme-dark .bg-slate-100` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:337` | `.topai-theme-dark .border-slate-100, .topai-theme-dark .border-slate-200, .topai-theme-dark .border-slate-300, .topai-theme-dark .border-gray-200` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:344` | `.topai-theme-dark .text-slate-900, .topai-theme-dark .text-slate-800, .topai-theme-dark .text-slate-700` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:350` | `.topai-theme-dark .text-slate-600, .topai-theme-dark .text-slate-500` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:355` | `.topai-theme-dark .text-slate-400` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:359` | `.topai-theme-dark` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:366` | `.topai-theme-dark .bg-primary` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:371` | `.topai-theme-dark .hover\:bg-primary\/90:hover` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:375` | `.topai-theme-dark .chat-user-bubble` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:380` | `.topai-theme-dark .chat-composer-footer` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:385` | `#chat-model-selection` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:390` | `:is(#chat-model-selection option, #chat-model-selection optgroup)` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:395` | `.topai-theme-dark #chat-model-selection` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:410` | `.topai-theme-dark :is(#chat-model-selection:hover, #chat-model-selection:focus, #chat-model-selection:active)` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:415` | `.topai-theme-dark :is(#chat-model-selection option, #chat-model-selection optgroup)` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:420` | `.topai-theme-dark .chat-composer-surface` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:425` | `.topai-theme-dark [data-testid='todo-runtime-panel']` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:430` | `.topai-theme-dark [data-testid='todo-runtime-panel'] :is(.text-slate-700, .text-slate-600)` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:434` | `.topai-theme-dark [data-testid='todo-runtime-panel'] :is(.text-slate-500, .text-slate-400)` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:438` | `.topai-theme-dark [data-testid='todo-runtime-panel'] .border-slate-400` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:442` | `.topai-theme-dark .chat-delete-confirm-surface` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:447` | `.topai-theme-dark .chat-delete-confirm-surface .text-slate-700` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:451` | `.topai-theme-dark .extension-main-tabs` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:456` | `.topai-theme-dark .extension-main-tab` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:460` | `.topai-theme-dark .extension-main-tab:hover` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:465` | `.topai-theme-dark .extension-main-tab-active` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:472` | `.topai-theme-dark .extension-provider-readiness-badge` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:477` | `.topai-theme-dark .extension-provider-readiness-ready` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:481` | `.topai-theme-dark .extension-provider-readiness-not-ready` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:485` | `body.vscode-dark #topai-vscode-root, body.vscode-high-contrast #topai-vscode-root, body.vscode-high-contrast-light #topai-vscode-root` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:493` | `body.vscode-dark #topai-vscode-root .topai-chat-widget-shell, body.vscode-high-contrast #topai-vscode-root .topai-chat-widget-shell, body.vscode-high-contrast-light #topai-vscode-root .topai-chat-widget-shell` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:501` | `body.vscode-dark #topai-vscode-root .bg-white, body.vscode-dark #topai-vscode-root .bg-slate-50, body.vscode-dark #topai-vscode-root .bg-slate-100, body.vscode-high-contrast #topai-vscode-root .bg-white, body.vscode-high-contrast #topai-vscode-root .bg-slate-50, body.vscode-high-contrast #topai-vscode-root .bg-slate-100, body.vscode-high-contrast-light #topai-vscode-root .bg-white, body.vscode-high-contrast-light #topai-vscode-root .bg-slate-50, body.vscode-high-contrast-light #topai-vscode-root .bg-slate-100` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:513` | `body.vscode-dark #topai-vscode-root .border-slate-100, body.vscode-dark #topai-vscode-root .border-slate-200, body.vscode-dark #topai-vscode-root .border-slate-300, body.vscode-dark #topai-vscode-root .border-gray-200, body.vscode-high-contrast #topai-vscode-root .border-slate-100, body.vscode-high-contrast #topai-vscode-root .border-slate-200, body.vscode-high-contrast #topai-vscode-root .border-slate-300, body.vscode-high-contrast #topai-vscode-root .border-gray-200, body.vscode-high-contrast-light #topai-vscode-root .border-slate-100, body.vscode-high-contrast-light #topai-vscode-root .border-slate-200, body.vscode-high-contrast-light #topai-vscode-root .border-slate-300, body.vscode-high-contrast-light #topai-vscode-root .border-gray-200` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:528` | `body.vscode-dark #topai-vscode-root .text-slate-900, body.vscode-dark #topai-vscode-root .text-slate-800, body.vscode-dark #topai-vscode-root .text-slate-700, body.vscode-dark #topai-vscode-root .text-slate-600, body.vscode-dark #topai-vscode-root .text-slate-500, body.vscode-high-contrast #topai-vscode-root .text-slate-900, body.vscode-high-contrast #topai-vscode-root .text-slate-800, body.vscode-high-contrast #topai-vscode-root .text-slate-700, body.vscode-high-contrast #topai-vscode-root .text-slate-600, body.vscode-high-contrast #topai-vscode-root .text-slate-500, body.vscode-high-contrast-light #topai-vscode-root .text-slate-900, body.vscode-high-contrast-light #topai-vscode-root .text-slate-800, body.vscode-high-contrast-light #topai-vscode-root .text-slate-700, body.vscode-high-contrast-light #topai-vscode-root .text-slate-600, body.vscode-high-contrast-light #topai-vscode-root .text-slate-500` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
-| `ui/src/app.css:546` | `body.vscode-dark #topai-vscode-root .bg-red-50, body.vscode-high-contrast #topai-vscode-root .bg-red-50, body.vscode-high-contrast-light #topai-vscode-root .bg-red-50` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:7` | `@theme` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:16` | `@layer base` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:45` | `@utility space-y-1` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:57` | `@utility space-y-2` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:69` | `@utility space-y-3` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:81` | `@utility space-y-4` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:93` | `@utility space-y-6` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:106` | `@layer utilities` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:107` | `[data-chat-widget-tab-bar] .shadow-sm` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:113` | `.bg-black.bg-opacity-40` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:117` | `.outline-none, .focus\:outline-none:focus, .focus-visible\:outline-none:focus-visible` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:125` | `:root` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:211` | `.layout-main > .column-a > .grid > .space-y-6` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:216` | `.layout-main > .column-a > .grid > .space-y-6 > *:last-child` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:221` | `.layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > * + *` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:245` | `.layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:254` | `.layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > .rounded-lg` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:265` | `.layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > .rounded-lg > *:last-child` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:270` | `.layout-main > .column-a > .grid.lg\:grid-cols-2.lg\:col-span-2 > .space-y-6 > *:last-child` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:285` | `.prose a, .markdown-wrapper a, .text-slate-600 a` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:292` | `.prose a:hover, .markdown-wrapper a:hover, .text-slate-600 a:hover` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:299` | `.slim-scroll` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:303` | `.slim-scroll::-webkit-scrollbar` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:307` | `.slim-scroll::-webkit-scrollbar-track` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:310` | `.slim-scroll::-webkit-scrollbar-thumb` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:316` | `.slim-scroll:hover::-webkit-scrollbar-thumb` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:321` | `.topai-theme-dark body` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:326` | `.topai-theme-dark .bg-white` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:330` | `.topai-theme-dark .bg-slate-50, .topai-theme-dark .bg-slate-50\/70` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:335` | `.topai-theme-dark .bg-slate-100` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:339` | `.topai-theme-dark .border-slate-100, .topai-theme-dark .border-slate-200, .topai-theme-dark .border-slate-300, .topai-theme-dark .border-gray-200` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:346` | `.topai-theme-dark .text-slate-900, .topai-theme-dark .text-slate-800, .topai-theme-dark .text-slate-700` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:352` | `.topai-theme-dark .text-slate-600, .topai-theme-dark .text-slate-500` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:357` | `.topai-theme-dark .text-slate-400` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:361` | `.topai-theme-dark` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:368` | `.topai-theme-dark .bg-primary` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:373` | `.topai-theme-dark .hover\:bg-primary\/90:hover` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:377` | `.topai-theme-dark .chat-user-bubble` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:382` | `.topai-theme-dark .chat-composer-footer` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:387` | `#chat-model-selection` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:392` | `:is(#chat-model-selection option, #chat-model-selection optgroup)` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:397` | `.topai-theme-dark #chat-model-selection` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:412` | `.topai-theme-dark :is(#chat-model-selection:hover, #chat-model-selection:focus, #chat-model-selection:active)` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:417` | `.topai-theme-dark :is(#chat-model-selection option, #chat-model-selection optgroup)` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:422` | `.topai-theme-dark .chat-composer-surface` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:427` | `.topai-theme-dark [data-testid='todo-runtime-panel']` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:432` | `.topai-theme-dark [data-testid='todo-runtime-panel'] :is(.text-slate-700, .text-slate-600)` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:436` | `.topai-theme-dark [data-testid='todo-runtime-panel'] :is(.text-slate-500, .text-slate-400)` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:440` | `.topai-theme-dark [data-testid='todo-runtime-panel'] .border-slate-400` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:444` | `.topai-theme-dark .chat-delete-confirm-surface` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:449` | `.topai-theme-dark .chat-delete-confirm-surface .text-slate-700` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:453` | `.topai-theme-dark .extension-main-tabs` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:458` | `.topai-theme-dark .extension-main-tab` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:462` | `.topai-theme-dark .extension-main-tab:hover` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:467` | `.topai-theme-dark .extension-main-tab-active` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:474` | `.topai-theme-dark .extension-provider-readiness-badge` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:479` | `.topai-theme-dark .extension-provider-readiness-ready` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:483` | `.topai-theme-dark .extension-provider-readiness-not-ready` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:488` | `body.vscode-dark #topai-vscode-root, body.vscode-high-contrast #topai-vscode-root, body.vscode-high-contrast-light #topai-vscode-root` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:495` | `body.vscode-dark #topai-vscode-root .topai-chat-widget-shell, body.vscode-high-contrast #topai-vscode-root .topai-chat-widget-shell, body.vscode-high-contrast-light #topai-vscode-root .topai-chat-widget-shell` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:503` | `body.vscode-dark #topai-vscode-root .bg-white, body.vscode-dark #topai-vscode-root .bg-slate-50, body.vscode-dark #topai-vscode-root .bg-slate-100, body.vscode-high-contrast #topai-vscode-root .bg-white, body.vscode-high-contrast #topai-vscode-root .bg-slate-50, body.vscode-high-contrast #topai-vscode-root .bg-slate-100, body.vscode-high-contrast-light #topai-vscode-root .bg-white, body.vscode-high-contrast-light #topai-vscode-root .bg-slate-50, body.vscode-high-contrast-light #topai-vscode-root .bg-slate-100` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:515` | `body.vscode-dark #topai-vscode-root .border-slate-100, body.vscode-dark #topai-vscode-root .border-slate-200, body.vscode-dark #topai-vscode-root .border-slate-300, body.vscode-dark #topai-vscode-root .border-gray-200, body.vscode-high-contrast #topai-vscode-root .border-slate-100, body.vscode-high-contrast #topai-vscode-root .border-slate-200, body.vscode-high-contrast #topai-vscode-root .border-slate-300, body.vscode-high-contrast #topai-vscode-root .border-gray-200, body.vscode-high-contrast-light #topai-vscode-root .border-slate-100, body.vscode-high-contrast-light #topai-vscode-root .border-slate-200, body.vscode-high-contrast-light #topai-vscode-root .border-slate-300, body.vscode-high-contrast-light #topai-vscode-root .border-gray-200` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:530` | `body.vscode-dark #topai-vscode-root .text-slate-900, body.vscode-dark #topai-vscode-root .text-slate-800, body.vscode-dark #topai-vscode-root .text-slate-700, body.vscode-dark #topai-vscode-root .text-slate-600, body.vscode-dark #topai-vscode-root .text-slate-500, body.vscode-high-contrast #topai-vscode-root .text-slate-900, body.vscode-high-contrast #topai-vscode-root .text-slate-800, body.vscode-high-contrast #topai-vscode-root .text-slate-700, body.vscode-high-contrast #topai-vscode-root .text-slate-600, body.vscode-high-contrast #topai-vscode-root .text-slate-500, body.vscode-high-contrast-light #topai-vscode-root .text-slate-900, body.vscode-high-contrast-light #topai-vscode-root .text-slate-800, body.vscode-high-contrast-light #topai-vscode-root .text-slate-700, body.vscode-high-contrast-light #topai-vscode-root .text-slate-600, body.vscode-high-contrast-light #topai-vscode-root .text-slate-500` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
+| `ui/src/app.css:548` | `body.vscode-dark #topai-vscode-root .bg-red-50, body.vscode-high-contrast #topai-vscode-root .bg-red-50, body.vscode-high-contrast-light #topai-vscode-root .bg-red-50` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
 | `ui/src/app.css:552` | `body.vscode-dark #topai-vscode-root .border-red-200, body.vscode-high-contrast #topai-vscode-root .border-red-200, body.vscode-high-contrast-light #topai-vscode-root .border-red-200` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
 | `ui/src/app.css:558` | `body.vscode-dark #topai-vscode-root .text-red-700, body.vscode-high-contrast #topai-vscode-root .text-red-700, body.vscode-high-contrast-light #topai-vscode-root .text-red-700` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
 | `ui/src/app.css:564` | `body.vscode-dark #topai-vscode-root .bg-green-50, body.vscode-high-contrast #topai-vscode-root .bg-green-50, body.vscode-high-contrast-light #topai-vscode-root .bg-green-50` | H/APP current override; V/DS tokens in P3; preserve unrelated app styling |
