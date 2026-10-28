@@ -19,6 +19,8 @@ export interface DecisionEvaluatorDescriptor {
     bundleDigest: string;
   };
   evaluator: EvaluatorRef;
+  /** Absent means production. Qualification is an explicit experimental composition. */
+  executionProfile?: 'production' | 'qualification';
   protocol?: DecisionBackendProtocol;
   wireModel: string;
   acceptedServedModelIds: readonly string[];
@@ -26,7 +28,7 @@ export interface DecisionEvaluatorDescriptor {
     billingBound: 'qualified' | 'unqualified'; evidenceRefs: readonly string[] };
   maxBillableInputTokens: number;
   /** Enforced protocol output/reasoning bound (§3.2 Execution). Zero means
-   * the descriptor admits no billable output; non-JEV quoting requires a
+   * the descriptor admits no billable output; output-priced quoting requires a
    * positive bound and the structured transport transmits it as the
    * execution cap. */
   maxBillableOutputTokens: number;

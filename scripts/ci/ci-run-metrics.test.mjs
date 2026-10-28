@@ -12,6 +12,8 @@ import {
   cancellationOwnership,
   captureRecords,
   concurrencyPeak,
+  criticalPathScheduling,
+  contentionReceipt,
   releaseContinuity,
   dedupeJobs,
   deliveryElapsed,
@@ -36,6 +38,64 @@ const job = (overrides = {}) => ({
   startedAt: '2026-10-18T10:00:00.000Z',
   completedAt: '2026-10-18T10:03:44.000Z',
   ...overrides,
+});
+
+test('should sum queue waits along the elapsed critical path without summing parallel branches', () => {
+  const rows = [
+    job({ name: 'changes', jobId: 1, queuedAt: '2026-10-18T09:59:50Z', completedAt: '2026-10-18T10:00:10Z' }),
+    job({ name: 'test (a)', jobId: 2, queuedAt: '2026-10-18T10:00:10Z', startedAt: '2026-10-18T10:00:30Z', completedAt: '2026-10-18T10:01:30Z' }),
+    job({ name: 'test (b)', jobId: 3, queuedAt: '2026-10-18T10:00:10Z', startedAt: '2026-10-18T10:00:15Z', completedAt: '2026-10-18T10:00:20Z' }),
+    job({ name: 'ci-gate', jobId: 4, queuedAt: '2026-10-18T10:01:30Z', startedAt: '2026-10-18T10:02:05Z', completedAt: '2026-10-18T10:02:10Z' }),
+  ];
+  const graph = { changes: [], test: ['changes'], 'ci-gate': ['test'] };
+  const createdAt = '2026-10-18T09:59:50Z';
+  const receipt = criticalPathScheduling(rows, graph, { qualification: ['ci-gate'] }, createdAt);
+  assert.equal(receipt.qualification.seconds, 65);
+  assert.equal(criticalPathScheduling(rows, graph, { qualification: ['ci-gate'] }, '2026-10-18T09:59:40Z')
+    .qualification.seconds, 75, 'include workflow admission before root job creation');
+  assert.equal(criticalPathScheduling(rows, graph, { qualification: ['ci-gate'] }, null).qualification.seconds, null);
+  assert.equal(criticalPathScheduling(rows.map(row => row.name === 'ci-gate' ? { ...row, queuedAt: '2026-10-18T10:02:00Z' } : row),
+    graph, { qualification: ['ci-gate'] }, createdAt).qualification.seconds, 65, 'retain dependency-to-dispatch handoff delay');
+  assert.deepEqual(receipt.qualification.jobs.map(row => row.jobId), [1, 2, 4]);
+  assert.equal(budgetVerdict({ schedulingSeconds: receipt.qualification.seconds }).budgets.schedulingSeconds.status, 'breach');
+  assert.equal(criticalPathScheduling(rows.map(row => row.jobId === 2 ? { ...row, queuedAt: null } : row),
+    graph, { qualification: ['ci-gate'] }, createdAt).qualification.seconds, null);
+  assert.equal(criticalPathScheduling(rows, {}, { qualification: ['ci-gate'] }, createdAt).qualification.seconds, null);
+  assert.equal(criticalPathScheduling(rows, graph, { images: [] }).images.seconds, null);
+  assert.equal(criticalPathScheduling(rows.map(row => row.name === 'ci-gate' ? { ...row, conclusion: 'skipped' } : row),
+    graph, { qualification: ['ci-gate'] }, createdAt).qualification.seconds, null);
+  assert.equal(criticalPathScheduling(rows.map(row => row.name === 'ci-gate' ? { ...row, completedAt: row.queuedAt } : row),
+    graph, { qualification: ['ci-gate'] }, createdAt).qualification.seconds, null);
+});
+
+test('should never label an interrupted main release superseded by a later main run', () => {
+  const rows = [job({ runId: 1, headBranch: 'main', conclusion: 'cancelled' }),
+    job({ runId: 2, headBranch: 'main' })];
+  assert.equal(cancellationOwnership(rows).cancelled[0].ownership, 'current');
+});
+
+test('should require identified simultaneous executions and complete runs for combined admission', () => {
+  const capture = (id, branch, conclusion = 'success') => ({
+    run: { id, status: 'completed', run_attempt: 1, head_branch: branch },
+    records: [job({ runId: id, headBranch: branch, conclusion, name: 'ci-gate' })],
+    endpoints: { qualification: ['ci-gate'] }, capacity: { availableSlots: 2, reserveSlots: 2 },
+  });
+  const main = capture(1, 'main');
+  const old = capture(2, 'chore/x', 'cancelled');
+  const current = capture(3, 'chore/x');
+  const receipt = contentionReceipt([current, main, old]);
+  assert.equal(receipt.observedPeak, 3);
+  assert.equal(receipt.admission.status, 'over-capacity');
+  assert.equal(receipt.overlaps[0].witness.seconds, 224);
+  assert.equal(receipt.cancellation.superseded, 1);
+  assert.equal(receipt.releases[0].continuity.continuous, true);
+  assert.equal(releaseContinuity([]).continuous, false);
+  assert.equal(contentionReceipt([current, { ...main, records: [] }]).admission.status, 'to-measure');
+  assert.equal(contentionReceipt([current, { ...main, records: main.records.map(row => ({ ...row, completedAt: null })) }])
+    .admission.status, 'to-measure');
+  assert.equal(contentionReceipt([current, { ...main, run: { ...main.run, status: 'in_progress' } }]).admission.status, 'to-measure');
+  assert.equal(contentionReceipt([current, { ...main, records: main.records.map(row => ({ ...row, conclusion: 'skipped' })) }])
+    .overlaps[0].witness, null);
 });
 
 test('should retain Jobs API identities and step timestamps without inventing readiness', () => {
@@ -193,6 +253,27 @@ test('queue waits require job readiness and never substitute workflow age', () =
   assert.deepEqual([waits.count, waits.minSeconds, waits.p50Seconds, waits.maxSeconds], [2, 10, 60, 60]);
 });
 
+test('should not treat queued API placeholder timestamps as executed zero waits', () => {
+  const [row] = captureRecords({ run: { head_branch: 'main', head_sha: 'abc' }, jobs: [{
+    id: 1, run_id: 7, run_attempt: 2, status: 'queued',
+    created_at: '2026-10-26T15:00:00Z', started_at: '2026-10-26T15:00:00Z',
+  }] });
+  assert.equal(queueSeconds(row), null);
+  assert.equal(row.headBranch, 'main');
+  assert.equal(row.headSha, 'abc');
+});
+
+test('should exclude cancelled jobs that never received a runner despite positive API intervals', () => {
+  const rows = captureRecords({ run: { id: 1 }, jobs: [{ id: 2, run_id: 1, run_attempt: 1,
+    name: 'deploy-preprod', status: 'completed', conclusion: 'cancelled', runner_id: 0,
+    created_at: '2026-10-26T15:46:09Z', started_at: '2026-10-26T15:46:09Z', completed_at: '2026-10-26T15:52:57Z' }] });
+  assert.equal(concurrencyPeak(rows), 0);
+  assert.equal(queueSeconds(rows[0]), null);
+  assert.equal(runnerMinutes(rows).totalMinutes, 0);
+  assert.equal(summarizeRun(rows).measured, 0);
+  assert.equal(endpointReadiness(rows, { preproduction: ['deploy-preprod'] }).preproduction.status, 'partial');
+});
+
 test('should exclude timestamped skipped rows from execution queue statistics', () => {
   const executed = job({ queuedAt: '2026-10-18T09:58:57.000Z' });
   const skipped = job({ conclusion: 'skipped', queuedAt: executed.startedAt });
@@ -259,6 +340,13 @@ test('should emit capacity receipts through the delivered CLI when inputs exist'
     assert.equal(out.budgets.budgets.verdictSeconds.status, 'breach');
     assert.equal(out.cancellation.cancelledCount, 0);
     assert.equal(out.continuity.continuous, true);
+    const captured = JSON.parse(fs.readFileSync(file));
+    for (const incomplete of [{ ...captured, run: { status: 'in_progress' } }, { ...captured, records: [] }]) {
+      fs.writeFileSync(file, JSON.stringify(incomplete));
+      const pending = spawnSync(process.execPath, ['scripts/ci/ci-run-metrics.mjs', '--run-file', file], { encoding: 'utf8' });
+      assert.equal(pending.status, 0, pending.stderr);
+      assert.equal(JSON.parse(pending.stdout).admission.status, 'to-measure');
+    }
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }
@@ -282,6 +370,8 @@ test('delivery elapsed needs every endpoint member measured', () => {
   const base = '2026-10-18T10:00:00.000Z';
   const full = deliveryElapsed(records, base, { images: ['publish-api-image'] });
   assert.equal(full.images.elapsedSeconds, 224);
+  const carried = deliveryElapsed(records, '2026-10-18T10:10:00.000Z', { images: ['publish-api-image'] });
+  assert.equal(carried.images.elapsedSeconds, null, 'carried endpoints completed before this attempt are not a new elapsed sample');
   const incomplete = deliveryElapsed(records, base, { images: ['publish-api-image', 'publish-ui-image'] });
   assert.equal(incomplete.images.elapsedSeconds, null);
   const unmeasured = deliveryElapsed(
