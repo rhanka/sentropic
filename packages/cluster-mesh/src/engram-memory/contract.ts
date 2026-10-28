@@ -164,7 +164,6 @@ export {
   stripJournalIntentHash,
   translateMemoryAggregateRead,
   translateMemoryUpdateWrite,
-  withMemoryCaptureReceipt,
   type MemoryKernelTransactionPort,
 } from './wire-adaptation.js';
 export {
