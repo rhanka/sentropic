@@ -42,7 +42,8 @@
   - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
-- [x] BR1-checks: package gates pass (201 manifest/CI tests, runtime 447 plus native 4, UI 524 unit/206 DOM, cowork-bridge 27); app typecheck/lint, all 489 app tests and production web/Chrome/VSCode build pass. Post-correction full regression and final hash report are retained separately.
+- [x] BR1-R2-consensus: two eligible complementary peers approve exact source 54df2098; final source differs only in verification documentation. Runtime 451/451 and UI DOM 206/206 pass after corrections; final installed pair passes its public HTTP/permission matrix.
+- [x] BR1-checks: package gates pass (201 manifest/CI tests, runtime 451, UI 524 unit/206 DOM, cowork-bridge 27); app typecheck/lint, all 489 app tests and production web/Chrome/VSCode build pass. Post-correction full runtime/DOM regression and final installed hash report pass.
 - [x] BR1-R2-scope: clarify P1 fixture/package completion versus the frozen P2 production cutover; the app continues to consume the extracted controller until P2.
 - [x] BR1-R2-package: export the comment runtime factory at the root, remove orphaned formatting docs and restrict the necessary chat-server test dependency link to test tasks; cleanup removes only that owned link.
 - [x] BR1-R2-types: document the supported high-level TypeScript UI/runtime pair and independent wire subpaths; optional peer does not introduce visual value imports. A new contracts-package redesign is outside the frozen P1 pair.
@@ -150,7 +151,7 @@
   - [x] Conversation view source slice 17 committed within the atomic limit.
   - [x] Conversation view source slice 18 committed within the atomic limit.
   - [x] Conversation view source slice 19 committed within the atomic limit.
-- [ ] **Lot 3 — Parity and packed boundary qualification**
+- [x] **Lot 3 — Parity and packed boundary qualification**
   - [x] Limit the probe's short domain permission deadline to the explicit timeout case; approval uses the production policy deadline, with unchanged assertion wait bounds.
   - [x] Add native-platform permission parity through the real session/controller/HTTP fixture: pending visibility, native allow/deny, zero denied execution and exactly-once replay/result posting.
   - [x] Clean installed pair passes Svelte typecheck with 0 errors/warnings and Vite production build; wire the exact-archive probe and retained head/hash report into CI.
@@ -177,8 +178,8 @@
   - [x] UI tests: `chat-conversation-functional.dom.spec.ts`, `chat-conversation.dom.spec.ts`, `chat-conversation.spec.ts`; injected standalone and app-shaped fixtures use the same runtime.
   - [x] Add runtime permission/continuation and remount parity tests with real controller/projection; no command stubs in parity fixtures.
   - [x] Run package typecheck, unit/DOM tests, app typecheck/lint and affected app tests.
-  - [ ] Pack both candidates and prove runtime-free UI and standalone installed consumption.
-- [ ] **Lot 4 — Docs consolidation and review**
+  - [x] Pack both candidates and prove runtime-free UI and standalone installed consumption.
+- [x] **Lot 4 — Docs consolidation and review**
   - [x] Consolidate implemented boundaries, real parity fixtures, observed package/app gates and release prerequisites in the P1 specification; CI/owner acceptance remain separate.
   - [x] Resolve CI graph/pack gates: include runtime validation in final receipts/gate, pack each candidate once with an explicit context/environment, then qualify those exact archives.
   - [x] Pass explicit test environments to every command in the chat CI validation lane.
@@ -189,4 +190,6 @@
   - [x] Record pair versions, breaking imports, package bootstrap/OIDC prerequisites and consumer notices in `spec/CHAT_MIGRATION_P1.md`.
   - [x] Document P1a candidate versions/import notices and the remaining P1b acceptance boundary in `spec/CHAT_MIGRATION_P1.md`.
 - [ ] **Lot 5 — Draft handoff**
-  - [ ] Run `make down ENV=test-chat-p1` and report PR URLs and head SHAs.
+  - [x] Open draft sequence #817 (P1a) and #819 (P1b), both targeting main; post each execution plan.
+  - [x] Run `make down ENV=test-chat-p1`; `make ps` shows no services.
+  - [ ] Require CI completed/success on each exact submitted head; GitHub-hosted runner queues remain pending, with no success claimed.

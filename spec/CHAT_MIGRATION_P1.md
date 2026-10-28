@@ -92,15 +92,28 @@ history restart, edit/retry/stop/feedback/steer, document failure/retry/preview/
 checkpoint preserve/restore ordering, comments and state continuity during remount. Platform data I/O
 uses in-memory adapters; production runtime commands are never stubbed.
 
-Observed gates: runtime typecheck and 447 tests; UI typecheck, 524 unit tests and 206 DOM tests;
+Observed gates: runtime typecheck and 451 tests; UI typecheck, 524 unit tests and 206 DOM tests;
 cowork-bridge typecheck and 27 tests; 201 publication-wiring/manifest tests. App typecheck reports
-0 errors, lint passes, the affected comment adapter has 4 passing tests, and the production image
+0 errors, lint passes, all 489 app tests pass, and the production image
 build completes for web/Chrome/VSCode. The app typecheck also reports 6 warnings in 5 files.
 
 Guarded candidate packs pass. The clean installed-pair probe mounts only the archives and its probe:
 Svelte typecheck has 0 errors/warnings, Vite production bundling succeeds, and the visual archive has
 no runtime implementation paths. Final archive hashes/head are retained in its report after final review.
+Native allow/deny/timeout/disposal is additionally covered through the real runtime/controller; denied
+native prompts cannot reappear as approved. Two complementary r2 source reviews approve the corrections.
 These checks are technical evidence; GitHub CI completion and owner U0 remain separately recorded gates.
+
+Final unpublished candidate qualification at source head `2da73456f44a069905d7e2736ffd211b4a1b6e2d`:
+
+| Candidate | SHA-256 |
+| --- | --- |
+| `@sentropic/chat-ui@1.0.0` | `53b90e3259ee569194aba079090b2663db9f3c5d95ceac9e8973e44e2c29bde4` |
+| `@sentropic/chat-runtime@0.1.0` | `f3d1794b0dd95b781e3c12edf0d37e6b3e3b14583ff63e8c88be4bc10ff83228` |
+
+The clean probe verifies installed public contracts, Svelte typecheck, production bundle, real HTTP
+payload/commands, subscription remount, all four authorization paths and visual archive ownership.
+Its retained local report is `tmp/chat-p1b-final-r2/installed/chat-pair.json`; CI retains the same report shape.
 
 Runtime release preparation includes guarded OIDC/bootstrap targets and one explicit bootstrap choice.
 Only package paths select publication; UI publication waits for a selected runtime publisher. No publish
