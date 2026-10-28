@@ -292,3 +292,133 @@ export const buildMistralTtsRequest = (request: MistralTtsRequestShape): Record<
     response_format: request.responseFormat,
   };
 };
+
+// ---------------------------------------------------------------------------
+// Session ports (mirror the L8/L9 seam; mesh never imports the gateway)
+// ---------------------------------------------------------------------------
+
+/**
+ * Admission outcome consumed as data (gateway `admitSpeech` runs at
+ * composition, L16/API — mesh never imports the gateway). The session
+ * refuses to open without it and never exceeds its ceilings.
+ */
+export interface MistralTranscriptionAdmission {
+  readonly operationId: string;
+  readonly holdRef: string;
+  readonly pricingRevision: string;
+  readonly ceiling: { readonly connectedSeconds: number; readonly admittedAudioSeconds: number };
+  readonly maxDurationMs: number;
+}
+
+export interface MistralTranscriptionUsageTotals {
+  readonly connectedSeconds: number;
+  readonly admittedAudioSeconds: number;
+}
+
+/**
+ * Usage sink shaped for the gateway `recordSpeechUsage` / `settleSpeech`
+ * calls the composition layer performs. The adapter only measures seconds;
+ * pricing stays pinned at admission.
+ */
+export interface MistralTranscriptionUsageSink {
+  /**
+   * Maps to the L8 `recordSpeechUsage` call: operational evidence on the hold,
+   * never a charge. The adapter sends `cumulative` totals under a stable
+   * eventId so restarts and retries cannot double-count measured seconds.
+   */
+  record(update: {
+    readonly eventId: string;
+    readonly revision: number;
+    readonly mode: 'cumulative' | 'incremental';
+    readonly usage: Partial<MistralTranscriptionUsageTotals>;
+  }): void | Promise<void>;
+  /**
+   * Maps to the L8 `settleSpeech` call. Usage stays absent unless provider-
+   * reported (with a monotonic providerRevision): locally measured seconds
+   * are estimates, and a usage covering every priced dimension without a
+   * providerRevision is rejected by `settleSpeech` as invalid. The
+   * `transcription.done` usage block is opaque (no revision semantics
+   * documented) and is never settled.
+   */
+  settle(request: {
+    readonly operationId: string;
+    readonly outcome: 'completed' | 'cancelled' | 'failed';
+    readonly usage?: MistralTranscriptionUsageTotals;
+    readonly providerRevision?: number;
+  }): void | Promise<void>;
+}
+
+/** Injectable provider socket. Tests use recorded scripts; never a live call. */
+export interface MistralTranscriptionSocket {
+  send(message: string): void;
+  messages(): AsyncIterable<string>;
+  close(): Promise<void>;
+}
+
+export interface MistralTranscriptionConnect {
+  (url: string, headers: { readonly authorization: string; readonly originator: string }): Promise<MistralTranscriptionSocket> | MistralTranscriptionSocket;
+}
+
+export interface MistralTranscriptionOpenOptions {
+  readonly request: SpeechSessionRequest;
+  readonly admission: MistralTranscriptionAdmission;
+  /** Bearer token, used once for the socket handshake and never logged. */
+  readonly bearerToken: string;
+  readonly connect: MistralTranscriptionConnect;
+  readonly usage: MistralTranscriptionUsageSink;
+  readonly originator?: string;
+  readonly nowMs?: () => number;
+  /** Injectable expiry scheduler (tests advance it manually); defaults to setTimeout. */
+  readonly schedule?: (delayMs: number, fn: () => void) => () => void;
+  readonly signal?: AbortSignal;
+}
+
+const assertAdmission = (admission: MistralTranscriptionAdmission): void => {
+  if (!admission || !isNonEmptyString(admission.operationId) || !isNonEmptyString(admission.holdRef)
+    || !isNonEmptyString(admission.pricingRevision)
+    || !(admission.ceiling?.connectedSeconds > 0) || !(admission.ceiling?.admittedAudioSeconds > 0)
+    || !(admission.maxDurationMs > 0)) {
+    throw new MistralTranscriptionError('admission', 'a valid admission (operation, hold, ceilings) is required');
+  }
+};
+
+interface TurnStream {
+  readonly socket: MistralTranscriptionSocket;
+  readonly utteranceId: string;
+  readonly audioStartMs: number;
+  audioEndMs: number;
+  text: string;
+  revision: number;
+  /** The client ended this turn; the provider `done` is still in flight. */
+  donePending: boolean;
+  /** Abandoned by clear/close or superseded: late frames drop silently. */
+  abandoned: boolean;
+  doneReceived: boolean;
+  resolveDone: (text: string | undefined) => void;
+  donePromise: Promise<string | undefined>;
+}
+
+const monotonicNow = (nowMs: (() => number) | undefined): number => {
+  const now = (nowMs ?? Date.now)();
+  if (!Number.isFinite(now) || now < 0) throw new MistralTranscriptionError('invalid-config', 'clock must be finite');
+  return now;
+};
+
+const errorEvent = (
+  base: Pick<SpeechEventMetadata, 'speechSessionId' | 'connectionEpoch' | 'clock'>,
+  eventId: string,
+  sequence: number,
+  reason: string,
+  retryable: boolean,
+): SpeechEvent => ({
+  schemaVersion: 1,
+  speechSessionId: base.speechSessionId,
+  connectionEpoch: base.connectionEpoch,
+  eventId,
+  sequence,
+  clock: base.clock,
+  type: 'error',
+  reason,
+  retryable,
+});
+
