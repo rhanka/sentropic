@@ -1,0 +1,57 @@
+import { randomBytes, type KeyObject } from 'node:crypto';
+import { SignJWT } from 'jose';
+import { z } from 'zod';
+import { RemoteAuthorityError, remoteCounter, remoteEvidenceRequestSchema, remoteId,
+  requireRemoteDeadline } from './remote-contract';
+export { verifyRemoteEvidence } from './remote-evidence-verify';
+
+export const remoteLoginSchema = z.object({
+  sub: remoteId, sid: remoteId, sessionVersion: remoteCounter, authTime: remoteCounter,
+  amr: z.array(remoteId).min(1).max(16), expiresAt: remoteCounter,
+}).strict();
+export type RemoteLogin = z.infer<typeof remoteLoginSchema>;
+export interface RemoteApprovedTarget { audience: string; tenantId: string; workspaceId: string }
+export interface RemoteEvidenceIssuerPorts {
+  issuer: string; kid: string; key: KeyObject; now(): number;
+  session(credential: string): Promise<RemoteLogin | null>;
+  approvedTarget(digest: string, actor: RemoteLogin): Promise<RemoteApprovedTarget | null>;
+  reserve(sid: string, actionId: string, expiresAt: Date): Promise<boolean>;
+}
+export function createRemoteEvidenceIssuer(ports: RemoteEvidenceIssuerPorts) {
+  let lastNow = -1;
+  return async (input: unknown): Promise<string> => {
+    const parsed = remoteEvidenceRequestSchema.safeParse(input);
+    if (!parsed.success) throw new RemoteAuthorityError('invalid_request');
+    const request = parsed.data;
+    const now = ports.now();
+    if (!Number.isSafeInteger(now) || now < 0 || now < lastNow)
+      throw new RemoteAuthorityError('authority_unavailable');
+    lastNow = now;
+    const current = remoteLoginSchema.safeParse(await ports.session(request.sessionCredential));
+    if (!current.success) throw new RemoteAuthorityError('authentication_required');
+    const login = current.data;
+    if (login.sid !== request.sid || login.sessionVersion !== request.sessionVersion
+      || login.expiresAt <= now + 5000 || login.authTime * 1000 > now
+      || !['hwk', 'user', 'mfa'].every((method) => login.amr.includes(method)))
+      throw new RemoteAuthorityError('authentication_required');
+    const approved = await ports.approvedTarget(request.targetDigest, login);
+    if (!approved || ![approved.audience, approved.tenantId, approved.workspaceId]
+      .every((id) => remoteId.safeParse(id).success)) throw new RemoteAuthorityError('authority_refused');
+    if (ports.key.type !== 'private' || ports.key.asymmetricKeyType !== 'ed25519'
+      || !remoteId.safeParse(ports.issuer).success || !remoteId.safeParse(ports.kid).success)
+      throw new RemoteAuthorityError('authority_unavailable');
+    const iat = Math.floor(now / 1000);
+    const exp = Math.min(iat + 60, Math.floor(login.expiresAt / 1000));
+    requireRemoteDeadline(iat * 1000, exp * 1000, now);
+    // This namespace is independent of native jti/nonce consumption and K-app dedup.
+    if (!await ports.reserve(login.sid, request.actionId, new Date(now + 90 * 86_400_000)))
+      throw new RemoteAuthorityError('replay_refused');
+    return new SignJWT({
+      iss: ports.issuer, sub: login.sub, sid: login.sid, sessionVersion: login.sessionVersion,
+      tenantId: approved.tenantId, workspaceId: approved.workspaceId, auth_time: login.authTime,
+      amr: login.amr, aud: approved.audience, iat, exp, jti: randomBytes(16).toString('base64url'),
+      actionId: request.actionId, targetDigest: request.targetDigest, operation: request.operation,
+      payloadDigest: request.payloadDigest, nonceId: request.nonceId,
+    }).setProtectedHeader({ alg: 'EdDSA', kid: ports.kid }).sign(ports.key);
+  };
+}
