@@ -40,8 +40,8 @@
   - [ ] Add `tools/engram-e11/{tuple,bindings,slots}.mjs` and candidate spec; hash files/tarballs/backend/C6/locks; reject drift and status promotion.
   - [x] Add `tools/engram-e11/e11.mk`: pinned Node 24, temporary evidence, deterministic dry-run/check; no lock regeneration.
   - [x] Add `tools/engram-e11/tuple.test.mjs`: tampering, missing input, pending/final refusal, deterministic output.
-- [ ] **Lot E11-2 — Receiving handoff**
-  - [ ] Add `tools/engram-e11/README.md`: 21 categories, PENDING reasons, retained-lock install, reservation, main PR, CI publication, byte recheck, separate C9/L5 ACKs.
+- [x] **Lot E11-2 — Receiving handoff**
+  - [x] Add `tools/engram-e11/README.md`: 21 categories, PENDING reasons, retained-lock install, reservation, main PR, CI publication, byte recheck, separate C9/L5 ACKs.
 - [ ] **Lot E11-3 — Evidence and draft PR**
   - [ ] Run make tests and candidate dry-run/check under flock; retain tuple SHA-256/PENDING inventory; make down.
   - [ ] Review scoped diff; draft PR against feat/engram-e2-integration; completed/success CI on exact head; no merge/publication.
