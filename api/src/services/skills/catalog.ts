@@ -2,14 +2,14 @@
  * App-local catalog façade (BR-42b Lot 7 — search_catalog meta-tool added)
  *
  * Foundation skills + agent templates + workflow seeds + canvas templates +
- * MCP tools (opt-in) now flow through the CompositeCatalogRegistry:
+ * Compiled host-registry MCP tools flow through the CompositeCatalogRegistry:
  *
  *   StaticCatalogSource ('foundation')       ← Lot 1 (skill entries)
  *   StandaloneToolSource ('standalone')      ← Lot 2 (tool entries, empty by default)
  *   AgentTemplateSource ('agent-templates')  ← Lot 3 (agent entries, code-level seeds)
  *   WorkflowSeedSource ('workflow-seeds')    ← Lot 4 (workflow entries, flow seeds)
  *   CanvasTemplateSource ('canvas-templates')← Lot 6 (canvas entries, static starters)
- *   McpCatalogSource ('mcp:<name>') [OPT-IN] ← Lot 5 (tool entries from MCP server)
+ *   HostRegistryCatalogSource ('host-registry') ← sole MCP source, compiled names
  *     → CompositeCatalogRegistry
  *       → SkillsToolRegistry adapter (unchanged)
  *         → resolveFoundationChatTools() [sync, search_skills first, search_catalog second]
@@ -18,7 +18,7 @@
  *   CatalogExecutionSeam                  ← Lot 2
  *     → foundation-executor.ts falls through to here for non-hardcoded names
  *       → StandaloneToolSource.getHandler() → handler invocation
- *       → McpCatalogSource.getHandler()    → MCP call dispatch [if wired]
+ *       → HostRegistryCatalogSource.getHandler() → authorized artifact transport
  *
  * Lot 7 adds `search_catalog` as an ADDITIVE sibling to `search_skills`
  * (SPEC_EVOL_CATALOG §3.5):
@@ -55,7 +55,6 @@ import {
 } from '../catalog/search-catalog-tool.js';
 import { agentTemplateSource } from '../catalog/sources/agent-template-source.js';
 import { canvasTemplateSource } from '../catalog/sources/canvas-template-source.js';
-import type { McpCatalogSource } from '../catalog/sources/mcp-source.js';
 import { foundationCatalogSource } from '../catalog/sources/static-source.js';
 import { standaloneToolSource } from '../catalog/sources/standalone-tool-source.js';
 import { workflowSeedSource } from '../catalog/sources/workflow-seed-source.js';
@@ -92,7 +91,7 @@ const hostRegistrySource = createHostRegistryCatalogSource({
  */
 export const compositeCatalogRegistry = new CompositeCatalogRegistry();
 compositeCatalogRegistry.addSource(foundationCatalogSource);
-// Lot 2: wire standalone-tool source (empty; Lot 5 MCP will populate it).
+// Standalone code tools use the static source; MCP tools use host-registry only.
 compositeCatalogRegistry.addSource(standaloneToolSource);
 // Lot 3: wire agent template source (code-level seeds; DB rows are NOT here).
 compositeCatalogRegistry.addSource(agentTemplateSource);
@@ -119,34 +118,13 @@ compositeCatalogRegistry.addSource(hostRegistrySource);
  * D-TOOL-RECONCILE: `skill`-kind entries are NOT dispatched through this seam.
  * Skill tools remain in foundation-executor's hardcoded branches.
  *
- * MCP sources (Lot 5 — default-off): additional handler sources are added via
- * `registerMcpSource()` which calls `seam.addHandlerSource(source)`. The seam
- * holds a mutable list of handler sources so new MCP sources become visible
- * immediately without rebuilding the seam instance.
+ * Handler sources are fixed here. The compiled host-registry source is the
+ * only MCP source; its request-local views and effects require current authority.
  */
 export const catalogExecutionSeam = new CatalogExecutionSeam(
   compositeCatalogRegistry,
   [standaloneToolSource, hostRegistrySource],
 );
-
-/**
- * Register an MCP catalog source into the composite registry and the execution
- * seam. This is the OPT-IN entry point for MCP tools (Lot 5).
- *
- * Default-off: no MCP source is registered at startup. Calling this function
- * is the only way to introduce MCP tools into the catalog. Call `source.refresh()`
- * separately (out-of-band) to populate the snapshot from the MCP server.
- *
- * 0-regression: until `registerMcpSource` is called, the composite registry
- * and the execution seam behave byte-identically to the pre-Lot-5 baseline.
- * The characterization oracle (41 tests) and the 28-tool order are unaffected.
- */
-export function registerMcpSource(source: McpCatalogSource): void {
-  // Wire into composite registry for list/get/search discovery.
-  compositeCatalogRegistry.addSource(source);
-  // Wire into execution seam for `call` dispatch.
-  catalogExecutionSeam.addHandlerSource(source);
-}
 
 // ---------------------------------------------------------------------------
 // Populate InMemorySkillRegistry from the composite snapshot
