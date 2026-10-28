@@ -17,6 +17,14 @@ function setup(role: 'auth-idp' | 'product' = 'auth-idp', allowed = true) {
   return { send, issue, authenticateWorkload };
 }
 describe('RC1 internal evidence boundary', () => {
+  it('should keep the issuing route isolated in the actual application roots', async () => {
+    const { app: product } = await import('../../../src/app');
+    const { createIdpApp } = await import('../../../../apps/auth-idp/idp-app');
+    const path = 'https://idp/api/v1/auth/session/remote-action-evidence';
+    const request = { method: 'POST', headers: { 'content-type': 'application/json' }, body: 'invalid' };
+    expect((await product.request(path, request)).status).toBe(403);
+    expect((await createIdpApp().request(path, request)).status).toBe(401);
+  });
   it('should issue evidence only on the authenticated internal IdP route', async () => {
     const { send, issue } = setup();
     const result = await send();

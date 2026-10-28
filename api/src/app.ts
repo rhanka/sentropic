@@ -4,6 +4,7 @@ import { env } from './config/env';
 import { isOriginAllowed, parseAllowedOrigins } from './utils/cors';
 import { applyAuthRateLimiters } from './middleware/auth-rate-limiters';
 import { logger } from './logger';
+import { createRemoteEvidenceRouter } from './routes/auth/remote-evidence';
 import { createClusterMeshPlugin } from '@sentropic/cluster-mesh';
 import { clusterMeshAdapter } from './services/cluster-mesh-adapter';
 import { productSessionModule, SESSION_PATHS } from './routes/namespaces/session';
@@ -419,6 +420,7 @@ app.use('*', async (c, next) => {
 // Auth rate limiters are shared with the standalone IdP (apps/auth-idp) — see
 // api/src/middleware/auth-rate-limiters.ts. Order matters; the helper owns it.
 applyAuthRateLimiters(app);
+app.route('/api/v1/auth/session/remote-action-evidence', createRemoteEvidenceRouter({ role: 'product' }));
 
 app.route('/.well-known', createOAuthWellKnownProjection({
   compositionRoot: 'product',

@@ -37,6 +37,8 @@ import {
   createOAuthWellKnownProjection,
 } from '../../api/src/routes/namespaces/oauth';
 import { idpAuthPlugin } from '../../api/src/routes/namespaces/auth';
+import { createRemoteEvidenceRouter, type RemoteEvidenceRoutePorts } from '../../api/src/routes/auth/remote-evidence';
+import { createRemoteIdpEvidencePorts } from '../../api/src/services/auth/remote-idp';
 
 // BR-39m A0-bis — the human-facing login/register/magic-link/consent screens are
 // a minimal SvelteKit static front (apps/auth-idp/web) built to `web/build` with
@@ -74,7 +76,7 @@ const readSpaFallback = (): string | null => {
  * `api/src/middleware/auth-rate-limiters.ts` and are applied by BOTH apps, so the
  * two surfaces cannot drift apart again.
  */
-export const createIdpApp = (): Hono => {
+export const createIdpApp = (options: { remoteEvidence?: RemoteEvidenceRoutePorts } = {}): Hono => {
   const app = new Hono();
   const allowedOrigins = parseAllowedOrigins(env.CORS_ALLOWED_ORIGINS);
 
@@ -160,6 +162,9 @@ export const createIdpApp = (): Hono => {
   // Same limiters as the product API (shared module, not a copy) — this public
   // host had none at all before.
   applyAuthRateLimiters(app);
+  app.route('/api/v1/auth/session/remote-action-evidence', createRemoteEvidenceRouter({
+    role: 'auth-idp', ...(options.remoteEvidence ?? createRemoteIdpEvidencePorts()),
+  }));
 
   app.route('/.well-known', createOAuthWellKnownProjection({
     compositionRoot: 'auth-idp',
