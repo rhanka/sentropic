@@ -5,7 +5,6 @@ import { memoryPgHost, memoryHostComposed } from './pg-host.js';
 import { verifyHostBinding } from '../../src/engram-memory/binding.js';
 import { openMemoryMaintenance, type MemoryMaintenancePorts } from '../../src/engram-memory/host-maintenance.js';
 import type { InjectedPgDriver } from '../../src/storage/postgres/protocol.js';
-import { readFile } from 'node:fs/promises';
 import { openMemoryPostgresHostLedger } from '../../src/engram-memory/ledger.js';
 
 export type MemoryCampaignHost = Awaited<ReturnType<typeof memoryCampaignHost>>;
@@ -68,15 +67,6 @@ export const memoryCampaignHost = async (existing?: Awaited<ReturnType<typeof me
     store = opened.value;
   };
   try {
-    if (!existing) {
-      const ledgerSql = await readFile(new URL('../../assets/storage/postgres/engram-memory/002-host-ledger.sql', import.meta.url), 'utf8');
-      await pg.tx.run(false, async (session) => {
-        await session.execute({ text: `CREATE TABLE "${pg.name}".host_memory_identity
-          (scope text PRIMARY KEY,store_id text UNIQUE NOT NULL)`, values: [] });
-        // E7's existing host-ledger asset; registration remains E2-owned.
-        await session.execute({ text: ledgerSql.replaceAll('__MEMORY_SCHEMA__', `"${pg.name}_projection"`), values: [] });
-      });
-    }
     await open();
   } catch (error) { await kernel?.ownership?.release(); await pg.close(); throw error; }
   const ledger = await openMemoryPostgresHostLedger(pg.options.driver, `${pg.name}_projection`);
