@@ -19,6 +19,7 @@
   - `packages/cluster-mesh/tests/engram-memory/**`
   - `packages/cluster-mesh/tests/storage/cold-workspace.sh`
   - `packages/cluster-mesh/src/engram-memory/**`
+  - `packages/cluster-mesh/src/storage/postgres/effects.ts` (BR11B-EX3)
   - `packages/cluster-mesh/contracts/**`
   - `packages/cluster-mesh/.gitignore`
   - `packages/cluster-mesh/assets/storage/engram-memory/**`
@@ -36,6 +37,7 @@
 - **Exception process**:
   - [x] BR11B-EX1: add test-mem-e11b selectors and an installed Stage B action to existing make routing; impact isolated qualification only; rollback selectors/action.
   - [x] BR11B-EX2: run E11 tooling tests/check in CI with deterministic inputs; impact tuple tooling coverage; rollback workflow step.
+  - [x] BR11B-EX3: installed C5 exposes missing u64 chain-allocation exhaustion check in PG effects; add only the upper-bound guard, preserving generic safe-number dense positions and frozen SQL. Rollback guard.
   - [x] BR11-EX1: add only test-mem-e11 to host scope-check selector, avoiding an unrelated harness build; impact validation routing; rollback remove selector.
   - [x] BR11-EX2: owner-requested 0.21.3/dev.6 clean install proof uses existing qualification Compose, PostgreSQL and down selectors for test-mem-e11; rollback those three selector entries together. No package/source/lock edits.
   - [x] BR11-EX3: owner-requested CI diagnosis adds test-mem-e11 to E2 qualification, lint/wiring and packed-platform build selectors, and preserves packed-consumer npm stderr. Impact: run the same gates in the owned Compose environment and expose install failures; rollback these selector/logging changes. No assertion, dependency, lock or workflow changes.
