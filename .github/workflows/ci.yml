@@ -33,6 +33,7 @@ on:
           - chat-core
           - chat-server
           - comments
+          - chat-runtime
           - chat-ui
           - oauth-verify
           - mcp-auth
@@ -280,6 +281,7 @@ jobs:
       artifacts: ${{ steps.filter.outputs.artifacts }}
       llm_mesh_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.llm_mesh_publish }}
       llm_gateway_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.llm_gateway_publish }}
+      chat_runtime_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.chat_runtime_publish }}
       chat_ui_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.chat_ui_publish }}
       cited_source_viewer_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.cited_source_viewer_publish }}
       oauth_verify_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.oauth_verify_publish }}
@@ -436,6 +438,8 @@ jobs:
               - 'packages/chat-runtime/**'
               - 'packages/chat-ui/**'
               - '.github/workflows/ci.yml'
+            chat_runtime_publish:
+              - 'packages/chat-runtime/**'
             chat_ui_publish:
               - 'packages/chat-ui/**'
             cited_source_viewer:
@@ -2305,11 +2309,34 @@ jobs:
         if: inputs.capacity_publish_dry_run != true
         run: make publish-llm-gateway
 
-  publish-chat-ui:
+  publish-chat-runtime:
     runs-on: ubuntu-latest
     needs: [changes, validate-chat-ui]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-ui.result == 'success' && (needs.changes.outputs.chat_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-ui.result == 'success' && (needs.changes.outputs.chat_runtime_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=chat-runtime ENV=test-ci-capacity
+      - name: Publish Chat Runtime
+        if: inputs.capacity_publish_dry_run != true
+        run: make publish-chat-runtime
+
+  publish-chat-ui:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-chat-ui, publish-chat-runtime]
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-ui.result == 'success' && (needs.publish-chat-runtime.result == 'success' || needs.publish-chat-runtime.result == 'skipped') && (needs.changes.outputs.chat_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2879,7 +2906,7 @@ jobs:
         run: |
           set -eu
           case "$BOOTSTRAP_TARGET" in
-            contracts|events|chat-core|chat-server|comments|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|harness|llm-gateway|cluster-mesh|cited-source-viewer|artifacts) ;;
+            contracts|events|chat-core|chat-server|comments|chat-runtime|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|harness|llm-gateway|cluster-mesh|cited-source-viewer|artifacts) ;;
             *) echo "::error title=Bootstrap publish::target '${BOOTSTRAP_TARGET}' is not one explicit declared package (no 'all' bootstrap)"; exit 1 ;;
           esac
       - uses: actions/checkout@v6
@@ -2907,6 +2934,9 @@ jobs:
       - name: Bootstrap publish comments
         if: inputs.bootstrap_publish_target == 'comments'
         run: make publish-comments-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish chat-runtime
+        if: inputs.bootstrap_publish_target == 'chat-runtime'
+        run: make publish-chat-runtime-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish chat-ui
         if: inputs.bootstrap_publish_target == 'chat-ui'
         run: make publish-chat-ui-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
