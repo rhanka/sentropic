@@ -34,6 +34,7 @@
   - [x] Read MASTER/workflow, plan E11, PR #803 E11 inputs, Opus r3 21-entry inventory, RESERVATION.md and Docker lock packet; mechanical branch PASS.
 - [ ] **Lot E11-1 — Generator and checker**
   - [x] File/archive binding primitives and deterministic comparison added; final acceptance refuses preparation.
+  - [x] Pin current candidate hashes and snapshot committed E10 inputs without changing its sources or locks.
   - [ ] Add `tools/engram-e11/{tuple,bindings,slots}.mjs` and candidate spec; hash files/tarballs/backend/C6/locks; reject drift and status promotion.
   - [ ] Add `tools/engram-e11/e11.mk`: pinned Node 24, temporary evidence, deterministic dry-run/check; no lock regeneration.
   - [ ] Add `tools/engram-e11/tuple.test.mjs`: tampering, missing input, pending/final refusal, deterministic output.
