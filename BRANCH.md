@@ -97,6 +97,7 @@
   - [x] Migrate mixed optional-module imports in app adapters and existing tests to the correct visual/runtime public entrypoints.
   - [x] Split the mixed comment tests: visual export/manifest assertions stay in UI; runtime tests retain state behavior and explicit runtime export registration.
   - [x] Add a shared parity fixture using the real Hono chat server, default transport, stream hub, session runtime and platform I/O adapters.
+  - [x] Add standalone/app-shaped visual fixtures that receive the same host-created runtime and real command implementation.
   - [x] Add real-runtime permission parity tests for missing adapter/executor, denial, timeout, late approval, disposal and exactly-once approved execution/result posting.
   - [x] Relocate the web-host factory and session-history assembly with their existing tests; keep view implementations in chat-ui.
   - [x] Inject the visual renderer into the runtime web-host factory; fix the parity SSE adapter's delayed connection with synchronous test-adapter reconnect.
