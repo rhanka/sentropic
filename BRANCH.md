@@ -68,6 +68,7 @@
   - [x] Declare BRH-EXn with reason, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] H1-R1-MERGE — Retain both manual workflow inputs, guarded inherited secrets, main's image cache configuration and the Decision plan while merging c8ec01237; no Track writes.
 - [x] BR822-EX4 — Merge origin/main c8ec01237 to resolve the workflow conflict blocking pull_request CI; no rebase. Impact: inherit the already reviewed CI-image changes, retain Decision guards and this plan; integration-only paths above permit no authored edits. Rollback: revert the merge. Parent Track logs are byte-identical; verify event containment before committing; acceptance writes remain with the designated conductor.
 - [x] H1-R1-CI-02 — Full PR run 40735442415 reproduced three cluster-mesh tuple mismatches: frozen 0.32.0 vs candidate 0.32.1. Aligned the test tuple and selected lock to the guarded candidate archive; all 1,228 locally enabled cluster-mesh tests passed (138 environment-dependent skips). Integrity enforcement and every gate retained.
 - [x] BR822-EX3 — Owner-requested Decision provisioning in Compose, k8s-bundle-secret and the API env template. Impact: pass JEV_API_KEY and DECISION_EXECUTION_PROFILE by name only; missing values stay unavailable, production refuses; no deployment or credential provisioning. Rollback: remove these two entries/references from each surface.
