@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import type { ArtifactPolicyDriver, AuthorizeCommit, CommitPolicyParticipantFactory,
   FinalizeTxClient } from '@sentropic/artifacts/server/commit-contract';
 
@@ -18,7 +18,7 @@ export interface ArtifactHostIdentity {
 export type CurrentArtifactIdentity = (client: FinalizeTxClient, identity: ArtifactHostIdentity) =>
   Promise<{ readonly readable: boolean; readonly writable: boolean }>;
 
-export function artifactReadClient(pool: Pool): FinalizeTxClient {
+export function artifactReadClient(pool: Pool | PoolClient): FinalizeTxClient {
   return { async query<T>(sql: string, params: readonly unknown[]) {
     const result = await pool.query(sql, [...params]);
     return { rows: result.rows as T[], rowCount: result.rowCount ?? 0 };
@@ -91,5 +91,5 @@ export function createArtifactAuthorization(options: {
     if (!admission.approved || revision !== context.policyRevision) return denied;
     return { allowed: true, fence: transaction.participant.mintFence(revision, context.invocationId) };
   };
-  return { current, policy, guard };
+  return { current, currentOn: (client: FinalizeTxClient) => read(client, true), policy, guard };
 }
