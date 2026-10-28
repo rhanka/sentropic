@@ -125,7 +125,7 @@ console.log('PASS: real pruned content entrypoint serves health, denies private 
 NODE
 }
 
-case "${1:-static}" in
+case "${1:-all}" in
   hash) content_hash ;;
   filters) content_filters ;;
   build) content_build ;;
