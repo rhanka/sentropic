@@ -65,9 +65,16 @@ case "$CM_ACTION" in
       ln -s node_modules/@sentropic/cluster-mesh/dist src
       ln -s node_modules/@sentropic/cluster-mesh/assets assets
       export MEMORY_INSTALLED_ROOT="$consumer"
+      receipt=/source/tmp/memory-stage-b
+      mkdir -p "$receipt"
+      set +e
       ./node_modules/.bin/vitest run tests/engram-memory/durable-memory.spec.ts \
-        --environment node --maxWorkers=1
-      exit
+        --reporter=default --reporter=json --outputFile=stage-b-result.json --environment node --maxWorkers=1
+      result=$?
+      set -e
+      cp stage-b-result.json package-lock.json ./sentropic-cluster-mesh-*.tgz "$receipt/"
+      sha256sum ./sentropic-cluster-mesh-*.tgz > "$receipt/mesh.sha256"
+      exit "$result"
     fi
     /tmp/cm-tools/node_modules/.bin/vitest run "${CM_SCOPE:-tests}" \
       --exclude tests/engram-memory/durable-memory.spec.ts --environment node --maxWorkers=1
