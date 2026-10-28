@@ -272,3 +272,143 @@ export type ControllerHostTransport = {
 };
 
 /**
+ * Options for attachHost (slice 1D).
+ */
+export type AttachHostOptions = {
+  transport: ControllerHostTransport;
+};
+
+/**
+ * Input for bootstrapRun (slice 1D).
+ *
+ * The controller handles the Message-list mutation + startJobPoll.
+ * App-side is responsible for:
+ *   - historyTimelineItems truncation (Svelte state) BEFORE calling bootstrapRun
+ *     when truncateAfterMessageId is set.
+ *   - scroll side-effects and checkpoint creation AFTER bootstrapRun returns.
+ *
+ * The controller builds the assistant message using buildAssistantMessage.
+ * Callers may provide a `buildAssistantMessage` factory to stamp any
+ * host-specific fields (e.g. sessionId, model) onto the base shape —
+ * this keeps the controller generic over the Message type parameter.
+ */
+export type BootstrapRunInput<Message extends ChatProjectionMessage> = {
+  sessionId: string;
+  assistantMessageId: string;
+  streamId: string;
+  jobId: string;
+  /**
+   * Factory: build the new optimistic assistant message.
+   * Receives the base fields the controller always sets, plus the sessionId
+   * from the BootstrapRunInput (which on the send path is the post-host-call
+   * sessionId from the RunHandle). Callers stamp model and any other
+   * host-specific fields on top of the base.
+   */
+  buildAssistantMessage: (base: {
+    id: string;
+    sessionId: string;
+    _streamId: string;
+    _localStatus: 'processing';
+    role: 'assistant';
+    content: null;
+    createdAt: string;
+  }) => Message;
+  /**
+   * Optional user message to prepend (new-session send path).
+   * When set, controller calls setMessages([...messages, userMsg, assistantMsg]).
+   */
+  userMessage?: Message;
+  /**
+   * When set (retry path), controller truncates messages to everything up to
+   * and including this id, then appends assistantMsg.
+   * App-side MUST truncate historyTimelineItems BEFORE calling bootstrapRun.
+   */
+  truncateAfterMessageId?: string;
+  /**
+   * Job poll timeout override (default 90 000 ms).
+   */
+  pollTimeoutMs?: number;
+};
+
+/**
+ * Result returned by bootstrapRun and send/retry — exposes the optimistic
+ * assistant message so app-side can schedule scroll and checkpoint creation
+ * without re-reading controller state.
+ */
+export type BootstrapRunResult<Message extends ChatProjectionMessage> = {
+  assistantMessage: Message;
+  handle: ControllerRunHandle;
+};
+
+// ---------------------------------------------------------------------------
+// Projected assistant computation (with signature for the cache)
+// ---------------------------------------------------------------------------
+type ProjectedAssistantComputationCached = ChatProjectionComputation & {
+  /** Cache key — computed from message id, local status, content length, event count, last sequence. */
+  signature: string;
+};
+
+// ---------------------------------------------------------------------------
+// Local-tool state machine types — slice 1E
+// ---------------------------------------------------------------------------
+
+/**
+ * Internal state for a buffered local-tool call in flight.
+ * Mirrors AppChatPanel's LocalToolStreamState — kept framework-neutral.
+ */
+export type ControllerLocalToolStreamState = {
+  streamId: string;
+  name: string;
+  argsText: string;
+  lastSequence: number;
+  firstSeenAt: number;
+  executed: boolean;
+};
+
+/**
+ * Permission prompt surfaced when executeLocalTool throws a
+ * LocalToolPermissionRequiredError. App renders these as permission UI.
+ */
+export type ControllerLocalToolPermissionPrompt = {
+  toolCallId: string;
+  streamId: string;
+  name: string;
+  args: unknown;
+  /** The permission request payload returned by the runtime (opaque to the controller). */
+  request: {
+    requestId: string;
+    toolName: string;
+    origin: string;
+    details?: Record<string, unknown>;
+  };
+  createdAt: number;
+};
+
+/**
+ * Executor function injected by the app (wraps chrome.runtime.sendMessage / VSCode bridge).
+ * Must throw an error satisfying `isLocalToolPermissionRequired` when a permission
+ * prompt is needed. The controller does NOT import the concrete error class.
+ */
+export type ControllerLocalToolExecutorFn = (
+  toolCallId: string,
+  name: string,
+  args: unknown,
+  opts: { streamId: string },
+) => Promise<unknown>;
+
+/**
+ * Permission decision function injected by the app (wraps decideLocalToolPermission).
+ */
+export type ControllerLocalToolPermissionDeciderFn = (
+  requestId: string,
+  decision: string,
+) => Promise<void>;
+
+/**
+ * Result poster injected by the app (wraps chatCoreHost.postLocalToolResult with retry).
+ * App-side handles the ApiError retry logic so the controller stays transport-agnostic.
+ */
+export type ControllerLocalToolResultPosterFn = (
+  streamId: string,
+  toolCallId: string,
+  result: unknown,
