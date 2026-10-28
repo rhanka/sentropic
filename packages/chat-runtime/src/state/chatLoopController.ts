@@ -1532,3 +1532,143 @@ export function createChatLoopController<
       );
       const truncatedMessages =
         userIndex >= 0
+          ? [...messages.slice(0, userIndex + 1), assistantMessage]
+          : [...messages, assistantMessage];
+      setMessages(truncatedMessages);
+    } else {
+      // Append path
+      appendMessage(assistantMessage);
+    }
+
+    const handle: ControllerRunHandle = {
+      sessionId: input.sessionId,
+      userMessageId: input.userMessage?.id ?? '',
+      assistantMessageId: input.assistantMessageId,
+      streamId: input.streamId,
+      jobId: input.jobId,
+    };
+
+    startJobPoll(input.jobId, assistantMessage._streamId ?? assistantMessage.id, {
+      timeoutMs: input.pollTimeoutMs ?? 90_000,
+    });
+
+    return { assistantMessage, handle };
+  };
+
+  // -------------------------------------------------------------------------
+  // send — calls host transport, builds optimistic messages, bootstraps run (slice 1D)
+  // -------------------------------------------------------------------------
+
+  const send = async (
+    payload: ControllerSendPayload,
+    opts: {
+      buildUserMessage: (handle: ControllerRunHandle) => Message;
+      buildAssistantMessage: BootstrapRunInput<Message>['buildAssistantMessage'];
+      pollTimeoutMs?: number;
+    },
+  ): Promise<BootstrapRunResult<Message> & { handle: ControllerRunHandle }> => {
+    const transport = attachedTransport;
+    if (!transport) throw new Error('chatLoopController: no host transport attached — call attachHost() first');
+
+    const runHandle = await transport.sendMessage(payload);
+
+    const handle: ControllerRunHandle = {
+      sessionId: runHandle.sessionId,
+      userMessageId: runHandle.userMessageId,
+      assistantMessageId: runHandle.assistantMessageId,
+      streamId: runHandle.streamId,
+      jobId: runHandle.jobId,
+    };
+
+    const userMessage = opts.buildUserMessage(handle);
+
+    const result = bootstrapRun({
+      sessionId: handle.sessionId,
+      assistantMessageId: handle.assistantMessageId,
+      streamId: handle.streamId,
+      jobId: handle.jobId,
+      buildAssistantMessage: opts.buildAssistantMessage,
+      userMessage,
+      pollTimeoutMs: opts.pollTimeoutMs,
+    });
+
+    return { ...result, handle };
+  };
+
+  // -------------------------------------------------------------------------
+  // retry — calls host transport retryMessage + bootstrapRun (slice 1D)
+  // -------------------------------------------------------------------------
+
+  const retry = async (
+    messageId: string,
+    opts: {
+      providerId: string;
+      model: string;
+      buildAssistantMessage: BootstrapRunInput<Message>['buildAssistantMessage'];
+      pollTimeoutMs?: number;
+    },
+  ): Promise<BootstrapRunResult<Message>> => {
+    const transport = attachedTransport;
+    if (!transport) throw new Error('chatLoopController: no host transport attached — call attachHost() first');
+
+    const runHandle = await transport.retryMessage(messageId, {
+      providerId: opts.providerId,
+      model: opts.model,
+    });
+
+    return bootstrapRun({
+      sessionId: runHandle.sessionId,
+      assistantMessageId: runHandle.assistantMessageId,
+      streamId: runHandle.streamId,
+      jobId: runHandle.jobId,
+      buildAssistantMessage: opts.buildAssistantMessage,
+      truncateAfterMessageId: messageId,
+      pollTimeoutMs: opts.pollTimeoutMs,
+    });
+  };
+
+  // -------------------------------------------------------------------------
+  // stop — calls host transport stopMessage (slice 1D)
+  // -------------------------------------------------------------------------
+
+  const stop = async (messageId: string): Promise<void> => {
+    const transport = attachedTransport;
+    if (!transport) throw new Error('chatLoopController: no host transport attached — call attachHost() first');
+    await transport.stopMessage(messageId);
+  };
+
+  // -------------------------------------------------------------------------
+  // edit — calls host editMessage + patches content in message list (slice 1D)
+  // -------------------------------------------------------------------------
+
+  const edit = async (messageId: string, content: string): Promise<void> => {
+    const transport = attachedTransport;
+    if (!transport) throw new Error('chatLoopController: no host transport attached — call attachHost() first');
+    await transport.editMessage(messageId, content);
+    patchMessage(messageId, { content } as Partial<Message>);
+  };
+
+  // -------------------------------------------------------------------------
+  // setFeedback — calls host setFeedback + patches feedbackVote (slice 1D)
+  // -------------------------------------------------------------------------
+
+  const setFeedback = async (
+    messageId: string,
+    vote: 'up' | 'down' | 'clear',
+  ): Promise<void> => {
+    const transport = attachedTransport;
+    if (!transport) throw new Error('chatLoopController: no host transport attached — call attachHost() first');
+    await transport.setFeedback(messageId, vote);
+    const voteValue = vote === 'clear' ? null : vote === 'up' ? 1 : -1;
+    // feedbackVote is not in ChatProjectionMessage's base constraint but IS in
+    // the concrete Message type used by consumers (LocalMessage). Cast via unknown.
+    patchMessage(messageId, { feedbackVote: voteValue } as unknown as Partial<Message>);
+  };
+
+  // -------------------------------------------------------------------------
+  // Local-tool machine helpers (slice 1E)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Internal: get stream ids eligible for local-tool execution.
+   * Mirrors AppChatPanel's getLocalToolEligibleStreamIds — reads controller messages.
