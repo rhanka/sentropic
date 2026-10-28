@@ -47,3 +47,143 @@ const resetState = () => {
     tools: getLocalToolDefinitions(),
     executions: {},
   });
+};
+
+const useAdapter = (adapter: LocalToolsAdapter | null) => {
+  setLocalToolsAdapter(adapter);
+};
+
+describe('@sentropic/chat-ui local tools store', () => {
+  beforeEach(() => {
+    setLocalToolsAdapter(null);
+    clearRegisteredLocalTools();
+    resetState();
+  });
+
+  afterEach(() => {
+    setLocalToolsAdapter(null);
+    clearRegisteredLocalTools();
+  });
+
+  it('exposes Chrome-mode definitions when no runtime is configured', () => {
+    const definitions = getLocalToolDefinitions();
+    expect(definitions.map((tool) => tool.name).sort()).toEqual([
+      'tab_action',
+      'tab_read',
+    ]);
+    expect(isLocalToolName('tab_read')).toBe(true);
+    expect(isLocalToolName('tab_info')).toBe(true);
+    expect(isLocalToolName('unknown_tool')).toBe(false);
+    expect(isLocalToolRuntimeAvailable()).toBe(false);
+  });
+
+  it('switches to VSCode tool catalog when adapter id is sentropic.vscode.runtime', () => {
+    useAdapter({
+      id: 'sentropic.vscode.runtime',
+      sendMessage: vi.fn(),
+    });
+
+    const definitions = getLocalToolDefinitions();
+    expect(definitions.map((tool) => tool.name).sort()).toEqual([
+      'bash',
+      'file_edit',
+      'file_read',
+      'git',
+      'ls',
+      'rg',
+    ]);
+    expect(isLocalToolRuntimeAvailable()).toBe(true);
+  });
+
+  it('executes a local tool and stores completed state through the adapter', async () => {
+    const sendMessage = vi
+      .fn()
+      .mockResolvedValue({ ok: true, result: { title: 'Example' } });
+    useAdapter({ id: 'ext-1', sendMessage });
+
+    const result = await executeLocalTool(
+      'call-1',
+      'tab_read',
+      { mode: 'info' },
+      { streamId: 'stream-1' },
+    );
+
+    expect(result).toEqual({ title: 'Example' });
+    expect(sendMessage).toHaveBeenCalledWith({
+      type: 'tool_execute',
+      toolCallId: 'call-1',
+      name: 'tab_read',
+      args: { mode: 'info' },
+    });
+    const state = get(localToolsStore);
+    expect(state.executions['call-1']).toMatchObject({
+      toolCallId: 'call-1',
+      streamId: 'stream-1',
+      status: 'completed',
+      result: { title: 'Example' },
+    });
+  });
+
+  it('raises LocalToolPermissionRequiredError when adapter requests consent', async () => {
+    const sendMessage = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        error: 'permission_required',
+        permissionRequest: {
+          requestId: 'perm-1',
+          toolName: 'tab_read:dom',
+          origin: 'https://example.com',
+        },
+      })
+      .mockResolvedValueOnce({ ok: true });
+    useAdapter({ id: 'ext-1', sendMessage });
+
+    await expect(
+      executeLocalTool('call-p', 'tab_read', { mode: 'dom' }),
+    ).rejects.toBeInstanceOf(LocalToolPermissionRequiredError);
+
+    const state = get(localToolsStore);
+    expect(state.executions['call-p']).toMatchObject({
+      status: 'awaiting_permission',
+      permissionRequest: { requestId: 'perm-1' },
+    });
+
+    await expect(
+      decideLocalToolPermission('perm-1', 'allow_once'),
+    ).resolves.toBeUndefined();
+    expect(sendMessage).toHaveBeenNthCalledWith(2, {
+      type: 'tool_permission_decide',
+      payload: { requestId: 'perm-1', decision: 'allow_once' },
+    });
+  });
+
+  it('stores failed state when adapter returns ok=false', async () => {
+    const sendMessage = vi
+      .fn()
+      .mockResolvedValue({ ok: false, error: 'Tool execution failed' });
+    useAdapter({ id: 'ext-1', sendMessage });
+
+    await expect(
+      executeLocalTool('call-fail', 'tab_action', {
+        action: 'click',
+        selector: '#main',
+      }),
+    ).rejects.toThrow('Tool execution failed');
+
+    expect(get(localToolsStore).executions['call-fail']).toMatchObject({
+      status: 'failed',
+      error: 'Tool execution failed',
+    });
+  });
+
+  it('fails fast when no adapter is wired and globalThis.chrome.runtime is absent', async () => {
+    await expect(
+      executeLocalTool('call-x', 'tab_read', { mode: 'screenshot' }),
+    ).rejects.toThrow(/unavailable outside extension context/i);
+  });
+
+  it('forwards extension permission policy CRUD through the adapter', async () => {
+    const sendMessage = vi
+      .fn()
+      .mockResolvedValueOnce({
