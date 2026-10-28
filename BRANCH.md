@@ -1,13 +1,13 @@
-# Feature: Engram E11 E2 tuple and receiving handoff
+# Feature: Engram E11b installed Stage B and C6 closure
 
 ## Objective
-- [x] Generate deterministic `e2-host-tuple/v1` on integrated E10 inputs; report independent qualification/release gaps without claiming receiving acceptance.
+- [ ] Qualify all 23 Stage B cases through the installed handle, ship C6 declaration in dev.7, and regenerate the 21-slot tuple; stop for an evidenced Engram-side blocker.
 
 ## Scope / Guardrails
-- [x] Branch `feat/cluster-mesh-engram-e11` from integration `52936121af9a67e3605f5c09c0e70c021b8da1d9`; worktree `tmp/worktrees/mem-e11`; merge only, never rebase.
-- [x] Owner-directed E11 generation on integration `32dd911be`; no publication, version bump, artifacts source edits or receiving ACK.
+- [x] Branch `feat/cluster-mesh-engram-e11b` from integration `fa900e335`; worktree `tmp/worktrees/mem-e11b`; mechanical branch PASS; merge only, never rebase.
+- [x] Owner-directed pack-only dev.7; no publication, artifacts source edits or receiving ACK.
 - [x] Read-only E2 inputs: published Engram 0.21.3 `32d47df1…`, mesh dev.6 `ff79088e…`, contract pair `55f8d457…` / `dd0cccbd…`; L4 MCP 0.22.0 is separate L5 scope (plan E11 line 120).
-- [x] Node 24 through make and Docker flock; no Python; ENV=test-mem-e11 last; make down after each Docker step.
+- [x] Node 24 through make and Docker flock; no Python; ENV=test-mem-e11b last; make down after each Docker step.
 - [x] Isolated Compose PostgreSQL only, no host ports; API 9055, UI 5255, Maildev 1155 reserved; owner environments untouched.
 - [x] Atomic make commits at most 150 changed lines; selective staging; no AI trailers.
 
@@ -16,26 +16,45 @@
   - `BRANCH.md`
   - `tools/engram-e11/**`
   - `Makefile` (BR11-EX1)
-- **Forbidden Paths (must not change in this branch)**:
-  - `packages/**`
+  - `packages/cluster-mesh/tests/engram-memory/**`
+  - `packages/cluster-mesh/tests/storage/cold-workspace.sh`
+  - `packages/cluster-mesh/src/engram-memory/**`
+  - `packages/cluster-mesh/contracts/**`
+  - `packages/cluster-mesh/assets/storage/engram-memory/**`
+  - `packages/cluster-mesh/package.json`
   - `package-lock.json`
+  - `.github/workflows/ci.yml` (BR11B-EX2)
+- **Forbidden Paths (must not change in this branch)**:
+  - `packages/engram/**`
   - `tools/memory-mcp-l5/artifacts/**`
   - `docker-compose*.yml`
-  - `.github/workflows/**`
   - `.track/**`
   - `.cursor/rules/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - [x] None beyond BR11-EX1.
 - **Exception process**:
+  - [x] BR11B-EX1: add test-mem-e11b selectors and an installed Stage B action to existing make routing; impact isolated qualification only; rollback selectors/action.
+  - [x] BR11B-EX2: run E11 tooling tests/check in CI with deterministic inputs; impact tuple tooling coverage; rollback workflow step.
   - [x] BR11-EX1: add only test-mem-e11 to host scope-check selector, avoiding an unrelated harness build; impact validation routing; rollback remove selector.
   - [x] BR11-EX2: owner-requested 0.21.3/dev.6 clean install proof uses existing qualification Compose, PostgreSQL and down selectors for test-mem-e11; rollback those three selector entries together. No package/source/lock edits.
   - [x] BR11-EX3: owner-requested CI diagnosis adds test-mem-e11 to E2 qualification, lint/wiring and packed-platform build selectors, and preserves packed-consumer npm stderr. Impact: run the same gates in the owned Compose environment and expose install failures; rollback these selector/logging changes. No assertion, dependency, lock or workflow changes.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot E11b-0 — Evidence and installed qualification**
+  - [x] Read #789 scope: E7 supplies host binding/maintenance, not the neutral fenced handle; E10a supplies the installed handle. Stage B still uses fixture glue and unconditional skips.
+  - [ ] Replace fixture handle with shipped factory; run durable-memory.spec.ts (all 23 behaviors) from a clean packed consumer with real PostgreSQL, including independent crash/ownership processes.
+  - [ ] Stop and write exact Engram-owner request if a producer change is required; never promote a blocked profile.
+- [ ] **Lot E11b-1 — Package and tuple**
+  - [ ] Pack dev.7 with standalone neutral declaration; bind slot 15 SHA-256 and derive neutralContract.status from slot 15.
+  - [ ] Update installed-memory.mjs/qualification.mk to 0.21.3/dev.7, retain locks and installed receipt, qualify five profiles from zero-skip evidence.
+  - [ ] Regenerate/check/test tuple, retain archive and SHA-256 in shared e10-artifacts; C9 request explicitly names dff737ce → dd0cccbd under 1.0.0.
+- [ ] **Lot E11b-2 — Validation and draft PR**
+  - [ ] Typecheck/lint affected cluster-mesh paths; memory-e11-test and memory-e11-check run in CI.
+  - [ ] Draft PR to feat/engram-e2-integration; completed/success exact-head CI retained externally; no merge/publication.
 - [x] **Lot E11-4 — Integration refresh**
   - [x] Diagnose run 40741738278: common lane fails resolving AWS core ^3.978.7 at 18:45:38 UTC; registry publication occurred at 18:47:57 UTC. Unmodified common target passes locally (11 tests).
   - [x] Packed-consumer probe passes in test-mem-e11 through PACKED_ADAPTERS_OK; artifacts tarball SHA-256 matches the failed CI job exactly. Preserve npm stderr for future failures.
-  - [ ] Run complete E2 qualification in test-mem-e11 and recheck the retained tuple; exact-head CI success stays outside git after push.
+  - [x] Prior E11 complete E2 qualification and tuple check: .tmp/packets/pr818-ci-40741738278/LOCAL-RECEIPT.md and FINAL-RECEIPT.md (review #818 r1).
   - [x] Merge integration after #821/#803, never rebase; retain E11 plan and union all Makefile environment selectors. No `.track` changes on either side of this merge.
   - [x] Generate/check the 0.21.3/dev.6 tuple and receiving checklist; preserve evidenced Stage B gaps.
   - [x] Stage published Engram and retained dev.6; adapt only E10 consumer version/archive assertions, never package bytes or artifacts sources.
@@ -53,7 +72,7 @@
   - [x] Freeze successful E2 receipt, package/lock, campaign log/status and adaptation hashes as checker anchors; successor reruns require an explicit reviewed evidence update.
   - [x] E10 final-head CI `cfd45de4d54651626e97113494b9d7bd108998c8` completed/success in run 40727760123; bind that exact receipt as slot 21. E11 exact-head CI stays a separate post-push receipt to avoid self-reference.
   - [x] Nine tests pass, generation/check exit 0, cleanup 0; tuple SHA-256 `66fa8eeef276dfd73fdb9440f589dbdeff33417e8650b55ac354e894cd547527`; complete bundle retained in `.tmp/engram-e2-host-tuple/e11-current/`.
-  - [ ] Push final head; completed/success CI recorded outside git after push; no publication or ACK.
+  - [x] Prior E11 exact head 6a8eee916 CI run 40773445916 completed/success; #818 r1 verified 63 passed jobs, 26 skipped; no publication or ACK.
 - [x] **Lot E11-0 — Baseline and scope**
   - [x] Read MASTER/workflow, plan E11, PR #803 E11 inputs, Opus r3 21-entry inventory, RESERVATION.md and Docker lock packet; mechanical branch PASS.
 - [x] **Lot E11-1 — Generator and checker**
