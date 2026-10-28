@@ -117,3 +117,83 @@ export type HistoryPayload = {
    * Each value is an array of raw stream events for that assistant turn.
    */
   readonly eventsByMessageId?: Readonly<Record<string, readonly HistoryEventRaw[]>>;
+};
+
+/**
+ * Project a history payload into an ordered `RestoredTimelineItem[]`.
+ *
+ * - User / system / tool messages → `kind: 'user-message'`
+ * - Assistant messages → `kind: 'assistant-message'` with collapsed content
+ *   derived from `content_delta` events (falls back to `message.content`).
+ *
+ * Skips messages with no content and no events (empty rounds).
+ * Pure function — no side effects.
+ */
+export function projectRestoredTimeline(
+  payload: HistoryPayload,
+): RestoredTimelineItem[] {
+  const { messages, eventsByMessageId = {} } = payload;
+  const result: RestoredTimelineItem[] = [];
+
+  for (const message of messages) {
+    if (message.role !== 'assistant') {
+      // Only emit non-assistant messages if they have content.
+      if (message.content == null || message.content === '') continue;
+      result.push({
+        kind: 'user-message',
+        key: `message:${message.id}`,
+        message,
+      });
+      continue;
+    }
+
+    // Assistant: collapse content_delta events into a single string.
+    const streamId = message.id;
+    const events: readonly HistoryEventRaw[] = eventsByMessageId[streamId] ?? [];
+    const collapsed = collapseContentDeltas(events);
+    const content = collapsed !== '' ? collapsed : (message.content ?? '');
+
+    // Skip if there is truly no content (e.g. a runtime-only turn).
+    if (content === '' && events.length === 0) continue;
+
+    result.push({
+      kind: 'assistant-message',
+      key: `message:${message.id}`,
+      message,
+      content,
+    });
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Internal helpers
+// ---------------------------------------------------------------------------
+
+/**
+ * Convert a date-like value to a milliseconds-since-epoch number.
+ * Returns 0 for null / undefined / unparseable values.
+ */
+function toMs(value: string | Date | null | undefined): number {
+  if (value == null) return 0;
+  if (value instanceof Date) return value.getTime();
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+/**
+ * Collapse all `content_delta` events in order into a single string.
+ */
+function collapseContentDeltas(events: readonly HistoryEventRaw[]): string {
+  const sorted = [...events]
+    .filter((e) => typeof e.sequence === 'number' && Number.isFinite(e.sequence))
+    .sort((a, b) => (a.sequence as number) - (b.sequence as number));
+  return sorted
+    .filter((e) => e.eventType === 'content_delta')
+    .map((e) => {
+      const data = e.data as { delta?: unknown } | null | undefined;
+      return String(data?.delta ?? '');
+    })
+    .join('');
+}
