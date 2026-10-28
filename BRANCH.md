@@ -37,6 +37,7 @@
   - [x] Stage published Engram and retained dev.6; adapt only E10 consumer version/archive assertions, never package bytes or artifacts sources.
   - [x] Add make-owned E2 lock freeze and strict fresh npm-ci campaign with source/PG identity, lock comparison, type/runtime proof and automatic owned-stack cleanup.
   - [x] Pin integration source/tree, 0.21.3 SHA-256/SRI, dev.6 SHA-256/SRI and the producer neutral JCS bytes.
+  - [x] Checker recomputes the domain-separated contract digest, compares mesh/producer manifest bytes and validates the explicit E10 consumer adaptation and installed closure.
 - [x] **Lot E11-0 — Baseline and scope**
   - [x] Read MASTER/workflow, plan E11, PR #803 E11 inputs, Opus r3 21-entry inventory, RESERVATION.md and Docker lock packet; mechanical branch PASS.
 - [x] **Lot E11-1 — Generator and checker**
