@@ -1,7 +1,7 @@
 # Feature: Engram E11 tuple and receiving handoff preparation
 
 ## Objective
-- [ ] Prepare deterministic `e2-host-tuple/v1` tooling and receiving checklist; gr-conductor owns final generation after stable E9/E10 evidence.
+- [x] Prepare deterministic `e2-host-tuple/v1` tooling and receiving checklist; gr-conductor owns final generation after stable E9/E10 evidence.
 
 ## Scope / Guardrails
 - [x] Branch `feat/cluster-mesh-engram-e11` from integration `52936121af9a67e3605f5c09c0e70c021b8da1d9`; worktree `tmp/worktrees/mem-e11`; merge only, never rebase.
@@ -32,7 +32,7 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot E11-0 — Baseline and scope**
   - [x] Read MASTER/workflow, plan E11, PR #803 E11 inputs, Opus r3 21-entry inventory, RESERVATION.md and Docker lock packet; mechanical branch PASS.
-- [ ] **Lot E11-1 — Generator and checker**
+- [x] **Lot E11-1 — Generator and checker**
   - [x] File/archive binding primitives and deterministic comparison added; final acceptance refuses preparation.
   - [x] Pin current candidate hashes and snapshot committed E10 inputs without changing its sources or locks.
   - [x] Encode all 21 input categories and independent receiving gates with explicit PENDING reasons.
@@ -40,13 +40,14 @@
   - [x] First real fixture run exposed a root-level hydration helper in E10 runtimeClosure; bind its retained bytes to the committed lane snapshot and compare installed locks byte-for-byte.
   - [x] Preserve documented receiving top-level fields; null C6 final path/hash and empty qualified profiles deliberately retain source-gap; bind format/receiving-validator evidence.
   - [x] Execute the retained receiver's actual shape gate against preparation and require source-gap for development backend, missing C6 final bytes and unqualified profiles.
-  - [ ] Add `tools/engram-e11/{tuple,bindings,slots}.mjs` and candidate spec; hash files/tarballs/backend/C6/locks; reject drift and status promotion.
+  - [x] Add `tools/engram-e11/{tuple,bindings,slots}.mjs` and candidate spec; hash files/tarballs/backend/C6/locks; reject drift and status promotion.
   - [x] Add `tools/engram-e11/e11.mk`: pinned Node 24, temporary evidence, deterministic dry-run/check; no lock regeneration.
   - [x] Add `tools/engram-e11/tuple.test.mjs`: tampering, missing input, pending/final refusal, deterministic output.
 - [x] **Lot E11-2 — Receiving handoff**
   - [x] Add `tools/engram-e11/README.md`: 21 categories, PENDING reasons, retained-lock install, reservation, main PR, CI publication, byte recheck, separate C9/L5 ACKs.
 - [ ] **Lot E11-3 — Evidence and draft PR**
-  - [ ] Run make tests and candidate dry-run/check under flock; retain tuple SHA-256/PENDING inventory; make down.
+  - [x] Run make tests and candidate dry-run/check under flock: 9/9 passed, generation/check exit 0; tuple SHA-256 `9edee7d7998addd6ddc2ff383989d3fd0805d2dc3f84fd467604f40e8438a2cd`; PENDING inventory in `tools/engram-e11/DRY-RUN.md`.
+  - [x] Retain complete bundle via memory-e11-retain outside the worktree; cleanup via make down after Docker verification.
   - [ ] Review scoped diff; draft PR against feat/engram-e2-integration; completed/success CI on exact head; no merge/publication.
 
 ## AI Flaky tests
