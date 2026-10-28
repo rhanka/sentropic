@@ -85,6 +85,14 @@ describe('durable app content composition', () => {
     const cookie = results.find(response => response.status === 204)!.headers.get('set-cookie')!;
     const read = () => runtime().fetch(new Request(origin, {headers:{cookie}}));
     expect(await (await read()).text()).toBe('<h1>Private runtime</h1>');
+    // A valid tenant/workspace KV key cannot authorize a scope owned by another org.
+    await pool.query(`UPDATE artifacts.storage_scopes SET org_id='foreign-org' WHERE id=$1`, [scope]);
+    try {
+      expect((await read()).status).toBe(404);
+    } finally {
+      await pool.query(`UPDATE artifacts.storage_scopes SET org_id='tenant' WHERE id=$1`, [scope]);
+    }
+    expect((await read()).status).toBe(200);
     await pool.query(`DELETE FROM workspace_memberships WHERE user_id='reader'`);
     expect((await read()).status).toBe(404);
     await pool.query(`INSERT INTO workspace_memberships(workspace_id,user_id,role) VALUES ('workspace','reader','viewer')`);
@@ -103,6 +111,42 @@ describe('durable app content composition', () => {
     }
     key = 'b'.repeat(64);
     expect((await read()).status).toBe(401);
+  });
+
+  it('should reject the stable A grant after republication while activating and serving pinned A', async () => {
+    async function activateAt(targetOrigin: string, channel: 'stable' | 'pinned') {
+      const host = runtime();
+      const started = await host.fetch(new Request(`${targetOrigin}/_reader/nonce`));
+      const { nonce } = await started.json();
+      const issued = await createArtifactReaderActivation({ pool, ...config }).issue(session,
+        { artifactId, releaseId, channel, targetOrigin, nonce });
+      const activated = await host.fetch(new Request(`${targetOrigin}/_reader/activate`, { method: 'POST',
+        headers: { origin: targetOrigin, 'content-type': 'application/json', 'x-artifact-activation': '1',
+          cookie: started.headers.get('set-cookie')! },
+        body: JSON.stringify({ flowId: issued.flow.flowId, ticketId: issued.ticket.ticketId }) }));
+      expect(activated.status).toBe(204);
+      return activated.headers.get('set-cookie')!;
+    }
+    const cookie = await activateAt(origin, 'stable');
+    const stableRead = () => runtime().fetch(new Request(origin, { headers: { cookie } }));
+    expect((await stableRead()).status).toBe(200);
+    const next = randomUUID();
+    try {
+      await pool.query(`INSERT INTO artifacts.releases(id,artifact_id,manifest_digest,manifest)
+        SELECT $1,artifact_id,'b',manifest FROM artifacts.releases WHERE id=$2`, [next, releaseId]);
+      await pool.query('UPDATE artifacts.artifact_current SET release_id=$1 WHERE artifact_id=$2', [next, artifactId]);
+      await pool.query(`UPDATE artifacts.releases SET state='retired' WHERE id=$1`, [releaseId]);
+      expect((await stableRead()).status).toBe(401);
+      const pinnedOrigin = `https://${releaseId}.pinned.${config.baseDomain}`;
+      const pinnedCookie = await activateAt(pinnedOrigin, 'pinned');
+      const pinned = await runtime().fetch(new Request(pinnedOrigin, { headers: { cookie: pinnedCookie } }));
+      expect(pinned.status).toBe(200);
+      expect(await pinned.text()).toBe('<h1>Private runtime</h1>');
+    } finally {
+      await pool.query('UPDATE artifacts.artifact_current SET release_id=$1 WHERE artifact_id=$2', [releaseId, artifactId]);
+      await pool.query(`UPDATE artifacts.releases SET state='ready' WHERE id=$1`, [releaseId]);
+      await pool.query('DELETE FROM artifacts.releases WHERE id=$1', [next]);
+    }
   });
 
   it('should serve the enabled real listener with private S3 reads and a rotating mounted key', async () => {

@@ -162,6 +162,26 @@ beforeEach(async () => {
 });
 
 describe('trusted app reader activation', () => {
+  it('should resolve content-origin authority through the package flow port and deny replay', async () => {
+    const issued = await reader().issue(session, target);
+    expect(await reader().consumeForContentOrigin({ ...input(issued), nonce: 'z'.repeat(43) })).toBeUndefined();
+    expect(await reader().consumeForContentOrigin({ ...input(issued),
+      targetOrigin: `https://${randomUUID()}.${config.baseDomain}` })).toBeUndefined();
+    expect(await reader().consumeForContentOrigin({ ...input(issued),
+      targetOrigin: `https://${releaseId}.pinned.${config.baseDomain}` })).toBeUndefined();
+    expect(await reader().consumeForContentOrigin(input(issued))).toEqual(issued.ticket);
+    expect(await reader().consumeForContentOrigin(input(issued))).toBeUndefined();
+  });
+
+  it.each(['expiry', 'generation', 'session'])('should refuse content-origin activation after %s revocation', async reason => {
+    const issued = await reader({ flowTtlSeconds: reason === 'expiry' ? 1 : 30 }).issue(session, target);
+    if (reason === 'expiry') await pool.query('SELECT pg_sleep(1.05)');
+    if (reason === 'generation') await pool.query(`UPDATE artifact_host.activation_namespaces SET generation=generation+1`);
+    if (reason === 'session') await pool.query(`DELETE FROM user_sessions WHERE id='session'`);
+    expect(await reader().consumeForContentOrigin(input(issued))).toBeUndefined();
+    expect((await pool.query('SELECT count(*)::int AS n FROM artifact_host.activation_tickets')).rows[0].n).toBe(1);
+  });
+
   it('should acknowledge only one consume across host instances and deny replay', async () => {
     const issued = await reader().issue(session, target);
     const results = await Promise.all([reader(), reader()].map(host => host.consume(session, input(issued))));

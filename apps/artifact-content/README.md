@@ -18,6 +18,8 @@ The existing authenticated app reader-activation port issues a flow for the exac
 
 Every private read verifies the current key and short grant, current account/tenant/workspace membership, release state and ACL/lifecycle. These checks repeat after blob waits; stable pointer movement requires fresh consent. Pinned origins retain their exact release. All assets use upstream isolation headers and no-store; direct storage keys never route.
 
+Grants carry no session identifier: logout or session revocation takes effect at grant expiry (at most 55 seconds), while every new activation rechecks the live session; W3.e must assert this bound alongside immediate membership, ACL and lifecycle revocation.
+
 ## Qualification
 
 Use the existing Make targets with the shared Docker lock, ports `API_PORT=8803 UI_PORT=5189 MAILDEV_UI_PORT=1096` and `ENV=test-app-w3b` last:
