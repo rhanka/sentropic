@@ -1167,7 +1167,7 @@ export const executeWithToolsStream = async (
   options: ExecuteWithToolsStreamOptions = {}
 ): Promise<ExecuteWithToolsStreamResult> => {
   const {
-    model = 'gpt-4.1-nano',
+    model = 'gpt-5.4-nano',
     userId,
     useWebSearch = false,
     useDocuments = false,

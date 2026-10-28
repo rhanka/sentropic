@@ -236,7 +236,7 @@ export const magicLinkHandlers: AuthHonoRouteHandlers = {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
-      return c.json({ error: 'Invalid request data', details: error.errors }, 400);
+      return c.json({ error: 'Invalid request data', details: error.issues }, 400);
     }
     
     logger.error({ err: error }, 'Error verifying magic link');

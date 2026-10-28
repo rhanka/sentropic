@@ -123,10 +123,16 @@ describe('VSCode code-agent prompt profile', () => {
     });
 
     expect(mockedCallLLMStream).toHaveBeenCalled();
-    const firstCall = mockedCallLLMStream.mock.calls[0]?.[0] as
-      | { messages?: Array<{ role: string; content: string }> }
-      | undefined;
-    const systemPrompt = firstCall?.messages?.[0]?.content ?? '';
+    // The reasoning-effort evaluator may run first for reasoning-capable models;
+    // the generation call is the one carrying the vscode prompt profile.
+    const systemPrompt = mockedCallLLMStream.mock.calls
+      .map((call) => {
+        const args = call?.[0] as
+          | { messages?: Array<{ role: string; content: string }> }
+          | undefined;
+        return args?.messages?.[0]?.content ?? '';
+      })
+      .find((content) => content.includes('MARKER')) ?? '';
     expect(systemPrompt).toContain('WORKSPACE_OVERRIDE_MARKER');
     expect(systemPrompt).not.toContain('GLOBAL_OVERRIDE_MARKER');
     expect(systemPrompt).toContain('--- AGENTS.md ---');
@@ -140,10 +146,14 @@ describe('VSCode code-agent prompt profile', () => {
       instructionFiles: [],
     });
 
-    const firstCall = mockedCallLLMStream.mock.calls[0]?.[0] as
-      | { messages?: Array<{ role: string; content: string }> }
-      | undefined;
-    const systemPrompt = firstCall?.messages?.[0]?.content ?? '';
+    const systemPrompt = mockedCallLLMStream.mock.calls
+      .map((call) => {
+        const args = call?.[0] as
+          | { messages?: Array<{ role: string; content: string }> }
+          | undefined;
+        return args?.messages?.[0]?.content ?? '';
+      })
+      .find((content) => content.includes('MARKER')) ?? '';
     expect(systemPrompt).toContain('GLOBAL_FALLBACK_MARKER');
   });
 

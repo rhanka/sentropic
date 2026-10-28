@@ -17,7 +17,7 @@
 
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { zValidator } from '@hono/zod-validator';
+import { zValidator } from '../../utils/zod-validator';
 import { viewTemplateService } from '../../services/view-template-service';
 import { requireWorkspaceAccessRole } from '../../middleware/workspace-rbac';
 import { requireEditor } from '../../middleware/rbac';
@@ -84,7 +84,7 @@ const createSchema = z.object({
   workspaceType: z.string().min(1),
   objectType: z.string().min(1),
   maturityStage: z.string().nullish(),
-  descriptor: z.record(z.unknown()),
+  descriptor: z.record(z.string(), z.unknown()),
   sourceLevel: z.enum(['code', 'admin', 'user']).optional(),
 });
 
@@ -106,7 +106,7 @@ viewTemplatesRouter.post('/', requireEditor, requireWorkspaceAdminRole(), zValid
 
 // Update view template descriptor (user-level only)
 const updateSchema = z.object({
-  descriptor: z.record(z.unknown()).optional(),
+  descriptor: z.record(z.string(), z.unknown()).optional(),
   sourceLevel: z.enum(['code', 'admin', 'user']).optional(),
 });
 

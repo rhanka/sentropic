@@ -1,0 +1,266 @@
+import { describe, expect, it, vi } from 'vitest';
+import { createDecisionService } from '../src/decision/service.js';
+import * as pricing from '../src/decision/pricing.js';
+import { decisionRequest, decisionServiceFixture, decisionPrice, jevResponse } from './decision-fixtures.js';
+
+describe('decision admission and exactly one dispatch', () => {
+  it.each(['auth', 'admit', 'mark', 'provider', 'settle', 'receipt'] as const)('bounds a stalled %s port without losing late accounting', async (stage) => {
+    vi.useFakeTimers();
+    const f = decisionServiceFixture();
+    let acknowledge!: () => void;
+    const gate = new Promise<void>((resolve) => { acknowledge = resolve; });
+    if (stage === 'auth') {
+      const original = f.options.resolveAuth;
+      f.options.resolveAuth = async (request) => { await gate; return original(request); };
+    } else if (stage === 'admit') f.budget.admit.mockImplementationOnce(async (input) => { await gate; return { ok: true, holdId: input.callId }; });
+    else if (stage === 'mark') f.budget.markDispatched.mockImplementationOnce(async () => { await gate; return { ok: true }; });
+    else if (stage === 'provider') f.transport.send.mockImplementationOnce(async () => { await gate; return { ok: true, body: jevResponse() }; });
+    else if (stage === 'settle') {
+      const original = f.budget.settle;
+      f.budget.settle.mockImplementationOnce(async (input) => { await gate; return original(input); });
+    }
+    else vi.mocked(f.options.receipts.persist).mockImplementationOnce(async () => { await gate; });
+    const controller = new AbortController();
+    let received: unknown;
+    const pending = createDecisionService(f.options).decide(decisionRequest(), { signal: controller.signal }).then((result) => { received = result; return result; });
+    try {
+      await vi.advanceTimersByTimeAsync(10000);
+      expect(received).toMatchObject({ ok: false, error: { code: 'TIMEOUT' } });
+      if (stage !== 'auth') expect(received).toMatchObject({ receipt: { budget: { state: 'pending-reconciliation' } } });
+      if (stage === 'settle' || stage === 'receipt') expect(received).toMatchObject({ error: { phase: 'settlement', retryable: false }, receipt: { attempts: 1 } });
+      else if (stage === 'provider') expect(received).toMatchObject({ error: { phase: 'dispatch', retryable: false }, receipt: { attempts: 1, dispatch: 'unknown' } });
+      else expect(f.transport.send).not.toHaveBeenCalled();
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      controller.abort(); acknowledge();
+      await pending;
+      await vi.advanceTimersByTimeAsync(0);
+      vi.useRealTimers();
+    }
+    expect(f.transport.send).toHaveBeenCalledTimes(['provider', 'settle', 'receipt'].includes(stage) ? 1 : 0);
+    if (stage === 'admit' || stage === 'mark') expect(f.budget.release).toHaveBeenCalledOnce();
+    if (stage === 'provider') {
+      expect(f.state.ledger).toMatchObject([{ cost: { amountMicroUsd: '42' }, outcome: 'error', errorCode: 'TIMEOUT' }]);
+      expect(f.state.receipts).toMatchObject([{ cost: { amountMicroUsd: '42' }, outcome: 'error', errorCode: 'TIMEOUT' }]);
+      expect(f.state.receipts[0].outcome).toBe(f.state.ledger[0].outcome);
+      expect(f.state.receipts[0].errorCode).toBe(f.state.ledger[0].errorCode);
+    }
+    if (stage === 'settle') {
+      expect(f.state.ledger).toMatchObject([{ budget: { state: 'settled' }, outcome: 'verdict' }]);
+      expect(f.state.receipts).toMatchObject([{ budget: { state: 'settled' }, outcome: 'verdict' }]);
+      expect(f.state.receipts[0].outcome).toBe(f.state.ledger[0].outcome);
+      expect(f.state.receipts[0]).not.toHaveProperty('errorCode');
+      expect(f.state.ledger[0]).not.toHaveProperty('errorCode');
+    }
+  });
+  it('agrees on settled verdict between ledger and persisted receipt on cancellation during settlement', async () => {
+    const f = decisionServiceFixture();
+    let acknowledge!: () => void;
+    const gate = new Promise<void>((resolve) => { acknowledge = resolve; });
+    const original = f.budget.settle;
+    f.budget.settle.mockImplementationOnce(async (input) => { await gate; return original(input); });
+    const controller = new AbortController();
+    const pending = createDecisionService(f.options).decide(decisionRequest(), { signal: controller.signal });
+    await new Promise((r) => setTimeout(r, 10));
+    controller.abort();
+    const received = await pending;
+    expect(received).toMatchObject({ ok: false, error: { code: 'CANCELLED', phase: 'settlement' } });
+    acknowledge();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(f.state.ledger).toMatchObject([{ budget: { state: 'settled' }, outcome: 'verdict' }]);
+    expect(f.state.receipts).toMatchObject([{ budget: { state: 'settled' }, outcome: 'verdict' }]);
+    expect(f.state.receipts[0].outcome).toBe(f.state.ledger[0].outcome);
+    expect(f.state.receipts[0]).not.toHaveProperty('errorCode');
+    expect(f.state.ledger[0]).not.toHaveProperty('errorCode');
+  });
+  it('agrees on verdict between ledger and persisted receipt on cancellation during settlement with pending reconciliation', async () => {
+    const f = decisionServiceFixture();
+    let acknowledge!: () => void;
+    const gate = new Promise<void>((resolve) => { acknowledge = resolve; });
+    const original = f.budget.settle;
+    f.budget.settle.mockImplementationOnce(async (input) => { await gate; return original(input); });
+    const spy = vi.spyOn(pricing, 'priceDecisionUsage').mockReturnValue({
+      cost: { status: 'estimated', amountMicroUsd: '42', source: 'reserved-liability', priceRevision: 'fixture-price-v1', rounding: 'ceil-micro-usd' },
+      pending: true,
+      overrun: false,
+    });
+    try {
+      const controller = new AbortController();
+      const pending = createDecisionService(f.options).decide(decisionRequest(), { signal: controller.signal });
+      await new Promise((r) => setTimeout(r, 10));
+      controller.abort();
+      const received = await pending;
+      expect(received).toMatchObject({ ok: false, error: { code: 'CANCELLED', phase: 'settlement' } });
+      acknowledge();
+      await new Promise((r) => setTimeout(r, 10));
+      expect(f.state.ledger).toMatchObject([{ budget: { state: 'pending-reconciliation' }, outcome: 'verdict' }]);
+      expect(f.state.receipts).toMatchObject([{ budget: { state: 'pending-reconciliation' }, outcome: 'verdict' }]);
+      expect(f.state.receipts[0].outcome).toBe(f.state.ledger[0].outcome);
+      expect(f.state.receipts[0]).not.toHaveProperty('errorCode');
+      expect(f.state.ledger[0]).not.toHaveProperty('errorCode');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+  it('marks pending-reconciliation on returned receipt when clock exceeds deadline during persist', async () => {
+    const f = decisionServiceFixture();
+    const originalPersist = f.options.receipts.persist;
+    vi.mocked(f.options.receipts.persist).mockImplementationOnce(async (receipt) => {
+      f.state.now = 10001; // monotonic now >= deadline (default timeoutMs: 10000)
+      return originalPersist(receipt);
+    });
+    const result = await createDecisionService(f.options).decide(decisionRequest());
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'TIMEOUT', phase: 'settlement', retryable: false },
+      receipt: {
+        outcome: 'error',
+        errorCode: 'TIMEOUT',
+        budget: { state: 'pending-reconciliation' },
+      },
+    });
+    expect(f.state.ledger).toMatchObject([{ budget: { state: 'settled' }, outcome: 'verdict' }]);
+    expect(f.state.receipts).toMatchObject([{ budget: { state: 'settled' }, outcome: 'verdict' }]);
+    expect(f.state.receipts[0].callId).toBe(result.receipt.callId);
+  });
+  it('agrees on error between ledger and persisted receipt when adapter returns verdict after cancellation', async () => {
+    const f = decisionServiceFixture();
+    const controller = new AbortController();
+    f.transport.send.mockImplementationOnce(async () => {
+      controller.abort();
+      return { ok: true, body: jevResponse() };
+    });
+    const result = await createDecisionService(f.options).decide(decisionRequest(), { signal: controller.signal });
+    expect(result).toMatchObject({ ok: false, error: { code: 'CANCELLED' } });
+    expect(result.receipt.outcome).toBe('error');
+    expect(f.state.ledger).toMatchObject([{ outcome: 'error', errorCode: 'CANCELLED' }]);
+    expect(f.state.receipts).toMatchObject([{ outcome: 'error', errorCode: 'CANCELLED' }]);
+    expect(f.state.receipts[0].outcome).toBe(f.state.ledger[0].outcome);
+    expect(f.state.receipts[0].errorCode).toBe(f.state.ledger[0].errorCode);
+  });
+  it('maps adapter CANCELLED to TIMEOUT on provider deadline expiry', async () => {
+    const f = decisionServiceFixture();
+    f.transport.send.mockImplementationOnce(async () => {
+      f.state.now = 10001;
+      return { ok: false, error: { code: 'CANCELLED', phase: 'dispatch', message: 'Cancelled.' } };
+    });
+    const result = await createDecisionService(f.options).decide(decisionRequest());
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'TIMEOUT', phase: 'dispatch' },
+      receipt: { attempts: 1, dispatch: 'unknown' },
+    });
+  });
+  it.each(['descriptor', 'price'] as const)('checks expiry after %s resolution before acquiring credentials', async (stage) => {
+    const f = decisionServiceFixture();
+    if (stage === 'descriptor') f.options.resolveEvaluator = async () => { f.state.now = 10001; return f.descriptor; };
+    else f.options.resolvePrice = async () => { f.state.now = 10001; return decisionPrice(); };
+    expect(await createDecisionService(f.options).decide(decisionRequest())).toMatchObject({ error: { code: 'TIMEOUT', phase: 'admission' }, receipt: { attempts: 0 } });
+    expect(f.options.resolveAuth).not.toHaveBeenCalled();
+    expect(f.budget.admit).not.toHaveBeenCalled();
+  });
+  it('checks the reduced host deadline again after durable marking', async () => {
+    const f = decisionServiceFixture();
+    f.budget.markDispatched.mockImplementationOnce(async () => { f.state.now = 51; return { ok: true }; });
+    expect(await createDecisionService({ ...f.options, policy: { timeoutMs: 50 } }).decide(decisionRequest()))
+      .toMatchObject({ error: { code: 'TIMEOUT', phase: 'dispatch' }, receipt: { attempts: 0, budget: { state: 'released' } } });
+    expect(f.budget.release).toHaveBeenCalledOnce();
+    expect(f.transport.send).not.toHaveBeenCalled();
+  });
+  it('rechecks verified authority after marking before any send', async () => {
+    const f = decisionServiceFixture();
+    f.options.authorize = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    expect(await createDecisionService(f.options).decide(decisionRequest())).toMatchObject({ error: { code: 'AUTHORIZATION_DENIED', phase: 'dispatch' } });
+    expect(f.budget.release).toHaveBeenCalledOnce();
+    expect(f.transport.send).not.toHaveBeenCalled();
+  });
+  it.each([true, false])('releases a refused marker only with explicit unsent proof (%s)', async (provenUnsent) => {
+    const f = decisionServiceFixture();
+    f.budget.markDispatched.mockResolvedValueOnce({ ok: false, code: 'PROVIDER_UNAVAILABLE', provenUnsent });
+    const result = await createDecisionService(f.options).decide(decisionRequest());
+    expect(result.receipt.budget.state).toBe(provenUnsent ? 'released' : 'pending-reconciliation');
+    expect(f.budget.release).toHaveBeenCalledTimes(provenUnsent ? 1 : 0);
+    expect(f.transport.send).not.toHaveBeenCalled();
+  });
+  it('retains ambiguous admission liability and refuses pre-aborted work before configuration I/O', async () => {
+    const f = decisionServiceFixture();
+    f.budget.admit.mockRejectedValueOnce(new Error('ambiguous durable hold'));
+    expect(await createDecisionService(f.options).decide(decisionRequest())).toMatchObject({ error: { code: 'BUDGET_UNAVAILABLE', retryable: false },
+      receipt: { attempts: 0, budget: { state: 'pending-reconciliation' }, cost: { amountMicroUsd: '2753' } } });
+    const controller = new AbortController();
+    controller.abort();
+    vi.mocked(f.options.resolveAuth).mockClear();
+    expect(await createDecisionService(f.options).decide(decisionRequest(), { signal: controller.signal })).toMatchObject({ error: { code: 'CANCELLED', phase: 'preflight' } });
+    expect(f.options.resolveAuth).not.toHaveBeenCalled();
+    expect(f.budget.release).not.toHaveBeenCalled();
+    expect(f.transport.send).not.toHaveBeenCalled();
+  });
+  it('constructs without I/O and awaits the durable marker before sending', async () => {
+    const f = decisionServiceFixture();
+    let acknowledge!: () => void;
+    f.budget.markDispatched.mockImplementationOnce(() => new Promise((resolve) => { acknowledge = () => resolve({ ok: true }); }));
+    const service = createDecisionService(f.options);
+    expect(f.options.resolveAuth).not.toHaveBeenCalled();
+    const pending = service.decide(decisionRequest({ decision: { kind: 'threshold', field: 'score', op: 'gte', value: 0.5 } }));
+    await vi.waitFor(() => expect(f.budget.markDispatched).toHaveBeenCalledOnce());
+    expect(f.transport.send).not.toHaveBeenCalled();
+    acknowledge();
+    const result = await pending;
+    expect(result).toMatchObject({ ok: true, verdict: { decision: { pass: false } }, receipt: { attempts: 1, budget: { state: 'settled' } } });
+    expect(f.transport.send).toHaveBeenCalledOnce();
+    expect(f.budget.settle).toHaveBeenCalledOnce();
+    expect(f.options.receipts.persist).toHaveBeenCalledOnce();
+  });
+  it.each(['BUDGET_EXHAUSTED', 'BUDGET_UNAVAILABLE'] as const)('distinguishes admission %s without dispatch', async (code) => {
+    const f = decisionServiceFixture();
+    f.budget.admit.mockResolvedValueOnce({ ok: false, code });
+    expect(await createDecisionService(f.options).decide(decisionRequest())).toMatchObject({ ok: false, error: { code, phase: 'admission' },
+      receipt: { attempts: 0, cost: { status: 'not-incurred' }, budget: { state: 'not-admitted' } } });
+    expect(f.transport.send).not.toHaveBeenCalled();
+  });
+  it('retains liability after an ambiguous marker exception and never refunds or sends', async () => {
+    const f = decisionServiceFixture();
+    f.budget.markDispatched.mockRejectedValueOnce(new Error('synthetic-secret-canary'));
+    const result = await createDecisionService(f.options).decide(decisionRequest());
+    expect(result).toMatchObject({ ok: false, error: { code: 'BUDGET_UNAVAILABLE', phase: 'dispatch', retryable: false },
+      receipt: { attempts: 0, dispatch: 'unknown', cost: { amountMicroUsd: '2753' }, budget: { state: 'pending-reconciliation' } } });
+    expect(f.budget.release).not.toHaveBeenCalled();
+    expect(f.transport.send).not.toHaveBeenCalled();
+    expect(JSON.stringify(result)).not.toContain('synthetic-secret-canary');
+  });
+  it('denies unverified authority before acquiring a key or hold', async () => {
+    const f = decisionServiceFixture();
+    f.options.authorize = vi.fn(async () => false);
+    expect(await createDecisionService(f.options).decide(decisionRequest())).toMatchObject({ error: { code: 'AUTHORIZATION_DENIED' } });
+    expect(f.options.resolveAuth).not.toHaveBeenCalled();
+    expect(f.budget.admit).not.toHaveBeenCalled();
+  });
+  it('holds cancellation during admission pending until late unsent proof releases the hold', async () => {
+    const f = decisionServiceFixture();
+    const controller = new AbortController();
+    f.budget.admit.mockImplementationOnce(async (input) => { controller.abort(); return { ok: true, holdId: input.callId }; });
+    const result = await createDecisionService(f.options).decide(decisionRequest(), { signal: controller.signal });
+    expect(result).toMatchObject({ error: { code: 'CANCELLED', phase: 'admission', retryable: false },
+      receipt: { attempts: 0, budget: { state: 'pending-reconciliation' } } });
+    await vi.waitFor(() => expect(f.budget.release).toHaveBeenCalledOnce());
+    expect(result.receipt.budget.state).toBe('pending-reconciliation');
+    expect(f.transport.send).not.toHaveBeenCalled();
+  });
+  it.each([() => 'invalid id', () => { throw new Error('private exception'); }])('returns mandatory safe metadata for invalid generated IDs', async (generateId) => {
+    const f = decisionServiceFixture();
+    const result = await createDecisionService({ ...f.options, generateId }).decide(decisionRequest());
+    expect(result).toMatchObject({ error: { code: 'MESH_UNAVAILABLE', phase: 'preflight' }, receipt: { attempts: 0 } });
+    expect(result.receipt.callId).toMatch(/^[A-Za-z0-9._:-]+$/);
+    expect(result.receipt.correlationId).toMatch(/^[A-Za-z0-9._:-]+$/);
+    expect(f.transport.send).not.toHaveBeenCalled();
+  });
+  it('has independent financial IDs even with the same caller correlation', async () => {
+    const f = decisionServiceFixture();
+    const service = createDecisionService(f.options);
+    const a = await service.decide(decisionRequest({ correlationId: 'fixture-correlation' }));
+    const b = await service.decide(decisionRequest({ correlationId: 'fixture-correlation' }));
+    expect(a.receipt.callId).not.toBe(b.receipt.callId);
+    expect(a.receipt.correlationId).toBe(b.receipt.correlationId);
+    expect(f.transport.send).toHaveBeenCalledTimes(2);
+  });
+});

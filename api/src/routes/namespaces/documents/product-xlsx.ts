@@ -9,7 +9,7 @@
 import { randomUUID } from 'node:crypto';
 import { Hono } from 'hono';
 import { z } from 'zod';
-import { zValidator } from '@hono/zod-validator';
+import { zValidator } from '../../../utils/zod-validator';
 import { queueManager } from '../../../services/queue-manager';
 import { computeXlsxSourceHash } from '../../../services/xlsx-generation';
 import { getDocumentsBucketName, getObjectBytes } from '../../../services/storage-s3';

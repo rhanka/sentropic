@@ -206,12 +206,15 @@ export function createRadarCommitSetup(options: {
   pool: Pool;
   clock: { nowMs: number };
   quotaKey?: string;
+  /** Bind this same mapper on createHttpArtifactApp and createArtifactsAdapter. */
+  mapHostError?: CommitCoordinatorOptions['mapHostError'];
   testObserver?: CommitCoordinatorOptions['testObserver'];
   testPoints?: readonly CoordinatorTestPoint[];
 }): RadarCommitSetup {
   const quotaKey = options.quotaKey ?? 'radar-quota';
   const abandonedAttempts: AbandonedAttempt[] = [];
   const coordinator = createArtifactCommitCoordinator({
+    mapHostError: options.mapHostError,
     executor: createPostgresCommitExecutor(options.pool),
     policy: createParticipantFactory(quotaKey, options.clock),
     nowMs: () => options.clock.nowMs,

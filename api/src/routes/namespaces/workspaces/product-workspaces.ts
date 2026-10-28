@@ -1,6 +1,6 @@
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
-import { zValidator } from '@hono/zod-validator';
+import { zValidator } from '../../../utils/zod-validator';
 import { db } from '../../../db/client';
 import {
   chatGenerationTraces,
@@ -121,7 +121,7 @@ workspacesRouter.put('/:id', requireEditor, zValidator('json', updateWorkspaceSc
 const gateConfigSchema = z.object({
   mode: z.enum(['free', 'soft', 'hard']),
   stages: z.array(z.string()),
-  criteria: z.record(z.object({
+  criteria: z.record(z.string(), z.object({
     required_fields: z.array(z.string()),
     guardrail_categories: z.array(z.string()),
   })).optional(),

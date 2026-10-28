@@ -34,6 +34,9 @@ describe('module capability reporting', () => {
     const input = bindings();
     const mesh = createDegenerateClusterMesh({ ...input, modules });
     expect(mesh.capabilities.modules?.['llm-mesh']).toEqual({ availability: 'gated', state: 'unprobed' });
+    expect(mesh.capabilities.modules?.['llm-mesh/decision']).toEqual({ availability: 'gated', state: 'unprobed' });
+    expect(mesh.capabilities.modules?.['llm-mesh/decision/host']).toEqual({ availability: 'gated', state: 'unprobed' });
+    expect(mesh.capabilities.modules?.['llm-mesh/transport/jev']).toEqual({ availability: 'gated', state: 'unprobed' });
     await modules.probe();
     expect(mesh.capabilities.modules?.['llm-mesh']).toMatchObject({ availability: 'available', state: 'installed' });
     expect(mesh.capabilities.modules?.gateway).toMatchObject({ state: 'unavailable', reason: 'not_installed' });
@@ -48,7 +51,16 @@ describe('module capability reporting', () => {
   it('should create an unprobed public registry without resolving providers', () => {
     const modules = createClusterMeshModules();
     expect(modules.snapshot().gateway).toEqual({ availability: 'gated', state: 'unprobed' });
+    expect(modules.snapshot()['llm-mesh/decision']).toEqual({ availability: 'gated', state: 'unprobed' });
+    expect(modules.snapshot()['llm-mesh/decision/host']).toEqual({ availability: 'gated', state: 'unprobed' });
+    expect(modules.snapshot()['llm-mesh/transport/jev']).toEqual({ availability: 'gated', state: 'unprobed' });
     expect(modules.isEnabled('gateway')).toBe(true);
+    expect(modules.isEnabled('llm-mesh/decision')).toBe(true);
+    expect(modules.isEnabled('llm-mesh/decision/host')).toBe(true);
+    expect(modules.isEnabled('llm-mesh/transport/jev')).toBe(true);
     expect(createClusterMeshModules({ disabled: ['gateway'] }).isEnabled('gateway')).toBe(false);
+    expect(createClusterMeshModules({ disabled: ['llm-mesh/decision'] }).isEnabled('llm-mesh/decision')).toBe(false);
+    expect(createClusterMeshModules({ disabled: ['llm-mesh/decision/host'] }).isEnabled('llm-mesh/decision/host')).toBe(false);
+    expect(createClusterMeshModules({ disabled: ['llm-mesh/transport/jev'] }).isEnabled('llm-mesh/transport/jev')).toBe(false);
   });
 });
