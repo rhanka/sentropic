@@ -6,12 +6,143 @@ import path from 'node:path';
 import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
-import { evaluateExpected, evaluateSelection, workflowExpected, reconcileRun } from './ci-expected-results.mjs';
+import { createHash } from 'node:crypto';
+import { evaluateExpected, evaluateSelection, workflowExpected, reconcileRun, capacityDemand, capacityCapture, wallClockProof } from './ci-expected-results.mjs';
 
 const selected = (job) => ({ job, required: true, selected: true });
 const ran = (job, conclusion) => ({ job, conclusion });
 const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
 const workflow = YAML.parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
+
+test('should select API and E2E gates for global changes on every pull request', () => {
+  assert.doesNotMatch(JSON.stringify(workflow), /decision_fixture_only|feat\/decision-v4-l5/);
+  const expected = workflowExpected(workflow, { changes: { global: 'true' }, event: 'pull_request' });
+  for (const job of ['test-api-unit-integration', 'test-e2e', 'e2e-vscode']) {
+    const members = expected.filter((row) => row.job.startsWith(job));
+    assert.ok(members.length > 0 && members.every((row) => row.selected === true));
+  }
+  assert.equal(expected.find((row) => row.job === 'validate-llm-mesh').selected, true);
+  assert.equal(expected.find((row) => row.job === 'validate-cluster-mesh').selected, true);
+});
+
+test('should require completed PR and main receipts of the same policy within the baseline', () => {
+  const sample = (id, event, head_branch) => ({ policyDigest: 'final-policy', run: {
+    id, event, head_branch, status: 'completed', conclusion: 'success',
+    created_at: '2026-10-26T10:00:00Z', updated_at: '2026-10-26T10:38:08Z',
+  }, jobs: [{ name: 'ci-gate', runner_id: 1, conclusion: 'success',
+    started_at: '2026-10-26T10:38:00Z', completed_at: '2026-10-26T10:38:08Z' }] });
+  const pr = sample(1, 'pull_request', 'topic');
+  const main = sample(2, 'push', 'main');
+  const proof = rows => wallClockProof(rows, 'final-policy');
+  assert.equal(proof([pr, main]).accepted, true);
+  assert.equal(proof([pr, main]).runs[0].wallClockSeconds, 2288);
+  const carried = { name: 'publish-contracts', runner_id: 2, conclusion: 'success',
+    started_at: '2026-10-26T09:50:00Z', completed_at: '2026-10-26T09:51:00Z' };
+  assert.equal(proof([pr, { ...main, jobs: [...main.jobs, carried] }]).accepted, false);
+  assert.equal(proof([pr, { ...main, jobs: [{ ...main.jobs[0], started_at: null }] }]).accepted, false);
+  for (const rows of [[], [pr], [pr, pr], [pr, { ...main, policyDigest: 'old-policy' }],
+    [pr, { ...main, run: { ...main.run, status: 'in_progress' } }],
+    [pr, { ...main, run: { ...main.run, conclusion: 'cancelled' } }],
+    [pr, { ...main, run: { ...main.run, event: 'workflow_dispatch' } }],
+    [pr, { ...main, run: { ...main.run, updated_at: '2026-10-26T10:38:09Z' } }],
+    [pr, { ...main, jobs: [] }]]) assert.equal(proof(rows).accepted, false);
+});
+
+test('should keep validators independent without static capacity mutexes', () => {
+  const concurrency = { group: 'capacity-0', queue: 'max', 'cancel-in-progress': false };
+  assert.equal(capacityDemand({ jobs: { a: { concurrency }, b: { concurrency } } }), 1);
+  assert.equal(capacityDemand({ jobs: { a: { concurrency }, b: {} } }), 2);
+  assert.throws(() => capacityDemand({ jobs: { a: { concurrency: { group: 'capacity-0' } } } }), /queue/);
+  const validators = Object.entries(workflow.jobs).filter(([name]) =>
+    /^validate-/.test(name) && !['validate-publishable-manifests', 'validate-ci-capacity-metrics', 'validate-idp-sync'].includes(name)
+    || name === 'memory-l5-qualification');
+  assert.equal(validators.length, 23);
+  for (const [name, job] of validators) {
+    assert.deepEqual(job.needs, ['changes'], name);
+    assert.equal(job.concurrency, undefined, name);
+  }
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    assert.ok(!job.concurrency?.group.startsWith('ci-capacity-'), name);
+  }
+  assert.equal(workflow.jobs['test-api-unit-integration'].strategy['max-parallel'], 15);
+  assert.equal(workflow.jobs['test-e2e'].strategy['max-parallel'], 5);
+});
+
+test('should run E2E beside API quality checks while retaining promotion barriers', () => {
+  assert.ok(!workflow.jobs['test-e2e'].needs.includes('typecheck-lint-api'));
+  for (const name of ['ci-gate', 'ci-capacity-receipts', 'publish-api-image', 'publish-ui-image']) {
+    assert.ok(workflow.jobs[name].needs.includes('typecheck-lint-api'), name);
+  }
+  assert.equal(workflow.concurrency.group, 'ci-${{ github.ref }}');
+  assert.equal(workflow.concurrency['cancel-in-progress'], "${{ github.event_name == 'pull_request' }}");
+});
+
+test('should allow unrelated npm releases when another package fails', () => {
+  const train = new Set(['publish-llm-mesh', 'publish-llm-gateway', 'publish-cluster-mesh']);
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    if (!name.startsWith('publish-') || name.endsWith('-image') || train.has(name)) continue;
+    const own = name.replace('publish-', 'validate-');
+    const required = name === 'publish-mcp-auth' ? ['changes', own, 'publish-oauth-verify'] : ['changes', own];
+    assert.deepEqual(job.needs, required, name);
+    assert.ok(!job.if.includes('failure()'), name);
+    const lookup = key => key === 'github.ref' ? 'refs/heads/main'
+      : key.startsWith('needs.changes.outputs.') ? 'true'
+      : key === 'needs.publish-oauth-verify.result' ? 'skipped' : 'success';
+    assert.equal(evaluateSelection(job.if, lookup), true, name);
+    assert.equal(evaluateSelection(job.if, key => key === `needs.${own}.result` ? 'failure' : lookup(key)), false, name);
+  }
+});
+
+test('should exercise the real publication DAG on a branch without running registry writers', () => {
+  const changes = Object.fromEntries(Object.keys(workflow.jobs.changes.outputs).map(key => [key, key === 'engram_e2' ? 'false' : 'true']));
+  const context = { changes, ref: 'refs/heads/topic', event: 'workflow_dispatch', inputs: { capacity_publish_dry_run: true } };
+  const selected = workflowExpected(workflow, context).filter(row => row.selected && row.job.startsWith('publish-'));
+  assert.equal(selected.length, 21);
+  for (const { job: name } of selected) {
+    const steps = workflow.jobs[name].steps;
+    const dry = steps.find(step => step.name === 'Dry-run package publication');
+    assert.equal(dry.if, 'inputs.capacity_publish_dry_run == true', name);
+    assert.deepEqual(dry.env, {
+      CI_MANIFEST_CONTEXT: '${{ toJSON(needs.changes.outputs) }}',
+      CI_MANIFEST_EVENT: '${{ github.event_name }}',
+      CI_MANIFEST_BOOTSTRAP_TARGET: "${{ inputs.bootstrap_publish_target || 'none' }}",
+    }, name);
+    assert.equal(dry.run, `make ci-capacity-publish-dry-run PACKAGE=${name.slice(8)} ENV=test-ci-capacity`);
+    for (const step of steps.filter(step => /^Publish |^Qualify published /.test(step.name ?? ''))) {
+      assert.equal(step.if, 'inputs.capacity_publish_dry_run != true', `${name}/${step.name}`);
+    }
+  }
+  const normal = workflowExpected(workflow, { ...context, inputs: { capacity_publish_dry_run: false } });
+  assert.equal(normal.some(row => row.selected && row.job.startsWith('publish-')), false);
+});
+
+test('should bound simultaneous execution slots across dependency joins and matrix caps', () => {
+  assert.equal(capacityDemand({ jobs: { a: {}, b: { needs: ['a'] }, c: {} } }), 2);
+  const matrix = { strategy: { 'max-parallel': 2, matrix: { include: [{ x: 1 }, { x: 2 }, { x: 3 }] } } };
+  assert.equal(capacityDemand({ jobs: { a: matrix, b: { needs: ['a'] }, c: {} } }), 3);
+  assert.throws(() => capacityDemand({ jobs: { a: { needs: ['missing'] } } }), /dependency/);
+  assert.throws(() => capacityDemand({ jobs: { a: { needs: ['b'] }, b: { needs: ['a'] } } }), /cycle/);
+});
+
+test('should capture only selected delivery endpoints and reject cross-head receipts', () => {
+  const run = { id: 77, head_sha: 'abc', event: 'push' };
+  const manifest = { identity: { runId: '77', headSha: 'abc' }, expected: [
+    selected('publish-api-image'), selected('deploy-preprod'), selected('publish-comments'),
+    { job: 'publish-ui-image', selected: false },
+  ] };
+  const capture = capacityCapture(workflow, run, [], manifest);
+  assert.equal(capture.policyDigest, null, 'unattested source files never prove the executed policy');
+  const policyDigest = createHash('sha256').update(JSON.stringify(workflow)).digest('hex');
+  assert.equal(capacityCapture(workflow, run, [], { ...manifest, policyDigest }).policyDigest, policyDigest);
+  assert.throws(() => capacityCapture(workflow, run, [], { ...manifest, policyDigest: 'other-workflow' }), /policy/);
+  assert.deepEqual(capture.endpoints.images, ['publish-api-image']);
+  assert.deepEqual(capture.endpoints.packages, ['publish-comments']);
+  assert.equal(capture.timings.verdictSeconds, null);
+  assert.equal(capacityCapture(workflow, run, [{ name: 'changes', runner_id: 0, conclusion: 'cancelled',
+    started_at: '2026-10-26T15:46:09Z', completed_at: '2026-10-26T15:52:57Z' }], manifest).timings.classificationSeconds, null);
+  assert.deepEqual(capture.dependencies['ci-gate'], workflow.jobs['ci-gate'].needs);
+  assert.throws(() => capacityCapture(workflow, { ...run, head_sha: 'wrong' }, [], manifest), /identity/);
+});
 
 test('should capture every page of the current attempt at the actual gate and fail on API errors', async () => {
   const script = workflow.jobs['ci-gate'].steps.find((step) => step.name === 'Capture the current attempt for the final verdict').with.script;
