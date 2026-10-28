@@ -43,8 +43,12 @@
   - [x] Record BRW3A-EXn reason, impact and rollback before any scope extension.
 
 ## Feedback Loop
-- [ ] Opus r1 P2: prove authority locks survive authorization through COMMIT/ROLLBACK; refuse public artifacts without an explicit grant.
+- [x] Opus r1 P2: seven revocation writers time out with 55P03 after authorization and succeed after COMMIT/ROLLBACK; public artifacts without an explicit grant refuse both issue and consume.
 - [x] R1 regression baseline: 60/63 pass, including all 14 post-authorization lock cases; public-without-grant issuance and both invalid control-origin configurations reproduce the three expected failures (`/tmp/pr806-r1-baseline.log`).
+- [x] R1 mutation proof: temporarily removing the reader's five FOR SHARE clauses fails 10/14 fence cases; the four session/membership cases retain their separate authority locks. All clauses restored before qualification (`/tmp/pr806-r1-mutation.log`).
+- [x] Opus r1 P3-1/2/3/4/5: recheck the package-locked flow; fail closed with 404 on invalid control-origin configuration; test the product credential gate; cache activation storage per namespace with failed-init retry; refresh baseline validation checkboxes.
+- [x] R1 final local qualification with locked dependencies: 154/154 tests in nine suites, including 16 imported PostgreSQL vectors, pass (`/tmp/pr806-r1-suite-locked.log`).
+- [x] Local setup repaired: initial Make preparation stopped before workspace install; `npm ls` exposed missing API-local jose 6.2.4 and an invalid root jose 5.10.0 resolution. Complete the official Make preparation; API typecheck and lint now pass (0 errors, 220 warnings, `/tmp/pr806-r1-quality-locked.log`).
 - [x] Runtime evidence: initial Docker metadata writes required sandbox escalation; first API migration encountered PostgreSQL 57P03 during initial startup. Retry used the same isolated database once ready. Second campaign API health passed and its stack was removed; no production service was contacted.
 - [x] W3.b handoff: `getProductArtifactReader().consume(verifiedSession, {flowId,ticketId,nonce,targetOrigin})` is internal. The content host must derive the session independently and obtain nonce proof from its host-only browser state; sign/set a grant only after a defined, acknowledged result. An uncertain commit throws and requires a fresh flow. No public consume dispatcher exists here.
 - [x] Configuration handoff: `APP_ARTIFACT_HOST_ENABLED=1` plus `APP_ARTIFACT_READER_ENABLED=1` are both required. An approved `APP_ARTIFACT_CONTENT_BASE_DOMAIN` and exact `UI_BASE_URL` must be supplied before a later authorized activation. This branch sets neither flag.
@@ -89,17 +93,17 @@
   - [x] Mount distinct internal reader issuance port under the existing resources author fence.
   - [x] Keep APP-P1 public discovery/tool selection unchanged.
 - [ ] **Lot 3 — Final validation and handoff**
-  - [x] Run scoped activation/store/publication and resources/MCP/auth regression suites: 136/136 in `/tmp/w3a-suite-2.log`.
+  - [x] Run scoped activation/store/publication and resources/MCP/auth regression suites: 154/154 in `/tmp/pr806-r1-suite-locked.log`.
     - [x] `artifacts-reader-activation.test.ts`, `artifacts-host-activation-store.test.ts`, `artifacts-host-publication.test.ts`.
     - [x] `app-artifacts-transport.test.ts`, `app-mcp-registry.test.ts`, `cluster-mesh-resources.test.ts`.
     - [x] `cluster-mesh-namespace-inventory.test.ts`, `cluster-mesh-session.test.ts`, `tests/unit/auth/session-manager.test.ts`.
-  - [x] Baseline API typecheck/lint passed in [run 40621657187](https://github.com/rhanka/sentropic/actions/runs/40621657187); repeat checks and hunk review for r1 corrections.
+  - [x] R1 API typecheck/lint and hunk review passed; baseline CI receipt: [run 40621657187](https://github.com/rhanka/sentropic/actions/runs/40621657187).
   - [ ] Obtain independent reviews on the final implementation and reconcile findings.
   - [x] Pass mechanical scope checks before each commit.
   - [x] Push and create draft PR #806 against `feat/app-cm-integration` with this file as body.
   - [x] Post the execution plan as the first PR comment.
   - [x] Baseline CI green on exact pushed head `db1ea5f59`: [run 40621657187](https://github.com/rhanka/sentropic/actions/runs/40621657187); r1 must pass on its exact pushed head before handoff.
-  - [ ] Run make down and verify no remaining test services; report PR and head.
+  - [x] Run make down and verify no remaining test services; final response carries PR and qualified head.
 
 ## Inherited main qualification record
 
