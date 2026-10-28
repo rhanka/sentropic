@@ -34,6 +34,7 @@
   - [x] Declare reason, impact and rollback before edits in Feedback Loop.
 
 ## Feedback Loop
+- [x] BR84-R2 — Direct deterministic comparison executes main `5016fa36a9da25d22972ae092d13bd4357e65e58` and current SVG/projection/collapse implementations: both languages, all figures, navigation highlights, prepared folds and plans. Compare exact SVG hashes/byte counts plus canonical graph hashes; retain per-case receipts under `.cache/artifact-weight/governance-equivalence.json`.
 - [x] BR84-R1 — Budget now enforces single-file inline resources and CSP `connect-src 'none'` on the measured portable; report includes the owner's non-gating token estimate. Governance ceilings: 5200000 B portable/closure/release and 5120000 B JS, approximately 5% above the r1 measurement (4936759 / 4874332 B).
 - [x] BR84-F5 — 2026-10-27: three force-pushes rewrote history in violation of the owner's merge-only rule. Both histories preserved remotely: `backup/pr801-pre-rebase-ca81d9392` and `backup/pr801-current-7e335423e`. From this point: merges only, no rebase or force-push; merge `origin/main`, keep this PR's plan, then requalify and bind the receipt to a reachable post-merge commit.
 - [x] BR84-EX1 — Owner-authorized Makefile exception: add artifact budget/build/test targets and enable installed-host scope checking for this ENV. Reason: reproducible Make-only validation and pre-21:00 non-Docker commits. Impact: additive tooling lane; no application runtime changes. Rollback: remove the targets and ENV condition.
