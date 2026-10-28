@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import { checkBundle, postgresImage, s5cmdImage } from './bundle-checks.mjs';
 import { runTests } from './run.selftest.mjs';
 import { workflowTests } from './workflow.selftest.mjs';
+import { sessionPreflightTests } from './session-preflight.selftest.mjs';
 const { parseAllDocuments } = createRequire('/tmp/idp-tools/package.json')('yaml');
 const load = file => parseAllDocuments(readFileSync(file, 'utf8')).map(doc => { assert.deepEqual(doc.errors, []); return doc.toJS(); }).filter(Boolean);
 let passed = 0;
@@ -68,6 +69,7 @@ check('reject prod trigger namespace-wide pod logs', () => mutated('prod', o => 
 check('reject s5cmd shell assumption', () => mutated('preprod', o => { cron(o).spec.jobTemplate.spec.template.spec.initContainers[1].command = ['sh', '-c']; }));
 passed += await runTests(load, bundles);
 workflowTests(check, load);
+sessionPreflightTests(check, load);
 if (!process.argv.includes('--output-probe')) check('selftest output contains no fixture audit or summary', () => {
   const result = spawnSync(process.execPath, [fileURLToPath(import.meta.url), '--output-probe'], { encoding: 'utf8' });
   assert.equal(result.status, 0, 'selftest output probe failed');
