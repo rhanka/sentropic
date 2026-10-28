@@ -53,6 +53,7 @@ Mesh `speech/mistral-transcription.ts` with the Voxtral realtime STT adapter (3.
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- `BR13-EX1`: touch forbidden path `packages/llm-gateway/package.json` (one line: admit mesh `^0.32.0` in the `@sentropic/llm-mesh` range). Reason: without it the gateway resolves a nested llm-mesh 0.30.0 while cluster-mesh resolves the workspace 0.32.0, and the API topology check fails `divergent_llm_mesh` (CI: API container unhealthy on head dfcaef72d). Precedent: L9's `8ed01fb01` admitted 0.31.0 the same way. Impact: range widen only, no gateway version bump. Rollback: revert the one line + `make lock-root`.
 - `acknowledge`: mesh 0.30.0 → 0.31.0 collided numerically with L9's merged 0.31.0. Resolved: PR #809 retargeted to `main`, merged `origin/main`, mesh 0.32.0 / cluster 0.23.5 (0.31.0/0.23.4 taken on main); tuple ranges widened to `<0.33.0`; selected fixture + root lock rebound via the sanctioned make pack/refresh path.
 - `acknowledge`: Mistral wire grounded in docs 2026-10-28: realtime `wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-3`, TTS `POST /v1/audio/speech` model `voxtral-mini-tts-3-0`. 2602 generation not served (separate license/price, see the L13 receipt). No live call made; receipt stays blocked.
 
