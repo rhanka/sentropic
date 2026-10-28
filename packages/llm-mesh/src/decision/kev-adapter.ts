@@ -48,7 +48,8 @@ export class KevAdapter implements ProviderAdapter {
     try {
       const result = await this.options.transport.send(encoded.bodyJson, auth.token,
         { signal: context?.signal, timeoutMs: encoded.request.policy?.timeoutMs });
-      if (!result.ok) return { ...failed(result.error.code, 'dispatch'), error: result.error };
+      if (!result.ok) return { ...failed(result.error.code, 'dispatch'), error: result.error,
+        ...(result.body === undefined ? {} : { usage: decodeJevResponse(result.body, encoded.request, this.descriptor).usage }) };
       const snapshot = snapshotBoundedJson(result.body, 65536);
       if (result.servedModelId !== KEV_SERVED_MODEL_ID) return failed('SERVED_IDENTITY_MISMATCH', 'parse');
       if (!snapshot.ok || !isRecord(snapshot.value)) return failed('VERDICT_INVALID', 'parse');

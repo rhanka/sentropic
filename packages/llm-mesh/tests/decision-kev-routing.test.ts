@@ -61,6 +61,13 @@ describe('Kev host admission and native receipts', () => {
       error: { code: 'SERVED_IDENTITY_MISMATCH' }, receipt: { servedEvaluator: null,
         usage: { tokens: { input: { value: 100 } } }, budget: { state: 'pending-reconciliation' } } });
   });
+  it('should retain independent counters when host inventory changes after dispatch', async () => {
+    const f = kevFixture();
+    f.verifyInventory.mockResolvedValueOnce(f.inventory).mockResolvedValueOnce(null as never);
+    expect(await createDecisionService(f.options).decide(f.request)).toMatchObject({ ok: false,
+      error: { code: 'SERVED_IDENTITY_MISMATCH' }, receipt: { servedEvaluator: null, servedModelId: null,
+        usage: { tokens: { input: { value: 100, source: 'provider' } } }, budget: { state: 'pending-reconciliation' } } });
+  });
   it.each([
     { type: 'noul', noul: 2 }, { type: 'choice', noul: 0.75 }, { noul: 0.75 },
     { type: 'noul', noul: 0.75, rationale: 'canary' },
