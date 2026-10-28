@@ -2,6 +2,6 @@
 export type {
   ChatAttachmentKind, ChatAttachmentSource, ChatAttachmentState, ChatComposerAttachmentDraft,
   ChatGeneratedFileCard, ChatRuntimeSummaryWithGeneratedFiles, UnifiedAttachmentKind,
-  UnifiedAttachmentItem, DocumentHost,
+  UnifiedAttachmentItem,
 } from './types.js';
 export { getGeneratedFileFormatLabel } from './file-format.js';
