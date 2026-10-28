@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { checkWorkload, component, object } from './bundle-checks.mjs';
+import { checkActivationImage, checkWorkload, closed, component, object } from './bundle-checks.mjs';
 import { checkConnectivity } from './network.selftest.mjs';
 const { parseAllDocuments } = createRequire('/tmp/content-tools/package.json')('yaml');
 const load = file => parseAllDocuments(readFileSync(file, 'utf8')).map(doc => {
@@ -58,6 +58,23 @@ for (const tier of ['prod', 'preprod']) {
     assert.equal(object(pinned, 'Deployment', 'artifact-content').spec.template.spec.containers[0].image,
       `rg.fr-par.scw.cloud/nc-reg/sentropic-api@sha256:${'a'.repeat(64)}`);
   });
+  for (const workload of ['api', 'artifact-content']) for (const flag of closed) {
+    const enable = values => {
+      object(values, 'Deployment', workload).spec.template.spec.containers[0].env.find(e => e.name === flag).value = '1';
+      return values;
+    };
+    check(`${tier}: reject ${workload} ${flag}=1 on a tag`, () => {
+      assert.throws(() => checkActivationImage(enable(structuredClone(objects))), /opening requires digest-pinned/);
+    });
+    check(`${tier}: digest prerequisite accepts ${workload} ${flag}=1`, () => {
+      const pinned = enable(load(`/rendered/${tier}-pinned.yaml`));
+      checkActivationImage(pinned);
+      for (const image of ['other@sha256:abc', `other@sha256:${'a'.repeat(64)}:tag`]) {
+        object(pinned, 'Deployment', 'artifact-content').spec.template.spec.containers[0].image = image;
+        assert.throws(() => checkActivationImage(pinned), /opening requires digest-pinned/);
+      }
+    });
+  }
   const deny = (name, mutation) => check(`${tier}: reject ${name}`, () => {
     const copy = structuredClone(objects); mutation(copy); assert.throws(() => qualify(copy));
   });
