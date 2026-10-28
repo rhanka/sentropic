@@ -45,6 +45,9 @@ Call execution and result posting are deduplicated across replay; runtime dispos
 The export map lists the exact public subpaths. Runtime has no value import from visual implementations.
 Its optional UI peer supplies normalized TypeScript data contracts; the packed runtime's Node entries
 work without loading Svelte views. Both packages are qualified together for visual consumers.
+TypeScript consumers of the root/high-level conversation, comments and document ports install the UI
+peer for its neutral declarations. Runtime-only wire/transport consumers can use the independent
+`client/*` subpaths. No visual implementation is loaded by the runtime.
 
 ## Release preparation
 
