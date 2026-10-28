@@ -96,6 +96,7 @@
   - [ ] Bind full send/model/context/tools/attachments, history, retry/stop/edit/feedback/steer and active modules.
   - [ ] Enforce visible permission pending/denied state; approval executes/posts once; no adapter, denial and timeout execute zero times.
   - [ ] Preserve host lifetime across remounts; retain explicit default `() => false` authorization.
+  - [x] Conversation view source slice 1 committed within the atomic limit.
 - [ ] **Lot 3 — Parity and packed boundary qualification**
   - [ ] Runtime tests: relocated `transport.test.ts`, `replay.test.ts`, `streamHub.test.ts`, `stream-history-bounds.test.ts`, `stream-throughput.test.ts`, `chat-core-host.spec.ts`.
   - [ ] Runtime tests: relocated `chat-loop-controller.spec.ts`, `chat-session-runtime.test.ts`, `chat-session-hydration.test.ts`, `chat-projection.test.ts`, `projection.golden.spec.ts`.
