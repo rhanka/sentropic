@@ -20,7 +20,7 @@ export const runMemoryU64Corpus = (open: () => Promise<MemoryCampaignHost>) => {
             status: 'accepted', record_id: 'record-u64', cursor: previous, decision_receipt_digest: DIGEST, transaction_receipt_digest: DIGEST }],
         ] as const;
         const updates = values.map(([kind, key, value]) => ({ kind, key: JSON.stringify(key), version: previous, value: memoryJcs(value) }));
-        const empty: NeutralAtomicUnit = { guards: [], records: [], appends: [], updates: [], indexWrites: [], relationships: [], barriers: [], purgeIntents: [] };
+        const empty: NeutralAtomicUnit = { intentHash: 'u64-fixture', guards: [], records: [], appends: [], updates: [], indexWrites: [], relationships: [], barriers: [], purgeIntents: [] };
         await h.handle.transact(options, (tx) => tx.apply({ ...empty, updates }));
         // Qualified sparse high-water fixture: retain the actual kernel root,
         // seed only its prior counters; never enumerate a fabricated history.
