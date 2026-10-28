@@ -7,3 +7,10 @@ decision-kev-provision:
 decision-kev-smoke:
 	@test "$(ENV)" = test-decision-l4 && test -z "$$CI" && test -z "$$GITHUB_ACTIONS"
 	@flock /home/antoinefa/.cache-tmp/sentropic-docker.lock bash scripts/decision/kev-smoke.sh "$(KEV_CACHE)"
+
+.PHONY: decision-kev-smoke-client
+decision-kev-smoke-client:
+	@test "$(ENV)" = test-decision-l4 && test -z "$$CI" && test -z "$$GITHUB_ACTIONS"
+	@docker run --rm --network host -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e KEV_CACHE_HOST \
+		-v "$(CURDIR):/workspace:ro" -v "$(KEV_CACHE):/kev-cache" -v /proc:/kev-host-proc:ro \
+		-w /workspace $(LLM_MESH_NODE_IMAGE) node scripts/decision/kev-smoke.mjs

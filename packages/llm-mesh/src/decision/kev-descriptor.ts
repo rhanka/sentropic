@@ -10,7 +10,10 @@ export const KEV_INVENTORY = freezeDecisionData({
     sha256: '7c2ebed90560522c2801389db482ac1dc4c36d828f201f6074c1d60e433948da', quantization: 'Q8_0' },
   runtime: { repository: 'ggml-org/llama.cpp', revision: 'f1a7dea99aae1623bad10c4ce31fe220033ab7f6',
     release: 'b11954', archiveSha256: '9e43757438fe70dee5ca759c718bf0b17df7760916c3714092a3a63e22e11fbc',
-    backend: 'CPU', platform: 'linux-x64', contextTokens: 2048, parallel: 1, threads: 4 },
+    backend: 'CPU', platform: 'linux-x64', contextTokens: 2048, parallel: 1, threads: 4,
+    threadsBatch: 4, batchTokens: 512, microBatchTokens: 512, gpuLayers: 0, contextShift: false, cacheRamMiB: 0,
+    serverSha256: 'd198b4a5156c34279cf75346451d2e17acafa8188edee4d00e3042a727f01259',
+    serverLibrarySha256: 'e9617b6f102a7301dd9b417726e6972234b6fa68e02b14b9874f689abfd8ba7a' },
   readout: 'llama.cpp-systemone-b11954',
 });
 export const KEV_SERVED_MODEL_ID = 'kev-q8-7c2ebed90560522c-b11954';
