@@ -124,8 +124,9 @@ describe('app private content host', () => {
 
   it('should deny ambiguous grant cookies, cookie flooding and service-worker script fetches', async () => {
     const value = cookie();
-    for (const headers of [{ cookie: value + '; ' + value }, { cookie: value + '; extra=' + 'a'.repeat(8192) },
-      { cookie: value, 'service-worker': 'script' }]) {
+    const cases: Record<string,string>[] = [{ cookie: value + '; ' + value }, { cookie: value + '; extra=' + 'a'.repeat(8192) },
+      { cookie: value, 'service-worker': 'script' }];
+    for (const headers of cases) {
       expect((await request(stable, '/', { headers })).status).not.toBe(200);
     }
     expect(options.blobs.getBlob).not.toHaveBeenCalled();
@@ -168,7 +169,7 @@ describe('content browser activation transport', () => {
       nonce: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/) }));
   });
 
-  it.each([{ origin: 'https://evil.test' }, { origin: '' }, { 'x-artifact-activation': '' },
+  it.each<Record<string,string>>([{ origin: 'https://evil.test' }, { origin: '' }, { 'x-artifact-activation': '' },
     { 'content-type': 'text/plain' }, { cookie: '' }])('should refuse unbound browser activation %j', async headers => {
     expect((await activate(headers)).status).toBe(403);
     expect(options.activate).not.toHaveBeenCalled();

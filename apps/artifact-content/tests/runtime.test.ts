@@ -3,8 +3,10 @@ import { randomUUID } from 'node:crypto';
 import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { request as httpRequest } from 'node:http';
 import { Pool } from 'pg';
 import { S3Client } from '@aws-sdk/client-s3';
+import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '@sentropic/artifacts/mcp-core';
 import { runMigrations } from '../../../api/src/db/run-migrations';
 import { createArtifactReaderActivation } from '../../../api/src/services/artifacts/reader-activation';
 import { createContentRuntime } from '../src/runtime';
@@ -15,13 +17,31 @@ const database = `test_w3b_${randomUUID().replaceAll('-', '')}`;
 let pool: Pool;
 const ends: Promise<void>[] = [];
 const artifactId = randomUUID(), releaseId = randomUUID(), scope = randomUUID();
-const config = { baseDomain: 'content.example.test', profileDigest: 'b'.repeat(64) };
+const config = { baseDomain: 'content.example.test', profileDigest: compileArtifactsProfile(RADAR_ARTIFACTS_PROFILE).profileDigest };
 const origin = `https://${artifactId}.${config.baseDomain}`;
 const session = { subjectId: 'reader', sessionId: 'session', tenantId: 'tenant', workspaceId: 'workspace' };
 const bytes = new TextEncoder().encode('<h1>Private runtime</h1>');
 let key = 'a'.repeat(64);
 const runtime = () => createContentRuntime({ pool, ...config, enabled: () => true,
   signingSecret: () => key, blobs: { getBlob: async () => bytes } });
+
+// Node fetch rewrites Host to its connection authority. This models the actual ingress Host.
+function ingressRequest(url: string, headers: Record<string,string>, body?: string) {
+  return new Promise<Response>((resolve,reject) => {
+    const req = httpRequest(url,{method:body ? 'POST':'GET',headers}, response => {
+      const chunks: Buffer[] = [];
+      response.on('data',chunk => chunks.push(Buffer.from(chunk)));
+      response.on('end',() => {
+        const resultHeaders = new Headers();
+        for (const [name,value] of Object.entries(response.headers)) {
+          for (const entry of Array.isArray(value) ? value : value === undefined ? [] : [value]) resultHeaders.append(name,entry);
+        }
+        resolve(new Response(response.statusCode === 204 ? null : Buffer.concat(chunks),{status:response.statusCode,headers:resultHeaders}));
+      });
+    });
+    req.on('error',reject); req.end(body);
+  });
+}
 
 beforeAll(async () => {
   await admin.query(`CREATE DATABASE "${database}"`);
@@ -106,18 +126,19 @@ describe('durable app content composition', () => {
       if (!address || typeof address === 'string') throw new Error('TCP listener required');
       const local = `http://127.0.0.1:${address.port}`;
       const headers = { host:new URL(origin).host };
-      const started = await fetch(`${local}/_reader/nonce`, {headers});
+      const started = await ingressRequest(`${local}/_reader/nonce`, headers);
+      expect(started.status, await started.clone().text()).toBe(200);
       const { nonce } = await started.json();
       const issued = await createArtifactReaderActivation({ pool,...config }).issue(session,
         {artifactId,releaseId,channel:'stable',targetOrigin:origin,nonce});
-      const activated = await fetch(`${local}/_reader/activate`, {method:'POST',headers: {
+      const activated = await ingressRequest(`${local}/_reader/activate`, {
         ...headers,origin,'content-type':'application/json','x-artifact-activation':'1',cookie:started.headers.get('set-cookie')! },
-      body:JSON.stringify({flowId:issued.flow.flowId,ticketId:issued.ticket.ticketId})});
+      JSON.stringify({flowId:issued.flow.flowId,ticketId:issued.ticket.ticketId}));
       expect(activated.status).toBe(204);
       const readHeaders = {...headers,cookie:activated.headers.get('set-cookie')!};
-      expect(await (await fetch(local,{headers:readHeaders})).text()).toBe('<h1>Private runtime</h1>');
+      expect(await (await ingressRequest(local,readHeaders)).text()).toBe('<h1>Private runtime</h1>');
       writeFileSync(keyFile,'c'.repeat(64));
-      expect((await fetch(local,{headers:readHeaders})).status).toBe(401);
+      expect((await ingressRequest(local,readHeaders)).status).toBe(401);
       expect(send).toHaveBeenCalled();
     } finally {
       await new Promise<void>((resolve,reject) => server.close(error => error ? reject(error) : resolve()));
