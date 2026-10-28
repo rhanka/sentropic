@@ -15,6 +15,7 @@ Sentropic baseline: `ea20bd9c026e9717d911514e763f8911b6981dde`, fetched `origin/
 | --- | --- |
 | [Sources](CHAT_MIGRATION_P0_SOURCES.md) | Every tracked `packages/chat-ui/src/**` source/declaration and destination class. |
 | [Exports](CHAT_MIGRATION_P0_EXPORTS.md) | Every package export-map entry, with declaring-module symbol ownership. |
+| [Symbols](CHAT_MIGRATION_P0_SYMBOLS.md) | Every TypeScript declaration module's named exports/re-export blocks, including component declarations. |
 | [Dependency closure](CHAT_MIGRATION_P0_EDGES.md) | Relative imports/re-exports of all runtime and mixed TypeScript modules. |
 | [Tests/support](CHAT_MIGRATION_P0_SUPPORT.md) | Every other tracked package file, including tests, fixtures, generators and publication support. |
 | [Consumers](CHAT_MIGRATION_P0_CONSUMERS.md) | Every sending-repository tracked package-name/source-path match outside package/spec/plan. |
