@@ -520,11 +520,35 @@ describe('mistral transcript mapping', () => {
     await flush();
     driven.lastSocket().end();
     await pending;
+    // The dead turn resolves with a transport error and no final; the next
+    // turn opens a fresh stream on the still-open session.
+    await driven.write('u2', 100);
+    expect(driven.sockets).toHaveLength(2);
+    await driven.commit('u2', [frameDone('second')]);
     const events = await driven.collect();
-    expect(events.filter((event) => event.type === 'transcript.final')).toHaveLength(0);
+    expect(events
+      .filter((event) => event.type === 'transcript.final')
+      .map((event) => (event as unknown as { utteranceId: string }).utteranceId)).toEqual(['u2']);
     expect(events.filter((event) => event.type === 'error')).toMatchObject([{ reason: 'transport' }]);
-    // The transport is gone: the session is closed, so a ghost turn cannot reuse it.
-    await expect(driven.write('u2', 100)).rejects.toThrowError(/closed/);
+  });
+
+  it('should close while a stream is still opening', async () => {
+    // The provider never answers with session.created: close() must tear the
+    // opening socket down instead of joining a pump that waits forever.
+    const socket = new GateSocket();
+    const session = await openMistralTranscriptionSession(sttConfig, {
+      request: sessionRequest(),
+      admission: admission(),
+      bearerToken: 'bearer-fixture',
+      connect: async () => socket,
+      usage: new RecordingSink(),
+      schedule: () => () => undefined,
+    });
+    const pendingWrite = session.write(frame('u1', 10));
+    await flush(50);
+    await session.close();
+    await expect(pendingWrite).rejects.toMatchObject({ code: 'transport' });
+    expect(socket.closed).toBe(true);
   });
 
   it('should emit no second final when committing after a spontaneous done', async () => {
