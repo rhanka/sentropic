@@ -190,63 +190,10 @@ const hostHistory = phase === 'write'
   ? await hostDriver.transaction({ readOnly: true, deadlineMs: 5000 }, (session) => history.read(session))
   : priorState.hostHistory;
 
-// Host wire bridge: preserve memory values and decimal strings exactly;
-// validation, allocation, durability and authority stay in the kernel.
-const memoryFailure = (error) => {
-  const source = error ?? {};
-  const codes = { denied: 'unauthorized', 'invalid-command': 'invalid-schema', unavailable: 'store-unavailable',
-    'capacity-exceeded': 'limit-exceeded', 'idempotency-conflict': 'digest-conflict',
-    'instance-busy': 'fence-conflict', 'stale-epoch': 'fence-lost', 'terminal-loss': 'fence-lost' };
-  throw Object.assign(new Error(source.message ?? String(error)), { code: codes[source.code ?? ''] ?? source.code });
-};
-const guarded = async (run) => { try { return await run(); } catch (error) { return memoryFailure(error); } };
-const commitIndexKey = (identity) => JSON.stringify(['memory-host-commit-v1', identity]);
-// The frozen substrate persists K7/K8 entries in snake-case wire form
-// while the installed kernel validator checks the camel-case proof model.
-// The bridge translates those two aggregate values in both directions
-// without dropping fields: the full entry rides in `proof` for K8, and
-// for K7 the proof keeps the creation fields while recordDigest maps to
-// the model field.
-const isCaptureKey = (key) => key.startsWith('["memory-capture-idempotency-v1",');
-const isOutcomeKey = (key) => key.startsWith('["memory-admission-outcome-v1",');
-const translateUpdateWrite = (row) => {
-  if (!isCaptureKey(row.key) && !isOutcomeKey(row.key)) return row;
-  const entry = JSON.parse(row.value.data);
-  if (isCaptureKey(row.key)) {
-    if (typeof entry.candidateId === 'string') return row;
-    return { ...row, value: memoryJcs({ candidateId: entry.candidate_id,
-      revision: entry.record_digest ? 2 : 1, recordDigest: entry.record_digest ?? null,
-      createdCursor: entry.cursor,
-      proof: { candidate_id: entry.candidate_id, content: entry.content, cursor: entry.cursor } }) };
-  }
-  if (typeof entry.candidateId === 'string') return row;
-  return { ...row, value: memoryJcs({ candidateId: entry.candidate_id, outcome: entry.status, proof: entry }) };
-};
-const translateAggregateRead = (key, value) => {
-  if (!isCaptureKey(key) && !isOutcomeKey(key)) return value;
-  const parsed = JSON.parse(value.data);
-  if (isCaptureKey(key)) {
-    if (typeof parsed.candidate_id === 'string') return value;
-    return memoryJcs({ ...parsed.proof,
-      ...(parsed.recordDigest ? { record_digest: parsed.recordDigest } : {}) });
-  }
-  if (typeof parsed.candidate_id === 'string') return value;
-  return memoryJcs(parsed.proof);
-};
-// The K7 receipt digest is born with the capture commit, after the
-// registry write, so the bridge rejoins it at read time from the pending
-// control aggregate, which carries the same digest.
-const withCaptureReceipt = async (key, value, readControl) => {
-  const translated = translateAggregateRead(key, value);
-  if (!isCaptureKey(key)) return translated;
-  const entry = JSON.parse(translated.data);
-  if (typeof entry.receipt_digest === 'string') return translated;
-  const candidateId = JSON.parse(key)[1];
-  const control = await readControl(JSON.stringify(['memory-pending-control-v1', candidateId]));
-  if (!control) return translated;
-  const receiptDigest = JSON.parse(control.data ?? control.value?.data ?? '{}').capture_receipt_digest;
-  return typeof receiptDigest === 'string' ? memoryJcs({ ...entry, receipt_digest: receiptDigest }) : translated;
-};
+// Host wire bridge lives in the retained consumer file
+// installed-host-bridge.mjs (host-authored, not installed bytes).
+const kernelRef = { current: null };
+const bridge = createInstalledHostBridge({ meshMemory, hostDriver, schemaName, scope, binding, kernelRef });
 const neutralUnitToPg = (unit) => {
   if (unit.relationships.length || unit.barriers.length || unit.purgeIntents.length)
     throw Object.assign(new Error('unsupported memory effects'), { code: 'invalid-schema' });
