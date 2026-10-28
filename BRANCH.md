@@ -67,6 +67,12 @@
   - [x] BR024-EX1: conductor authorizes union of all three Makefile environment selectors, retaining memory and artifacts entries. Impact: qualification/cleanup routing; rollback selectors together.
 
 ## Plan / Todo (lot-based)
+- [ ] **Lot E10-5 — Final integration refresh**
+  - [x] Merge `origin/feat/engram-e2-integration` at `d08d44b78`, keeping this PR's plan; inherit #808 malformed-proof refusal, intent-hash equality, bounded chain reads and the stable-release packaging fixture fix from #767.
+  - [x] Apply max+1 pack-only `0.24.0-dev.4` above integration `dev.3` and E10 `dev.2`; synchronize the workspace lock and installed lane.
+  - [x] BR10-EX3: owner authorizes `test-mem-e10-fin` in the existing Makefile qualification/cleanup and host scope-check selectors plus installed lane; impact limited to this disposable environment, rollback by removing that selector. Worktree `tmp/worktrees/mem-e10-fin`; API 8791, UI 5191, Maildev 1091; PostgreSQL publishes no host port.
+  - [ ] Rerun installed memory on the clean merged head, retain tarball and receipt hashes with exact profile statuses and no `hostGlue`.
+  - [ ] Push, require completed/success pull_request CI on the exact head, and update #803 with receipt and E11 inputs.
 - [x] **Lot E10-0 — Baseline and constraints**
   - [x] Read `rules/MASTER.md`, `plan/BRANCH_TEMPLATE.md` and the E10 plan line; worktree `tmp/worktrees/mem-e10` verified on `feat/cluster-mesh-engram-e10` at `4bd435349`.
   - [x] Verify the Engram tarball sha256 and the P3 manifest sha256 before any install.

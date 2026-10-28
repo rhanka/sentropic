@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { memoryJcs } from '../../src/engram-memory/codec.js';
+import { describe, expect, it, vi } from 'vitest';
+import { openModuleStorageCanonicalMemoryStoreV1 } from '@sentropic/engram/memory-substrate';
+import type { NeutralAtomicUnit, NeutralWorkLimits } from '../../src/engram-memory/neutral-contract.js';
+import { MemoryCanonicalJsonError, memoryJcs } from '../../src/engram-memory/codec.js';
+import { memoryNeutralFailure } from '../../src/engram-memory/wire-adaptation.js';
 import type { MemoryHostBinding } from '../../src/engram-memory/binding.js';
 import {
   createMemoryNeutralHandle, type MemoryNeutralHostDriver, type MemoryNeutralKernelPort,
@@ -68,6 +71,40 @@ const make = () => {
 };
 
 describe('memory neutral-handle factory refusals', () => {
+  it('should map canonical JSON errors to a terminal schema refusal', () => {
+    expect(() => memoryNeutralFailure(new MemoryCanonicalJsonError()))
+      .toThrow(expect.objectContaining({ code: 'invalid-schema' }));
+  });
+  it.each([
+    ['memory-capture-idempotency-v1', { content: 'body', cursor: '7' }],
+    ['memory-admission-outcome-v1', { candidate_id: 'cand-1' }],
+  ])('should refuse malformed %s through installed Engram without reconciliation', async (prefix, proof) => {
+    const { handle, assembly } = make();
+    const limits = { maxAppends: 10, maxRecords: 10, maxEncodedBytes: 4096 };
+    const unit: NeutralAtomicUnit = { guards: [], records: [], appends: [], relationships: [],
+      barriers: [], purgeIntents: [], indexWrites: [], updates: [{ kind: 'proof',
+        key: JSON.stringify([prefix, 'cand-1']), value: memoryJcs(proof), version: '1' }] };
+    await expect(handle.transact({ limits, grant }, (tx) => tx.apply(unit)))
+      .rejects.toMatchObject({ code: 'invalid-schema' });
+    const opened = await openModuleStorageCanonicalMemoryStoreV1({ handle, grant,
+      scope_binding: { scope, store_id: 'store-1', resolveScope: () => scope },
+      clock: { now: () => '2026-10-28T00:00:00.000Z' }, deadline_at: '2026-10-28T01:00:00.000Z' });
+    expect(opened.ok).toBe(true);
+    if (!opened.ok) throw new Error(opened.error.message);
+    // Inject at the installed commit boundary: public input validation cannot
+    // produce malformed K7/K8 bytes. Exercise its real error/reconcile branch.
+    const store = opened.value as unknown as {
+      commitUnit(operation: string, unit: NeutralAtomicUnit, identity: string, limits: NeutralWorkLimits): Promise<unknown>;
+      reconcile(identity: string): Promise<boolean>;
+    };
+    const reconcile = vi.spyOn(store, 'reconcile');
+    try {
+      expect(await store.commitUnit('capture', unit, 'malformed-proof', limits))
+        .toMatchObject({ ok: false, error: { code: 'INVALID_SCHEMA', retryable: false } });
+      expect(reconcile).not.toHaveBeenCalled();
+      expect(assembly.units).toHaveLength(0);
+    } finally { await opened.value.close(); }
+  });
   it('refuses a missing kernel, driver, binding and an invalid schema name', () => {
     const { driver, kernel } = harness();
     const base = { kernel, binding, driver, schemaName: 'host_schema' };
@@ -98,15 +135,54 @@ describe('memory neutral-handle fence', () => {
     expect(fence).toEqual({ fenceId: 'instance-1', epoch: '3' });
     expect(assembly.getFence()).toEqual(fence);
     expect(state.provisioned).toHaveLength(1);
+    const beforeRefusal = state.verified;
     await expect(handle.acquireFence({ scope, store_id: 'store-1', grant }))
       .rejects.toMatchObject({ code: 'fence-conflict' });
+    expect(state.verified).toBe(beforeRefusal);
     await handle.checkFence(grant, fence);
+    expect(state.verified).toBe(beforeRefusal + 1);
     await expect(handle.checkFence(grant, { fenceId: 'instance-1', epoch: '9' }))
       .rejects.toMatchObject({ code: 'fence-lost' });
     await handle.releaseFence(fence);
     expect(state.released).toBe(1);
     await handle.releaseFence(fence);
     expect(state.released).toBe(1);
+  });
+  it('should refuse a concurrent holder on the same kernel before driver side effects', async () => {
+    const { kernel, driver } = harness();
+    const transaction = vi.spyOn(driver, 'transaction');
+    const first = createMemoryNeutralHandle({ kernel, driver, binding, schemaName: 'host_schema' });
+    const second = createMemoryNeutralHandle({ kernel, driver, binding, schemaName: 'host_schema' });
+    const acquiring = first.handle.acquireFence({ scope, store_id: 'store-1', grant });
+    await expect(second.handle.acquireFence({ scope, store_id: 'store-1', grant }))
+      .rejects.toMatchObject({ code: 'fence-conflict' });
+    const fence = await acquiring;
+    expect(transaction).toHaveBeenCalledTimes(1);
+    await expect(second.handle.acquireFence({ scope, store_id: 'store-1', grant }))
+      .rejects.toMatchObject({ code: 'fence-conflict' });
+    expect(transaction).toHaveBeenCalledTimes(1);
+    await first.handle.releaseFence(fence);
+    const successor = await second.handle.acquireFence({ scope, store_id: 'store-1', grant });
+    await first.handle.releaseFence(fence);
+    await second.handle.checkFence(grant, successor);
+    await second.handle.releaseFence(successor);
+  });
+  it('should recheck ownership and refuse a lost fence', async () => {
+    const { handle, kernel, driver } = make();
+    const fence = await handle.acquireFence({ scope, store_id: 'store-1', grant });
+    const transaction = vi.spyOn(driver, 'transaction');
+    vi.spyOn(kernel.ownership!, 'verify').mockRejectedValueOnce(
+      Object.assign(new Error('ownership lost'), { code: 'stale-epoch' }));
+    await expect(handle.checkFence(grant, fence)).rejects.toMatchObject({ code: 'fence-lost' });
+    expect(transaction).toHaveBeenCalledWith(
+      { isolation: 'serializable', readOnly: true, deadlineMs: 5000 }, expect.any(Function));
+  });
+  it('should clear a failed acquisition reservation', async () => {
+    const { handle, kernel } = make();
+    vi.spyOn(kernel, 'provisionFence').mockRejectedValueOnce(new Error('provision failed'));
+    await expect(handle.acquireFence({ scope, store_id: 'store-1', grant })).rejects.toThrow('provision failed');
+    await expect(handle.acquireFence({ scope, store_id: 'store-1', grant }))
+      .resolves.toEqual({ fenceId: 'instance-1', epoch: '3' });
   });
   it('refuses a second store identity for the bound scope', async () => {
     const parts = harness();
@@ -116,7 +192,8 @@ describe('memory neutral-handle fence', () => {
     const second = createMemoryNeutralHandle({
       kernel: parts.kernel, binding, driver: parts.driver, schemaName: 'host_schema',
     });
-    await first.handle.acquireFence({ scope, store_id: 'store-1', grant });
+    const fence = await first.handle.acquireFence({ scope, store_id: 'store-1', grant });
+    await first.handle.releaseFence(fence);
     await expect(second.handle.acquireFence({ scope, store_id: 'store-2', grant }))
       .rejects.toMatchObject({ code: 'fence-conflict' });
   });
