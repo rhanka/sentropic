@@ -67,6 +67,7 @@
   - [ ] Prove one consume, wrong browser/session/subject, replay, DB expiry and revocation.
   - [ ] Prove release/channel/origin/profile/policy binding and stable-pointer fencing after waits.
   - [ ] Prove commit failure/uncertainty returns no grant and current-session fresh-flow recovery needs no MFA.
+  - [x] Cover PG acquisition/consume failure and wrong flow/ticket association without granting or burning valid state.
   - [ ] Prove authenticated resources route refuses forged identity and stays default-closed.
   - [ ] Record focused red runs before adding each behavior.
 - [ ] **Lot 2 — Trusted host composition**
