@@ -60,6 +60,7 @@
   - [x] Record documentation-only environment, scope and existing source baseline.
 - [ ] **Lot P0a — Inventory and classify**
   - [ ] Inventory all package files/exports, consumers, styling overrides and app widget snippets.
+  - [x] Record appendix: edges inventory.
   - [x] Record appendix: consumers inventory.
   - [x] Record appendix: support inventory.
   - [x] Record appendix: exports inventory.
