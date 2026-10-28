@@ -150,6 +150,33 @@ export {
   type MemoryPostgresHostLedger,
 } from './ledger.js';
 
+export {
+  captureProofToKernel,
+  captureProofToWire,
+  createMemoryNeutralTransaction,
+  isMemoryCaptureKey,
+  isMemoryOutcomeKey,
+  journalBytesWithIntentHash,
+  memoryCommitIndexKey,
+  memoryNeutralFailure,
+  neutralQueryResult,
+  neutralUnitToPg,
+  stripJournalIntentHash,
+  translateMemoryAggregateRead,
+  translateMemoryUpdateWrite,
+  withMemoryCaptureReceipt,
+  type MemoryKernelTransactionPort,
+} from './wire-adaptation.js';
+export {
+  createMemoryNeutralHandle,
+  type CreateMemoryNeutralHandleInput,
+  type MemoryNeutralBoundPort,
+  type MemoryNeutralHandleAssembly,
+  type MemoryNeutralHostDriver,
+  type MemoryNeutralHostSession,
+  type MemoryNeutralKernelPort,
+} from './neutral-handle.js';
+
 /** Reserved trusted-service options for the memory module. No service is required in G1a. */
 export interface MemoryServiceOptions {
   readonly services?: Record<string, never>;
