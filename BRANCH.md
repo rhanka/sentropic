@@ -58,6 +58,7 @@
   - [x] Signed D2-JWS identity, exact action, audience, MFA, lifetime and tenancy mutation vectors authored.
   - [x] Unknown and regressing clock refusal tests authored before implementation.
   - [x] Closed I2 schemas, exact domain bytes and conservative immutable proof deadline primitives implemented.
+  - [x] IdP evidence producer derives identity from current credential, preserves login authentication time and reserves each action issuance.
   - [ ] api/tests/unit/auth/remote-evidence.test.ts: repeated actions/switch, logout/revoke/expiry, wrong sid/version/MFA/audience/key, replay and workload separation.
   - [ ] Closed EvidenceRequest; issuer-derived identity and original authentication time; per-operation EdDSA evidence with pinned audiences.
 - [ ] **Lot 2 — Consent and authorization, RED then GREEN**
