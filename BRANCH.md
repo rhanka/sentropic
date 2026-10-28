@@ -65,8 +65,8 @@
   - [x] Add N8 correspondence; supersede older tree-binding and snapshot-only recovery wording.
   - [x] Record installed-lock DS versions/digests, prerequisites and unqualified publication gates.
 - [ ] **Lot 4 — Docs consolidation and validation**
-  - [ ] Validate fixture JSON, byte hashes, corpus coverage, mount uniqueness/counts, receipt completeness and source references.
-  - [ ] Check diff contains only documentation/fixtures; `make scope-check` before each commit.
+  - [x] Validate fixture JSON, byte hashes, corpus coverage, mount uniqueness/counts, receipt completeness and source references.
+  - [x] Check diff contains only documentation/fixtures; `make scope-check` before each commit.
   - [ ] Complete independent harness review; reconcile findings in the evidence note.
   - [ ] API/UI/E2E behavior tests: no test files changed; future adoption witness commands stay pending.
   - [ ] Create draft PR to main with this exact file as body and add the 3–6 step plan comment.
