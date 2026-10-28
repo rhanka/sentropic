@@ -23,9 +23,10 @@ if [ ! -e "$cache/$archive" ]; then
   mv "$cache/$archive.partial" "$cache/$archive"
 fi
 printf '%s  %s\n' "$runtime_hash" "$cache/$archive" | sha256sum -c -
-if [ ! -d "$cache/llama-$release" ]; then tar -xzf "$cache/$archive" -C "$cache"; fi
-# Compare every extracted regular file to the authenticated archive before use.
-tar --compare -zf "$cache/$archive" -C "$cache"
+# Restore only this pinned runtime from its verified archive, including symlinks.
+tar -xzf "$cache/$archive" -C "$cache"
+export KEV_VERIFY_ROOT="$cache"
+tar -xzf "$cache/$archive" --to-command='cmp - "$KEV_VERIFY_ROOT/$TAR_FILENAME"'
 if [ ! -e "$cache/$file" ]; then
   [ "$(df --output=avail -B1 "$cache" | tail -1)" -gt "$((model_bytes + 1073741824))" ]
   curl -fL --max-time 1800 --continue-at - "https://huggingface.co/$repository/resolve/$revision/$file" -o "$cache/$file.partial"

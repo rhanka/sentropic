@@ -55,9 +55,9 @@
   - [x] Confirm published mesh version 0.31.0; feature bump will be 0.32.0.
 - [ ] **Lot 1 — Immutable runtime and artifact manifest**
   - [x] Pin upstream native CPU release/source/archive; verify provenance, licence and model LFS source before use.
-  - [ ] Add opt-in Make provisioning/smoke targets; one shared cache; bounded process and cleanup.
+  - [x] Add opt-in Make provisioning target; one shared cache; verified native archive contents.
 - [ ] **Lot 2 — Inventory and descriptor**
-  - [ ] Bind file, revision, bytes, quantization, binary, runtime/readout and compilation into evaluator definition.
+  - [x] Bind file, revision, bytes, quantization, runtime archive/readout and compilation into evaluator definition.
   - [ ] Keep shipped candidate unqualified; explicit local qualification composition only.
 - [ ] **Lot 3 — Fixed local transport**
   - [ ] Verify host inventory and single served native model before/after one System One POST.
