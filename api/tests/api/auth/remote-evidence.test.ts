@@ -17,6 +17,10 @@ function setup(role: 'auth-idp' | 'product' = 'auth-idp', allowed = true) {
   return { send, issue, authenticateWorkload };
 }
 describe('RC1 internal evidence boundary', () => {
+  it('should return 426 for an unsupported version and 400 for an invalid kind', async () => {
+    expect((await setup().send(JSON.stringify({ ...body, version: 'remote-action-v2' }))).status).toBe(426);
+    expect((await setup().send(JSON.stringify({ ...body, kind: 'other' }))).status).toBe(400);
+  });
   it('should keep the issuing route isolated in the actual application roots', async () => {
     const { app: product } = await import('../../../src/app');
     const { createIdpApp } = await import('../../../../apps/auth-idp/idp-app');

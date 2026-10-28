@@ -33,6 +33,12 @@ function setup() {
 }
 
 describe('RC1 D2 session evidence', () => {
+  it('should distinguish unsupported versions from invalid kinds', async () => {
+    await expect(setup().issue({ ...request, version: 'remote-action-v2' }))
+      .rejects.toMatchObject({ code: 'unsupported_version' });
+    await expect(setup().issue({ ...request, kind: 'other' }))
+      .rejects.toMatchObject({ code: 'invalid_request' });
+  });
   it('should preserve login lineage for repeated actions and machine switches without MFA', async () => {
     const { issue, state } = setup();
     const first = decodeJwt(await issue(request));
