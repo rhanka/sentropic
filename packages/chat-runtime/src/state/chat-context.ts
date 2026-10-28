@@ -64,24 +64,3 @@ export type ChatContextProvider = {
   context: ReadableStore<ChatContextEntry[]>;
 };
 
-// ---------------------------------------------------------------------------
-// Default no-op provider
-// ---------------------------------------------------------------------------
-
-/**
- * Returns a `ChatContextProvider` whose `context` store always emits `[]`.
- *
- * Suitable as the default prop value for any component that accepts an optional
- * `contextProvider`, or as a test double when context is not relevant.
- */
-export function createNoopChatContextProvider(): ChatContextProvider {
-  return {
-    context: {
-      subscribe(run) {
-        run([]);
-        // No-op unsubscribe — no resources to clean up.
-        return () => undefined;
-      },
-    },
-  };
-}
