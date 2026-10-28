@@ -1,7 +1,10 @@
 import { generateKeyPairSync } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { decodeJwt } from 'jose';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../../../src/db/client';
 import { users, userSessions } from '../../../src/db/schema';
 import { createSession, refreshSession, revokeAllSessions, revokeSession } from '../../../src/services/session-manager';
@@ -10,12 +13,20 @@ import { createRemoteEvidenceIssuer } from '../../../src/services/auth/remote-ev
 
 const keys = generateKeyPairSync('ed25519');
 let userId: string;
+let directory: string;
 beforeEach(async () => {
+  directory = mkdtempSync(join(tmpdir(), 'rc1-login-'));
+  vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
+  vi.stubEnv('REMOTE_ACTION_SESSION_STATE_DIR', directory);
   userId = crypto.randomUUID();
   await db.insert(users).values({ id: userId, email: `rc1-${userId}@example.test`,
     role: 'editor', emailVerified: true });
 });
-afterEach(async () => { await db.delete(users).where(eq(users.id, userId)); });
+afterEach(async () => {
+  await db.delete(users).where(eq(users.id, userId));
+  vi.unstubAllEnvs();
+  rmSync(directory, { recursive: true, force: true });
+});
 async function setup() {
   const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
   const login = (await resolveRemoteLogin(tokens.sessionToken))!;
@@ -30,6 +41,13 @@ async function setup() {
 }
 
 describe('RC1 current issuer session store', () => {
+  it('should refuse restored shared-DB authority after issuer logout', async () => {
+    const { tokens, request, issue } = await setup();
+    const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
+    await revokeSession(tokens.sessionId);
+    await db.insert(userSessions).values(row);
+    await expect(issue(request)).rejects.toMatchObject({ code: 'authentication_required' });
+  });
   it('should preserve sid/version/auth_time/MFA across credential refresh and fresh actions', async () => {
     const { tokens, login, request, issue } = await setup();
     const first = decodeJwt(await issue(request));
