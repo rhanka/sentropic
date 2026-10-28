@@ -5,6 +5,7 @@
 
 ## Scope / Guardrails
 - [x] Base: origin/main 5e986a0b6cd2dfecfbde6a588d30055271124696; branch feat/remote-ctl-rc1; worktree tmp/worktrees/rc1.
+- [x] Integrated origin/main 8d37455df7f019cb42699257d343abbcc7ac2f68 by merge 6d603530d; only BRANCH.md conflicted; Track contains all 370 original event IDs; narrow implementation scope restored.
 - [x] Frozen interface SHA-256: 104e64761f957c12291ad86bc8553359d63bf15135660d7f53ddbdccded17032; plan: 31d6257d70fc87877e4a2076e4cbf0e58ffc33adc24b9d288590e6059f8d4256.
 - [x] ENV=test-rc1 last; API_PORT=8799 UI_PORT=5199 MAILDEV_UI_PORT=1099; shared Docker locks; make down after execution.
 - [x] Make-only; no production changes; no frozen-directory writes; merge only; atomic commits at most 150 lines; no trailers.
@@ -14,24 +15,6 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `.dockerignore`
-  - `.github/workflows/ci.yml`
-  - `Makefile`
-  - `api/Dockerfile`
-  - `e2e/Dockerfile`
-  - `e2e/tests/07_comment_assistant.spec.ts`
-  - `package-lock.json`
-  - `packages/chat-runtime/**`
-  - `plan/64-BRANCH_perf-ci-image-artifacts.md`
-  - `scripts/check-ci-version-filters.sh`
-  - `scripts/ci/ci-expected-results.test.mjs`
-  - `scripts/ci/image-receipt.mjs`
-  - `scripts/ci/image-receipt.test.mjs`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `scripts/ci/publishable-manifests.mjs`
-  - `scripts/test-api-tooling.sh`
-  - `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`
-  - `ui/Dockerfile`
   - `BRANCH.md`
   - `api/src/services/auth/remote-*`
   - `api/src/routes/auth/remote-*`
@@ -45,8 +28,10 @@
   - `deploy/k8s/base/35-auth-idp.yaml`
   - `spec/REMOTE_CONTROL_RC1.md`
 - **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
+  - `packages/**`
   - `api/drizzle/**`
   - `api/drizzle-control/**`
   - `.track/**`
