@@ -56,7 +56,7 @@ test('should keep validators independent without static capacity mutexes', () =>
   const validators = Object.entries(workflow.jobs).filter(([name]) =>
     /^validate-/.test(name) && !['validate-publishable-manifests', 'validate-ci-capacity-metrics', 'validate-idp-sync'].includes(name)
     || name === 'memory-l5-qualification');
-  assert.equal(validators.length, 23);
+  assert.equal(validators.length, 24);
   for (const [name, job] of validators) {
     assert.deepEqual(job.needs, ['changes'], name);
     assert.equal(job.concurrency, undefined, name);

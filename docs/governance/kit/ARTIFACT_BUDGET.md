@@ -71,7 +71,7 @@ static-import sums, missing files and unused deployed data. The baseline build
 deliberately retains the governance corpus and must fail the typical JS budget.
 
 `check-governance-equivalence.mjs` executes both the pinned main renderer
-(`5016fa36a9da25d22972ae092d13bd4357e65e58`) and the current renderer with identical
+(`96dbc2120103cc800713d28dc397da2823ff6627`) and the current renderer with identical
 dependencies (lockfile equality is required). It compares exact generated SVG
 hashes/byte counts and canonical groups/nodes/edges hashes, in FR and EN, for
 every figure, navigation highlight, prepared fold and overview routing plan.
