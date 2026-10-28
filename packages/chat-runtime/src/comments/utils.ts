@@ -86,3 +86,29 @@ export const buildCommentThreads = <T extends CommentItem>(
 
   for (const [threadId, threadItems] of map.entries()) {
     map.set(
+      threadId,
+      [...threadItems].sort((left, right) =>
+        String(left.created_at ?? '') < String(right.created_at ?? '') ? -1 : 1,
+      ),
+    );
+  }
+
+  const threads = Array.from(map.entries()).map(([threadId, threadItems]) => {
+    const last = threadItems[threadItems.length - 1];
+    const root = threadItems[0] ?? null;
+    return {
+      id: threadId,
+      sectionKey: last?.section_key || null,
+      count: threadItems.length,
+      lastAt: last?.created_at ?? '',
+      preview: last?.content ?? '',
+      authorLabel: last ? presentation.getCommentAuthorLabel(last) : '',
+      status: (root?.status ?? 'open') as 'open' | 'closed',
+      assignedTo: root?.assigned_to ?? null,
+      rootId: root?.id ?? threadId,
+      createdBy: root?.created_by ?? '',
+    };
+  });
+  threads.sort((left, right) => (left.lastAt < right.lastAt ? 1 : -1));
+  return { threads, map };
+};
