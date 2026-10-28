@@ -55,3 +55,77 @@ export async function createConversationFixture(overrides: Partial<ConversationR
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
     requests.push({ method: request.method, path: new URL(request.url).pathname,
+      body: ['POST', 'PATCH'].includes(request.method) ? await request.clone().json().catch(() => null) : null });
+    return server.request(request);
+  };
+  const transport = createDefaultTransport('http://chat.test');
+  const created = await server.request('/chat/sessions', {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ sessionTitle: 'Parity' }),
+  });
+  const { sessionId } = await created.json() as { sessionId: string };
+  let source: FixtureEventSource;
+  const streamClient = createStreamHub({
+    getBaseUrl: () => 'http://chat.test', getAuthState: () => true, eventTarget: new EventTarget(), reconnectDelayMs: 0,
+    eventSourceFactory: () => { source = new FixtureEventSource(); return source as unknown as EventSource; },
+  });
+  const documents: DocumentHost = {
+    async uploadFile(draft, file) {
+      uploads.push(file.name);
+      if (failUpload) { failUpload = false; throw new Error('Upload failed'); }
+      const documentId = `doc:${draft.id}`;
+      docs.set(documentId, file);
+      return { ...draft, documentId, state: 'ready' };
+    },
+    async deleteUploadedFile(id) { docs.delete(id); },
+    resolveAttachmentSrc: (attachment) => attachment.previewUrl ?? `http://chat.test/documents/${attachment.documentId}/content`,
+    async downloadGeneratedFile(card) {
+      const response = await fetch(card.downloadUrl ?? `http://chat.test/documents/${card.jobId}/content`);
+      if (!response.ok) throw new Error('Download failed');
+    },
+  };
+  const host = { ...transport, streamClient };
+  const checkpointRequest = async (path: string, body?: unknown) => {
+    const response = await fetch(`http://chat.test/chat/sessions/${sessionId}/checkpoints${path}`, body === undefined ? undefined : {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error(`Checkpoint request failed: ${response.status}`);
+    return response.json();
+  };
+  const checkpointHost: CheckpointHost = {
+    fetchCheckpoints: async () => (await checkpointRequest('')).checkpoints,
+    createCheckpoint: async (_sessionId, anchorMessageId) => { await checkpointRequest('', { anchorMessageId }); },
+    restoreCheckpoint: async (_sessionId, checkpointId) => { await checkpointRequest(`/${checkpointId}/restore`, {}); },
+    isMutatingTool: (name) => name.endsWith('_update'),
+  };
+  const runtimeOptions: ConversationRuntimeOptions = {
+    host, documents, checkpointHost,
+    localTools: {
+      isLocalToolName: (name) => name === 'render_mermaid', isLocalToolRuntimeAvailable: () => true,
+      isLocalToolPermissionRequired: (error) => error instanceof LocalToolPermissionRequiredError,
+      getPermissionRequest: (error) => (error as LocalToolPermissionRequiredError).request,
+      async executeLocalTool(id, name, args) {
+        if (platform.nativePermissions && !nativeDecisions.has(id)) throw new LocalToolPermissionRequiredError({ requestId: id, toolName: name, origin: 'fixture' });
+        if (nativeDecisions.get(id) === false) throw new Error('Native permission denied');
+        executions.push({ id, name, args }); return { rendered: true };
+      },
+      async decideLocalToolPermission(id, value) { decisions.push({ id, value }); nativeDecisions.set(id, value.startsWith('allow')); },
+      postLocalToolResult: transport.postLocalToolResult,
+    },
+    ...overrides,
+  };
+  let runtime = createConversationRuntime(sessionId, runtimeOptions);
+  await runtime.initialize();
+  return {
+    get runtime() { return runtime; }, transport, deps, server, requests, executions, decisions, docs, uploads, sessionId,
+    failNextUpload() { failUpload = true; },
+    async restart() { runtime.dispose(); runtime = createConversationRuntime(sessionId, runtimeOptions); await runtime.initialize(); },
+    emit(streamId: string, type: string, data: Record<string, unknown>, sequence: number) {
+      source!.publish(type, { streamId, data, sequence });
+    },
+    async replay() {
+      const events = await deps.stream.readSessionEvents({ sessionId, fromSeq: 0, userId: 'user_test' });
+      for (const event of events) source!.publish(event.eventType, { streamId: event.streamId, data: event.data, sequence: event.sequence });
+    },
+    dispose() { runtime.dispose(); streamClient.reset(); unregisterLocalTool('render_mermaid'); globalThis.fetch = originalFetch; },
+  };
+}
