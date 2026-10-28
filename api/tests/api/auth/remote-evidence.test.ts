@@ -1,0 +1,57 @@
+import { Hono } from 'hono';
+import { describe, expect, it, vi } from 'vitest';
+import { createRemoteEvidenceRouter } from '../../../src/routes/auth/remote-evidence';
+
+const body = { version: 'remote-action-v1', kind: 'evidence-request',
+  actionId: 'AAAAAAAAAAAAAAAAAAAAAA', targetDigest: 'a'.repeat(64), operation: 'input',
+  payloadDigest: 'b'.repeat(64), nonceId: 'nonce', sid: 'login', sessionVersion: 1,
+  sessionCredential: 'private-credential' };
+function setup(role: 'auth-idp' | 'product' = 'auth-idp', allowed = true) {
+  const issue = vi.fn(async () => 'compact.signed.evidence');
+  const authenticateWorkload = vi.fn(async () => allowed);
+  const app = new Hono().route('/api/v1/auth/session/remote-action-evidence',
+    createRemoteEvidenceRouter({ role, authenticateWorkload, issue }));
+  const send = (value = JSON.stringify(body), headers = {}) => app.request(
+    'https://idp/api/v1/auth/session/remote-action-evidence', { method: 'POST',
+      headers: { 'content-type': 'application/json', ...headers }, body: value });
+  return { send, issue, authenticateWorkload };
+}
+describe('RC1 internal evidence boundary', () => {
+  it('should issue evidence only on the authenticated internal IdP route', async () => {
+    const { send, issue } = setup();
+    const result = await send();
+    expect(result.status).toBe(200);
+    expect(await result.text()).toBe('compact.signed.evidence');
+    expect(result.headers.get('cache-control')).toBe('no-store');
+    expect(issue).toHaveBeenCalledWith(body);
+  });
+  it('should refuse product-role issuance before reading the body', async () => {
+    const { send, issue, authenticateWorkload } = setup('product');
+    expect((await send('invalid')).status).toBe(403);
+    expect(issue).not.toHaveBeenCalled();
+    expect(authenticateWorkload).not.toHaveBeenCalled();
+  });
+  it('should authenticate workload before body parsing', async () => {
+    const { send, issue } = setup('auth-idp', false);
+    expect((await send('invalid')).status).toBe(401);
+    expect(issue).not.toHaveBeenCalled();
+  });
+  it.each([{ origin: 'https://app' }, { cookie: 'session=browser' }])
+    ('should refuse browser requests %j', async (headers) => {
+      expect((await setup().send(JSON.stringify(body), headers)).status).toBe(403);
+    });
+  it.each(['{"actionId":"x","actionId":"y"}', JSON.stringify({ ...body, sub: 'forged' }),
+    'x'.repeat(8193)])('should reject ambiguous, asserted-identity or oversized bodies', async (value) => {
+      const { send, issue } = setup();
+      expect([400, 413]).toContain((await send(value)).status);
+      expect(issue).not.toHaveBeenCalled();
+    });
+  it('should return content-free errors without reflecting credentials', async () => {
+    const { send, issue } = setup();
+    issue.mockRejectedValue(new Error('private-credential'));
+    const result = await send();
+    expect(result.status).toBe(503);
+    expect(await result.text()).not.toContain('private-credential');
+    expect(result.headers.get('cache-control')).toBe('no-store');
+  });
+});
