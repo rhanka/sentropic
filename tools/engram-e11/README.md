@@ -1,85 +1,36 @@
-# E11 tuple preparation and receiving handoff
+# E11 E2 tuple and receiving handoff
 
-This is preparation for plan E11, not final E2 acceptance. **gr-conductor owns final manifest generation.** The tooling emits `e2-host-tuple/v1` with `status: PENDING` and refuses `--require-final`. It cannot publish or record an ACK. The author does not change package versions, producer archives, artifacts sources or existing locks.
+Owner instruction advances PR #818 from preparation to E2 generation on integration `32dd911be19f0874459a1b4e697d7175bb6b433f` (tree `9dcd865487004e28649f3d68c842f328cc4d1952`), after #821/#803. Plan E11, line 120, requires the E10 host tuple. The L4 MCP 0.22.0 candidate belongs to separate L5 work and is excluded. Historical P3 bytes are retained only as lane evidence; they do not bind this E2 tuple to that L4 candidate.
 
-## Candidate observation
+| Input | Exact identity |
+| --- | --- |
+| Engram | Published `0.21.3`, gitHead `8b93ba6b834f83fddbcf76091054efea2e188cf1` |
+| Engram SHA-256 | `32d47df1880cf5c43b0f16145f75aebeda5fd341d8b1317f3b89acc428bbd05b` |
+| Engram integrity | `sha512-eGoBIutpeISKgN4HOS3NSIj7K6rMtT6Y/FbBvoXMykLu0wbaKEaO1pjCLDxVFfdA6Zlj9zg2v2Ft7DIr5Vf7aw==` |
+| cluster-mesh | Pack-only `0.24.0-dev.6`, source `eb79034df17ed5e2cb2ddcc3288b9b8bbb682120`; packed inputs unchanged at integration |
+| Mesh SHA-256 | `ff79088e02574f9e17e16deb52f9380453255ed79f5b69c8b17d156a25233194` |
+| Mesh integrity | `sha512-A20DTkaNo++aXw/A+K5Hyg9SHRlX6ZefoWhpXGF1BQnXONThsSLT6yKeWq3QwZb/iIAznLqlW0F0zs7/ENbFFg==` |
+| Neutral contract | `1.0.0`, `memory-binding-v1`, 4,012 JCS bytes in `neutral-contract-1.0.0.jcs.json` |
+| Contract bytes SHA-256 | `55f8d4572db7100e4dba0a135331cdeb1186458711f0c7202e5f0cd93a6dc759` |
+| Domain-separated digest | `sha256:dd0cccbd6e5e29766fbc9c48351ffe58f5b0a3162152f5ff02da0798c3244fee` |
+| Node image | `node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6` |
 
-The current #803 `E11 inputs` supersede the historical dev.4 hashes in the [Opus r3 inventory](/home/antoinefa/src/sentropic/.h2a/reviews/pr803_opus_r3.md). Its 21 categories remain the input inventory. The preparation freezes E10 snapshot `afd283ec8054abb4bb16dd74428bb51bea136fcc`, qualified source `cf1e537a8810a49d50d442169474f3b893103e6f`, tree `8b14cca07a28aeaf644bd05b718120a9b29c9321`. The preparation recipe mechanically verifies no packed-source drift between those commits, then archives committed sources rather than the live worktree.
+The generator binds all 21 inventory categories, source, archives, recipe/adaptation, retained consumer/workspace locks, migrations, host history and runtime/type closure. See `DRY-RUN.md` for campaign hashes, the tuple hash and the pending inventory. Status stays PENDING until evidence permits final acceptance. The checker rejects changed bytes, manual profile promotion and `--require-final`.
 
-| Candidate | Version | Archive SHA-256 |
-| --- | --- | --- |
-| Engram | 0.22.0 | `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10` |
-| cluster-mesh | 0.24.0-dev.5 | `11a8fe858d1abecde50e003c191a8600db4880f4382c8ce3ffa2bb44c09df8e4` |
+Run from this worktree with `rtk make -f Makefile -f tools/engram-e11/e11.mk TARGET ENV=test-mem-e11`. Docker targets must be wrapped with `rtk flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make ...`; run locked `make down ENV=test-mem-e11` after each Docker step. Targets: `memory-e11-prepare`, one-time `memory-e11-lock`, `memory-e11-installed`, `memory-e11-snapshot`, `memory-e11-test`, `memory-e11-generate`, `memory-e11-check`, `memory-e11-retain`. Generation/check use no network. Retained bundle: `.tmp/engram-e2-host-tuple/e11-current/`; check it using absolute `E11_INPUT` before the final ENV argument.
 
-Both SHA-512 integrities and package identities are checked against `candidates.mjs` and the retained receipt/consumer lock. A file-list hash alone is insufficient. All five profiles retain `declared`; equivalence retains `not-covered`. No E9/E10 coverage is inferred from CI success.
+The initial E2 lock is created once before qualification. Subsequent installation removes consumer node_modules, runs `npm ci --ignore-scripts --no-audit --no-fund` and compares the retained lock before/after. The explicit staging transform changes only E10 consumer version/archive assertions; original scripts and transformed bytes are retained. No package archive, package source, repository lock or artifacts source is modified. Installed proof covers capture/completion/admission/read, two-process reopen, original replay, typed refusals and K7 hydration faults. It does not run Stage B.
 
-## Reproduction
+## Receiving checklist
 
-Run from the E11 worktree. The prepare target reads the local retained artifacts, review, reservation, E10 consumer closure and GitHub PR/CI metadata. It requires the pinned git objects and retained E10 files. It performs no install. The subsequent targets use the exact Node 24 image, no network, no dependency installation, no service stack and no exposed ports.
-
-```sh
-rtk make -f Makefile -f tools/engram-e11/e11.mk memory-e11-prepare ENV=test-mem-e11
-rtk flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make -f Makefile -f tools/engram-e11/e11.mk memory-e11-test ENV=test-mem-e11
-rtk flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make down ENV=test-mem-e11
-rtk flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make -f Makefile -f tools/engram-e11/e11.mk memory-e11-generate ENV=test-mem-e11
-rtk flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make down ENV=test-mem-e11
-rtk flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make -f Makefile -f tools/engram-e11/e11.mk memory-e11-check ENV=test-mem-e11
-rtk flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make down ENV=test-mem-e11
-```
-
-Output: `tmp/engram-e11/e2-host-tuple.v1.json`; stdout reports its exact SHA-256 and every PENDING reason. Retain the complete input directory alongside the tuple before cleaning the worktree. Its paths are relative and every referenced file has a byte count and SHA-256. Archive SHA-512 integrity and selected member hashes bind installed runtime/types, C6 inventory/declarations and migration SQL. The workspace lock and retained consumer lock are hashed independently. Canonical output sorts object keys, preserves arrays and ends with one LF; there is no timestamp or host path in the tuple.
-
-`rtk make -f Makefile -f tools/engram-e11/e11.mk memory-e11-retain ENV=test-mem-e11` copies that complete directory to the repository-local `.tmp/engram-e2-host-tuple/e11-preparation/`. To check the retained copy, pass its absolute directory as `E11_INPUT` before the final ENV argument. The bundle includes the actual installed closure so verification remains possible after the E10 worktree disappears.
-
-The checker rebuilds all observations and byte hashes, compares the complete canonical tuple and rejects edited statuses, missing inputs, changed files, wrong archive identity or mismatched installed files. `memory-e11-check E11_CHECK_FLAGS=--require-final ENV=test-mem-e11` must fail during preparation. The candidate configuration is deliberately frozen; new producer/mesh bytes require an explicit configuration update and new qualification, not silently replacing files under the same tuple.
-
-The test target exercises missing/tampered files, escaping paths, integrity substitution, manual profile promotion, premature final acceptance and reproducibility against the actual retained candidates. These are local E11 checks; the existing repository CI does not execute this make fragment or the installed qualification lane.
-
-## Input inventory and expected changes
-
-`PENDING` means acceptance is still open, including slots whose bytes may remain unchanged but must be re-attested on the successor tuple. `VERIFIED-CANDIDATE` means the current observation was bound; it grants no release acceptance.
-
-| # | Slot | Preparation state / reason |
-| --- | --- | --- |
-| 1 | Installed receipt | PENDING: regenerate after final producer/mesh rerun |
-| 2 | Backend package/source/head/tree | PENDING: intentHash carriage changes source and qualified identity |
-| 3 | Engram archive/version/integrity | PENDING: owner merge of rhanka/engram#410 and exact 0.21.3 published bytes |
-| 4 | Mesh archive/version/integrity | PENDING: successor pack-only dev carrying producer intentHash |
-| 5 | P3 manifest | VERIFIED-CANDIDATE: frozen bytes, no artifacts edit |
-| 6 | Consumer package | PENDING: new exact archive references |
-| 7 | Consumer/workspace locks | PENDING: successor retained locks, npm ci only |
-| 8 | Lane script | PENDING: successor assertions/receipt metadata |
-| 9 | Lane type probe | PENDING: compile against producer intentHash declarations |
-| 10 | Lane recipe | PENDING: successor version assertions; retained-lock install |
-| 11 | Campaign log | PENDING: new installed qualification |
-| 12 | Campaign status | PENDING: new exit=0/cleanup=0 |
-| 13 | pg 8.22.0 identity | VERIFIED-CANDIDATE: installed package.json hash plus lock integrity |
-| 14 | Node 24/PostgreSQL images/runtime | PENDING: re-attest exact images/runtime on successor |
-| 15 | Contract/C6/migrations/history | PENDING: final standalone C6 1.0.0 bytes and agreement |
-| 16 | Five profile identities/statuses | PENDING: declared/not-covered is not qualified evidence |
-| 17 | Host glue / host tables | VERIFIED-CANDIDATE: no glue, full tuple coverage |
-| 18 | Adaptation | PENDING: replace host intentHash formula, recheck lossless K7 |
-| 19 | Refusals/operations/runtime/type closure | PENDING: repeat against final bytes |
-| 20 | Lot 6 disposition | VERIFIED-CANDIDATE: verbatim #803 section; missing source, option (a) |
-| 21 | CI | PENDING: exact final E10/E11 heads and completed/success |
-
-The top-level `backend`, `neutralContract`, `locks`, `nodeImage` and `profiles` follow the documented receiving vocabulary (retained as `format.md` with the receiving validator). The dev backend version, null neutral-contract path/hash and empty qualified `profiles` intentionally fail that validator's final-delivery gate. All five required names and their declared digests remain in `requiredProfiles` and slot 16. This preparation must not be submitted as a complete host delivery.
-
-The C6 source inventory announces `contracts/engram-memory-neutral-contract-v1.d.ts`, version 1.0.0, but that member is absent from dev.5. The tuple records the actual emitted `dist/engram-memory/neutral-contract.d.ts` hash separately and leaves `finalBytesSha256: null`. Neither that candidate hash nor the semantic `contractDigest` substitutes for the final standalone declaration bytes.
-
-## Receiving checklist — future finalization only
-
-- [ ] Stabilize #803 rerun and Engram owner merge/publication of 0.21.3. Confirm the exact version rather than inferring precedence from today's 0.22.0 candidate. Obtain registry metadata, archive SHA-256/SHA-512 integrity, source/tag/provenance and producer intentHash contract.
-- [ ] Produce the new mesh pack-only dev with unchanged producer-supplied intentHash carriage. Qualify actual byte carriage, K7 created/completed receipts and original replay through installed Engram. Retain the successor source, archive, receipt, scripts/probe/recipe, refusal/hydration evidence and closures.
-- [ ] Resolve E9's five-profile qualification gap on the same shipped handle and exact tuple, with Engram read/write and separate host maintenance authority. Preserve profile name/version/digest identities and real statuses; require qualified evidence, never relabel the current receipt.
-- [ ] Freeze C6 asset `engram-memory-neutral-contract@1.0.0`, final standalone declaration path and exact byte SHA-256. Verify packaged bytes, standalone declaration closure, producer agreement, unchanged semantic identity and full migration/history identities.
-- [ ] Read and hash the current [RESERVATION.md](/home/antoinefa/src/sentropic/.tmp/engram-e2-host-tuple/RESERVATION.md). Recheck registry occupancy and release ownership: **0.24.0 is reserved**. If occupied, obtain a new authorized reservation before changing qualified package/lock bytes. Development candidates are never published.
-- [ ] Under conductor authority, prepare the exact stable reserved-version archive and retained install locks before final qualification. Any version, lock, C6 or archive change invalidates affected evidence and requires regeneration/rerun; do not stamp versions after qualification.
-- [ ] Install in a fresh consumer outside repository resolution with `npm ci --ignore-scripts --no-audit --no-fund` using the retained lock and exact local archives. Compare lock hashes before/after; no `npm install --package-lock-only` or lock re-resolution. Retain root/consumer locks and all runtime/type closure byte hashes. Recheck Node 24/PostgreSQL images, driver identity, migrations and reopen hostHistory independently.
-- [ ] **gr-conductor generates the final manifest**, retains every referenced artifact, and checks its exact SHA-256. Convert to final acceptance only with a reviewed final specification and stable qualified inputs; this preparation generator intentionally cannot emit FINAL.
-- [ ] Obtain explicit **producer C9 ACK** naming final tuple SHA-256, both package versions/integrities, C6 1.0.0 final-byte SHA-256, source identity and qualification receipt. Sending a tuple is not an ACK.
-- [ ] Obtain independent **Sentropic/L5 receiving ACK** naming the identical tuple SHA-256, installed lock/closure hashes and receiving verification. Record owner, time and evidence reference; distinguish received, checked and accepted states.
-- [ ] Prepare the **final main PR** from the integration branch with all acceptance evidence. Merge upstream changes only; never rebase. Require completed/success CI on its exact head. A later commit requires new exact-head CI and affected qualification; retain ACK freshness against the final tuple.
-- [ ] After release-owner authorization and acceptance, merge through the final main PR and use only the repository CI publication path (`make publish-cluster-mesh`, trusted OIDC, package tag `cluster-mesh@0.24.0` or an explicitly renewed reservation). Never publish manually or publish a dev candidate.
-- [ ] **Verify published bytes**: download the exact registry versions and dist metadata through the approved make lane; recompute SHA-256/SHA-512 integrity, compare archive/member bytes, C6 final declaration, source/tag/provenance and retained locks with the accepted tuple. Clean-install those published bytes and verify closure. Any mismatch blocks receiving completion and invalidates the associated acceptance.
-- [ ] Retain publication run/tag, registry metadata, byte-verification receipt and both ACK references with the final tuple. If publication changed any tuple identity, gr-conductor regenerates it and both parties ACK that same new hash. Tear down only the owned test environment with `make down`.
+- [x] Merge integration into #818, never rebase; preserve E11 scope and all environment selectors.
+- [x] Resolve Engram 0.21.3 publication, exact SRI/SHA-256, intentHash producer carriage and neutral contract byte/digest pair.
+- [x] Retain dev.6 archive bound by SHA-256 and source; exclude the L4 0.22.0 candidate from E2.
+- [ ] Require five qualified profiles on the exact installed tuple. Integration still marks all 23 Stage B cases blocked on E7-fenced-writers; three also require E7 host reads. E9/host-binding owner must supply a passing zero-skip campaign; preserve all five declared name/version/digest identities meanwhile.
+- [ ] Resolve the distinct standalone C6 declaration. Dev.6 announces `contracts/engram-memory-neutral-contract-v1.d.ts` but omits it and states final bytes pending. The producer JCS contract is resolved; its hash does not establish that missing declaration. C6 packaging owner must supply packaged bytes, standalone compilation and agreement.
+- [ ] Generate the stable reserved-version archive and qualify its exact locks/bytes before release acceptance. `0.24.0` remains the reservation; development candidates are never published. Recheck occupancy and ownership before changing identities.
+- [ ] Integration → main PR: conductor integrates #818 and prepares the final PR, with completed/success CI on its exact head and all qualification gaps resolved.
+- [ ] CI-only publication: release owner uses the repository trusted-publisher workflow for `cluster-mesh@0.24.0` under the reservation. No publication is authorized by this E11 task.
+- [ ] Published-byte recheck: retrieve exact registry bytes/metadata; compare SHA-256/SRI, contract, migrations, source/tag/provenance and clean installed closure. Any changed identity requires a new tuple and affected qualification.
+- [ ] Producer C9 ACK: producer explicitly names the same tuple hash, versions/integrities, contract pair, source and installed receipt.
+- [ ] Receiving ACK: independent Sentropic/L5 receiver explicitly names that identical tuple hash and checked installed locks/closure. Delivery, CI and producer ACK do not imply receiving acceptance.
