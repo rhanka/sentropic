@@ -1,0 +1,36 @@
+{
+  "createdAt": "2026-10-28T04:30:00Z",
+  "kind": "l13-g-cloud-receipt",
+  "lot": "L13",
+  "spec": "r3 §7 (L13 row: Mistral STT/TTS), §10 tuple E",
+  "status": "blocked",
+  "note": "L13 adds the Mistral realtime STT profile (voxtral-mini-transcribe-realtime-3, one provider stream per client turn) and the Mistral TTS selection binding (voxtral-mini-tts-3-0, pinned preset voices) with recorded fixtures only. No live provider call exists in tests or CI, no credential is stored, and no audio payload is persisted by the adapter. Until every item below is real — measured against the pinned provider/region with authorized credentials inside the Q3 budget — this receipt stays blocked, never claimed.",
+  "profiles": {
+    "mistral-voxtral-realtime-3": {
+      "modelId": "voxtral-mini-transcribe-realtime-3",
+      "modelRevision": "unpinned — blocked: pin the served snapshot at admission, never latest",
+      "placement": "cloud-relay",
+      "wire": "wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-3, session.update with session object (turn_detection off), input_audio.append/end, transcription.text.delta/done. Committed per-turn input_audio.end finishes the provider stream; the next turn reopens."
+    },
+    "mistral-tts": {
+      "modelId": "voxtral-mini-tts-3-0",
+      "modelRevision": "unpinned — blocked: same pinning rule",
+      "placement": "cloud-relay",
+      "wire": "POST https://api.mistral.ai/v1/audio/speech with model/input/voice_id/response_format; selection data only in mesh, HTTPS at composition"
+    }
+  },
+  "price": {
+    "observation": "not observed — blocked: no contractual quote recorded; STT meters audio-seconds, TTS meters characters (separate priced dimensions via L8)",
+    "pinnedRevision": "missing — blocked: price() must be pinned at admission via the L8 gateway before any cloud call"
+  },
+  "missing": [
+    { "item": "provider credentials and entitlement for the Mistral account", "status": "blocked" },
+    { "item": "served model snapshot (revision) for the STT profile and the TTS binding", "status": "blocked" },
+    { "item": "region for the transcription and synthesis calls (none documented; explicit region refused fail-closed)", "status": "blocked" },
+    { "item": "retention terms for the selected endpoint/account", "status": "blocked" },
+    { "item": "live partial/final measurement against representative audio (never synthetic-only)", "status": "blocked" },
+    { "item": "durable accounting of the qualification spend inside the 5 USD/day, 20 USD total ceiling", "status": "blocked" },
+    { "item": "separate §10 qualification for tuple E (Mistral Voxtral Realtime 3 + Voxtral TTS 3)", "status": "blocked" },
+    { "item": "budgeted real qualification campaign for the L13 gate (endpoint/final mapping, license/price separation)", "status": "blocked" }
+  ]
+}
