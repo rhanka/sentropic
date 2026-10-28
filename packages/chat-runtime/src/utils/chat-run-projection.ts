@@ -206,3 +206,21 @@ export const mergeProjectionHistoryEvents = (
     const sequence = asFiniteSequence(event.sequence);
     if (sequence === null) continue;
     bySequence.set(sequence, event);
+  }
+  for (const event of incoming) {
+    const sequence = asFiniteSequence(event.sequence);
+    if (sequence === null) continue;
+    bySequence.set(sequence, event);
+  }
+  return [...bySequence.values()].sort((left, right) => left.sequence - right.sequence);
+};
+
+export const appendLiveProjectionEvent = (
+  current: readonly ProjectionStreamEvent[],
+  incoming: ProjectionStreamEvent,
+): ProjectionStreamEvent[] => {
+  const sequence = asFiniteSequence(incoming.sequence);
+  if (sequence === null) return [...current];
+  if (current.some((event) => event.sequence === sequence)) return [...current];
+  return [...current, incoming].sort((left, right) => left.sequence - right.sequence);
+};

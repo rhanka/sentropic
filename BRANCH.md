@@ -48,7 +48,7 @@
 - [x] **Lot 0 — Baseline and scope**
   - [x] Read repository/harness rules, frozen P0 boundary and P1 review; mechanical branch check passes.
 - [ ] **Lot 1 — Runtime package**
-  - [ ] Runtime source import progress: 9940 lines from #819 snapshot `70db7a8dc`.
+  - [ ] Runtime source import progress: 10080 lines from #819 snapshot `70db7a8dc`.
   - [ ] Import #819 runtime sources, tests, scripts, manifest and license without consumer changes.
   - [ ] Verify typecheck/tests against unchanged main and retain the package ownership/export tests.
 - [x] **Lot 2 — Publication wiring**
