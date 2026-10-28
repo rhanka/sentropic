@@ -478,3 +478,143 @@ export const getLocalToolDefinitions = (): LocalToolDefinition[] => {
 const now = () => Date.now();
 
 export const localToolsStore = writable<LocalToolsState>({
+  available: hasExtensionRuntimeMessaging(),
+  tools: getLocalToolDefinitions(),
+  executions: {},
+});
+
+const upsertExecution = (
+  toolCallId: string,
+  patch: Partial<LocalToolExecution> & Pick<LocalToolExecution, 'name' | 'args'>,
+) => {
+  localToolsStore.update((state) => {
+    const runtime = getRuntime();
+    const current = state.executions[toolCallId];
+    const next: LocalToolExecution = {
+      toolCallId,
+      name: patch.name,
+      args: patch.args,
+      status: patch.status ?? current?.status ?? 'pending',
+      result: patch.result ?? current?.result,
+      error: patch.error ?? current?.error,
+      permissionRequest: patch.permissionRequest ?? current?.permissionRequest,
+      streamId: patch.streamId ?? current?.streamId,
+      updatedAt: now(),
+    };
+    return {
+      ...state,
+      available: hasExtensionRuntimeMessaging(),
+      tools: getRuntimeToolDefinitions(runtime).map((tool) => ({ ...tool })),
+      executions: {
+        ...state.executions,
+        [toolCallId]: next,
+      },
+    };
+  });
+};
+
+type ExecuteLocalToolOptions = {
+  streamId?: string;
+};
+
+const getRuntimeWithMessaging = (): LocalToolsAdapter => {
+  const runtime = getRuntime();
+  const sendMessage = runtime?.sendMessage;
+  if (!runtime?.id || !sendMessage) {
+    throw new Error(
+      'Local tool runtime is unavailable outside extension context.',
+    );
+  }
+  return runtime;
+};
+
+export async function executeLocalTool(
+  toolCallId: string,
+  name: LocalToolName,
+  args: unknown,
+  options?: ExecuteLocalToolOptions,
+): Promise<unknown> {
+  const runtime = getRuntimeWithMessaging();
+  const sendMessage = runtime.sendMessage as NonNullable<
+    LocalToolsAdapter['sendMessage']
+  >;
+
+  upsertExecution(toolCallId, {
+    name,
+    args,
+    streamId: options?.streamId,
+    status: 'executing',
+    error: undefined,
+  });
+
+  try {
+    const response = await sendMessage({
+      type: 'tool_execute',
+      toolCallId,
+      name,
+      args,
+    });
+
+    if (response?.permissionRequest) {
+      const request = response.permissionRequest as LocalToolPermissionRequest;
+      upsertExecution(toolCallId, {
+        name,
+        args,
+        streamId: options?.streamId,
+        status: 'awaiting_permission',
+        permissionRequest: request,
+        error: undefined,
+      });
+      throw new LocalToolPermissionRequiredError(request);
+    }
+
+    if (!response?.ok) {
+      const reason = response?.error ?? 'Local tool execution failed.';
+      upsertExecution(toolCallId, {
+        name,
+        args,
+        streamId: options?.streamId,
+        status: 'failed',
+        error: reason,
+      });
+      throw new Error(reason);
+    }
+
+    upsertExecution(toolCallId, {
+      name,
+      args,
+      streamId: options?.streamId,
+      status: 'completed',
+      result: response.result,
+      permissionRequest: undefined,
+      error: undefined,
+    });
+    return response.result;
+  } catch (error) {
+    if (error instanceof LocalToolPermissionRequiredError) {
+      throw error;
+    }
+    const reason = error instanceof Error ? error.message : String(error);
+    upsertExecution(toolCallId, {
+      name,
+      args,
+      streamId: options?.streamId,
+      status: 'failed',
+      permissionRequest: undefined,
+      error: reason,
+    });
+    throw error;
+  }
+}
+
+export async function decideLocalToolPermission(
+  requestId: string,
+  decision: LocalToolPermissionDecision,
+): Promise<void> {
+  const runtime = getRuntimeWithMessaging();
+  const sendMessage = runtime.sendMessage as NonNullable<
+    LocalToolsAdapter['sendMessage']
+  >;
+  const response = await sendMessage({
+    type: 'tool_permission_decide',
+    payload: {
