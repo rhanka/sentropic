@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: artifact-content
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: sentropic
+    app.kubernetes.io/component: artifact-content
+  ports:
+    - name: http
+      port: 8791
+      targetPort: http
