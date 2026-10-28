@@ -28,6 +28,7 @@
   import type { CommentContextType } from '$lib/utils/comments';
   import CommentsPanel from '@sentropic/chat-ui/comments/CommentsPanel.svelte';
   import { createCommentRuntime } from '@sentropic/chat-runtime/comments';
+  import { getCommentAuthorLabel, getMentionLabel } from '@sentropic/chat-ui/comments';
   import type { CommentThreadSummary } from '@sentropic/chat-ui/comments';
   import { createSentropicCommentHost } from '$lib/chat/comment-host-adapter';
   import ChatPanelShell from '@sentropic/chat-ui/components/ChatPanelShell.svelte';
@@ -1273,7 +1274,7 @@
 
   // commentHost: sentropic-wired CommentHost, instantiated once at mount.
   const commentHost = createSentropicCommentHost((key: string) => $_(key));
-  const commentRuntime = createCommentRuntime(commentHost);
+  const commentRuntime = createCommentRuntime(commentHost, { getCommentAuthorLabel, getMentionLabel });
 
   const loadSessionDocs = async () => {
     if (!sessionId) return;

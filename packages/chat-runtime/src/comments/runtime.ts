@@ -1,9 +1,10 @@
 import type { CommentHost } from './host.js';
 import { createCommentState } from './state.js';
+import type { CommentPresentation } from './utils.js';
 
 /** Hosts retain comment state and update subscriptions above view instances. */
-export function createCommentRuntime(host: CommentHost) {
-  const state = createCommentState(host);
+export function createCommentRuntime(host: CommentHost, presentation: CommentPresentation) {
+  const state = createCommentState(host, presentation);
   let unsubscribe: (() => void) | undefined;
   let contextKey = '';
   let disposed = false;

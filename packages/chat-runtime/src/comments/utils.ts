@@ -1,4 +1,3 @@
-import { getCommentAuthorLabel, getMentionLabel } from '@sentropic/chat-ui/comments';
 /**
  * comments/utils.ts
  *
@@ -9,9 +8,11 @@ import { getCommentAuthorLabel, getMentionLabel } from '@sentropic/chat-ui/comme
 
 import type { MentionMember, CommentItem, CommentThreadSummary } from '@sentropic/chat-ui/comments';
 
-
-
-
+/** Pure presentation helpers are supplied by the composing host. */
+export type CommentPresentation = {
+  getCommentAuthorLabel(comment: Pick<CommentItem, 'created_by' | 'created_by_user'>): string;
+  getMentionLabel(member: MentionMember): string;
+};
 export const isCommentByUser = (
   comment: Pick<CommentItem, 'created_by' | 'created_by_user'>,
   user: { id?: string | null; email?: string | null } | null | undefined,
@@ -42,24 +43,26 @@ export const getMentionCandidate = (
 export const getMentionMatches = <T extends MentionMember>(
   members: readonly T[],
   query: string,
+  presentation: CommentPresentation,
   limit = 6,
 ): T[] => {
   const needle = query.trim().toLowerCase();
   if (!needle) return members.slice(0, limit);
   return members
-    .filter((member) => getMentionLabel(member).toLowerCase().includes(needle))
+    .filter((member) => presentation.getMentionLabel(member).toLowerCase().includes(needle))
     .slice(0, limit);
 };
 
 export const findAssignedMentionFromText = <T extends MentionMember>(
   text: string,
   members: readonly T[],
+  presentation: CommentPresentation,
 ): T | null => {
   if (!text || members.length === 0) return null;
   const haystack = text.toLowerCase();
   let best: { member: T; index: number } | null = null;
   for (const member of members) {
-    const label = getMentionLabel(member).toLowerCase();
+    const label = presentation.getMentionLabel(member).toLowerCase();
     const index = haystack.lastIndexOf(`@${label}`);
     if (index >= 0 && (!best || index > best.index)) {
       best = { member, index };
@@ -72,6 +75,7 @@ export const findAssignedMentionFromText = <T extends MentionMember>(
 
 export const buildCommentThreads = <T extends CommentItem>(
   items: readonly T[],
+  presentation: CommentPresentation,
 ): { threads: CommentThreadSummary[]; map: Map<string, T[]> } => {
   const map = new Map<string, T[]>();
   for (const item of items) {
@@ -98,7 +102,7 @@ export const buildCommentThreads = <T extends CommentItem>(
       count: threadItems.length,
       lastAt: last?.created_at ?? '',
       preview: last?.content ?? '',
-      authorLabel: last ? getCommentAuthorLabel(last) : '',
+      authorLabel: last ? presentation.getCommentAuthorLabel(last) : '',
       status: (root?.status ?? 'open') as 'open' | 'closed',
       assignedTo: root?.assigned_to ?? null,
       rootId: root?.id ?? threadId,
