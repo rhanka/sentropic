@@ -60,7 +60,9 @@ it does not claim recipient acknowledgement or external consumer qualification.
 Neutral visual contracts remain available through public type exports. Runtime imports neutral model
 utilities, never view implementations. Conversation snapshots/commands are type-only ports exported
 by `@sentropic/chat-runtime/conversation`; visual files have no runtime value imports. The UI's runtime
-peer is optional. Record/task rendering helpers and the empty context fallback belong to chat-ui.
+peer is optional. Runtime requires the UI's existing neutral model utility seam as a peer;
+its compatible range covers published UI 0.34.1 and the separated UI 1.0.0. Record/task rendering
+helpers and the empty context fallback belong to chat-ui.
 P1a temporarily retains the existing conversation wiring to preserve a green step;
 P1b completes that boundary without a migration flag or fallback implementation.
 

@@ -42,6 +42,7 @@
   - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] BR1-R3-runtime-peer: neutral model helpers are runtime value dependencies, so runtime requires its compatible UI peer; the visual package keeps its runtime peer type-only/optional. Main UI 0.34.1 plus corrected runtime typecheck and 440 tests pass in the precursor worktree.
 - [x] BR1-R3-checks: runtime 440, visual 533 unit/206 DOM tests and both typechecks pass after ownership changes; refresh locks for optional runtime/type-peer metadata.
 - [x] BR1-R3-scope: main integration's make scope-check reports only inbound main paths; mechanical harness scope against origin/main passes without widening the authored scope.
 - [x] BR1-R3-main: merge origin/main without rebase; keep this PR plan on conflict; Track event bytes are identical on both parents.
@@ -208,4 +209,4 @@
 - [ ] **Lot 5 — Draft handoff**
   - [x] Open draft sequence #817 (P1a) and #819 (P1b), both targeting main; post each execution plan.
   - [x] Run `make down ENV=test-chat-p1`; `make ps` shows no services.
-  - [ ] Require CI completed/success on each exact submitted head; GitHub-hosted runner queues remain pending, with no success claimed.
+  - [x] Previous #819 head `55d903bb7` completed/success in CI run `40698362118`; current correction head requires its own completed/success run before conductor integration.
