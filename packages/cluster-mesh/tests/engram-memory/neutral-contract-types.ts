@@ -1,4 +1,4 @@
-// Compiled by binding-compatibility.spec.ts with the installed 0.21.1 declarations.
+// Compiled by binding-compatibility.spec.ts with the installed 0.21.3 declarations.
 import type {
   ModuleStorageMemoryStoreOptionsV1 as InstalledOptions,
   openModuleStorageCanonicalMemoryStoreV1,

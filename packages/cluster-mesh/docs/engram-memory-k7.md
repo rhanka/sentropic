@@ -1,5 +1,7 @@
 # Engram memory K7 carriage and version rule
 
+Historical E10 evidence below records dev.5/0.22.0 as run; E11 regenerates the final tuple on cluster-mesh `0.24.0-dev.6` + Engram `0.21.3` (+ L4 `0.22.0` candidate when re-qualified).
+
 Cluster-mesh `0.24.0-dev.5` carries every producer K7 field unchanged inside
 the kernel proof, including `receipt_digest` and unknown extensions. Only
 `record_digest` is stored separately as `recordDigest`, because completion may

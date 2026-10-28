@@ -5,7 +5,7 @@
 - [ ] Retained batch objective below: integrate the approved memory lots into one batch branch and qualify one exact head before conductor merge.
 
 ## Scope / Guardrails
-- [x] Base refreshed through `feat/engram-e2-integration` at `52936121a` (#815 merged); branch `feat/cluster-mesh-engram-e10`; final worktree `tmp/worktrees/mem-e10-fin`; PR #803 against `feat/engram-e2-integration`; merge only, never rebase.
+- [x] Base refreshed through `feat/engram-e2-integration` at `7abd70fd3` (#821 merged); branch `feat/cluster-mesh-engram-e10`; final worktree `tmp/worktrees/mem-e10-fin`; PR #803 against `feat/engram-e2-integration`; merge only, never rebase.
 - [ ] Engram candidate is read-only: `@sentropic/engram` `0.22.0` tarball `/home/antoinefa/src/graphify-wt-mcpl4/.graphify/scratch/l4-r4-artifacts/sentropic-engram-0.22.0.tgz`, sha256 `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10`; P3 manifest sha256 `1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730`. No write in that repository.
 - [x] Candidate cluster-mesh tarball is built from installed-lane source head `cf1e537a8` at committed workspace version `0.24.0-dev.5` with no version stamping; SHA-256 `11a8fe858d1abecde50e003c191a8600db4880f4382c8ce3ffa2bb44c09df8e4` matches #815's retained archive. Subsequent receipt/plan commits do not change packed bytes.
 - [x] Host driver closure is the installed `pg` package plus the installed cluster-mesh bytes; no sibling source resolution, no workspace links.
@@ -24,6 +24,7 @@
   - `BRANCH.md`
   - `packages/cluster-mesh/**`
   - `package-lock.json`
+  - `package.json` (inherited #821 Engram 0.21.3 security override)
   - `PLAN.md`
   - `tools/memory-mcp-l5/**`
   - `spec/evidence/memory-mcp-l5/l0-freeze.json` (inherited #792 P3 evidence)
@@ -68,6 +69,8 @@
   - [x] BR024-EX1: conductor authorizes union of all three Makefile environment selectors, retaining memory and artifacts entries. Impact: qualification/cleanup routing; rollback selectors together.
 
 ## Plan / Todo (lot-based)
+- [x] **Lot E10-7 — Merge #821**: retain #821 code, cluster-mesh `0.24.0-dev.6` and Engram `0.21.3`; preserve the historical E10 receipt/docs without rerunning the installed lane.
+  - [x] E11 regenerates the final tuple on cluster-mesh `0.24.0-dev.6` + Engram `0.21.3` (+ L4 `0.22.0` candidate when re-qualified); E10 dev.5/0.22.0 evidence remains historical.
 - [ ] **Lot E10-6 — Lossless K7 installed rerun after #815**
   - [x] Merge `origin/feat/engram-e2-integration` at `52936121a` (#815), retaining the E10 plan and adopting pack-only `0.24.0-dev.5`; no rebase or force-push.
   - [x] Add `installed-hydration.mjs` to the clean consumer: created/completed K7 divergence and missing-receipt refusal by installed Engram `0.22.0`, with matching positive reopen and direct/transactional byte checks; in-memory fault injection is separate from the lane's real PostgreSQL operations.

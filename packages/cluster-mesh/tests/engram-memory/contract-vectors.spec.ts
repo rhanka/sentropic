@@ -27,7 +27,7 @@ import {
   nextU64,
 } from '../../src/engram-memory/codec.js';
 
-const PINNED_CONTRACT_DIGEST = 'sha256:dff737ced37d801ef48bb4d7088fc4fbc92021d21fe2034ff33ea643b49bec28';
+const PINNED_CONTRACT_DIGEST = 'sha256:dd0cccbd6e5e29766fbc9c48351ffe58f5b0a3162152f5ff02da0798c3244fee';
 
 const PINNED_PROFILE_DIGESTS = [
   'sha256:507fd5a8f5d68a8c2b99c05bee5a23c0ded47d79532ca5edf34ea08c1919958a',
@@ -157,9 +157,12 @@ describe('memory semantic assets', () => {
   it('should bind the packaged manifest bytes to the pinned digest', async () => {
     const asset = JSON.parse(
       await readFile(new URL('../../assets/storage/engram-memory/contract-manifest.json', import.meta.url), 'utf8'),
-    ) as { contractDigest: string; canonicalManifest: string };
+    ) as { contractDigest: string; canonicalManifest: string; canonicalManifestSha256: string };
     expect(asset.contractDigest).toBe(PINNED_CONTRACT_DIGEST);
     expect(asset.canonicalManifest).toBe(canonicalizeMemoryJcs(memoryContractManifest()));
+    expect(Buffer.byteLength(asset.canonicalManifest)).toBe(4012);
+    expect(asset.canonicalManifestSha256).toBe('55f8d4572db7100e4dba0a135331cdeb1186458711f0c7202e5f0cd93a6dc759');
+    expect(createHash('sha256').update(asset.canonicalManifest).digest('hex')).toBe(asset.canonicalManifestSha256);
   });
 
   it('should record the neutral profile claims in the equivalence receipt', async () => {
