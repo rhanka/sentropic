@@ -1,10 +1,10 @@
-# Feature: P1b — Inject conversation state and finish runtime separation
+# Feature: P1a — Extract the Sentropic chat runtime foundation
 
 ## Objective
 - [ ] Complete P1 under `spec/CHAT_MIGRATION_P0*.md`: preserve supported behavior while separating Sentropic runtime from the injected conversation view.
 
 ## Scope / Guardrails
-- [x] Branch `feat/chat-convergence-p1b`, based on P1a `d9a849e5d`; worktree `tmp/worktrees/chat-p1b`; draft predecessor #817 targets main.
+- [x] Branch `feat/chat-convergence-p1`, based on `origin/main`; worktree `tmp/worktrees/chat-p1`.
 - [x] Environment `test-chat-p1`; API_PORT=8796 UI_PORT=5196 MAILDEV_UI_PORT=1096; ENV always last.
 - [x] Serialize Docker work with `/home/antoinefa/.cache-tmp/sentropic-docker.lock`; run `make down` after each step.
 - [x] Make targets only; no Python, dev tests, clean-all, rebase, force-push, publication or merge.
@@ -42,15 +42,7 @@
   - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
-- [x] BR1-R2-consensus: two eligible complementary peers approve exact source 54df2098; final source differs only in verification documentation. Runtime 451/451 and UI DOM 206/206 pass after corrections; final installed pair passes its public HTTP/permission matrix.
-- [x] BR1-checks: package gates pass (201 manifest/CI tests, runtime 451, UI 524 unit/206 DOM, cowork-bridge 27); app typecheck/lint, all 489 app tests and production web/Chrome/VSCode build pass. Post-correction full runtime/DOM regression and final installed hash report pass.
-- [x] BR1-R2-scope: clarify P1 fixture/package completion versus the frozen P2 production cutover; the app continues to consume the extracted controller until P2.
-- [x] BR1-R2-package: export the comment runtime factory at the root, remove orphaned formatting docs and restrict the necessary chat-server test dependency link to test tasks; cleanup removes only that owned link.
-- [x] BR1-R2-types: document the supported high-level TypeScript UI/runtime pair and independent wire subpaths; optional peer does not introduce visual value imports. A new contracts-package redesign is outside the frozen P1 pair.
-- [x] BR1-R2-packed: strengthen clean qualification with installed public runtime behavior: real HTTP payload/commands, subscription remount, default denial/denial/timeout and approved exactly-once result posting; no command stubs.
-- [x] BR1-R2-native-timeout: bound native permission waits too; expiry denies through the real controller and disposal cancels expiry. Add native timeout/disposal proofs with zero execution or successful result.
-- [x] BR1-R2-native: accept the native permission review finding; settle approved only after execution, preserve preflight grants for native continuation, record native denial and guard stale native callbacks after disposal. Keep only the latest resolved status plus pending prompts.
-- [x] BR1-M1: merge P1a review corrections from `8525b730d`; resolve the runtime export map by keeping explicit optional-module/high-level entrypoints and removing the wildcard; Track log remains unchanged.
+- [x] BR1-cowork-pack: strict packed/source manifest guard reproduced a forbidden cowork-bridge file dependency in the changed desktop consumer; replace it with published-compatible ^0.1.1, retaining the already reserved desktop 0.2.1 release.
 - [x] BR1-R1: boundary review APPROVE; packaging findings accepted: include LICENSE, make the temporary UI type peer optional and explicitly enumerate runtime subpaths; align the host export test and handle string-valued export entries.
 - [x] BR1-R1-check: corrected runtime export test 23/23 and guarded pack pass; regenerate optional-peer metadata; P1a UI/runtime source behavior remains unchanged.
 - [x] BR1-EX1: allow additive Makefile runtime build/typecheck/test/pack targets and necessary chat dependency wiring; impact is package tooling only; rollback restores existing targets and removes runtime targets.
@@ -71,16 +63,12 @@
   - [x] Read master/workflow/testing rules, P0 ownership/closure and P1 row.
   - [x] Create requested worktree and pass `harness check branch`.
   - [x] Fix environment, Docker lock, scope and atomic commit policy.
-- [x] **Lot 1 — Runtime package and physical ownership**
-  - [x] Refresh root/UI lockfiles for cowork-bridge 0.1.2 and its runtime peer after registry verification.
-  - [x] Migrate cowork-bridge's public SSE dependency/guidance to runtime; registry 0.1.1 verified before reserving 0.1.2.
-  - [x] Remove optional-module and tool-normalization runtime symbols from the visual export snapshot; document the injected conversation/comment and composer role props.
-  - [x] Inject pure comment presentation helpers through the host composition; runtime comments have no value imports from visual code.
+- [ ] **Lot 1 — Runtime package and physical ownership**
   - [x] Create `packages/chat-runtime/package.json`, `tsconfig.json` and public entrypoints.
   - [x] Move client transport/replay/history/stream hub and their tests without behavior changes.
   - [x] Migrate client consumers to public runtime subpaths; reserve chat-ui 1.0.0 above registry 0.34.1; runtime registry returns 404.
-  - [x] Remove client entries from the visual export snapshot; retarget moved host export assertions to explicit runtime entries.
-  - [x] Move draft/attachment/projection/controller/session/checkpoint/local-tool implementation and tests; delete original implementations.
+  - [x] Remove client entries from the visual export snapshot; retarget moved host export assertions to the runtime wildcard entry.
+  - [ ] Move draft/attachment/projection/controller/session/checkpoint/local-tool implementation and tests; delete original implementations.
   - [x] Relocate the existing draft/attachment/projection/controller/session implementation and core parity tests unchanged.
   - [x] Relocate local-tool store, checkpoints, steer/scope helpers and principal-scoped view-marker persistence with existing tests.
   - [x] Reference neutral visual contracts through public type exports; the runtime imports no visual implementation.
@@ -93,103 +81,25 @@
   - [x] Resolve visual export failures: remove relocated checkpoint export, migrate consumers and align major-version assertions; keep consumer scan strict.
   - [x] Gate runtime typecheck/tests/pack in the existing chat CI lane; register the guarded runtime pack target without publishing.
   - [x] Reserve cowork-desktop 0.2.1 above registry 0.2.0 for its runtime import migration; visual unit tests 676/676 and DOM tests 219/219 pass.
-  - [x] Migrate inventoried web/Chrome/VSCode/cowork imports and active tooling links.
-  - [x] Split neutral contracts and optional module state from views; runtime never imports a view implementation.
-  - [x] Relocate context selection, comment retrieval/state and document assembly with their existing behavioral tests.
-  - [x] Split comment formatting into the visual package; remove comment runtime forwarding exports.
-  - [x] Keep file-format labels in the visual package; document attachment/generated-event assembly lives in runtime.
-  - [x] Expose runtime optional-module entrypoints; visual context barrel exports only normalized types.
-  - [x] Qualify breaking chat-ui version and initial runtime version against registry; update lockfiles.
-- [x] **Lot 2 — Injected conversation and complete command binding**
-  - [x] Render injected checkpoint restore/preserve choices and mutation preview; disable duplicate checkpoint actions in runtime state.
-  - [x] Route send checkpoint creation and edit/retry/restore choices through the same runtime commands; reload history after an authorized restore.
-  - [x] Add runtime-owned checkpoint mutation choices and create/fetch/restore I/O through the existing CheckpointHost contract; no view-owned checkpoint lifecycle.
-  - [x] Bind attachment retry/paste, preview/lightbox and generated-file download controls to injected data/commands; visual state contains no upload or extraction implementation.
-  - [x] Retain upload inputs/previews with the runtime; expose pending/failure/retry/removal, paste source and generated-file extraction/download commands through the injected port.
-  - [x] Define a data-only conversation snapshot/command port; allow StreamMessage to render injected segment events without a transport.
-  - [x] Add runtime-owned authorization before platform execution, explicit default `() => false`, bounded permission wait and per-call execution/result deduplication.
-  - [x] Expose session-owned history-event hydration and steer commands without exposing controller construction to views.
-  - [x] Implement runtime conversation commands for full payload/model/context/attachments and retry/stop/edit/feedback/steer through the real session runtime.
-  - [x] Add host-owned conversation snapshots, incremental history hydration and explicit lifetime independent of view subscriptions.
-  - [x] Move comment-state construction and update-subscription lifetime to a host-owned comment runtime.
-  - [x] Migrate mixed optional-module imports in app adapters and existing tests to the correct visual/runtime public entrypoints.
-  - [x] Split the mixed comment tests: visual export/manifest assertions stay in UI; runtime tests retain state behavior and explicit runtime export registration.
-  - [x] Add a shared parity fixture using the real Hono chat server, default transport, stream hub, session runtime and platform I/O adapters.
-  - [x] Add standalone/app-shaped visual fixtures that receive the same host-created runtime and real command implementation.
-  - [x] Add `packages/chat-ui/tests/conversation-runtime-parity.dom.spec.ts`: complete payload/markdown, remount state, command HTTP parity and visible default denial.
-  - [x] Resolve parity evidence: supply the composer's required floating snippet, register the fixture's custom local tool and ignore execution callbacks after machine disposal.
-  - [x] Fix the evidenced send-completion race: clear only the submitted draft/attachments, preserving edits and uploads made while the send finishes; await the send's settled state in payload assertions.
-  - [x] Add real-runtime permission parity tests for missing adapter/executor, denial, timeout, late approval, disposal and exactly-once approved execution/result posting.
-  - [x] Wire pending permission decisions through the host authorization adapter and native continuation; view commands cannot grant permission without that adapter.
-  - [x] Relocate the web-host factory and session-history assembly with their existing tests; keep view implementations in chat-ui.
-  - [x] Inject the visual renderer into the runtime web-host factory; fix the parity SSE adapter's delayed connection with synchronous test-adapter reconnect.
-  - [x] Retarget visual label/panel/context contracts to the relocated public runtime host factory.
-  - [x] Retarget model/session-list views, host composition and existing DOM fixture types to runtime public contracts.
-  - [x] Remove host-factory/history/context-runtime entries from the visual export snapshot.
-  - [x] Split tool-result normalization into runtime; retain markdown/text formatting and smoothing in the visual package.
-  - [x] Resolve typecheck evidence: import canonical comment formatting, normalize wire attachment source/IDs and keep ES2022-compatible lookup.
-  - [x] Replace component runtime creation/disposal with normalized snapshot and command props/declarations.
-  - [x] Bind full send/model/context/tools/attachments, history, retry/stop/edit/feedback/steer and active modules.
-  - [x] Enforce visible permission pending/denied state; approval executes/posts once; no adapter, denial and timeout execute zero times.
-  - [x] Preserve host lifetime across remounts; retain explicit default `() => false` authorization.
-  - [x] Conversation view source slice 1 committed within the atomic limit.
-  - [x] Conversation view source slice 2 committed within the atomic limit.
-  - [x] Conversation view source slice 3 committed within the atomic limit.
-  - [x] Conversation view source slice 4 committed within the atomic limit.
-  - [x] Conversation view source slice 5 committed within the atomic limit.
-  - [x] Conversation view source slice 6 committed within the atomic limit.
-  - [x] Conversation view source slice 7 committed within the atomic limit.
-  - [x] Conversation view source slice 8 committed within the atomic limit.
-  - [x] Conversation view source slice 9 committed within the atomic limit.
-  - [x] Conversation view source slice 10 committed within the atomic limit.
-  - [x] Conversation view source slice 11 committed within the atomic limit.
-  - [x] Conversation view source slice 12 committed within the atomic limit.
-  - [x] Conversation view source slice 13 committed within the atomic limit.
-  - [x] Conversation view source slice 14 committed within the atomic limit.
-  - [x] Conversation view source slice 15 committed within the atomic limit.
-  - [x] Conversation view source slice 16 committed within the atomic limit.
-  - [x] Conversation view source slice 17 committed within the atomic limit.
-  - [x] Conversation view source slice 18 committed within the atomic limit.
-  - [x] Conversation view source slice 19 committed within the atomic limit.
-- [x] **Lot 3 — Parity and packed boundary qualification**
-  - [x] Limit the probe's short domain permission deadline to the explicit timeout case; approval uses the production policy deadline, with unchanged assertion wait bounds.
-  - [x] Add native-platform permission parity through the real session/controller/HTTP fixture: pending visibility, native allow/deny, zero denied execution and exactly-once replay/result posting.
-  - [x] Clean installed pair passes Svelte typecheck with 0 errors/warnings and Vite production build; wire the exact-archive probe and retained head/hash report into CI.
-  - [x] Add standalone/app-shaped live plan-result rendering and IME Enter parity through the real runtime; composing text cannot accidentally submit.
-  - [x] Add a clean installed-pair probe that mounts only exact archives: public-contract Svelte typecheck, production bundle and visual archive ownership scan, with retained SHA-256 evidence.
-  - [x] Enrich the in-memory checkpoint data adapter with persisted anchor metadata, matching the production checkpoint contract rather than bypassing the mutation classifier.
-  - [x] Compose the real comment runtime/panel in both conversation fixtures; verify draft retention, send persistence and one host update subscription across remounts.
-  - [x] Exercise checkpoint create/fetch/restore through the real chat-server HTTP routes; standalone/app-shaped fixtures retain the choice across remount and prove restore-before-retry versus preserve-and-retry ordering.
-  - [x] Use chat-core's real history projection in the fixture session data adapter, matching the production timeline contract; assert lightbox through its existing public test surface.
-  - [x] Respect JSON-safe session state in upload transitions: omit absent optional fields instead of inserting undefined; preserve the failed attachment for retry.
-  - [x] Add real-runtime document/history parity: failed upload retained across remount, retry/preview/remove, full server history restart and generated-file download through host I/O.
-  - [x] Runtime 447/447 and visual unit 524/524 pass; migrate the remaining shell comment fixture to injected host-owned state and forward feedback votes for clear/toggle parity.
-  - [x] Align StreamMessage's boundary assertion with optional transport access and keep public docs explicit about host-owned comment/conversation state.
-  - [x] Resolve visual typecheck's missing public UI type peer in ephemeral runtime dependency links; extend registry preflight to the inventoried cowork-bridge consumer.
-  - [x] Move initials/day-format tests to the visual suite and assert those functions are absent from runtime barrels; full runtime run exposed only the stale visual export assertions (450 other tests passed).
-  - [x] Migrate comment state/mention/thread tests to the same explicitly injected visual presentation helpers used by app composition.
-  - [x] Resolve duplicate textbox roles found by layout tests; the editable input owns textbox semantics and the composer wrapper is a group.
-  - [x] Migrate layout, accessibility, feature defaults, optional slots and label assertions to a host-created real runtime fixture.
-  - [x] Bind the contenteditable text property so a remounted view renders the retained runtime draft; assert both stored and displayed content.
-  - [x] Runtime tests: relocated `transport.test.ts`, `replay.test.ts`, `streamHub.test.ts`, `stream-history-bounds.test.ts`, `stream-throughput.test.ts`, `chat-core-host.spec.ts`.
-  - [x] Runtime tests: relocated `chat-loop-controller.spec.ts`, `chat-session-runtime.test.ts`, `chat-session-hydration.test.ts`, `chat-projection.test.ts`, `projection.golden.spec.ts`.
-  - [x] Runtime tests: relocated `chat-draft.test.ts`, `chat-attachments.test.ts`, `local-tools-store.test.ts`, `checkpoints.spec.ts`, `model-selection.spec.ts`, `agents-view-markers.test.ts`.
-  - [x] Optional module tests: `comments-module.spec.ts`, `documents-attachment-state.test.ts`, `documents-generated-file-cards.test.ts`, `context.spec.ts`, `chat-context.spec.ts`, `web-host.test.ts`. Visual contract metadata: `documents-module.spec.ts`, `host-adapter-types.test.ts` remain in UI.
-  - [x] UI tests: `chat-conversation-functional.dom.spec.ts`, `chat-conversation.dom.spec.ts`, `chat-conversation.spec.ts`; injected standalone and app-shaped fixtures use the same runtime.
-  - [x] Add runtime permission/continuation and remount parity tests with real controller/projection; no command stubs in parity fixtures.
-  - [x] Run package typecheck, unit/DOM tests, app typecheck/lint and affected app tests.
-  - [x] Pack both candidates and prove runtime-free UI and standalone installed consumption.
-- [x] **Lot 4 — Docs consolidation and review**
-  - [x] Consolidate implemented boundaries, real parity fixtures, observed package/app gates and release prerequisites in the P1 specification; CI/owner acceptance remain separate.
-  - [x] Resolve CI graph/pack gates: include runtime validation in final receipts/gate, pack each candidate once with an explicit context/environment, then qualify those exact archives.
-  - [x] Pass explicit test environments to every command in the chat CI validation lane.
-  - [x] Resolve the publisher wiring gate: give runtime its own real validation job and require that job before its publisher, while retaining UI/runtime pair validation ordering.
-  - [x] Document runtime composition, permission adapter semantics, public module ownership and guarded release/bootstrap prerequisites.
-  - [x] Declare runtime-only CI publication filters, guarded publisher ordering and an explicit single-package bootstrap target/allowlist; draft validation cannot publish.
-  - [x] Prepare runtime OIDC/token-bootstrap Make targets by copying the guarded existing package publisher pattern; no publication executed or authorized.
-  - [x] Record pair versions, breaking imports, package bootstrap/OIDC prerequisites and consumer notices in `spec/CHAT_MIGRATION_P1.md`.
+  - [ ] Migrate inventoried web/Chrome/VSCode/cowork imports and active tooling links.
+  - [ ] Split neutral contracts and optional module state from views; runtime never imports a view implementation.
+  - [ ] Qualify breaking chat-ui version and initial runtime version against registry; update lockfiles.
+- [ ] **Lot 2 — Injected conversation and complete command binding**
+  - [ ] Replace component runtime creation/disposal with normalized snapshot and command props/declarations.
+  - [ ] Bind full send/model/context/tools/attachments, history, retry/stop/edit/feedback/steer and active modules.
+  - [ ] Enforce visible permission pending/denied state; approval executes/posts once; no adapter, denial and timeout execute zero times.
+  - [ ] Preserve host lifetime across remounts; retain explicit default `() => false` authorization.
+- [ ] **Lot 3 — Parity and packed boundary qualification**
+  - [ ] Runtime tests: relocated `transport.test.ts`, `replay.test.ts`, `streamHub.test.ts`, `stream-history-bounds.test.ts`, `stream-throughput.test.ts`, `chat-core-host.spec.ts`.
+  - [ ] Runtime tests: relocated `chat-loop-controller.spec.ts`, `chat-session-runtime.test.ts`, `chat-session-hydration.test.ts`, `chat-projection.test.ts`, `projection.golden.spec.ts`.
+  - [ ] Runtime tests: relocated `chat-draft.test.ts`, `chat-attachments.test.ts`, `local-tools-store.test.ts`, `checkpoints.spec.ts`, `model-selection.spec.ts`, `agents-view-markers.test.ts`.
+  - [ ] Optional module tests: `comments-module.spec.ts`, `documents-module.spec.ts`, `documents-attachment-state.test.ts`, `documents-generated-file-cards.test.ts`, `context.spec.ts`, `chat-context.spec.ts`, `web-host.test.ts`, `host-adapter-types.test.ts`.
+  - [ ] UI tests: `chat-conversation-functional.dom.spec.ts`, `chat-conversation.dom.spec.ts`, `chat-conversation.spec.ts`; injected standalone and app-shaped fixtures use the same runtime.
+  - [ ] Add runtime permission/continuation and remount parity tests with real controller/projection; no command stubs in parity fixtures.
+  - [ ] Run package typecheck, unit/DOM tests, app typecheck/lint and affected app tests.
+  - [ ] Pack both candidates and prove runtime-free UI and standalone installed consumption.
+- [ ] **Lot 4 — Docs consolidation and review**
+  - [ ] Record pair versions, breaking imports, package bootstrap/OIDC prerequisites and consumer notices in `spec/CHAT_MIGRATION_P1.md`.
   - [x] Document P1a candidate versions/import notices and the remaining P1b acceptance boundary in `spec/CHAT_MIGRATION_P1.md`.
 - [ ] **Lot 5 — Draft handoff**
-  - [x] Open draft sequence #817 (P1a) and #819 (P1b), both targeting main; post each execution plan.
-  - [x] Run `make down ENV=test-chat-p1`; `make ps` shows no services.
-  - [ ] Require CI completed/success on each exact submitted head; GitHub-hosted runner queues remain pending, with no success claimed.
+  - [ ] Run `make down ENV=test-chat-p1` and report PR URLs and head SHAs.
