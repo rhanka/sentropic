@@ -29,11 +29,12 @@
 - [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `Makefile`
   - `.github/workflows/ci.yml`
+  - `.github/workflows/app-cm-w3c.yml`
   - `.dockerignore`
 - [x] **Exception process**: BR03c-EX1 below records the plan-authorized build/CI extension before edits.
 
 ## Feedback Loop
-- [x] BR03c-EX1 — acknowledged: W3.c explicitly authorizes `Makefile`, `.github/workflows/ci.yml` and `.dockerignore` for content hash/filters, test target/CI gate and generated bundle exclusion. Impact: canonical API image and its validation. Rollback: revert W3.c commits; retain W3.b source and prior qualified image. No deployment edits.
+- [x] BR03c-EX1 — acknowledged: W3.c authorizes `Makefile`, `.github/workflows/{ci,app-cm-w3c}.yml` and `.dockerignore` for hash/filters, runtime gates and generated bundle exclusion. The topic workflow follows W3.b because shared CI excludes this integration base. Impact: canonical API image and validation only. Rollback: revert W3.c commits; retain W3.b source and prior qualified image. No deployment edits.
 - [x] Track remains single-writer: update this mergeable plan; conductor owns import and independent final acceptance.
 
 ## AI Flaky tests
