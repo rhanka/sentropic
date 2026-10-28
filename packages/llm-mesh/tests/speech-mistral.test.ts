@@ -436,20 +436,48 @@ describe('mistral transcript mapping', () => {
   });
 
   it('should emit the record when done arrives without a commit', async () => {
-    // A spontaneous provider done ends the turn: the record is the final,
-    // and the next write opens a fresh stream under the same utterance.
+    // A spontaneous provider done ends the turn: the final is emitted, and a
+    // follow-up write under the same id is refused — the next turn uses u2.
     const driven = await openMistralDriven();
     await driven.write('u1', 10);
     driven.lastSocket().push(frameDelta('one '), frameDone('one'));
     await flush();
-    await driven.write('u1', 50);
-    await driven.commit('u1', [frameDelta('two'), frameDone('two')]);
+    await expect(driven.session.write(frame('u1', 50))).rejects.toMatchObject({
+      code: 'invalid-format', message: expect.stringContaining('already finalized'),
+    });
+    await driven.write('u2', 50);
+    await driven.commit('u2', [frameDelta('two'), frameDone('two')]);
+    const events = await driven.collect();
+    const finals = events
+      .filter((event) => event.type === 'transcript.final')
+      .map((event) => `${(event as unknown as { utteranceId: string }).utteranceId}:${(event as unknown as { text: string }).text}`);
+    expect(finals).toEqual(['u1:one', 'u2:two']);
+    expect(driven.sockets).toHaveLength(2);
+  });
+
+  it('should emit exactly one final on double commit', async () => {
+    const driven = await openMistralDriven();
+    await driven.write('u1', 10);
+    await driven.commit('u1', [frameDone('one')]);
+    await driven.session.command(commitCommand('u1'));
+    const events = await driven.collect();
+    const finals = events.filter((event) => event.type === 'transcript.final');
+    expect(finals).toHaveLength(1);
+    expect(driven.sink.records).toHaveLength(1);
+  });
+
+  it('should emit no second final when committing after a spontaneous done', async () => {
+    const driven = await openMistralDriven();
+    await driven.write('u1', 10);
+    driven.lastSocket().push(frameDone('one'));
+    await flush();
+    await driven.session.command(commitCommand('u1'));
     const events = await driven.collect();
     const finals = events
       .filter((event) => event.type === 'transcript.final')
       .map((event) => (event as unknown as { text: string }).text);
-    expect(finals).toEqual(['one', 'two']);
-    expect(driven.sockets).toHaveLength(2);
+    expect(finals).toEqual(['one']);
+    expect(driven.sink.records).toHaveLength(0);
   });
 
   it('should drop the turn on provider error and continue the session', async () => {
@@ -730,6 +758,13 @@ describe('mistral session lifecycle', () => {
     await driven.commit('u1', [frameDone('one')]);
     const events = await driven.collect();
     expect(events.filter((event) => event.type === 'transcript.final')).toHaveLength(1);
+    // The refused switch was never metered: only the accepted frame counts.
+    expect(driven.sink.records).toEqual([
+      {
+        eventId: 'op-1:audio', revision: 0, mode: 'cumulative',
+        usage: { admittedAudioSeconds: 0.02, connectedSeconds: 0 },
+      },
+    ]);
   });
 
   it('should keep the G-CLOUD receipt blocked and never claim live evidence', () => {
