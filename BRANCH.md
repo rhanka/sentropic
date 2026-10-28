@@ -60,6 +60,7 @@
   - [ ] Typecheck/lint affected cluster-mesh paths; memory-e11-test and memory-e11-check run in CI.
   - [x] Vendor historical input inventory excerpt, reservation and producer record so CI needs no owner-local Markdown files; these records do not promote current qualification.
   - [x] Retain the receiver's exact readHostTuple excerpt for the development-version refusal test; this excerpt is evaluated with explicit dependencies, not executed as a standalone CLI.
+  - [x] Retain the receiver format reference; document the two explicit excerpts and distinguish historical records from fresh qualification evidence.
   - [ ] Draft PR to feat/engram-e2-integration; completed/success exact-head CI retained externally; no merge/publication.
 - [x] **Lot E11-4 — Integration refresh**
   - [x] Diagnose run 40741738278: common lane fails resolving AWS core ^3.978.7 at 18:45:38 UTC; registry publication occurred at 18:47:57 UTC. Unmodified common target passes locally (11 tests).
