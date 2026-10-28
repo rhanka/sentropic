@@ -1,114 +1,129 @@
-# Feature: STT L13 — Mistral streaming STT + TTS binding
+# Feature: BR-78 — Build and transfer fewer image bytes
 
 ## Objective
-Mesh `speech/mistral-transcription.ts` with the Voxtral realtime STT adapter (3.0 preview model, recorded fixtures only) plus the Mistral TTS binding/registry entry, admitted and metered by the L8 caps with the L9 guarantees (duration bound, no double count, client utterance ids, late frames suppressed, no Bearer leak).
+- [ ] Build each selected image once and transport source-correct artifacts with verified exact digests.
+- [ ] Measure complete readiness at ≤180s warm / 210s cold; API-case UI ≤120s / 150s.
 
 ## Scope / Guardrails
-- Scope limited to `packages/llm-mesh/src/speech/`, `packages/llm-mesh/tests/`, bench receipt, `BRANCH.md`, tuple version cascade from the mesh bump.
-- Make-only workflow, flock-wrapped lanes, no ad-hoc docker, no raw `docker run`.
-- Branch development in `tmp/worktrees/stt-l13`, ENV=test-stt-l13 last, never ENV=dev.
-- 0 Python. No live provider call (recorded fixtures only, receipt blocked). No key leakage, no audio payload persisted.
-- All new text in English.
+- [x] Base: origin/main; predecessor BR-77 merge aa559f58c; owner packet supersedes the historical BR-77 allocation in the train index.
+- [x] Worktree: tmp/worktrees/ci-br78; branch: perf/ci-image-artifacts; merge main only, never rebase or force-push.
+- [x] Make entry points; ENV last; no Python; commits under 150 changed lines; no attribution trailers.
+- [x] Slot 0 author: ENV=test-ci-br78; API_PORT=9390, UI_PORT=5590, MAILDEV_UI_PORT=1490; check ports before services.
+- [x] Local Docker only when necessary, under /home/antoinefa/.cache-tmp/sentropic-docker.lock; make down after each step.
+- [x] Preserve every gate, runtime assertion, selected matrix and publication dependency; no timeout increases.
 
 ## Branch Scope Boundaries (MANDATORY)
-- **Allowed Paths (implementation scope)**:
-  - `packages/llm-mesh/src/speech/mistral-transcription.ts`
-  - `packages/llm-mesh/src/speech/index.ts`
-  - `packages/llm-mesh/tests/speech-mistral.test.ts`
-  - `packages/llm-mesh/tests/speech-contract.test.ts`
-  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
-  - `packages/llm-mesh/tests/fixtures/mistral-frames.ts`
-  - `packages/llm-mesh/bench/l13-mistral.receipt.json`
-  - `packages/llm-mesh/package.json`
-  - `packages/llm-gateway/package.json`
-  - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/src/modules/catalog.ts`
-  - `packages/cluster-mesh/tests/fixtures/train.ts`
-  - `packages/cluster-mesh/tests/speech-peer.spec.ts`
-  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
-  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
-  - `packages/cluster-mesh/tests/packaging/tuple-skew.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `api/tests/unit/gateway-package-version.test.ts`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `package-lock.json`
-  - `BRANCH.md`
-- **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
-  - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `packages/llm-gateway/**`
-  - `packages/live-speech/**`
-  - `packages/llm-mesh/src/**` (except `src/speech/mistral-transcription.ts`, `src/speech/index.ts`, `src/speech/catalog.ts`)
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/**`
-- **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+- [x] **Allowed Paths (implementation scope)**:
+  - [x] `BRANCH.md`
+  - [x] `plan/64-BRANCH_perf-ci-image-artifacts.md`
+  - [x] `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`
+  - [x] `api/Dockerfile`
+  - [x] `ui/Dockerfile`
+  - [x] `e2e/Dockerfile`
+  - [x] `scripts/test-api-tooling.sh`
+  - [x] `scripts/check-ci-version-filters.sh`
+  - [x] `scripts/ci/image-receipt.mjs`
+  - [x] `scripts/ci/image-receipt.test.mjs`
+- [x] **Forbidden Paths (must not change in this branch)**:
+  - [x] `docker-compose*.yml`
+  - [x] `.cursor/rules/**`
+  - [x] `api/drizzle/*.sql`
+  - [x] `plan/NN-BRANCH_*.md` except plan/64-BRANCH_perf-ci-image-artifacts.md
+  - [x] `PLAN.md`
+  - [x] `.track/**`
+  - [x] Production deployment configuration.
+- [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - [x] `.github/workflows/ci.yml` — BR78-EX1.
+  - [x] `Makefile` — BR78-EX2.
+  - [x] `.dockerignore` — BR78-EX3, exclude new transport artifacts from build inputs.
+  - [x] `scripts/ci/publishable-ci-wiring.test.mjs` — BR78-EX4, preserve filter isolation with exact image-guard exceptions.
+  - [x] `e2e/tests/07_comment_assistant.spec.ts` — BR78-EX5, deterministic workspace initialization for the unchanged blocking journey.
+  - [x] `spec/CHAT_MIGRATION_P0*.md` — BR78-EX6, unchanged upstream documents in the main integration merge only.
+  - [x] `scripts/ci/ci-expected-results.test.mjs` — BR78-EX7, authenticated gate capture regression.
+  - [x] `api/tests/unit/gateway-package-version.test.ts`, `package-lock.json`, `packages/cluster-mesh/**`, `packages/llm-gateway/package.json`, `packages/llm-mesh/**` — BR78-EX8, unchanged upstream content in the main integration merge only.
+- [x] Exception process: record rationale, impact and rollback before edits; additional paths require bounded exceptions.
 
 ## Feedback Loop
-- `BR13-EX1`: touch forbidden path `packages/llm-gateway/package.json` (admit mesh `^0.32.0` in the `@sentropic/llm-mesh` range). Reason: without it the gateway resolves a nested llm-mesh 0.30.0 while cluster-mesh resolves the workspace 0.32.0, and the API topology check fails `divergent_llm_mesh` (CI: API container unhealthy on head dfcaef72d). Precedent: L9's `8ed01fb01` admitted 0.31.0 the same way. Follow-up: the publishable-manifest train refuses a manifest change on published 0.22.1, so gateway also bumps 0.22.1 → 0.22.2 (same exception); root lock deduped via `make lock-root`, selected fixture rebound (mesh 0.32.0 registry + E6b9, gateway 0.22.2 registry + with-dist pack integrity, artifacts frozen at published 0.1.4); `api/tests/unit/gateway-package-version.test.ts` pin tracks the bump. Rollback: revert the range/version lines + `make lock-root`.
-- `acknowledge`: mesh 0.30.0 → 0.31.0 collided numerically with L9's merged 0.31.0. Resolved: PR #809 retargeted to `main`, merged `origin/main`, mesh 0.32.0 / cluster 0.23.5 (0.31.0/0.23.4 taken on main); tuple ranges widened to `<0.33.0`; selected fixture + root lock rebound via the sanctioned make pack/refresh path.
-- `acknowledge`: Mistral wire grounded in docs 2026-10-28: realtime `wss://api.mistral.ai/v1/audio/transcriptions/realtime?model=voxtral-mini-transcribe-realtime-3`, TTS `POST /v1/audio/speech` model `voxtral-mini-tts-3-0`. 2602 generation not served (separate license/price, see the L13 receipt). No live call made; receipt stays blocked.
+- [x] BR78-EX8: integrate main 5e986a0b6 via merge to resolve GitHub's sole BRANCH.md conflict, retaining the BR78 plan. Incoming live-STT L13 package/test/lock/receipt files remain byte-identical to main; no STT changes are authored here. Impact: upstream integration only; rollback: reverse this merge with a new commit, never rewrite history. Requalify PR and cold dispatch on the resulting exact head.
+- [x] PR #811 Opus r1 APPROVE at d072d24ec: close the action pin, record exact-head measurements, and explicitly carry remaining Lot 3/5 acceptance to a follow-up; owner retains merge authority.
+- [x] BR78-EX1 names crazy-max/ghaction-github-runtime, exporting GitHub runtime/cache credentials to image producers. All four uses pin 3cb05d89e1f492524af3d41a1c98c83bc3025124 with a v3 comment; upstream refs/tags/v3 resolves directly to that commit via both GitHub API and git ls-remote (2026-10-28). Impact: immutable action source; rollback: revert these four pins with the transport/cache rollback.
+- [x] Run 40713883861 attempt 1 at d072d24ecc4caf30dba18e4476366efd58a4d2bb is completed/success (1465s wall-clock). API/tools/UI/browser/scan/restore take 111/121/255/73/209/196s; IdP 290s, VSCode 142s, E2E a/b/c/d/e 270/154/303/200/211s, capacity 17s, gate 18s. Study section 11 records job IDs. Full UI warm 255s exceeds 180s by 75s; final-head cold and API-case UI targets must be measured, never inferred.
+- [x] Final pushed-head PR and image_cache_mode=cold dispatch receipts are captured after completion under .tmp/ci-br78/receipts/<run-id>/ in the owner workspace, with full run/attempt/job/step JSON, per-job durations and target comparisons in the final handoff. A prior-head green verdict does not qualify the final head.
+- [x] Maintenance: exact apk pins for Chromium/headless-shell 155.0.8059.84-r0, FFmpeg 8.1.3-r0 and libcrypto3/libssl3 3.5.9-r0 fail closed when Alpine retires those versions. Future rebuilds then require explicit repinning and fresh browser DOM/screenshot/video probes, journeys and unchanged container scans; never float versions to bypass the failure.
+- [x] Receipt-fix follow-up: f3cc9f668 / PR run 40704275592 captures the final receipt successfully (ci-gate 122894637302); the verdict correctly rejects validate-publishable-manifests 122874516639 because its existing wiring fixture still expects contents-only permissions. Align that exact assertion with job-local contents/actions read, retaining every dependency and fail-closed check; BR78-EX4 covers this existing fixture path. Under the shared Docker lock, make test-publishable-manifests SCOPE='scripts/ci/publishable-ci-wiring.test.mjs scripts/ci/ci-expected-results.test.mjs' API_PORT=9390 UI_PORT=5590 MAILDEV_UI_PORT=1490 ENV=test-ci-br78 passes all 157 tests; make down completes. Mechanical branch/scope and whitespace checks pass.
+- [x] BR78-EX7 authorized by the owner's receipt-failure fix request: update the existing gate capture fixture to require job-local contents/actions read permissions, authenticated attempt/pagination calls and fail-closed API errors. Impact: regression coverage only; rollback: revert this fixture together with the workflow authentication fix.
+- [x] Receipt diagnosis at 04f0d1497: PR 40670667401 attempt 1, ci-gate 122851492883 fails at 13:41:35Z on its first anonymous run-attempt GET with HTTP 403. Main de7ab8d315 / green 40667783628 / ci-gate 122763272082 uses the identical capture and contents-only token (12s). No response headers/body were logged, so secondary throttling is unproven; github-script retry inputs do not govern raw fetch. Use its authenticated Actions client with job-local actions: read, matching ci-capacity-receipts (122851195668, success, 19s); retain current-attempt pagination, mandatory receipt and unchanged verdict.
+- [x] Receipt-fix local validation: git diff --check, harness check branch and make scope-check ENV=test-artifact-weight pass. Under the shared Docker lock, make test-ci-expected-results API_PORT=9390 UI_PORT=5590 MAILDEV_UI_PORT=1490 ENV=test-ci-br78 passes all 23 tests, including authenticated capture, fail-closed 403/503 API errors and selected/missing/matrix cases; its Docker container is removed automatically. Required validate-ci-capacity-metrics must repeat qualification on the pushed head.
+- [x] Merge main de7ab8d3157b1859648e0404b78c182ea9cd21e4 after GitHub reports the PR conflicted at 257180a6f. Retain this branch's BRANCH.md in the sole plan conflict; incoming chat design documents are unchanged upstream content. No image, gate, test or package source conflict; no rebase or history rewrite. Requalify the resulting exact head.
+- [x] BR78-EX6: mechanical scope check identifies 16 incoming spec/CHAT_MIGRATION_P0*.md documents. Permit their unchanged main versions for this integration merge only, without authoring chat design changes. Impact: scope declaration only; rollback: reverse the main merge with a new commit if rejected, never rewrite published history.
+- [x] BR78-EX1 authorized by owner packet: producers and image consumers need persistent caches and verified transport. Impact: artifact production/loading; gate dependencies and blocking power retained. Rollback: revert workflow transport/cache hunks and invalidate br78 cache scopes.
+- [x] BR78-EX1 includes IdP's browser consumer: reuse the exact E2E artifact instead of adding Chromium to every API toolbox; add build-e2e to IdP prerequisites, retain screen assertions. Rollback: restore browser toolbox recipe and IdP command together.
+- [x] IdP browser runs through its official Make target with --rm on the isolated Compose network and a read-only script mount; the ordinary E2E service uses host networking, which cannot resolve auth-idp.
+- [x] BR78-EX3: exclude new root transport archives/receipts from subsequent UI build contexts. VSCode assets are generated inside npm run build, so their existing ignore stays. Impact: prevent transport bytes from invalidating/copying into UI source layers. Rollback: remove these two ignore patterns with the compressed transport recipes.
+- [x] BR78-EX1/EX2: remove duplicate external Chrome/VSCode builds; ui/package.json build already executes both. Preserve all prior output assertions inside ui/Dockerfile; desktop remains an explicit embedded prerequisite. Each distinct Vite profile still builds its own extension outputs.
+- [x] BR78-EX4: cold run 40636446215 job 122644590282 rejects the new image-guard filters under its blanket scripts/ci isolation assertion. Permit only the two exact image receipt paths in global, retain all other scripts/ci and publisher isolation assertions. Impact: image guards trigger full qualification. Rollback: restore assertion and remove those two workflow filters together.
+- [x] Cold API/tools jobs 122644591261/122644591096 pass runtime guards in 250/255s, breaching 210s. Logs identify Docker export/import at 79.1/83.9s. BR78-EX1/EX2 now use pinned Docker 29.9.2/Buildx 0.38.1, native driver and containerd image store (documented GHA-cache support); no intermediate --load tarball. Rollback: restore docker-container setup and --load together, preserving every guard.
+- [x] Cold UI job 122644591027 fails its existing static endpoint contract (488/489 tests pass): preserve the workflow's VITE_API_BASE_URL environment and pass it to the new static image exporter, with the existing assertion unchanged.
+- [x] Native-store rollback: head 43ce8700d producer jobs pass, but restore 122655378122 and API consumer 122655438883 reject loaded identity mismatches across stores. Restore docker-container/--load with unchanged digest guards; fresh-cache toolbox takes 340s including 114.1s cache export. The native experiment is rejected, not timing acceptance.
+- [x] Flatten prepared API/toolbox filesystems onto the same Node base: keep pruned production dependencies, patched npm/esbuild tooling and every retained source/runtime assertion; omit hidden install-cache and deleted devDependency layers from transported images. Qualification remains open until fresh CI verifies bytes, runtime and timings.
+- [x] Pin API/toolbox/IdP and E2E Node bases to the exact digests resolved in jobs 122658342949/122657596849; base-image changes now invalidate the source hash explicitly. Toolbox fixtures reject floating Node bases; existing UI/Go pins remain.
+- [x] IdP correction qualified: head 9d7c58cab, run 40643738039 attempt 1, job 122671543007 passes in 220s. Full Chromium at the SUT loopback origin validates served login/consent, authorization code, id_token iss/aud/nonce/sub and userinfo; production headers and timeouts unchanged. Earlier jobs 122660292811/122661023083 retain their HTTPS-upgrade failures.
+- [x] BR78-EX2 includes a CI-only public-origin override passed to Compose on stdin and browser network-namespace sharing with this project's auth-idp container. Select a loopback test origin; NODE_ENV=production, CSP/HSTS, startup health wait, login/consent/token checks and the qualified image remain unchanged. No repository Compose file changes. Fresh CI must qualify the correction. Rollback: restore the bridge origin and browser runner together.
+- [x] BR78-EX1/EX2 preserve browser scan coverage after moving IdP Chromium out of the toolbox: security-container also waits for build-e2e, verifies its archive and scans it through the unchanged HIGH/CRITICAL parser/compliance gate. ci-gate dependencies and all previous scan checks remain; no vulnerability exception or severity is relaxed. Rollback: restore the scanned browser toolbox and its IdP runner together.
+- [x] BR78-EX2 authorized by owner packet: Make image cache/build/save/load recipes, API_TOOL_VERSION and receipt tests. Lightweight Node receipt CLI in CI avoids downloading a compiler/browser image just to hash bytes. Impact: named image entry points only. Rollback: revert recipes and requalify previous artifacts; never bypass identity or runtime checks.
+- [x] BR77 timing remains open: capacity.md requires first actual-main attempt and strict PR/main ≤2288s proof; green correctness alone does not qualify timing. BR78 does not close BR77 acceptance.
+- [ ] Record every real run ID/attempt/SHA, job duration, queue/cache state, failure, retry and budget breach.
+- [x] Browser scan diagnosis: head 7b62ad02a, PR run 40646332385 attempt 1, security-container 122678494699 fails 102 findings (Debian 12 libraries/X server and bundled npm); ci-gate 122682967025 fails closed. Replace the pinned base with current Node 24/Trixie, patch npm tooling, remove unused Xvfb and flatten the prepared filesystem; preserve Chromium/full-shell coverage and scanner metadata. Fresh CI must qualify this correction; no exception is added.
+- [x] BR78-EX1/EX2/EX3 extend to the UI test transport: run the unchanged npm test suite in a BuildKit stage with --no-cache-filter=ui-tests, exporting only its success marker. Include the exact infra files read by existing contract tests in the context; production stages still copy explicit inputs. Restrict UI source COPY to ui/packages so browser/API source changes do not invalidate both UI profiles. Impact: removes the measured 41.9s development-image export/import while retaining fresh test execution and all gate dependencies. Rollback: restore Test UI's make test-ui invocation, broad UI COPY and context exclusions together.
+- [x] BR78-EX1 scan evidence: 40646332385 has no security-container-results artifact because upload excludes hidden .security paths by default. Enable hidden files only on the existing explicit container report globs to retain scanner-native fixed-version/status evidence for owner triage. Impact: receipts only; no scanner/parser/register change. Rollback: remove include-hidden-files from that upload.
+- [x] Browser lifecycle inspection: e2e/package.json install runs playwright install for all engines even though every selected project uses Chromium. Disable npm install scripts, retain the explicit install --with-deps chromium (both Chromium variants), and omit unconsumed desktop packaging staging files from root build contexts. Published desktop binaries remain in ui/static/cowork-desktop and are still embedded in both UI profiles.
+- [x] Trixie candidate 57c5d03fe / run 40652025952 / scan 122698285457 still fails 57 OS findings with empty FixedVersion; npm is clean. Replace that rejected Debian implementation with pinned Alpine 3.24 and native Chromium/headless-shell 155.0.8059.84-r0 + FFmpeg 8.1.3-r0. Register their real binaries at the installed Playwright package's resolved paths; preserve full-browser IdP and default headless/video behavior. Build-time probes assert navigation/title, screenshots and nonempty video from both engines; all existing journey/scan assertions remain. Fresh CI must qualify this replacement; no exception added.
+- [x] Cold dispatch 40654322669 / build-e2e 122701728553 rejects the removed Playwright registry file path before running browser probes. Inspect the locked 1.60.0 package tarball and use its exported coreBundle.registry.registry interface; retain both behavioral probes and every journey assertion. This failed candidate is not a timing or security pass.
+- [x] Alpine candidate 8bfd472f7 / scan 122708320165 reduces 102 findings to two instances of CVE-2026-14456: libcrypto3/libssl3 3.5.7-r0 inherited from the pinned Node base. Trivy reports FixedVersion=3.5.8-r0; the live Alpine 3.24 main index serves 3.5.9-r0, so explicitly pin both packages to that available patched version. Full Chromium/headless/video probes already pass on 155.0.8059.84. No exception or threshold change; fresh CI must qualify the patched artifact.
+- [x] Patched browser job 122711504732 at c8d6fd2cc explicitly upgrades libcrypto3/libssl3 from 3.5.7-r0 to 3.5.9-r0 and passes both Chromium DOM/screenshot/video probes; compressed artifact is 517,286,222 bytes. Final exact-head security and journey verdicts must be read from completed run receipts, never inferred from this build.
+- [x] UI continuation measurements and bounded blockers are consolidated in study section 11 and plan/64: test step 87s to 37s; cold full UI 505s to 329s; the 180/210s budgets remain open. Published desktop binaries differ on identical tracked inputs and base; exact hashes identify the compiler-cache boundary corrected below.
+- [x] Resolve the measured warm-cache invalidation at the image boundary: exclude desktop bytes from UI compiler COPY with a digest-pinned Dockerfile 1.19 frontend, validate present desktop files in a separate static-assets stage, and copy fresh assets into both production/static outputs after compilation. Preserve API-only/local optional-desktop behavior and every full-UI desktop prerequisite. Build asserts the volatile executable is absent from compiler inputs; compiled code/profile caches must now survive fresh desktop bytes. Qualification and complete timings remain pending; no Windows packager/runtime change.
+- [x] Warm cache diagnosis at 8f9cf1d9b / UI 122735162130: production compilation is cached (25s step), but ci-test-ui without external parent import reruns npm ci (28.7s), followed by a 69.7s static compilation and 70.5s cache export; complete UI is 296s. Import the producer's UI parent cache into the test build while retaining --no-cache-filter=ui-tests and no test-result export. Fixtures enforce parent import only in warm mode and fresh tests in both modes; fresh CI must qualify stable sibling reuse.
+- [x] Local scoped checks pass: canonical tag inputs, toolbox/hash/cache fixtures, version-filter coverage and all 16 receipt tests. The aggregate local canonical suite reaches its retained-runtime check without a local image and fails there; actual image/runtime assertions remain required in CI. Isolated cleanup completed; no local image build was used.
+- [x] BR78-EX5: run 40660088690 / group-e 122724595102 fails before reaching the seeded AI comment. All three attempts GET /folders/e2e-folder-a under unrelated workspace IDs and receive 404; loadUserWorkspaces can overwrite the test's post-navigation localStorage write before reload. Initialize workspaceScopeId with addInitScript before application startup in both existing scenarios. Impact: test setup only; preserve folder/comment/badge assertions, seeded memberships, matrix, retries and timeouts. Rollback: restore the two post-load evaluate/reload blocks; never skip the assertion or accept a wrong workspace.
+- [x] Complete qualification at 8f9cf1d9b: PR 40664255786 and cold dispatch 40664434461 attempt 1 both succeed, including all selected journeys, source/digest guards, container gates and ci-gate 122744805201/122748541061. UI is 296/330s, so timing acceptance remains open; the parent-cache correction must qualify on its own head. Study section 11 records producer/consumer job IDs and per-job durations; generated receipts retain every job/step and actual checkout source.
 
 ## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
+- [x] All deterministic failures block; no additional provider exception or timeout extension authorized.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single mesh adapter + TTS binding, one test file, one lane.
+- [x] Multi-branch train; this author implements BR78 only; shared workflow changes serialized.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI change in this lot: no UAT.
+- [ ] Qualify exact pushed SHA; preserve production runtime, IdP screens, restore and embedded UI assets.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read spec-plan L13 row, §7-8.1, §9-10, L8 gateway caps.
-  - [x] Fetch Mistral Studio audio docs: realtime endpoint/model, session.update fields, append/end, delta/done, turn events, TTS endpoint/voices.
-  - [x] Seam: mesh dependency-free; admission as data + injected usage sink; TTS = selection/binding only (no synthesis transport in mesh).
-  - [x] Worktree `tmp/worktrees/stt-l13`, branch `feat/live-stt-l13`, base `origin/main` (retargeted after L8/L9 merged; PR #809 draft).
-  - [x] Harness plan event recorded; `harness check branch` PASS C1.
-  - [x] Lot gate: base head verified, scope boundaries declared, no exception needed.
-- [x] **Lot 1 — STT adapter `speech/mistral-transcription.ts` (9 slices + 2 fixes; typecheck green; mutation-proven)**
-  - [x] Profile config `mistral-voxtral-realtime-3`: model pin `voxtral-mini-transcribe-realtime-3`, delay `target_streaming_delay_ms`, language fr/en, format pcm16/24k mono, placement cloud-relay; server turn_detection pinned off (client commits drive turns).
-  - [x] `session.update` builder: `session` object with audio_format/language/delay; refuse unsupported fields at open (fail-closed).
-  - [x] Transport port (injectable WS): append base64 pcm16, no audio persisted, no key in logs/errors.
-  - [x] Turn mapping: one provider stream per client turn; `input.commit` sends `input_audio.end` and emits the final from `transcription.done` (record); lazy reopen on next write; `input.clear` abandons the stream (close + drop, no final); uncommitted trailing audio emits no final at close.
-  - [x] Event mapping: `transcription.text.delta` append-only partials under the client utteranceId; per-turn audioInterval from the open-turn capture window; `transcription.done` final; `error{code,message}` to session error; unknown events tolerated.
-  - [x] Metering: admission receipt required; injectable expiry timer (min(admission, request maxDurationMs)); cumulative usage records under a stable eventId; settle without providerRevision.
-  - [x] TTS exclusion from the STT adapter: no synthesis field, no implicit voice.
-  - [x] Lot gate: `make typecheck-llm-mesh` green on the lot head.
-- [x] **Lot 2 — TTS binding/registry (in-adapter; voices/languages pinned, request builder, no transport)**
-  - [x] Mistral TTS binding: provider mistral, model `voxtral-mini-tts-3-0`, preset voices (Voxtral 3 list incl. fr Marie/Manon/Lea/Camille, en US/UK), response_format; no implicit voice (explicit voice_id required).
-  - [x] Capabilities entry: tts supported, stt refused on the TTS binding and vice versa; usageUnits characters (price separation from audio-seconds); regions unset (explicit region refused fail-closed, no documented API region).
-  - [x] Request-shape fixture pins `POST /v1/audio/speech` fields from docs (no live call).
-  - [x] Lot gate: negotiation tests green (accept documented voice+language, refuse unknown voice/region/format).
-- [x] **Lot 3 — Fixtures + gate tests (28/28 scoped; window + post-close mutation-proven)**
-  - [x] `tests/fixtures/mistral-frames.ts`: recorded session.created/updated, delta scripts, done records, turn events, invalid/error frames; no live call.
-  - [x] `tests/speech-mistral.test.ts`: endpoint/final mapping, cancel/flush, no double count, late-frame suppression (incl. post-close), Bearer redaction, per-turn windows, completed-only done, orphan/empty-turn behavior.
-  - [x] Lot gate: `make test-llm-mesh` green (SCOPE=file then full) on the lot head.
-- [x] **Lot 4 — Receipt + version (mesh 0.32.0, cluster 0.23.5, fixture rebind via make packs + sha512, root lock; lanes green)**
-  - [x] `bench/l13-mistral.receipt.json`: status blocked, exact missing G-CLOUD/§10 items, price revision unpinned, no live evidence claimed.
-  - [x] Bump `packages/llm-mesh/package.json` to 0.32.0 and cluster-mesh to 0.23.5 (0.31.0/0.23.4 taken on main); cascade tuple ranges/fixtures/lock integrity via sanctioned refresh only.
-  - [x] Lot gate: receipt present and blocked, version bumped, `make build-llm-mesh` + `make pack-llm-mesh` green.
-- [ ] **Lot N — Final validation (scope-check, draft PR #809 to main, CI green, report, down)**
-  - [ ] `make scope-check` (harness) green.
-  - [ ] Push, draft PR #809 against `main`, CI green on the exact head.
-  - [ ] Report PR number, head SHA, CI URL without merging.
-  - [ ] `make down ENV=test-stt-l13`.
+- [ ] **Lot 0 — Baseline and constraints**
+  - [x] Read rules, template, plan, study and BR77 post-merge procedure.
+  - [x] Mechanical harness branch check and BR76 baseline capture: first BR77 main 40576115790 attempt 1, 1903s wall-clock; API/tools/UI/E2E jobs 109/262/533/30s (E2E reused registry).
+  - [x] Inventory Docker/source/lock/toolchain/profile/embedded inputs and current gate membership; gate body and needs remain unchanged.
+- [ ] **Lot 1 — Persistent build cache**
+  - [x] Scope BuildKit cache import/export by runtime/tools/UI/E2E and architecture; preserve source-dependent keys and build arguments; remove forced UI cache bypass.
+  - [x] Update scripts/test-api-tooling.sh for persistent/cold cache recipes and verified toolbox transport; check-ci-version-filters.sh also enforces E2E hash and receipt-guard coverage.
+  - [x] Gate: make test-ci-api-tooling check-ci-version-filters ENV=test-ci-br78 passes; 16 receipt tests, 201 manifest tests, canonical input fixtures and tag-collision guards pass locally. Runtime filesystem checks await actual CI candidates; local all-case command had no built image and failed retained-path assertions.
+- [ ] **Lot 2 — Digest-addressed transport**
+  - [x] Implement scripts/ci/image-receipt.mjs and image-receipt.test.mjs; negative tests cover stale/wrong/missing receipts, modified archives and loaded image substitution.
+  - [x] Verify source/workflow/inputs/cache identity, archive digest and loaded image ID at every load; E2E/VSCode use exact UI/E2E artifacts instead of registry tags.
+  - [ ] Gate: make test-ci-image-receipts test-ci-api-runtime test-ci-api-tag-guard test-ci-api-tool-runtime ENV=test-ci-br78.
+- [ ] **Lot 3 — Carried to follow-up: UAT and measured acceptance**
+  - [ ] Real warm/cold runs for four producers, scanners and restore; workflow dispatch exposes explicit cold rebuilds; include embedded prerequisites/export/compression/upload/download/load.
+  - [ ] Verify production smoke/limits, npm-absent runtime, tag collisions, IdP screens and both UI profiles with embedded Chrome/VSCode/desktop assets.
+  - [ ] Rollback drill with scoped invalidation and fresh verified artifacts.
+- [ ] **Lot 4 — Docs consolidation**
+  - [x] Record baseline, cache-population/cold measurements, byte counts, exact producer/restore tuple, rejected native experiment and remaining gaps in plan/64 and study section 11; timing/IdP acceptance remains open.
+- [ ] **Lot 5 — Carried to follow-up: remaining final validation**
+  - [x] Head 9d7c58cab full PR run 40643738039 attempt 1 succeeds, including ci-gate 122674614619, all selected browser/VSCode/API/static/security/restore lanes; 1313s workflow wall-clock. Later E2E scan coverage must qualify on its own head; timing/review acceptance stays open.
+  - [ ] Exact-head changed-file tests, typecheck-api lint-api typecheck-ui lint-ui and image/runtime guards through CI.
+  - [ ] Exact-head API/UI/E2E/VSCode, container scans, smoke and restore; selected membership unchanged.
+  - [ ] make scope-check before every make commit; selective staging; cleanup isolated environments.
+  - [ ] Draft PR to main using this file as body; independent reviews, CI and measured head handoff; owner retains merge authority.
 
-## Deferred to BR-XX
-- None.
+## Deferred to follow-up (owner: CI train owner; number to be assigned)
+- [x] Lot 3 carry-over is explicit, not completed acceptance: complete the repeated warm/cold campaign including embedded prerequisites and all transfers, measure API-case UI, meet full readiness ≤180/210s and API-case UI ≤120/150s, and perform the scoped cache-invalidation/verified-artifact rollback drill. Keep all production, IdP, restore, profile and embedded-output assertions; verify through real run/attempt/job receipts.
+- [x] Lot 5 carry-over is explicit, not completed acceptance: repeat the exhaustive listed local/static/build/runtime/regression commands and expected/executed membership comparison for the follow-up's final SHA, complete measured acceptance and independent review, then hand off closure to the merge operator. This PR still requires completed/success CI on its exact final head; performance targets and the rollback drill stay open.
+- [x] Merged BR78 scope: persistent source-keyed image caches, digest-verified same-run artifact transport, source-level browser remediation, compiler/desktop cache isolation and bounded blocking regression fixes. No timing-budget or BR77 acceptance closure is claimed; the open Lot 2 aggregate local gate is not relabelled as passed.

@@ -200,3 +200,295 @@ The train index above preserves the original #701 allocation: plan/63 still
 calls native checks BR-77 while the owner packet names capacity BR-77 and
 the next branch BR-78. The conductor must reconcile that allocation before
 launching the successor; this branch does not edit the other branch plans.
+
+## 11. BR-78 image artifacts — qualification in progress
+
+The 2026-10-28 owner packet assigns BR-78 to plan/64 after BR-77 merge
+`aa559f58c57d0453239668505ccfeaebe5599a1e`. It requests merge-only updates,
+worktree `tmp/worktrees/ci-br78`, and a draft PR; it does not close BR-77's
+outstanding strict PR/main timing acceptance.
+
+The actual first main-push run after BR-77 is [40576115790](https://github.com/rhanka/sentropic/actions/runs/40576115790),
+attempt 1, source `aa559f58c57d0453239668505ccfeaebe5599a1e`, successful in
+1903s (created_at to updated_at). BR-76 capture records 89 jobs, 64 measured
+executions / 25 skips, 233.9 runner-minutes, queue p50 94s / maximum 445s.
+This main receipt alone does not supply the required same-policy PR proof.
+
+| Baseline job | Job ID | Complete job seconds | Scope |
+| --- | --- | --- | --- |
+| build-api-image | 122443114522 | 109 | Canonical resolver, runtime checks, export and upload |
+| build-api-tool-image | 122443114250 | 262 | Cache miss; build, export, upload and cache save |
+| build-ui | 122443114508 | 533 | Full UI, embedded prerequisites, tests and static profile |
+| build-e2e | 122443112221 | 30 | Existing registry image; build skipped, not a cold measurement |
+| security-container | 122449269994 | 263 | API/toolbox/UI transport and existing scans |
+| test-smoke-restore | 122445831064 | 241 | Production image/toolbox transport, backup, restore and smoke |
+
+BR-78 adds independent BuildKit layer scopes, stable npm/esbuild tool layers,
+compressed credential-free artifacts and run/source/tree/workflow/profile receipts.
+Consumers hash archives before load and compare the loaded Docker image config
+SHA-256 afterwards; these are image IDs, not registry manifest digests.
+Chrome/VSCode output assertions move into each UI profile's existing build;
+the IdP screen assertions use the qualified E2E browser instead of embedding
+Chromium in every non-browser API toolbox. ci-gate and publisher barriers remain.
+
+Initial PR [40635754181](https://github.com/rhanka/sentropic/actions/runs/40635754181),
+attempt 1, head `13a188569`, was superseded/cancelled: API 260s and E2E 201s
+are cancelled partial executions; toolbox/UI lack measured execution spans.
+No successful image-readiness sample is credited to that run.
+Cold dispatch [40636446215](https://github.com/rhanka/sentropic/actions/runs/40636446215),
+attempt 1, head `a4d98dcde`, produced E2E successfully in 151s
+(job 122644590256; build/export/compression 127s, upload 5s, queue 42s).
+Its manifest-wiring job 122644590282 failed on the prior blanket scripts/ci
+filter assertion; BR78-EX4 retains isolation except for the two exact image guards.
+Remaining producer/consumer durations, exact-head warm/cold acceptance,
+input-invalidation and rollback proof remain **to measure**.
+
+The following measurements qualify the implementation at head `13712a5d2`,
+before the later base-digest pins and IdP loopback correction. PR checkout
+source is `cb85e39ed2e7b08ae8caa269d0de51597c07ac41` (the PR merge commit),
+workflow SHA-256 `33873b096f9a17742370cfe0fa86bc2b044f7ee2d3cd33c4d249bad4cc6dda74`.
+Normal run [40640414275](https://github.com/rhanka/sentropic/actions/runs/40640414275),
+attempt 1, imported/populated caches; it is **not a fully warm sample**.
+Forced cold rebuild [40640411046](https://github.com/rhanka/sentropic/actions/runs/40640411046),
+attempt 1, disables external cache import/export and uses --no-cache;
+its budget does not include first-population cache uploads.
+
+| Producer | Normal job / seconds | Forced cold job / seconds |
+| --- | --- | --- |
+| API | 122657597114 / 230 | 122658342949 / 234 |
+| Toolbox | 122657597557 / 258 | 122658342919 / 200 |
+| UI, complete job | 122657597564 / 398 | 122658342944 / 380 |
+| E2E | 122657596849 / 248 | 122658342138 / 149 |
+
+These results **do not meet BR-78 timing acceptance**. Normal E2E spends 76.5s
+exporting cache; normal UI still contains 30s desktop, 149s image build, 87s
+UI qualification and 100s static profile. The latter two remain blocking;
+BR-79 owns their independent scheduling. API-case UI and a fully warm sample
+remain to measure; the full UI job is never substituted for the API case.
+
+GitHub artifact sizes at this head: API 217,041,045 bytes versus BR77's
+1,869,666,158; toolbox 400,395,762 versus 2,719,976,086; UI 109,800,331 versus
+105,605,942; E2E 774,218,936 (no corresponding BR77 artifact: registry reuse).
+The fresh API/toolbox stages transport prepared filesystems without hidden
+download-cache/deleted dependency layers. Plain archive compression is zstd;
+image config digests remain distinct from archive and GitHub ZIP digests.
+
+Verified producer/restore tuple, normal run 40640414275 attempt 1:
+
+| Image | Docker config SHA-256 | Archive SHA-256 |
+| --- | --- | --- |
+| API | `6cc2575664a3b227518497ec046c00ad39abf43d10285e7417bfee2b24ed78b0` | `23941fd796b4cafb39d458fb7dff0422835f1691e977612a1f07be98dc0c8236` |
+| Toolbox | `81651306ddd91ba410783acd35c6d2c5b26d171ea5c790168bbfea4b8a9ec6c2` | `c5c7d558291cdd6be78518cdfa3d18905efbec98abed36f59fa76a1c4b09cfeb` |
+| UI | `5eedd2d8e54923167d7ead45a9a32f80d4ebc9c734fc068653e664b67e20766c` | `9548c0676d88ea810357121495f0601ca492b6bca036f1e67775b4244d326e31` |
+| E2E | `670ba073a8dc9f2ee8aee3eead69360ed72d284d35b3b92062394e9ec14484e4` | `390d94b9cd7afaddd07d50397c626347f593d69a77c40187a28c82edefe5b565` |
+
+Restore job 122659204773 passes in 158s and verifies the exact API/toolbox
+tuple before and after load; container scan 122660115540 passes in 134s.
+IdP 122660292811 fails on HTTPS-upgraded subresources under the new browser;
+its existing screen assertions keep ci-gate 122663280154 red. The correction
+uses the qualified E2E browser in the IdP network namespace at a loopback
+test origin, with production CSP/HSTS and startup health waits retained.
+That correction requires fresh CI; no IdP acceptance is claimed here.
+
+Rejected experiment: native Docker/containerd producers at head `43ce8700d`
+were rolled back when restore 122655378122 and API consumer 122655438883
+rejected their loaded identities. No digest check was relaxed. Normal toolbox
+340s includes 114.1s cache export. Cold llm-gateway 122651928831 also fails a
+120s clean-npm-install timeout; same-head PR validator 122651425217 passes.
+All superseded PRs (40635754181, 40636281967, 40636804356, 40637033882,
+40637537467, 40637927472, 40638269271) and pending dispatch 40637534902 retain
+their cancelled/failed statuses and partial durations in the run records.
+
+At head `9d7c58cab`, [40643738039](https://github.com/rhanka/sentropic/actions/runs/40643738039)
+attempt 1 completes successfully in 1313s, including ci-gate 122674614619.
+All selected API/UI/browser/VSCode/static/security/restore results pass.
+Image jobs are API 287s (122667727218), toolbox 209s (122667727115),
+full UI 400s (122667727048), E2E 109s (122667726528). These are identified
+cache-enabled executions, not an accepted warm/cold performance campaign.
+IdP 122671543007 succeeds in 220s: discovery, served login and consent,
+authorization code, id_token iss/aud/nonce/sub and userinfo remain asserted.
+Its qualified full Chromium joins the SUT network namespace and uses a CI-only
+loopback public origin; production CSP/HSTS, NODE_ENV and health waits remain.
+
+The following coverage addition must qualify on a fresh head: security-container
+also waits for build-e2e, verifies its receipt and applies the existing blocking
+HIGH/CRITICAL scan/compliance gate to the browser artifact. This preserves the
+browser coverage formerly provided by the larger API toolbox. Existing scans,
+ci-gate membership and publication/restore barriers remain enforced; no register
+exception, scanner threshold, assertion or timeout is relaxed.
+
+### BR-78 continuation: browser remediation and UI timing
+
+The initial browser-covered head `7b62ad02a` fails the existing HIGH/CRITICAL
+gate: PR [40646332385](https://github.com/rhanka/sentropic/actions/runs/40646332385)
+attempt 1, scan 122678494699, refuses 102 findings. Cold dispatch
+[40646328430](https://github.com/rhanka/sentropic/actions/runs/40646328430)
+also fails that gate. The earlier green `9d7c58cab` does not qualify this coverage.
+
+| Producer / consumer | 7b62 PR job / seconds | 7b62 cold job / seconds |
+| --- | --- | --- |
+| API | 122676009845 / 80 | 122676032511 / 246 |
+| Toolbox | 122676009646 / 87 | 122676032393 / 233 |
+| Full UI | 122676009766 / 421 | 122676032501 / 505 |
+| Browser | 122676009049 / 97 | 122676031311 / 164 |
+| Container gate | 122678494699 / 183, failure | 122680288141 / 329, failure |
+| Restore | 122677167776 / 168 | 122679853836 / 175 |
+| ci-gate | 122682967025 / 28, failure | 122688318784 / 18, failure |
+
+Rejected Trixie candidate `57c5d03fe`, run
+[40652025952](https://github.com/rhanka/sentropic/actions/runs/40652025952)
+attempt 1, fails with 57 OS findings lacking a Debian FixedVersion (scan
+122698285457 / 195s); bundled npm is clean. API/tools/UI/browser/restore jobs
+122694620184/122694620317/122694620385/122694619748/122696016656 take
+87/89/424/343/171s; ci-gate 122701111297 fails in 18s. No exception was added.
+
+The replacement uses pinned Node 24/Alpine 3.24, native Chromium and headless
+shell `155.0.8059.84-r0`, and FFmpeg `8.1.3-r0`. It omits unused engines/Xvfb,
+flattens the prepared filesystem while retaining apk scanner metadata, and
+registers the native executables through the locked Playwright registry.
+Build probes assert both engines' DOM title, screenshot and nonempty video.
+At `8bfd472f7`, job 122704840141 passes these probes; its browser artifact is
+517,331,610 bytes versus 774,218,936 bytes at `7b62ad02a`. First cache export
+still takes 178.8s; this is not a fully warm timing sample.
+
+Run [40655027953](https://github.com/rhanka/sentropic/actions/runs/40655027953)
+attempt 1 is superseded/cancelled after scan 122708320165 / 175s refuses two
+instances of CVE-2026-14456 in inherited libcrypto3/libssl3 3.5.7-r0.
+Trivy's fixed version is 3.5.8-r0; the live Alpine index provides 3.5.9-r0,
+which the Dockerfile now explicitly requires. API/tools/UI/browser/restore
+jobs 122704841279/122704841426/122704841128/122704840141/122706494384 take
+78/85/418/310/180s. ci-gate 122710829111 fails in 19s. The patched candidate
+requires fresh qualification; no register or severity change accepts either CVE.
+Patched producer 122711504732 at `c8d6fd2cc` explicitly upgrades both libraries
+to 3.5.9-r0 and passes the two browser probes; its compressed artifact is
+517,286,222 bytes. Only a completed exact-head scan/journey run can qualify it.
+
+The unchanged 83-file / 489-test UI suite now executes inside BuildKit with
+`--no-cache-filter=ui-tests`, rather than exporting/loading a development
+image. Test-step time falls from 87s to 37s (38s on the first candidate).
+Both profile builds and their embedded-output assertions remain blocking.
+Source COPY excludes API/browser changes and desktop packaging staging files.
+
+Identified cold UI job 122707557109, run
+[40656087209](https://github.com/rhanka/sentropic/actions/runs/40656087209)
+attempt 1 at `8bfd472f7`, completes in **329s**, versus the earlier 505s.
+It includes desktop 28s, production image 113s, fresh tests 36s, static profile
+106s, plus setup/save/uploads/cleanup. Browser 122707555892 takes 124s;
+API/toolbox 122707557086/122707557180 take 237/231s. These completed producer
+measurements do not qualify the old browser's security or meet 210s.
+
+**The full UI timing budget remains unmet.** Even its two cold build steps
+alone total 219s, before fresh tests, desktop packaging or transfer. In the
+cache-enabled 418s UI job, the builds take 180/133s, including 37.5/59.4s
+cache exports; production also spends 51.8s materializing cached dependencies.
+Independent scheduling belongs to BR-79; removing either profile/test is forbidden.
+
+There is also a measured warm-cache blocker: runs 40652025952 and 40655027953
+use the same main base `ea20bd9c026e9717d911514e763f8911b6981dde` and identical
+tracked UI/desktop/package sources, but their published `cowork.exe` SHA-256s
+are `647f409155cf930fdd6c326486c1128cb26162ed0f56dd3932e56e069a685568`
+and `6a6240346f31a27b962d15b47af1feefc9040a92b444ab1e8efa119007df5445`.
+Their metadata SHA-256 is identical:
+`fd1ad5eb2b08cef0841a7860b112a9c417c750caf406aef5792ee46cd47f75e3`.
+Consequently `COPY ui` misses and both profiles recompile despite unchanged
+tracked sources. The packager resolves native dependency ranges and emits pkg
+bytecode; this evidence establishes unstable output, not which mechanism causes it.
+The final image boundary excludes desktop bytes from the compiler's source COPY
+using a digest-pinned Dockerfile 1.19 frontend. A separate static-assets stage
+validates present desktop files and copies the fresh bytes into both production
+and static outputs after compilation. A build assertion rejects the executable
+inside compiler inputs. This preserves existing API-only/local optional-desktop
+behavior and the full-UI desktop prerequisite, without changing the Windows
+packager/runtime. New complete warm/cold receipts must qualify this isolation;
+the measurements above precede it and do not establish 180/210s acceptance.
+
+Superseded continuation runs 40651336571, 40651731668, 40654285195 and
+40657002180 remain cancelled. Dispatch 40654322669 is cancelled after browser
+job 122701728553 fails in 39s on a removed Playwright internal import; the
+locked package's exported coreBundle registry replaces it. Cancelled/unstarted
+jobs are not timing passes. Full run/job/step JSON and per-job TSV receipts are
+retained under `.tmp/ci-br78/receipts/<run-id>/` in the owner workspace; container
+uploads now explicitly retain their hidden `.security` report files.
+Final exact-head run/job/step receipts are generated after completion, alongside
+the workflow's `ci-capacity-<run-id>-<attempt>` artifact. They identify the actual
+head and checkout source separately; a documentation commit never inherits a
+green verdict from the prior head.
+
+At `213154c8a`, scan 122724595128 in run 40660088690 succeeds with **zero
+HIGH/CRITICAL browser findings**, without a register change. UI 122721657507
+takes 366s on the first isolated-asset cache population; all 489 unit tests pass.
+Direct archive inspection verifies identical fresh desktop bytes in production
+and static output (`7fddf56e1ede19ffc9cb125f871eb2a0c76edfaa42f2537402307028f36e2aab`)
+and nonempty Chrome/VSCode downloads in both profiles. The full run is still
+blocked by group-e 122724595102: the comment journey requests its seeded folder
+under an unrelated workspace and gets 404 before any AI assertion.
+BR78-EX5 moves its workspace initialization before application startup; no
+assertion, membership, retry or timeout is relaxed. A fresh exact-head full run
+must qualify that setup correction and measure reuse of both compiler profiles.
+
+At `8f9cf1d9b`, UI 122735162130 in run 40664255786 completes in 296s:
+production 25s (compiled layer cached), fresh tests 68s, static profile 142s,
+desktop 28s. The test target lacked an external parent-cache import and reran
+npm ci in 28.7s; the subsequent static profile rebuilt in 69.7s and exported
+cache for 70.5s. The correction imports the producer's parent UI cache into
+the test build while still forcing `ui-tests` execution and exporting no test
+result cache. Cold mode imports nothing. Both the comment journey and the
+unchanged container gate pass on this head; complete new warm/cold receipts
+must verify the cache correction before accepting a timing budget.
+
+Both full runs at GitHub head `8f9cf1d9ba28c0a2ede50f75f1a1956618231df1`
+complete successfully (attempt 1). The PR checkout source is
+`ab093d0227f20b23cea7b42b089aba7bc492bb1e`; cold dispatch checks out the branch
+head. These receipts qualify all selected assertions and the unchanged gates,
+including native browser coverage, independently of the unmet timing budget.
+
+| Producer / consumer | PR 40664255786 job / seconds | Cold 40664434461 job / seconds |
+| --- | --- | --- |
+| API | 122735162037 / 81 | 122736863314 / 229 |
+| Toolbox | 122735161913 / 91 | 122736863245 / 244 |
+| Full UI | 122735162130 / 296 | 122736863560 / 330 |
+| Browser | 122735161374 / 83 | 122736862454 / 145 |
+| Container gate | 122741299974 / 165 | 122744107853 / 190 |
+| Restore | 122739165320 / 191 | 122743353511 / 196 |
+| ci-gate | 122744805201 / 19 | 122748541061 / 19 |
+
+### BR-78 reviewed head and carried acceptance
+
+At head `d072d24ecc4caf30dba18e4476366efd58a4d2bb`, PR run
+[40713883861](https://github.com/rhanka/sentropic/actions/runs/40713883861),
+attempt 1, is completed/success in 1465s wall-clock. These are cache-enabled
+job durations, including job setup, embedded prerequisites, builds and transfers:
+
+| Job | Job ID | Seconds |
+| --- | --- | --- |
+| API | 122906441972 | 111 |
+| Toolbox | 122906442347 | 121 |
+| Full UI | 122906441859 | 255 |
+| Browser | 122906441182 | 73 |
+| Container gate | 122909971487 | 209 |
+| Restore | 122909971457 | 196 |
+| IdP screens | 122913533033 | 290 |
+| VSCode | 122913532961 | 142 |
+| E2E a / b / c / d / e | 122909358820 / 122909359737 / 122909358919 / 122909358935 / 122909358946 | 270 / 154 / 303 / 200 / 211 |
+| Capacity receipts | 122918555558 | 17 |
+| ci-gate | 122919004635 | 18 |
+
+Full UI is **255s versus the 180s warm target**, a 75s breach. No cold run
+exists at this reviewed head; the older 330s cold sample at `8f9cf1d9b`
+cannot qualify the parent-cache correction. The final pushed head receives a
+forced-cold dispatch (`image_cache_mode=cold`, no image cache import/export)
+and its own PR qualification. After completion, full run/attempt/job/step JSON,
+per-job durations, actual head/checkout provenance and target comparisons are
+recorded in `.tmp/ci-br78/receipts/<run-id>/` and the final head/run handoff.
+
+Lots 3 and 5 explicitly carry to a follow-up (CI train owner; number pending):
+repeated warm/cold acceptance, API-case UI ≤120/150s, full readiness ≤180/210s,
+the scoped rollback drill and exhaustive listed final validation. This PR's
+exact final head must still pass CI. Its delivered cache/transport/browser
+remediation does not close performance or BR77 acceptance.
+
+Exact apk pins fail closed when Alpine retires a package version; maintainers
+must explicitly repin Chromium/headless-shell, FFmpeg and libcrypto3/libssl3,
+then repeat browser probes, journeys and the unchanged container gate. The
+new runtime/cache action is pinned to the source-verified v3 commit
+`3cb05d89e1f492524af3d41a1c98c83bc3025124` at all four call sites.
