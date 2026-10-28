@@ -31,11 +31,11 @@ beforeEach(() => {
     current: vi.fn(async () => allowed),
     acls: { getArtifactAcl: vi.fn(async () => ({ ownerId: 'reader', isPublic: false, withdrawn: false,
       storageScopeId: 'scope', grants: [] })) },
-    lifecycle: { stateOf: vi.fn(async () => 'active'), canRead: () => allowed },
+    lifecycle: { stateOf: vi.fn(async () => 'active' as const), canRead: () => allowed },
     publication: { getCurrent: vi.fn(async () => ({ releaseId: currentRelease, manifest })),
       getRelease: vi.fn(async (id: string) => [releaseA, releaseB].includes(id) ? { releaseId: id, manifest } : undefined) },
     blobs: { getBlob: vi.fn(async () => bytes) },
-    activate: vi.fn(async () => ({ subjectId: 'reader', artifactId, releaseId: releaseA, channel: 'stable',
+    activate: vi.fn(async () => ({ subjectId: 'reader', artifactId, releaseId: releaseA, channel: 'stable' as const,
       ticketId: 'ticket', expiresAt: now + 60000 })),
   };
   host = createContentHost(options);

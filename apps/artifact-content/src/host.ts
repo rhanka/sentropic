@@ -13,7 +13,10 @@ export interface ContentHostOptions {
   activate(input: ContentActivationInput): Promise<TicketRecord | undefined>;
   acls: Pick<ContentHandlerDeps['acls'], 'getArtifactAcl'>;
   lifecycle: Pick<ContentHandlerDeps['lifecycle'], 'stateOf' | 'canRead'>;
-  publication: Pick<ContentHandlerDeps['publication'], 'getCurrent' | 'getRelease'>;
+  publication: {
+    getCurrent(id: string): Promise<{ releaseId: string; manifest: string } | undefined>;
+    getRelease(id: string): Promise<{ releaseId: string; manifest: string } | undefined>;
+  };
   blobs: Pick<ContentHandlerDeps['blobs'], 'getBlob'>;
 }
 const NONCE_COOKIE = '__Host-artifacts_nonce';
@@ -39,6 +42,7 @@ export function createContentHost(options: ContentHostOptions) {
   const handler = createContentHandler({ ...options,
     // The upstream content handler uses only these read ports, never publication mutations.
     lifecycle: options.lifecycle as ContentHandlerDeps['lifecycle'],
+    acls: options.acls as ContentHandlerDeps['acls'],
     publication: options.publication as ContentHandlerDeps['publication'],
     blobs: options.blobs as ContentHandlerDeps['blobs'],
     tickets: { async issue() { throw new Error('Public ticket issuance disabled'); },
