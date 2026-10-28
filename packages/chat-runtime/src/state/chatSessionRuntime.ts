@@ -286,3 +286,143 @@ const isControllerStreamClient = (
 
 const resolvePollJob = (
   transport: unknown,
+  configured?: ControllerPollJob,
+): ControllerPollJob => {
+  if (configured) return configured;
+  if (transport && typeof transport === 'object') {
+    const candidate = (transport as { pollJob?: unknown }).pollJob;
+    if (typeof candidate === 'function') {
+      return candidate.bind(transport) as ControllerPollJob;
+    }
+  }
+  return async () => ({ status: undefined });
+};
+
+const sameHostRefs = (
+  left: HostRefs | null,
+  right: ChatSessionRuntimeHost,
+): boolean =>
+  Boolean(left) &&
+  left!.transport === right.transport &&
+  left!.streamClient === right.streamClient &&
+  left!.checkpointHost === right.checkpointHost &&
+  left!.localToolMachine === right.localToolMachine;
+
+export function createChatSessionRuntime<
+  Message extends ChatSessionRuntimeMessage = ChatSessionRuntimeMessage,
+>(
+  sessionId: string,
+  config: ChatSessionRuntimeConfig<Message> = {},
+): ChatSessionRuntime<Message> {
+  const controller = createChatLoopController<Message, unknown>();
+  const listeners = new Set<(s: ChatSessionSnapshot<Message>) => void>();
+
+  assertString(sessionId, 'sessionId');
+  assertString(config.initialDraft ?? '', 'initialDraft');
+  assertJsonSafe(config.initialMessages ?? [], 'initialMessages');
+  assertJsonSafe(config.initialAttachments ?? [], 'initialAttachments');
+  assertJsonSafe(config.initialCheckpoints ?? [], 'initialCheckpoints');
+  assertJsonSafe(config.initialTodo ?? null, 'initialTodo');
+  if (config.initialLastAppliedSequence !== undefined) {
+    assertFiniteNumber(config.initialLastAppliedSequence, 'initialLastAppliedSequence');
+  }
+
+  let currentSessionId = sessionId;
+  let draftState = createDraftState(config.initialDraft ?? '');
+  let attachments: ChatSessionAttachment[] = cloneMutableValue([
+    ...(config.initialAttachments ?? []),
+  ]);
+  let checkpoints: ChatSessionCheckpoint[] = cloneMutableValue([
+    ...(config.initialCheckpoints ?? []),
+  ]);
+  let todo: ChatSessionTodo | null = cloneMutableValue(config.initialTodo ?? null);
+  let lastAppliedSequence = normalizeSequence(
+    config.initialLastAppliedSequence ?? 0,
+  );
+  let attachGeneration = 0;
+  let attachedRefs: HostRefs | null = null;
+  let streamAttached = false;
+  let viewBindings = 0;
+  let disposed = false;
+  let controllerUnsubscribe: (() => void) | null = null;
+
+  const readMaxAppliedSequence = (): number => {
+    const loop = controller.getSnapshot();
+    let max = 0;
+    for (const message of loop.messages) {
+      const sequence = Number(message.sequence ?? 0);
+      if (Number.isFinite(sequence)) max = Math.max(max, sequence);
+    }
+    for (const eventList of loop.initialEventsByMessageId.values()) {
+      for (const event of eventList) {
+        const sequence = Number(event.sequence ?? 0);
+        if (Number.isFinite(sequence)) max = Math.max(max, sequence);
+      }
+    }
+    for (const eventList of loop.projectedStreamEventsById.values()) {
+      for (const event of eventList) {
+        const sequence = Number(event.sequence ?? 0);
+        if (Number.isFinite(sequence)) max = Math.max(max, sequence);
+      }
+    }
+    return normalizeSequence(max);
+  };
+
+  const syncLastAppliedSequenceFromController = (): void => {
+    lastAppliedSequence = Math.max(lastAppliedSequence, readMaxAppliedSequence());
+  };
+
+  const buildSnapshot = (): ChatSessionSnapshot<Message> => {
+    const loop = controller.getSnapshot();
+
+    return Object.freeze({
+      sessionId: currentSessionId,
+      messages: cloneSnapshotValue(loop.messages),
+      projectedTimelineItems: cloneSnapshotValue(loop.projectedTimelineItems),
+      draft: draftState.draft,
+      input: draftState.input,
+      attachments: cloneSnapshotValue(attachments),
+      attachmentSummary: cloneSnapshotValue(summarizeAttachments(attachments)),
+      checkpoints: cloneSnapshotValue(checkpoints),
+      todo: cloneSnapshotValue(todo),
+      pendingLocalToolPermissionPrompts: cloneSnapshotValue(
+        loop.pendingLocalToolPermissionPrompts,
+      ),
+      lastAppliedSequence,
+      attachGeneration,
+      viewBindings,
+      disposed,
+    });
+  };
+
+  const notify = (): void => {
+    if (listeners.size === 0) return;
+    const current = buildSnapshot();
+    for (const cb of [...listeners]) {
+      try {
+        cb(current);
+      } catch {
+        // Isolate subscribers: one view bridge must not break the runtime.
+      }
+    }
+  };
+
+  const assertActive = (): void => {
+    if (disposed) {
+      throw new Error('ChatSessionRuntime is disposed');
+    }
+  };
+
+  controllerUnsubscribe = controller.subscribe(() => {
+    syncLastAppliedSequenceFromController();
+    if (!disposed) notify();
+  });
+
+  if (config.initialMessages && config.initialMessages.length > 0) {
+    controller.setMessages(cloneMessages(config.initialMessages));
+  }
+
+  const setDraft = (value: string): void => {
+    assertActive();
+    assertString(value, 'draft');
+    draftState = syncDraftFromInput({
