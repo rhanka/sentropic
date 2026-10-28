@@ -106,3 +106,21 @@ describe('agents view markers — apply', () => {
     await markers.markViewed('s1', 900);
     const [applied] = await markers.apply([entry('s1')]);
     expect(applied?.lastViewedAt).toBe(900);
+  });
+
+  it('keeps the most recent of the local marker and a server-provided value', async () => {
+    const store = asyncStore();
+    const markers = createAgentsViewMarkers({ storage: store.adapter });
+    await markers.markViewed('s1', 100);
+    const [localOlder] = await markers.apply([entry('s1', 900)]);
+    expect(localOlder?.lastViewedAt).toBe(900);
+    await markers.markViewed('s2', 900);
+    const [localNewer] = await markers.apply([entry('s2', 100)]);
+    expect(localNewer?.lastViewedAt).toBe(900);
+  });
+
+  it('leaves an unmarked entry untouched rather than inventing a timestamp', async () => {
+    const [applied] = await createAgentsViewMarkers().apply([entry('s1')]);
+    expect(applied?.lastViewedAt).toBeUndefined();
+  });
+});
