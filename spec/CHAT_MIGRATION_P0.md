@@ -53,6 +53,8 @@ Re-estimate physical separation at **4–6 engineering days**, replacing P1's 2�
 
 Required P0–P5/P2b effort becomes **21–36 days**; with U0 preparation **21.5–36.5**. M0–M4 remains **5–10**; total **26.5–46.5** (159–279 focused hours), approximately **34–59 days with 25% reserve**. No external wait or owner test time is included. The Drawer contract gap can add upstream lead time; it blocks P4, not P1/P2. The broader editor and follow-on features stay outside this estimate.
 
+This is an **estimate proposal for conductor reconciliation before P1 dispatch**, not a change to the earlier plan's APPROVE. Its owner summary still states **24.5–43.5 days (31–55 with reserve)** and omits the runtime package name on line 4. The conductor owns refreshing that summary to identify `@sentropic/chat-runtime` and show the proposed revised range alongside the approved baseline; P0 does not edit the plan outside this branch's scope. Do not circulate the new totals as owner-ratified delivery commitments.
+
 ## Release and acceptance gates
 
 P0 → P1 → P2 → P2b/P4 → P5 → U0; P3 may overlap after file ownership is agreed and must complete before P4/P5. P2 is the single L0b+L0c cutover, with no migration flag or fallback path. P2b completes reusable header handover and P3 removes competing chat styling; together leave zero `dark:` variants in the app widget. P4 consumes a qualified DS Drawer without implementing a host-local substitute; F15 later replaces the current package drop zones.
