@@ -42,5 +42,5 @@ a3fdf43de3d58d6f5e8e8feec34c8a94e1215421a51e38f96b1b50848db5a110  e2e/tests/07-i
 bf88daa876cd4415ee4f00391ada647e8b73eb4c967234f4f918f800e3adbf7e  ui/tests/chat/comment-adapter.test.ts
 dec6fff094099b1dbb6b7a3ddd1fe69976dfb1188d2f06d71636a04e9df579f3  package-lock.json
 12bbef09995cbd4356adac1cf8f9846f9178305804ccefd95445eed894213ec4  ui/package-lock.json
-2aae50639feddccbae1d359a637e6a1d5de7022cfb4eefe2cba77e11babdfde5  ui/tests/fixtures/canvas-live/b1-content.json
+35bbb994e22ab63b72059d139c1e447d18b44c3b3b8fb05498f9dbde28f239a1  ui/tests/fixtures/canvas-live/b1-content.json
 2bfcf5c301f92f1f0bb804f3b26508cc80bc5bd10d7e85ef02409b984f1fbd76  api/tests/fixtures/canvas-live/b1-save-payloads.json

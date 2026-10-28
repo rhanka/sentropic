@@ -6,7 +6,7 @@ The classes below group inventory and coverage tests only. Under Q-CL-1 (owner a
 
 ## Baseline and drift
 
-The approved host plan is SHA-256 `f130f04c4597b483b089ef5b3b6d6d9502b61a36111859f62f835b37c9bc19e2`, H0 lines 69–81. Its survey pin is `de7ab8d3157b1859648e0404b78c182ea9cd21e4`. `git diff <survey> <base> -- <the ten files below> packages/chat-core/src/ports.ts ui/src/lib/extensions` returned no output: **zero drift** in those evidence paths. No statement of zero drift elsewhere is implied.
+The approved host plan r3 is SHA-256 `a48f54be6ce82b05e697f1c3f7dbc433ed60b69f5c2e377b6fb71faad9ababe7`, H0 lines 69–81. Its survey pin is `de7ab8d3157b1859648e0404b78c182ea9cd21e4`. `git diff <survey> <base> -- <the ten files below> packages/chat-core/src/ports.ts ui/src/lib/extensions` returned no output: **zero drift** in those evidence paths. No statement of zero drift elsewhere is implied.
 
 `rg -n '<EditableInput' ui/src` yields **24 mounts across 10 files**, including layout alternatives and repeated rows only once per source site. Every row below has one class and one host save authority. Citation decoration is an overlay, not an additional mount/class. `migrated 0/24`; all seven adoption classes remain `not-started`.
 
