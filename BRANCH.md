@@ -1,120 +1,109 @@
-# Feature: Live STT L8a gateway speech policy and usage
+# Feature: Live STT L6a shared TTS and voice loop
 
 ## Objective
-- [ ] Bind bounded speech admission, usage and settlement to the gateway ledger owner.
-- [ ] L8 acceptance is conditional: this PR delivers L8a policy/contracts only, not M1-ready cloud activation.
+Deliver L6a: `live-speech/src/node/{tts-registry,voice-loop,playback}.ts`, a local eSpeak NG TTS entry (pinned, digest-verified like arecord), configurable stages, bounded narration and barge-in on both mic modes, wired to the L4 capture/control contracts.
 
 ## Scope / Guardrails
-- [x] Base origin/feat/live-stt-l2; branch feat/live-stt-l8; worktree tmp/worktrees/stt-l8.
-- [x] Spec: .tmp/live-stt/spec-plan.md L8, sections 7/11.2; aggregate USD 5 per UTC day / USD 20 campaign.
-- [x] Make-only; ENV=test-stt-l8 last; no containers before 2026-10-27 21:00 UTC; shared flock thereafter.
-- [x] Specific-file staging; make commit; under 150 changed lines per commit; no attribution trailers.
-- [x] No inference, provider credentials, ledger replacement, native dependencies, publication or merge.
+- Scope limited to L6a voice loop: TTS registry (local espeak-ng entry, config-only selection, no silent fallback), playback driver (aplay backend, cancellable within the fence), voice loop (bounded narration, VAD/key/stop barge-in, both mic modes), §8.1 receipt blocked-never-claimed.
+- No L2 core files (`live-speech/src/core/**` belongs to the parallel L2 lane, still unmerged PR #776; the loop consumes only L3/L4 contracts and leaves the journal seam open).
+- L3b is PARKED (no usable whisper artifacts under repo constraints): single L3 engine, engine seam kept open (ports injected, never a fixed engine in the loop).
+- No llm-mesh/cluster-mesh source edits (L1c `SpeechMicMode` consumed as a type only, like L4).
+- No new npm dependencies: pure Node (node:child_process spawn with argv, no shell), no Python, no node-gyp.
+- No microphone and no TTS binary in tests (fake ports + node fixtures only); no audio payload in logs (counts/ids/text only).
+- Make-only workflow, no direct Docker commands.
+- Branch development in isolated worktree `tmp/worktrees/stt-l6a`.
+- Automated test campaigns on dedicated env `ENV=test-stt-l6a`, never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off).
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
+- Docker is yielded to radar until 21:00 UTC 2026-10-27: no make target that starts containers before then; author + push, GitHub CI runs. `make scope-check` is replaced meanwhile by host `harness check scope` (container-free); the lane scope-check reruns after 21:00 UTC with `make test-live-speech ENV=test-stt-l6a`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/llm-gateway/src/speech/**`
-  - `packages/llm-gateway/tests/speech-*.test.ts`
-  - `packages/llm-gateway/tests/fixtures/speech-*.ts`
-  - `packages/llm-gateway/package.json`
-  - `packages/llm-gateway/README.md`
-  - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/src/modules/catalog.ts`
-  - `packages/cluster-mesh/tests/fixtures/train.ts`
-  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
-  - `packages/cluster-mesh/tests/modules/topology-ranges.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/optional-install.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/skew-invariants.ts`
-  - `packages/cluster-mesh/tests/packaging/skew-invariants.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `package-lock.json`
-  - `.tmp/live-stt/l8/**`
-  - `.github/workflows/ci.yml`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `api/tests/unit/gateway-package-version.test.ts`
+  - `packages/live-speech/**`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `api/src/**`
-  - `.track/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile`
+  - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
-  - `packages/llm-gateway/src/index.ts`
-  - `package-lock.json`
 - **Exception process**:
-  - [x] Declare BRL8-EXn with reason, impact and rollback before sensitive changes.
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [x] CI 40624700431 passed on 82b24e2b3; main then advanced through PR801 to d86b627f8. Merge that main without source conflicts (retain this branch plan), and require fresh exact-head CI before READY.
-- [x] Integration regression (CI 40621929792): official lock refresh also advanced the unrelated artifacts baseline to 0.2.4. Restore the exact published 0.1.4 entry from main, preserving the L8 gateway archive and cluster/mesh tuple; `artifacts-tuple.spec.ts` explicitly requires that baseline.
-- [x] Integration evidence: gateway 0.22.0 BLOCK archive SHA-256 `cbf4ef6c51536ed0b26bb2a9f29901c927ef1a986d1d8039e7c44d8394fdb54b`; official `refresh-lazy-package-lock` passes with the verified sibling and current mesh 0.30.0; full gateway suite passes 1370 tests / 78 files with `ENV=test-integrator-stt-l8` under the shared Docker lock.
-- [x] Integration: retain main's llm-mesh 0.30 support with the L8 speech floor 0.28 and gateway 0.22.0; use cluster-mesh 0.23.3 above published 0.23.2. Regenerate the selected release lock through the official verified-sibling qualification target; remove the obsolete L2 PR-base filter now that PR798 targets main.
-- [x] BRL8-EX7: owner authorizes updating only the API gateway release-tuple test from 0.21.3 to feature version 0.22.0. Run 40511994178 imports 0.22.0 and fails the old equality assertion; unrelated id errors are not its failure. Run the targeted test before the unchanged full API unit suite in GitHub CI; no local Docker before 21:00 UTC. Rollback restores the expectation and removes the targeted CI step with the gateway bump.
-- [x] BRL8-EX6: run 40505571158 proves the runtime gateway range and frozen selected tuple still reject gateway 0.22.0. Align only catalog/train ranges, affected test expectations and fixture package/lock; use the verified CI gateway archive's SHA-512. Cluster 0.23.1 supplies the required source bugfix bump. Rollback restores the old ranges/tuple with gateway 0.21.3.
-- [x] Frozen gateway 0.22.0 lock integrity comes from run 40507121290, llm-gateway-candidate artifact 12735344167; archive SHA-256 30529da3c0230df3787c30b108b6e7d9f2ba10479ecebd5af0b31b7f02588dc8 matches the prior successful BLOCK packs.
-- [x] Run 40509273838 passes gateway (1370 tests, including 27 speech), API/UI typecheck/lint and both BLOCK packs; align the two remaining installed-gateway version assertions via TRAIN_LLM_GATEWAY_VERSION=0.22.0.
-- [x] BRL8-EX5: retain the verified gateway pack as a seven-day CI artifact for the required frozen Cluster Mesh release-lock refresh while local Docker is reserved; no publication, credential, permission or validation change. Rollback removes the artifact upload and pack destination.
-- [x] BRL8-EX4: update the real gateway dependency-floor assertion in scripts/ci/publishable-ci-wiring.test.mjs from 0.27.0 to required speech floor 0.28.0 (run 40504853431); impact is one CI regression expectation, no gate bypass. Rollback restores the assertion with the old dependency range.
-- [x] R1 P1/P2-1: build incremental totals through a mutable dimension map; require llm-mesh >=0.28.0 for speech contracts.
-- [x] R1 manifests: registry latest gateway 0.21.3 / cluster-mesh 0.22.4 on 2026-10-27; gateway feature 0.22.0 and cluster peer-range patch 0.23.1 remain unpublished BLOCK candidates. Mirror versions/ranges in package-lock.json; retain full pack gates.
-- [ ] G-LEDGER (open, 2026-10-27): L8b durable owner-adapter sub-lot, gateway/ledger owner + Sol; outside this PR's api/** scope. Bind SpeechLedgerPort to control.budgets/budget_holds/cost_ledger, allocator receipts and leases; qualify real DB restart, replica concurrency, UTC rollover, crash/replay and unavailable-store refusal before L8 acceptance or cloud activation.
-- [x] R1 P2-2: expose reconcileSpeech on speech/settlement for L7: operation/attempt rows join holds, allocator receipts and usage entries; report duplicate, uncounted and orphan evidence without a new store.
-- [x] R1 reconciliation also detects the same scoped native turn counted under different submit keys/epochs; tenant/session boundaries remain isolated.
-- [x] Docker reservation takes precedence over the container-backed scope target; temporary host Make adapter invokes the same installed harness C2 check before every commit.
-- [x] Registry latest is 0.21.3 (2026-10-27); feature version will be 0.22.0, without publication.
-- [x] BRL8-EX1: gateway 0.22.0 requires widening cluster-mesh's optional gateway peer upper bound from 0.22 to 0.23 and mirroring workspace metadata in package-lock.json. Initial manifest compatibility is completed by BRL8-EX6's runtime range and frozen tuple; rollback restores the previous version/range fields.
-- [x] BRL8-EX2: permit .tmp/live-stt/l8 review/validation receipts only; no raw media, credentials or accounting store.
-- [x] BRL8-EX3: CI ignores pull requests targeting feat/live-stt-l2. Add only that base to the existing pull_request branch filter so PR798 runs standard gates; no job, secret, permission or publication change. Rollback removes the one branch entry.
-- [ ] G-REVIEW: author-complementary peer selection remains pending; .tmp/live-stt/l8/review.md records exact target, requested author tuple and selection failure. No reviewer allocation inferred; no consensus claimed.
-- [x] G-LEDGER handoff delivered through signed h2a to live s-conductor (env:send:a2aaa010-2d5d-444b-9a7f-1de14fb5d355); gateway/ledger named-session discovery returned no matches.
+- [x] Integration validation: 157 tests / 18 files, source/test types, lint and package build pass through the official targets under the shared Docker flock with `ENV=test-integrator-stt-l6a`.
+- [x] Integration after L2/L4/L8: retain both independent playback suites by moving the L6a driver suite to `tests/node-playback.test.ts` and keeping the L2 core suite at `tests/playback.test.ts`; preserve this branch plan.
+- [x] No conditional path touched (no Makefile/CI changes: `test-live-speech` already covers `tests/**`, `validate-live-speech` already gates on `packages/live-speech/**`; verified with host `harness check scope`, PASS C2).
+- [x] Docker-yield ended: official package tests, typecheck, lint and build pass in the integrator's dedicated test environment under the shared lock; scope is checked mechanically before the integration commit.
 
 ## AI Flaky tests
-- [x] Deterministic fixtures only; no provider calls or waiver.
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch, sequential authoring; shared gateway/ledger owner files remain untouched.
-- [ ] Multi-branch not required.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: Single-package lot with one test cycle; no UI.
 
 ## UAT Management (in orchestration context)
-- [x] Library contract fixtures only; device/provider qualification belongs to L9/L13/L7.
+- [x] No UI change; no UAT required (no microphone path exercised by a human in this lot; narration proven with fake ports + qualified host aplay binary).
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read Docker lock, project rules, L8 row, M1 receipts and G-LEDGER/G-CLOUD/G-QUOTA.
-  - [x] Fetch L2 head 3b793cb89c4a0427152907f986f9415b9c348122 and pass mechanical harness branch check.
-  - [x] Inspect existing CostContext, pool/budget admission and durable host ledger; no new accounting store.
-  - [x] Reserve ENV=test-stt-l8; package fixtures need no listening ports (reserved API/UI/mail: 9040/5240/1140).
-- [ ] **Lot 1 — Typed usage and pricing**
-  - [x] src/speech/usage.ts: duration/token/character dimensions, revision normalization and pinned USD pricing.
-  - [x] tests/speech-metering.test.ts: cumulative/incremental updates, duplicate/conflicting revisions, absent dimensions and invalid prices.
-- [ ] **Lot 2 — Admission binding**
-  - [x] Pin the campaign across awaits and require connections to end before UTC rollover; bind the authoritative backend operation reference.
-  - [x] Add regression fixtures for UTC-boundary refusal, immutable async identity, payload exclusion and missing bound price dimensions.
-  - [x] Preserve L2's optional native turn ID before acknowledgement while requiring the admitted allocator/submit/backend operation links.
-  - [x] Require the authenticated workspace, matching L2 receipt scope and the M1 identity contract.
-  - [x] Define transaction views over existing owner holds/buckets/allocator receipts; no production store supplied.
-  - [x] src/speech/admission.ts: trusted campaign identity, UTC daily and campaign caps, authoritative allocator links, bounded holds and fail-closed host port.
-  - [x] tests/speech-admission.test.ts: daily/total refusal, provider switching, concurrent reservations, restart/replay, allocator identity and ledger outage.
-- [ ] **Lot 3 — Settlement binding**
-  - [x] Preserve partial overrun evidence and test rollback after both financial entry and budget mutation, before hold closure.
-  - [x] src/speech/settlement.ts: one billable operation, conservative missing-usage estimate, signed true-ups, replay and retained uncertainty.
-  - [x] tests/speech-settlement.test.ts: missing usage, adjustment idempotence, restart, unavailable sink and no duplicate backend counted unit.
-  - [x] tests/fixtures/speech-ledger.ts: deterministic owner transaction fixture; never exported or used as a production ledger.
-- [ ] **Lot 4 — Contract review and integration documentation**
-  - [x] Document ledger-owner binding, dispatch bounds, limitations and G-LEDGER acceptance in README.md.
-  - [x] Export speech subpath and bump package to 0.22.0; shared owner sources change only for BRL8-EX6's bounded compatibility range.
-  - [ ] Reconcile independent correctness and accounting/security reviews; no self-certification of durable host acceptance.
-- [ ] **L8b — Durable owner adapter (gateway/ledger owner + Sol; dated 2026-10-27; separate lot)**
-  - [ ] Supply the real DB SpeechLedgerPort adapter and one trusted cross-provider campaign identity; no production adapter is provided by L8a.
-  - [ ] Pass real DB crash/restart, multi-replica reservations, rollover, adjustment dedupe and store-outage tests; attach evidence to G-LEDGER before accepting L8/M1.
-  - [ ] Keep L9/L13 fixture-only and L8 acceptance conditional until this gate passes; scheduling/owner acknowledgement remains pending.
-- [ ] **Lot 5 — Draft delivery and validation**
-  - [x] Prepare .tmp/live-stt/l8/local-gate.sh: 21:00 UTC guard, exact-head/clean-worktree checks, one package run, locked cleanup and persisted exit receipts.
-  - [x] Push feat/live-stt-l8; open draft PR798 against feat/live-stt-l2 with this plan as body and post implementation plan.
-  - [ ] Monitor exact-head GitHub CI: lint/typecheck/test/build/pack; resolve branch failures.
-  - [x] After 21:00 UTC: full `make test-llm-gateway ENV=test-integrator-stt-l8` passes under the shared flock (1370 tests / 78 files).
-  - [ ] Cleanup: flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make down ENV=test-stt-l8.
-  - [ ] Report draft PR, head, CI and any remaining G-LEDGER owner gate; preserve BRANCH.md, no merge.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read packet, spec-plan r3 (L6a l.425, voice §l.239-245, retention table l.339, §9 gates l.364), §8.1 receipts, L2 (#776, unmerged — journal seam left open) and L4 contracts.
+  - [x] Create worktree `tmp/worktrees/stt-l6a` on `feat/live-stt-l4` as `feat/live-stt-l6a`.
+  - [x] Qualify host audio helpers: aplay 1.2.15.2 (byte-identical to vetted arecord, same sha256), espeak-ng BINARY ABSENT (lib 1.1.51 + data 1.52.0 GPL-3 present, no CLI) → entry unwired, receipt blocked.
+  - [x] Confirm scope: no Makefile/CI changes, no exceptions; Docker yielded to radar until 21:00 UTC (host `harness check scope` + GitHub CI meanwhile).
+  - [x] Lot gate: host `harness check scope` PASS C2; lane `make scope-check` reruns post-21:00 UTC.
+- [x] **Lot 1 — TTS registry**
+  - [x] `src/node/tts-registry.ts`: `TtsEnginePort`, espeak-ng entry (stdin/stdout pipe, digest-verify with empty built-in pins + `ESPEAK_DIGESTS` allowlist, injected runner for tests, abort kills the child), `TtsRegistry` config-only selection, fail-closed unknown engines.
+  - [x] `tests/tts-registry.test.ts`: selection/switch, capability differences, unpinned refusal, unknown refusal, pipe argv/stdin, abort propagation, real-child synth abort with reap.
+  - [x] Lot gate: lane `validate-live-speech` green on 07330b113 (CI run 40522166118; lane `make` runs post-21:00 UTC).
+- [x] **Lot 2 — Playback driver**
+  - [x] `src/node/playback.ts` + `tests/fixtures/fake-aplay.mjs` (mode 0755): aplay backend on stdin (digest pin = vetted alsa-utils bytes, no audio files), sticky pre-spawn cancel, SIGTERM then 100 ms SIGKILL + reap.
+  - [x] `tests/node-playback.test.ts`: piped natural end with exact-bytes proof, fence cancel ≤150 ms with pid reaped, SIGKILL escalation path, pre-spawn cancel with positive control, nonzero exit, digest refusal.
+  - [x] Lot gate: lane `validate-live-speech` green on 07330b113 (CI run 40522166118; lane `make` runs post-21:00 UTC).
+- [x] **Lot 3 — Voice loop**
+  - [x] `src/node/voice-loop.ts`: chunked narration (120-char clause flush, truncated flag), VAD/key/stop barge-in with mic-mode gating, epoch floor (L2 fence seam), default sensitive guard, speak/played/cancelled/error outcomes, hygiene (no retained audio, no files).
+  - [x] `tests/voice-loop.test.ts`: chunk preview, one submission, immediate clear, sensitive refusal, truncation, epoch fence (late-speak refused, next accepted), key wiring, real synth/playback phases, stop/close mapping, leakage, receipt blocked.
+  - [x] Lot gate: lane `validate-live-speech` green on 07330b113 (CI run 40522166118; lane `make` runs post-21:00 UTC).
+- [x] **Lot R1 — Opus r1 review fixes (pipe + sticky cancel + chunks)**
+  - [x] P1-1: fixture mode 0755, `withMode` awaits, runner seam bypasses verify, refusal paths via fixture binary/missing binary.
+  - [x] P1-2: sticky generation counter, barge in every phase (synth/prespawn/playing) with real playback + pid proofs, latency bound, SIGKILL 100 ms, epoch carried.
+  - [x] P1-3: `--stdin`/`--stdout` pipe with text on stdin, aplay stdin autodetect (man-page grounded), zero audio files, trust boundary in receipt.
+  - [x] P1-4: chunked flush (120 chars), preview events, one submission, immediate clear, sensitive guard, truncated flag and events, explicit stages.
+  - [x] P2: close-during-playback maps to cancelled, key-toggle barge wired, engineId `espeak-ng/unpinned`, TOCTOU recorded.
+- [x] **Lot R2 — Opus r2 review fixes (epoch fence + gate bounds)**
+  - [x] P1-A: duplicate `complete()` removed (TS2393 red), fixture 0755 verified via `git ls-files -s`, pre-spawn positive control.
+  - [x] P1-B: cancel latency asserted ≤150 ms (SIGTERM path), SIGKILL escalation path tested on a real ignoring child (bound 500 ms in receipt), real-child synth abort tested with reap.
+  - [x] P1-C: epoch floor — `barge(source, {turnEpoch})` raises it, `turnEpoch <= floor` refused, untagged refused once epochs are in use; late-speak(N) refused, speak(N+1) accepted.
+  - [x] P2: Lot gates per lot, stale hygiene wording replaced, feedback box ticked, commits split per file, default sensitive set (de-globalled), title reworded, pidfiles cleaned.
+- [x] **Lot R3 — Opus r3 review fix (pre-spawn barge fence)**
+  - [x] P1-R3: abort checked before spawn in both `synthesize()` (post-verify fence) and `runEspeak()` (pre-spawn, settle without spawning); `isAborted()` call-boundary read (readonly narrowing).
+  - [x] P1-R3 test: barge during `verifiedBinary()` asserts reject + no pidfile (ENOENT) with a positive control (same setup spawns, barge reaps, ESRCH). Superseded by Lot R4: the pidfile-only absence proof missed stdin-held orphans; the spawn log now covers it.
+  - [x] P2-B: fixture writes the pidfile only after the SIGTERM handler is installed, so a booted pid proves the escalation path is armed.
+  - [x] Lot gate: lane `validate-live-speech` green on the R3 head 46f5be6a (CI run 40565062747, lane-only; the run as a whole failed on e2e group-d). Fully green run 40568868245 on 0771178bd (BRANCH-only delta). Host replica: tsc clean + 120/120.
+- [x] **Lot R4 — Opus r4 review fix (spawn marker, mutation-sensitive absence)**
+  - [x] P1-R4: fixture appends `$FAKE_APLAY_SPAWNLOG` at process start, before any stdin read; the three pre-spawn absence proofs (tts-registry, playback pre-spawn, voice-loop prespawn) assert ENOENT on the log, then a positive control and `readSpawnLog() === [controlPid]` plus ESRCH. Mutation-checked on the exact r3 shape and on spawn-then-check-without-kill: the log shows the orphan line and the test fails.
+  - [x] Lot gate: lane `validate-live-speech` green on the R4 head f9d02617 (CI run 40580106410). Host replica: tsc clean + 120/120 (14 files); mutation r3-shape fails `[orphan, control] vs [control]`, each fence alone passes, playback fence removal fails.
+- [ ] **Lot 4 — Receipts + wiring**
+  - [x] `bench/l6a-g-native.receipt.json` (status blocked, exact missing §8.1 items), README section, `src/node/index.ts` exports.
+  - [ ] Retest green, push, draft PR against `feat/live-stt-l4`, CI green, report without merging.
+  - [x] Lot gate: lane `validate-live-speech` green on 07330b113 (CI run 40522166118; lane `make` runs post-21:00 UTC). Host replica: tsc clean + 88/88 on the L6a-adjacent files.
+- [ ] **Lot N-1 — Docs**
+  - [x] README L6a section (registry/playback/loop, refusal semantics).
+  - [x] `bench/l6a-g-native.receipt.json` (status blocked, trust boundary recorded, no native claim).
+- [ ] **Lot N — Final validation**
+  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. (New private package: CI skips bump check.)
+  - [ ] Final gate step 1: draft PR #799 to `feat/live-stt-l4` using `BRANCH.md` text as PR body (source of truth). Draft PR open, no merge.
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
