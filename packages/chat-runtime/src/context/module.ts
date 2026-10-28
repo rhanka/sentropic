@@ -141,3 +141,143 @@ export type ContextModule = {
   }): void;
 
   /**
+   * Toggle the active state of an entry identified by type + id.
+   */
+  toggleActive(type: string, id: string | undefined): void;
+
+  /**
+   * Load persisted prefs and merge into the store.
+   * Returns the raw prefs object for callers that need toolEnabledById etc.
+   */
+  loadPrefs(sessionId: string | null): unknown;
+
+  /**
+   * Persist the current store state + caller-provided extra prefs.
+   */
+  savePrefs(sessionId: string | null, extra?: Record<string, unknown>): void;
+
+  /**
+   * Re-resolve labels for all entries in the store (e.g. after store hydration).
+   * Does NOT import svelte/store — safe to call from any framework context.
+   */
+  refreshLabels(): Promise<void>;
+
+  /**
+   * Returns entries that are both active and used (sorted by lastUsedAt desc).
+   */
+  getActiveContexts(): ChatContextEntry[];
+};
+
+// ---------------------------------------------------------------------------
+// Factory
+// ---------------------------------------------------------------------------
+
+export function createContextModule(host: ContextHost): ContextModule {
+  const store = createWritable<ChatContextEntry[]>([]);
+  const labelCache = new Map<string, string>();
+  const labelLoading = new Set<string>();
+  let lastRouteKey: string | null = null;
+
+  const resolveAndPatchLabel = (type: string, id: string): void => {
+    const key = `${type}:${id}`;
+    if (!id || labelCache.has(key) || labelLoading.has(key)) return;
+    labelLoading.add(key);
+
+    const result = host.resolveContextLabel(type, id);
+    const patch = (label: string) => {
+      if (label && label !== id) {
+        labelCache.set(key, label);
+        store.update((entries) =>
+          entries.map((e) =>
+            e.type === type && e.id === id ? { ...e, label } : e,
+          ),
+        );
+      }
+      labelLoading.delete(key);
+    };
+
+    if (typeof result === 'string') {
+      patch(result);
+    } else {
+      result.then(patch).catch(() => labelLoading.delete(key));
+    }
+  };
+
+  const getBestLabel = (type: string, id: string, fallback: string): string => {
+    const key = `${type}:${id}`;
+    return labelCache.get(key) || fallback || id;
+  };
+
+  const upsert = (input: {
+    contextType: string | null | undefined;
+    contextId: string | null | undefined;
+    used: boolean;
+  }): void => {
+    const { contextType, contextId } = input;
+    const currentLabel =
+      contextType && contextId
+        ? getBestLabel(contextType, contextId, contextId)
+        : '';
+
+    const result = upsertRouteContextEntry({
+      entries: store.get(),
+      contextType,
+      contextId,
+      label: currentLabel,
+      previousRouteKey: lastRouteKey,
+      nowIso: new Date().toISOString(),
+      used: input.used,
+    });
+
+    store.set(result.entries);
+    lastRouteKey = result.nextRouteKey;
+
+    if (result.shouldLoadName && contextType && contextId) {
+      resolveAndPatchLabel(contextType, contextId);
+    }
+  };
+
+  return {
+    entries: store,
+
+    updateFromRoute(input) {
+      const ctx = host.detectContext(input);
+      upsert({
+        contextType: ctx?.primaryContextType ?? null,
+        contextId: ctx?.primaryContextId ?? null,
+        used: false,
+      });
+    },
+
+    markUsed(input) {
+      const ctx = host.detectContext(input);
+      if (!ctx?.primaryContextType || !ctx.primaryContextId) return;
+      upsert({
+        contextType: ctx.primaryContextType,
+        contextId: ctx.primaryContextId,
+        used: true,
+      });
+    },
+
+    toggleActive(type, id) {
+      store.update((entries) =>
+        entries.map((e) => {
+          if (e.type !== type || e.id !== id) return e;
+          const nextActive = !e.active;
+          return {
+            ...e,
+            active: nextActive,
+            lastUsedAt: nextActive ? new Date().toISOString() : e.lastUsedAt,
+          };
+        }),
+      );
+    },
+
+    loadPrefs(sessionId) {
+      const raw = host.loadPrefs(sessionId);
+      if (!raw || typeof raw !== 'object') return raw;
+      const parsed = raw as Record<string, unknown>;
+      if (Array.isArray(parsed['contexts'])) {
+        const entries: ChatContextEntry[] = (parsed['contexts'] as unknown[])
+          .filter((c): c is Record<string, unknown> => !!c && typeof c === 'object' && 'type' in c)
+          .map((c) => ({
