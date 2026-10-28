@@ -2232,3 +2232,143 @@ export function createChatLoopController<
           request,
           createdAt: Date.now(),
         };
+        ltPendingLocalToolPermissionPrompts = [
+          ...ltPendingLocalToolPermissionPrompts.filter(
+            (item) => item.toolCallId !== prompt.toolCallId,
+          ),
+          nextPrompt,
+        ];
+        ltNotify();
+        return;
+      }
+      const reason = error instanceof Error ? error.message : String(error);
+      try {
+        await ltPostLocalToolResult!(prompt.streamId, prompt.toolCallId, {
+          status: 'error',
+          error: reason,
+        });
+      } catch (forwardError) {
+        const forwardReason =
+          forwardError instanceof Error ? forwardError.message : String(forwardError);
+        console.warn(
+          `Failed to forward permission decision error for ${prompt.name} (${prompt.toolCallId}): ${forwardReason}`,
+        );
+      }
+    } finally {
+      if (machineGeneration !== ltMachineGeneration) return;
+      ltLocalToolPermissionRetriesInFlight.delete(prompt.toolCallId);
+      ltScheduleNextToolForStream(prompt.streamId);
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // Steer public API (slice 1F)
+  // -------------------------------------------------------------------------
+
+  /**
+   * Internal: schedule clearing the steer ack after ackTimeoutMs.
+   * Mirrors AppChatPanel's setTimeout(() => { if (shouldClearComposerSteerAck...) }, 5000).
+   */
+  const steerScheduleAckClear = (expectedCreatedAtMs: number, timeoutMs: number): void => {
+    if (steerAckTimer) clearTimeout(steerAckTimer);
+    steerAckTimer = setTimeout(() => {
+      steerAckTimer = null;
+      if (shouldClearComposerSteerAck(steerComposerAck, expectedCreatedAtMs)) {
+        steerComposerAck = null;
+        notify();
+      }
+    }, timeoutMs);
+  };
+
+  const sendSteer = async (
+    steerText: string,
+    targetStreamId: string,
+    opts: SendSteerOptions,
+  ): Promise<void> => {
+    const transport = attachedTransport;
+    if (!transport) throw new Error('chatLoopController: no host transport attached — call attachHost() first');
+
+    const createdAtMs = Date.now();
+
+    // 1. Create and set the steer ACK
+    steerComposerAck = createComposerSteerAck({
+      streamId: targetStreamId,
+      message: opts.ackMessage,
+      createdAtMs,
+    });
+
+    // 2. Build + append optimistic steer message
+    const optimistic = createOptimisticSteerMessage({
+      sessionId: opts.sessionId,
+      content: steerText,
+      targetAssistantMessageId: opts.targetAssistantMessageId ?? null,
+      targetStreamId,
+      nowMs: createdAtMs,
+      nowIso: new Date(createdAtMs).toISOString(),
+    }) as ControllerOptimisticSteerMessage;
+
+    steerOptimisticMessages = [...steerOptimisticMessages, optimistic];
+    notify();
+
+    try {
+      // 3. Call host
+      await transport.postSteer(targetStreamId, steerText);
+
+      // 4. On success: KEEP the optimistic message. It is the only visible
+      // rendering of the steer text in the live timeline (the server-persisted
+      // steer message only arrives on the next session history reload, which
+      // calls clearOptimisticSteerMessages first — no duplication).
+      // Removing it here (pre-0.19.1 regression) made the steer bubble vanish
+      // as soon as POST /chat/messages/:id/steer resolved.
+    } catch (error) {
+      // 5. On error: rollback optimistic message, clear ACK, re-throw
+      steerOptimisticMessages = steerOptimisticMessages.filter(
+        (m) => m.id !== optimistic.id,
+      );
+      steerComposerAck = null;
+      if (steerAckTimer) {
+        clearTimeout(steerAckTimer);
+        steerAckTimer = null;
+      }
+      notify();
+      throw error;
+    }
+
+    // Schedule ACK clear (only runs on success path)
+    steerScheduleAckClear(createdAtMs, opts.ackTimeoutMs ?? 5000);
+  };
+
+  const clearOptimisticSteerMessages = (): void => {
+    if (steerOptimisticMessages.length === 0) return;
+    steerOptimisticMessages = [];
+    notify();
+  };
+
+  // -------------------------------------------------------------------------
+  // Model catalog public API (slice 1F)
+  // -------------------------------------------------------------------------
+
+  /** Internal: coerce + apply selection; notify. */
+  const mcCoerceAndApply = (providerId: ModelProviderId, modelId: string): void => {
+    if (mcModels.length === 0) {
+      mcSelectedProviderId = providerId;
+      mcSelectedModelId = modelId;
+      return;
+    }
+    const coerced = coerceSelectionToValidEntry(mcModels, providerId, modelId);
+    mcSelectedProviderId = coerced.providerId;
+    mcSelectedModelId = coerced.modelId;
+  };
+
+  const loadModelCatalog = async (fetchFn: ControllerModelCatalogFetchFn): Promise<void> => {
+    const payload = await fetchFn();
+
+    mcProviders = (Array.isArray(payload.providers) ? payload.providers : []) as ModelCatalogProvider[];
+    mcModels = (Array.isArray(payload.models) ? payload.models : []) as ModelCatalogModel[];
+    mcGroups = groupModelsByProvider(mcProviders, mcModels);
+
+    // Resolve initial selection from catalog defaults
+    const initialProviderId = (
+      payload.defaults?.provider_id ??
+      mcProviders[0]?.provider_id ??
+      'openai'
