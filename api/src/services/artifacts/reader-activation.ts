@@ -79,3 +79,65 @@ async function currentPolicy(client: PoolClient, pool: Pool, namespace: string,
   const current = await authority.currentOn(artifactReadClient(client));
   return current.readable ? digest(JSON.stringify([current.revision, artifact.rows[0].revision, grants.rows])) : undefined;
 }
+
+/** No listeners, cookies, signing or MFA. W3.b may sign only an acknowledged consume result. */
+export function createArtifactReaderActivation(options: {
+  pool: Pool; baseDomain: string; profileDigest: string; ticketTtlSeconds?: number; flowTtlSeconds?: number;
+}) {
+  const { pool, baseDomain, profileDigest, ticketTtlSeconds = 60, flowTtlSeconds = 30 } = options;
+  if (!/^[a-z0-9]+(?:[.-][a-z0-9]+)*$/.test(baseDomain) || !baseDomain.includes('.') ||
+    !/^[0-9a-f]{64}$/.test(profileDigest)) throw denied();
+  const storage = (namespace: string) => createArtifactHostActivationStorage({
+    pool, namespace, ticketTtlSeconds, flowTtlSeconds,
+  });
+  const verifiedSession = (value: ArtifactReaderSession) => {
+    const session = Object.freeze({ ...value });
+    if (Object.values(session).length !== 4 || Object.values(session).some(v => typeof v !== 'string' || !v)) throw denied();
+    return session;
+  };
+  return {
+    async issue(value: ArtifactReaderSession, input: ArtifactReaderTarget) {
+      const session = verifiedSession(value);
+      const target = Object.freeze({ ...input });
+      const nonce = nonceDigest(target.nonce);
+      if (!approvedOrigin(baseDomain, target)) throw denied();
+      const namespace = await namespaceFor(pool, session);
+      if (!namespace) throw denied();
+      const store = await storage(namespace);
+      const client = await pool.connect();
+      let policyRevision: string | undefined;
+      let committing = false;
+      let discard = false;
+      try {
+        await client.query('BEGIN ISOLATION LEVEL READ COMMITTED');
+        policyRevision = await currentPolicy(client, pool, namespace, session, target, baseDomain);
+        if (!policyRevision) throw denied();
+        committing = true;
+        await client.query('COMMIT');
+      } catch (error) {
+        discard = committing;
+        try { await client.query('ROLLBACK'); } catch { discard = true; }
+        throw error;
+      } finally { client.release(discard); }
+      return store.issue({ subjectId: session.subjectId, sessionId: session.sessionId,
+        artifactId: target.artifactId, releaseId: target.releaseId, channel: target.channel,
+        targetOrigin: target.targetOrigin, nonceDigest: nonce, profileDigest, policyRevision });
+    },
+    async consume(value: ArtifactReaderSession, input: {
+      flowId: string; ticketId: string; nonce: string; targetOrigin: string;
+    }) {
+      const session = verifiedSession(value);
+      const request = Object.freeze({ ...input });
+      const nonce = nonceDigest(request.nonce);
+      const namespace = await namespaceFor(pool, session);
+      if (!namespace) return undefined;
+      const store = await storage(namespace);
+      const flow = await store.flows.peek(request.flowId);
+      if (!flow) return undefined;
+      const expected: BrowserFlowBinding = { ...flow, subjectId: session.subjectId, sessionId: session.sessionId,
+        nonceDigest: nonce, targetOrigin: request.targetOrigin, profileDigest };
+      return store.consume({ flowId: request.flowId, ticketId: request.ticketId, expected }, async ({ client }) =>
+        await currentPolicy(client, pool, namespace, session, flow, baseDomain) === flow.policyRevision);
+    },
+  };
+}
