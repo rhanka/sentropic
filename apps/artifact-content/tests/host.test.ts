@@ -85,4 +85,83 @@ describe('app private content host', () => {
     }
     expect(options.blobs.getBlob).not.toHaveBeenCalled();
   });
+
+  it('should deny key rotation, expiry and revoked authority on the next request', async () => {
+    const previous = cookie();
+    secret = 'b'.repeat(64);
+    expect((await request(stable, '/', { headers: { cookie: previous } })).status).toBe(401);
+    const fresh = cookie();
+    allowed = false;
+    expect((await request(stable, '/', { headers: { cookie: fresh } })).status).toBe(404);
+    allowed = true; now += 60000;
+    expect((await request(stable, '/', { headers: { cookie: fresh } })).status).toBe(401);
+    expect(options.blobs.getBlob).not.toHaveBeenCalled();
+  });
+
+  it.each(['authority', 'key'])('should discard private bytes when %s changes during storage waits', async change => {
+    vi.mocked(options.blobs.getBlob).mockImplementation(async () => {
+      if (change === 'authority') allowed = false;
+      else secret = 'b'.repeat(64);
+      return bytes;
+    });
+    const response = await request(stable, '/', { headers: { cookie: cookie() } });
+    expect(response.status).toBe(change === 'authority' ? 404 : 401);
+    expect(await response.text()).not.toContain('Private');
+  });
+
+  it('should fail closed on storage errors and when serving is disabled', async () => {
+    vi.mocked(options.blobs.getBlob).mockRejectedValue(new Error('private backend detail'));
+    const response = await request(stable, '/', { headers: { cookie: cookie() } });
+    expect(response.status).toBe(500);
+    expect(await response.text()).not.toContain('backend detail');
+    options.enabled = () => false;
+    expect((await request(stable, '/', { headers: { cookie: cookie() } })).status).toBe(404);
+  });
+});
+
+describe('content browser activation transport', () => {
+  const bootstrap = () => request(stable, '/_reader/nonce');
+  async function activate(extra: HeadersInit = {}, body = { flowId: 'flow', ticketId: 'ticket' }) {
+    const started = await bootstrap();
+    const headers = { origin: stable, 'content-type': 'application/json', 'x-artifact-activation': '1',
+      cookie: started.headers.get('set-cookie')!, ...extra };
+    return request(stable, '/_reader/activate', { method: 'POST', headers, body: JSON.stringify(body) });
+  }
+
+  it('should bind a host-only browser nonce and sign only the acknowledged consume', async () => {
+    const started = await bootstrap();
+    expect(started.status).toBe(200);
+    expect((await started.json()).nonce).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(started.headers.get('set-cookie')).toMatch(/^__Host-artifacts_nonce=.+; Path=\/; HttpOnly; Secure; SameSite=Strict; Max-Age=60$/);
+    const response = await activate();
+    expect(response.status).toBe(204);
+    expect(response.headers.get('set-cookie')).toContain('__Host-artifacts_grant=');
+    expect(response.headers.get('set-cookie')).not.toContain('Domain=');
+    expect(options.activate).toHaveBeenCalledWith(expect.objectContaining({ flowId: 'flow', ticketId: 'ticket', targetOrigin: stable,
+      nonce: expect.stringMatching(/^[A-Za-z0-9_-]{43}$/) }));
+  });
+
+  it.each([{ origin: 'https://evil.test' }, { origin: '' }, { 'x-artifact-activation': '' },
+    { 'content-type': 'text/plain' }, { cookie: '' }])('should refuse unbound browser activation %j', async headers => {
+    expect((await activate(headers)).status).toBe(403);
+    expect(options.activate).not.toHaveBeenCalled();
+  });
+
+  it('should refuse forged body identity, duplicate nonce cookies and foreign bootstrap origins', async () => {
+    expect((await activate({}, { flowId: 'flow', ticketId: 'ticket', subjectId: 'owner' } as never)).status).toBe(400);
+    expect((await activate({ cookie: '__Host-artifacts_nonce=a; __Host-artifacts_nonce=b' })).status).toBe(403);
+    expect((await request(stable, '/_reader/nonce', { headers: { origin: 'https://evil.test' } })).status).toBe(403);
+    expect(options.activate).not.toHaveBeenCalled();
+  });
+
+  it.each(['denied', 'uncertain', 'wrong-target'])('should emit no cookie on %s consume', async failure => {
+    vi.mocked(options.activate).mockImplementation(async () => {
+      if (failure === 'uncertain') throw new Error('commit outcome unknown');
+      if (failure === 'denied') return undefined;
+      return { subjectId: 'reader', artifactId, releaseId: releaseB, channel: 'pinned', ticketId: 'ticket', expiresAt: now + 60000 };
+    });
+    const response = await activate();
+    expect(response.status).toBe(403);
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
 });
