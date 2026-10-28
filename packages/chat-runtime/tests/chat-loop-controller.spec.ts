@@ -2011,3 +2011,143 @@ describe('chat-loop-controller: steer (slice 1F)', () => {
   });
 
   // 12b. Ack is set during steer in-flight
+  it('12b: sendSteer sets composerSteerAck with correct streamId and message', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    let ackDuringPost: import('../src/state/chatLoopController.js').ComposerSteerAck | null = null;
+    const { transport } = makeSteerTransport();
+    const origPostSteer = transport.postSteer.bind(transport);
+    transport.postSteer = async (streamId, message) => {
+      ackDuringPost = ctrl.getSnapshot().composerSteerAck;
+      return origPostSteer(streamId, message);
+    };
+    ctrl.attachHost({ transport });
+
+    await ctrl.sendSteer('steer text', 'stream-s2', {
+      sessionId: 'sess-s2',
+      ackMessage: 'Processing steer...',
+    });
+
+    expect(ackDuringPost).not.toBeNull();
+    expect(ackDuringPost?.streamId).toBe('stream-s2');
+    expect(ackDuringPost?.message).toBe('Processing steer...');
+    expect(typeof ackDuringPost?.createdAtMs).toBe('number');
+  });
+
+  // 12c. host.postSteer called with correct args
+  it('12c: sendSteer calls host.postSteer with targetStreamId + steerText', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    const { transport, calls } = makeSteerTransport();
+    ctrl.attachHost({ transport });
+
+    await ctrl.sendSteer('my steer', 'stream-s3', {
+      sessionId: 'sess-s3',
+      ackMessage: 'Ack',
+    });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.streamId).toBe('stream-s3');
+    expect(calls[0]?.message).toBe('my steer');
+  });
+
+  // 12d. Optimistic message KEPT on success — it is the only visible rendering
+  // of the steer text until the next session reload (which clears optimistic
+  // steers before showing the server-persisted message). Removing it on success
+  // was a fidelity regression vs the pre-extraction AppChatPanel behavior
+  // (steer bubble vanished as soon as POST .../steer resolved — e2e
+  // 09-run-steering-core + 00-ai-generation caught it).
+  it('12d: sendSteer keeps the optimistic message after successful postSteer', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    const { transport } = makeSteerTransport();
+    ctrl.attachHost({ transport });
+
+    await ctrl.sendSteer('steer', 'stream-s4', {
+      sessionId: 'sess-s4',
+      ackMessage: 'Ack',
+    });
+
+    // After success, the optimistic steer message stays visible.
+    const snap = ctrl.getSnapshot();
+    expect(snap.optimisticSteerMessages).toHaveLength(1);
+    expect(snap.optimisticSteerMessages[0]?.content).toBe('steer');
+  });
+
+  // 12e. Error rollback — optimistic message removed + ack cleared + re-throws
+  it('12e: sendSteer rolls back optimistic message and clears ack on error, re-throws', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    const error = new Error('postSteer failed');
+    const { transport } = makeSteerTransport({ postSteerThrows: error });
+    ctrl.attachHost({ transport });
+
+    await expect(
+      ctrl.sendSteer('steer', 'stream-s5', {
+        sessionId: 'sess-s5',
+        ackMessage: 'Ack',
+      }),
+    ).rejects.toThrow('postSteer failed');
+
+    const snap = ctrl.getSnapshot();
+    expect(snap.optimisticSteerMessages).toHaveLength(0);
+    expect(snap.composerSteerAck).toBeNull();
+  });
+
+  // 12f. clearOptimisticSteerMessages resets the array
+  it('12f: clearOptimisticSteerMessages resets optimisticSteerMessages to empty', async () => {
+    const ctrl = createChatLoopController<Msg>();
+
+    let resolvePost!: () => void;
+    const transport = {
+      async sendMessage() { return { sessionId: 's', userMessageId: 'u', assistantMessageId: 'a', streamId: 'st', jobId: 'j' }; },
+      async retryMessage() { return { sessionId: 's', userMessageId: 'u', assistantMessageId: 'a', streamId: 'st', jobId: 'j' }; },
+      async stopMessage() {},
+      async editMessage() {},
+      async setFeedback() {},
+      postSteer: () => new Promise<void>((res) => { resolvePost = res; }),
+    };
+    ctrl.attachHost({ transport });
+
+    // Start the steer (don't await)
+    const promise = ctrl.sendSteer('msg', 'stream-s6', { sessionId: 'sess', ackMessage: 'Ack' });
+
+    // Steer is in-flight — optimistic message should be present
+    expect(ctrl.getSnapshot().optimisticSteerMessages).toHaveLength(1);
+
+    // Clear optimistic messages explicitly
+    ctrl.clearOptimisticSteerMessages();
+    expect(ctrl.getSnapshot().optimisticSteerMessages).toHaveLength(0);
+
+    // Resolve the steer — the success path keeps whatever is in the array
+    // (nothing here: it was explicitly cleared above) and never re-adds.
+    resolvePost();
+    await promise;
+    expect(ctrl.getSnapshot().optimisticSteerMessages).toHaveLength(0);
+  });
+
+  // 12g. sendSteer throws when no transport attached
+  it('12g: sendSteer throws when no host transport is attached', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    await expect(
+      ctrl.sendSteer('x', 'stream-x', { sessionId: 'sess', ackMessage: 'Ack' }),
+    ).rejects.toThrow(/no host transport/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 13. Model catalog (slice 1F)
+//
+// Strategy: inject a fake fetchFn and assert:
+//   13a. loadModelCatalog: providers + models + groups populated correctly
+//   13b. loadModelCatalog: selection defaults to catalog defaults
+//   13c. loadModelCatalog: coerces invalid selection to valid entry
+//   13d. setModelSelection: updates selectedProviderId + selectedModelId
+//   13e. applyUserDefaults: exact match → updates defaults + current (no session)
+//   13f. applyUserDefaults: model-only match → uses that entry's provider
+//   13g. applyUserDefaults: no match → falls back to first provider entry
+//   13h. applyUserDefaults: with active session → updates defaults but NOT current selection
+//   13i. resetModelSelectionToDefaults: reverts to stored defaults
+//   13j. snapshot exposes all catalog + selection fields
+//   13k. sentropic-string scan: 1F additions contain zero domain strings
+// ---------------------------------------------------------------------------
+
+const fakeCatalog = {
+  providers: [
+    { provider_id: 'openai', label: 'OpenAI', status: 'ready' as const },
