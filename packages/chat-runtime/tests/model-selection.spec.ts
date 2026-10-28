@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-  coerceSelectionToValidEntry,
   computeModelSelectorWidthCh,
   formatModelSelectionKey,
   getSelectedModelLabel,
@@ -8,10 +7,10 @@ import {
   parseModelSelectionKey,
   providerGroupLabel,
   resolveFallbackModelOption,
-  resolveHydratedModelSelection,
   type ModelCatalogModel,
   type ModelCatalogProvider,
-} from '../src/utils/model-selection.js';
+} from '@sentropic/chat-ui/utils/model-selection';
+import { coerceSelectionToValidEntry, resolveHydratedModelSelection } from '../src/utils/modelSelectionPolicy.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures
