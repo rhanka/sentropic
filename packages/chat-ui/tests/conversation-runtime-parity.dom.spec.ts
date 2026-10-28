@@ -50,6 +50,7 @@ it('should preserve live progress, draft, attachments and checkpoints across a s
   await host.runtime.commands.attachFiles([new File(['x'], 'retained.txt', { type: 'text/plain' })]);
   host.runtime.session.setCheckpoints([{ id: 'checkpoint-retained' }]);
   first.unmount();
+  expect(host.runtime.snapshot().draft).toBe('Unsent draft');
   expect(host.runtime.session.snapshot().viewBindings).toBe(0);
   expect(host.runtime.session.snapshot().disposed).toBe(false);
   host.emit(streamId, 'content_delta', { delta: 'Progress during remount' }, 1);
