@@ -95,6 +95,7 @@
                     finalContent={item.isTerminal ? item.segment.content : undefined} />
                   {#if item.isLastAssistantSegment}
                     <MessageActions role="assistant" {labels} isLastAssistantSegment={true}
+                      feedbackVote={item.message.feedbackVote === 1 ? 1 : item.message.feedbackVote === -1 ? -1 : null}
                       streamStatus={item.isTerminal ? 'completed' : 'processing'} isCopied={copiedKey === item.key}
                       onCopy={() => void copy(item.segment.content, item.key)}
                       onRegenerate={flags.retry ? () => void commands.retry(item.message.id) : undefined}
