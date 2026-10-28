@@ -67,6 +67,34 @@ test('should reject a missing or failed selected scan while allowing unselected 
   assert.throws(() => securityJoin({}, 'unknown'), /Unknown scan category/);
 });
 
+test('should select exactly the workflow scan lanes for every change-filter combination', () => {
+  for (const api of ['false', 'true']) for (const ui of ['false', 'true']) for (const global of ['false', 'true']) {
+    const changes = { api, ui, global };
+    for (const category of ['code', 'container']) {
+      const lanes = Object.entries(workflow.jobs).filter(([name]) => name.startsWith(`security-${category}-`));
+      assert.equal(lanes.length, category === 'code' ? 2 : 4);
+      const selected = lanes.filter(([, job]) => evaluateSelection(job.if, key => {
+        assert.ok(key.startsWith('needs.changes.outputs.'), key);
+        return changes[key.slice(22)];
+      })).map(([name]) => name);
+      const needs = { changes: { result: 'success', outputs: changes },
+        ...Object.fromEntries(lanes.map(([name]) => [name, { result: selected.includes(name) ? 'success' : 'skipped' }])) };
+      const verdict = securityJoin(needs, category);
+      const label = `${category}: ${JSON.stringify(changes)}`;
+      assert.equal(verdict.ok, true, label);
+      assert.deepEqual(verdict.passed.sort(), [...selected].sort(), label);
+      assert.deepEqual(verdict.unselected.sort(), lanes.map(([name]) => name).filter(name => !selected.includes(name)).sort(), label);
+      for (const name of selected) {
+        for (const result of ['failure', 'cancelled', 'skipped', 'neutral', '']) {
+          assert.equal(securityJoin({ ...needs, [name]: { result } }, category).ok, false, `${label}: ${name}=${result}`);
+        }
+        const missing = { ...needs }; delete missing[name];
+        assert.equal(securityJoin(missing, category).ok, false, `${label}: missing ${name}`);
+      }
+    }
+  }
+});
+
 test('should start runtime and scan consumers at their actual artifact barriers', () => {
   assert.deepEqual(checkDag(workflow, context).errors, []);
   for (const [name] of Object.entries(runtimeInputs)) {
