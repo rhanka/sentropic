@@ -2,6 +2,8 @@
 
 H0 is preparation for existing Canvas L2-CB3, not an implementation or adoption receipt. Measured on 2026-10-28 at `origin/main` / branch base `5e986a0b6cd2dfecfbde6a588d30055271124696`. All source line references in this note resolve at that commit. See [transfer receipts](h0-transfer-receipts.md), [gates](h0-gates.md) and [corpus](h0-corpus.md).
 
+The classes below group inventory and coverage tests only. Under Q-CL-1 (owner answer, 2026-10-28), all 24 sites migrate in one pass after the DS full editor-profile lot covers every used feature and is published/B1-qualified; classes never define separate migration stages.
+
 ## Baseline and drift
 
 The approved host plan is SHA-256 `f130f04c4597b483b089ef5b3b6d6d9502b61a36111859f62f835b37c9bc19e2`, H0 lines 69–81. Its survey pin is `de7ab8d3157b1859648e0404b78c182ea9cd21e4`. `git diff <survey> <base> -- <the ten files below> packages/chat-core/src/ports.ts ui/src/lib/extensions` returned no output: **zero drift** in those evidence paths. No statement of zero drift elsewhere is implied.
