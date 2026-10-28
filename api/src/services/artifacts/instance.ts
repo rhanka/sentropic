@@ -10,6 +10,8 @@ import { createArtifactHost } from './composition';
 import { createPrivateArtifactStorage } from './lifecycle';
 import { artifactCredential, ARTIFACT_SESSION_CLIENT, createCurrentArtifactIdentity } from './credentials';
 import { createArtifactTransport } from './transport';
+import { createArtifactReaderActivation } from './reader-activation';
+import type { ArtifactHttpPorts } from '../../routes/namespaces/artifacts';
 
 export const artifactHostEnabled = () => process.env.APP_ARTIFACT_HOST_ENABLED === '1';
 const resource = env.MCP_RESOURCE_URI ?? `${resolveOAuthIssuer()}/api/v1/mcp`;
@@ -42,6 +44,34 @@ const blobs: PublicationBlobStore = {
 export const productArtifactHost = createArtifactHost({ pool, blobs, quotaBytes,
   currentIdentity: createCurrentArtifactIdentity(resource) });
 export const productArtifactTransport = createArtifactTransport(productArtifactHost);
+
+export const artifactReaderEnabled = () => artifactHostEnabled() && process.env.APP_ARTIFACT_READER_ENABLED === '1';
+let reader: ReturnType<typeof createArtifactReaderActivation> | undefined;
+/** W3.b supplies verified session and content-origin browser proof to this internal port. */
+export function getProductArtifactReader() {
+  if (!artifactReaderEnabled()) throw new Error('Artifact reader is disabled');
+  const baseDomain = process.env.APP_ARTIFACT_CONTENT_BASE_DOMAIN;
+  if (!baseDomain) throw new Error('Approved artifact content base domain required');
+  return reader ??= createArtifactReaderActivation({ pool, baseDomain,
+    profileDigest: productArtifactHost.profile.profileDigest });
+}
+export const productArtifactReaderPort: NonNullable<ArtifactHttpPorts['reader']> = {
+  enabled: artifactReaderEnabled,
+  get controlOrigin() {
+    if (!process.env.UI_BASE_URL) throw new Error('Approved reader control origin required');
+    return new URL(process.env.UI_BASE_URL).origin;
+  },
+  async issue({ identity, workspaceId }, target) {
+    const credential: unknown = JSON.parse(identity.credentialId);
+    if (identity.clientId !== ARTIFACT_SESSION_CLIENT || !Array.isArray(credential) || credential.length !== 4 ||
+      credential[0] !== 'session' || typeof credential[1] !== 'string' || !credential[1] ||
+      credential[2] !== null || !Array.isArray(credential[3]) || credential[3].length !== 0) {
+      throw new Error('Artifact reader requires the current app session');
+    }
+    return getProductArtifactReader().issue({ subjectId: identity.subject, sessionId: credential[1],
+      tenantId: identity.tenantId, workspaceId }, target);
+  },
+};
 
 /** The resources module runs requireAuth first; request bodies supply no identity. */
 export async function resolveArtifactSession(context: Context) {

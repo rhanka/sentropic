@@ -81,7 +81,7 @@ describe('cluster mesh resources transport', () => {
     expect(RESOURCE_PATHS).toEqual([
       '/resources/list', '/resources/stat', '/resources/read', '/resources/grep', '/resources/edit', '/resources/invoke',
       '/resources/artifacts/*', '/resources/artifacts/ensure', '/resources/artifacts/publish',
-      '/resources/artifacts/list', '/resources/artifacts/meta/:artifactId',
+      '/resources/artifacts/list', '/resources/artifacts/meta/:artifactId', '/resources/artifacts/reader-activation',
     ]);
     expect(RESOURCE_PATHS).not.toContain('/*');
 

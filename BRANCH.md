@@ -28,6 +28,23 @@
   - `api/tests/api/cluster-mesh-catalog.test.ts`
   - `api/tests/api/artifacts-host-credentials.test.ts`
   - `.github/workflows/app-cm-w4b.yml`
+  - `.github/workflows/app-cm-w3a.yml`
+  - `api/src/routes/namespaces/artifacts.ts`
+  - `api/src/routes/namespaces/resources-module.ts`
+  - `api/src/routes/namespaces/resources.ts`
+  - `api/src/services/artifacts/authorization.ts`
+  - `api/src/services/artifacts/instance.ts`
+  - `api/src/services/artifacts/reader-activation.ts`
+  - `api/tests/api/artifacts-reader-activation.test.ts`
+  - `api/tests/api/cluster-mesh-resources.test.ts`
+  - `spec/SPEC_EVOL_CATALOG.md`
+  - `spec/SPEC_EVOL_ARCHITECTURE.md`
+  - `spec/SPEC_EVOL_RESOURCE_FS.md`
+  - `spec/SPEC_STUDY_39_MCP_AUTHKIT_ELICITATION_GAPS.md`
+  - `spec/SPEC_STUDY_39_MCP_LIBRARIZATION.md`
+  - `docs/baselines/app-cm-w0/host-fit.md`
+  - `docs/baselines/app-cm-w0/catalog-context.md`
+  - `track/TRACK.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -44,6 +61,9 @@
 - [x] Record rationale, impact and rollback in Feedback Loop before expansion.
 
 ## Feedback Loop
+- [x] BR-W4B-EX4: owner-requested merge of W3.a #806 from integration, retaining this PR's plan and both reader authority and single-catalogue intents. Added W3.a paths permit inherited changes only; no W3.a code edits. Rollback: revert the merge as a unit.
+- [ ] BR-W4B-EX5: owner-requested P3 documentation pass over the listed specs, baselines and track/TRACK.md. Rationale: retired MCP source is still described as active. Impact: documentation only; no .track event edits or historical plan changes. Rollback: revert the documentation commit.
+- [x] Merge resolution: BRANCH.md was the only conflict; retained W4.b content. The 647 additions/7 deletions inherited from W3.a are existing reviewed commits, not newly authored code; merge resolution and plan additions remain below 150 lines.
 - [x] BR-W4B-EX3: retire the unused sanitizing MCP source and its tests, move ToolHandlerSource to execution-seam.ts, remove runtime registration and correct standalone-source comments. Rationale: W4.b requires one compiled-registry MCP source and the owner forbids legacy fallback. Impact: removes dormant exports only; production uses host-registry. Rollback: revert this bounded retirement series, restoring the old files and wiring together.
 - [x] P2-1: intended W4.a boundary: turn effects are bound to conversation + current account/tenant/workspace membership, not login-session liveness; logout or login-session expiry does not revoke a running turn. Conversation deletion/move, disabled account and membership revocation still deny effects. W3.a/W5.c may tighten this separately; no session policy change in W4.b.
 - [x] P2-2: retain the two awaits of the same public immutable plan: model selection needs compiled names before freezing its allowlist, while authority resolution/revalidation must initialize independently for HTTP and executor-only callers. Removing the second call would change that initialization contract; no duplicated effect or private view is prepared.
