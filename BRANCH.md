@@ -36,6 +36,7 @@
   - [x] `.github/workflows/ci.yml` — BR78-EX1.
   - [x] `Makefile` — BR78-EX2.
   - [x] `.dockerignore` — BR78-EX3, exclude new transport artifacts from build inputs.
+  - [x] `scripts/ci/publishable-ci-wiring.test.mjs` — BR78-EX4, preserve filter isolation with exact image-guard exceptions.
 - [x] Exception process: record rationale, impact and rollback before edits; additional paths require bounded exceptions.
 
 ## Feedback Loop
@@ -43,6 +44,7 @@
 - [x] BR78-EX1 includes IdP's browser consumer: reuse the exact E2E artifact instead of adding Chromium to every API toolbox; add build-e2e to IdP prerequisites, retain screen assertions. Rollback: restore browser toolbox recipe and IdP command together.
 - [x] BR78-EX3: exclude new root transport archives/receipts from subsequent UI build contexts. VSCode assets are generated inside npm run build, so their existing ignore stays. Impact: prevent transport bytes from invalidating/copying into UI source layers. Rollback: remove these two ignore patterns with the compressed transport recipes.
 - [x] BR78-EX1/EX2: remove duplicate external Chrome/VSCode builds; ui/package.json build already executes both. Preserve all prior output assertions inside ui/Dockerfile; desktop remains an explicit embedded prerequisite. Each distinct Vite profile still builds its own extension outputs.
+- [x] BR78-EX4: cold run 40636446215 job 122644590282 rejects the new image-guard filters under its blanket scripts/ci isolation assertion. Permit only the two exact image receipt paths in global, retain all other scripts/ci and publisher isolation assertions. Impact: image guards trigger full qualification. Rollback: restore assertion and remove those two workflow filters together.
 - [x] BR78-EX2 authorized by owner packet: Make image cache/build/save/load recipes, API_TOOL_VERSION and receipt tests. Lightweight Node receipt CLI in CI avoids downloading a compiler/browser image just to hash bytes. Impact: named image entry points only. Rollback: revert recipes and requalify previous artifacts; never bypass identity or runtime checks.
 - [x] BR77 timing remains open: capacity.md requires first actual-main attempt and strict PR/main ≤2288s proof; green correctness alone does not qualify timing. BR78 does not close BR77 acceptance.
 - [ ] Record every real run ID/attempt/SHA, job duration, queue/cache state, failure, retry and budget breach.

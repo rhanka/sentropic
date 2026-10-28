@@ -49,11 +49,16 @@ test('changes: boolean filter step without file lists plus a separate single-fil
   assert.equal(out.manifest_guard, '${{ steps.filter.outputs.manifest_guard }}');
 });
 
-test('dedicated manifest_guard filter: scripts/ci never fans out through global, api/ui/e2e or _publish', () => {
+test('dedicated manifest_guard filter: only exact image guards also select global qualification', () => {
   const filters = YAML.parse(jobs.changes.steps.find((s) => s.id === 'filter').with.filters);
   assert.deepEqual(filters.manifest_guard, ['scripts/ci/**']);
+  const imageGuards = ['scripts/ci/image-receipt.mjs', 'scripts/ci/image-receipt.test.mjs'];
+  assert.deepEqual(filters.global.filter(g => g.startsWith('scripts/ci')), imageGuards);
   for (const [name, globs] of Object.entries(filters)) {
-    if (name !== 'manifest_guard') assert.ok(!globs.some((g) => g.startsWith('scripts/ci')), `${name} must not include scripts/ci`);
+    if (name === 'manifest_guard') continue;
+    for (const glob of globs.filter(g => g.startsWith('scripts/ci'))) {
+      assert.ok(name === 'global' && imageGuards.includes(glob), `${name} must not include ${glob}`);
+    }
   }
 });
 
