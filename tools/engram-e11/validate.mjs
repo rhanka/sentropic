@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { json, sha256 } from './bindings.mjs';
 import { candidate, profileNames } from './candidates.mjs';
+import { qualifyProfiles } from './profiles.mjs';
 
 export function validate(b) {
   for (const [file, hash] of Object.entries(candidate.anchors)) b.read(file, hash);
@@ -19,6 +20,9 @@ export function validate(b) {
   source.package = 'source/packages/cluster-mesh/package.json';
   const engram = b.archive('engram.tgz', candidate.engram);
   const mesh = b.archive('mesh.tgz', candidate.mesh);
+  const equivalence = json(mesh.member('assets/storage/engram-memory/equivalence.json'));
+  assert.deepEqual(r.declaredProfileClaims.map(({ status, ...claim }) => claim),
+    equivalence.neutralClaims.filter((claim) => profileNames.includes(claim.name)), 'profile identities must match packed claims');
   for (const [name, archive] of [['engram', engram], ['clusterMesh', mesh]]) {
     assert.equal(r[name].version, archive.version);
     assert.equal(r[name].tarballSha256, archive.sha256);
@@ -65,8 +69,7 @@ export function validate(b) {
   const adaptations = [];
   for (const name of ['installed-memory.mjs', 'installed-hydration.mjs', 'installed-memory-types.ts']) {
     const original = b.read(`source/packages/cluster-mesh/tests/engram-memory/${name}`).toString();
-    const staged = original.replaceAll('0.22.0', '0.21.3').replaceAll('0.24.0-dev.5', '0.24.0-dev.6')
-      .replaceAll('26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10', engram.sha256);
+    const staged = original;
     assert.equal(sha256(b.read(`consumer/${name}`)), sha256(staged), `unreviewed lane adaptation: ${name}`);
     adaptations.push({ name, sourceSha256: sha256(original), stagedSha256: sha256(staged) });
   }
@@ -77,8 +80,7 @@ export function validate(b) {
     const bytes = b.read(`consumer/${file}`);
     if (!file.startsWith('node_modules/')) {
       const original = b.read(`source/packages/cluster-mesh/tests/engram-memory/${file}`).toString();
-      const staged = original.replaceAll('0.22.0', '0.21.3').replaceAll('0.24.0-dev.5', '0.24.0-dev.6')
-        .replaceAll('26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10', engram.sha256);
+      const staged = original;
       assert.equal(sha256(bytes), sha256(staged), `unreviewed lane adaptation: ${file}`);
     }
     const archive = file.startsWith('node_modules/@sentropic/engram/') ? engram
@@ -106,11 +108,20 @@ export function validate(b) {
   mesh.member('dist/engram-memory/neutral-contract.d.ts');
   mesh.member('dist/engram-memory/wire-adaptation.js');
   const finalMember = `package/${inventory.asset.declaration}`;
+  assert(mesh.members.includes(finalMember), 'standalone C6 declaration is required');
+  const declaration = mesh.member(inventory.asset.declaration);
+  assert.equal(sha256(declaration), inventory.asset.declarationSha256);
+  assert.equal(declaration.toString(), mesh.member('dist/engram-memory/neutral-contract.d.ts').toString()
+    .replace(/^\/\/# sourceMappingURL=.*\n?/m, ''), 'standalone bytes differ from compiled neutral declarations');
+  assert(!/^\s*(?:import|export\s+\*|export\s*\{.*\}\s*from)\b/m.test(declaration.toString()));
+  assert(r.typeClosure.includes(`node_modules/@sentropic/cluster-mesh/${inventory.asset.declaration}`), 'standalone C6 compilation is required');
   const c6 = { name: inventory.asset.name, version: inventory.asset.version, declaration: inventory.asset.declaration,
     path: 'neutral-contract-1.0.0.jcs.json', finalBytesSha256: sha256(contractBytes), contractDigest,
     standaloneDeclarationSha256: mesh.members.includes(finalMember) ? sha256(mesh.member(inventory.asset.declaration)) : null,
     candidateEmittedDeclarationSha256: mesh.memberHashes['dist/engram-memory/neutral-contract.d.ts'], inventory };
-  for (const file of ['producer.md', 'e10a3-delivery.json', 'pack-receipt.json', 'lane-adaptation.json', 'npm-version.txt',
+  for (const file of ['producer.md', 'pack-receipt.json', 'lane-adaptation.json', 'npm-version.txt',
     'reserved-registry.json', 'reserved-registry.status', 'type-files.txt']) b.read(file);
-  return { receipt: r, engram, mesh, source, c6, locks, driver: { ...r.postgres.driver, integrity: lock.packages['node_modules/pg'].integrity }, closure };
+  const qualifiedProfiles = qualifyProfiles(b, mesh, r.declaredProfileClaims);
+  return { receipt: r, engram, mesh, source, c6, locks, qualifiedProfiles,
+    driver: { ...r.postgres.driver, integrity: lock.packages['node_modules/pg'].integrity }, closure };
 }
