@@ -99,7 +99,7 @@
     type ModelProviderId,
     type ModelCatalogModel,
     type ModelCatalogGroup,
-  } from '@sentropic/chat-runtime/utils/model-selection';
+  } from '@sentropic/chat-ui/utils/model-selection';
 
   import {
     Send,
