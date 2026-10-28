@@ -1,7 +1,7 @@
 # Feature: RC1 session authority and isolated proof signing
 
 ## Objective
-- [ ] Implement RC1 from plan v1.1 revision 2: repeated explicit actions and switching under one valid 2FA login; refuse invalidated authority.
+- [x] Implement the app-side RC1 boundary from plan v1.1 revision 2: repeated explicit actions and switching under one valid 2FA login; refuse invalidated authority. Native/real-session acceptance remains open below.
 
 ## Scope / Guardrails
 - [x] Base: origin/main 5e986a0b6cd2dfecfbde6a588d30055271124696; branch feat/remote-ctl-rc1; worktree tmp/worktrees/rc1.
@@ -63,7 +63,7 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and scope**
   - [x] Read MASTER/workflow/testing/domain rules, I1–I6, D2 limits and BRRC0-EX1; mechanical branch check passes.
-- [ ] **Lot 1 — Session evidence, RED then GREEN**
+- [x] **Lot 1 — Session evidence, RED then GREEN**
   - [x] RED: four unit and two API suites fail on missing RC1 modules; RC1-red.log records exit 2 for each command.
   - [x] Signed D2-JWS identity, exact action, audience, MFA, lifetime and tenancy mutation vectors authored.
   - [x] Unknown and regressing clock refusal tests authored before implementation.
@@ -99,24 +99,24 @@
   - [x] Issuer-private synchronous signing boundary shares the revocation fence and validates current immutable login/hash/deadline before signing.
   - [x] Evidence revalidates login after asynchronous work and signs standard compact EdDSA synchronously inside the mandatory private fence; original deadlines never extend.
   - [x] Pre-integration validation: 172 cases passed, API typecheck/lint and IdP typecheck passed. Final runner prepares dependencies before starting the API to avoid transient module removal during live reload.
-  - [ ] api/tests/unit/auth/remote-evidence.test.ts: repeated actions/switch, logout/revoke/expiry, wrong sid/version/MFA/audience/key, replay and workload separation.
-  - [ ] Closed EvidenceRequest; issuer-derived identity and original authentication time; per-operation EdDSA evidence with pinned audiences.
-- [ ] **Lot 2 — Consent and authorization, RED then GREEN**
+  - [x] api/tests/unit/auth/remote-evidence.test.ts: repeated actions/switch, logout/revoke/expiry, wrong sid/version/MFA/audience/key, replay and workload separation.
+  - [x] Closed EvidenceRequest; issuer-derived identity and original authentication time; per-operation EdDSA evidence with pinned audiences.
+- [x] **Lot 2 — Consent and authorization, RED then GREEN**
   - [x] api/tests/unit/auth/remote-native-proof.test.ts authored for exact current CLI proof and substitution/expiry/key refusals.
-  - [ ] api/tests/unit/auth/remote-authority.test.ts: owner-only, exact workspace membership/role/scopes/consent/epoch, signed attestation, source/read separation.
-  - [ ] Separate IdP/app/mesh key and workload references; current native-proof port; no per-action MFA or new unlock.
-- [ ] **Lot 3 — Internal IdP composition, RED then GREEN**
+  - [x] api/tests/unit/auth/remote-authority.test.ts: owner-only, exact workspace membership/role/scopes/consent/epoch, signed attestation, source/read separation.
+  - [x] Separate IdP/app/mesh key and workload references; current native-proof port; no per-action MFA or new unlock.
+- [x] **Lot 3 — Internal IdP composition, RED then GREEN**
   - [x] api/tests/unit/auth/remote-session-integrity.test.ts authored before session-manager changes to challenge DB-only MFA elevation.
   - [x] api/tests/api/auth/remote-session.test.ts authored for durable issuer login/refresh/revocation/version/replay behavior.
-  - [ ] api/tests/api/auth/remote-evidence.test.ts: internal workload before body, browser/product denial, bounded strict body, no-store and sanitized failures.
-  - [ ] Real session-store adapter preserves sid/version/auth_time across refresh and revalidates logout/revocation/expiry.
+  - [x] api/tests/api/auth/remote-evidence.test.ts: internal workload before body, browser/product denial, bounded strict body, no-store and sanitized failures.
+  - [x] Real session-store adapter preserves sid/version/auth_time across refresh and revalidates logout/revocation/expiry.
 - [ ] **Lot 4 — Documentation and validation**
   - [x] internal route acceptance tests authored before implementation.
   - [x] signing isolation acceptance tests authored before implementation.
   - [x] authority acceptance tests authored before implementation.
   - [x] Consent fixture scopeDigest checked against SHA-256 of the exact canonical scope array.
-  - [ ] spec/REMOTE_CONTROL_RC1.md: ports, isolation, native request vectors, trust limits and qualification boundaries.
-  - [ ] Scoped API tests, retained session/auth regression suites, API typecheck/lint; no UI behavior changed.
-  - [ ] Independent review findings reconciled; make scope-check before every commit.
-  - [ ] Draft PR to main using this file; first PR comment with execution plan.
-  - [ ] CI completed/success on exact reported head; teardown test-rc1; report PR/head without merging.
+  - [x] spec/REMOTE_CONTROL_RC1.md: ports, isolation, native request vectors, trust limits and qualification boundaries.
+  - [x] Post-integration local validation at c36c75759: 177 passing cases; API typecheck/lint and IdP typecheck pass; RC1-final-green.log records seven zero results; make down removed test-rc1 services/network.
+  - [x] Independent review findings reconciled; fresh blind Astra/Terra legs both PASS at c36c75759 (RC1-code-review-r3.md), after correcting prior findings; make scope-check before every commit.
+  - [x] Draft PR #825 to main using this file; first PR comment with execution plan.
+  - [ ] Final exact-head CI and PR/head handoff: record completed/success in .tmp/remote-ctl/RC1-receipt-sentropic.md after this metadata commit; test-rc1 teardown is complete; keep PR draft without merging.
