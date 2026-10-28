@@ -373,3 +373,13 @@ describe('ChatSessionRuntime', () => {
 
   it('should tear down live IO once when disposed repeatedly', () => {
     const streamClient = createStreamClient();
+    const runtime = createChatSessionRuntime('session-1');
+
+    runtime.attach({ transport: createTransport(), streamClient });
+    runtime.dispose();
+    runtime.dispose();
+
+    expect(streamClient.delete).toHaveBeenCalledTimes(1);
+    expect(runtime.snapshot().disposed).toBe(true);
+  });
+});
