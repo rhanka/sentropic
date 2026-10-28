@@ -566,3 +566,143 @@ export function createChatSessionRuntime<
             config.onTerminal?.(streamId, outcome);
           }
         },
+        pollTimeoutMs: config.pollTimeoutMs,
+        pollInitialDelayMs: config.pollInitialDelayMs,
+        pollIntervalMs: config.pollIntervalMs,
+      });
+      streamAttached = true;
+    }
+
+    notify();
+  };
+
+  const bindView = (): (() => void) => {
+    assertActive();
+    let active = true;
+    viewBindings += 1;
+    notify();
+    return () => {
+      if (!active) return;
+      active = false;
+      viewBindings = Math.max(0, viewBindings - 1);
+      notify();
+    };
+  };
+
+  const serialize = (): ChatSessionSnapshotSerializable<Message> => {
+    const current = buildSnapshot();
+    const serialized = cloneMutableValue({
+      sessionId: current.sessionId,
+      messages: current.messages as readonly Message[],
+      draft: current.draft,
+      attachments: current.attachments,
+      checkpoints: current.checkpoints,
+      todo: current.todo,
+      lastAppliedSequence: current.lastAppliedSequence,
+    });
+    assertJsonSafe(serialized, 'serialized session');
+    return serialized;
+  };
+
+  const restore = (
+    serialized: ChatSessionSnapshotSerializable<Message>,
+  ): void => {
+    assertActive();
+    assertJsonSafe(serialized, 'restore snapshot');
+    assertString(serialized.sessionId, 'restore snapshot.sessionId');
+    assertArray(serialized.messages, 'restore snapshot.messages');
+    assertString(serialized.draft, 'restore snapshot.draft');
+    assertArray(serialized.attachments, 'restore snapshot.attachments');
+    assertArray(serialized.checkpoints, 'restore snapshot.checkpoints');
+    assertFiniteNumber(
+      serialized.lastAppliedSequence,
+      'restore snapshot.lastAppliedSequence',
+    );
+    if (attachedRefs || streamAttached) {
+      throw new Error(
+        'ChatSessionRuntime.restore requires a quiescent runtime',
+      );
+    }
+
+    currentSessionId = serialized.sessionId;
+    draftState = createDraftState(serialized.draft);
+    attachments = cloneMutableValue([...serialized.attachments]);
+    checkpoints = cloneMutableValue([...serialized.checkpoints]);
+    todo = cloneMutableValue(serialized.todo);
+    lastAppliedSequence = normalizeSequence(serialized.lastAppliedSequence);
+    // Pending-tool cross-process restore is L0d — it needs a controller-owned serializable pending-tool descriptor API (absent today) + the backend tool-result idempotency contract.
+    controller.resetLocalToolMachineState();
+    controller.setMessages(cloneMessages(serialized.messages));
+  };
+
+  const send = async (
+    payload: ControllerSendPayload,
+    opts: ChatSessionSendOptions<Message>,
+  ): Promise<void> => {
+    assertActive();
+    await controller.send(payload, {
+      ...opts,
+      buildUserMessage: (handle) =>
+        cloneValidatedMessage(opts.buildUserMessage(handle), 'user message'),
+      buildAssistantMessage: (base) =>
+        cloneValidatedMessage(
+          opts.buildAssistantMessage(base),
+          'assistant message',
+        ),
+    });
+  };
+
+  const retry = async (
+    messageId: string,
+    opts: ChatSessionRetryOptions<Message>,
+  ): Promise<void> => {
+    assertActive();
+    await controller.retry(messageId, {
+      ...opts,
+      buildAssistantMessage: (base) =>
+        cloneValidatedMessage(
+          opts.buildAssistantMessage(base),
+          'assistant message',
+        ),
+    });
+  };
+
+  const stop = async (messageId: string): Promise<void> => {
+    assertActive();
+    await controller.stop(messageId);
+  };
+
+  const edit = async (messageId: string, content: string): Promise<void> => {
+    assertActive();
+    await controller.edit(messageId, content);
+  };
+
+  const setFeedback = async (
+    messageId: string,
+    vote: 'up' | 'down' | 'clear',
+  ): Promise<void> => {
+    assertActive();
+    await controller.setFeedback(messageId, vote);
+  };
+
+  const decideLocalToolPermission = async (
+    prompt: ChatSessionPendingTool,
+    decision: string,
+  ): Promise<void> => {
+    assertActive();
+    await controller.decideLocalToolPermission(prompt, decision);
+  };
+
+  const dispose = (): void => {
+    if (disposed) return;
+    disposed = true;
+    if (streamAttached) {
+      controller.detachStream();
+      streamAttached = false;
+    }
+    controller.detachHost();
+    controller.detachLocalToolMachine();
+    attachedRefs = null;
+    controllerUnsubscribe?.();
+    controllerUnsubscribe = null;
+    notify();
