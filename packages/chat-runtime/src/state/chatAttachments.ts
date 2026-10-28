@@ -17,7 +17,7 @@ export type {
   ChatAttachmentSource,
   ChatAttachmentState,
   ChatComposerAttachmentDraft,
-} from '../documents/types.js';
+} from '@sentropic/chat-ui/documents';
 
 // Local types that remain in this module (not duplicated elsewhere)
 
@@ -35,7 +35,7 @@ import type {
   ChatAttachmentSource,
   ChatAttachmentState,
   ChatComposerAttachmentDraft,
-} from '../documents/types.js';
+} from '@sentropic/chat-ui/documents';
 
 const SUPPORTED_IMAGE_ATTACHMENT_MIME_TYPES = new Set([
   'image/gif',

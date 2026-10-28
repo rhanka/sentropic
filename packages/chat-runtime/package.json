@@ -18,7 +18,7 @@
   "files": ["dist", "README.md", "LICENSE"],
   "sideEffects": false,
   "publishConfig": { "access": "public", "provenance": true },
-  "peerDependencies": { "svelte": "^5.0.0" },
+  "peerDependencies": { "svelte": "^5.0.0", "@sentropic/chat-ui": "^1.0.0" },
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc --noEmit -p tsconfig.json",
