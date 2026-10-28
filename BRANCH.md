@@ -20,22 +20,6 @@
   - `BRANCH.md`
   - `docs/baselines/app-cm-w0/**`
   - `.h2a/owner-questions-w0.md`
-  - `.github/**`
-  - `.security/**`
-  - `.tmp/**`
-  - `.track/**`
-  - `Makefile`
-  - `api/**`
-  - `deploy/**`
-  - `docs/**`
-  - `package-lock.json`
-  - `package.json`
-  - `packages/**`
-  - `plan/**`
-  - `scripts/**`
-  - `spec/**`
-  - `tools/**`
-  - `ui/**`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -59,9 +43,13 @@
   - [x] `BR142-EX5`: owner 28 October instruction explicitly requests merging origin/main `ea20bd9c026e9717d911514e763f8911b6981dde` into #702, preserving W0's BRANCH.md. Additional Allowed Paths above apply only to unchanged inherited main bytes/history in this merge and are removed in the reconciliation commit. Impact: inherited merge exceeds 150 lines; W0-authored changes remain below 150 lines per commit, with no product edits. Rollback: separately authorized merge revert. All 346 prior branch Track event IDs and all 370 main event IDs survive; acceptance refresh remains with the designated Track writer.
 
 ## Feedback Loop
-- [ ] `attention`: 26 October B01/B02/B04 and B06 number evidence supplied; B03 isolated recovery/checkpoint and B08 exact-head reviews remain open. Missing upstream UP-T durable activation receipt gates W1.c; positive writer fencing gates W2.
+- [ ] `attention`: B01/B02/B04 and B06 evidence supplied; current d is #796 (linked below). Published artifacts 0.2.4 supplies UP-T's adapter/SQL; receiving host authority/restart/conformance remains qualification. B03 and B08 remain open.
 - [x] `acknowledge`: F3/F4 owner answers Q1–Q4 copied verbatim into owner-decisions.md; owner holds all human roles, agents execute, no staffed windows or temporal slot bookings are required because there are no users; owner signs with a later-enrolled dedicated identity/key.
-- [ ] `blocked`: W0 acceptance remains gated by B03 and exact-head independent review B08 in authorization.md; UP-T, enrollment/infra/promotion and runtime qualification retain their applicable downstream gates.
+- [ ] `blocked`: W0-close.c / B03 stays BLOCKED: isolated kubeconfig, namespace/Service/Secrets/RBAC/NetworkPolicy and selected backup object key/sha256/ETag/version requested from the k8s session on 2026-10-28; restore, authority checks, duration, revocation/rotation and external receipt path/hash indexing remain required. B08 final-head reconciliation remains open; no W0 acceptance or production authorization.
+- [x] `W0-DEV1` / #756 target deviation: merged to main as [ab981b16d](https://github.com/rhanka/sentropic/commit/ab981b16d), instead of targeting #702 before B08; no prior owner authorization source found. Disposition: retain history, incorporate through main merge, index the [runbook](docs/runbooks/app-cm-baseline-restore.md) and #756 in baseline/authorization; Opus accepts b's 43/43 guard evidence. This does not execute c or authorize production.
+- [x] `W0-DEV2` / gate-order deviation: W1–W4 entered `feat/app-cm-integration` before W0-close.e, contrary to plan-v2 lines 134/171; no prior owner authorization source found. Disposition: retain history and record retrospective a/b/d consistency qualification in the 28 October Opus receipt; integration exact-head full CI and c/B08 acceptance remain conductor gates. No retroactive W0-close.e acceptance or production GO is inferred.
+- [x] `W0-DEV3` / missing review source: Astra r1 `pr702_astra_r1.md` at `ce26bb090` is absent from disk/history. Disposition: preserve source-gap attribution; F1 B01/B02 closed, B03 partial/BLOCKED; F2 B04 closed; F3 Q1/Q2 closed; F4 Q3/Q4 decided with B05 enrollment/fingerprint pending. Statuses reconstructed from `.tmp/packets/702-*.md`, BRANCH.md and authorization.md are not the original review or final-head acceptance.
+- [x] Independent evidence: `/home/antoinefa/src/sentropic/.tmp/app-switch-week/W0e-receipt-opus.md` (28 October) accepts a/b/d on cited heads, blocks c and rejects overall W0. Record Opus in place of the planned Astra pairing for conductor reconciliation; independent final-head acceptance remains pending.
 - [x] `clarification`: D2/#677 owns control 0012–0019; W1 withdraws 0017 and reserves verified-free 0020. O1 owns 9495/5695/1595; app ports remain in reservations.md; W2.b alone reconciles API manifest/root/API locks.
 - [x] Track import belongs to the designated root writer; this concurrent worktree updates mergeable source records only (`track-operation` contract).
 
@@ -96,7 +84,8 @@
   - [x] 22 October B02/B03 follow-up: verify branch/pull; owner-authorized read-only migration discovery/count/max/frontiers in prod/preprod and latest backup status/upload receipts recorded in migration-backup-readings-2026-10-22.md; temporary mode-600 kubeconfigs deleted, no refusal; runtime/package state, private object checkpoint and restore proof remain pending.
 - [ ] **Lot 1 — Frozen implementation handoffs**
   - [x] W0-close.d/B06: 747 ref / 263 worktree nonlocal scan; withdraw 0017, reserve control 0020, freeze main/upstream/next-branch bases and W2.b's sole lock-writer turn.
-  - [x] W0-close.d tuple/profile: published 0.2.0/0.22.1 strict fit passes; APP-P1/internal ports, whole source-lock/installed tuple trees and payload-equivalence gates frozen; missing upstream UP-T durable activation receipt explicitly gates W1.c.
+  - [x] Historical W0-close.d tuple/profile: 26 October 0.2.0/0.22.1 fit retained as dated evidence; superseded by #796 below, including the then-missing UP-T handoff.
+  - [x] Current W0-close.d: [#796](https://github.com/rhanka/sentropic/pull/796), integration merge `ea8e84431`; immutable [tuple](https://github.com/rhanka/sentropic/blob/ea8e84431/docs/baselines/app-cm-w0/published-tuple.json) and [qualification](https://github.com/rhanka/sentropic/blob/ea8e84431/docs/baselines/app-cm-w0/tuple-refresh-2026-10-27.md), linked without copying integration code/locks. Artifacts 0.2.4, cluster-mesh 0.22.4, llm-mesh 0.28.1, gateway 0.21.3; APP-P1 `020aacfec500d754b76c90d3ad4a05097e0f996b8b9282145ca458917ea6fb27`.
   - [x] Record the W2 host-fit prototype and exact provider/transport preservation contract in `host-fit.md`.
   - [x] Freeze W4 context construction, signatures, caller changes and acceptance tests in `catalog-context.md`.
   - [x] Pin P canonical verifier, vectors and trust/key authorization contract in `promotion-contract.md` and `verifier-vectors.json`; Q3/Q4 settle signer/key source, with enrollment and public fingerprint deferred under B05.
@@ -108,6 +97,7 @@
   - [x] Enumerate remaining W0 acceptance blockers precisely: serving-cluster/DB/backup/object access and F1/F2 receipts/disposition, B06 nonlocal migration-0017 reconciliation and B08 independent final-head review; distinguish later technical/action gates.
   - [x] Consolidate findings into the bounded downstream branch handoffs, including W3/T3 EX1 and P/TG EX2.
 - [ ] **Lot 3 — Final validation and draft delivery**
+  - [x] 28 October resync: retain merge `2d64d4e9f`, reconcile d through #796 links, record W0-DEV1/2/3 dispositions and keep c BLOCKED; API/UI/runtime tests are not applicable to these record edits. Exact-head CI is required after push, independently of W0 acceptance.
   - [x] W0-close.a/d: baseline/authorization/catalogue/README consolidated around dated current receipts; B03/B08 remain open, UP-T W1.c dependency explicit, no restore or PR merge.
   - [x] W0-close.a/d verification: strict published fit and original vector/source/link checks pass; payload asset comparisons, JSON/diff hygiene, mechanical C1/C2 and matching locked Compose cleanup recorded in verification-2026-10-26.md; exact pushed-head CI checked at delivery.
   - [x] Check JSON, source citations, secret hygiene, reservations, prototype/verifier evidence and every diff hunk; run `make scope-check` before each commit.
