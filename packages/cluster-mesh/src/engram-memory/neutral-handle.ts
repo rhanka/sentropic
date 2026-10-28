@@ -11,7 +11,7 @@ import {
   withMemoryCaptureReceipt, type MemoryKernelTransactionPort,
 } from './wire-adaptation.js';
 import type {
-  NeutralAtomicUnit, NeutralMemoryHandle, NeutralScopeGrant, NeutralWriterFence,
+  NeutralAtomicUnit, NeutralCommitReceipt, NeutralMemoryHandle, NeutralScopeGrant, NeutralWriterFence,
 } from './neutral-contract.js';
 
 export interface MemoryNeutralBoundPort {
@@ -79,7 +79,7 @@ export const createMemoryNeutralHandle = (input: CreateMemoryNeutralHandleInput)
   const guarded = async <T,>(run: () => Promise<T>): Promise<T> => {
     try { return await run(); } catch (error) { return memoryNeutralFailure(error); }
   };
-  const handle: NeutralMemoryHandle = Object.freeze({
+  const handle: NeutralMemoryHandle = {
     moduleId: 'engram-memory', backend: 'postgres' as const, descriptor: MEMORY_DESCRIPTOR,
     profiles: MEMORY_PINNED_PROFILES.filter((claim) =>
       (MEMORY_DESCRIPTOR.requiredProfiles as readonly string[]).includes(claim.name)),
@@ -123,8 +123,9 @@ export const createMemoryNeutralHandle = (input: CreateMemoryNeutralHandleInput)
     }),
     transact: (options, operation) => guarded(async () => {
       const bound = await kernel.bind(castGrant(options.grant));
-      return bound.transact(options, (tx) =>
+      const result = await bound.transact(options, (tx) =>
         operation(createMemoryNeutralTransaction(tx, { units, identity: options.idempotencyKey })));
+      return { value: result.value, receipt: result.receipt as NeutralCommitReceipt };
     }),
     readAggregate: (kind, key, grant) => guarded(async () => {
       const bound = await kernel.bind(castGrant(grant));
@@ -144,6 +145,7 @@ export const createMemoryNeutralHandle = (input: CreateMemoryNeutralHandleInput)
       const page = await bound.query(name, queryInput, { limit: queryInput.limit ?? queryInput.max_candidates ?? 2000 });
       return neutralQueryResult(name, page.records);
     }),
-  });
+  };
+  Object.freeze(handle);
   return Object.freeze({ handle, getFence: () => fence, units });
 };
