@@ -8,6 +8,11 @@ on:
     branches: [main, feat/immo-861-integration, feat/engram-e2-integration, feat/live-stt-l1c]
   workflow_dispatch:
     inputs:
+      image_cache_mode:
+        description: 'Image qualification: persistent warm layers or a full cold rebuild'
+        type: choice
+        default: warm
+        options: [warm, cold]
       capacity_publish_dry_run:
         description: 'Qualify package publication jobs on this ref using guarded pack targets; never publish'
         type: boolean
@@ -24,6 +29,7 @@ on:
           - chat-core
           - chat-server
           - comments
+          - chat-runtime
           - chat-ui
           - oauth-verify
           - mcp-auth
@@ -42,6 +48,7 @@ on:
 env:
   REGISTRY: ${{ secrets.REGISTRY }}
   ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+  CI_IMAGE_CACHE: ${{ inputs.image_cache_mode == 'cold' && '0' || '1' }}
 
 # BR76-EX1 — capacity reservation: cancel only superseded PR attempts; main
 # releases are never cancelled and serialize on one group (no release overlap).
@@ -170,6 +177,7 @@ jobs:
       engram_e2: ${{ steps.engram_e2_scope.outputs.selected }}
       cluster_mesh_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.cluster_mesh_publish }}
       llm_gateway: ${{ steps.filter.outputs.llm_gateway }}
+      chat_runtime: ${{ steps.filter.outputs.chat_runtime }}
       chat_ui: ${{ steps.filter.outputs.chat_ui }}
       cited_source_viewer: ${{ steps.filter.outputs.cited_source_viewer }}
       cowork_bridge: ${{ steps.filter.outputs.cowork_bridge }}
@@ -193,6 +201,7 @@ jobs:
       artifacts: ${{ steps.filter.outputs.artifacts }}
       llm_mesh_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.llm_mesh_publish }}
       llm_gateway_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.llm_gateway_publish }}
+      chat_runtime_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.chat_runtime_publish }}
       chat_ui_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.chat_ui_publish }}
       cited_source_viewer_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.cited_source_viewer_publish }}
       oauth_verify_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.oauth_verify_publish }}
@@ -264,6 +273,8 @@ jobs:
               - 'docker-compose.ci.yml'
               - 'tools/**'
               - 'scripts/test-api-tooling.sh'
+              - 'scripts/ci/image-receipt.mjs'
+              - 'scripts/ci/image-receipt.test.mjs'
               - 'scripts/publish-api-image.sh'
               - 'scripts/test-api-tag-guard.sh'
               - 'scripts/resolve-api-image.sh'
@@ -335,6 +346,15 @@ jobs:
               - 'packages/llm-mesh/**'
             llm_gateway_publish:
               - 'packages/llm-gateway/**'
+            chat_runtime:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/chat-runtime/**'
+              - 'packages/chat-ui/**'
+              - '.github/workflows/ci.yml'
+            chat_runtime_publish:
+              - 'packages/chat-runtime/**'
             chat_ui:
               - 'Makefile'
               - 'package.json'
@@ -597,17 +617,19 @@ jobs:
       - name: Setup Docker
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: docker/setup-buildx-action@v4
-      - name: Check if E2E image is up to date
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        id: check-e2e-image
-        run: make check-e2e-image
-        continue-on-error: true
-      - name: Build e2e image
-        if: steps.check-e2e-image.outcome == 'failure' && (needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
-        run: make build-e2e
-      - name: Publish API image
-        if: steps.check-e2e-image.outcome == 'failure' && (needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true')
-        run: make publish-e2e-image
+      - name: Build and save exact E2E candidate
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make ci-build-e2e save-e2e ENV=test-ci-images
+      - uses: actions/upload-artifact@v7
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        with:
+          name: e2e-image
+          path: |
+            e2e-image.tar.zst
+            e2e-image.json
+          compression-level: 0
 
   typecheck-lint-ui:
     runs-on: ubuntu-latest
@@ -802,6 +824,31 @@ jobs:
           name: llm-gateway-candidate
           path: tmp/ci-manifest-guard/candidate/llm-gateway/*.tgz
           retention-days: 7
+          if-no-files-found: error
+
+  validate-chat-runtime:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: needs.changes.outputs.chat_runtime == 'true' || needs.changes.outputs.global == 'true'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck and test Chat Runtime
+        run: make typecheck-chat-runtime test-chat-runtime ENV=test-ci-chat-runtime
+      - name: Pack Chat Runtime
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-chat-runtime PACK_DESTINATION=tmp/chat-runtime-package ENV=test-ci-chat-runtime
+      - name: Qualify standalone Chat Runtime against published peers
+        run: make qualify-published-install TARBALL=tmp/chat-runtime-package/sentropic-chat-runtime-0.1.0.tgz REPORT_DIR=tmp/chat-runtime-package/qualification QUALIFY_HEAD_SHA=${{ github.event.pull_request.head.sha || github.sha }} ENV=test-ci-chat-runtime
+      - name: Retain standalone Chat Runtime evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: chat-runtime-qualification
+          path: tmp/chat-runtime-package/qualification
           if-no-files-found: error
 
   validate-chat-ui:
@@ -1282,12 +1329,14 @@ jobs:
       - name: Setup Docker
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: docker/setup-buildx-action@v4
-      - name: Login to registry (canonical tag resolution)
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make docker-login
       - name: Build API image
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make build-api
+        run: make ci-build-api ENV=test-ci-images
+      - name: Test image receipt integrity and input guards
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make test-ci-image-receipts ENV=test-ci-images
       - name: Verify npm CLI and cache are absent from the production runtime
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make test-ci-api-runtime ENV=test-ci-api
@@ -1309,7 +1358,8 @@ jobs:
         with:
           name: api-image
           path: |
-            api-image.tar
+            api-image.tar.zst
+            api-image.json
             .tmp/ci-prod-image/api-image-id
           include-hidden-files: true
           compression-level: 0
@@ -1324,30 +1374,19 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Test toolbox image references, cache fallback and hash inputs
         run: make test-ci-api-tooling ENV=test-ci-api
-      - name: Compute toolbox content tag
-        id: tool-version
-        run: echo "tag=$(make -s api-tool-version ENV=test-ci-api)" >> "$GITHUB_OUTPUT"
-      - name: Restore exact toolbox cache
-        id: tool-cache
-        uses: actions/cache@v4
-        with:
-          path: api-tool-image.tar
-          key: ${{ runner.os }}-api-tools-v1-${{ steps.tool-version.outputs.tag }}
-      - name: Load cached toolbox
-        if: steps.tool-cache.outputs.cache-hit == 'true'
-        run: make load-api-tool ENV=test-ci-api
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
       - name: Build CI toolbox
-        if: steps.tool-cache.outputs.cache-hit != 'true'
-        run: make build-api-tool-image ENV=test-ci-api
+        run: make ci-build-api-tool ENV=test-ci-images
       - name: Verify toolbox runner and compiler interfaces
         run: make test-ci-api-tool-runtime ENV=test-ci-api
       - name: Save CI toolbox
-        if: steps.tool-cache.outputs.cache-hit != 'true'
         run: make save-api-tool ENV=test-ci-api
       - uses: actions/upload-artifact@v7
         with:
           name: api-tool-image
-          path: api-tool-image.tar
+          path: |
+            api-tool-image.tar.zst
+            api-tool-image.json
           compression-level: 0
 
   test-api-unit-integration:
@@ -1468,33 +1507,32 @@ jobs:
       - name: Setup Docker
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: docker/setup-buildx-action@v4
-      - name: Build Chrome extension target
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        run: make build-ext-chrome
-      - name: Build VSCode extension target
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        run: make build-ext-vscode
+      - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
       - name: Build Cowork desktop binary
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
         run: make package-desktop-windows
       - name: Build UI image
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make build-ui-image
+        run: make ci-build-ui ENV=test-ci-images
       - name: Save UI image as artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make save-ui
       - name: Test UI
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-ui
+        run: make ci-test-ui ENV=test-ci-images
       - name: Upload UI image artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: actions/upload-artifact@v7
         with:
           name: ui-image
-          path: ui-image.tar
+          path: |
+            ui-image.tar.zst
+            ui-image.json
+          compression-level: 0
       - name: Build UI
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        run: make build-ui
+        run: make ci-build-ui-static ENV=test-ci-images
         env:
           VITE_API_BASE_URL: https://sentropic.sent-tech.ca/api/v1
       - name: Upload static files as artifact
@@ -1535,12 +1573,7 @@ jobs:
         with:
           name: api-image
           path: .
-      - name: Pull if UI image is up to date
-        id: check-ui-image
-        run: make pull-ui-image
-        continue-on-error: true
       - name: Download UI image artifact
-        if: steps.check-ui-image.outcome == 'failure'
         uses: actions/download-artifact@v7
         with:
           name: ui-image
@@ -1548,10 +1581,14 @@ jobs:
       - name: Load API image from artifact
         run: make load-api
       - name: Load UI image from artifact
-        if: steps.check-ui-image.outcome == 'failure'
         run: make load-ui
-      - name: Pull e2e image artifact
-        run: make pull-e2e-image
+      - name: Download E2E image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: e2e-image
+          path: .
+      - name: Load exact E2E image
+        run: make load-e2e ENV=e2e-ci
       - name: Test e2e API & UI (${{ matrix.group }})
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -1586,21 +1623,20 @@ jobs:
           path: .
       - name: Load API image from artifact
         run: make load-api
-      - name: Pull if UI image is up to date
-        id: check-ui-image-vscode
-        run: make pull-ui-image
-        continue-on-error: true
       - name: Download UI image artifact
-        if: steps.check-ui-image-vscode.outcome == 'failure'
         uses: actions/download-artifact@v7
         with:
           name: ui-image
           path: .
       - name: Load UI image from artifact
-        if: steps.check-ui-image-vscode.outcome == 'failure'
         run: make load-ui
-      - name: Pull e2e image artifact
-        run: make pull-e2e-image
+      - name: Download E2E image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: e2e-image
+          path: .
+      - name: Load exact E2E image
+        run: make load-e2e ENV=e2e-vscode-ci
       - name: Test VSCode E2E lane
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -1626,7 +1662,7 @@ jobs:
   # API/unit suite never exercised the served consent screen end-to-end.
   smoke-idp-screens:
     runs-on: ubuntu-latest
-    needs: [changes, typecheck-lint-api, build-api-image, build-api-tool-image, security-sast-sca]
+    needs: [changes, typecheck-lint-api, build-api-image, build-api-tool-image, build-e2e, security-sast-sca]
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     env:
       DOCKER_USERNAME: nologin
@@ -1653,6 +1689,13 @@ jobs:
           path: .
       - name: Load CI toolbox
         run: make load-api-tool ENV=test-ci-idp
+      - name: Download qualified browser image
+        uses: actions/download-artifact@v7
+        with:
+          name: e2e-image
+          path: .
+      - name: Load qualified browser image
+        run: make load-e2e ENV=test-ci-idp
       - name: Start standalone IdP (screens + API on shared DB)
         run: make up-idp-sut ENV=test-ci-idp
       - name: Screen-driven SSO smoke (served login + consent screens)
@@ -1726,13 +1769,14 @@ jobs:
   # Security: Container scans (Docker images)
   security-container:
     runs-on: ubuntu-latest
-    needs: [changes, build-api-image, build-api-tool-image, build-ui]
+    needs: [changes, build-api-image, build-api-tool-image, build-ui, build-e2e]
     # UI-only changes intentionally skip the toolbox job; keep the UI scan active.
     if: >-
       !cancelled() &&
       needs.changes.result == 'success' &&
       needs.build-api-image.result == 'success' &&
       needs.build-ui.result == 'success' &&
+      needs.build-e2e.result == 'success' &&
       (needs.build-api-tool-image.result == 'success' || (needs.build-api-tool-image.result == 'skipped' && needs.changes.outputs.api != 'true' && needs.changes.outputs.global != 'true')) &&
       (needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true')
     env:
@@ -1777,11 +1821,20 @@ jobs:
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
         run: make test-ui-security-container
         continue-on-error: false
+      - name: Download qualified browser image
+        uses: actions/download-artifact@v7
+        with:
+          name: e2e-image
+          path: .
+      - name: Scan the qualified browser with the existing container gate
+        run: make load-e2e test-e2e-security-container ENV=test-ci-images
+        continue-on-error: false
       - name: Upload security scan results (Container)
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: security-container-results
+          include-hidden-files: true
           path: |
             .security/container-*.json
             .security/container-*-parsed.yaml
@@ -1983,6 +2036,29 @@ jobs:
       - name: Publish LLM Gateway
         if: inputs.capacity_publish_dry_run != true
         run: make publish-llm-gateway
+
+  publish-chat-runtime:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-chat-runtime]
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-runtime.result == 'success' && (needs.changes.outputs.chat_runtime_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=chat-runtime ENV=test-ci-capacity
+      - name: Publish Chat Runtime
+        if: inputs.capacity_publish_dry_run != true
+        run: make publish-chat-runtime
 
   publish-chat-ui:
     runs-on: ubuntu-latest
@@ -2558,7 +2634,7 @@ jobs:
         run: |
           set -eu
           case "$BOOTSTRAP_TARGET" in
-            contracts|events|chat-core|chat-server|comments|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|harness|llm-gateway|cluster-mesh|cited-source-viewer|artifacts) ;;
+            contracts|events|chat-core|chat-server|comments|chat-runtime|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|harness|llm-gateway|cluster-mesh|cited-source-viewer|artifacts) ;;
             *) echo "::error title=Bootstrap publish::target '${BOOTSTRAP_TARGET}' is not one explicit declared package (no 'all' bootstrap)"; exit 1 ;;
           esac
       - uses: actions/checkout@v6
@@ -2586,6 +2662,9 @@ jobs:
       - name: Bootstrap publish comments
         if: inputs.bootstrap_publish_target == 'comments'
         run: make publish-comments-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
+      - name: Bootstrap publish chat-runtime
+        if: inputs.bootstrap_publish_target == 'chat-runtime'
+        run: make publish-chat-runtime-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish chat-ui
         if: inputs.bootstrap_publish_target == 'chat-ui'
         run: make publish-chat-ui-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
@@ -2722,6 +2801,7 @@ jobs:
     if: always()
     permissions:
       contents: read
+      actions: read
     needs:
       - enforce-package-bump
       - qualify-engram-e2
@@ -2734,6 +2814,7 @@ jobs:
       - validate-llm-mesh
       - validate-cluster-mesh
       - validate-llm-gateway
+      - validate-chat-runtime
       - validate-chat-ui
       - validate-cited-source-viewer
       - validate-cowork-bridge
@@ -2779,20 +2860,11 @@ jobs:
         with:
           script: |
             const fs = require('node:fs');
-            // This repository's run/job receipts are public; no additional token permissions.
-            const base = `https://api.github.com/repos/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const get = async url => {
-              const response = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
-              if (!response.ok) throw new Error(`Receipt capture failed: HTTP ${response.status}`);
-              return response.json();
-            };
-            const run = await get(`${base}/attempts/${process.env.GITHUB_RUN_ATTEMPT}`);
-            const jobs = [];
-            for (let page = 1; ; page++) {
-              const result = await get(`${base}/attempts/${process.env.GITHUB_RUN_ATTEMPT}/jobs?per_page=100&page=${page}`);
-              jobs.push(...result.jobs);
-              if (jobs.length >= result.total_count) break;
-            }
+            const params = { ...context.repo, run_id: context.runId,
+              attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT) };
+            const { data: run } = await github.rest.actions.getWorkflowRunAttempt(params);
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
+              { ...params, per_page: 100 });
             fs.writeFileSync('tmp/ci-capacity/capture.json', JSON.stringify({ run, jobs,
               sourceSha: run.head_sha, workflowSha: process.env.GITHUB_WORKFLOW_SHA ?? null }, null, 2));
       - name: Check required CI results
@@ -2812,7 +2884,7 @@ jobs:
       actions: read
     needs: [changes, enforce-package-bump, build-e2e, typecheck-lint-ui, typecheck-lint-api,
       validate-idp-sync, validate-llm-mesh, validate-cluster-mesh, validate-llm-gateway,
-      validate-chat-ui, validate-cited-source-viewer, validate-cowork-bridge, validate-oauth-verify,
+      validate-chat-runtime, validate-chat-ui, validate-cited-source-viewer, validate-cowork-bridge, validate-oauth-verify,
       validate-mcp-auth, validate-mcp-platform, validate-auth-hono, validate-auth-client,
       validate-auth-ui, validate-cowork-desktop, validate-contracts, validate-events,
       validate-chat-core, validate-chat-server, validate-comments, validate-live-speech, validate-skills, validate-flow,
@@ -2820,7 +2892,7 @@ jobs:
       test-api-unit-integration, build-ui, test-e2e, e2e-vscode, smoke-idp-screens,
       security-sast-sca, security-iac, security-container, test-smoke-restore, validate-ci-capacity-metrics,
       publish-api-image, publish-ui-image, deploy-preprod, publish-cluster-mesh,
-      publish-llm-mesh, publish-llm-gateway, publish-chat-ui, publish-cited-source-viewer,
+      publish-llm-mesh, publish-llm-gateway, publish-chat-runtime, publish-chat-ui, publish-cited-source-viewer,
       publish-cowork-bridge, publish-oauth-verify, publish-mcp-auth, publish-mcp-platform,
       publish-artifacts, publish-auth-hono, publish-auth-client, publish-auth-ui,
       publish-cowork-desktop, publish-contracts, publish-events, publish-chat-core,
