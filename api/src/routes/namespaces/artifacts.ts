@@ -30,7 +30,10 @@ export function createArtifactHttpRouter(ports: ArtifactHttpPorts): Hono {
     context.header('Cache-Control', 'no-store');
     context.header('Referrer-Policy', 'no-referrer');
     if ((ports.enabled && !ports.enabled()) || !ports.reader?.enabled()) return context.json({ error: 'not_found' }, 404);
-    if (context.req.header('origin') !== ports.reader.controlOrigin) return context.json({ error: 'access_denied' }, 403);
+    let controlOrigin: string;
+    try { controlOrigin = ports.reader.controlOrigin; }
+    catch { return context.json({ error: 'not_found' }, 404); }
+    if (context.req.header('origin') !== controlOrigin) return context.json({ error: 'access_denied' }, 403);
     let target: ArtifactReaderTarget;
     try {
       if (!context.req.header('content-type')?.startsWith('application/json')) throw new Error('JSON required');
