@@ -30,10 +30,10 @@
   - `Makefile`
   - `.github/workflows/ci.yml`
   - `.dockerignore`
-- [x] **Exception process**: BRW3C-EX1 below records the plan-authorized build/CI extension before edits.
+- [x] **Exception process**: BR03c-EX1 below records the plan-authorized build/CI extension before edits.
 
 ## Feedback Loop
-- [x] BRW3C-EX1 — acknowledged: W3.c explicitly authorizes `Makefile`, `.github/workflows/ci.yml` and `.dockerignore` for content hash/filters, test target/CI gate and generated bundle exclusion. Impact: canonical API image and its validation. Rollback: revert W3.c commits; retain W3.b source and prior qualified image. No deployment edits.
+- [x] BR03c-EX1 — acknowledged: W3.c explicitly authorizes `Makefile`, `.github/workflows/ci.yml` and `.dockerignore` for content hash/filters, test target/CI gate and generated bundle exclusion. Impact: canonical API image and its validation. Rollback: revert W3.c commits; retain W3.b source and prior qualified image. No deployment edits.
 - [x] Track remains single-writer: update this mergeable plan; conductor owns import and independent final acceptance.
 
 ## AI Flaky tests
@@ -61,8 +61,8 @@
   - [x] Compile/copy content bundle in `api/Dockerfile`, retaining existing API/IdP commands and single image resolver.
   - [ ] Gate: build canonical image once, run content process with no activation/DB/storage credentials, verify health and denial.
 - [ ] **Lot 3 — Artifact identity and CI**
-  - [ ] Test content image receipt equality and collision refusal using #712 canonical resolver/publisher and promotion pins.
-  - [ ] Wire real content-image verification before image save/upload in `.github/workflows/ci.yml`.
+  - [x] Test image receipt equality/substitution refusal using #712 canonical resolver/publisher; dry-run asserts canonical promotion pins without deployment.
+  - [x] Wire real content-image verification before image save/upload in `.github/workflows/ci.yml`; ordering test turned red then green.
   - [ ] Gate: `test-ci-api-image-canonical`, `test-ci-api-tag-guard`, `test-ci-api-runtime`, `test-artifact-content-image`, `check-ci-version-filters`.
 - [ ] **Lot 4 — Docs consolidation and final validation**
   - [ ] Keep acceptance evidence and review findings in this plan; no unrelated spec edits or package bumps.
