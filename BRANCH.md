@@ -60,6 +60,7 @@
   - [ ] Capture a real baseline with run/attempt/job IDs, source SHA, workflow SHA, cache state, runner class, spans, selected endpoints, and executed test identities.
   - [ ] Declare exceptions above; names marked new below are deliverables to create, not existing commands or evidence.
 - [ ] **Lot 1 — Candidate closure and guard ownership**
+  - [x] Implement topological public sibling closure, one build/guarded pack per member, tuple-bound archive hashes, and fail-closed partial-output handling in `package-candidate.mjs`; integration and fixtures follow.
   - [ ] Add `package-candidate.mjs` and `package-candidate.test.mjs` (new): build the topological sibling closure and pack once per source/tool tuple; hash each tarball and require all selected sibling receipts.
   - [ ] Update the named manifest/pack/install scripts and tests: wrong SHA/hash, absent archive/sibling, registry failure, and a modified packed manifest must fail; clean consumers receive tarballs, never source `node_modules`.
   - [ ] Lot gate: new `make test-ci-package-candidate ENV=test-ci-package-candidates` plus `make test-publishable-manifests test-qualify-published-install ENV=test-ci-package-candidates`.
