@@ -57,6 +57,7 @@
   - [ ] Update `ci-expected-results.mjs` and its test: static/SAST failures must still block promotion even if browser work has finished; absent scan reports and unexpected skips fail closed.
   - [ ] Lot gate: new `make test-ci-dag ENV=test-ci-parallel-dag` and `make test-ci-expected-results test-security-parser ENV=test-ci-parallel-dag`; negative fixtures prove result completeness without triggering a release.
 - [ ] **Lot 2 — Independent UI and runtime lanes**
+  - [x] Remove static/SAST wait edges from browser, VSCode, IdP and restore; preserve static/SAST barriers explicitly at both image publishers (BR79-EX1).
   - [ ] Fan out Chrome extension, VSCode extension, desktop, and UI tests after their prepared inputs; UI image waits for the assets actually embedded in `ui/static`.
   - [ ] Reuse a Vite output only when every profile input matches; retain separate application/static-site builds when API base URLs differ.
   - [ ] Dispatch browser/VSCode/IdP/restore at artifact readiness; keep real IdP native form POST, redirects/codes, restore, and production runtime assertions.
