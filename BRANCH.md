@@ -107,6 +107,7 @@
   - [x] Retarget visual label/panel/context contracts to the relocated public runtime host factory.
   - [x] Retarget model/session-list views, host composition and existing DOM fixture types to runtime public contracts.
   - [x] Remove host-factory/history/context-runtime entries from the visual export snapshot.
+  - [x] Split tool-result normalization into runtime; retain markdown/text formatting and smoothing in the visual package.
   - [x] Resolve typecheck evidence: import canonical comment formatting, normalize wire attachment source/IDs and keep ES2022-compatible lookup.
   - [ ] Replace component runtime creation/disposal with normalized snapshot and command props/declarations.
   - [ ] Bind full send/model/context/tools/attachments, history, retry/stop/edit/feedback/steer and active modules.
