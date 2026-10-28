@@ -178,3 +178,117 @@ const base64Of = (payload: Uint8Array): string => {
   return out;
 };
 
+// ---------------------------------------------------------------------------
+// TTS binding/registry (selection data only; no synthesis transport in mesh)
+// ---------------------------------------------------------------------------
+
+export const MISTRAL_TTS_PROVIDER_ID = 'mistral';
+export const MISTRAL_TTS_ADAPTER_ID = 'mistral-tts';
+export const MISTRAL_TTS_ADAPTER_REVISION = '1';
+export const MISTRAL_TTS_PLACEMENT = 'cloud-relay' as const;
+export const MISTRAL_TTS_MODEL_ID = 'voxtral-mini-tts-3-0';
+export const MISTRAL_TTS_ENDPOINT = 'https://api.mistral.ai/v1/audio/speech';
+
+/**
+ * Pinned Voxtral 3 preset voices (docs voice library). The mesh pins the
+ * selection; voice creation/management stays a console/API operation.
+ */
+export const mistralTtsVoices = [
+  'voice_478', 'voice_447', 'voice_485', 'voice_3150',
+  'voice_1787', 'voice_1786', 'voice_1788', 'voice_590', 'voice_591', 'voice_3149', 'voice_3147',
+  'voice_592', 'voice_3137', 'voice_589', 'voice_3141',
+  'voice_483', 'voice_481', 'voice_482', 'voice_480', 'voice_479', 'voice_3143',
+  'voice_3139', 'voice_3153', 'voice_3146', 'voice_3133', 'voice_3136', 'voice_3135',
+  'voice_3145', 'voice_3134', 'voice_3154', 'voice_3155', 'voice_3132', 'voice_3138',
+  'voice_3140', 'voice_3144', 'voice_3142',
+] as const;
+export type MistralTtsVoiceId = (typeof mistralTtsVoices)[number];
+
+/** Languages covered by the pinned preset voices (voice implies language). */
+export const mistralTtsLanguages = [
+  'en', 'fr', 'es', 'de', 'it', 'pt', 'ar', 'ca', 'hi', 'hu',
+  'ja', 'ko', 'nl', 'no', 'pl', 'ro', 'ru', 'tr', 'uk', 'vi', 'zh',
+] as const;
+
+export const mistralTtsResponseFormats = ['mp3', 'wav'] as const;
+export type MistralTtsResponseFormat = (typeof mistralTtsResponseFormats)[number];
+
+export const mistralTtsIdentity = (modelRevision: string): SpeechEngineIdentity => {
+  if (!isNonEmptyString(modelRevision)) {
+    throw new MistralTranscriptionError('invalid-config', 'TTS modelRevision must be a pinned non-empty revision');
+  }
+  return {
+    providerId: MISTRAL_TTS_PROVIDER_ID,
+    modelId: MISTRAL_TTS_MODEL_ID,
+    modelRevision,
+    adapterId: MISTRAL_TTS_ADAPTER_ID,
+    adapterRevision: MISTRAL_TTS_ADAPTER_REVISION,
+    placement: MISTRAL_TTS_PLACEMENT,
+  };
+};
+
+/**
+ * TTS selection capabilities. Usage is metered in characters (price
+ * separation from STT audio-seconds). Regions stay unset: the speech API
+ * documents no region selector, so an explicit region refuses fail-closed.
+ * No implicit voice: the request builder requires an explicit voice_id.
+ */
+export const mistralTtsCapabilities = (
+  modelRevision: string,
+  language?: string,
+): SpeechCapabilities => {
+  if (language !== undefined && !isLanguageCode(language)) {
+    throw new MistralTranscriptionError('invalid-config',
+      `language must be a two-letter ISO 639-1 code, got ${String(language)}`);
+  }
+  return {
+    binding: mistralTtsIdentity(modelRevision),
+    ...(language ? { languages: [language] } : { languages: [...mistralTtsLanguages] }),
+    voices: [...mistralTtsVoices],
+    features: {
+      streamingStt: 'unsupported',
+      partialTranscript: 'unsupported',
+      nativeDuplex: 'unsupported',
+      tts: 'supported',
+      serverVad: 'unsupported',
+      clientVad: 'unsupported',
+      manualCommit: 'unsupported',
+      playoutTruncate: 'unsupported',
+      toolCancellation: 'unsupported',
+      resume: 'unknown',
+    },
+    inputFormats: [],
+    outputFormats: [{ codec: 'pcm16-le', sampleRateHz: 24000, channels: 1 }],
+    usageUnits: ['characters'],
+  };
+};
+
+export interface MistralTtsRequestShape {
+  readonly voiceId: string;
+  readonly input: string;
+  readonly responseFormat: MistralTtsResponseFormat;
+}
+
+/**
+ * Exact `POST /v1/audio/speech` body. No implicit voice and no unbounded
+ * input: the composition performs the HTTPS call, the mesh only builds the
+ * validated shape. Recorded fixtures only.
+ */
+export const buildMistralTtsRequest = (request: MistralTtsRequestShape): Record<string, unknown> => {
+  if (!mistralTtsVoices.includes(request.voiceId as MistralTtsVoiceId)) {
+    throw new MistralTranscriptionError('invalid-config', `unknown Mistral TTS voice: ${request.voiceId}`);
+  }
+  if (!isNonEmptyString(request.input)) {
+    throw new MistralTranscriptionError('invalid-config', 'TTS input must be non-empty text');
+  }
+  if (!mistralTtsResponseFormats.includes(request.responseFormat)) {
+    throw new MistralTranscriptionError('invalid-config',
+      `responseFormat must be one of ${mistralTtsResponseFormats.join(', ')}`);
+  }
+  return {
+    model: MISTRAL_TTS_MODEL_ID,
+    input: request.input,
+    voice_id: request.voiceId,
+    response_format: request.responseFormat,
+  };
+};
