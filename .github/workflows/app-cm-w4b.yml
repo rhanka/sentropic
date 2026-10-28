@@ -30,10 +30,10 @@ jobs:
       - uses: docker/setup-buildx-action@v4
       - name: Start isolated host executor
         run: flock /tmp/sentropic-docker.lock make up-api-test ENV=test-app-w4b
-      - name: Qualify catalog views and shared effect dispatch
+      - name: Qualify catalog views, reader authority and shared effect dispatch
         run: >-
           flock /tmp/sentropic-docker.lock make test-api-endpoints
-          SCOPE="tests/services/catalog tests/services/catalog-characterization.spec.ts tests/api/cluster-mesh-catalog.test.ts tests/api/catalog-auth-context.test.ts tests/api/artifacts-host-credentials.test.ts tests/api/app-mcp-registry.test.ts tests/api/app-mcp-installed.test.ts tests/api/app-artifacts-transport.test.ts"
+          SCOPE="tests/services/catalog tests/services/catalog-characterization.spec.ts tests/api/cluster-mesh-catalog.test.ts tests/api/catalog-auth-context.test.ts tests/api/artifacts-host-credentials.test.ts tests/api/app-mcp-registry.test.ts tests/api/app-mcp-installed.test.ts tests/api/app-artifacts-transport.test.ts tests/api/artifacts-reader-activation.test.ts tests/api/artifacts-host-activation-store.test.ts tests/api/artifacts-host-publication.test.ts tests/api/cluster-mesh-resources.test.ts tests/api/cluster-mesh-namespace-inventory.test.ts tests/api/cluster-mesh-session.test.ts tests/unit/auth/session-manager.test.ts"
           API_TEST_WORKERS=1 API_TEST_ARGS="--no-file-parallelism"
           ENV=test-app-w4b
       - name: Check API types and lint
