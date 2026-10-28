@@ -706,3 +706,43 @@ export function createChatSessionRuntime<
     controllerUnsubscribe?.();
     controllerUnsubscribe = null;
     notify();
+  };
+
+  return {
+    snapshot: buildSnapshot,
+    subscribe(cb) {
+      listeners.add(cb);
+      cb(buildSnapshot());
+      return () => {
+        listeners.delete(cb);
+      };
+    },
+    setDraft,
+    setAttachments,
+    setMessages,
+    appendMessage,
+    hydrateMessages,
+    setCheckpoints,
+    setTodo,
+    setLastAppliedSequence,
+    attach,
+    bindView,
+    send,
+    retry,
+    stop,
+    edit,
+    setFeedback,
+    mergeHistoryEvents(messageId, events) {
+      assertActive();
+      controller.mergeHistoryEvents(messageId, events);
+    },
+    async sendSteer(text, streamId, options) {
+      assertActive();
+      await controller.sendSteer(text, streamId, options);
+    },
+    decideLocalToolPermission,
+    serialize,
+    restore,
+    dispose,
+  };
+}
