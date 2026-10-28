@@ -6,6 +6,11 @@ import assert from 'node:assert/strict';
 import { registerHooks } from 'node:module';
 import { createHash, randomBytes } from 'node:crypto';
 import { readFile, writeFile } from 'node:fs/promises';
+import { createInstalledHostBridge } from './installed-host-bridge.mjs';
+
+const phase = process.argv[2];
+assert.ok(phase === 'write' || phase === 'reopen', 'usage: installed-memory.mjs write|reopen');
+const statePath = new URL('./installed-state.json', import.meta.url);
 
 const consumerRoot = process.env.INSTALLED_CONSUMER_ROOT;
 const receiptPath = process.env.INSTALLED_RECEIPT;
@@ -94,33 +99,46 @@ const provider = {
   serverFloor: '17.0.0',
   pool: hostDriver,
 };
+await meshMemory.verifyMemoryPostgresProvider(provider);
 const serverVersion = await provider.pool.transaction(
   { isolation: 'serializable', readOnly: true, deadlineMs: 5000 },
   async (session) => (await session.execute({ text: 'SHOW server_version', values: [] })).rows[0].server_version,
 );
 
-// Refusals before any durable effect: missing driver, a wrong driver
-// identity and a provider without the live pool are each refused.
+// Refusals before any durable effect, asserted on typed errors.
 const refusals = {};
-const expectRefusal = async (name, run, pattern) => {
+const expectTypedRefusal = async (name, run, check) => {
   try {
     await run();
   } catch (error) {
-    assert.match(`${error.name}: ${error.message}`, pattern, name);
+    check(error);
     refusals[name] = `${error.name}: ${error.message}`;
     return;
   }
   assert.fail(`${name} must refuse`);
 };
-await expectRefusal('missing-driver', () => meshMemory.checkMemoryPostgresDriver(undefined), /driver/);
-await expectRefusal('missing-pool', () => meshMemory.checkMemoryPostgresDriver(
-  { identity: provider.identity, serverFloor: '17.0.0' }), /pool/);
-await expectRefusal('wrong-driver-identity', () => meshMemory.checkMemoryPostgresDriver(
-  { identity: { name: 'node-pg-installed', version: '8.16.3', artifactDigest: 'not-a-digest' },
-    serverFloor: '17.0.0', pool: hostDriver }), /identity|digest/);
-await expectRefusal('storage-without-provider', () => meshMemory.createMemoryPostgresStorage(
-  { layout: {}, history: {}, cursorSecret: 'installed-secret' }), /provider/);
-meshMemory.checkMemoryPostgresDriver(provider);
+const expectDriverRequired = (error) => {
+  assert.ok(error instanceof meshMemory.MemoryHostDriverRequiredError,
+    `expected MemoryHostDriverRequiredError, got ${error?.name}`);
+  assert.equal(error.code, 'HOST_DRIVER_REQUIRED');
+};
+const expectUnavailable = (error) => {
+  assert.equal(error.name, 'StorageUnavailableError');
+  assert.equal(error.code, 'unavailable');
+};
+if (phase === 'write') {
+  await expectTypedRefusal('missing-driver',
+    () => meshMemory.checkMemoryPostgresDriver(undefined), expectDriverRequired);
+  await expectTypedRefusal('missing-pool', () => meshMemory.checkMemoryPostgresDriver(
+    { identity: provider.identity, serverFloor: '17.0.0' }), expectDriverRequired);
+  await expectTypedRefusal('wrong-driver-identity', () => meshMemory.checkMemoryPostgresDriver(
+    { identity: { name: 'node-pg-installed', version: '8.22.0', artifactDigest: 'not-a-digest' },
+      serverFloor: '17.0.0', pool: hostDriver }), expectDriverRequired);
+  await expectTypedRefusal('storage-without-provider', () => meshMemory.createMemoryPostgresStorage(
+    { layout: {}, history: {}, cursorSecret: 'installed-secret' }), expectUnavailable);
+  await expectTypedRefusal('wrong-driver-live', () => meshMemory.verifyMemoryPostgresProvider(
+    { identity: provider.identity, serverFloor: '99.0.0', pool: hostDriver }), expectUnavailable);
+}
 
 // Host grants: the maintain grant stays host-side; Engram receives only
 // the derived neutral grant with exactly ['read', 'write'].
@@ -133,13 +151,19 @@ const maintainGrant = {
   issuer: 'installed-host', authorityRevision: '1', policyRevision: '1',
   moduleAuthority: null, lifetime: { kind: 'invocation', invocationId },
 };
+if (phase === 'write') {
+  await expectTypedRefusal('assembly-missing-driver', () => meshMemory.assembleMemoryHostBinding(
+    { driver: undefined, maintainGrant, invocationId, storeId }), expectDriverRequired);
+}
 const binding = meshMemory.assembleMemoryHostBinding({ driver: provider, maintainGrant, invocationId, storeId });
 assert.deepEqual([...binding.memoryGrant.operations], ['read', 'write']);
 assert.deepEqual([...binding.maintainGrant.operations], ['read', 'maintain']);
 
 // Installed PostgreSQL schema, migration history and kernel. The assets
 // load from the installed mesh package bytes, never from a checkout.
-const schemaName = `installed_${randomBytes(6).toString('hex')}`;
+const priorState = phase === 'reopen' ? JSON.parse(await readFile(statePath, 'utf8')) : null;
+if (priorState) Object.assign(refusals, priorState.refusals);
+const schemaName = priorState?.schemaName ?? `installed_${randomBytes(6).toString('hex')}`;
 const layout = { dataSchema: schemaName, projectionSchemas: { 'engram-memory': `${schemaName}_projection` },
   outboxSchema: schemaName };
 const history = {
@@ -153,15 +177,18 @@ const history = {
   },
 };
 const registration = await meshMemory.createMemoryPostgresRegistration();
-await hostDriver.transaction({ readOnly: false, deadlineMs: 30000 }, async (session) => {
-  await session.execute({ text: `CREATE SCHEMA "${schemaName}"; CREATE SCHEMA "${schemaName}_projection";
-    CREATE TABLE "${schemaName}".host_history(ordinal integer PRIMARY KEY, receipt jsonb NOT NULL);
-    CREATE TABLE "${schemaName}".host_memory_identity(scope text PRIMARY KEY, store_id text UNIQUE NOT NULL)`, values: [] });
-  await meshPg.applyPgMigrations(session, layout, registration.assets, history,
-    { id: 'installed-memory/001', checksum: 'a'.repeat(64) });
-});
-const hostHistory = await hostDriver.transaction({ readOnly: true, deadlineMs: 5000 },
-  (session) => history.read(session));
+if (phase === 'write') {
+  await hostDriver.transaction({ readOnly: false, deadlineMs: 30000 }, async (session) => {
+    await session.execute({ text: `CREATE SCHEMA "${schemaName}"; CREATE SCHEMA "${schemaName}_projection";
+      CREATE TABLE "${schemaName}".host_history(ordinal integer PRIMARY KEY, receipt jsonb NOT NULL);
+      CREATE TABLE "${schemaName}".host_memory_identity(scope text PRIMARY KEY, store_id text UNIQUE NOT NULL)`, values: [] });
+    await meshPg.applyPgMigrations(session, layout, registration.assets, history,
+      { id: 'installed-memory/001', checksum: 'a'.repeat(64) });
+  });
+}
+const hostHistory = phase === 'write'
+  ? await hostDriver.transaction({ readOnly: true, deadlineMs: 5000 }, (session) => history.read(session))
+  : priorState.hostHistory;
 
 // Host wire bridge: preserve memory values and decimal strings exactly;
 // validation, allocation, durability and authority stay in the kernel.
