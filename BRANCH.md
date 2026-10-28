@@ -1,7 +1,7 @@
 # Feature: W3.c canonical artifact content image
 
 ## Objective
-- [ ] Ship the W3.b content entrypoint in the canonical API/IdP image with content hash, runtime and identity evidence.
+- [x] Ship the W3.b content entrypoint in the canonical API/IdP image with content hash, runtime and identity evidence.
 
 ## Scope / Guardrails
 - [x] Implement `.tmp/app-switch-week/plan-v2.md` W3.c, sections 1–5; inherit W3.b (#810) from base `d4625d764`.
@@ -57,20 +57,22 @@
   - [x] Extend canonical required-input inventory in `scripts/test-api-image-canonical.sh`.
   - [x] Hash/copy content sources, exclude generated bundles and align `.github/workflows/ci.yml` filters.
   - [x] Gate: scoped static image/hash/filter tests turned red then green; CI filter guard passes.
-- [ ] **Lot 2 — Production entrypoint**
+- [x] **Lot 2 — Production entrypoint**
   - [x] Add real-image test for pruned dependencies, Node startup, health, denial and shutdown; assembly test fails because content sources are not copied.
   - [x] Compile/copy content bundle in `api/Dockerfile`, retaining existing API/IdP commands and single image resolver.
-  - [ ] Gate: build canonical image once, run content process with no activation/DB/storage credentials, verify health and denial.
-- [ ] **Lot 3 — Artifact identity and CI**
+  - [x] Gate: build canonical image once, run content process with no activation/DB/storage credentials, verify health, denial, shutdown and incomplete-activation refusal (CI 40636597780).
+- [x] **Lot 3 — Artifact identity and CI**
   - [x] Test image receipt equality/substitution refusal using #712 canonical resolver/publisher; dry-run asserts canonical promotion pins without deployment.
   - [x] Wire real content-image verification before image save/upload in `.github/workflows/ci.yml`; ordering test turned red then green.
-  - [ ] Gate: `test-ci-api-image-canonical`, `test-ci-api-tag-guard`, `test-ci-api-runtime`, `test-artifact-content-image`, `check-ci-version-filters`.
-- [ ] **Lot 4 — Docs consolidation and final validation**
-  - [ ] Keep acceptance evidence and review findings in this plan; no unrelated spec edits or package bumps.
-  - [ ] Review every changed hunk; pass branch/scope checks and shell syntax checks.
-  - [ ] Create draft PR with this file as body and a 3–6 step plan comment; push without force.
-  - [ ] Confirm GitHub CI success on the exact final head and report PR/head.
-  - [ ] Run `make down ENV=test-app-w3c` and verify no remaining project services.
+  - [x] Gate: `test-ci-api-image-canonical`, `test-ci-api-tag-guard`, `test-ci-api-runtime`, `test-artifact-content-image`, `check-ci-version-filters` passed in CI 40636597780 on `275f0a0a0871417b4cb66b3ebcd0a5f40b255f8f`.
+  - [x] CI-tested image receipt: `sha256:7c0bbee42561078fad5c782d1e8fe0600bb732c7b79c6f3eaaae8a0b67acfd3f`; source tag `853d98`. Publication guards use mocks; promotion is dry-run only, never a production receipt.
+- [x] **Lot 4 — Docs consolidation and final validation**
+  - [x] Local canonical build and the same five Make validation targets passed with all assigned ports and `ENV=test-app-w3c`; receipt `sha256:32718eeb1f4425bd6ed61674aa156671b368a2f0270ca1b8e87cc45e22deee29`.
+  - [x] Keep acceptance evidence in this plan; no unrelated spec edits or package bumps. Independent acceptance remains with the conductor; this is an author draft.
+  - [x] Review every changed hunk; branch/scope and shell syntax checks pass. Scope exception uses the mechanical `BR03c-EX1` grammar.
+  - [x] Create draft PR #812 with this file as body and a five-step plan comment; push without force.
+  - [x] Exact-head CI verifies checkout identity; retain final head/run/result in the PR validation comment after the evidence commit.
+  - [x] Run scoped `make down`, remove the disposable test volume with scoped `make clean`, repeat `make down` and verify `make ps` has no project services; all under the shared lock with `ENV=test-app-w3c`.
 
 ## Inherited main qualification record
 
