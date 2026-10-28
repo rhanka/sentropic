@@ -13,6 +13,8 @@ import {
   type ControllerPollJob,
   type ControllerSendPayload,
   type ControllerStreamClient,
+  type ControllerStreamEvent,
+  type SendSteerOptions,
 } from './chatLoopController.js';
 import type {
   ChatProjectedTimelineItem,
@@ -133,6 +135,8 @@ export type ChatSessionRuntime<
   stop(messageId: string): Promise<void>;
   edit(messageId: string, content: string): Promise<void>;
   setFeedback(messageId: string, vote: 'up' | 'down' | 'clear'): Promise<void>;
+  mergeHistoryEvents(messageId: string, events: ControllerStreamEvent[]): void;
+  sendSteer(text: string, streamId: string, options: SendSteerOptions): Promise<void>;
   decideLocalToolPermission(
     prompt: ChatSessionPendingTool,
     decision: string,
@@ -728,6 +732,14 @@ export function createChatSessionRuntime<
     stop,
     edit,
     setFeedback,
+    mergeHistoryEvents(messageId, events) {
+      assertActive();
+      controller.mergeHistoryEvents(messageId, events);
+    },
+    async sendSteer(text, streamId, options) {
+      assertActive();
+      await controller.sendSteer(text, streamId, options);
+    },
     decideLocalToolPermission,
     serialize,
     restore,
