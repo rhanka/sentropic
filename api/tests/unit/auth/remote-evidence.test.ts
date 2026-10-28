@@ -1,5 +1,5 @@
 import { generateKeyPairSync } from 'node:crypto';
-import { decodeJwt, jwtVerify } from 'jose';
+import { decodeJwt, jwtVerify, SignJWT } from 'jose';
 import { describe, expect, it } from 'vitest';
 import { createRemoteEvidenceIssuer, verifyRemoteEvidence } from '../../../src/services/auth/remote-evidence';
 
@@ -85,7 +85,24 @@ describe('RC1 D2 session evidence', () => {
     expect(payload).toMatchObject({ actionId: request.actionId, targetDigest: request.targetDigest,
       payloadDigest: request.payloadDigest, nonceId: 'nonce-1', operation: 'input' });
     await expect(verifyRemoteEvidence(evidence, { key: generateKeyPairSync('ed25519').publicKey,
-      issuer: 'idp', kid: 'idp-1', audience: 'native-b', now, request, login }))
+      issuer: 'idp', kid: 'idp-1', audience: 'native-b', tenantId: 'tenant-1', workspaceId: 'workspace-1',
+      now, request, login }))
       .rejects.toMatchObject({ code: 'authority_refused' });
+  });
+
+  it.each([
+    { iss: 'other-idp' }, { sub: 'other-owner' }, { sid: 'other-login' }, { sessionVersion: 2 },
+    { aud: 'other-native' }, { amr: ['pwd'] }, { auth_time: now / 1000 }, { jti: '' },
+    { tenantId: 'other' }, { workspaceId: 'other' }, { targetDigest: 'd'.repeat(64) },
+    { payloadDigest: 'd'.repeat(64) }, { actionId: 'BBBBBBBBBBBBBBBBBBBBBA' },
+    { operation: 'permission-response' }, { nonceId: 'other' },
+    { iat: now / 1000 - 120, exp: now / 1000 + 60 }, { exp: now / 1000 },
+  ])('should refuse signed IdP claim substitution %j', async (change) => {
+    const payload = decodeJwt(await setup().issue(request));
+    const evidence = await new SignJWT({ ...payload, ...change })
+      .setProtectedHeader({ alg: 'EdDSA', kid: 'idp-1' }).sign(keys.privateKey);
+    await expect(verifyRemoteEvidence(evidence, { key: keys.publicKey, issuer: 'idp', kid: 'idp-1',
+      audience: 'native-b', tenantId: 'tenant-1', workspaceId: 'workspace-1', now, request, login }))
+      .rejects.toHaveProperty('code');
   });
 });
