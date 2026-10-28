@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { db } from '../../db/client';
 import { oauthDpopProofs } from '../../db/schema';
 import { authHonoSessionService } from './session-adapter';
-import { remoteCounter, remoteRawHash } from './remote-contract';
+import { RemoteAuthorityError, remoteCounter, remoteRawHash, type RemoteEvidenceRequest } from './remote-contract';
 import type { RemoteLogin } from './remote-evidence';
 import { getRemoteSessionAuthority } from './remote-private-session';
 
@@ -44,4 +44,10 @@ export async function reserveRemoteEvidence(sid: string, actionId: string, expir
   const rows = await db.insert(oauthDpopProofs).values({ jti, createdAt: new Date(), expiresAt })
     .onConflictDoNothing().returning({ jti: oauthDpopProofs.jti });
   return rows.length === 1;
+}
+
+export function commitRemoteEvidence(login: RemoteLogin, request: RemoteEvidenceRequest, operation: () => string): string {
+  const authority = getRemoteSessionAuthority();
+  if (!authority) throw new RemoteAuthorityError('authority_unavailable');
+  return authority.signCurrent(login.sid, remoteRawHash(request.sessionCredential), login, operation);
 }

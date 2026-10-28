@@ -94,6 +94,7 @@
   - [x] OAuth single/bulk revocation persists the same private tombstone before DB deletion; federation uses canonical signed session/refresh minting without adding MFA.
   - [x] Review-r2 regressions authored for late private creation after bulk revoke and revocation/deadline changes during asynchronous evidence preparation.
   - [x] Bulk logout fences every deleted session, including a private create that has not completed; unknown-session tombstones prevent late recreation.
+  - [x] Issuer-private synchronous signing boundary shares the revocation fence and validates current immutable login/hash/deadline before signing.
   - [ ] api/tests/unit/auth/remote-evidence.test.ts: repeated actions/switch, logout/revoke/expiry, wrong sid/version/MFA/audience/key, replay and workload separation.
   - [ ] Closed EvidenceRequest; issuer-derived identity and original authentication time; per-operation EdDSA evidence with pinned audiences.
 - [ ] **Lot 2 — Consent and authorization, RED then GREEN**
