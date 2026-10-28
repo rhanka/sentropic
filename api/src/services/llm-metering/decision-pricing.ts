@@ -8,7 +8,7 @@ export const resolveDecisionPrice = async (database: LedgerDatabase, key: Decisi
     : key.providerId === 'openai' && key.modelId === 'gpt-6-luna' ? 'openai-decisions' : undefined;
   if (key.authority !== 'control.model_pricing' || key.protocol !== protocol || !protocol) return null;
   return decisionTransaction(database, async (tx) => {
-    const row = await loadPricing(tx, key.providerId, key.modelId, new Date());
+    const row = await loadPricing(tx, key.providerId, key.modelId, new Date(), protocol);
     if (!row || row.id !== key.priceRevision || row.output !== 0n || row.reasoning !== 0n
       || row.image !== 0n || row.toolCall !== 0n) return null;
     return { ...key, protocol, inputMicroUsdPerMtok: row.input.toString(), outputMicroUsdPerMtok: '0',

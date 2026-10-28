@@ -50,6 +50,10 @@ Verified 2026-10-28 from the providers' public documentation, without authentica
 Migration `control/0012_decision_host.sql` inserts both `control.model_pricing` rows. Rates are
 42,000 and 100,000 integer micro-USD per million input tokens, respectively. The migration uses
 the existing pricing writer's provider/model advisory lock and closes only an open predecessor.
+Windows and their unique key include `protocol`; historical rows default to `generation`.
+The generation reader/writer keep that default, while Decision admission explicitly selects
+`jev-native` or `openai-decisions`. A native Decisions price never replaces the chat tariff for
+the same `gpt-6-luna` wire model, including when both rows share an effective timestamp.
 Resolution requires the exact current row ID, provider, model, protocol and authority. Missing,
 expired or superseded rows refuse execution. OpenAI's dedicated Decisions codec disables implicit
 caching; other OpenAI endpoints and processing tiers do not inherit this price.

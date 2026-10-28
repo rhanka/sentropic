@@ -549,7 +549,7 @@ export const decisionCalls = controlSchema.table('decision_calls', {
 });
 
 /**
- * Immutable effective-dated component rates (micro-USD). Non-overlap per (provider, model) is
+ * Immutable effective-dated component rates (micro-USD). Non-overlap per (provider, model, protocol) is
  * enforced by the unique key plus the single-writer checked insert (B0-A4); only `effective_to`
  * of the open predecessor may be closed by that writer. No btree_gist / extension.
  */
@@ -559,6 +559,7 @@ export const modelPricing = controlSchema.table(
     id: text('id').primaryKey(),
     providerId: text('provider_id').notNull(),
     modelId: text('model_id').notNull(),
+    protocol: text('protocol').notNull().default('generation'),
     inputMicroUsdPerMtok: bigint('input_micro_usd_per_mtok', { mode: 'number' }).notNull(),
     outputMicroUsdPerMtok: bigint('output_micro_usd_per_mtok', { mode: 'number' }).notNull(),
     cachedInputMicroUsdPerMtok: bigint('cached_input_micro_usd_per_mtok', { mode: 'number' }),
@@ -576,6 +577,7 @@ export const modelPricing = controlSchema.table(
     effectiveUnique: uniqueIndex('model_pricing_provider_model_effective_from_unique').on(
       table.providerId,
       table.modelId,
+      table.protocol,
       table.effectiveFrom,
     ),
     windowCheck: check(

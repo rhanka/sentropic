@@ -4,7 +4,7 @@
  *
  * `FOR UPDATE` cannot lock an absent predecessor, so a transaction-scoped advisory lock keyed on
  * (provider, model) serializes writers first; the predecessor lookup `FOR UPDATE` and the overlap
- * check run in the same transaction; the unique `(provider_id, model_id, effective_from)` key stays
+ * check run in the same transaction; the unique `(provider_id, model_id, protocol, effective_from)` key stays
  * the last-resort guard. Only `effective_to` of the open predecessor is ever closed. Non-overlap is a
  * single-writer discipline: a direct SQL write with another `effective_from` can bypass it.
  */
@@ -26,6 +26,7 @@ export interface ModelPricingRates {
 }
 
 export interface ModelPricingWrite extends ModelPricingRates {
+  readonly protocol?: string;
   readonly id?: string;
   readonly providerId: string;
   readonly modelId: string;
@@ -48,18 +49,20 @@ const rate = (value: number | null | undefined): number | null => {
   return value;
 };
 
-/** Inserts one immutable pricing window; closes the open predecessor at the new start. */
+/** Inserts one immutable protocol-specific pricing window; closes only that protocol's predecessor. */
 export const insertModelPricing = async (database: Database, write: ModelPricingWrite): Promise<string> => {
   const id = write.id ?? createId();
   const input = rate(write.inputMicroUsdPerMtok);
   const output = rate(write.outputMicroUsdPerMtok);
   if (input === null || output === null) throw new RangeError('input and output rates are required');
   const to = write.effectiveTo ?? null;
+  const protocol = write.protocol ?? 'generation';
   await database.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${write.providerId}), hashtext(${write.modelId}))`);
     const existing = (await tx.execute(sql`
       SELECT id, effective_from, effective_to FROM control.model_pricing
       WHERE provider_id = ${write.providerId} AND model_id = ${write.modelId}
+        AND protocol = ${protocol}
       ORDER BY effective_from FOR UPDATE`)).rows as Array<{ id: string; effective_from: Date; effective_to: Date | null }>;
     const end = to?.getTime() ?? Number.POSITIVE_INFINITY;
     let predecessor: string | null = null;
@@ -74,10 +77,10 @@ export const insertModelPricing = async (database: Database, write: ModelPricing
         WHERE id = ${predecessor} AND effective_to IS NULL`);
     }
     await tx.execute(sql`INSERT INTO control.model_pricing
-      (id, provider_id, model_id, input_micro_usd_per_mtok, output_micro_usd_per_mtok, cached_input_micro_usd_per_mtok,
+      (id, provider_id, model_id, protocol, input_micro_usd_per_mtok, output_micro_usd_per_mtok, cached_input_micro_usd_per_mtok,
        reasoning_micro_usd_per_mtok, image_micro_usd_per_unit, tool_call_micro_usd_per_unit, min_charge_micro_usd,
        effective_from, effective_to)
-      VALUES (${id}, ${write.providerId}, ${write.modelId}, ${input}, ${output}, ${rate(write.cachedInputMicroUsdPerMtok)},
+      VALUES (${id}, ${write.providerId}, ${write.modelId}, ${protocol}, ${input}, ${output}, ${rate(write.cachedInputMicroUsdPerMtok)},
        ${rate(write.reasoningMicroUsdPerMtok)}, ${rate(write.imageMicroUsdPerUnit)}, ${rate(write.toolCallMicroUsdPerUnit)},
        ${rate(write.minChargeMicroUsd)}, ${write.effectiveFrom}, ${to})`);
   });

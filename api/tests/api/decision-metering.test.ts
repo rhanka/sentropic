@@ -10,6 +10,8 @@ import { evaluatorKey } from '../../src/services/llm-metering/decision-store';
 import { resolveDecisionPrice } from '../../src/services/llm-metering/decision-pricing';
 import { reapExpiredHolds } from '../../src/services/llm-metering/reservation-reaper';
 import { createDecisionAdmission } from '../../src/services/llm-metering/decision-admission';
+import { loadPricing } from '../../src/services/llm-metering/budget-admission';
+import { insertModelPricing } from '../../src/services/llm-metering/model-pricing-writer';
 import { decisionRequest, jevResponse } from '../../../packages/llm-mesh/tests/decision-fixtures';
 
 const tenant = `decision-${randomUUID().slice(0, 8)}`;
@@ -44,11 +46,26 @@ afterEach(async () => {
   await db.execute(sql`DELETE FROM control.budget_holds WHERE tenant_id = ${tenant}`);
   await db.execute(sql`DELETE FROM control.budgets WHERE tenant_id = ${tenant}`);
   await db.execute(sql`DELETE FROM control.tenant_budget_strategy WHERE tenant_id = ${tenant}`);
+  await db.execute(sql`DELETE FROM control.model_pricing WHERE id = ${`${tenant}-chat`}`);
   for (const descriptor of descriptors) await db.execute(sql`DELETE FROM control.decision_evaluator_state
     WHERE evaluator_key = ${evaluatorKey(descriptor.evaluator)}`);
 });
 
 describe('Decision durable metering and authoritative pricing', () => {
+  it('should keep GPT-6 Luna generation and Decisions tariffs independent at the same effective date', async () => {
+    await seed();
+    await insertModelPricing(db, { id: `${tenant}-chat`, providerId: 'openai', modelId: 'gpt-6-luna',
+      inputMicroUsdPerMtok: 5_000_000, outputMicroUsdPerMtok: 10_000_000, effectiveFrom: new Date('2026-10-28T00:00:00Z') });
+    await db.transaction(async (tx) => {
+      expect(await loadPricing(tx, 'openai', 'gpt-6-luna', new Date())).toMatchObject({ id: `${tenant}-chat`, input: 5_000_000n });
+      expect(await loadPricing(tx, 'openai', 'gpt-6-luna', new Date(), 'openai-decisions'))
+        .toMatchObject({ id: descriptors[1].priceProtocol.revision, input: 100_000n, output: 0n });
+    });
+    const f = fixture();
+    expect(await f.client.decide(decisionRequest({ evaluator: descriptors[1].evaluator })))
+      .toMatchObject({ ok: true, receipt: { cost: { amountMicroUsd: '100' } } });
+    expect(f.fetch).toHaveBeenCalledOnce();
+  });
   it.each([0, 1])('should use the exact published pricing row for backend %i', async (index) => {
     const descriptor = descriptors[index];
     const key = { providerId: descriptor.evaluator.providerId, modelId: descriptor.wireModel,
