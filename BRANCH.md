@@ -166,6 +166,7 @@
   - [ ] Run package typecheck, unit/DOM tests, app typecheck/lint and affected app tests.
   - [ ] Pack both candidates and prove runtime-free UI and standalone installed consumption.
 - [ ] **Lot 4 — Docs consolidation and review**
+  - [x] Resolve the publisher wiring gate: give runtime its own real validation job and require that job before its publisher, while retaining UI/runtime pair validation ordering.
   - [x] Document runtime composition, permission adapter semantics, public module ownership and guarded release/bootstrap prerequisites.
   - [x] Declare runtime-only CI publication filters, guarded publisher ordering and an explicit single-package bootstrap target/allowlist; draft validation cannot publish.
   - [x] Prepare runtime OIDC/token-bootstrap Make targets by copying the guarded existing package publisher pattern; no publication executed or authorized.
