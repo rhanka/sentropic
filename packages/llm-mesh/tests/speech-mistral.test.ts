@@ -834,10 +834,18 @@ describe('mistral session lifecycle', () => {
     const receipt = JSON.parse(readFileSync(receiptPath, 'utf8')) as {
       status: string;
       missing: Array<{ item: string; status: string }>;
+      license: Record<string, string>;
+      priceList: Record<string, string>;
     };
     expect(receipt.status).toBe('blocked');
     for (const item of receipt.missing) {
       expect(item.status).toBe('blocked');
     }
+    // License/price separation per generation: the 2602 generation stays
+    // not admitted and differs from the 3.0 preview entries.
+    expect(receipt.license['voxtral-2602']).toMatch(/not admitted/);
+    expect(receipt.priceList['voxtral-2602']).toMatch(/not admitted/);
+    expect(receipt.license['voxtral-3-preview']).not.toBe(receipt.license['voxtral-2602']);
+    expect(receipt.priceList['voxtral-3-preview']).not.toBe(receipt.priceList['voxtral-2602']);
   });
 });
