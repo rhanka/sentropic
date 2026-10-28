@@ -73,8 +73,8 @@
   - [x] Implement transaction-bound current authority using the package ACL/lifecycle evaluator.
   - [x] Add reader service over W1.c; lock current session, memberships, ACL, release and stable pointer until commit.
   - [x] Return grant permission only after acknowledged package consume; never issue browser effects in callbacks.
-  - [ ] Mount distinct internal reader issuance port under the existing resources author fence.
-  - [ ] Keep APP-P1 public discovery/tool selection unchanged.
+  - [x] Mount distinct internal reader issuance port under the existing resources author fence.
+  - [x] Keep APP-P1 public discovery/tool selection unchanged.
 - [ ] **Lot 3 — Final validation and handoff**
   - [ ] Run scoped activation/store/publication and resources/MCP/auth regression suites.
   - [ ] Run API typecheck/lint and review every diff hunk.
