@@ -1506,7 +1506,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Build Cowork desktop binary
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        run: make ci-build-desktop ENV=test-ci-br79
+        run: make ci-build-desktop ENV=test-ci-images
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
         with:
@@ -1525,7 +1525,7 @@ jobs:
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - uses: crazy-max/ghaction-github-runtime@3cb05d89e1f492524af3d41a1c98c83bc3025124 # v3
       - name: Test UI
-        run: make ci-test-ui ENV=test-ci-br79
+        run: make ci-test-ui ENV=test-ci-ui
 
   # Build the runtime UI independently of unit tests and the static profile
   build-ui:
@@ -1775,7 +1775,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Run unchanged security gate
-        run: make test-api-security-${{ matrix.scan }} ENV=test-ci-br79
+        run: make test-api-security-${{ matrix.scan }} ENV=test-ci-security
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
@@ -1801,7 +1801,7 @@ jobs:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Run unchanged security gate
-        run: make test-ui-security-${{ matrix.scan }} ENV=test-ci-br79
+        run: make test-ui-security-${{ matrix.scan }} ENV=test-ci-security
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
@@ -1825,7 +1825,7 @@ jobs:
         env:
           CI_SECURITY_NEEDS: ${{ toJSON(needs) }}
           CI_SECURITY_CATEGORY: code
-        run: make ci-security-join ENV=test-ci-br79
+        run: make ci-security-join ENV=test-ci-security
 
   # Security: IaC scans (infrastructure configuration)
   security-iac:
@@ -1867,7 +1867,7 @@ jobs:
           name: api-image
           path: .
       - name: Verify candidate and run unchanged container gate
-        run: make load-api test-api-security-container ENV=test-ci-br79
+        run: make load-api test-api-security-container ENV=test-ci-security
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
@@ -1893,7 +1893,7 @@ jobs:
           name: api-tool-image
           path: .
       - name: Verify candidate and run unchanged container gate
-        run: make load-api-tool test-api-tool-security-container ENV=test-ci-br79
+        run: make load-api-tool test-api-tool-security-container ENV=test-ci-security
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
@@ -1919,7 +1919,7 @@ jobs:
           name: ui-image
           path: .
       - name: Verify candidate and run unchanged container gate
-        run: make load-ui test-ui-security-container ENV=test-ci-br79
+        run: make load-ui test-ui-security-container ENV=test-ci-security
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
@@ -1945,7 +1945,7 @@ jobs:
           name: e2e-image
           path: .
       - name: Verify candidate and run unchanged container gate
-        run: make load-e2e test-e2e-security-container ENV=test-ci-br79
+        run: make load-e2e test-e2e-security-container ENV=test-ci-security
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always()
         with:
@@ -1972,7 +1972,7 @@ jobs:
         env:
           CI_SECURITY_NEEDS: ${{ toJSON(needs) }}
           CI_SECURITY_CATEGORY: container
-        run: make ci-security-join ENV=test-ci-br79
+        run: make ci-security-join ENV=test-ci-security
 
   test-smoke-restore:
     runs-on: ubuntu-latest
@@ -3131,7 +3131,7 @@ jobs:
       - name: Qualify CI capacity metrics and expected-result fixtures
         run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity
       - name: Qualify artifact dispatch and fail-closed scan joins
-        run: make test-ci-dag test-security-parser ENV=test-ci-br79
+        run: make test-ci-dag test-security-parser ENV=test-ci-capacity
       - name: Prove selection-aware negative cases through the Make entry point
         run: |
           set -euo pipefail
