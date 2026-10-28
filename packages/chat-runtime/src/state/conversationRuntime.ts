@@ -53,6 +53,10 @@ export function createConversationRuntime(sessionId: string, options: Conversati
   const authorization = createAuthorizedLocalToolMachine({
     machine: options.localTools, authorize: options.authorizeLocalTool,
     permissionTimeoutMs: options.permissionTimeoutMs, onChange: notify,
+    async onNativeTimeout(requestId) {
+      const prompt = session.snapshot().pendingLocalToolPermissionPrompts.find((entry) => entry.request.requestId === requestId);
+      if (prompt && !disposed) await session.decideLocalToolPermission(prompt, 'deny_once');
+    },
     postResult: (streamId, toolCallId, result) => options.host.postLocalToolResult(streamId, toolCallId, result),
   });
   const snapshot = (): ChatConversationSnapshot => {
