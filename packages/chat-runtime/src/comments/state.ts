@@ -310,3 +310,143 @@ export function createCommentState(host: CommentHost, presentation: CommentPrese
   ): Promise<void> => {
     if (!contextType || !contextId) {
       commentThreads = [];
+      commentMessages = [];
+      commentItemsByThread = new Map();
+      lastCommentThreadId = null;
+      lastCommentMessageCount = 0;
+      notify();
+      return;
+    }
+    const shouldShowLoader = !opts?.silent;
+    if (shouldShowLoader) commentLoading = true;
+    commentError = null;
+    const activeThreadId = commentThreadId;
+    notify();
+    try {
+      const res = await host.listComments({
+        contextType,
+        contextId,
+        sectionKey,
+      });
+      const items = res.items || [];
+      const { threads, map } = buildCommentThreads(items, presentation);
+      commentThreads = threads;
+      commentItemsByThread = new Map(map);
+
+      if (activeThreadId && commentItemsByThread.has(activeThreadId)) {
+        const nextMessages = commentItemsByThread.get(activeThreadId) ?? [];
+        commentMessages = nextMessages;
+        const nextCount = nextMessages.length;
+        const threadChanged = lastCommentThreadId !== activeThreadId;
+        if (threadChanged) {
+          lastCommentThreadId = activeThreadId;
+          lastCommentMessageCount = nextCount;
+        } else {
+          lastCommentMessageCount = nextCount;
+        }
+      } else if (!opts?.silent) {
+        commentMessages = [];
+        lastCommentThreadId = null;
+        lastCommentMessageCount = 0;
+      }
+      syncThreadRoot();
+    } catch (e) {
+      commentError = e instanceof Error ? e.message : String(e);
+    } finally {
+      if (shouldShowLoader) commentLoading = false;
+      notify();
+    }
+  };
+
+  const scheduleCommentReload = () => {
+    if (commentReloadTimer) return;
+    commentReloadTimer = setTimeout(() => {
+      commentReloadTimer = null;
+      void loadCommentThreads({ silent: true });
+    }, 150);
+  };
+
+  const loadMentionMembers = async (): Promise<void> => {
+    if (mentionLoading || mentionWorkspaceLoaded) return;
+    mentionLoading = true;
+    mentionError = null;
+    mentionDelayElapsed = false;
+    if (mentionDelayTimer) clearTimeout(mentionDelayTimer);
+    mentionDelayTimer = setTimeout(() => {
+      mentionDelayElapsed = true;
+      mentionDelayTimer = null;
+      notify();
+    }, 500);
+    notify();
+    try {
+      const res = await host.listMentionMembers();
+      mentionMembers = res.items ?? [];
+      mentionWorkspaceLoaded = true;
+    } catch (e) {
+      mentionError = e instanceof Error ? e.message : String(e);
+    } finally {
+      mentionLoading = false;
+      notify();
+    }
+  };
+
+  const sendComment = async (): Promise<void> => {
+    if (!host.canComment()) return;
+    if (commentThreadResolved) return;
+    if (!contextType || !contextId) return;
+    const trimmed = commentInput.trim();
+    if (!trimmed) return;
+
+    commentError = null;
+
+    try {
+      if (trimmed.includes('@') && mentionMembers.length === 0) {
+        await loadMentionMembers();
+      }
+      let resolvedAssigneeId = assignedToUserId;
+      let resolvedAssigneeLabel = assignedToLabel;
+      if (!resolvedAssigneeId && mentionMembers.length > 0) {
+        const inferred = findAssignedMentionFromText(trimmed, mentionMembers, presentation);
+        if (inferred) {
+          resolvedAssigneeId = inferred.userId;
+          resolvedAssigneeLabel = getMentionLabel(inferred);
+        }
+      }
+
+      if (commentThreadId) {
+        // Reply to existing thread.
+        await host.createComment({
+          contextType,
+          contextId,
+          sectionKey: commentSectionKey || undefined,
+          content: trimmed,
+          threadId: commentThreadId,
+          assignedTo: resolvedAssigneeId ?? undefined,
+        });
+      } else {
+        // New thread — optimistic update (D5).
+        const nowIso = new Date().toISOString();
+        const user = host.currentUser();
+        const res = await host.createComment({
+          contextType,
+          contextId,
+          sectionKey: commentSectionKey || undefined,
+          content: trimmed,
+          assignedTo: resolvedAssigneeId ?? undefined,
+        });
+        commentThreadId = res.thread_id;
+        commentSectionKey = sectionKey;
+
+        const assignedUserId = resolvedAssigneeId ?? user?.id ?? null;
+        const assignedMember = resolvedAssigneeId
+          ? (mentionMembers.find((m) => m.userId === resolvedAssigneeId) ?? null)
+          : null;
+        const optimistic: CommentItem = {
+          id: res.id,
+          context_type: contextType,
+          context_id: contextId,
+          section_key: commentSectionKey ?? null,
+          created_by: user?.id ?? '',
+          assigned_to: assignedUserId,
+          status: 'open',
+          thread_id: res.thread_id,
