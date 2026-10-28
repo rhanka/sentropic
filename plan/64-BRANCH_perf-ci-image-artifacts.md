@@ -34,6 +34,9 @@
 - [ ] BR78-EX2 — Planned Makefile exception: change image cache/build/save/load targets and `API_TOOL_VERSION`; add `test-ci-image-receipts`; remove UI forced `--no-cache` without weakening hash inputs. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
+- [x] Owner execution packet (2026-10-28): tmp/worktrees/ci-br78, ENV=test-ci-br78, merge-only updates; draft PR #811. BRANCH.md declares workflow/Makefile exceptions plus bounded .dockerignore transport and manifest-filter fixture exceptions with rollback.
+- [x] Actual BR77 first-main baseline 40576115790 attempt 1, source aa559f58c57d0453239668505ccfeaebe5599a1e: success, 1903s wall-clock, 233.9 runner-minutes; image jobs API 109s, tools 262s, full UI 533s, E2E 30s (registry reuse). Detailed job IDs and scope in study section 11; strict PR/main acceptance remains open.
+- [x] Initial PR 40635754181 attempt 1 superseded/cancelled; API 260s and E2E 201s are partial cancelled executions. Cold dispatch 40636446215 attempt 1 on a4d98dcde: E2E job 122644590256 succeeds in 151s including upload; manifest fixture job 122644590282 fails, corrected by exact image-guard filter exceptions. Branch author owns remaining qualification.
 
 ## AI Flaky tests
 - [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.

@@ -200,3 +200,45 @@ The train index above preserves the original #701 allocation: plan/63 still
 calls native checks BR-77 while the owner packet names capacity BR-77 and
 the next branch BR-78. The conductor must reconcile that allocation before
 launching the successor; this branch does not edit the other branch plans.
+
+## 11. BR-78 image artifacts — qualification in progress
+
+The 2026-10-28 owner packet assigns BR-78 to plan/64 after BR-77 merge
+`aa559f58c57d0453239668505ccfeaebe5599a1e`. It requests merge-only updates,
+worktree `tmp/worktrees/ci-br78`, and a draft PR; it does not close BR-77's
+outstanding strict PR/main timing acceptance.
+
+The actual first main-push run after BR-77 is [40576115790](https://github.com/rhanka/sentropic/actions/runs/40576115790),
+attempt 1, source `aa559f58c57d0453239668505ccfeaebe5599a1e`, successful in
+1903s (created_at to updated_at). BR-76 capture records 89 jobs, 64 measured
+executions / 25 skips, 233.9 runner-minutes, queue p50 94s / maximum 445s.
+This main receipt alone does not supply the required same-policy PR proof.
+
+| Baseline job | Job ID | Complete job seconds | Scope |
+| --- | --- | --- | --- |
+| build-api-image | 122443114522 | 109 | Canonical resolver, runtime checks, export and upload |
+| build-api-tool-image | 122443114250 | 262 | Cache miss; build, export, upload and cache save |
+| build-ui | 122443114508 | 533 | Full UI, embedded prerequisites, tests and static profile |
+| build-e2e | 122443112221 | 30 | Existing registry image; build skipped, not a cold measurement |
+| security-container | 122449269994 | 263 | API/toolbox/UI transport and existing scans |
+| test-smoke-restore | 122445831064 | 241 | Production image/toolbox transport, backup, restore and smoke |
+
+BR-78 adds independent BuildKit layer scopes, stable npm/esbuild tool layers,
+compressed credential-free artifacts and run/source/tree/workflow/profile receipts.
+Consumers hash archives before load and compare the loaded Docker image config
+SHA-256 afterwards; these are image IDs, not registry manifest digests.
+Chrome/VSCode output assertions move into each UI profile's existing build;
+the IdP screen assertions use the qualified E2E browser instead of embedding
+Chromium in every non-browser API toolbox. ci-gate and publisher barriers remain.
+
+Initial PR [40635754181](https://github.com/rhanka/sentropic/actions/runs/40635754181),
+attempt 1, head `13a188569`, was superseded/cancelled: API 260s and E2E 201s
+are cancelled partial executions; toolbox/UI lack measured execution spans.
+No successful image-readiness sample is credited to that run.
+Cold dispatch [40636446215](https://github.com/rhanka/sentropic/actions/runs/40636446215),
+attempt 1, head `a4d98dcde`, produced E2E successfully in 151s
+(job 122644590256; build/export/compression 127s, upload 5s, queue 42s).
+Its manifest-wiring job 122644590282 failed on the prior blanket scripts/ci
+filter assertion; BR78-EX4 retains isolation except for the two exact image guards.
+Remaining producer/consumer durations, exact-head warm/cold acceptance,
+input-invalidation and rollback proof remain **to measure**.

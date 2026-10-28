@@ -62,12 +62,12 @@
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline and constraints**
   - [x] Read rules, template, plan, study and BR77 post-merge procedure.
-  - [ ] Mechanical harness branch check and baseline capture through BR76 metrics.
-  - [ ] Inventory Docker/source/lock/toolchain/profile/embedded inputs and current gate membership.
+  - [x] Mechanical harness branch check and BR76 baseline capture: first BR77 main 40576115790 attempt 1, 1903s wall-clock; API/tools/UI/E2E jobs 109/262/533/30s (E2E reused registry).
+  - [x] Inventory Docker/source/lock/toolchain/profile/embedded inputs and current gate membership; gate body and needs remain unchanged.
 - [ ] **Lot 1 — Persistent build cache**
   - [x] Scope BuildKit cache import/export by runtime/tools/UI/E2E and architecture; preserve source-dependent keys and build arguments; remove forced UI cache bypass.
   - [x] Update scripts/test-api-tooling.sh for persistent/cold cache recipes and verified toolbox transport; check-ci-version-filters.sh also enforces E2E hash and receipt-guard coverage.
-  - [ ] Gate: make test-ci-api-tooling check-ci-version-filters ENV=test-ci-br78.
+  - [x] Gate: make test-ci-api-tooling check-ci-version-filters ENV=test-ci-br78 passes; 16 receipt tests, 201 manifest tests, canonical input fixtures and tag-collision guards pass locally. Runtime filesystem checks await actual CI candidates; local all-case command had no built image and failed retained-path assertions.
 - [ ] **Lot 2 — Digest-addressed transport**
   - [x] Implement scripts/ci/image-receipt.mjs and image-receipt.test.mjs; negative tests cover stale/wrong/missing receipts, modified archives and loaded image substitution.
   - [x] Verify source/workflow/inputs/cache identity, archive digest and loaded image ID at every load; E2E/VSCode use exact UI/E2E artifacts instead of registry tags.
