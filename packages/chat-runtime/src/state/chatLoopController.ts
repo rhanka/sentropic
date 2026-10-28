@@ -1042,6 +1042,7 @@ export function createChatLoopController<
   // Local-tool machine state (slice 1E)
   // -------------------------------------------------------------------------
   let ltExecuteLocalTool: ControllerLocalToolExecutorFn | null = null;
+  let ltMachineGeneration = 0;
   let ltDecideLocalToolPermission: ControllerLocalToolPermissionDeciderFn | null = null;
   let ltPostLocalToolResult: ControllerLocalToolResultPosterFn | null = null;
   let ltIsLocalToolName: ((name: string) => boolean) | null = null;
@@ -1872,6 +1873,7 @@ export function createChatLoopController<
     ltLocalToolInFlight.add(toolCallId);
     ltNotify();
 
+    const generation = ltMachineGeneration;
     try {
       const localResult = await ltExecuteLocalTool!(
         toolCallId,
@@ -1879,12 +1881,14 @@ export function createChatLoopController<
         parsed.value,
         { streamId: localToolState.streamId },
       );
+      if (generation !== ltMachineGeneration) return;
       await ltPostLocalToolResult!(
         localToolState.streamId,
         toolCallId,
         localResult,
       );
     } catch (error) {
+      if (generation !== ltMachineGeneration) return;
       if (ltIsLocalToolPermissionRequired?.(error)) {
         const request = ltGetPermissionRequest!(error);
         const prompt: ControllerLocalToolPermissionPrompt = {
@@ -1925,6 +1929,7 @@ export function createChatLoopController<
       }
     } finally {
       // Only runs when NOT returning early (permission prompt path returns above)
+      if (generation !== ltMachineGeneration) return;
       ltLocalToolInFlight.delete(toolCallId);
       ltNotify();
       ltScheduleNextToolForStream(localToolState.streamId);
@@ -2109,6 +2114,7 @@ export function createChatLoopController<
   // -------------------------------------------------------------------------
 
   const attachLocalToolMachine = (opts: AttachLocalToolMachineOptions): void => {
+    ltMachineGeneration += 1;
     ltExecuteLocalTool = opts.executeLocalTool;
     ltDecideLocalToolPermission = opts.decideLocalToolPermission;
     ltPostLocalToolResult = opts.postLocalToolResult;
@@ -2123,6 +2129,7 @@ export function createChatLoopController<
    * Called by both resetLocalToolMachineState and detachLocalToolMachine.
    */
   const ltClearMachineState = (): void => {
+    ltMachineGeneration += 1;
     ltLocalToolExecutionTimersById.forEach((timerId) => clearTimeout(timerId));
     ltLocalToolExecutionTimersById.clear();
     ltLocalToolStatesById.clear();

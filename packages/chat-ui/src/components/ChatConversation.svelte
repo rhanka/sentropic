@@ -137,6 +137,7 @@
             aria-label={labels('chat.composer.placeholder.chat')} aria-multiline="false"
             textContent={state.draft} on:input={(event) => commands.setDraft(event.currentTarget.textContent ?? '')}></div>
         {/snippet}
+        {#snippet renderFloatingLayer()}<span></span>{/snippet}
         {#snippet renderLeftControls()}
           {#if flags.attachments}
             <input type="file" multiple aria-label={labels('chat.attachments.add')}
