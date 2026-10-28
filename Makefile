@@ -3410,6 +3410,10 @@ test-%-security-container: ## Run container scan (Trivy) on service image (usage
 		IMAGE_NAME="$(API_TOOL_IMAGE)"; \
 		echo "  Scanning image: $$IMAGE_NAME"; \
 		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json; \
+	elif [ "$*" = "e2e" ]; then \
+		IMAGE_NAME="$(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION)"; \
+		echo "  Scanning image: $$IMAGE_NAME"; \
+		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json; \
 	else \
 		IMAGE_NAME="sentropic-$*:latest"; \
 		echo "  Scanning image: $$IMAGE_NAME"; \
