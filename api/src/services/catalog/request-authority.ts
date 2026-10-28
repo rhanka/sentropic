@@ -7,6 +7,8 @@ import { createCatalogContextResolver, type CatalogContextInput } from './reques
 
 /** First-party HTTP sessions and verified conversation turns have separate session authorities.
  * OAuth consent is not borrowed from a first-party session. Provider grants remain provider-owned.
+ * W4.a intentionally binds turns to conversation + current account/memberships, not login liveness:
+ * logout or login expiry does not stop a running turn; conversation/account/membership revocation does.
  */
 const resolve = createCatalogContextResolver(async input => {
   const tenant = await resolveTenantAuthoritatively({ workspaceId: input.workspaceId, userId: input.userId });
