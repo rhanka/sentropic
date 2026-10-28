@@ -1,10 +1,10 @@
-# Feature: P1a — Extract the Sentropic chat runtime foundation
+# Feature: P1b — Inject conversation state and finish runtime separation
 
 ## Objective
 - [ ] Complete P1 under `spec/CHAT_MIGRATION_P0*.md`: preserve supported behavior while separating Sentropic runtime from the injected conversation view.
 
 ## Scope / Guardrails
-- [x] Branch `feat/chat-convergence-p1`, based on `origin/main`; worktree `tmp/worktrees/chat-p1`.
+- [x] Branch `feat/chat-convergence-p1b`, based on P1a `d9a849e5d`; worktree `tmp/worktrees/chat-p1b`; draft predecessor #817 targets main.
 - [x] Environment `test-chat-p1`; API_PORT=8796 UI_PORT=5196 MAILDEV_UI_PORT=1096; ENV always last.
 - [x] Serialize Docker work with `/home/antoinefa/.cache-tmp/sentropic-docker.lock`; run `make down` after each step.
 - [x] Make targets only; no Python, dev tests, clean-all, rebase, force-push, publication or merge.
@@ -80,6 +80,7 @@
   - [x] Reserve cowork-desktop 0.2.1 above registry 0.2.0 for its runtime import migration; visual unit tests 676/676 and DOM tests 219/219 pass.
   - [ ] Migrate inventoried web/Chrome/VSCode/cowork imports and active tooling links.
   - [ ] Split neutral contracts and optional module state from views; runtime never imports a view implementation.
+  - [x] Relocate context selection, comment retrieval/state and document assembly with their existing behavioral tests.
   - [ ] Qualify breaking chat-ui version and initial runtime version against registry; update lockfiles.
 - [ ] **Lot 2 — Injected conversation and complete command binding**
   - [ ] Replace component runtime creation/disposal with normalized snapshot and command props/declarations.
