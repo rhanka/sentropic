@@ -49,9 +49,8 @@ export const neutralTransaction = (tx: KernelTransaction, units: NeutralAtomicUn
   },
   apply: async (unit) => {
     const translated = neutralUnitToPg(unit);
-    const appends = unit.appends.map((row) => row.id);
     const commitIndex = identity ? [{ key: commitIndexKey(identity),
-      digest: memoryJcs({ appends, updates: [...appends, ...unit.updates.map((row) => row.key)] }).data,
+      digest: unit.intentHash,
       resultIds: [], resultHash: JSON.stringify(unit.moduleResult ?? memoryJcs(null)) }] : [];
     await tx.apply({ ...translated, indexWrites: [...translated.indexWrites, ...commitIndex] });
     units.push(structuredClone(unit));
