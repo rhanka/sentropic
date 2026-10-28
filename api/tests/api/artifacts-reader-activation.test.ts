@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { runMigrations } from '../../src/db/run-migrations';
 import { createArtifactReaderActivation } from '../../src/services/artifacts/reader-activation';
+import { createArtifactHttpRouter } from '../../src/routes/namespaces/artifacts';
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL });
 const database = `test_w3a_${randomUUID().replaceAll('-', '')}`;
@@ -18,6 +19,58 @@ const target = { artifactId, releaseId, channel: 'stable' as const,
 const reader = (extra = {}) => createArtifactReaderActivation({ pool, ...config, ...extra });
 const input = (issued: Awaited<ReturnType<ReturnType<typeof reader>['issue']>>) => ({
   flowId: issued.flow.flowId, ticketId: issued.ticket.ticketId, nonce: target.nonce, targetOrigin: target.targetOrigin,
+});
+
+describe('resources reader activation port', () => {
+  const controlOrigin = 'https://app.example.test';
+  function route(enabled = true, authenticated = true) {
+    const transport = vi.fn();
+    const identity = vi.fn(async () => authenticated ? { workspaceId: session.workspaceId,
+      identity: { subject: session.subjectId, tenantId: session.tenantId, clientId: 'session-client', credentialId: 'verified' } } : null);
+    const issue = vi.fn(async (_bound, value: typeof target) => reader().issue(session, value));
+    const app = createArtifactHttpRouter({ transport, identity,
+      reader: { enabled: () => enabled, controlOrigin, issue } });
+    const post = (body: unknown = target, origin = controlOrigin) => app.request('/reader-activation', {
+      method: 'POST', headers: { 'content-type': 'application/json', origin }, body: JSON.stringify(body),
+    });
+    return { post, transport, identity, issue };
+  }
+
+  it('should issue from verified session context through a distinct reader port', async () => {
+    const { post, issue, transport } = route();
+    const response = await post();
+    expect(response.status).toBe(201);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('referrer-policy')).toBe('no-referrer');
+    const body = await response.json();
+    expect(Object.keys(body).sort()).toEqual(['expiresAt', 'flowId', 'targetOrigin', 'ticketId']);
+    expect(issue).toHaveBeenCalledWith({ workspaceId: session.workspaceId, identity: {
+      subject: session.subjectId, tenantId: session.tenantId, clientId: 'session-client', credentialId: 'verified',
+    } }, target);
+    expect(transport).not.toHaveBeenCalled();
+  });
+
+  it('should stay closed by default and require an authenticated exact-origin request', async () => {
+    expect((await route(false).post()).status).toBe(404);
+    expect((await route(true, false).post()).status).toBe(401);
+    for (const origin of ['', 'null', 'https://sibling.example.test', `${controlOrigin}.evil.test`]) {
+      const { post, identity, issue } = route();
+      expect((await post(target, origin)).status).toBe(403);
+      expect(identity).not.toHaveBeenCalled();
+      expect(issue).not.toHaveBeenCalled();
+    }
+    const closed = createArtifactHttpRouter({ transport: vi.fn(), identity: vi.fn() });
+    expect((await closed.request('/reader-activation', { method: 'POST' })).status).toBe(404);
+  });
+
+  it.each(['subjectId', 'sessionId', 'tenantId', 'workspaceId', 'profileDigest', 'policyRevision'])
+  ('should refuse caller-controlled authority field %s before issuance', async field => {
+    const { post, issue } = route();
+    const response = await post({ ...target, [field]: 'forged' });
+    expect(response.status).toBe(400);
+    expect(issue).not.toHaveBeenCalled();
+    expect(await response.text()).not.toContain('forged');
+  });
 });
 
 beforeAll(async () => {
