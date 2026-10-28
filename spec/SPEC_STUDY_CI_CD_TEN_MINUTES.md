@@ -413,3 +413,15 @@ Final exact-head run/job/step receipts are generated after completion, alongside
 the workflow's `ci-capacity-<run-id>-<attempt>` artifact. They identify the actual
 head and checkout source separately; a documentation commit never inherits a
 green verdict from the prior head.
+
+At `213154c8a`, scan 122724595128 in run 40660088690 succeeds with **zero
+HIGH/CRITICAL browser findings**, without a register change. UI 122721657507
+takes 366s on the first isolated-asset cache population; all 489 unit tests pass.
+Direct archive inspection verifies identical fresh desktop bytes in production
+and static output (`7fddf56e1ede19ffc9cb125f871eb2a0c76edfaa42f2537402307028f36e2aab`)
+and nonempty Chrome/VSCode downloads in both profiles. The full run is still
+blocked by group-e 122724595102: the comment journey requests its seeded folder
+under an unrelated personal workspace and gets 404 before any AI assertion.
+BR78-EX5 moves its workspace initialization before application startup; no
+assertion, membership, retry or timeout is relaxed. A fresh exact-head full run
+must qualify that setup correction and measure reuse of both compiler profiles.
