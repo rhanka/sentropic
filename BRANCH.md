@@ -43,6 +43,7 @@
 - [x] `BRP0-R1` acknowledge: boundary review APPROVE; clarify estimate proposal versus approved summary, and split mixed DOM/stream-fixture test custody (conductor refresh before P1).
 - [x] `BRP0-R2a` acknowledge: broaden consumer census to all case-insensitive chat-ui references; add CI manifests/wiring, E2E storage/regressions and retained historical mentions.
 - [x] `BRP0-R2b` acknowledge: all 125 selector locations now identify the first selector token; both atomic correction slices complete.
+- [x] `BRP0-R2c` acknowledge: inventory the semicolon hover-variant directive separately from CSS selector blocks.
 
 ## AI Flaky tests
 - [x] Not applicable: no application tests changed or executed; no flaky acceptance requested.
