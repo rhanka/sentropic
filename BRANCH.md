@@ -52,6 +52,8 @@ Mesh `speech/openai-transcription.ts` with two independently configured OpenAI s
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] Integration qualification: full mesh 1529/1529, cluster-mesh 1223 passed with 138 qualification-specific tests skipped by the unit lane, manifest guards 201/201; both BLOCK archives pass and the official selected-lock refresh succeeds with artifacts 0.1.4 retained. Gateway archive SHA-256 `9baacd3f80ea65c5929f6139565cb8fc40c413749cbe2c96d42732b8d3800c4f`; mesh archive `19a028e45925fc5f88a7c57f0dfe7d09741f9999bf678d11cf466213f38fb266`.
+- [x] Integration fixture: the gateway's retained L8 minimum is 0.28.0; align the existing dependency-floor CLI assertion with that range while preserving all version-selection checks.
 - [x] Integration authorized by the existing Opus r3 APPROVE on bc5c72d18 (`.h2a/reviews/pr804_opus_r3.md`). Preserve the reviewed adapter and main's L8 functionality; use mesh 0.31.0 / gateway 0.22.1 / cluster 0.23.4, preserving the gateway speech floor 0.28 and extending its supported mesh range to 0.31. Regenerate verified archive locks while retaining the unrelated artifacts 0.1.4 baseline.
 - `acknowledge`: P2-A/C/D from L6a r5 go to a follow-up before Lp1/L6b, not this lot (conductor 2026-10-27).
 
