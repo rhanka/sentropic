@@ -1,5 +1,5 @@
 /**
- * @sentropic/chat-ui/checkpoints
+ * @sentropic/chat-runtime/checkpoints
  *
  * Generic checkpoint module — pure TS, zero sentropic domain strings.
  * Provides classifier functions, session state helpers, and the CheckpointHost
