@@ -141,7 +141,7 @@ export const runMemoryCorpus = (open: () => Promise<MemoryCampaignHost>): void =
       const storedOutcome = (await h.handle.readAggregate('memory-admission-outcomes', outcomeKey, h.binding.memoryGrant))!;
       await expect(h.handle.transact({ grant: h.binding.memoryGrant, fence: h.fence,
         limits: { maxAppends: 1, maxRecords: 8, maxEncodedBytes: 1048576 } }, (tx) => tx.apply({
-        guards: [], records: [], appends: [], indexWrites: [], relationships: [], barriers: [], purgeIntents: [],
+        intentHash: 'tampered-admission', guards: [], records: [], appends: [], indexWrites: [], relationships: [], barriers: [], purgeIntents: [],
         updates: [{ ...storedOutcome, version: (BigInt(storedOutcome.version) + 1n).toString(),
           value: memoryJcs({ ...JSON.parse(storedOutcome.value.data), transaction_receipt_digest: `sha256:${'b'.repeat(64)}` }) }],
       }))).rejects.toMatchObject({ code: 'invalid-schema', message: expect.stringContaining('admission first proof is immutable') });

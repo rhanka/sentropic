@@ -11,17 +11,17 @@ declaration packaging remains serially owned by the E2 release integrator.
 | Asset semver | `1.0.0` |
 | Intended declaration | `contracts/engram-memory-neutral-contract-v1.d.ts` |
 | Constructor | `openModuleStorageCanonicalMemoryStoreV1` |
-| Installed semantic target | `@sentropic/engram@0.21.1` |
+| Installed semantic target | `@sentropic/engram@0.21.3` |
 | Module contract | `memory-binding-v1` |
-| Module digest | `sha256:dff737ced37d801ef48bb4d7088fc4fbc92021d21fe2034ff33ea643b49bec28` |
+| Module digest | `sha256:dd0cccbd6e5e29766fbc9c48351ffe58f5b0a3162152f5ff02da0798c3244fee` |
 | Generic contract | `l3a-generic-module-storage-port`, `v4.1`, `c7111c9e7293ee270a0b4dde277f1cfc40fa3c863c3915c6f9ccdd6935c46294` |
 | Reserved mesh release | `0.23.0` |
 | E0 topic version | `0.23.0-dev.1`, pack-only, never published |
 
-`neutral-asset-inventory.json` maps all six additive clauses and the complete
-flat, bound, transaction and constructor-option surfaces. The original manifest
-and profile-equivalence inventories remain unchanged. `neutral-equivalence.json`
-reconciles the 0.21.0 handoff with the exact 0.21.1 archive and its three-file
+`neutral-asset-inventory.json` maps all seven additive clauses and the complete
+flat, bound, transaction and constructor-option surfaces. The final 4,012-byte
+manifest has SHA-256 `55f8d4572db7100e4dba0a135331cdeb1186458711f0c7202e5f0cd93a6dc759`. `neutral-equivalence.json`
+reconciles the 0.21.0 handoff with the exact 0.21.3 archive and its three-file
 declaration closure. Source types have no external imports; a test emits one
 declaration and compiles it independently after deleting its source.
 
