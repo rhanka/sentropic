@@ -3,10 +3,10 @@
 // The E2 integration reserves `RESERVED_NEXT` (today `0.24.0`) for its release
 // line: memory-lot workspaces carry `<reservedNext>-dev.N` by plan. The
 // frozen published compatibility pin (`LATEST_PUBLISHED_CLUSTER_MESH`,
-// `0.22.4`) stays separate from the selected local candidate fixture.
+// `0.23.2`) stays separate from the selected local candidate fixture.
 // Both constants are declared ONCE here; keep the bare-probe mirror aligned.
 export const RESERVED_NEXT = '0.24.0';
-export const LATEST_PUBLISHED_CLUSTER_MESH = '0.22.4';
+export const LATEST_PUBLISHED_CLUSTER_MESH = '0.23.2';
 
 export const isPrerelease = (version: string): boolean => version.includes('-');
 
