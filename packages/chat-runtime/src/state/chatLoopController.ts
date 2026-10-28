@@ -552,3 +552,143 @@ export type ChatLoopProjectionState<
   /** Currently selected provider id. */
   readonly selectedProviderId: ModelProviderId;
 
+  /** Currently selected model id. */
+  readonly selectedModelId: string;
+
+  /** Default provider for new sessions (from catalog defaults or user prefs). */
+  readonly defaultProviderIdForNewSession: ModelProviderId;
+
+  /** Default model for new sessions (from catalog defaults or user prefs). */
+  readonly defaultModelIdForNewSession: string;
+};
+
+// ---------------------------------------------------------------------------
+// Controller methods
+// ---------------------------------------------------------------------------
+export type ChatLoopController<
+  Message extends ChatProjectionMessage = ChatProjectionMessage,
+  RuntimeSummary = unknown,
+> = {
+  // -- State access ----------------------------------------------------------
+
+  /** Return current snapshot. */
+  getSnapshot(): ChatLoopProjectionState<Message, RuntimeSummary>;
+
+  /**
+   * Subscribe to state changes.
+   * Follows the observable / Svelte store contract:
+   *   - called immediately with current state
+   *   - called on every subsequent change
+   *   - returns an unsubscribe function
+   *
+   * This makes the controller directly usable as a Svelte store via `$ctrl`.
+   */
+  subscribe(
+    listener: (state: ChatLoopProjectionState<Message, RuntimeSummary>) => void,
+  ): () => void;
+
+  // -- Message list mutations ------------------------------------------------
+
+  /** Replace the full message list. Triggers timeline recomputation. */
+  setMessages(messages: Message[]): void;
+
+  /** Append a single message to the end. */
+  appendMessage(message: Message): void;
+
+  /**
+   * Apply a patch to an existing message by id.
+   * Returns true if a matching message was found and patched.
+   */
+  patchMessage(id: string, patch: Partial<Message>): boolean;
+
+  /** Remove messages with ids not in the provided set. */
+  filterMessages(keepIds: Set<string>): void;
+
+  // -- Projection event mutations --------------------------------------------
+
+  /**
+   * Merge batch history events for a stream into initialEventsByMessageId.
+   * Used when loading session history from the ndjson endpoint.
+   * Invalidates the cached computation for messageId.
+   */
+  mergeHistoryEvents(messageId: string, events: ControllerStreamEvent[]): void;
+
+  /**
+   * Merge batch events into projectedStreamEventsById.
+   * Used for stream replay / history batch loading into the live-event map.
+   */
+  mergeProjectedHistoryForStream(streamId: string, events: ControllerStreamEvent[]): void;
+
+  /**
+   * Append a single live stream event to projectedStreamEventsById.
+   * Deduplicates by sequence number.
+   */
+  appendProjectedLiveEvent(streamId: string, event: ControllerStreamEvent): void;
+
+  /** Remove all projected events for the given stream. */
+  clearProjectedEventsForStream(streamId: string): void;
+
+  /** Reset all projection state (clear both maps + version). */
+  resetProjectionState(): void;
+
+  /** Invalidate the cached computation for a message id (forces recompute on next call). */
+  invalidateComputationCache(messageId: string): void;
+
+  // -- Projection queries ----------------------------------------------------
+
+  /**
+   * Return the effective projection events for a message:
+   *   - projectedStreamEventsById[streamId] if non-empty
+   *   - else initialEventsByMessageId[streamId]
+   */
+  getProjectionEventsForMessage(message: Message): ControllerStreamEvent[];
+
+  /**
+   * Return the cached (or freshly computed) ChatProjectionComputation for a message.
+   * Uses a signature cache to skip recomputation when inputs have not changed.
+   */
+  getProjectedAssistantComputation(message: Message): ChatProjectionComputation;
+
+  /**
+   * Return true if the stream id is tracked by any assistant message in the list
+   * (used to guard against stray stream events).
+   */
+  isTrackedAssistantStreamId(streamId: string): boolean;
+
+  // -- Timeline build -------------------------------------------------------
+
+  /**
+   * Build the projected timeline from the current message list and projection state.
+   * Accepts optional inputs that change with later slices (steer ack, optimistic steers, runtime summaries).
+   */
+  buildTimeline(opts?: {
+    optimisticSteerMessages?: Message[];
+    runtimeSummariesByMessageId?: ReadonlyMap<string, RuntimeSummary>;
+    composerSteerAck?: ChatProjectionSteerAck | null;
+  }): ReadonlyArray<ChatProjectedTimelineItem<Message, RuntimeSummary>>;
+
+  // -- Stream subscription lifecycle (slice 1C) ----------------------------
+
+  /**
+   * Attach the controller to a live stream client.
+   *
+   * Registers a hub subscription that routes projection stream events into the
+   * controller's own appendProjectedLiveEvent. On terminal events ('done' /
+   * 'error'), patches the matching assistant message to completed/failed and
+   * triggers the optional onTerminal callback.
+   *
+   * Also starts a job-poll fallback loop via the injected pollJob (matching the
+   * behavior of AppChatPanel's pollJobUntilTerminal). The poll loop exits early
+   * if the message has already been marked terminal or hydrated by SSE.
+   *
+   * Safe to call multiple times — calling attachStream while already attached
+   * detaches the previous subscription first (same semantics as a hot-swap).
+   */
+  attachStream(opts: AttachStreamOptions): void;
+
+  /**
+   * Detach the stream subscription registered by attachStream.
+   * Removes the hub key from the stream client. Safe to call when not attached.
+   */
+  detachStream(): void;
+
