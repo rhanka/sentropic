@@ -1,14 +1,14 @@
-# Feature: Engram E11 tuple and receiving handoff preparation
+# Feature: Engram E11 E2 tuple and receiving handoff
 
 ## Objective
-- [x] Prepare deterministic `e2-host-tuple/v1` tooling and receiving checklist; gr-conductor owns final generation after stable E9/E10 evidence.
+- [x] Generate deterministic `e2-host-tuple/v1` on integrated E10 inputs; report independent qualification/release gaps without claiming receiving acceptance.
 
 ## Scope / Guardrails
 - [x] Branch `feat/cluster-mesh-engram-e11` from integration `52936121af9a67e3605f5c09c0e70c021b8da1d9`; worktree `tmp/worktrees/mem-e11`; merge only, never rebase.
 - [x] Owner-directed E11 generation on integration `32dd911be`; no publication, version bump, artifacts source edits or receiving ACK.
-- [x] Read-only candidates: Engram 0.22.0 `26a0edd5…`; mesh 0.24.0-dev.5 `11a8fe85…`; pending Engram 0.21.3 intentHash and successor mesh pack.
+- [x] Read-only E2 inputs: published Engram 0.21.3 `32d47df1…`, mesh dev.6 `ff79088e…`, contract pair `55f8d457…` / `dd0cccbd…`; L4 MCP 0.22.0 is separate L5 scope (plan E11 line 120).
 - [x] Node 24 through make and Docker flock; no Python; ENV=test-mem-e11 last; make down after each Docker step.
-- [x] No services or host ports required; API 9055, UI 5255, Maildev 1155 reserved if needed; owner environments untouched.
+- [x] Isolated Compose PostgreSQL only, no host ports; API 9055, UI 5255, Maildev 1155 reserved; owner environments untouched.
 - [x] Atomic make commits at most 150 changed lines; selective staging; no AI trailers.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -75,6 +75,8 @@
 - [x] Evidence tooling only; web, Chrome and VSCode unaffected; deterministic checks and negative tests.
 
 ## Feedback Loop
-- [ ] PENDING: #803 rerun and Engram 0.21.3 / rhanka/engram#410 must stabilize; mesh must carry NeutralAtomicUnit.intentHash in a new pack-only dev candidate.
-- [ ] PENDING: five profiles declared/equivalence not-covered; C6 final 1.0.0 bytes, producer C9 and Sentropic/L5 ACKs remain open.
+- [x] #821/#803 merged into integration; published 0.21.3/dev.6 carry producer intentHash, and the neutral JCS byte/digest pair is resolved.
+- [ ] PENDING E9/host-binding owner: 23 Stage B cases explicitly blocked in integrated durable-memory.spec.ts; acceptance requires a zero-skip campaign through shipped bindings on this tuple.
+- [ ] PENDING C6 packaging owner: dev.6 still omits its announced standalone declaration; producer JCS bytes do not replace that packaging obligation.
+- [ ] PENDING conductor/release owners: stable reserved-version qualification, integration → main PR, CI-only publication, published-byte recheck, producer C9 ACK and receiving ACK.
 - [x] Review author: host codex, model gpt-6.1-sol, effort high (owner declaration).
