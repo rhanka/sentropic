@@ -30,7 +30,7 @@ describe('RC1 internal evidence boundary', () => {
     expect((await createIdpApp().request(path, request)).status).toBe(401);
   });
   it('should issue evidence only on the authenticated internal IdP route', async () => {
-    const { send, issue } = setup();
+    const { send, issue, authenticateWorkload } = setup();
     const result = await send();
     expect(result.status).toBe(200);
     expect(await result.text()).toBe('compact.signed.evidence');
