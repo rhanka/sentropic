@@ -52,6 +52,7 @@
   - [ ] Capture a real baseline with run/attempt/job IDs, source SHA, workflow SHA, cache state, runner class, spans, selected endpoints, and executed test identities.
   - [ ] Declare exceptions above; names marked new below are deliverables to create, not existing commands or evidence.
 - [ ] **Lot 1 — Explicit executable dependency graph**
+  - [x] Wire DAG/parser fixtures into mandatory CI; reject incomplete selection contexts and neutral verdicts, including after browser success.
   - [x] Fan API/UI SAST and SCA into four independently blocking matrix members, retaining the original aggregate release barrier and mandatory reports.
   - [x] Replace serial container scans with a selection-aware complete join; failed/missing/skipped selected scans block image publication.
   - [x] Add UI/browser container scan lanes; retain all four images, existing severity/compliance checks and native reports (BR79-EX1).

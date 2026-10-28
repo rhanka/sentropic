@@ -3028,11 +3028,13 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Setup Docker
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Qualify CI capacity metrics and expected-result fixtures
         run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity
+      - name: Qualify artifact dispatch and fail-closed scan joins
+        run: make test-ci-dag test-security-parser ENV=test-ci-br79
       - name: Prove selection-aware negative cases through the Make entry point
         run: |
           set -euo pipefail

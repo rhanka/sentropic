@@ -12,7 +12,12 @@ export const scanInputs = { api: 'build-api-image', 'api-tool': 'build-api-tool-
 const needsOf = job => [job?.needs ?? []].flat();
 
 export function securityJoin(needs, category) {
+  if (!['container', 'code'].includes(category)) throw Error('Unknown scan category');
   const changes = needs.changes?.outputs ?? {};
+  if (needs.changes?.result !== 'success'
+    || ['api', 'ui', 'global'].some(key => !['true', 'false'].includes(changes[key]))) {
+    return { ok: false, failures: [{ job: 'changes', reason: 'missing-selection' }] };
+  }
   const api = changes.api === 'true' || changes.global === 'true';
   const ui = changes.ui === 'true' || changes.global === 'true';
   const selected = category === 'container' ? { api, 'api-tool': api, ui, e2e: api || ui }
