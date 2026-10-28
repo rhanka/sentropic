@@ -929,7 +929,7 @@ E2_LOCK ?= /home/antoinefa/.cache-tmp/sentropic-docker.lock
 E2_RECEIPTS ?= tmp/engram-e2-receipts
 .PHONY: engram-e2-qualify engram-e2-lane engram-e2-stable-publish-guard
 engram-e2-qualify: ## Qualify an exact E2 topic head and retain per-lane receipts
-	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e11,$(ENV))"
+	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b,$(ENV))"
 	@mkdir -p "$(E2_RECEIPTS)" "$$(dirname "$(E2_LOCK)")"
 	@set -eu; base="$${E2_BASE_SHA:-origin/main}"; head="$$(git rev-parse HEAD)"; \
 		{ date -u +%FT%TZ; printf 'head=%s\nbase=%s\nmerge-base=%s\n' "$$head" "$$(git rev-parse "$$base")" "$$(git merge-base "$$base" "$$head")"; \
@@ -943,7 +943,7 @@ engram-e2-qualify: ## Qualify an exact E2 topic head and retain per-lane receipt
 		done
 
 engram-e2-lane: ## Run one lane under the caller's shared Docker lock
-	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e11,$(ENV))"
+	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b,$(ENV))"
 	@mkdir -p "$(E2_RECEIPTS)"
 	@set -euo pipefail; \
 		trap 'status=$$?; trap - EXIT; set +e; $(MAKE) down ENV=$(ENV) >> "$(E2_RECEIPTS)/$(E2_LANE).log" 2>&1; cleanup=$$?; printf "exit=%s\ncleanup=%s\n" "$$status" "$$cleanup" > "$(E2_RECEIPTS)/$(E2_LANE).status"; sha256sum "$(E2_RECEIPTS)/$(E2_LANE).log" "$(E2_RECEIPTS)/$(E2_LANE).status" "$(E2_RECEIPTS)/$(E2_LANE).inventory" > "$(E2_RECEIPTS)/$(E2_LANE).sha256"; test "$$status" -eq 0 && test "$$cleanup" -eq 0' EXIT; \
