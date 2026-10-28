@@ -36,6 +36,9 @@ describe('RC1 owner and consent predicate', () => {
     [{ expectedRemoteControlEpoch: 0 }, 'control_disabled'],
     [{ expectedConsentRevision: 0 }, 'control_disabled'],
     [{ consent: null }, 'control_disabled'],
+    [{ consent: { ...authority.consent, bindingId: 'other' } }, 'control_disabled'],
+    [{ consent: { ...authority.consent, ownerIssuer: 'other' } }, 'control_disabled'],
+    [{ consent: { ...authority.consent, ownerSub: 'other' } }, 'control_disabled'],
     [{ consent: { ...authority.consent, actionScopes: [], scopeDigest:
       '4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945' } }, 'action_scope_refused'],
     [{ permissionMode: 'auto-approve' }, 'input_mode_refused'],

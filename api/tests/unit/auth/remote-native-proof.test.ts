@@ -24,7 +24,8 @@ describe('RC1 I2 CLI proof publication and use', () => {
   it('should verify an exact source-signed current native session proof', () => {
     expect(verifyRemoteCliProof(signed(body), expected).body).toEqual(body);
   });
-  it.each(['nativeSessionId', 'workspaceId', 'connectionId', 'sourceGeneration',
+  it.each(['appMeshId', 'sourceMeshId', 'nativeAudience', 'registrationId', 'tenantId', 'bindingId',
+    'sourceId', 'sourceSessionId', 'nativeSessionId', 'workspaceId', 'connectionId', 'sourceGeneration',
     'bootGeneration', 'controllerEpoch', 'custodyEpoch', 'connectionGeneration'] as const)
     ('should refuse an old or substituted %s', (field) => {
       const target = { ...body.target, [field]: typeof body.target[field] === 'number' ? 2 : 'other' };
@@ -32,14 +33,20 @@ describe('RC1 I2 CLI proof publication and use', () => {
         .toThrowError(expect.objectContaining({ code: 'session_proof_invalid' }));
     });
   it.each(['ownerSub', 'ownerIssuer', 'approvedRegistrationRef', 'providerId', 'providerVersion',
-    'executableDigest', 'nativeSessionPublicKeyId', 'capabilitiesDigest', 'permissionMode', 'proofId'])
+    'executableDigest', 'nativeSessionPublicKeyId', 'capabilitiesDigest', 'permissionMode', 'proofId',
+    'version', 'kind', 'issuer', 'kid', 'audience', 'approvedRegistrationRevision', 'autoApprovePolicyDigest'])
     ('should refuse a signed substituted %s', (field) => {
       expect(() => verifyRemoteCliProof(signed({ ...body, [field]: 'other' }), expected)).toThrow();
     });
   it('should refuse expiry and unsafe clock instead of extending authority', () => {
+    expect(verifyRemoteCliProof(signed(body), { ...expected, now: body.expiresAt - 5001 }).body).toEqual(body);
     expect(() => verifyRemoteCliProof(signed(body), { ...expected, now: body.expiresAt - 5000 }))
       .toThrowError(expect.objectContaining({ code: 'expired' }));
     expect(() => verifyRemoteCliProof(signed(body), { ...expected, now: NaN })).toThrow();
+  });
+  it('should refuse a revoked source key', () => {
+    expect(() => verifyRemoteCliProof(signed(body), { ...expected, revoked: true }))
+      .toThrowError(expect.objectContaining({ code: 'authority_refused' }));
   });
   it('should refuse the wrong signing key, algorithm and extra target fields', () => {
     expect(() => verifyRemoteCliProof(signed(body), { ...expected,
