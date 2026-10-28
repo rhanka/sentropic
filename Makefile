@@ -67,7 +67,7 @@ export API_TOOL_IMAGE_NAME ?= sentropic-api-tools
 # Include source inputs: the toolbox contains test sources and built workspaces.
 # Hash paths as well as bytes, so additions, deletions and renames invalidate it.
 ifndef API_TOOL_VERSION
-API_TOOL_VERSION := tool-$(shell git ls-files --cached --others --exclude-standard --deduplicate -z -- api packages apps ui scripts tools .security package.json package-lock.json .dockerignore e2e/package.json e2e/package-lock.json | LC_ALL=C sort -z | while IFS= read -r -d '' file; do if [ -f "$$file" ]; then printf '%s\0' "$$file"; fi; done | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
+API_TOOL_VERSION := tool-$(shell git ls-files --cached --others --exclude-standard --deduplicate -z -- api packages apps ui scripts tools .security package.json package-lock.json .dockerignore e2e/package.json e2e/package-lock.json e2e/tests/fixtures | LC_ALL=C sort -z | while IFS= read -r -d '' file; do if [ -f "$$file" ]; then printf '%s\0' "$$file"; fi; done | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
 endif
 export API_TOOL_VERSION
 API_TOOL_IMAGE = $(if $(REGISTRY),$(REGISTRY)/)$(API_TOOL_IMAGE_NAME):$(API_TOOL_VERSION)
@@ -641,7 +641,7 @@ load-api-tool: ## Load the toolbox from a CI artifact
 # BR78-EX2: byte verification uses runner Node, without a browser/compiler image.
 IMAGE_ARCHIVE = $(IMAGE_KIND)-image.tar.zst
 IMAGE_RECEIPT = $(IMAGE_KIND)-image.json
-.PHONY: ci-save-image ci-load-image save-e2e load-e2e
+.PHONY: ci-save-image ci-load-image
 ci-save-image:
 	@set -o pipefail; docker save $(IMAGE_REF) | zstd -T0 -1 > $(IMAGE_ARCHIVE)
 	@node scripts/ci/image-receipt.mjs write $(IMAGE_KIND) $(IMAGE_REF) $(IMAGE_ARCHIVE) $(IMAGE_RECEIPT)
@@ -649,10 +649,35 @@ ci-load-image:
 	@node scripts/ci/image-receipt.mjs verify $(IMAGE_KIND) $(IMAGE_REF) $(IMAGE_ARCHIVE) $(IMAGE_RECEIPT)
 	@set -o pipefail; zstd -dc $(IMAGE_ARCHIVE) | docker load
 	@node scripts/ci/image-receipt.mjs loaded $(IMAGE_KIND) $(IMAGE_REF) $(IMAGE_ARCHIVE) $(IMAGE_RECEIPT)
-save-e2e:
-	@$(MAKE) ci-save-image IMAGE_KIND=e2e IMAGE_REF=$(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) ENV=$(ENV)
-load-e2e:
-	@$(MAKE) ci-load-image IMAGE_KIND=e2e IMAGE_REF=$(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) ENV=$(ENV)
+
+# Persistent layer caches are an optimization; BuildKit still keys every COPY/ARG.
+export IMAGE_PLATFORM ?= linux/amd64
+CI_IMAGE_CACHE ?= 0
+CI_IMAGE_CACHE_FLAGS = $(if $(filter 1,$(CI_IMAGE_CACHE)),--cache-from type=gha$(comma)scope=br78-v1-$(IMAGE_KIND)-$(IMAGE_PLATFORM) --cache-to type=gha$(comma)scope=br78-v1-$(IMAGE_KIND)-$(IMAGE_PLATFORM)$(comma)mode=max,--no-cache)
+comma := ,
+CI_IMAGE_BUILD = docker buildx build --platform $(IMAGE_PLATFORM) $(CI_IMAGE_CACHE_FLAGS) --load
+.PHONY: ci-build-api ci-build-api-tool ci-build-ui ci-build-e2e
+ci-build-api:
+	@$(MAKE) ci-build-api-target IMAGE_KIND=api ENV=$(ENV)
+ci-build-api-target:
+	@$(CI_IMAGE_BUILD) --target production -f api/Dockerfile -t $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) .
+	@$(MAKE) record-api-image ENV=$(ENV)
+ci-build-api-tool:
+	@$(MAKE) ci-build-api-tool-target IMAGE_KIND=api-tool ENV=$(ENV)
+ci-build-api-tool-target:
+	@$(CI_IMAGE_BUILD) --target ci-tools -f api/Dockerfile -t $(API_TOOL_IMAGE) .
+ci-build-ui:
+	@$(MAKE) ci-build-ui-target IMAGE_KIND=ui ENV=$(ENV)
+ci-build-ui-target:
+	@$(CI_IMAGE_BUILD) --target production -f ui/Dockerfile -t $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) \
+		--build-arg VITE_API_BASE_URL=/api/v1 --build-arg VITE_EXTENSION_PROFILE=$(VITE_EXTENSION_PROFILE_BUILD) \
+		--build-arg VITE_EXTENSION_API_BASE_URL=$(VITE_EXTENSION_API_BASE_URL_BUILD) \
+		--build-arg VITE_EXTENSION_APP_BASE_URL=$(VITE_EXTENSION_APP_BASE_URL_BUILD) \
+		--build-arg VITE_EXTENSION_WS_BASE_URL=$(VITE_EXTENSION_WS_BASE_URL_BUILD) .
+ci-build-e2e:
+	@$(MAKE) ci-build-e2e-target IMAGE_KIND=e2e ENV=$(ENV)
+ci-build-e2e-target:
+	@$(CI_IMAGE_BUILD) -f e2e/Dockerfile -t $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) e2e
 
 publish-api-tool-image: docker-login ## Publish the non-shipping toolbox for reuse across CI runs
 	@docker push $(API_TOOL_IMAGE)
