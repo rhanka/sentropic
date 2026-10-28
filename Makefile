@@ -949,6 +949,10 @@ test-ci-expected-results: ## Run ci-expected-results fixture tests in Docker (BR
 test-ci-dag: ## Qualify artifact dispatch, complete verdict and rollback (BR79-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-dag.test.mjs'
 
+.PHONY: ci-security-join
+ci-security-join: ## Reject missing, failed or unexpectedly skipped scan lanes
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e CI_SECURITY_NEEDS -e CI_SECURITY_CATEGORY -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-dag.mjs --security-join
+
 
 .PHONY: typecheck
 .NOTPARALLEL: typecheck

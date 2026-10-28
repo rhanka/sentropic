@@ -1885,79 +1885,22 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-  # Security: Container scans (Docker images)
+  # Every selected image scan remains blocking at this complete join.
   security-container:
     runs-on: ubuntu-latest
-    needs: [changes, build-api-image, build-api-tool-image, build-ui, build-e2e]
-    # UI-only changes intentionally skip the toolbox job; keep the UI scan active.
+    needs: [changes, security-container-api, security-container-api-tool, security-container-ui, security-container-e2e]
     if: >-
       !cancelled() &&
-      needs.changes.result == 'success' &&
-      needs.build-api-image.result == 'success' &&
-      needs.build-ui.result == 'success' &&
-      needs.build-e2e.result == 'success' &&
-      (needs.build-api-tool-image.result == 'success' || (needs.build-api-tool-image.result == 'skipped' && needs.changes.outputs.api != 'true' && needs.changes.outputs.global != 'true')) &&
       (needs.changes.outputs.api == 'true' || needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true')
-    env:
-      REGISTRY: ${{ secrets.REGISTRY }}
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v6
-      - name: Setup Docker
-        uses: docker/setup-buildx-action@v4
-      - name: Download API image artifact
-        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        uses: actions/download-artifact@v7
-        with:
-          name: api-image
-          path: .
-      - name: Load API image from artifact
-        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make load-api
-      - name: Download UI image artifact
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        uses: actions/download-artifact@v7
-        with:
-          name: ui-image
-          path: .
-      - name: Load UI image from artifact
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        run: make load-ui
-      - name: Run container scan on API
-        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-api-security-container
-        continue-on-error: false
-      - name: Download API toolbox artifact
-        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        uses: actions/download-artifact@v7
-        with:
-          name: api-tool-image
-          path: .
-      - name: Scan API toolbox with the existing container gate
-        if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make load-api-tool test-api-tool-security-container
-        continue-on-error: false
-      - name: Run container scan on UI
-        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
-        run: make test-ui-security-container
-        continue-on-error: false
-      - name: Download qualified browser image
-        uses: actions/download-artifact@v7
-        with:
-          name: e2e-image
-          path: .
-      - name: Scan the qualified browser with the existing container gate
-        run: make load-e2e test-e2e-security-container ENV=test-ci-images
-        continue-on-error: false
-      - name: Upload security scan results (Container)
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: security-container-results
-          include-hidden-files: true
-          path: |
-            .security/container-*.json
-            .security/container-*-parsed.yaml
-          retention-days: 30
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Require every selected container scan
+        env:
+          CI_SECURITY_NEEDS: ${{ toJSON(needs) }}
+          CI_SECURITY_CATEGORY: container
+        run: make ci-security-join ENV=test-ci-br79
 
   test-smoke-restore:
     runs-on: ubuntu-latest
