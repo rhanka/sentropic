@@ -219,30 +219,14 @@
     "jose": "^5.10.0"
   },
   "peerDependenciesMeta": {
-    "@sentropic/comments": {
-      "optional": true
-    },
-    "@sentropic/llm-mesh": {
-      "optional": true
-    },
-    "@sentropic/llm-gateway": {
-      "optional": true
-    },
-    "@sentropic/mcp-auth": {
-      "optional": true
-    },
-    "@sentropic/auth-hono": {
-      "optional": true
-    },
-    "@sentropic/artifacts": {
-      "optional": true
-    },
-    "@modelcontextprotocol/sdk": {
-      "optional": true
-    },
-    "jose": {
-      "optional": true
-    }
+    "@sentropic/comments": { "optional": true },
+    "@sentropic/llm-mesh": { "optional": true },
+    "@sentropic/llm-gateway": { "optional": true },
+    "@sentropic/mcp-auth": { "optional": true },
+    "@sentropic/auth-hono": { "optional": true },
+    "@sentropic/artifacts": { "optional": true },
+    "@modelcontextprotocol/sdk": { "optional": true },
+    "jose": { "optional": true }
   },
   "devDependencies": {
     "@sentropic/engram": "0.21.1",
