@@ -37,6 +37,7 @@
   - [x] `Makefile` — BR78-EX2.
   - [x] `.dockerignore` — BR78-EX3, exclude new transport artifacts from build inputs.
   - [x] `scripts/ci/publishable-ci-wiring.test.mjs` — BR78-EX4, preserve filter isolation with exact image-guard exceptions.
+  - [x] `e2e/tests/07_comment_assistant.spec.ts` — BR78-EX5, deterministic workspace initialization for the unchanged blocking journey.
 - [x] Exception process: record rationale, impact and rollback before edits; additional paths require bounded exceptions.
 
 ## Feedback Loop
@@ -68,6 +69,7 @@
 - [x] UI continuation measurements and bounded blockers are consolidated in study section 11 and plan/64: test step 87s to 37s; cold full UI 505s to 329s; the 180/210s budgets remain open. Published desktop binaries differ on identical tracked inputs and base; exact hashes identify the compiler-cache boundary corrected below.
 - [x] Resolve the measured warm-cache invalidation at the image boundary: exclude desktop bytes from UI compiler COPY with a digest-pinned Dockerfile 1.19 frontend, validate present desktop files in a separate static-assets stage, and copy fresh assets into both production/static outputs after compilation. Preserve API-only/local optional-desktop behavior and every full-UI desktop prerequisite. Build asserts the volatile executable is absent from compiler inputs; compiled code/profile caches must now survive fresh desktop bytes. Qualification and complete timings remain pending; no Windows packager/runtime change.
 - [x] Local scoped checks pass: canonical tag inputs, toolbox/hash/cache fixtures, version-filter coverage and all 16 receipt tests. The aggregate local canonical suite reaches its retained-runtime check without a local image and fails there; actual image/runtime assertions remain required in CI. Isolated cleanup completed; no local image build was used.
+- [x] BR78-EX5: run 40660088690 / group-e 122724595102 fails before reaching the seeded AI comment. All three attempts GET /folders/e2e-folder-a under unrelated personal workspace IDs and receive 404; loadUserWorkspaces can overwrite the test's post-navigation localStorage write before reload. Initialize workspaceScopeId with addInitScript before application startup in both existing scenarios. Impact: test setup only; preserve folder/comment/badge assertions, seeded memberships, matrix, retries and timeouts. Rollback: restore the two post-load evaluate/reload blocks; never skip the assertion or accept a wrong workspace.
 
 ## AI Flaky tests
 - [x] All deterministic failures block; no additional provider exception or timeout extension authorized.
