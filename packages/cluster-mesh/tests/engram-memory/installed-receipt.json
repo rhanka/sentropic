@@ -1,14 +1,14 @@
 {
   "version": 1,
   "kind": "engram-e10-installed-receipt",
-  "head": "cd563d72eaf934ceab93f88f48e0ab30d2b6f6be",
-  "tree": "ad748ec72f1f5f4443d6c55e6ea62cd190bdb30c",
+  "head": "bf87c772a0432201248a5b3831a72a92becc7531",
+  "tree": "3fa277e406b28987394907ba4681df50f0781901",
   "consumer": {
     "node": "v24.21.0",
     "platform": "linux",
     "arch": "x64",
     "root": "clean-consumer-outside-repository",
-    "lockSha256": "eab1961ca86892edeace4c08b6dd2ba130a3e8d5ef47147f2136b0f2d37fb5ac",
+    "lockSha256": "98209af43f6952def63538d4d36e21780d53bbc0253dc14d7c8a3a6b6e896ecc",
     "npmVersion": "11.19.0"
   },
   "engram": {
@@ -17,9 +17,9 @@
     "integrity": "sha512-/TV03olHbzG+3haTC5j5YJ282egCrXak1yQE0I8DHF1kAQDwsKUe1QlMwibvBCEmPGdWeTgSHT4fF8lZJTH8cw=="
   },
   "clusterMesh": {
-    "version": "0.24.0-dev.2",
-    "tarballSha256": "bced27e380962f5792cc3af734db20c46750bd0a892c29d7cc83ac6d2f31997f",
-    "integrity": "sha512-N+blFRfwZAe3e/qps0x+0hNk3xeEWGRRyjmBirSUOg20pjnwOwPdKlEhEbr9AWj17jVg04rJrEj/6jIT3Oe5Nw==",
+    "version": "0.24.0-dev.4",
+    "tarballSha256": "f7d03a4675adaa23d0baca9012fc86127d13bd57b8f136c0cfc802a7d0e6acd3",
+    "integrity": "sha512-bgXVGgk6C8+TPHXfqMvg7bm9Y9xgzqevzRFh4hJSrEWneqNN57YAY34NnLZU0qphhpPrRhra8z7vT9ZyXAyETQ==",
     "fileListSha256": "cd30501f29c188e15434e435287cc198c359cc9c8b14ae2efe2a34f62b9f7898"
   },
   "p3ManifestSha256": "1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730",
@@ -33,8 +33,8 @@
       "version": "8.22.0",
       "artifactDigest": "bab5faf4410151a463078fffa326d10979150bfc330f0a29bd08948378ed3421"
     },
-    "statements": 880,
-    "transactions": 86
+    "statements": 906,
+    "transactions": 112
   },
   "migrations": [
     {
