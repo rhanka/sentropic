@@ -91,6 +91,7 @@
   - [x] Expose runtime optional-module entrypoints; visual context barrel exports only normalized types.
   - [ ] Qualify breaking chat-ui version and initial runtime version against registry; update lockfiles.
 - [ ] **Lot 2 — Injected conversation and complete command binding**
+  - [x] Render injected checkpoint restore/preserve choices and mutation preview; disable duplicate checkpoint actions in runtime state.
   - [x] Route send checkpoint creation and edit/retry/restore choices through the same runtime commands; reload history after an authorized restore.
   - [x] Add runtime-owned checkpoint mutation choices and create/fetch/restore I/O through the existing CheckpointHost contract; no view-owned checkpoint lifecycle.
   - [x] Bind attachment retry/paste, preview/lightbox and generated-file download controls to injected data/commands; visual state contains no upload or extraction implementation.
