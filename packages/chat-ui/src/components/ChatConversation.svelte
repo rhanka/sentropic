@@ -42,6 +42,7 @@
   };
   const send = () => flags.steer && state.activeStreamId ? commands.steer() : commands.send();
   const keydown = (event: KeyboardEvent) => {
+    if (event.isComposing || event.keyCode === 229) return;
     if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); }
   };
   const paste = (event: ClipboardEvent) => {
