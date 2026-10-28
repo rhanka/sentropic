@@ -44,7 +44,10 @@ export const createDecisionAdmission = (database: LedgerDatabase, cost: CostCont
           VALUES (${input.callId}, ${cost.tenantId}, ${cost.workspaceId}, ${cost.principalId}, ${key}, ${admitted.holdRef})`);
         return { ok: true, holdId: admitted.holdRef };
       });
-    } catch { return { ok: false, code: 'BUDGET_UNAVAILABLE' }; }
+    } catch {
+      // Commit acknowledgement can be lost after the hold exists; the service must retain uncertainty.
+      throw new Error('Decision budget admission unavailable');
+    }
   },
   async markDispatched(input: { holdId: string; callId: string; evaluator: DecisionAdmission['evaluator']; deadlineAt: number }): Promise<DecisionDispatchResult> {
     try {

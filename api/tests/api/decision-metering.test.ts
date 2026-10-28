@@ -9,6 +9,7 @@ import { createDecisionMetering } from '../../src/services/llm-metering/decision
 import { evaluatorKey } from '../../src/services/llm-metering/decision-store';
 import { resolveDecisionPrice } from '../../src/services/llm-metering/decision-pricing';
 import { reapExpiredHolds } from '../../src/services/llm-metering/reservation-reaper';
+import { createDecisionAdmission } from '../../src/services/llm-metering/decision-admission';
 import { decisionRequest, jevResponse } from '../../../packages/llm-mesh/tests/decision-fixtures';
 
 const tenant = `decision-${randomUUID().slice(0, 8)}`;
@@ -188,6 +189,20 @@ describe('Decision durable metering and authoritative pricing', () => {
     });
     expect(await f.client.decide(decisionRequest({ evaluator: descriptors[0].evaluator })))
       .toMatchObject({ ok: false, error: { code: 'BUDGET_UNAVAILABLE' }, receipt: { attempts: 0, budget: { state: 'released' } } });
+    expect(f.jev.send).not.toHaveBeenCalled();
+  });
+  it('should retain ambiguous admission liability when the hold commits but its acknowledgement is lost', async () => {
+    await seed();
+    const f = fixture();
+    const uncertain = createDecisionAdmission({ execute: db.execute.bind(db), transaction: async (run) => {
+      await db.transaction(run);
+      throw new Error('Fixture lost commit acknowledgement');
+    } }, cost, descriptors);
+    vi.spyOn(f.metering.budget, 'admit').mockImplementation(uncertain.admit);
+    expect(await f.client.decide(decisionRequest({ evaluator: descriptors[0].evaluator })))
+      .toMatchObject({ ok: false, error: { code: 'BUDGET_UNAVAILABLE' }, receipt: { attempts: 0,
+        budget: { state: 'pending-reconciliation' }, cost: { amountMicroUsd: '2753' } } });
+    expect(await query(sql`SELECT id FROM control.budget_holds WHERE tenant_id = ${tenant}`)).toHaveLength(1);
     expect(f.jev.send).not.toHaveBeenCalled();
   });
 });
