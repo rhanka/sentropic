@@ -62,6 +62,9 @@ hash() {
 }
 
 layers() {
+  if grep '^FROM node:' api/Dockerfile e2e/Dockerfile | grep -Ev '@sha256:[a-f0-9]{64}'; then
+    echo 'FAIL: Node base digest must be part of the image input key' >&2; return 1
+  fi
   make -n ci-build-api ci-build-api-tool ci-build-ui ci-build-e2e CI_IMAGE_CACHE=1 REGISTRY=registry.example/team ENV="$ENV" > "$scratch/builds"
   for kind in api api-tool ui e2e; do
     grep -F -- "--cache-from type=gha,scope=br78-v1-$kind-linux/amd64" "$scratch/builds"
