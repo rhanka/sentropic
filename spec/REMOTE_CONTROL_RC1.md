@@ -25,6 +25,8 @@ BRRC1-EX1 adds a dedicated `auth-idp-session-signing` Secret reference and `auth
 
 The issuer-private volume retains current credential hashes, immutable login metadata, expiry and revocation tombstones. It stores no bearer or proof bytes. Login/refresh/revoke update this authority; a restored or modified shared DB row cannot create, elevate or revive it. Writes use per-session filesystem fences, fsync and atomic replacement. An interrupted writer leaves authority closed for recovery. An ambiguous refresh fails closed and can require a new login. Tombstones are retained without automatic deletion. Session-store loss/corruption refuses authority. Restoring an older private authority volume requires a separately qualified revocation/epoch recovery and remains closed until that gate passes.
 
+Bulk session revocation tombstones every deleted session ID, including a login whose private creation has not completed. A tombstone for an unknown ID prevents that creation from reviving deleted authority. Evidence preparation revalidates current login after asynchronous target/replay work; the final synchronous EdDSA signature shares the per-session private revocation fence and rechecks the original conservative deadline. Revocation and signing therefore have an explicit ordering boundary across issuer processes.
+
 ## Configuration and composition handoff
 
 The standalone issuer requires its isolated `JWT_SECRET`, `REMOTE_ACTION_ROLE=auth-idp`, and `REMOTE_ACTION_SESSION_STATE_DIR` on the issuer-only durable mount. Provision the referenced Secret and storage before any approved rollout. No Secret value, deployment or live migration is created by this branch.
@@ -58,6 +60,8 @@ Native reply IDs below are tracking references only. They preserve the seven ori
 ## Validation and acceptance
 
 Tests cover repeated explicit action evidence and distinct native audiences under the same login; refresh; logout, revocation, expiry/version; wrong identity/audience/MFA/key; revoked/rotated trust; exact Target/consent; native replay fake; bounded body/TLS/workload/product/browser refusals; and private authority restart/restore/CAS. RED receipts precede implementation. Commands use ENV=test-rc1 last, API_PORT=8799, UI_PORT=5199 and MAILDEV_UI_PORT=1099, under both shared Docker locks, followed by `make down`.
+
+Post-integration local validation at `c36c75759a0fbe43c2e32ca14f08d67a55b03e68` passes 177 cases: 123 RC1 unit, 20 RC1 API, 11 session-manager, 2 passkey-MFA session, 10 federation-route cookies and 11 API session cases. API typecheck/lint and standalone IdP typecheck pass. The receipt is `.tmp/remote-ctl/RC1-final-green.log`; its final result records zero for all seven checks. This is local app-side evidence; native and real-session gates below remain open.
 
 The D2 trust limits remain unchanged. A compromised API holding a still-valid login credential can act within that login's existing bounds. Compromise of API plus issuer/signing authority can drive connected approved sessions within native limits. Key isolation does not prove a fresh human click or protect a compromised permission-card UI. There is no trusted-display or instantaneous offline-revocation claim. Fixed conservative deadlines and native local denial still apply.
 
