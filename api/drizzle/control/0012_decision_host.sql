@@ -1,4 +1,8 @@
 -- Decision metadata only: request content, verdicts and credentials are never persisted here.
+ALTER TABLE control.cost_ledger
+  DROP CONSTRAINT cost_ledger_operation_check,
+  ADD CONSTRAINT cost_ledger_operation_check CHECK (operation IN ('generate', 'stream', 'decision')) NOT VALID;
+--> statement-breakpoint
 CREATE TABLE control.decision_evaluator_state (
   evaluator_key text PRIMARY KEY,
   disabled boolean NOT NULL DEFAULT false,

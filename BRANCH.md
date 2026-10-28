@@ -81,7 +81,8 @@
   - [x] Verify and cite the published JEV tariff at its primary source.
   - [x] Add both immutable control.model_pricing rows using the existing control migration lane.
   - [x] Move JEV price authority from its synthetic fixture to control.model_pricing and bump llm-mesh to 0.31.1 (npm view: 0.31.0).
-  - [ ] Test exact revision/protocol resolution and missing or stale price refusal.
+  - [x] Add PostgreSQL tests for exact revision/protocol prices, missing prices and one metadata-only settlement per backend.
+  - [x] Extend the existing ledger operation CHECK to decision; real-PG regression reproduced the prior constraint refusal.
 - [ ] **Docs consolidation**
   - [x] Document route, profiles, readiness limits, tariff sources and provisioned environment names in spec/decision/api-host.md.
 - [ ] **Final validation**
