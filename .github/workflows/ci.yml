@@ -831,7 +831,15 @@ jobs:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-chat-runtime ENV=test-ci-chat-runtime
+        run: make pack-chat-runtime PACK_DESTINATION=tmp/chat-runtime-package ENV=test-ci-chat-runtime
+      - name: Qualify standalone Chat Runtime against published peers
+        run: make qualify-published-install TARBALL=tmp/chat-runtime-package/sentropic-chat-runtime-0.1.0.tgz REPORT_DIR=tmp/chat-runtime-package/qualification QUALIFY_HEAD_SHA=${{ github.event.pull_request.head.sha || github.sha }} ENV=test-ci-chat-runtime
+      - name: Retain standalone Chat Runtime evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: chat-runtime-qualification
+          path: tmp/chat-runtime-package/qualification
+          if-no-files-found: error
 
   validate-chat-ui:
     runs-on: ubuntu-latest

@@ -5,7 +5,7 @@
 
 ## Scope / Guardrails
 - [x] Branch `feat/chat-runtime-package` starts from `origin/main` at `5e986a0b6`; worktree `tmp/chat-runtime-package`.
-- [x] Package source baseline: #819 at `55d903bb7b79ad51ab7a68d51a75a038369d68c3`.
+- [x] Package copied byte-for-byte from corrected #819 at `7a5285c26cee7fd4265e469058b60427ab42c9ec`; runtime sources stabilized at `15881ba19`.
 - [x] Serialize Docker with `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; API_PORT=8796 UI_PORT=5196 MAILDEV_UI_PORT=1096 ENV=test-chat-p1 last; run make down after checks.
 - [x] Make-only development, Docker-only dependencies; no Python, rebase, force push, publication or main merge; commits at most 150 changed lines, no AI trailers.
 - [x] The conductor merges and dispatches bootstrap only after this draft has completed/success CI on its exact head.
@@ -47,14 +47,14 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and scope**
   - [x] Read repository/harness rules, frozen P0 boundary and P1 review; mechanical branch check passes.
-- [ ] **Lot 1 — Runtime package**
-  - [ ] Runtime source import progress: 18430 lines from #819 snapshot `70db7a8dc`.
-  - [ ] Import #819 runtime sources, tests, scripts, manifest and license without consumer changes.
-  - [ ] Verify typecheck/tests against unchanged main and retain the package ownership/export tests.
+- [x] **Lot 1 — Runtime package**
+  - [x] Import #819 runtime sources, tests, scripts, manifest and license without consumer changes, in commits below 150 lines.
+  - [x] Typecheck and 440 runtime tests pass against unchanged main; retain the package ownership/export tests.
+  - [x] Fresh runtime archive `a5bc85bc6f2e68fcefed00168f67b368e61d637dcc8a6a65ca63d67ef5c05c9f` installs alone; all public imports pass using registry UI 0.34.1 with no injected peers; matches #819's clean CI artifact.
 - [x] **Lot 2 — Publication wiring**
   - [x] Register runtime-only validation, pack and guarded OIDC/token bootstrap targets; retain manifest/CI gates; 201 manifest fixtures and 23 CI fixtures pass.
   - [x] Verify bootstrap `CI` (`.github/workflows/ci.yml`), ref `main`, input `bootstrap_publish_target=chat-runtime`, all other inputs default.
 - [ ] **Lot 3 — Draft handoff**
-  - [ ] Run runtime typecheck, full unit tests, guarded pack and relevant manifest/CI tests.
+  - [x] Run runtime typecheck, 440 unit tests, guarded pack, standalone archive qualification, 201 manifest fixtures and 23 CI fixtures; all pass.
   - [ ] Open draft PR to main using this file as body; record exact head and completed/success CI.
-  - [ ] Run make down; stop without main merge or bootstrap dispatch.
+  - [x] Run make down and make ps; no remaining services. Stop without main merge or bootstrap dispatch.

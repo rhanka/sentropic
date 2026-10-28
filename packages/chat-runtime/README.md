@@ -34,20 +34,22 @@ Call execution and result posting are deduplicated across replay; runtime dispos
 ## Public modules
 
 - `state/conversationRuntime`: host-owned session binding and complete conversation commands.
+- `conversation`: data-only snapshot/command ports for injected views.
+- `hosts/types`: local-tool transport adapter contract.
 - `client/*`: transport, stream hub, replay/history and wire contracts.
 - `state/chatSessionRuntime`, `state/chatLoopController`, `state/chatProjection`: session/loop/projection.
 - `checkpoints`: mutation classifier, checkpoint state and host contract.
 - `comments`: retrieval/state/runtime; inject pure visual label helpers into `createCommentRuntime`.
-- `documents`: attachment lifecycle helpers and generated-file extraction.
+- `documents`: document host I/O contract, attachment lifecycle helpers and generated-file extraction.
 - `context`: context selection and host module.
 - `stores/localTools`: platform adapter, tool definitions and permission state.
 
 The export map lists the exact public subpaths. Runtime has no value import from visual implementations.
-Its optional UI peer supplies normalized TypeScript data contracts; the packed runtime's Node entries
-work without loading Svelte views. Both packages are qualified together for visual consumers.
-TypeScript consumers of the root/high-level conversation, comments and document ports install the UI
-peer for its neutral declarations. Runtime-only wire/transport consumers can use the independent
-`client/*` subpaths. No visual implementation is loaded by the runtime.
+Its required UI peer supplies neutral model key/catalog utilities and normalized TypeScript declarations.
+The peer accepts published UI 0.34.1 and separated UI 1.0.0; no Svelte view is loaded by runtime entries.
+Both packages are qualified together for visual consumers. UI imports runtime only through type declarations
+and injected ports, so its runtime peer is optional. Runtime-only wire/transport consumers can use the
+independent `client/*` subpaths.
 
 ## Release preparation
 
