@@ -2372,3 +2372,117 @@ export function createChatLoopController<
       payload.defaults?.provider_id ??
       mcProviders[0]?.provider_id ??
       'openai'
+    ) as ModelProviderId;
+    const initialModelId =
+      payload.defaults?.model_id ??
+      mcModels.find((entry) => entry.provider_id === initialProviderId)?.model_id ??
+      mcModels[0]?.model_id ??
+      mcSelectedModelId;
+
+    mcDefaultProviderId = initialProviderId;
+    mcDefaultModelId = initialModelId;
+    mcCoerceAndApply(initialProviderId, initialModelId);
+    notify();
+  };
+
+  const setModelSelection = (providerId: ModelProviderId, modelId: string): void => {
+    mcCoerceAndApply(providerId, modelId);
+    notify();
+  };
+
+  const applyUserDefaults = (
+    providerId: ModelProviderId,
+    modelId: string,
+    opts: { sessionId: string | null },
+  ): void => {
+    if (!modelId) return;
+
+    let nextProviderId: ModelProviderId = providerId;
+    let nextModelId = modelId;
+
+    if (mcModels.length > 0) {
+      const exactMatch = mcModels.find(
+        (entry) => entry.provider_id === providerId && entry.model_id === modelId,
+      );
+      if (!exactMatch) {
+        const modelMatch = mcModels.find((entry) => entry.model_id === modelId);
+        if (modelMatch) {
+          nextProviderId = modelMatch.provider_id;
+          nextModelId = modelMatch.model_id;
+        } else {
+          const providerFallback =
+            mcModels.find((entry) => entry.provider_id === providerId) ?? mcModels[0];
+          if (providerFallback) {
+            nextProviderId = providerFallback.provider_id;
+            nextModelId = providerFallback.model_id;
+          }
+        }
+      }
+    }
+
+    mcDefaultProviderId = nextProviderId;
+    mcDefaultModelId = nextModelId;
+
+    // Only update current selection when no active session
+    if (!opts.sessionId) {
+      mcSelectedProviderId = nextProviderId;
+      mcSelectedModelId = nextModelId;
+    }
+    notify();
+  };
+
+  const resetModelSelectionToDefaults = (): void => {
+    mcSelectedProviderId = mcDefaultProviderId;
+    mcSelectedModelId = mcDefaultModelId;
+    notify();
+  };
+
+  // -------------------------------------------------------------------------
+  // Initial timeline build (empty state)
+  // -------------------------------------------------------------------------
+  recomputeTimeline();
+  currentSnapshot = buildSnapshot();
+
+  return {
+    getSnapshot,
+    subscribe,
+    setMessages,
+    appendMessage,
+    patchMessage,
+    filterMessages,
+    mergeHistoryEvents,
+    mergeProjectedHistoryForStream,
+    appendProjectedLiveEvent,
+    clearProjectedEventsForStream,
+    resetProjectionState,
+    invalidateComputationCache,
+    getProjectionEventsForMessage,
+    getProjectedAssistantComputation,
+    isTrackedAssistantStreamId,
+    buildTimeline,
+    attachStream,
+    detachStream,
+    startJobPoll,
+    attachHost,
+    detachHost,
+    bootstrapRun,
+    send,
+    retry,
+    stop,
+    edit,
+    setFeedback,
+    attachLocalToolMachine,
+    resetLocalToolMachineState,
+    detachLocalToolMachine,
+    handleLocalToolStreamEvent,
+    decideLocalToolPermission,
+    // Steer (slice 1F)
+    sendSteer,
+    clearOptimisticSteerMessages,
+    // Model catalog (slice 1F)
+    loadModelCatalog,
+    setModelSelection,
+    applyUserDefaults,
+    resetModelSelectionToDefaults,
+  };
+}
