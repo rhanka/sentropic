@@ -1,0 +1,10 @@
+SELECT current_database(),current_setting('default_transaction_read_only'),clock_timestamp();
+SELECT table_schema,table_name FROM information_schema.tables WHERE table_type='BASE TABLE' AND (table_name ~* '(migration|journal|schema_version)' OR table_schema='artifacts') ORDER BY 1,2;
+SELECT 'product' AS journal,count(*),max(id),max(created_at) FROM drizzle.__drizzle_migrations UNION ALL SELECT 'control',count(*),max(id),max(created_at) FROM public.__drizzle_control_migrations;
+SELECT 'product' AS journal,id,hash,created_at FROM drizzle.__drizzle_migrations ORDER BY created_at DESC,id DESC LIMIT 1;
+SELECT 'control' AS journal,id,hash,created_at FROM public.__drizzle_control_migrations ORDER BY created_at DESC,id DESC LIMIT 1;
+SELECT c.composition_root,c.active_author,c.status,c.selected_generation_id,g.status AS generation_status,g.supervisor_lease_expires_at>clock_timestamp() AS supervisor_live,count(*) AS namespaces,string_agg(c.namespace,',' ORDER BY c.namespace) AS namespace_set FROM control.cluster_mesh_namespace_cutovers c LEFT JOIN control.cluster_mesh_generations g ON g.generation_id=c.selected_generation_id GROUP BY 1,2,3,4,5,6 ORDER BY 1,2,3;
+SELECT status,count(*),count(*) FILTER (WHERE supervisor_lease_expires_at>clock_timestamp()) AS live_supervisor FROM control.cluster_mesh_generations GROUP BY 1 ORDER BY 1;
+SELECT status,count(*),count(*) FILTER (WHERE lease_expires_at>clock_timestamp()) AS live_lease FROM control.cluster_mesh_mcp_servers GROUP BY 1 ORDER BY 1;
+SELECT status,count(*),count(*) FILTER (WHERE lease_expires_at>clock_timestamp() AND expires_at>clock_timestamp() AND revoked_at IS NULL AND lost_at IS NULL) AS live_authority FROM control.cluster_mesh_registrations GROUP BY 1 ORDER BY 1;
+SELECT status,count(*),count(*) FILTER (WHERE lease_expires_at>clock_timestamp() AND expires_at>clock_timestamp() AND released_at IS NULL) AS live_lease FROM control.cluster_mesh_capacity_leases GROUP BY 1 ORDER BY 1;
