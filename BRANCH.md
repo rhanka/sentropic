@@ -1,103 +1,101 @@
-# feat(security): add daily scan adapter (S2a)
+# Feature: Live STT L3 local registry adapter
 
 ## Objective
-- [x] Deliver the credential-free `security-daily-scan` Make adapter and raw scan orchestration from approved spec r4 section 9; estimate 3–5 h, dependency S1 approval.
+Deliver approved r3 L3: `live-speech/src/node/local-stt.ts` plus an isolated worker using the owned TS package, rolling windows/VAD, independently pinned tiny/base profiles with no fixed model in the loop.
 
 ## Scope / Guardrails
-- [x] Owner authorized implementation on 2026-10-26; draft PR to main stacked on S1 #732, no merge.
-- [x] Base: corrected S1 head `76c745d5a89eaa8362a914d07604d563489b9f67`, including the merge of main `365e8b313`; merge updates only, never rebase.
-- [x] Work only in `tmp/worktrees/sec-s2a` on `feat/security-autofix-s2a`.
-- [x] Use Make targets only, zero Python, no AI commit trailers, selective staging and `make commit`; each new commit stays below 150 changed lines.
-- [x] Use the shared Docker lock for every image build, container start and test; release it between steps and clean with locked `make down ENV=test-sec-s2a` after each step.
-- [x] Pass `ENV=test-sec-s2a` last; run fixture targets without application services or host port bindings.
-- [x] Preserve the public-repository model, required PR gates, vulnerability register, disabled auto-fix and L5 class.
-- [x] No scheduler, credentials, collector, publication, repair, merge actor or runtime activation.
-- [x] Keep image/DB qualification in S2b and native Rust SAST qualification in S2c; unqualified surfaces remain explicit blockers.
-- [x] Keep the root worktree and all other sessions' containers, volumes and environments untouched.
-- [x] Use English for repository text and keep all implementation changes within the paths below.
+- Scope limited to L3 local STT: adapter, isolated worker, tiny/base profiles, session/pins/reconciliation/ordering/protocol/backpressure tests, session-level bench + receipts, §8.1 evidence.
+- No L2 core files (`live-speech/src/core/**` belongs to the parallel L2 lane).
+- No llm-mesh/cluster-mesh source edits; L1 contract types consumed as `import type` only.
+- Make-only workflow, no direct Docker commands.
+- Branch development in isolated worktree `tmp/worktrees/stt-l3` (even for one active branch).
+- Automated test campaigns on dedicated env `ENV=test-stt-l3`, never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off).
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
+- No paid API call; no microphone in tests; no audio payload in logs; model use only through pinned, hashed artifacts.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `scripts/security/daily/scan.mjs`
-  - `scripts/security/daily/scan.test.mjs`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `Makefile`
+  - `packages/live-speech/**`
+  - `package.json` (BR04-EX1)
+  - `package-lock.json` (BR04-EX1)
+  - `scripts/ci/ci-expected-results.test.mjs` (BR06-EX1)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
-  - `.github/workflows/**`
   - `.cursor/rules/**`
-  - `.security/**`
-  - `api/Dockerfile`
-  - `ui/Dockerfile`
-  - `packages/**`
-  - `tools/**`
-  - `plan/NN-BRANCH_*.md`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `Makefile` (SECDAILY-EX1, only the two adapter recipes below)
+  - `Makefile`
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
 - **Exception process**:
-  - [x] Declare any additional exception with rationale, impact and rollback in this feedback loop before editing.
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [x] Integration: merge origin/main 289d0971d after #776; keep this branch plan on the sole conflict. Makefile and manifest-wiring additions merge automatically, preserving the S2a scan suite and main's live-speech inventory regression. Imported history exceeds 150 lines; no scanner implementation changes. Rollback: revert the merge.
-- [x] PR786 P2-4, author, resolved: eagerly materialize sorted per-row register joins with exact-match paths and pending reasons; map manifest paths only to one exact scanner/component/version node. Legacy identities and ambiguous nodes remain pending. Real-register and reversed-order regressions pass; locked daily suite passes 110 tests.
-- [x] PR786 P2-3, author, resolved: capture HEAD once and refuse tracked, staged or untracked changes before launching the scanner; Git failures also abort. Shell-guard regressions pass in the 13-test scoped scan suite.
-- [x] PR786 P2-2, author, resolved: keep the complete npm repair target as name@version plus its major-bump flag; reject malformed targets. The langium/mermaid regression preserves mermaid@11.17.2; scoped scan suite passes 12 tests.
-- [x] PR786 P2-1, author, resolved: emit only a package's own advisories at affected installed versions; retain npm carrier graph and severities as context. Langium/mermaid with two lodash-es versions is covered; locked daily suite passes 107 tests. Reuse the pinned semver tool from the existing fixture lane.
-- [x] SECDAILY-EX1 predeclared by approved r4 for S2a: edit only `security-daily-scan` and `test-security-daily` recipes in `Makefile`; reuse the existing pinned credential-free Node test lane. Impact: explicit raw scanner orchestration and its regression target; existing gates and deploy recipes remain unchanged. Rollback: revert these adapter recipes and scan files, keeping activation disabled.
-- [x] S1 dependency: owner confirms Opus r2 approval of corrected #732 head `76c745d5a`.
-- [x] S2A-F1, author, resolved: native npm rejected user/global config both pointing to `/dev/null` (double-loading config); use a distinct absent global config in scratch. Native-version regression preserves credential isolation.
-- [x] S2A-F2, author, resolved: real npm reports contain cyclic dependency references; traverse without revisiting, require reachable advisory evidence and retain each advisory severity. Independent lock audits preserve repository-relative local-link metadata inside scratch; outside-repository links fail closed.
-- [x] Validation: locked `make test-security-daily ENV=test-sec-s2a` passes 106 tests, including real native npm version resolution; initial missing-module and F1/F2 regressions were observed failing before their fixes.
-- [x] Parser compatibility: locked `make test-security-parser ENV=test-sec-s2a` passes all five cases; no parser/compliance or existing gate edit.
-- [x] Runtime identity: reuse existing `MEMORY_L5_NODE_IMAGE`, `node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6`; no image build, new image, Python, Docker socket, source write or application service.
-- [x] Operator smoke: locked `make security-daily-scan ENV=test-sec-s2a` on immutable code head `2f95bb0735725f46da1efc3d97dd46f4dd3c7097` audits all seven locks successfully and retains 251 affected-path/advisory findings (12 HIGH, 196 MEDIUM, 43 LOW); 68 unresolved register rows remain (7 expired, 61 unexpired). This is an author-branch smoke, not qualified main/pilot evidence.
-- [x] Smoke receipt: ignored `tmp/security-daily/receipt.json`, SHA-256 `99d546935dcb376acd169d04f099aa6d8405994823771f8861877055bc00331e`; source/register hashes and raw reports retained. Make exits 2 from scanner exit 1 as required for `incomplete-scan`; all source input hashes remain unchanged.
-- [x] Register bytes: SHA-256 `837f27b85ed9c20b0efd9f8fde10fb30533a87558ab23d4e65fe41d96a6df787`; policy SHA-256 `cb3f56d654fc59dcd30f1cee13af372ec037df7b70483405bb610420394b0bff`; both and every lock remain identical to S1.
-- [x] Coverage handoff: S2b 4–6 h qualifies immutable Trivy/image/IaC/DB evidence; S2c 6–12 h qualifies native Rust SAST; S3 4–6 h follows S2c for the public workflow/collector. Inventory additionally exposes missing qualified locks for `apps/auth-idp/package.json`, `tools/scw-tem-mock/package.json`, `ui/vscode-ext/package.json`; no false complete-clean receipt.
-- [x] Independent S2a review remains pending: local harness selection failed because this session has no live model catalog and h2a presence lacks exact models; no peer was dispatched and no consensus is claimed. Ignored dossier: `tmp/security-daily/review.md`.
-- [x] Track import belongs to the designated writer; this worktree updates only the mergeable `BRANCH.md` source.
+- [x] BR06-EX1: update `scripts/ci/ci-expected-results.test.mjs` validator count from 23 to 24 for the added L3 validator. Reason: CI run 40611049316 fails the exact inventory assertion, while all other capacity fixtures pass. Impact: fixture inventory only; no scheduling or gate logic changes. Rollback: revert the count with removal of the L3 job.
+- [x] Integration validation: `test-live-speech` (68 tests / 11 files), `typecheck-live-speech`, `lint-live-speech` and `build-live-speech` pass under the shared Docker lock with `ENV=test-integrator-stt-l3`.
+- [x] Integration lint: the shared L2 lint gate reports unused arguments in the L3 fake engine; omit unused parameters without changing scripted behavior.
+- [x] Integration after L2: retain the root core export and the L3 `/node` export; keep both ordering suites by moving L3 tests to `tests/local-stt-ordering.test.ts`; retain source-only dist compilation and both README contracts.
+- [x] BR03-EX1: touch conditional `Makefile` (`test-live-speech` target only). Reason: L3 needs a runnable vitest lane mirroring `test-oauth-verify` (SCOPE support, pinned vitest/typescript). Impact: one additive target; no existing target changed. Rollback: delete the target block.
+- [x] BR04-EX1: touch conditional `.github/workflows/ci.yml` (live_speech filter + output + `validate-live-speech` job + 2 needs entries), conditional `Makefile` (`bench-live-speech` target), root `package.json` (onnxruntime-node override pin), root `package-lock.json` (workspace refresh via `make lock-root`). Reason: P1-5/P2-1 demand the CI lane, the bench lane, exact onnx pinning and lockfile refresh. Impact: additive CI job gated on live-speech paths; additive bench target; one override line; lock gains only live-speech entries. Rollback: revert the job/filter/target/override lines.
+- [x] BR05-EX1: touch conditional `.github/workflows/ci.yml` (one-line `pull_request.branches` exception adding `feat/live-stt-l1c`). Reason: PR #781 targets the unmerged L1c base, so the `main`-only PR filter suppresses every automatic run; the exception restores `pull_request` CI on the exact L3 head without changing any job. Impact: one branch string; no job/filter logic changed. Rollback: remove the branch string.
+- [ ] CI run for PR #781: after BR05-EX1, expect an automatic `pull_request` run on the exact head; keep `workflow_dispatch` only as a fallback if the queue stalls.
 
 ## AI Flaky tests
-- [x] Expect deterministic fixture tests only; treat any failure as blocking and do not increase timeouts or accept AI flakiness.
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
+  - 2026-10-27 bench flake (accepted, non-systematic): one orchestrated
+    `run-local-bench.mjs` run failed with `bench child failed for
+    local-base/espeak`; the same command on the same head measured 4/4 clean on
+    direct rerun and on full rerun (tiny 1 partial, base 2 partials, 0 errors).
+    Native-side flake, unrelated to the committed diff.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch**: one bounded adapter lot with serial tests under the shared Docker lock.
-- [ ] **Multi-branch**: not needed for this scope.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: Single-package lot with one test cycle; no UI.
 
 ## UAT Management (in orchestration context)
-- [x] Web app UAT: not applicable; no user-facing or application runtime change.
-- [x] Chrome plugin UAT: not applicable; no extension change.
-- [x] VSCode plugin UAT: not applicable; no extension change.
-- [x] Operator UAT: inspect a fixture scan receipt for source SHA, all severities, explicit gaps, public backlog and unchanged source/register bytes.
+- [x] No UI change; no UAT required (no microphone path in this lot; bench is local-only).
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Admission and baseline**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, `rules/security.md`, the Docker lock and approved spec r4 sections 3/4/9.
-  - [x] Verify the S1 dependency head, `harness check branch`, scope boundaries and SECDAILY-EX1 before editing.
-  - [x] Inventory existing Make scan/parser entrypoints; reuse S1 schema/inventory helpers without changing their safety contract.
-  - [x] Capture source/register byte identities and the source SHA for unchanged-main assertions.
-- [x] **Lot 1 — Raw scan orchestration, `scan.mjs` and `scan.test.mjs`**
-  - [x] Enumerate three images explicitly, root/workspace and independent UI/kit lockfiles including dev dependencies, and discovered source/hash consumers.
-  - [x] Capture raw output before compliance; run audit/scan commands without repair or publication and preserve accepted exceptions in the public queue.
-  - [x] Validate reports with S1 fail-closed checks; keep command errors, missing reports, unsupported formats, missing images and unqualified SAST as coverage gaps.
-  - [x] Record exact source, scanner/database identities, component/path, all severity flags and coverage; retain identical flags between comparable scans.
-  - [x] In `scan.test.mjs`, assert source/register bytes remain unchanged, registered findings remain queued, explicit toolbox/locks coverage and independent locks include dev dependencies.
-  - [x] In `scan.test.mjs`, reject empty/malformed/partial/error reports and verify missing surfaces or SAST qualification prevent complete-clean receipts.
-  - [x] In `scan.test.mjs`, assert identical scan flags and bounded credential-free command invocation through injected fixture runners.
-  - [x] Register the suite in the existing required `scripts/ci/publishable-ci-wiring.test.mjs` entrypoint without editing workflow filters or permissions.
-  - [x] Lot gate: scoped scan regression tests through the existing `make test-publishable-manifests SCOPE=scripts/security/daily/scan.test.mjs ENV=test-sec-s2a`, locked, followed by scoped teardown.
-- [x] **Lot 2 — Make adapter and parser compatibility**
-  - [x] Add only the thin `security-daily-scan` and `test-security-daily` targets under SECDAILY-EX1; use existing removable container tooling.
-  - [x] Keep scanner/DB/provenance qualification explicitly pending S2b and native SAST pending S2c; do not reuse Python SAST in the daily lane.
-  - [x] In `scan.test.mjs`, assert Make recipe wiring, fail-closed exit behavior and explicit coverage; do not start live scan stacks as fixture assertions.
-  - [x] Run locked `make test-security-daily ENV=test-sec-s2a` and existing `make test-security-parser ENV=test-sec-s2a`, with locked teardown after each.
-  - [x] API/UI/E2E tests: not applicable to this adapter-only change; no app service stack required.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read packet, `rules/MASTER.md`, `rules/workflow.md`, `rules/subagents.md`, `DOCKER-LOCK.md`, spec-plan r3 (L3 row l.420, §8.1).
+  - [x] Create worktree `tmp/worktrees/stt-l3` on `origin/feat/live-stt-l1c` as `feat/live-stt-l3`.
+  - [x] Confirm scope and declare `BR03-EX1` before touching `Makefile`.
+- [x] **Lot 1 — Local STT adapter**
+  - [x] `packages/live-speech/package.json` (private), `tsconfig.json`.
+  - [x] `src/node/profiles.ts`: independently pinned tiny/base profiles with origin/revision/license, per-file digests, max-utterance bound.
+  - [x] `src/node/engine-port.ts`: engine port interface (no faster-whisper import).
+  - [x] `src/node/worker-port.ts`: profile-driven `NodeWorkerClient`, engineId capture, terminate on init failure.
+  - [x] `src/node/model-pins.ts`: hash-verified profile-to-artifact binding, fail closed.
+  - [x] `src/node/engines/faster-whisper.mjs`: real engine behind the worker (lazy, injectable loader).
+  - [x] `src/node/stt-worker.mjs`: isolated worker entry (plain JS), engine path injected, no audio in logs.
+  - [x] `src/node/local-stt.ts` + `utterance-buffer.ts` + `reconciler.ts`: anchored windows, one in-flight decode, forced endpoint, one final, teardown.
+  - [x] `Makefile`: `test-live-speech` target (BR03-EX1), `bench-live-speech` target (BR04-EX1).
+  - [x] Lot gate: `make test-live-speech ENV=test-stt-l3` green (27/27 over 7 files, tsc clean).
+- [x] **Lot 2 — Tests + bench receipts**
+  - [x] `tests/local-stt.test.ts` + `profiles.test.ts` + `model-pins.test.ts`: model selection, one final, commit offsets, pin verification, teardown.
+  - [x] `tests/window-reconciliation.test.ts` + `ordering.test.ts`: anchored stitching over 2x window, endpoint priority, per-utterance finals.
+  - [x] `tests/worker-protocol.test.ts` + `backpressure.test.ts`: profile-driven load, init-failure terminate, real-thread backpressure (final < 1500 ms vs ~2000 ms uncoalesced floor).
+  - [x] `bench/run-local-bench.mjs` + `bench/profile-run.mjs` + `bench/local-stt-bench.receipt.json`: measured through worker + session on multi-window paced fixtures (tiny 5.6 s/1 partial/1 final/87 chars, base 7.6 s/2 partials/1 final/26 chars, silence 0 finals, 0 errors, 4/4 children exit clean).
+  - [x] `bench/l3-g-native.receipt.json` (§8.1 evidence: corrected integrity, pending items explicit).
+  - [x] Lot gate: `make test-live-speech ENV=test-stt-l3` green (27/27 over 7 files, tsc clean).
 - [x] **Lot N-1 — Docs consolidation**
-  - [x] Record commands, result counts, immutable head, coverage blockers and operator fixture receipt in this plan; keep the approved spec unchanged.
-  - [x] Confirm every diff hunk serves S2a and S2b/S2c/S3 work remains deferred.
+  - [x] `packages/live-speech/README.md`: layout, profiles/pins, tests and bench lanes.
+  - [x] No `spec/BRANCH_SPEC_EVOL.md` in this branch; nothing to integrate or delete.
 - [ ] **Lot N — Final validation**
-  - [x] Run S1 plus scan and required wiring suites through the existing pinned Node Make target, locked, then clean the scoped environment.
-  - [x] Verify `harness check branch`, `make scope-check ENV=test-sec-s2a`, clean diff formatting and each new commit below 150 changed lines with no AI trailer.
-  - [ ] Update the S2a PR from this plan, push the owner-authorized draft stacked on S1 #732, and verify CI on its exact head.
-  - [ ] Report head SHA, CI URL and remaining S2b/S2c blockers; keep runtime activation disabled and do not merge.
+  - [x] Typecheck (via `test-live-speech` tsc --noEmit) & Lint (n/a: no lint lane for this package)
+  - [x] Retest package: 31/31 green on head (normalized overlap, graceful worker close)
+  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`. (New private package: CI skips bump check.)
+  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
