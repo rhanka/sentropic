@@ -64,6 +64,7 @@
   - [ ] api/tests/api/auth/remote-evidence.test.ts: internal workload before body, browser/product denial, bounded strict body, no-store and sanitized failures.
   - [ ] Real session-store adapter preserves sid/version/auth_time across refresh and revalidates logout/revocation/expiry.
 - [ ] **Lot 4 — Documentation and validation**
+  - [x] authority acceptance tests authored before implementation.
   - [ ] spec/REMOTE_CONTROL_RC1.md: ports, isolation, native request vectors, trust limits and qualification boundaries.
   - [ ] Scoped API tests, retained session/auth regression suites, API typecheck/lint; no UI behavior changed.
   - [ ] Independent review findings reconciled; make scope-check before every commit.
