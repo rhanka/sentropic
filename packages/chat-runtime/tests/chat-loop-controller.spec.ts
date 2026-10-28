@@ -1871,3 +1871,143 @@ describe('chat-loop-controller: local-tool state machine (slice 1E)', () => {
     ];
 
     for (const term of forbidden) {
+      const lines = source.split('\n');
+      const codeLines = lines.filter(
+        (line) => !/^\s*(\/\/|\*)/.test(line),
+      );
+      const codeBlock = codeLines.join('\n');
+      expect(
+        codeBlock.includes(term),
+        `Domain string "${term}" found in non-comment code`,
+      ).toBe(false);
+    }
+  });
+
+  // 11r. EXTERNAL host registers a custom tool name (render_mermaid): the
+  // controller recognizes it as local via the host-injected isLocalToolName
+  // hook, fires the injected executor, and posts the result. This proves the
+  // open-registration seam drives a non-built-in tool end-to-end.
+  it('11r: controller drives an external custom tool name via injected isLocalToolName + executor', async () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = createChatLoopController<Msg>();
+      const { opts, calls } = makeFakeLocalToolMachine({
+        executeResult: { svg: '<svg/>' },
+      });
+      // Simulate the host having registered `render_mermaid`: only built-ins
+      // + the host-registered custom name are recognized as local.
+      opts.isLocalToolName = (name: string) =>
+        ['bash', 'tab_read'].includes(name) || name === 'render_mermaid';
+      ctrl.attachLocalToolMachine(opts);
+      ctrl.setMessages([
+        assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' }),
+      ]);
+
+      emitToolCallStart(
+        ctrl,
+        'stream-1',
+        'tc-mermaid',
+        'render_mermaid',
+        '{"source":"graph TD; A-->B"}',
+        1,
+      );
+      await vi.runAllTimersAsync();
+
+      // Recognized + executed via host executor.
+      expect(ctrl.getSnapshot().localToolStatesById.has('tc-mermaid')).toBe(true);
+      expect(calls.execute).toHaveLength(1);
+      expect(calls.execute[0]?.name).toBe('render_mermaid');
+      expect(calls.execute[0]?.args).toEqual({ source: 'graph TD; A-->B' });
+      // Result posted back to the stream.
+      expect(calls.poster).toHaveLength(1);
+      expect(calls.poster[0]?.toolCallId).toBe('tc-mermaid');
+      expect(calls.poster[0]?.result).toEqual({ svg: '<svg/>' });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 11s. A tool name the host did NOT register is NOT recognized as local and
+  // never reaches the executor (guards against the seam over-capturing).
+  it('11s: an unregistered custom tool name is ignored by the local-tool machine', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const { opts, calls } = makeFakeLocalToolMachine();
+    // Host registered only render_mermaid (plus built-ins); render_chart is not.
+    opts.isLocalToolName = (name: string) =>
+      ['bash', 'tab_read'].includes(name) || name === 'render_mermaid';
+    ctrl.attachLocalToolMachine(opts);
+    ctrl.setMessages([
+      assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' }),
+    ]);
+
+    emitToolCallStart(ctrl, 'stream-1', 'tc-chart', 'render_chart', '{}', 1);
+
+    expect(ctrl.getSnapshot().localToolStatesById.has('tc-chart')).toBe(false);
+    expect(calls.execute).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 12. Steer (slice 1F)
+//
+// Strategy: inject a fake transport with postSteer + assertions:
+//   12a. sendSteer: optimistic message inserted before postSteer call
+//   12b. sendSteer: ack created (composerSteerAck non-null during in-flight)
+//   12c. sendSteer: postSteer called with targetStreamId + steerText
+//   12d. sendSteer: optimistic message removed on success
+//   12e. sendSteer: error rollback — optimistic message removed + ack cleared + re-throws
+//   12f. clearOptimisticSteerMessages: resets the array
+//   12g. sendSteer throws when no transport attached
+// ---------------------------------------------------------------------------
+
+/** Minimal fake transport for steer tests (postSteer only). */
+function makeSteerTransport(opts: {
+  postSteerThrows?: Error;
+} = {}) {
+  const calls: Array<{ streamId: string; message: string }> = [];
+  return {
+    calls,
+    transport: {
+      async sendMessage() { return { sessionId: 's', userMessageId: 'u', assistantMessageId: 'a', streamId: 'st', jobId: 'j' }; },
+      async retryMessage() { return { sessionId: 's', userMessageId: 'u', assistantMessageId: 'a', streamId: 'st', jobId: 'j' }; },
+      async stopMessage() {},
+      async editMessage() {},
+      async setFeedback() {},
+      async postSteer(streamId: string, message: string) {
+        calls.push({ streamId, message });
+        if (opts.postSteerThrows) throw opts.postSteerThrows;
+      },
+    },
+  };
+}
+
+describe('chat-loop-controller: steer (slice 1F)', () => {
+  // 12a. Optimistic message inserted before postSteer resolves
+  it('12a: sendSteer inserts optimistic message before host call completes', async () => {
+    const ctrl = createChatLoopController<Msg>();
+    let snapshotDuringPost: ReturnType<typeof ctrl.getSnapshot> | null = null;
+    const { transport } = makeSteerTransport();
+    // Intercept postSteer to capture snapshot mid-call
+    const origPostSteer = transport.postSteer.bind(transport);
+    transport.postSteer = async (streamId, message) => {
+      snapshotDuringPost = ctrl.getSnapshot();
+      return origPostSteer(streamId, message);
+    };
+    ctrl.attachHost({ transport });
+
+    const promise = ctrl.sendSteer('hello', 'stream-s1', {
+      sessionId: 'sess-s1',
+      ackMessage: 'Steering...',
+    });
+
+    await promise;
+
+    // During the call, optimistic message should have been inserted
+    expect(snapshotDuringPost?.optimisticSteerMessages).toHaveLength(1);
+    const optimistic = snapshotDuringPost?.optimisticSteerMessages[0];
+    expect(optimistic?.content).toBe('hello');
+    expect(optimistic?.role).toBe('user');
+    expect(optimistic?._optimisticSteerTargetAssistantId).toBe('stream-s1');
+  });
+
+  // 12b. Ack is set during steer in-flight
