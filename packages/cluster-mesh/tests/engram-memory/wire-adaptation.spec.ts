@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { memoryJcs } from '../../src/engram-memory/codec.js';
+import { canonicalizeMemoryJcs, memoryJcs } from '../../src/engram-memory/codec.js';
 import { captureProofToKernel, captureProofToWire, createMemoryNeutralTransaction, journalBytesWithIntentHash, memoryCommitIndexKey, neutralQueryResult, neutralUnitToPg, stripJournalIntentHash, translateMemoryAggregateRead, translateMemoryUpdateWrite, withMemoryCaptureReceipt, type MemoryKernelTransactionPort } from '../../src/engram-memory/wire-adaptation.js';
 import type { NeutralAtomicUnit } from '../../src/engram-memory/neutral-contract.js';
 import { validateAdmissionTransition, validateCaptureTransition } from '../../src/engram-memory/validation.js';
@@ -147,6 +147,15 @@ describe('memory neutral transaction', () => {
     };
     return { tx, applied };
   };
+  it('should refuse binary aggregate and record bytes at the UTF-8 memory boundary', async () => {
+    const value = { format: 'base64' as const, data: 'e30=' };
+    expect(() => translateMemoryAggregateRead(captureKey, value))
+      .toThrow(expect.objectContaining({ code: 'invalid-command' }));
+    const { tx } = fakeTx();
+    tx.readRecords = async () => [{ key: 'r1', bytes: value, contentHash: 'h1' }];
+    await expect(createMemoryNeutralTransaction(tx).readRecords('record', ['r1']))
+      .rejects.toMatchObject({ code: 'invalid-command' });
+  });
   it('reads aggregates with the receipt rejoined and chains without intent hashes', async () => {
     const { tx } = fakeTx();
     const neutral = createMemoryNeutralTransaction(tx, {});
@@ -170,10 +179,17 @@ describe('memory neutral transaction', () => {
         expectation: { kind: 'absent', allocation: '0' } }],
     }));
     const written = applied[0] as { updates: { value: { data: string } }[];
-      appends: { record: { bytes: string } }[]; indexWrites: { key: string }[] };
+      appends: { record: { bytes: string } }[]; indexWrites: { key: string; digest: string; resultHash: string }[] };
     expect(JSON.parse(written.updates[0]!.value.data)).toEqual(kernelDone);
     expect(JSON.parse(written.appends[0]!.record.bytes).intent_hash).toBe('sha256:ev');
     expect(written.indexWrites.at(-1)!.key).toBe(memoryCommitIndexKey('commit-1'));
+    // Engram expectedIntentHash(unit): append ids also prefix the update keys.
+    const expectedIntentHash = canonicalizeMemoryJcs({ appends: ['e1'], updates: ['e1', captureKey] });
+    const index = written.indexWrites.at(-1)!;
+    expect(index.digest).toBe(expectedIntentHash);
+    tx.findIdempotency = async ({ key }) => key === index.key ? index : null;
+    const replay = await neutral.findIdempotency({ commitIdentity: 'commit-1' });
+    expect(replay!.intentHash).toBe(expectedIntentHash);
     expect(units).toHaveLength(1);
   });
 });
