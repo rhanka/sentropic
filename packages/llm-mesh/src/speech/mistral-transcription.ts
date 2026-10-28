@@ -591,17 +591,18 @@ export class MistralTranscriptionSession implements SpeechSession {
       || frame.format.channels !== TRANSCRIPTION_FORMAT.channels) {
       throw new MistralTranscriptionError('invalid-format', 'only pcm16-le 24kHz mono is admitted');
     }
-    // Refused audio is never metered: the utterance checks run before the
-    // reservation, and a failed stream open rolls the reservation back.
+    // Refused audio is never metered: the session bound and the utterance
+    // checks run before the reservation, and a failed stream open rolls the
+    // reservation back.
+    if (monotonicNow(this.nowMs) - this.openedAtMs >= this.effectiveMaxMs) {
+      throw new MistralTranscriptionError('ceiling', 'session duration bound reached');
+    }
     const open = this.current;
     if (open && !open.abandoned && !open.donePending && open.utteranceId !== frame.utteranceId) {
       throw new MistralTranscriptionError('invalid-format', 'new utteranceId requires a committed or cleared turn');
     }
     if (this.finalizedIds.has(frame.utteranceId)) {
       throw new MistralTranscriptionError('invalid-format', 'utteranceId already finalized');
-    }
-    if (monotonicNow(this.nowMs) - this.openedAtMs >= this.effectiveMaxMs) {
-      throw new MistralTranscriptionError('ceiling', 'session duration bound reached');
     }
     const seconds = frame.sampleCount / frame.format.sampleRateHz;
     if (!(seconds > 0) || this.audioSeconds + seconds > this.admission.ceiling.admittedAudioSeconds) {
