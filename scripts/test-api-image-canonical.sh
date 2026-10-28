@@ -392,5 +392,5 @@ case "${1:-all}" in
     version_filters_cover
     retained_exclusions
     ;;
-  *) echo "Expected resolve-reuse, resolve-absent, resolve-local, resolve-auth-error, resolve-network-error, resolve-stdout-unknown, guard-collision, tag-inputs-cover-builds, tag-inputs-exclude-global, copy-sources-hashed, no-blind-copy, trigger-coverage, retained-exclusions, hash-pipeline-sensitive, toolchain-pinned, version-filters-cover, resolve, tag-inputs, retained, or all" >&2; exit 1 ;;
+  *) echo "Expected resolve-reuse, resolve-absent, resolve-local, resolve-auth-error, resolve-network-error, resolve-stdout-unknown, guard-collision, receipt-identity, tag-inputs-cover-builds, tag-inputs-exclude-global, copy-sources-hashed, no-blind-copy, trigger-coverage, retained-exclusions, hash-pipeline-sensitive, toolchain-pinned, version-filters-cover, resolve, tag-inputs, retained, or all" >&2; exit 1 ;;
 esac
