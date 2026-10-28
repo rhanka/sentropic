@@ -20,6 +20,7 @@ const signed = (value: unknown) => ({ body: value,
   signature: { alg: 'Ed25519', value: sign(null, remoteSignedBytes(value), keys.privateKey).toString('base64url') } });
 const expected = { ...body, key: keys.publicKey, now };
 
+// R09: app-side CLI proof validation; actual-host production proof/capsule remains native-owned.
 describe('RC1 I2 CLI proof publication and use', () => {
   it('should verify an exact source-signed current native session proof', () => {
     expect(verifyRemoteCliProof(signed(body), expected).body).toEqual(body);
@@ -38,6 +39,7 @@ describe('RC1 I2 CLI proof publication and use', () => {
     ('should refuse a signed substituted %s', (field) => {
       expect(() => verifyRemoteCliProof(signed({ ...body, [field]: 'other' }), expected)).toThrow();
     });
+  // R07/R14: original proof deadline minus 5000 ms; no installed <=35 s claim witness.
   it('should refuse expiry and unsafe clock instead of extending authority', () => {
     expect(verifyRemoteCliProof(signed(body), { ...expected, now: body.expiresAt - 5001 }).body).toEqual(body);
     expect(() => verifyRemoteCliProof(signed(body), { ...expected, now: body.expiresAt - 5000 }))

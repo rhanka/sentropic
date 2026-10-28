@@ -44,6 +44,8 @@
 - [x] BRRC1-EX1 extension: issuer-private durable session authority on its own PVC prevents shared-DB row restoration from undoing logout/revocation. The product has no mount; loss or corruption refuses remote authority. No schema migration or live storage mutation; rollback disables remote issuance while preserving tombstones.
 - [x] BRRC1-EX1: isolate IdP session signing in deploy/k8s/base/35-auth-idp.yaml and bind immutable MFA/lineage in session-manager credentials. Reason: shared DB writers must not elevate issuer MFA. Impact: new IdP session-secret reference; pre-upgrade unsigned-lineage credentials cannot control remotely. Rollback: disable remote issuance and restore manifest; no data reversal or gate bypass. User's RC1 login/proof-key isolation mandate authorizes this directly blocking correction; no deployment is run.
 - [ ] Native I2 verifier/proof/capsule contribution: conductor handoff in .tmp/remote-ctl/RC1-requests-to-native.md; use test-only fake pending receipt.
+- [x] Native reply R01–R15 tracking IDs linked beside existing tests and in spec/REMOTE_CONTROL_RC1.md; no wire identifier, assertion or native acceptance changed.
+- [ ] R15 / RC1-S2-POLICY-01: frozen line 140 references absent S2 share/amend schema/vector bytes; exact normative change request in .tmp/remote-ctl/RC1-share-amend-proof.md; no policy-proof implementation or fixture invented.
 - [ ] Real enrolled-2FA/installed native acceptance remains separately witnessed; local fake results cannot close RC-SESSION.
 
 ## AI Flaky tests

@@ -33,12 +33,14 @@ function setup() {
 }
 
 describe('RC1 D2 session evidence', () => {
+  // R01-R08/R12-R14 are native reply tracking IDs; these remain app-side witnesses or explicit fakes.
   it('should distinguish unsupported versions from invalid kinds', async () => {
     await expect(setup().issue({ ...request, version: 'remote-action-v2' }))
       .rejects.toMatchObject({ code: 'unsupported_version' });
     await expect(setup().issue({ ...request, kind: 'other' }))
       .rejects.toMatchObject({ code: 'invalid_request' });
   });
+  // R01: the real enrolled-2FA/installed-native receipt remains pending.
   it('should preserve login lineage for repeated actions and machine switches without MFA', async () => {
     const { issue, state } = setup();
     const first = decodeJwt(await issue(request));
@@ -55,6 +57,7 @@ describe('RC1 D2 session evidence', () => {
     expect(second.exp! - second.iat!).toBeLessThanOrEqual(60);
   });
 
+  // R13: current issuer denial; observed native denial remains a separate contribution.
   it.each(['logout', 'revoke', 'expiry'])('should refuse %s before signing', async (reason) => {
     const { issue, state } = setup();
     if (reason === 'expiry') state.login!.expiresAt = now;
@@ -84,6 +87,7 @@ describe('RC1 D2 session evidence', () => {
     await expect(issue(request)).rejects.toMatchObject({ code: 'replay_refused' });
   });
 
+  // R14: issuer clock refusal, without claiming the installed native offline bound.
   it('should refuse unknown or regressing issuer clocks', async () => {
     const { issue, state } = setup();
     await issue(request);
@@ -95,6 +99,7 @@ describe('RC1 D2 session evidence', () => {
       .rejects.toMatchObject({ code: 'authority_unavailable' });
   });
 
+  // R04/R06: action bindings and EdDSA producer check; native algorithm-substitution vectors remain pending.
   it('should sign EdDSA with the pinned IdP key and exact action binding', async () => {
     const evidence = await setup().issue(request);
     const { payload, protectedHeader } = await jwtVerify(evidence, keys.publicKey, {
@@ -112,6 +117,7 @@ describe('RC1 D2 session evidence', () => {
       .rejects.toMatchObject({ code: 'authority_refused' });
   });
 
+  // R05: pinned IdP key rejection, including message-selected trust roots.
   it('should refuse revoked and unknown IdP keys and message-selected trust roots', async () => {
     const evidence = await setup().issue(request);
     const trust = { key: keys.publicKey, issuer: 'idp', kid: 'idp-1', audience: 'native-b',
@@ -125,6 +131,7 @@ describe('RC1 D2 session evidence', () => {
     }
   });
 
+  // R12: acknowledged rotation and purpose-ring isolation at the app verifier.
   it('should accept an acknowledged rotated key and refuse the old purpose ring', async () => {
     const pair = generateKeyPairSync('ed25519');
     const payload = decodeJwt(await setup().issue(request));
@@ -136,6 +143,7 @@ describe('RC1 D2 session evidence', () => {
       .rejects.toMatchObject({ code: 'authority_refused' });
   });
 
+  // R08: explicit fake; its retained Set is not a durable native consumption receipt.
   it('should refuse captured jti replay through the injected native verifier fake after restart', async () => {
     const evidence = await setup().issue(request);
     const consumed = new Set<string>();
@@ -155,6 +163,7 @@ describe('RC1 D2 session evidence', () => {
     expect(consumed.size).toBe(1);
   });
 
+  // R02: identity/lineage; R03: audience/MFA; R04: exact bindings; R07: signed time/expiry.
   it.each([
     { iss: 'other-idp' }, { sub: 'other-owner' }, { sid: 'other-login' }, { sessionVersion: 2 },
     { aud: 'other-native' }, { amr: ['pwd'] }, { auth_time: now / 1000 }, { jti: '' },

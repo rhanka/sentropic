@@ -20,6 +20,7 @@ const authority = {
   controlPolicyRevision: 1, operation: 'input', permissionMode: 'interactive', autoApprovePolicyDigest: null,
 };
 
+// R10: owner/membership/role; R11: consent/scope/revision/epoch. These are A-side checks.
 describe('RC1 owner and consent predicate', () => {
   it.each(['input', 'permission-response'])('should authorize the owner for %s under current consent', (operation) => {
     expect(() => authorizeRemoteAction({ ...authority, operation })).not.toThrow();
@@ -68,6 +69,7 @@ describe('RC1 owner and consent predicate', () => {
     expect(() => authorizeRemoteAction({ ...authority, actor: { ...actor, issuer: 'source' } }))
       .toThrowError(expect.objectContaining({ code: 'authority_refused' }));
   });
+  // R04: app attestation bindings; matching native equality/refusal vectors remain pending.
   it('should sign the frozen attestation with a distinct app key and no cyclic fields', () => {
     const key = generateKeyPairSync('ed25519');
     const result = signRemoteAttestation({ authority, issuer: 'app', kid: 'app-1', key: key.privateKey,

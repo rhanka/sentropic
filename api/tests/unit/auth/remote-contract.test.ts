@@ -16,6 +16,8 @@ function trust() {
     secretRef: string; publicKeyPem: string }>;
 }
 
+// R04/R12: app wire/domain and signing-role isolation witnesses.
+// R15 has no policy-proof test/vector: RC1-S2-POLICY-01 requires a normative S2 supplement.
 describe('RC1 strict wire and key separation', () => {
   it('should use JCS without Unicode or newline normalization', () => {
     expect(remoteSignedBytes({ kind: 'target', z: 'e\u0301\r\n', a: 1 }).toString())
