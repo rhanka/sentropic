@@ -21,135 +21,27 @@
   export let labels: ChatUiLabelResolver = (key) => key;
   export let layout: 'inline' | 'docked' | 'floating' = 'inline';
   export let features: ChatConversationFeatures = {};
-      postLocalToolResult: async (_streamId, _toolCallId, _result) => {
-        // Result posting not wired in turnkey (deferred)
-      },
-    });
-  }
-
-  // Tear down controller on component destroy
-  onDestroy(() => {
-    if (localToolHubKey && host?.streamClient) {
-      host.streamClient.delete(localToolHubKey);
-    }
-    ctrl.detachStream();
-    ctrl.detachLocalToolMachine();
-    ctrl.detachHost();
-  });
-
-  // ---------------------------------------------------------------------------
-  // Composer state
-  // ---------------------------------------------------------------------------
-
-  let composerInput = '';
-  let isSending = false;
-
-  // ---------------------------------------------------------------------------
-  // Copy-flash state (per message key)
-  // ---------------------------------------------------------------------------
-
+  export let renderComments: Snippet | undefined = undefined;
+  export let renderDocuments: Snippet | undefined = undefined;
+  export let renderJobs: Snippet | undefined = undefined;
+  export let renderWorkspaceScope: Snippet | undefined = undefined;
+  let editingId: string | null = null;
+  let editingContent = '';
   let copiedKey: string | null = null;
-
-  const handleCopy = (content: string | null | undefined, key: string): void => {
-    if (!content) return;
-    void navigator.clipboard?.writeText(content).then(() => {
-      copiedKey = key;
-      setTimeout(() => { copiedKey = null; }, 1500);
-    });
+  $: state = $snapshots;
+  $: flags = { attachments: false, comments: false, documents: false, jobs: false,
+    workspaceScope: false, steer: true, retry: true, stop: true, ...features };
+  const copy = async (content: string, key: string) => {
+    await navigator.clipboard?.writeText(content);
+    copiedKey = key;
+    setTimeout(() => { copiedKey = null; }, 1500);
   };
-
-  // ---------------------------------------------------------------------------
-  // Send handler — delegates entirely to the controller (R5: no 3rd loop)
-  //
-  // The controller's send():
-  //   1. Calls controllerTransport.sendMessage → wraps host.transport.postMessage
-  //   2. Builds optimistic user + assistant messages
-  //   3. Starts job-poll fallback (disabled via pollInitialDelayMs)
-  //
-  // ChatConversation only manages composerInput / isSending (UI state).
-  // All timeline mutations happen inside the controller.
-  // ---------------------------------------------------------------------------
-
-  const handleSend = async (): Promise<void> => {
-    const text = composerInput.trim();
-    if (!text || !sessionId || isSending) return;
-
-    isSending = true;
-    composerInput = '';
-
-    try {
-      await ctrl.send(
-        { content: text, sessionId },
-        {
-          buildUserMessage: (_handle) => ({
-            id: `local_${Date.now()}`,
-            role: 'user',
-            content: text,
-            _localStatus: 'completed',
-            sessionId,
-            createdAt: new Date().toISOString(),
-          }),
-          buildAssistantMessage: (base) => ({
-            ...base,
-            sessionId: base.sessionId,
-          }),
-        },
-      );
-    } catch {
-      // Silent: user message stays in optimistic state; deeper error handling is app-owned
-    } finally {
-      isSending = false;
-    }
+  const send = () => flags.steer && state.activeStreamId ? commands.steer() : commands.send();
+  const keydown = (event: KeyboardEvent) => {
+    if (event.key === 'Enter' && !event.shiftKey) { event.preventDefault(); void send(); }
   };
-
-  // ---------------------------------------------------------------------------
-  // Keyboard handler for composer
-  // ---------------------------------------------------------------------------
-
-  const handleComposerKeyDown = (event: KeyboardEvent): void => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault();
-      void handleSend();
-    }
-  };
-
-  // ---------------------------------------------------------------------------
-  // Layout CSS class
-  // ---------------------------------------------------------------------------
-
-  $: layoutClass = {
-    inline: 'chat-conversation-inline',
-    docked: 'chat-conversation-docked',
-    floating: 'chat-conversation-floating',
-  }[layout];
 </script>
 
-<!--
-  ChatConversation — turnkey wrapper (controller-backed, R5).
-
-  Structure:
-    .chat-conversation-{layout}
-      ChatPanel (shell boundary)
-        [header] ChatContextPicker (if contextProvider) + ModelSelector (if models)
-        [timeline] ChatTimeline -> per-item: StreamMessage + MessageActions
-        [composer] ChatComposer
--->
-<div
-  class="chat-conversation {layoutClass} flex h-full min-h-0 flex-col"
-  data-session-id={sessionId ?? ''}
-  data-layout={layout}
-  data-feature-steer={resolvedFeatures.steer}
-  data-feature-retry={resolvedFeatures.retry}
-  data-feature-stop={resolvedFeatures.stop}
-  role="region"
-  aria-label={resolveLabel('chat.panel.label')}
->
-  <ChatPanel
-    {host}
-    labels={effectiveLabels}
-    featureFlags={{
-      comments: resolvedFeatures.comments,
-      documents: resolvedFeatures.documents,
       jobs: resolvedFeatures.jobs,
       workspaceScope: resolvedFeatures.workspaceScope,
     }}
