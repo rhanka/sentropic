@@ -192,4 +192,33 @@ describe('memory neutral transaction', () => {
     expect(replay!.intentHash).toBe(expectedIntentHash);
     expect(units).toHaveLength(1);
   });
+  it('should stop paging as soon as the requested records past the allocation are collected', async () => {
+    const { tx } = fakeTx();
+    let calls = 0;
+    tx.readChain = async ({ cursor, limit }) => {
+      calls++;
+      expect(limit).toBe(1);
+      const allocation = cursor === undefined ? '1' : '2';
+      return { records: [{ id: `e${allocation}`, hash: 'h',
+        bytes: JSON.stringify({ cursor: allocation, intent_hash: 'stored-only' }) }], nextCursor: allocation };
+    };
+    const page = await createMemoryNeutralTransaction(tx).readChain({ chain: 'memory-journal', afterAllocation: '1', limit: 1 });
+    expect(page.records.map((row) => row.id)).toEqual(['e2']);
+    expect(page.records[0]!.value.data).not.toContain('intent_hash');
+    expect(calls).toBe(2);
+  });
+  it.each(['not-numeric', '01', '-1', '18446744073709551616', null])(
+    'should refuse malformed stored chain cursor %j', async (cursor) => {
+      const { tx } = fakeTx();
+      tx.readChain = async () => ({ records: [{ id: 'e1', hash: 'h1', bytes: JSON.stringify({ cursor }) }] });
+      await expect(createMemoryNeutralTransaction(tx).readChain({ chain: 'memory-journal', afterAllocation: '7', limit: 1 }))
+        .rejects.toMatchObject({ code: 'invalid-command' });
+    });
+  it.each([{ afterAllocation: 'bad', limit: 1 }, { limit: 0 }, { limit: -1 }, { limit: 2001 }, { limit: 1.5 }])(
+    'should refuse an invalid chain read bound %j before kernel reads', async (bounds) => {
+      const { tx } = fakeTx();
+      tx.readChain = async () => { throw new Error('kernel must not be read'); };
+      await expect(createMemoryNeutralTransaction(tx).readChain({ chain: 'memory-journal', ...bounds }))
+        .rejects.toMatchObject({ code: 'invalid-command' });
+    });
 });

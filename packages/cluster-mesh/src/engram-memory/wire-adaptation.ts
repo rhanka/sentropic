@@ -4,7 +4,7 @@
 // helpers translate both ways at the neutral-handle boundary; validation,
 // allocation, durability and authority remain in the real kernel.
 
-import { MemoryCanonicalJsonError, memoryJcs, type MemoryEncodedValue } from './codec.js';
+import { isCanonicalU64, MemoryCanonicalJsonError, memoryJcs, type MemoryEncodedValue } from './codec.js';
 import { isMemoryAdmissionOutcome, isMemoryCaptureProof } from './validation.js';
 import { StorageInvalidCommandError } from '../storage/errors.js';
 import type { AtomicUnit } from '../storage/atomic.js';
@@ -68,11 +68,11 @@ const requireKernel = (entry: Record<string, unknown>, capture: boolean): void =
 export const captureProofToKernel = (entry: Record<string, unknown>): Record<string, unknown> => {
   requireSnake(entry, true);
   return {
-  candidateId: entry['candidate_id'],
-  revision: entry['record_digest'] ? 2 : 1,
-  recordDigest: entry['record_digest'] ?? null,
-  createdCursor: entry['cursor'],
-  proof: { candidate_id: entry['candidate_id'], content: entry['content'], cursor: entry['cursor'] },
+    candidateId: entry['candidate_id'],
+    revision: entry['record_digest'] ? 2 : 1,
+    recordDigest: entry['record_digest'] ?? null,
+    createdCursor: entry['cursor'],
+    proof: { candidate_id: entry['candidate_id'], content: entry['content'], cursor: entry['cursor'] },
   };
 };
 
@@ -204,25 +204,30 @@ export const createMemoryNeutralTransaction = (
   readRecords: async (kind, keys) => (await tx.readRecords(keys, { maxRecords: 2000, maxEncodedBytes: 1048576 }))
     .map((row) => ({ kind, key: row.key, value: requireMemoryUtf8(row.bytes), contentHash: row.contentHash })),
   readChain: async ({ chain, afterAllocation = '0', limit }) => {
-    const all: { readonly id: string; readonly hash: string; readonly bytes: string }[] = [];
+    if (!isCanonicalU64(afterAllocation) || !Number.isSafeInteger(limit) || limit <= 0 || limit > 2000) {
+      throw new StorageInvalidCommandError('memory chain requires a canonical allocation and limit from 1 to 2000');
+    }
+    const after = BigInt(afterAllocation);
+    const records: { id: string; hash: string; value: MemoryEncodedValue }[] = [];
     let cursor: unknown;
     for (;;) {
-      const page = await tx.readChain({ chainId: chain, limit: 500, cursor, maxEncodedBytes: 1048576 });
-      all.push(...page.records);
+      const page = await tx.readChain({ chainId: chain, limit: Math.min(500, limit - records.length),
+        cursor, maxEncodedBytes: 1048576 });
+      for (const row of page.records) {
+        const data = stripJournalIntentHash(row.bytes);
+        const allocation = parseStored(data)['cursor'];
+        if (!isCanonicalU64(allocation)) {
+          throw new StorageInvalidCommandError('memory chain record requires a canonical cursor');
+        }
+        if (BigInt(allocation) > after) {
+          records.push({ id: row.id, hash: row.hash, value: { format: 'utf8', data } });
+          if (records.length === limit) return { chain, records };
+        }
+      }
       if (!page.nextCursor || page.records.length === 0) break;
       cursor = page.nextCursor;
     }
-    const after = BigInt(afterAllocation);
-    const records = all
-      .map((row) => ({ id: row.id, hash: row.hash,
-        value: { format: 'utf8' as const, data: stripJournalIntentHash(row.bytes) } }))
-      .filter((row) => {
-        try {
-          const value = (JSON.parse(row.value.data) as { cursor?: unknown }).cursor;
-          return value === undefined || BigInt(String(value)) > after;
-        } catch { return true; }
-      });
-    return { chain, records: records.slice(0, limit) };
+    return { chain, records };
   },
   findIdempotency: async ({ commitIdentity }) => {
     const row = await tx.findIdempotency({ key: memoryCommitIndexKey(commitIdentity) });
