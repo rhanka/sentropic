@@ -85,6 +85,7 @@
   - [x] Extend the existing ledger operation CHECK to decision; real-PG regression reproduced the prior constraint refusal.
   - [x] Add all-bucket cap, pending-liability and durable overrun-disable regression controls; bind dispatch to the held evaluator.
   - [x] Readiness checks credentials, the tenant's strategy/bucket and each evaluator's durable disable state.
+  - [x] Reaper reconciliation restores Decision attribution and corrects conservative spend once without provider replay.
 - [ ] **Docs consolidation**
   - [x] Document route, profiles, readiness limits, tariff sources and provisioned environment names in spec/decision/api-host.md.
 - [ ] **Final validation**
