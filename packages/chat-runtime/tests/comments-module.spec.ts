@@ -1,4 +1,4 @@
-import { getCommentAuthorLabel, getMentionLabel, getInitials, isSameDay } from '@sentropic/chat-ui/comments';
+import { getCommentAuthorLabel, getMentionLabel } from '@sentropic/chat-ui/comments';
 const presentation = { getCommentAuthorLabel, getMentionLabel };
 /**
  * comments-module.spec.ts
@@ -39,7 +39,7 @@ describe('comments module — module loading', () => {
     expect(typeof mod.createCommentState).toBe('function');
     expect(typeof mod.buildCommentThreads).toBe('function');
     expect(typeof mod.getMentionCandidate).toBe('function');
-    expect(typeof mod.getInitials).toBe('function');
+    expect(mod.getInitials).toBeUndefined();
   });
 
   it('should load comments/host without error', async () => {
@@ -52,9 +52,9 @@ describe('comments module — module loading', () => {
     expect(typeof mod.buildCommentThreads).toBe('function');
     expect(typeof mod.getMentionCandidate).toBe('function');
     expect(typeof mod.getMentionMatches).toBe('function');
-    expect(typeof mod.getInitials).toBe('function');
-    expect(typeof mod.formatCommentTimestamp).toBe('function');
-    expect(typeof mod.isSameDay).toBe('function');
+    expect(mod.getInitials).toBeUndefined();
+    expect(mod.formatCommentTimestamp).toBeUndefined();
+    expect(mod.isSameDay).toBeUndefined();
   });
 });
 
@@ -275,20 +275,6 @@ import {
 } from '../src/comments/utils.js';
 
 describe('comments module — utility functions', () => {
-  describe('getInitials', () => {
-    it('should extract initials from a full name', () => {
-      expect(getInitials('John Doe')).toBe('JD');
-    });
-
-    it('should return first letter for single name', () => {
-      expect(getInitials('Alice')).toBe('A');
-    });
-
-    it('should return ? for empty string', () => {
-      expect(getInitials('')).toBe('?');
-    });
-  });
-
   describe('getMentionCandidate', () => {
     it('should detect @mention at end of input', () => {
       const result = getMentionCandidate('Hello @jo');
@@ -343,20 +329,6 @@ describe('comments module — utility functions', () => {
       const { threads, map } = buildCommentThreads([], presentation);
       expect(threads).toHaveLength(0);
       expect(map.size).toBe(0);
-    });
-  });
-
-  describe('isSameDay', () => {
-    it('should return true for same day Date objects', () => {
-      const d1 = new Date('2026-06-05T10:00:00Z');
-      const d2 = new Date('2026-06-05T22:00:00Z');
-      expect(isSameDay(d1, d2)).toBe(true);
-    });
-
-    it('should return false for different days', () => {
-      const d1 = new Date('2026-06-05T10:00:00Z');
-      const d2 = new Date('2026-06-06T10:00:00Z');
-      expect(isSameDay(d1, d2)).toBe(false);
     });
   });
 

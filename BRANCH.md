@@ -134,6 +134,7 @@
   - [x] Conversation view source slice 16 committed within the atomic limit.
   - [x] Conversation view source slice 17 committed within the atomic limit.
 - [ ] **Lot 3 — Parity and packed boundary qualification**
+  - [x] Move initials/day-format tests to the visual suite and assert those functions are absent from runtime barrels; full runtime run exposed only the stale visual export assertions (450 other tests passed).
   - [x] Migrate comment state/mention/thread tests to the same explicitly injected visual presentation helpers used by app composition.
   - [x] Resolve duplicate textbox roles found by layout tests; the editable input owns textbox semantics and the composer wrapper is a group.
   - [x] Migrate layout, accessibility, feature defaults, optional slots and label assertions to a host-created real runtime fixture.
