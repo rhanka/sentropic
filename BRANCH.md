@@ -81,6 +81,7 @@
   - [ ] Migrate inventoried web/Chrome/VSCode/cowork imports and active tooling links.
   - [ ] Split neutral contracts and optional module state from views; runtime never imports a view implementation.
   - [x] Relocate context selection, comment retrieval/state and document assembly with their existing behavioral tests.
+  - [x] Split comment formatting into the visual package; remove comment runtime forwarding exports.
   - [ ] Qualify breaking chat-ui version and initial runtime version against registry; update lockfiles.
 - [ ] **Lot 2 — Injected conversation and complete command binding**
   - [ ] Replace component runtime creation/disposal with normalized snapshot and command props/declarations.
