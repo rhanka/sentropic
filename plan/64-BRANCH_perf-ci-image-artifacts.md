@@ -40,6 +40,7 @@
 - [x] Head 13712a5d2 receipts: normal/cache-population run 40640414275 attempt 1 has API/tools/UI/E2E 230/258/398/248s; forced no-import/no-export cold run 40640411046 has 234/200/380/149s. Timing acceptance stays open; full warm and API-case UI are to measure. Study section 11 records job IDs, source/workflow identities, sizes and exact producer/restore digests.
 - [x] Producer/consumer correctness at 13712a5d2: runtime/tool interfaces, UI builds/tests, restore 122659204773 (158s) and scans 122660115540 (134s) pass; IdP screen smoke 122660292811 fails HTTPS-upgraded assets and blocks ci-gate. Requalify the browser/origin correction before any acceptance.
 - [x] Native-store experiment at 43ce8700d rejected/rolled back after exact-digest consumers fail; guards unchanged. Source now pins the actual API/E2E Node base digests and retains every failed/cancelled attempt; no budget is ticked complete.
+- [x] Full PR qualification at 9d7c58cab: run 40643738039 attempt 1 succeeds in 1313s including ci-gate 122674614619. IdP 122671543007 validates all original screen/token assertions in 220s on the qualified browser at the SUT loopback origin; full UI 400s, API 287s, tools 209s, E2E 109s. This does not close timing acceptance. Later E2E scan addition preserves browser coverage and requires a fresh head qualification.
 
 ## AI Flaky tests
 - [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
