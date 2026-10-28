@@ -25,6 +25,7 @@ it.each([false, true])('should preserve the complete send payload and markdown s
   await type(view.container, 'Complete payload');
   await fireEvent.click(view.getByRole('button', { name: 'chat.composer.send', exact: true }));
   await waitFor(() => expect(view.getByText('Complete payload')).toBeTruthy());
+  await waitFor(() => expect(host.runtime.snapshot().sending).toBe(false));
   const send = host.requests.find((entry) => entry.path === '/chat/messages' && entry.method === 'POST');
   expect(send?.body).toMatchObject({
     content: 'Complete payload', providerId: 'openai', model: 'model-b', sessionId: host.sessionId,
