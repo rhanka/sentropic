@@ -1,81 +1,80 @@
-# Feature: W3.c canonical artifact content image
+# Feature: W3.d default-closed artifact content infrastructure
 
 ## Objective
-- [x] Ship the W3.b content entrypoint in the canonical API/IdP image with content hash, runtime and identity evidence.
+- [ ] Deliver the content Kubernetes workload and isolated TLS routes without activating artifacts or accessing any cluster.
 
 ## Scope / Guardrails
-- [x] Implement `.tmp/app-switch-week/plan-v2.md` W3.c, sections 1–5; inherit W3.b (#810) from base `d4625d764`.
-- [x] Work only in `tmp/worktrees/app-w3c`, branch `feat/app-cm-w3c`, base `origin/feat/app-cm-integration`.
-- [x] Sole W3.c build writer; merge only, never rebase or force-push; no package/lock/schema changes.
-- [x] Use Make targets, ENV last, shared `/home/antoinefa/.cache-tmp/sentropic-docker.lock` for every Docker/test step.
-- [x] Use `API_PORT=8805 UI_PORT=5191 MAILDEV_UI_PORT=1098 ENV=test-app-w3c`; ports checked free before startup.
-- [x] No production activation, publication or deployment; no Python, AI trailers, broad staging or destructive cleanup.
-- [x] Keep selective commits below 150 changed lines and stop the isolated stack after each Docker step.
+- [x] Source: `.tmp/app-switch-week/plan-v2.md` W3.d and sections 3, 4, 5; W0 host-fit/reservations and W3.c inherited.
+- [x] Base `origin/feat/app-cm-integration` at `763bb9d7e`; branch `feat/app-cm-w3d`; worktree `tmp/worktrees/app-w3d`.
+- [x] Make-only; shared Docker flock `/home/antoinefa/.cache-tmp/sentropic-docker.lock`; no parallel builds.
+- [x] Every make command ends with `ENV=test-app-w3d`; ports API=8806, UI=5192, Maildev=1099.
+- [x] No cluster operations, production activation, Python, rebase, force-push, AI trailers or destructive cleanup.
+- [x] Serving, reader activation and host publication remain explicitly disabled before FIRST-IMMO, including main auto-deploys.
+- [x] API remains the sole migration executor; content starts only the compiled content entrypoint.
+- [x] Atomic commits under 150 changed lines; selective staging; `make commit` only.
+- [x] External DNS/TLS/IAM/storage provisioning and positive live activation belong to tenant/W3.e/W5 lanes.
 
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `api/Dockerfile`
-  - `scripts/test-artifact-content-image.sh`
-  - `scripts/test-api-image-canonical.sh`
+  - `deploy/k8s/base/artifact-content-*.yaml`
+  - `deploy/k8s/base/kustomization.yaml`
+  - `deploy/k8s/base/30-api.yaml`
+  - `deploy/k8s/overlays/{preprod,prod}/kustomization.yaml`
+  - `deploy/k8s/overlays/{preprod,prod}/artifact-content-*.yaml`
+  - `deploy/k8s/overlays/{preprod,prod}/patch-artifact-content-config.yaml`
+  - `deploy/ci/artifact-content/**`
+  - `docs/runbooks/app-artifact-content-infrastructure.md`
 - [x] **Forbidden Paths (must not change in this branch)**:
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
   - `packages/**`
   - `api/src/**`
-  - `apps/artifact-content/**`
-  - `deploy/**`
-  - `docker-compose*.yml`
+  - `api/drizzle/**`
   - `.track/**`
-  - `.cursor/rules/**`
+  - `plan/**`
 - [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `Makefile`
   - `.github/workflows/ci.yml`
-  - `.github/workflows/app-cm-w3c.yml`
-  - `.dockerignore`
-- [x] **Exception process**: BR03c-EX1 below records the plan-authorized build/CI extension before edits.
+- [x] **Exception process**: BR-CM-W3-EX1 below is the bounded inherited T3 build/deploy exception.
 
 ## Feedback Loop
-- [x] BR03c-EX1 — acknowledged: W3.c authorizes `Makefile`, `.github/workflows/{ci,app-cm-w3c}.yml` and `.dockerignore` for hash/filters, runtime gates and generated bundle exclusion. The topic workflow follows W3.b because shared CI excludes this integration base. Impact: canonical API image and validation only. Rollback: revert W3.c commits; retain W3.b source and prior qualified image. No deployment edits.
-- [x] Track remains single-writer: update this mergeable plan; conductor owns import and independent final acceptance.
-- [x] Review P2-2 — integration close-out owner: conductor. Remove `.github/workflows/app-cm-w3*.yml` before `feat/app-cm-integration` merges into `main`. That integration PR is the first real execution of the `ci.yml` content gate through `make build-api` (canonical resolver reuse path, real registry); shared CI must pass on its exact head.
-- [x] Merge #813 from `origin/feat/app-cm-integration` at `b0e60eb34`, retaining this W3.c plan for the BRANCH.md conflict; no rebase or force-push.
-- [x] Review P2-1 — replaced symlinked hash inputs with hard links; equality with canonical API_VERSION (`eeb755`) and invalidation/restoration for both content-only and API-only edits pass. Old probe failed the new equality assertion; `CONTENT_IMAGE_CASE=static`, `check-ci-version-filters` and scope checks pass, worktree sources unchanged. Scoped `make down` and empty `make ps` verified.
+- [x] BR-CM-W3-EX1 / acknowledged by owner W3.d packet and W0 reservations: add a render-only Make target/include and CI invocation. Impact: offline qualification only; rollback: remove include/step and content resources, retain closed flags. No deploy target execution or general CI refactor.
+- [x] Tenant handoff: DNS/TLS provisioning, dedicated namespace-local credentials, private bucket checkpoint/restore and actual accepted image digest remain external receipts; document exact gates without asserting live readiness.
 
 ## AI Flaky tests
-- [x] No AI/provider behavior changes or accepted flaky tests; all selected checks must pass.
+- [x] No AI tests or flaky exception selected; deterministic manifest and denial checks only.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch, one code author; merge-only integration, draft PR against `feat/app-cm-integration`.
+- [x] Mono-branch; merge integration updates only; no cherry-picks or rebase.
 
 ## UAT Management (in orchestration context)
-- [x] No UI change; isolated image health/denial qualification only. W3.d/e own deployment and HTTPS browser acceptance.
-- [x] No live activation; FIRST-IMMO and production owner gates remain downstream.
+- [x] Offline manifest inspection and local denial checks only; no root dev services or live browser activation.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read MASTER/workflow/testing/subagents, README/TODO/PLAN, branch template, W3.c row and cited policy/dependency sections.
-  - [x] Read W3.b entrypoint/runtime and #712 Dockerfile, resolver, publisher, canonical tests, hash inputs and CI filters.
-  - [x] Create isolated worktree and pass `harness check branch` before work.
-- [x] **Lot 1 — Content hash and build inputs**
-  - [x] Add failing content-only invalidation and CI-filter tests in `scripts/test-artifact-content-image.sh`: both fail on the missing content input/filter.
-  - [x] Extend canonical required-input inventory in `scripts/test-api-image-canonical.sh`.
-  - [x] Hash/copy content sources, exclude generated bundles and align `.github/workflows/ci.yml` filters.
-  - [x] Gate: scoped static image/hash/filter tests turned red then green; CI filter guard passes.
-- [x] **Lot 2 — Production entrypoint**
-  - [x] Add real-image test for pruned dependencies, Node startup, health, denial and shutdown; assembly test fails because content sources are not copied.
-  - [x] Compile/copy content bundle in `api/Dockerfile`, retaining existing API/IdP commands and single image resolver.
-  - [x] Gate: build canonical image once, run content process with no activation/DB/storage credentials, verify health, denial, shutdown and incomplete-activation refusal (CI 40636597780).
-- [x] **Lot 3 — Artifact identity and CI**
-  - [x] Test image receipt equality/substitution refusal using #712 canonical resolver/publisher; dry-run asserts canonical promotion pins without deployment.
-  - [x] Wire real content-image verification before image save/upload in `.github/workflows/ci.yml`; ordering test turned red then green.
-  - [x] Gate: `test-ci-api-image-canonical`, `test-ci-api-tag-guard`, `test-ci-api-runtime`, `test-artifact-content-image`, `check-ci-version-filters` passed in CI 40636597780 on `275f0a0a0871417b4cb66b3ebcd0a5f40b255f8f`.
-  - [x] CI-tested image receipt: `sha256:7c0bbee42561078fad5c782d1e8fe0600bb732c7b79c6f3eaaae8a0b67acfd3f`; source tag `853d98`. Publication guards use mocks; promotion is dry-run only, never a production receipt.
-- [x] **Lot 4 — Docs consolidation and final validation**
-  - [x] Local canonical build and the same five Make validation targets passed with all assigned ports and `ENV=test-app-w3c`; receipt `sha256:32718eeb1f4425bd6ed61674aa156671b368a2f0270ca1b8e87cc45e22deee29`.
-  - [x] Keep acceptance evidence in this plan; no unrelated spec edits or package bumps. Independent acceptance remains with the conductor; this is an author draft.
-  - [x] Review every changed hunk; branch/scope and shell syntax checks pass. Scope exception uses the mechanical `BR03c-EX1` grammar.
-  - [x] Create draft PR #812 with this file as body and a five-step plan comment; push without force.
-  - [x] Exact-head CI verifies checkout identity; retain final head/run/result in the PR validation comment after the evidence commit.
-  - [x] Run scoped `make down`, remove the disposable test volume with scoped `make clean`, repeat `make down` and verify `make ps` has no project services; all under the shared lock with `ENV=test-app-w3c`.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read MASTER/workflow/testing, template, plan W3.d/dependencies/ownership, W0 reservations, W3.c entrypoint and image tests.
+  - [x] Create isolated worktree and pass mechanical `harness check branch` before work.
+  - [x] Freeze scope, exception, environment and ports; leave other lanes untouched.
+- [ ] **Lot 1 — Tests first**
+  - [ ] Add `deploy/ci/artifact-content/{tests.mk,bundle-checks.mjs,bundle.selftest.mjs}`.
+  - [ ] Prove red: missing content resources; then render both full overlays without kubeconfig/network access.
+  - [ ] Test closed gates despite enabled secret values, least privilege, network peer namespace isolation, both TLS wildcard depths and exact app route precedence.
+  - [ ] Test synthetic digest replacement across API/IdP/content, unchanged backup/restore access and mutation denials.
+- [ ] **Lot 2 — Workload and default closure**
+  - [ ] Add content Deployment/Service/ConfigMap/NetworkPolicies and base registration; pin API gate env values explicitly.
+  - [ ] Dedicated unprivileged ServiceAccount, read-only root, bounded resources/probes, no migration command or broad app secret.
+  - [ ] Keep storage egress closed pending tenant-specific network/IAM receipts; health can run without secrets.
+- [ ] **Lot 3 — Environment routes and certificates**
+  - [ ] Add prod/preprod content ingress, explicit Certificate and domain patches/registrations.
+  - [ ] Both stable and pinned wildcard SANs, dedicated TLS secret, HTTPS-only route; no catch-all/identity headers.
+- [ ] **Lot 4 — Handoff and final validation**
+  - [ ] Document tenant DNS/TLS/storage/restore/digest evidence and FIRST-IMMO activation gate in runbook.
+  - [ ] Pass `make test-artifact-content-manifests API_PORT=8806 UI_PORT=5192 MAILDEV_UI_PORT=1099 ENV=test-app-w3d`.
+  - [ ] Pass inherited IdP parent-overlay regression and W3.c static image checks as applicable.
+  - [ ] Complete independent review, scope check and diff inspection; address blocking findings.
+  - [ ] Create draft PR against `feat/app-cm-integration` using this file; push and verify CI on exact final head.
+  - [ ] Run locked `make down ENV=test-app-w3d` and confirm no services remain.
 
 ## Inherited main qualification record
 
