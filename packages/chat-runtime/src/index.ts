@@ -29,3 +29,5 @@ export * from './context/module.js';
 export * from './documents/attachmentState.js';
 export * from './documents/generatedFileCards.js';
 export * from './state/chat-context.js';
+export * from './hosts/createWebHost.js';
+export * from './state/sessionList.js';
