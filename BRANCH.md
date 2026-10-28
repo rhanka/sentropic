@@ -57,6 +57,7 @@
 - [x] BR78-EX2 authorized by owner packet: Make image cache/build/save/load recipes, API_TOOL_VERSION and receipt tests. Lightweight Node receipt CLI in CI avoids downloading a compiler/browser image just to hash bytes. Impact: named image entry points only. Rollback: revert recipes and requalify previous artifacts; never bypass identity or runtime checks.
 - [x] BR77 timing remains open: capacity.md requires first actual-main attempt and strict PR/main ≤2288s proof; green correctness alone does not qualify timing. BR78 does not close BR77 acceptance.
 - [ ] Record every real run ID/attempt/SHA, job duration, queue/cache state, failure, retry and budget breach.
+- [x] Browser scan diagnosis: head 7b62ad02a, PR run 40646332385 attempt 1, security-container 122678494699 fails 102 findings (Debian 12 libraries/X server and bundled npm); ci-gate 122682967025 fails closed. Replace the pinned base with current Node 24/Trixie, patch npm tooling, remove unused Xvfb and flatten the prepared filesystem; preserve Chromium/full-shell coverage and scanner metadata. Fresh CI must qualify this correction; no exception is added.
 
 ## AI Flaky tests
 - [x] All deterministic failures block; no additional provider exception or timeout extension authorized.
