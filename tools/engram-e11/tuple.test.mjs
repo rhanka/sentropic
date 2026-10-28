@@ -82,7 +82,7 @@ test('should reproduce E2 bytes while refusing unqualified profiles and stable-r
   assert(first.slots.filter((slot) => slot.status === 'PENDING').every((slot) => slot.reason.length > 0));
   assert.equal(first.slots[14].observed.c6.finalBytesSha256, first.neutralContract.sha256);
   assert.equal(first.slots[14].observed.c6.standaloneDeclarationSha256, null);
-  assert.deepEqual(first.slots.filter((s) => s.status === 'PENDING').map((s) => s.id), [15, 16, 21]);
+  assert.deepEqual(first.slots.filter((s) => s.status === 'PENDING').map((s) => s.id), [15, 16]);
   assert.equal(first.slots[15].observed.equivalence.status, 'not-covered');
   assert(first.files['consumer/installed-hydration.mjs']);
   assert(Object.values(first.handoff).every((gate) => gate.status === 'PENDING'));

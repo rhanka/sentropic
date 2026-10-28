@@ -30,11 +30,13 @@ export function build(root) {
   b.read('receiving-validator.mjs');
   const reservation = b.read('reservation.md').toString();
   assert(reservation.includes('New reserved stable release: `@sentropic/cluster-mesh@0.24.0`'));
-  const runs = json(b.read('ci.json')).workflow_runs;
+  b.read('ci.json'); // Integration merge observation, independently retained.
+  const runs = json(b.read('e10-ci.json')).workflow_runs;
   assert(Array.isArray(runs));
-  const ci = runs.filter((run) => run.head_sha === candidate.snapshotHead && run.event === 'pull_request')
+  const ci = runs.filter((run) => run.head_sha === 'cfd45de4d54651626e97113494b9d7bd108998c8' && run.event === 'pull_request' && run.name === 'CI')
     .map(({ id, head_sha, status, conclusion, html_url }) => ({ id, head: head_sha, status, conclusion, url: html_url }))
     .sort((a, z) => a.id - z.id);
+  assert(ci.some((run) => run.status === 'completed' && run.conclusion === 'success'), 'E10 final-head CI is required');
   const cleanArchive = ({ member: _member, members: _members, ...data }) => data;
   const inputSlots = slots({ ...observed, engram: cleanArchive(observed.engram), mesh: cleanArchive(observed.mesh), ci, lot6 });
   assert.equal(inputSlots.length, 21);

@@ -47,6 +47,7 @@
   - [x] Static verification binds all three adapted consumer entry/helper/type files independently of the observed import closure, plus the complete transformation receipt.
   - [x] Producer extraction passes. First tuple test exposed the mesh manifest wrapper; compare its manifest, canonical bytes, byte hash and digest rather than the enclosing metadata object.
   - [x] Freeze successful E2 receipt, package/lock, campaign log/status and adaptation hashes as checker anchors; successor reruns require an explicit reviewed evidence update.
+  - [x] E10 final-head CI `cfd45de4d54651626e97113494b9d7bd108998c8` completed/success in run 40727760123; bind that exact receipt as slot 21. E11 exact-head CI stays a separate post-push receipt to avoid self-reference.
 - [x] **Lot E11-0 — Baseline and scope**
   - [x] Read MASTER/workflow, plan E11, PR #803 E11 inputs, Opus r3 21-entry inventory, RESERVATION.md and Docker lock packet; mechanical branch PASS.
 - [x] **Lot E11-1 — Generator and checker**
