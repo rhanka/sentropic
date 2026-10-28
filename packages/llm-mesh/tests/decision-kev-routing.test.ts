@@ -32,6 +32,14 @@ describe('Kev host admission and native receipts', () => {
       .toMatchObject({ ok: false, error: { code: 'REVISION_MISMATCH' } });
     expect(f.verifyInventory).not.toHaveBeenCalled();
   });
+  it('should require an explicit bounded local call tariff before egress', async () => {
+    const f = kevFixture();
+    for (const change of [{ billingMode: 'token-rate' }, { minimumMicroUsd: '0' }, { inputMicroUsdPerMtok: '1' }]) {
+      expect(await createDecisionService({ ...f.options, resolvePrice: () => ({ ...f.price, ...change }) }).decide(f.request))
+        .toMatchObject({ ok: false, error: { code: 'BUDGET_BOUND_UNAVAILABLE' }, receipt: { attempts: 0 } });
+    }
+    expect(f.fetch).not.toHaveBeenCalled();
+  });
   it.each(['choice', 'graded'] as const)('should preserve native %s distributions through host reconstruction', async (kind) => {
     const f = kevFixture();
     const criterion = kind === 'choice' ? { kind, instructions: 'Route.', options: [

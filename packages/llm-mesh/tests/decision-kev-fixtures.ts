@@ -18,7 +18,7 @@ export function kevFixture() {
   const adapter = createKevAdapter({ descriptor, transport });
   const price = { providerId: 'local', modelId: descriptor.wireModel, protocol: 'systemone-local',
     authority: descriptor.priceProtocol.authority, priceRevision: descriptor.priceProtocol.revision,
-    inputMicroUsdPerMtok: '1000000', outputMicroUsdPerMtok: '0', minimumMicroUsd: '0',
+    billingMode: 'call-rate', inputMicroUsdPerMtok: '0', outputMicroUsdPerMtok: '0', minimumMicroUsd: '100',
     identityMismatchPricing: 'requires-reconciliation' as const };
   const auth = { material: { type: 'environment-token' as const, envVar: 'KEV_LOCAL_API_KEY', token: 'fixture-kev-secret' },
     descriptor: { sourceType: 'environment-token' as const } };

@@ -49,7 +49,7 @@ const client = createDecisionService({ executionProfile: 'qualification', regist
     descriptor: { sourceType: 'environment-token' } }),
   resolvePrice: () => ({ providerId: 'local', modelId: descriptor.wireModel, protocol: 'systemone-local',
     authority: descriptor.priceProtocol.authority, priceRevision: descriptor.priceProtocol.revision,
-    inputMicroUsdPerMtok: '1000000', outputMicroUsdPerMtok: '0', minimumMicroUsd: '0',
+    billingMode: 'call-rate', inputMicroUsdPerMtok: '0', outputMicroUsdPerMtok: '0', minimumMicroUsd: '100',
     identityMismatchPricing: 'requires-reconciliation' }),
   budget: { admit: async ({ callId }) => ({ ok: true, holdId: callId }),
     markDispatched: async () => ({ ok: true }), release: async () => {}, settle: async () => {} },

@@ -61,7 +61,7 @@
   - [ ] Keep shipped candidate unqualified; explicit local qualification composition only.
 - [ ] **Lot 3 — Fixed local transport**
   - [x] Verify host inventory and single served native model before/after one System One POST.
-  - [ ] Bound request, response, timeout and cancellation; reject redirects and identity gaps without replay.
+  - [x] Bound request, response, timeout and cancellation; reject redirects and identity gaps without replay; explicit positive local call-rate tariff.
 - [ ] **Lot 4 — Native adapter and host exports**
   - [x] Compile typed binary/choice/graded questions and validate pinned native output, independent usage and identity.
   - [x] Preserve host allowlist, receipt, budget and qualification gates; no general chat registration.
