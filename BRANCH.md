@@ -66,6 +66,7 @@
   - [x] Three signing roles validate distinct public fingerprints, kids, workloads and secret references; loader reads only its role secret.
   - [x] Owner/current exact-workspace role and consent-scope predicate implemented with the frozen refusal codes and attestation fields.
   - [x] Internal evidence route requires TLS and the exact authenticated app workload before bounded strict body parsing; browser/product issuance refused.
+  - [x] Durable issuer adapter revalidates credential/hash/session record and signed immutable login lineage; replay issuance fence uses a separate metadata namespace.
   - [ ] api/tests/unit/auth/remote-evidence.test.ts: repeated actions/switch, logout/revoke/expiry, wrong sid/version/MFA/audience/key, replay and workload separation.
   - [ ] Closed EvidenceRequest; issuer-derived identity and original authentication time; per-operation EdDSA evidence with pinned audiences.
 - [ ] **Lot 2 — Consent and authorization, RED then GREEN**
