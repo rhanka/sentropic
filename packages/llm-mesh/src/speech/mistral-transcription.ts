@@ -422,3 +422,136 @@ const errorEvent = (
   retryable,
 });
 
+export class MistralTranscriptionSession implements SpeechSession {
+  readonly receipt: SpeechSessionReceipt;
+  readonly events: AsyncIterable<SpeechEvent>;
+  private readonly binding: SpeechBinding;
+  private readonly admission: MistralTranscriptionAdmission;
+  private readonly usage: MistralTranscriptionUsageSink;
+  private readonly config: MistralTranscriptionProfileConfig;
+  private readonly connect: MistralTranscriptionConnect;
+  private readonly bearerToken: string;
+  private readonly originator: string;
+  private readonly nowMs?: () => number;
+  private readonly openedAtMs: number;
+  private readonly queue: SpeechEvent[] = [];
+  private readonly waiters: Array<() => void> = [];
+  private sequence = 0;
+  private eventId = 0;
+  private audioSeconds = 0;
+  private settled = false;
+  private outcome: 'completed' | 'cancelled' | 'failed' = 'completed';
+  private readonly signal?: AbortSignal;
+  private readonly effectiveMaxMs: number;
+  private abortHandler?: () => void;
+  private expiryCancel?: () => void;
+  /** Active per-turn pumps; close() joins them unless called from a pump. */
+  private pumps = 0;
+  private readonly pumpPromises = new Set<Promise<void>>();
+  private current?: TurnStream;
+  private usageRevision = 0;
+
+  constructor(
+    receipt: SpeechSessionReceipt,
+    binding: SpeechBinding,
+    admission: MistralTranscriptionAdmission,
+    usage: MistralTranscriptionUsageSink,
+    config: MistralTranscriptionProfileConfig,
+    connect: MistralTranscriptionConnect,
+    bearerToken: string,
+    originator: string | undefined,
+    nowMs: (() => number) | undefined,
+    signal: AbortSignal | undefined,
+    schedule: ((delayMs: number, fn: () => void) => () => void) | undefined,
+    maxDurationMs: number,
+  ) {
+    this.receipt = receipt;
+    this.binding = binding;
+    this.admission = admission;
+    this.usage = usage;
+    this.config = config;
+    this.connect = connect;
+    this.bearerToken = bearerToken;
+    this.originator = originator ?? 'sentropic-llm-mesh';
+    this.nowMs = nowMs;
+    this.signal = signal;
+    this.openedAtMs = monotonicNow(nowMs);
+    this.effectiveMaxMs = Math.min(admission.maxDurationMs, maxDurationMs);
+    this.events = this.stream();
+    const arm = schedule ?? ((delayMs: number, fn: () => void): (() => void) => {
+      const timer = setTimeout(fn, delayMs);
+      return () => clearTimeout(timer);
+    });
+    this.expiryCancel = arm(this.effectiveMaxMs, () => {
+      this.pushError('ceiling', false);
+      this.outcome = 'cancelled';
+      void this.close();
+    });
+    if (signal) {
+      if (signal.aborted) {
+        this.outcome = 'cancelled';
+        void this.close();
+      } else {
+        this.abortHandler = (): void => {
+          this.outcome = 'cancelled';
+          void this.close();
+        };
+        signal.addEventListener('abort', this.abortHandler, { once: true });
+      }
+    }
+  }
+
+  private nextId(): string {
+    this.eventId += 1;
+    return `evt-${this.eventId}`;
+  }
+
+  private emit(event: SpeechEvent): void {
+    this.queue.push(event);
+    const waiter = this.waiters.shift();
+    if (waiter) waiter();
+  }
+
+  private clock(): { readonly id: string; readonly monotonicMs: number } {
+    return { id: 'mistral-transcription', monotonicMs: monotonicNow(this.nowMs) };
+  }
+
+  private async *stream(): AsyncIterable<SpeechEvent> {
+    let index = 0;
+    for (;;) {
+      while (index >= this.queue.length) {
+        if (this.settled) return;
+        await new Promise<void>((resolve) => this.waiters.push(resolve));
+      }
+      const event = this.queue[index++] as SpeechEvent;
+      // Bound the queue for long sessions: consumed events are dropped.
+      if (index > 1024) {
+        this.queue.splice(0, index);
+        index = 0;
+      }
+      yield event;
+    }
+  }
+
+  private pushError(reason: string, retryable: boolean): void {
+    this.sequence += 1;
+    this.emit(errorEvent(
+      { speechSessionId: this.receipt.speechSessionId, connectionEpoch: this.receipt.connectionEpoch, clock: this.clock() },
+      this.nextId(), this.sequence, reason, retryable,
+    ));
+  }
+
+  private async recordUsage(): Promise<void> {
+    // Cumulative operational totals (L8 sums incremental events per eventId,
+    // so a per-turn total would double-count); the composition settles from these.
+    await this.usage.record({
+      eventId: `${this.admission.operationId}:audio`,
+      revision: this.usageRevision++,
+      mode: 'cumulative',
+      usage: {
+        admittedAudioSeconds: this.audioSeconds,
+        connectedSeconds: Math.max(0, (monotonicNow(this.nowMs) - this.openedAtMs) / 1000),
+      },
+    });
+  }
+
