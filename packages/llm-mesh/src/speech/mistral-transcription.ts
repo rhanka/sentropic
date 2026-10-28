@@ -555,3 +555,145 @@ export class MistralTranscriptionSession implements SpeechSession {
     });
   }
 
+  private emitEmptyFinal(utteranceId: string): void {
+    // A commit with no audio since the last turn boundary: the provider
+    // would confirm an empty transcript, so the final carries no window.
+    this.sequence += 1;
+    const final: SpeechTranscriptFinal = {
+      schemaVersion: 1,
+      speechSessionId: this.receipt.speechSessionId,
+      connectionEpoch: this.receipt.connectionEpoch,
+      eventId: this.nextId(),
+      sequence: this.sequence,
+      clock: this.clock(),
+      type: 'transcript.final',
+      binding: this.binding,
+      utteranceId,
+      revision: 1,
+      text: '',
+      language: this.config.language ?? 'und',
+      audioInterval: { startMs: 0, endMs: 0 },
+    };
+    this.emit(final);
+  }
+
+  async write(frame: SpeechInputFrame): Promise<void> {
+    if (this.settled) throw new MistralTranscriptionError('closed', 'session is closed');
+    if (!isValidSpeechAudioFrame(frame) || frame.type !== 'audio.input') {
+      throw new MistralTranscriptionError('invalid-format', 'audio.input frame failed validation');
+    }
+    if (frame.format.codec !== TRANSCRIPTION_FORMAT.codec
+      || frame.format.sampleRateHz !== TRANSCRIPTION_FORMAT.sampleRateHz
+      || frame.format.channels !== TRANSCRIPTION_FORMAT.channels) {
+      throw new MistralTranscriptionError('invalid-format', 'only pcm16-le 24kHz mono is admitted');
+    }
+    if (monotonicNow(this.nowMs) - this.openedAtMs >= this.effectiveMaxMs) {
+      throw new MistralTranscriptionError('ceiling', 'session duration bound reached');
+    }
+    const seconds = frame.sampleCount / frame.format.sampleRateHz;
+    if (!(seconds > 0) || this.audioSeconds + seconds > this.admission.ceiling.admittedAudioSeconds) {
+      throw new MistralTranscriptionError('ceiling', 'admitted audio ceiling reached');
+    }
+    this.audioSeconds += seconds;
+    const open = this.current;
+    if (open && !open.abandoned && !open.donePending && open.utteranceId !== frame.utteranceId) {
+      throw new MistralTranscriptionError('invalid-format', 'new utteranceId requires a committed or cleared turn');
+    }
+    let stream = this.current;
+    if (!stream || stream.abandoned || stream.donePending) {
+      stream = await this.openStream(frame.utteranceId, frame.capturedAtMs);
+      if (this.settled) throw new MistralTranscriptionError('closed', 'session is closed');
+    }
+    // Capture-domain turn window for the final's audioInterval. The window
+    // lives on the per-turn stream, so a later turn can never stretch it.
+    if (Number.isFinite(frame.capturedAtMs) && frame.capturedAtMs >= 0) {
+      stream.audioEndMs = frame.capturedAtMs + (frame.sampleCount / frame.format.sampleRateHz) * 1000;
+    }
+    // The payload is encoded and released here; the adapter retains only counters.
+    const audio = base64Of(frame.payload);
+    stream.socket.send(JSON.stringify({ type: 'input_audio.append', audio }));
+  }
+
+  async command(command: Parameters<SpeechSession['command']>[0]): Promise<void> {
+    if (this.settled && command.type !== 'session.close') {
+      throw new MistralTranscriptionError('closed', 'session is closed');
+    }
+    switch (command.type) {
+      case 'input.commit': {
+        if (monotonicNow(this.nowMs) - this.openedAtMs >= this.effectiveMaxMs) {
+          throw new MistralTranscriptionError('ceiling', 'session duration bound reached');
+        }
+        const stream = this.current;
+        if (!stream || stream.abandoned) {
+          this.emitEmptyFinal(command.utteranceId);
+          await this.recordUsage();
+          return;
+        }
+        if (stream.donePending) {
+          throw new MistralTranscriptionError('invalid-format', 'turn already committed');
+        }
+        if (stream.utteranceId !== command.utteranceId) {
+          throw new MistralTranscriptionError('invalid-format', 'commit for a turn with no open audio');
+        }
+        stream.donePending = true;
+        stream.socket.send(JSON.stringify({ type: 'input_audio.end' }));
+        await this.recordUsage();
+        // The final was emitted by onDone before this resolves; an
+        // abandonment (clear/close/error) resolves with no final.
+        await stream.donePromise;
+        return;
+      }
+      case 'input.clear': {
+        // Mistral exposes no buffer clear: abandon the open provider stream
+        // so late frames cannot resurrect the turn, and reopen lazily.
+        const stream = this.current;
+        if (stream && !stream.abandoned && stream.utteranceId === command.utteranceId) {
+          stream.abandoned = true;
+          stream.resolveDone(undefined);
+          if (this.current === stream) this.current = undefined;
+          await stream.socket.close();
+        }
+        return;
+      }
+      case 'session.mute': {
+        // Mute is enforced by capture (no audio written); the cloud adapter holds no gate.
+        return;
+      }
+      case 'session.close': {
+        await this.close();
+        return;
+      }
+      default: {
+        throw new MistralTranscriptionError('unsupported-command', 'not applicable to STT-only transcription');
+      }
+    }
+  }
+
+  async close(): Promise<void> {
+    if (this.settled) return;
+    this.settled = true;
+    this.expiryCancel?.();
+    this.expiryCancel = undefined;
+    if (this.signal && this.abortHandler) this.signal.removeEventListener('abort', this.abortHandler);
+    const stream = this.current;
+    this.current = undefined;
+    if (stream && !stream.abandoned) {
+      stream.abandoned = true;
+      stream.resolveDone(undefined);
+    }
+    try {
+      if (stream) await stream.socket.close();
+    } finally {
+      // No usage attached: locally measured seconds are operational estimates,
+      // not provider-attested finals. The composition settles from the recorded
+      // cumulative totals (or provider-reported usage with a revision), so an
+      // L8 `settleSpeech` missing-dimension estimate stays valid.
+      await this.usage.settle({
+        operationId: this.admission.operationId,
+        outcome: this.outcome,
+      });
+      while (this.waiters.length > 0) this.waiters.shift()?.();
+      if (this.pumps === 0) await Promise.allSettled([...this.pumpPromises]);
+    }
+  }
+
