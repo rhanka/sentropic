@@ -482,7 +482,7 @@ COPY --from=build /workspace/api/dist /workspace/api/dist
 # screens into the SAME image. The api runtime is untouched (default CMD below);
 # the IdP is selected by a k8s `command: ["node","apps/auth-idp/dist/index.js"]`
 # override run from /workspace (so IDP_WEB_BUILD_DIR=apps/auth-idp/web/build
-# resolves relative to that cwd). One image, two Deployments, one publish pipeline.
+# resolves relative to that cwd). Content uses its own Node command in the same image.
 COPY --from=build /workspace/apps/auth-idp/dist /workspace/apps/auth-idp/dist
 COPY --from=build /workspace/apps/artifact-content/dist /workspace/apps/artifact-content/dist
 COPY --from=idp-web-build /workspace/apps/auth-idp/web/build /workspace/apps/auth-idp/web/build
