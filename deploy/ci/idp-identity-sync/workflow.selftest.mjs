@@ -47,7 +47,11 @@ export function workflowTests(check, load) {
     assert.ok(filter.idp_sync.includes('deploy/**'));
     assert.ok(filter.idp_sync.includes('packages/auth-hono/src/**'));
     assert.ok(filter.idp_sync.includes('packages/auth-hono/package.json'));
-    assert.deepEqual(ci.jobs['validate-idp-sync'].steps.filter(s => s.run).map(s => s.run), ['make test-idp-sync-selftest ENV=test-idp-sync', 'make test-idp-sync-sql ENV=test-idp-sync']);
+    assert.deepEqual(ci.jobs['validate-idp-sync'].steps.filter(s => s.run).map(s => s.run), [
+      'make test-idp-sync-selftest ENV=test-idp-sync',
+      'make test-artifact-content-manifests ENV=test-app-w3d',
+      'make test-idp-sync-sql ENV=test-idp-sync',
+    ]);
   });
   check('bootstrap delegates only tenant resources and two existing Secrets', () => {
     const objects = load('deploy/ci/idp-identity-sync/rbac-ci-idp-bundle-prod.yaml');
