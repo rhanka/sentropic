@@ -37,3 +37,87 @@ describe('createWebHost', () => {
     expect(source).toContain('ChatUiCommentsHostAdapter');
     expect(source).toContain('ChatUiDocumentHostAdapter');
   });
+
+  it('composes web transport, stream client, labels, renderers, jobs, comments, documents, and local tools', async () => {
+    const transport = createTransport();
+    const streamClient = createStreamClient();
+    const renderers = createRendererRegistry();
+    const localTools: LocalToolsAdapter = {
+      id: 'web-test',
+      sendMessage: vi.fn(async () => ({ ok: true, result: { id: 'ok' } })),
+    };
+    const purgeMine = vi.fn();
+    const labels = vi.fn((key: string) => `label:${key}`);
+    const jobs = {
+      renderPanel: { id: 'jobs-panel' },
+      activeJobsCount: 2,
+      failedJobsCount: 1,
+      queueTabLabel: 'Jobs',
+      purgeMine,
+    };
+    const comments = {
+      renderPanel: { id: 'comments-panel' },
+      openThread: vi.fn(),
+    };
+    const documents = {
+      createSessionContext: vi.fn((sessionId: string) => ({ sessionId })),
+      extractGeneratedFileCards: vi.fn(() => []),
+    };
+
+    const host = createWebHost({
+      transport,
+      streamClient,
+      labels,
+      renderers,
+      localTools,
+      jobs,
+      comments,
+      documents,
+      contextProvider: { id: 'context' },
+      auth: { getSession: vi.fn(() => ({ userId: 'user-1' })) },
+      navigation: { navigate: vi.fn() },
+      storage: { get: vi.fn(), set: vi.fn(), remove: vi.fn() },
+    });
+
+    expect(host.kind).toBe('web');
+    expect(host.transport).toBe(transport);
+    expect(host.streamClient).toBe(streamClient);
+    expect(host.labels('chat.tabs.jobs')).toBe('label:chat.tabs.jobs');
+    expect(host.renderers).toBe(renderers);
+    expect(host.localTools).toBe(localTools);
+    expect(host.jobs).toBe(jobs);
+    expect(host.comments).toBe(comments);
+    expect(host.documents).toBe(documents);
+    expect(await host.localTools?.sendMessage?.({ type: 'ping' })).toEqual({
+      ok: true,
+      result: { id: 'ok' },
+    });
+  });
+
+  it('uses safe default labels and the injected visual renderer when optional adapters are omitted', () => {
+    const host = createWebHost({
+      transport: createTransport(),
+      streamClient: createStreamClient(),
+      renderers: createRendererRegistry(),
+    });
+
+    expect(host.labels('chat.unknown')).toBe('chat.unknown');
+    expect(host.renderers.default({ ok: true })).toBe('{"ok":true}');
+    expect(host.localTools).toBeUndefined();
+  });
+
+  it('fails fast when required transport or stream client adapters are missing', () => {
+    expect(() =>
+      createWebHost({
+        transport: null as unknown as ChatCoreTransport,
+        streamClient: createStreamClient(),
+      }),
+    ).toThrow('transport');
+    expect(() =>
+      createWebHost({
+        transport: createTransport(),
+        streamClient: null as unknown as StreamHubClient,
+      }),
+    ).toThrow('streamClient');
+  });
+});
