@@ -492,3 +492,48 @@ must explicitly repin Chromium/headless-shell, FFmpeg and libcrypto3/libssl3,
 then repeat browser probes, journeys and the unchanged container gate. The
 new runtime/cache action is pinned to the source-verified v3 commit
 `3cb05d89e1f492524af3d41a1c98c83bc3025124` at all four call sites.
+
+## 12. BR-79 independent DAG — qualification in progress
+
+BR-79 starts from merge `c8ec01237ce5f8539a9ac6c1c11c58c947a22078`, on
+`perf/ci-parallel-dag` in `tmp/worktrees/ci-parallel-dag`. The owner requires
+merge-only updates and local `ENV=test-ci-br79`, with the shared Docker lock.
+Draft [PR #826](https://github.com/rhanka/sentropic/pull/826) retains BRANCH.md.
+BR-78's carried Lots 3/5 and warm/cold readiness gaps remain open.
+
+Browser and VSCode consume API/UI/browser images; IdP consumes API/toolbox/
+browser images; restore consumes API/toolbox images. Their dispatch no longer
+waits for lint or SAST/SCA. Those verdicts remain explicit image-promotion
+barriers and required final-join members. Desktop packaging, fresh UI tests,
+runtime image production and the separate static profile now have independent
+jobs. The runtime and static API URLs retain their distinct compilations.
+
+Four container lanes verify and scan API/toolbox/UI/browser candidates at
+their own artifact barriers. API/UI SAST and SCA run as four matrix members.
+Selection-aware joins reject missing, failed, cancelled, neutral and unexpected
+skipped results; the final verdict also checks each actual matrix member.
+Native report uploads include hidden files and fail when reports are absent.
+Existing scanner/parser/compliance policies and runtime assertions remain.
+
+Local qualification passes 6 DAG, 24 expected-result and 134 publication tests,
+the parser negatives, version filters and the inventory of 56 numbered E2E
+specs. Capacity shape remains 15 API / 5 browser members without mutexes;
+the graph reports demand of 64 PR / 63 main slots, not account admission.
+The observed 17-slot lower bound and cumulative scheduling budget are still
+unqualified. A green shape test does not close either timing requirement.
+
+Baseline main [40736913130](https://github.com/rhanka/sentropic/actions/runs/40736913130),
+attempt 1 at `c8ec01237`, is incomplete and includes failed comments packaging
+(job 122989014482, npm ECONNRESET after 102 tests pass). Initial BR-79 PR run
+[40741770463](https://github.com/rhanka/sentropic/actions/runs/40741770463),
+attempt 1 at `52206747c7338d082094ff4cb74fb596b30cd360`, is also incomplete.
+Neither supplies final acceptance. Raw run/attempt/job/step JSON, workflow
+digests, per-job TSV and native failure logs are retained in the owner workspace
+under `.tmp/ci-br79/receipts/<run-id>/`. Missing spans remain to measure.
+
+Chrome/VSCode stage separation awaits the bounded owner decision for
+`ui/Dockerfile` (BR79-EX3); the current implementation still builds both inside
+each UI profile and preserves every embedded-output assertion. Scans <=90s,
+IdP <=150s, cumulative scheduling <=60s, complete UI readiness and the exact
+final-head CI result remain to measure. The historical 255s full UI / 209s
+container / 290s IdP sample at `d072d24ec` is not a new-base acceptance result.

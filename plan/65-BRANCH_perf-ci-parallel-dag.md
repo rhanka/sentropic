@@ -32,6 +32,11 @@
 - [ ] BR79-EX2 — Planned Makefile exception: expose independent extension, desktop, UI test/profile, scanner, and runtime startup targets; preserve build-input ordering. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
+- [x] BR-79 execution: branch `perf/ci-parallel-dag`, base `origin/main` c8ec01237, worktree `tmp/worktrees/ci-parallel-dag`, draft PR #826. Owner overrides: merge only, local `ENV=test-ci-br79`, shared Docker lock, no Python or attribution trailers.
+- [x] Implementation separates runtime artifact readiness from static/security release barriers; independent desktop/UI tests/static profile, four container lanes and four SAST/SCA matrix members retain complete final membership.
+- [x] Initial local checks pass: 6 DAG, 24 expected-result, 134 publication tests, parser negatives, capacity shape, version filters and the 56-spec E2E inventory. Requalify after final edits; this is not final-head CI.
+- [ ] Study section 12 and `.tmp/ci-br79/receipts/<run-id>/` retain identified raw measurements. Main 40736913130 attempt 1 has comments packaging failure 122989014482 (npm ECONNRESET); initial PR 40741770463 at 52206747c is incomplete. No timing acceptance is inferred.
+- [ ] BR79-EX3 owner decision for bounded `ui/Dockerfile` stage separation is pending; the original scope does not authorize that path. Both existing extension builds/assertions remain active meanwhile.
 
 ## AI Flaky tests
 - [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
