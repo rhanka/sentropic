@@ -201,3 +201,62 @@ describe('projectRestoredTimeline — history restore', () => {
       eventsByMessageId: {},
     };
     expect(projectRestoredTimeline(payload)).toHaveLength(0);
+  });
+
+  it('should preserve message ordering (user → assistant → user)', () => {
+    const payload: HistoryPayload = {
+      messages: [
+        { id: 'u1', role: 'user', content: 'Q1' },
+        { id: 'a1', role: 'assistant', content: 'A1' },
+        { id: 'u2', role: 'user', content: 'Q2' },
+        { id: 'a2', role: 'assistant', content: 'A2' },
+      ],
+    };
+    const result = projectRestoredTimeline(payload);
+    expect(result.map((r) => r.key)).toEqual([
+      'message:u1',
+      'message:a1',
+      'message:u2',
+      'message:a2',
+    ]);
+  });
+
+  it('should prefer content_delta collapse over message.content for assistant', () => {
+    const payload: HistoryPayload = {
+      messages: [{ id: 'a1', role: 'assistant', content: 'message.content text' }],
+      eventsByMessageId: {
+        a1: [
+          { eventType: 'content_delta', sequence: 1, data: { delta: 'delta text' } },
+        ],
+      },
+    };
+    const result = projectRestoredTimeline(payload);
+    if (result[0]!.kind === 'assistant-message') {
+      expect(result[0]!.content).toBe('delta text');
+    }
+  });
+
+  it('should skip system and tool messages with no content', () => {
+    const payload: HistoryPayload = {
+      messages: [
+        { id: 's1', role: 'system', content: null },
+        { id: 't1', role: 'tool', content: '' },
+      ],
+    };
+    expect(projectRestoredTimeline(payload)).toHaveLength(0);
+  });
+
+  it('should work without eventsByMessageId (no events map provided)', () => {
+    const payload: HistoryPayload = {
+      messages: [
+        { id: 'u1', role: 'user', content: 'Hello' },
+        { id: 'a1', role: 'assistant', content: 'World' },
+      ],
+    };
+    const result = projectRestoredTimeline(payload);
+    expect(result).toHaveLength(2);
+    if (result[1]!.kind === 'assistant-message') {
+      expect(result[1]!.content).toBe('World');
+    }
+  });
+});
