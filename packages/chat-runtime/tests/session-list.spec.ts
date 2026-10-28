@@ -61,3 +61,143 @@ describe('projectSessionList — list sorting', () => {
         id: 'b',
         title: 'B',
         createdAt: '2026-05-01T00:00:00Z',
+        updatedAt: null, // no updatedAt — falls back to createdAt
+      },
+    ];
+    const result = projectSessionList(rows);
+    // 'a' was last updated in June, 'b' was created in May → 'a' first
+    expect(result[0]!.id).toBe('a');
+    expect(result[1]!.id).toBe('b');
+  });
+
+  it('should return null title when row title is null', () => {
+    const rows: SessionRow[] = [
+      { id: 'x', title: null, createdAt: '2026-01-01T00:00:00Z' },
+    ];
+    const result = projectSessionList(rows);
+    expect(result[0]!.title).toBeNull();
+  });
+
+  it('should return null title when row title is undefined', () => {
+    const rows: SessionRow[] = [
+      { id: 'x', createdAt: '2026-01-01T00:00:00Z' },
+    ];
+    const result = projectSessionList(rows);
+    expect(result[0]!.title).toBeNull();
+  });
+
+  it('should handle Date objects in createdAt', () => {
+    const rows: SessionRow[] = [
+      { id: 'a', createdAt: new Date('2026-06-01T00:00:00Z') },
+      { id: 'b', createdAt: new Date('2026-01-01T00:00:00Z') },
+    ];
+    const result = projectSessionList(rows);
+    expect(result[0]!.id).toBe('a');
+  });
+
+  it('should produce a stable sort (same lastActivity preserves insertion order)', () => {
+    const ts = '2026-01-01T00:00:00Z';
+    const rows: SessionRow[] = [
+      { id: 'first', createdAt: ts },
+      { id: 'second', createdAt: ts },
+    ];
+    const result = projectSessionList(rows);
+    // Both have same time — Array.prototype.sort is stable; original order preserved.
+    expect(result.map((r) => r.id)).toEqual(['first', 'second']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// projectRestoredTimeline
+// ---------------------------------------------------------------------------
+
+describe('projectRestoredTimeline — history restore', () => {
+  it('should return an empty array for an empty payload', () => {
+    const payload: HistoryPayload = { messages: [] };
+    expect(projectRestoredTimeline(payload)).toEqual([]);
+  });
+
+  it('should project a user message as kind user-message', () => {
+    const payload: HistoryPayload = {
+      messages: [{ id: 'u1', role: 'user', content: 'Hello' }],
+    };
+    const result = projectRestoredTimeline(payload);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.kind).toBe('user-message');
+    expect(result[0]!.key).toBe('message:u1');
+  });
+
+  it('should skip a user message with no content', () => {
+    const payload: HistoryPayload = {
+      messages: [{ id: 'u1', role: 'user', content: null }],
+    };
+    expect(projectRestoredTimeline(payload)).toHaveLength(0);
+  });
+
+  it('should project an assistant message as kind assistant-message', () => {
+    const payload: HistoryPayload = {
+      messages: [{ id: 'a1', role: 'assistant', content: 'Hi!' }],
+      eventsByMessageId: {},
+    };
+    const result = projectRestoredTimeline(payload);
+    expect(result).toHaveLength(1);
+    expect(result[0]!.kind).toBe('assistant-message');
+    if (result[0]!.kind === 'assistant-message') {
+      expect(result[0]!.content).toBe('Hi!');
+    }
+  });
+
+  it('should collapse content_delta events for assistant message', () => {
+    const payload: HistoryPayload = {
+      messages: [{ id: 'a1', role: 'assistant' }],
+      eventsByMessageId: {
+        a1: [
+          { eventType: 'content_delta', sequence: 1, data: { delta: 'Hello' } },
+          { eventType: 'content_delta', sequence: 2, data: { delta: ', world' } },
+          { eventType: 'done', sequence: 3 },
+        ],
+      },
+    };
+    const result = projectRestoredTimeline(payload);
+    expect(result).toHaveLength(1);
+    if (result[0]!.kind === 'assistant-message') {
+      expect(result[0]!.content).toBe('Hello, world');
+    }
+  });
+
+  it('should sort content_delta events by sequence before collapsing', () => {
+    const payload: HistoryPayload = {
+      messages: [{ id: 'a1', role: 'assistant' }],
+      eventsByMessageId: {
+        a1: [
+          { eventType: 'content_delta', sequence: 3, data: { delta: '3' } },
+          { eventType: 'content_delta', sequence: 1, data: { delta: '1' } },
+          { eventType: 'content_delta', sequence: 2, data: { delta: '2' } },
+        ],
+      },
+    };
+    const result = projectRestoredTimeline(payload);
+    if (result[0]!.kind === 'assistant-message') {
+      expect(result[0]!.content).toBe('123');
+    }
+  });
+
+  it('should fall back to message.content when no content_delta events present', () => {
+    const payload: HistoryPayload = {
+      messages: [{ id: 'a1', role: 'assistant', content: 'Fallback text' }],
+      eventsByMessageId: {
+        a1: [{ eventType: 'status', sequence: 1, data: { state: 'started' } }],
+      },
+    };
+    const result = projectRestoredTimeline(payload);
+    if (result[0]!.kind === 'assistant-message') {
+      expect(result[0]!.content).toBe('Fallback text');
+    }
+  });
+
+  it('should skip an assistant message with no content and no events', () => {
+    const payload: HistoryPayload = {
+      messages: [{ id: 'a1', role: 'assistant', content: null }],
+      eventsByMessageId: {},
+    };
+    expect(projectRestoredTimeline(payload)).toHaveLength(0);
