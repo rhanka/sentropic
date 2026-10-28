@@ -22,6 +22,7 @@ export const kevInventoryMatches = (value: unknown): boolean => {
   catch { return false; }
 };
 const contract = { inventory: KEV_INVENTORY, state: 'json-data', question: 'verdict', attempts: 1,
+  // Library response cache only; the pinned native runtime retains slot prefix KV reuse.
   endpoint: 'http://127.0.0.1:8797/v1/systemone', cache: 'disabled', outputTokens: 0 };
 const digest = digestStructuredArtifact;
 /** Catalogue candidate only; no I/O, automatic registration, or production qualification. */
