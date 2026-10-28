@@ -1468,6 +1468,8 @@ jobs:
       - name: Setup Docker
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: docker/setup-buildx-action@v4
+      - uses: crazy-max/ghaction-github-runtime@v3
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
       - name: Build Chrome extension target
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
         run: make build-ext-chrome
@@ -1479,7 +1481,7 @@ jobs:
         run: make package-desktop-windows
       - name: Build UI image
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
-        run: make build-ui-image
+        run: make ci-build-ui ENV=test-ci-images
       - name: Save UI image as artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make save-ui
@@ -1491,7 +1493,10 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ui-image
-          path: ui-image.tar
+          path: |
+            ui-image.tar.zst
+            ui-image.json
+          compression-level: 0
       - name: Build UI
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true'
         run: make build-ui
@@ -1535,12 +1540,7 @@ jobs:
         with:
           name: api-image
           path: .
-      - name: Pull if UI image is up to date
-        id: check-ui-image
-        run: make pull-ui-image
-        continue-on-error: true
       - name: Download UI image artifact
-        if: steps.check-ui-image.outcome == 'failure'
         uses: actions/download-artifact@v7
         with:
           name: ui-image
@@ -1548,10 +1548,14 @@ jobs:
       - name: Load API image from artifact
         run: make load-api
       - name: Load UI image from artifact
-        if: steps.check-ui-image.outcome == 'failure'
         run: make load-ui
-      - name: Pull e2e image artifact
-        run: make pull-e2e-image
+      - name: Download E2E image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: e2e-image
+          path: .
+      - name: Load exact E2E image
+        run: make load-e2e ENV=e2e-ci
       - name: Test e2e API & UI (${{ matrix.group }})
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
@@ -1586,21 +1590,20 @@ jobs:
           path: .
       - name: Load API image from artifact
         run: make load-api
-      - name: Pull if UI image is up to date
-        id: check-ui-image-vscode
-        run: make pull-ui-image
-        continue-on-error: true
       - name: Download UI image artifact
-        if: steps.check-ui-image-vscode.outcome == 'failure'
         uses: actions/download-artifact@v7
         with:
           name: ui-image
           path: .
       - name: Load UI image from artifact
-        if: steps.check-ui-image-vscode.outcome == 'failure'
         run: make load-ui
-      - name: Pull e2e image artifact
-        run: make pull-e2e-image
+      - name: Download E2E image artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: e2e-image
+          path: .
+      - name: Load exact E2E image
+        run: make load-e2e ENV=e2e-vscode-ci
       - name: Test VSCode E2E lane
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
