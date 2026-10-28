@@ -1,71 +1,10 @@
-/**
- * McpCatalogSource — `CatalogSource` for MCP server tools (BR-42b Lot 5)
- *
- * Absorbs and retires the dormant `feat/mcp-tool-catalog-br19b` stub.
- *
- * Connects to an MCP server via the official `@modelcontextprotocol/sdk`,
- * runs `tools/list`, and maps each MCP tool to a `tool`-kind `CatalogEntry`:
- *   - Sanitized provider-safe public `metadata.name` (kebab/underscore charset
- *     accepted by the parser and the OpenAI tool call schema).
- *   - `rawName` on the `ToolEntry` carries the MCP server's original tool name,
- *     enabling the `call` dispatch to use the correct name with the MCP server.
- *   - The catalog owns the public-id↔rawName map; the model never sees raw names.
- *
- * Sync constraint (SPEC_EVOL_CATALOG §3.2 / Codex MF2):
- *   `snapshot()` is SYNCHRONOUS and returns the LAST refreshed in-memory set.
- *   `refresh()` is ASYNC — connects, calls `tools/list`, repopulates the cache.
- *   NEVER connect or call `tools/list` on the per-turn resolve.
- *
- * Default-off (0-regression critical):
- *   With no MCP server configured, this source returns an EMPTY snapshot.
- *   The default chat tool set is UNCHANGED (no MCP tools leak into the tool set).
- *   The source must be wired explicitly in `catalog.ts`; it is NOT auto-registered.
- *
- * Per-source config (server URL/command, auth token/headers, allow/deny filter)
- * is carried out-of-band in the constructor options, NOT inside the entry.
- *
- * Naming rule (SPEC_EVOL_CATALOG §3.3 / Codex MF3):
- *   MCP tool names often contain `:` and `/` (e.g. `mcp:my-server/tool_name`)
- *   which are invalid as OpenAI tool identifiers and violate the kebab-pattern
- *   enforced by `packages/skills/src/format/parser.ts:21`:
- *     `KEBAB_PATTERN = /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/`
- *   `sanitizeMcpToolName()` replaces all invalid characters with `_` and lower-
- *   cases the result. Collisions after sanitization are broken by appending `_N`.
- */
-
 import type { Client as McpClient } from '@modelcontextprotocol/sdk/client/index.js';
 import type { Transport } from '@modelcontextprotocol/sdk/shared/transport.js';
-
 import type { SkillTool } from '../../../../../packages/skills/src/index.js';
 import type { StandaloneToolHandler } from './standalone-tool-source.js';
 import type { CatalogSource } from '../source.js';
 import type { CatalogEntry, ToolEntry } from '../types.js';
-
-// ---------------------------------------------------------------------------
-// Re-export for external consumers (type only)
-// ---------------------------------------------------------------------------
-
 export type { StandaloneToolHandler as McpToolHandler };
-
-// ---------------------------------------------------------------------------
-// Name sanitization (§3.3 / Codex MF3)
-// ---------------------------------------------------------------------------
-
-/**
- * KEBAB_PATTERN accepted by `packages/skills/src/format/parser.ts:21`.
- * Matches: /^[a-z0-9]+(?:[-_][a-z0-9]+)*$/
- *
- * MCP names can contain `:` and `/` which are INVALID. This function:
- *   1. Lowercases the input.
- *   2. Replaces any run of non-kebab characters ([^a-z0-9_-]) with `_`.
- *   3. Strips leading/trailing `_` or `-`.
- *   4. Collapses consecutive `_` or `-` into a single `_`.
- *
- * Examples:
- *   'mcp:my-server/greet_user' → 'mcp_my_server_greet_user'
- *   'MyTool'                   → 'mytool'
- *   'tool--name'               → 'tool_name'
- */
 export function sanitizeMcpToolName(rawName: string): string {
   return rawName
     .toLowerCase()
@@ -74,99 +13,23 @@ export function sanitizeMcpToolName(rawName: string): string {
     .replace(/[_]{2,}/g, '_')       // collapse consecutive underscores
     .replace(/^[_-]+|[_-]+$/g, ''); // strip leading/trailing separators
 }
-
-// ---------------------------------------------------------------------------
-// Per-source configuration
-// ---------------------------------------------------------------------------
-
-/**
- * Configuration for a single MCP server connection.
- *
- * Per-source config is carried out-of-band (constructor/env/workspace config),
- * NOT inside the catalog entries. This keeps entries serialisable.
- */
 export interface McpSourceConfig {
-  /**
-   * Human-readable server name used as the source identifier suffix.
-   * Example: `'my-server'` → source id = `'mcp:my-server'`.
-   */
   readonly serverName: string;
-
-  /**
-   * Optional allowlist of raw MCP tool names to include.
-   * When provided, tools NOT in this list are silently excluded.
-   * When absent, all tools from `tools/list` are included.
-   */
   readonly allowedTools?: ReadonlyArray<string>;
-
-  /**
-   * Optional denylist of raw MCP tool names to exclude.
-   * Applied after the allowlist; tools in this list are excluded.
-   */
   readonly deniedTools?: ReadonlyArray<string>;
 }
-
-// ---------------------------------------------------------------------------
-// ToolHandlerSource interface (minimal surface for the execution seam)
-// ---------------------------------------------------------------------------
-
-/**
- * Minimal interface implemented by any source that can provide tool handlers
- * to the `CatalogExecutionSeam`.
- *
- * Both `StandaloneToolSource` and `McpCatalogSource` implement this interface,
- * allowing the seam to dispatch to either source type.
- */
 export interface ToolHandlerSource {
   readonly id: string;
   getHandler(name: string): StandaloneToolHandler | undefined;
 }
-
-// ---------------------------------------------------------------------------
-// McpCatalogSource
-// ---------------------------------------------------------------------------
-
-/**
- * A `CatalogSource` that connects to an MCP server and maps its tools to
- * `tool`-kind `CatalogEntry` objects via `tools/list`.
- *
- * Transport is provided externally (stdio or HTTP/SSE) — the source does NOT
- * construct transports itself, keeping it testable with in-memory transports.
- *
- * Lifecycle:
- *   1. Construct with `config` + a lazy `transportFactory` (returns a Transport).
- *   2. Call `refresh()` once (or on a schedule) to connect and populate the
- *      snapshot. `snapshot()` is empty until the first `refresh()` completes.
- *   3. `snapshot()` returns the last cached set synchronously on every call.
- *   4. Subsequent `refresh()` calls repopulate the snapshot (e.g. after server
- *      reconnect or tool list changes).
- *
- * Thread-safety: NodeJS is single-threaded; concurrent `refresh()` calls are
- * safe but will result in back-to-back `tools/list` calls. The last one wins.
- */
 export class McpCatalogSource implements CatalogSource, ToolHandlerSource {
   readonly id: string;
   readonly kind = 'mcp' as const;
-
   private readonly config: McpSourceConfig;
-  /**
-   * Factory that returns a fresh Transport for each connection attempt.
-   * Lazily evaluated — called only inside `refresh()`, never on `snapshot()`.
-   */
   private readonly transportFactory: () => Transport;
-
-  /** In-memory snapshot of ToolEntry objects, populated by `refresh()`. */
   private _entries: ToolEntry[] = [];
-
-  /**
-   * Side-table: sanitized public metadata.name → MCP call handler.
-   * Kept separate from `CatalogEntry` so entries remain serialisable.
-   */
   private readonly _handlers = new Map<string, StandaloneToolHandler>();
-
-  /** Whether this source has successfully completed at least one refresh. */
   private _initialized = false;
-
   /**
    * @param config           Per-source configuration (server name, allow/deny).
    * @param transportFactory Returns a fresh Transport for each refresh attempt.
@@ -178,7 +41,6 @@ export class McpCatalogSource implements CatalogSource, ToolHandlerSource {
     this.transportFactory = transportFactory;
     this.id = `mcp:${config.serverName}`;
   }
-
   // -------------------------------------------------------------------------
   // CatalogSource — snapshot (sync, hot path safe)
   // -------------------------------------------------------------------------
