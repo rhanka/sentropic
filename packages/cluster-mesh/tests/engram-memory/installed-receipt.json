@@ -1,14 +1,15 @@
 {
   "version": 1,
   "kind": "engram-e10-installed-receipt",
-  "head": "b8bb6fa6a4be2cc751562ed5ee5960b075c8c3df",
-  "tree": "b5350569d0877ec4a6ead7bad9c9adee335ff892",
+  "head": "1eb052fe6d1f4ac6f3ed8e244efed28020e825a6",
+  "tree": "e23fa32e8d251cfae186a6555b2e1c63edf91218",
   "consumer": {
     "node": "v24.21.0",
     "platform": "linux",
     "arch": "x64",
     "root": "clean-consumer-outside-repository",
-    "lockSha256": "105adab03826fd993b752379266acd8d7a1e3b18f8b19b867734726467b05bc0"
+    "lockSha256": "8abf2ea7560354f1edbdcf0f6e43c9c1c815aa5a443e8e8dab06fdfd386e3b2d",
+    "npmVersion": "11.19.0"
   },
   "engram": {
     "version": "0.22.0",
@@ -17,20 +18,32 @@
   },
   "clusterMesh": {
     "version": "0.24.0-dev.1",
-    "tarballSha256": "b0192c73af37d230dd179c5079d8fbe1d14fe6cab82d487c2ec02ba3f0a31c90",
-    "integrity": "sha512-Zqwwq1Xaa4FDzorhY0Sfzm8MIwpdDHifB+cW3xtFR295i6uYyL5GUDZH3DETixDdUk7tcjYI8qxEZvxbyFKPwQ=="
+    "tarballSha256": "4799bcc39944b7d487cf1f4b6d5b628a5c4556a068918a5ffb36db54348bd8cc",
+    "integrity": "sha512-3dNFR7+a2vDra2nZuffLKd28HAVdNEu3B4y2e4LF+4r3p8FcQbihxE7zPtePJZtN+g2wUX84eqEkzz2Cl9/MPw==",
+    "fileListSha256": "dae60a97c1df035c23377a1d25da543ca662fdb7c04cec28bc5da779f9e39b0e"
   },
   "p3ManifestSha256": "1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730",
+  "qualificationImage": "sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+  "hostGlue": {
+    "file": "installed-host-bridge.mjs",
+    "sha256": "a50b94737fe41ded997111447aee488a3131b834c706432518b93ede92bfbdef",
+    "status": "host-authored-not-installed",
+    "derivedFrom": [
+      "tests/engram-memory/memory-pg-host.ts",
+      "tests/engram-memory/memory-neutral.ts"
+    ],
+    "tupleCoverage": "partial"
+  },
   "postgres": {
     "serverVersion": "17.11",
     "image": "sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b",
     "driver": {
       "name": "node-pg-installed",
-      "version": "8.16.3",
-      "artifactDigest": "f7b678a8055c234669e8dd272dd624771e29d9f0e3a3353f15c3005ab1a5fd29"
+      "version": "8.22.0",
+      "artifactDigest": "bab5faf4410151a463078fffa326d10979150bfc330f0a29bd08948378ed3421"
     },
-    "statements": 874,
-    "transactions": 82
+    "statements": 878,
+    "transactions": 86
   },
   "migrations": [
     {
@@ -86,33 +99,42 @@
     "cluster-mesh-pg/engram-memory/001-projections@1",
     "cluster-mesh-pg/engram-memory/002-host-ledger@1"
   ],
-  "profiles": [
+  "declaredProfileClaims": [
     {
       "name": "atomic-units-v1",
       "version": "1",
-      "digest": "sha256:507fd5a8f5d68a8c2b99c05bee5a23c0ded47d79532ca5edf34ea08c1919958a"
+      "digest": "sha256:507fd5a8f5d68a8c2b99c05bee5a23c0ded47d79532ca5edf34ea08c1919958a",
+      "status": "declared"
     },
     {
       "name": "immutable-chains-v1",
       "version": "1",
-      "digest": "sha256:927777f8470be49c968a15cb9bbf2560efdd63bd329d763bfeeb1c166759a3bc"
+      "digest": "sha256:927777f8470be49c968a15cb9bbf2560efdd63bd329d763bfeeb1c166759a3bc",
+      "status": "declared"
     },
     {
       "name": "immutable-boundaries-v1",
       "version": "1",
-      "digest": "sha256:47ee879a5552868ec7cee15f9984cb44f5a72b64aa2b02556232cd0c9037c80f"
+      "digest": "sha256:47ee879a5552868ec7cee15f9984cb44f5a72b64aa2b02556232cd0c9037c80f",
+      "status": "declared"
     },
     {
       "name": "scope-outbox-v1",
       "version": "1",
-      "digest": "sha256:d4f1e16890c9541fada3e71e4ba7ba2016da5b07e26383979e29e42b7916b1ed"
+      "digest": "sha256:d4f1e16890c9541fada3e71e4ba7ba2016da5b07e26383979e29e42b7916b1ed",
+      "status": "declared"
     },
     {
       "name": "fenced-writers-v1",
       "version": "1",
-      "digest": "sha256:48cfb030a1a9c614de6170588116d1afe3d7c94acda79b4322b6b6d7d5156900"
+      "digest": "sha256:48cfb030a1a9c614de6170588116d1afe3d7c94acda79b4322b6b6d7d5156900",
+      "status": "declared"
     }
   ],
+  "fiveProfileEquivalence": {
+    "status": "not-covered",
+    "reason": "Stage B blocked (E9 #790, 23 cases)"
+  },
   "requiredProfiles": [
     "atomic-units-v1",
     "immutable-chains-v1",
@@ -126,6 +148,8 @@
     "missing-pool": "MemoryHostDriverRequiredError: memory driver provider requires the live host pool",
     "wrong-driver-identity": "MemoryHostDriverRequiredError: memory driver provider requires a named versioned artifact identity",
     "storage-without-provider": "StorageUnavailableError: memory Postgres composition requires the checked host provider for the G1b stateful projection: no backend reachable",
+    "wrong-driver-live": "StorageUnavailableError: memory PG server is below the provider floor",
+    "assembly-missing-driver": "MemoryHostDriverRequiredError: memory Postgres storage requires an explicit host-injected driver provider",
     "missing-profile": "CAPABILITY_UNAVAILABLE: neutral port does not advertise required profile fenced-writers-v1"
   },
   "operations": {
@@ -143,10 +167,16 @@
       "events": 2,
       "last_event": "admission:candidate_26d1ec616acafab30337c1706811471677a9191e7eb2a3e4d5a1d1764b0043c6"
     },
+    "epochs": {
+      "write": "1",
+      "reopen": "2",
+      "advance": "1"
+    },
     "restart": {
       "capture_replay": "duplicate_exact",
       "record_id": "mem_x2dqwoy6tbsalsv57tuoyk623yo6tkgt3cleyra5ncfybku3hjha",
-      "journal_events": 2
+      "journal_events": 2,
+      "processes": 2
     }
   },
   "runtimeClosure": [
@@ -251,7 +281,6 @@
     "node_modules/pg/lib/connection.js",
     "node_modules/pg/lib/crypto/cert-signatures.js",
     "node_modules/pg/lib/crypto/sasl.js",
-    "node_modules/pg/lib/crypto/utils-webcrypto.js",
     "node_modules/pg/lib/crypto/utils.js",
     "node_modules/pg/lib/defaults.js",
     "node_modules/pg/lib/index.js",
@@ -352,7 +381,6 @@
     "node_modules/@types/node/diagnostics_channel.d.ts",
     "node_modules/@types/node/dns.d.ts",
     "node_modules/@types/node/dns/promises.d.ts",
-    "node_modules/@types/node/dom-events.d.ts",
     "node_modules/@types/node/domain.d.ts",
     "node_modules/@types/node/events.d.ts",
     "node_modules/@types/node/fs.d.ts",
@@ -362,6 +390,7 @@
     "node_modules/@types/node/http2.d.ts",
     "node_modules/@types/node/https.d.ts",
     "node_modules/@types/node/inspector.d.ts",
+    "node_modules/@types/node/inspector.generated.d.ts",
     "node_modules/@types/node/module.d.ts",
     "node_modules/@types/node/net.d.ts",
     "node_modules/@types/node/os.d.ts",
@@ -394,6 +423,13 @@
     "node_modules/@types/node/v8.d.ts",
     "node_modules/@types/node/vm.d.ts",
     "node_modules/@types/node/wasi.d.ts",
+    "node_modules/@types/node/web-globals/abortcontroller.d.ts",
+    "node_modules/@types/node/web-globals/domexception.d.ts",
+    "node_modules/@types/node/web-globals/events.d.ts",
+    "node_modules/@types/node/web-globals/fetch.d.ts",
+    "node_modules/@types/node/web-globals/navigator.d.ts",
+    "node_modules/@types/node/web-globals/storage.d.ts",
+    "node_modules/@types/node/web-globals/streams.d.ts",
     "node_modules/@types/node/worker_threads.d.ts",
     "node_modules/@types/node/zlib.d.ts",
     "node_modules/typescript/lib/lib.decorators.d.ts",
