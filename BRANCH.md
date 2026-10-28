@@ -37,7 +37,7 @@
 - [ ] Local HTTP process qualification only; no root-dev or production UAT.
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read W3.b row, sections 2/3/4/5, rules and template; mechanical branch check and port availability pass.
-- [ ] Lot 1: tests first in apps/artifact-content/tests/host.test.ts for stable/pinned routes, unknown hosts, CSP/headers, private blobs, rotation/revocation and activation refusal.
+- [x] Lot 1: acceptance tests committed before host implementation; execution pending the shared Docker lock.
 - [ ] Lot 2: apps/artifact-content/src/{host,runtime,index}.ts reuse package content/PG/S3 ports and W3.a consume; no publication dispatcher.
 - [ ] Lot 3: typecheck/lint, focused content and W3.a regressions, HTTP listener smoke; scope checks; isolated teardown.
 - [ ] Lot 4: draft PR against feat/app-cm-integration, BRANCH.md body, first plan comment, push and green CI on exact head; report PR and SHA.
