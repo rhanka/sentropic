@@ -73,6 +73,10 @@ Tests substitute a synthetic digest to prove replacement coverage; it is never a
 deployable release receipt. Existing main CD supplies the canonical immutable
 content-hash tag. W5 must pin the actual tested/published registry digest, verify
 API/IdP/content equality and record config/render hashes before promotion.
+BR03d-EX2 permits tags only during the default-closed phase. The render gate
+rejects any API/content enabling flag set to `1` unless API/content images end
+in `@sha256:` followed by exactly 64 lowercase hexadecimal characters. Passing
+this prerequisite does not authorize activation or replace the closed-state gate.
 No new image is built or published by this manifest lane.
 
 Opening any live Sentropic artifacts surface, including preprod, requires the
