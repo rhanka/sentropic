@@ -48,6 +48,7 @@ describe('RC1 current issuer session store', () => {
     const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
     const store = getRemoteSessionAuthority()!;
     const pending = store.find(tokens.sessionId)!;
+    if (pending.revoked) throw new Error('Expected active test session');
     // Reproduce the committed DB insert while its private-create continuation is paused.
     unlinkSync(join(directory, `${createHash('sha256').update(tokens.sessionId).digest('hex')}.json`));
     expect(await getSentropicOAuthPorts().sessions.revokeAllForUser(userId)).toBe(1);

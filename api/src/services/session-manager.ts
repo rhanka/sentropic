@@ -424,11 +424,13 @@ export async function listUserSessions(userId: string) {
  * @param userId - User ID
  */
 export async function revokeAllSessions(userId: string): Promise<void> {
-  getRemoteSessionAuthority()?.revokeUser(userId);
+  const authority = getRemoteSessionAuthority();
+  authority?.revokeUser(userId);
   const deleted = await db
     .delete(userSessions)
     .where(eq(userSessions.userId, userId))
     .returning({ id: userSessions.id });
+  for (const row of deleted) authority?.revoke(row.id);
   
   logger.info({ userId, count: deleted.length }, 'All user sessions revoked');
 }
