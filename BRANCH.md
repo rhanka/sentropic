@@ -26,6 +26,10 @@
   - `api/src/routes/auth/oauth.ts`
   - `api/src/routes/namespaces/auth/federation.ts`
   - `deploy/k8s/base/35-auth-idp.yaml`
+  - `.github/workflows/ci.yml`
+  - `.github/workflows/idp-session-secret.yml`
+  - `deploy/ci/idp-identity-sync/session-*`
+  - `deploy/ci/idp-identity-sync/idp-sync.selftest.mjs`
   - `spec/REMOTE_CONTROL_RC1.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -42,6 +46,10 @@
   - [x] Declare BRRC1-EXn with rationale, impact and rollback before any conditional edit.
 
 ## Feedback Loop
+- [x] BRRC1-EX3: F1 authorizes pre-apply Secret/KEK/PVC checks and an IdP session Secret provisioning workflow matching idp-workload-secret.yml. Impact: missing prerequisites fail CD before any apply; conductor owns key generation/storage. Rollback: revert workflow/checks together with the isolated manifest, without changing stored credentials.
+- [ ] Opus r1 F1: provision isolated signing through sentropic-idp-run; verify prerequisites before deploy.
+- [ ] Opus r1 F2/F4: delete DB sessions despite private-store errors; route product revocations to issuer tombstones; test failure modes and restored rows.
+- [ ] Opus r1 F3: refuse D2-JWS algorithm substitution with explicit authority_refused vectors.
 - [x] BRRC1-EX2: temporary scope for byte-preserving import of origin/main 8d37455df7f019cb42699257d343abbcc7ac2f68 by merge. Reason: main advanced and BRANCH.md conflicts prevent PR CI. Impact: import accepted upstream build/CI/chat-runtime commits; no RC1 edits to those files. Resolve only BRANCH.md, verify Track containment, then immediately restore narrow scope. Rollback: revert the integration merge without rewriting history. The 150-line author-change limit remains on authored patches; this merge preserves upstream commit identities.
 - [x] BRRC1-EX1 extension: issuer-private durable session authority on its own PVC prevents shared-DB row restoration from undoing logout/revocation. The product has no mount; loss or corruption refuses remote authority. No schema migration or live storage mutation; rollback disables remote issuance while preserving tombstones.
 - [x] BRRC1-EX1: isolate IdP session signing in deploy/k8s/base/35-auth-idp.yaml and bind immutable MFA/lineage in session-manager credentials. Reason: shared DB writers must not elevate issuer MFA. Impact: new IdP session-secret reference; pre-upgrade unsigned-lineage credentials cannot control remotely. Rollback: disable remote issuance and restore manifest; no data reversal or gate bypass. User's RC1 login/proof-key isolation mandate authorizes this directly blocking correction; no deployment is run.
