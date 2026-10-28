@@ -20,7 +20,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import ChatConversation from '../src/components/ChatConversation.svelte';
 // Verify StreamMessage is importable in the jsdom environment (svelte-streamdown wired via BR-CONV-EX1).
 import StreamMessage from '../src/components/StreamMessage.svelte';
-import type { ChatUiWebHost } from '../src/hosts/createWebHost.js';
+import type { ChatUiWebHost } from '@sentropic/chat-runtime/hosts/createWebHost';
 import { createRendererRegistry } from '../src/renderers/registry.js';
 import { createNoopChatContextProvider } from '@sentropic/chat-runtime/state/chat-context';
 

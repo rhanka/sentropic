@@ -30,7 +30,7 @@ import { cleanup, render, waitFor } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import ChatConversation from '../src/components/ChatConversation.svelte';
-import type { ChatUiWebHost } from '../src/hosts/createWebHost.js';
+import type { ChatUiWebHost } from '@sentropic/chat-runtime/hosts/createWebHost';
 import type { StreamHubEvent } from '@sentropic/chat-runtime/client/streamTypes';
 import { createRendererRegistry } from '../src/renderers/registry.js';
 
