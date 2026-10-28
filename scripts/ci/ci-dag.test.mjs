@@ -3,12 +3,30 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import test from 'node:test';
-import { checkDag, readiness, runtimeInputs, scanInputs } from './ci-dag.mjs';
+import { checkDag, readiness, runtimeInputs, scanInputs, securityJoin } from './ci-dag.mjs';
 import { evaluateExpected, workflowExpected } from './ci-expected-results.mjs';
 
 const YAML = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'))('yaml');
 const workflow = YAML.parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
 const context = { changes: { global: 'true' }, event: 'pull_request', ref: 'refs/pull/79/merge' };
+
+test('should reject a missing or failed selected scan while allowing unselected lanes', () => {
+  for (const changes of [{ global: 'true' }, { api: 'true' }, { ui: 'true' }]) {
+    const needs = { changes: { result: 'success', outputs: changes } };
+    for (const kind of Object.keys(scanInputs)) {
+      const selected = changes.global || (kind === 'ui' ? changes.ui : kind === 'e2e' ? changes.api || changes.ui : changes.api);
+      needs[`security-container-${kind}`] = { result: selected ? 'success' : 'skipped' };
+    }
+    assert.equal(securityJoin(needs, 'container').ok, true);
+    for (const [name, row] of Object.entries(needs).filter(([name, row]) => name !== 'changes' && row.result === 'success')) {
+      for (const result of ['failure', 'skipped', 'cancelled', 'neutral', '']) {
+        assert.equal(securityJoin({ ...needs, [name]: { result } }, 'container').ok, false);
+      }
+      const missing = { ...needs }; delete missing[name];
+      assert.equal(securityJoin(missing, 'container').ok, false);
+    }
+  }
+});
 
 test('should start runtime and scan consumers at their actual artifact barriers', () => {
   assert.deepEqual(checkDag(workflow, context).errors, []);
