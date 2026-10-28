@@ -53,45 +53,7 @@
         "ChatWidgetDisplayMode",
         "ChatWidgetDrawerSide",
         "ChatWidgetLayoutState",
-        "chatWidgetLayout",
-        "BUILTIN_LOCAL_TOOL_NAMES",
-        "LocalToolName",
-        "LocalToolExecutionStatus",
-        "LocalToolPermissionDecision",
-        "LocalToolPermissionPolicy",
-        "LocalToolPermissionRequest",
-        "LocalToolDefinition",
-        "LocalToolExecution",
-        "LocalToolPermissionPolicyEntry",
-        "LocalToolPermissionRequiredError",
-        "setLocalToolsAdapter",
-        "registerLocalTool",
-        "registerLocalTools",
-        "unregisterLocalTool",
-        "clearRegisteredLocalTools",
-        "listRegisteredLocalTools",
-        "isLocalToolName",
-        "isLocalToolRuntimeAvailable",
-        "getLocalToolDefinitions",
-        "localToolsStore",
-        "executeLocalTool",
-        "decideLocalToolPermission",
-        "listLocalToolPermissionPolicies",
-        "upsertLocalToolPermissionPolicy",
-        "deleteLocalToolPermissionPolicy",
-        "ChatSteerFeedback",
-        "postChatSteer",
-        "insertSteerMessageInTimeline",
-        "ChatToolScopeToggle",
-        "isExtensionRestrictedToolsetMode",
-        "computeToolToggleDefaults",
-        "computeVisibleToolToggleIds",
-        "computeEnabledToolIds",
-        "NormalizedPendingLocalToolCall",
-        "parsePendingLocalToolCallsFromStatusPayload",
-        "PermissionPromptShape",
-        "shouldResetLocalToolStateForFreshRound",
-        "filterPermissionPromptsForPendingStream"
+        "chatWidgetLayout"
       ]
     },
     "./state/chatWidgetShell": {
@@ -132,16 +94,6 @@
         "AgentsListRow",
         "AgentsSortOptions",
         "buildAgentsListRows"
-      ]
-    },
-    "./state/agentsViewMarkers": {
-      "kind": "ts",
-      "file": "dist/state/agentsViewMarkers.js",
-      "exports": [
-        "AgentsViewMarkersConfig",
-        "AgentsViewMarkers",
-        "buildAgentsViewMarkersKey",
-        "createAgentsViewMarkers"
       ]
     },
     "./state/streamMessageProjection": {
@@ -222,75 +174,6 @@
           "update"
         ]
       }
-    },
-    "./stores/localTools": {
-      "kind": "ts",
-      "file": "dist/stores/localTools.js",
-      "exports": [
-        "BUILTIN_LOCAL_TOOL_NAMES",
-        "LocalToolName",
-        "LocalToolExecutionStatus",
-        "LocalToolPermissionDecision",
-        "LocalToolPermissionPolicy",
-        "LocalToolPermissionRequest",
-        "LocalToolDefinition",
-        "LocalToolExecution",
-        "LocalToolPermissionPolicyEntry",
-        "LocalToolPermissionRequiredError",
-        "setLocalToolsAdapter",
-        "registerLocalTool",
-        "registerLocalTools",
-        "unregisterLocalTool",
-        "clearRegisteredLocalTools",
-        "listRegisteredLocalTools",
-        "isLocalToolName",
-        "isLocalToolRuntimeAvailable",
-        "getLocalToolDefinitions",
-        "localToolsStore",
-        "executeLocalTool",
-        "decideLocalToolPermission",
-        "listLocalToolPermissionPolicies",
-        "upsertLocalToolPermissionPolicy",
-        "deleteLocalToolPermissionPolicy"
-      ],
-      "storeShape": {
-        "localToolsStore": [
-          "subscribe",
-          "set",
-          "update"
-        ]
-      }
-    },
-    "./utils/chat-steer": {
-      "kind": "ts",
-      "file": "dist/utils/chat-steer.js",
-      "exports": [
-        "ChatSteerFeedback",
-        "postChatSteer",
-        "insertSteerMessageInTimeline"
-      ]
-    },
-    "./utils/chat-tool-scope": {
-      "kind": "ts",
-      "file": "dist/utils/chat-tool-scope.js",
-      "exports": [
-        "ChatToolScopeToggle",
-        "isExtensionRestrictedToolsetMode",
-        "computeToolToggleDefaults",
-        "computeVisibleToolToggleIds",
-        "computeEnabledToolIds"
-      ]
-    },
-    "./utils/localToolStreamSync": {
-      "kind": "ts",
-      "file": "dist/utils/localToolStreamSync.js",
-      "exports": [
-        "NormalizedPendingLocalToolCall",
-        "parsePendingLocalToolCallsFromStatusPayload",
-        "PermissionPromptShape",
-        "shouldResetLocalToolStateForFreshRound",
-        "filterPermissionPromptsForPendingStream"
-      ]
     },
     "./components/ChatDock.svelte": {
       "kind": "svelte",
