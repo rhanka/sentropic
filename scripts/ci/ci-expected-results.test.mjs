@@ -56,7 +56,7 @@ test('should keep validators independent without static capacity mutexes', () =>
   const validators = Object.entries(workflow.jobs).filter(([name]) =>
     /^validate-/.test(name) && !['validate-publishable-manifests', 'validate-ci-capacity-metrics', 'validate-idp-sync'].includes(name)
     || name === 'memory-l5-qualification');
-  assert.equal(validators.length, 24);
+  assert.equal(validators.length, 25);
   for (const [name, job] of validators) {
     assert.deepEqual(job.needs, ['changes'], name);
     assert.equal(job.concurrency, undefined, name);
@@ -94,10 +94,12 @@ test('should allow unrelated npm releases when another package fails', () => {
 });
 
 test('should exercise the real publication DAG on a branch without running registry writers', () => {
+  const makefile = fs.readFileSync('Makefile', 'utf8');
+  const dryRunPackages = makefile.match(/@case '\$\(PACKAGE\)' in ([a-z0-9|\-]+)\) ;;/)?.[1].split('|') ?? [];
   const changes = Object.fromEntries(Object.keys(workflow.jobs.changes.outputs).map(key => [key, key === 'engram_e2' ? 'false' : 'true']));
   const context = { changes, ref: 'refs/heads/topic', event: 'workflow_dispatch', inputs: { capacity_publish_dry_run: true } };
   const selected = workflowExpected(workflow, context).filter(row => row.selected && row.job.startsWith('publish-'));
-  assert.equal(selected.length, 21);
+  assert.equal(selected.length, 22);
   for (const { job: name } of selected) {
     const steps = workflow.jobs[name].steps;
     const dry = steps.find(step => step.name === 'Dry-run package publication');
@@ -108,6 +110,7 @@ test('should exercise the real publication DAG on a branch without running regis
       CI_MANIFEST_BOOTSTRAP_TARGET: "${{ inputs.bootstrap_publish_target || 'none' }}",
     }, name);
     assert.equal(dry.run, `make ci-capacity-publish-dry-run PACKAGE=${name.slice(8)} ENV=test-ci-capacity`);
+    assert.ok(dryRunPackages.includes(name.slice(8)), `${name}: accepted dry-run package`);
     for (const step of steps.filter(step => /^Publish |^Qualify published /.test(step.name ?? ''))) {
       assert.equal(step.if, 'inputs.capacity_publish_dry_run != true', `${name}/${step.name}`);
     }
