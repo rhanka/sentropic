@@ -2092,3 +2092,143 @@ export function createChatLoopController<
       if (timerId) clearTimeout(timerId);
       ltLocalToolExecutionTimersById.delete(toolCallId);
       ltPendingLocalToolPermissionPrompts = ltPendingLocalToolPermissionPrompts.filter(
+        (prompt) => prompt.toolCallId !== toolCallId,
+      );
+      ltLocalToolStatesById.delete(toolCallId);
+      ltLocalToolInFlight.delete(toolCallId);
+      ltLocalToolPermissionRetriesInFlight.delete(toolCallId);
+      ltNotify();
+      return;
+    }
+
+    if (state === 'response_created') {
+      ltPendingLocalToolPermissionPrompts = ltPendingLocalToolPermissionPrompts.filter(
+        (prompt) => prompt.streamId !== streamId,
+      );
+      ltNotify();
+    }
+  };
+
+  // -------------------------------------------------------------------------
+  // Local-tool machine public API (slice 1E)
+  // -------------------------------------------------------------------------
+
+  const attachLocalToolMachine = (opts: AttachLocalToolMachineOptions): void => {
+    ltMachineGeneration += 1;
+    ltExecuteLocalTool = opts.executeLocalTool;
+    ltDecideLocalToolPermission = opts.decideLocalToolPermission;
+    ltPostLocalToolResult = opts.postLocalToolResult;
+    ltIsLocalToolName = opts.isLocalToolName;
+    ltIsLocalToolRuntimeAvailable = opts.isLocalToolRuntimeAvailable;
+    ltIsLocalToolPermissionRequired = opts.isLocalToolPermissionRequired;
+    ltGetPermissionRequest = opts.getPermissionRequest;
+  };
+
+  /**
+   * Internal: clear only state (timers + maps), not the injected functions.
+   * Called by both resetLocalToolMachineState and detachLocalToolMachine.
+   */
+  const ltClearMachineState = (): void => {
+    ltMachineGeneration += 1;
+    ltLocalToolExecutionTimersById.forEach((timerId) => clearTimeout(timerId));
+    ltLocalToolExecutionTimersById.clear();
+    ltLocalToolStatesById.clear();
+    ltLocalToolInFlight.clear();
+    ltLocalToolPermissionRetriesInFlight.clear();
+    ltPendingLocalToolPermissionPrompts = [];
+  };
+
+  const resetLocalToolMachineState = (): void => {
+    ltClearMachineState();
+    ltNotify();
+  };
+
+  const detachLocalToolMachine = (): void => {
+    ltClearMachineState();
+    ltExecuteLocalTool = null;
+    ltDecideLocalToolPermission = null;
+    ltPostLocalToolResult = null;
+    ltIsLocalToolName = null;
+    ltIsLocalToolRuntimeAvailable = null;
+    ltIsLocalToolPermissionRequired = null;
+    ltGetPermissionRequest = null;
+    ltNotify();
+  };
+
+  const handleLocalToolStreamEvent = (event: unknown): void => {
+    // No-op if machine not attached
+    if (!ltIsLocalToolName) return;
+
+    const raw =
+      event && typeof event === 'object' ? (event as Record<string, unknown>) : null;
+    if (!raw) return;
+
+    const streamId = String(raw.streamId ?? '').trim();
+    if (!streamId) return;
+
+    const eventType = String(raw.type ?? '').trim();
+
+    if (eventType === 'status') {
+      ltHandleLocalToolStatusEvent(raw);
+      return;
+    }
+
+    if (eventType === 'done' || eventType === 'error') {
+      ltClearLocalToolStateForStream(streamId);
+      return;
+    }
+
+    if (eventType !== 'tool_call_start' && eventType !== 'tool_call_delta') return;
+    if (!ltIsLocalToolRuntimeAvailable?.()) return;
+
+    const eligibleStreamIds = ltGetLocalToolEligibleStreamIds();
+    if (!eligibleStreamIds.has(streamId)) return;
+
+    if (eventType === 'tool_call_start') {
+      ltHandleLocalToolCallStart(raw);
+      return;
+    }
+    ltHandleLocalToolCallDelta(raw);
+  };
+
+  const decideLocalToolPermission = async (
+    prompt: ControllerLocalToolPermissionPrompt,
+    decision: string,
+  ): Promise<void> => {
+    const machineGeneration = ltMachineGeneration;
+    if (ltLocalToolPermissionRetriesInFlight.has(prompt.toolCallId)) return;
+    ltLocalToolPermissionRetriesInFlight.add(prompt.toolCallId);
+
+    try {
+      await ltDecideLocalToolPermission!(prompt.request.requestId, decision);
+      if (machineGeneration !== ltMachineGeneration) return;
+      ltPendingLocalToolPermissionPrompts = ltPendingLocalToolPermissionPrompts.filter(
+        (item) => item.toolCallId !== prompt.toolCallId,
+      );
+      ltNotify();
+
+      if (decision === 'deny_once' || decision === 'deny_always') {
+        await ltPostLocalToolResult!(prompt.streamId, prompt.toolCallId, {
+          status: 'error',
+          error: `Permission denied for ${prompt.request.toolName} on ${prompt.request.origin}.`,
+        });
+        return;
+      }
+
+      const localResult = await ltExecuteLocalTool!(
+        prompt.toolCallId,
+        prompt.name,
+        prompt.args,
+        { streamId: prompt.streamId },
+      );
+      if (machineGeneration !== ltMachineGeneration) return;
+      await ltPostLocalToolResult!(prompt.streamId, prompt.toolCallId, localResult);
+    } catch (error) {
+      if (machineGeneration !== ltMachineGeneration) return;
+      if (ltIsLocalToolPermissionRequired?.(error)) {
+        const request = ltGetPermissionRequest!(error);
+        const nextPrompt: ControllerLocalToolPermissionPrompt = {
+          ...prompt,
+          request,
+          createdAt: Date.now(),
+        };
