@@ -257,3 +257,140 @@ class StreamHub implements StreamHubClient {
     this.history.record(event);
     this.dispatchBrowserEvents(event);
 
+    for (const sub of this.subs.values()) {
+      try {
+        if (sub.onlyType && event.type !== sub.onlyType) continue;
+        if (sub.onlyTypes && sub.onlyTypes.length > 0 && !sub.onlyTypes.includes(event.type)) continue;
+        if (sub.streamId) {
+          if (!('streamId' in event)) continue;
+          if ((event as { streamId: string }).streamId !== sub.streamId) continue;
+        }
+        sub.onEvent(event);
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  private dispatchBrowserEvents(event: StreamHubEvent): void {
+    const target = this.options.eventTarget;
+    if (!target || typeof CustomEvent === 'undefined') return;
+    if (event.type === 'workspace_membership_update') {
+      target.dispatchEvent(
+        new CustomEvent('streamhub:workspace_membership_update', {
+          detail: event,
+        }),
+      );
+      return;
+    }
+    if (event.type === 'workspace_update') {
+      target.dispatchEvent(
+        new CustomEvent('streamhub:workspace_update', { detail: event }),
+      );
+    }
+  }
+
+  private async ensureConnected(): Promise<void> {
+    if (!this.options.getAuthState()) {
+      this.close();
+      return;
+    }
+    if (this.subs.size === 0) {
+      this.close();
+      return;
+    }
+
+    const baseUrl = this.options.getBaseUrl();
+    if (!baseUrl) {
+      this.close();
+      return;
+    }
+    const workspaceId = this.options.getWorkspaceId?.() ?? null;
+    const streamIds = this.getTrackedStreamIds();
+    const shouldUseExtension = this.options.shouldUseExtensionProxy
+      ? this.options.shouldUseExtensionProxy()
+      : Boolean(this.options.extensionPortFactory);
+
+    if (shouldUseExtension) {
+      const connectionKey = JSON.stringify({
+        baseUrl,
+        workspaceId,
+        streamIds,
+      });
+      const extensionUrl = `ext-sse:${connectionKey}`;
+      if (this.currentUrl === extensionUrl && this.extensionPort) return;
+
+      this.close();
+      const connected = this.connectExtensionProxySse(
+        baseUrl,
+        workspaceId,
+        streamIds,
+      );
+      if (connected) {
+        this.currentUrl = extensionUrl;
+        return;
+      }
+      this.close();
+      this.scheduleReconnect();
+      return;
+    }
+
+    const url = buildSseUrl(
+      baseUrl,
+      workspaceId,
+      this.options.getUrlBaseOrigin?.(),
+    );
+    if (this.es && this.currentUrl === url) return;
+
+    this.close();
+    const source = this.createEventSource(url);
+    this.es = source;
+    this.currentUrl = url;
+
+    const handle = (type: string, raw: MessageEvent) => {
+      try {
+        this.handleSseEvent(type, JSON.parse(String(raw.data)));
+      } catch {
+        // ignore
+      }
+    };
+
+    for (const type of ALL_SSE_EVENT_TYPES) {
+      source.addEventListener(type, (event) => handle(type, event as MessageEvent));
+    }
+    source.onerror = () => {
+      // Native EventSource reconnects by itself.
+    };
+  }
+
+  private createEventSource(url: string): EventSource {
+    if (this.options.eventSourceFactory) {
+      return this.options.eventSourceFactory(url, { withCredentials: true });
+    }
+    return new EventSource(url, { withCredentials: true } as EventSourceInit);
+  }
+}
+
+const buildSseUrl = (
+  baseUrl: string,
+  workspaceId: string | null,
+  origin: string | undefined,
+): string => {
+  const baseOrigin =
+    origin ??
+    (typeof window !== 'undefined' ? window.location.origin : 'http://localhost');
+  const url = new URL(`${baseUrl}/streams/sse`, baseOrigin);
+  if (workspaceId) url.searchParams.set('workspace_id', workspaceId);
+  return url.toString();
+};
+
+const asRecord = (value: unknown): Record<string, unknown> =>
+  value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
+
+const safelyReplay = (replay: () => void): void => {
+  try {
+    replay();
+  } catch {
+    // ignore
+  }
+};
