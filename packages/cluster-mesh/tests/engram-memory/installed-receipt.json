@@ -1,14 +1,14 @@
 {
   "version": 1,
   "kind": "engram-e10-installed-receipt",
-  "head": "bf87c772a0432201248a5b3831a72a92becc7531",
-  "tree": "3fa277e406b28987394907ba4681df50f0781901",
+  "head": "cf1e537a8810a49d50d442169474f3b893103e6f",
+  "tree": "8b14cca07a28aeaf644bd05b718120a9b29c9321",
   "consumer": {
     "node": "v24.21.0",
     "platform": "linux",
     "arch": "x64",
     "root": "clean-consumer-outside-repository",
-    "lockSha256": "98209af43f6952def63538d4d36e21780d53bbc0253dc14d7c8a3a6b6e896ecc",
+    "lockSha256": "8904d2f36ae92c6e781bdc1f38f2ab41e293ec52ad8f5df13fe70295971fb1c2",
     "npmVersion": "11.19.0"
   },
   "engram": {
@@ -17,9 +17,9 @@
     "integrity": "sha512-/TV03olHbzG+3haTC5j5YJ282egCrXak1yQE0I8DHF1kAQDwsKUe1QlMwibvBCEmPGdWeTgSHT4fF8lZJTH8cw=="
   },
   "clusterMesh": {
-    "version": "0.24.0-dev.4",
-    "tarballSha256": "f7d03a4675adaa23d0baca9012fc86127d13bd57b8f136c0cfc802a7d0e6acd3",
-    "integrity": "sha512-bgXVGgk6C8+TPHXfqMvg7bm9Y9xgzqevzRFh4hJSrEWneqNN57YAY34NnLZU0qphhpPrRhra8z7vT9ZyXAyETQ==",
+    "version": "0.24.0-dev.5",
+    "tarballSha256": "11a8fe858d1abecde50e003c191a8600db4880f4382c8ce3ffa2bb44c09df8e4",
+    "integrity": "sha512-pDYuW62mwMdRpsgDCbS27eKfP+4YV3AgplUgdEboqqlUoLliWpgpgYPnnyW0aaPCZgiuDM/uwGQ2iELeIIFDcw==",
     "fileListSha256": "cd30501f29c188e15434e435287cc198c359cc9c8b14ae2efe2a34f62b9f7898"
   },
   "p3ManifestSha256": "1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730",
@@ -33,8 +33,8 @@
       "version": "8.22.0",
       "artifactDigest": "bab5faf4410151a463078fffa326d10979150bfc330f0a29bd08948378ed3421"
     },
-    "statements": 906,
-    "transactions": 112
+    "statements": 887,
+    "transactions": 111
   },
   "migrations": [
     {
@@ -168,9 +168,67 @@
       "record_id": "mem_x2dqwoy6tbsalsv57tuoyk623yo6tkgt3cleyra5ncfybku3hjha",
       "journal_events": 2,
       "processes": 2
+    },
+    "hydration": {
+      "host": "in-memory-fault-injection",
+      "cases": [
+        {
+          "completed": false,
+          "fault": "divergent-receipt",
+          "positiveReopen": "passed",
+          "entryReceipt": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "controlReceipt": "sha256:49a3bbbd95d1f176f7ada13c49b39f2cff1b4089a49351923e2fc61ebdf3f6a4",
+          "refusal": {
+            "code": "JOURNAL_CORRUPT",
+            "operation": "admin",
+            "message": "capture idempotency registry is malformed or disagrees with its canonical capture",
+            "retryable": false
+          }
+        },
+        {
+          "completed": false,
+          "fault": "missing-receipt",
+          "positiveReopen": "passed",
+          "entryReceipt": null,
+          "controlReceipt": "sha256:49a3bbbd95d1f176f7ada13c49b39f2cff1b4089a49351923e2fc61ebdf3f6a4",
+          "refusal": {
+            "code": "JOURNAL_CORRUPT",
+            "operation": "admin",
+            "message": "capture idempotency registry is malformed or disagrees with its canonical capture",
+            "retryable": false
+          }
+        },
+        {
+          "completed": true,
+          "fault": "divergent-receipt",
+          "positiveReopen": "passed",
+          "entryReceipt": "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "controlReceipt": "sha256:49a3bbbd95d1f176f7ada13c49b39f2cff1b4089a49351923e2fc61ebdf3f6a4",
+          "refusal": {
+            "code": "JOURNAL_CORRUPT",
+            "operation": "admin",
+            "message": "capture idempotency registry is malformed or disagrees with its canonical capture",
+            "retryable": false
+          }
+        },
+        {
+          "completed": true,
+          "fault": "missing-receipt",
+          "positiveReopen": "passed",
+          "entryReceipt": null,
+          "controlReceipt": "sha256:49a3bbbd95d1f176f7ada13c49b39f2cff1b4089a49351923e2fc61ebdf3f6a4",
+          "refusal": {
+            "code": "JOURNAL_CORRUPT",
+            "operation": "admin",
+            "message": "capture idempotency registry is malformed or disagrees with its canonical capture",
+            "retryable": false
+          }
+        }
+      ]
     }
   },
   "runtimeClosure": [
+    "installed-hydration.mjs",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/binding.js",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/codec.js",
     "node_modules/@sentropic/cluster-mesh/dist/engram-memory/commit-result-recovery.js",
