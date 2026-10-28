@@ -94,9 +94,9 @@
 - [ ] **Lot E10-4 — E10a installed-bytes takeover (conductor decision 2026-10-28, option (a))**
   - [x] Merge `feat/cluster-mesh-engram-e10a` (PR #808) into this branch; no rebase.
   - [x] Delete `installed-host-bridge.mjs`; construct memory only via the installed `createMemoryNeutralHandle` export at pack-only version `0.24.0-dev.2`.
-  - [ ] Rerun the E10 installed lane end to end on the exact head and regenerate the receipt with no `hostGlue` and `tupleCoverage` `full`.
-  - [ ] Retain the regenerated cluster-mesh tarball with the candidate artifacts and record its sha256.
-  - [ ] Record the Lot 6 disposition and the exact E11 input list in the PR body.
+  - [x] Rerun the E10 installed lane end to end on the exact head and regenerate the receipt with no `hostGlue` and `tupleCoverage` `full`.
+  - [x] Retain the regenerated cluster-mesh tarball with the candidate artifacts and record its sha256.
+  - [x] Record the Lot 6 disposition and the exact E11 input list in the PR body.
   - [ ] Push and require CI green on the exact head.
 - [ ] **Lot 1 — Ordered merges**
   - [x] Merge #758, #763, #765, #775, #779, #764, #793, #792, #790; all heads retained; no lot excluded.
@@ -116,6 +116,7 @@
 - [x] Five profiles are `declared` only in the receipt; `fiveProfileEquivalence` is `not-covered` (Stage B blocked, E9 #790, 23 cases); the neutral handle glue is `host-authored-not-installed` and the tuple coverage for that glue is `partial`.
 - [x] E10 bridge finding: the frozen substrate persists K7/K8 proofs and journal events in snake-case wire form while the installed kernel validator checks the camel-case proof model and an intent hash. The installed bridge translates those values in both directions (K7/K8 aggregates, journal intent hash carried only in stored bytes, K7 receipt digest rejoined from the pending control at read).
 - [x] E10a resolution (conductor decision 2026-10-28, option (a)): the fenced neutral-handle factory and the K7/K8 plus intent-hash adaptation now ship in `packages/cluster-mesh/src/engram-memory/` (PR #808, pack-only `0.24.0-dev.2`) and are exported through `./engram-memory`; `installed-host-bridge.mjs` is deleted and the regenerated receipt carries no `hostGlue`.
+- [x] E10a installed-bytes lane green on `cd563d72e`: exit=0, cleanup=0; write and reopen in two processes on the injected PostgreSQL through the installed `createMemoryNeutralHandle` only; exact u64 epoch advance `1` to `2`; seven typed refusals recorded. Receipt `packages/cluster-mesh/tests/engram-memory/installed-receipt.json` sha256 `5f729fd6376f059ef56f2470dfd1a043de74870a7eb5d1936dae6b46e5a0efe9`; cluster-mesh `0.24.0-dev.2` tarball sha256 `bced27e380962f5792cc3af734db20c46750bd0a892c29d7cc83ac6d2f31997f` retained under `.tmp/engram-e2-host-tuple/e10-artifacts/`; campaign log sha256 `d2093543e53bb990954f449e35e64b518d070cb7b0d40c90306d54c1051d1261`, campaign status sha256 `eb30050778841df44c7a4fe88d59a640dc9620a1429382b8afccda8cb2b493b3`; the `1eb052fe6` takeover run above is superseded by this run.
 - [x] Owner authorization covers all listed approved lots and the E9 API adaptation.
 - [x] BR1-EX1 implemented: existing qualification routes accept test-mem-batch1, preserve Compose cleanup and guard the exact approved P3 bytes; no Compose/workflow file changes.
 - [x] All nine lot heads are ancestors of the batch; E2/E3/E4 were already present through E7. No lot excluded for a content conflict.
@@ -126,6 +127,27 @@
 - [x] Memory: 21 files, 166 passed, 23 explicitly blocked/skipped; three async-recovery regression tests pass; no type errors. Common: 11 passed. Grants: 3 passed. PG: 37 files passed, 1 skipped; 144 tests passed, 4 skipped (dedicated campaigns), no type errors.
 - [x] Aggregate context began at ed7795b94; a test-only assertion correction and its plan entry were committed as ea251468d before the memory lane. No implementation source changed during qualification. This final docs commit records results without rerunning the same campaign.
 - [x] make lock-root succeeded after 21:00 UTC with no lock diff; generated dependencies removed; final PG container/network cleanup succeeded. Final pack-only version is 0.23.0-dev.14; no publication.
+
+## Lot 6 disposition (#709)
+- Lot 6 evidence from #709: `missing source`.
+- Conductor decision: option (a) of the PR #803 r2 review — ship the fenced neutral handle and the wire adaptation in cluster-mesh (lot E10a, PR #808), delete the host bridge, rerun the lane and regenerate the receipt.
+- Date: 2026-10-28.
+- Disposition status: executed in this branch (merge `68405fbd2`, bridge deleted, lane green on `cd563d72e`, receipt sha256 `5f729fd6376f059ef56f2470dfd1a043de74870a7eb5d1936dae6b46e5a0efe9`).
+
+## E11 inputs (exact, from this head)
+- Receipt: `packages/cluster-mesh/tests/engram-memory/installed-receipt.json` sha256 `5f729fd6376f059ef56f2470dfd1a043de74870a7eb5d1936dae6b46e5a0efe9`; qualified head `cd563d72eaf934ceab93f88f48e0ab30d2b6f6be`, tree `ad748ec72f1f5f4443d6c55e6ea62cd190bdb30c`; campaign log sha256 `d2093543e53bb990954f449e35e64b518d070cb7b0d40c90306d54c1051d1261` and status sha256 `eb30050778841df44c7a4fe88d59a640dc9620a1429382b8afccda8cb2b493b3` under `tmp/worktrees/mem-e10b/tmp/installed-memory-e10/`.
+- Engram: `@sentropic/engram` `0.22.0`, tarball sha256 `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10`; P3 manifest sha256 `1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730`.
+- cluster-mesh bound by bytes: `0.24.0-dev.2` tarball sha256 `bced27e380962f5792cc3af734db20c46750bd0a892c29d7cc83ac6d2f31997f`, file-list sha256 `cd30501f29c188e15434e435287cc198c359cc9c8b14ae2efe2a34f62b9f7898`, retained under `.tmp/engram-e2-host-tuple/e10-artifacts/` with the `0.24.0-dev.1` predecessor (sha256 `4799bcc39944b7d487cf1f4b6d5b628a5c4556a068918a5ffb36db54348bd8cc`).
+- Consumer closure: `installed-consumer-package.json` sha256 `6eeb3e747fd7774afa76116cf9d33091c9a8b48529aac76c17808110ebcca015`; `installed-consumer-package-lock.json` sha256 `eab1961ca86892edeace4c08b6dd2ba130a3e8d5ef47147f2136b0f2d37fb5ac`; install with `npm ci` from this lock; `pg` `8.22.0`, `typescript` `5.4.5`, `@types/node` `22.20.1`, npm `11.19.0`, Node `v24.21.0` (linux/x64).
+- Engine identities: qualification image `sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6`; PostgreSQL image `sha256:266d3c257594e195b309ae9d1805e54c788f1d7b375f56bf6c367aac6c917e7b`, server `17.11`, provider floor `17.0.0`.
+- Contract and migrations: `contractDigest` `sha256:dff737ced37d801ef48bb4d7088fc4fbc92021d21fe2034ff33ea643b49bec28`, five required profiles, the 10 migration ids/checksums and `hostHistory` exactly as listed in the receipt.
+- Profile statuses carried verbatim: five profiles `declared`; `fiveProfileEquivalence` `not-covered` (Stage B blocked, E9 #790, 23 cases); never promoted to `qualified`.
+- Host glue: none. `installed-host-bridge.mjs` is deleted; memory is constructed only through the installed `createMemoryNeutralHandle` export (E10a, PR #808); the receipt carries `tupleCoverage` `full` and no `hostGlue`. Host-created tables `host_history` and `host_memory_identity` unchanged.
+- Refusals: the seven typed refusals and their exact strings from the receipt `refusals` field.
+- Operations evidence: capture, admission and journal digests from the receipt; epochs `1` to `2` (advance `1`); restart `duplicate_exact`, 2 processes.
+- Closures: `runtimeClosure` and `typeClosure` from the receipt, all under `/consumer/`.
+- Lot 6 (#709): `missing source`, with the conductor disposition recorded in the Lot 6 disposition section above (2026-10-28).
+- CI: the exact-head `pull_request` CI run for this PR; the installed lane is not covered by CI (local qualification lane only).
 
 ## Included lots and review references
 
