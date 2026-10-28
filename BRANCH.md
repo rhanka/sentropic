@@ -38,7 +38,7 @@
   - [x] Encode all 21 input categories and independent receiving gates with explicit PENDING reasons.
   - [x] Validate source/package, tarball identities, retained locks, installed closure, migration bytes, engines and exact profile statuses.
   - [ ] Add `tools/engram-e11/{tuple,bindings,slots}.mjs` and candidate spec; hash files/tarballs/backend/C6/locks; reject drift and status promotion.
-  - [ ] Add `tools/engram-e11/e11.mk`: pinned Node 24, temporary evidence, deterministic dry-run/check; no lock regeneration.
+  - [x] Add `tools/engram-e11/e11.mk`: pinned Node 24, temporary evidence, deterministic dry-run/check; no lock regeneration.
   - [ ] Add `tools/engram-e11/tuple.test.mjs`: tampering, missing input, pending/final refusal, deterministic output.
 - [ ] **Lot E11-2 — Receiving handoff**
   - [ ] Add `tools/engram-e11/README.md`: 21 categories, PENDING reasons, retained-lock install, reservation, main PR, CI publication, byte recheck, separate C9/L5 ACKs.
