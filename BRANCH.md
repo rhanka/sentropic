@@ -28,7 +28,7 @@
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
-- [x] BR79-EX1 — Planned workflow exception: split `build-ui` children and scans, remove non-runtime prerequisites from `test-e2e`, `e2e-vscode`, `smoke-idp-screens`, and `test-smoke-restore`; keep the complete final join. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
+- [x] BR79-EX1 — Workflow exception: split `build-ui` children and scans, remove non-runtime prerequisites from browser/VSCode/IdP/restore; retain complete joins, explicit publisher success/legitimate-skip predicates, SHA-pinned touched actions, read-only job permissions and neutral CI environments. Impact: selected dispatch and release barriers. Rollback: revert this branch's workflow changes while preserving complete-result checks.
 - [x] BR79-EX2 — Planned Makefile exception: expose independent extension, desktop, UI test/profile, scanner, and runtime startup targets; preserve build-input ordering. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 - [x] Owner author identity: codex / gpt-6.1-sol / high; no Python, no AI trailers, commits <=150 changed lines. BR-78 Lots 3/5 and unmet 255s UI readiness remain open.
 - [x] PR #826 review O2/O4: parity fixtures compare both security joins against actual lane `if` predicates for all eight api/ui/global combinations, including every selected missing/non-success result. Permanent workflow steps use neutral `test-ci-*` environments, matching the existing images/capacity convention; branch-local `test-ci-br79` remains local only. Locked local qualification passes 8 DAG / 24 expected-result tests and every security-parser fixture.
@@ -39,8 +39,10 @@
 - [x] Extended local pass: 6 DAG / 24 expected-result / 134 publication tests, all report-parser negatives, capacity shape, version filters and the 56-spec E2E inventory pass. Capacity reports 64 PR / 63 main ready slots against a 17-slot observed lower bound; admission/timing acceptance remains unqualified.
 - [ ] Main baseline job validate-comments 122989014482 fails packaging at 18:02:00Z with npm ECONNRESET after 102 tests pass. Its log and raw job/step receipts are retained; this run cannot supply a successful baseline verdict. Owner: CI train author; compare complete spans without treating this failure as a pass.
 - [x] First local locked qualification: `make test-ci-dag test-ci-expected-results test-security-parser API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-br79` passes 6 DAG / 23 expected-result tests and all parser fixtures; repeat after final edits. Isolated cleanup requested under the same lock.
-- [ ] Baseline main run 40736913130 attempt 1 at c8ec01237 is still incomplete; raw attempt/job/step receipts are in `.tmp/ci-br79/receipts/40736913130/`. Do not infer a completed verdict or duration.
-- [ ] Chrome/VSCode fan-out needs the owner's pending BR79-EX3 decision for `ui/Dockerfile`; current builds still preserve both embedded extension assertions and separate profile endpoints.
+- [x] Baseline main run 40736913130 attempt 1 at c8ec01237 is now completed/failure; initial PR 40741770463 attempt 1 is completed/cancelled. Retain their raw snapshots and failed comments packaging; neither supplies successful acceptance.
+- [x] Reviewed-head after receipt: run 40748328717 attempt 1 at 949d47c8ced0426a010da639ac910229d5699874 completed/success, 75 successful / 28 skipped jobs. Raw run/attempt/job/step capture, all-job duration/admission TSV, exact workflow digest and readiness JSON: `.tmp/ci-br79/receipts/40748328717/`; durable summary: study section 12. This is the reviewed head, not the later review-fix head.
+- [x] Explicit gaps: IdP 233s vs <=150s (83s over); first-wave runner waits up to 2649s, exceeding the <=60s cumulative scheduling budget on their own. Container lanes max 90s, plus 17s join and queue; whole scan-path <=90s is unqualified. Owner: CI train author; carry actions below do not claim achieved budgets.
+- [x] Chrome/VSCode fan-out and BR79-EX3 are carried to BR-80; `ui/Dockerfile` remains unchanged and unauthorized in BR-79. Preserve both embedded extension assertions and separate profile endpoints until bounded authorization and qualification.
 
 ## AI Flaky tests
 - [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
@@ -70,7 +72,8 @@
   - [x] Add `ci-dag.mjs` and `ci-dag.test.mjs` (new): actual artifact dependencies, matrix membership, parallel API/UI/toolbox scan lanes, and a complete expected-result join.
   - [x] Update `ci-expected-results.mjs` and its test: static/SAST failures must still block promotion even if browser work has finished; absent scan reports and unexpected skips fail closed.
   - [ ] Lot gate: new `make test-ci-dag ENV=test-ci-br79` and `make test-ci-expected-results test-security-parser ENV=test-ci-br79`; negative fixtures prove result completeness without triggering a release.
-- [ ] **Lot 2 — Independent UI and runtime lanes**
+- [ ] **Lot 2 — Independent UI and runtime lanes — remainder carried to BR-80**
+  - [x] Carry scope: BR79-EX3 authorization, Chrome/VSCode stage fan-out, profile/output identity checks and full UI readiness; completed desktop/UI-test/static/runtime split remains this PR's delivered scope. No Dockerfile change is included.
   - [x] Separate desktop, fresh UI tests, runtime image and static profile; both image publishers retain UI test/profile requirements (BR79-EX1/EX2).
   - [x] Remove static/SAST wait edges from browser, VSCode, IdP and restore; preserve static/SAST barriers explicitly at both image publishers (BR79-EX1).
   - [ ] Fan out Chrome extension, VSCode extension, desktop, and UI tests after their prepared inputs; UI image waits for the assets actually embedded in `ui/static`.
@@ -78,7 +81,8 @@
   - [ ] Dispatch browser/VSCode/IdP/restore at artifact readiness; keep real IdP native form POST, redirects/codes, restore, and production runtime assertions.
   - [ ] Lot gate: real PR/main runs plus `make check-ci-version-filters check-e2e-inventory ENV=test-ci-br79`; run existing SAST/SCA/container scans and `test-smoke-restore` through their unchanged assertion sets.
   - [ ] Pre-UAT static gate: `make typecheck-api lint-api typecheck-ui lint-ui API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-br79`; independent scheduling must preserve both consumers' compiler/linter verdicts before Lot 3.
-- [ ] **Lot 3 — UAT and measured acceptance**
+- [ ] **Lot 3 — UAT and measured acceptance — remainder carried to BR-80**
+  - [x] Carry scope: served login/consent and packaging inspection; IdP <=150s, complete scan-path <=90s, scheduling <=60s, warm/cold readiness and full rollback execution remain open. BR-80 must retain admission receipts while reducing package-lane pressure and inspect IdP setup/build/transfer/execute before choosing an optimization; no assertion/timeout reduction. BR-81 handles deterministic journeys; BR-84 proves repeated full-train budgets.
   - [x] Record completed new-base main spans with job IDs in study section 12: API/tools/full UI/browser 397/437/438/487s, container/restore/IdP/VSCode 229/208/213/105s. Cache enabled, mixed state; retain the comments packaging failure and unqualified budgets.
   - [x] Rollback fixture restores serial UI grouping and static/security runtime waits without changing selected membership; an injected failed API scan still blocks the verdict. IaC native report upload is mandatory.
   - [x] Add an identified complete-run readiness receipt; preserve absent spans and expose admission delay and runner-minutes separately from execution.
@@ -88,8 +92,9 @@
   - [ ] Rollback drill: restore previous dependency edges and build grouping while retaining exact result membership; prove a negative scan still prevents promotion.
 - [ ] **Lot 4 — Docs consolidation**
   - [x] Record current architecture, local checks and identified incomplete/failed runs in plan/65 and study section 12; final measurements remain pending.
-  - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
-- [ ] **Lot 5 — Final validation**
+  - [x] Update this plan and the study with the reviewed-head after receipt and explicit carried scope; no temporary spec scaffolding was introduced.
+- [ ] **Lot 5 — Final validation — broader campaign carried to BR-80**
+  - [x] Carry scope: local full static/build/API/UI/browser/VSCode campaigns, extension-output inspection, rollback drill and PR/main timing comparison remain open; prior exact-head local attempt failed fetching yaml (ECONNRESET). This PR requires changed-file fixtures and completed/success CI on its exact review-fix head; green CI does not close carried UAT or timing acceptance.
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
   - [ ] Static: `make typecheck-api lint-api typecheck-ui lint-ui API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-br79`; `make test-ci-dag test-ci-expected-results test-security-parser ENV=test-ci-br79` must still reject failed or missing static/security results.
   - [ ] Build: `make build-api build-ui-image API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-br79`; verify separate Chrome/VSCode/desktop outputs and that UI image assembly waits for every embedded prerequisite.
@@ -100,3 +105,6 @@
   - [ ] Apply required package version bumps and lock refresh if package source changes; qualify exact candidate bytes; no source-change bump is waived.
   - [ ] Run `make scope-check ENV=test-ci-br79` before each commit; end isolated service lots with `make down ENV=test-ci-br79` and `make down ENV=test-ci-br79`.
   - [ ] Create/update the PR using `BRANCH.md`; obtain review and green CI/UAT on the same head; only then hand off to the authorized merge operator for branch-plan removal and merge.
+
+## Deferred to BR-80
+- [ ] CI train author owns the explicit Lots 2/3/5 carry above; retain their unchecked acceptance items. BR-80 starts after BR-79 merge; carry is a handoff requirement, not evidence that BR-80 already implements or satisfies it.

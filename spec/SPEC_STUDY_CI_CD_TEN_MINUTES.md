@@ -493,7 +493,7 @@ then repeat browser probes, journeys and the unchanged container gate. The
 new runtime/cache action is pinned to the source-verified v3 commit
 `3cb05d89e1f492524af3d41a1c98c83bc3025124` at all four call sites.
 
-## 12. BR-79 independent DAG — qualification in progress
+## 12. BR-79 independent DAG — reviewed-head receipt and carried acceptance
 
 BR-79 starts from merge `c8ec01237ce5f8539a9ac6c1c11c58c947a22078`, on
 `perf/ci-parallel-dag` in `tmp/worktrees/ci-parallel-dag`. The owner requires
@@ -523,10 +523,10 @@ The observed 17-slot lower bound and cumulative scheduling budget are still
 unqualified. A green shape test does not close either timing requirement.
 
 Baseline main [40736913130](https://github.com/rhanka/sentropic/actions/runs/40736913130),
-attempt 1 at `c8ec01237`, is incomplete and includes failed comments packaging
+attempt 1 at `c8ec01237`, is completed/failure and includes failed comments packaging
 (job 122989014482, npm ECONNRESET after 102 tests pass). Initial BR-79 PR run
 [40741770463](https://github.com/rhanka/sentropic/actions/runs/40741770463),
-attempt 1 at `52206747c7338d082094ff4cb74fb596b30cd360`, is also incomplete.
+attempt 1 at `52206747c7338d082094ff4cb74fb596b30cd360`, is completed/cancelled.
 Neither supplies final acceptance. Raw run/attempt/job/step JSON, workflow
 digests, per-job TSV and native failure logs are retained in the owner workspace
 under `.tmp/ci-br79/receipts/<run-id>/`. Missing spans remain to measure.
@@ -534,8 +534,8 @@ under `.tmp/ci-br79/receipts/<run-id>/`. Missing spans remain to measure.
 Chrome/VSCode stage separation awaits the bounded owner decision for
 `ui/Dockerfile` (BR79-EX3); the current implementation still builds both inside
 each UI profile and preserves every embedded-output assertion. Scans <=90s,
-IdP <=150s, cumulative scheduling <=60s, complete UI readiness and the exact
-final-head CI result remain to measure. The historical 255s full UI / 209s
+IdP <=150s, cumulative scheduling <=60s and complete UI readiness remain open;
+the reviewed-head CI result is recorded below. The historical 255s full UI / 209s
 container / 290s IdP sample at `d072d24ec` is not a new-base acceptance result.
 
 Completed baseline job spans from main run 40736913130 attempt 1 are below.
@@ -543,7 +543,7 @@ Cache import/export is enabled; this mixed cache state is not a fully warm
 qualification. Runner labels are `ubuntu-latest`; full job/step identities and
 timestamps are retained. Workflow SHA-256 is
 `e4a90d83c54dfe5d05ee3f0c80f299e1734e09e4ee6f03ab53c41d57a64e0d18`.
-The run's packaging failure and pending publication prevent whole-run success
+The run's failure prevents whole-run success
 credit; these completed job spans remain valid measurements.
 
 | Baseline job | Job ID | Complete seconds |
@@ -561,3 +561,62 @@ Initial-head UI job 123006317177 in PR run 40741770463 passes all 83 files /
 489 tests in 188s, including about 122s materializing cached input layers and
 35s executing tests. Moving this work off the runtime-image path preserves
 its cost; it does not qualify complete UI readiness or the final head.
+
+After receipt: [run 40748328717](https://github.com/rhanka/sentropic/actions/runs/40748328717),
+attempt 1, `pull_request`, reviewed head `949d47c8ced0426a010da639ac910229d5699874`,
+completed/success: 75 successful jobs, 28 skipped, zero failures. Raw run/attempt/
+job/step JSON, all 103 job spans in `jobs.tsv`, exact workflow and readiness JSON
+are retained under `.tmp/ci-br79/receipts/40748328717/`. Workflow SHA-256:
+`f268d4ea1b4d64137ab93741a26ee78063c5d385b471bb9e88e0807d6e9e8b0a`.
+Runner class is `ubuntu-latest`; cache import/export is enabled, actual warm/cold
+state unidentified. Measured runner-minutes: 205.8, with no missing executed
+spans. These are complete job spans, excluding runner admission.
+
+| After job | Job ID | Execution seconds | Created-to-start seconds |
+| --- | --- | --- | --- |
+| API image | 123051431931 | 332 | 2315 |
+| Toolbox | 123051431960 | 1354 | 2494 |
+| Desktop | 123051431933 | 46 | 2444 |
+| UI runtime | 123073253521 | 117 | 309 |
+| UI static | 123073253248 | 230 | 229 |
+| UI tests | 123051431812 | 104 | 2209 |
+| Browser image | 123051430438 | 56 | 525 |
+| Container API | 123074641143 | 62 | 184 |
+| Container toolbox | 123085229482 | 90 | 2 |
+| Container UI | 123077045060 | 50 | 16 |
+| Container browser | 123056496684 | 89 | 2086 |
+| Container join | 123086032495 | 17 | 2 |
+| API SAST / SCA | 123051432031 / 123051432004 | 56 / 23 | 2436 / 2433 |
+| UI SAST / SCA | 123051432256 / 123051431837 | 34 / 24 | 2591 / 2242 |
+| Code join | 123074448295 | 15 | 205 |
+| IaC | 123051432003 | 31 | 2180 |
+| Restore | 123085229870 | 209 | 3 |
+| IdP screens | 123085229315 | 233 | 2 |
+| VSCode | 123077044862 | 129 | 2 |
+| Browser groups a/b/c/d/e | 123077045022 / 123077044968 / 123077045660 / 123077045124 / 123077045154 | 268 / 216 / 251 / 205 / 199 | 35 / 3 / 37 / 5 / 3 |
+| Final gate | 123089502746 | 20 | 2 |
+
+Run creation 18:47:06Z to update 20:43:50Z is 7004s; first job creation
+19:26:49Z leaves 4621s. The preceding concurrency-group cancellation accounts
+for 2383s before first-job creation. First-wave runner waits reach **2649s**
+(`validate-artifacts`, job 123051432139), exceeding the **<=60s cumulative
+scheduling budget** alone. API/browser container admission is 184/2086s.
+Runtime readiness-to-start is 3–38s for browser groups, 2s for VSCode/IdP and
+3s for restore; group c's own creation is 1s after UI readiness. Execution and
+admission are separate; a removed DAG edge cannot establish admitted capacity.
+
+**IdP 233s vs <=150s is 83s over budget**, versus the 213s baseline. Container
+lanes max 90s meet the individual lane ceiling, but the complete path also has
+the 17s join and queue; whole-path <=90s is unqualified. Toolbox execution
+1354s includes a 1297s build step versus 437s baseline; no cache-state speedup
+is inferred. Split UI spans are not added or substituted for full UI readiness.
+
+CI train author carries BR-79 Lots 2 (EX3), 3 and 5 to **BR-80**: obtain bounded
+Dockerfile authorization before extension-stage fan-out, verify embedded output/
+profile identity, inspect IdP setup/build/transfer/execute before optimizing,
+retain rollback/UAT and broader local campaigns. BR-80's package-lane split
+targets package-path cost and runner pressure; it does not establish the IdP
+or scheduling ceilings. Measure admission after that split and resolve capacity
+with the owner if waits persist. BR-81 supplies deterministic runtime journeys;
+BR-84 owns repeated warm/cold whole-train proof and every breach. Exact-head
+green CI is still required after review fixes; these carried budgets stay open.
