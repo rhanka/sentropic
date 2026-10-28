@@ -146,3 +146,143 @@ export type ChatSessionRuntime<
   dispose(): void;
 };
 
+type HostRefs = {
+  transport: ControllerHostTransport;
+  streamClient: ControllerStreamClient | undefined;
+  checkpointHost: unknown;
+  localToolMachine: AttachLocalToolMachineOptions | undefined;
+};
+
+const createDraftState = (draft = ''): ChatDraftState => ({
+  draft,
+  input: draft,
+  lastDraftApplied: draft,
+});
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> => {
+  if (!value || typeof value !== 'object') return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+};
+
+const assertJsonSafe = (
+  value: unknown,
+  label: string,
+  ancestors = new Set<object>(),
+): void => {
+  if (value === null || typeof value === 'string' || typeof value === 'boolean') {
+    return;
+  }
+  if (typeof value === 'number') {
+    if (Number.isFinite(value)) return;
+    throw new TypeError(`${label} must contain only finite JSON numbers`);
+  }
+  if (typeof value === 'undefined') {
+    throw new TypeError(`${label} must not contain undefined values`);
+  }
+  if (typeof value !== 'object' || !value) {
+    throw new TypeError(`${label} must contain only JSON-safe plain data`);
+  }
+  if (ancestors.has(value)) {
+    throw new TypeError(`${label} must not contain cyclic data`);
+  }
+  if (!Array.isArray(value) && !isPlainObject(value)) {
+    throw new TypeError(
+      `${label} must contain only JSON-safe plain data (Map, Set, class, and host objects are not allowed)`,
+    );
+  }
+  ancestors.add(value);
+  if (Array.isArray(value)) {
+    value.forEach((entry, index) =>
+      assertJsonSafe(entry, `${label}[${index}]`, ancestors),
+    );
+  } else {
+    Object.entries(value).forEach(([key, entry]) =>
+      assertJsonSafe(entry, `${label}.${key}`, ancestors),
+    );
+  }
+  ancestors.delete(value);
+};
+
+const assertString: (
+  value: unknown,
+  label: string,
+) => asserts value is string = (value, label) => {
+  if (typeof value !== 'string') {
+    throw new TypeError(`${label} must be a string`);
+  }
+};
+
+const assertArray: (
+  value: unknown,
+  label: string,
+) => asserts value is readonly unknown[] = (value, label) => {
+  if (!Array.isArray(value)) {
+    throw new TypeError(`${label} must be an array`);
+  }
+};
+
+const assertFiniteNumber: (
+  value: unknown,
+  label: string,
+) => asserts value is number = (value, label) => {
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new TypeError(`${label} must be a finite number`);
+  }
+};
+
+const cloneMutableValue = <T>(value: T): T => {
+  if (Array.isArray(value)) {
+    return value.map((item) => cloneMutableValue(item)) as T;
+  }
+  if (isPlainObject(value)) {
+    const next: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      next[key] = cloneMutableValue(entry);
+    }
+    return next as T;
+  }
+  if (value !== null && typeof value === 'object') {
+    throw new TypeError('value must contain only JSON-safe plain data');
+  }
+  return value;
+};
+
+const freezeSnapshotValue = <T>(value: T): T => {
+  if (Array.isArray(value)) {
+    for (const item of value) freezeSnapshotValue(item);
+    return Object.freeze(value) as T;
+  }
+  if (isPlainObject(value)) {
+    for (const entry of Object.values(value)) freezeSnapshotValue(entry);
+    return Object.freeze(value) as T;
+  }
+  return value;
+};
+
+const cloneSnapshotValue = <T>(value: T): T =>
+  freezeSnapshotValue(cloneMutableValue(value));
+
+const normalizeSequence = (value: number): number =>
+  Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+
+const cloneMessages = <
+  Message extends ChatSessionRuntimeMessage = ChatSessionRuntimeMessage,
+>(
+  messages: readonly Message[],
+): Message[] => cloneMutableValue([...messages]);
+
+const summarizeAttachments = (
+  attachments: readonly ChatSessionAttachment[],
+): ComposerAttachmentSummary => summarizeComposerAttachments(attachments);
+
+const isControllerStreamClient = (
+  value: unknown,
+): value is ControllerStreamClient => {
+  if (!value || typeof value !== 'object') return false;
+  const record = value as Record<string, unknown>;
+  return typeof record.set === 'function' && typeof record.delete === 'function';
+};
+
+const resolvePollJob = (
+  transport: unknown,
