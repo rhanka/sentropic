@@ -74,6 +74,7 @@
   - [ ] Lot gate: real PR/main runs plus `make check-ci-version-filters check-e2e-inventory ENV=test-ci-parallel-dag`; run existing SAST/SCA/container scans and `test-smoke-restore` through their unchanged assertion sets.
   - [ ] Pre-UAT static gate: `make typecheck-api lint-api typecheck-ui lint-ui API_PORT=9395 UI_PORT=5595 MAILDEV_UI_PORT=1495 ENV=test-ci-parallel-dag`; independent scheduling must preserve both consumers' compiler/linter verdicts before Lot 3.
 - [ ] **Lot 3 — UAT and measured acceptance**
+  - [x] Rollback fixture restores serial UI grouping and static/security runtime waits without changing selected membership; an injected failed API scan still blocks the verdict. IaC native report upload is mandatory.
   - [x] Add an identified complete-run readiness receipt; preserve absent spans and expose admission delay and runner-minutes separately from execution.
   - [ ] Inspect served login/consent and web/Chrome/VSCode/desktop packaging on the qualification SHA; verify the embedded files and profile-specific endpoints match the intended consumer.
   - [ ] Budget to measure: security scan branch ≤90s versus the PR example of 199s; IdP ≤150s; start runtime jobs as soon as their artifact inputs are ready, and preserve BR-76 cumulative scheduling ≤60s. Publish readiness and actual start times.
