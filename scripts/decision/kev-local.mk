@@ -19,3 +19,15 @@ decision-kev-smoke-client:
 decision-kev-verify-provenance:
 	@test "$(ENV)" = test-decision-l4 && test -z "$$CI" && test -z "$$GITHUB_ACTIONS"
 	@flock /home/antoinefa/.cache-tmp/sentropic-docker.lock bash scripts/decision/kev-attestation.sh "$(KEV_CACHE)"
+
+.PHONY: decision-kev-lock-root decision-kev-lock-check
+decision-kev-lock-root:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) \
+		npm install --package-lock-only --workspaces --include-workspace-root --ignore-scripts --no-audit --no-fund
+decision-kev-lock-check:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) \
+		sh -ec 'probe="$$(mktemp -d)"; mkdir -p "$$probe/api" "$$probe/ui" "$$probe/packages/cluster-mesh" "$$probe/packages/llm-mesh"; \
+		cp package.json package-lock.json "$$probe/"; for package in api ui packages/cluster-mesh packages/llm-mesh; do cp "$$package/package.json" "$$probe/$$package/"; done; \
+		cd "$$probe"; npm ci --dry-run --workspaces --include-workspace-root --ignore-scripts --no-audit --no-fund'
