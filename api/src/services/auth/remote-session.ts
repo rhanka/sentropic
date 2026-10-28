@@ -19,7 +19,9 @@ export async function resolveRemoteLogin(credential: string): Promise<RemoteLogi
   if (!parsed.success) return null;
   const login = parsed.data;
   const record = validated.sessionRecord;
-  if (!login.mfaVerified || !record.mfaVerified || login.sessionVersion !== record.createdAt.getTime()
+  if (record.userId !== payload.userId || record.id !== payload.sessionId
+    || record.userId !== validated.session.userId
+    || !login.mfaVerified || !record.mfaVerified || login.sessionVersion !== record.createdAt.getTime()
     || login.authTime !== Math.floor(record.createdAt.getTime() / 1000)
     || typeof payload.exp !== 'number') return null;
   return {
