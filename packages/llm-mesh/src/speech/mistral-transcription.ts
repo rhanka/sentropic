@@ -628,6 +628,11 @@ export class MistralTranscriptionSession implements SpeechSession {
     if (open && !open.abandoned && !open.donePending && open.utteranceId !== frame.utteranceId) {
       throw new MistralTranscriptionError('invalid-format', 'new utteranceId requires a committed or cleared turn');
     }
+    // A late capture frame racing a pending commit must not open a second
+    // provider stream for the same id: the commit owns the turn until done.
+    if (open && !open.abandoned && open.donePending && open.utteranceId === frame.utteranceId) {
+      throw new MistralTranscriptionError('invalid-format', 'turn already committed');
+    }
     if (this.finalizedIds.has(frame.utteranceId)) {
       throw new MistralTranscriptionError('invalid-format', 'utteranceId already finalized');
     }
@@ -926,6 +931,15 @@ export class MistralTranscriptionSession implements SpeechSession {
 
   private onDone(stream: TurnStream, text: string, language: unknown): void {
     if (stream.abandoned) return;
+    // A done for an id another stream already finalized (a provider end
+    // racing a clear) must never emit a second final: drop the stream.
+    if (this.finalizedIds.has(stream.utteranceId) && !stream.doneReceived) {
+      stream.abandoned = true;
+      stream.resolveDone(undefined);
+      if (this.current === stream) this.current = undefined;
+      void stream.socket.close().catch(() => undefined);
+      return;
+    }
     this.finalizedIds.add(stream.utteranceId);
     if (stream.doneReceived) {
       this.pushError('invalid-format', true);

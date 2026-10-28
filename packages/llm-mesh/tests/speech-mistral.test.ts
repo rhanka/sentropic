@@ -482,6 +482,26 @@ describe('mistral transcript mapping', () => {
     expect(driven.sink.records).toHaveLength(1);
   });
 
+  it('should refuse a write that races a pending commit on the same id', async () => {
+    const driven = await openMistralDriven();
+    await driven.write('u1', 10);
+    const pending = driven.session.command(commitCommand('u1'));
+    await flush();
+    // A late capture frame after Stop must not open a second u1 stream.
+    await expect(driven.write('u1', 20)).rejects.toMatchObject({ code: 'invalid-format' });
+    expect(driven.sockets).toHaveLength(1);
+    driven.lastSocket().push(frameDone('one'));
+    await pending;
+    await driven.write('u2', 100);
+    expect(driven.sockets).toHaveLength(2);
+    await driven.commit('u2', [frameDone('two')]);
+    const events = await driven.collect();
+    const finals = events
+      .filter((event) => event.type === 'transcript.final')
+      .map((event) => `${(event as unknown as { utteranceId: string }).utteranceId}:${(event as unknown as { text: string }).text}`);
+    expect(finals).toEqual(['u1:one', 'u2:two']);
+  });
+
   it('should emit one final with no partials when done carries the whole turn', async () => {
     const driven = await openMistralDriven();
     await driven.write('u_solo', 10);
