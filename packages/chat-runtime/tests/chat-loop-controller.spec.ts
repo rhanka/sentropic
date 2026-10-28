@@ -1731,3 +1731,143 @@ describe('chat-loop-controller: local-tool state machine (slice 1E)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  // 11m. sequential ordering: second tool waits for first to complete
+  it('11m: second tool in stream is NOT executed while first is in-flight', async () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = createChatLoopController<Msg>();
+      let firstResolve!: () => void;
+      const firstDone = new Promise<void>((r) => { firstResolve = r; });
+
+      const calls: Array<string> = [];
+      const poster = vi.fn(async (_: string, toolCallId: string) => {
+        calls.push(`posted:${toolCallId}`);
+      });
+
+      const opts = {
+        executeLocalTool: vi.fn(async (_toolCallId: string, name: string) => {
+          calls.push(`exec:${_toolCallId}`);
+          if (_toolCallId === 'tc-first') {
+            await firstDone;
+          }
+          return { status: 'ok' };
+        }),
+        decideLocalToolPermission: vi.fn(async () => {}),
+        postLocalToolResult: poster,
+        isLocalToolName: (n: string) => ['bash'].includes(n),
+        isLocalToolRuntimeAvailable: () => true,
+        isLocalToolPermissionRequired: () => false,
+        getPermissionRequest: () => ({ requestId: '', toolName: '', origin: '' }),
+      };
+      ctrl.attachLocalToolMachine(opts);
+      ctrl.setMessages([assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' })]);
+
+      // First tool arrives with seq=1, second with seq=2
+      emitToolCallStart(ctrl, 'stream-1', 'tc-first', 'bash', '{}', 1);
+      emitToolCallStart(ctrl, 'stream-1', 'tc-second', 'bash', '{}', 2);
+
+      // Let timers fire — first starts, second should be blocked
+      await vi.runAllTimersAsync();
+
+      // Only first should have been executed so far
+      expect(calls.filter(c => c.startsWith('exec'))).toEqual(['exec:tc-first']);
+
+      // Now complete the first tool
+      firstResolve();
+      await vi.runAllTimersAsync();
+
+      // Both should have been executed now
+      expect(calls.filter(c => c.startsWith('exec'))).toContain('exec:tc-first');
+      expect(calls.filter(c => c.startsWith('exec'))).toContain('exec:tc-second');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 11n. detachLocalToolMachine clears state + injections
+  it('11n: detachLocalToolMachine clears all state and injected functions', async () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = createChatLoopController<Msg>();
+      const { opts } = makeFakeLocalToolMachine();
+      ctrl.attachLocalToolMachine(opts);
+      ctrl.setMessages([assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' })]);
+
+      emitToolCallStart(ctrl, 'stream-1', 'tc-1', 'bash', '{}', 1);
+      expect(ctrl.getSnapshot().localToolStatesById.size).toBe(1);
+
+      ctrl.detachLocalToolMachine();
+
+      expect(ctrl.getSnapshot().localToolStatesById.size).toBe(0);
+      expect(ctrl.getSnapshot().pendingLocalToolPermissionPrompts).toHaveLength(0);
+
+      // After detach, events are no-ops (no isLocalToolName injected)
+      emitToolCallStart(ctrl, 'stream-1', 'tc-2', 'bash', '{}', 2);
+      expect(ctrl.getSnapshot().localToolStatesById.size).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 11o. resetLocalToolMachineState clears state but keeps injections
+  it('11o: resetLocalToolMachineState clears state but keeps machine functional', async () => {
+    vi.useFakeTimers();
+    try {
+      const ctrl = createChatLoopController<Msg>();
+      const { opts, calls } = makeFakeLocalToolMachine();
+      ctrl.attachLocalToolMachine(opts);
+      ctrl.setMessages([assistantMsg('a1', { _streamId: 'stream-1', _localStatus: 'processing' })]);
+
+      emitToolCallStart(ctrl, 'stream-1', 'tc-1', 'bash', '{}', 1);
+      expect(ctrl.getSnapshot().localToolStatesById.size).toBe(1);
+
+      ctrl.resetLocalToolMachineState();
+
+      // State cleared
+      expect(ctrl.getSnapshot().localToolStatesById.size).toBe(0);
+      expect(ctrl.getSnapshot().pendingLocalToolPermissionPrompts).toHaveLength(0);
+
+      // Machine still functional — new events processed
+      ctrl.setMessages([assistantMsg('a2', { _streamId: 'stream-2', _localStatus: 'processing' })]);
+      emitToolCallStart(ctrl, 'stream-2', 'tc-2', 'bash', '{}', 1);
+      await vi.runAllTimersAsync();
+
+      expect(calls.execute).toHaveLength(1);
+      expect(calls.execute[0]?.toolCallId).toBe('tc-2');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // 11p. snapshot exposes both localToolStatesById and pendingLocalToolPermissionPrompts
+  it('11p: snapshot exposes localToolStatesById and pendingLocalToolPermissionPrompts', () => {
+    const ctrl = createChatLoopController<Msg>();
+    const snap = ctrl.getSnapshot();
+    expect(snap.localToolStatesById).toBeInstanceOf(Map);
+    expect(Array.isArray(snap.pendingLocalToolPermissionPrompts)).toBe(true);
+  });
+
+  // 11q. sentropic-string scan: controller source contains zero domain strings (re-check with 1E additions)
+  it('11q: controller source (with 1E additions) still contains zero sentropic domain strings', () => {
+    const controllerPath = path.join(
+      process.cwd(),
+      'src',
+      'state',
+      'chatLoopController.ts',
+    );
+    const source = fs.readFileSync(controllerPath, 'utf8');
+
+    const forbidden = [
+      'organization',
+      'folder',
+      'initiative',
+      'usecase',
+      'session_adapter',
+      'workspace',
+      'organization_update',
+      'folder_update',
+    ];
+
+    for (const term of forbidden) {
