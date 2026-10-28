@@ -6,10 +6,11 @@
   export let appShaped = false;
   export let features: ChatConversationFeatures = {};
   export let layout: 'inline' | 'docked' | 'floating' = 'inline';
+  export let labels: (key: string) => string = (key) => key;
 </script>
 
 {#snippet conversation()}
-  <ChatConversation snapshots={runtime} commands={runtime.commands} {features} {layout}>
+  <ChatConversation snapshots={runtime} commands={runtime.commands} {features} {layout} {labels}>
     {#snippet renderComments()}<div>Comments module</div>{/snippet}
     {#snippet renderDocuments()}<div>Documents module</div>{/snippet}
     {#snippet renderJobs()}<div>Jobs module</div>{/snippet}

@@ -126,6 +126,7 @@
   - [x] Conversation view source slice 10 committed within the atomic limit.
   - [x] Conversation view source slice 11 committed within the atomic limit.
 - [ ] **Lot 3 — Parity and packed boundary qualification**
+  - [x] Migrate layout, accessibility, feature defaults, optional slots and label assertions to a host-created real runtime fixture.
   - [x] Bind the contenteditable text property so a remounted view renders the retained runtime draft; assert both stored and displayed content.
   - [ ] Runtime tests: relocated `transport.test.ts`, `replay.test.ts`, `streamHub.test.ts`, `stream-history-bounds.test.ts`, `stream-throughput.test.ts`, `chat-core-host.spec.ts`.
   - [ ] Runtime tests: relocated `chat-loop-controller.spec.ts`, `chat-session-runtime.test.ts`, `chat-session-hydration.test.ts`, `chat-projection.test.ts`, `projection.golden.spec.ts`.
