@@ -10,7 +10,7 @@ import {
 import { applyResourcesAuthorFence, createResourcesAuthorFence, resourcesAuthorFence, type ResourcesCutoverControl } from './resources-cutover';
 import { productResourcesPorts } from './resources-product-ports';
 import { createArtifactHttpRouter } from './artifacts';
-import { artifactHostEnabled, productArtifactTransport, resolveArtifactSession } from '../../services/artifacts/instance';
+import { artifactHostEnabled, productArtifactTransport, productArtifactReaderPort, resolveArtifactSession } from '../../services/artifacts/instance';
 
 export { RESOURCE_PATHS, RESOURCE_ROUTES, createResourcesTransportRouter } from './resources';
 export { RESOURCES_AUTHOR, RESOURCES_PREDECESSOR } from './resources-cutover';
@@ -38,6 +38,7 @@ export const createResourcesNamespaceModule = (
       options.cutoverControl ? createResourcesAuthorFence(options.cutoverControl) : resourcesAuthorFence);
     router.route('/resources/artifacts', createArtifactHttpRouter({
       transport: async () => productArtifactTransport, identity: resolveArtifactSession, enabled: artifactHostEnabled,
+      reader: productArtifactReaderPort,
     }));
     return router;
   },
