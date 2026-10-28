@@ -145,3 +145,51 @@ describe('extractGeneratedFileCardsFromEvents', () => {
       }),
     ];
     expect(extractGeneratedFileCardsFromEvents(events)).toHaveLength(0);
+  });
+
+  it('should support parameterized toolName', () => {
+    const events = [
+      makeToolStartEvent('tc1', 'my_custom_doc_tool'),
+      makeToolResultEvent('tc1', {
+        status: 'completed',
+        jobId: 'job_xyz',
+        fileName: 'custom.pptx',
+        format: 'pptx',
+      }),
+    ];
+    const result = extractGeneratedFileCardsFromEvents(events, { toolName: 'my_custom_doc_tool' });
+    expect(result).toHaveLength(1);
+    expect(result[0].format).toBe('pptx');
+  });
+
+  it('should extract multiple cards from multiple tool calls', () => {
+    const events = [
+      makeToolStartEvent('tc1', 'document_generate'),
+      makeToolStartEvent('tc2', 'document_generate'),
+      makeToolResultEvent('tc1', { status: 'completed', jobId: 'j1', fileName: 'a.docx' }),
+      makeToolResultEvent('tc2', { status: 'completed', jobId: 'j2', fileName: 'b.docx' }),
+    ];
+    const result = extractGeneratedFileCardsFromEvents(events);
+    expect(result).toHaveLength(2);
+    expect(result.map((c) => c.jobId)).toEqual(['j1', 'j2']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getGeneratedFileFormatLabel
+// ---------------------------------------------------------------------------
+
+describe('getGeneratedFileFormatLabel', () => {
+  it('should uppercase a format string', () => {
+    expect(getGeneratedFileFormatLabel('docx')).toBe('DOCX');
+    expect(getGeneratedFileFormatLabel('pptx')).toBe('PPTX');
+  });
+
+  it('should return FILE for undefined', () => {
+    expect(getGeneratedFileFormatLabel(undefined)).toBe('FILE');
+  });
+
+  it('should return FILE for empty string', () => {
+    expect(getGeneratedFileFormatLabel('')).toBe('FILE');
+  });
+});
