@@ -7,7 +7,7 @@ export const TRAIN_LLM_GATEWAY_VERSION = '0.21.6';
 export const TRAIN_CLUSTER_MESH_VERSION = '0.23.3';
 /** Supported ranges consumed by registry/topology specs (adopted in 1.26b). */
 export const TRAIN_LLM_MESH_RANGE = '>=0.22.0 <0.32.0';
-export const TRAIN_LLM_GATEWAY_RANGE = '>=0.19.0 <0.22.0';
+export const TRAIN_LLM_GATEWAY_RANGE = '>=0.19.0 <0.23.0';
 /** Pre-train fake defaults preserved by the package-tree helper. */
 export const HISTORICAL_FAKE_MESH_VERSION = '0.22.0';
 export const HISTORICAL_FAKE_GATEWAY_VERSION = '0.19.0';
