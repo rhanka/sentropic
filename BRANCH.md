@@ -64,6 +64,7 @@
 - **Exception process**:
   - [x] BR1-EX1: inherit #793 Makefile wiring, extend qualification environment selectors only as needed; impact limited to isolated test environment, rollback batch changes to those lines.
   - [x] BR10-EX2: add `test-mem-e10` to the existing ENV filters of the Compose qualification mode, `engram-e2-postgres-up` and `down` in `Makefile` so the E10 installed lane reuses the same Compose project and Node 24 qualification image as `test-mem-batch1`; no other target changes. Impact: one additional isolated test environment name; rollback: remove `test-mem-e10` from those filters.
+  - [x] BR10-EX5: owner-approved size exception for existing commit `b312a63aa`: 250 changed lines = 207 lines of pure deletion of `installed-host-bridge.mjs` + 43 authored lines. Rationale: remove the host bridge atomically with the switch to the installed neutral handle. Impact: installed consumer/types and qualification wiring only; no history rewrite. Rollback: revert `b312a63aa` in a new commit, restoring its consumer wiring and deleted bridge together.
   - [x] BR024-EX1: conductor authorizes union of all three Makefile environment selectors, retaining memory and artifacts entries. Impact: qualification/cleanup routing; rollback selectors together.
 
 ## Plan / Todo (lot-based)
@@ -124,6 +125,7 @@
   - [ ] Require pull_request ci.yml completed/success on exact head; append READY-BATCH only afterward.
 
 ## Feedback Loop
+- [x] Opus r4 documentation dispositions: BR10-EX5 records the `b312a63aa` size exception; `PLAN.md` now registers the final worktree, current integration base, dev.5 lane and pending Engram 0.21.3 switch. Receipt and lane inputs remain unchanged; no installed rerun.
 - [x] E10-6 installed rerun on `cf1e537a8810a49d50d442169474f3b893103e6f`: exit=0, cleanup=0; receipt SHA-256 `2304a3e414a3090b968a2ff980ade48a29c1a3f5965dbc14d21d5ee74d0ed3a8`. Engram `0.22.0` + cluster-mesh `0.24.0-dev.5`: PG capture/admission/read/restart/replay, epoch 1 to 2, seven typed refusals, plus four K7 hydration refusals (created/completed × divergent/missing receipt), each with matching positive reopen and direct/transactional byte checks. Five profiles remain `declared`, equivalence `not-covered`; no `hostGlue`. Supersedes earlier E10 receipts below.
 - [x] Interim intentHash deviation remains fail-closed: Engram `0.22.0` supplies no producer-owned intentHash carrier at `transaction.apply`; retain existing computation pending Engram `0.21.3`, https://github.com/rhanka/engram/issues/410. Review-gate condition 2 is not satisfied and promotion remains blocked; this installed rerun does not waive it.
 - [x] K7 rows written by cluster-mesh dev.3/dev.4 without `receipt_digest` are refused by hydration without migration; no receipt is reconstructed from control rows.
