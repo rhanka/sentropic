@@ -17,6 +17,12 @@
   - `packages/cluster-mesh/tests/engram-memory/**`
   - `packages/cluster-mesh/package.json`
   - `package-lock.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts`
+  - `packages/cluster-mesh/tests/fixtures/reserved-versions.ts`
+  - `packages/cluster-mesh/tests/storage/pack-only-dev-gate.mjs`
+  - `packages/cluster-mesh/tests/storage/pack-only-dev-gate.spec.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -31,6 +37,7 @@
   - No exception declared; the additive `./engram-memory` export is declared above with rationale, impact and rollback.
 
 ## Feedback Loop
+- [x] BRE10a-EX1: owner-authorized PR #808 CI repair in `tmp/worktrees/mem-e10a-ci`, `ENV=test-mem-e10a-ci`; rationale: a frozen prerelease pin breaks pack-only alignment after the dev bump; impact: pin the selected fixture and lock to published stable `0.23.2` (matching this candidate's dependency metadata), align the mirrored contract and assert only that frozen registry request; rollback: revert this repair commit. Registry probes returned 404 for `0.23.4` and `0.23.5`.
 - Frozen-surface gates from the pack-only tolerance and the Comments gate lines must still pass on this branch; any failure is blocking for this lot.
 
 ## AI Flaky tests
@@ -61,6 +68,7 @@
   - [x] Lot gate: scoped cluster-mesh tests plus typecheck and lint for cluster-mesh.
 - [ ] **Lot E10a-3 — Pack-only version and handoff**
   - [x] Increment the pack-only version from `0.24.0-dev.1` to the next dev increment in the package manifest and the workspace lock.
+  - [x] Repair the stable selected fixture/lock pin; shared-lock `ENV=test-mem-e10a-ci` runs: targeted packaging 17 passed; full cluster-mesh 1361 passed, 268 conditional skips, no type errors; `make down` after each step.
   - [x] Run `make scope-check` and the frozen-surface gates before every commit.
   - [x] Push and open the draft PR against `feat/engram-e2-integration` with `BRANCH.md` as the PR body.
   - [ ] Require CI on the exact head before marking ready.
