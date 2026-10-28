@@ -13,8 +13,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   parsePendingLocalToolCallsFromStatusPayload,
-} from '../src/utils/localToolStreamSync.js';
-import { isLocalToolName } from '../src/stores/localTools.js';
+} from '@sentropic/chat-runtime/utils/localToolStreamSync';
+import { isLocalToolName } from '@sentropic/chat-runtime/stores/localTools';
 
 // ---------------------------------------------------------------------------
 // Feature-flag defaults (pure logic — no Svelte needed)
