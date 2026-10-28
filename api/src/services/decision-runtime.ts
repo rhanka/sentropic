@@ -19,7 +19,7 @@ const resolveCaller = async (user: AuthUser, profile: DecisionExecutionProfile):
     await (profile === 'qualification' ? requireWorkspaceAdmin : requireWorkspaceEditor)(user.userId, user.workspaceId);
   } catch { return undefined; }
   return { tenantId: grant.workspaceTenantId, principalId: user.userId, workspaceId: grant.workspaceId,
-    ownerScopeRef: ownerScopeRefFor(grant.workspaceId, user.userId), source: 'product-api:decision' };
+    ownerScopeRef: ownerScopeRefFor(grant.workspaceId, user.userId), source: 'product-api:decision', correlationId: crypto.randomUUID() };
 };
 
 export const createDecisionRuntime = (input: LlmMeshRouterInput, jev: JevTransport, profile: DecisionExecutionProfile) => {

@@ -23,7 +23,7 @@ export const createDecisionAdmission = (database: LedgerDatabase, cost: CostCont
         const inner: LedgerDatabase = { execute: tx.execute.bind(tx), transaction: (run) => run(tx) };
         const budget = createBudgetAdmission({ database: inner, ownerRef: 'product-api:decision', inputMarginPercent: 0,
           holdTtlMs: Math.max(1, input.deadlineAt - Date.now()) });
-        const admitted = await budget.admit({ requestId: input.callId, cost, quote: {
+        const admitted = await budget.admit({ requestId: input.callId, cost, wire: 'openai-chat-completions', quote: {
           quoteRef: `decision:${input.callId}`, requestedModel: descriptor.wireModel, maxAttempts: 1,
           quotedAt: new Date().toISOString(), policyRevision: 'decision-host-v1', councilRevision: 'none',
           candidates: [{ providerId: input.evaluator.providerId, modelId: descriptor.wireModel, reason: 'exact',

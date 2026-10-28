@@ -30,7 +30,7 @@ export const lockDecisionEvaluator = async (tx: LedgerTx, key: string): Promise<
   return row?.disabled === false;
 };
 
-export interface DecisionHold {
+export interface DecisionHold extends Record<string, unknown> {
   id: string; status: string; request_id: string; tenant_id: string; workspace_id: string;
   principal_key: string; budget_ids: string[]; liability_micro_usd: string; budget_strategy_id: string;
   pricing_versions: string[]; deadline_at: Date; quote_ref: string; dispatch_started_at: Date | null;
