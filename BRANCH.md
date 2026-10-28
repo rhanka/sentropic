@@ -45,6 +45,8 @@
   - [x] Replace historical receiving checklist with exact 0.21.3/dev.6/contract/image values, independent qualification gaps and ordered release/ACK handoff.
   - [x] Second campaign passes runtime/types, absolute closure and cleanup; producer manifest is internal, so inspect an in-memory export without changing installed bytes, then rerun only finalization.
   - [x] Static verification binds all three adapted consumer entry/helper/type files independently of the observed import closure, plus the complete transformation receipt.
+  - [x] Producer extraction passes. First tuple test exposed the mesh manifest wrapper; compare its manifest, canonical bytes, byte hash and digest rather than the enclosing metadata object.
+  - [x] Freeze successful E2 receipt, package/lock, campaign log/status and adaptation hashes as checker anchors; successor reruns require an explicit reviewed evidence update.
 - [x] **Lot E11-0 — Baseline and scope**
   - [x] Read MASTER/workflow, plan E11, PR #803 E11 inputs, Opus r3 21-entry inventory, RESERVATION.md and Docker lock packet; mechanical branch PASS.
 - [x] **Lot E11-1 — Generator and checker**
