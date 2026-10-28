@@ -10,7 +10,7 @@
   },
   "semanticManifest": "contract-manifest.json",
   "profileInventory": "equivalence.json",
-  "contractDigest": "sha256:dff737ced37d801ef48bb4d7088fc4fbc92021d21fe2034ff33ea643b49bec28",
+  "contractDigest": "sha256:dd0cccbd6e5e29766fbc9c48351ffe58f5b0a3162152f5ff02da0798c3244fee",
   "declarationDesign": {
     "closure": "single file; no imports or re-exports; all referenced neutral types declared locally",
     "entrypoints": ["NeutralMemoryHandle", "NeutralModuleStorageBinding", "ModuleStorageMemoryStoreOptionsV1"],
@@ -22,7 +22,7 @@
     "boundMethods": ["transact", "query", "readAggregate", "readCommitResult", "acquireFence", "checkFence", "releaseFence"],
     "transactionMethods": ["readAggregate", "readRecords", "readChain", "findIdempotency", "apply"],
     "errorMapping": "src/engram-memory/neutral-contract.ts#MEMORY_NEUTRAL_ERROR_MAPPING",
-    "optionalRecovery": "readCommitResult is optional in 0.21.1; absence refuses original-result recovery, never recomputes it",
+    "optionalRecovery": "readCommitResult is optional in 0.21.3; absence refuses original-result recovery, never recomputes it",
     "hostMaintenance": "separate host authority; no checkpoint, resync or snapshot maintenance port is exposed to Engram"
   },
   "additiveMapping": [
@@ -31,7 +31,8 @@
     {"manifestIndex": 2, "surface": ["NeutralMemoryHandle.readCommitResult", "NeutralBoundScope.readCommitResult", "NeutralAtomicUnit.moduleResult"], "obligation": "scoped original immutable moduleResult; E3"},
     {"manifestIndex": 3, "surface": ["NeutralProfileClaim", "NeutralMemoryHandle.profiles", "NeutralModuleStorageBinding.profiles"], "obligation": "five required semantic identities mapped to exact backend claims; E7/E9"},
     {"manifestIndex": 4, "surface": ["NeutralMemoryHandle.query", "NeutralBoundScope.query", "NeutralModuleDescriptor.queryNames"], "obligation": "four memory queries plus scope-chain-index for memory-journal; E6"},
-    {"manifestIndex": 5, "surface": ["NeutralEncodedValue", "NeutralAtomicUnit", "NeutralModuleDescriptor.contractDigest"], "obligation": "registered codecs, keys, kinds and index policies in unchanged semanticManifest; E6/E9"}
+    {"manifestIndex": 5, "surface": ["NeutralEncodedValue", "NeutralAtomicUnit", "NeutralModuleDescriptor.contractDigest"], "obligation": "registered codecs, keys, kinds and index policies in semanticManifest; E6/E9"},
+    {"manifestIndex": 6, "surface": ["NeutralAtomicUnit.intentHash", "NeutralIdempotencyEntry.intentHash"], "obligation": "persist and return producer intent bytes unchanged; E10a-3"}
   ],
   "constraints": {
     "moduleId": "engram-memory",
@@ -39,7 +40,7 @@
     "grantOperations": ["read", "write"],
     "u64": {"encoding": "canonical decimal string", "maximum": "18446744073709551615", "arithmetic": "exact; never Number or signed BIGINT narrowing"},
     "scope": "one tenant/workspace pair per store_id/journal; authoritative resolveScope outside DTOs",
-    "candidateLiaison": "C7 candidate-to-scope mapping remains E8; 0.21.1 DTOs unchanged",
+    "candidateLiaison": "C7 candidate-to-scope mapping remains E8; 0.21.3 DTOs unchanged",
     "captureCompletion": {"maxAppends": 1, "maxRecords": 1, "maxEncodedBytes": 65536, "actualAppends": 0},
     "commonV1": "separate common-contract identity and two-module domain; no activation or common-rule acceptance"
   },

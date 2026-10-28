@@ -172,7 +172,7 @@ describe('G1 binding compatibility with the installed substrate', () => {
   });
 });
 
-describe('C6 declaration compatibility with installed Engram 0.21.1', () => {
+describe('C6 declaration compatibility with installed Engram 0.21.3', () => {
   const compilerOptions: ts.CompilerOptions = {
     strict: true, target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.NodeNext,
     moduleResolution: ts.ModuleResolutionKind.NodeNext, skipLibCheck: false,
