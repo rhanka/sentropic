@@ -9,144 +9,18 @@
   import MessageActions from './MessageActions.svelte';
   import ChatContextPicker from './ChatContextPicker.svelte';
   import StreamMessage from './StreamMessage.svelte';
-
-  import type { ChatContextEntry } from '../state/chat-context.js';
-  import type { ChatProjectedTimelineItem } from '@sentropic/chat-runtime/state/chatProjection';
-
-  // ---------------------------------------------------------------------------
-  // Feature flags type — all default OFF except steer/retry/stop
-  // ---------------------------------------------------------------------------
+  import AttachmentBand from '../documents/AttachmentBand.svelte';
+  import MessageAttachments from '../documents/MessageAttachments.svelte';
 
   export type ChatConversationFeatures = {
-    /**
-     * BR-38c attachment tray + lightbox + reference upload.
-     * Defaults ON when host.uploadAttachment is present — but BR-38c is not
-     * yet landed, so this flag has no effect until that branch merges.
-     */
-    attachments?: boolean;
-    /** Comments mode / mention UI. Default OFF. */
-    comments?: boolean;
-    /** Document-source menu / session docs. Default OFF. */
-    documents?: boolean;
-    /** Queue / jobs panel. Default OFF. */
-    jobs?: boolean;
-    /** Workspace RBAC gating. Default OFF. */
-    workspaceScope?: boolean;
-    /** Steer action in composer. Default ON (pure, already in primitives). */
-    steer?: boolean;
-    /** Retry / regenerate in message actions. Default ON. */
-    retry?: boolean;
-    /** Stop (abort) in composer. Default ON. */
-    stop?: boolean;
+    attachments?: boolean; comments?: boolean; documents?: boolean; jobs?: boolean;
+    workspaceScope?: boolean; steer?: boolean; retry?: boolean; stop?: boolean;
   };
-
-  // ---------------------------------------------------------------------------
-  // Props
-  // ---------------------------------------------------------------------------
-
-  /**
-   * The web host adapter (transport + streamClient + optional localTools/auth/
-   * nav/storage/contextProvider/renderers).  Required.
-   */
-  export let host: ChatUiWebHost;
-
-  /**
-   * Session identifier.  If omitted the component renders in an empty /
-   * loading state; the caller is responsible for bootstrapping and passing
-   * the resolved sessionId before messages are shown.
-   */
-  export let sessionId: string | undefined = undefined;
-
-  /**
-   * Layout variant.  Default 'inline'.
-   * 'docked' and 'floating' affect the outer wrapper CSS class — the
-   * ChatPanel shell is the same in all cases.
-   */
+  export let snapshots: ChatConversationSnapshots;
+  export let commands: ChatConversationCommands;
+  export let labels: ChatUiLabelResolver = (key) => key;
   export let layout: 'inline' | 'docked' | 'floating' = 'inline';
-
-  /**
-   * i18n label resolver.  No user-facing string is hardcoded — all labels
-   * go through this resolver.  Falls back to `host.labels` and then to
-   * returning the key itself.
-   */
-  export let labels: ChatUiLabelResolver | undefined = undefined;
-
-  /**
-   * Feature flags.  Merge with per-feature defaults before use.
-   * All app-coupled flags default OFF; pure flags (steer/retry/stop) default ON.
-   */
   export let features: ChatConversationFeatures = {};
-
-  /**
-   * Extra tool-result renderers injected by the host.  Package defaults are
-   * always present (from `host.renderers`).
-   */
-  export let renderers: RendererRegistry | undefined = undefined;
-
-  /**
-   * Flat model list for ModelSelector (shown when non-empty).
-   */
-  export let models: ModelCatalogModel[] = [];
-
-  /**
-   * Provider-grouped model list for ModelSelector.
-   */
-  export let modelGroups: ModelCatalogGroup[] = [];
-
-  /**
-   * Currently-selected model key ('provider::model').
-   */
-  export let selectedModel: string = '';
-
-  /**
-   * Context provider.  When supplied, ChatContextPicker is rendered in the
-   * composer header.
-   */
-  export let contextProvider: ChatContextProvider | undefined = undefined;
-
-  // ---------------------------------------------------------------------------
-  // Resolved helpers
-  // ---------------------------------------------------------------------------
-
-  const resolveLabel = (key: string): string =>
-    labels?.(key) ?? host?.labels?.(key) ?? key;
-
-  $: effectiveLabels = labels ?? host?.labels ?? ((key: string) => key);
-
-  // Resolved feature flags — pure-chat features ON by default
-  $: resolvedFeatures = {
-    attachments: features.attachments ?? false,
-    comments: features.comments ?? false,
-    documents: features.documents ?? false,
-    jobs: features.jobs ?? false,
-    workspaceScope: features.workspaceScope ?? false,
-    steer: features.steer ?? true,
-    retry: features.retry ?? true,
-    stop: features.stop ?? true,
-  };
-
-  // Resolved renderer registry: host.renderers merged with caller-supplied extras
-  $: effectiveRenderers = (() => {
-    const base = host?.renderers ?? createRendererRegistry();
-    if (!renderers) return base;
-    return base; // merge is deferred; extra renderers handled at render site
-  })();
-
-  // Show ModelSelector when models or groups are available
-  $: hasModels = modelGroups.length > 0 || models.length > 0;
-
-  // Show ChatContextPicker only when a contextProvider is explicitly supplied
-  $: hasContextProvider = Boolean(contextProvider);
-
-  // Derive context entries from the provider store
-  let contextEntries: ChatContextEntry[] = [];
-  $: if (contextProvider?.context) {
-    const unsub = contextProvider.context.subscribe((vals) => {
-      contextEntries = vals ?? [];
-    });
-    // We hold the subscription for the reactive lifetime; unsubscribe is
-    // handled automatically when contextProvider changes (Svelte re-runs $:).
-    void unsub; // prevent unused-variable lint
   } else {
     contextEntries = [];
   }
