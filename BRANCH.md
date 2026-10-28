@@ -43,10 +43,12 @@
   - [x] Record BRW3A-EXn reason, impact and rollback before any scope extension.
 
 ## Feedback Loop
+- [ ] Opus r1 P2: prove authority locks survive authorization through COMMIT/ROLLBACK; refuse public artifacts without an explicit grant.
+- [x] R1 regression baseline: 60/63 pass, including all 14 post-authorization lock cases; public-without-grant issuance and both invalid control-origin configurations reproduce the three expected failures (`/tmp/pr806-r1-baseline.log`).
 - [x] Runtime evidence: initial Docker metadata writes required sandbox escalation; first API migration encountered PostgreSQL 57P03 during initial startup. Retry used the same isolated database once ready. Second campaign API health passed and its stack was removed; no production service was contacted.
 - [x] W3.b handoff: `getProductArtifactReader().consume(verifiedSession, {flowId,ticketId,nonce,targetOrigin})` is internal. The content host must derive the session independently and obtain nonce proof from its host-only browser state; sign/set a grant only after a defined, acknowledged result. An uncertain commit throws and requires a fresh flow. No public consume dispatcher exists here.
 - [x] Configuration handoff: `APP_ARTIFACT_HOST_ENABLED=1` plus `APP_ARTIFACT_READER_ENABLED=1` are both required. An approved `APP_ARTIFACT_CONTENT_BASE_DOMAIN` and exact `UI_BASE_URL` must be supplied before a later authorized activation. This branch sets neither flag.
-- [ ] Independent review: owner approval is pending under `rules/subagents.md` ("Wait for user OK"); no reviewer was launched and no consensus verdict is claimed. Dossier: `.tmp/app-w3a-review.md` in the primary checkout.
+- [ ] Independent final-head review remains conductor-owned. Opus r1 reviewed `db1ea5f59`: CHANGES, no P1, two P2 and five P3; author corrections follow `.h2a/reviews/pr806_opus_r1.md` in the primary checkout.
 - [x] Local second campaign: 136/136 tests across nine suites, including all 16 imported PG vectors, pass (`/tmp/w3a-suite-2.log`). Typecheck identifies the required session credential `jkt: null`; supply it explicitly without changing session behavior.
 - [x] Resources regression inventory must declare the additive reader path: first campaign failed its exact path assertion. Bounded test-only scope extension; no namespace author or resource verb changes.
 - [x] First campaign reproduces the stable A-to-B-to-A gap. Bind the stable pointer row revision into the existing policy fence; pinned releases retain their immutable-release policy.
@@ -91,12 +93,12 @@
     - [x] `artifacts-reader-activation.test.ts`, `artifacts-host-activation-store.test.ts`, `artifacts-host-publication.test.ts`.
     - [x] `app-artifacts-transport.test.ts`, `app-mcp-registry.test.ts`, `cluster-mesh-resources.test.ts`.
     - [x] `cluster-mesh-namespace-inventory.test.ts`, `cluster-mesh-session.test.ts`, `tests/unit/auth/session-manager.test.ts`.
-  - [ ] Run API typecheck/lint and review every diff hunk.
+  - [x] Baseline API typecheck/lint passed in [run 40621657187](https://github.com/rhanka/sentropic/actions/runs/40621657187); repeat checks and hunk review for r1 corrections.
   - [ ] Obtain independent reviews on the final implementation and reconcile findings.
   - [x] Pass mechanical scope checks before each commit.
   - [x] Push and create draft PR #806 against `feat/app-cm-integration` with this file as body.
   - [x] Post the execution plan as the first PR comment.
-  - [ ] Verify CI green on the exact pushed head.
+  - [x] Baseline CI green on exact pushed head `db1ea5f59`: [run 40621657187](https://github.com/rhanka/sentropic/actions/runs/40621657187); r1 must pass on its exact pushed head before handoff.
   - [ ] Run make down and verify no remaining test services; report PR and head.
 
 ## Inherited main qualification record

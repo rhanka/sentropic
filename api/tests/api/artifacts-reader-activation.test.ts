@@ -4,6 +4,7 @@ import { Pool } from 'pg';
 import { runMigrations } from '../../src/db/run-migrations';
 import { createArtifactReaderActivation } from '../../src/services/artifacts/reader-activation';
 import { createArtifactHttpRouter } from '../../src/routes/namespaces/artifacts';
+import { ARTIFACT_SESSION_CLIENT } from '../../src/services/artifacts/credentials';
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL });
 const database = `test_w3a_${randomUUID().replaceAll('-', '')}`;
@@ -72,6 +73,45 @@ describe('resources reader activation port', () => {
     }
     const closed = createArtifactHttpRouter({ transport: vi.fn(), identity: vi.fn() });
     expect((await closed.request('/reader-activation', { method: 'POST' })).status).toBe(404);
+  });
+
+  it.each([undefined, 'invalid-origin'])('should stay closed with invalid control origin configuration: %s', async origin => {
+    const product = await import('../../src/services/artifacts/instance');
+    vi.stubEnv('APP_ARTIFACT_HOST_ENABLED', '1');
+    vi.stubEnv('APP_ARTIFACT_READER_ENABLED', '1');
+    vi.stubEnv('UI_BASE_URL', origin);
+    try {
+      const identity = vi.fn();
+      const app = createArtifactHttpRouter({ transport: vi.fn(), identity, reader: product.productArtifactReaderPort });
+      expect((await app.request('/reader-activation', { method: 'POST' })).status).toBe(404);
+      expect(identity).not.toHaveBeenCalled();
+    } finally { vi.unstubAllEnvs(); }
+  });
+
+  it('should require an unbound current app session credential at the product reader port', async () => {
+    const product = await import('../../src/services/artifacts/instance');
+    vi.stubEnv('APP_ARTIFACT_HOST_ENABLED', '1');
+    vi.stubEnv('APP_ARTIFACT_READER_ENABLED', '1');
+    vi.stubEnv('APP_ARTIFACT_CONTENT_BASE_DOMAIN', config.baseDomain);
+    try {
+      expect(product.productArtifactReaderPort.enabled()).toBe(true);
+      const issue = vi.spyOn(product.getProductArtifactReader(), 'issue').mockResolvedValue(await reader().issue(session, target));
+      const identity = { subject: session.subjectId, tenantId: session.tenantId, clientId: ARTIFACT_SESSION_CLIENT,
+        credentialId: JSON.stringify(['session', session.sessionId, null, []]) };
+      for (const changed of [
+        { clientId: 'foreign' },
+        { credentialId: JSON.stringify(['oauth', session.sessionId, null, []]) },
+        { credentialId: JSON.stringify(['session', session.sessionId, 'jkt', []]) },
+        { credentialId: JSON.stringify(['session', session.sessionId, null, ['read']]) },
+        { credentialId: JSON.stringify(['session', '', null, []]) },
+      ]) {
+        await expect(product.productArtifactReaderPort.issue({ identity: { ...identity, ...changed },
+          workspaceId: session.workspaceId }, target)).rejects.toThrow('Artifact reader requires the current app session');
+      }
+      expect(issue).not.toHaveBeenCalled();
+      await product.productArtifactReaderPort.issue({ identity, workspaceId: session.workspaceId }, target);
+      expect(issue).toHaveBeenCalledExactlyOnceWith(session, target);
+    } finally { vi.restoreAllMocks(); vi.unstubAllEnvs(); }
   });
 
   it.each(['subjectId', 'sessionId', 'tenantId', 'workspaceId', 'profileDigest', 'policyRevision'])
@@ -152,6 +192,64 @@ describe('trusted app reader activation', () => {
     const fresh = await reader().issue(session, target);
     expect(fresh.ticket.ticketId).not.toBe(expired.ticket.ticketId);
     expect(await reader().consume(session, input(fresh))).toEqual(fresh.ticket);
+  });
+
+  it('should refuse public artifacts without an explicit reader grant at issue and consume', async () => {
+    const host = reader();
+    const issued = await host.issue(session, target);
+    await pool.query('UPDATE artifacts.artifacts SET is_public = true');
+    await pool.query(`DELETE FROM artifacts.artifact_access WHERE principal_id = 'reader'`);
+    await expect(host.issue(session, target)).rejects.toThrow(/refused/);
+    expect(await host.consume(session, input(issued))).toBeUndefined();
+    expect((await pool.query('SELECT count(*)::int AS n FROM artifact_host.activation_tickets')).rows[0].n).toBe(1);
+  });
+
+  describe.each(['COMMIT', 'ROLLBACK'])('authority fence through %s', outcome => {
+    it.each([
+      `DELETE FROM user_sessions WHERE id = 'session'`,
+      `DELETE FROM artifacts.artifact_access WHERE principal_id = 'reader'`,
+      `UPDATE artifacts.artifact_current SET release_id = (SELECT id FROM artifacts.releases WHERE manifest_digest = 'b')`,
+      `UPDATE artifacts.releases SET state = 'purged' WHERE manifest_digest = 'digest'`,
+      `UPDATE artifacts.artifacts SET lifecycle_state = 'withdrawn'`,
+      `DELETE FROM workspace_memberships WHERE user_id = 'reader'`,
+      `DELETE FROM control.artifact_host_kv WHERE storage_scope_id = 'app-artifact-scopes/v1'`,
+    ])('should block revocation after authorization until transaction end: %s', async sql => {
+      await pool.query(`INSERT INTO artifacts.releases(id,artifact_id,manifest_digest,manifest)
+        VALUES ($1,$2,'b','{}')`, [randomUUID(), artifactId]);
+      const issued = await reader().issue(session, target);
+      let resume!: () => void;
+      const gate = new Promise<void>(resolve => { resume = resolve; });
+      let authorized = false;
+      const paused = { query: pool.query.bind(pool), async connect() {
+        const client = await pool.connect();
+        return { async query(statement: string, values?: unknown[]) {
+          if (statement.includes('DELETE FROM artifact_host.activation_tickets t')) {
+            authorized = true;
+            await gate;
+            if (outcome === 'ROLLBACK') throw new Error('injected rollback after authorization');
+          }
+          return client.query(statement, values);
+        }, release(destroy?: boolean) { client.release(destroy); } };
+      } } as unknown as Pool;
+      const pending = reader({ pool: paused }).consume(session, input(issued))
+        .then(ticket => ({ ticket, error: undefined }), error => ({ ticket: undefined, error }));
+      const revoker = await pool.connect();
+      try {
+        await vi.waitFor(() => expect(authorized).toBe(true));
+        await revoker.query("SET lock_timeout = '300ms'");
+        await expect(revoker.query(sql)).rejects.toMatchObject({ code: '55P03' });
+        resume();
+        const result = await pending;
+        if (outcome === 'COMMIT') expect(result.ticket).toEqual(issued.ticket);
+        else expect(result.error).toMatchObject({ message: 'injected rollback after authorization' });
+        expect((await revoker.query(sql)).rowCount).toBeGreaterThan(0);
+      } finally {
+        resume();
+        await pending;
+        await revoker.query('RESET lock_timeout');
+        revoker.release();
+      }
+    });
   });
 
   it.each([
