@@ -13,6 +13,8 @@ import { db } from '../../src/db/client';
 import { chatMessages, chatSessions, tenantMemberships, userSessions } from '../../src/db/schema';
 import { resolveHttpCatalogContext } from '../../src/services/catalog/request-authority';
 import { revalidateCatalogInvocation } from '../../src/services/catalog/request-context';
+import { resolveFoundationChatTools, executeFoundationSearchCatalog } from '../../src/services/skills/catalog';
+import { productArtifactTransport } from '../../src/services/artifacts/instance';
 import { testCatalogContext } from '../services/catalog/test-context';
 import { chatService } from '../../src/services/chat-service';
 import { standaloneToolSource } from '../../src/services/catalog/sources/standalone-tool-source';
@@ -130,9 +132,65 @@ describe('cluster mesh catalog product authority', () => {
   });
 
   afterEach(async () => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
     standaloneToolSource.unregister('catalog_context_probe');
     await clearCutover();
     await cleanupAuthData();
+  });
+
+  it('should expose compiled host tools through mounted discovery, search and model selection', async () => {
+    vi.stubEnv('APP_ARTIFACT_HOST_ENABLED', '1');
+    const [session] = await db.select().from(userSessions).where(eq(userSessions.userId, user.id));
+    const context = await resolveHttpCatalogContext({ userId: user.id, sessionId: session.id,
+      workspaceId: user.workspaceId!, role: 'editor' });
+    const names = [...(await productArtifactTransport.ready).tools.keys()];
+    const response = await authenticatedRequest(productApp, 'GET',
+      '/api/v1/catalog/entries?sourceId=host-registry', user.sessionToken!);
+    expect(response.status).toBe(200);
+    expect((await response.json()).items.map((item: { metadata: { name: string } }) => item.metadata.name)).toEqual(names);
+    expect(executeFoundationSearchCatalog({ payload: { query: 'artifacts', limit: 10 }, context }).hits
+      .map(hit => hit.name)).toEqual(expect.arrayContaining(names));
+    const tools = resolveFoundationChatTools({ userId: user.id, workspaceId: user.workspaceId!,
+      allowedTools: [], context });
+    expect(tools.filter(tool => tool.type === 'function').map(tool => tool.function.name)).toEqual(expect.arrayContaining(names));
+    const other = await createAuthenticatedUser('guest');
+    await db.insert(tenantMemberships).values({ userId: other.id, tenantId: 'sentropic', status: 'approved' });
+    const denied = await authenticatedRequest(productApp, 'GET',
+      '/api/v1/catalog/entries/artifacts_publish', other.sessionToken!);
+    expect(denied.status).toBe(404);
+    vi.stubEnv('APP_ARTIFACT_HOST_ENABLED', '0');
+    expect(productCatalogDiscovery.list({ sourceId: 'host-registry' }, context)).toEqual([]);
+  });
+
+  it('should route one verified chat tool to the shared transport and deny a revoked retry', async () => {
+    vi.stubEnv('APP_ARTIFACT_HOST_ENABLED', '1');
+    const sessionId = crypto.randomUUID();
+    const messageId = crypto.randomUUID();
+    await db.insert(chatSessions).values({ id: sessionId, userId: user.id, workspaceId: user.workspaceId });
+    await db.insert(chatMessages).values({ id: messageId, sessionId, role: 'assistant', sequence: 0 });
+    const invoke = vi.spyOn(productArtifactTransport, 'invoke').mockResolvedValue({ status: 201, body: { artifactId: 'one' } });
+    // Await request-bound plan preparation through the same authority entry as HTTP discovery.
+    const [session] = await db.select().from(userSessions).where(eq(userSessions.userId, user.id));
+    await resolveHttpCatalogContext({ userId: user.id, sessionId: session.id, workspaceId: user.workspaceId!, role: 'editor' });
+    const args = { bindingName: 'report', idempotencyKey: 'one' };
+    let sequence = 0;
+    const call = () => (chatService as unknown as { executeServerToolInternal(input: unknown): Promise<unknown> })
+      .executeServerToolInternal({ toolCall: { id: 'ensure', name: 'artifacts_ensure', args: JSON.stringify(args) }, args,
+        options: { userId: user.id, sessionId, assistantMessageId: messageId }, streamSeq: sequence++,
+        sessionWorkspaceId: user.workspaceId, currentUserRole: 'editor', readOnly: false,
+        allowedFolderIds: new Set(), allowedByType: { organization: new Set(), folder: new Set(),
+          usecase: new Set(), executive_summary: new Set() }, hasContextType: () => false,
+        isAllowedOrganizationId: async () => false,
+        tools: [{ type: 'function', function: { name: 'artifacts_ensure', parameters: {} } }] });
+    await expect(call()).resolves.toMatchObject({ result: { status: 201, body: { artifactId: 'one' } } });
+    expect(invoke).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ subject: user.id,
+      tenantId: 'sentropic', clientId: 'sentropic-turn',
+      credentialId: JSON.stringify(['turn', sessionId, user.workspaceId, []]) }), user.workspaceId,
+    ['mcp:tools:invoke'], 'artifacts_ensure', args);
+    await db.delete(tenantMemberships).where(eq(tenantMemberships.userId, user.id));
+    await expect(call()).resolves.toMatchObject({ result: { error: 'catalog_access_denied' } });
+    expect(invoke).toHaveBeenCalledOnce();
   });
 
   it('matches direct canonical deterministic discovery without a predecessor shadow', async () => {
