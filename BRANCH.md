@@ -68,6 +68,7 @@
   - [x] Internal evidence route requires TLS and the exact authenticated app workload before bounded strict body parsing; browser/product issuance refused.
   - [x] Durable issuer adapter revalidates credential/hash/session record and signed immutable login lineage; replay issuance fence uses a separate metadata namespace.
   - [x] Standalone issuer composition uses exact S2S client/scope/audience, public trust and own key; independent tenant/workspace lookup; absent native mapping stays closed.
+  - [x] Actual product root exposes only a refusal; standalone IdP owns the internal route with default-closed native contribution.
   - [ ] api/tests/unit/auth/remote-evidence.test.ts: repeated actions/switch, logout/revoke/expiry, wrong sid/version/MFA/audience/key, replay and workload separation.
   - [ ] Closed EvidenceRequest; issuer-derived identity and original authentication time; per-operation EdDSA evidence with pinned audiences.
 - [ ] **Lot 2 — Consent and authorization, RED then GREEN**
