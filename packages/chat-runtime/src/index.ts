@@ -1,7 +1,6 @@
 /** Sentropic-owned client runtime; visual components live in @sentropic/chat-ui. */
 export { createConversationRuntime } from './state/conversationRuntime.js';
 export type { ConversationRuntimeOptions } from './state/conversationRuntime.js';
-export * from './state/streamMessageProjection.js';
 export * from './client/chat-core-host.js';
 export * from './client/replay.js';
 export * from './client/streamHistory.js';
