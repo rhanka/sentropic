@@ -27,6 +27,7 @@
   - `deploy/k8s/overlays/preprod/patch-artifact-content-config.yaml`
   - `deploy/k8s/overlays/prod/patch-artifact-content-config.yaml`
   - `deploy/ci/artifact-content/**`
+  - `deploy/ci/idp-identity-sync/workflow.selftest.mjs`
   - `docs/runbooks/app-artifact-content-infrastructure.md`
 - [x] **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
@@ -46,6 +47,7 @@
 - [x] BR03d-EX1 (mechanical alias of BR-CM-W3-EX1) / acknowledged by owner W3.d packet and W0 reservations: add a render-only Make target/include and CI invocation. Impact: offline qualification only; rollback: remove include/step and content resources, retain closed flags. No deploy target execution or general CI refactor.
 - [x] Tenant handoff: DNS/TLS provisioning, dedicated namespace-local credentials, private bucket checkpoint/restore and actual accepted image digest remain external receipts; document exact gates without asserting live readiness.
 - [x] BR03d-EX1 includes `.github/workflows/app-cm-w3d.yml`: shared CI excludes this app integration base; mirror W3.c's topic workflow for exact-head offline checks. Conductor removes topic workflows before main integration; rollback removes this topic workflow only.
+- [x] BR03d-EX1 receiving-test seam: update only the exact expected CI command list in `deploy/ci/idp-identity-sync/workflow.selftest.mjs`. Evidence: first topic CI passes manifests then rejects the new content step in that list. Preserve the exact-order assertion and all IdP controls; rollback removes the expectation with the CI step.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky exception selected; deterministic manifest and denial checks only.
