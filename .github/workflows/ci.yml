@@ -8,6 +8,10 @@ on:
     branches: [main, feat/immo-861-integration, feat/engram-e2-integration]
   workflow_dispatch:
     inputs:
+      capacity_publish_dry_run:
+        description: 'Qualify package publication jobs on this ref using guarded pack targets; never publish'
+        type: boolean
+        default: false
       bootstrap_publish_target:
         description: 'Bootstrap-publish target: exactly one explicit package is required, there is no "all" option (uses NPM_TOKEN; first publish only before OIDC trusted publishers are attached)'
         required: true
@@ -45,6 +49,8 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
+# BR77-EX1: independent jobs use hosted-runner scheduling; no per-index mutexes.
+# Matrix widths and PR cancellation bound each run; release groups remain separate.
 jobs:
   enforce-package-bump:
     runs-on: ubuntu-latest
@@ -162,14 +168,14 @@ jobs:
       llm_mesh: ${{ steps.filter.outputs.llm_mesh }}
       cluster_mesh: ${{ steps.filter.outputs.cluster_mesh }}
       engram_e2: ${{ steps.engram_e2_scope.outputs.selected }}
-      cluster_mesh_publish: ${{ steps.filter.outputs.cluster_mesh_publish }}
+      cluster_mesh_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.cluster_mesh_publish }}
       llm_gateway: ${{ steps.filter.outputs.llm_gateway }}
       chat_ui: ${{ steps.filter.outputs.chat_ui }}
       cited_source_viewer: ${{ steps.filter.outputs.cited_source_viewer }}
       cowork_bridge: ${{ steps.filter.outputs.cowork_bridge }}
-      cowork_bridge_publish: ${{ steps.filter.outputs.cowork_bridge_publish }}
+      cowork_bridge_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.cowork_bridge_publish }}
       cowork_desktop: ${{ steps.filter.outputs.cowork_desktop }}
-      cowork_desktop_publish: ${{ steps.filter.outputs.cowork_desktop_publish }}
+      cowork_desktop_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.cowork_desktop_publish }}
       oauth_verify: ${{ steps.filter.outputs.oauth_verify }}
       mcp_auth: ${{ steps.filter.outputs.mcp_auth }}
       mcp_platform: ${{ steps.filter.outputs.mcp_platform }}
@@ -185,25 +191,25 @@ jobs:
       contracts: ${{ steps.filter.outputs.contracts }}
       flow: ${{ steps.filter.outputs.flow }}
       artifacts: ${{ steps.filter.outputs.artifacts }}
-      llm_mesh_publish: ${{ steps.filter.outputs.llm_mesh_publish }}
-      llm_gateway_publish: ${{ steps.filter.outputs.llm_gateway_publish }}
-      chat_ui_publish: ${{ steps.filter.outputs.chat_ui_publish }}
-      cited_source_viewer_publish: ${{ steps.filter.outputs.cited_source_viewer_publish }}
-      oauth_verify_publish: ${{ steps.filter.outputs.oauth_verify_publish }}
-      mcp_auth_publish: ${{ steps.filter.outputs.mcp_auth_publish }}
-      mcp_platform_publish: ${{ steps.filter.outputs.mcp_platform_publish }}
-      auth_hono_publish: ${{ steps.filter.outputs.auth_hono_publish }}
-      auth_client_publish: ${{ steps.filter.outputs.auth_client_publish }}
-      auth_ui_publish: ${{ steps.filter.outputs.auth_ui_publish }}
-      chat_core_publish: ${{ steps.filter.outputs.chat_core_publish }}
-      chat_server_publish: ${{ steps.filter.outputs.chat_server_publish }}
-      comments_publish: ${{ steps.filter.outputs.comments_publish }}
-      events_publish: ${{ steps.filter.outputs.events_publish }}
-      contracts_publish: ${{ steps.filter.outputs.contracts_publish }}
-      flow_publish: ${{ steps.filter.outputs.flow_publish }}
-      artifacts_publish: ${{ steps.filter.outputs.artifacts_publish }}
+      llm_mesh_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.llm_mesh_publish }}
+      llm_gateway_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.llm_gateway_publish }}
+      chat_ui_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.chat_ui_publish }}
+      cited_source_viewer_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.cited_source_viewer_publish }}
+      oauth_verify_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.oauth_verify_publish }}
+      mcp_auth_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.mcp_auth_publish }}
+      mcp_platform_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.mcp_platform_publish }}
+      auth_hono_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.auth_hono_publish }}
+      auth_client_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.auth_client_publish }}
+      auth_ui_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.auth_ui_publish }}
+      chat_core_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.chat_core_publish }}
+      chat_server_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.chat_server_publish }}
+      comments_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.comments_publish }}
+      events_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.events_publish }}
+      contracts_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.contracts_publish }}
+      flow_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.flow_publish }}
+      artifacts_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.artifacts_publish }}
       harness: ${{ steps.filter.outputs.harness }}
-      harness_publish: ${{ steps.filter.outputs.harness_publish }}
+      harness_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.harness_publish }}
       manifest_guard: ${{ steps.filter.outputs.manifest_guard }}
       # Publishable manifest guard context (spec section 6): JSON lists, never booleans.
       package_files: ${{ steps.publishable_files.outputs.publishable_package_files_files }}
@@ -248,6 +254,7 @@ jobs:
               - 'api/drizzle/*.sql'
               - 'Makefile'
               - '.github/workflows/idp-identity-sync.yml'
+              - '.github/workflows/idp-workload-secret.yml'
               - '.github/workflows/ci.yml'
             global:
               - 'Makefile'
@@ -260,6 +267,7 @@ jobs:
               - 'scripts/test-api-tag-guard.sh'
               - 'scripts/resolve-api-image.sh'
               - 'scripts/test-api-image-canonical.sh'
+              - 'scripts/test-pgbackup-restore-isolation.sh'
               - '.github/workflows/ci.yml'
               - 'e2e/**'
             # Keep `api` and `ui` in sync with the API_VERSION / UI_VERSION content-sha inputs
@@ -511,11 +519,11 @@ jobs:
           ENGRAM_E2_SELECTED: ${{ steps.engram_e2_scope.outputs.selected }}
           CI_SELECTION_CONTEXT: >-
             {"changes": ${{ toJSON(steps.filter.outputs) }}, "event": "${{ github.event_name }}",
-            "ref": "${{ github.ref }}", "inputs": {"bootstrap_publish_target": "${{ inputs.bootstrap_publish_target || 'none' }}"},
+            "ref": "${{ github.ref }}", "inputs": {"bootstrap_publish_target": "${{ inputs.bootstrap_publish_target || 'none' }}", "capacity_publish_dry_run": ${{ inputs.capacity_publish_dry_run || false }}},
             "identity": {"runId": "${{ github.run_id }}", "attempt": "${{ github.run_attempt }}",
             "headSha": "${{ github.event.pull_request.head.sha || github.sha }}"}}
         run: |
-          export CI_SELECTION_CONTEXT="$(node -e 'const context = JSON.parse(process.env.CI_SELECTION_CONTEXT); context.changes.engram_e2 = process.env.ENGRAM_E2_SELECTED; process.stdout.write(JSON.stringify(context));')"
+          export CI_SELECTION_CONTEXT="$(node -e 'const context = JSON.parse(process.env.CI_SELECTION_CONTEXT); context.changes.engram_e2 = process.env.ENGRAM_E2_SELECTED; if (context.inputs.capacity_publish_dry_run) for (const key of Object.keys(context.changes)) if (key.endsWith("_publish")) context.changes[key] = "true"; process.stdout.write(JSON.stringify(context));')"
           make ci-expected-manifest ENV=test-ci-62
       - uses: actions/upload-artifact@v4
         with:
@@ -648,7 +656,7 @@ jobs:
   validate-llm-mesh:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.llm_mesh == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.llm_mesh == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -675,7 +683,7 @@ jobs:
   validate-cluster-mesh:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.cluster_mesh == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.cluster_mesh == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -744,7 +752,7 @@ jobs:
         if: steps.pack.outputs.manifest_mode == 'block'
         env:
           CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
-        run: make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.28.1,@sentropic/llm-gateway@0.21.3,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
+        run: make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.30.0,@sentropic/llm-gateway@0.21.5,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Upload Cluster Mesh candidate qualification report
         if: always()
         uses: actions/upload-artifact@v4
@@ -761,7 +769,7 @@ jobs:
   validate-llm-gateway:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.llm_gateway == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.llm_gateway == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -807,7 +815,7 @@ jobs:
   validate-cited-source-viewer:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.cited_source_viewer == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.cited_source_viewer == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -830,7 +838,7 @@ jobs:
   validate-cowork-bridge:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.cowork_bridge == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.cowork_bridge == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -851,7 +859,7 @@ jobs:
   validate-oauth-verify:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.oauth_verify == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.oauth_verify == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -872,7 +880,7 @@ jobs:
   validate-mcp-auth:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.mcp_auth == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.mcp_auth == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -914,7 +922,7 @@ jobs:
   validate-mcp-platform:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.mcp_platform == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.mcp_platform == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -937,7 +945,7 @@ jobs:
   memory-l5-qualification:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.memory_l5 == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.memory_l5 == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -950,7 +958,7 @@ jobs:
   validate-auth-hono:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.auth_hono == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.auth_hono == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -971,7 +979,7 @@ jobs:
   validate-auth-client:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.auth_client == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.auth_client == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -992,7 +1000,7 @@ jobs:
   validate-auth-ui:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.auth_ui == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.auth_ui == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1013,7 +1021,7 @@ jobs:
   validate-cowork-desktop:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.cowork_desktop == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.cowork_desktop == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1053,7 +1061,7 @@ jobs:
   validate-events:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.events == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.events == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1072,7 +1080,7 @@ jobs:
   validate-chat-core:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.chat_core == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.chat_core == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1091,7 +1099,7 @@ jobs:
   validate-chat-server:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.chat_server == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.chat_server == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1112,7 +1120,7 @@ jobs:
   validate-comments:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.comments == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.comments == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1133,7 +1141,7 @@ jobs:
   validate-skills:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.skills == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.skills == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1148,7 +1156,7 @@ jobs:
   validate-flow:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.flow == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.flow == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1167,7 +1175,7 @@ jobs:
   validate-artifacts:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.artifacts == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.artifacts == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1180,6 +1188,11 @@ jobs:
         run: make test-artifacts
       - name: Test Artifacts integration
         run: make test-artifacts-integration ENV=test-ci-artifacts
+      - name: Test installed activation conformance vectors
+        run: make -f packages/cluster-mesh/packaging.mk test-lazy-package-activation ENV=test-ci-artifacts-activation
+      - name: Remove activation qualification stack
+        if: always()
+        run: make down ENV=test-ci-artifacts-activation
       - name: Lint Artifacts
         run: make lint-artifacts
       - name: Pack Artifacts
@@ -1194,7 +1207,7 @@ jobs:
   validate-harness:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: needs.changes.outputs.harness == 'true' || needs.changes.outputs.global == 'true'
+    if: always() && !cancelled() && (needs.changes.outputs.harness == 'true' || needs.changes.outputs.global == 'true')
     steps:
       - uses: actions/checkout@v6
       - name: Setup Docker
@@ -1237,6 +1250,9 @@ jobs:
       - name: Test publish-api-image tag-collision guard
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make test-ci-api-tag-guard ENV=test-ci-api
+      - name: Test pgbackup restore isolation guards
+        if: needs.changes.outputs.global == 'true'
+        run: make test-pgbackup-restore-isolation ENV=test-ci-restore-guard
       - name: Test canonical API image artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make test-ci-api-image-canonical ENV=test-ci-api
@@ -1303,6 +1319,7 @@ jobs:
       UI_PORT: '5691'
       MAILDEV_UI_PORT: '1591'
     strategy:
+      max-parallel: 15
       fail-fast: false
       matrix:
         include:
@@ -1442,9 +1459,10 @@ jobs:
 
   test-e2e:
     runs-on: ubuntu-latest
-    needs: [changes, typecheck-lint-ui, typecheck-lint-api, build-api-image, build-ui, build-e2e, security-sast-sca]
+    needs: [changes, typecheck-lint-ui, build-api-image, build-ui, build-e2e, security-sast-sca]
     if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     strategy:
+      max-parallel: 5
       fail-fast: false
       matrix:
         include:
@@ -1782,7 +1800,7 @@ jobs:
 
   publish-ui-image:
     runs-on: ubuntu-latest
-    needs: [changes, test-e2e, e2e-vscode, security-container]
+    needs: [changes, typecheck-lint-api, test-e2e, e2e-vscode, security-container]
     if: (needs.changes.outputs.ui == 'true' || needs.changes.outputs.global == 'true') && github.ref == 'refs/heads/main'
     env:
       DOCKER_USERNAME: nologin
@@ -1821,7 +1839,7 @@ jobs:
     concurrency:
       group: api-image-publication
       cancel-in-progress: false
-    needs: [changes, test-api-unit-integration, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container]
+    needs: [changes, typecheck-lint-api, test-api-unit-integration, test-e2e, e2e-vscode, smoke-idp-screens, test-smoke-restore, security-container]
     if: (needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true') && github.ref == 'refs/heads/main'
     env:
       DOCKER_USERNAME: nologin
@@ -1850,7 +1868,7 @@ jobs:
     if: >-
       !cancelled() &&
       needs.changes.result == 'success' &&
-      github.ref == 'refs/heads/main' &&
+      (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true) &&
       needs.changes.outputs.llm_mesh_publish == 'true' &&
       (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
       (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true')) &&
@@ -1865,7 +1883,15 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=llm-mesh ENV=test-ci-capacity
       - name: Publish LLM Mesh
+        if: inputs.capacity_publish_dry_run != true
         env:
           CLOUD_CODE_OAUTH_CLIENT_SECRET: ${{ secrets.LLM_MESH_CLOUD_CODE_OAUTH_CLIENT_SECRET }}
         run: |
@@ -1884,7 +1910,7 @@ jobs:
     if: >-
       !cancelled() &&
       needs.changes.result == 'success' &&
-      github.ref == 'refs/heads/main' &&
+      (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true) &&
       needs.changes.outputs.llm_gateway_publish == 'true' &&
       (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
       (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true')) &&
@@ -1900,13 +1926,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=llm-gateway ENV=test-ci-capacity
       - name: Publish LLM Gateway
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-llm-gateway
 
   publish-chat-ui:
     runs-on: ubuntu-latest
     needs: [changes, validate-chat-ui]
-    if: needs.changes.outputs.chat_ui_publish == 'true' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-ui.result == 'success' && (needs.changes.outputs.chat_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -1914,13 +1949,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=chat-ui ENV=test-ci-capacity
       - name: Publish Chat UI
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-chat-ui
 
   publish-cited-source-viewer:
     runs-on: ubuntu-latest
     needs: [changes, validate-cited-source-viewer]
-    if: needs.changes.outputs.cited_source_viewer_publish == 'true' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-cited-source-viewer.result == 'success' && (needs.changes.outputs.cited_source_viewer_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -1928,13 +1972,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=cited-source-viewer ENV=test-ci-capacity
       - name: Publish Cited Source Viewer
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-cited-source-viewer
 
   publish-cowork-bridge:
     runs-on: ubuntu-latest
     needs: [changes, validate-cowork-bridge]
-    if: needs.changes.outputs.cowork_bridge_publish == 'true' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-bridge.result == 'success' && (needs.changes.outputs.cowork_bridge_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -1942,13 +1995,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=cowork-bridge ENV=test-ci-capacity
       - name: Publish Cowork Bridge
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-cowork-bridge
 
   publish-oauth-verify:
     runs-on: ubuntu-latest
     needs: [changes, validate-oauth-verify]
-    if: needs.changes.outputs.oauth_verify_publish == 'true' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-oauth-verify.result == 'success' && (needs.changes.outputs.oauth_verify_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -1956,7 +2018,15 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=oauth-verify ENV=test-ci-capacity
       - name: Publish OAuth Verify
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-oauth-verify
 
   # N1: mcp-auth depends on @sentropic/oauth-verify; publish (and qualify from the registry)
@@ -1965,11 +2035,11 @@ jobs:
     runs-on: ubuntu-latest
     needs: [changes, validate-mcp-auth, publish-oauth-verify]
     if: >-
-      always() &&
+      always() && !cancelled() && needs.changes.result == 'success' &&
       needs.changes.outputs.mcp_auth_publish == 'true' &&
       needs.validate-mcp-auth.result == 'success' &&
       (needs.publish-oauth-verify.result == 'success' || needs.publish-oauth-verify.result == 'skipped') &&
-      github.ref == 'refs/heads/main'
+      (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true)
     permissions:
       contents: read
       id-token: write
@@ -1977,9 +2047,18 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=mcp-auth ENV=test-ci-capacity
       - name: Publish MCP Auth
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-mcp-auth
       - name: Qualify published MCP Auth from the registry
+        if: inputs.capacity_publish_dry_run != true
         run: |
           set -eu
           receipt=tmp/ci-manifest-guard/publish/mcp-auth.publish-output
@@ -2018,7 +2097,8 @@ jobs:
   publish-mcp-platform:
     runs-on: ubuntu-latest
     needs: [changes, validate-mcp-platform]
-    if: needs.changes.outputs.mcp_platform_publish == 'true' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-mcp-platform.result == 'success' && (needs.changes.outputs.mcp_platform_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2026,13 +2106,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=mcp-platform ENV=test-ci-capacity
       - name: Publish MCP Platform
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-mcp-platform
 
   publish-artifacts:
     runs-on: ubuntu-latest
     needs: [changes, validate-artifacts]
-    if: needs.changes.outputs.artifacts_publish == 'true' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-artifacts.result == 'success' && (needs.changes.outputs.artifacts_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2040,13 +2129,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=artifacts ENV=test-ci-capacity
       - name: Publish Artifacts
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-artifacts
 
   publish-auth-hono:
     runs-on: ubuntu-latest
     needs: [changes, validate-auth-hono]
-    if: needs.changes.outputs.auth_hono_publish == 'true' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-hono.result == 'success' && (needs.changes.outputs.auth_hono_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2054,13 +2152,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=auth-hono ENV=test-ci-capacity
       - name: Publish Auth Hono
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-auth-hono
 
   publish-auth-client:
     runs-on: ubuntu-latest
     needs: [changes, validate-auth-client]
-    if: needs.changes.outputs.auth_client_publish == 'true' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-client.result == 'success' && (needs.changes.outputs.auth_client_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2068,13 +2175,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=auth-client ENV=test-ci-capacity
       - name: Publish Auth Client
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-auth-client
 
   publish-auth-ui:
     runs-on: ubuntu-latest
     needs: [changes, validate-auth-ui]
-    if: needs.changes.outputs.auth_ui_publish == 'true' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-auth-ui.result == 'success' && (needs.changes.outputs.auth_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2082,13 +2198,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=auth-ui ENV=test-ci-capacity
       - name: Publish Auth UI
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-auth-ui
 
   publish-cowork-desktop:
     runs-on: ubuntu-latest
     needs: [changes, validate-cowork-desktop]
-    if: needs.changes.outputs.cowork_desktop_publish == 'true' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-cowork-desktop.result == 'success' && (needs.changes.outputs.cowork_desktop_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2096,13 +2221,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=cowork-desktop ENV=test-ci-capacity
       - name: Publish Cowork Desktop
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-cowork-desktop
 
   publish-contracts:
     runs-on: ubuntu-latest
     needs: [changes, validate-contracts]
-    if: needs.changes.outputs.contracts_publish == 'true' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-contracts.result == 'success' && (needs.changes.outputs.contracts_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2110,13 +2244,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=contracts ENV=test-ci-capacity
       - name: Publish Contracts
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-contracts
 
   publish-events:
     runs-on: ubuntu-latest
     needs: [changes, validate-events]
-    if: needs.changes.outputs.events_publish == 'true' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-events.result == 'success' && (needs.changes.outputs.events_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2124,13 +2267,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=events ENV=test-ci-capacity
       - name: Publish Events
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-events
 
   publish-chat-core:
     runs-on: ubuntu-latest
     needs: [changes, validate-chat-core]
-    if: needs.changes.outputs.chat_core_publish == 'true' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-core.result == 'success' && (needs.changes.outputs.chat_core_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2138,13 +2290,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=chat-core ENV=test-ci-capacity
       - name: Publish Chat Core
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-chat-core
 
   publish-chat-server:
     runs-on: ubuntu-latest
     needs: [changes, validate-chat-server]
-    if: needs.changes.outputs.chat_server_publish == 'true' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-server.result == 'success' && (needs.changes.outputs.chat_server_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2152,13 +2313,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=chat-server ENV=test-ci-capacity
       - name: Publish Chat Server
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-chat-server
 
   publish-comments:
     runs-on: ubuntu-latest
     needs: [changes, validate-comments]
-    if: needs.changes.outputs.comments_publish == 'true' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-comments.result == 'success' && (needs.changes.outputs.comments_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2166,13 +2336,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=comments ENV=test-ci-capacity
       - name: Publish Comments
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-comments
 
   publish-flow:
     runs-on: ubuntu-latest
     needs: [changes, validate-flow]
-    if: needs.changes.outputs.flow_publish == 'true' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-flow.result == 'success' && (needs.changes.outputs.flow_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2180,13 +2359,22 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=flow ENV=test-ci-capacity
       - name: Publish Flow
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-flow
 
   publish-harness:
     runs-on: ubuntu-latest
     needs: [changes, validate-harness]
-    if: needs.changes.outputs.harness_publish == 'true' && github.ref == 'refs/heads/main'
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-harness.result == 'success' && (needs.changes.outputs.harness_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2194,7 +2382,15 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=harness ENV=test-ci-capacity
       - name: Publish Harness
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-harness
 
   # N1: cluster-mesh depends on @sentropic/events and @sentropic/contracts; wait for both.
@@ -2206,7 +2402,7 @@ jobs:
     if: >-
       !cancelled() &&
       needs.changes.result == 'success' &&
-      github.ref == 'refs/heads/main' &&
+      (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true) &&
       needs.changes.outputs.cluster_mesh_publish == 'true' &&
       (needs.validate-llm-mesh.result == 'success' || (needs.validate-llm-mesh.result == 'skipped' && needs.changes.outputs.llm_mesh != 'true' && needs.changes.outputs.global != 'true')) &&
       (needs.validate-llm-gateway.result == 'success' || (needs.validate-llm-gateway.result == 'skipped' && needs.changes.outputs.llm_gateway != 'true' && needs.changes.outputs.global != 'true')) &&
@@ -2227,9 +2423,18 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=cluster-mesh ENV=test-ci-capacity
       - name: Publish Cluster Mesh
+        if: inputs.capacity_publish_dry_run != true
         run: make publish-cluster-mesh
       - name: Qualify published Cluster Mesh from the registry
+        if: inputs.capacity_publish_dry_run != true
         run: |
           set -eu
           receipt=tmp/ci-manifest-guard/publish/cluster-mesh.publish-output
@@ -2257,7 +2462,7 @@ jobs:
               fi ;;
             *) echo "::error title=Publication qualification::cluster-mesh status=${status}: unexpected publication outcome"; exit 1 ;;
           esac
-          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.28.1,@sentropic/llm-gateway@0.21.3,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1 QUALIFY_MODE=post-publication REPORT_DIR="$report_dir" QUALIFY_WAIT_ATTEMPTS=36 QUALIFY_PROVENANCE_SHA="$GITHUB_SHA" QUALIFY_PROVENANCE_RUN="$provenance_run" ENV=test-ci-cluster-mesh
+          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.30.0,@sentropic/llm-gateway@0.21.5,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1 QUALIFY_MODE=post-publication REPORT_DIR="$report_dir" QUALIFY_WAIT_ATTEMPTS=36 QUALIFY_PROVENANCE_SHA="$GITHUB_SHA" QUALIFY_PROVENANCE_RUN="$provenance_run" ENV=test-ci-cluster-mesh
       - name: Upload Cluster Mesh publication qualification report
         if: always()
         uses: actions/upload-artifact@v4
@@ -2397,7 +2602,7 @@ jobs:
           if [ -z "$status" ]; then echo "::error title=Publication qualification::cluster-mesh publish receipt $receipt has no status= line: publication outcome unknown"; exit 1; fi
           if [ "$status" != published ]; then echo "::notice title=Publication qualification::cluster-mesh status=${status}: qualification runs only after a new publication"; exit 0; fi
           pkg="$(sed -n 's/^pkg=//p' "$receipt")"
-          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.28.1,@sentropic/llm-gateway@0.21.3,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
+          make qualify-published-install PKG="$pkg" PEERS=@sentropic/llm-mesh@0.30.0,@sentropic/llm-gateway@0.21.5,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1 QUALIFY_MODE=post-publication REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
       - name: Upload bootstrap publication receipts and qualification reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -2589,12 +2794,15 @@ jobs:
               { ...params, attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT) });
             const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
               { ...params, attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT), per_page: 100 });
-            const expected = JSON.parse(fs.readFileSync('tmp/ci-capacity/expected.json')).expected;
+            const manifest = JSON.parse(fs.readFileSync('tmp/ci-capacity/expected.json'));
+            const expected = manifest.expected;
             const packages = expected.filter(row => row.job.startsWith('publish-') && !row.job.endsWith('-image'));
             const selected = packages.filter(row => row.selected);
             const endpoints = { qualification: ['ci-gate'], images: ['publish-api-image', 'publish-ui-image'],
               preproduction: ['deploy-preprod'], packages: (selected.length ? selected : packages).map(row => row.job) };
-            fs.writeFileSync('tmp/ci-capacity/capture.json', JSON.stringify({ run, jobs, endpoints,
+            const capacity = { availableSlots: 17, reserveSlots: context.eventName === 'pull_request' ? 2 : 0 };
+            fs.writeFileSync('tmp/ci-capacity/capture.json', JSON.stringify({ run, jobs, endpoints, capacity,
+              dependencies: manifest.dependencies,
               sourceSha: run.head_sha, workflowSha: process.env.GITHUB_WORKFLOW_SHA ?? null }, null, 2));
       - name: Emit measured job and step spans through Make
         run: make --no-print-directory ci-run-metrics RUN_FILE=tmp/ci-capacity/capture.json ENV=test-ci-62 > tmp/ci-capacity/metrics.json
@@ -2623,7 +2831,7 @@ jobs:
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
       - name: Qualify CI capacity metrics and expected-result fixtures
-        run: make test-ci-run-metrics test-ci-expected-results ENV=test-ci-62
+        run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity
       - name: Prove selection-aware negative cases through the Make entry point
         run: |
           set -euo pipefail
