@@ -1,6 +1,9 @@
 # SPEC STUDY — BR-39 auth/IdP ecosystem vs MCP authorization, mcp-authkit & elicitation: gap analysis
 
 Status: STUDY (planning-only, 2026-06-11). No code. Baseline = `main` working tree.
+
+> W4.b supersession (PR #807): references below to `McpCatalogSource`, its deleted `sources/mcp-source.ts` file and unstable IDs are historical study evidence. The sole MCP catalogue source is now `HostRegistryCatalogSource` (`sources/host-registry-source.ts`, id `host-registry`), using authorized compiled exact names and the existing artifact transport. The old-source ID fix is no longer a prerequisite; future resource/registry work must reuse the compiled registry without restoring the retired source or runtime registration API.
+
 Mission: for each dimension, (a) what we HAVE, (b) the GAP, (c) RECOMMENDATION (owning BR-39* or new sub-branch + decisions to settle).
 
 External sources (fetched 2026-06-11):
