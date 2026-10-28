@@ -221,3 +221,143 @@ describe('selectActiveChatContexts', () => {
   it('sorts by lastUsedAt descending', () => {
     const entries: ChatContextEntry[] = [
       { type: 'folder', id: 'early', label: 'Early', active: true, used: true, lastUsedAt: '2026-01-01T00:00:00.000Z' },
+      { type: 'folder', id: 'late', label: 'Late', active: true, used: true, lastUsedAt: '2026-06-01T00:00:00.000Z' },
+    ];
+    const active = selectActiveChatContexts(entries);
+    expect(active[0].id).toBe('late');
+    expect(active[1].id).toBe('early');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4. createContextModule — updateFromRoute → label-resolve → store-update
+// ---------------------------------------------------------------------------
+
+describe('createContextModule — updateFromRoute', () => {
+  it('detects route context and inserts entry into store', () => {
+    const host = makeFakeHost({ 'folder:f1': 'My Folder' });
+    const mod = createContextModule(host);
+    const emissions = collectStore(mod);
+
+    mod.updateFromRoute({ routeId: '/folder/[id]', params: { id: 'f1' } });
+
+    const last = emissions[emissions.length - 1];
+    expect(last).toHaveLength(1);
+    expect(last[0].type).toBe('folder');
+    expect(last[0].id).toBe('f1');
+    expect(last[0].active).toBe(true);
+  });
+
+  it('resolves label async and patches store', async () => {
+    const host = makeFakeHost({ 'folder:f1': 'Resolved Folder' });
+    const mod = createContextModule(host);
+    const emissions = collectStore(mod);
+
+    // Label starts as fallback (id) because resolveContextLabel is async
+    mod.updateFromRoute({ routeId: '/folder/[id]', params: { id: 'f1' } });
+
+    // Wait for async label resolution
+    await new Promise((r) => setTimeout(r, 10));
+
+    const last = emissions[emissions.length - 1];
+    expect(last[0].label).toBe('Resolved Folder');
+  });
+
+  it('emits empty store initially', () => {
+    const host = makeFakeHost();
+    const mod = createContextModule(host);
+    const emissions: ChatContextEntry[][] = [];
+    mod.entries.subscribe((v) => emissions.push([...v]));
+    expect(emissions[0]).toHaveLength(0);
+  });
+
+  it('does not add entry for null route context', () => {
+    const host = makeFakeHost();
+    const mod = createContextModule(host);
+    const emissions = collectStore(mod);
+
+    mod.updateFromRoute({ routeId: '/dashboard', params: {} });
+
+    expect(emissions[emissions.length - 1]).toHaveLength(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 5. createContextModule — toggleActive
+// ---------------------------------------------------------------------------
+
+describe('createContextModule — toggleActive', () => {
+  it('flips active state of matching entry', () => {
+    const host = makeFakeHost();
+    const mod = createContextModule(host);
+    const emissions = collectStore(mod);
+
+    mod.updateFromRoute({ routeId: '/folder/[id]', params: { id: 'f1' } });
+    const before = emissions[emissions.length - 1][0];
+    expect(before.active).toBe(true);
+
+    mod.toggleActive('folder', 'f1');
+    const after = emissions[emissions.length - 1][0];
+    expect(after.active).toBe(false);
+  });
+
+  it('toggling inactive→active sets lastUsedAt', () => {
+    const host = makeFakeHost();
+    const mod = createContextModule(host);
+    collectStore(mod);
+
+    mod.updateFromRoute({ routeId: '/folder/[id]', params: { id: 'f1' } });
+    mod.toggleActive('folder', 'f1'); // now inactive
+    mod.toggleActive('folder', 'f1'); // back to active — should set lastUsedAt
+
+    let current: ChatContextEntry[] = [];
+    mod.entries.subscribe((v) => { current = v; })();
+    expect(current[0].active).toBe(true);
+    expect(current[0].lastUsedAt).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 6. createContextModule — markUsed
+// ---------------------------------------------------------------------------
+
+describe('createContextModule — markUsed', () => {
+  it('marks entry as used and sets lastUsedAt', () => {
+    const host = makeFakeHost();
+    const mod = createContextModule(host);
+    collectStore(mod);
+
+    mod.updateFromRoute({ routeId: '/folder/[id]', params: { id: 'f1' } });
+    mod.markUsed({ routeId: '/folder/[id]', params: { id: 'f1' } });
+
+    let current: ChatContextEntry[] = [];
+    mod.entries.subscribe((v) => { current = v; })();
+    expect(current[0].used).toBe(true);
+    expect(current[0].lastUsedAt).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 7. CRITICAL — prefs-migration test (data-loss prevention)
+//
+// Legacy localStorage entries use:
+//   - lastUsedAt: number (epoch-ms) instead of ISO-8601 string
+//   - contextType/contextId field names instead of type/id
+//   - "usecase" type instead of "initiative"
+//
+// The context-adapter.ts (app side) handles contextType→type and
+// usecase→initiative migrations. The module.ts loadPrefs handles
+// any remaining shape by treating the incoming data as pre-normalized
+// (it expects type/id/lastUsedAt:string per ChatContextEntry).
+//
+// This test proves that when context-adapter.ts normalizes legacy prefs
+// (epoch-ms→ISO, usecase→initiative, contextType→type) before calling
+// module.loadPrefs, the module loads correctly without data loss.
+// ---------------------------------------------------------------------------
+
+describe('CRITICAL: prefs migration — legacy epoch-ms + usecase→initiative', () => {
+  /**
+   * Simulates what context-adapter.ts must do:
+   * normalize legacy stored entries before feeding to module.loadPrefs.
+   */
+  function normalizeLegacyContextEntry(raw: Record<string, unknown>): Record<string, unknown> {
