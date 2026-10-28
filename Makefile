@@ -3308,6 +3308,20 @@ test-security-parser: ## Verify security reports fail closed and preserve real f
 	@bash -n scripts/security/security-parser.sh scripts/security/security-compliance.sh scripts/security/security-parser-test.sh
 	@bash scripts/security/security-parser-test.sh
 
+# SECDAILY-EX1: raw daily adapter; immutable scanner/DB and native SAST await S2b/S2c.
+.PHONY: security-daily-scan test-security-daily
+security-daily-scan: ## Emit a local raw receipt; incomplete coverage exits nonzero
+	@set -eu; source_sha="$$(git rev-parse --verify HEAD)"; \
+		tree_status="$$(git status --porcelain --untracked-files=normal)"; \
+		if [ -n "$$tree_status" ]; then echo 'incomplete-scan: clean source tree required (including untracked files)' >&2; exit 1; fi; \
+		docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges --memory=512m --cpus=1 --tmpfs /tmp:rw,nosuid,nodev,size=128m \
+		-u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -e SECURITY_DAILY_SOURCE_SHA="$$source_sha" \
+		-v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) \
+		sh -ec 'tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund yaml@2.8.1 semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node scripts/security/daily/scan.mjs'
+
+test-security-daily: ## Run daily inventory, schema and adapter regressions in the approved pinned Node lane
+	@$(MAKE) test-publishable-manifests MANIFEST_GUARD_IMAGE="$(MEMORY_L5_NODE_IMAGE)" SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs scripts/security/daily/scan.test.mjs" ENV=$(ENV)
+
 .PHONY: test-%-security-container
 test-%-security-container: ## Run container scan (Trivy) on service image (usage: make test-api-security-container, make test-ui-security-container)
 	@echo "🔒 Security: Running container scan on $*..."

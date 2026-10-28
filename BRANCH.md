@@ -1,112 +1,103 @@
-# Feature: Live STT L2 interruption core
+# feat(security): add daily scan adapter (S2a)
 
 ## Objective
-- [x] Deliver approved r3 L2 implementation: durable interruption, all-class dispatch fencing, playback invalidation and usage receipts; final qualification tracked below.
+- [x] Deliver the credential-free `security-daily-scan` Make adapter and raw scan orchestration from approved spec r4 section 9; estimate 3–5 h, dependency S1 approval.
 
 ## Scope / Guardrails
-- [x] Author: codex / gpt-6.1-sol / high. Spec: `.tmp/live-stt/spec-plan.md`, r3, L2 row and sections 4/7.
-- [x] Base: origin/feat/live-stt-l1c at 581d6262a3d15e0cedde24b3debe3e3c6413e96b (#757); merge only, never rebase.
-- [x] Isolated branch feat/live-stt-l2 in tmp/worktrees/stt-l2; preserve root and other sessions.
-- [x] Make-only; ENV=test-stt-l2 last; shared Docker flock for each container/test step, followed by make down.
-- [x] No paid API, microphone, inference, audio in logs, Python, publication, deployment or merge.
-- [x] Capacity decision: A Partage normal; no extra allocation or qualification units consumed.
-- [x] Specific-file staging, make commit only, every commit under 150 changed lines, no attribution trailers.
+- [x] Owner authorized implementation on 2026-10-26; draft PR to main stacked on S1 #732, no merge.
+- [x] Base: corrected S1 head `76c745d5a89eaa8362a914d07604d563489b9f67`, including the merge of main `365e8b313`; merge updates only, never rebase.
+- [x] Work only in `tmp/worktrees/sec-s2a` on `feat/security-autofix-s2a`.
+- [x] Use Make targets only, zero Python, no AI commit trailers, selective staging and `make commit`; each new commit stays below 150 changed lines.
+- [x] Use the shared Docker lock for every image build, container start and test; release it between steps and clean with locked `make down ENV=test-sec-s2a` after each step.
+- [x] Pass `ENV=test-sec-s2a` last; run fixture targets without application services or host port bindings.
+- [x] Preserve the public-repository model, required PR gates, vulnerability register, disabled auto-fix and L5 class.
+- [x] No scheduler, credentials, collector, publication, repair, merge actor or runtime activation.
+- [x] Keep image/DB qualification in S2b and native Rust SAST qualification in S2c; unqualified surfaces remain explicit blockers.
+- [x] Keep the root worktree and all other sessions' containers, volumes and environments untouched.
+- [x] Use English for repository text and keep all implementation changes within the paths below.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/live-speech/**`
-  - `.tmp/live-stt/l2/**`
-  - `.github/workflows/live-speech.yml`
-  - `package-lock.json`
-  - `packages/cluster-mesh/README.md`
-  - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package*.json`
+  - `scripts/security/daily/scan.mjs`
+  - `scripts/security/daily/scan.test.mjs`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
+  - `Makefile`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
+  - `.github/workflows/**`
   - `.cursor/rules/**`
-  - `api/**`
-  - `ui/**`
-  - `.track/**`
-  - `plan/**`
+  - `.security/**`
+  - `api/Dockerfile`
+  - `ui/Dockerfile`
+  - `packages/**`
+  - `tools/**`
+  - `plan/NN-BRANCH_*.md`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `Makefile`
-  - `.github/workflows/ci.yml`
-  - `scripts/ci/publishable-manifests.mjs`, `scripts/ci/publishable-classification.test.mjs`, `scripts/ci/publishable-ci-wiring.test.mjs` (BR757-EX6)
+  - `Makefile` (SECDAILY-EX1, only the two adapter recipes below)
 - **Exception process**:
-  - [x] BR757-EX1 below permits only package Make include and dedicated CI gate.
+  - [x] Declare any additional exception with rationale, impact and rollback in this feedback loop before editing.
 
 ## Feedback Loop
-- [x] PR776 inventory repair: declare live-speech in PACK_TARGETS and cover selected BLOCK classification; preserve all existing validation-pack context checks and verify the separate workflow's four deterministic gates. Local fixture commands could not acquire the shared Docker lock; require the new exact-head manifest CI result before READY.
-- [x] BR757-EX6: owner-requested repair of run 40417977042/job 121916029156. Its guarded live-speech pack passed but the static PACK_TARGETS inventory omitted the package and failed. Register the existing lane, add an inventory regression and explicitly check its inventory-only packing path without adding a publisher. Impact: live-speech BLOCK classification recognizes its existing guarded Make lane; rollback: revert these three CI script changes together.
-- [x] Integration: merge origin/main 6690b8add after #778; retain L2 BRANCH.md and main's cluster 0.23.2/mesh 0.30.0/gateway 0.21.5 tuple. No L2-specific cluster source/version change remains; root lock keeps the live-speech workspace registration. Imported history exceeds 150 lines; conflict resolutions are metadata only.
-- [x] PR776 generation lookup regression: malformed historical references resolved an inherited entry (16/17 ordering tests passed). Validate scope, numeric epoch, submit key and owned journal entry before historical lookup; retain valid old-generation settlement.
-- [x] BR757-EX5: the standard manifest gate requires a literal root pack-live-speech target for this changed public package. Add only that lane using the existing guarded pack macro and a transient L2 build; no publication. Rollback removes the lane and package pack script.
-- [x] PR776 P2-3 follow-through: late evidence on accepted effects and old terminal acknowledgements leave current approvals valid; unresolved-effect changes still invalidate grants. Add a parallel-call regression spanning both histories.
-- [x] PR776 r1 local package tests: 34/34 pass across interruption, ordering, playback and usage. All seven correction commits stay below 150 lines; head workflows are submitted and remain required for handoff.
-- [x] PR776 combined recovery: generation rotation preserves unsent queued finals with their immutable epoch/submit key; old references fail scope checks. Usage estimates without a native ID remain replayable after ACK recovery.
-- [x] PR776 local interruption run: 11/12 pass; the late-ID fixture also delayed the successor's start indefinitely. Limit its delayed mock to the original start; retain the unchanged timeout and assert successor admission.
-- [x] PR776 P2-4: deduplicate counted units by allocator admission ID across operations/restart; limit one unit per estimate and verify the admitted coordinator/native-turn link. Persisted replay and forged-link tests added.
-- [x] PR776 P2-3: bind grants to turn/call identity; admissions and active sibling results no longer invalidate parallel approvals. Stop and unresolved-effect transitions still revoke stale grants; concurrency and pending-approval Stop tests added.
-- [x] PR776 P2-2: trusted CAS generation rotation carries effects, fences, action tombstones and consumed approvals forward; persisted-byte restart tests retain the mutation barrier and query-only old-turn recovery.
-- [x] PR776 P2-1: journal queued finals while a predecessor settles; gate send by prior completion or durable fence, retaining exactly-once submission across restart/lost ACK. Covered in interrupt.test.ts.
-- [x] BR757-EX4: deterministic L2 qualification uses a dedicated read-only workflow without provider secrets. Owner's PR776 r1 instructions require rerunning cancelled head CI; retain standard global selection and monitor both workflows without cancelling the requested runs. No local inference or paid API probes.
-- [x] Final lint and build/export/pack pass; CI package commands also use the owner-requested ENV=test-stt-l2. Native qualification and publication remain separate.
-- [x] Full final package tests pass 27/27 across the four required suites; source includes durable CAS restart and immutable typed-risk verification.
-- [x] Add asynchronous authentication input-mutation regression: selected risk/evidence must remain bound to the exact request verified before the await boundary.
-- [x] Require the authenticated workspace in the durable scope and operational receipts, alongside tenant/principal/target/source/controller/consent; missing scope fields fail admission.
-- [x] Include validate-live-speech in both final CI aggregation dependencies so result capture cannot race this newly selected job.
-- [x] Add lost-start-ACK fail-closed admission, inherited class-key refusal and optional native-ID metadata type checks before final quality gates.
-- [x] Add concrete CAS-backed SessionJournal tests: persisted-byte restart, transaction rollback and contention retry. Storage durability remains an explicit host primitive; no production in-memory sink is supplied.
-- [x] BR757-EX3: merge origin/main ab981b16d to enable PR776 CI. Preserve L1c 0.23 speech, main peer releases/Decision changes and both README sections. Authored conflict resolutions are small; imported main commits retain their original history. Scope-check at merge measures resolutions against AUTO_MERGE, excluding unchanged incoming commits. Rollback uses the pre-merge parent; never rewrite/rebase.
-- [x] Add exact barrier-revision approval binding (including previously unused approvals) and explicit paired cancellation for emitted calls denied before admission.
-- [x] Each official live-speech gate now invokes cleanup via Make on exit while still under the shared lock, preserving failures. CI selects this gate only for its package/build/workflow changes.
-- [x] Add explicit tests for 2s pending Stop, disconnect/reconnect fencing, completed-epoch late Stop and typed-acceptance replay after durable restart.
-- [x] First full core run: 17/19 pass; two ordering assertions expected lowercase substrings while authority errors start Action/Stale. Match the observed identity/revision error messages; no behavior change.
-- [x] Playback uses the L1 binary header shape (session/stream identity and negotiated format); add cross-session and independent-stream ordering assertions.
-- [x] Admission review adds tests requiring an explicit non-dispatching duplicate receipt, single-use approvals and safe record keys; callers must never infer dispatch permission from an absent result.
-- [x] BR757-EX2: register the new dependency-free workspace in root lock metadata so existing npm-ci consumers see the package. Impact limited to its workspace/link entries; rollback removes those entries with the package.
-- [x] BR757-EX1: new package has no build/test entrypoint. Add package-local Make recipes using existing qualification Compose service, one root include and CI job. Impact: deterministic isolated package gate; rollback: remove include/job and package recipes. No new containers or ports outside ENV.
+- [x] Integration: merge origin/main 289d0971d after #776; keep this branch plan on the sole conflict. Makefile and manifest-wiring additions merge automatically, preserving the S2a scan suite and main's live-speech inventory regression. Imported history exceeds 150 lines; no scanner implementation changes. Rollback: revert the merge.
+- [x] PR786 P2-4, author, resolved: eagerly materialize sorted per-row register joins with exact-match paths and pending reasons; map manifest paths only to one exact scanner/component/version node. Legacy identities and ambiguous nodes remain pending. Real-register and reversed-order regressions pass; locked daily suite passes 110 tests.
+- [x] PR786 P2-3, author, resolved: capture HEAD once and refuse tracked, staged or untracked changes before launching the scanner; Git failures also abort. Shell-guard regressions pass in the 13-test scoped scan suite.
+- [x] PR786 P2-2, author, resolved: keep the complete npm repair target as name@version plus its major-bump flag; reject malformed targets. The langium/mermaid regression preserves mermaid@11.17.2; scoped scan suite passes 12 tests.
+- [x] PR786 P2-1, author, resolved: emit only a package's own advisories at affected installed versions; retain npm carrier graph and severities as context. Langium/mermaid with two lodash-es versions is covered; locked daily suite passes 107 tests. Reuse the pinned semver tool from the existing fixture lane.
+- [x] SECDAILY-EX1 predeclared by approved r4 for S2a: edit only `security-daily-scan` and `test-security-daily` recipes in `Makefile`; reuse the existing pinned credential-free Node test lane. Impact: explicit raw scanner orchestration and its regression target; existing gates and deploy recipes remain unchanged. Rollback: revert these adapter recipes and scan files, keeping activation disabled.
+- [x] S1 dependency: owner confirms Opus r2 approval of corrected #732 head `76c745d5a`.
+- [x] S2A-F1, author, resolved: native npm rejected user/global config both pointing to `/dev/null` (double-loading config); use a distinct absent global config in scratch. Native-version regression preserves credential isolation.
+- [x] S2A-F2, author, resolved: real npm reports contain cyclic dependency references; traverse without revisiting, require reachable advisory evidence and retain each advisory severity. Independent lock audits preserve repository-relative local-link metadata inside scratch; outside-repository links fail closed.
+- [x] Validation: locked `make test-security-daily ENV=test-sec-s2a` passes 106 tests, including real native npm version resolution; initial missing-module and F1/F2 regressions were observed failing before their fixes.
+- [x] Parser compatibility: locked `make test-security-parser ENV=test-sec-s2a` passes all five cases; no parser/compliance or existing gate edit.
+- [x] Runtime identity: reuse existing `MEMORY_L5_NODE_IMAGE`, `node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6`; no image build, new image, Python, Docker socket, source write or application service.
+- [x] Operator smoke: locked `make security-daily-scan ENV=test-sec-s2a` on immutable code head `2f95bb0735725f46da1efc3d97dd46f4dd3c7097` audits all seven locks successfully and retains 251 affected-path/advisory findings (12 HIGH, 196 MEDIUM, 43 LOW); 68 unresolved register rows remain (7 expired, 61 unexpired). This is an author-branch smoke, not qualified main/pilot evidence.
+- [x] Smoke receipt: ignored `tmp/security-daily/receipt.json`, SHA-256 `99d546935dcb376acd169d04f099aa6d8405994823771f8861877055bc00331e`; source/register hashes and raw reports retained. Make exits 2 from scanner exit 1 as required for `incomplete-scan`; all source input hashes remain unchanged.
+- [x] Register bytes: SHA-256 `837f27b85ed9c20b0efd9f8fde10fb30533a87558ab23d4e65fe41d96a6df787`; policy SHA-256 `cb3f56d654fc59dcd30f1cee13af372ec037df7b70483405bb610420394b0bff`; both and every lock remain identical to S1.
+- [x] Coverage handoff: S2b 4–6 h qualifies immutable Trivy/image/IaC/DB evidence; S2c 6–12 h qualifies native Rust SAST; S3 4–6 h follows S2c for the public workflow/collector. Inventory additionally exposes missing qualified locks for `apps/auth-idp/package.json`, `tools/scw-tem-mock/package.json`, `ui/vscode-ext/package.json`; no false complete-clean receipt.
+- [x] Independent S2a review remains pending: local harness selection failed because this session has no live model catalog and h2a presence lacks exact models; no peer was dispatched and no consensus is claimed. Ignored dossier: `tmp/security-daily/review.md`.
+- [x] Track import belongs to the designated writer; this worktree updates only the mergeable `BRANCH.md` source.
 
 ## AI Flaky tests
-- [x] Deterministic unit fixtures only; no flaky waiver.
+- [x] Expect deterministic fixture tests only; treat any failure as blocking and do not increase timeouts or accept AI flakiness.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch, sequential implementation; complementary review selected only from evidenced reachable capacity.
-- [ ] Multi-branch not required for this single lot.
+- [x] **Mono-branch**: one bounded adapter lot with serial tests under the shared Docker lock.
+- [ ] **Multi-branch**: not needed for this scope.
 
 ## UAT Management (in orchestration context)
-- [x] Core-only fixture qualification; no device/UI/native-runtime acceptance claimed.
+- [x] Web app UAT: not applicable; no user-facing or application runtime change.
+- [x] Chrome plugin UAT: not applicable; no extension change.
+- [x] VSCode plugin UAT: not applicable; no extension change.
+- [x] Operator UAT: inspect a fixture scan receipt for source SHA, all severities, explicit gaps, public backlog and unchanged source/register bytes.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read Docker lock first, project rules, approved spec, owner answers and PR757 base.
-  - [x] Mechanical harness branch check passes; no service ports required.
-  - [x] Add package manifest, strict TS build, Make and CI entrypoints using the existing isolated qualification service.
-- [x] **Lot 1 — Tests first**
-  - [x] interrupt.test.ts: pre-start Stop, double Stop, late native ID, completion race, all-class fence and restart fixtures authored before source.
-  - [x] ordering.test.ts: one commit/submission, pairing/dedupe, stale generations, barrier, partial/stale risk acceptance and fresh authorization fixtures authored first.
-  - [x] playback.test.ts: actual rendered samples, stale output, bounded queue and connection/turn epochs authored first.
-  - [x] usage-receipts.test.ts: estimate/true-up dedupe, dimensions, restart and payload exclusion authored first.
-  - [x] Red at 4f03beab7: scoped interrupt suite fails on missing core/session.js before source implementation.
-- [x] **Lot 2 — Implementation**
-  - [x] Snapshot command identities and typed risk bodies before asynchronous admission/authentication; opaque proofs stay transient and are never journalled.
-  - [x] Durable scopes and receipts require complete authenticated tenant/workspace identity; shared shape validation rejects omitted or extra fields.
-  - [x] Uncertain native starts install a tombstone before rethrowing; admission rejects inherited class keys and receipts validate optional identity fields.
-  - [x] SessionJournal implements durable snapshot CAS, bounded contention retry, rollback, schema/scope checks and isolated returns over host storage.
-  - [x] Fresh mutation approvals bind the barrier revision; denied emitted calls have durable cancelled-before-start results and action tombstones.
-  - [x] Expose stopping/pending/terminal separately from fence receipts; retain paired read-only outcomes and suppress Stop RPCs for completed old epochs.
-  - [x] All-class admission returns explicit dispatch/dedupe receipts with authority ordering; consumed approval IDs and exact tool/arguments bindings persist across restart.
-  - [x] core/session.ts: trusted scoped authority, atomic journal, persisted epochs/tombstones, opaque control port implemented.
-  - [x] core/interrupt.ts: all-class fence receipts, outcome pairing, effect barrier and typed authenticated risk acceptance implemented.
-  - [x] core/playback.ts: L1-compatible session/stream headers, monotonic rendered samples, bounded transient queue and stale epoch refusal implemented.
-  - [x] core/usage-receipts.ts: canonical operation identity, strict metadata fields and signed revision-deduplicated adjustments implemented.
-- [x] **Lot 3 — Documentation and local validation**
-  - [x] README: control/journal integration, authority and runtime qualification boundaries, L3 integration seam documented.
-  - [x] Strict source/test types, lint, build/exports and all 27 package tests pass through locked Make targets; each gate cleans its ENV on exit.
-  - [x] make scope-check before every commit; repeatable first-parent atomic-size, whitespace and attribution-trailer audit provided.
-  - [x] Review dossier records exact author/source and selection failure without inferred reviewer allocation or consensus; G-REVIEW remains open for merge.
-- [ ] **Lot 4 — Draft handoff**
-  - [x] Push branch and create draft PR776 to main using this plan as body; implementation plan posted as its first comment.
-  - [ ] Obtain green exact-head CI; report PR, head SHA, CI URL and L3 readiness.
-  - [x] Keep BRANCH.md and draft; no merge/publication/deployment performed.
+- [x] **Lot 0 — Admission and baseline**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `rules/testing.md`, `rules/security.md`, the Docker lock and approved spec r4 sections 3/4/9.
+  - [x] Verify the S1 dependency head, `harness check branch`, scope boundaries and SECDAILY-EX1 before editing.
+  - [x] Inventory existing Make scan/parser entrypoints; reuse S1 schema/inventory helpers without changing their safety contract.
+  - [x] Capture source/register byte identities and the source SHA for unchanged-main assertions.
+- [x] **Lot 1 — Raw scan orchestration, `scan.mjs` and `scan.test.mjs`**
+  - [x] Enumerate three images explicitly, root/workspace and independent UI/kit lockfiles including dev dependencies, and discovered source/hash consumers.
+  - [x] Capture raw output before compliance; run audit/scan commands without repair or publication and preserve accepted exceptions in the public queue.
+  - [x] Validate reports with S1 fail-closed checks; keep command errors, missing reports, unsupported formats, missing images and unqualified SAST as coverage gaps.
+  - [x] Record exact source, scanner/database identities, component/path, all severity flags and coverage; retain identical flags between comparable scans.
+  - [x] In `scan.test.mjs`, assert source/register bytes remain unchanged, registered findings remain queued, explicit toolbox/locks coverage and independent locks include dev dependencies.
+  - [x] In `scan.test.mjs`, reject empty/malformed/partial/error reports and verify missing surfaces or SAST qualification prevent complete-clean receipts.
+  - [x] In `scan.test.mjs`, assert identical scan flags and bounded credential-free command invocation through injected fixture runners.
+  - [x] Register the suite in the existing required `scripts/ci/publishable-ci-wiring.test.mjs` entrypoint without editing workflow filters or permissions.
+  - [x] Lot gate: scoped scan regression tests through the existing `make test-publishable-manifests SCOPE=scripts/security/daily/scan.test.mjs ENV=test-sec-s2a`, locked, followed by scoped teardown.
+- [x] **Lot 2 — Make adapter and parser compatibility**
+  - [x] Add only the thin `security-daily-scan` and `test-security-daily` targets under SECDAILY-EX1; use existing removable container tooling.
+  - [x] Keep scanner/DB/provenance qualification explicitly pending S2b and native SAST pending S2c; do not reuse Python SAST in the daily lane.
+  - [x] In `scan.test.mjs`, assert Make recipe wiring, fail-closed exit behavior and explicit coverage; do not start live scan stacks as fixture assertions.
+  - [x] Run locked `make test-security-daily ENV=test-sec-s2a` and existing `make test-security-parser ENV=test-sec-s2a`, with locked teardown after each.
+  - [x] API/UI/E2E tests: not applicable to this adapter-only change; no app service stack required.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] Record commands, result counts, immutable head, coverage blockers and operator fixture receipt in this plan; keep the approved spec unchanged.
+  - [x] Confirm every diff hunk serves S2a and S2b/S2c/S3 work remains deferred.
+- [ ] **Lot N — Final validation**
+  - [x] Run S1 plus scan and required wiring suites through the existing pinned Node Make target, locked, then clean the scoped environment.
+  - [x] Verify `harness check branch`, `make scope-check ENV=test-sec-s2a`, clean diff formatting and each new commit below 150 changed lines with no AI trailer.
+  - [ ] Update the S2a PR from this plan, push the owner-authorized draft stacked on S1 #732, and verify CI on its exact head.
+  - [ ] Report head SHA, CI URL and remaining S2b/S2c blockers; keep runtime activation disabled and do not merge.
