@@ -26,7 +26,7 @@ mesh_list="$(tar -tzf "$out/mesh.tgz" | LC_ALL=C sort | sha256sum | cut -d' ' -f
     rm -rf node_modules; npm ci --ignore-scripts --no-audit --no-fund;
     sha256sum -c /evidence/lock-before.sha256;
     ./node_modules/.bin/tsc --noEmit --strict --target es2022 --module nodenext --moduleResolution nodenext \
-      --listFiles installed-memory-types.ts > /evidence/type-files.txt || { cat /evidence/type-files.txt; exit 1; };
+      --listFiles /evidence/consumer/installed-memory-types.ts > /evidence/type-files.txt || { cat /evidence/type-files.txt; exit 1; };
     npm --version > /evidence/npm-version.txt;
     node installed-memory.mjs write; node installed-memory.mjs reopen'
 cp "$out/consumer/package.json" "$out/consumer-package.json"
