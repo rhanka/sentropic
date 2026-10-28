@@ -99,11 +99,11 @@ Mesh `speech/mistral-transcription.ts` with the Voxtral realtime STT adapter (3.
   - [ ] `tests/fixtures/mistral-frames.ts`: recorded session.created/updated, delta scripts, done records, turn events, invalid/error frames; no live call.
   - [ ] `tests/speech-mistral.test.ts`: endpoint/final mapping, cancel/flush, no double count, late-frame suppression (incl. post-close), Bearer redaction, per-turn windows, completed-only done, orphan/empty-turn behavior.
   - [ ] Lot gate: `make test-llm-mesh` green (SCOPE=file then full) on the lot head.
-- [ ] **Lot 4 — Receipt + version**
+- [x] **Lot 4 — Receipt + version (mesh 0.31.0, cluster 0.23.4, fixture rebind via make packs + sha512, root lock; lanes green)**
   - [ ] `bench/l13-mistral.receipt.json`: status blocked, exact missing G-CLOUD/§10 items, price revision unpinned, no live evidence claimed.
   - [ ] Bump `packages/llm-mesh/package.json` to 0.31.0 (train rhythm; collision with L9 noted above); cascade tuple ranges/fixtures/lock integrity via sanctioned refresh only.
   - [ ] Lot gate: receipt present and blocked, version bumped, `make build-llm-mesh` + `make pack-llm-mesh` green.
-- [ ] **Lot N — Final validation**
+- [x] **Lot N — Final validation (scope-check PASS C2; draft PR, CI green, report, down)**
   - [ ] `make scope-check` (harness) green.
   - [ ] Push, draft PR against `feat/live-stt-l8`, CI green on the exact head.
   - [ ] Report PR number, head SHA, CI URL without merging.
