@@ -2195,11 +2195,13 @@ export function createChatLoopController<
     prompt: ControllerLocalToolPermissionPrompt,
     decision: string,
   ): Promise<void> => {
+    const machineGeneration = ltMachineGeneration;
     if (ltLocalToolPermissionRetriesInFlight.has(prompt.toolCallId)) return;
     ltLocalToolPermissionRetriesInFlight.add(prompt.toolCallId);
 
     try {
       await ltDecideLocalToolPermission!(prompt.request.requestId, decision);
+      if (machineGeneration !== ltMachineGeneration) return;
       ltPendingLocalToolPermissionPrompts = ltPendingLocalToolPermissionPrompts.filter(
         (item) => item.toolCallId !== prompt.toolCallId,
       );
@@ -2219,8 +2221,10 @@ export function createChatLoopController<
         prompt.args,
         { streamId: prompt.streamId },
       );
+      if (machineGeneration !== ltMachineGeneration) return;
       await ltPostLocalToolResult!(prompt.streamId, prompt.toolCallId, localResult);
     } catch (error) {
+      if (machineGeneration !== ltMachineGeneration) return;
       if (ltIsLocalToolPermissionRequired?.(error)) {
         const request = ltGetPermissionRequest!(error);
         const nextPrompt: ControllerLocalToolPermissionPrompt = {
@@ -2251,6 +2255,7 @@ export function createChatLoopController<
         );
       }
     } finally {
+      if (machineGeneration !== ltMachineGeneration) return;
       ltLocalToolPermissionRetriesInFlight.delete(prompt.toolCallId);
       ltScheduleNextToolForStream(prompt.streamId);
     }

@@ -42,6 +42,8 @@
   - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] BR1-R2-native: accept the native permission review finding; settle approved only after execution, preserve preflight grants for native continuation, record native denial and guard stale native callbacks after disposal. Keep only the latest resolved status plus pending prompts.
+- [x] BR1-M1: merge P1a review corrections from `8525b730d`; resolve the runtime export map by keeping explicit optional-module/high-level entrypoints and removing the wildcard; Track log remains unchanged.
 - [x] BR1-R1: boundary review APPROVE; packaging findings accepted: include LICENSE, make the temporary UI type peer optional and explicitly enumerate runtime subpaths; align the host export test and handle string-valued export entries.
 - [x] BR1-R1-check: corrected runtime export test 23/23 and guarded pack pass; regenerate optional-peer metadata; P1a UI/runtime source behavior remains unchanged.
 - [x] BR1-EX1: allow additive Makefile runtime build/typecheck/test/pack targets and necessary chat dependency wiring; impact is package tooling only; rollback restores existing targets and removes runtime targets.
