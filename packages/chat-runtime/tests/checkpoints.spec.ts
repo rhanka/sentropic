@@ -128,3 +128,143 @@ describe('classifier — built-in git/bash/file_edit', () => {
   it('bash with read-only command is not mutating', () => {
     expect(
       hasCheckpointMutationDelta(
+        { anchorSequence: 1 },
+        [
+          { id: 'u1', role: 'user', sequence: 1 },
+          { id: 'a1', role: 'assistant', sequence: 2 },
+        ],
+        makeEvents({ id: 'a1', events: [toolCallStartEvent('tc1', 'bash', '{"command":"cat package.json"}')] }),
+      ),
+    ).toBe(false);
+  });
+
+  it('plan tool is never mutating', () => {
+    expect(
+      hasCheckpointMutationDelta(
+        { anchorSequence: 1 },
+        [
+          { id: 'u1', role: 'user', sequence: 1 },
+          { id: 'a1', role: 'assistant', sequence: 2 },
+        ],
+        makeEvents({ id: 'a1', events: [toolCallStartEvent('tc1', 'plan', '{}')] }),
+      ),
+    ).toBe(false);
+  });
+
+  it('returns false when checkpoint is null', () => {
+    expect(hasCheckpointMutationDelta(null, [], new Map())).toBe(false);
+  });
+
+  it('returns false when anchorSequence is 0 or negative', () => {
+    expect(
+      hasCheckpointMutationDelta({ anchorSequence: 0 }, [], new Map()),
+    ).toBe(false);
+    expect(
+      hasCheckpointMutationDelta({ anchorSequence: -1 }, [], new Map()),
+    ).toBe(false);
+  });
+
+  it('only scans assistant messages after the anchor sequence', () => {
+    // The file_edit is on sequence 1 (same as anchor) — not "after", so false.
+    expect(
+      hasCheckpointMutationDelta(
+        { anchorSequence: 2 },
+        [
+          { id: 'u1', role: 'user', sequence: 1 },
+          { id: 'a1', role: 'assistant', sequence: 2 },
+        ],
+        makeEvents({ id: 'a1', events: [toolCallStartEvent('tc1', 'file_edit', '{"path":"x"}')] }),
+      ),
+    ).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 2. isMutatingTool hook override (domain tools)
+// ---------------------------------------------------------------------------
+describe('classifier — isMutatingTool hook override', () => {
+  const domainOpts = {
+    isMutatingTool: (name: string) =>
+      ['_create', '_update', '_delete'].some((s) => name.toLowerCase().endsWith(s)),
+  };
+
+  it('marks folder_create as mutating via hook', () => {
+    expect(
+      hasCheckpointMutationDelta(
+        { anchorSequence: 1 },
+        [
+          { id: 'u1', role: 'user', sequence: 1 },
+          { id: 'a1', role: 'assistant', sequence: 2 },
+        ],
+        makeEvents({ id: 'a1', events: [toolCallStartEvent('tc1', 'folder_create', '{}')] }),
+        domainOpts,
+      ),
+    ).toBe(true);
+  });
+
+  it('marks folder_update as mutating via hook', () => {
+    expect(
+      hasCheckpointMutationDelta(
+        { anchorSequence: 1 },
+        [
+          { id: 'u1', role: 'user', sequence: 1 },
+          { id: 'a1', role: 'assistant', sequence: 2 },
+        ],
+        makeEvents({ id: 'a1', events: [toolCallStartEvent('tc1', 'folder_update', '{"folderId":"f1"}')] }),
+        domainOpts,
+      ),
+    ).toBe(true);
+  });
+
+  it('does NOT mark folder_create without the hook (unknown tool, falls through)', () => {
+    expect(
+      hasCheckpointMutationDelta(
+        { anchorSequence: 1 },
+        [
+          { id: 'u1', role: 'user', sequence: 1 },
+          { id: 'a1', role: 'assistant', sequence: 2 },
+        ],
+        makeEvents({ id: 'a1', events: [toolCallStartEvent('tc1', 'folder_create', '{}')] }),
+        // No isMutatingTool hook — folder_create is unknown, treated as non-mutating
+      ),
+    ).toBe(false);
+  });
+
+  it('humanizeMutation hook produces labelled preview items', () => {
+    const preview = getCheckpointMutationPreviewItems(
+      { anchorSequence: 1 },
+      [
+        { id: 'u1', role: 'user', sequence: 1 },
+        { id: 'a1', role: 'assistant', sequence: 2 },
+      ],
+      makeEvents({ id: 'a1', events: [toolCallStartEvent('tc1', 'folder_update', '{"folderId":"fld_42"}')] }),
+      {
+        ...domainOpts,
+        humanizeMutation: (toolName, argsText) => {
+          let record: Record<string, unknown> | null = null;
+          try {
+            const p: unknown = JSON.parse(argsText);
+            if (p && typeof p === 'object' && !Array.isArray(p)) record = p as Record<string, unknown>;
+          } catch { /**/ }
+          const entity = toolName.replace(/_(create|update|delete)$/i, '');
+          const label = entity.replace(/_/g, ' ').trim();
+          const idCandidate = String(record?.folderId ?? record?.id ?? '').trim();
+          const action = toolName.split('_').pop() ?? '';
+          return idCandidate ? `${label} ${action}: ${idCandidate}` : `${label} ${action}`;
+        },
+      },
+    );
+    expect(preview).toEqual(['folder update: fld_42']);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3. isLocalToolName default ()=>false equivalence proof
+// ---------------------------------------------------------------------------
+describe('classifier — isLocalToolName default equivalence', () => {
+  /**
+   * PROOF: isLocalToolName defaults to () => false.
+   * parsePendingLocalToolCallsFromStatusPayload filters by isLocalToolName:
+   * any status event with pending_local_tool_calls will produce ZERO calls when
+   * isLocalToolName = ()=>false, regardless of the tool name.
+   *
