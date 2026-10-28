@@ -34,16 +34,16 @@ memory-stage-b-locked:
 # E10 installed injection proof: clean consumer outside repository resolution.
 INSTALLED_DIR ?= tmp/installed-memory-e10
 INSTALLED_ENGRAM_TGZ ?= /home/antoinefa/src/graphify-wt-mcpl4/.graphify/scratch/l4-r4-artifacts/sentropic-engram-0.22.0.tgz
-INSTALLED_MESH_VERSION ?= 0.24.0-dev.2
+INSTALLED_MESH_VERSION ?= 0.24.0-dev.4
 INSTALLED_RECEIPTS ?= $(INSTALLED_DIR)
 .PHONY: installed-memory installed-memory-locked
 installed-memory:
-	@test -n "$(filter test-mem-e10 test-e2-int test-mem-batch1,$(ENV))"
+	@test -n "$(filter test-mem-e10 test-mem-e10-fin test-e2-int test-mem-batch1,$(ENV))"
 	@flock "$(E2_LOCK)" $(MAKE) -f Makefile -f $(MEMORY_QUALIFICATION_MK) installed-memory-locked ENV=$(ENV)
 
 # Internal entry: caller holds the machine-wide lock through cleanup.
 installed-memory-locked:
-	@test -n "$(filter test-mem-e10 test-e2-int test-mem-batch1,$(ENV))"
+	@test -n "$(filter test-mem-e10 test-mem-e10-fin test-e2-int test-mem-batch1,$(ENV))"
 	@test -z "$$(git status --porcelain)" || { echo 'Installed receipt requires a clean committed tree'; exit 1; }
 	@printf '%s  %s\n' 26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10 "$(INSTALLED_ENGRAM_TGZ)" | sha256sum -c -
 	@printf '%s  %s\n' 1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730 tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json | sha256sum -c -

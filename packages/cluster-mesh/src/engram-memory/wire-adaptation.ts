@@ -4,15 +4,19 @@
 // helpers translate both ways at the neutral-handle boundary; validation,
 // allocation, durability and authority remain in the real kernel.
 
-import { memoryJcs, type MemoryEncodedValue } from './codec.js';
+import { isCanonicalU64, MemoryCanonicalJsonError, memoryJcs, type MemoryEncodedValue } from './codec.js';
+import { isMemoryAdmissionOutcome, isMemoryCaptureProof } from './validation.js';
 import { StorageInvalidCommandError } from '../storage/errors.js';
 import type { AtomicUnit } from '../storage/atomic.js';
+import type { EncodedValue } from '../storage/contracts.js';
 import type {
   NeutralAggregateUpdate, NeutralAtomicUnit, NeutralModuleTransaction,
 } from './neutral-contract.js';
 
 export const memoryNeutralFailure = (error: unknown): never => {
-  const source = (error ?? {}) as { code?: string; message?: string };
+  const source = error instanceof MemoryCanonicalJsonError
+    ? { code: 'invalid-schema', message: error.message }
+    : (error ?? {}) as { code?: string; message?: string };
   const codes: Record<string, string> = {
     denied: 'unauthorized', 'invalid-command': 'invalid-schema', unavailable: 'store-unavailable',
     'capacity-exceeded': 'limit-exceeded', 'idempotency-conflict': 'digest-conflict',
@@ -41,17 +45,40 @@ const parseStored = (data: string): Record<string, unknown> => {
   }
 };
 
+export const requireMemoryUtf8 = (value: EncodedValue): MemoryEncodedValue => {
+  if (value.format !== 'utf8') throw new StorageInvalidCommandError('memory wire value must be UTF-8');
+  return { format: 'utf8', data: value.data };
+};
+
+const requireWire = (ok: boolean, what: string): void => {
+  if (!ok) throw new StorageInvalidCommandError(`memory wire proof is malformed: ${what}`);
+};
+const requireSnake = (entry: Record<string, unknown>, capture: boolean): void => {
+  requireWire(typeof entry['candidate_id'] === 'string' && entry['candidate_id'] !== '', 'candidate_id');
+  if (!capture) { requireWire('status' in entry, 'admission outcome'); return; }
+  requireWire(typeof entry['cursor'] === 'string', 'cursor');
+  requireWire('content' in entry, 'content');
+  requireWire(entry['record_digest'] === undefined || typeof entry['record_digest'] === 'string', 'record_digest');
+};
+const requireKernel = (entry: Record<string, unknown>, capture: boolean): void => {
+  requireWire(capture ? isMemoryCaptureProof(entry) : isMemoryAdmissionOutcome(entry), 'stored proof');
+};
+
 /** K7 write direction: snake-case substrate proof to camel-case kernel proof. */
-export const captureProofToKernel = (entry: Record<string, unknown>): Record<string, unknown> => ({
-  candidateId: entry['candidate_id'],
-  revision: entry['record_digest'] ? 2 : 1,
-  recordDigest: entry['record_digest'] ?? null,
-  createdCursor: entry['cursor'],
-  proof: { candidate_id: entry['candidate_id'], content: entry['content'], cursor: entry['cursor'] },
-});
+export const captureProofToKernel = (entry: Record<string, unknown>): Record<string, unknown> => {
+  requireSnake(entry, true);
+  return {
+    candidateId: entry['candidate_id'],
+    revision: entry['record_digest'] ? 2 : 1,
+    recordDigest: entry['record_digest'] ?? null,
+    createdCursor: entry['cursor'],
+    proof: { candidate_id: entry['candidate_id'], content: entry['content'], cursor: entry['cursor'] },
+  };
+};
 
 /** K7 read direction: camel-case kernel proof back to snake-case wire proof. */
 export const captureProofToWire = (stored: Record<string, unknown>): Record<string, unknown> => {
+  requireKernel(stored, true);
   const proof = (stored['proof'] ?? {}) as Record<string, unknown>;
   return { ...proof, ...(stored['recordDigest'] ? { record_digest: stored['recordDigest'] } : {}) };
 };
@@ -59,32 +86,37 @@ export const captureProofToWire = (stored: Record<string, unknown>): Record<stri
 export const translateMemoryUpdateWrite = (row: NeutralAggregateUpdate): NeutralAggregateUpdate => {
   if (!isMemoryCaptureKey(row.key) && !isMemoryOutcomeKey(row.key)) return row;
   const entry = parseStored(row.value.data);
+  if (typeof entry['candidateId'] === 'string') {
+    requireKernel(entry, isMemoryCaptureKey(row.key)); return row;
+  }
+  requireSnake(entry, isMemoryCaptureKey(row.key));
   if (isMemoryCaptureKey(row.key)) {
-    if (typeof entry['candidateId'] === 'string') return row;
     return { ...row, value: memoryJcs(captureProofToKernel(entry)) };
   }
-  if (typeof entry['candidateId'] === 'string') return row;
   return { ...row, value: memoryJcs({ candidateId: entry['candidate_id'], outcome: entry['status'], proof: entry }) };
 };
 
 export const translateMemoryAggregateRead = (
-  key: string, value: MemoryEncodedValue,
+  key: string, storedValue: EncodedValue,
 ): MemoryEncodedValue => {
+  const value = requireMemoryUtf8(storedValue);
   if (!isMemoryCaptureKey(key) && !isMemoryOutcomeKey(key)) return value;
   const parsed = parseStored(value.data);
+  if (typeof parsed['candidate_id'] === 'string') {
+    requireSnake(parsed, isMemoryCaptureKey(key)); return value;
+  }
+  requireKernel(parsed, isMemoryCaptureKey(key));
   if (isMemoryCaptureKey(key)) {
-    if (typeof parsed['candidate_id'] === 'string') return value;
     return memoryJcs(captureProofToWire(parsed));
   }
-  if (typeof parsed['candidate_id'] === 'string') return value;
   return memoryJcs(parsed['proof']);
 };
 
 /** Rejoin the K7 receipt digest carried only in the pending control bytes. */
 export const withMemoryCaptureReceipt = async (
   key: string,
-  value: MemoryEncodedValue,
-  readControl: (controlKey: string) => Promise<MemoryEncodedValue | null>,
+  value: EncodedValue,
+  readControl: (controlKey: string) => Promise<EncodedValue | null>,
 ): Promise<MemoryEncodedValue> => {
   const translated = translateMemoryAggregateRead(key, value);
   if (!isMemoryCaptureKey(key)) return translated;
@@ -93,7 +125,7 @@ export const withMemoryCaptureReceipt = async (
   const candidateId = (JSON.parse(key) as unknown[])[1];
   const control = await readControl(JSON.stringify(['memory-pending-control-v1', candidateId]));
   if (!control) return translated;
-  const receiptDigest = parseStored(control.data)['capture_receipt_digest'];
+  const receiptDigest = parseStored(requireMemoryUtf8(control).data)['capture_receipt_digest'];
   return typeof receiptDigest === 'string'
     ? memoryJcs({ ...entry, receipt_digest: receiptDigest }) : translated;
 };
@@ -143,10 +175,10 @@ export const neutralUnitToPg = (unit: NeutralAtomicUnit): AtomicUnit => {
 
 /** Structural kernel transaction port consumed by the neutral transaction. */
 export interface MemoryKernelTransactionPort {
-  readAggregate(key: string): Promise<{ readonly version: number; readonly value: MemoryEncodedValue } | null>;
+  readAggregate(key: string): Promise<{ readonly version: number; readonly value: EncodedValue } | null>;
   readRecords(
     keys: readonly string[], limits: { readonly maxRecords: number; readonly maxEncodedBytes: number },
-  ): Promise<readonly { readonly key: string; readonly bytes: MemoryEncodedValue; readonly contentHash: string }[]>;
+  ): Promise<readonly { readonly key: string; readonly bytes: EncodedValue; readonly contentHash: string }[]>;
   readChain(input: {
     readonly chainId: string; readonly limit: number; readonly cursor?: unknown; readonly maxEncodedBytes: number;
   }): Promise<{ readonly records: readonly { readonly id: string; readonly hash: string; readonly bytes: string }[];
@@ -170,27 +202,32 @@ export const createMemoryNeutralTransaction = (
     return { kind, key, version: String(found.version), value };
   },
   readRecords: async (kind, keys) => (await tx.readRecords(keys, { maxRecords: 2000, maxEncodedBytes: 1048576 }))
-    .map((row) => ({ kind, key: row.key, value: row.bytes, contentHash: row.contentHash })),
+    .map((row) => ({ kind, key: row.key, value: requireMemoryUtf8(row.bytes), contentHash: row.contentHash })),
   readChain: async ({ chain, afterAllocation = '0', limit }) => {
-    const all: { readonly id: string; readonly hash: string; readonly bytes: string }[] = [];
+    if (!isCanonicalU64(afterAllocation) || !Number.isSafeInteger(limit) || limit <= 0 || limit > 2000) {
+      throw new StorageInvalidCommandError('memory chain requires a canonical allocation and limit from 1 to 2000');
+    }
+    const after = BigInt(afterAllocation);
+    const records: { id: string; hash: string; value: MemoryEncodedValue }[] = [];
     let cursor: unknown;
     for (;;) {
-      const page = await tx.readChain({ chainId: chain, limit: 500, cursor, maxEncodedBytes: 1048576 });
-      all.push(...page.records);
+      const page = await tx.readChain({ chainId: chain, limit: Math.min(500, limit - records.length),
+        cursor, maxEncodedBytes: 1048576 });
+      for (const row of page.records) {
+        const data = stripJournalIntentHash(row.bytes);
+        const allocation = parseStored(data)['cursor'];
+        if (!isCanonicalU64(allocation)) {
+          throw new StorageInvalidCommandError('memory chain record requires a canonical cursor');
+        }
+        if (BigInt(allocation) > after) {
+          records.push({ id: row.id, hash: row.hash, value: { format: 'utf8', data } });
+          if (records.length === limit) return { chain, records };
+        }
+      }
       if (!page.nextCursor || page.records.length === 0) break;
       cursor = page.nextCursor;
     }
-    const after = BigInt(afterAllocation);
-    const records = all
-      .map((row) => ({ id: row.id, hash: row.hash,
-        value: { format: 'utf8' as const, data: stripJournalIntentHash(row.bytes) } }))
-      .filter((row) => {
-        try {
-          const value = (JSON.parse(row.value.data) as { cursor?: unknown }).cursor;
-          return value === undefined || BigInt(String(value)) > after;
-        } catch { return true; }
-      });
-    return { chain, records: records.slice(0, limit) };
+    return { chain, records };
   },
   findIdempotency: async ({ commitIdentity }) => {
     const row = await tx.findIdempotency({ key: memoryCommitIndexKey(commitIdentity) });
