@@ -115,4 +115,71 @@ describe('trusted app reader activation', () => {
     const fresh = await reader().issue(session, target);
     expect(await reader().consume(session, input(fresh))).toEqual(fresh.ticket);
   });
+
+  it.each([
+    { channel: 'pinned' }, { releaseId: randomUUID() }, { artifactId: randomUUID() },
+    { targetOrigin: `http://${artifactId}.${config.baseDomain}` },
+    { targetOrigin: `${target.targetOrigin}:444` }, { targetOrigin: `${target.targetOrigin}/path` },
+    { targetOrigin: 'https://foreign.example.test' }, { nonce: '' },
+  ])('should refuse an unbound target before issuing durable state: %j', async changed => {
+    await expect(reader().issue(session, { ...target, ...changed } as typeof target)).rejects.toThrow();
+    expect((await pool.query('SELECT count(*)::int AS n FROM artifact_host.activation_tickets')).rows[0].n).toBe(0);
+  });
+
+  it('should fence stable A after B becomes current while allowing pinned A', async () => {
+    const stable = await reader().issue(session, target);
+    const pinnedTarget = { ...target, channel: 'pinned' as const,
+      targetOrigin: `https://${releaseId}.pinned.${config.baseDomain}` };
+    const pinned = await reader().issue(session, pinnedTarget);
+    const b = randomUUID();
+    await pool.query(`INSERT INTO artifacts.releases(id,artifact_id,manifest_digest,manifest) VALUES ($1,$2,'b','{}')`, [b, artifactId]);
+    await pool.query('UPDATE artifacts.artifact_current SET release_id=$1', [b]);
+    await pool.query(`UPDATE artifacts.releases SET state='retired' WHERE id=$1`, [releaseId]);
+    expect(await reader().consume(session, input(stable))).toBeUndefined();
+    expect(await reader().consume(session, { ...input(pinned), targetOrigin: pinnedTarget.targetOrigin })).toEqual(pinned.ticket);
+  });
+
+  it.each(['acl', 'pointer', 'session-expiry'])('should recheck %s after a stable-pointer lock wait', async change => {
+    const issued = await reader().issue(session, target);
+    const blocker = await pool.connect();
+    await blocker.query('BEGIN');
+    await blocker.query('SELECT artifact_id FROM artifacts.artifact_current WHERE artifact_id=$1 FOR UPDATE', [artifactId]);
+    const pending = reader().consume(session, input(issued));
+    try {
+      await vi.waitFor(async () => {
+        expect((await pool.query(`SELECT 1 FROM pg_stat_activity WHERE datname=current_database()
+          AND wait_event_type='Lock' AND query LIKE '%artifact_current%' AND pid<>pg_backend_pid()`)).rowCount).toBeGreaterThan(0);
+      });
+      if (change === 'acl') await pool.query(`DELETE FROM artifacts.artifact_access WHERE principal_id='reader'`);
+      if (change === 'session-expiry') await pool.query(`UPDATE user_sessions SET expires_at=clock_timestamp() WHERE id='session'`);
+      if (change === 'pointer') {
+        const b = randomUUID();
+        await blocker.query(`INSERT INTO artifacts.releases(id,artifact_id,manifest_digest,manifest) VALUES ($1,$2,'b','{}')`, [b, artifactId]);
+        await blocker.query('UPDATE artifacts.artifact_current SET release_id=$1', [b]);
+      }
+    } finally {
+      await blocker.query('COMMIT');
+      blocker.release();
+    }
+    expect(await pending).toBeUndefined();
+    expect((await pool.query('SELECT count(*)::int AS n FROM artifact_host.activation_tickets')).rows[0].n).toBe(1);
+  });
+
+  it('should emit no grant on uncertain commit and recover with a fresh current-session flow', async () => {
+    const issued = await reader().issue(session, target);
+    const uncertain = { query: pool.query.bind(pool), async connect() {
+      const client = await pool.connect();
+      return { async query(sql: string, values?: unknown[]) {
+        const result = await client.query(sql, values);
+        if (sql === 'COMMIT') throw new Error('injected commit acknowledgement loss');
+        return result;
+      }, release(destroy?: boolean) { client.release(destroy); } };
+    } } as unknown as Pool;
+    const grant = vi.fn();
+    await expect(reader({ pool: uncertain }).consume(session, input(issued)).then(grant)).rejects.toThrow(/commit outcome unknown/);
+    expect(grant).not.toHaveBeenCalled();
+    expect(await reader().consume(session, input(issued))).toBeUndefined();
+    const fresh = await reader().issue(session, target);
+    expect(await reader().consume(session, input(fresh))).toEqual(fresh.ticket);
+  });
 });
