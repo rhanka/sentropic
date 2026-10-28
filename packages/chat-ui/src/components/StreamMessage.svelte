@@ -6,7 +6,7 @@
     GeneratedFileCard,
     StreamHubClient,
     StreamHubEvent,
-  } from '../client/streamTypes.js';
+  } from '@sentropic/chat-runtime/client/streamTypes';
   import {
     asRecord,
     buildTodoRuntimeChecklist,

@@ -8,7 +8,7 @@ import {
   type ChatUiWebHost,
   type CreateWebHostInput,
 } from '@sentropic/chat-ui/hosts/createWebHost';
-import type { ChatCoreTransport } from '@sentropic/chat-ui/client/transport';
+import type { ChatCoreTransport } from '@sentropic/chat-runtime/client/transport';
 import { createRendererRegistry } from '@sentropic/chat-ui/renderers/registry';
 import type { LocalToolsAdapter } from '@sentropic/chat-ui/hosts/types';
 import type { ContextProvider } from '@sentropic/cowork-bridge/core';
