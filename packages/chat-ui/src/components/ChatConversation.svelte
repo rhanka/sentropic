@@ -132,7 +132,7 @@
           loadingLabel={labels('common.loading')} errorLabel={labels('common.error')} />
       {/if}
       <ChatComposer value={state.draft} disabled={state.sending || !state.sessionId}
-        ariaLabel={labels('chat.composer.placeholder.chat')} onKeyDown={keydown}>
+        ariaLabel={labels('chat.composer.placeholder.chat')} surfaceRole="group" tabIndex={-1} onKeyDown={keydown}>
         {#snippet renderComposerSurface()}
           <div class="w-full text-sm text-slate-900 outline-none" contenteditable="plaintext-only" role="textbox"
             aria-label={labels('chat.composer.placeholder.chat')} aria-multiline="false"
