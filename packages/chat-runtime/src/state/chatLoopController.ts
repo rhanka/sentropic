@@ -1952,3 +1952,143 @@ export function createChatLoopController<
     const sequence = Number.isFinite(sequenceRaw) ? sequenceRaw : 0;
 
     if (!streamId || !toolCallId || !ltIsLocalToolName?.(toolNameRaw)) return;
+
+    const previous = ltLocalToolStatesById.get(toolCallId);
+    if (previous && sequence <= previous.lastSequence) return;
+
+    // Import shouldResetLocalToolStateForFreshRound logic inline to avoid import
+    const isFreshRound =
+      Boolean(previous) &&
+      Boolean(previous?.executed) &&
+      Number.isFinite(sequence) &&
+      sequence > (previous?.lastSequence ?? 0);
+
+    ltLocalToolStatesById.set(toolCallId, {
+      streamId,
+      name: toolNameRaw,
+      argsText:
+        previous && !isFreshRound
+          ? `${previous.argsText}${argsChunk}`
+          : argsChunk,
+      lastSequence: sequence,
+      firstSeenAt: previous?.firstSeenAt ?? Date.now(),
+      executed: isFreshRound ? false : (previous?.executed ?? false),
+    });
+    ltNotify();
+    ltScheduleBufferedLocalToolExecution(toolCallId);
+  };
+
+  /**
+   * Internal: handle tool_call_delta stream event.
+   * Mirrors AppChatPanel's handleLocalToolCallDelta.
+   */
+  const ltHandleLocalToolCallDelta = (rawEvent: Record<string, unknown>): void => {
+    const toolCallId = String((rawEvent.data as Record<string, unknown>)?.tool_call_id ?? '').trim();
+    if (!toolCallId) return;
+    const previous = ltLocalToolStatesById.get(toolCallId);
+    if (!previous) return;
+
+    const sequenceRaw = Number(rawEvent.sequence);
+    const sequence = Number.isFinite(sequenceRaw) ? sequenceRaw : previous.lastSequence;
+    if (sequence <= previous.lastSequence) return;
+
+    const deltaChunk =
+      typeof (rawEvent.data as Record<string, unknown>)?.delta === 'string'
+        ? String((rawEvent.data as Record<string, unknown>)?.delta)
+        : '';
+
+    ltLocalToolStatesById.set(toolCallId, {
+      ...previous,
+      argsText: `${previous.argsText}${deltaChunk}`,
+      lastSequence: sequence,
+    });
+    ltNotify();
+    ltScheduleBufferedLocalToolExecution(toolCallId);
+  };
+
+  /**
+   * Internal: handle status stream event for local-tool machine.
+   * Mirrors AppChatPanel's handleLocalToolStatusEvent.
+   */
+  const ltHandleLocalToolStatusEvent = (rawEvent: Record<string, unknown>): void => {
+    const streamId = String(rawEvent.streamId ?? '').trim();
+    if (!streamId || !ltIsKnownAssistantStream(streamId)) return;
+
+    const data = rawEvent.data as Record<string, unknown> | null;
+    const state = String(data?.state ?? '').trim();
+    const sequenceRaw = Number(rawEvent.sequence);
+    const sequence = Number.isFinite(sequenceRaw) ? sequenceRaw : 0;
+
+    if (state === 'awaiting_local_tool_results') {
+      // Import parsePendingLocalToolCallsFromStatusPayload logic inline
+      const record = data && typeof data === 'object' ? data : null;
+      const pendingRaw = Array.isArray(record?.pending_local_tool_calls)
+        ? (record!.pending_local_tool_calls as unknown[])
+        : [];
+      const seen = new Set<string>();
+      const pendingCalls: Array<{ toolCallId: string; name: string; argsText: string; sequence: number }> = [];
+      for (const item of pendingRaw) {
+        if (!item || typeof item !== 'object') continue;
+        const entry = item as Record<string, unknown>;
+        const toolCallId =
+          typeof entry.tool_call_id === 'string' ? entry.tool_call_id.trim() : '';
+        const name = typeof entry.name === 'string' ? entry.name.trim() : '';
+        if (!toolCallId || seen.has(toolCallId) || !ltIsLocalToolName?.(name)) continue;
+        seen.add(toolCallId);
+        // serialize args
+        let argsText: string;
+        if (typeof entry.args === 'string') {
+          argsText = entry.args;
+        } else {
+          try {
+            argsText = JSON.stringify(entry.args ?? {});
+          } catch {
+            argsText = '{}';
+          }
+        }
+        pendingCalls.push({ toolCallId, name, argsText, sequence });
+      }
+
+      const pendingToolCallIds = new Set(pendingCalls.map((call) => call.toolCallId));
+      // Filter permission prompts: keep only those with a matching pending toolCallId for this stream
+      ltPendingLocalToolPermissionPrompts = ltPendingLocalToolPermissionPrompts.filter(
+        (prompt) => {
+          if (prompt.streamId !== streamId) return true;
+          return pendingToolCallIds.has(prompt.toolCallId);
+        },
+      );
+
+      for (const call of pendingCalls) {
+        const previous = ltLocalToolStatesById.get(call.toolCallId);
+        const isFreshRound =
+          Boolean(previous) &&
+          Boolean(previous?.executed) &&
+          Number.isFinite(sequence) &&
+          sequence > (previous?.lastSequence ?? 0);
+        ltLocalToolStatesById.set(call.toolCallId, {
+          streamId,
+          name: call.name,
+          argsText:
+            previous &&
+            !isFreshRound &&
+            previous.argsText.trim().length > 0
+              ? previous.argsText
+              : call.argsText,
+          lastSequence: Math.max(previous?.lastSequence ?? 0, call.sequence),
+          firstSeenAt: previous?.firstSeenAt ?? Date.now(),
+          executed: isFreshRound ? false : (previous?.executed ?? false),
+        });
+      }
+
+      ltNotify();
+      ltScheduleNextToolForStream(streamId, 0);
+      return;
+    }
+
+    if (state === 'local_tool_result_received') {
+      const toolCallId = String(data?.tool_call_id ?? '').trim();
+      if (!toolCallId) return;
+      const timerId = ltLocalToolExecutionTimersById.get(toolCallId);
+      if (timerId) clearTimeout(timerId);
+      ltLocalToolExecutionTimersById.delete(toolCallId);
+      ltPendingLocalToolPermissionPrompts = ltPendingLocalToolPermissionPrompts.filter(
