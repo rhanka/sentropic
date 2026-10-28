@@ -104,65 +104,54 @@
             {/snippet}
             {#snippet renderRuntimeSegment(item)}
               {#if item.kind === 'runtime-segment'}
-                    data-stream-id={item.streamId}
-                    data-active={item.isActiveRuntimeSegment}
-                  >
-                    {item.isActiveRuntimeSegment
-                      ? resolveLabel('chat.stream.processing')
-                      : resolveLabel('chat.stream.completed')}
-                  </div>
-                {/if}
+                <div class="chat-conversation-runtime-segment px-4 py-2" data-stream-id={item.streamId} data-active={item.isActiveRuntimeSegment}>
+                  <StreamMessage streamId={item.streamId} status={item.isActiveRuntimeSegment ? 'processing' : 'completed'}
+                    {labels} variant="chat" subscriptionMode="passive" initialEvents={[...item.segment.events]} />
+                </div>
               {/if}
             {/snippet}
           </ChatTimeline>
         {/if}
+        {#each state.permissions as permission (permission.id)}
+          <div role="status" data-permission-status={permission.status}>
+            {permission.name}: {labels(`chat.permission.${permission.status}`)}
+            {#if permission.status === 'pending'}
+              <button type="button" on:click={() => void commands.decidePermission(permission.id, true)}>{labels('chat.permission.allow')}</button>
+              <button type="button" on:click={() => void commands.decidePermission(permission.id, false)}>{labels('chat.permission.deny')}</button>
+            {/if}
+          </div>
+        {/each}
+        {#if state.error}<div role="alert">{state.error}</div>{/if}
       </div>
     {/snippet}
-
     {#snippet renderComposer()}
-      <ChatComposer
-        value={composerInput}
-        disabled={isSending || !sessionId}
-        ariaLabel={resolveLabel('chat.composer.placeholder.chat')}
-        onKeyDown={handleComposerKeyDown}
-      >
+      {#if flags.attachments}
+        <AttachmentBand items={state.attachments} onRemove={(item) => void commands.removeAttachment(item.composerAttachmentId)}
+          removeLabel={labels('common.remove')} enlargeLabel={labels('common.enlarge')}
+          loadingLabel={labels('common.loading')} errorLabel={labels('common.error')} />
+      {/if}
+      <ChatComposer value={state.draft} disabled={state.sending || !state.sessionId}
+        ariaLabel={labels('chat.composer.placeholder.chat')} onKeyDown={keydown}>
         {#snippet renderComposerSurface()}
-          <!-- Plain text input surface — rich editor integration is app-owned -->
-          <div
-            class="w-full text-sm text-slate-900 outline-none"
-            contenteditable="plaintext-only"
-            role="textbox"
-            aria-label={resolveLabel('chat.composer.placeholder.chat')}
-            aria-multiline="false"
-            bind:textContent={composerInput}
-          ></div>
+          <div class="w-full text-sm text-slate-900 outline-none" contenteditable="plaintext-only" role="textbox"
+            aria-label={labels('chat.composer.placeholder.chat')} aria-multiline="false"
+            textContent={state.draft} on:input={(event) => commands.setDraft(event.currentTarget.textContent ?? '')}></div>
         {/snippet}
-
-        {#snippet renderFloatingLayer()}
-          <!-- Floating layer slot (autocomplete, mentions) — app-owned, empty here -->
-          <span></span>
-        {/snippet}
-
         {#snippet renderLeftControls()}
-          <!-- Left controls (attach, tools) — deferred to BR-38c / app -->
-          <span class="text-xs text-slate-400">
-            {resolveLabel('chat.composer.hint')}
-          </span>
+          {#if flags.attachments}
+            <input type="file" multiple aria-label={labels('chat.attachments.add')}
+              on:change={(event) => void commands.attachFiles(Array.from(event.currentTarget.files ?? []))} />
+          {:else}<span class="text-xs text-slate-400">{labels('chat.composer.hint')}</span>{/if}
         {/snippet}
-
         {#snippet renderRightActions()}
-          <button
-            type="button"
-            class="chat-conversation-send-btn rounded px-3 py-1 text-xs font-medium text-white transition"
-            class:bg-slate-800={!isSending && Boolean(sessionId)}
-            class:bg-slate-300={isSending || !sessionId}
-            class:cursor-not-allowed={isSending || !sessionId}
-            disabled={isSending || !sessionId}
-            aria-label={resolveLabel('chat.composer.send')}
-            on:click={() => void handleSend()}
-          >
-            {resolveLabel('chat.composer.send')}
-          </button>
+          {#if flags.stop && state.activeMessageId}
+            <button type="button" aria-label={labels('chat.composer.stop')}
+              on:click={() => state.activeMessageId && void commands.stop(state.activeMessageId)}>{labels('chat.composer.stop')}</button>
+          {/if}
+          <button type="button" class="chat-conversation-send-btn rounded px-3 py-1 text-xs font-medium text-white transition"
+            class:bg-slate-800={!state.sending && Boolean(state.sessionId)} class:bg-slate-300={state.sending || !state.sessionId}
+            disabled={state.sending || !state.sessionId} aria-label={labels(state.activeStreamId && flags.steer ? 'chat.composer.steer' : 'chat.composer.send')}
+            on:click={() => void send()}>{labels(state.activeStreamId && flags.steer ? 'chat.composer.steer' : 'chat.composer.send')}</button>
         {/snippet}
       </ChatComposer>
     {/snippet}
