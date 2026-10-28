@@ -602,9 +602,18 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+      - name: Setup native image store
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        uses: docker/setup-docker-action@v5.6.0
+        with:
+          version: v29.9.2
+          daemon-config: '{"features":{"containerd-snapshotter":true}}'
       - name: Setup Docker
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker
+          version: v0.38.1
       - uses: crazy-max/ghaction-github-runtime@v3
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
       - name: Build and save exact E2E candidate
@@ -1289,9 +1298,18 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+      - name: Setup native image store
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        uses: docker/setup-docker-action@v5.6.0
+        with:
+          version: v29.9.2
+          daemon-config: '{"features":{"containerd-snapshotter":true}}'
       - name: Setup Docker
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker
+          version: v0.38.1
       - uses: crazy-max/ghaction-github-runtime@v3
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
       - name: Build API image
@@ -1333,8 +1351,16 @@ jobs:
     if: needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
     steps:
       - uses: actions/checkout@v6
+      - name: Setup native image store
+        uses: docker/setup-docker-action@v5.6.0
+        with:
+          version: v29.9.2
+          daemon-config: '{"features":{"containerd-snapshotter":true}}'
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker
+          version: v0.38.1
       - name: Test toolbox image references, cache fallback and hash inputs
         run: make test-ci-api-tooling ENV=test-ci-api
       - uses: crazy-max/ghaction-github-runtime@v3
@@ -1467,9 +1493,18 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+      - name: Setup native image store
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        uses: docker/setup-docker-action@v5.6.0
+        with:
+          version: v29.9.2
+          daemon-config: '{"features":{"containerd-snapshotter":true}}'
       - name: Setup Docker
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         uses: docker/setup-buildx-action@v4
+        with:
+          driver: docker
+          version: v0.38.1
       - uses: crazy-max/ghaction-github-runtime@v3
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
       - name: Build Cowork desktop binary
