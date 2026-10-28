@@ -63,6 +63,7 @@
   - [x] Create requested worktree and pass `harness check branch`.
   - [x] Fix environment, Docker lock, scope and atomic commit policy.
 - [ ] **Lot 1 — Runtime package and physical ownership**
+  - [x] Migrate cowork-bridge's public SSE dependency/guidance to runtime; registry 0.1.1 verified before reserving 0.1.2.
   - [x] Remove optional-module and tool-normalization runtime symbols from the visual export snapshot; document the injected conversation/comment and composer role props.
   - [x] Inject pure comment presentation helpers through the host composition; runtime comments have no value imports from visual code.
   - [x] Create `packages/chat-runtime/package.json`, `tsconfig.json` and public entrypoints.

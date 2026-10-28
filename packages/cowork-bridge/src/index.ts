@@ -8,7 +8,7 @@
  *   - `@sentropic/cowork-bridge/permissions`
  *
  * SSE streaming is intentionally NOT re-exported here: consume
- * `@sentropic/chat-ui`'s `StreamHub` (`createStreamHub`) directly.
+ * `@sentropic/chat-runtime/client/streamHub`'s `createStreamHub` directly.
  */
 
 export * from './core/index.js';
