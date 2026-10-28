@@ -10,17 +10,20 @@ const stateSchema = z.object({ sessionId: remoteId, userId: remoteId, sessionTok
   refreshTokenHash: remoteHash, login: z.object({ mfaVerified: z.boolean(), authTime: remoteCounter,
     sessionVersion: remoteCounter }).strict(), expiresAt: remoteCounter, revoked: z.boolean() }).strict();
 export type RemoteSessionAuthority = z.infer<typeof stateSchema>;
+const storedStateSchema = z.union([stateSchema,
+  z.object({ sessionId: remoteId, revoked: z.literal(true) }).strict()]);
+type StoredAuthority = z.infer<typeof storedStateSchema>;
 
 // This directory is an issuer-only durable volume, never a product DB or product mount.
 export function createRemoteSessionAuthority(directory: string) {
   if (!isAbsolute(directory)) throw new RemoteAuthorityError('authority_unavailable');
   mkdirSync(directory, { recursive: true, mode: 0o700 });
   const path = (sid: string) => join(directory, `${remoteRawHash(remoteId.parse(sid))}.json`);
-  function find(sid: string): RemoteSessionAuthority | null {
+  function find(sid: string): StoredAuthority | null {
     const file = path(sid);
     if (!existsSync(file)) return null;
     if (statSync(file).size > 8192) throw new RemoteAuthorityError('authority_unavailable');
-    const record = stateSchema.parse(JSON.parse(readFileSync(file, 'utf8')));
+    const record = storedStateSchema.parse(JSON.parse(readFileSync(file, 'utf8')));
     if (record.sessionId !== sid) throw new RemoteAuthorityError('authority_unavailable');
     return record;
   }
@@ -30,8 +33,8 @@ export function createRemoteSessionAuthority(directory: string) {
     mkdirSync(lock, { mode: 0o700 });
     try { return operation(); } finally { rmdirSync(lock); }
   }
-  function write(record: RemoteSessionAuthority): void {
-    const value = stateSchema.parse(record);
+  function write(record: StoredAuthority): void {
+    const value = storedStateSchema.parse(record);
     const file = path(value.sessionId), temporary = `${file}.${randomUUID()}.tmp`;
     const descriptor = openSync(temporary, 'wx', 0o600);
     try { writeFileSync(descriptor, remoteCanonicalJson(value)); fsyncSync(descriptor); }
@@ -58,16 +61,19 @@ export function createRemoteSessionAuthority(directory: string) {
     });
   }
   function revoke(sid: string): void {
-    locked(sid, () => { const current = find(sid); if (current) write({ ...current, revoked: true }); });
+    locked(sid, () => {
+      const current = find(sid);
+      write(current ? { ...current, revoked: true } : { sessionId: sid, revoked: true });
+    });
   }
   function revokeUser(userId: string): void {
     for (const entry of readdirSync(directory)) {
       if (!/^[a-f0-9]{64}\.json$/.test(entry)) continue;
       const file = join(directory, entry);
       if (statSync(file).size > 8192) throw new RemoteAuthorityError('authority_unavailable');
-      const record = stateSchema.parse(JSON.parse(readFileSync(file, 'utf8')));
+      const record = storedStateSchema.parse(JSON.parse(readFileSync(file, 'utf8')));
       if (path(record.sessionId) !== file) throw new RemoteAuthorityError('authority_unavailable');
-      if (record.userId === userId) revoke(record.sessionId);
+      if ('userId' in record && record.userId === userId) revoke(record.sessionId);
     }
   }
   return { find(sid: string) {
