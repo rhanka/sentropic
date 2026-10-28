@@ -242,3 +242,59 @@ Its manifest-wiring job 122644590282 failed on the prior blanket scripts/ci
 filter assertion; BR78-EX4 retains isolation except for the two exact image guards.
 Remaining producer/consumer durations, exact-head warm/cold acceptance,
 input-invalidation and rollback proof remain **to measure**.
+
+The following measurements qualify the implementation at head `13712a5d2`,
+before the later base-digest pins and IdP loopback correction. PR checkout
+source is `cb85e39ed2e7b08ae8caa269d0de51597c07ac41` (the PR merge commit),
+workflow SHA-256 `33873b096f9a17742370cfe0fa86bc2b044f7ee2d3cd33c4d249bad4cc6dda74`.
+Normal run [40640414275](https://github.com/rhanka/sentropic/actions/runs/40640414275),
+attempt 1, imported/populated caches; it is **not a fully warm sample**.
+Forced cold rebuild [40640411046](https://github.com/rhanka/sentropic/actions/runs/40640411046),
+attempt 1, disables external cache import/export and uses --no-cache;
+its budget does not include first-population cache uploads.
+
+| Producer | Normal job / seconds | Forced cold job / seconds |
+| --- | --- | --- |
+| API | 122657597114 / 230 | 122658342949 / 234 |
+| Toolbox | 122657597557 / 258 | 122658342919 / 200 |
+| UI, complete job | 122657597564 / 398 | 122658342944 / 380 |
+| E2E | 122657596849 / 248 | 122658342138 / 149 |
+
+These results **do not meet BR-78 timing acceptance**. Normal E2E spends 76.5s
+exporting cache; normal UI still contains 30s desktop, 149s image build, 87s
+UI qualification and 100s static profile. The latter two remain blocking;
+BR-79 owns their independent scheduling. API-case UI and a fully warm sample
+remain to measure; the full UI job is never substituted for the API case.
+
+GitHub artifact sizes at this head: API 217,041,045 bytes versus BR77's
+1,869,666,158; toolbox 400,395,762 versus 2,719,976,086; UI 109,800,331 versus
+105,605,942; E2E 774,218,936 (no corresponding BR77 artifact: registry reuse).
+The fresh API/toolbox stages transport prepared filesystems without hidden
+download-cache/deleted dependency layers. Plain archive compression is zstd;
+image config digests remain distinct from archive and GitHub ZIP digests.
+
+Verified producer/restore tuple, normal run 40640414275 attempt 1:
+
+| Image | Docker config SHA-256 | Archive SHA-256 |
+| --- | --- | --- |
+| API | `6cc2575664a3b227518497ec046c00ad39abf43d10285e7417bfee2b24ed78b0` | `23941fd796b4cafb39d458fb7dff0422835f1691e977612a1f07be98dc0c8236` |
+| Toolbox | `81651306ddd91ba410783acd35c6d2c5b26d171ea5c790168bbfea4b8a9ec6c2` | `c5c7d558291cdd6be78518cdfa3d18905efbec98abed36f59fa76a1c4b09cfeb` |
+| UI | `5eedd2d8e54923167d7ead45a9a32f80d4ebc9c734fc068653e664b67e20766c` | `9548c0676d88ea810357121495f0601ca492b6bca036f1e67775b4244d326e31` |
+| E2E | `670ba073a8dc9f2ee8aee3eead69360ed72d284d35b3b92062394e9ec14484e4` | `390d94b9cd7afaddd07d50397c626347f593d69a77c40187a28c82edefe5b565` |
+
+Restore job 122659204773 passes in 158s and verifies the exact API/toolbox
+tuple before and after load; container scan 122660115540 passes in 134s.
+IdP 122660292811 fails on HTTPS-upgraded subresources under the new browser;
+its existing screen assertions keep ci-gate 122663280154 red. The correction
+uses the qualified E2E browser in the IdP network namespace at a loopback
+test origin, with production CSP/HSTS and startup health waits retained.
+That correction requires fresh CI; no IdP acceptance is claimed here.
+
+Rejected experiment: native Docker/containerd producers at head `43ce8700d`
+were rolled back when restore 122655378122 and API consumer 122655438883
+rejected their loaded identities. No digest check was relaxed. Normal toolbox
+340s includes 114.1s cache export. Cold llm-gateway 122651928831 also fails a
+120s clean-npm-install timeout; same-head PR validator 122651425217 passes.
+All superseded PRs (40635754181, 40636281967, 40636804356, 40637033882,
+40637537467, 40637927472, 40638269271) and pending dispatch 40637534902 retain
+their cancelled/failed statuses and partial durations in the run records.

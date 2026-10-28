@@ -52,7 +52,7 @@
 - [x] Flatten prepared API/toolbox filesystems onto the same Node base: keep pruned production dependencies, patched npm/esbuild tooling and every retained source/runtime assertion; omit hidden install-cache and deleted devDependency layers from transported images. Qualification remains open until fresh CI verifies bytes, runtime and timings.
 - [x] Pin API/toolbox/IdP and E2E Node bases to the exact digests resolved in jobs 122658342949/122657596849; base-image changes now invalidate the source hash explicitly. Toolbox fixtures reject floating Node bases; existing UI/Go pins remain.
 - [ ] IdP jobs 122660292811/122661023083 fail on HTTPS-upgraded assets under the E2E image's default headless shell. Select its full Chromium executable explicitly, matching the prior system-Chromium runner; preserve production CSP/HSTS and every smoke assertion. Re-observe in real CI before acceptance.
-- [x] BR78-EX2 includes a CI-only public-origin override passed to Compose on stdin and browser network-namespace sharing with this project's auth-idp container. The tested IdP origin is loopback, so Chromium's production CSP keeps working over the test HTTP transport; NODE_ENV=production, CSP/HSTS, startup health wait, login/consent/token checks and the qualified image remain unchanged. No repository Compose file changes. Rollback: restore the bridge origin and browser runner together.
+- [x] BR78-EX2 includes a CI-only public-origin override passed to Compose on stdin and browser network-namespace sharing with this project's auth-idp container. Select a loopback test origin; NODE_ENV=production, CSP/HSTS, startup health wait, login/consent/token checks and the qualified image remain unchanged. No repository Compose file changes. Fresh CI must qualify the correction. Rollback: restore the bridge origin and browser runner together.
 - [x] BR78-EX2 authorized by owner packet: Make image cache/build/save/load recipes, API_TOOL_VERSION and receipt tests. Lightweight Node receipt CLI in CI avoids downloading a compiler/browser image just to hash bytes. Impact: named image entry points only. Rollback: revert recipes and requalify previous artifacts; never bypass identity or runtime checks.
 - [x] BR77 timing remains open: capacity.md requires first actual-main attempt and strict PR/main ≤2288s proof; green correctness alone does not qualify timing. BR78 does not close BR77 acceptance.
 - [ ] Record every real run ID/attempt/SHA, job duration, queue/cache state, failure, retry and budget breach.
@@ -84,7 +84,7 @@
   - [ ] Verify production smoke/limits, npm-absent runtime, tag collisions, IdP screens and both UI profiles with embedded Chrome/VSCode/desktop assets.
   - [ ] Rollback drill with scoped invalidation and fresh verified artifacts.
 - [ ] **Lot 4 — Docs consolidation**
-  - [ ] Record measured receipts and remaining gaps in plan/64 and study; missing durations remain to measure.
+  - [x] Record baseline, cache-population/cold measurements, byte counts, exact producer/restore tuple, rejected native experiment and remaining gaps in plan/64 and study section 11; timing/IdP acceptance remains open.
 - [ ] **Lot 5 — Final validation**
   - [ ] Exact-head changed-file tests, typecheck-api lint-api typecheck-ui lint-ui and image/runtime guards through CI.
   - [ ] Exact-head API/UI/E2E/VSCode, container scans, smoke and restore; selected membership unchanged.
