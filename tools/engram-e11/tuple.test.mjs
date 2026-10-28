@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bindings, canonical, sha256, verifyTuple } from './bindings.mjs';
 import { build, report } from './tuple.mjs';
+import { qualifyProfiles } from './profiles.mjs';
+import { candidate } from './candidates.mjs';
 
 function fixture(run) {
   const root = mkdtempSync(join(tmpdir(), 'e11-test-'));
@@ -59,6 +61,22 @@ test('should reject a changed tuple or manually promoted profile', () => {
   const tuple = { format: 'e2-host-tuple/v1', status: 'PENDING', profile: 'declared' };
   assert.throws(() => verifyTuple({ ...tuple, profile: 'qualified' }, tuple), /differs from recomputed/);
   assert.throws(() => verifyTuple({ ...tuple, status: 'FINAL' }, tuple, true), /differs from recomputed/);
+});
+
+test('should refuse Stage B qualification with skips, missing or repeated cases, failures, or another archive', () => {
+  for (const mutate of [
+    (r) => { r.numPendingTests = 1; },
+    (r) => { r.testResults[0].assertionResults.pop(); },
+    (r) => { r.testResults[0].assertionResults[1] = r.testResults[0].assertionResults[0]; },
+    (r) => { r.testResults[0].assertionResults[0].status = 'failed'; },
+  ]) {
+    const b = bindings('/evidence');
+    const r = JSON.parse(b.read('stage-b-result.json'));
+    mutate(r);
+    const changed = { ...b, read: (name) => name === 'stage-b-result.json' ? Buffer.from(JSON.stringify(r)) : b.read(name) };
+    assert.throws(() => qualifyProfiles(changed, candidate.mesh, []));
+  }
+  assert.throws(() => qualifyProfiles(bindings('/evidence'), { ...candidate.mesh, integrity: 'sha512-other' }, []), /identical mesh archive/);
 });
 
 test('should reproduce E2 bytes while refusing unqualified profiles and stable-release acceptance', () => {
