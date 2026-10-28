@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
@@ -11,6 +11,7 @@ import { getRemoteSessionAuthority } from '../../../src/services/auth/remote-pri
 import { resolveRemoteLogin } from '../../../src/services/auth/remote-session';
 import { createJwksAdapter } from '../../../src/services/auth/jwks-adapter';
 import { getSentropicOAuthPorts } from '../../../src/routes/auth/oauth';
+import { remoteRawHash } from '../../../src/services/auth/remote-contract';
 import { createIdpApp } from '../../../../apps/auth-idp/idp-app';
 
 const issuer = 'https://idp.example.test', resource = `${issuer}/remote-revocation`;
@@ -39,23 +40,28 @@ async function bearer(change: Record<string, unknown> = {}) {
     scope: 'remote.sessions.revoke', exp: Math.floor(Date.now() / 1000) + 60, ...change })
     .setProtectedHeader({ alg: 'EdDSA', kid: key.kid }).sign(key.privateKey!);
 }
+async function bridge() {
+  const token = await bearer(), idp = createIdpApp();
+  const transport = vi.fn(async (url: string, init: RequestInit) => {
+    if (url.endsWith('/oauth/token')) {
+      expect(new URLSearchParams(String(init.body)).get('scope')).toBe('remote.sessions.revoke');
+      return Response.json({ access_token: token, token_type: 'Bearer' });
+    }
+    expect(url).toBe(`${issuer}${path}`);
+    vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
+    try { return await idp.request(url, init); }
+    finally { vi.stubEnv('REMOTE_ACTION_ROLE', 'product'); }
+  });
+  vi.stubGlobal('fetch', transport);
+  return transport;
+}
 describe('RC1 product to issuer revocation', () => {
   it.each(['logout', 'revoke-all', 'oauth-logout', 'oauth-revoke-all'])
   ('should persist issuer tombstones for product %s before returning', async operation => {
     const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
-    const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
-    const token = await bearer(), idp = createIdpApp();
-    const transport = vi.fn(async (url: string, init: RequestInit) => {
-      if (url.endsWith('/oauth/token')) {
-        expect(new URLSearchParams(String(init.body)).get('scope')).toBe('remote.sessions.revoke');
-        return Response.json({ access_token: token, token_type: 'Bearer' });
-      }
-      expect(url).toBe(`${issuer}${path}`);
-      vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
-      try { return await idp.request(url, init); }
-      finally { vi.stubEnv('REMOTE_ACTION_ROLE', 'product'); }
-    });
-    vi.stubGlobal('fetch', transport);
+    if (operation.includes('all')) await createSession(userId, 'editor', undefined, { mfaVerified: true });
+    const rows = await db.select().from(userSessions).where(eq(userSessions.userId, userId));
+    const transport = await bridge();
     vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
     if (operation === 'logout') await revokeSession(tokens.sessionId);
     if (operation === 'revoke-all') await revokeAllSessions(userId);
@@ -63,8 +69,9 @@ describe('RC1 product to issuer revocation', () => {
     if (operation === 'oauth-revoke-all') await getSentropicOAuthPorts().sessions.revokeAllForUser(userId);
     expect(transport).toHaveBeenCalledTimes(2);
     vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
-    expect(getRemoteSessionAuthority()!.find(tokens.sessionId)?.revoked).toBe(true);
-    await db.insert(userSessions).values(row);
+    for (const row of rows) expect(getRemoteSessionAuthority()!.find(row.id)?.revoked).toBe(true);
+    expect(await db.select().from(userSessions).where(eq(userSessions.userId, userId))).toEqual([]);
+    await db.insert(userSessions).values(rows);
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
   });
   it.each([{ scope: 'remote.evidence.issue' }, { aud: 'other' }, { client_id: 'other' },
@@ -78,11 +85,57 @@ describe('RC1 product to issuer revocation', () => {
   });
   it('should delete the DB session even when issuer delivery fails', async () => {
     const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
+    const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
     vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('network unavailable')));
     await expect(revokeSession(tokens.sessionId)).rejects.toMatchObject({ code: 'authority_unavailable' });
     expect(await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId))).toEqual([]);
     vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
+    // Retry still tombstones the issuer record after the shared row is already gone.
+    await bridge();
+    vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
+    await revokeSession(tokens.sessionId);
+    vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
+    await db.insert(userSessions).values(row);
+    expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
+  });
+  it.each(['lock', 'corrupt-file', 'missing-pvc'])
+  ('should delete product sessions and keep issuer authority closed on %s', async failure => {
+    const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
+    const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
+    await bridge();
+    if (failure === 'lock') mkdirSync(join(directory, `${remoteRawHash(tokens.sessionId)}.json.lock`));
+    if (failure === 'corrupt-file') writeFileSync(join(directory, `${'0'.repeat(64)}.json`), '{');
+    if (failure === 'missing-pvc') rmSync(directory, { recursive: true });
+    vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
+    await expect(revokeAllSessions(userId)).rejects.toMatchObject({ code: 'authority_unavailable' });
+    expect(await db.select().from(userSessions).where(eq(userSessions.userId, userId))).toEqual([]);
+    vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
+    await db.insert(userSessions).values(row);
+    await expect(resolveRemoteLogin(tokens.sessionToken)).rejects.toMatchObject({ code: 'authority_unavailable' });
+  });
+  it('should refuse an active product composition missing its issuer configuration after DB removal', async () => {
+    const tokens = await createSession(userId, 'editor');
+    vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
+    vi.stubEnv('REMOTE_ACTION_REVOCATION_ISSUER', '');
+    await expect(revokeSession(tokens.sessionId)).rejects.toMatchObject({ code: 'authority_unavailable' });
+    expect(await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId))).toEqual([]);
+  });
+  it.each(['browser', 'cookie', 'http', 'extra-field', 'duplicate', 'oversize', 'empty', 'anonymous'])
+  ('should refuse %s revocation requests without writing authority', async failure => {
+    const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
+    const headers: Record<string, string> = { authorization: `Bearer ${await bearer()}` };
+    if (failure === 'browser') headers.origin = 'https://product.example.test';
+    if (failure === 'cookie') headers.cookie = 'session=browser';
+    if (failure === 'anonymous') delete headers.authorization;
+    const body = failure === 'duplicate' ? '{"sessionIds":[],"sessionIds":[]}'
+      : failure === 'oversize' ? 'x'.repeat(8193) : failure === 'empty' ? '{"sessionIds":[]}'
+        : JSON.stringify({ sessionIds: [tokens.sessionId], ...(failure === 'extra-field' ? { restore: true } : {}) });
+    const result = await createIdpApp().request(`${failure === 'http' ? 'http://idp.example.test' : issuer}${path}`,
+      { method: 'POST', headers, body });
+    expect(result.status).toBe(['browser', 'cookie', 'http'].includes(failure) ? 403 : failure === 'anonymous' ? 401 : 400);
+    expect(result.headers.get('cache-control')).toBe('no-store');
+    expect(getRemoteSessionAuthority()!.find(tokens.sessionId)?.revoked).toBe(false);
   });
 });
