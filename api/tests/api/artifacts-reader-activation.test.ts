@@ -1,0 +1,118 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { randomUUID } from 'node:crypto';
+import { Pool } from 'pg';
+import { runMigrations } from '../../src/db/run-migrations';
+import { createArtifactReaderActivation } from '../../src/services/artifacts/reader-activation';
+
+const admin = new Pool({ connectionString: process.env.DATABASE_URL });
+const database = `test_w3a_${randomUUID().replaceAll('-', '')}`;
+let pool: Pool;
+const ends: Promise<void>[] = [];
+const artifactId = randomUUID();
+const releaseId = randomUUID();
+const scope = randomUUID();
+const session = { subjectId: 'reader', sessionId: 'session', tenantId: 'tenant', workspaceId: 'workspace' };
+const config = { baseDomain: 'content.example.test', profileDigest: 'b'.repeat(64) };
+const target = { artifactId, releaseId, channel: 'stable' as const,
+  targetOrigin: `https://${artifactId}.${config.baseDomain}`, nonce: 'a'.repeat(43) };
+const reader = (extra = {}) => createArtifactReaderActivation({ pool, ...config, ...extra });
+const input = (issued: Awaited<ReturnType<ReturnType<typeof reader>['issue']>>) => ({
+  flowId: issued.flow.flowId, ticketId: issued.ticket.ticketId, nonce: target.nonce, targetOrigin: target.targetOrigin,
+});
+
+beforeAll(async () => {
+  await admin.query(`CREATE DATABASE "${database}"`);
+  const url = new URL(process.env.DATABASE_URL!);
+  url.pathname = `/${database}`;
+  pool = new Pool({ connectionString: url.toString() });
+  pool.on('connect', client => ends.push(new Promise<void>(resolve => client.once('end', resolve))));
+  await runMigrations(pool);
+});
+afterAll(async () => {
+  await pool?.end();
+  await Promise.all(ends);
+  await admin.query(`DROP DATABASE "${database}"`);
+  await admin.end();
+});
+beforeEach(async () => {
+  vi.restoreAllMocks();
+  await pool.query(`TRUNCATE artifact_host.activation_namespaces, artifacts.storage_scopes,
+    control.artifact_host_kv, users, tenants CASCADE;
+    INSERT INTO users(id, role, account_status) VALUES ('reader','editor','active'), ('other','editor','active');
+    INSERT INTO tenants(id, name) VALUES ('tenant','Tenant');
+    INSERT INTO workspaces(id, name, tenant_id) VALUES ('workspace','Workspace','tenant');
+    INSERT INTO tenant_memberships(tenant_id,user_id,status) VALUES ('tenant','reader','approved');
+    INSERT INTO workspace_memberships(workspace_id,user_id,role) VALUES ('workspace','reader','viewer');
+    INSERT INTO user_sessions(id,user_id,session_token_hash,expires_at) VALUES
+      ('session','reader','session-hash',clock_timestamp() + interval '1 hour'),
+      ('new-session','reader','new-session-hash',clock_timestamp() + interval '1 hour');`);
+  await pool.query(`INSERT INTO control.artifact_host_kv(storage_scope_id,key,value) VALUES ($1,$2,$3);
+    `, ['app-artifact-scopes/v1', JSON.stringify(['tenant', 'workspace']), scope]);
+  await pool.query(`INSERT INTO artifacts.storage_scopes(id,org_id) VALUES ($1,'tenant');
+    `, [scope]);
+  await pool.query(`INSERT INTO artifacts.artifacts(id,storage_scope_id,owner_id,binding_name)
+    VALUES ($1,$2,'other','report')`, [artifactId, scope]);
+  await pool.query(`INSERT INTO artifacts.artifact_access(artifact_id,principal_id,permission) VALUES ($1,'reader','read')`, [artifactId]);
+  await pool.query(`INSERT INTO artifacts.releases(id,artifact_id,manifest_digest,manifest) VALUES ($1,$2,'digest','{}')`, [releaseId, artifactId]);
+  await pool.query(`INSERT INTO artifacts.artifact_current(artifact_id,release_id) VALUES ($1,$2)`, [artifactId, releaseId]);
+});
+
+describe('trusted app reader activation', () => {
+  it('should acknowledge only one consume across host instances and deny replay', async () => {
+    const issued = await reader().issue(session, target);
+    const results = await Promise.all([reader(), reader()].map(host => host.consume(session, input(issued))));
+    expect(results.filter(Boolean)).toEqual([issued.ticket]);
+    expect(await reader().consume(session, input(issued))).toBeUndefined();
+  });
+
+  it.each([
+    ['browser', { nonce: 'z'.repeat(43) }, {}],
+    ['subject', {}, { subjectId: 'other' }],
+    ['session', {}, { sessionId: 'new-session' }],
+    ['origin', { targetOrigin: 'https://foreign.example.test' }, {}],
+    ['workspace', {}, { workspaceId: 'foreign' }],
+    ['tenant', {}, { tenantId: 'foreign' }],
+  ])('should refuse a wrong %s without consuming either record', async (_name, changed, claims) => {
+    const issued = await reader().issue(session, target);
+    expect(await reader().consume({ ...session, ...claims }, { ...input(issued), ...changed })).toBeUndefined();
+    expect(await reader().consume(session, input(issued))).toEqual(issued.ticket);
+  });
+
+  it('should recover expired activation with the current session without an MFA port', async () => {
+    const short = reader({ ticketTtlSeconds: 1, flowTtlSeconds: 1 });
+    const expired = await short.issue(session, target);
+    await pool.query('SELECT pg_sleep(1.05)');
+    expect(await short.consume(session, input(expired))).toBeUndefined();
+    const fresh = await reader().issue(session, target);
+    expect(fresh.ticket.ticketId).not.toBe(expired.ticket.ticketId);
+    expect(await reader().consume(session, input(fresh))).toEqual(fresh.ticket);
+  });
+
+  it.each([
+    `DELETE FROM user_sessions WHERE id = 'session'`,
+    `UPDATE user_sessions SET expires_at = clock_timestamp() WHERE id = 'session'`,
+    `UPDATE users SET disabled_at = clock_timestamp() WHERE id = 'reader'`,
+    `DELETE FROM workspace_memberships WHERE user_id = 'reader'`,
+    `UPDATE tenant_memberships SET status = 'pending' WHERE user_id = 'reader'`,
+    `DELETE FROM artifacts.artifact_access WHERE principal_id = 'reader'`,
+    `UPDATE artifacts.artifacts SET lifecycle_state = 'withdrawn'`,
+    `UPDATE artifacts.artifacts SET lifecycle_state = 'deleted'`,
+    `UPDATE artifacts.releases SET state = 'purged'`,
+  ])('should deny current authority revocation: %s', async sql => {
+    const host = reader();
+    const issued = await host.issue(session, target);
+    await pool.query(sql);
+    expect(await host.consume(session, input(issued))).toBeUndefined();
+    await expect(host.issue(session, target)).rejects.toThrow();
+    expect((await pool.query('SELECT count(*)::int AS n FROM artifact_host.activation_tickets')).rows[0].n).toBe(1);
+  });
+
+  it('should reject a changed compiled profile or policy revision without consuming', async () => {
+    const issued = await reader().issue(session, target);
+    expect(await reader({ profileDigest: 'c'.repeat(64) }).consume(session, input(issued))).toBeUndefined();
+    await pool.query(`UPDATE workspace_memberships SET role = 'editor' WHERE user_id = 'reader'`);
+    expect(await reader().consume(session, input(issued))).toBeUndefined();
+    const fresh = await reader().issue(session, target);
+    expect(await reader().consume(session, input(fresh))).toEqual(fresh.ticket);
+  });
+});
