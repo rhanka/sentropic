@@ -938,7 +938,7 @@ engram-e2-qualify: ## Qualify an exact E2 topic head and retain per-lane receipt
 		sha256sum BRANCH.md Makefile .github/workflows/ci.yml packages/cluster-mesh/package.json package-lock.json; \
 		git ls-files '*package-lock.json' | xargs sha256sum; \
 		} > "$(E2_RECEIPTS)/context.txt"
-	@set -eu; for lane in mechanical wiring build typecheck lint memory common grants postgres; do \
+	@set -eu; for lane in mechanical wiring build typecheck lint memory stage-b common grants postgres; do \
 		flock "$(E2_LOCK)" $(MAKE) engram-e2-lane E2_LANE="$$lane" ENV=$(ENV); \
 		done
 
@@ -952,13 +952,14 @@ engram-e2-lane: ## Run one lane under the caller's shared Docker lock
 		wiring) args=(test-publishable-manifests 'SCOPE=scripts/ci/publishable-ci-wiring.test.mjs scripts/ci/ci-expected-results.test.mjs'); pattern='scripts/ci/publishable-ci-wiring.test.mjs' ;; \
 		build|typecheck|lint) args=("$(E2_LANE)-cluster-mesh"); pattern='packages/cluster-mesh/src/*' ;; \
 		memory) args=(test-cluster-mesh SCOPE=tests/engram-memory CM_PG_URL=postgresql://app:app@postgres:5432/app); pattern='packages/cluster-mesh/tests/engram-memory/*.spec.ts' ;; \
+		stage-b) args=(test-cluster-mesh SCOPE=tests/engram-memory/durable-memory.spec.ts CM_PG_URL=postgresql://app:app@postgres:5432/app); pattern='packages/cluster-mesh/tests/engram-memory/memory-*' ;; \
 		common) args=(test-cluster-mesh SCOPE=tests/storage/common-rule); pattern='packages/cluster-mesh/tests/storage/common-rule/*.spec.ts' ;; \
 		grants) args=(test-cluster-mesh SCOPE=tests/storage/scope-grant-modules.spec.ts); pattern='packages/cluster-mesh/tests/storage/scope-grant-modules.spec.ts' ;; \
 		postgres) args=(test-cluster-mesh SCOPE=tests/storage/postgres- CM_PG_URL=postgresql://app:app@postgres:5432/app); pattern='packages/cluster-mesh/tests/storage/postgres-*.spec.ts' ;; \
 		*) exit 1 ;; esac; \
 		git ls-files "$$pattern" > "$(E2_RECEIPTS)/$(E2_LANE).inventory"; \
 		if [ "$(E2_LANE)" = wiring ]; then git ls-files scripts/ci/ci-expected-results.test.mjs >> "$(E2_RECEIPTS)/$(E2_LANE).inventory"; fi; \
-		{ if [ "$(E2_LANE)" = postgres ] || [ "$(E2_LANE)" = memory ]; then \
+		{ if [ "$(E2_LANE)" = postgres ] || [ "$(E2_LANE)" = memory ] || [ "$(E2_LANE)" = stage-b ]; then \
 		  echo 'make engram-e2-postgres-up ENV=$(ENV)'; $(MAKE) engram-e2-postgres-up ENV=$(ENV); fi; \
 		printf 'make'; printf ' %q' "$${args[@]}"; printf ' ENV=$(ENV)\n'; \
 		$(MAKE) "$${args[@]}" ENV=$(ENV); } 2>&1 | tee "$(E2_RECEIPTS)/$(E2_LANE).log"
