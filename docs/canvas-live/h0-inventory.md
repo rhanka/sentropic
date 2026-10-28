@@ -52,11 +52,11 @@ Class totals: templater-prose-score **5**, templater-list **4**, folder-context 
 
 ## Save authorities and server enforcement observed
 
-These are current source facts, not claims that H5 conditional-save/publication qualification has passed. `EditableInput.svelte:142–163` obtains the current getter payload and calls `apiPut`; its lock prop is only a client gate. Server rejection and atomic version/base checks must be witnessed independently.
+These are current source facts, not claims that H5 conditional-save/publication qualification has passed. `EditableInput.svelte:138–163` reads the getter, then overrides a single primitive-valued key with the component's captured `saveValue` before `apiPut`. That override determines top-level text/name/description saves (A-T/A-FN/A-F/A-O/A-W); nested object, list, score and matrix payloads retain the getter shape. Its lock prop is only a client gate. Server rejection and atomic version/base checks must be witnessed independently.
 
 | Authority | Payload / trigger | Server route and existing authority |
 | --- | --- | --- |
-| A-T | Caller endpoint; `getTextFullData` normalizes/strips trailing empty paragraphs; `getListFullData` converts array/Markdown; nested keys rebuild sibling data (T:343–359) | `/organizations/:id`, `/initiatives/:id` or `/folders/:id` according to caller object; corresponding product business router below. Empty endpoint keeps local creation state. |
+| A-T | Caller endpoint; `getTextFullData` normalizes/strips trailing empty paragraphs, but the single-primitive-key guard replaces top-level cleaned text with component `saveValue`; nested sibling objects retain getter content. `getListFullData` converts array/Markdown, never runs the prose normalizer (T:343–359) | `/organizations/:id`, `/initiatives/:id` or `/folders/:id` according to caller object; corresponding product business router below. Empty endpoint keeps local creation state. |
 | A-S | Caller endpoint with `getScoreFullData(axis.id)`; full score array preserves axis/rating/siblings (T:360 onward) | Same object-selected product business router as A-T; no separate score writer. |
 | A-FN | Local buffer before ID; persisted draft uses `/folders/:id`; initial creation is `POST /folders` | `api/src/services/business/folders.ts:246,389`; workspace editor and folder lock on existing object. |
 | A-F | `{name}` or `{description}`, selected folder ID | `PUT /folders/:id`, `api/src/services/business/folders.ts:389–438`; editor + workspace editor, workspace-scoped lookup, `requireLockOwnershipForMutation`. |

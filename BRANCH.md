@@ -38,6 +38,7 @@
 - [x] Q-CL-1, Q-B1-4, list profile, FE-3/FE-6 and preserved-block eligibility remain adoption gates; H0 must not settle them.
 - [x] DS publication, export qualification and N1–N8 deletion evidence remain pending until measured by their adoption owners.
 - [x] Apply Opus r2 notes touching H0: B-BRIDGE-1…7 traceability, cross-lot RED-first, `ports.ts:70–72`.
+- [x] Review F1–F6 accepted and corrected (owner: H0 author): normalize only actual text paths, distinguish list arrays/context passthrough and single-key override; repair provenance and evidence hashes.
 
 ## AI Flaky tests
 - [x] No AI tests or flaky acceptance requested for this documentation and fixture lot.

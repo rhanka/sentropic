@@ -12,7 +12,7 @@ rtk jq -e --rawfile inventory "$inventory" '
   [.cases[].mounts[]] | unique as $covered |
   ($inventory | [scan("\\| ([A-Z]+[0-9]+) \\| [A-Z]+:[0-9]+ \\|")]) as $rows |
   ($rows | flatten) as $mounts |
-  ($ids | length) == 28 and ($ids | unique | length) == 28 and
+  ($ids | length) == 29 and ($ids | unique | length) == 29 and
   ($mounts | length) == 24 and ($mounts | unique | length) == 24 and
   $covered == ($mounts | sort)
 ' "$corpus" > /dev/null
@@ -29,7 +29,7 @@ rtk jq -e '
   .cases[4].route == null and .cases[4].expectedRequestsBeforeId == 0
 ' "$payloads" > /dev/null
 rtk jq -e '
-  [.cases[].oracle] | unique | length == 12
+  [.cases[].oracle] | unique | length == 13
 ' "$corpus" > /dev/null
 mount_count=0
 file_count=0
@@ -62,4 +62,4 @@ while IFS= read -r path; do
     *) printf 'Out-of-scope path: %s\n' "$path" >&2; exit 1 ;;
   esac
 done < <(rtk proxy git diff --name-only 5e986a0b6cd2dfecfbde6a588d30055271124696)
-printf '%s\n' 'PASS H0: 42 input hashes; 28 UI cases; 12 payload cases; 24 unique mounts / 10 files / 7 plain; 8 receipts; scope unchanged.'
+printf '%s\n' 'PASS H0: 45 input hashes; 29 UI cases; 12 payload cases; 24 unique mounts / 10 files / 7 plain; 8 receipts; scope unchanged.'
