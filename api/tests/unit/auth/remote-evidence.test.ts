@@ -21,7 +21,7 @@ function setup() {
     issuer: 'idp', kid: 'idp-1', key: keys.privateKey, now: () => state.now,
     session: async (credential) => credential === 'credential-1' ? state.login : null,
     approvedTarget: async (digest, actor) => actor.sub === 'owner' && /^[ac]{64}$/.test(digest)
-      ? { audience: 'native-b', tenantId: 'tenant-1', workspaceId: 'workspace-1' } : null,
+      ? { audience: digest.startsWith('c') ? 'native-c' : 'native-b', tenantId: 'tenant-1', workspaceId: 'workspace-1' } : null,
     reserve: async (sid, actionId) => {
       const key = `${sid}:${actionId}`;
       if (used.has(key)) return false;
@@ -43,6 +43,8 @@ describe('RC1 D2 session evidence', () => {
       expect(second[field]).toEqual(first[field]);
     }
     expect(second.jti).not.toBe(first.jti);
+    expect(first.aud).toBe('native-b');
+    expect(second.aud).toBe('native-c');
     expect(second.iat).toBe(state.now / 1000);
     expect(second.exp! - second.iat!).toBeLessThanOrEqual(60);
   });
