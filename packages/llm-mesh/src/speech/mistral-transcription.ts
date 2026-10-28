@@ -886,3 +886,119 @@ export class MistralTranscriptionSession implements SpeechSession {
     this.emit(final);
   }
 
+  private onFrame(stream: TurnStream, raw: string): void {
+    if (this.settled || stream.abandoned) return;
+    let frame: unknown;
+    try {
+      frame = JSON.parse(raw) as unknown;
+    } catch {
+      this.pushError('invalid-format', true);
+      return;
+    }
+    if (!frame || typeof frame !== 'object') {
+      this.pushError('invalid-format', true);
+      return;
+    }
+    const record = frame as Record<string, unknown>;
+    if (record.type === 'session.updated' || record.type === 'session.created'
+      || record.type === 'transcription.segment'
+      || (typeof record.type === 'string' && record.type.startsWith('turn.'))) {
+      // Acks, diarized segments (diarize stays off) and turn events (server
+      // turn detection stays off): tolerated for forward compatibility.
+      return;
+    }
+    if (record.type === 'transcription.text.delta') {
+      if (typeof record.text !== 'string') {
+        this.pushError('invalid-format', true);
+        return;
+      }
+      this.onDelta(stream, record.text);
+      return;
+    }
+    if (record.type === 'transcription.done') {
+      if (typeof record.text !== 'string') {
+        this.pushError('invalid-format', true);
+        return;
+      }
+      this.onDone(stream, record.text, record.language);
+      return;
+    }
+    if (record.type === 'error') {
+      // The turn is over: drop it so a late done cannot resurrect it.
+      stream.abandoned = true;
+      stream.resolveDone(undefined);
+      if (this.current === stream) this.current = undefined;
+      void stream.socket.close().catch(() => undefined);
+      this.pushError('provider-error', false);
+      return;
+    }
+    // Unknown provider event types are tolerated (forward compatibility); the stream continues.
+  }
+}
+
+/**
+ * Redact the bearer token from any message before it reaches an error.
+ * A provider that echoes the Authorization header must never leak it through
+ * session events or thrown errors.
+ */
+const redactBearer = (message: string, token: string): string => {
+  if (!token) return message;
+  return message.split(`Bearer ${token}`).join('Bearer [REDACTED]').split(token).join('[REDACTED]');
+};
+
+/**
+ * Open an admitted transcription session. No provider contact happens here:
+ * each client turn opens its own stream lazily at the first write, since
+ * `input_audio.end` finishes the provider session. The bearer token travels
+ * only into the per-turn socket handshakes; failures never echo it. An
+ * aborted signal refuses without connecting.
+ */
+export const openMistralTranscriptionSession = async (
+  config: MistralTranscriptionProfileConfig,
+  options: MistralTranscriptionOpenOptions,
+): Promise<MistralTranscriptionSession> => {
+  const capabilities = mistralTranscriptionCapabilities(config);
+  const binding: SpeechBinding = {
+    ...mistralTranscriptionIdentity(config),
+    ...(config.language ? { language: config.language } : {}),
+    ...(config.accountRef ? { accountRef: config.accountRef } : {}),
+  };
+  assertAdmission(options.admission);
+  if (!isNonEmptyString(options.bearerToken)) {
+    throw new MistralTranscriptionError('invalid-config', 'bearer token is required');
+  }
+  const { request } = options;
+  // TTS bindings are refused here (fail-closed): synthesis is selected
+  // separately on the Mistral TTS binding, never through this adapter.
+  if (request.pipeline !== 'chained' || request.bindings.stt === undefined
+    || request.bindings.stt.providerId !== binding.providerId
+    || request.bindings.stt.modelId !== binding.modelId
+    || request.bindings.tts !== undefined) {
+    throw new MistralTranscriptionError('invalid-config', 'STT-only chained binding for this profile is required');
+  }
+  for (const format of [...(request.inputFormats ?? []), ...(request.outputFormats ?? [])]) {
+    if (format.codec !== TRANSCRIPTION_FORMAT.codec || format.sampleRateHz !== TRANSCRIPTION_FORMAT.sampleRateHz
+      || format.channels !== TRANSCRIPTION_FORMAT.channels) {
+      throw new MistralTranscriptionError('invalid-config', 'only pcm16-le 24kHz mono is supported');
+    }
+  }
+  if (options.signal?.aborted) {
+    throw new MistralTranscriptionError('aborted', 'open aborted before connect');
+  }
+  const receipt: SpeechSessionReceipt = {
+    protocolVersion: 1,
+    speechSessionId: `speech-${options.admission.operationId}`,
+    connectionEpoch: request.target.controllerEpoch,
+    configuration: request.configuration,
+    target: request.target,
+    pipeline: 'chained',
+    micMode: request.micMode,
+    stages: { stt: capabilities },
+    inputFormat: TRANSCRIPTION_FORMAT,
+  };
+  return new MistralTranscriptionSession(
+    receipt, binding, options.admission, options.usage, config, options.connect,
+    options.bearerToken, options.originator, options.nowMs, options.signal,
+    options.schedule, request.maxDurationMs,
+  );
+};
