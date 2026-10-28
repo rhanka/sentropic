@@ -50,11 +50,16 @@ test('changes: boolean filter step without file lists plus a separate single-fil
   assert.equal(out.manifest_guard, '${{ steps.filter.outputs.manifest_guard }}');
 });
 
-test('dedicated manifest_guard filter: scripts/ci never fans out through global, api/ui/e2e or _publish', () => {
+test('dedicated manifest_guard filter: only exact image guards also select global qualification', () => {
   const filters = YAML.parse(jobs.changes.steps.find((s) => s.id === 'filter').with.filters);
   assert.deepEqual(filters.manifest_guard, ['scripts/ci/**']);
+  const imageGuards = ['scripts/ci/image-receipt.mjs', 'scripts/ci/image-receipt.test.mjs'];
+  assert.deepEqual(filters.global.filter(g => g.startsWith('scripts/ci')), imageGuards);
   for (const [name, globs] of Object.entries(filters)) {
-    if (name !== 'manifest_guard') assert.ok(!globs.some((g) => g.startsWith('scripts/ci')), `${name} must not include scripts/ci`);
+    if (name === 'manifest_guard') continue;
+    for (const glob of globs.filter(g => g.startsWith('scripts/ci'))) {
+      assert.ok(name === 'global' && imageGuards.includes(glob), `${name} must not include ${glob}`);
+    }
   }
 });
 
@@ -86,7 +91,7 @@ test('ci-gate aggregates every PR job, stays unconditional for normal runs and i
   const gate = jobs['ci-gate'];
   assert.equal(gate.if, 'always() && inputs.decision_fixtures_only != true');
   assert.equal(gate.name, undefined, 'the required context must stay ci-gate');
-  assert.deepEqual(gate.permissions, { contents: 'read' });
+  assert.deepEqual(gate.permissions, { contents: 'read', actions: 'read' });
   assert.deepEqual([...needsOf('ci-gate')].sort(), Object.keys(jobs).filter((name) => !excluded(name)).sort(), 'every PR job must be in ci-gate.needs');
   for (const name of Object.keys(jobs)) {
     assert.ok(!needsOf(name).includes('ci-gate'), `${name} must not need ci-gate`);
@@ -116,7 +121,7 @@ test('Decision offline mode is explicit, credential-free and cannot publish, whi
     const skippedLookup = (key) => /^needs\..+\.result$/.test(key) ? 'skipped' : lookup(key);
     assert.equal(evaluateSelection(jobs['deploy-preprod'].if, skippedLookup), value !== true);
   }
-  for (const expression of Object.values(ci.env)) {
+  for (const expression of Object.values(ci.env).filter((value) => value.includes('secrets.'))) {
     assert.match(expression, /inputs\.decision_fixtures_only != true && secrets\./);
   }
   const fixtureLookup = (key) => key === 'inputs.decision_fixtures_only' ? true
