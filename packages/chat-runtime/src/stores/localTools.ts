@@ -198,3 +198,143 @@ const CHROME_LOCAL_TOOL_DEFINITIONS: ReadonlyArray<LocalToolDefinition> = [
               },
               waitMs: { type: 'integer', minimum: 0, maximum: 60000 },
               direction: {
+                type: 'string',
+                enum: ['up', 'down', 'top', 'bottom'],
+              },
+              pixels: { type: 'integer', minimum: 1, maximum: 20000 },
+              selector: { type: 'string' },
+              text: { type: 'string' },
+              exact: { type: 'boolean' },
+              clear: { type: 'boolean' },
+              x: { type: 'number' },
+              y: { type: 'number' },
+            },
+            required: ['action'],
+          },
+        },
+      },
+      required: [],
+    },
+  },
+];
+
+const VSCODE_LOCAL_TOOL_DEFINITIONS: ReadonlyArray<LocalToolDefinition> = [
+  {
+    name: 'bash',
+    description:
+      'Execute a shell command in the current workspace with permission policy checks.',
+    parameters: {
+      type: 'object',
+      properties: {
+        command: { type: 'string' },
+        timeoutMs: { type: 'integer', minimum: 1000, maximum: 60000 },
+      },
+      required: ['command'],
+    },
+  },
+  {
+    name: 'ls',
+    description:
+      'List files and directories in the workspace with bounded recursion depth.',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+        depth: { type: 'integer', minimum: 0, maximum: 4 },
+        includeHidden: { type: 'boolean' },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'rg',
+    description:
+      'Search text in workspace files via ripgrep with bounded results.',
+    parameters: {
+      type: 'object',
+      properties: {
+        pattern: { type: 'string' },
+        path: { type: 'string' },
+        maxResults: { type: 'integer', minimum: 1, maximum: 400 },
+        offset: { type: 'integer', minimum: 0, maximum: 2000 },
+        timeoutMs: { type: 'integer', minimum: 1000, maximum: 30000 },
+      },
+      required: ['pattern'],
+    },
+  },
+  {
+    name: 'file_read',
+    description:
+      'Read file content with bounded line-window mode by default.',
+    parameters: {
+      type: 'object',
+      properties: {
+        path: { type: 'string' },
+        startLine: { type: 'integer', minimum: 1 },
+        lineCount: { type: 'integer', minimum: 1, maximum: 500 },
+        full: { type: 'boolean' },
+      },
+      required: ['path'],
+    },
+  },
+  {
+    name: 'file_edit',
+    description:
+      'Edit files with mode=write|edit|apply_patch under explicit permission policies.',
+    parameters: {
+      type: 'object',
+      properties: {
+        mode: { type: 'string', enum: ['write', 'edit', 'apply_patch'] },
+        path: { type: 'string' },
+        patch: { type: 'string' },
+        content: { type: 'string' },
+        find: { type: 'string' },
+        replace: { type: 'string' },
+        replaceAll: { type: 'boolean' },
+      },
+      required: ['mode'],
+    },
+  },
+  {
+    name: 'git',
+    description:
+      'Run git actions (status, diff, ls_files, add, commit, push, reset, checkout, rebase, clean) with policy gating.',
+    parameters: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: [
+            'status',
+            'diff',
+            'ls_files',
+            'add',
+            'commit',
+            'push',
+            'reset',
+            'checkout',
+            'rebase',
+            'clean',
+          ],
+        },
+        ref: { type: 'string' },
+        path: { type: 'string' },
+        paths: { type: 'array', items: { type: 'string' } },
+        message: { type: 'string' },
+        remote: { type: 'string' },
+        branch: { type: 'string' },
+        target: { type: 'string' },
+        mode: { type: 'string' },
+        flags: { type: 'string' },
+        cwd: { type: 'string' },
+        forceWithLease: { type: 'boolean' },
+        noVerify: { type: 'boolean' },
+        timeoutMs: { type: 'integer', minimum: 1000, maximum: 30000 },
+      },
+      required: [],
+    },
+  },
+];
+
+const BUILTIN_LOCAL_TOOL_NAME_SET: ReadonlySet<string> = new Set<string>(
+  BUILTIN_LOCAL_TOOL_NAMES,
