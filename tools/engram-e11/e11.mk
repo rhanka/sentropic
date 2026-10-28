@@ -40,3 +40,4 @@ memory-e11-lock:
 memory-e11-installed:
 	@test "$(ENV)" = test-mem-e11
 	@bash tools/engram-e11/installed.sh "$(E11_INPUT)" "$(ARTIFACTS_COMPOSE)"
+	@$(E11_RUN) node tools/engram-e11/finalize.mjs /evidence

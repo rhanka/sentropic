@@ -41,12 +41,20 @@ export function validate(b) {
   }
   const workspace = json(b.read('source/package-lock.json'));
   assert.equal(workspace.packages['packages/cluster-mesh'].version, mesh.version);
-  const locks = { package: pkg, consumer: 'consumer-lock.json', workspace: 'source/package-lock.json', install: 'npm ci only; not executed by preparation' };
+  const locks = { package: pkg, consumer: 'consumer-lock.json', workspace: 'source/package-lock.json', install: 'fresh npm ci; retained lock compared before/after' };
+  assert.equal(b.read('lock-before.sha256').toString().split(' ')[0], r.consumer.lockSha256);
+  const registry = json(b.read('engram-registry.json'));
+  assert.equal(registry.gitHead, '8b93ba6b834f83fddbcf76091054efea2e188cf1');
+  assert.equal(registry.dist.integrity, engram.integrity);
+  const contractBytes = b.read('neutral-contract-1.0.0.jcs.json');
+  assert.equal(contractBytes.length, 4012);
+  const contractDigest = `sha256:${sha256(Buffer.concat([Buffer.from('graphify-memory/l3a-module-descriptor/v1\0'), contractBytes]))}`;
+  assert.equal(contractDigest, 'sha256:dd0cccbd6e5e29766fbc9c48351ffe58f5b0a3162152f5ff02da0798c3244fee');
   assert.deepEqual(r.requiredProfiles, profileNames);
   assert.deepEqual(r.declaredProfileClaims.map((p) => p.name), profileNames);
   assert(r.declaredProfileClaims.every((p) => p.status === 'declared' && /^sha256:[a-f0-9]{64}$/.test(p.digest)));
   assert.equal(r.fiveProfileEquivalence.status, 'not-covered');
-  assert.equal(r.contractDigest, 'sha256:dff737ced37d801ef48bb4d7088fc4fbc92021d21fe2034ff33ea643b49bec28');
+  assert.equal(r.contractDigest, contractDigest);
   assert.equal(r.tupleCoverage, 'full');
   assert(!Object.hasOwn(r, 'hostGlue'));
   assert.equal(b.read('campaign.status').toString(), 'exit=0\ncleanup=0\n');
@@ -58,7 +66,12 @@ export function validate(b) {
   for (const file of new Set([...closure.runtime, ...closure.types])) {
     assert(file.startsWith('node_modules/') || ['installed-memory.mjs', 'installed-hydration.mjs'].includes(file), `unexpected consumer closure member: ${file}`);
     const bytes = b.read(`consumer/${file}`);
-    if (!file.startsWith('node_modules/')) assert.equal(sha256(bytes), sha256(b.read(`source/packages/cluster-mesh/tests/engram-memory/${file}`)));
+    if (!file.startsWith('node_modules/')) {
+      const original = b.read(`source/packages/cluster-mesh/tests/engram-memory/${file}`).toString();
+      const staged = original.replaceAll('0.22.0', '0.21.3').replaceAll('0.24.0-dev.5', '0.24.0-dev.6')
+        .replaceAll('26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10', engram.sha256);
+      assert.equal(sha256(bytes), sha256(staged), `unreviewed lane adaptation: ${file}`);
+    }
     const archive = file.startsWith('node_modules/@sentropic/engram/') ? engram
       : file.startsWith('node_modules/@sentropic/cluster-mesh/') ? mesh : null;
     if (archive) assert.equal(sha256(bytes), sha256(archive.member(file.slice(`node_modules/${archive.name}/`.length))), `installed bytes differ: ${file}`);
@@ -74,12 +87,18 @@ export function validate(b) {
   }
   for (const file of ['installed-memory.mjs', 'installed-memory-types.ts', 'qualification.mk', 'installed-hydration.mjs']) b.read(`source/packages/cluster-mesh/tests/engram-memory/${file}`);
   const inventory = json(mesh.member('assets/storage/engram-memory/neutral-asset-inventory.json'));
+  const manifest = json(mesh.member('assets/storage/engram-memory/contract-manifest.json'));
+  assert.deepEqual(manifest, json(contractBytes));
+  assert.equal(inventory.contractDigest, contractDigest);
   assert.equal(inventory.asset.version, '1.0.0');
   mesh.member('dist/engram-memory/neutral-contract.d.ts');
   mesh.member('dist/engram-memory/wire-adaptation.js');
   const finalMember = `package/${inventory.asset.declaration}`;
   const c6 = { name: inventory.asset.name, version: inventory.asset.version, declaration: inventory.asset.declaration,
-    finalBytesSha256: mesh.members.includes(finalMember) ? sha256(mesh.member(inventory.asset.declaration)) : null,
+    path: 'neutral-contract-1.0.0.jcs.json', finalBytesSha256: sha256(contractBytes), contractDigest,
+    standaloneDeclarationSha256: mesh.members.includes(finalMember) ? sha256(mesh.member(inventory.asset.declaration)) : null,
     candidateEmittedDeclarationSha256: mesh.memberHashes['dist/engram-memory/neutral-contract.d.ts'], inventory };
+  for (const file of ['producer.md', 'e10a3-delivery.json', 'pack-receipt.json', 'lane-adaptation.json', 'npm-version.txt',
+    'reserved-registry.json', 'reserved-registry.status', 'type-files.txt']) b.read(file);
   return { receipt: r, engram, mesh, source, c6, locks, driver: { ...r.postgres.driver, integrity: lock.packages['node_modules/pg'].integrity }, closure };
 }
