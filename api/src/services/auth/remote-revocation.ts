@@ -2,6 +2,7 @@ import { logger } from '../../logger';
 import { closeRemoteSessionAuthority, getRemoteSessionAuthority } from './remote-private-session';
 import { RemoteAuthorityError } from './remote-contract';
 import { revocationMac, revocationPath, revocationServiceOrigin, signRevocation, validRevocationMac } from './remote-revocation-transport';
+import { acknowledgeRemoteRevocation, pendingRemoteRevocations, queueRemoteRevocation } from './remote-revocation-outbox';
 
 export interface RemoteSessionRevocation { sessionIds: string[]; userId?: string }
 
@@ -26,17 +27,16 @@ export function persistRemoteSessionRevocation(input: RemoteSessionRevocation): 
 }
 
 // Called after the DB delete: private storage must never prevent ordinary logout.
-export async function tombstoneRemoteSessions(input: RemoteSessionRevocation): Promise<void> {
+export async function tombstoneRemoteSessions(input: RemoteSessionRevocation, pendingKey?: string): Promise<void> {
   if (process.env.REMOTE_ACTION_ROLE === 'auth-idp') {
     persistRemoteSessionRevocation(input);
     return;
   }
-  const configured = process.env.REMOTE_ACTION_REVOCATION_ISSUER;
-  if (!configured) {
-    if (process.env.REMOTE_ACTION_ROLE === 'product') throw new RemoteAuthorityError('authority_unavailable');
-    return; // Product-only installations have no isolated issuer authority.
-  }
   try {
+    const configured = process.env.REMOTE_ACTION_REVOCATION_ISSUER;
+    if (!configured && process.env.REMOTE_ACTION_ROLE !== 'product') return;
+    pendingKey ??= await queueRemoteRevocation(input);
+    if (!configured) throw new Error();
     const issuer = new URL(configured);
     const clientId = process.env.REMOTE_ACTION_REVOCATION_CLIENT_ID;
     const secret = process.env.REMOTE_ACTION_REVOCATION_CLIENT_SECRET;
@@ -66,9 +66,19 @@ export async function tombstoneRemoteSessions(input: RemoteSessionRevocation): P
       if (response.status !== 204 || !validRevocationMac(revocationMac('ack', signed['x-revocation-mac']),
         response.headers.get('x-revocation-ack'))) throw new Error();
     }
+    if (pendingKey) await acknowledgeRemoteRevocation(pendingKey);
   } catch {
     // The DB deletion is already committed. Never claim issuer acknowledgement on delivery failure.
     logger.error({ code: 'authority_unavailable' }, 'Issuer revocation delivery requires recovery');
     throw new RemoteAuthorityError('authority_unavailable');
+  }
+}
+
+// The existing periodic approval sweep also drains committed revocations after process restart.
+export async function retryRemoteRevocations(): Promise<void> {
+  if (process.env.REMOTE_ACTION_ROLE !== 'product') return;
+  for (const row of await pendingRemoteRevocations()) {
+    try { await tombstoneRemoteSessions(JSON.parse(row.value!), row.key); }
+    catch { break; } // Keep the oldest intent and retry on the next sweep; no busy loop.
   }
 }
