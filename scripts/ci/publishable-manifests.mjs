@@ -682,7 +682,17 @@ export async function commandPack(opts, { env = process.env, cwd = process.cwd()
   const explicit = typeof opts.destination === 'string';
   const dest = explicit ? opts.destination : fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-pack-'));
   try {
-    const { archive } = runNpmPack(cwd, dest);
+    let archive;
+    if (env.CI_PACKAGE_CANDIDATES) {
+      const { candidateTuple, verifyCandidates } = await import('./package-candidate.mjs');
+      const root = path.resolve(cwd, '../..');
+      const index = verifyCandidates(env.CI_PACKAGE_CANDIDATES, candidateTuple(root, env), ['cluster-mesh'], { root });
+      const receipt = index.receipts.find(row => row.slug === opts.slug);
+      if (!receipt) throw new GuardError(`missing selected candidate: ${opts.slug}`);
+      fs.mkdirSync(dest, { recursive: true });
+      archive = path.join(dest, path.basename(receipt.file));
+      fs.copyFileSync(path.join(env.CI_PACKAGE_CANDIDATES, receipt.file), archive);
+    } else ({ archive } = runNpmPack(cwd, dest));
     const result = inspectArchive({ archive, sources, semver });
     for (const s of result.structural) reporter.error(opts.slug, s);
     if (snapshot && (snapshot.name !== result.name || snapshot.version !== result.version)) {

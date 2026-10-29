@@ -87,7 +87,7 @@ export async function produceCandidates({ root, dir, roots, tuple, tsc, env = pr
     run(tsc, ['--typeRoots', '/tmp/cm-tools/node_modules/@types', '-p', 'tsconfig.json'], cwd);
     const destination = path.join(dir, slug), reports = path.join(dir, 'reports');
     const code = await pack({ slug, destination, 'report-dir': reports }, { cwd,
-      env: { ...env, MANIFEST_HEAD_SHA: tuple.head_sha, PACK_DESTINATION_HOST: destination } });
+      env: { ...env, MANIFEST_SEVERITY: 'block', CI_PACKAGE_CANDIDATES: '', MANIFEST_HEAD_SHA: tuple.head_sha, PACK_DESTINATION_HOST: destination } });
     if (code !== 0) fail(`candidate guard failed: ${slug}`);
     const receipt = json(path.join(reports, `${slug}.receipt.json`));
     receipts.push({ ...receipt, file: `${slug}/${path.basename(receipt.archive)}` });
@@ -97,11 +97,29 @@ export async function produceCandidates({ root, dir, roots, tuple, tsc, env = pr
   return index;
 }
 
+export function exportSiblings(dir, index, slug, destination) {
+  const selected = new Set(candidateClosure(process.cwd(), [slug]).filter(member => member !== slug));
+  fs.mkdirSync(destination, { recursive: true });
+  if (fs.readdirSync(destination).length) fail('sibling destination is not empty');
+  const receipts = index.receipts.filter(row => selected.has(row.slug)).map(row => {
+    fs.mkdirSync(path.join(destination, row.slug), { recursive: true });
+    fs.copyFileSync(path.join(dir, row.file), path.join(destination, row.file));
+    return row;
+  });
+  if (receipts.length !== selected.size) fail('missing selected sibling receipts');
+  fs.writeFileSync(path.join(destination, 'receipts.json'), `${JSON.stringify(receipts, null, 2)}\n`);
+}
+
 export async function main([command, dir, ...roots]) {
   const root = process.cwd(), tuple = candidateTuple(root);
   if (command === 'produce') return produceCandidates({ root, dir, roots, tuple,
     tsc: '/tmp/cm-tools/node_modules/.bin/tsc' });
   if (command === 'verify') return verifyCandidates(dir, tuple, roots);
+  if (command === 'siblings') {
+    const [slug, destination] = roots;
+    const index = verifyCandidates(dir, tuple, ['cluster-mesh']);
+    return exportSiblings(dir, index, slug, destination);
+  }
   if (command === 'seal') {
     const index = verifyCandidates(dir, tuple, roots);
     index.prepared = { file: 'prepared.tgz', sha256: sha256File(path.join(dir, 'prepared.tgz')) };
