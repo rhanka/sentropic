@@ -38,6 +38,7 @@
 - [x] No calibration authorized; live observations cannot qualify immutable weights, billing beyond the admitted bound, or production readiness.
 - [x] Q1-CRED-01: JEV preflight refused peripheral whitespace; normalized transiently after Compose injection, source env unchanged; refusal consumes attempt 1.
 - [x] Q1-INV-01: parser previously forbade observed IDs with unqualified production status; permit evidence inventory while retaining admission gates; regression keeps nonempty IDs and proves production refusal.
+- [ ] Q1-REV-01: conductor to select two exact complementary reviewer models before merge; h2a discovery has host presence but no model identities, no configured gateway catalog; no consensus claimed.
 
 ## AI Flaky tests
 - [x] No flaky acceptance or additional live calls beyond the cap.
@@ -63,6 +64,8 @@
   - [x] Preserve unqualified production and OD-4 calibration requirement; 16 host/route tests pass.
 - [ ] **Lot 3 — Final validation and draft PR**
   - [x] Mesh descriptor, qualification, adapter, pricing, public and request suites: 88 files / 1,566 tests pass.
-  - [ ] Run applicable typecheck/lint and mechanical scope check before each atomic commit (at most 150 lines).
-  - [ ] Verify secret-free receipts/diff, stop test stack, create draft PR to main using this plan.
-  - [ ] Observe CI completed/success on exact head; report head, cost and candidate outcomes.
+  - [x] llm-mesh typecheck/lint and mechanical scope checks pass; commits at most 150 lines.
+  - [x] Secret scan, attempt counts, identity comparison and durable 77 micro-USD ledger verified; zero reserved/pending.
+  - [x] Stop local stack with `make down`; publish report `spec/decision/q1-live-smoke.md`.
+  - [ ] Create draft PR to main using this plan; final PR/comment records exact-head CI after this checkpoint.
+  - [ ] Observe CI completed/success on exact head; report head, 77 micro-USD and candidate outcomes.
