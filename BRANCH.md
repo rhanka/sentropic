@@ -1,7 +1,7 @@
 # Feature: Prepare hardened Trivy image lane (S2b option B)
 
 ## Objective
-- [ ] Prepare upstream Trivy by immutable image digest with trusted DB acquisition and fail-closed execution; qualification and daily activation remain blocked.
+- [x] Prepare upstream Trivy by immutable image digest with trusted DB acquisition and fail-closed execution; qualification and daily activation remain blocked.
 
 ## Scope / Guardrails
 - [x] Owner-authorized default B from dossier r2, SHA-256 `b4de75e7e2d5bca48ea1d9571c797d65c0e9262259c54d772a57f2f81c9817a1`; no toolbox Dockerfile change.
@@ -45,6 +45,7 @@
 - [ ] S2B-Q2, conductor, blocked: live DB provenance/integrity/freshness, Java/IaC data, immutable targets with exact source/platform, zero-Python runtime inventory.
 - [ ] S2B-Q3, conductor, blocked: real offline/rate-limit/corruption/rollback exercises and cold/warm remote/rebuild measurements including full CI critical path.
 - [x] Live DB preparation: vulnerability snapshot ingested and restored; Java layer 991,026,356 bytes refused by the 512 MiB bound. Preparation exits nonzero; scoped teardown succeeds. Receipts and source evidence in root `.tmp/sec-s2b-evidence/`.
+- [x] S2B-R1, author, selection-failed: live model catalog unavailable for two distinct eligible Claude-hosted reviewers. No peer dispatched or consensus claimed; exact target/code hashes and failure recorded in root `.tmp/sec-s2b-evidence/review.md`. Independent review remains a qualification gate.
 - [x] Shared Track remains owned by its designated writer; no event writes from this lot.
 
 ## AI Flaky tests
@@ -56,30 +57,30 @@
 
 ## UAT Management (in orchestration context)
 - [x] Web, Chrome and VSCode UAT not applicable; no application changes.
-  - [x] Operator UAT: inspect source evidence, immutable pins, live acquisition/refusal receipts and qualification gaps.
+- [x] Operator UAT: inspect source evidence, immutable pins, live acquisition/refusal receipts and qualification gaps.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and admission**
   - [x] Read rules, approved plan, historical reviews, S1 receipt, dossier r2 and merged S1/S2a.
   - [x] Verify branch mechanically with harness C1 and declare exact scope before implementation.
-- [ ] **Lot 1 — Frozen scanner policy and source evidence**
+- [x] **Lot 1 — Frozen scanner policy and source evidence**
   - [x] Resolve upstream index/platform/config and exact-identity signature; inspect immutable release and both live security advisories.
   - [x] Freeze pins, minimum version, exact publisher, trusted DB/rules sources and explicit missing admissions.
-- [ ] **Lot 2 — Acquisition and execution contracts**
+- [x] **Lot 2 — Acquisition and execution contracts**
   - [x] Acquire DB once per campaign through allowed OCI origin; verify descriptors and hashes before atomic cache publication.
   - [x] Validate schema/dates and cache bytes after restoration; block missing/corrupt/stale/incompatible data.
   - [x] Prepare socket-free, least-privilege remote/archive scans with immutable target/source/platform proof and frozen flags/data.
   - [x] Reject caller configuration and untrusted mirrors before acquisition; no automatic mirror fallback.
   - [x] Reject silent Java/IaC fallback and preserve all-severity raw diagnostics; live Java layer exceeds the prepared bound and stays blocked.
   - [x] Keep unqualified execution gated and daily job off; bind scanner/policy/flags/DB identities across comparisons and recheck freshness before merge.
-- [ ] **Lot 3 — Security regression fixtures**
+- [x] **Lot 3 — Security regression fixtures**
   - [x] `toolchain-contract.test.mjs`: pin/version, publisher/platform/source, cache corruption/schema/dates, hostile archives and bounded acquisition failures; eight tests pass.
   - [x] `trivy.test.mjs`: sandbox flags, environment isolation, report/target mismatch and unqualified execution refusal; four tests pass.
   - [x] Existing `schema.test.mjs`, `inventory.test.mjs`, `scan.test.mjs` plus required wiring entrypoint: 149/149 pass; parser: 17/17 cases pass.
-- [ ] **Lot N-1 — Docs consolidation**
+- [x] **Lot N-1 — Docs consolidation**
   - [x] Document source receipts, frozen identities, trust limits, qualification matrix and rollback in `docs/security/trivy-s2b.md`.
 - [ ] **Lot N — Final validation**
   - [x] Scoped fixtures, daily suite and final required wiring validation pass under flock with dedicated teardown.
-  - [ ] Check scope before each commit; verify diff, commit sizes and no AI trailers.
+  - [x] C1/C2 pass; all commits at most 150 changed lines; clean diff, no AI trailers and forbidden paths byte-identical to base.
   - [ ] Create draft PR to main with this plan as body; verify CI completed/success on exact head.
   - [ ] Report PR/head and remaining evidence; retain BRANCH.md, disabled service and qualification blockers; no merge.
