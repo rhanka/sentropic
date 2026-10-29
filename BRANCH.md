@@ -25,6 +25,9 @@
   - `api/src/services/session-manager.ts`
   - `api/src/routes/auth/oauth.ts`
   - `api/src/routes/namespaces/auth/federation.ts`
+  - `api/src/routes/namespaces/auth/account.ts`
+  - `api/src/routes/namespaces/admin-product-authority.ts`
+  - `api/src/services/admin-approval-sweep.ts`
   - `deploy/k8s/base/35-auth-idp.yaml`
   - `deploy/k8s/base/30-api.yaml`
   - `.github/workflows/ci.yml`
@@ -47,6 +50,8 @@
   - [x] Declare BRRC1-EXn with rationale, impact and rollback before any conditional edit.
 
 ## Feedback Loop
+- [x] BRRC1-EX5: F4 audit found direct session deletes in account self-service, admin disable/delete and approval expiry. Route them through canonical revocation or post-commit tombstones, preserving transaction rollback and connector teardown. Impact: all coded product revocations reach issuer authority; DB removal remains independent of private/transport errors. Rollback: revert these hooks while disabling remote issuance; no schema or credential mutation.
+- [ ] F4 lifecycle audit: regression witnesses for account/admin deactivation, destructive deletion and approval sweep, including deletion commit despite issuer delivery failure.
 - [x] BRRC1-EX4: F4 requires the deployed API to pin product role explicitly, and preflight to require the shared S2S revocation configuration before apply. Impact: incomplete pairing blocks deployment with running workloads untouched; prevents silent product-only fallback beside the isolated issuer. Rollback: revert the role pin/check together with remote authority; no credential or data mutation.
 - [x] BRRC1-EX3: F1 authorizes pre-apply Secret/KEK/PVC checks and an IdP session Secret provisioning workflow matching idp-workload-secret.yml. Impact: missing prerequisites fail CD before any apply; conductor owns key generation/storage. Rollback: revert workflow/checks together with the isolated manifest, without changing stored credentials.
 - [x] Opus r1 F1: provision isolated signing through sentropic-idp-run; verify Secret/KEK/Bound PVC before deploy; selftests cover absent/invalid prerequisites and pre-apply ordering.
