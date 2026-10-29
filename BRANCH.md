@@ -78,6 +78,7 @@
   - [x] LLM mesh/gateway consume the prepared closure and retain lint, compiler, tests, model-equivalence and packed-manifest checks; remove their repeated sibling compilation/packing.
   - [x] The common inventory verifies shared BLOCK candidate receipts rather than repacking their closure. The producer is a direct final-gate/capacity-receipt dependency; actual cluster matrix members remain in the complete-result manifest.
   - [x] Add qualification-DAG fixtures covering every actual matrix member, missing/cancelled/skipped/neutral failures, lane ownership, crash order, retained lazy tuples, least privilege and full action pins.
+  - [x] Require named Node/npm identities and passing BLOCK receipts; a repeated producer restores and verifies its sealed preparation rather than constructing a new snapshot without compiled outputs. Preparation substitution negatives cover the extraction boundary.
   - [ ] Refactor the four named cluster preparation/Make files; separate static/source, PostgreSQL conformance, comments storage, crash recovery, candidate packing, and installed lanes; each mutating lane owns its workspace/database/ports.
   - [ ] Preserve existing `postgres-crashes.spec.ts`, `installed-major-upgrade.mjs`, `installed-bare.mjs`, and all packaging suite membership; maintain seed → crash/restart → verify inside each crash fixture.
   - [ ] Add `package-qualification-dag.test.mjs` (new): no installed check before packing, no second candidate build, distinct mutable fixture roots, lazy bare/selected-peer/latest-in-range/global-consumer cases retained.
