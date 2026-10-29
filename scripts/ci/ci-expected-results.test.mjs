@@ -165,9 +165,9 @@ test('should capture only selected delivery endpoints and reject cross-head rece
   assert.throws(() => capacityCapture(workflow, { ...run, head_sha: 'wrong' }, [], manifest), /identity/);
 });
 
-test('should authenticate current-attempt receipts with read-only permissions and fail closed on API errors', async () => {
+test('should authenticate current-attempt receipts and fail closed on API errors', async () => {
   const gate = workflow.jobs['ci-gate'];
-  assert.deepEqual(gate.permissions, { contents: 'read', actions: 'read' });
+  assert.deepEqual(gate.permissions, { contents: 'read', actions: 'write' });
   const script = gate.steps.find((step) => step.name === 'Capture the current attempt for the final verdict').with.script;
   const execute = new (Object.getPrototypeOf(async function () {}).constructor)('require', 'context', 'github', 'process', script);
   const requests = [];
@@ -205,6 +205,51 @@ test('should authenticate current-attempt receipts with read-only permissions an
       await assert.rejects(execute(() => files, context, client, process), new RegExp(`HTTP ${status}`));
       assert.equal(captured, undefined, 'an API error must never produce a receipt');
     }
+  }
+});
+
+test('should delete only current-run transport artifacts after every consumer, even when validation fails', async () => {
+  const names = ['api-tool-image', 'api-image', 'ui-image', 'e2e-image', 'desktop-download'];
+  const gate = workflow.jobs['ci-gate'];
+  const cleanup = gate.steps.at(-1);
+  assert.equal(cleanup.name, 'Delete consumed transport artifacts');
+  assert.match(cleanup.if, /^always\(\)/);
+  assert.match(cleanup.if, /github.event.pull_request.head.repo.full_name == github.repository/);
+  assert.match(cleanup.uses, /^actions\/github-script@[a-f0-9]{40}$/);
+  assert.deepEqual(Object.entries(workflow.jobs).filter(([, job]) => job.permissions?.actions === 'write').map(([name]) => name), ['ci-gate']);
+  const ancestors = new Set();
+  const visit = name => {
+    for (const parent of workflow.jobs[name].needs ?? []) if (!ancestors.has(parent)) { ancestors.add(parent); visit(parent); }
+  };
+  visit('ci-gate');
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    for (const step of job.steps ?? []) {
+      if (!names.includes(step.with?.name)) continue;
+      if (step.uses?.startsWith('actions/upload-artifact@')) assert.equal(step.with['retention-days'], 1);
+      if (step.uses?.startsWith('actions/download-artifact@')) {
+        assert.ok(ancestors.has(name), `${name} must finish before cleanup`);
+        assert.equal(step.with['run-id'], undefined, 'transport stays within this run');
+      }
+    }
+  }
+  for (const name of ['publish-api-image', 'publish-ui-image', 'deploy-preprod']) assert.ok(ancestors.has(name));
+  const execute = new (Object.getPrototypeOf(async function () {}).constructor)('context', 'github', 'core', cleanup.with.script);
+  const context = { repo: { owner: 'rhanka', repo: 'sentropic' }, runId: 7 };
+  const list = Symbol('list run artifacts'), deleted = [];
+  const github = { rest: { actions: { listWorkflowRunArtifacts: list,
+    deleteArtifact: async input => deleted.push(input) } }, paginate: async (endpoint, input) => {
+      assert.equal(endpoint, list);
+      assert.deepEqual(input, { ...context.repo, run_id: 7, per_page: 100 });
+      return [...names, 'security-container-api-results', 'ci-expected-7-1', 'package-candidates', 'api-image-other']
+        .map((name, id) => ({ id, name, size_in_bytes: 10 }));
+    } };
+  await execute(context, github, { info() {} });
+  assert.deepEqual(deleted, names.map((_, artifact_id) => ({ ...context.repo, artifact_id })));
+  for (const operation of ['list', 'delete']) {
+    const reject = async () => { throw Error('HTTP 403'); };
+    const client = operation === 'list' ? { ...github, paginate: reject }
+      : { ...github, rest: { actions: { ...github.rest.actions, deleteArtifact: reject } } };
+    await assert.rejects(execute(context, client, { info() {} }), /HTTP 403/);
   }
 });
 
