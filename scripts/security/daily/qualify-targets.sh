@@ -2,6 +2,8 @@
 # Trusted operator acquisition; credentials are never mounted into a scanner.
 set -euo pipefail
 evidence="$PWD/tmp/security-qualify"
+cohort=${SECQUAL_COHORT:-main-40832206894}
+[[ "$cohort" = main-40832206894 || "$cohort" = main-40876641000 ]]
 operator_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
 source <(rg '^export (REGISTRY|DOCKER_USERNAME|DOCKER_PASSWORD)=' "$operator_root/.env")
 export DOCKER_CONFIG
@@ -12,7 +14,7 @@ printf '%s' "$DOCKER_PASSWORD" | docker login "$REGISTRY" --username "$DOCKER_US
 unset DOCKER_PASSWORD
 blocked=0
 for kind in api api-tool ui; do
-  folder="$evidence/main-40832206894/$kind-image"
+  folder="$evidence/$cohort/$kind-image"
   receipt="$folder/$kind-image.json"
   ref=$(jq -er .ref "$receipt")
   expected=$(jq -er .archiveDigest "$receipt")

@@ -7,14 +7,16 @@ import { failClosedReport } from './inventory.mjs';
 // Only the trusted preparation path can establish archive identity; JSON cannot mint this proof.
 const verifiedArchives = new WeakMap();
 
-export function validateTarget(target, sourceSha, key) {
+export function validateTarget(target, sourceSha, key, archive) {
   requireEvidence(/^[a-f0-9]{40}$/.test(sourceSha || '') &&
     ['api-production', 'api-toolbox', 'ui-production'].includes(key), 'target source/surface');
   requireEvidence(target?.key === key && target.sourceSha === sourceSha && target.platform === policy.platform &&
     target.provenance?.verified === true && target.provenance.sourceSha === sourceSha &&
     target.provenance.imageRef === target.ref && target.provenance.platform === policy.platform &&
     isDigest(target.provenance.receiptHash) && isDigest(target.configDigest), 'target provenance/platform');
-  requireEvidence(/^[a-z0-9.-]+(?::\d+)?\/[a-z0-9/_.-]+@sha256:[a-f0-9]{64}$/.test(target.ref || ''), 'immutable remote image');
+  const remote = /^[a-z0-9.-]+(?::\d+)?\/[a-z0-9/_.-]+@sha256:[a-f0-9]{64}$/.test(target.ref || '');
+  const archived = archive && isDigest(archive.digest) && target.ref === `urn:oci-archive:${archive.digest}`;
+  requireEvidence(remote || archived, 'immutable image/archive identity');
   requireEvidence(Array.isArray(target.expectedResults) && target.expectedResults.length > 0 &&
     target.expectedResults.every((value) => typeof value === 'string' && value.length > 0) &&
     new Set(target.expectedResults).size === target.expectedResults.length, 'target coverage inventory');
@@ -26,7 +28,7 @@ const safePath = (path) => {
 };
 
 export async function prepareImageScan({ target, sourceSha, key, snapshots, archive, now = Date.now() }) {
-  validateTarget(target, sourceSha, key);
+  validateTarget(target, sourceSha, key, archive);
   // Java cannot be silently skipped; applicability/inventory qualification is still pending.
   requireEvidence(snapshots?.vulnerability && snapshots?.java, 'required vulnerability/Java DB snapshots');
   const receipts = {};
