@@ -843,13 +843,16 @@ qualify-published-install: ## Install+import PKG=<name>@<exact-version> or TARBA
 	@mkdir -p "$(REPORT_DIR)"
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e QUALIFY_IMAGE="$(MANIFEST_GUARD_IMAGE)" -e GITHUB_JOB \
 		-v "$(CURDIR)/scripts/ci/qualify-published-install.mjs:/probe/qualify.mjs:ro" \
+		-v "$(CURDIR)/scripts/ci/package-candidate.mjs:/probe/package-candidate.mjs:ro" \
 		-v "$(CURDIR)/scripts/ci/publishable-manifests.mjs:/probe/publishable-manifests.mjs:ro" \
 		$(if $(TARBALL),-v "$(abspath $(TARBALL)):/input/package.tgz:ro") \
 		$(if $(SIBLING_ARCHIVES_FILE),-v "$(abspath $(dir $(SIBLING_ARCHIVES_FILE))):/input/siblings:ro") \
+		$(if $(CI_PACKAGE_CANDIDATES),-v "$(abspath $(CI_PACKAGE_CANDIDATES)):/input/candidates:ro") \
 		-v "$(abspath $(REPORT_DIR)):/reports" -w /tmp $(MANIFEST_GUARD_IMAGE) \
 		sh -lc 'set -eu; unset NODE_PATH NODE_OPTIONS; tool_dir="$$(mktemp -d)"; npm_config_cache="$$(mktemp -d)" npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; \
 			node /probe/qualify.mjs --report-dir /reports --registry $(QUALIFY_REGISTRY) --head-sha "$(QUALIFY_HEAD_SHA)" --attempts "$(QUALIFY_WAIT_ATTEMPTS)" --delay "$(QUALIFY_WAIT_SECONDS)" \
 			$(if $(PKG),--pkg "$(PKG)",--tarball /input/package.tgz) $(if $(SIBLING_ARCHIVES_FILE),--siblings-dir /input/siblings) \
+			$(if $(CI_PACKAGE_CANDIDATES),--candidate-dir /input/candidates) \
 			$(if $(PEERS),--peers "$(PEERS)") $(if $(QUALIFY_MODE),--mode "$(QUALIFY_MODE)") $(if $(QUALIFY_PROVENANCE_SHA),--provenance-commit "$(QUALIFY_PROVENANCE_SHA)") $(if $(QUALIFY_PROVENANCE_RUN),--provenance-run "$(QUALIFY_PROVENANCE_RUN)")'
 
 test-qualify-published-install: ## Run clean-consumer qualification fixture tests (local fixture tarballs, no publish)

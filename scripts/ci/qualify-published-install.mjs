@@ -5,6 +5,7 @@
 import { spawnSync } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
+import { verifyCandidateSelection } from './package-candidate.mjs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -334,6 +335,7 @@ export async function qualify(opts) {
       report.problems.push(`packed manifest guard: ${s}`);
     }
     if (report.problems.length) return finish('fail');
+    const candidateSet = opts.candidatesDir ? verifyCandidateSelection(opts.candidatesDir, opts.headSha, report.resolved) : null;
     // ---- same-PR siblings (candidate only)
     let siblings = [];
     if (opts.siblingsDir) {
@@ -346,6 +348,13 @@ export async function qualify(opts) {
       fs.writeFileSync(path.join(consumer.dir, 'package.json'), `${JSON.stringify(pkgJson, null, 2)}\n`);
       report.overrides = pkgJson.overrides;
       report.siblings = siblings.map(({ name, version, sha256, file }) => ({ name, version, sha256, file }));
+    }
+    if (candidateSet) {
+      for (const required of candidateSet.receipts.filter(row => row.name !== primary.name)) {
+        if (!siblings.some(row => row.name === required.name && row.sha256 === required.sha256)) {
+          throw new GuardError(`missing selected sibling receipt: ${required.name}`);
+        }
+      }
     }
     // ---- core install (no optional peers), bounded propagation retries after publication
     const installArgs = ['install', installSpec, '--save-exact', '--omit=dev', '--no-audit', '--no-fund'];
@@ -442,6 +451,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === path.resolve(process.a
   const peers = argValue(argv, '--peers');
   qualify({
     pkg: argValue(argv, '--pkg'), tarball: argValue(argv, '--tarball'), siblingsDir: argValue(argv, '--siblings-dir'),
+    candidatesDir: argValue(argv, '--candidate-dir'),
     peers: peers ? peers.split(',').filter(Boolean) : [], mode: argValue(argv, '--mode'), registry: argValue(argv, '--registry'),
     reportDir: argValue(argv, '--report-dir') ?? '/reports', headSha: argValue(argv, '--head-sha') || null,
     image: process.env.QUALIFY_IMAGE ?? null, job: process.env.GITHUB_JOB ?? null,
