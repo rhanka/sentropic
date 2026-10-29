@@ -38,4 +38,5 @@
   - [x] Add process-time report binding with immutable raw JSON retention; source-only reports retain that mode and cannot become installed E4 evidence.
   - [x] Wire tooling, Lot 3 and packed report producers into the full attempt; retain explicit missing-file/process failures and do not stamp old reports at collection time.
   - [x] An actual GCC compilation produced an ELF object under the candidate addon path and was blocked by the predicate. The disposable positive-control container adds compiler tools; ordinary candidate installation keeps the original unmodified pinned image. The control also verifies that no Python executable is present.
+  - [x] Compile attribution now requires an observed candidate compiler or concrete candidate source-build object outputs; node-gyp/make dispatch alone and downloaded prebuilt .node files are not compilation proof. Keep the full native check and actual-compiler regression.
 - [ ] Lot 2: document the actual verdict and exact remaining owner actions, scope/review/CI checks, PR and cleanup; do not issue a false L5 acceptance.

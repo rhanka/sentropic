@@ -29,8 +29,9 @@ export function qualifyDisabledInstall(root, manifestPath, output) {
     const code = `require('node:child_process').spawnSync(process.execPath, ${JSON.stringify([gyp, 'rebuild'])}, {cwd:${JSON.stringify(native)},stdio:'ignore'});`;
     const canary = spawnSync(process.execPath, ['-e', code], { env: { ...process.env, ...trace.env }, encoding: 'utf8' });
     assert.equal(canary.status, 0, canary.stderr);
-    result.positiveControlBuilds = candidateNativeBuilds(trace.read(), control).length;
-    assert.ok(result.positiveControlBuilds > 0, 'native observer positive control did not fire');
+    result.observerPositiveControlEvents = trace.read().filter(row => row.kind === 'native-build').length;
+    assert.ok(result.observerPositiveControlEvents > 0, 'native observer positive control did not fire');
+    assert.equal(candidateNativeBuilds(trace.read(), control).length, 0, 'an unsuccessful build orchestrator is not compiler execution');
     trace.reset(); mkdirSync(consumer);
     writeFileSync(join(consumer, 'package.json'), '{"private":true,"type":"module"}');
     const install = spawnSync('npm', ['install', '--no-save', '--no-audit', '--no-fund', '--foreground-scripts', '--include=optional',
