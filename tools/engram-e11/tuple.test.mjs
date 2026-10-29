@@ -6,6 +6,8 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { bindings, canonical, sha256, verifyTuple } from './bindings.mjs';
 import { build, report } from './tuple.mjs';
+import { qualifyProfiles } from './profiles.mjs';
+import { candidate } from './candidates.mjs';
 
 function fixture(run) {
   const root = mkdtempSync(join(tmpdir(), 'e11-test-'));
@@ -61,7 +63,23 @@ test('should reject a changed tuple or manually promoted profile', () => {
   assert.throws(() => verifyTuple({ ...tuple, status: 'FINAL' }, tuple, true), /differs from recomputed/);
 });
 
-test('should reproduce E2 bytes while refusing unqualified profiles and stable-release acceptance', () => {
+test('should refuse Stage B qualification with skips, missing or repeated cases, failures, or another archive', () => {
+  for (const mutate of [
+    (r) => { r.numPendingTests = 1; },
+    (r) => { r.testResults[0].assertionResults.pop(); },
+    (r) => { r.testResults[0].assertionResults[1] = r.testResults[0].assertionResults[0]; },
+    (r) => { r.testResults[0].assertionResults[0].status = 'failed'; },
+  ]) {
+    const b = bindings('/evidence');
+    const r = JSON.parse(b.read('stage-b-result.json'));
+    mutate(r);
+    const changed = { ...b, read: (name) => name === 'stage-b-result.json' ? Buffer.from(JSON.stringify(r)) : b.read(name) };
+    assert.throws(() => qualifyProfiles(changed, candidate.mesh, []));
+  }
+  assert.throws(() => qualifyProfiles(bindings('/evidence'), { ...candidate.mesh, integrity: 'sha512-other' }, []), /identical mesh archive/);
+});
+
+test('should reproduce qualified E2 candidate bytes while refusing stable-release acceptance', () => {
   const first = build('/evidence');
   const second = build('/evidence');
   assert.equal(canonical(first), canonical(second));
@@ -72,18 +90,20 @@ test('should reproduce E2 bytes while refusing unqualified profiles and stable-r
   assert.equal(first.neutralContract.sha256, '55f8d4572db7100e4dba0a135331cdeb1186458711f0c7202e5f0cd93a6dc759');
   assert.equal(first.neutralContract.contractDigest, 'sha256:dd0cccbd6e5e29766fbc9c48351ffe58f5b0a3162152f5ff02da0798c3244fee');
   assert.equal(first.engram.version, '0.21.3');
-  assert.equal(first.backend.version, '0.24.0-dev.6');
+  assert.equal(first.backend.version, '0.24.0-dev.7');
   assert.equal(first.neutralContract.version, '1.0.0');
-  assert.deepEqual(first.profiles, []);
+  assert.deepEqual(first.profiles, first.requiredProfiles);
+  assert(first.profileQualifications.every((claim) => claim.status === 'QUALIFIED' && claim.meshSha256 === first.backend.sha256));
   assert.equal(first.requiredProfiles.length, 5);
   assert.match(first.nodeImage, /^node:24-bookworm-slim@sha256:[a-f0-9]{64}$/);
   assert(first.locks.every((lock) => first.files[lock.path].sha256 === lock.sha256));
   assert(first.slots.every((slot) => first.files[slot.file]));
   assert(first.slots.filter((slot) => slot.status === 'PENDING').every((slot) => slot.reason.length > 0));
   assert.equal(first.slots[14].observed.c6.finalBytesSha256, first.neutralContract.sha256);
-  assert.equal(first.slots[14].observed.c6.standaloneDeclarationSha256, null);
-  assert.deepEqual(first.slots.filter((s) => s.status === 'PENDING').map((s) => s.id), [15, 16]);
-  assert.equal(first.slots[15].observed.equivalence.status, 'not-covered');
+  assert.equal(first.slots[14].observed.c6.standaloneDeclarationSha256, '5a8c13c51eb00b350fae0b271d5357f54bdb01c930d607f679372bebff773229');
+  assert.equal(first.neutralContract.status, first.slots[14].status);
+  assert.deepEqual(first.slots.filter((s) => s.status === 'PENDING'), []);
+  assert.equal(first.slots[15].observed.equivalence.status, 'qualified');
   assert(first.files['consumer/installed-hydration.mjs']);
   assert(Object.values(first.handoff).every((gate) => gate.status === 'PENDING'));
   fixture((root) => {
@@ -91,11 +111,11 @@ test('should reproduce E2 bytes while refusing unqualified profiles and stable-r
     writeFileSync(path, canonical(first));
     const receivingSource = readFileSync('/evidence/receiving-validator.mjs', 'utf8');
     const start = receivingSource.indexOf("const HOST_TUPLE_FORMAT = 'e2-host-tuple/v1';");
-    const end = receivingSource.indexOf('function prepareE2(', start);
+    const end = receivingSource.length;
     assert(start >= 0 && end > start);
     const readHostTuple = runInNewContext(`${receivingSource.slice(start, end)}\nreadHostTuple;`, {
       assert, readFileSync, resolve: (file) => file,
     });
-    assert.throws(() => readHostTuple(path), /source-gap: host tuple is incomplete.*backend closure.*profiles/s);
+    assert.throws(() => readHostTuple(path), /source-gap: host tuple is incomplete.*backend closure/s);
   });
 });

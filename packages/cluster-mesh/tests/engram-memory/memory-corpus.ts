@@ -23,15 +23,11 @@ export const MEMORY_STAGE_B_CASES = {
 export const memoryCaseInventory: string[] = [];
 export const registerMemoryCase = (name: string) => { memoryCaseInventory.push(name.split(':')[0]!); };
 export const memoryBlockedCases: { name: string; blockers: string[] }[] = [];
-// Every behavioral case opens the fixture NeutralMemoryHandle. Until E7
-// ships that handle, none can qualify the real host's fenced-writers profile.
+// The behavioral corpus executes only in the make-owned installed consumer.
 export const memoryScenario = (open: () => Promise<MemoryCampaignHost>, name: string,
   run: (host: MemoryCampaignHost) => Promise<void>) => {
   registerMemoryCase(name);
-  const blockers = ['blocked: E7-fenced-writers'];
-  if (name.startsWith('scope-outbox-v1/')) blockers.push('blocked: E7');
-  memoryBlockedCases.push({ name: name.split(':')[0]!, blockers });
-  return it.skip(`${name} [${blockers.join('; ')}]`, async () => {
+  return it(name, async () => {
     const host = await open();
     try { await run(host); } finally { await host.close(); }
   });
@@ -57,7 +53,7 @@ export const runMemoryCorpus = (open: () => Promise<MemoryCampaignHost>): void =
   describe('memory Stage B: exact read/write binding and separate host maintenance', () => {
     scenario('atomic-units-v1/capture-completion: should negotiate the binding and complete K7 without allocating another cursor', async (h) => {
       expect(h.binding.memoryGrant.operations).toEqual(['read', 'write']);
-      expect(h.binding.maintainGrant.operations).toEqual(['maintain']);
+      expect(h.binding.maintainGrant.operations).toEqual(['read', 'maintain']);
       expect(h.handle.profiles).toEqual(MEMORY_PINNED_PROFILES.filter((claim) => MEMORY_STAGE_B_PROFILES.includes(claim.name as never)));
       expect(h.handle.profiles.map((claim) => claim.name)).toEqual(MEMORY_STAGE_B_PROFILES);
       const backendProfiles = (await h.kernel.bind(h.binding.memoryGrant)).profiles
@@ -209,11 +205,11 @@ export const runMemoryCorpus = (open: () => Promise<MemoryCampaignHost>): void =
     scenario('scope-outbox-v1/authority-refusals: should refuse absent foreign and revoked host authority independently', async (h) => {
       expect(() => openMemoryMaintenance(undefined!, undefined!)).toThrow(/assembled binding/);
       expect(() => assembleMemoryHostBinding({ driver: h.binding.provider, maintainGrant: undefined, invocationId: 'inv' })).toThrow(/maintain grant/);
-      const foreign = assembleMemoryHostBinding({ driver: h.binding.provider, maintainGrant: memoryMaintainGrant('foreign'), invocationId: 'foreign' });
+      const foreign = assembleMemoryHostBinding({ driver: h.binding.provider, maintainGrant: memoryMaintainGrant('foreign'), invocationId: 'foreign', storeId: h.scopeBinding.store_id });
       await h.kernel.bindNew(foreign.maintainGrant);
       await expect(verifyHostBinding(h.kernel, foreign, h.scopeBinding.scope)).rejects.toMatchObject({ code: 'denied' });
       const neverIssued = assembleMemoryHostBinding({ driver: h.binding.provider,
-        maintainGrant: { ...h.binding.maintainGrant, token: 'never-issued' }, invocationId: 'unknown' });
+        maintainGrant: { ...h.binding.maintainGrant, token: 'never-issued' }, invocationId: 'unknown', storeId: h.scopeBinding.store_id });
       await expect(verifyHostBinding(h.kernel, neverIssued, h.scopeBinding.scope)).rejects.toMatchObject({ code: 'denied' });
       const fence = await (await h.kernel.bind(h.binding.maintainGrant)).journalFence();
       await h.kernel.revoke(h.binding.maintainGrant.token);

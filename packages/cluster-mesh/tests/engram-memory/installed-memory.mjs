@@ -30,7 +30,7 @@ registerHooks({
   },
 });
 
-const ENGRAM_TARBALL_SHA256 = '26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10';
+const ENGRAM_TARBALL_SHA256 = '32d47df1880cf5c43b0f16145f75aebeda5fd341d8b1317f3b89acc428bbd05b';
 const P3_MANIFEST_SHA256 = '1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730';
 const sha256File = async (path) => createHash('sha256').update(await readFile(path)).digest('hex');
 const sha256Text = (text) => createHash('sha256').update(text, 'utf8').digest('hex');
@@ -50,8 +50,8 @@ const meshPkg = JSON.parse(await readFile(
   new URL('./node_modules/@sentropic/cluster-mesh/package.json', import.meta.url), 'utf8'));
 const engramPkg = JSON.parse(await readFile(
   new URL('./node_modules/@sentropic/engram/package.json', import.meta.url), 'utf8'));
-assert.equal(engramPkg.version, '0.22.0');
-assert.equal(meshPkg.version, '0.24.0-dev.5', 'candidate mesh tarball version');
+assert.equal(engramPkg.version, '0.21.3');
+assert.equal(meshPkg.version, '0.24.0-dev.7', 'candidate mesh tarball version');
 
 const pg = (await import('pg')).default;
 const meshMemory = await import('@sentropic/cluster-mesh/engram-memory');
@@ -395,7 +395,7 @@ const receipt = {
   migrations: registration.assets.map((asset) => ({ id: asset.id, checksum: asset.checksum })),
   hostHistory: hostHistory.map((row) => row.id),
   declaredProfileClaims: handle.profiles.map((claim) => ({ ...claim, status: 'declared' })),
-  fiveProfileEquivalence: { status: 'not-covered', reason: 'Stage B blocked (E9 #790, 23 cases)' },
+  fiveProfileEquivalence: { status: 'not-covered', reason: 'This E10 injection lane does not run Stage B; E11 binds its separate installed campaign.' },
   requiredProfiles: [...MEMORY_DESCRIPTOR.requiredProfiles],
   contractDigest: MEMORY_DESCRIPTOR.contractDigest,
   refusals,

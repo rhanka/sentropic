@@ -126,7 +126,8 @@ export const applyPgEffects = async (
       if (previous) throw new StorageIdempotencyConflictError('chain already exists');
     } else if (previous?.head !== append.expectation.hash) throw new StorageCasConflictError('stale chain head');
     const seq = previous?.count ?? 0;
-    if (!Number.isSafeInteger(seq + 1)) throw new StorageInvalidCommandError('chain sequence exhausted');
+    if (!Number.isSafeInteger(seq + 1) || BigInt(previous?.allocation ?? '0') >= 18446744073709551615n)
+      throw new StorageInvalidCommandError('chain sequence exhausted');
     const payload = await store.payload(
       session,
       scope,
