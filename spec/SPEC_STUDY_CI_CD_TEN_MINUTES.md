@@ -787,7 +787,9 @@ Compose #841's cleanup with the union exemptions `ci-gate`, `ci-capacity-receipt
 `delete-transport-artifacts`; keep the producer in capacity needs. All six
 transport artifacts use one-day retention, including `package-candidates`
 (artifact 12923722892, 167,402,696 bytes measured). Delete current-run allowlisted
-transport only after successful completed consumers; retain unsuccessful or
+transport only after successful completed consumers **and a successful final
+`ci-gate`**. Cleanup is downstream of the verdict, excluded only from that gate's
+required set to avoid a cycle, and still part of whole-run success. Retain unsuccessful or
 incomplete attempts and fork/cancellation/API-error fallback. Evidence reports
 are excluded. Wiring/expected-results/DAG contracts qualify this composed tree;
 the second PR to land must preserve these resolutions and repeat the suites.

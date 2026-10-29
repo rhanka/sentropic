@@ -180,17 +180,18 @@ test('inventory job is always scheduled, credential-free and never a publisher/b
   }
 });
 
-test('ci-gate aggregates every PR job, stays unconditional for normal runs and is a leaf', () => {
+test('ci-gate aggregates every PR validation and cleanup follows its verdict', () => {
   const mainOnly = ['bootstrap-publish', 'verify-train-lock-integrity', 'deploy-preprod'];
-  const excluded = (name) => name === 'ci-gate' || name.startsWith('publish-') || mainOnly.includes(name);
+  const excluded = (name) => ['ci-gate', 'delete-transport-artifacts'].includes(name) || name.startsWith('publish-') || mainOnly.includes(name);
   const gate = jobs['ci-gate'];
   assert.equal(gate.if, 'always()');
   assert.equal(gate.name, undefined, 'the required context must stay ci-gate');
   assert.deepEqual(gate.permissions, { contents: 'read', actions: 'read' });
   assert.deepEqual([...needsOf('ci-gate')].sort(), Object.keys(jobs).filter((name) => !excluded(name)).sort(), 'every PR job must be in ci-gate.needs');
   for (const name of Object.keys(jobs)) {
-    assert.ok(!needsOf(name).includes('ci-gate'), `${name} must not need ci-gate`);
-    if (excluded(name) && name !== 'ci-gate') assert.match(String(jobs[name].if ?? ''), /github\.ref == 'refs\/heads\/main'/, `${name} must stay main-only to be excluded`);
+    if (name === 'delete-transport-artifacts') assert.ok(needsOf(name).includes('ci-gate'));
+    else assert.ok(!needsOf(name).includes('ci-gate'), `${name} must not need ci-gate`);
+    if (excluded(name) && !['ci-gate', 'delete-transport-artifacts'].includes(name)) assert.match(String(jobs[name].if ?? ''), /github\.ref == 'refs\/heads\/main'/, `${name} must stay main-only to be excluded`);
   }
 });
 
