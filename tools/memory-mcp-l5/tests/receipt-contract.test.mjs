@@ -326,7 +326,6 @@ describe('P10.tooling.receipt-contract — L5 receipt contract and closed checkp
 // still pending (predecessors, verifier, CI/owner/acceptance provenance).
 const EXPECTED_LOT0_OBLIGATIONS = [
   'provenance.predecessors: pendingPredecessorMappings remain unresolved (BR3/L5-F1)',
-  'assurance.verifier: tools/memory-mcp-l5/verifier.mjs is not yet implemented (Lot 2 obligation)',
   'ci.provenance: trusted CI run provenance is not established by local evidence files',
   'ownerUat.provenance: authenticated owner decision provenance is not established by local actorRef strings',
   'acceptances.provenance: authenticated co-owner acceptance provenance is not established by local actorRef strings',
