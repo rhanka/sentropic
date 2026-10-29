@@ -18,6 +18,7 @@
   - `packages/mcp-platform/tests/transport/**`
   - `packages/mcp-platform/package.json`
   - `Makefile`
+  - `package-lock.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -30,6 +31,7 @@
 ## Feedback Loop
 - [x] BR01-EX1: allow Makefile changes for the dedicated PostgreSQL test environment and hash-pinned candidate test provisioning; additive test tooling only; rollback removes those additions.
 - [x] BR01-EX2: allow `.github/workflows/ci.yml` to require the isolated memory MCP PostgreSQL campaign when validating cluster-mesh; rollback removes the added step; no publication or release-gate exemption.
+- [x] BR01-EX3: update the root workspace lock for the candidate development peer and optional runtime peer metadata; the existing lock still records development engram 0.21.3; preserve unrelated dependency selections; rollback restores those entries.
 - [x] Keep the supplied candidate as a hash-checked test-only fixture so CI can qualify identical unpublished peer bytes.
 - [x] Record unanswered producer questions in root `.tmp/memory-mcp-builtin/questions.md`; choose the narrowest compatible composition.
 - [ ] BLOCKED — Engram 0.22.0 candidate public entries duplicate the private fenced-store registry: real PostgreSQL captures return `CAPABILITY_UNAVAILABLE`. Owner: Engram packaging; preserve the private provenance gate and share the engine/store-factory instance across public entries. The builtin now refuses this composition atomically before opening storage.
