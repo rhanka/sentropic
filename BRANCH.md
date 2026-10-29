@@ -4,6 +4,7 @@
 - [ ] Qualify all 23 Stage B cases through the installed handle, ship C6 declaration in dev.7, and regenerate the 21-slot tuple; stop for an evidenced Engram-side blocker.
 
 ## Scope / Guardrails
+- [x] PR #831 refresh after #702: merge origin/main c37662a20 without rebase; retain the integration plan and inherit the complete W0 baseline/restore documentation. The sole conflict is BRANCH.md; package, lock, Makefile, CI and Track bytes are unchanged from f0e0b15a9, so its stable successor remains byte-valid.
 - [x] PR #831 release refresh: merge origin/main e938151c0 (#832), retain this integration plan and preserve Trivy tooling/tests alongside the MCP guard regression; no Track event differences. Stable successor evidence is generated externally on the final committed head.
 - [x] PR #831 Opus R1: restore the MCP platform guard alternation; required publishable CI wiring tests execute all admitted environments and refuse unrelated projects. Regression fails with shell exit 2 before the fix.
 - [x] Packaging regression caught a duplicate local candidate name in the stable-fixture assertion; distinguish meshCandidate from the later artifacts candidate. Package bytes are unchanged by this test-only correction.

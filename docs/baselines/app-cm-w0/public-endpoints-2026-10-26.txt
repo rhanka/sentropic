@@ -1,0 +1,20 @@
+2026-10-26T07:42:21Z
+sentropic.sent-tech.ca/api/v1/health status=200 ip=51.79.100.177 tls=0 type=application/json
+a452e25435a43c89cf40f29fb2f6938d43831cd4ba0f19eb0e90e482bfa89357
+sentropic.sent-tech.ca/api/v1/auth/session status=401 ip=51.79.100.177 tls=0 type=application/json
+706ec8e55958f5e8346660541c8a6e85d13350ba5e2986c590b376650fa5c40b
+sentropic.sent-tech.ca/api/v1/mcp status=404 ip=51.79.100.177 tls=0 type=application/json
+866419e39504d40976c678f9841b5911dcfce3741cdcdb995bcb02863d4ecccf
+preprod.sentropic.sent-tech.ca/api/v1/health status=200 ip=51.79.100.177 tls=0 type=application/json
+2fe8332296dabaea69ab1ffc54ea19e207fe631f4b64d3f97ff496ab197d491f
+preprod.sentropic.sent-tech.ca/api/v1/auth/session status=401 ip=51.79.100.177 tls=0 type=application/json
+706ec8e55958f5e8346660541c8a6e85d13350ba5e2986c590b376650fa5c40b
+preprod.sentropic.sent-tech.ca/api/v1/mcp status=401 ip=51.79.100.177 tls=0 type=application/json
+d190aabd9b7130a0a92b6a3e1e8eb9e3d5c41c64f295d07931e6cb5da242d580
+auth.sent-tech.ca discovery status=200 ip=51.79.100.177 tls=0 type=application/json
+03224275d0cae1a4909b03fc2783079445267d0aa156b4aa5c894e40d2e6b11b
+{"issuer":"https://auth.sent-tech.ca","authorization_endpoint":"https://auth.sent-tech.ca/api/v1/auth/oauth/authorize","token_endpoint":"https://auth.sent-tech.ca/api/v1/auth/oauth/token","jwks_uri":"https://auth.sent-tech.ca/.well-known/jwks.json"}
+preprod.auth.sent-tech.ca discovery status=200 ip=51.79.100.177 tls=0 type=application/json
+342f26f105b9a58168e919f67fe7b0da37b64a466bbfe5557aa637e879284a0a
+{"issuer":"https://preprod.auth.sent-tech.ca","authorization_endpoint":"https://preprod.auth.sent-tech.ca/api/v1/auth/oauth/authorize","token_endpoint":"https://preprod.auth.sent-tech.ca/api/v1/auth/oauth/token","jwks_uri":"https://preprod.auth.sent-tech.ca/.well-known/jwks.json"}
+2026-10-26T07:42:24Z
