@@ -1,8 +1,8 @@
 // E2 integration after #821 and #803. L4 0.22.0 remains a separate L5 input.
 export const candidate = {
-  snapshotHead: 'd1726c3092895d105eb1b56fe3357228b634760e',
-  qualifiedHead: 'd1726c3092895d105eb1b56fe3357228b634760e',
-  qualifiedTree: '76359b7e5cf64dab431dd1fdd94f73759f46dd81',
+  snapshotHead: '2d9d5da97669199091700e138de638ca28b559c9',
+  qualifiedHead: '2d9d5da97669199091700e138de638ca28b559c9',
+  qualifiedTree: '4f9ef09088d2fd28a451196c23151146bdd6bc64',
   engram: {
     name: '@sentropic/engram', version: '0.21.3',
     sha256: '32d47df1880cf5c43b0f16145f75aebeda5fd341d8b1317f3b89acc428bbd05b',
