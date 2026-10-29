@@ -102,6 +102,7 @@
   - [x] Consolidate findings into the bounded downstream branch handoffs, including W3/T3 EX1 and P/TG EX2.
 - [ ] **Lot 3 — Final validation and draft delivery**
   - [x] W0-close.c: execute owner-authorized isolated local restore, verify schema/counts/tenant-authority facts, record recovery duration and limits, stop/remove project data and delete the dump; aggregate receipt committed under BR-CM-W0-EX7.
+  - [x] W0-close.c reconciliation: baseline/authorization/README and external readiness updated with the receipt/hash and explicit local live-dump proof limits; `w0-record-check` passes (vectors, canonical hash, verifier/source bytes and links), diff hygiene checked, matching probe cleanup performed. Exact-head successful CI remains required at delivery; B08 is separate.
   - [x] 28 October resync: retain merge `2d64d4e9f`, reconcile d through #796 links, record W0-DEV1/2/3 dispositions and keep c BLOCKED; API/UI/runtime tests are not applicable to these record edits. Exact-head CI is required after push, independently of W0 acceptance.
   - [x] W0-close.a/d: baseline/authorization/catalogue/README consolidated around dated current receipts; B03/B08 remain open, UP-T W1.c dependency explicit, no restore or PR merge.
   - [x] W0-close.a/d verification: strict published fit and original vector/source/link checks pass; payload asset comparisons, JSON/diff hygiene, mechanical C1/C2 and matching locked Compose cleanup recorded in verification-2026-10-26.md; exact pushed-head CI checked at delivery.
