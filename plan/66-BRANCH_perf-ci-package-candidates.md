@@ -70,12 +70,12 @@
 - [x] **Lot 1 — Candidate closure and guard ownership**
   - [x] Add `package-candidate.mjs` and `package-candidate.test.mjs`: topological closure, pack once per tuple, fail-closed archive/sibling receipts and exact copied bytes.
   - [x] Update manifest/pack/install scripts and tests: wrong SHA/hash, absent archive/sibling, registry failure and manifest tampering fail; clean consumers receive archives only.
-  - [ ] Lot gate: new `make test-ci-package-candidate ENV=test-ci-package-candidates` plus `make test-publishable-manifests test-qualify-published-install ENV=test-ci-package-candidates`.
+  - [x] Historical lot gates pass; correction candidate fixtures pass 9/9; final-head validation remains below.
 - [x] **Lot 2 — Independent qualification lanes**
-  - [ ] Refactor the four named cluster preparation/Make files; separate static/source, PostgreSQL conformance, comments storage, crash recovery, candidate packing, and installed lanes; each mutating lane owns its workspace/database/ports.
-  - [ ] Preserve existing `postgres-crashes.spec.ts`, `installed-major-upgrade.mjs`, `installed-bare.mjs`, and all packaging suite membership; maintain seed → crash/restart → verify inside each crash fixture.
-  - [ ] Add `package-qualification-dag.test.mjs` (new): no installed check before packing, no second candidate build, distinct mutable fixture roots, lazy bare/selected-peer/latest-in-range/global-consumer cases retained.
-  - [ ] Lot gate: new `make test-ci-package-qualification-dag ENV=test-ci-package-candidates`; `make lint-cluster-mesh typecheck-cluster-mesh test-cluster-mesh ENV=test-ci-package-candidates`; run `cluster-mesh-pg-test`, `cluster-mesh-comments-test`, `cluster-mesh-pg-crash-test`, `cluster-mesh-comments-installed`, and `cluster-mesh-pg-major-upgrade` through `make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk` with distinct `ENV=test-*` last and the exact candidate tarball; run `make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test-ci-package-candidates` and `qualify-published-install` with candidate/sibling receipts.
+  - [x] Preparation/Make refactor is implemented; each qualifier owns disposable mutable state and environment.
+  - [x] Storage/crash/installed files and packaging assertions remain; seed → crash/restart → verify is pinned by the DAG fixture.
+  - [x] DAG fixtures pass 8/8, including grouped-dispatch failure aggregation and teardown, receipt ordering and all retained lazy tuples.
+  - [x] All nine qualifiers passed on reviewed head 0d4bf1ca4; study §13.1 has the source/audit, PostgreSQL/comments/crash/installed/major, stateful/lazy/clean-install receipts. Final-head validation remains mandatory.
 - [ ] **Lot 3 — UAT and measured acceptance**
   - [ ] Review installed package exports, optional-peer behavior, clean install, retained cursors, and PostgreSQL recovery receipts; no product UI change.
   - [ ] Budget to measure on real warm/cold qualification: complete cluster branch ≤210s versus 664s; common manifest guard ≤75s versus 125s. Account for preparation, pack, transfer, and longest installed lane; one candidate per tuple is observable.
