@@ -1,6 +1,6 @@
 # Trivy S2b qualification: NOT QUALIFIED
 
-Observed 2026-10-29, from `origin/main` `c37662a208a19ae12377d1a0aec2c7610c4bc0aa`, branch `feat/sec-s2b-qualify`. The daily auto-fix service remains OFF. Scanner/verifier admission is denied by actual HIGH/CRITICAL findings. No activation commit is appropriate. S2c native SAST and S3 custody remain separate gates.
+Observed 2026-10-29 from initial main baseline `c37662a208a19ae12377d1a0aec2c7610c4bc0aa`, branch `feat/sec-s2b-qualify`; rebased onto `2ea238790fe992cdbb8e0202b1a73a937b6a1793` for draft PR #840. Historical artifact measurements retain their original source identities. The daily auto-fix service remains OFF. Scanner/verifier admission is denied by actual HIGH/CRITICAL findings. No activation commit is appropriate. S2c native SAST and S3 custody remain separate gates.
 
 The [receipt index](sec-s2b-qualify/files.json) identifies 77 public source records with SHA-256, original byte size and the hash of the published JSON value. JSON is minified into concern-specific bundles; text is preserved as JSON strings. Full all-severity reports, findings, package inventories, source identities and diagnostics are retained. Registry credentials are absent. These are dated observations, not perpetual admission or claims of a clean scan.
 
