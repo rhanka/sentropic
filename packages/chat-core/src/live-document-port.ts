@@ -8,6 +8,7 @@ export interface LiveBaseline {
   documentRef: string; baseHash: string; manifestBaseHash: string;
   manifestId: string; lineageId: string; headAtOpen: string | null;
   production: { producerId: string; generationId: string; requestId: string } | null;
+  fields: readonly { fieldKey: string; address: Pick<LiveParagraph, 'nodeId' | 'targetRef' | 'field' | 'format'> }[];
   paragraphs: readonly LiveParagraph[];
 }
 /** Exact ParagraphValue address at h2a 98060bd0a, Focus editing 0.5.0.
