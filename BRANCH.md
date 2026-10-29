@@ -55,12 +55,14 @@
   - [x] Freeze 50 isolated tool profiles with exact transitive versions and integrity.
   - [x] Remove container install fallbacks and implicit executable downloads.
   - [x] Include the new API and E2E tool lock inputs in content-addressed image versions.
+  - [x] Freeze historical consumer closures for auth-hono 0.15.0, mesh 0.19.2/0.21.2, gateway 0.18.0 and cluster-mesh 0.23.2.
   - [x] Commit installation graphs and replace live tool resolution.
   - [x] Preserve isolated builds and tarball consumers.
   - [x] Guard against unlocked npm/npx resolution, including regression fixtures.
 - [x] **Lot 2 — Security evidence**
   - [x] Record fixed finding and coverage in security notes/register.
 - [ ] **Lot 3 — Validation and delivery**
+  - [x] Full cluster-mesh suite: 1,414 pass; installed stateful/artifacts consumer: 16 pass; llm-mesh typecheck/lint and gateway auth consumers: 3 pass.
   - [x] Cluster-mesh typecheck, 17 packaging preparation regressions and seven install guard tests pass.
   - [x] Published-consumer qualification: 18 tests pass; manifest, security and CI wiring contracts: 219 tests pass.
   - [x] Diff review preserves API runtime npm removal and distinguishes executable checks from npx execution.

@@ -20,6 +20,9 @@ export function violations(file, source) {
     if (/^\s*(#|\/\/|\*)/.test(line)) return;
     if (/^\s*(?:it|test)\(['"]/.test(line) || /problems\.push\(`npm install failed/.test(line)) return;
     if (file === 'Makefile' && maintenanceTargets.has(target)) return;
+    if (file.startsWith('.github/workflows/') && /\bmake\b[^\n]*\b(?:install-(?:ui|api)(?:-dev)?|lock-(?:api|root|e2e|idp-web|ci-tools)|memory-l5-toolchain-snapshot)\b/.test(line)) {
+      problems.push(`${file}:${i + 1}: dependency lock authoring is forbidden in CI`);
+    }
     // This explicit authoring mode writes a new snapshot; CI uses the checked-in snapshot.
     if (file === 'tools/memory-mcp-l5/pack.mjs' && i >= snapshotStart && i < snapshotEnd) return;
     const span = lines.slice(i, i + 8).join('\n');
