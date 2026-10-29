@@ -12,6 +12,13 @@
   - `tools/memory-mcp-l5/r5-*`
   - `.github/workflows/ci.yml` (BRR5-EX1)
   - `scripts/ci/ci-expected-results.test.mjs` (BRR5-EX1)
+  - `Makefile` (BRR5-EX2, unchanged main import only)
+  - `PLAN.md` (BRR5-EX2, unchanged main import only)
+  - `package.json` (BRR5-EX2, unchanged main import only)
+  - `package-lock.json` (BRR5-EX2, unchanged main import only)
+  - `packages/cluster-mesh/**` (BRR5-EX2, unchanged main import only)
+  - `scripts/ci/publishable-ci-wiring.test.mjs` (BRR5-EX2, unchanged main import only)
+  - `tools/engram-e11/**` (BRR5-EX2, unchanged main import only)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -20,6 +27,7 @@
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
 ## Feedback Loop
+- [x] BRR5-EX2: main advanced to `2ea238790fe992cdbb8e0202b1a73a937b6a1793` (#831), conflicting with the R5 branch plan and preventing PR CI. Integrate that exact main by merge, preserve R5's plan and the two pagination changes. Temporary paths above admit only existing main history (163 files, 15763 insertions/458 deletions), not authored product changes; remove after merge. Authored merge resolutions stay within 150 lines. Track streams are byte-identical; verify both parents with events-contains, never write Track. Rollback is a merge revert, never rebase. Candidate SHA remains absent from imported E2 tuple inputs.
 - [x] BRR5-EX1: required exact-head CI is blocked by reproduced GitHub HTTP 502 on current-attempt job pages of 100; pages of 30 succeed. Allow only collector/final-guard pagination and its existing contract test. Impact: more API requests, same complete job set, identities, permissions and fail-closed verdict. Rollback: restore both page sizes and the fixture expectation; no gate waiver.
 - [x] Preserve P01-P09 proof gaps and checkpoint obligations as blockers; never weaken a gate.
 - [x] R5-NATIVE: source-commit disabled gate FAIL reproduced on the real install log; false attribution to tree-sitter, retained as blocking.
