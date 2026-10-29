@@ -4,11 +4,12 @@ import { digestStructuredArtifact } from './validation.js';
 
 const contract = 'openai-decisions-v1';
 const digest = (value: unknown) => digestStructuredArtifact(value);
-/** Documented candidate only. Account entitlement and stable selection are unverified. */
+/** Live account access observed in Q1; stable selection and calibration remain unverified. */
 export const openAiDecisionsDescriptor: DecisionEvaluatorDescriptor = {
   evaluator: { providerId: 'openai', evaluatorId: 'gpt-6-luna-decisions', revision: 'gpt-6-luna-decisions-v1-unqualified' },
-  protocol: 'openai-decisions', wireModel: 'gpt-6-luna', acceptedServedModelIds: [],
-  qualification: { servedIdentity: 'unqualified', billingBound: 'unqualified', evidenceRefs: [] },
+  protocol: 'openai-decisions', wireModel: 'gpt-6-luna', acceptedServedModelIds: ['gpt-6-luna'],
+  qualification: { servedIdentity: 'unqualified', billingBound: 'unqualified',
+    evidenceRefs: ['spec/decision/q1-live-smoke.md#openai-decisions'] },
   maxBillableInputTokens: 2048, maxBillableOutputTokens: 0,
   maxRequestBytes: 256 * 1024, maxStateQuestionBytes: 32 * 1024,
   probabilityTolerance: 1e-4, scoreNativeKeys: 'index-string', nativeDecision: false,

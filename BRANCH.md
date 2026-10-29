@@ -24,6 +24,8 @@
   - `packages/llm-mesh/tests/decision-jev-v4l3.test.ts`
   - `packages/llm-mesh/tests/decision-qualification-admission.test.ts`
   - `packages/llm-mesh/tests/decision-qualification.test.ts`
+  - `packages/llm-mesh/tests/decision-jev-request.test.ts`
+  - `packages/llm-mesh/tests/decision-openai-routing.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -55,12 +57,12 @@
   - [x] No documented zero-cost Decisions entitlement probe established; first POST counts as attempt 1.
   - [x] Record served identity, tokens, priced cost, billing bound, latency, verdict shape and refusals per attempt.
   - [x] Fail closed on descriptor identity mismatch; three calls per candidate including the JEV preflight refusal, five egresses total, 77 micro-USD.
-- [ ] **Lot 2 — Evidence and descriptors**
+- [x] **Lot 2 — Evidence and descriptors**
   - [x] Retain scrubbed receipts in `spec/decision/`; accepted identities/evidenceRefs cite only observed results.
-  - [ ] Bump llm-mesh only if source descriptors change; verify published version first.
-  - [ ] Preserve unqualified production and OD-4 calibration requirement.
+  - [x] Bump llm-mesh from published 0.32.1 to 0.32.2; align workspace lock and public version assertion.
+  - [x] Preserve unqualified production and OD-4 calibration requirement; 16 host/route tests pass.
 - [ ] **Lot 3 — Final validation and draft PR**
-  - [ ] Run existing mesh descriptor, qualification, native adapter and production-refusal tests.
+  - [x] Mesh descriptor, qualification, adapter, pricing, public and request suites: 88 files / 1,566 tests pass.
   - [ ] Run applicable typecheck/lint and mechanical scope check before each atomic commit (at most 150 lines).
   - [ ] Verify secret-free receipts/diff, stop test stack, create draft PR to main using this plan.
   - [ ] Observe CI completed/success on exact head; report head, cost and candidate outcomes.
