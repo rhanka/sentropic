@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AdmissionRecord } from '../../src/services/canvas-live/admission';
 import { SessionRegistry } from '../../src/services/canvas-live/session-registry';
+import { AdmissionAuthority } from '../../src/services/canvas-live/admission';
+import { DraftRecovery, type PreservedDraft } from '../../src/services/canvas-live/recovery';
+import { LiveSessionProvider } from '../../src/services/canvas-live/provider';
 
 function fixture() {
   const record: AdmissionRecord = { tenantId: 't', workspaceId: 'w', documentId: 'canvas:a', sessionId: 's', sessionEpoch: 'admission-1', profileId: 'full@1', schemaEpoch: '2', fields: ['description', 'notes', 'meta'], operations: ['read', 'edit'], closed: false, actor: { actorId: 'a', kind: 'human', displayLabel: 'A', color: '#123456' } };
@@ -58,5 +61,39 @@ describe('canvas live binding registry', () => {
     expect(f.removed).toHaveBeenCalled(); expect(f.disconnected).not.toHaveBeenCalled();
     expect(() => f.registry.resolveBinding(f.record, b.identity)).toThrow('invalid-binding');
     expect(() => f.registry.resolveBinding(agent, b.identity)).not.toThrow(); stop();
+  });
+});
+
+describe('canvas live provider admission composition', () => {
+  it.each(['client-upgrade', 'draft-migration'] as const)('should refuse before binding, preserve draft bytes and admit only acknowledged %s recovery', async (branch) => {
+    const f = fixture(); const records = new Map<string, AdmissionRecord>(); const drafts = new Map<string, PreservedDraft>(); const pending = new Map<string, string>();
+    const facts = { documentId: f.record.documentId, sessionId: f.record.sessionId, fields: f.record.fields, profileId: 'new@1', schemaEpoch: '3' };
+    const bytes = new Uint8Array([255, 0, 10, 65]); const authoritativeBefore = structuredClone(facts);
+    const ports = { authenticate: async () => f.record, document: async () => facts, authorize: async () => f.record, epoch: () => 'persisted-epoch',
+      update: async (key: string, change: (old?: AdmissionRecord) => AdmissionRecord) => { const result = change(records.get(key)); records.set(key, result); return result; },
+      captureDraft: vi.fn(async () => ({ draftId: 'draft-b', bytes })),
+    };
+    const recoveryPorts = {
+      update: async (key: string, change: (old?: PreservedDraft) => PreservedDraft) => { const result = change(drafts.get(key)); drafts.set(key, result); return result; },
+      pending: async (key: string, id?: string) => { if (id) pending.set(key, id); return pending.get(key) ?? null; },
+      migrate: vi.fn(async (copy: Uint8Array) => new Uint8Array([...copy, 42])),
+    };
+    const recovery = new DraftRecovery(recoveryPorts); const authority = new AdmissionAuthority(ports);
+    const provider = new LiveSessionProvider(authority, f.registry, recovery, ports);
+    const old = { binding: { documentId: facts.documentId, fieldKey: 'notes' }, actor: f.record.actor, profileId: 'old@1', schemaEpoch: '2' };
+    await expect(provider.openLiveSession(old)).rejects.toMatchObject({ code: 'incompatible-schema' });
+    expect(f.create).not.toHaveBeenCalled(); expect([...drafts.values()][0].bytes).toEqual(bytes);
+    const upgraded = { ...old, profileId: facts.profileId, schemaEpoch: facts.schemaEpoch };
+    await expect(provider.openLiveSession(upgraded)).rejects.toMatchObject({ code: 'incompatible-schema' });
+    const prepared = await recovery.prepare(f.record, facts, 'draft-b', branch);
+    await expect(provider.openLiveSession(upgraded)).rejects.toMatchObject({ code: 'incompatible-schema' });
+    expect(f.create).not.toHaveBeenCalled();
+    await recovery.acknowledge(f.record, facts, 'draft-b');
+    const reopened = new LiveSessionProvider(new AdmissionAuthority(ports), f.registry, new DraftRecovery(recoveryPorts), ports);
+    const handle = await reopened.openLiveSession(upgraded);
+    expect(handle.identity).toEqual({ ...upgraded.binding, sessionId: facts.sessionId });
+    expect(prepared.bytes).toEqual(bytes); expect(facts).toEqual(authoritativeBefore);
+    expect(recoveryPorts.migrate).toHaveBeenCalledTimes(branch === 'draft-migration' ? 1 : 0);
+    expect(f.create).toHaveBeenCalledTimes(1); await handle.dispose();
   });
 });
