@@ -6,7 +6,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { Writable } from 'node:stream';
 import { candidateTuple } from './package-candidate.mjs';
-import { GuardError, TRANSIENT_HINT, commandPack, commandPublish, commandWait, createRegistry, diffDependencyMaps, isTransientError, runNpmPack, sha256File, waitBudget, withManifestTransform } from './publishable-manifests.mjs';
+import { GuardError, TRANSIENT_HINT, commandInventory, commandPack, commandPublish, commandWait, createRegistry, diffDependencyMaps, isTransientError, runNpmPack, sha256File, snapshotPackage, waitBudget, withManifestTransform } from './publishable-manifests.mjs';
 
 const sink = () => {
   const chunks = [];
@@ -132,7 +132,7 @@ function sharedCandidateFixture() {
   const env = { CI_PACKAGE_CANDIDATES: dir, MANIFEST_HEAD_SHA: 'a'.repeat(40),
     CANDIDATE_NODE_IMAGE: 'node:fixture', CANDIDATE_NPM_VERSION: '11.fixture' };
   fs.writeFileSync(path.join(dir, 'candidates.json'), JSON.stringify({ schema: 1, roots: ['cluster-mesh'],
-    order: ['cluster-mesh'], tuple: candidateTuple(root, env), receipts: [{ slug: 'cluster-mesh',
+    order: ['cluster-mesh'], siblingSelection: [], tuple: candidateTuple(root, env), receipts: [{ slug: 'cluster-mesh',
       name: '@fx/cluster-mesh', version: '1.0.0', guard: 'pass', manifest_mode: 'block',
       evidence: 'release-candidate', head_sha: env.MANIFEST_HEAD_SHA,
       file: `cluster-mesh/${path.basename(archive)}`, sha256: sha256File(archive) }] }));
@@ -152,6 +152,21 @@ test('should guard exactly the shared archive without executing its pack lifecyc
   assert.equal(result.code, 0);
   assert.equal(result.receipt.sha256, sha256File(archive));
   assert.equal(fs.readFileSync(path.join(candidateDir, 'pack-count'), 'utf8'), 'packed\n');
+});
+
+test('should reuse guarded candidate manifests in the common WARN inventory without another snapshot pack', async () => {
+  const { root, env } = sharedCandidateFixture();
+  let snapshots = 0;
+  const reportDir = path.join(root, 'inventory');
+  assert.equal(await commandInventory({ 'report-dir': reportDir }, { root, registry: absentRegistry, out: sink(),
+    env: { ...env, ...warnEnv }, snapshot: dir => {
+      assert.notEqual(path.basename(dir), 'cluster-mesh');
+      snapshots++; return snapshotPackage(dir);
+    } }), 0);
+  assert.equal(snapshots, 1);
+  const report = JSON.parse(fs.readFileSync(path.join(reportDir, 'classification.json')));
+  assert.equal(report.packages['cluster-mesh'].snapshot.status, 'release-candidate');
+  assert.equal(report.packages.outside.snapshot.status, 'inventory-snapshot');
 });
 
 // ---- D7 bump gate

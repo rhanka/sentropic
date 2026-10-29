@@ -350,7 +350,7 @@ export async function qualify(opts) {
       report.siblings = siblings.map(({ name, version, sha256, file }) => ({ name, version, sha256, file }));
     }
     if (candidateSet) {
-      for (const required of candidateSet.receipts.filter(row => row.name !== primary.name)) {
+      for (const required of candidateSet.receipts.filter(row => row.name !== primary.name && candidateSet.siblingSelection.includes(row.slug))) {
         if (!siblings.some(row => row.name === required.name && row.sha256 === required.sha256)) {
           throw new GuardError(`missing selected sibling receipt: ${required.name}`);
         }

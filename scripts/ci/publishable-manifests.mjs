@@ -768,7 +768,10 @@ export async function commandInventory(opts, { env = process.env, root = process
   const takeSnapshot = (slug) => {
     if (!snapshots.has(slug)) {
       try {
-        snapshots.set(slug, { ok: true, ...withManifestTransform(packages.get(slug).dir, () => snapshot(packages.get(slug).dir)) });
+        const receipt = candidates?.receipts.find(row => row.slug === slug);
+        const shared = receipt && { name: receipt.name, version: receipt.version, sha256: receipt.sha256,
+          packed: readPackedManifest(fs.readFileSync(path.join(env.CI_PACKAGE_CANDIDATES, receipt.file))), evidence: 'release-candidate' };
+        snapshots.set(slug, { ok: true, ...(shared ?? withManifestTransform(packages.get(slug).dir, () => snapshot(packages.get(slug).dir))) });
       } catch (error) {
         snapshots.set(slug, { ok: false, error: error.message, transient: isTransientError(error) });
       }
@@ -812,10 +815,10 @@ export async function commandInventory(opts, { env = process.env, root = process
         entry.snapshot = { status: 'audit-incomplete', error: snap.error };
       } else {
         const packedCheck = checkManifest(snap.packed, semver);
-        const where = `inventory-snapshot package/package.json (sha256 ${snap.sha256})`;
+        const where = `${snap.evidence ?? 'inventory-snapshot'} package/package.json (sha256 ${snap.sha256})`;
         for (const s of packedCheck.structural) reporter.warn(slug, `${where}: ${s}`);
         for (const v of packedCheck.violations) reporter.warn(slug, describeFinding(where, v));
-        entry.snapshot = { status: 'inventory-snapshot', name: snap.name, version: snap.version, sha256: snap.sha256 };
+        entry.snapshot = { status: snap.evidence ?? 'inventory-snapshot', name: snap.name, version: snap.version, sha256: snap.sha256 };
       }
     }
     report.packages[slug] = entry;

@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { Writable } from 'node:stream';
-import { candidateClosure, produceCandidates, verifyCandidates, verifyPrepared } from './package-candidate.mjs';
+import { candidateClosure, exportSiblings, produceCandidates, verifyCandidates, verifyPrepared } from './package-candidate.mjs';
 import { commandPack, runNpmPack, sha256File } from './publishable-manifests.mjs';
 
 const tuple = { head_sha: 'a'.repeat(40), node: process.version, image: 'node:test', npm: '11.0.0' };
@@ -84,4 +84,20 @@ test('should reject unsealed, substituted and corrupted preparation before extra
   assert.throws(() => verifyPrepared(opts.dir, { ...tuple, npm: 'different' }), /tuple mismatch/);
   fs.appendFileSync(archive, 'changed');
   assert.throws(() => verifyPrepared(opts.dir, tuple), /hash\/tuple mismatch/);
+});
+
+test('should inject every selected same-PR sibling while retaining unchanged frozen peers', async t => {
+  const opts = fixture(t);
+  const context = { CI_MANIFEST_EVENT: 'pull_request', CI_MANIFEST_CONTEXT: JSON.stringify({
+    package_files: '["packages/leaf/src/index.ts"]', matched_filters: '[]' }) };
+  const { result } = await produce({ ...opts, env: context });
+  assert.deepEqual(result.siblingSelection, ['leaf']);
+  const destination = path.join(opts.root, 'siblings');
+  exportSiblings(opts.dir, result, 'root', destination, { root: opts.root });
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(destination, 'receipts.json'))).map(row => row.slug), ['leaf']);
+  const standalone = fixture(t);
+  const { result: unselected } = await produce(standalone);
+  assert.deepEqual(unselected.siblingSelection, []);
+  exportSiblings(standalone.dir, unselected, 'root', path.join(standalone.root, 'siblings'), { root: standalone.root });
+  assert.deepEqual(JSON.parse(fs.readFileSync(path.join(standalone.root, 'siblings/receipts.json'))), []);
 });
