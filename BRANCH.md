@@ -1,7 +1,7 @@
 # Feature: app cluster-mesh integration
 
 ## Objective
-- [x] Integrate the fourteen reviewed W1/W2/W3/W4/W0-close.d lots on main's accepted W0 baseline; keep serving, publication and activation closed.
+- [x] Integrate the fourteen W1/W2/W3/W4/W0-close.d source lots on main's accepted W0 baseline; keep serving, publication and activation closed; W4.a acceptance remains explicit below.
 - [ ] Deliver a draft PR to main with successful CI on its exact head; do not merge.
 
 ## Scope / Guardrails
@@ -55,6 +55,9 @@
 - [x] **Exception process**: BR143-EX1 covers the completed inherited merge only; BR143-EX2 covers topic workflow retirement and equivalent CI gates.
 
 ## Feedback Loop
+- [x] PR837-R1-9 render evidence: 54/54 test-artifact-content-manifests checks pass on the correction tree; both prod/preprod API/content renders explicitly keep host/content/reader flags 0, override secret values, and reject tagged images if any flag opens. Recheck final-head CI validate-idp-sync before merge.
+- [x] PR837-R1-2/5: `docs/runbooks/app-cm-integration-review.md` records the reproducible range-diff, all main/replay overlaps, post-rebase workspace dependency correction and read-only legacy-key quarantine disposition; no ancestry or legacy-serving fallback is claimed.
+- [x] PR837-R1-6 schema rollback: all three flags remain 0; revert qualified images/config while retaining additive schema, journals, receipts and blobs; see baseline restore runbook. Actual baseline migration rehearsal remains open below.
 - [x] PR837-R1-1: CI log 123666763408 proves the immutable root-mount inventory omitted W3.a's POST reader-activation route. Add it to IMMUTABLE_ARTIFACT_ROUTES without changing production fences, timeouts or skips; final-head CI remains required.
 - [x] PR837-R1-7: inherited replay commits exceed 150 changed lines: 8dab28051 (208), 0ef65483b (199), 34ef1adc5 (196), 2f7e0e65f (181), b97efabb9 (180), 56ce57aac (168), 4217bd8ca (161). These are historical rule violations, not covered by BR143-EX1; no retrospective exemption or history rewrite is claimed.
 - [ ] PR837-R1-4 / owner Antoine (product): approved tenant membership is a prerequisite for every chat server tool, including in TENANT_RESOLUTION_MODE=shadow. Missing/requested/revoked membership yields text-only chat; owner acceptance and final-head chat CI remain pre-merge gates.
