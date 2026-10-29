@@ -1,5 +1,5 @@
 /**
- * @sentropic/chat-runtime/checkpoints
+ * @sentropic/chat-core/runtime/checkpoints
  *
  * Generic checkpoint module — pure TS, zero sentropic domain strings.
  * Provides classifier functions, session state helpers, and the CheckpointHost
@@ -10,23 +10,23 @@ export type {
   CheckpointSummaryLike,
   CheckpointMessageLike,
   CheckpointStreamEventLike,
-} from '@sentropic/chat-runtime/checkpoints/classifier';
+} from './classifier.js';
 
 export {
   hasCheckpointMutationDelta,
   getCheckpointMutationPreviewItems,
-} from '@sentropic/chat-runtime/checkpoints/classifier';
+} from './classifier.js';
 
 export type {
   CheckpointItem,
   PendingCheckpointPrompt,
-} from '@sentropic/chat-runtime/checkpoints/checkpointState';
+} from './checkpointState.js';
 
 export {
   applySessionCheckpoints,
   getCheckpointForUserMessage,
   openCheckpointPrompt,
-} from '@sentropic/chat-runtime/checkpoints/checkpointState';
+} from './checkpointState.js';
 
 /**
  * Checkpoint represents a minimal checkpoint record as understood by the module.
