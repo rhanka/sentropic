@@ -1028,7 +1028,7 @@ ci-package-verify:
 	@test -n "$(CI_PACKAGE_CANDIDATES)"
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(MANIFEST_GUARD_ENV) \
 		-e CANDIDATE_NODE_IMAGE="$(LLM_MESH_NODE_IMAGE)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
-		sh -ec 'export CANDIDATE_NPM_VERSION="$$(npm --version)"; $(MANIFEST_GUARD_TOOLS); node scripts/ci/package-candidate.mjs verify "$(CI_PACKAGE_CANDIDATES)" cluster-mesh'
+		sh -ec 'export CANDIDATE_NPM_VERSION="$$(npm --version)"; $(MANIFEST_GUARD_TOOLS); node scripts/ci/package-candidate.mjs verify "$(CI_PACKAGE_CANDIDATES)" cluster-mesh; $(if $(TARBALL),node scripts/ci/package-candidate.mjs verify-primary "$(CI_PACKAGE_CANDIDATES)" "$(TARBALL)",true)'
 .PHONY: ci-package-qualification
 ci-package-qualification: ci-package-verify
 	@case "$(PACKAGE_LANE)" in \
