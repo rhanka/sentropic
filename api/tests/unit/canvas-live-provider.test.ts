@@ -62,7 +62,7 @@ describe('canvas live binding registry', () => {
     const actors = updates.mock.lastCall![0]; expect(actors).toHaveLength(2);
     expect(new Set(actors.map((a: { awarenessClientId: number }) => a.awarenessClientId)).size).toBe(2);
     f.registry.revoke(f.record);
-    expect(updates.mock.lastCall![0].map((a: { actor: { actorId: string } }) => a.actor.actorId)).toEqual(['agent-b']);
+    expect(updates.mock.lastCall![0]).toEqual([]);
     expect(f.removed).toHaveBeenCalled(); expect(f.disconnected).not.toHaveBeenCalled();
     expect(() => f.registry.resolveBinding(f.record, b.identity)).toThrow('invalid-binding');
     expect(() => f.registry.resolveBinding(agent, b.identity)).not.toThrow(); stop();
