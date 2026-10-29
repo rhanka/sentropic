@@ -6,3 +6,4 @@ export { loadMcpPlatformHono } from './hono.js';
 export { loadMcpPlatformRegistry } from './registry.js';
 export { loadMcpPlatformStdio } from './stdio.js';
 export { loadArtifactsMcp } from './artifacts.js';
+export { loadEngramMemoryMcp, loadEngramMemorySubstrate } from './memory.js';
