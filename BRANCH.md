@@ -1,7 +1,7 @@
 # Feature: Cluster mesh memory MCP builtin
 
 ## Objective
-- [ ] Expose the six engram memory tools through the selected `sentropic.engram.memory` builtin, composed in-process over the PostgreSQL neutral handle.
+- [x] Expose the six engram memory tools through the selected `sentropic.engram.memory` builtin, composed in-process over the PostgreSQL neutral handle.
 
 ## Scope / Guardrails
 - [x] Worktree: `tmp/worktrees/memory-mcp-builtin`; branch: `feat/cluster-mesh-memory-mcp`; base: `origin/main`.
@@ -36,7 +36,8 @@
 - [x] Record unanswered producer questions in root `.tmp/memory-mcp-builtin/questions.md`; choose the narrowest compatible composition.
 - [x] Repin the shared-chunk candidate from Engram source `2bd7da41779305831b16c94f1272ab3b9d38128e`; preserve the atomic split-engine/provenance refusal test and private gate.
 - [ ] BLOCKED — Published engram is still 0.21.3; retain cluster-mesh 0.24.0 per owner instruction. The release bump gate cannot pass for this draft without a changed publication prerequisite.
-- [x] Static validation: lint, source/test typechecks, build and launcher syntax pass; unit lane: 159 files, 1420 tests pass; 245 existing conditional tests are outside this unit lane.
+- [x] Static validation: lint, source/test typechecks, build and launcher syntax pass; expanded PostgreSQL regression lane: 215 files, 1612 tests pass; 58 existing conditional cases remain outside this lane.
+- [x] Initial expanded run timed out in `tests/storage/instance-ownership.spec.ts`; unchanged focused rerun passes all 13 cases, then the complete expanded lane passes. No timeout increase or exemption.
 - [x] Positive qualification: six required PostgreSQL/stdio/HTTP tests and six static/lazy/refusal tests pass; no required case is skipped. Forget replay preserves its receipt.
 - [x] Fix the directly exposed consumer lexical-index adapter: preserve the canonical null tombstone and mutable projection bytes under the existing admitted index identity; commit proofs and provenance remain enforced.
 - [ ] Consensus review pending: Muse startup failed on its read-only session directory; automatic approval review rejected the Gemini Argon fallback's external source-code payload. No consensus verdict is claimed.
@@ -48,7 +49,7 @@
 - [x] Mono-branch; isolated implementation and final consensus review.
 
 ## UAT Management (in orchestration context)
-- [ ] Validate the same six tools over stdio and HTTP against the exact branch head.
+- [x] Validate the six-tool catalog over stdio and HTTP, transport captures, and all six tool lifecycles through the separate-process stdio launcher.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and contracts**
