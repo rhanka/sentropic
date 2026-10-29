@@ -395,7 +395,7 @@ const receipt = {
   migrations: registration.assets.map((asset) => ({ id: asset.id, checksum: asset.checksum })),
   hostHistory: hostHistory.map((row) => row.id),
   declaredProfileClaims: handle.profiles.map((claim) => ({ ...claim, status: 'declared' })),
-  fiveProfileEquivalence: { status: 'not-covered', reason: 'Stage B blocked (E9 #790, 23 cases)' },
+  fiveProfileEquivalence: { status: 'not-covered', reason: 'This E10 injection lane does not run Stage B; E11 binds its separate installed campaign.' },
   requiredProfiles: [...MEMORY_DESCRIPTOR.requiredProfiles],
   contractDigest: MEMORY_DESCRIPTOR.contractDigest,
   refusals,
