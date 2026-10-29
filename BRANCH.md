@@ -72,13 +72,13 @@
   - [ ] Reject silent Java/IaC fallback and preserve all-severity raw diagnostics.
   - [x] Keep unqualified execution gated and daily job off; expose frozen preparation identities in raw receipts.
 - [ ] **Lot 3 — Security regression fixtures**
-  - [ ] `toolchain-contract.test.mjs`: pin/version, publisher/platform/source, cache corruption/schema/dates and bounded acquisition failures.
+  - [x] `toolchain-contract.test.mjs`: pin/version, publisher/platform/source, cache corruption/schema/dates and bounded acquisition failures; six tests pass.
   - [x] `trivy.test.mjs`: sandbox flags, environment isolation, report/target mismatch and unqualified execution refusal; four tests pass.
   - [ ] Existing `schema.test.mjs`, `inventory.test.mjs`, `scan.test.mjs` plus required wiring entrypoint and `test-security-parser`.
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Document source receipts, frozen identities, trust limits, qualification matrix and rollback in `docs/security/trivy-s2b.md`.
 - [ ] **Lot N — Final validation**
-  - [ ] Run scoped and full daily/required wiring fixtures under flock, then `make down ENV=test-sec-s2b`.
+  - [x] Scoped fixtures and full daily suite pass under flock with dedicated teardown; required wiring validation follows.
   - [ ] Check scope before each commit; verify diff, commit sizes and no AI trailers.
   - [ ] Create draft PR to main with this plan as body; verify CI completed/success on exact head.
   - [ ] Report PR/head and remaining evidence; retain BRANCH.md, disabled service and qualification blockers; no merge.
