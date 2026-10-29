@@ -151,11 +151,16 @@ providers stay independent packages and never depend on cluster-mesh. They are
 | `/mcp/registry`, `/mcp/stdio` | Embedded `@sentropic/mcp-platform` MCP kernel entries | Platform and SDK installed transitively by mesh |
 | `/compose/mcp`, `/loaders/mcp` | `createMcpNamespaceModule`, `loadMcpPlatform{Registry,Stdio,Bridge,Entry,Hono}` | as its leaf, resolved on call |
 | `/mcp/artifacts` | `createArtifactsBuiltin`, `createArtifactsToolExecutor` | `@sentropic/artifacts >=0.1.3 <0.2.0`; platform embedded in mesh |
+| `/mcp/memory` | `createEngramMemoryBuiltin`, `registerEngramMemoryTools` | Qualified optional engram 0.22 peer; explicit PostgreSQL host definition |
 
 The `./mcp/artifacts` export provides the `sentropic.artifacts` builtin factory;
 its optional `@sentropic/artifacts >=0.1.3 <0.2.0` peer must be installed when
 that leaf is imported. `loadArtifactsMcp` from `./loaders/mcp` acquires the same
 provider through the module registry. The root entry remains usable without it.
+
+The memory builtin and explicit-host stdio command are described in
+[Memory MCP](docs/memory-mcp.md). The pinned candidate currently has a
+[blocking provenance packaging defect](docs/memory-mcp-candidate.md).
 
 Static provider re-export leaves use `export *`: same values,
 types, overloads and class identity. Importing a leaf selects that provider; a

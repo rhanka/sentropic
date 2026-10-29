@@ -184,6 +184,8 @@
   "files": [
     "dist",
     "examples/memory-mcp-stdio.mjs",
+    "docs/memory-mcp.md",
+    "docs/memory-mcp-candidate.md",
     "contracts",
     "assets/storage",
     "README.md",
