@@ -34,6 +34,35 @@ const recipe = (target) => {
 };
 const needsOf = (job) => [jobs[job].needs ?? []].flat();
 
+const assertActionsPermissions = (workflow) => {
+  assert.deepEqual(workflow.permissions, { contents: 'read', actions: 'read' });
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    if (name === 'delete-transport-artifacts') {
+      assert.deepEqual(job.permissions, { actions: 'write' });
+    } else {
+      assert.ok(job.permissions === undefined || typeof job.permissions === 'object', `${name}: explicit permission map required`);
+      assert.ok([undefined, 'read', 'none'].includes(job.permissions?.actions), `${name}: actions write is cleanup-only`);
+    }
+  }
+};
+
+test('should restrict Actions write to the transport deletion job', () => {
+  assertActionsPermissions(ci);
+  for (const name of Object.keys(jobs).filter(name => name !== 'delete-transport-artifacts')) {
+    const changed = structuredClone(ci);
+    changed.jobs[name].permissions = { ...changed.jobs[name].permissions, actions: 'write' };
+    assert.throws(() => assertActionsPermissions(changed), /actions write is cleanup-only/, name);
+    changed.jobs[name].permissions = 'write-all';
+    assert.throws(() => assertActionsPermissions(changed), /explicit permission map required/, name);
+  }
+  const changed = structuredClone(ci);
+  changed.permissions.actions = 'write';
+  assert.throws(() => assertActionsPermissions(changed));
+  changed.permissions = ci.permissions;
+  changed.jobs['delete-transport-artifacts'].permissions.contents = 'write';
+  assert.throws(() => assertActionsPermissions(changed));
+});
+
 test('isolated MCP platform build guard admits test environments and refuses other projects', () => {
   const guard = recipe('immo-861-build-mcp-platform').split('\n')[0].replace(/^\t@/, '');
   for (const env of ['test-861-int', 'test-861-gaps', 'test-artifacts-021', 'test-artifacts-022',

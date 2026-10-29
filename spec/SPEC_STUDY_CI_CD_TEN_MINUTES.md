@@ -155,9 +155,11 @@ local path is `/home/antoinefa/.cache-tmp/claude-1000/-home-antoinefa-src-poc-k8
 
 `fix/ci-artifact-retention` changes only the five transport uploads to
 `retention-days: 1`, replacing their inherited 90-day lifetime. The final
-`ci-gate` also waits for both image publishers and preproduction deployment.
-An `always()` step then paginates **this run's** artifacts and deletes only
-the five exact names below. Only this job receives `actions: write`; fork
+`ci-gate` also waits for `delete-transport-artifacts`, which waits for every
+consumer through `ci-capacity-receipts`, including image publication and
+preproduction deployment. Its sole step paginates **this run's** artifacts
+and deletes only the five exact names below. Only the deletion job receives
+`actions: write`; workflow defaults and `ci-gate` stay read-only. Fork
 PRs retain one-day expiry because their token is read-only. Cancellation
 before cleanup also falls back to expiry. API failures fail the cleanup step;
 the existing required-result verdict and all gates remain enforced.
@@ -188,9 +190,9 @@ claiming the cleanup works in GitHub Actions.
 
 Coordination: open PR #829 (BR-80) changes package-candidate wiring in the same
 workflow. Preserve its jobs, needs and candidate artifacts; the retention diff
-is confined to the five upload inputs and the final gate. This section is
+is confined to the five upload inputs, deletion job and final gate. This section is
 separate from BR-80's appended implementation receipts to reduce rebase overlap.
-Rollback: revert the cleanup step, its extra needs/job permission, and the five
+Rollback: revert the deletion job, its gate dependency, and the five
 retention inputs together; restore no other workflow policy.
 
 ## 9. BR-76 implementation receipts

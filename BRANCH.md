@@ -13,6 +13,7 @@
   - `BRANCH.md`
   - `.github/workflows/ci.yml`
   - `scripts/ci/ci-expected-results.test.mjs`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
   - `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -36,4 +37,7 @@
 - [x] No web, Chrome or VSCode behavior change; workflow qualification supplies acceptance.
 ## Feedback Loop
 - [x] Fresh paginated stock read: 2,714.98 GB before this branch ran, versus audit 4,017 GB; no attribution to this change; repository log-retention GET remains 90 days.
-- [x] No scope exception; historical stock purge and registry transport redesign remain outside scope.
+- [x] BR841-EX1: owner-requested least-privilege regression coverage in `scripts/ci/publishable-ci-wiring.test.mjs`; impact limited to credential-free fixtures; rollback reverts that test hunk.
+- [x] Rebased on origin/main; no package manifests or package sources changed, so the post-rebase package-version gate has no affected package.
+- [x] Restore read-only workflow and ci-gate permissions; isolate Actions write in the single-step deletion job, with a negative mutation for every other job.
+- [x] Full manifest suite passes (220 tests), expected-results fixtures (25), DAG fixtures (8), capacity-policy shape and mechanical scope check pass on the rebased branch.

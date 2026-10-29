@@ -167,7 +167,7 @@ test('should capture only selected delivery endpoints and reject cross-head rece
 
 test('should authenticate current-attempt receipts and fail closed on API errors', async () => {
   const gate = workflow.jobs['ci-gate'];
-  assert.deepEqual(gate.permissions, { contents: 'read', actions: 'write' });
+  assert.deepEqual(gate.permissions, { contents: 'read', actions: 'read' });
   const script = gate.steps.find((step) => step.name === 'Capture the current attempt for the final verdict').with.script;
   const execute = new (Object.getPrototypeOf(async function () {}).constructor)('require', 'context', 'github', 'process', script);
   const requests = [];
@@ -210,18 +210,23 @@ test('should authenticate current-attempt receipts and fail closed on API errors
 
 test('should delete only current-run transport artifacts after every consumer, even when validation fails', async () => {
   const names = ['api-tool-image', 'api-image', 'ui-image', 'e2e-image', 'desktop-download'];
-  const gate = workflow.jobs['ci-gate'];
-  const cleanup = gate.steps.at(-1);
+  const job = workflow.jobs['delete-transport-artifacts'];
+  assert.equal(job.if, 'always() && !cancelled() && inputs.decision_fixtures_only != true');
+  assert.deepEqual(job.permissions, { actions: 'write' });
+  assert.deepEqual(job.needs, ['ci-capacity-receipts']);
+  assert.ok(workflow.jobs['ci-gate'].needs.includes('delete-transport-artifacts'));
+  assert.equal(job.steps.length, 1);
+  const cleanup = job.steps[0];
   assert.equal(cleanup.name, 'Delete consumed transport artifacts');
   assert.match(cleanup.if, /^always\(\)/);
   assert.match(cleanup.if, /github.event.pull_request.head.repo.full_name == github.repository/);
   assert.match(cleanup.uses, /^actions\/github-script@[a-f0-9]{40}$/);
-  assert.deepEqual(Object.entries(workflow.jobs).filter(([, job]) => job.permissions?.actions === 'write').map(([name]) => name), ['ci-gate']);
+  assert.deepEqual(Object.entries(workflow.jobs).filter(([, job]) => job.permissions?.actions === 'write').map(([name]) => name), ['delete-transport-artifacts']);
   const ancestors = new Set();
   const visit = name => {
     for (const parent of workflow.jobs[name].needs ?? []) if (!ancestors.has(parent)) { ancestors.add(parent); visit(parent); }
   };
-  visit('ci-gate');
+  visit('delete-transport-artifacts');
   for (const [name, job] of Object.entries(workflow.jobs)) {
     for (const step of job.steps ?? []) {
       if (!names.includes(step.with?.name)) continue;
