@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { discoverDecisionEvaluator, decisionExecutionDigest, decisionQualificationScope } from '../src/decision/qualification.js';
+import { canExecuteDecisionCandidate, discoverDecisionEvaluator, decisionExecutionDigest, decisionQualificationScope } from '../src/decision/qualification.js';
 import { createDecisionService } from '../src/decision/service.js';
 import { parseDecisionEvaluatorDescriptor } from '../src/decision/descriptor-validation.js';
 import { decisionPrice, decisionRequest, decisionServiceFixture, qualifiedDescriptor } from './decision-fixtures.js';
@@ -36,10 +36,12 @@ describe('criterion-scoped production admission', () => {
     descriptor.executionProfile = 'qualification';
     descriptor.qualification.servedIdentity = 'unqualified';
     expect(parseDecisionEvaluatorDescriptor(descriptor)).not.toBeNull();
+    expect(canExecuteDecisionCandidate(descriptor)).toBe(true);
     expect(discoverDecisionEvaluator(descriptor, undefined, decisionRequest()))
       .toMatchObject({ experimental: true, productionReady: false });
     descriptor.executionProfile = 'production';
-    expect(parseDecisionEvaluatorDescriptor(descriptor)).toBeNull();
+    expect(parseDecisionEvaluatorDescriptor(descriptor)).not.toBeNull();
+    expect(canExecuteDecisionCandidate(descriptor)).toBe(false);
   });
   it('should preserve execution identity when only evidence changes', () => {
     const descriptor = qualifiedDescriptor();
