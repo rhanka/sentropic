@@ -56,7 +56,7 @@
   - [ ] Preserve isolated builds and tarball consumers.
   - [x] Guard against unlocked npm/npx resolution, including regression fixtures.
 - [ ] **Lot 2 — Security evidence**
-  - [ ] Record fixed finding and coverage in security notes/register.
+  - [x] Record fixed finding and coverage in security notes/register.
 - [ ] **Lot 3 — Validation and delivery**
   - [ ] Run guard, cluster-mesh tests/typecheck, representative package and consumer checks.
   - [ ] Review changed install paths and run mechanical scope check before each commit.
