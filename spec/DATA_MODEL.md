@@ -2384,3 +2384,30 @@ Notes :
 - `chat_stream_events.message_id` est nullable : les appels structurés utilisent `stream_id` déterministe (`folder_<id>`, `usecase_<id>`, etc.).
 - `context_documents.context_type/context_id` sont des **références logiques** (pas de FK DB) vers `organizations/folders/use_cases`.
 - `chat_message_feedback` stocke le feedback par utilisateur sur les messages assistant (unique par `message_id` + `user_id`).
+# Canvas live collaboration H2 (host persistence)
+
+`canvas_live_documents` retains the immutable baseline (document/manifest hashes,
+manifest addresses, lineage identity, production identity and head at open), the
+schema epoch, committed journal head and current encoded-state checkpoint.
+`canvas_live_journal` orders transactions by `(tenant_id, workspace_id,
+document_id, seq)`. Each body includes the update, complete-key terminal patch
+receipt, payload hash, canonical operation results, affected-item/inverse
+linkage, semantic formatting intents (including same-value assertions), and
+session admission, roster/awareness-origin mappings, acknowledgement, refusal,
+freeze/exclusion/digest and revert records. All commit atomically under the
+document row lock. Transient rate limits are never terminal receipts.
+
+`canvas_live_checkpoints` retains checkpoint history. The current pointer and its
+encoded state, state vector, journal watermark, schema epoch and creation
+metadata commit together. Recovery validates the checkpoint digest and ordered
+journal, decodes into a fresh document, then applies only the suffix above the
+watermark. A comparison snapshot cannot substitute for encoded state.
+
+All keys, reads and writes include tenant **and** workspace. H1 supplies current
+authenticated admission; its production composition waits for #830. H3 supplies
+the real document/provider codec; H4 qualifies inverses. H2 has no deletion/GC
+API and retains full history, provenance, inverse targets, baseline manifests
+and pending publication recovery. H10 must qualify retention policies against
+DS §5.6 before enabling destructive compaction. Artifact storage/lifecycle
+authority stays with the artifacts provider. No UI or publication path is enabled.
+

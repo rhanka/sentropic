@@ -1,4 +1,4 @@
-import type { LiveBaseline, LiveParagraph } from '../../../../../packages/chat-core/src/live-document-port';
+import type { LiveBaseline, LiveParagraph } from '../../../../packages/chat-core/src/live-document-port';
 
 export interface CompleteCapture {
   complete: boolean;
