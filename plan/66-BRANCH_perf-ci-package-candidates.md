@@ -36,6 +36,7 @@
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
+- [x] Review repair local receipts: stateful 15+1 tests plus installed witness; gateway 78 files/1,370 tests including all auth-subpaths; manifest 223, candidate 9, install 19 and L5 tooling 104 pass. Final post-verdict cleanup composition passes wiring 153, expected-results 27 and both DAG suites 8+8; capacity remains 67/66 with no admission acceptance. Cleanup waits for successful ci-gate; the downstream action is outside that gate's required set and remains required for whole-run success.
 - [x] BR-80 starts from BR-79 `ecca3a0d50526a25e0b76e5955f26f2557c8e0b0`; use `ENV=test-ci-br80`; COMMON-RULES supersedes merge-only updates with rebase on origin/main and the package-version gate. Reviewed history is linear on main b7e86f5ea0; the old EX9 merge narrative is superseded.
 - [x] Baseline predecessor PR 40748328717 attempt 1, head 949d47c8ced0426a010da639ac910229d5699874: cluster 991s (123051431364), common guard 65s (123051430739), mesh 71s (123051431590), gateway 199s (123051431190). Raw receipts: `.tmp/ci-br80/receipts/40748328717/`; study section 13 records limits and step spans.
 - [ ] Main push 40790421598 at ecca3a0d5 is initially queued; capture its completed spans before claiming a new-base baseline.
