@@ -3,7 +3,7 @@ import type {
   LiveAdmission, LiveBaseline, LiveCommit, LiveDocumentIdentity, LiveDocumentState,
   LiveDocumentStore, LiveFormattingIntent, LiveJournalEntry,
 } from '../../../packages/chat-core/src/live-document-port';
-import { commitDigest } from '../../src/services/canvas-live/journal';
+import { sequenceEntry } from '../../src/services/canvas-live/journal';
 
 export const identity: LiveDocumentIdentity = {
   tenantId: 'tenant-a', workspaceId: 'workspace-a', documentId: 'canvas:artifact-a',
@@ -40,7 +40,11 @@ export const commit = (encodedUpdate: string | null, transactionId = 'transactio
   sessionEpoch: admission.sessionEpoch, encodedUpdate, records: [], formattingIntents: [],
   receipt: { key: { documentId: identity.documentId, actorId: admission.actor.actorId,
     sessionEpoch: admission.sessionEpoch, patchId: transactionId }, payloadHash: transactionId,
-    status: 'applied', operationResults: [{ status: 'applied' }], affectedItems: [{ insertedItems: [1] }] },
+    status: 'applied', operationResults: [{ status: 'applied' }], affectedItems: [{
+      fieldKey: 'body', operationIndex: 0, kind: 'insert',
+      insertedItems: [{ client: 7, clockRanges: [{ start: 0, end: 1 }] }], deletedItems: [],
+      markIntentIds: [], stateVectorBefore: 'AA==', stateVectorAfter: 'AQcB',
+    }] },
 });
 export const intent = (intentId: string): LiveFormattingIntent => ({
   intentId, actorId: admission.actor.actorId, fieldKey: 'body',
@@ -72,7 +76,7 @@ export class MemoryStore implements LiveDocumentStore {
   async commit(_id: LiveDocumentIdentity, expectedHead: number, input: LiveCommit) {
     if (this.fail === 'before') throw new Error('crash-before-commit');
     if (expectedHead !== this.state.head) throw new Error('head-conflict');
-    const entry: LiveJournalEntry = { ...structuredClone(input), seq: ++this.state.head, digest: commitDigest(input) };
+    const entry: LiveJournalEntry = sequenceEntry(this.state.journal, structuredClone(input), ++this.state.head);
     this.state.journal.push(entry);
     if (this.fail === 'after') throw new Error('crash-after-commit');
     return structuredClone(entry);

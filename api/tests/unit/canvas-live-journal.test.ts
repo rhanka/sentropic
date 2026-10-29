@@ -17,7 +17,7 @@ describe('canvas live durable acceptance boundary', () => {
       const saved = await store.load(identity);
       expect(saved.journal).toEqual([entry]);
       expect(entry.receipt?.affectedItems).toEqual(input.receipt?.affectedItems);
-      expect(entry.formattingIntents).toEqual(input.formattingIntents);
+      expect(entry.formattingIntents).toMatchObject(input.formattingIntents);
     });
     const before = codec.encode(doc);
     const human = commit(update(doc, t => t.format(0, 1, { bold: true })), 'same-value');
@@ -33,6 +33,9 @@ describe('canvas live durable acceptance boundary', () => {
     expect(store.state.journal.map(e => e.formattingIntents[0].intentId))
       .toEqual(['agent-intent', 'human-intent']);
     expect(store.state.journal.map(e => e.seq)).toEqual([1, 2]);
+    expect(store.state.journal.flatMap(e => e.formattingIntents)).toMatchObject([
+      { intentId: 'agent-intent', seq: 1 }, { intentId: 'human-intent', seq: 2 },
+    ]);
   });
 
   it.each(['before', 'after'] as const)('should rebuild committed state after a %s commit failure', async phase => {

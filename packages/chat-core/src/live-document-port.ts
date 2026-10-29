@@ -25,7 +25,18 @@ export interface LivePatchKey {
 export interface LiveReceipt {
   key: LivePatchKey; payloadHash: string;
   status: 'applied' | 'refused'; operationResults: readonly unknown[];
-  affectedItems: readonly unknown[];
+  affectedItems: readonly LiveAffectedItems[];
+}
+/** DS §5.6 R-REV-2: sufficient inverse data survives a process restart. */
+export interface LiveAffectedItems {
+  fieldKey: string; operationIndex: number;
+  kind: 'insert' | 'delete' | 'split' | 'merge' | 'mark';
+  insertedItems: readonly { client: number; clockRanges: readonly { start: number; end: number }[] }[];
+  deletedItems: readonly { text: string; marks: readonly string[]; isHardBreak: boolean;
+    anchorBefore: string; anchorAfter: string }[];
+  separatorItem?: { paragraphId: string; payload: unknown; item: { client: number; clock: number };
+    anchorBefore?: string; anchorAfter?: string };
+  markIntentIds: readonly string[]; stateVectorBefore: string; stateVectorAfter: string;
 }
 export interface LiveFormattingIntent {
   intentId: string; actorId: string; fieldKey: string;
@@ -57,6 +68,7 @@ export interface LiveCommit {
 }
 export interface LiveJournalEntry extends LiveCommit {
   seq: number; digest: string;
+  formattingIntents: readonly (LiveFormattingIntent & { seq: number })[];
 }
 export interface LiveCheckpoint {
   checkpointId: string; documentId: string; encodedState: string; stateVector: string;

@@ -3,7 +3,7 @@ import type {
   LiveBaseline, LiveCheckpoint, LiveCommit, LiveDocumentIdentity, LiveDocumentState,
   LiveDocumentStore, LiveJournalEntry,
 } from '../../../../packages/chat-core/src/live-document-port';
-import { canonical, commitDigest, duplicate, validateCommit } from './journal';
+import { canonical, duplicate, sequenceEntry, validateCommit } from './journal';
 import { verifyCheckpoint } from './persistence';
 
 type CrashPoint = 'before-journal' | 'after-journal' | 'before-checkpoint' | 'after-checkpoint' | 'after-commit';
@@ -63,7 +63,7 @@ export class PgLiveDocumentStore implements LiveDocumentStore {
       const previous = duplicate(state.journal, frozen);
       if (previous) return previous;
       if (state.head !== expectedHead) throw new Error('head-conflict');
-      const entry: LiveJournalEntry = { ...frozen, seq: state.head + 1, digest: commitDigest(frozen) };
+      const entry = sequenceEntry(state.journal, frozen, state.head + 1);
       this.fault('before-journal');
       await client.query(`INSERT INTO canvas_live_journal (tenant_id,workspace_id,document_id,seq,body)
         VALUES ($1,$2,$3,$4,$5)`, [...scope(identity), entry.seq, JSON.stringify(entry)]);
