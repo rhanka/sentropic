@@ -1,0 +1,5 @@
+{"provider":"openai","attempt":1,"at":"2026-10-29T06:21:00.963Z","endpoint":"https://api.openai.com/v1/decisions"}
+{"provider":"openai","attempt":2,"at":"2026-10-29T06:21:02.759Z","endpoint":"https://api.openai.com/v1/decisions"}
+{"provider":"openai","attempt":3,"at":"2026-10-29T06:21:04.311Z","endpoint":"https://api.openai.com/v1/decisions"}
+{"provider":"typesafe","attempt":2,"at":"2026-10-29T06:22:21.445Z","endpoint":"https://api.typesafe.ai/v1/systemone"}
+{"provider":"typesafe","attempt":3,"at":"2026-10-29T06:22:21.661Z","endpoint":"https://api.typesafe.ai/v1/systemone"}

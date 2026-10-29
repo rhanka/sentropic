@@ -17,7 +17,13 @@
   - `spec/decision/**`
   - `packages/llm-mesh/src/decision/descriptor.ts`
   - `packages/llm-mesh/src/decision/openai-descriptor.ts`
+  - `packages/llm-mesh/src/decision/descriptor-validation.ts`
   - `packages/llm-mesh/package.json`
+  - `package-lock.json`
+  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
+  - `packages/llm-mesh/tests/decision-jev-v4l3.test.ts`
+  - `packages/llm-mesh/tests/decision-qualification-admission.test.ts`
+  - `packages/llm-mesh/tests/decision-qualification.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -28,6 +34,8 @@
 
 ## Feedback Loop
 - [x] No calibration authorized; live observations cannot qualify immutable weights, billing beyond the admitted bound, or production readiness.
+- [x] Q1-CRED-01: JEV preflight refused peripheral whitespace; normalized transiently after Compose injection, source env unchanged; refusal consumes attempt 1.
+- [x] Q1-INV-01: parser previously forbade observed IDs with unqualified production status; permit evidence inventory while retaining admission gates; regression keeps nonempty IDs and proves production refusal.
 
 ## AI Flaky tests
 - [x] No flaky acceptance or additional live calls beyond the cap.
@@ -41,14 +49,14 @@
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and constraints**
   - [x] Read master/workflow rules, spec section 7.4, API host and descriptors; mechanical branch check passed.
-  - [ ] Verify ports, credential names, control pricing and isolated stack.
-- [ ] **Lot 1 — Bounded live evidence**
-  - [ ] Fix a public synthetic binary criterion and retain only that fixture input.
-  - [ ] Check documented zero-cost Decisions access probe; otherwise count the first Decisions call as an attempt.
-  - [ ] Record served identity, tokens, priced cost, billing bound, latency, verdict shape and refusals per attempt.
-  - [ ] Fail closed on descriptor identity mismatch; stop within three attempts per candidate.
+  - [x] Verify ports, credential names, control pricing and isolated stack.
+- [x] **Lot 1 — Bounded live evidence**
+  - [x] Fix a public synthetic binary criterion and retain only that fixture input.
+  - [x] No documented zero-cost Decisions entitlement probe established; first POST counts as attempt 1.
+  - [x] Record served identity, tokens, priced cost, billing bound, latency, verdict shape and refusals per attempt.
+  - [x] Fail closed on descriptor identity mismatch; three calls per candidate including the JEV preflight refusal, five egresses total, 77 micro-USD.
 - [ ] **Lot 2 — Evidence and descriptors**
-  - [ ] Commit scrubbed receipts in `spec/decision/`; update accepted identities/evidenceRefs only when proven.
+  - [x] Retain scrubbed receipts in `spec/decision/`; accepted identities/evidenceRefs cite only observed results.
   - [ ] Bump llm-mesh only if source descriptors change; verify published version first.
   - [ ] Preserve unqualified production and OD-4 calibration requirement.
 - [ ] **Lot 3 — Final validation and draft PR**
