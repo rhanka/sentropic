@@ -67,6 +67,7 @@
 - [ ] **Lot 1 — Port and RED witnesses**
   - [x] Recovery witness authored before implementation, with real Yjs codec and test-only registry/storage fakes.
   - [x] Recovery RED: Docker Vitest fails on missing persistence module, before implementation.
+  - [x] PostgreSQL crash/rollback, restart, idempotency, journal metadata and tenant witnesses authored before adapter implementation.
   - [x] Replace stub with host-only persistence contract; chat-core 0.2.0 exceeds npm 0.1.7 (Docker npm view).
   - [ ] RED `api/tests/unit/canvas-live-recovery.test.ts`: checkpoints, replay, delete set/vector, epoch, corrupted watermark, tenant isolation.
   - [ ] RED `api/tests/unit/canvas-live-journal.test.ts`: receipts, inverse/provenance atomicity, publish after commit, rebuild after failure, retention.
