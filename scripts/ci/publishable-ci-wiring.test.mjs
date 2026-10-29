@@ -31,6 +31,24 @@ const recipe = (target) => {
 };
 const needsOf = (job) => [jobs[job].needs ?? []].flat();
 
+test('E2 gates run for the final main PR and preserve the reviewed candidate proof', () => {
+  const scope = jobs.changes.steps.find((s) => s.id === 'engram_e2_scope');
+  const selected = scope.env.SELECTED.slice(3, -3);
+  const evaluate = (base, head, changed) => Function('github', 'steps', `return (${selected});`)(
+    { base_ref: base, head_ref: head }, { filter: { outputs: { engram_e2: changed } } });
+  assert.equal(evaluate('main', 'feat/engram-e2-integration', 'true'), true);
+  assert.equal(evaluate('feat/engram-e2-integration', 'feat/memory-lot', 'true'), true);
+  assert.equal(evaluate('main', 'feat/unrelated', 'true'), false);
+  assert.equal(evaluate('main', 'feat/engram-e2-integration', 'false'), false);
+  const steps = jobs['qualify-engram-e2'].steps;
+  assert.ok(steps.some((s) => s.run === 'make engram-e2-qualify ENV=test-e2-int'));
+  const proof = steps.find((s) => s.name === 'Qualify E11 installed tuple and run generator checks');
+  assert.equal(proof['working-directory'], 'tmp/engram-e11-reviewed');
+  for (const gate of ['prepare', 'lock', 'installed', 'snapshot', 'generate', 'test', 'check']) {
+    assert.ok(proof.run.includes(`memory-e11-${gate}`), `retained E11 ${gate} gate`);
+  }
+});
+
 test('changes: boolean filter step without file lists plus a separate single-filter JSON list step', () => {
   const steps = jobs.changes.steps;
   const filter = steps.find((s) => s.id === 'filter');
