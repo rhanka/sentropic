@@ -1,0 +1,29 @@
+{
+  "recordType": "main-integration-not-l5-acceptance",
+  "initialBase": "c37662a208a19ae12377d1a0aec2c7610c4bc0aa",
+  "branchParent": "a8a97985d47c161df9f897a6752badd959c6a291",
+  "mainParent": "2ea238790fe992cdbb8e0202b1a73a937b6a1793",
+  "mergeCommit": "be9738ce62dad5e9498723c0d8e7a8f22389ef53",
+  "strategy": "merge; no rebase",
+  "conflictsResolved": ["BRANCH.md: retained R5 plan"],
+  "denseCombinedDiffLines": 0,
+  "authoredProductChangesAgainstImportedMain": false,
+  "temporaryImportAllowancesRemoved": true,
+  "track": {
+    "sha256BothParentsAndResult": "f1bdd745448dfd0c76c198405512baf2fec73775e30f3e99a1c5b72cecdeee91",
+    "branchParentEvents": 370,
+    "mainParentEvents": 370,
+    "resultEvents": 370,
+    "bothParentsContained": true,
+    "missingIds": [],
+    "writesOrConsolidationPerformed": false,
+    "freshness": "Read-only require-accepted report generated; acceptance consolidation remains with the designated Track writer"
+  },
+  "p3Sha256": "1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730",
+  "candidateHashPresentInImportedE2Inputs": false,
+  "postMergeChecks": {
+    "ciExpectedResults": "24 passed; zero failures/skips",
+    "memoryL5Tooling": "104 passed; zero failures/skips",
+    "p3PackedGraph": "PASS; 30 files, 54 edges"
+  }
+}
