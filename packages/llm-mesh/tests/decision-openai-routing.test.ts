@@ -72,7 +72,7 @@ describe('Decisions dedicated transport, tariff and route registration', () => {
   it('should keep candidates unavailable and refuse unlisted catalogue entries before egress (P28)', async () => {
     const f = setup();
     expect(openAiDecisionsDescriptor.qualification.servedIdentity).toBe('unqualified');
-    expect(openAiDecisionsDescriptor.acceptedServedModelIds).toEqual([]);
+    expect(openAiDecisionsDescriptor.acceptedServedModelIds).toEqual(['gpt-6-luna']);
     const result = await createDecisionService({ ...f.options, evaluatorAllowlist: [] }).decide(f.request);
     expect(result).toMatchObject({ ok: false, error: { code: 'EVALUATOR_UNKNOWN' }, receipt: { attempts: 0 } });
     expect(f.fetch).not.toHaveBeenCalled();

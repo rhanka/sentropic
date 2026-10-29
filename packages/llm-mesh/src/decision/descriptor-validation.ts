@@ -28,8 +28,8 @@ export function parseDecisionEvaluatorDescriptor(candidate: unknown): DecisionEv
     || !Array.isArray(value.qualification.evidenceRefs) || !value.qualification.evidenceRefs.every(isText)
     || !Array.isArray(value.acceptedServedModelIds) || !value.acceptedServedModelIds.every((id) => sanitizeJevId(id) !== null)
     || new Set(value.acceptedServedModelIds).size !== value.acceptedServedModelIds.length
-    || (value.qualification.servedIdentity === 'qualified' ? value.acceptedServedModelIds.length === 0
-      : value.executionProfile !== 'qualification' && value.acceptedServedModelIds.length !== 0)
+    // Observed inventory is evidence, not qualification; execution still checks the independent status.
+    || (value.qualification.servedIdentity === 'qualified' && value.acceptedServedModelIds.length === 0)
     || ((value.qualification.servedIdentity === 'qualified' || value.qualification.billingBound === 'qualified') && !value.qualification.evidenceRefs.length)
     || typeof value.maxBillableInputTokens !== 'number' || !Number.isSafeInteger(value.maxBillableInputTokens) || value.maxBillableInputTokens < 1
     || typeof value.maxBillableOutputTokens !== 'number' || !Number.isSafeInteger(value.maxBillableOutputTokens) || value.maxBillableOutputTokens < 0
