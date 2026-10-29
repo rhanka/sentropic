@@ -1,4 +1,4 @@
-import type { ConversationPermission } from '@sentropic/chat-runtime/conversation';
+import type { ConversationPermission } from '../conversation.js';
 import { isLocalToolName } from '../stores/localTools.js';
 import type { AttachLocalToolMachineOptions, ControllerLocalToolExecutorFn } from './chatLoopController.js';
 
