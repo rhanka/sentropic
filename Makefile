@@ -2171,45 +2171,45 @@ build-contracts: install-internal-packages ## Build @sentropic/contracts dist pa
 
 .PHONY: build-events
 build-events: build-contracts ## Build @sentropic/events dist package (depends on contracts dist)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/events $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --offline tsc -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/events $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --no-install --offline tsc -p tsconfig.json'
 
 .PHONY: build-chat-core
 build-chat-core: build-events ## Build @sentropic/chat-core dist package (depends on contracts + events dist)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/chat-core $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --offline tsc -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/chat-core $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --no-install --offline tsc -p tsconfig.json'
 
 .PHONY: build-chat-server
 build-chat-server: build-chat-core ## Build @sentropic/chat-server dist package
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/chat-server $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-server $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node hono@4.10.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-server $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node hono@4.10.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 
 .PHONY: build-comments
 build-comments: build-contracts ## Build @sentropic/comments dist package (depends on contracts dist)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/comments $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --offline tsc -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/comments $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --no-install --offline tsc -p tsconfig.json'
 
 .PHONY: build-ubo-contracts
 build-ubo-contracts: ## Build @sentropic/ubo-contracts (private, BR-59) dist package — no @sentropic deps
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/ubo-contracts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --offline tsc -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/ubo-contracts $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist && npx --no-install --offline tsc -p tsconfig.json'
 
 .PHONY: typecheck-contracts
 typecheck-contracts: install-internal-packages ## Run @sentropic/contracts type checks
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/contracts $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --offline tsc --noEmit -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/contracts $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --no-install --offline tsc --noEmit -p tsconfig.json'
 
 .PHONY: typecheck-events
 typecheck-events: build-contracts ## Run @sentropic/events type checks (requires contracts dist)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/events $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --offline tsc --noEmit -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/events $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --no-install --offline tsc --noEmit -p tsconfig.json'
 
 .PHONY: typecheck-chat-core
 typecheck-chat-core: build-events ## Run @sentropic/chat-core type checks (requires contracts+events dist)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/chat-core $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --offline tsc --noEmit -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/chat-core $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --no-install --offline tsc --noEmit -p tsconfig.json'
 
 .PHONY: typecheck-chat-server
 typecheck-chat-server: ## Run @sentropic/chat-server type checks
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/chat-server $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-server $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node hono@4.10.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-server $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node hono@4.10.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 
 .PHONY: typecheck-comments
 typecheck-comments: build-contracts ## Run @sentropic/comments type checks (requires contracts dist)
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/comments $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --offline tsc --noEmit -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace" -w /workspace/packages/comments $(LLM_MESH_NODE_IMAGE) sh -lc 'npx --no-install --offline tsc --noEmit -p tsconfig.json'
 
 .PHONY: pack-contracts
 pack-contracts: build-contracts ## Validate @sentropic/contracts npm package contents without publishing
@@ -2492,7 +2492,7 @@ test: test-api test-ui test-e2e ## Run all tests
 
 .PHONY: test-llm-mesh
 test-llm-mesh: ## Run @sentropic/llm-mesh tests
-	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-mesh/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; if [ -n "$$scope" ]; then NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-mesh/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; if [ -n "$$scope" ]; then NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 
 # BR04-EX1 — @sentropic/live-speech bench (r3 L3 bench lane; P1-5/P2-1).
 # Compiles the session to a scratch dist (never committed), installs the pinned
@@ -2504,7 +2504,7 @@ test-llm-mesh: ## Run @sentropic/llm-mesh tests
 # outside the repo, so manual runs never dirty the tree).
 .PHONY: bench-live-speech
 bench-live-speech: ## Run @sentropic/live-speech bench (OUT=<receipt path>)
-	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/live-speech $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; out="$(OUT)"; out="$${out:-/tmp/live-speech-docker-bench.receipt.json}"; tool_dir="$$(mktemp -d)"; trap "rm -rf $$tool_dir" EXIT; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund typescript@5.4.5 @types/node faster-whisper-ts@1.2.1 onnxruntime-node@1.24.3 >/dev/null; npm install --prefix "$$tool_dir" --package-lock-only --ignore-scripts --no-audit --no-fund >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json --rootDir . --outDir "$$tool_dir/dist" --declaration false --sourceMap false --declarationMap false --typeRoots "$$tool_dir/node_modules/@types" || true; test -f "$$tool_dir/dist/src/node/local-stt.js" || { echo "bench: tsc emit failed" >&2; exit 1; }; mkdir -p "$$tool_dir/dist/src/node/engines"; cp src/node/stt-worker.mjs "$$tool_dir/dist/src/node/stt-worker.mjs"; cp src/node/engines/faster-whisper.mjs "$$tool_dir/dist/src/node/engines/"; node bench/run-local-bench.mjs --dist "$$tool_dir/dist/src" --install-lock "$$tool_dir/package-lock.json" --out "$$out"'
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/live-speech $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; out="$(OUT)"; out="$${out:-/tmp/live-speech-docker-bench.receipt.json}"; tool_dir="$$(mktemp -d)"; trap "rm -rf $$tool_dir" EXIT; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund typescript@5.4.5 @types/node faster-whisper-ts@1.2.1 onnxruntime-node@1.24.3 >/dev/null; node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --package-lock-only --ignore-scripts --no-audit --no-fund >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json --rootDir . --outDir "$$tool_dir/dist" --declaration false --sourceMap false --declarationMap false --typeRoots "$$tool_dir/node_modules/@types" || true; test -f "$$tool_dir/dist/src/node/local-stt.js" || { echo "bench: tsc emit failed" >&2; exit 1; }; mkdir -p "$$tool_dir/dist/src/node/engines"; cp src/node/stt-worker.mjs "$$tool_dir/dist/src/node/stt-worker.mjs"; cp src/node/engines/faster-whisper.mjs "$$tool_dir/dist/src/node/engines/"; node bench/run-local-bench.mjs --dist "$$tool_dir/dist/src" --install-lock "$$tool_dir/package-lock.json" --out "$$out"'
 
 # BR-LB-EX1 — @sentropic/llm-gateway tests (WP16 Layer-B; owner-approved 2026-06-22).
 # Mirrors test-auth-hono: build the sibling @sentropic/llm-mesh dist, symlink it + hono +
@@ -2512,7 +2512,7 @@ bench-live-speech: ## Run @sentropic/live-speech bench (OUT=<receipt path>)
 .PHONY: test-llm-gateway
 test-llm-gateway: build-llm-mesh build-oauth-verify build-mcp-auth build-auth-hono ## Run @sentropic/llm-gateway tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-gateway/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node hono@4.10.7 semver@7.7.2 jose@5.10.0 zod@4.6.7 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@sentropic node_modules/@types; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/llm-mesh node_modules/@sentropic/llm-mesh; ln -sfn "$$tool_dir/node_modules/semver" node_modules/semver; for pkg in oauth-verify mcp-auth auth-hono; do ln -sfn /workspace/packages/$$pkg node_modules/@sentropic/$$pkg; mkdir -p /workspace/packages/$$pkg/node_modules/@sentropic; ln -sfn /workspace/packages/oauth-verify /workspace/packages/$$pkg/node_modules/@sentropic/oauth-verify; for peer in hono jose zod @hono @simplewebauthn; do ln -sfn "$$tool_dir/node_modules/$$peer" "/workspace/packages/$$pkg/node_modules/$$peer"; done; done; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; trap "rm -rf node_modules ../oauth-verify/node_modules ../mcp-auth/node_modules ../auth-hono/node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-gateway/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node hono@4.10.7 semver@7.7.2 jose@5.10.0 zod@4.6.7 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@sentropic node_modules/@types; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; ln -sfn /workspace/packages/llm-mesh node_modules/@sentropic/llm-mesh; ln -sfn "$$tool_dir/node_modules/semver" node_modules/semver; for pkg in oauth-verify mcp-auth auth-hono; do ln -sfn /workspace/packages/$$pkg node_modules/@sentropic/$$pkg; mkdir -p /workspace/packages/$$pkg/node_modules/@sentropic; ln -sfn /workspace/packages/oauth-verify /workspace/packages/$$pkg/node_modules/@sentropic/oauth-verify; for peer in hono jose zod @hono @simplewebauthn; do ln -sfn "$$tool_dir/node_modules/$$peer" "/workspace/packages/$$pkg/node_modules/$$peer"; done; done; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; trap "rm -rf node_modules ../oauth-verify/node_modules ../mcp-auth/node_modules ../auth-hono/node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/llm-gateway $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 # BRDP-EX1a — standalone LLM gateway host (apps/llm-gateway) checks on the existing api Compose
@@ -2525,12 +2525,12 @@ lint-llm-gateway-process: prepare-node-workspace ## Lint the standalone LLM gate
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -w /workspace/apps/llm-gateway api npm run lint
 
 test-llm-gateway-process: prepare-node-workspace ## Test the standalone LLM gateway host (SCOPE=tests/<file>.test.ts)
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e SCOPE="$(SCOPE)" -w /workspace/apps/llm-gateway api sh -lc 'set -eu; scope="$${SCOPE#apps/llm-gateway/}"; if [ -n "$$scope" ]; then npx vitest run "$$scope" --environment node; else npm test; fi'
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e SCOPE="$(SCOPE)" -w /workspace/apps/llm-gateway api sh -lc 'set -eu; scope="$${SCOPE#apps/llm-gateway/}"; if [ -n "$$scope" ]; then npx --no-install vitest run "$$scope" --environment node; else npm test; fi'
 
 .PHONY: test-chat-ui
 test-chat-ui: ## Run @sentropic/chat-ui tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node --exclude "tests/**/*.dom.spec.ts"'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node --exclude "tests/**/*.dom.spec.ts"'
 
 # BR-A0b-EX1 — additive jsdom DOM/ARIA test target for @sentropic/chat-ui Svelte 5 components.
 # Rationale: DOM/ARIA harness requires @sveltejs/vite-plugin-svelte + vite + jsdom +
@@ -2553,34 +2553,34 @@ test-chat-ui: ## Run @sentropic/chat-ui tests
 .PHONY: test-chat-ui-dom
 test-chat-ui-dom: ## Run @sentropic/chat-ui DOM/ARIA tests (jsdom, Svelte 5, BR-A0b-EX1 + BR-CONV-EX1)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 vite@8.0.16 @sveltejs/vite-plugin-svelte@7.1.2 @testing-library/svelte@5.3.1 jsdom@29.1.1 "@lucide/svelte@0.562.0" "svelte-streamdown@3.0.1" "svelte-preprocess@6.0.3" "@sentropic/design-system-svelte@^0.34.0" >/dev/null; mkdir -p node_modules/@sveltejs node_modules/@testing-library node_modules/@lucide node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@sentropic/design-system-svelte" node_modules/@sentropic/design-system-svelte; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; ln -sfn "$$tool_dir/node_modules/vite" node_modules/vite; ln -sfn "$$tool_dir/node_modules/jsdom" node_modules/jsdom; ln -sfn "$$tool_dir/node_modules/@sveltejs/vite-plugin-svelte" node_modules/@sveltejs/vite-plugin-svelte; ln -sfn "$$tool_dir/node_modules/@sveltejs/acorn-typescript" node_modules/@sveltejs/acorn-typescript; ln -sfn "$$tool_dir/node_modules/@testing-library/svelte" node_modules/@testing-library/svelte; ln -sfn "$$tool_dir/node_modules/@testing-library/dom" node_modules/@testing-library/dom; ln -sfn "$$tool_dir/node_modules/@testing-library/svelte-core" node_modules/@testing-library/svelte-core; ln -sfn "$$tool_dir/node_modules/@lucide/svelte" node_modules/@lucide/svelte; ln -sfn "$$tool_dir/node_modules/svelte-streamdown" node_modules/svelte-streamdown; ln -sfn "$$tool_dir/node_modules/svelte-preprocess" node_modules/svelte-preprocess; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run --config vitest.dom.config.ts'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 vite@8.0.16 @sveltejs/vite-plugin-svelte@7.1.2 @testing-library/svelte@5.3.1 jsdom@29.1.1 "@lucide/svelte@0.562.0" "svelte-streamdown@3.0.1" "svelte-preprocess@6.0.3" "@sentropic/design-system-svelte@^0.34.0" >/dev/null; mkdir -p node_modules/@sveltejs node_modules/@testing-library node_modules/@lucide node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@sentropic/design-system-svelte" node_modules/@sentropic/design-system-svelte; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; ln -sfn "$$tool_dir/node_modules/vite" node_modules/vite; ln -sfn "$$tool_dir/node_modules/jsdom" node_modules/jsdom; ln -sfn "$$tool_dir/node_modules/@sveltejs/vite-plugin-svelte" node_modules/@sveltejs/vite-plugin-svelte; ln -sfn "$$tool_dir/node_modules/@sveltejs/acorn-typescript" node_modules/@sveltejs/acorn-typescript; ln -sfn "$$tool_dir/node_modules/@testing-library/svelte" node_modules/@testing-library/svelte; ln -sfn "$$tool_dir/node_modules/@testing-library/dom" node_modules/@testing-library/dom; ln -sfn "$$tool_dir/node_modules/@testing-library/svelte-core" node_modules/@testing-library/svelte-core; ln -sfn "$$tool_dir/node_modules/@lucide/svelte" node_modules/@lucide/svelte; ln -sfn "$$tool_dir/node_modules/svelte-streamdown" node_modules/svelte-streamdown; ln -sfn "$$tool_dir/node_modules/svelte-preprocess" node_modules/svelte-preprocess; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run --config vitest.dom.config.ts'
 
 .PHONY: test-chat-server
 test-chat-server: ## Run @sentropic/chat-server tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/chat-server $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-server $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node hono@4.10.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-server $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node hono@4.10.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
 
 .PHONY: test-comments
 test-comments: ## Run @sentropic/comments tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/comments $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/comments $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/comments $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
 
 .PHONY: test-auth-hono
 test-auth-hono: build-oauth-verify ## Run @sentropic/auth-hono tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/auth-hono/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node hono@4.10.7 @hono/zod-validator@0.7.5 zod@4.6.7 jose@5.10.0 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@hono node_modules/@simplewebauthn node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/@hono/zod-validator" node_modules/@hono/zod-validator; ln -sfn "$$tool_dir/node_modules/zod" node_modules/zod; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/@simplewebauthn/server" node_modules/@simplewebauthn/server; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/oauth-verify node_modules/@sentropic/oauth-verify; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/auth-hono/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node hono@4.10.7 @hono/zod-validator@0.7.5 zod@4.6.7 jose@5.10.0 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@hono node_modules/@simplewebauthn node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/@hono/zod-validator" node_modules/@hono/zod-validator; ln -sfn "$$tool_dir/node_modules/zod" node_modules/zod; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/@simplewebauthn/server" node_modules/@simplewebauthn/server; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/oauth-verify node_modules/@sentropic/oauth-verify; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-hono $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
 
 .PHONY: test-auth-client
 test-auth-client: build-auth-hono ## Run @sentropic/auth-client tests (needs auth-hono dist for the in-process IdP round-trip)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules ../auth-hono/node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/auth-client/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node jose@5.10.0 hono@4.10.7 zod@4.6.7 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@sentropic ../auth-hono/node_modules/@hono ../auth-hono/node_modules/@simplewebauthn ../auth-hono/node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/zod" node_modules/zod; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/auth-hono node_modules/@sentropic/auth-hono; ln -sfn /workspace/packages/oauth-verify ../auth-hono/node_modules/@sentropic/oauth-verify; ln -sfn "$$tool_dir/node_modules/hono" ../auth-hono/node_modules/hono; ln -sfn "$$tool_dir/node_modules/jose" ../auth-hono/node_modules/jose; ln -sfn "$$tool_dir/node_modules/zod" ../auth-hono/node_modules/zod; ln -sfn "$$tool_dir/node_modules/@hono/zod-validator" ../auth-hono/node_modules/@hono/zod-validator; ln -sfn "$$tool_dir/node_modules/@simplewebauthn/server" ../auth-hono/node_modules/@simplewebauthn/server; trap "rm -rf node_modules ../auth-hono/node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/auth-client/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node jose@5.10.0 hono@4.10.7 zod@4.6.7 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 >/dev/null; mkdir -p node_modules/@sentropic ../auth-hono/node_modules/@hono ../auth-hono/node_modules/@simplewebauthn ../auth-hono/node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/jose" node_modules/jose; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn "$$tool_dir/node_modules/zod" node_modules/zod; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn /workspace/packages/auth-hono node_modules/@sentropic/auth-hono; ln -sfn /workspace/packages/oauth-verify ../auth-hono/node_modules/@sentropic/oauth-verify; ln -sfn "$$tool_dir/node_modules/hono" ../auth-hono/node_modules/hono; ln -sfn "$$tool_dir/node_modules/jose" ../auth-hono/node_modules/jose; ln -sfn "$$tool_dir/node_modules/zod" ../auth-hono/node_modules/zod; ln -sfn "$$tool_dir/node_modules/@hono/zod-validator" ../auth-hono/node_modules/@hono/zod-validator; ln -sfn "$$tool_dir/node_modules/@simplewebauthn/server" ../auth-hono/node_modules/@simplewebauthn/server; trap "rm -rf node_modules ../auth-hono/node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules ../auth-hono/node_modules'
 
 .PHONY: test-auth-ui
 test-auth-ui: ## Run @sentropic/auth-ui tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/auth-ui/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node @simplewebauthn/browser@13.2.2 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@simplewebauthn" node_modules/@simplewebauthn; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/auth-ui/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node @simplewebauthn/browser@13.2.2 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@simplewebauthn" node_modules/@simplewebauthn; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 
 .PHONY: test-packages
 test-packages: ## Run package tests by SCOPE path
@@ -2598,7 +2598,7 @@ test-pkg-chat-core: build-chat-core ## Run core and client runtime unit tests wi
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e SCOPE="$(SCOPE)" -v "$(CURDIR):/workspace" -w /workspace/packages/chat-core $(LLM_MESH_NODE_IMAGE) sh scripts/test.sh
 .PHONY: test-skills
 test-skills: ## Run @sentropic/skills tests
-		@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/skills $(SKILLS_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node gray-matter@4.0.3 zod@4.6.7 isolated-vm@6.1.2 docx@9.5.1 pptxgenjs@4.0.1 >/dev/null; ln -s "$$tool_dir/node_modules" node_modules; trap "rm -f node_modules" EXIT; NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
+		@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/skills $(SKILLS_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node gray-matter@4.0.3 zod@4.6.7 isolated-vm@6.1.2 docx@9.5.1 pptxgenjs@4.0.1 >/dev/null; ln -s "$$tool_dir/node_modules" node_modules; trap "rm -f node_modules" EXIT; NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
 
 .PHONY: test-ui
 test-ui: up-ui ## Run UI tests (usage: make test-ui, SCOPE=tests/stores/session.test.ts make test-ui)
@@ -2681,14 +2681,14 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	      spec_path="$$E2E_SPEC"; \
 	      spec_path="$${spec_path#e2e/}"; \
 	      echo "▶ Running scoped Playwright: $$spec_path (workers=$$workers retries=$$retries $${extra:-})"; \
-	      code=0; npx playwright test "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra || code=$$?; \
+	      code=0; npx --no-install playwright test "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra || code=$$?; \
 	      summary="$$spec_path: exit $$code"; status=$$code; \
 	    else \
 	      echo "▶ Running Playwright by groups: $$E2E_GROUPS (workers=$$workers retries=$$retries $${extra:-})"; \
 	      for g in $$E2E_GROUPS; do \
 	        pattern="tests/$${g}[-_].*\\.spec\\.ts$$"; \
 	        echo "▶ Running group $$g: $$pattern"; \
-	        code=0; npx playwright test "$$pattern" --workers="$$workers" --retries="$$retries" $$extra || code=$$?; \
+	        code=0; npx --no-install playwright test "$$pattern" --workers="$$workers" --retries="$$retries" $$extra || code=$$?; \
 	        summary="$${summary}$${summary:+; }$$g: exit $$code"; \
 	        if [ "$$code" -ne 0 ]; then status=1; fi; \
 	      done; \
@@ -2714,13 +2714,13 @@ test-e2e-vscode: up-e2e-vscode wait-ready db-seed-test e2e-set-queue ## Run VSCo
 	    if [ -n "$$max_fail" ]; then extra="--max-failures=$$max_fail"; fi; \
 	    spec_path="$${E2E_SPEC#e2e/}"; \
 	    echo "▶ Running VSCode scoped Playwright: $$spec_path (workers=$$workers retries=$$retries $${extra:-})"; \
-	    npx playwright test "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra'
+	    npx --no-install playwright test "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra'
 	@echo "🛑 Stopping VSCode E2E services..."
 	# @$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml down
 
 .PHONY: test-smoke
 test-smoke: up wait-ready ## Run smoke tests (quick E2E subset)
-	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e npx playwright test --grep "devrait charger"
+	$(DOCKER_COMPOSE) -f docker-compose.test.yml run --rm e2e npx --no-install playwright test --grep "devrait charger"
 	@echo "🛑 Stopping services..."
 	@$(DOCKER_COMPOSE) down
 
@@ -2907,7 +2907,7 @@ endif
 # -----------------------------------------------------------------------------
 .PHONY: typecheck-idp
 typecheck-idp: ## Typecheck the standalone IdP composition (apps/auth-idp)
-	@$(DOCKER_COMPOSE) -f docker-compose.yml run --rm --no-deps -w /workspace api npx tsc --noEmit --project apps/auth-idp/tsconfig.json
+	@$(DOCKER_COMPOSE) -f docker-compose.yml run --rm --no-deps -w /workspace api npx --no-install tsc --noEmit --project apps/auth-idp/tsconfig.json
 
 # BR-39m A0-bis — minimal IdP screens front (apps/auth-idp/web). Self-contained
 # sub-project (NOT a root workspace member; same isolation as e2e/). It pulls
@@ -2932,7 +2932,7 @@ install-idp-web: ## Install the IdP screens front deps into the mounted workspac
 		-v "$$(pwd):/workspace" \
 		-w /workspace/apps/auth-idp/web \
 		node:24-alpine \
-		sh -lc "if [ -f package-lock.json ]; then npm ci --ignore-scripts --no-audit --no-fund; else npm install --ignore-scripts --no-audit --no-fund; fi"
+		sh -lc "npm ci --ignore-scripts --no-audit --no-fund"
 
 .PHONY: typecheck-idp-web
 typecheck-idp-web: install-idp-web ## Typecheck the IdP screens front
@@ -2993,7 +2993,7 @@ smoke-idp: ## Run the deterministic SSO authorization_code smoke against the liv
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml run --rm --no-deps \
 		-e IDP_BASE_URL=http://auth-idp:8787 \
 		-e JWT_SECRET=$${JWT_SECRET:-dev-idp-jwt-secret-change-in-production} \
-		-w /workspace api npx tsx apps/auth-idp/sso-smoke.ts
+		-w /workspace api npx --no-install tsx apps/auth-idp/sso-smoke.ts
 
 .PHONY: smoke-idp-screens
 smoke-idp-screens: ## Screen-driven SSO smoke: drives the IdP-SERVED login+consent screens (needs make dev-idp)
@@ -3003,7 +3003,7 @@ smoke-idp-screens: ## Screen-driven SSO smoke: drives the IdP-SERVED login+conse
 	@echo "▶ Seeding verified user + session on the shared DB..."
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.idp.yml run --rm --no-deps \
 		-e JWT_SECRET=$${JWT_SECRET:-dev-idp-jwt-secret-change-in-production} \
-		-w /workspace api npx tsx apps/auth-idp/screen-smoke-seed.ts > .tmp-idp-seed.env 2>/dev/null; \
+		-w /workspace api npx --no-install tsx apps/auth-idp/screen-smoke-seed.ts > .tmp-idp-seed.env 2>/dev/null; \
 	USER_ID=$$(grep '^USER_ID=' .tmp-idp-seed.env | cut -d= -f2-); \
 	SESSION_TOKEN=$$(grep '^SESSION_TOKEN=' .tmp-idp-seed.env | cut -d= -f2-); \
 	rm -f .tmp-idp-seed.env; \
@@ -3333,7 +3333,7 @@ db-seed:
 
 .PHONY: db-seed-test
 db-seed-test: ## Seed database with test data for E2E tests
-	$(DOCKER_COMPOSE) exec api sh -lc 'if [ -f dist/tests/utils/seed-test-data.js ]; then node dist/tests/utils/seed-test-data.js; else npx tsx tests/utils/seed-test-data.ts; fi'
+	$(DOCKER_COMPOSE) exec api sh -lc 'if [ -f dist/tests/utils/seed-test-data.js ]; then node dist/tests/utils/seed-test-data.js; else npx --no-install tsx tests/utils/seed-test-data.ts; fi'
 
 .PHONY: db-migrate-data
 db-migrate-data: ## Migrate initiatives data to JSONB data field
@@ -3467,7 +3467,7 @@ security-daily-scan: ## Emit a local raw receipt; incomplete coverage exits nonz
 		docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges --memory=512m --cpus=1 --tmpfs /tmp:rw,nosuid,nodev,size=128m \
 		-u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -e SECURITY_DAILY_SOURCE_SHA="$$source_sha" \
 		-v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) \
-		sh -ec 'tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund yaml@2.8.1 semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node scripts/security/daily/scan.mjs'
+		sh -ec 'tool_dir="$$(mktemp -d)"; node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund yaml@2.8.1 semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node scripts/security/daily/scan.mjs'
 
 test-security-daily: ## Run daily inventory, schema and adapter regressions in the approved pinned Node lane
 	@$(MAKE) test-publishable-manifests MANIFEST_GUARD_IMAGE="$(MEMORY_L5_NODE_IMAGE)" SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs scripts/security/daily/scan.test.mjs scripts/security/daily/toolchain-contract.test.mjs scripts/security/daily/trivy.test.mjs" ENV=$(ENV)
@@ -3577,9 +3577,9 @@ test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SC
 	  if [ -n "$$SCOPE" ]; then \
 	    echo "▶ Running scoped $$TEST_TYPE tests: $$SCOPE (workers=$$workers, cleanup=$$cleanup_scope, args=$${extra_args:-<none>})"; \
 	    if [ -n "$$extra_args" ]; then \
-	      npx vitest run $$SCOPE $$extra_args; \
+	      npx --no-install vitest run $$SCOPE $$extra_args; \
 	    else \
-	      npx vitest run $$SCOPE; \
+	      npx --no-install vitest run $$SCOPE; \
 	    fi; \
 	  else \
 	    echo "▶ Running all $$TEST_TYPE tests (workers=$$workers, cleanup=$$cleanup_scope, args=$${extra_args:-<none>})"; \
@@ -4119,12 +4119,12 @@ oauth-provision-exchange-client: ## Create the exchange-only workload client onc
 # Rollback: delete the four targets below.
 .PHONY: typecheck-cited-source-viewer
 typecheck-cited-source-viewer: ## Run @sentropic/cited-source-viewer type checks
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 
 .PHONY: test-cited-source-viewer
 test-cited-source-viewer: ## Run @sentropic/cited-source-viewer pure tests (node env: quote match, pdf geometry, body registry, purity gates)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node --exclude "tests/**/*.dom.spec.ts"'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node --exclude "tests/**/*.dom.spec.ts"'
 
 .PHONY: test-cited-source-viewer-dom
 # Toolchain note (differs from the chat-ui dom recipe on three pins, all forced):
@@ -4137,7 +4137,7 @@ test-cited-source-viewer: ## Run @sentropic/cited-source-viewer pure tests (node
 #     the plugin major that peers with it (plugin 7.x peers vite ^8 only).
 test-cited-source-viewer-dom: ## Run @sentropic/cited-source-viewer frame tests (jsdom, Svelte 5 + real DS components)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.56.4 vite@7.3.6 @sveltejs/vite-plugin-svelte@6.2.4 jsdom@29.1.1 "@sentropic/design-system-svelte@^0.34.33" >/dev/null; mkdir -p node_modules/@sveltejs node_modules/@sentropic node_modules/@lucide; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; ln -sfn "$$tool_dir/node_modules/vite" node_modules/vite; ln -sfn "$$tool_dir/node_modules/jsdom" node_modules/jsdom; ln -sfn "$$tool_dir/node_modules/@sveltejs/vite-plugin-svelte" node_modules/@sveltejs/vite-plugin-svelte; ln -sfn "$$tool_dir/node_modules/@sentropic/design-system-svelte" node_modules/@sentropic/design-system-svelte; ln -sfn "$$tool_dir/node_modules/@sentropic/design-system-themes" node_modules/@sentropic/design-system-themes; ln -sfn "$$tool_dir/node_modules/@lucide/svelte" node_modules/@lucide/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run --config vitest.dom.config.ts'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.56.4 vite@7.3.6 @sveltejs/vite-plugin-svelte@6.2.4 jsdom@29.1.1 "@sentropic/design-system-svelte@^0.34.33" >/dev/null; mkdir -p node_modules/@sveltejs node_modules/@sentropic node_modules/@lucide; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; ln -sfn "$$tool_dir/node_modules/vite" node_modules/vite; ln -sfn "$$tool_dir/node_modules/jsdom" node_modules/jsdom; ln -sfn "$$tool_dir/node_modules/@sveltejs/vite-plugin-svelte" node_modules/@sveltejs/vite-plugin-svelte; ln -sfn "$$tool_dir/node_modules/@sentropic/design-system-svelte" node_modules/@sentropic/design-system-svelte; ln -sfn "$$tool_dir/node_modules/@sentropic/design-system-themes" node_modules/@sentropic/design-system-themes; ln -sfn "$$tool_dir/node_modules/@lucide/svelte" node_modules/@lucide/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run --config vitest.dom.config.ts'
 
 # BR-CSVP-EX1: build-cited-source-viewer produces the PUBLISHABLE dist via svelte-package
 # (transpiled .ts -> .js + .d.ts, copied plain-JS .svelte, copied hand-written .svelte.d.ts).
@@ -4148,7 +4148,7 @@ test-cited-source-viewer-dom: ## Run @sentropic/cited-source-viewer frame tests 
 .PHONY: build-cited-source-viewer
 build-cited-source-viewer: ## Build @sentropic/cited-source-viewer publishable dist via svelte-package (BR-CSVP-EX1)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund "@sveltejs/package@2.3.9" svelte@5.55.7 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@sveltejs; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; ln -sfn "$$tool_dir/node_modules/@sveltejs/package" node_modules/@sveltejs/package; trap "cp /tmp/svelte.config.orig.js svelte.config.js; rm -rf node_modules" EXIT; cp svelte.config.js /tmp/svelte.config.orig.js; printf "export default {};\n" > svelte.config.js; "$$tool_dir/node_modules/.bin/svelte-package" -i src -o dist'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cited-source-viewer $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund "@sveltejs/package@2.3.9" svelte@5.55.7 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@sveltejs; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; ln -sfn "$$tool_dir/node_modules/@sveltejs/package" node_modules/@sveltejs/package; trap "cp /tmp/svelte.config.orig.js svelte.config.js; rm -rf node_modules" EXIT; cp svelte.config.js /tmp/svelte.config.orig.js; printf "export default {};\n" > svelte.config.js; "$$tool_dir/node_modules/.bin/svelte-package" -i src -o dist'
 
 # BR-CSVP-EX1: pack validates the dist-form tarball without publishing (transient
 # package.json rewrite via scripts/make-publish-pkgjson.mjs; repo stays src-form).
