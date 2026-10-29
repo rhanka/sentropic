@@ -80,7 +80,7 @@ describe('canvas live provider admission composition', () => {
     };
     const recoveryPorts = {
       update: async (key: string, change: (old?: PreservedDraft) => PreservedDraft) => { const result = change(drafts.get(key)); drafts.set(key, result); return result; },
-      pending: async (key: string, id?: string) => { if (id) pending.set(key, id); return pending.get(key) ?? null; },
+      pending: async (key: string, id?: string | null, expected?: string) => { if (id === null && pending.get(key) === expected) pending.delete(key); else if (id) pending.set(key, id); return pending.get(key) ?? null; },
       migrate: vi.fn(async (copy: Uint8Array) => new Uint8Array([...copy, 42])),
     };
     const recovery = new DraftRecovery(recoveryPorts); const authority = new AdmissionAuthority(ports);
