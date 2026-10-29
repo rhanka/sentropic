@@ -7,7 +7,7 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
-import { evaluateExpected, evaluateSelection, workflowExpected, reconcileRun, capacityDemand, capacityCapture, wallClockProof } from './ci-expected-results.mjs';
+import { evaluateExpected, evaluateSelection, workflowExpected, reconcileRun, capacityDemand, capacityCapture, wallClockProof, independentValidators } from './ci-expected-results.mjs';
 
 const selected = (job) => ({ job, required: true, selected: true });
 const ran = (job, conclusion) => ({ job, conclusion });
@@ -22,7 +22,9 @@ test('should select API and E2E gates for global changes on every pull request',
     assert.ok(members.length > 0 && members.every((row) => row.selected === true));
   }
   assert.equal(expected.find((row) => row.job === 'validate-llm-mesh').selected, true);
-  assert.equal(expected.find((row) => row.job === 'validate-cluster-mesh').selected, true);
+  for (const { lane } of workflow.jobs['validate-cluster-mesh'].strategy.matrix.include) {
+    assert.equal(expected.find(row => row.job === `validate-cluster-mesh (${lane})`)?.selected, true, lane);
+  }
 });
 
 test('should require completed PR and main receipts of the same policy within the baseline', () => {
@@ -57,8 +59,10 @@ test('should keep validators independent without static capacity mutexes', () =>
     /^validate-/.test(name) && !['validate-publishable-manifests', 'validate-ci-capacity-metrics', 'validate-idp-sync'].includes(name)
     || name === 'memory-l5-qualification');
   assert.equal(validators.length, 24);
+  assert.equal(independentValidators(workflow), true);
   for (const [name, job] of validators) {
-    assert.deepEqual(job.needs, ['changes'], name);
+    const consumers = ['validate-cluster-mesh', 'validate-llm-mesh', 'validate-llm-gateway'];
+    assert.deepEqual(job.needs, consumers.includes(name) ? ['changes', 'package-candidates'] : ['changes'], name);
     assert.equal(job.concurrency, undefined, name);
   }
   for (const [name, job] of Object.entries(workflow.jobs)) {
@@ -66,6 +70,28 @@ test('should keep validators independent without static capacity mutexes', () =>
   }
   assert.equal(workflow.jobs['test-api-unit-integration'].strategy['max-parallel'], 15);
   assert.equal(workflow.jobs['test-e2e'].strategy['max-parallel'], 5);
+});
+
+test('should reject validator serialization beyond the immutable candidate producer', () => {
+  for (const [name, needs] of [
+    ['package-candidates', ['changes', 'validate-chat-runtime']],
+    ['validate-cluster-mesh', ['changes']],
+    ['validate-llm-mesh', ['changes', 'package-candidates', 'validate-cluster-mesh']],
+    ['validate-llm-gateway', ['package-candidates']],
+    ['validate-publishable-manifests', ['changes', 'package-candidates', 'validate-llm-mesh']],
+    ['validate-chat-runtime', ['changes', 'package-candidates']],
+    ['memory-l5-qualification', ['changes', 'validate-mcp-platform']],
+  ]) {
+    const changed = structuredClone(workflow);
+    changed.jobs[name].needs = needs;
+    assert.equal(independentValidators(changed), false, name);
+  }
+  for (const name of ['package-candidates', 'validate-cluster-mesh', 'validate-llm-mesh',
+    'validate-llm-gateway', 'validate-publishable-manifests']) {
+    const changed = structuredClone(workflow);
+    delete changed.jobs[name];
+    assert.equal(independentValidators(changed), false, `missing ${name}`);
+  }
 });
 
 test('should run E2E beside API quality checks while retaining promotion barriers', () => {
