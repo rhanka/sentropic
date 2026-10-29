@@ -1,82 +1,63 @@
-# Feature: qualify the frozen Trivy S2b toolchain
+# Feature: Decision API host and authoritative remote pricing
 
 ## Objective
-- [ ] Produce real S2b qualification receipts and an evidence-backed verdict for every blocker; deliver one draft PR to main.
+- [x] Integrate JEV and OpenAI Decisions into the authenticated API through cluster-mesh, with durable financial ports and fail-closed production readiness.
 
 ## Scope / Guardrails
-- [x] Initial base `c37662a20`; rebased onto `2ea238790`; branch `feat/sec-s2b-qualify`; worktree `tmp/worktrees/sec-s2b-qualify`.
-- [x] Existing activation switch stays OFF; S2c and S3 remain separate prerequisites.
-- [x] No scanner removal, severity reduction, toolbox change, secrets or Python.
-- [x] Docker under `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; `ENV=test-sec-qualify` last; `make down` after campaigns.
-- [x] No application services or listening host ports; no root dev changes.
-- [x] English source/docs; atomic commits below 150 changed lines using `make commit`.
+- [x] Owner priority 2026-10-28: integrate both remote backends; local hosting remains deferred.
+- [x] Base: origin/main de7ab8d31; branch feat/decision-host-h1; worktree tmp/worktrees/decision-h1.
+- [x] No live provider requests, spend, deployment, PR merge, rebase, Python or AI commit trailers.
+- [x] Use existing make targets; ENV=test-decision-h1 last; API_PORT=8798 UI_PORT=5198 MAILDEV_UI_PORT=1098.
+- [x] Serialize Docker steps with flock; tear down the isolated environment after each step.
+- [x] One additive control migration; atomic make commits at most 150 changed lines.
+- [x] Qualification is host-selected and admin-only; production stays unqualified.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `scripts/security/daily/**`
-  - `docs/security/**`
-  - `.security/trivy-toolchain.json`
-  - `Makefile`
+  - `.github/workflows/ci.yml`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
+  - `api/src/routes/namespaces/llm-mesh.ts`
+  - `api/src/routes/namespaces/llm-mesh-cutover.ts`
+  - `api/src/routes/namespaces/decision*.ts`
+  - `api/src/services/decision*.ts`
+  - `api/src/services/llm-metering/decision*.ts`
+  - `api/src/services/llm-metering/budget-admission.ts`
+  - `api/src/services/llm-metering/model-pricing-writer.ts`
+  - `api/src/db/control-schema.ts`
+  - `api/vitest.config.ts`
+  - `api/drizzle/control/*decision*.sql`
+  - `api/drizzle/control/meta/_journal.json`
+  - `api/tests/unit/decision*.test.ts`
+  - `api/tests/api/decision*.test.ts`
+  - `api/tests/api/llm-admission-schema.test.ts`
+  - `packages/llm-mesh/src/decision/descriptor.ts`
+  - `packages/llm-mesh/package.json`
+  - `packages/llm-mesh/tests/decision-fixtures.ts`
+  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
+  - `packages/cluster-mesh/tests/decision-receipts.spec.ts`
+  - `packages/cluster-mesh/tests/fixtures/train.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `package-lock.json`
+  - `spec/decision/api-host.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `docker-compose*.yml`
+  - `docker-compose.*.yml`
   - `.cursor/rules/**`
-  - `api/Dockerfile*`
-  - `.github/workflows/**`
-  - `plan/**`
+  - `.track/**`
+  - `plan/NN-BRANCH_*.md`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - None.
+  - `Makefile` (BR822-EX3: Decision secret names only)
+  - `docker-compose.yml` (BR822-EX3: Decision environment names only)
+  - `deploy/k8s/base/30-api.yaml` (BR822-EX3: optional Decision secret references only)
+  - `api/drizzle/*.sql` (maximum one migration; control uses its existing migration lane)
+  - `.github/workflows/**`
 - **Exception process**:
-  - [x] SECQUAL-EX1: Makefile may include a qualification-only adapter; purpose: reproducible Docker-first live trials; impact: opt-in targets only; rollback: remove the include and adapter.
+  - [x] Declare BRH-EXn with reason, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
-- [x] No previously admitted runtime exists: rollback must restore the explicitly blocked S2a state.
-- [ ] Independent scanner/verifier admission requires reviewed evidence, not an author-set boolean.
-- [x] All missing inputs are named in the final verdict; fixture passes do not close live gates.
-- [x] Qualification verdict: NOT QUALIFIED; exact missing artifacts/access/analyzer/builder inputs and all receipts in `docs/security/trivy-s2b-qualify.md`.
-
-## AI Flaky tests
-- [x] No AI inference or timeout increases in this lot.
-
-## Orchestration Mode (AI-selected)
-- [x] Single implementation branch; independent peer review at the final evidence gate.
-
-## UAT Management (in orchestration context)
-- [x] No UI change; operator UAT consists of live artifact, failure, isolation and rollback trials.
-
-## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline**
-  - [x] Read common/master/workflow rules, owner SEC-Q1..Q5, approved plan and S2b dossier.
-  - [x] Fetch origin/main, create isolated worktree, run `harness check branch` (PASS C1).
-  - [x] Declare paths, environment, Makefile exception and immutable scanner identities.
-- [ ] **Lot 1 — Acquisition and admission evidence**
-  - [x] Add a reproducible bounded OCI sizing experiment; keep production ingestion unchanged until measurements complete.
-  - [ ] Independently retrieve scanner/verifier bytes, bundles and roots; verify offline.
-  - [x] Verify retained index bytes with Cosign DSSE attestation, exact issuer/identity and retained roots under `--network=none` (Verified OK).
-  - [x] Supply immutable Cosign 3.1.4 replacement pin, 253-dependency native inventory, all-severity report (no HIGH/CRITICAL) and successful offline verification; independent admission remains pending.
-  - [ ] Inventory image filesystem, native executable dependencies and actual runtime commands without Python.
-  - [x] Pull exact platform image, export without execution, inventory APK/filesystem and decode 375 Trivy / 281 Cosign Go dependencies; no Python filesystem matches.
-  - [x] Measure Java: 991026356 compressed / 1565823119 expanded bytes, 86364 KiB Node RSS, 86.4 s transfer; propose bounded per-kind limits.
-  - [x] Verify the Java limit fix with regressions and real ingestion (161.2 s cold, 5.0 s hash-checked restore).
-  - [x] Acquire fresh vulnerability/Java receipts and freeze IaC bytes; preserve exact hashes.
-  - [x] Deny current scanner/verifier admission: all-severity self-scans expose HIGH/CRITICAL dependencies; frozen IaC bundle yields zero Compose configs.
-- [ ] **Lot 2 — Targets and real trials**
-  - [ ] Resolve all three main targets with source-SHA/platform provenance and retain complete reports.
-  - [x] Scan all three authenticated main-CI archives cold/warm with immutable archive/config hashes; remote provenance blocked by API/UI config mismatch and absent toolbox tag.
-  - [x] Requalify newly available current-main `2ea238790` archives from run `40876641000`; validate real reports and same-snapshot pairs with hash-bound archive identities; current remote API/toolbox absent and UI mismatched.
-  - [ ] Exercise network/rate-limit, missing/corrupt/stale/incompatible cache, malicious config, expiry and changed snapshot pairs.
-  - [x] Twelve recorded trials reject network/TCP faults, damaged/incompatible/expired data, unknown sources and changed snapshots; previous main policy restores blocked S2a.
-  - [ ] Inspect process/mount/credential isolation and exercise rollback to blocked S2a.
-  - [x] Capture scanner process/mount/environment-name inventories; no network, credentials, daemon socket or writable target/DB mounts.
-  - [ ] Measure cold/warm, refresh, remote/rebuild and CI critical path with queue separate.
-  - [x] Measure archive cold/warm and DB acquisition/restoration; observe actual remote authorization refusal and absence of isolated builder.
-- [ ] **Lot 3 — Verification and delivery**
-  - [x] Scoped tests: `scripts/security/daily/toolchain-contract.test.mjs`, `scripts/security/daily/trivy.test.mjs` and qualification regressions.
-  - [x] Fix archive report identity using a process-local proof issued only after preparation verifies archive bytes; cloned JSON cannot grant that proof.
-  - [x] Final `make test-security-daily` (125 passing) and `make test-security-parser` (17 passing); scoped `make down` completed.
-  - [x] Record CLOSED / STILL BLOCKED with exact missing inputs under `docs/security/`; independent review selection failed explicitly, with no consensus claimed.
-  - [x] Bind the independent review receipt to `bde825e8f`, including all current-main archive trials and the immutable archive identity fix.
-  - [ ] Mechanical scope check before every commit; no publishable package source changes.
-  - [x] Draft PR #840 to main with this plan as body and a five-step plan comment.
-  - [x] Rebase onto current main; preserve this plan; split inherited plan replacement into commits below 150 lines; package bump gate N/A (no package source/manifest changes).
-  - [ ] CI completed/success on exact head; publish the immutable SHA/run receipt in the PR.
+- [x] H1-R2-MERGE-2 — Main advanced during CI: merge origin/main ecca3a0d5 (PR #826), keeping this plan as the sole conflict resolution and retaining incoming DAG changes. Head 80c7183eb passed full PR CI 40774107205 and all four required checks; the new merge head must pass separately. No rebase or Track writes.
+- [x] H1-R2-MERGE — Merge origin/main 8d37455df without rebase; BRANCH.md was the sole conflict and this PR's plan is retained. Incoming changes are unchanged; both parents and the merge retain identical Track files, with no Track writes.
+- [x] H1-R2-F7 — Fixture dispatch always runs ci-gate and fails before checkout or artifacts with an explicit refusal; ordinary gate evaluation is unchanged. Regression reproduced the skipped gate, then all 137 Docker-hosted workflow wiring tests passed, including execution of the refusal step.
+- [x] H1-R1-MERGE — Retain both manual workflow inputs, guarded inherited secrets, main's image cache configuration and the Decision plan while merging c8ec01237; no Track writes.
+- [x] BR822-EX4 — Merged origin/main c8ec01237 in 93de7e1ee to resolve the workflow conflict blocking pull_request CI; no rebase. Impact: inherited reviewed CI-image changes, retained Decision guards and this plan; temporary integration allowances removed. Rollback: revert the merge. Both parent event logs retain all 370 event IDs; acceptance writes remain with the designated conductor.
