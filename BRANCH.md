@@ -78,6 +78,7 @@
   - [ ] Durable roster, registry origins, admissions/acknowledgements, freeze exclusions/digest, refusals, receipts, inverse and revert records.
   - [ ] Transactionally commit update/receipt/inverse/formatting intents; preserve retained dependency references during compaction.
 - [ ] **Lot 3 — Recovery and commit-gated publication**
+  - [x] Implemented fresh committed-state reconstruction and discarded scratch candidates; no rejected tombstone reaches shared state.
   - [ ] Restore fresh document from checkpoint plus exact suffix; reject inconsistent watermark and digest.
   - [ ] Rebuild committed state after candidate persistence failure; gate all further publication until recovery succeeds.
   - [ ] GREEN recovery and journal witnesses, including semantic same-value formatting reassertion.
