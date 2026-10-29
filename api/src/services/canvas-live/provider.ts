@@ -90,6 +90,6 @@ export class LiveSessionProvider {
   private invalidate(record: AdmissionRecord) {
     this.registry.revoke(record);
     for (const entry of this.bindings.values()) if (admissionKey(entry.record, entry.record.documentId) === admissionKey(record, record.documentId)
-      && entry.record.sessionEpoch === record.sessionEpoch) entry.revoked = true;
+      && entry.record.sessionEpoch === record.sessionEpoch && entry.record.sessionId === record.sessionId) entry.revoked = true;
   }
 }

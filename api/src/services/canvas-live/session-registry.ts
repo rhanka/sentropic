@@ -109,7 +109,7 @@ export class SessionRegistry {
     if (record.closed || this.revoked.has(admissionRef(record))) throw new AdmissionError('revoked');
   }
   private assertSession(session: LocalSession, record: AdmissionRecord) {
-    if (session.sessionId !== record.sessionId) throw new AdmissionError('invalid-binding');
+    if (session.closed || session.sessionId !== record.sessionId) throw new AdmissionError('invalid-binding');
     if (session.profileId !== record.profileId || session.schemaEpoch !== record.schemaEpoch) throw new AdmissionError('incompatible-schema');
   }
   private prune(key: string, session: LocalSession) {
