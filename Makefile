@@ -1028,6 +1028,25 @@ ci-package-verify:
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(MANIFEST_GUARD_ENV) \
 		-e CANDIDATE_NODE_IMAGE="$(LLM_MESH_NODE_IMAGE)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
 		sh -ec 'export CANDIDATE_NPM_VERSION="$$(npm --version)"; $(MANIFEST_GUARD_TOOLS); node scripts/ci/package-candidate.mjs verify "$(CI_PACKAGE_CANDIDATES)" cluster-mesh'
+.PHONY: ci-package-qualification
+ci-package-qualification: ci-package-verify
+	@case "$(PACKAGE_LANE)" in \
+	  source) $(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-storage-deps-audit cluster-mesh-comments-deps-audit lint-cluster-mesh typecheck-cluster-mesh test-cluster-mesh ENV=$(ENV) ;; \
+	  postgres) $(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test ENV=$(ENV) ;; \
+	  comments) $(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-comments-test ENV=$(ENV) ;; \
+	  crash) $(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-crash-test ENV=$(ENV) ;; \
+	  stateful) $(MAKE) cluster-mesh-workspace CM_ACTION=stateful-consumer ENV=$(ENV) ;; \
+	  lazy) $(MAKE) -f packages/cluster-mesh/packaging.mk test-lazy-package SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json ENV=$(ENV) ;; \
+	  installed|major|install) \
+	    tarball="$$(find "$(CI_PACKAGE_CANDIDATES)/cluster-mesh" -name '*.tgz')"; \
+	    case "$(PACKAGE_LANE)" in \
+	      installed) target=cluster-mesh-comments-installed ;; \
+	      major) target=cluster-mesh-pg-major-upgrade ;; \
+	      install) exec $(MAKE) qualify-published-install TARBALL="$$tarball" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.30.0,@sentropic/llm-gateway@0.21.5,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=$(ENV) ;; \
+	    esac; \
+	    $(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk "$$target" CM_COMMENTS_TARBALL="$$tarball" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json CM_COMMENTS_REPORT=tmp/ci-manifest-guard/qualify-cluster-mesh/$(PACKAGE_LANE) ENV=$(ENV) ;; \
+	  *) echo 'Unknown package qualification lane' >&2; exit 1 ;; \
+	esac
 cluster-mesh-workspace:
 	@$(CM_RUN) -u "$$(id -u):$$(id -g)" \
 		-e HOME=/tmp -e CM_ACTION="$(CM_ACTION)" -e CM_PEER_TOOLS="$(CLUSTER_MESH_PEER_TOOLS)" \
