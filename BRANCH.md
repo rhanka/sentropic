@@ -30,6 +30,7 @@
   - `api/src/routes/namespaces/admin-product-authority.ts`
   - `api/src/services/admin-approval-sweep.ts`
   - `deploy/k8s/base/35-auth-idp.yaml`
+  - `deploy/k8s/base/15-networkpolicy.yaml`
   - `deploy/k8s/base/30-api.yaml`
   - `.github/workflows/ci.yml`
   - `.github/workflows/idp-session-secret.yml`
@@ -68,6 +69,7 @@
   - [x] Declare BRRC1-EXn with rationale, impact and rollback before any conditional edit.
 
 ## Feedback Loop
+- [x] BRRC1-EX9: F6's authenticated service channel requires API-to-IdP ingress through the existing default-deny NetworkPolicy. Add only same-namespace sentropic/api to sentropic/auth-idp TCP 8787, with manifest selftests pinning selectors, port and Service target. Impact: enables the signed deny-only channel; no public HTTP relaxation or live apply. Rollback: remove this policy together with F6 transport.
 - [x] F6 socket fixture correction: Node fetch rewrites Host when redirecting the service URL to loopback; use node:http to preserve the deployed auth-idp Host, and assert the node-server's reconstructed origin. Temporary diagnostics removed; no product transport relaxation.
 - [x] F6 typecheck caught the bounded reader's Uint8Array boundary; request MAC now hashes raw body bytes directly, preserving byte integrity without coercion or decoding.
 - [x] Integrated origin/main a3204932e after F6 with a two-parent merge; BRANCH.md was the sole conflict and this PR's plan was kept. Upstream canvas paths are unchanged; no rebase or provisioning.

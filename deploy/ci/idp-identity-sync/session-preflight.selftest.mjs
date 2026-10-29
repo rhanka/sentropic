@@ -57,6 +57,19 @@ export function sessionPreflightTests(check, load) {
     assert.deepEqual(api.spec.template.spec.containers[0].env.find(e => e.name === 'REMOTE_ACTION_ROLE'),
       { name: 'REMOTE_ACTION_ROLE', value: 'product' });
   });
+  check('revocation service hop admits only same-namespace product pods on the IdP port', () => {
+    const policy = load('deploy/k8s/base/15-networkpolicy.yaml').find(o => o.metadata?.name === 'allow-api-to-auth-idp');
+    const idp = load('deploy/k8s/base/35-auth-idp.yaml').find(o => o.kind === 'Deployment');
+    const service = load('deploy/k8s/base/35-auth-idp.yaml').find(o => o.kind === 'Service');
+    const api = load('deploy/k8s/base/30-api.yaml').find(o => o.kind === 'Deployment');
+    assert.deepEqual(policy.spec.podSelector.matchLabels, idp.spec.selector.matchLabels);
+    assert.deepEqual(policy.spec.policyTypes, ['Ingress']);
+    assert.deepEqual(policy.spec.ingress, [{ from: [{ podSelector: { matchLabels: api.spec.selector.matchLabels } }],
+      ports: [{ protocol: 'TCP', port: 8787 }] }]);
+    assert.equal(service.metadata.name, 'auth-idp');
+    assert.deepEqual(service.spec.selector, idp.spec.selector.matchLabels);
+    assert.deepEqual(service.spec.ports, [{ name: 'http', port: 8787, targetPort: 8787 }]);
+  });
   check('CD cannot apply before the read-only IdP preflight succeeds', () => {
     const [workflow] = load('.github/workflows/ci.yml');
     const steps = workflow.jobs['deploy-preprod'].steps;
