@@ -10,7 +10,7 @@
 - [x] `ENV=test-canvas-h2` last; `API_PORT=8801 UI_PORT=5201 MAILDEV_UI_PORT=1101`.
 - [x] Docker operations hold `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; finish with `make down`.
 - [x] One branch migration maximum; no storage expiry invented; artifacts lifecycle remains authoritative.
-- [x] Atomic commits ≤150 changed lines through `make commit`; selective staging; merge only, never rebase.
+- [x] Atomic commits ≤150 changed lines through `make commit`; selective staging; update this PR with `git rebase origin/main` and push only its branch with `--force-with-lease` per COMMON-RULES.
 - [x] Draft PR to main; retain BRANCH.md; no merge requested.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -49,10 +49,13 @@
   - [x] Record BRH2-EXn reason, impact and rollback before any additional conditional change.
 
 ## Feedback Loop
+- [x] PR #833 Opus r1 findings 1/3: populated tenant/workspace scopes share document/actor/session/transaction/patch/checkpoint identifiers with distinct payloads; assert isolated content, head, journal, receipts and checkpoint history plus unchanged peer scopes after writes. Tenant-filter and workspace-filter mutations both fail on leaked journals; restored adapter passes H2 23/23. Corrected Lot 1 isolation claim and marked DS/Focus host-port mirrors provisional with the H3 published-import replacement gate.
+- [ ] PR #833 Opus r1 finding 2: wait for #830 merge, rebase onto origin/main, preserve H1 draft acknowledgement and H2 checkpoint/suffix recovery suites, then run the post-rebase package-version gate and exact-head CI.
 - [x] BRH2-EX2 — CI job 123301301873 fails full manifest parity because the historical router reads pinned journal 0043 while the product reads H2 journal 0048; session-denial logs belong to passing chat tests. Scope: parity harness and fixture documentation only. Bridge historical journal reads to the current product input, preserve pinned bytes/digests and complete archive equality. Rollback: revert the test bridge and documentation together.
 - [ ] Peer dispatch awaits the owner's reply to the repository-mandated launch approval request; no consensus review is claimed. Dossier: `.tmp/canvas-h2-review/dossier.md` in the main workspace.
 - [x] BRH2-EX1 — Root Docker npm ci dry-run reproduced missing chat-core 0.1.7: chat-server's old dependency excludes 0.2.0. Scope: its manifest and existing locks only. Advance to the new substantive port rather than installing another old stub; no server source changes. Rollback: revert manifest and matching lock entries together.
-- [ ] Deferred integration: H1 final admission/registry wiring waits for #830 merge; H3 owns real provider conformance, H4 real inverse qualification, H5 publication authority, H10 production activation/N4 retirement.
+- [ ] Deferred integration: bind `LiveAdmission` to H1 `AdmissionRecord` with a type-level assignability check at host composition after #830 lands; H3 owns registry wiring and real provider conformance, H4 real inverse qualification, H5 publication authority, H10 production activation/N4 retirement.
+- [ ] H3 replacement gate: DS/Focus-shaped receipts, affected items, formatting intents, actor kinds and paragraphs exported by chat-core are provisional host-port mirrors, not DS conformance. Replace with exact published DS canvas-live / Focus editing imports when those versions expose the contracts, before claiming provider conformance; keep DS-owned code outside the host.
 - [x] User instruction replaces the LiveDocumentStore stub now; one exported substantive port, no alias or fallback.
 - [x] Focus editing API pinned to h2a `98060bd0a` (0.5.0, unpublished: npm E404); inject its exact diff contract and use the planned FE-3 test double, without substituting the app-local Focus package.
 
@@ -60,7 +63,7 @@
 - [x] No AI calls in H2 acceptance; no flaky exceptions requested.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; single code author; merge-only integration.
+- [x] Mono-branch; single code author; rebase onto origin/main for PR updates per COMMON-RULES.
 
 ## UAT Management (in orchestration context)
 - [x] No UI, Chrome or VSCode flow changes; acceptance uses host service and database witnesses.
@@ -75,7 +78,7 @@
   - [x] Recovery RED: Docker Vitest fails on missing persistence module, before implementation.
   - [x] PostgreSQL crash/rollback, restart, idempotency, journal metadata and tenant witnesses authored before adapter implementation.
   - [x] Replace stub with host-only persistence contract; chat-core 0.2.0 exceeds npm 0.1.7 (Docker npm view).
-  - [x] RED `api/tests/unit/canvas-live-recovery.test.ts`: checkpoints, replay, delete set/vector, epoch, corrupted watermark, tenant isolation.
+  - [x] RED `api/tests/unit/canvas-live-recovery.test.ts`: checkpoints, replay, delete set/vector, epoch, corrupted watermark; tenant/workspace isolation is covered by the PostgreSQL suite below.
   - [x] RED `api/tests/unit/canvas-live-journal.test.ts`: receipts, inverse/provenance atomicity, publish after commit, rebuild after failure; retention witness follows.
   - [x] RED `api/tests/unit/canvas-live-freeze-capture.test.ts`: cumulative retained-baseline diff and undo to baseline.
   - [x] RED `api/tests/api/canvas-live-persistence.test.ts`: missing adapter module; real PostgreSQL rollback, restart, duplicate keys and scope.

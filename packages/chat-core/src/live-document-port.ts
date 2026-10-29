@@ -1,4 +1,8 @@
-/** Host persistence contract, frozen DS canvas-live §7.4. Bytes are base64.
+/** Host persistence port informed by DS canvas-live §7.4. Bytes are base64.
+ * DS/Focus-shaped types below (receipts, affected items, formatting intents,
+ * actor kinds and paragraphs) are provisional host-port mirrors, not DS conformance.
+ * H3 must replace them with exact published DS canvas-live / Focus editing imports
+ * when those versions expose these contracts, before provider conformance is claimed.
  * A codec must preserve item identities and delete sets (including inverse targets).
  * Authentication/admission is supplied by the host, never by a client payload. */
 export interface LiveDocumentIdentity {
@@ -24,7 +28,7 @@ export interface LiveBaseline {
   }[];
   paragraphs: readonly LiveParagraph[];
 }
-/** Exact ParagraphValue address at h2a 98060bd0a, Focus editing 0.5.0.
+/** Provisional ParagraphValue mirror at h2a 98060bd0a, Focus editing 0.5.0 (unpublished).
  * The host injects that API; no app-local Focus implementation is substituted. */
 export interface LiveParagraph {
   documentRef: string;
@@ -103,7 +107,8 @@ export interface LiveFormattingIntent {
   range: { start: string; end: string };
   items: readonly { client: number; clock: number }[];
 }
-/** H1 admission facts: epoch survives reconnect and changes only on new admission. */
+/** Provisional H1 admission mirror; bind to AdmissionRecord at host composition.
+ * Epoch survives reconnect and changes only on new admission. */
 export interface LiveAdmission extends LiveDocumentIdentity {
   sessionId: string;
   sessionEpoch: string;
