@@ -1,4 +1,4 @@
-# Feature: W3.d default-closed artifact content infrastructure
+# Feature: app cluster-mesh integration
 
 ## Objective
 - [x] Deliver the content Kubernetes workload and isolated TLS routes without activating artifacts or accessing any cluster.
@@ -17,6 +17,24 @@
 ## Branch Scope Boundaries (MANDATORY)
 - [x] **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
+  - `.dockerignore`
+  - `.tmp/live-stt/**`
+  - `docker-compose.yml`
+  - `.github/workflows/**`
+  - `.security/**`
+  - `Makefile`
+  - `api/**`
+  - `apps/**`
+  - `deploy/**`
+  - `docs/**`
+  - `e2e/**`
+  - `package.json`
+  - `package-lock.json`
+  - `packages/**`
+  - `plan/**`
+  - `scripts/**`
+  - `spec/**`
+  - `ui/**`
   - `deploy/k8s/base/artifact-content-*.yaml`
   - `deploy/k8s/base/kustomization.yaml`
   - `deploy/k8s/base/30-api.yaml`
@@ -30,13 +48,9 @@
   - `deploy/ci/idp-identity-sync/workflow.selftest.mjs`
   - `docs/runbooks/app-artifact-content-infrastructure.md`
 - [x] **Forbidden Paths (must not change in this branch)**:
-  - `docker-compose*.yml`
+  - `docker-compose.*.yml`
   - `.cursor/rules/**`
-  - `packages/**`
-  - `api/src/**`
-  - `api/drizzle/**`
   - `.track/**`
-  - `plan/**`
 - [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `Makefile`
   - `.github/workflows/ci.yml`
@@ -44,6 +58,10 @@
 - [x] **Exception process**: BR-CM-W3-EX1 below is the bounded inherited T3 build/deploy exception.
 
 ## Feedback Loop
+- [x] Integration render regression: automatic merge duplicated API container env. Combine decision secret references and explicit artifact flags in one list; preserve envFrom and all flags at 0. The existing overlay render gate reproduces the failure and verifies the correction.
+- [x] BR143-EX2 / explicit owner request: remove all six app-cm topic workflows after preserving every gate in ci.yml. Add test-artifact-content to the existing API unit executor for content tests/types/lint; existing API endpoints/services, API quality, manifest and image jobs retain all other gates. Impact: main PR CI owns qualification; rollback restores the topic workflows and removes only this additive gate.
+- [x] BR143-EX1 / owner request 29 October 2026: merge origin/main c37662a20 without rebase. Imported reviewed main changes are inherited merge content, outside the 150-line authored-change budget. Resolve README/host-fit by retaining W0 local recovery and W4.b supersession; preserve both Docker build intents, both alias sets and both migration identities. Impact: refreshed integration base only, all production gates remain closed. Rollback: revert the merge on this integration branch; never rewrite main.
+- [x] BR143-EX1 scope: the following additional Allowed Paths apply only to unchanged origin/main imports and the six named conflict resolutions; later authored work requires the bounded integration scope.
 - [x] BR03d-EX2 / owner acknowledgment: PR #814 correction request (2026-10-28), Opus r1 P2-2. Defer actual release digest to W5; existing prod `:main` and CD content-hash `newTag` remain acceptable only while all three API/content flags are explicitly `0` (health/denial, no private serving). Impact: closed workloads run registry tags until W5; render gate rejects any flag `1` without SHA-256 digest-pinned API/content images. Rollback: keep all flags `0` and restore the prior qualified image/config; W5 replaces tags with the tested published digest before any opening.
 - [x] BR03d-EX1 (mechanical alias of BR-CM-W3-EX1) / acknowledged by owner W3.d packet and W0 reservations: add a render-only Make target/include and CI invocation. Impact: offline qualification only; rollback: remove include/step and content resources, retain closed flags. No deploy target execution or general CI refactor.
 - [x] Tenant handoff: DNS/TLS provisioning, dedicated namespace-local credentials, private bucket checkpoint/restore and actual accepted image digest remain external receipts; document exact gates without asserting live readiness.
@@ -86,6 +104,7 @@
   - [x] Independent receiving review received: Opus r1 at `.h2a/reviews/pr814_opus_r1.md`, head `e6b59ccd0`, CHANGES (P2-1/P2-2); author corrections supplied here. Conductor owns receiving acceptance of the corrected head; no new review consensus claimed.
   - [x] Create draft PR #814 against `feat/app-cm-integration` using this file; final pushed-head CI receipt is recorded in its validation comment. First green run: `40644234492` at `fb170161b29870b439d1e5f36822ab351d3d9e42`.
   - [x] Run locked `make down ps API_PORT=8806 UI_PORT=5192 MAILDEV_UI_PORT=1099 ENV=test-app-w3d`: no services remain.
+- [x] Integration merge: reconcile origin/main and W0 baseline #702 with the reviewed integration lots; preserve the W3.d historical checklist above.
 
 ## Inherited main qualification record
 
