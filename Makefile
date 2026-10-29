@@ -3462,7 +3462,21 @@ security-daily-scan: ## Emit a local raw receipt; incomplete coverage exits nonz
 		sh -ec 'tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund yaml@2.8.1 semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node scripts/security/daily/scan.mjs'
 
 test-security-daily: ## Run daily inventory, schema and adapter regressions in the approved pinned Node lane
-	@$(MAKE) test-publishable-manifests MANIFEST_GUARD_IMAGE="$(MEMORY_L5_NODE_IMAGE)" SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs scripts/security/daily/scan.test.mjs" ENV=$(ENV)
+	@$(MAKE) test-publishable-manifests MANIFEST_GUARD_IMAGE="$(MEMORY_L5_NODE_IMAGE)" SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs scripts/security/daily/scan.test.mjs scripts/security/daily/toolchain-contract.test.mjs scripts/security/daily/trivy.test.mjs" ENV=$(ENV)
+
+# SECDAILY-EX1: explicit DB preparation, never scanner admission or scheduled activation.
+.PHONY: security-daily-trivy-status security-daily-trivy-prepare
+security-daily-trivy-status: ## Emit frozen option B identities and qualification gaps (exits nonzero)
+	@docker run --rm --network=none --read-only --cap-drop=ALL --security-opt=no-new-privileges \
+		-u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace \
+		$(MEMORY_L5_NODE_IMAGE) node scripts/security/daily/toolchain-preflight.mjs status
+
+security-daily-trivy-prepare: ## Ingest trusted OCI DB snapshots; qualification remains blocked (exits nonzero)
+	@mkdir -p tmp/security-daily/trivy-cache && chmod 700 tmp/security-daily/trivy-cache
+	@docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges --memory=512m --cpus=1 \
+		--pids-limit=128 --tmpfs /tmp:rw,nosuid,nodev,noexec,size=128m -u "$$(id -u):$$(id -g)" \
+		-v "$(CURDIR):/workspace:ro" -v "$(CURDIR)/tmp/security-daily/trivy-cache:/cache" -w /workspace \
+		$(MEMORY_L5_NODE_IMAGE) node scripts/security/daily/toolchain-preflight.mjs acquire
 
 .PHONY: test-%-security-container
 test-%-security-container: ## Run container scan (Trivy) on service image (usage: make test-api-security-container, make test-ui-security-container)
