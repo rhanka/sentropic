@@ -4,6 +4,16 @@ E11_INPUT ?= $(CURDIR)/tmp/engram-e11-current
 E11_REPOSITORY ?= $(shell git rev-parse --path-format=absolute --git-common-dir | sed 's@/\.git$$@@')
 E11_RETAIN ?= $(E11_REPOSITORY)/.tmp/engram-e2-host-tuple/e11b-current
 E11_IMAGE := node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
+E11_REVIEW_HEAD := 1deb70a5f530aca72ea9200c219e6865ca24f9c7
+E11_REVIEW_WT := $(CURDIR)/tmp/engram-e11-reviewed
+.PHONY: memory-e11-reviewed-prepare
+# Preserve the approved dev.7 proof independently of the stable release campaign.
+memory-e11-reviewed-prepare:
+	@test -n "$(filter test-e2-int test-mem-release,$(ENV))"
+	@test ! -e "$(E11_REVIEW_WT)"
+	@git worktree add --detach "$(E11_REVIEW_WT)" $(E11_REVIEW_HEAD)
+	@flock "$(E2_LOCK)" $(MAKE) -C "$(E11_REVIEW_WT)" engram-e2-lane E2_LANE=stage-b ENV=$(ENV)
+
 E11_RUN = docker run --rm --network none -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -v "$(E11_INPUT):/evidence" -w /workspace $(E11_IMAGE)
 .PHONY: memory-e11-prepare memory-e11-generate memory-e11-check memory-e11-test
 memory-e11-prepare:
