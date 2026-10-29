@@ -1,12 +1,12 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { eq, inArray } from 'drizzle-orm';
+import { eq, inArray, like } from 'drizzle-orm';
 import { SignJWT } from 'jose';
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../../../src/db/client';
-import { users, userSessions, workspaces } from '../../../src/db/schema';
+import { settings, users, userSessions, workspaces } from '../../../src/db/schema';
 import { createSession, revokeSession, revokeAllSessions, validateSession } from '../../../src/services/session-manager';
 import { getRemoteSessionAuthority } from '../../../src/services/auth/remote-private-session';
 import { resolveRemoteLogin } from '../../../src/services/auth/remote-session';
@@ -18,6 +18,7 @@ import { accountRouter } from '../../../src/routes/namespaces/auth/account';
 import { adminRouter } from '../../../src/routes/namespaces/admin-product-authority';
 import { runAdminApprovalSweep } from '../../../src/services/admin-approval-sweep';
 import { signRevocation, revocationServiceOrigin } from '../../../src/services/auth/remote-revocation-transport';
+import { pendingRemoteRevocations } from '../../../src/services/auth/remote-revocation-outbox';
 
 const issuer = 'https://idp.example.test', resource = `${issuer}/remote-revocation`;
 const clientId = 'test-product-revoker', path = '/api/v1/auth/session/remote-revocations';
@@ -35,6 +36,7 @@ beforeEach(async () => {
   await db.insert(users).values({ id: userId, email: `${userId}@example.test`, emailVerified: true, role: 'editor' });
 });
 afterEach(async () => {
+  await db.delete(settings).where(like(settings.key, 'remote_session_revocation:%'));
   await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
   await db.delete(users).where(eq(users.id, userId));
   vi.unstubAllEnvs(); vi.unstubAllGlobals();
@@ -106,7 +108,7 @@ describe('RC1 product to issuer revocation', () => {
     expect(await validateSession(tokens.sessionToken)).toMatchObject({ userId });
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
   });
-  it.each(['self-delete', 'admin-delete'])
+  it.each(['self-deactivate', 'self-delete', 'admin-disable', 'admin-delete'])
   ('should commit %s destruction even when issuer delivery fails', async operation => {
     const workspaceId = crypto.randomUUID();
     await db.insert(workspaces).values({ id: workspaceId, ownerUserId: userId, name: 'RC1 failed delivery' });
@@ -114,13 +116,24 @@ describe('RC1 product to issuer revocation', () => {
     if (operation === 'admin-delete') await db.update(users).set({ accountStatus: 'disabled_by_admin' }).where(eq(users.id, userId));
     vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
     vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('issuer unavailable')));
-    const endpoint = operation === 'admin-delete' ? `/admin/users/${userId}` : '/account';
-    const response = await lifecycleApp(workspaceId, operation === 'admin-delete')
-      .request(`https://product.example.test${endpoint}`, { method: 'DELETE' });
-    expect(response.status).toBe(500);
-    expect(await db.select().from(users).where(eq(users.id, userId))).toEqual([]);
+    const admin = operation.startsWith('admin');
+    const endpoint = admin ? `/admin/users/${userId}${operation === 'admin-disable' ? '/disable' : ''}`
+      : `/account${operation === 'self-deactivate' ? '/deactivate' : ''}`;
+    const response = await lifecycleApp(workspaceId, admin).request(`https://product.example.test${endpoint}`, {
+      method: operation.endsWith('delete') ? 'DELETE' : 'POST',
+      ...(operation === 'admin-disable' ? { headers: { 'content-type': 'application/json' }, body: '{}' } : {}),
+    });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'authority_unavailable', revocation: 'pending' });
+    expect(response.headers.get('retry-after')).toBe('60');
+    if (operation.endsWith('delete')) expect(await db.select().from(users).where(eq(users.id, userId))).toEqual([]);
     expect(await db.select().from(userSessions).where(eq(userSessions.userId, userId))).toEqual([]);
-    expect(await db.select().from(workspaces).where(eq(workspaces.id, workspaceId))).toEqual([]);
+    if (operation.endsWith('delete')) expect(await db.select().from(workspaces).where(eq(workspaces.id, workspaceId))).toEqual([]);
+    expect(await pendingRemoteRevocations()).toHaveLength(1);
+    await bridge();
+    // No user or session row is needed to drain a committed intent on a later scheduled sweep.
+    await runAdminApprovalSweep();
+    expect(await pendingRemoteRevocations()).toEqual([]);
   });
   it('should expire every selected user even when all issuer deliveries fail', async () => {
     const otherId = crypto.randomUUID();
