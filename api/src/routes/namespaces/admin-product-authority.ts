@@ -18,6 +18,8 @@ import {
 import { getTenantResolutionMetrics } from '../../services/tenancy/tenant-resolution-metrics';
 import { revokeAllSessions } from '../../services/session-manager';
 import { tombstoneRemoteSessions } from '../../services/auth/remote-revocation';
+import { queueRemoteRevocation } from '../../services/auth/remote-revocation-outbox';
+import { remoteRevocationError } from '../../services/auth/remote-revocation-error';
 import {
   captureConnectorGrantsForTeardown,
   recordConnectorGrantTombstones,
@@ -25,6 +27,7 @@ import {
 } from '../../services/connector-grant-teardown';
 
 export const adminRouter = new Hono();
+adminRouter.onError(remoteRevocationError);
 export const tenantResolutionMetricsRouter = new Hono();
 
 tenantResolutionMetricsRouter.get('/', (c) => c.json(getTenantResolutionMetrics()));
@@ -366,7 +369,8 @@ adminRouter.delete('/users/:id', async (c) => {
 
     // Finally delete user
     await tx.delete(users).where(eq(users.id, userId));
-    return sessions;
+    const input = { sessionIds: sessions.map(row => row.id), userId };
+    return { input, key: await queueRemoteRevocation(input, tx) };
   });
 
   // Only after a successful commit — a rolled-back transaction must not leave a revoked grant
@@ -374,7 +378,7 @@ adminRouter.delete('/users/:id', async (c) => {
   try {
     await revokeCapturedConnectorGrants(capturedGrants);
   } finally {
-    await tombstoneRemoteSessions({ sessionIds: deletedSessions.map(row => row.id), userId });
+    await tombstoneRemoteSessions(deletedSessions.input, deletedSessions.key);
   }
 
   return c.json({ success: true });

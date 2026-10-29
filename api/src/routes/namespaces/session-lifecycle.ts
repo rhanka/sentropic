@@ -3,6 +3,8 @@ import type { SessionRouteHandlers } from '@sentropic/cluster-mesh';
 import type { Context } from 'hono';
 import { z } from 'zod';
 import { logger } from '../../logger';
+import { remoteRevocationError } from '../../services/auth/remote-revocation-error';
+import { RemoteAuthorityError } from '../../services/auth/remote-contract';
 import {
   authHonoCookiePort,
   authHonoSessionService,
@@ -83,7 +85,13 @@ export const sessionLifecycleHandlers: SessionRouteHandlers = {
     }
   },
 
-  logout: packaged.logout!,
+  async logout(c) {
+    try { return await packaged.logout!(c); }
+    catch (error) {
+      if (error instanceof RemoteAuthorityError) return remoteRevocationError(error, c);
+      throw error;
+    }
+  },
 
   async logoutAll(c) {
     try {
@@ -96,6 +104,7 @@ export const sessionLifecycleHandlers: SessionRouteHandlers = {
       logger.info({ userId: session.userId }, 'All sessions logged out');
       return c.json({ success: true, message: 'Logged out from all devices' });
     } catch (error) {
+      if (error instanceof RemoteAuthorityError) return remoteRevocationError(error, c);
       logger.error({ err: error }, 'Error logging out all sessions');
       return c.json({ error: 'Failed to logout from all devices' }, 500);
     }

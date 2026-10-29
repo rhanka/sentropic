@@ -26,6 +26,7 @@
   - `api/src/routes/auth/oauth.ts`
   - `api/src/routes/namespaces/auth/federation.ts`
   - `api/src/routes/namespaces/auth/account.ts`
+  - `api/src/routes/namespaces/session-lifecycle.ts`
   - `api/src/routes/namespaces/admin-product-authority.ts`
   - `api/src/services/admin-approval-sweep.ts`
   - `deploy/k8s/base/35-auth-idp.yaml`
@@ -58,6 +59,7 @@
   - [x] Declare BRRC1-EXn with rationale, impact and rollback before any conditional edit.
 
 ## Feedback Loop
+- [x] BRRC1-EX7: F6 directly requires the product session-lifecycle adapter to map issuer unavailability to 503 with cleared cookies; atomic account deletion queues IDs before commit. Impact: defined retryable failure after local revocation, no false issuer acknowledgement. Rollback: revert F6 as a unit while disabling remote authority.
 - [x] F6 recovery: canonical session/OAuth deletion atomically queues credential-free revocation intents in existing settings storage; authenticated issuer acknowledgements remove only the delivered intent. Pending intents remain after unavailable delivery and can be drained after restart.
 - [x] F6 transport: use the existing auth-idp ClusterIP HTTP service with exact S2S claims plus a fresh MAC binding method/path/body/token; require a request-bound authenticated durable acknowledgement. External HTTP and spoofed forwarding remain refused; no provisioning performed.
 - [x] BRRC1-EX6: import origin/main ecca3a0d5 by merge to resolve the PR's BRANCH.md conflict after PR826. The eight additionally allowed Makefile/plan/scripts/CI-study paths are inherited only and must match that main commit byte for byte; no RC1 edits to those files. Impact: qualify against the integrated CI DAG without rebasing or dropping the pre-apply guard. Rollback: revert the merge, retaining the RC1 commits; Track log blobs are identical on both parents.

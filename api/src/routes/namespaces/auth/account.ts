@@ -19,6 +19,8 @@ import {
 import { and, eq, inArray } from 'drizzle-orm';
 import { revokeAllSessions } from '../../../services/session-manager';
 import { tombstoneRemoteSessions } from '../../../services/auth/remote-revocation';
+import { queueRemoteRevocation } from '../../../services/auth/remote-revocation-outbox';
+import { remoteRevocationError } from '../../../services/auth/remote-revocation-error';
 import {
   captureConnectorGrantsForTeardown,
   recordConnectorGrantTombstones,
@@ -26,6 +28,7 @@ import {
 } from '../../../services/connector-grant-teardown';
 
 export const accountRouter = new Hono();
+accountRouter.onError(remoteRevocationError);
 
 accountRouter.get('/', async (c) => {
   const { userId, workspaceId, role } = c.get('user');
@@ -188,7 +191,8 @@ accountRouter.delete('/', async (c) => {
 
     // Finally delete user
     await tx.delete(users).where(eq(users.id, userId));
-    return sessions;
+    const input = { sessionIds: sessions.map(row => row.id), userId };
+    return { input, key: await queueRemoteRevocation(input, tx) };
   });
 
   // Only after a successful commit. Revoking earlier would kill the grant of an account that a
@@ -196,7 +200,7 @@ accountRouter.delete('/', async (c) => {
   try {
     await revokeCapturedConnectorGrants(capturedGrants);
   } finally {
-    await tombstoneRemoteSessions({ sessionIds: deletedSessions.map(row => row.id), userId });
+    await tombstoneRemoteSessions(deletedSessions.input, deletedSessions.key);
   }
 
   return c.json({ success: true });
