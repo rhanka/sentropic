@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { digest, policy } from './toolchain-contract.mjs';
-import { executeImageScan, prepareImageScan, requireIacQualification, validateImageReport, validateTarget } from './trivy.mjs';
+import { executeImageScan, prepareImageScan, requireIacQualification, validateComparison, validateImageReport, validateTarget } from './trivy.mjs';
 import { preflight } from './toolchain-preflight.mjs';
 
 const sourceSha = 'a'.repeat(40);
@@ -60,6 +60,13 @@ test('should prepare immutable remote and disconnected archive scans with isolat
   await assert.rejects(prepareImageScan({ ...options, archive: { path, digest: digest('bad') } }), /archive integrity/);
   await assert.rejects(prepareImageScan({ ...options, snapshots: { vulnerability: snapshots.vulnerability } }), /Java/);
   await assert.rejects(prepareImageScan({ ...options, now: now + 86400000 }), /freshness/);
+  const before = { ...remote, status: 0, rawHash: digest('before') };
+  const after = { ...remote, status: 0, rawHash: digest('after') };
+  assert.equal(await validateComparison(before, after, now), true);
+  for (const field of ['parametersHash', 'policyHash', 'scannerIdentity', 'databaseIdentity']) {
+    await assert.rejects(validateComparison(before, { ...after, [field]: digest('changed') }, now), /rescan both inputs/);
+  }
+  await assert.rejects(validateComparison(before, after, now + 86400000), /freshness/);
 });
 
 test('should preserve low severity raw findings and refuse incomplete or wrong-target reports', () => {

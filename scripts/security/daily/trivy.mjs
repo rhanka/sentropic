@@ -53,7 +53,8 @@ export async function prepareImageScan({ target, sourceSha, key, snapshots, arch
     '--network', archive ? 'none' : 'bridge', '--tmpfs', '/tmp:rw,nosuid,nodev,noexec,size=256m',
     '--tmpfs', '/cache:rw,nosuid,nodev,noexec,size=16m', '--env', 'HOME=/tmp', ...mounts,
     '--platform', policy.platform, `${policy.repository}@${policy.manifestDigest}`, ...args],
-    target, sourceSha, snapshots, databaseIdentity: Object.fromEntries(Object.entries(receipts).map(([kind, receipt]) =>
+    target, sourceSha, snapshots, parametersHash: digest(JSON.stringify(args.slice(0, -1))),
+    policyHash: digest(JSON.stringify(policy)), databaseIdentity: Object.fromEntries(Object.entries(receipts).map(([kind, receipt]) =>
       [kind, { manifestDigest: receipt.manifestDigest, receiptHash: snapshots[kind].receiptHash }])),
     scannerIdentity: { version: policy.version, indexDigest: policy.indexDigest, manifestDigest: policy.manifestDigest } };
 }
@@ -84,7 +85,27 @@ export async function executeImageScan(options, scannerEvidence, execute) {
   // A DB that expired during scanning cannot support absence/reconciliation/merge.
   for (const snapshot of Object.values(plan.snapshots)) await restoreSnapshot(snapshot);
   return { ...result, rawHash: digest(result.stdout), scannerIdentity: plan.scannerIdentity,
-    databaseIdentity: plan.databaseIdentity, target: plan.target, sourceSha: plan.sourceSha };
+    databaseIdentity: plan.databaseIdentity, target: plan.target, sourceSha: plan.sourceSha,
+    parametersHash: plan.parametersHash, policyHash: plan.policyHash, snapshots: plan.snapshots };
+}
+
+export async function validateComparison(before, after, now = Date.now()) {
+  requireEvidence(before.status === 0 && after.status === 0 && isDigest(before.rawHash) && isDigest(after.rawHash) &&
+    before.target?.key === after.target?.key && before.target?.platform === policy.platform &&
+    after.target?.platform === policy.platform, 'comparison scan receipts');
+  for (const field of ['parametersHash', 'policyHash', 'scannerIdentity', 'databaseIdentity']) {
+    requireEvidence(before[field] && JSON.stringify(before[field]) === JSON.stringify(after[field]),
+      `comparison changed ${field}; rescan both inputs`);
+  }
+  for (const scan of [before, after]) {
+    for (const kind of ['vulnerability', 'java']) {
+      const snapshot = scan.snapshots?.[kind];
+      requireEvidence(snapshot && snapshot.receiptHash === scan.databaseIdentity[kind]?.receiptHash &&
+        snapshot.manifestDigest === scan.databaseIdentity[kind]?.manifestDigest, 'comparison snapshot identity');
+      await restoreSnapshot(snapshot, now);
+    }
+  }
+  return true;
 }
 
 export function requireIacQualification() {

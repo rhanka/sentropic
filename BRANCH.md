@@ -70,7 +70,7 @@
   - [x] Prepare socket-free, least-privilege remote/archive scans with immutable target/source/platform proof and frozen flags/data.
   - [x] Reject caller configuration and untrusted mirrors before acquisition; no automatic mirror fallback.
   - [x] Reject silent Java/IaC fallback and preserve all-severity raw diagnostics; live Java layer exceeds the prepared bound and stays blocked.
-  - [x] Keep unqualified execution gated and daily job off; expose frozen preparation identities in raw receipts.
+  - [x] Keep unqualified execution gated and daily job off; bind scanner/policy/flags/DB identities across comparisons and recheck freshness before merge.
 - [ ] **Lot 3 — Security regression fixtures**
   - [x] `toolchain-contract.test.mjs`: pin/version, publisher/platform/source, cache corruption/schema/dates and bounded acquisition failures; six tests pass.
   - [x] `trivy.test.mjs`: sandbox flags, environment isolation, report/target mismatch and unqualified execution refusal; four tests pass.
