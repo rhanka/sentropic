@@ -40,5 +40,8 @@
 - [ ] Lot 2: report bundling and checkpoint production; tests/proof-bundle.test.mjs covers absent/duplicate/nonexecuted/failed/skipped/stale/cross-manifest assertions; keep strict receipt rejection.
   - [x] Add proof-bundle.mjs: retain actual case names/statuses, reject missing or stale execution bindings and source reports for E4, and hash immutable per-proof reports.
   - [x] Add checkpoint.mjs to produce strict-verifier proposals and rejection receipts; unknown owner/CI/acceptance fields remain absent.
+  - [x] Tooling passes 134 tests; add memory-l5-candidate and memory-l5-checkpoint make delegations without changing P3 producing recipes.
 - [ ] Lot 3: resolve predecessor dispositions against the approved memory-first transfer, preserving all later R2/R7a obligations.
+  - [x] Add digest-pinned transfer resolution: L0 fixture must exist with its P3 hash; four remote suites remain explicit later R2/R7a 22-suite obligations. Frozen catalog unchanged.
+  - [x] Tooling passes 137 tests, including the incomplete-checkpoint regression: missing owner/CI/acceptance fields stay absent and the proposal is rejected.
 - [ ] Lot 4: scope-check and tooling gate; record review selection, push PR and verify exact-head CI; no publication or merge.
