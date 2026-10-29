@@ -9,12 +9,12 @@ function fixture() {
   const pending = new Map<string, string>();
   const migrate = vi.fn(async (bytes: Uint8Array) => new Uint8Array([...bytes, 42]));
   const ports = {
-    pending: async (key: string, id?: string) => { if (id) pending.set(key, id); return pending.get(key) ?? null; },
+    pending: async (key: string, id?: string | null, expected?: string) => { if (id === null && pending.get(key) === expected) pending.delete(key); else if (id) pending.set(key, id); return pending.get(key) ?? null; },
     update: async (key: string, change: (old?: PreservedDraft) => PreservedDraft) => {
       const value = change(drafts.get(key)); drafts.set(key, structuredClone(value)); return structuredClone(value);
     }, migrate,
   };
-  return { principal, facts, original, migrate, drafts, ports, recovery: new DraftRecovery(ports) };
+  return { principal, facts, original, migrate, drafts, pending, ports, recovery: new DraftRecovery(ports) };
 }
 describe('canvas incompatible draft recovery', () => {
   it.each(['client-upgrade', 'draft-migration'] as const)('should require explicit actor/draft acknowledgement for %s', async (branch) => {
@@ -38,8 +38,31 @@ describe('canvas incompatible draft recovery', () => {
   it('should preserve bytes across repeated incompatible retries without overwriting or acknowledging them', async () => {
     const f = fixture();
     await f.recovery.preserve(f.principal, f.facts.documentId, 'draft-b', { bytes: f.original, profileId: 'old@1', schemaEpoch: '1' });
-    const retry = await f.recovery.preserve(f.principal, f.facts.documentId, 'draft-b', { bytes: new Uint8Array([1]), profileId: 'old@1', schemaEpoch: '1' });
+    await expect(f.recovery.preserve(f.principal, f.facts.documentId, 'draft-b', { bytes: new Uint8Array([1]), profileId: 'old@1', schemaEpoch: '1' })).rejects.toMatchObject({ code: 'draft-id-reuse' });
+    const retry = await f.recovery.preserve(f.principal, f.facts.documentId, 'draft-b', { bytes: f.original, profileId: 'old@1', schemaEpoch: '1' });
     expect(retry.bytes).toEqual(f.original);
     await expect(f.recovery.acknowledge(f.principal, f.facts, 'draft-b')).rejects.toMatchObject({ code: 'incompatible-schema' });
+  });
+  it('should retain distinct immutable captures and recover the latest refused bytes', async () => {
+    const f = fixture();
+    await f.recovery.preserve(f.principal, f.facts.documentId, 'first', { bytes: f.original, profileId: 'old@1', schemaEpoch: '1' });
+    const latest = new Uint8Array([9, 8, 7]);
+    await f.recovery.preserve(f.principal, f.facts.documentId, 'second', { bytes: latest, profileId: 'old@1', schemaEpoch: '1' });
+    const migrated = await f.recovery.prepare(f.principal, f.facts, 'second', 'draft-migration');
+    expect(migrated.bytes).toEqual(latest); expect(migrated.prepared?.bytes).toEqual(new Uint8Array([...latest, 42]));
+    expect([...f.drafts.values()].map((draft) => draft.bytes)).toContainEqual(f.original);
+    await f.recovery.acknowledge(f.principal, f.facts, 'second');
+    await f.recovery.consumePendingAcknowledged(f.principal, f.facts);
+    expect(f.pending.size).toBe(0); expect(f.drafts.size).toBe(2);
+  });
+  it('should discard only the explicitly named actor draft and retain a newer pending capture', async () => {
+    const f = fixture();
+    for (const id of ['first', 'second']) await f.recovery.preserve(f.principal, f.facts.documentId, id, { bytes: f.original, profileId: 'old@1', schemaEpoch: '1' });
+    await expect(f.recovery.discard({ ...f.principal, tenantId: 'other' }, f.facts, 'second')).rejects.toMatchObject({ code: 'incompatible-schema' });
+    await f.recovery.discard(f.principal, f.facts, 'first');
+    expect([...f.pending.values()]).toEqual(['second']);
+    await expect(f.recovery.requirePendingAcknowledged(f.principal, f.facts)).rejects.toMatchObject({ code: 'incompatible-schema' });
+    await f.recovery.discard(f.principal, f.facts, 'second');
+    expect(f.pending.size).toBe(0); expect([...f.drafts.values()].every((draft) => draft.bytes.length === 0)).toBe(true);
   });
 });
