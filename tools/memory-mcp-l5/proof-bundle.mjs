@@ -1,6 +1,7 @@
 import { canonicalizeJson, sha256Hex } from './schema-validator.mjs';
 import { isCommitSha, isSha256Hex } from './receipt.mjs';
 import { readCandidateInput, writeImmutable } from './candidate.mjs';
+import { caseWasExecuted } from './proof-cases.mjs';
 
 export function normalizeReportPath(path) {
   const text = String(path).replaceAll('\\', '/');
@@ -10,7 +11,7 @@ export function normalizeReportPath(path) {
 }
 
 /** Preserve actual assertion names/statuses. Missing assertions never become passes. */
-export function bundleProof(catalog, inputs, binding) {
+export function bundleProof(catalog, inputs, binding, { sourceFiles = {} } = {}) {
   if (!isCommitSha(binding.sourceHead) || !isSha256Hex(binding.artifactManifestSha256) ||
       typeof binding.command !== 'string' || typeof binding.runId !== 'string' || !Number.isInteger(binding.attempt)) {
     throw Error('proof: exact execution binding required');
@@ -33,7 +34,7 @@ export function bundleProof(catalog, inputs, binding) {
       seen.add(file); rows.push({ ...result, name: file });
       if (result.status !== 'passed' || !result.assertionResults?.length) failures.push(`proof: failed/empty file ${file}`);
       for (const id of catalog.fileCases[file]) {
-        if (!result.assertionResults?.some(a => a.status === 'passed' && String(a.fullName || a.title).includes(id))) {
+        if (!caseWasExecuted(catalog, file, result, id, sourceFiles[file])) {
           failures.push(`proof: missing executed case ${id} in ${file}`);
         }
       }
@@ -59,7 +60,10 @@ export function retainProofBundle(root, directory, catalog, reportPaths, binding
   const proofs = [], failures = [];
   for (const row of catalog.proofs) {
     const current = { ...binding, command: binding.commands?.[row.id] ?? binding.command };
-    const actual = bundleProof(row, inputs, current);
+    const sourceFiles = Object.fromEntries(row.files.flatMap(file => {
+      try { return [[file, sha256Hex(readCandidateInput(root, file))]]; } catch { return []; }
+    }));
+    const actual = bundleProof(row, inputs, current, { sourceFiles });
     const ref = writeImmutable(root, `${directory}/${row.id}.json`, actual.report, { compact: true });
     proofs.push({ id: row.id, files: row.files, command: current.command,
       sourceHead: binding.sourceHead, artifactManifestSha256: binding.artifactManifestSha256,
