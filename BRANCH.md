@@ -33,6 +33,7 @@
   - `api/tests/api/canvas-live-persistence.test.ts`
   - `api/package.json`
   - `api/package-lock.json`
+  - `package-lock.json`
   - `spec/DATA_MODEL.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -64,6 +65,7 @@
   - [x] Create isolated worktree and mechanically pass `harness check branch`.
   - [x] Define scope, test environment, ports and Docker lock.
 - [ ] **Lot 1 — Port and RED witnesses**
+  - [x] Recovery witness authored before implementation, with real Yjs codec and test-only registry/storage fakes.
   - [x] Replace stub with host-only persistence contract; chat-core 0.2.0 exceeds npm 0.1.7 (Docker npm view).
   - [ ] RED `api/tests/unit/canvas-live-recovery.test.ts`: checkpoints, replay, delete set/vector, epoch, corrupted watermark, tenant isolation.
   - [ ] RED `api/tests/unit/canvas-live-journal.test.ts`: receipts, inverse/provenance atomicity, publish after commit, rebuild after failure, retention.
