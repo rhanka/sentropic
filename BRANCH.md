@@ -43,20 +43,21 @@
   - [x] BR11-EX3: owner-requested CI diagnosis adds test-mem-e11 to E2 qualification, lint/wiring and packed-platform build selectors, and preserves packed-consumer npm stderr. Impact: run the same gates in the owned Compose environment and expose install failures; rollback these selector/logging changes. No assertion, dependency, lock or workflow changes.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot E11b-0 — Evidence and installed qualification**
+- [x] **Lot E11b-0 — Evidence and installed qualification**
   - [x] Read #789 scope: E7 supplies host binding/maintenance, not the neutral fenced handle; E10a supplies the installed handle. Stage B still uses fixture glue and unconditional skips.
   - [x] Replace fixture handle/codec/fence authority with shipped createMemoryNeutralHandle; reacquire a fresh assembly on every reopen. Qualification follows in the installed runner.
   - [x] Add installed consumer routing with source-free runtime/assets, remove unconditional skips, and add a separate Stage B CI lane; qualification remains pending until all behaviors pass.
   - [x] First installed run: 16/23 behaviors pass; fix adapter Number narrowing using E2 U64AtomicUnit, align fixture store identity, and exercise bijection after releasing the live holder. No Engram change identified.
-  - [ ] Replace fixture handle with shipped factory; run durable-memory.spec.ts (all 23 behaviors) from a clean packed consumer with real PostgreSQL, including independent crash/ownership processes.
+  - [x] Replace fixture handle with shipped factory; run durable-memory.spec.ts (all 23 behaviors) from a clean packed consumer with real PostgreSQL, including independent crash/ownership processes.
   - [x] Installed dev.7 run d1726c309: 23 behaviors + inventory pass, zero skip/todo; stage-b.status exit=0 cleanup=0; archive SHA-256 7aeb92cf…395e271. Retain JSON result and exact archive for tuple binding.
-  - [ ] Stop and write exact Engram-owner request if a producer change is required; never promote a blocked profile.
+  - [x] No Engram-owner change is required: 23/23 pass on published 0.21.3 after the bounded host fixes.
+  - [x] Remove the unused fixture codec/handle helper and describe standalone E10 coverage separately from the passing installed Stage B campaign; preserve historical checked-in receipts verbatim.
 - [ ] **Lot E11b-1 — Package and tuple**
-  - [ ] Pack dev.7 with standalone neutral declaration; bind slot 15 SHA-256 and derive neutralContract.status from slot 15.
+  - [x] Pack dev.7 with standalone neutral declaration; bind slot 15 SHA-256 and derive neutralContract.status from slot 15.
   - [x] Add build-time standalone C6 emission from tsc declarations; no external imports; expected SHA-256 5a8c13c5…773229, verified against dev.6 declaration with only its source-map comment removed.
   - [x] Pin dev.7 archive/SRI and d1726c309 source; prepare from installed Stage B archive and fresh locked E10 consumer, with unmodified lane assertions and standalone compilation. Each new tuple binds its own logs/locks; historical tuple stays immutable.
   - [x] Derive five QUALIFIED claims only from all 23 named passing cases plus inventory, zero skipped/todo, identical installed archive SRI, packed claim identities and cleanup success. Slot 15 checks compiled standalone bytes; neutralContract.status follows slot 15; C9 names the 1.0.0 digest supersession.
-  - [ ] Update installed-memory.mjs/qualification.mk to 0.21.3/dev.7, retain locks and installed receipt, qualify five profiles from zero-skip evidence.
+  - [x] Update installed-memory.mjs/qualification.mk to 0.21.3/dev.7; clean npm-ci/type/runtime/two-process proof and standalone compilation pass, cleanup=0; qualify five profiles from zero-skip evidence.
   - [ ] Regenerate/check/test tuple, retain archive and SHA-256 in shared e10-artifacts; C9 request explicitly names dff737ce → dd0cccbd under 1.0.0.
 - [ ] **Lot E11b-2 — Validation and draft PR**
   - [ ] Typecheck/lint affected cluster-mesh paths; memory-e11-test and memory-e11-check run in CI.
@@ -118,7 +119,7 @@
 
 ## Feedback Loop
 - [x] #821/#803 merged into integration; published 0.21.3/dev.6 carry producer intentHash, and the neutral JCS byte/digest pair is resolved.
-- [ ] PENDING E9/host-binding owner: 23 Stage B cases explicitly blocked in integrated durable-memory.spec.ts; acceptance requires a zero-skip campaign through shipped bindings on this tuple.
-- [ ] PENDING C6 packaging owner: dev.6 still omits its announced standalone declaration; producer JCS bytes do not replace that packaging obligation.
+- [x] E9/host-binding source gap resolved in E11b: all 23 Stage B behaviors pass through the installed dev.7 handle, no blocked markers.
+- [x] C6 packaging source gap resolved in dev.7: standalone declaration SHA-256 5a8c13c51eb00b350fae0b271d5357f54bdb01c930d607f679372bebff773229, compiled in the installed closure; C9 remains a separate owner ACK.
 - [ ] PENDING conductor/release owners: stable reserved-version qualification, integration → main PR, CI-only publication, published-byte recheck, producer C9 ACK and receiving ACK.
 - [x] Review author: host codex, model gpt-6.1-sol, effort high (owner declaration).
