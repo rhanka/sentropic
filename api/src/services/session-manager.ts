@@ -7,6 +7,7 @@ import { logger } from '../logger';
 import { env } from '../config/env';
 import { getRemoteSessionAuthority } from './auth/remote-private-session';
 import { tombstoneRemoteSessions } from './auth/remote-revocation';
+import { deleteAndQueueRemoteSessions } from './auth/remote-revocation-outbox';
 
 /**
  * Session Manager Service
@@ -383,10 +384,8 @@ export async function refreshSession(
  * @param sessionId - Session ID to revoke
  */
 export async function revokeSession(sessionId: string): Promise<void> {
-  await db
-    .delete(userSessions)
-    .where(eq(userSessions.id, sessionId));
-  await tombstoneRemoteSessions({ sessionIds: [sessionId] });
+  const { input, key } = await deleteAndQueueRemoteSessions({ sessionId });
+  await tombstoneRemoteSessions(input, key);
   
   logger.info({ sessionId }, 'Session revoked');
 }
@@ -425,11 +424,8 @@ export async function listUserSessions(userId: string) {
  * @param userId - User ID
  */
 export async function revokeAllSessions(userId: string): Promise<void> {
-  const deleted = await db
-    .delete(userSessions)
-    .where(eq(userSessions.userId, userId))
-    .returning({ id: userSessions.id });
-  await tombstoneRemoteSessions({ sessionIds: deleted.map(row => row.id), userId });
+  const { rows: deleted, input, key } = await deleteAndQueueRemoteSessions({ userId });
+  await tombstoneRemoteSessions(input, key);
   
   logger.info({ userId, count: deleted.length }, 'All user sessions revoked');
 }
