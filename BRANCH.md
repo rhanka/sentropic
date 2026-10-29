@@ -1,74 +1,74 @@
-# Feature: A2-M0-MIG — repair drizzle control migration chain 0007–0011 & journal integrity
+# Feature: Cluster mesh memory MCP builtin
 
 ## Objective
-- [x] Deliver fast-track plan r2 Wave 0 lot `A2-M0-MIG`: a linearized, deterministic drizzle migration chain `0007`–`0011` in `api/drizzle/control/` and its `_journal.json`, with zero duplicate tags and zero broken foreign-key ordering (plan r2 §2.2 `A2-M0-MIG`; identity spec r2 `§9 M0`, `§9.3` condition 1).
-- [x] Keep migration application order, `when` timestamps and SQL contents byte-identical so every already-migrated database (prod, preprod, test, CI) observes zero behavioral change; the repair only realigns file names, journal tags and journal integrity.
+- [ ] Expose the six engram memory tools through the selected `sentropic.engram.memory` builtin, composed in-process over the PostgreSQL neutral handle.
 
 ## Scope / Guardrails
-- Scope limited to the drizzle control migration stream (`api/drizzle/control/**`) and a locking unit test; no application code, no schema change, no new migration statement.
-- No new schema migration added (renames only); the public stream `api/drizzle/*.sql` and its journal are untouched.
-- Make-only workflow, no direct Docker commands; Docker steps under the shared flock (`.tmp/packets/DOCKER-LOCK.md`).
-- Branch development in isolated worktree `tmp/worktrees/a2-m0-mig` from `origin/main 1b7f8ab94`.
-- Automated tests on dedicated environment `ENV=test-a2-m0-mig` (never `dev`), `ENV=` last argument; `make down ENV=test-a2-m0-mig` after each Docker step.
-- CI lockfile-lane policy acknowledged (review_by=2026-11-30T00:00:00Z); installs resolve committed tool profiles or frozen consumer closures.
-- All new text in English.
+- [x] Worktree: `tmp/worktrees/memory-mcp-builtin`; branch: `feat/cluster-mesh-memory-mcp`; base: `origin/main`.
+- [x] Make-only, Docker-first; shared Docker flock; `ENV=test-memory-mcp` last; shutdown after qualification.
+- [x] Candidate: engram 0.22.0, SHA-256 `965c93e326df9866584261061f4e49571cfd74dfe1dc258c0c6894eea121a4e9`.
+- [x] No publication or release version depending on unpublished engram; SQLite remains refused.
+- [x] All host customization arrives through `definition`; no stub or fallback.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `api/drizzle/control/*.sql` (renames only, no content change)
-  - `api/drizzle/control/meta/_journal.json`
-  - `api/tests/unit/drizzle-journal-integrity.test.ts`
-  - `api/tests/api/session-adoption.test.ts` (fixture tag alignment, see `A2M0-EX2`)
-  - `api/tests/api/decision-api.test.ts` (fixture filename alignment, see `A2M0-EX2`)
   - `BRANCH.md`
-- **Forbidden Paths (must not change in this branch)**:
+  - `packages/cluster-mesh/**`
+  - `packages/mcp-platform/src/transport/tool-schemas.ts`
+  - `packages/mcp-platform/tests/transport/**`
+  - `packages/mcp-platform/package.json`
   - `Makefile`
+- **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `api/src/**`
-  - `packages/**`
-  - `api/drizzle/meta/_journal.json` (public stream journal)
-  - `api/drizzle/0*.sql` (public stream migrations)
+  - `plan/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/control/*.sql` (max 1 new file normally; this branch renames 2 existing files — see exception)
+  - `.github/workflows/**`
 - **Exception process**:
-  - `A2M0-EX1`: rename `api/drizzle/control/0011_session_workspace_bindings.sql` to `0009_session_workspace_bindings.sql` and `api/drizzle/control/0012_decision_host.sql` to `0011_decision_host.sql`, and retag `api/drizzle/control/meta/_journal.json` accordingly (idx and `when` values unchanged). Reason: journal integrity repair per plan r2 lot `A2-M0-MIG` — the journal applies tag `0011` before tag `0010` (non-linear) and the numbering gap at `0009` makes the next drizzle-kit generate collide with the existing `0012_decision_host`. Impact: zero — application order, timestamps and file contents are byte-identical, so drizzle's `created_at`-based migrator state on every existing database is unaffected. Rollback: single revert of this branch's commits (pure renames + journal tags).
-  - `A2M0-EX2`: align two pre-existing API test fixtures with the repaired tags — `api/tests/api/session-adoption.test.ts` expects journal tag `0011_session_workspace_bindings` (now `0009_session_workspace_bindings`, plus title/comment number) and `api/tests/api/decision-api.test.ts` reads `drizzle/control/0012_decision_host.sql` (now `0011_decision_host.sql`). Reason: those fixtures pin the pre-repair tag/filename made stale by `A2M0-EX1`; CI `test-api-unit-integration (endpoints)` fails on them. Impact: assertion strings only — the decision-api sha256 check still hashes the same SQL bytes (rename does not change content), so the applied-migration proof is preserved. Rollback: revert this branch's commits.
+  - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
-Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
-- `blocked` / `deferred` / `cancelled` / `attention`: message (requires clarification about ...)
-- `clarification` / `acknowledge` / `refuse`: explanation
+- [x] BRMEM-EX1: allow Makefile changes for the dedicated PostgreSQL test environment and hash-pinned candidate test provisioning; additive test tooling only; rollback removes those additions.
+- [x] Record unanswered producer questions in root `.tmp/memory-mcp-builtin/questions.md`; choose the narrowest compatible composition.
 
 ## AI Flaky tests
-- Acceptance rule: accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and same command); never amend tests with additive timeouts; if flaky, analyze impact vs `main` — this branch adds a deterministic filesystem-only test, no flaky lane applies.
+- [x] No accepted flaky tests; no timeout increases.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single atomic repair lot with one test cycle; no sub-workstreams.
+- [x] Mono-branch; isolated implementation and final consensus review.
 
-## UAT Management (orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UAT checkpoint in this branch: no UI change, no user-facing behavior.
+## UAT Management (in orchestration context)
+- [ ] Validate the same six tools over stdio and HTTP against the exact branch head.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Create/confirm isolated worktree `tmp/worktrees/a2-m0-mig` on `feat/a2-m0-mig` from `origin/main 1b7f8ab94`; branch verified with `git branch --show-current`.
-  - [x] Capture Makefile targets: `up-api-test`, `db-migrate`, `test-api-smoke-restore`, `test-api-unit` (SCOPE), `typecheck-api`, `scope-check`, `commit`, `down`.
-  - [x] Environment mapping: `ENV=test-a2-m0-mig`, ports `API_PORT=8831`, `UI_PORT=5231`, `MAILDEV_UI_PORT=1131`; `ENV=` last in every command.
-  - [x] Confirm scope and guardrails; declare `A2M0-EX1`.
+- [x] **Lot 0 — Baseline and contracts**
+  - [x] Read common rules, binding specification, handoff, launch contract and host bindings.
+  - [x] Create isolated worktree and pass mechanical harness branch check.
+  - [x] Verify candidate tarball hash.
+- [ ] **Lot 1 — Contract tests first**
+  - [ ] Add `tests/mcp-memory.spec.ts`: static catalog, schemas, lazy selection and atomic peer refusal.
+  - [ ] Add `tests/engram-memory/mcp-memory-pg.spec.ts`: all six tools, confirmation guard and two-tenant isolation on real PostgreSQL.
+  - [ ] Add transport coverage for stdio and HTTP using the same compiled definition.
+  - [ ] Demonstrate expected failures before implementation.
+- [ ] **Lot 2 — Qualified builtin and composition**
+  - [ ] Add `src/integrations/mcp/memory.ts` and `src/loaders/mcp/memory.ts` with the existing topology guard.
+  - [ ] Extend module catalog, contracts, exports and loader barrel.
+  - [ ] Compose canonical store, shared engine/read facets and nine bindings through `definition` only.
+  - [ ] Preserve producer schemas, receipts, confirmation guard and trusted context.
+- [ ] **Lot 3 — Qualification and handoff**
+  - [ ] Run focused PostgreSQL and transport tests, typecheck, package build and regression suite.
+  - [ ] Run scope check before each atomic commit.
+  - [ ] Complete consensus review and reconcile findings.
+  - [ ] Document the exact host launch line and required definition bindings.
+  - [ ] Open draft PR to main; wait for CI completed/success on exact head.
+  - [ ] Run `make down ENV=test-memory-mcp`.
 
-- [x] **Lot 1 — Journal integrity repair (test first)**
-  - [x] Add `api/tests/unit/drizzle-journal-integrity.test.ts` asserting, for both drizzle streams (public `api/drizzle` and control `api/drizzle/control`): contiguous `idx` sequence, unique and strictly tag-ordered entries, strictly increasing `when`, journal tag ↔ `.sql` file bijection, unique numeric prefixes and a free next-generate number.
-  - [x] Prove RED on the unmodified chain (control journal out-of-order tags).
-  - [x] Apply `A2M0-EX1`: rename control `0011_session_workspace_bindings.sql` → `0009_session_workspace_bindings.sql`, `0012_decision_host.sql` → `0011_decision_host.sql`; retag `control/meta/_journal.json` (idx, `when`, application order, SQL bytes unchanged).
-  - [x] Prove GREEN: `make test-api-unit SCOPE=tests/unit/drizzle-journal-integrity.test.ts ENV=test-a2-m0-mig`.
-  - [x] Lot gate: `make typecheck-api ENV=test-a2-m0-mig`.
+## Deferred to BR-XX
+- [x] Publication and release pinning await L5 qualification and published engram 0.22.0.
 
-- [ ] **Lot 2 — Acceptance & train**
-  - [x] Fresh-database chain proof: `make up-api-test ENV=test-a2-m0-mig` (under flock), `make db-migrate ENV=test-a2-m0-mig`, `make test-api-smoke-restore ENV=test-a2-m0-mig`, `make down ENV=test-a2-m0-mig`.
-  - [x] `make scope-check` clean.
-  - [x] Atomic commits ≤150 lines via `make commit`.
-  - [ ] Push only after local tests pass; draft PR; single CI run on the final head; record PR, head, CI run and acceptance evidence in `.tmp/rv/lot-A2-M0-MIG.md`.
+## Risks / Mitigations
+- [x] Missing or incompatible peer refuses selected compilation atomically.
+- [x] Candidate-only qualification never silently substitutes a published older peer.
+
+## Rollback Plan
+- [x] Remove the optional builtin and its catalog/export entries; retain existing durable storage APIs.
