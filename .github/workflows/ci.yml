@@ -681,6 +681,8 @@ jobs:
           path: tmp/ci-package-candidates
       - name: Check eradicated packages (CLI and focus are owned by h2a)
         run: make check-eradicated-packages ENV=test-ci-manifests
+      - name: Reject unlocked CI install paths
+        run: make test-ci-lockfile-installs ENV=test-ci-manifests
       - name: Test publishable manifest guard and consumer qualification
         run: make test-publishable-manifests test-qualify-published-install ENV=test-ci-manifests
       - name: Test candidate identity and qualification DAG
