@@ -1,0 +1,1 @@
+{"name":"engram-e10-installed-consumer","version":"1.0.0","private":true,"type":"module","dependencies":{"@sentropic/engram":"file:../artifacts/sentropic-engram-0.22.0.tgz","@sentropic/cluster-mesh":"file:../artifacts/sentropic-cluster-mesh-0.24.0-dev.5.tgz","pg":"8.22.0"},"devDependencies":{"typescript":"5.4.5","@types/node":"22.20.1"}}

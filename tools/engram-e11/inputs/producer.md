@@ -1,0 +1,11 @@
+# engram 0.21.3 — published inputs (verified by s-conductor 2026-10-28)
+- version: @sentropic/engram@0.21.3
+- integrity: sha512-eGoBIutpeISKgN4HOS3NSIj7K6rMtT6Y/FbBvoXMykLu0wbaKEaO1pjCLDxVFfdA6Zlj9zg2v2Ft7DIr5Vf7aw== (npm registry, verified)
+- shasum: c3ca3750b35573504c6f3af7c8806835ebd817fc (verified)
+- commit: 8b93ba6b834f83fddbcf76091054efea2e188cf1 (gitHead verified), tag v0.21.3 (annotated 208fb7dd), GitHub Actions publish with signed provenance (sigstore logIndex 3539411151, per producer)
+- neutral contract 1.0.0 final bytes (JCS of memoryContractManifest() extracted from the published tarball): copied to /home/antoinefa/src/sentropic/.tmp/engram-e2-host-tuple/neutral-contract-1.0.0.jcs.json, 4,012 bytes, sha256 55f8d4572db7100e4dba0a135331cdeb1186458711f0c7202e5f0cd93a6dc759 (verified)
+- contractVersion: "memory-binding-v1"; neutral contract identity 1.0.0 unchanged (no bump)
+- MEMORY_CONTRACT_DIGEST = sha256("graphify-memory/l3a-module-descriptor/v1\u0000" || bytes) = sha256:dd0cccbd6e5e29766fbc9c48351ffe58f5b0a3162152f5ff02da0798c3244fee (recomputed, verified)
+- additive asset: intentHash, « Engram-carried intent hash persisted and returned byte for byte (binding §5.3 rule 5) »
+- E11 pins the pair (bytes sha256 55f8d457…, contractDigest dd0cccbd…)
+- L4 candidate 0.22.0 with the same change: pending from the producer (new tarball + P3 re-binding for L5)

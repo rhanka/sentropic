@@ -44,11 +44,40 @@ case "$CM_ACTION" in
     "$tsc" --noEmit -p tsconfig.test.json ;;
   build)
     "$tsc" -p tsconfig.json
+    node tests/engram-memory/package-contract.mjs
     rm -rf /source/packages/cluster-mesh/dist
-    cp -R dist /source/packages/cluster-mesh/dist ;;
+    cp -R dist /source/packages/cluster-mesh/dist
+    mkdir -p /source/packages/cluster-mesh/contracts
+    cp contracts/engram-memory-neutral-contract-v1.d.ts /source/packages/cluster-mesh/contracts/ ;;
   test)
+    if [ "${CM_SCOPE:-}" = tests/engram-memory/durable-memory.spec.ts ]; then
+      "$tsc" -p tsconfig.json
+      node tests/engram-memory/package-contract.mjs
+      consumer=$(mktemp -d)
+      npm pack --loglevel error --pack-destination "$consumer" >/dev/null
+      cp -R tests "$consumer/tests"
+      cd "$consumer"
+      printf '%s\n' '{"private":true,"type":"module"}' > package.json
+      npm install --ignore-scripts --no-audit --no-fund ./sentropic-cluster-mesh-*.tgz \
+        @sentropic/engram@0.21.3 vitest@4.1.5 pg@8.22.0 >/dev/null
+      # Fixture relative paths target installed declarations/runtime/assets.
+      # No checkout sources are copied into this consumer.
+      ln -s node_modules/@sentropic/cluster-mesh/dist src
+      ln -s node_modules/@sentropic/cluster-mesh/assets assets
+      export MEMORY_INSTALLED_ROOT="$consumer"
+      receipt=/source/tmp/memory-stage-b
+      mkdir -p "$receipt"
+      set +e
+      ./node_modules/.bin/vitest run tests/engram-memory/durable-memory.spec.ts \
+        --reporter=default --reporter=json --outputFile=stage-b-result.json --environment node --maxWorkers=1
+      result=$?
+      set -e
+      cp stage-b-result.json package-lock.json ./sentropic-cluster-mesh-*.tgz "$receipt/"
+      sha256sum ./sentropic-cluster-mesh-*.tgz > "$receipt/mesh.sha256"
+      exit "$result"
+    fi
     /tmp/cm-tools/node_modules/.bin/vitest run "${CM_SCOPE:-tests}" \
-      --environment node --maxWorkers=1
+      --exclude tests/engram-memory/durable-memory.spec.ts --environment node --maxWorkers=1
     if [ "$CM_PG_CRASH_PHASE" = seed ]; then
       mkdir -p /source/.h2a
       cp ../../.h2a/pg-crash-witness.json /source/.h2a/

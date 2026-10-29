@@ -35,9 +35,27 @@ describe.skipIf(!pgEnabled)('shared corpora on injected Postgres', () => {
       const foreign = grantFor({ token: 'foreign', scope: { tenantId: 'tenant-a', workspaceId: 'foreign' }, operations: ['read', 'write', 'maintain'] });
       const client = (issued: typeof grant, bound: PgScoped) => {
         const base = pgCorpusClient(root, issued, bound);
+        // The frozen shared corpus uses small numeric positions. Keep its
+        // adapter local; PostgreSQL's public transport remains exact strings.
+        const bounded = (value: unknown): unknown => {
+          if (Array.isArray(value)) return value.map(bounded);
+          if (!value || typeof value !== 'object') return value;
+          return Object.fromEntries(Object.entries(value).map(([key, item]) => {
+            if (['seq', 'from', 'to', 'watermark', 'cursor', 'lag', 'journalSeq'].includes(key) && typeof item === 'string' && /^(0|[1-9][0-9]*)$/.test(item)) {
+              const number = Number(item);
+              if (!Number.isSafeInteger(number)) throw new Error('shared corpus position exceeds its numeric fixture range');
+              return [key, number];
+            }
+            return [key, bounded(item)];
+          }));
+        };
         const extra = {
-          journalRead: (consumer: string, after: number, limit: number) => bound.journalRead(after, limit, consumer),
-          journalMarkPoison: bound.journalPoison.bind(bound), externalRead: (after: number, limit: number) => bound.journalRead(after, limit),
+          journalRead: async (consumer: string, after: number, limit: number) => bounded(await bound.journalRead(after, limit, consumer)),
+          externalRead: async (after: number, limit: number) => bounded(await bound.journalRead(after, limit)),
+          journalInspect: async (consumer: string) => bounded(await bound.journalInspect(consumer)),
+          journalResync: async (...args: Parameters<PgScoped['journalResync']>) => bounded(await bound.journalResync(...args)),
+          snapshotRead: async (...args: Parameters<PgScoped['snapshotRead']>) => bounded(await bound.snapshotRead(...args)),
+          journalMarkPoison: bound.journalPoison.bind(bound),
           armExternalFailure: async () => { fail = true; },
         };
         return new Proxy(base, { get(target, property) { if (Object.hasOwn(extra, property)) return extra[property as keyof typeof extra]; const value = Reflect.get(target, property, target) as unknown; return typeof value === 'function' ? value.bind(target) : value; } }) as unknown as ReplayCorpusStore;
