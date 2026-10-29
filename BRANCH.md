@@ -1,75 +1,69 @@
-# Feature: Decision Q1 live qualification smoke
+# Feature: feat(memory-l5): Lot 2 durable reference
 
 ## Objective
-- [ ] Record bounded live protocol and identity evidence for JEV and OpenAI Decisions; keep production refused pending OD-4 calibration.
-
+- [x] Implement durable workflow reference and fail-closed P3/E2 receiving harness; retain missing host acceptance explicitly.
 ## Scope / Guardrails
-- [x] Owner GO dated 2026-10-29; spec v4 section 7.4; H1/H2 base `213638676`.
-- [x] Worktree `tmp/worktrees/decision-q1`, branch `feat/decision-q1-live`, mono-branch.
-- [x] Make only; no Python; secrets enter Compose from the existing root `.env` without copying values.
-- [x] Maximum three attempts per candidate, counting failed, refused and ambiguous calls; no retries.
-- [x] Local qualification only, `ENV=test-decision-q1` last; API 8802, UI 5202, Maildev 1102.
-- [x] Serialize Docker with `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; run `make down` afterward.
-
+- [x] Worktree tmp/worktrees/mem-l5-lot2; branch feat/memory-l5-lot2; rebased onto origin/main 2ea238790 on 2026-10-29 per COMMON-RULES.
+- [x] Preserve catalog, l0-freeze and P3 bytes; shared Docker lock; ENV=test-memory-l5 last.
+- [x] Disposable official containers only; ports 9625/5825/1725; no application services required.
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `spec/decision/**`
-  - `packages/llm-mesh/src/decision/descriptor.ts`
-  - `packages/llm-mesh/src/decision/openai-descriptor.ts`
-  - `packages/llm-mesh/src/decision/descriptor-validation.ts`
-  - `packages/llm-mesh/package.json`
+  - `packages/mcp-broker/src/memory-reference/**`
+  - `packages/mcp-broker/tests/memory/**`
+  - `packages/mcp-broker/package.json`
+  - `packages/mcp-broker/README.md`
   - `package-lock.json`
-  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
-  - `packages/llm-mesh/tests/decision-jev-v4l3.test.ts`
-  - `packages/llm-mesh/tests/decision-qualification-admission.test.ts`
-  - `packages/llm-mesh/tests/decision-qualification.test.ts`
-  - `packages/llm-mesh/tests/decision-jev-request.test.ts`
-  - `packages/llm-mesh/tests/decision-openai-routing.test.ts`
-  - `packages/cluster-mesh/tests/fixtures/train.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-- **Forbidden Paths (must not change in this branch)**:
+  - `tools/memory-mcp-l5/lot2*.mjs`
+  - `tools/memory-mcp-l5/verifier.mjs`
+  - `tools/memory-mcp-l5/import-graph.mjs`
+  - `tools/memory-mcp-l5/policies/**`
+  - `tools/memory-mcp-l5/tests/lot2*`
+  - `tools/memory-mcp-l5/tests/receipt-contract.test.mjs`
+  - `spec/evidence/memory-mcp-l5/lot2/**`
   - `Makefile`
+  - `.github/workflows/ci.yml`
+  - `deploy/k8s/README.md`
+  - `docs/runbooks/app-cm-baseline-restore.md`
+  - `scripts/test-pgbackup-restore-isolation.sh`
+- **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `api/**`
+  - `.track/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
-
+- **Exception process**:
+  - [x] L5L2-EX1: bounded Makefile Lot 2 delegation/manifest forwarding; local/CI parity; rollback added wiring only.
+  - [x] L5L2-EX2: update only broker workspace version in package-lock.json; retain frozen P3 lock snapshot; rollback this scalar.
+  - [x] L5L2-EX3: CI uses explicit source/reference mode with historical P3 validation; strict qualification remains unchanged. Required after the new broker version; rollback only this CI mode/wiring.
+  - [x] L5L2-EX4: inherit origin/main ab981b16d (#756) unchanged to resolve the CI merge conflict; listed restore paths are inheritance-only. Preserve this branch's Lot 2 plan. Upstream committed lines are outside the authored atomic budget; rollback the merge only.
 ## Feedback Loop
-- [x] No calibration authorized; live observations cannot qualify immutable weights, billing beyond the admitted bound, or production readiness.
-- [x] Q1-CRED-01: JEV preflight refused peripheral whitespace; normalized transiently after Compose injection, source env unchanged; refusal consumes attempt 1.
-- [x] Q1-INV-01: parser previously forbade observed IDs with unqualified production status; permit evidence inventory while retaining admission gates; regression keeps nonempty IDs and proves production refusal.
-- [ ] Q1-REV-01: conductor to select two exact complementary reviewer models before merge; h2a discovery has host presence but no model identities, no configured gateway catalog; no consensus claimed.
-- [x] Q1-CI-01: reproduced job 123314702961's three stale-version failures; rebound independent train and selected fixture to llm-mesh 0.32.2 and guarded archive SHA-512; 1,228 cluster-mesh tests and scope pass, 138 expected skips; see `spec/decision/q1-2026-10-29/ci-repair.md`.
-
+- [ ] gr-conductor: real P3-bound lot2-manifest/sidecar, E2/backend/neutral/profile/lock closure and G1–G4/C9 receipts pending; fixture is unverified.
+- [ ] Owner/Engram: authoritative enrollment/assurance mapping and current L0 role dispositions pending; no deployed identity acceptance.
 ## AI Flaky tests
-- [x] No flaky acceptance or additional live calls beyond the cap.
-
+- [x] Deterministic storage/security tests; no waiver.
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; no integration from other branches.
-
+- [x] Mono-branch; implementation by author; independent review per harness review skill.
 ## UAT Management (in orchestration context)
-- [x] API-only qualification fixture; no UI, Chrome or VSCode surface change.
-
+- [x] No UI change; reference/receiving harness only; final E4 and owner UAT remain later lots.
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read master/workflow rules, spec section 7.4, API host and descriptors; mechanical branch check passed.
-  - [x] Verify ports, credential names, control pricing and isolated stack.
-- [x] **Lot 1 — Bounded live evidence**
-  - [x] Fix a public synthetic binary criterion and retain only that fixture input.
-  - [x] No documented zero-cost Decisions entitlement probe established; first POST counts as attempt 1.
-  - [x] Record served identity, tokens, priced cost, billing bound, latency, verdict shape and refusals per attempt.
-  - [x] Fail closed on descriptor identity mismatch; three calls per candidate including the JEV preflight refusal, five egresses total, 77 micro-USD.
-- [x] **Lot 2 — Evidence and descriptors**
-  - [x] Retain scrubbed receipts in `spec/decision/`; accepted identities/evidenceRefs cite only observed results.
-  - [x] Bump llm-mesh from published 0.32.1 to 0.32.2; align workspace lock and public version assertion.
-  - [x] Preserve unqualified production and OD-4 calibration requirement; 16 host/route tests pass.
-- [ ] **Lot 3 — Final validation and draft PR**
-  - [x] Mesh descriptor, qualification, adapter, pricing, public and request suites: 88 files / 1,566 tests pass.
-  - [x] llm-mesh typecheck/lint and mechanical scope checks pass; commits at most 150 lines.
-  - [x] Secret scan, attempt counts, identity comparison and durable 77 micro-USD ledger verified; zero reserved/pending.
-  - [x] Stop local stack with `make down`; publish report `spec/decision/q1-live-smoke.md`.
-  - [x] Draft PR #834 created against main; exact-head CI remains the final checkpoint.
-  - [ ] Observe CI completed/success on exact head; report head, 77 micro-USD and candidate outcomes.
+- [x] Lot 0: read lock/schedule/spec/template; verify mechanical branch and immutable baseline.
+- [x] Lot 1: six reference test files, signed-token corpus and manifest refusal tests specified; first store run fails on missing reference module.
+  - [x] `packages/mcp-broker/tests/memory/sqlite-workflow-store.test.ts`
+  - [x] `packages/mcp-broker/tests/memory/sqlite-workflow-crash.test.ts` and `fixtures/workflow-child.mjs`
+  - [x] `packages/mcp-broker/tests/memory/mutation-recovery.test.ts`
+  - [x] `packages/mcp-broker/tests/memory/policy-version-persistence.test.ts`
+  - [x] `packages/mcp-broker/tests/memory/confirmation-continuation.test.ts`
+  - [x] `packages/mcp-broker/tests/memory/oidc-assurance.test.ts`
+  - [x] `tools/memory-mcp-l5/tests/lot2-{assurance,manifest,retained-inputs,envelope,canonical-report}.test.mjs`
+- [x] Lot 2: reference persistence and signed qualification assurance implemented; production policy refuses pending authoritative mappings.
+- [x] Lot 3: reference 66/tooling 112 passed; full source gate passed; reference archive and complete hashed reports retained; absent/unverified manifest refusals passed; Node 24.21.0/SQLite 3.53.4 WAL/FULL, no Python executable.
+  - [x] Namespace-only recovery lookup regression reproduced and fixed; reference archive and reports refreshed; import/export graph passed with 55 files/114 edges.
+  - [x] Canonical report guard rejects source-only/cross-tuple results; all five real E2 cases are mandatory before Lot 2 can close.
+  - [x] Malformed host configuration/driver digests refuse; receiving-harness suite passed 112 tests; retained report refreshed.
+- [ ] Lot 4: report blocked acceptance, review, push draft PR to main and verify CI; do not merge.
+  - [x] Merge main ab981b16d (#756); preserve this Lot 2 plan, identical Track blobs and frozen P3 bytes; no authored restore-tooling changes. P3 #769 remains open.
+  - [x] Rerun the full source gate after main integration: tooling 112 and Lot 1/platform/broker 193 passed; no qualification acceptance.
+  - [ ] Final-head CI and independent peer review remain pending; installed acceptance is blocked on the real host tuple.
+  - [x] Resume #771 under the owner harness completion request; no pr771 review files exist in the shared review directory. The broker is private, so the publication version gate is inapplicable; no public package source changed.
+  - [x] Post-rebase source gate passed: memory-l5-gate LOT=reference with retained P3, typechecks, 55-file/114-edge graph and 112 tooling tests; ENV=test-memory-l5 last, shared flock.

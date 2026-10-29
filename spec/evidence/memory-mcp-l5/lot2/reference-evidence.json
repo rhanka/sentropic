@@ -1,0 +1,82 @@
+{
+  "status": "unverified",
+  "qualificationAccepted": false,
+  "scope": "source reference and receiving harness only",
+  "sourceHead": "3deae637559a0ca0f456167a1fdc45861d6eb7e1",
+  "reports": [
+    {
+      "kind": "reference",
+      "path": "spec/evidence/memory-mcp-l5/lot2/reports/9a0d1417868c5cc592048786ddd0e1acb406f10ae2351b7aaf44ce3c95d7c748.json.gz",
+      "sha256": "9a0d1417868c5cc592048786ddd0e1acb406f10ae2351b7aaf44ce3c95d7c748",
+      "tests": 66,
+      "files": [
+        {"path":"packages/mcp-broker/tests/memory/audit-refusal.test.ts","assertions":3,"status":"passed"},
+        {"path":"packages/mcp-broker/tests/memory/confirmation-continuation.test.ts","assertions":1,"status":"passed"},
+        {"path":"packages/mcp-broker/tests/memory/forged-call.test.ts","assertions":4,"status":"passed"},
+        {"path":"packages/mcp-broker/tests/memory/invocation-context.test.ts","assertions":3,"status":"passed"},
+        {"path":"packages/mcp-broker/tests/memory/literal-true.test.ts","assertions":3,"status":"passed"},
+        {"path":"packages/mcp-broker/tests/memory/mutation-recovery.test.ts","assertions":1,"status":"passed"},
+        {"path":"packages/mcp-broker/tests/memory/oidc-assurance.test.ts","assertions":2,"status":"passed"},
+        {"path":"packages/mcp-broker/tests/memory/policy-version-persistence.test.ts","assertions":1,"status":"passed"},
+        {"path":"packages/mcp-broker/tests/memory/public-refusals.test.ts","assertions":31,"status":"passed"},
+        {"path":"packages/mcp-broker/tests/memory/real-dispatch.test.ts","assertions":8,"status":"passed"},
+        {"path":"packages/mcp-broker/tests/memory/source-binding.test.ts","assertions":4,"status":"passed"},
+        {"path":"packages/mcp-broker/tests/memory/sqlite-workflow-crash.test.ts","assertions":3,"status":"passed"},
+        {"path":"packages/mcp-broker/tests/memory/sqlite-workflow-store.test.ts","assertions":2,"status":"passed"}
+      ]
+    },
+    {
+      "kind": "tooling",
+      "path": "spec/evidence/memory-mcp-l5/lot2/reports/2ab5a5ac735447a421f9c9c5512d04f1a007af25c884cbd1d8f4c7ef0857cb83.json.gz",
+      "sha256": "2ab5a5ac735447a421f9c9c5512d04f1a007af25c884cbd1d8f4c7ef0857cb83",
+      "tests": 112,
+      "files": [
+        {"path":"tools/memory-mcp-l5/tests/artifact-manifest.test.mjs","assertions":5,"status":"passed"},
+        {"path":"tools/memory-mcp-l5/tests/ci-contract.test.mjs","assertions":5,"status":"passed"},
+        {"path":"tools/memory-mcp-l5/tests/fixture-provenance.test.mjs","assertions":2,"status":"passed"},
+        {"path":"tools/memory-mcp-l5/tests/import-graph.test.mjs","assertions":6,"status":"passed"},
+        {"path":"tools/memory-mcp-l5/tests/lock-closure.test.mjs","assertions":18,"status":"passed"},
+        {"path":"tools/memory-mcp-l5/tests/lock-fingerprint.test.mjs","assertions":38,"status":"passed"},
+        {"path":"tools/memory-mcp-l5/tests/lot2-assurance.test.mjs","assertions":2,"status":"passed"},
+        {"path":"tools/memory-mcp-l5/tests/lot2-canonical-report.test.mjs","assertions":2,"status":"passed"},
+        {"path":"tools/memory-mcp-l5/tests/lot2-envelope.test.mjs","assertions":1,"status":"passed"},
+        {"path":"tools/memory-mcp-l5/tests/lot2-manifest.test.mjs","assertions":2,"status":"passed"},
+        {"path":"tools/memory-mcp-l5/tests/lot2-retained-inputs.test.mjs","assertions":1,"status":"passed"},
+        {"path":"tools/memory-mcp-l5/tests/make-contract.test.mjs","assertions":2,"status":"passed"},
+        {"path":"tools/memory-mcp-l5/tests/p1-verification.test.mjs","assertions":11,"status":"passed"},
+        {"path":"tools/memory-mcp-l5/tests/p3-l0-freeze.test.mjs","assertions":3,"status":"passed"},
+        {"path":"tools/memory-mcp-l5/tests/packed-graph.test.mjs","assertions":6,"status":"passed"},
+        {"path":"tools/memory-mcp-l5/tests/receipt-contract.test.mjs","assertions":6,"status":"passed"},
+        {"path":"tools/memory-mcp-l5/tests/runtime.test.mjs","assertions":2,"status":"passed"}
+      ]
+    }
+  ],
+  "runtime": {
+    "imageDigest": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+    "nodeVersion": "24.21.0",
+    "sqliteVersion": "3.53.4",
+    "journalMode": "wal",
+    "synchronous": 2,
+    "temporaryFilesystemType": 2035054128,
+    "pythonExecutablePresent": false,
+    "nativeAddonCompilation": "not used by the built-in SQLite workflow reference"
+  },
+  "sources": [
+    {"path":"packages/mcp-broker/src/memory-reference/driver.ts","sha256":"dd188a92e56f8d9636fdd54160c897bb8b526980a7857b89dab1bcb0d4e977e6"},
+    {"path":"packages/mcp-broker/src/memory-reference/index.ts","sha256":"7a0a62fddf82b5b3242cfb53bf59010c1ea6351e91312845ec303dd9f78ba004"},
+    {"path":"packages/mcp-broker/src/memory-reference/schema.ts","sha256":"1eb73d6d2be7d70989c4ceac733c7ad68ad100d1806e1fcbb5f82674f98f0f72"},
+    {"path":"packages/mcp-broker/src/memory-reference/sqlite-memory-workflow-store.ts","sha256":"8d33ff09d9078803a7423e74010879e0b84c8906b8d8ccfed8518629b39e667e"},
+    {"path":"tools/memory-mcp-l5/policies/production-v1.json","sha256":"3c0802eec22bf9be97dc45595c444a29bb4ccf6e095423b590fa1233a03662d4"},
+    {"path":"tools/memory-mcp-l5/policies/qualification-v1.json","sha256":"5096d136574eea3a72bdece500afef3ebf2fda92ec829a410a3671de17c57d84"},
+    {"path":"tools/memory-mcp-l5/verifier.mjs","sha256":"f75537030ca6f28df805ae10623beb6ef38199681809574e3704d46523f8503c"},
+    {"path":"tools/memory-mcp-l5/lot2-manifest.mjs","sha256":"6a586ad03f7c4940e6e0f24977c5eb0048ca384802beb7f76724b6062ca200f7"},
+    {"path":"tools/memory-mcp-l5/lot2-canonical-report.mjs","sha256":"549f3f281f9578f752247e6e6031605f1c8005477819efcc009f4a2366c1cf38"}
+  ],
+  "waitingFor": [
+    "real P3/E2/PG lot2-manifest and sidecar",
+    "installed closure and G1-G4/C9 dispositions",
+    "canonical effect/original replay and all required E2 crash points",
+    "production enrollment/assurance mapping",
+    "final E4 rerun and checkpoint acceptance"
+  ]
+}
