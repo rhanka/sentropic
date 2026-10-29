@@ -25,8 +25,8 @@ describe('canvas live PostgreSQL durability', () => {
     value.receipt!.key.documentId = id.documentId;
     return value;
   };
-  const checkpoint = (doc: ReturnType<typeof codec.create>, watermark: number) => sealCheckpoint({
-    checkpointId: randomUUID(), documentId: id.documentId, encodedState: codec.encode(doc),
+  const checkpoint = (doc: ReturnType<typeof codec.create>, watermark: number, checkpointId: string = randomUUID()) => sealCheckpoint({
+    checkpointId, documentId: id.documentId, encodedState: codec.encode(doc),
     stateVector: codec.vector(doc), journalWatermark: watermark, schemaEpoch: '1',
     createdAt: '2026-10-29T00:00:00Z', createdBy: 'host',
   });
@@ -98,6 +98,63 @@ describe('canvas live PostgreSQL durability', () => {
     await store.open(id, { ...baseline, baseHash: 'peer-head' }, '1');
     expect((await store.load(id)).baseline).toEqual(baseline);
     await expect(store.open(id, baseline, '2')).rejects.toThrow('schema-epoch-conflict');
+  });
+
+  it('should isolate populated tenants and workspaces with identical collaboration identifiers', async () => {
+    const scopes = [id, { ...id, tenantId: 'tenant-b' }, { ...id, workspaceId: 'workspace-b' }];
+    const docs = scopes.map(() => codec.create());
+    const values = docs.map((doc, index) => {
+      const value = input(update(doc, text => text.insert(0, `scope-${index}`)));
+      value.receipt!.payloadHash = `payload-${index}`;
+      value.receipt!.detail = `receipt-${index}`;
+      return value;
+    });
+    try {
+      for (const scope of scopes) await store.open(scope, baseline, '1');
+      for (const [index, scope] of scopes.entries()) {
+        expect(await store.load(scope)).toMatchObject({ head: 0, journal: [], checkpoint: null });
+        const entry = await store.commit(scope, 0, values[index]);
+        expect(entry).toMatchObject({ ...values[index], seq: 1 });
+      }
+      const before = await Promise.all(scopes.map(scope => store.load(scope)));
+      const cp = checkpoint(docs[0], 1);
+      const checkpoints = docs.map(doc => checkpoint(doc, 1, cp.checkpointId));
+      await store.checkpoint(scopes[0], 1, cp);
+      expect((await store.load(scopes[0])).checkpoint).toEqual(cp);
+      for (const index of [1, 2]) expect(await store.load(scopes[index])).toEqual(before[index]);
+
+      // A retry is local even though all three scopes have the same transaction/patch key.
+      expect(await store.commit(scopes[0], 0, values[0])).toEqual(before[0].journal[0]);
+      const suffix = input(update(docs[0], text => text.insert(text.length, '-suffix')), 'tx-suffix');
+      await store.commit(scopes[0], 1, suffix);
+      for (const index of [1, 2]) expect(await store.load(scopes[index])).toEqual(before[index]);
+
+      // Reuse the checkpoint identifier too: history lookup/insert must remain scoped.
+      for (const index of [1, 2]) {
+        await store.checkpoint(scopes[index], 1, checkpoints[index]);
+        expect((await store.load(scopes[index])).checkpoint).toEqual(checkpoints[index]);
+      }
+      const restarted = new PgLiveDocumentStore(pool);
+      for (const [index, scope] of scopes.entries()) {
+        const state = await restarted.load(scope);
+        expect(state.identity).toEqual(scope);
+        expect(state.head).toBe(index === 0 ? 2 : 1);
+        expect(state.journal).toHaveLength(state.head);
+        expect(state.journal[0]).toEqual(before[index].journal[0]);
+        expect(state.journal.map(entry => entry.receipt)).toEqual(index === 0
+          ? [values[0].receipt, suffix.receipt] : [values[index].receipt]);
+        expect(state.checkpoint).toEqual(checkpoints[index]);
+        const history = await pool.query(`SELECT body FROM canvas_live_checkpoints
+          WHERE tenant_id=$1 AND workspace_id=$2 AND document_id=$3`, [scope.tenantId, scope.workspaceId, scope.documentId]);
+        expect(history.rows.map(row => row.body)).toEqual([checkpoints[index]]);
+        const restored = restoreDocument(state, codec);
+        expect(restored.getText('field:body').toString()).toBe(`scope-${index}${index === 0 ? '-suffix' : ''}`);
+        expect(codec.encode(restored)).toBe(codec.encode(docs[index]));
+        codec.destroy(restored);
+      }
+    } finally {
+      docs.forEach(codec.destroy);
+    }
   });
 
   it('should recover a committed journal and checkpoint even when their acknowledgement is lost', async () => {
