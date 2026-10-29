@@ -3,7 +3,7 @@ import {
   createImageAttachmentDraft,
   isSupportedImageAttachmentMimeType,
   summarizeComposerAttachments,
-} from '../src/state/chatAttachments.js';
+} from '../../src/runtime/state/chatAttachments.js';
 
 describe('chat attachment state', () => {
   it('creates normalized image attachment drafts for host-managed uploads', () => {

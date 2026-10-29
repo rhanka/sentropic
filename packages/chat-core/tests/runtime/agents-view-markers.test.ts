@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   buildAgentsViewMarkersKey,
   createAgentsViewMarkers,
-} from '../src/state/agentsViewMarkers.js';
-import type { AgentsEntry } from '../src/state/agentsEntry.js';
+} from '../../src/runtime/state/agentsViewMarkers.js';
+import type { AgentsEntry } from '../../src/runtime/state/agentsEntry.js';
 
 /** Async storage stub — mirrors the chrome.storage shape the port must tolerate. */
 const asyncStore = (initial: Record<string, string> = {}) => {
