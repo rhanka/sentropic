@@ -52,6 +52,7 @@
   - [x] Inventory Make, CI, scripts, Docker and installed-consumer paths.
 - [ ] **Lot 1 — Locked tool and workspace installs**
   - [x] Freeze 50 isolated tool profiles with exact transitive versions and integrity.
+  - [x] Remove container install fallbacks and implicit executable downloads.
   - [ ] Commit installation graphs and replace live tool resolution.
   - [ ] Preserve isolated builds and tarball consumers.
   - [x] Guard against unlocked npm/npx resolution, including regression fixtures.
