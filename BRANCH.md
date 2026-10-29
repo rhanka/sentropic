@@ -4,6 +4,7 @@
 - [ ] Qualify all 23 Stage B cases through the installed handle, ship C6 declaration in dev.7, and regenerate the 21-slot tuple; stop for an evidenced Engram-side blocker.
 
 ## Scope / Guardrails
+- [x] PR #831 release refresh: merge origin/main e938151c0 (#832), retain this integration plan and preserve Trivy tooling/tests alongside the MCP guard regression; no Track event differences. Stable successor evidence is generated externally on the final committed head.
 - [x] PR #831 Opus R1: restore the MCP platform guard alternation; required publishable CI wiring tests execute all admitted environments and refuse unrelated projects. Regression fails with shell exit 2 before the fix.
 - [x] Packaging regression caught a duplicate local candidate name in the stable-fixture assertion; distinguish meshCandidate from the later artifacts candidate. Package bytes are unchanged by this test-only correction.
 - [x] Stable release blocker: Comments self-leaf catalog excluded 0.24.0 at its upper bound. Admit 0.24.x with <0.25.0; retain current-release peer enforcement and next-minor refusal regressions. Refresh archive identities and rerun installed qualification after this byte change.
