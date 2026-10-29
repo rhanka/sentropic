@@ -72,6 +72,7 @@
   - [x] Add a contents-read-only producer job with full-SHA actions, failing artifact upload, and a separate read-only Make verification entry point; the final verdict wiring follows with lane fan-out.
   - [x] Packed lazy qualification skips sibling builds with an explicit candidate bundle and verifies/reuses cluster/artifacts/platform/train archives; bare, selected, session, latest, global, old and partial tuples retain their existing installs/assertions.
   - [x] Add nine isolated qualification dispatch cases using the original source/storage/crash/installed/upgrade/lazy/stateful commands; add clean-consumer negatives for unlisted primary bytes and wrong source SHA.
+  - [x] Declare nine fail-fast-disabled cluster matrix members, each with its own runner workspace/environment and read-only source permission, downloading/verifying the same producer bundle before dispatch.
   - [ ] Refactor the four named cluster preparation/Make files; separate static/source, PostgreSQL conformance, comments storage, crash recovery, candidate packing, and installed lanes; each mutating lane owns its workspace/database/ports.
   - [ ] Preserve existing `postgres-crashes.spec.ts`, `installed-major-upgrade.mjs`, `installed-bare.mjs`, and all packaging suite membership; maintain seed → crash/restart → verify inside each crash fixture.
   - [ ] Add `package-qualification-dag.test.mjs` (new): no installed check before packing, no second candidate build, distinct mutable fixture roots, lazy bare/selected-peer/latest-in-range/global-consumer cases retained.
