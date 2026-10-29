@@ -104,3 +104,5 @@
 - [x] Formatter slice 1: apply repository style to new H2 source only.
 
 - [x] Formatter slice 2: continue source-only H2 formatting.
+
+- [x] Formatter slice 3: source-only H2 formatting.

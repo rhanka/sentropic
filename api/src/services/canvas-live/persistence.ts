@@ -75,7 +75,11 @@ export function restoreDocument<D>(
       }
     }
     for (const entry of state.journal) {
-      if (entry.seq > (checkpoint?.journalWatermark ?? 0) && entry.encodedUpdate !== null) codec.apply(doc, entry.encodedUpdate);
+      if (
+        entry.seq > (checkpoint?.journalWatermark ?? 0) &&
+        entry.encodedUpdate !== null
+      )
+        codec.apply(doc, entry.encodedUpdate);
     }
     return doc;
   } catch (error) {
@@ -87,15 +91,27 @@ export function restoreDocument<D>(
 /** Structural H1 AdmissionAuthority.check contract. The authenticated registry is
  * injected by composition after H1 merges; request JSON is never this authority. */
 export interface AdmissionRegistry {
-  check(record: LiveAdmission, field: string, operation: string): Promise<LiveAdmission>;
+  check(
+    record: LiveAdmission,
+    field: string,
+    operation: string
+  ): Promise<LiveAdmission>;
 }
 export class DurableSession<D> {
   private queue: Promise<unknown> = Promise.resolve();
   private readonly identity: LiveDocumentIdentity;
-  constructor(private readonly store: LiveDocumentStore, private readonly codec: DocumentCodec<D>,
-    private readonly registry: AdmissionRegistry, private readonly admission: LiveAdmission,
-    private readonly field: string) {
-    this.identity = { tenantId: admission.tenantId, workspaceId: admission.workspaceId, documentId: admission.documentId };
+  constructor(
+    private readonly store: LiveDocumentStore,
+    private readonly codec: DocumentCodec<D>,
+    private readonly registry: AdmissionRegistry,
+    private readonly admission: LiveAdmission,
+    private readonly field: string
+  ) {
+    this.identity = {
+      tenantId: admission.tenantId,
+      workspaceId: admission.workspaceId,
+      documentId: admission.documentId,
+    };
   }
   private exclusive<T>(run: () => Promise<T>): Promise<T> {
     const next = this.queue.then(run, run);
@@ -103,51 +119,104 @@ export class DurableSession<D> {
     return next;
   }
   private async check(operation: string): Promise<void> {
-    const current = await this.registry.check(this.admission, this.field, operation);
-    for (const key of ['tenantId', 'workspaceId', 'documentId', 'sessionId', 'sessionEpoch', 'schemaEpoch', 'profileId'] as const) {
-      if (current[key] !== this.admission[key]) throw new Error('admission-identity-mismatch');
+    const current = await this.registry.check(
+      this.admission,
+      this.field,
+      operation
+    );
+    for (const key of [
+      'tenantId',
+      'workspaceId',
+      'documentId',
+      'sessionId',
+      'sessionEpoch',
+      'schemaEpoch',
+      'profileId',
+    ] as const) {
+      if (current[key] !== this.admission[key])
+        throw new Error('admission-identity-mismatch');
     }
-    if (current.closed || current.actor.actorId !== this.admission.actor.actorId
-      || current.actor.kind !== this.admission.actor.kind) throw new Error('admission-identity-mismatch');
+    if (
+      current.closed ||
+      current.actor.actorId !== this.admission.actor.actorId ||
+      current.actor.kind !== this.admission.actor.kind
+    )
+      throw new Error('admission-identity-mismatch');
   }
   open(baseline: LiveBaseline): Promise<void> {
     return this.exclusive(async () => {
       await this.check('read');
-      await this.store.open(this.identity, baseline, this.admission.schemaEpoch);
+      await this.store.open(
+        this.identity,
+        baseline,
+        this.admission.schemaEpoch
+      );
     });
   }
-  snapshot(): Promise<{ encodedState: string; stateVector: string; head: number }> {
-    return this.exclusive(async () => {
-      await this.check('read');
-      const state = await this.store.load(this.identity);
-      const doc = restoreDocument(state, this.codec);
-      try { return { encodedState: this.codec.encode(doc), stateVector: this.codec.vector(doc), head: state.head }; }
-      finally { this.codec.destroy(doc); }
-    });
-  }
-  checkpoint(checkpointId: string, createdAt: string, createdBy: string): Promise<LiveCheckpoint> {
+  snapshot(): Promise<{
+    encodedState: string;
+    stateVector: string;
+    head: number;
+  }> {
     return this.exclusive(async () => {
       await this.check('read');
       const state = await this.store.load(this.identity);
       const doc = restoreDocument(state, this.codec);
       try {
-        const checkpoint = sealCheckpoint({ checkpointId, documentId: this.identity.documentId,
-          encodedState: this.codec.encode(doc), stateVector: this.codec.vector(doc),
-          journalWatermark: state.head, schemaEpoch: state.schemaEpoch, createdAt, createdBy });
-        await this.store.checkpoint(this.identity, state.head, checkpoint);
-        return checkpoint;
-      } finally { this.codec.destroy(doc); }
+        return {
+          encodedState: this.codec.encode(doc),
+          stateVector: this.codec.vector(doc),
+          head: state.head,
+        };
+      } finally {
+        this.codec.destroy(doc);
+      }
     });
   }
-  accept(input: LiveCommit, publish: (entry: LiveJournalEntry) => Promise<void>): Promise<LiveJournalEntry> {
+  checkpoint(
+    checkpointId: string,
+    createdAt: string,
+    createdBy: string
+  ): Promise<LiveCheckpoint> {
+    return this.exclusive(async () => {
+      await this.check('read');
+      const state = await this.store.load(this.identity);
+      const doc = restoreDocument(state, this.codec);
+      try {
+        const checkpoint = sealCheckpoint({
+          checkpointId,
+          documentId: this.identity.documentId,
+          encodedState: this.codec.encode(doc),
+          stateVector: this.codec.vector(doc),
+          journalWatermark: state.head,
+          schemaEpoch: state.schemaEpoch,
+          createdAt,
+          createdBy,
+        });
+        await this.store.checkpoint(this.identity, state.head, checkpoint);
+        return checkpoint;
+      } finally {
+        this.codec.destroy(doc);
+      }
+    });
+  }
+  accept(
+    input: LiveCommit,
+    publish: (entry: LiveJournalEntry) => Promise<void>
+  ): Promise<LiveJournalEntry> {
     // Copy before queuing: a caller cannot mutate validated bytes while awaiting a lock.
     const frozen = structuredClone(input);
     return this.exclusive(async () => {
       await this.check('edit');
-      if (frozen.actorId !== this.admission.actor.actorId || frozen.sessionEpoch !== this.admission.sessionEpoch
-        || frozen.sessionId !== this.admission.sessionId) throw new Error('commit-admission-mismatch');
+      if (
+        frozen.actorId !== this.admission.actor.actorId ||
+        frozen.sessionEpoch !== this.admission.sessionEpoch ||
+        frozen.sessionId !== this.admission.sessionId
+      )
+        throw new Error('commit-admission-mismatch');
       validateCommit(this.identity, frozen);
-      if (this.admission.actor.kind === 'agent' && !frozen.receipt) throw new Error('agent-receipt-required');
+      if (this.admission.actor.kind === 'agent' && !frozen.receipt)
+        throw new Error('agent-receipt-required');
       const state = await this.store.load(this.identity);
       const previous = duplicate(state.journal, frozen);
       if (previous) return previous;
@@ -156,11 +225,18 @@ export class DurableSession<D> {
       // the next operation must load committed state again before serving anything.
       const candidate = restoreDocument(state, this.codec);
       try {
-        if (frozen.encodedUpdate !== null) this.codec.apply(candidate, frozen.encodedUpdate);
-        const entry = await this.store.commit(this.identity, state.head, frozen);
+        if (frozen.encodedUpdate !== null)
+          this.codec.apply(candidate, frozen.encodedUpdate);
+        const entry = await this.store.commit(
+          this.identity,
+          state.head,
+          frozen
+        );
         await publish(structuredClone(entry));
         return entry;
-      } finally { this.codec.destroy(candidate); }
+      } finally {
+        this.codec.destroy(candidate);
+      }
     });
   }
 }
