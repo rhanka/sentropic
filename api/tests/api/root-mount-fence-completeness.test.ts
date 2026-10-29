@@ -57,6 +57,7 @@ const IMMUTABLE_ARTIFACT_ROUTES = [
   ['POST', '/resources/artifacts/publish'],
   ['POST', '/resources/artifacts/list'],
   ['GET', '/resources/artifacts/meta/:artifactId'],
+  ['POST', '/resources/artifacts/reader-activation'],
 ] as const;
 const IMMUTABLE_ARTIFACT_FENCE = [['ALL', '/resources/artifacts/*']] as const;
 const IMMUTABLE_ADMIN_AUTH_ROUTES = [
