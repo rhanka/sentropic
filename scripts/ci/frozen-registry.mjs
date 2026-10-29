@@ -20,7 +20,8 @@ export function addLock(versions, lock) {
 
 export function lockedVersions(root) {
   const versions = new Map();
-  addLock(versions, JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'))));
+  const stagedLock = path.join(root, 'scripts/ci/root-package-lock.json');
+  addLock(versions, JSON.parse(fs.readFileSync(fs.existsSync(stagedLock) ? stagedLock : path.join(root, 'package-lock.json'))));
   for (const profile of Object.values(JSON.parse(fs.readFileSync(path.join(root, 'scripts/ci/tool-locks.json'))))) {
     addLock(versions, profile.lock);
   }
