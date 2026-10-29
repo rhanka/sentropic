@@ -37,6 +37,9 @@ describe('canvas live restart recovery', () => {
     await store.commit(identity, 1, commit(update(doc, t => t.insert(1, 'b')), 'next'));
     store.state.checkpoint.journalWatermark = 2;
     expect(() => restoreDocument(store.state, codec)).toThrow('checkpoint-integrity');
+    const { digest: _digest, ...forged } = store.state.checkpoint;
+    store.state.checkpoint = sealCheckpoint(forged);
+    expect(() => restoreDocument(store.state, codec)).toThrow('checkpoint-coverage');
     store.state.checkpoint = null;
     store.state.journal.shift();
     expect(() => restoreDocument(store.state, codec)).toThrow('journal-gap');

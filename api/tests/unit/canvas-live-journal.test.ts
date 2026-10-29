@@ -86,4 +86,13 @@ describe('canvas live durable acceptance boundary', () => {
     expect(store.state.journal[0]).toMatchObject(value);
     expect(store.state.baseline).toEqual(baseline);
   });
+
+  it('should reject an agent update without its terminal receipt before publication', async () => {
+    const { store, session, doc, publish } = await setup();
+    const value = commit(update(doc, t => t.insert(0, 'unreceipted')));
+    delete value.receipt;
+    await expect(session.accept(value, publish)).rejects.toThrow('agent-receipt-required');
+    expect(store.state.head).toBe(0);
+    expect(publish).not.toHaveBeenCalled();
+  });
 });
