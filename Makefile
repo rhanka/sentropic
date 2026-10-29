@@ -1119,7 +1119,7 @@ memory-mcp-qualify: ## Require the candidate memory MCP tools on real isolated P
 	@set -eu; mkdir -p tmp/memory-mcp-receipts "$$(dirname "$(E2_LOCK)")"; \
 		trap 'flock "$(E2_LOCK)" $(MAKE) down ENV=$(ENV)' EXIT; \
 		flock "$(E2_LOCK)" $(MAKE) engram-e2-postgres-up ENV=$(ENV); \
-		set -o pipefail; flock "$(E2_LOCK)" $(MAKE) test-cluster-mesh SCOPE=mcp-memory \
+		set -o pipefail; flock "$(E2_LOCK)" $(MAKE) cluster-mesh-workspace CM_ACTION=memory-mcp \
 		CM_PG_URL=postgresql://app:app@postgres:5432/app ENV=$(ENV) 2>&1 | tee tmp/memory-mcp-receipts/tools.log
 
 engram-e2-stable-publish-guard:
