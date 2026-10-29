@@ -29,11 +29,11 @@
   },
   "acquisition": { "attempts": 3, "requestTimeoutMs": 30000, "budgetMs": 120000, "maxRetryAfterMs": 30000 },
   "blockers": [
-    "Admit verifier and retain exact-index signature bundle, trust roots and offline verification receipt",
-    "Review image content, runtime dependencies and zero-Python inventory beyond publisher signature",
-    "Qualify fresh immutable DB, Java DB and IaC rules snapshots and restoration integrity",
-    "Qualify three target images with source-SHA/platform provenance and complete raw reports",
-    "Exercise offline, rate-limit, corruption, expiry-before-merge and rollback scenarios on real artifacts",
-    "Measure cold/warm remote/rebuild cost and full CI critical path; S2c/S3 remain separate gates"
+    "Independent admission of patched scanner/verifier and retained roots: current candidates contain HIGH/CRITICAL findings (docs/security/trivy-s2b-qualify.md)",
+    "Frozen IaC rules load offline but detect zero Compose configurations; complete declared IaC coverage and report adaptation are missing",
+    "Three canonical remote targets need matching trusted source-SHA/config/platform receipts: API/UI registry configs differ from main-CI archives and toolbox tag is absent",
+    "Successful remote scan needs narrowly scoped pull authorization; broad operator credentials must stay outside scanner tools",
+    "Isolated rebuild requires an admitted builder without shared daemon or secrets; approved Node sandbox has no builder",
+    "Successful remote/rebuild measurements and CI critical path at most 600 seconds remain missing; S2c/S3 are separate gates"
   ]
 }

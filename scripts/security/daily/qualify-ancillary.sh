@@ -14,6 +14,10 @@ common=(--rm --pull=never --read-only --cap-drop=ALL --security-opt=no-new-privi
 flags=(--config /dev/null --ignorefile /dev/null --cache-dir /cache --cache-backend memory
   --scanners vuln --format json --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --exit-code 0 --parallel 1
   --skip-db-update --skip-java-db-update --offline-scan --skip-version-check --disable-telemetry)
+docker run "${common[@]}" --entrypoint sh \
+  --mount "type=bind,src=$evidence/main-40832206894/api-image/image.tar,dst=/target/image.tar,readonly" \
+  "$scanner" -ec 'test ! -S /var/run/docker.sock; for path in /qualify-root /cache/db/metadata.json /target/image.tar; do if touch "$path"; then exit 1; fi; done; echo "Root, DB and target writes refused; daemon socket absent"' \
+  > "$evidence/write-isolation.log" 2>&1
 docker image save "$scanner" -o "$evidence/scanner-image.pending.tar"
 mv "$evidence/scanner-image.pending.tar" "$evidence/scanner-image.tar"
 chmod 444 "$evidence/scanner-image.tar"

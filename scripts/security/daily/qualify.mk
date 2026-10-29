@@ -48,6 +48,15 @@ security-qualify-scanner:
 	@docker image inspect "$(SECQUAL_SCANNER)" >/dev/null 2>&1 || docker pull --platform linux/amd64 "$(SECQUAL_SCANNER)"
 security-qualify-scans security-qualify-ancillary security-qualify-java: security-qualify-scanner
 
+.PHONY: security-qualify-remote
+security-qualify-remote: security-qualify-scanner
+	@bash scripts/security/daily/qualify-remote.sh
+
+.PHONY: security-qualify-receipts
+security-qualify-receipts: ## Publish only the fixed allowlist of public qualification evidence
+	@mkdir -p docs/security/sec-s2b-qualify
+	@$(SECQUAL_RUN) --network=none -v "$(CURDIR)/docs/security/sec-s2b-qualify:/receipts" $(SECQUAL_NODE) node scripts/security/daily/qualify-publish.mjs
+
 .PHONY: security-qualify-cosign-help
 security-qualify-cosign-help:
 	@$(SECQUAL_RUN) --network=none $(SECQUAL_NODE) /evidence/cosign verify-blob-attestation --help > "$(SECQUAL_DIR)/cosign-help.txt"
