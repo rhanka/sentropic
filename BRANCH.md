@@ -47,7 +47,7 @@
 ## Feedback Loop
 - [ ] Deferred integration: H1 final admission/registry wiring waits for #830 merge; H3 owns real provider conformance, H4 real inverse qualification, H5 publication authority, H10 production activation/N4 retirement.
 - [x] User instruction replaces the LiveDocumentStore stub now; one exported substantive port, no alias or fallback.
-- [x] Focus editing API pinned to h2a `98060bd0a`, package `@sentropic/focus@0.5.0`; dependency alias avoids the unrelated app-local Focus package.
+- [x] Focus editing API pinned to h2a `98060bd0a` (0.5.0, unpublished: npm E404); inject its exact diff contract and use the planned FE-3 test double, without substituting the app-local Focus package.
 
 ## AI Flaky tests
 - [x] No AI calls in H2 acceptance; no flaky exceptions requested.
@@ -64,7 +64,7 @@
   - [x] Create isolated worktree and mechanically pass `harness check branch`.
   - [x] Define scope, test environment, ports and Docker lock.
 - [ ] **Lot 1 — Port and RED witnesses**
-  - [ ] Replace stub with host-only persistence contract; bump chat-core after published-version check.
+  - [x] Replace stub with host-only persistence contract; chat-core 0.2.0 exceeds npm 0.1.7 (Docker npm view).
   - [ ] RED `api/tests/unit/canvas-live-recovery.test.ts`: checkpoints, replay, delete set/vector, epoch, corrupted watermark, tenant isolation.
   - [ ] RED `api/tests/unit/canvas-live-journal.test.ts`: receipts, inverse/provenance atomicity, publish after commit, rebuild after failure, retention.
   - [ ] RED `api/tests/unit/canvas-live-freeze-capture.test.ts`: cumulative retained-baseline diff and undo to baseline.
