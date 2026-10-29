@@ -110,6 +110,15 @@ export function exportSiblings(dir, index, slug, destination) {
   fs.writeFileSync(path.join(destination, 'receipts.json'), `${JSON.stringify(receipts, null, 2)}\n`);
 }
 
+export function verifyCandidateSelection(dir, headSha, primary) {
+  const index = json(path.join(dir, 'candidates.json'));
+  if (!headSha || index.tuple?.head_sha !== headSha) fail('candidate source SHA mismatch');
+  verifyCandidateArchives(dir, index);
+  const receipt = index.receipts.find(row => row.name === primary.name && row.version === primary.version);
+  if (!receipt || receipt.sha256 !== primary.sha256) fail('primary archive differs from selected candidate');
+  return index;
+}
+
 export async function main([command, dir, ...roots]) {
   const root = process.cwd(), tuple = candidateTuple(root);
   if (command === 'produce') return produceCandidates({ root, dir, roots, tuple,
