@@ -1,0 +1,65 @@
+# W0 release and authorization evidence register
+
+W0 preparation, local evidence probes, commits, push and a draft PR are covered by the owner's 2026-10-18 launch packet `AGENT_SIG:7f3a9c2e1b`. The 19 October follow-up also authorizes integrating origin/main into this branch and recording the [verbatim Q1–Q4 owner answers](owner-decisions.md). The original request and approved plan hash are preserved in [baseline.md](baseline.md). No PR merge, deployment, production migration, live restore, key enrollment or Environment reconfiguration is included in this task. Unknown evidence is pending; no receipt is inferred from a green check or elapsed time.
+
+**26 October scope:** the owner's W0-close.a/d packet authorizes current-main merge, read-only endpoint/config/package/authority/legacy probes, replacement migration-number reservation, record commits/push and exact-head CI. Production DB statements are SELECT-only with read-only connection options; object probes use GET/HEAD/ACL reads only. No W0-close.b/c restore or PR merge. The current extension below supersedes only pending-evidence descriptions; dated old readings remain unchanged.
+
+## 28 October reconciliation
+
+The owner authorizes #702's merge of main, record/PR-body reconciliation, push and exact-head CI. Current d authority is [#796's immutable tuple/qualification](https://github.com/rhanka/sentropic/blob/ea8e84431/docs/baselines/app-cm-w0/tuple-refresh-2026-10-27.md), indexed in [baseline.md](baseline.md); local earlier d records remain historical. W0-close.b is [#756](https://github.com/rhanka/sentropic/pull/756), merged on main at [ab981b16d](https://github.com/rhanka/sentropic/commit/ab981b16d), with the existing [restore runbook](../../runbooks/app-cm-baseline-restore.md). The three process/source deviations and their dispositions are in [BRANCH.md](../../../BRANCH.md).
+
+**Historical c disposition on 28 October:** BLOCKED pending a cluster target and selected backup object. No restore was executed by that resync. The 29 October owner-selected local scope below supersedes those prerequisites.
+
+Independent W0-close.e source: `/home/antoinefa/src/sentropic/.tmp/app-switch-week/W0e-receipt-opus.md` (2026-10-28): a/b/d ACCEPT on its cited heads, c BLOCKED, overall REJECT. Opus supplied this receipt although the planned B08 pairing names Sol/Astra; record that substitution for conductor reconciliation, without claiming final-head acceptance. The Astra r1 source file `pr702_astra_r1.md` is missing; reconstructed statuses do not replace that source or a final-head review.
+
+## 29 October local restore decision and receipt
+
+The owner authorizes the existing live production dump's isolated local restore in `test-app-w0c`, aggregate receipt, cleanup/deletion, current-main merge without rebase, PR #702 update/push and successful exact-head CI. **W0-close.c / B03 local baseline recovery is DONE per this decision**; [receipt and hash indexed in baseline.md](baseline.md). The source is production `pg_dump` under « Recup les donnees ici », not the S3 backup object. Schema/counts/authority state match; no existing revoked row, runtime deny test, blob/S3/version or cluster recovery is claimed. Cluster-target/bucket prerequisites and scoped-credential rotation are inapplicable to this local run. W0-close.e/B08 and production authorization remain open.
+
+## Pending dependencies and observable handoffs
+
+The owner (rhanka) holds all human roles as principal operator; agents do the work (Q1). No staffed windows or temporal slot bookings are required because there are no users (Q2). Dates below retain the original plan's requested technical deadlines. SC owns evidence collection; unresolved technical dependencies keep their applicable gates closed and add their nonoverlapping critical-path delay to Δ.
+
+| ID / responsible role | Bounded missing evidence / acceptance | Deadline / gate |
+|---|---|---|
+| B01 / owner as tenant operator, agents collect | **Baseline evidence supplied 26 Oct:** [endpoint/config receipt](endpoint-config-2026-10-26.md) retains live ConfigMap/template/container-environment hashes, Secret metadata only, routing/ready endpoints/proxy hash, public HTTPS digests and refreshed prod/preprod pod/image identities. Earlier tenant readings retain remote/content-role metadata | Supplied for B08 review; authenticated parity and deployment refresh remain W2/W5 |
+| B02 / tenant operator | **Baseline inventory supplied 26 Oct:** [package/authority receipt](package-authority-2026-10-26.md); same source-matching product/control frontiers, no artifacts package schema/journal, every cutover/author/generation group and zero runtime lease rows. No valid writer fence inferred | Supplied for B08 review; W2 must positively qualify selected authority/fencing before effects; refresh W5 |
+| B03 / owner as tenant operator + KO, agents collect | **W0-close.c local recovery DONE per 29 Oct owner decision:** [receipt](../../runbooks/app-cm-baseline-restore/receipts/restore-local-20261029T084403Z.md), indexed/hash in baseline.md. Live production dump, isolated restore, schema/count/authority parity and teardown/deletion supplied; S3/version/blob and runtime revoked-reader limits explicit | Supplied for B08; actual new-provider/blob/deny-state recovery qualification before W5 |
+| B04 / tenant operator + W1 storage owner | **Scoped inventory/disposition supplied 26 Oct:** [dated inventory](legacy-inventory-2026-10-26.md), anonymized tenant/workspace/source counts, ACL joins, 14 object existence/byte-checksum/private-ACL reads and denied anonymous HEADs. Leave every legacy source in place; retain its readers; exclude four unscoped chat messages from any import | Supplied for B08 review; full bucket/version/recovery checkpoint remains later W5 qualification |
+| B05 / owner as acceptance signer + SC | **W0 decisions closed by Q3/Q4:** owner signs from an instance he designates; new dedicated acceptance identity/key, later authorized enrollment, own revocation cycle. Public SPKI fingerprint **PENDING until enrollment**; no private key in records. Later action records public export/validity/revocation/role binding; reviewed P installs protected-main trust | Enrollment/trust evidence before signed acceptance/production validation; no pending W0 owner choice |
+| B06 / owner as KO + tenant operator, SC/agents execute | **W0 number reconciliation closed 26 Oct:** [747-ref/263-worktree scan](reservations.md) withdraws app 0017, preserves #677's 0012–0019 and reserves verified-free **0020**. Q1/Q2 ownership decisions stand. Branch bases/workspace mode/APP-P1/internal ports and W2.b lock turn are explicit | Number supplied for B08; W1 rescans before writing. DNS/TLS/bucket/IAM/RBAC remain W3/W5 gates; missing UP-T receipt gates W1.c |
+| B07 / rhanka + tenant operator | Native app `production` Environment configuration, main-only/reviewer/no-admin-bypass receipt, tag rules, credential-route audit and preprod production-write denial; signed positive rehearsal and native `probe_only` barrier receipt | TG exit; actual distinct G-PROD and run approval before production |
+| B08 / SC / independent R | Sol 6.1 xhigh + Astra max acceptance-scope review of the exact W0 head/records and reconciliation. Coding instance supplies evidence and does not issue its own independent GO | Before marking W0 accepted; draft PR alone is not acceptance |
+
+Historical F1/F2 readings remain in the dated cluster/tenant/migration/recovery records. The 26 October receipts supply B01/B02/B04 and B06's number check; the 29 October receipt closes c/B03's owner-selected local recovery. **B08 remains open.** F3/F4 owner decisions stay closed by the [verbatim answers](owner-decisions.md); later enrollment, infrastructure and promotion receipts retain their stated gates. No credential values were exported; SC keeps dependent work gated until acceptance.
+
+## Remaining W0 acceptance blockers
+
+- **F1 / B03 disposition:** c's owner-selected local recovery is DONE with the 29 October receipt. Scheduled-object/version/blob and runtime revocation proof remain later recovery qualification; they are not prerequisites for this selected W0-close.c scope.
+- **B08:** independent non-author acceptance reviews and reconciliation on the final W0 head, including owner answers and the Opus substitution above. Astra r1 targeted ce26bb090bf1d2a43a00d9c97671269e18152e52, but `pr702_astra_r1.md` is missing; statuses are reconstructed from packets/records, with no source-review or final-head acceptance claim.
+
+B01/B02/B04 and B06's number check are supplied for independent B08 assessment; this author does not issue acceptance. B05 enrollment/trust installation, B06 infrastructure delivery and B07 Environment/rehearsal remain later gates. #796 supplies UP-T's published artifacts 0.2.4 adapter/SQL; host composition/authority/restart/conformance remains receiving qualification under the linked [host-fit](host-fit.md). No staffed window or temporal reservation blocks W0; technical rollback remains required.
+
+## Action authorization register
+
+Each merge record needs the owner/actor, UTC timestamp, durable source link, action scope, PR, exact reviewed head, required checks and both independent reviews. Each production record instead binds the canonical manifest hash, all four role digests, config/migration/frontier/backup/rollback scope, target tenant, signed acceptance, owner as principal operator and the native Environment run/approval receipt. Q2 requires no staffed window; technical rollback and action authorization remain required.
+
+| Record | Action / state |
+|---|---|
+| W0-LAUNCH | **Granted**, owner 18 Oct task packet; baseline preparation + draft delivery only. W0 head/review/PR are supplied by this branch; this is not a merge receipt |
+| W0-FOLLOW-UP | **Granted**, owner 19 Oct task packet; branch pull/main integration, verbatim Q1–Q4 recording, commits and push. Later dedicated-key enrollment is outside this task |
+| W0-B01-21OCT | **Granted**, owner 21 Oct authorization quoted verbatim in tenant readings; use `K8S_TENANT_ADMIN_KUBECONFIG_B64` for namespaced GETs only, no ConfigMap/Secret data or DB access; record metadata, commit and push; no merge or ready transition |
+| W0-B02-B03-22OCT | **Granted**, owner AskUserQuestion 22 Oct « Oui, lecture seule »; named tenant-admin kubeconfig, existing PostgreSQL pod exec with read-only migration-bookkeeping SELECTs and backup catalogue/status/receipt reads for prod/preprod; record, commit and push; no live modification, restore, merge or ready transition |
+| W0-CLOSE-A-D-26OCT | **Granted**, current owner packet: merge current main into #702 without rebase; read-only endpoint/config, package/authority and scoped legacy evidence; withdraw app 0017 and reserve free 0020; freeze current source/published receiving contracts; commits/push and green exact-head CI. Excludes restore b/c, production writes and PR merge |
+| W0-CLOSE-C-29OCT | **Granted and executed**, owner local-recovery instruction: restore the supplied live production dump to `test-app-w0c`, verify schema/counts/authority and duration, stop/remove local data and delete dump, retain aggregate receipt; merge main without rebase, update #702/push and require successful exact-head CI. No PR merge or production write |
+| M-T1 | **Pending**, W1 storage exact PR/head + tests/reviews; SC prepares, owner authorizes |
+| M-T2 | **Pending**, W2 registry exact PR/head + parity/identity evidence; SC prepares, owner authorizes |
+| M-T3 | **Pending**, W3 content/activation/packaging/I manifests + EX1 and KO handoff; SC prepares, owner authorizes |
+| M-T4 | **Pending**, W4 context/callers/catalogue/UI + HTTP/chat auth proof; SC prepares, owner authorizes |
+| M-TG | **Pending**, P exact PR/head + verifier/bypass/configuration evidence and EX2; SC/operator prepare, owner authorizes |
+| M-T5 | **Pending**, integrated fixes/runbook/qualification candidate + final Sol/Astra findings/checks; SC prepares, owner authorizes; excludes production |
+| G-PROD | **Pending**, qualified immutable tuple/manifest + owner's signed acceptance, frontier/backup/migration scope and owner as principal operator; rhanka's distinct native approval is mandatory; no staffed window required |
+| G-ROLLBACK | **Pending**, explicit stop/fence/prior-tuple actions preserving committed data and deny state; may be included in G-PROD, but each workflow still passes its Environment gate. Destructive live restore excluded |
+| Other/T0/TX candidates | No authority granted by this plan or W0; SC refreshes their heads and cites separately applicable receipts |
+
+SC may reuse an existing explicit GO whose scope covers the concrete action; it records the receipt rather than requesting the same approval again. Operator and signer assignments above come from the owner answers. W0 creates no independent review or deployment approval by declaration. This draft remains a baseline preparation record until the remaining W0 blockers above close; later gates are assessed at their stated stages.

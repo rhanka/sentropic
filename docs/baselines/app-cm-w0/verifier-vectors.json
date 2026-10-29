@@ -1,0 +1,72 @@
+{
+  "purpose": "Public fixture only; this key has no release authority",
+  "verifier": "@sentropic/h2a@0.98.6",
+  "fileHashes": {
+    "signature": "fa5d6f48baf170a4b349adf41592747e4ebb2bc9acba7ff6983ffc4ff254fe00",
+    "canonical": "5ba272e3b44cff97672341f8ea377cbdf9b714d60bf16cf477f2cdac4ba29f20",
+    "envelope": "b6a48e52fa154ce5e73097aba9b3c1a4968210f94b2ba0a90ce0b8488e4b1048"
+  },
+  "publicKeyPem": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEAuAC6hWrIsSGcVqsJCdvxFby76sA54ypKh2bzx9MmAHk=\n-----END PUBLIC KEY-----\n",
+  "manifest": {
+    "repository": "rhanka/sentropic",
+    "sourceSha": "9ed96eb83cd77da710f1adeb83a19e425d6c4910",
+    "targetEnvironment": "fixture-only",
+    "images": {
+      "api": "fixture@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    }
+  },
+  "envelope": {
+    "protocol": "sentropic.h2a",
+    "version": "0.1",
+    "createdAt": "2026-10-18T23:30:00.000Z",
+    "id": "w0-fixture-acceptance",
+    "type": "event",
+    "actor": {
+      "instance": "w0-fixture-signer",
+      "scope": "w0",
+      "role": "AGENT"
+    },
+    "body": {
+      "kind": "app-release-acceptance",
+      "schemaVersion": 1,
+      "manifestHash": "sha256:199308f6281e2090edd068c2bd7b974504fca68a71c1fd0b830a092fb988bfa6",
+      "repository": "rhanka/sentropic",
+      "sourceSha": "9ed96eb83cd77da710f1adeb83a19e425d6c4910",
+      "workflowSha": "9ed96eb83cd77da710f1adeb83a19e425d6c4910",
+      "targetEnvironment": "fixture-only",
+      "expiresAt": "2026-10-19T00:30:00.000Z",
+      "receiptIds": [
+        "fixture-qualification"
+      ]
+    },
+    "signatures": [
+      {
+        "by": "w0-fixture-signer",
+        "alg": "ed25519",
+        "value": "b+2J1oBfrYqia0oleeG1wShV2jmt+0x+IKwSfMwO357h2BF8V8EA6pGRza5IYp7qrKizwUKqrfoq6GgP58ylDg=="
+      }
+    ]
+  },
+  "cases": [
+    {
+      "name": "valid",
+      "mutation": null,
+      "signatureValid": true
+    },
+    {
+      "name": "altered-manifest-hash",
+      "mutation": "body.manifestHash = sha256:64-zeroes",
+      "signatureValid": false
+    },
+    {
+      "name": "wrong-signer",
+      "mutation": "verify options.by = wrong-signer",
+      "signatureValid": false
+    },
+    {
+      "name": "missing-signature",
+      "mutation": "signatures = []",
+      "signatureValid": false
+    }
+  ]
+}
