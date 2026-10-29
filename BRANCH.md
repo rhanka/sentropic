@@ -36,6 +36,7 @@
 ## UAT Management (in orchestration context)
 - [x] No web, Chrome or VSCode behavior change; workflow qualification supplies acceptance.
 ## Feedback Loop
+- [x] C1 conductor decision: preserve selective reruns by skipping deletion when any current-attempt job failed or was cancelled; keep one-day expiry. Reversible guard; regression covers success/skipped and every consumer's failure/cancellation.
 - [x] Fresh paginated stock read: 2,714.98 GB before this branch ran, versus audit 4,017 GB; no attribution to this change; repository log-retention GET remains 90 days.
 - [x] BR841-EX1: owner-requested least-privilege regression coverage in `scripts/ci/publishable-ci-wiring.test.mjs`; impact limited to credential-free fixtures; rollback reverts that test hunk.
 - [x] Rebased on origin/main; no package manifests or package sources changed, so the post-rebase package-version gate has no affected package.

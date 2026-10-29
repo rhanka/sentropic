@@ -3100,7 +3100,8 @@ jobs:
   # Only this job can delete artifacts; every consumer precedes capacity receipts.
   delete-transport-artifacts:
     runs-on: ubuntu-latest
-    needs: [ci-capacity-receipts]
+    needs: [ci-capacity-receipts, validate-publishable-manifests,
+      qualify-engram-e2, memory-l5-qualification, verify-train-lock-integrity]
     if: always() && !cancelled() && inputs.decision_fixtures_only != true
     permissions:
       actions: write
@@ -3111,6 +3112,13 @@ jobs:
         uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
         with:
           script: |
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
+              { ...context.repo, run_id: context.runId,
+                attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT), per_page: 100 });
+            if (jobs.some(job => ['failure', 'cancelled'].includes(job.conclusion))) {
+              core.info('Preserving transport artifacts for selective reruns after failure or cancellation.');
+              return;
+            }
             const names = new Set(['api-tool-image', 'api-image', 'ui-image', 'e2e-image', 'desktop-download']);
             const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts,
               { ...context.repo, run_id: context.runId, per_page: 100 });

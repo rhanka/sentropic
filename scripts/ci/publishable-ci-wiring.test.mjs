@@ -137,8 +137,9 @@ test('inventory job is always scheduled, credential-free and never a publisher/b
   assert.equal(upload.with['retention-days'], 7);
   assert.ok(!JSON.stringify(job).includes('secrets.'), 'no registry credentials or OIDC token');
   assert.ok(needsOf('ci-gate').includes('validate-publishable-manifests'), 'the aggregate gate enforces inventory validation');
+  assert.ok(needsOf('delete-transport-artifacts').includes('validate-publishable-manifests'), 'cleanup must preserve artifacts after inventory failure');
   for (const name of Object.keys(jobs)) {
-    if (name === 'ci-gate') continue;
+    if (['ci-gate', 'delete-transport-artifacts'].includes(name)) continue;
     assert.ok(!needsOf(name).includes('validate-publishable-manifests'), `${name} must not need the inventory job`);
     assert.ok(!String(jobs[name].if ?? '').includes('validate-publishable-manifests'), `${name} must not gate on the inventory job`);
   }
@@ -454,7 +455,10 @@ test('release train: validation barrier, strict chain, serialization, lock-sync 
   assert.match(check.run, /if \[ "\$LLM_MESH_PUBLISH_RESULT" = success \]; then required="@sentropic\/llm-mesh"; fi/);
   assert.match(check.run, /if \[ "\$LLM_GATEWAY_PUBLISH_RESULT" = success \]; then required="[^\n]*@sentropic\/llm-gateway"; fi/);
   assert.match(check.run, /make -f packages\/cluster-mesh\/packaging\.mk check-train-lock-integrity REQUIRE_PUBLISHED="\$required" ENV=test-ci-cluster-mesh$/m);
-  for (const name of Object.keys(jobs)) assert.ok(!needsOf(name).includes('verify-train-lock-integrity'), `${name}: integrity check never stops the chain`);
+  assert.ok(needsOf('delete-transport-artifacts').includes('verify-train-lock-integrity'), 'cleanup must preserve artifacts after integrity failure');
+  for (const name of Object.keys(jobs).filter(name => name !== 'delete-transport-artifacts')) {
+    assert.ok(!needsOf(name).includes('verify-train-lock-integrity'), `${name}: integrity check never stops the chain`);
+  }
   const steps = jobs['validate-cluster-mesh'].steps;
   const index = (pattern) => steps.findIndex((s) => pattern.test(s.run ?? ''));
   const lazy = index(/packaging\.mk test-lazy-package/);
