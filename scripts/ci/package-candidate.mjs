@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { commandPack, DEP_SECTIONS, GuardError, inspectArchive, sha256File } from './publishable-manifests.mjs';
+import { commandPack, DEP_SECTIONS, GuardError, inspectArchive, readPackedManifest, sha256File } from './publishable-manifests.mjs';
 
 const json = file => JSON.parse(fs.readFileSync(file, 'utf8'));
 const fail = message => { throw new GuardError(message); };
@@ -133,6 +133,11 @@ export async function main([command, dir, ...roots]) {
   if (command === 'produce') return produceCandidates({ root, dir, roots, tuple,
     tsc: '/tmp/cm-tools/node_modules/.bin/tsc' });
   if (command === 'verify') return verifyCandidates(dir, tuple, roots);
+  if (command === 'verify-primary') {
+    verifyCandidates(dir, tuple, ['cluster-mesh']);
+    const archive = roots[0], primary = readPackedManifest(fs.readFileSync(archive));
+    return verifyCandidateSelection(dir, tuple.head_sha, { ...primary, sha256: sha256File(archive) });
+  }
   if (command === 'siblings') {
     const [slug, destination] = roots;
     const index = verifyCandidates(dir, tuple, ['cluster-mesh']);

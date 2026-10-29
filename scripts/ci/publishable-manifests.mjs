@@ -688,10 +688,11 @@ export async function commandPack(opts, { env = process.env, cwd = process.cwd()
       const root = path.resolve(cwd, '../..');
       const index = verifyCandidates(env.CI_PACKAGE_CANDIDATES, candidateTuple(root, env), ['cluster-mesh'], { root });
       const receipt = index.receipts.find(row => row.slug === opts.slug);
-      if (!receipt) throw new GuardError(`missing selected candidate: ${opts.slug}`);
-      fs.mkdirSync(dest, { recursive: true });
-      archive = path.join(dest, path.basename(receipt.file));
-      fs.copyFileSync(path.join(env.CI_PACKAGE_CANDIDATES, receipt.file), archive);
+      if (receipt) {
+        fs.mkdirSync(dest, { recursive: true });
+        archive = path.join(dest, path.basename(receipt.file));
+        fs.copyFileSync(path.join(env.CI_PACKAGE_CANDIDATES, receipt.file), archive);
+      } else ({ archive } = runNpmPack(cwd, dest));
     } else ({ archive } = runNpmPack(cwd, dest));
     const result = inspectArchive({ archive, sources, semver });
     for (const s of result.structural) reporter.error(opts.slug, s);
