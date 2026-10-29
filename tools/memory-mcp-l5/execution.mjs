@@ -31,11 +31,14 @@ export function executeProof({ root, output, executable, args, cwd, executionMod
   }
   const path = resolve(root, output), rawPath = path + '.raw.json';
   if (!path.startsWith(resolve(root) + '/') || existsSync(path) || existsSync(rawPath)) throw Error('execution: unsafe or existing report output');
-  writeImmutable(root, output + '.binding.json', { ...binding, executionMode });
+  writeImmutable(root, output + '.binding.json', { ...binding, executionMode, executable, args, cwd });
   const run = spawnSync(executable, [...args, '--reporter=json', `--outputFile=${rawPath}`], { cwd, stdio: 'inherit' });
   if (!existsSync(rawPath)) throw Error(`execution: process produced no JSON report (exit ${run.status})`);
   const raw = readFileSync(rawPath), report = JSON.parse(raw);
+  const testResults = report.testResults?.map(result => ({ ...result,
+    ...(existsSync(result.name) ? { sourceSha256: sha256(readFileSync(result.name)) } : {}) }));
   writeFileSync(path, JSON.stringify({ ...report, ...binding, executionMode,
+    testResults,
     success: report.success === true && run.status === 0 && !run.error,
     processExit: run.status, rawReport: { path: rawPath.slice(resolve(root).length + 1), sha256: sha256(raw) } }) + '\n', { flag: 'wx' });
   return run;

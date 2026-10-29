@@ -22,9 +22,8 @@ run() {
 }
 run reference memory-l5-gate LOT=reference ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json
 run lot2 memory-l5-test LOT=2 "ARTIFACT_MANIFEST=$manifest"
-run lot3 memory-l5-test LOT=3 "ARTIFACT_MANIFEST=$manifest"
 if [ -e tmp/memory-l5-lot3-results ]; then mv tmp/memory-l5-lot3-results "$out/prior-source-reports"; fi
-run source memory-l5-lot3-source
+run lot3 memory-l5-test LOT=3 "ARTIFACT_MANIFEST=$manifest"
 run tooling memory-l5-tooling "MEMORY_L5_REPORT=/workspace/$out/tooling.json"
 run native-positive memory-l5-native-positive "MEMORY_L5_REPORT=/workspace/$out/native-positive.json"
 run disabled-install memory-l5-disabled-install "ARTIFACT_MANIFEST=$manifest" "NATIVE_OUTPUT=$out/disabled-install"

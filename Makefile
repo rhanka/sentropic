@@ -4441,8 +4441,8 @@ ifeq ($(LOT),reference)
 else ifeq ($(LOT),2)
 	@$(MAKE) memory-l5-lot2 ARTIFACT_MANIFEST=$(ARTIFACT_MANIFEST) ENV=$(ENV)
 else ifeq ($(LOT),3)
-	@$(MAKE) memory-l5-lot2 ARTIFACT_MANIFEST=$(ARTIFACT_MANIFEST) ENV=$(ENV)
 	@$(MAKE) memory-l5-lot3-source API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@$(MAKE) memory-l5-lot2 ARTIFACT_MANIFEST=$(ARTIFACT_MANIFEST) ENV=$(ENV)
 else
 	@test "$(LOT)" = "1" || { echo "ERROR: memory-l5-test LOT=$(LOT) is owned by a later lot (only LOT=1 exists)" >&2; exit 1; }
 	@$(MAKE) test-mcp-platform SCOPE=tests/memory API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)

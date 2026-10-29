@@ -5,6 +5,7 @@ import { dirname, resolve, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 import { resolvePredecessors } from './predecessors.mjs';
+import { caseWasExecuted } from './proof-cases.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const PINNED_IMAGE_DIGEST = 'node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6';
@@ -318,14 +319,25 @@ export function verifyOnDiskEvidence(doc, catalog, options = {}) {
         else executed.push({ file: nf, caseId: ar.fullName || ar.title, status: 'passed' });
       }
       for (const reqCase of asArr(cat.fileCases?.[nf])) {
-        if (!ars.some((ar) => ar?.status === 'passed' && (ar.title === reqCase || ar.fullName === reqCase || String(ar.title || '').includes(reqCase) || String(ar.fullName || '').includes(reqCase)))) {
+        let sourceSha;
+        try { sourceSha = sha256Hex(readFileSync(resolve(rootDir, nf))); } catch { /* Missing source cannot establish a suite group. */ }
+        if (!caseWasExecuted(cat, nf, tr, reqCase, sourceSha)) {
           failures.push(`proofs/${p.id}: missing required case ${reqCase} in ${nf}`);
         }
       }
     }
     if (executed.length !== p.result?.passed) failures.push(`proofs/${p.id}: assertion count mismatch`);
     for (const reqFile of cat.files) if (!fileSet.has(reqFile)) failures.push(`proofs/${p.id}: missing executed file ${reqFile}`);
-    for (const reqCase of cat.requiredCases) if (!executed.some((e) => e.caseId === reqCase || String(e.caseId || '').includes(reqCase))) failures.push(`proofs/${p.id}: missing required case ${reqCase}`);
+    for (const reqCase of cat.requiredCases) {
+      const found = rep.testResults.some(tr => {
+        const file = normPath(tr?.name);
+        if (!cat.files.includes(file)) return false;
+        let sourceSha;
+        try { sourceSha = sha256Hex(readFileSync(resolve(rootDir, file))); } catch { /* Refuse absent source. */ }
+        return caseWasExecuted(cat, file, tr, reqCase, sourceSha);
+      });
+      if (!found) failures.push(`proofs/${p.id}: missing required case ${reqCase}`);
+    }
     if (sha256Hex(Buffer.from(canonicalizeJson(executed))) !== p.result?.executedCasesSha256) failures.push(`proofs/${p.id}: executedCasesSha256 mismatch`);
   }
   let ciRun = null;
