@@ -15,6 +15,8 @@
     "identity": "https://github.com/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/v0.76.1",
     "requirePlatformSignature": false,
     "verifierAdmitted": false,
+    "verifierCandidate": { "repository": "sigstore/cosign", "version": "3.1.4",
+      "sha256": "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa", "releaseImmutable": true },
     "contentAdmitted": false
   },
   "data": {
@@ -29,7 +31,7 @@
   },
   "acquisition": { "attempts": 3, "requestTimeoutMs": 30000, "budgetMs": 120000, "maxRetryAfterMs": 30000 },
   "blockers": [
-    "Independent admission of patched scanner/verifier and retained roots: current candidates contain HIGH/CRITICAL findings (docs/security/trivy-s2b-qualify.md)",
+    "Independent admission of a patched scanner, the frozen Cosign 3.1.4 candidate and retained roots: scanner still contains HIGH/CRITICAL findings (docs/security/trivy-s2b-qualify.md)",
     "Frozen IaC rules load offline but detect zero Compose configurations; complete declared IaC coverage and report adaptation are missing",
     "Three canonical remote targets need matching trusted source-SHA/config/platform receipts: API/UI registry configs differ from main-CI archives and toolbox tag is absent",
     "Successful remote scan needs narrowly scoped pull authorization; broad operator credentials must stay outside scanner tools",
