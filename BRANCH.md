@@ -62,13 +62,13 @@
   - [x] Create isolated worktree and pass harness check branch.
   - [x] Record exact environment, ports, scope and deferred publication gates.
 - [ ] **Lot 1 — Admission RED witnesses and authority**
-  - [ ] Add api/tests/unit/canvas-live-admission.test.ts; observe behavioral RED before implementation.
+  - [x] Add api/tests/unit/canvas-live-admission.test.ts; observe behavioral RED before implementation (10 failed assertions at 708de0636).
   - [ ] Deny cross-tenant, cross-field, forged actors, viewer edits and revoked admissions; reauthorize each operation.
   - [ ] Persist sessionEpoch through restart/reconnect; close/new admission alone rotates it.
   - [ ] Refuse schema/profile before binding; preserve draft bytes; require actor/draft acknowledgement for both recovery branches.
 - [ ] **Lot 2 — Session registry RED witnesses and lifetime**
   - [x] Define executable registry lifetime, isolation, identity and actor-update witnesses behind the H3 factory port.
-  - [ ] Add api/tests/unit/canvas-live-provider.test.ts registry cases and observe RED.
+  - [x] Add api/tests/unit/canvas-live-provider.test.ts registry cases and observe RED (8 failures at 708de0636; recovery suite 3 failures).
   - [ ] Resolve complete identities only; isolate tenants; share one document session and awareness across fields.
   - [ ] Refcount mounts, idempotent disposal, release transport on last binding, retain document state.
   - [ ] Register actors/awareness explicitly and deliver registry updates, including leave/revocation.
