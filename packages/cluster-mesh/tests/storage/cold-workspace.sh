@@ -107,7 +107,13 @@ case "$CM_ACTION" in
       sha256sum ./sentropic-cluster-mesh-*.tgz > "$receipt/mesh.sha256"
       exit "$result"
     fi
-    /tmp/cm-tools/node_modules/.bin/vitest run "${CM_SCOPE:-tests}" \
+    # The default unit lane excludes the required PostgreSQL MCP campaign.
+    # Its dedicated CI make target provisions PostgreSQL and runs it without skips.
+    set --
+    if [ -z "$CM_PG_URL" ] && [ -z "${CM_SCOPE:-}" ]; then
+      set -- --exclude 'tests/engram-memory/mcp-memory-*.spec.ts'
+    fi
+    /tmp/cm-tools/node_modules/.bin/vitest run "${CM_SCOPE:-tests}" "$@" \
       --exclude tests/engram-memory/durable-memory.spec.ts --environment node --maxWorkers=1
     if [ "$CM_PG_CRASH_PHASE" = seed ]; then
       mkdir -p /source/.h2a

@@ -2,7 +2,7 @@
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { createModuleRegistry } from '@sentropic/cluster-mesh';
+import { createClusterMeshModules } from '@sentropic/cluster-mesh';
 import { createMcpRegistry } from '@sentropic/cluster-mesh/mcp/registry';
 import { createEngramMemoryBuiltin, registerEngramMemoryTools } from '@sentropic/cluster-mesh/mcp/memory';
 import { loadMcpPlatformStdio } from '@sentropic/cluster-mesh/loaders/mcp';
@@ -18,7 +18,7 @@ const close = () => closing ??= (async () => {
   finally { try { await builtin?.runtime()?.close(); } finally { await host?.close(); } }
 })();
 try {
-  const modules = createModuleRegistry();
+  const modules = createClusterMeshModules();
   host = await (await import(pathToFileURL(resolve(args[1])).href)).createHost({ modules });
   builtin = createEngramMemoryBuiltin({ modules, definition: host.definition });
   const registry = createMcpRegistry({ modules, builtins: [builtin] });
