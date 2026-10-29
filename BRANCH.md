@@ -66,7 +66,7 @@
   - [x] Cluster-mesh typecheck, 17 packaging preparation regressions and seven install guard tests pass.
   - [x] Published-consumer qualification: 18 tests pass; manifest, security and CI wiring contracts: 219 tests pass.
   - [x] Diff review preserves API runtime npm removal and distinguishes executable checks from npx execution.
-  - [ ] Run guard, cluster-mesh tests/typecheck, representative package and consumer checks.
+  - [x] Run guard, cluster-mesh tests/typecheck, representative package and consumer checks.
   - [ ] Review changed install paths and run mechanical scope check before each commit.
-  - [ ] Stop test environment with `make down`.
+  - [x] Stop test environment with `make down`; no application services were started.
   - [ ] Create draft PR to main from this plan; CI completed/success on exact head.

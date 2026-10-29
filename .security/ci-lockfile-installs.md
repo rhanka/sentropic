@@ -15,6 +15,8 @@ Consumer tests still use npm's real install and peer-conflict behavior, install 
 
 This freezes dependency selection and integrity, not registry availability. A locked archive can still be unavailable; the run fails instead of choosing a newer version. Existing image, artifact, SAST and dependency audit gates retain their separate coverage.
 
+The root workspace dependency audit does not itself scan isolated tool and consumer catalogs as installed trees. Those catalogs are a distinct SCA coverage boundary; this guard enforces their version and integrity inputs without granting a scanner exception.
+
 `make test-ci-lockfile-installs` runs in the existing always-scheduled manifest validation job. It rejects raw install/exec commands and download-capable npx paths, checks locked version/integrity records, refuses unknown tool profiles, and exercises an actual candidate installation followed by an offline lock replay. Explicit dependency authoring targets (`lock-*`, `install-ui*`, `install-api*` and the existing L5 snapshot mode) are maintenance operations, not CI install paths. Tool lock renewal is explicit through `make lock-ci-tools`; it refuses CI and produces a diff for review. Add a new tool profile's manifest and lock together, then run the guard and the affected package gate.
 
 Validation evidence is recorded in the PR and its exact-head Actions run; no vulnerability suppression is introduced by this finding.
