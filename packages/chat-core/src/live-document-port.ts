@@ -67,7 +67,8 @@ export interface LiveCommit {
   records: readonly LiveSessionRecord[];
 }
 export interface LiveJournalEntry extends LiveCommit {
-  seq: number; digest: string;
+  seq: number;
+  digest: string;
   formattingIntents: readonly (LiveFormattingIntent & { seq: number })[];
 }
 export interface LiveCheckpoint {
