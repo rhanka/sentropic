@@ -46,6 +46,7 @@
 - [ ] S2B-Q3, conductor, blocked: real offline/rate-limit/corruption/rollback exercises and cold/warm remote/rebuild measurements including full CI critical path.
 - [x] Live DB preparation: vulnerability snapshot ingested and restored; Java layer 991,026,356 bytes refused by the 512 MiB bound. Preparation exits nonzero; scoped teardown succeeds. Receipts and source evidence in root `.tmp/sec-s2b-evidence/`.
 - [x] S2B-R1, author, selection-failed: live model catalog unavailable for two distinct eligible Claude-hosted reviewers. No peer dispatched or consensus claimed; exact target/code hashes and failure recorded in root `.tmp/sec-s2b-evidence/review.md`. Independent review remains a qualification gate.
+- [x] S2B-F1, author, resolved: reproduced loss of raw diagnostics on rejected image reports; bounded stdout/stderr and process/DB identities now accompany rejection errors. Regression retained; no qualification bypass.
 - [x] Shared Track remains owned by its designated writer; no event writes from this lot.
 
 ## AI Flaky tests
@@ -75,8 +76,8 @@
   - [x] Keep unqualified execution gated and daily job off; bind scanner/policy/flags/DB identities across comparisons and recheck freshness before merge.
 - [x] **Lot 3 — Security regression fixtures**
   - [x] `toolchain-contract.test.mjs`: pin/version, publisher/platform/source, cache corruption/schema/dates, hostile archives and bounded acquisition failures; eight tests pass.
-  - [x] `trivy.test.mjs`: sandbox flags, environment isolation, report/target mismatch and unqualified execution refusal; four tests pass.
-  - [x] Existing `schema.test.mjs`, `inventory.test.mjs`, `scan.test.mjs` plus required wiring entrypoint: 149/149 pass; parser: 17/17 cases pass.
+  - [x] `trivy.test.mjs`: sandbox flags, environment isolation, report/target mismatch, diagnostic retention and unqualified execution refusal; five tests pass.
+  - [x] Existing `schema.test.mjs`, `inventory.test.mjs`, `scan.test.mjs` plus required wiring entrypoint: 150/150 pass; parser: 17/17 cases pass.
 - [x] **Lot N-1 — Docs consolidation**
   - [x] Document source receipts, frozen identities, trust limits, qualification matrix and rollback in `docs/security/trivy-s2b.md`.
 - [ ] **Lot N — Final validation**
