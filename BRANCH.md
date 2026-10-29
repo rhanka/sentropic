@@ -82,6 +82,7 @@
 - [ ] **Lot 3 — Recovery and commit-gated publication**
   - [x] Initial GREEN: 17 scoped tests across all four planned files; added RED retention/checkpoint service witness and after-commit lost-ack witness.
   - [x] RED proved agent receipt omission and resealed stale watermark; added committed-state checkpoint creation and full-history coverage verification.
+  - [x] Persist explicit total-order sequences on every formatting intent and typed restart-safe affected-item records.
   - [x] Implemented fresh committed-state reconstruction and discarded scratch candidates; no rejected tombstone reaches shared state.
   - [ ] Restore fresh document from checkpoint plus exact suffix; reject inconsistent watermark and digest.
   - [ ] Rebuild committed state after candidate persistence failure; gate all further publication until recovery succeeds.

@@ -71,6 +71,7 @@ describe('canvas live PostgreSQL durability', () => {
     const state = await new PgLiveDocumentStore(pool).load(id);
     expect(codec.encode(restoreDocument(state, codec))).toBe(codec.encode(doc));
     expect(state.journal[0]).toMatchObject(first);
+    expect(state.journal[0].formattingIntents).toMatchObject([{ intentId: 'agent-intent', seq: 1 }]);
     expect(state.baseline).toEqual(baseline);
     expect(state.schemaEpoch).toBe('1');
     expect(state.journal.map(e => e.seq)).toEqual([1, 2]);

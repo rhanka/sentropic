@@ -22,10 +22,14 @@ export function restoreDocument<D>(state: LiveDocumentState, codec: DocumentCode
   const checkpoint = state.checkpoint;
   if (checkpoint) verifyCheckpoint(checkpoint, state);
   if (state.journal.length !== state.head) throw new Error('journal-gap');
+  let intentSeq = 0;
   for (const [index, entry] of state.journal.entries()) {
     const { seq, digest: expected, ...input } = entry;
     if (seq !== index + 1) throw new Error('journal-gap');
     if (commitDigest(input) !== expected) throw new Error('journal-integrity');
+    for (const intent of entry.formattingIntents) {
+      if (intent.seq !== ++intentSeq) throw new Error('formatting-order');
+    }
   }
   const doc = codec.create();
   try {

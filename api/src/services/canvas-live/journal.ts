@@ -12,7 +12,18 @@ export function canonical(value: unknown): string {
     .map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(',')}}`;
 }
 export const digest = (value: unknown): string => createHash('sha256').update(canonical(value)).digest('hex');
-export const commitDigest = (input: LiveCommit): string => digest(input);
+export const commitDigest = (input: LiveCommit): string => digest({ ...input,
+  formattingIntents: input.formattingIntents.map(intent => {
+    const { seq: _seq, ...semantic } = intent as typeof intent & { seq?: number };
+    return semantic;
+  }),
+});
+export function sequenceEntry(journal: readonly LiveJournalEntry[], input: LiveCommit, seq: number): LiveJournalEntry {
+  let intentSeq = journal.reduce((total, entry) => total + entry.formattingIntents.length, 0);
+  return { ...input, seq, digest: commitDigest(input),
+    formattingIntents: input.formattingIntents.map(intent => ({ ...intent, seq: ++intentSeq })),
+  };
+}
 export const patchKey = (key: LivePatchKey): string => canonical([
   key.documentId, key.actorId, key.sessionEpoch, key.patchId,
 ]);
