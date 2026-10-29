@@ -301,7 +301,8 @@ describe('RC1 product to issuer revocation', () => {
       vi.stubGlobal('fetch', transport);
       vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
       await expect(runAdminApprovalSweep()).resolves.toEqual({ expiredCount: 2 });
-      expect(transport).toHaveBeenCalledTimes(2);
+      expect(transport).toHaveBeenCalledTimes(1); // Concurrent deliveries share the failed token request.
+      expect(await pendingRemoteRevocations()).toHaveLength(2);
       expect(await db.select().from(userSessions).where(inArray(userSessions.userId, [userId, otherId]))).toEqual([]);
       vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
       expect(await resolveRemoteLogin(first.sessionToken)).toBeNull();
