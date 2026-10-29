@@ -15,15 +15,22 @@ export interface AdmissionPorts {
   epoch(): string;
 }
 export class AdmissionAuthority {
+  private readonly closedListeners = new Set<(record: AdmissionRecord) => void>();
   constructor(private readonly ports: AdmissionPorts) {}
+  onClosed(callback: (record: AdmissionRecord) => void): () => void {
+    this.closedListeners.add(callback);
+    return () => { this.closedListeners.delete(callback); };
+  }
   async open(input: OpenSessionInput): Promise<AdmissionRecord> {
     const principal = await this.ports.authenticate();
     if (!sameActor(principal.actor, input.actor)) throw new AdmissionError('actor-denied');
     const { grant, facts } = await this.current(principal, input.binding.documentId);
+    if (!grant.fields.includes(input.binding.fieldKey) || !grant.operations.includes('read')) throw new AdmissionError('scope-denied');
     if (input.profileId !== facts.profileId || input.schemaEpoch !== facts.schemaEpoch) throw new AdmissionError('incompatible-schema');
     if (input.binding.sessionId !== undefined && input.binding.sessionId !== facts.sessionId) throw new AdmissionError('invalid-binding');
-    if (!grant.fields.includes(input.binding.fieldKey) || !grant.operations.includes('read')) throw new AdmissionError('scope-denied');
     return this.ports.update(admissionKey(principal, facts.documentId), (old) => {
+      // Host actor ids are globally unique across kinds, including closed admissions.
+      if (old && !sameActor(old.actor, principal.actor)) throw new AdmissionError('actor-denied');
       const continuing = old && !old.closed;
       if (continuing && !old.fields.includes(input.binding.fieldKey)) throw new AdmissionError('scope-denied');
       return {
@@ -50,10 +57,11 @@ export class AdmissionAuthority {
   async close(record: AdmissionRecord): Promise<void> {
     const principal = await this.ports.authenticate();
     this.assertOwner(principal, record);
-    await this.ports.update(admissionKey(principal, record.documentId), (old) => {
+    const closed = await this.ports.update(admissionKey(principal, record.documentId), (old) => {
       this.assertActive(old, record);
       return { ...old!, closed: true };
     });
+    for (const callback of this.closedListeners) callback(closed);
   }
   private async current(principal: Principal, documentId: string) {
     if (![principal.tenantId, principal.workspaceId, principal.actor.actorId, documentId].every(nonempty)) throw new AdmissionError('scope-denied');
