@@ -52,17 +52,18 @@
   - [x] Installed dev.7 run d1726c309: 23 behaviors + inventory pass, zero skip/todo; stage-b.status exit=0 cleanup=0; archive SHA-256 7aeb92cf…395e271. Retain JSON result and exact archive for tuple binding.
   - [x] No Engram-owner change is required: 23/23 pass on published 0.21.3 after the bounded host fixes.
   - [x] Remove the unused fixture codec/handle helper and describe standalone E10 coverage separately from the passing installed Stage B campaign; preserve historical checked-in receipts verbatim.
-- [ ] **Lot E11b-1 — Package and tuple**
+- [x] **Lot E11b-1 — Package and tuple**
   - [x] Pack dev.7 with standalone neutral declaration; bind slot 15 SHA-256 and derive neutralContract.status from slot 15.
   - [x] Add build-time standalone C6 emission from tsc declarations; no external imports; expected SHA-256 5a8c13c5…773229, verified against dev.6 declaration with only its source-map comment removed.
   - [x] Pin dev.7 archive/SRI and d1726c309 source; prepare from installed Stage B archive and fresh locked E10 consumer, with unmodified lane assertions and standalone compilation. Each new tuple binds its own logs/locks; historical tuple stays immutable.
   - [x] Derive five QUALIFIED claims only from all 23 named passing cases plus inventory, zero skipped/todo, identical installed archive SRI, packed claim identities and cleanup success. Slot 15 checks compiled standalone bytes; neutralContract.status follows slot 15; C9 names the 1.0.0 digest supersession.
   - [x] Update installed-memory.mjs/qualification.mk to 0.21.3/dev.7; clean npm-ci/type/runtime/two-process proof and standalone compilation pass, cleanup=0; qualify five profiles from zero-skip evidence.
-  - [ ] Regenerate/check/test tuple, retain archive and SHA-256 in shared e10-artifacts; C9 request explicitly names dff737ce → dd0cccbd under 1.0.0.
+  - [x] Regenerate/check/test tuple 29c83333e34363c515dec2e92c00129f5a0d411df2a4d1be368c7a4531fc7a0a, 10/10 tests; retain bundle in e11b-current and archive/SHA-256 in shared e10-artifacts; no PENDING input slot; C9 explicitly names dff737ce → dd0cccbd under 1.0.0.
 - [ ] **Lot E11b-2 — Validation and draft PR**
   - [ ] Typecheck/lint affected cluster-mesh paths; memory-e11-test and memory-e11-check run in CI.
   - [x] Local typecheck passes. Full memory run identified one old C6 null-hash expectation (220 pass); update it to the shipped declaration hash/status and rerun the affected suite.
   - [x] Local lint passes. Refresh source snapshot to 2d9d5da97 for E10 coverage labels/C6 expectation; original dev.7 pack source remains d1726c309 and packed-source diff is empty. Reuse the retained install lock.
+  - [x] Focused corrected C6 suite passes 17/17; repeated E10 installed proof and tuple tests/check pass; owned make down succeeds. CI will rerun the full suite on the PR head.
   - [x] Vendor historical input inventory excerpt, reservation and producer record so CI needs no owner-local Markdown files; these records do not promote current qualification.
   - [x] Retain the receiver's exact readHostTuple excerpt for the development-version refusal test; this excerpt is evaluated with explicit dependencies, not executed as a standalone CLI.
   - [x] Retain the receiver format reference; document the two explicit excerpts and distinguish historical records from fresh qualification evidence.
