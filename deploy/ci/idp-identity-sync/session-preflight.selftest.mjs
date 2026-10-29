@@ -3,6 +3,13 @@ import { readFileSync } from 'node:fs';
 import { assertIdpDeploymentReady } from './session-preflight.mjs';
 
 export function sessionPreflightTests(check, load) {
+  check('standalone IdP signing secret and private volume are absent from the product deployment', () => {
+    const idp = load('deploy/k8s/base/35-auth-idp.yaml').find(o => o.kind === 'Deployment');
+    const signing = idp.spec.template.spec.containers[0].env.find(e => e.name === 'JWT_SECRET');
+    assert.deepEqual(signing.valueFrom.secretKeyRef, { name: 'auth-idp-session-signing', key: 'JWT_SECRET' });
+    assert.doesNotMatch(readFileSync('deploy/k8s/base/30-api.yaml', 'utf8'),
+      /auth-idp-session-signing|auth-idp-session-authority/);
+  });
   const secret = value => Buffer.from(value).toString('base64');
   const ready = () => ({ 'auth-idp-session-signing': { data: { JWT_SECRET: secret('a'.repeat(64)) } },
     'sentropic-api': { data: { JWT_SECRET: secret('b'.repeat(64)), OAUTH_SIGNING_KEK: secret('shared-kek'),
