@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "option": "B",
+  "qualified": false,
+  "version": "0.76.1",
+  "minimumVersion": "0.71.1",
+  "repository": "aquasec/trivy",
+  "indexDigest": "sha256:790fd66d1697395d8693d1acaa1ea702406a20f109b6fc7bac8db623eca6c06c",
+  "manifestDigest": "sha256:2e6c00d711ab4ae41d8a30c2c1fd3bd3b62704c177bb120f95012e939edfb3df",
+  "configDigest": "sha256:ac7fdaf3e1f1442ec467a00d1ec900bc8dc20f694d172b11ff43d32f83162fb6",
+  "platform": "linux/amd64",
+  "revision": "e713f67f7d54decdcd9b3132c9751833dcced698",
+  "signature": {
+    "issuer": "https://token.actions.githubusercontent.com",
+    "identity": "https://github.com/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/v0.76.1",
+    "requirePlatformSignature": false,
+    "verifierAdmitted": false,
+    "contentAdmitted": false
+  },
+  "data": {
+    "vulnerability": { "repository": "ghcr.io/aquasecurity/trivy-db", "tag": "2", "schema": 2 },
+    "java": { "repository": "ghcr.io/aquasecurity/trivy-java-db", "tag": "1", "schema": 1 },
+    "checks": { "repository": "ghcr.io/aquasecurity/trivy-checks", "tag": "1", "qualified": false },
+    "maxAgeSeconds": 86400,
+    "trust": "TLS origin plus OCI integrity and trusted ingestion receipt; DB publisher signature not established",
+    "mirrors": []
+  },
+  "acquisition": { "attempts": 3, "requestTimeoutMs": 30000, "budgetMs": 120000, "maxRetryAfterMs": 30000 },
+  "blockers": [
+    "Admit verifier and retain exact-index signature bundle, trust roots and offline verification receipt",
+    "Review image content, runtime dependencies and zero-Python inventory beyond publisher signature",
+    "Qualify fresh immutable DB, Java DB and IaC rules snapshots and restoration integrity",
+    "Qualify three target images with source-SHA/platform provenance and complete raw reports",
+    "Exercise offline, rate-limit, corruption, expiry-before-merge and rollback scenarios on real artifacts",
+    "Measure cold/warm remote/rebuild cost and full CI critical path; S2c/S3 remain separate gates"
+  ]
+}
