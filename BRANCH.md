@@ -47,3 +47,4 @@
   - [x] Full qualification routes LOT=2/3 to the separate canonical lot2-manifest.json, preserving the L4 candidate manifest for candidate proofs; absent or unverified E2 inputs still refuse.
 - [ ] Lot 2: document the actual verdict and exact remaining owner actions, scope/review/CI checks, PR and cleanup; do not issue a false L5 acceptance.
   - [x] Final source 99f95df13: tooling 146, P09 90, P10 24, actual compiler controls 2 passed. Strict checkpoint rejected with 1417 failures; retain final raw archive and exact remaining gates. CI/reviews and installed acceptance remain open.
+  - [x] Commit compact P01–P05 observations and digest sidecars; source-only and missing E4 cases remain explicitly unaccepted.
