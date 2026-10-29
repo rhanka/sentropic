@@ -66,7 +66,7 @@
   - [x] Read MASTER, workflow, testing, API services, data and schema migration rules, template and approved H2.
   - [x] Create isolated worktree and mechanically pass `harness check branch`.
   - [x] Define scope, test environment, ports and Docker lock.
-- [ ] **Lot 1 — Port and RED witnesses**
+- [x] **Lot 1 — Port and RED witnesses**
   - [x] Recovery witness authored before implementation, with real Yjs codec and test-only registry/storage fakes.
   - [x] Recovery RED: Docker Vitest fails on missing persistence module, before implementation.
   - [x] PostgreSQL crash/rollback, restart, idempotency, journal metadata and tenant witnesses authored before adapter implementation.
@@ -75,38 +75,30 @@
   - [x] RED `api/tests/unit/canvas-live-journal.test.ts`: receipts, inverse/provenance atomicity, publish after commit, rebuild after failure; retention witness follows.
   - [x] RED `api/tests/unit/canvas-live-freeze-capture.test.ts`: cumulative retained-baseline diff and undo to baseline.
   - [x] RED `api/tests/api/canvas-live-persistence.test.ts`: missing adapter module; real PostgreSQL rollback, restart, duplicate keys and scope.
-- [ ] **Lot 2 — Durable database adapter**
+- [x] **Lot 2 — Durable database adapter**
   - [x] Added one idempotent branch migration and scoped three-table schema; documented full retention and H1/H3/H4/H10 integration boundaries.
   - [x] Implemented PostgreSQL row-locked transactions, synchronous WAL commit, immutable checkpoint history and duplicate-payload fencing.
-  - [ ] Sequence journal, atomic encoded-state checkpoints, immutable baseline, scoped migration/schema and DATA_MODEL.
-  - [ ] Durable roster, registry origins, admissions/acknowledgements, freeze exclusions/digest, refusals, receipts, inverse and revert records.
-  - [ ] Transactionally commit update/receipt/inverse/formatting intents; preserve retained dependency references during compaction.
-- [ ] **Lot 3 — Recovery and commit-gated publication**
+  - [x] Sequence journal, atomic encoded-state checkpoints, immutable baseline, scoped migration/schema and DATA_MODEL.
+  - [x] Durable roster, registry origins, admissions/acknowledgements, freeze exclusions/digest, refusals, receipts, inverse and revert records.
+  - [x] Transactionally commit update/receipt/inverse/formatting intents; retain all dependency records with destructive compaction disabled.
+- [x] **Lot 3 — Recovery and commit-gated publication**
   - [x] Initial GREEN: 17 scoped tests across all four planned files; added RED retention/checkpoint service witness and after-commit lost-ack witness.
   - [x] RED proved agent receipt omission and resealed stale watermark; added committed-state checkpoint creation and full-history coverage verification.
   - [x] Persist explicit total-order sequences on every formatting intent and typed restart-safe affected-item records.
   - [x] Implemented fresh committed-state reconstruction and discarded scratch candidates; no rejected tombstone reaches shared state.
-  - [ ] Restore fresh document from checkpoint plus exact suffix; reject inconsistent watermark and digest.
-  - [ ] Rebuild committed state after candidate persistence failure; gate all further publication until recovery succeeds.
-  - [ ] GREEN recovery and journal witnesses, including semantic same-value formatting reassertion.
-- [ ] **Lot 4 — FE-3 baseline bridge**
-  - [ ] Map complete captured blocks by manifest identities to pinned Focus `diffParagraphs`; preserve baseline at reconnect.
-  - [ ] GREEN cumulative diff, undo-empty and invalid capture refusal witnesses.
+  - [x] Restore fresh document from checkpoint plus exact suffix; reject inconsistent watermark and digest.
+  - [x] Rebuild committed state after candidate persistence failure; gate all further publication until recovery succeeds.
+  - [x] GREEN recovery and journal witnesses, including semantic same-value formatting reassertion.
+- [x] **Lot 4 — FE-3 baseline bridge**
+  - [x] Map complete captured blocks by manifest identities to pinned Focus `diffParagraphs`; preserve baseline at reconnect.
+  - [x] GREEN cumulative diff, undo-empty and invalid capture refusal witnesses.
 - [ ] **Lot 5 — Docs consolidation and final validation**
-  - [ ] Typecheck, lint, formatting and package-port checks.
-  - [ ] All four scoped H2 suites GREEN on real isolated PostgreSQL where applicable.
+  - [x] Typecheck and lint passed for H2 services, schema, package port and tests; formatter applied to new source only in ≤150-line slices.
+  - [x] All four H2 suites GREEN (20 tests); real isolated PostgreSQL crash/rollback/restart witnesses; chat-core regression suite 252/252.
+  - [x] Root Docker npm ci dry-run passed after dependency correction; chat-server 0.4.1 exceeds published 0.4.0.
   - [ ] Review with at least two peers and resolve findings.
   - [ ] `make scope-check` before every commit; verify no out-of-scope hunks.
   - [ ] Draft PR using this BRANCH.md as body; initial plan comment.
   - [ ] CI completed/success on the exact reported head; record PR and SHA.
   - [ ] Inspect service logs and `make down` after validation.
 
-- [x] Formatter slice 1: apply repository style to new H2 source only.
-
-- [x] Formatter slice 2: continue source-only H2 formatting.
-
-- [x] Formatter slice 3: source-only H2 formatting.
-
-- [x] Formatter slice 4: source-only H2 formatting.
-
-- [x] Formatter slice 5: source-only H2 formatting.

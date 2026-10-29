@@ -2410,4 +2410,3 @@ API and retains full history, provenance, inverse targets, baseline manifests
 and pending publication recovery. H10 must qualify retention policies against
 DS §5.6 before enabling destructive compaction. Artifact storage/lifecycle
 authority stays with the artifacts provider. No UI or publication path is enabled.
-
