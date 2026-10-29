@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { digest, policy } from './toolchain-contract.mjs';
 import { executeImageScan, prepareImageScan, requireIacQualification, validateImageReport, validateTarget } from './trivy.mjs';
+import { preflight } from './toolchain-preflight.mjs';
 
 const sourceSha = 'a'.repeat(40);
 const now = Date.parse('2026-10-29T12:00:00Z');
@@ -82,4 +83,9 @@ test('should never execute unqualified scanners or silently substitute IaC rules
   await assert.rejects(executeImageScan({}, {}, () => { executions++; }), /S2b qualification pending/);
   assert.equal(executions, 0);
   assert.throws(() => requireIacQualification(), /IaC rules snapshot/);
+  const report = await preflight('status');
+  assert.equal(report.qualified, false);
+  assert.equal(report.status, 'coverage-blocked');
+  assert.deepEqual(report.snapshots, {});
+  await assert.rejects(preflight('--db-repository=evil'), /unknown preparation operation/);
 });

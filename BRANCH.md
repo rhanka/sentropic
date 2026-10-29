@@ -62,14 +62,14 @@
   - [x] Read rules, approved plan, historical reviews, S1 receipt, dossier r2 and merged S1/S2a.
   - [x] Verify branch mechanically with harness C1 and declare exact scope before implementation.
 - [ ] **Lot 1 — Frozen scanner policy and source evidence**
-  - [ ] Resolve upstream index/platform/config and signature; inspect release and both security advisories.
+  - [x] Resolve upstream index/platform/config and exact-identity signature; inspect immutable release and both live security advisories.
   - [x] Freeze pins, minimum version, exact publisher, trusted DB/rules sources and explicit missing admissions.
 - [ ] **Lot 2 — Acquisition and execution contracts**
   - [x] Acquire DB once per campaign through allowed OCI origin; verify descriptors and hashes before atomic cache publication.
   - [x] Validate schema/dates and cache bytes after restoration; block missing/corrupt/stale/incompatible data.
   - [x] Prepare socket-free, least-privilege remote/archive scans with immutable target/source/platform proof and frozen flags/data.
   - [x] Reject caller configuration and untrusted mirrors before acquisition; no automatic mirror fallback.
-  - [ ] Reject silent Java/IaC fallback and preserve all-severity raw diagnostics.
+  - [x] Reject silent Java/IaC fallback and preserve all-severity raw diagnostics; live Java layer exceeds the prepared bound and stays blocked.
   - [x] Keep unqualified execution gated and daily job off; expose frozen preparation identities in raw receipts.
 - [ ] **Lot 3 — Security regression fixtures**
   - [x] `toolchain-contract.test.mjs`: pin/version, publisher/platform/source, cache corruption/schema/dates and bounded acquisition failures; six tests pass.

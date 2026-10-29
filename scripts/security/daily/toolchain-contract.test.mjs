@@ -123,3 +123,47 @@ test('should freeze one DB per campaign and reject corrupted or expired restored
   await writeFile(join(snapshot.path, 'trivy.db'), 'corrupt');
   await assert.rejects(restoreSnapshot(snapshot, now), /cache integrity/);
 });
+
+test('should reject mismatched OCI bytes and stop when the shared acquisition budget expires', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'trivy-corrupt-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const responses = [Response.json({ token: 'anonymous' }), Response.json({ schemaVersion: 2,
+    layers: [{ digest: digest('good'), size: 4 }] }), new Response('evil')];
+  const source = await createOciClient({ fetcher: async () => responses.shift() }).resolve('vulnerability');
+  await assert.rejects(source.download(join(root, 'blob')), /layer integrity/);
+  await assert.rejects(readFile(join(root, 'blob')), /ENOENT/);
+  let time = 0;
+  const budgeted = createOciClient({ now: () => time, fetcher: async () => new Response('', {
+    status: 429, headers: { 'retry-after': '1' } }), sleep: async () => { time += 120001; } });
+  await assert.rejects(budgeted.resolve('vulnerability'), /budget exhausted/);
+});
+
+test('should reject archive traversal and links before extraction and retain failed campaign state', async (t) => {
+  for (const unsafe of ['traversal', 'link']) {
+    const root = await mkdtemp(join(tmpdir(), 'trivy-archive-'));
+    t.after(() => rm(root, { recursive: true, force: true }));
+    await writeFile(join(root, 'trivy.db'), 'db');
+    await writeFile(join(root, 'metadata.json'), JSON.stringify(metadata()));
+    if (unsafe === 'link') {
+      await rm(join(root, 'trivy.db'));
+      const { symlink } = await import('node:fs/promises');
+      await symlink('/etc/passwd', join(root, 'trivy.db'));
+    }
+    const archive = join(root, 'unsafe.tgz');
+    assert.equal(spawnSync('tar', ['-czf', archive, '-C', root,
+      ...(unsafe === 'traversal' ? ['--transform=s|^|../|'] : []), 'trivy.db', 'metadata.json']).status, 0);
+    const payload = await readFile(archive);
+    const layer = { digest: digest(payload), size: payload.length };
+    const manifestBytes = Buffer.from(JSON.stringify({ layers: [layer] }));
+    let calls = 0;
+    const acquire = campaignAcquirer({ resolve: async () => {
+      calls++;
+      return { repository: policy.data.vulnerability.repository, manifestBytes, manifestDigest: digest(manifestBytes), layer,
+        download: async (path) => writeFile(path, payload) };
+    } });
+    const pending = acquire('vulnerability', root, now);
+    await assert.rejects(pending, /archive paths|archive links/);
+    assert.equal(acquire('vulnerability', root, now), pending);
+    assert.equal(calls, 1);
+  }
+});
