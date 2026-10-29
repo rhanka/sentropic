@@ -36,6 +36,11 @@ export function createEngramMemoryBuiltin(options: {
         // Both peer entries must qualify before acquiring ownership or opening a store.
         const mcp = await loadEngramMemoryMcp(options.modules);
         const substrate = await loadEngramMemorySubstrate(options.modules);
+        // A second bundled engine owns a different private fenced-store registry.
+        // Never advertise tools whose engine cannot admit the substrate's store.
+        if (mcp.createMemoryPortV2 !== substrate.createMemoryPortV2) {
+          throw new Error('engram memory public entries do not share the engine/provenance instance');
+        }
         const composed = await composeEngramMemoryDefinition(mcp, substrate, options.definition, parameterSchema);
         runtime = composed.runtime;
         return composed.definition;

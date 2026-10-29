@@ -69,4 +69,26 @@ describe('engram memory builtin', () => {
     });
     expect(evaluations()).toEqual([]);
   });
+
+  it('should refuse a split engine instance before opening a canonical store', async () => {
+    const mcp = await import('@sentropic/engram/mcp-memory');
+    const substrate = await import('@sentropic/engram/memory-substrate');
+    let opened = 0;
+    const splitModules = { load: async (id: string) => {
+      if (id === 'mcp-platform/registry') return import('@sentropic/mcp-platform/registry');
+      if (id === 'mcp/memory') return mcp;
+      if (id === 'engram-memory/substrate') return { ...substrate,
+        createMemoryPortV2: () => { throw new Error('separate engine'); },
+        openModuleStorageCanonicalMemoryStoreV1: () => { opened++; throw new Error('must not open'); } };
+      throw new Error(`unexpected module ${id}`);
+    } } as unknown as ClusterMeshModules;
+    const registry = createMcpRegistry({ modules: splitModules,
+      builtins: [createEngramMemoryBuiltin({ modules: splitModules, definition })] });
+    registry.select(['sentropic.engram.memory']);
+    const result = await registry.compile({ bindings: {}, compatibility: {} });
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.diagnostics[0]?.message).toContain('engine/provenance instance');
+    expect(opened).toBe(0);
+    expect(registry.compiled()).toBeUndefined();
+  });
 });

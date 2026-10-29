@@ -2919,7 +2919,7 @@ up-ui: ## Start the ui stack in detached mode
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-mem-release test-artifacts-021 test-artifacts-022 test-llm-judge),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-mem-release test-artifacts-021 test-artifacts-022 test-llm-judge test-memory-mcp),)
 	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans
 else
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down
