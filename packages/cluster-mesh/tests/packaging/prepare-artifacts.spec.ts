@@ -1,4 +1,4 @@
-import { spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -140,12 +140,17 @@ it('should install compatible packed artifacts and fetch the frozen mesh pin onl
     writeFileSync(join(root, 'npm'), `#!${process.execPath}
 const fs = require('node:fs');
 const path = require('node:path');
+const { execFileSync } = require('node:child_process');
 const args = process.argv.slice(2);
 if (args[0] === 'pack') {
   const dest = args[args.indexOf('--pack-destination') + 1];
   fs.appendFileSync(path.join(dest, 'pack-requests.txt'), JSON.stringify(args) + '\\n');
   const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
-  fs.writeFileSync(path.join(dest, pkg.name.replace('@', '').replace('/', '-') + '-' + pkg.version + '.tgz'), JSON.stringify(pkg));
+  const stage = fs.mkdtempSync(path.join(dest, 'pack-'));
+  fs.mkdirSync(path.join(stage, 'package'));
+  fs.writeFileSync(path.join(stage, 'package/package.json'), JSON.stringify(pkg));
+  execFileSync('tar', ['-czf', path.join(dest, pkg.name.replace('@', '').replace('/', '-') + '-' + pkg.version + '.tgz'), '-C', stage, 'package']);
+  fs.rmSync(stage, { recursive: true });
 } else if (['install', 'ci'].includes(args[0]) && !args.includes('--prefix')) {
   fs.writeFileSync(path.join(process.cwd(), 'install-command.txt'), args[0]);
 }
@@ -180,7 +185,7 @@ if (args[0] === 'pack') {
     expect(dependency('selected')).toBe(archive);
     expect(dependency('latest')).toBe(archive);
     expect(readFileSync(join(work, 'selected', 'install-command.txt'), 'utf8')).toBe('install');
-    const packed = JSON.parse(readFileSync(archive.slice(5), 'utf8'));
+    const packed = JSON.parse(execFileSync('tar', ['-xOf', archive.slice(5), 'package/package.json'], { encoding: 'utf8' }));
     const candidate = JSON.parse(readFileSync(new URL('../../../artifacts/package.json', import.meta.url), 'utf8'));
     expect({ name: packed.name, version: packed.version }).toEqual({ name: candidate.name, version: candidate.version });
   } finally {
