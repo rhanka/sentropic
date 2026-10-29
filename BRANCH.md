@@ -93,7 +93,7 @@
   - [x] Reuse existing namespace locks/presence ports and object-lock client; no parallel API.
   - [x] Gate controlled L0 editing with locks, keep admitted L2 participants editable together.
 - [ ] **Lot 4 — Qualification and handoff**
-  - [x] Pass 33 API and 7 UI scoped tests plus API/UI typecheck/lint; record commands and RED/GREEN evidence in docs/canvas-live/h1-validation.md.
+  - [x] Pass 35 API and 8 UI scoped tests plus API/UI typecheck/lint; record commands and RED/GREEN evidence in docs/canvas-live/h1-validation.md.
   - [ ] Reconcile independent consensus review; pass mechanical scope before each commit.
   - [x] Create draft PR #830 to main using BRANCH.md; post the four-step plan; publish final measured validation externally.
   - [ ] Observe completed/success CI on exact final head; report PR and head without another commit.
