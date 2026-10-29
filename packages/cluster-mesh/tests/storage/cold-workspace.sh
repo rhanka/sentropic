@@ -20,6 +20,11 @@ tar --exclude=.git --exclude=node_modules --exclude=dist --exclude=tmp \
 cd "$workspace"
 test ! -d node_modules
 mkdir /tmp/cm-tools
+# Keep unrelated AI resolution on the repository's existing locked selection.
+node --input-type=module -e 'import { readFileSync, writeFileSync } from "node:fs";
+  const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+  writeFileSync("/tmp/cm-tools/package.json", JSON.stringify({ private: true,
+    overrides: { ai: lock.packages["node_modules/ai"].version } }));'
 echo '965c93e326df9866584261061f4e49571cfd74dfe1dc258c0c6894eea121a4e9  /source/packages/cluster-mesh/tests/fixtures/sentropic-engram-0.22.0.tgz' | sha256sum -c -
 # Shallow keeps transitive dependents nested so an installed @sentropic/*
 # package can never shadow a workspace symlink below (a hoisted older
