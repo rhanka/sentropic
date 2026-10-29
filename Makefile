@@ -792,9 +792,10 @@ manifest_guard_publish = $(MANIFEST_GUARD_TOOLS); node /workspace/scripts/ci/pub
 define manifest_guard_pack
 	@mkdir -p "$(MANIFEST_REPORT_DIR)" $(if $(PACK_DESTINATION),"$(PACK_DESTINATION)")
 	@$(MANIFEST_PACK_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
+		-e CI_PACKAGE_CANDIDATES="$(if $(CI_PACKAGE_CANDIDATES),/workspace/$(CI_PACKAGE_CANDIDATES))" -e CANDIDATE_NODE_IMAGE="$(LLM_MESH_NODE_IMAGE)" \
 		$(if $(PACK_DESTINATION),-v "$(abspath $(PACK_DESTINATION)):/pack-out" -e PACK_DESTINATION_HOST="$(abspath $(PACK_DESTINATION))") \
 		-v "$(CURDIR):/workspace" -v "$(abspath $(MANIFEST_REPORT_DIR)):/reports" -w /workspace/packages/$(1) $(MANIFEST_PACK_IMAGE) \
-		sh -lc 'set -eu; $(MANIFEST_GUARD_TOOLS); $(2) node /workspace/scripts/ci/publishable-manifests.mjs pack --slug $(1) --report-dir /reports $(if $(PACK_DESTINATION),--destination /pack-out)'
+		sh -lc 'set -eu; export CANDIDATE_NPM_VERSION="$$(npm --version)"; $(MANIFEST_GUARD_TOOLS); $(2) node /workspace/scripts/ci/publishable-manifests.mjs pack --slug $(1) --report-dir /reports $(if $(PACK_DESTINATION),--destination /pack-out)'
 	@if [ -n "$(PACK_OUTPUT_FILE)" ]; then cat "$(MANIFEST_REPORT_DIR)/$(1).github-output" >> "$(PACK_OUTPUT_FILE)"; fi
 endef
 
@@ -868,7 +869,13 @@ SIBLING_ARGS_GATE = $(if $(and $(filter 1,$(words $(PACKAGE))),$(if $(findstring
 .PHONY: pack-candidate-siblings publishable-sibling-plan publishable-sibling-collect
 pack-candidate-siblings: ## Full-pack same-PR BLOCK siblings of PACKAGE=<slug> into SIBLING_DIR=tmp/ci-manifest-guard/siblings/<slug> (writes receipts.json)
 	$(SIBLING_ARGS_GATE)
+ifneq ($(CI_PACKAGE_CANDIDATES),)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(MANIFEST_GUARD_ENV) \
+		-e CANDIDATE_NODE_IMAGE="$(LLM_MESH_NODE_IMAGE)" -v "$(CURDIR):/workspace" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		sh -ec 'export CANDIDATE_NPM_VERSION="$$(npm --version)"; $(MANIFEST_GUARD_TOOLS); node scripts/ci/package-candidate.mjs siblings "$(CI_PACKAGE_CANDIDATES)" "$(PACKAGE)" "$(SIBLING_DIR)"'
+else
 	@./scripts/ci/check-publishable-manifests.sh "$(ENV)" siblings '$(PACKAGE)' '$(SIBLING_DIR)'
+endif
 
 publishable-sibling-plan: ## Internal: list BLOCK packages in the dependency closure of PACKAGE into SIBLING_DIR/plan.txt
 	$(SIBLING_ARGS_GATE)
@@ -1088,7 +1095,7 @@ engram-e2-job-receipt:
 	@gh api "repos/$$GITHUB_REPOSITORY/actions/runs/$$GITHUB_RUN_ID/jobs?per_page=100" > "$(E2_RECEIPTS)/jobs.json"
 	@sha256sum "$(E2_RECEIPTS)/context.txt" "$(E2_RECEIPTS)/jobs.json" > "$(E2_RECEIPTS)/context.sha256"
 
-pack-cluster-mesh: build-cluster-mesh ## Validate @sentropic/cluster-mesh package contents
+pack-cluster-mesh: $(if $(CI_PACKAGE_CANDIDATES),,build-cluster-mesh) ## Validate @sentropic/cluster-mesh package contents
 	$(call manifest_guard_pack,cluster-mesh)
 
 publish-cluster-mesh: engram-e2-stable-publish-guard build-cluster-mesh ## Publish @sentropic/cluster-mesh from CI OIDC trusted publishing
