@@ -63,6 +63,10 @@ describe('artifacts source tuple coherence', () => {
     expect(lock.packages['node_modules/@sentropic/artifacts']).toMatchObject({
       version,
       resolved: `https://registry.npmjs.org/@sentropic/artifacts/-/artifacts-${version}.tgz`,
+      // Frozen supply-chain pin: the exact registry dist.integrity for the
+      // published baseline. Never hand-edit the fixture value: regenerate
+      // from the registry or copy it from main.
+      integrity: 'sha512-EPD2l/KdWBn2ZBShg59dUMdXr45z+OhgLZemdfx9zkKiePrMss4i8dm0o3nLRdvhcxw8aeW7WKTnf2Ye7eWByQ==',
     });
   });
 });

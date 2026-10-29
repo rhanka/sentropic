@@ -28,9 +28,10 @@ run_recipe() {
 }
 
 registry() {
-  run_recipe hit build-api-tool-image save-api-tool REGISTRY=
+  run_recipe hit build-api-tool-image REGISTRY=
   grep -Fx 'image inspect sentropic-api-tools:tool-regression' "$scratch/calls"
-  grep -Fx 'save sentropic-api-tools:tool-regression -o api-tool-image.tar' "$scratch/calls"
+  make -n save-api-tool REGISTRY= API_TOOL_VERSION=tool-regression ENV="$ENV" > "$scratch/save"
+  grep -F 'ci-save-image IMAGE_KIND=api-tool IMAGE_REF=sentropic-api-tools:tool-regression' "$scratch/save"
   : > "$scratch/calls"
   run_recipe hit build-api-tool-image REGISTRY=registry.example/team
   grep -Fx 'image inspect registry.example/team/sentropic-api-tools:tool-regression' "$scratch/calls"
@@ -60,8 +61,32 @@ hash() {
   echo 'PASS: tools input addition/edit invalidates hash; deletion restores it'
 }
 
+layers() {
+  if grep '^FROM node:' api/Dockerfile e2e/Dockerfile | grep -Ev '@sha256:[a-f0-9]{64}'; then
+    echo 'FAIL: Node base digest must be part of the image input key' >&2; return 1
+  fi
+  make -n ci-build-api ci-build-api-tool ci-build-ui ci-build-e2e CI_IMAGE_CACHE=1 REGISTRY=registry.example/team ENV="$ENV" > "$scratch/builds"
+  for kind in api api-tool ui e2e; do
+    grep -F -- "--cache-from type=gha,scope=br78-v1-$kind-linux/amd64" "$scratch/builds"
+    grep -F -- "--cache-to type=gha,scope=br78-v1-$kind-linux/amd64,mode=max" "$scratch/builds"
+  done
+  make -n ci-build-api CI_IMAGE_CACHE=0 ENV="$ENV" > "$scratch/cold"
+  grep -F -- '--no-cache --load' "$scratch/cold"
+  if grep -Fq -- '--cache-from' "$scratch/cold"; then return 1; fi
+  for cache_enabled in 0 1; do
+    make -n ci-test-ui CI_IMAGE_CACHE="$cache_enabled" ENV="$ENV" > "$scratch/ui-tests"
+    grep -F -- '--no-cache-filter=ui-tests' "$scratch/ui-tests"
+    grep -F -- '--target ui-test-output' "$scratch/ui-tests"
+    if [ "$cache_enabled" = 1 ]; then
+      grep -F -- '--cache-from type=gha,scope=br78-v1-ui-linux/amd64' "$scratch/ui-tests"
+    elif grep -Fq -- '--cache-from' "$scratch/ui-tests"; then return 1; fi
+  done
+  echo 'PASS: distinct persistent layer scopes and explicit cold-cache mode'
+  echo 'PASS: UI tests execute afresh in both warm and cold image modes'
+}
+
 case "${1:-all}" in
-  registry|cache|hash) "$1" ;;
-  all) registry; cache; hash ;;
-  *) echo 'Expected registry, cache, hash or all' >&2; exit 1 ;;
+  registry|cache|hash|layers) "$1" ;;
+  all) registry; cache; hash; layers ;;
+  *) echo 'Expected registry, cache, hash, layers or all' >&2; exit 1 ;;
 esac

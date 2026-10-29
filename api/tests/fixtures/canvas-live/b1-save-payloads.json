@@ -1,0 +1,35 @@
+{
+  "purpose": "H0 host save inputs and literal expected payloads, not a production descriptor or wire contract",
+  "sourceCommit": "5e986a0b6cd2dfecfbde6a588d30055271124696",
+  "provenance": "Repository values from e2e/tests/07-import-export.spec.ts:30-60; list-field shape reference ui/tests/stores/initiatives.test.ts:131-136; synthetic IDs, scores and edits",
+  "cases": [
+    {
+      "id": "nested-text-siblings", "authority": "A-T", "route": "PUT /folders/folder-h0",
+      "before": { "executiveSummary": { "introduction": "Dossier pour import/export", "analyse": "Keep analysis", "references": [{ "title": "Doc interne", "url": "https://example.com" }] } },
+      "expectedPayload": { "executiveSummary": { "introduction": "Edited introduction", "analyse": "Keep analysis", "references": [{ "title": "Doc interne", "url": "https://example.com" }] } }
+    },
+    {
+      "id": "list-array", "authority": "A-T", "route": "PUT /initiatives/initiative-h0",
+      "inputMarkdown": "- Réduction du temps de traitement\n- Meilleure qualité",
+      "expectedPayload": { "benefits": ["Réduction du temps de traitement", "Meilleure qualité"] }
+    },
+    {
+      "id": "score-siblings", "authority": "A-S", "route": "PUT /initiatives/initiative-h0",
+      "before": { "valueScores": [{ "axisId": "value1", "rating": 2, "description": "Old" }, { "axisId": "value2", "rating": 3, "description": "Keep [1]" }] },
+      "expectedPayload": { "valueScores": [{ "axisId": "value1", "rating": 2, "description": "Edited" }, { "axisId": "value2", "rating": 3, "description": "Keep [1]" }] }
+    },
+    {
+      "id": "matrix-whole-config", "authority": "A-M", "route": "PUT /folders/folder-h0/matrix",
+      "before": { "valueAxes": [{ "id": "value1", "name": "Value 1", "weight": 0.5, "levelDescriptions": [{ "level": 1, "description": "Keep level" }] }], "complexityAxes": [{ "id": "complexity1", "name": "Complexity 1", "weight": 0.5 }], "valueThresholds": [{ "level": 1, "points": 1 }], "complexityThresholds": [{ "level": 1, "points": 1 }] },
+      "expectedPayload": { "valueAxes": [{ "id": "value1", "name": "**Value** 1", "weight": 0.5, "levelDescriptions": [{ "level": 1, "description": "Keep level" }] }], "complexityAxes": [{ "id": "complexity1", "name": "Complexity 1", "weight": 0.5 }], "valueThresholds": [{ "level": 1, "points": 1 }], "complexityThresholds": [{ "level": 1, "points": 1 }] }
+    },
+    { "id": "new-folder-local", "authority": "A-FN", "route": null, "input": "Dossier Export", "expectedRequestsBeforeId": 0 },
+    { "id": "folder-name", "authority": "A-F", "route": "PUT /folders/folder-h0", "expectedPayload": { "name": "Dossier Export" } },
+    { "id": "organization-name", "authority": "A-O", "route": "PUT /organizations/organization-h0", "expectedPayload": { "name": "Organisation Export" } },
+    { "id": "initiative-name", "authority": "A-I", "route": "PUT /initiatives/initiative-h0", "expectedPayload": { "name": "Cas d’usage Export", "description": "Cas d’usage pour import/export", "benefits": ["Réduction du temps de traitement", "Meilleure qualité"] } },
+    { "id": "workspace-name", "authority": "A-W", "route": "PUT /workspaces/workspace-h0", "expectedPayload": { "name": "Research workspace" } },
+    { "id": "comment-send", "authority": "A-COM", "route": "POST /comments", "expectedPayload": { "context_type": "initiative", "context_id": "initiative-h0", "content": "Second" } },
+    { "id": "message-edit", "authority": "A-EDIT", "route": "PATCH /chat/messages/message-h0", "expectedPayload": { "content": "Latest" } },
+    { "id": "chat-send", "authority": "A-CHAT", "route": "POST /chat/messages", "content": "Compare **benefits** and risks [1].", "expectedAutosaveRequests": 0 }
+  ]
+}
