@@ -56,9 +56,29 @@ if [ -n "${CLUSTER_MESH_SIBLING_RECEIPTS:-}" ]; then
   MANIFEST_GUARD_TOOL_DIR="$work/tools" node "$here/siblings.mjs" verify "$CLUSTER_MESH_SIBLING_RECEIPTS" "$siblings"
 fi
 
+# Release candidates are verified as a complete source/tool closure before any install.
+if [ -n "${CLUSTER_MESH_CANDIDATES:-}" ]; then
+  export CANDIDATE_NPM_VERSION="$(npm --version)"
+  (cd ../..; MANIFEST_GUARD_TOOL_DIR="$work/tools" node scripts/ci/package-candidate.mjs verify "$CLUSTER_MESH_CANDIDATES" cluster-mesh)
+fi
+candidate_archive() {
+  slug="$1"; destination="$2"
+  if [ -n "${CLUSTER_MESH_CANDIDATES:-}" ]; then
+    node --input-type=module -e '
+      import fs from "node:fs"; import path from "node:path";
+      const [dir, slug, destination] = process.argv.slice(1);
+      const receipt = JSON.parse(fs.readFileSync(path.join(dir, "candidates.json"))).receipts.find(r => r.slug === slug);
+      if (!receipt) throw new Error("Missing selected candidate " + slug);
+      fs.copyFileSync(path.join(dir, receipt.file), path.join(destination, path.basename(receipt.file)));
+    ' "$CLUSTER_MESH_CANDIDATES" "$slug" "$destination"
+  else
+    (cd "../$slug" && npm pack --silent --pack-destination "$destination" >/dev/null)
+  fi
+}
+
 # Candidate tarball, packed exactly as published (files/exports/sideEffects). A verified receipt for
 # cluster-mesh itself replaces it: the qualified bytes are then exactly the bytes that will be published.
-npm pack --silent --pack-destination "$work" >/dev/null
+candidate_archive cluster-mesh "$work"
 tgz="$(ls "$work"/sentropic-cluster-mesh-*.tgz)"
 candidate_version="$(node -p "require('./package.json').version")"
 receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/cluster-mesh "$candidate_version")"
@@ -77,14 +97,14 @@ fi
 
 # Artifacts is an unpublished candidate, also exercised by the dedicated consumer below.
 # Reuse these exact bytes in every consumer that selects it, preferring a verified receipt.
-(cd ../artifacts && npm pack --silent --pack-destination "$work/src" >/dev/null)
+candidate_archive artifacts "$work/src"
 artifacts_tgz="$(ls "$work"/src/sentropic-artifacts-*.tgz)"
 receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/artifacts "$ARTIFACTS")"
 if [ -n "$receipt" ]; then cp "$receipt" "$artifacts_tgz"; fi
 echo "[artifacts candidate] sha256 $(sha256sum "$artifacts_tgz" | cut -d' ' -f1)"
 
 # The embedded dependency must also resolve for bare and global consumers before publication.
-(cd ../mcp-platform && npm pack --silent --pack-destination "$work/src" >/dev/null)
+candidate_archive mcp-platform "$work/src"
 platform_tgz="$(ls "$work"/src/sentropic-mcp-platform-*.tgz)"
 receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/mcp-platform "$MPLATFORM")"
 if [ -n "$receipt" ]; then cp "$receipt" "$platform_tgz"; fi
@@ -97,7 +117,7 @@ if [ -n "$receipt" ]; then cp "$receipt" "$platform_tgz"; fi
 # is not a definitive 404 fails the gate instead of silently substituting.
 train_spec() {
   name="$1"; slug="$2"; version="$3"
-  (cd "../$slug" && npm pack --silent --pack-destination "$work/src" >/dev/null)
+  candidate_archive "$slug" "$work/src"
   tgz="$(ls "$work"/src/sentropic-"$slug"-*.tgz)"
   published=0
   probe_err="$(mktemp)"
