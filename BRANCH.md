@@ -4,7 +4,7 @@
 - [ ] Produce real S2b qualification receipts and an evidence-backed verdict for every blocker; deliver one draft PR to main.
 
 ## Scope / Guardrails
-- [x] Base `c37662a20`; branch `feat/sec-s2b-qualify`; worktree `tmp/worktrees/sec-s2b-qualify`.
+- [x] Initial base `c37662a20`; rebased onto `2ea238790`; branch `feat/sec-s2b-qualify`; worktree `tmp/worktrees/sec-s2b-qualify`.
 - [x] Existing activation switch stays OFF; S2c and S3 remain separate prerequisites.
 - [x] No scanner removal, severity reduction, toolbox change, secrets or Python.
 - [x] Docker under `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; `ENV=test-sec-qualify` last; `make down` after campaigns.
@@ -74,4 +74,6 @@
   - [x] Final `make test-security-daily` (125 passing) and `make test-security-parser` (17 passing); scoped `make down` completed.
   - [x] Record CLOSED / STILL BLOCKED with exact missing inputs under `docs/security/`; independent review selection failed explicitly, with no consensus claimed.
   - [ ] Mechanical scope check before every commit; no publishable package source changes.
-  - [ ] Draft PR to main with this plan as body and a 3–6 step plan comment; CI completed/success on exact head.
+  - [x] Draft PR #840 to main with this plan as body and a five-step plan comment.
+  - [x] Rebase onto current main; preserve this plan; split inherited plan replacement into commits below 150 lines; package bump gate N/A (no package source/manifest changes).
+  - [ ] CI completed/success on exact head; publish the immutable SHA/run receipt in the PR.
