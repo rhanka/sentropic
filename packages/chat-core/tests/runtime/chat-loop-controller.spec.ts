@@ -36,7 +36,7 @@ import {
 // ---------------------------------------------------------------------------
 // Fixture loading
 // ---------------------------------------------------------------------------
-const FIXTURES_DIR = path.join(process.cwd(), 'tests', 'fixtures', 'streams');
+const FIXTURES_DIR = path.join(process.cwd(), 'tests', 'runtime', 'fixtures', 'streams');
 
 function loadNdjson(filename: string): ProjectionStreamEvent[] {
   const text = fs.readFileSync(path.join(FIXTURES_DIR, filename), 'utf8');
@@ -765,7 +765,7 @@ describe('chat-loop-controller: sentropic-string scan', () => {
   it('controller source contains zero sentropic domain strings', () => {
     const controllerPath = path.join(
       process.cwd(),
-      'src',
+      'src', 'runtime',
       'state',
       'chatLoopController.ts',
     );
@@ -1853,7 +1853,7 @@ describe('chat-loop-controller: local-tool state machine (slice 1E)', () => {
   it('11q: controller source (with 1E additions) still contains zero sentropic domain strings', () => {
     const controllerPath = path.join(
       process.cwd(),
-      'src',
+      'src', 'runtime',
       'state',
       'chatLoopController.ts',
     );
@@ -2315,7 +2315,7 @@ describe('chat-loop-controller: model catalog (slice 1F)', () => {
   it('13k: controller source (with 1F additions) still contains zero sentropic domain strings', () => {
     const controllerPath = path.join(
       process.cwd(),
-      'src',
+      'src', 'runtime',
       'state',
       'chatLoopController.ts',
     );

@@ -501,7 +501,7 @@ describe('createContextModule — savePrefs', () => {
 // ---------------------------------------------------------------------------
 
 describe('domain neutrality: zero sentropic domain strings in src/context/', () => {
-  const contextDir = path.resolve(process.cwd(), 'src', 'context');
+  const contextDir = path.resolve(process.cwd(), 'src', 'runtime', 'context');
   const DOMAIN_STRINGS = [
     'organization',
     'folder',

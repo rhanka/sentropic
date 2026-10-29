@@ -22,9 +22,9 @@ describe('comments runtime export registration', () => {
   it('exports its state module while keeping views in chat-ui', () => {
     const root = process.cwd();
     const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
-    expect(pkg.exports['./comments']).toBeTruthy();
-    expect(pkg.exports['./comments/CommentsPanel.svelte']).toBeUndefined();
-    expect(fs.existsSync(path.resolve(root, pkg.exports['./comments'].import))).toBe(true);
+    expect(pkg.exports['./runtime/comments']).toBeTruthy();
+    expect(pkg.exports['./runtime/comments/CommentsPanel.svelte']).toBeUndefined();
+    expect(fs.existsSync(path.resolve(root, pkg.exports['./runtime/comments'].import))).toBe(true);
   });
 });
 
