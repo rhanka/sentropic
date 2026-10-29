@@ -39,5 +39,6 @@
   - [x] Candidate tampering, identity, duplicate-role and immutable-path regressions pass; full tooling suite: 122 tests passed.
 - [ ] Lot 2: report bundling and checkpoint production; tests/proof-bundle.test.mjs covers absent/duplicate/nonexecuted/failed/skipped/stale/cross-manifest assertions; keep strict receipt rejection.
   - [x] Add proof-bundle.mjs: retain actual case names/statuses, reject missing or stale execution bindings and source reports for E4, and hash immutable per-proof reports.
+  - [x] Add checkpoint.mjs to produce strict-verifier proposals and rejection receipts; unknown owner/CI/acceptance fields remain absent.
 - [ ] Lot 3: resolve predecessor dispositions against the approved memory-first transfer, preserving all later R2/R7a obligations.
 - [ ] Lot 4: scope-check and tooling gate; record review selection, push PR and verify exact-head CI; no publication or merge.

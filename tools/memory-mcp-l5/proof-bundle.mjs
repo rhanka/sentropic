@@ -18,9 +18,10 @@ export function bundleProof(catalog, inputs, binding) {
   const failures = [], rows = [], seen = new Set(), origins = [];
   for (const input of inputs) {
     const report = JSON.parse(input.bytes);
+    if (Array.isArray(report.testResults) && !report.testResults.some(r => catalog.files.includes(normalizeReportPath(r.name)))) continue;
     if (report.success !== true) failures.push(`proof: ${input.path} execution did not succeed`);
     origins.push({ path: input.path, sha256: sha256Hex(input.bytes) });
-    for (const key of ['sourceHead', 'artifactManifestSha256', 'runId', 'attempt']) {
+    for (const key of ['sourceHead', 'artifactManifestSha256', 'runId', 'attempt', 'command']) {
       if (report[key] !== binding[key]) failures.push(`proof: ${input.path} ${key} mismatch or absent`);
     }
     if (catalog.requiresE4 && report.executionMode !== 'installed-candidate') failures.push(`proof: ${input.path} is not installed E4 evidence`);
@@ -57,9 +58,10 @@ export function retainProofBundle(root, directory, catalog, reportPaths, binding
   const inputs = reportPaths.map(path => ({ path, bytes: readCandidateInput(root, path) }));
   const proofs = [], failures = [];
   for (const row of catalog.proofs) {
-    const actual = bundleProof(row, inputs, binding);
+    const current = { ...binding, command: binding.commands?.[row.id] ?? binding.command };
+    const actual = bundleProof(row, inputs, current);
     const ref = writeImmutable(root, `${directory}/${row.id}.json`, actual.report);
-    proofs.push({ id: row.id, files: row.files, command: binding.command,
+    proofs.push({ id: row.id, files: row.files, command: current.command,
       sourceHead: binding.sourceHead, artifactManifestSha256: binding.artifactManifestSha256,
       runId: binding.runId, attempt: binding.attempt, result: { ...actual.result, ...ref } });
     failures.push(...actual.failures.map(message => `${row.id}: ${message}`));
