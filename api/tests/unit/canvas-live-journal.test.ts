@@ -98,4 +98,9 @@ describe('canvas live durable acceptance boundary', () => {
     expect(store.state.head).toBe(0);
     expect(publish).not.toHaveBeenCalled();
   });
+
+  it('should compute durable digests independently of the host collation', async () => {
+    const { canonical } = await import('../../src/services/canvas-live/journal');
+    expect(canonical({ 'ä': 1, z: 2 })).toBe('{"z":2,"ä":1}');
+  });
 });

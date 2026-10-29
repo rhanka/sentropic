@@ -63,7 +63,22 @@ export type {
  * full method surface lands progressively as chat-service migrates onto these ports.
  */
 
-export type { LiveDocumentStore } from './live-document-port.js';
+export type {
+  LiveDocumentStore,
+  LiveDocumentIdentity,
+  LiveBaseline,
+  LiveParagraph,
+  LivePatchKey,
+  LiveReceipt,
+  LiveAffectedItems,
+  LiveFormattingIntent,
+  LiveAdmission,
+  LiveSessionRecord,
+  LiveCommit,
+  LiveJournalEntry,
+  LiveCheckpoint,
+  LiveDocumentState,
+} from './live-document-port.js';
 
 /**
  * Per SPEC §5 — federated ToolRegistry.
