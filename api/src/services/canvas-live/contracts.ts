@@ -9,7 +9,7 @@ export interface OpenSessionInput {
   actor: CollaborationActor; profileId: string; schemaEpoch: string;
 }
 export class AdmissionError extends Error {
-  constructor(readonly code: 'scope-denied' | 'actor-denied' | 'revoked' | 'incompatible-schema' | 'invalid-binding') {
+  constructor(readonly code: 'scope-denied' | 'actor-denied' | 'revoked' | 'incompatible-schema' | 'invalid-binding' | 'draft-id-reuse', readonly draftId?: string) {
     super(code);
   }
 }

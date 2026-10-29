@@ -70,7 +70,7 @@ export class AdmissionAuthority {
       || grant.documentId !== documentId || !sameActor(grant.actor, principal.actor)) throw new AdmissionError('scope-denied');
     const facts = await this.ports.document(principal, documentId);
     if (facts.documentId !== documentId || !nonempty(facts.sessionId) || !nonempty(facts.profileId)
-      || !nonempty(facts.schemaEpoch) || !validFields(facts.fields)
+      || !/^(0|[1-9]\d*)$/.test(facts.schemaEpoch) || !validFields(facts.fields)
       || !grant.fields.every((field) => facts.fields.includes(field))) throw new AdmissionError('invalid-binding');
     return { grant, facts };
   }
