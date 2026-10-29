@@ -9,6 +9,7 @@ import { mintStructuredContractDigests, STRUCTURED_READOUT_IDENTITY } from '../s
 
 /** Synthetic qualification only: these IDs/evidence do not activate the built-in descriptor. */
 export const qualifiedDescriptor = () => structuredClone({ ...jevDescriptor,
+  priceProtocol: { authority: 'fixture:synthetic-tariff', revision: 'fixture-price-v1' },
   executionProfile: 'qualification' as 'production' | 'qualification' | undefined,
   evaluator: { ...jevDescriptor.evaluator, revision: 'synthetic-v1' },
   acceptedServedModelIds: ['synthetic-served-model'],

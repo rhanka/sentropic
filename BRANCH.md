@@ -20,6 +20,20 @@
   - `BRANCH.md`
   - `docs/baselines/app-cm-w0/**`
   - `.h2a/owner-questions-w0.md`
+  - `.dockerignore`
+  - `.github/**`
+  - `Makefile`
+  - `api/**`
+  - `deploy/**`
+  - `docker-compose.yml`
+  - `docs/canvas-live/**`
+  - `e2e/**`
+  - `package-lock.json`
+  - `packages/**`
+  - `plan/**`
+  - `scripts/**`
+  - `spec/**`
+  - `ui/**`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -41,6 +55,7 @@
   - [x] `BR142-EX3`: owner requests merging origin/main `fbfe68f0e40d386e6b3429abc2ea8f868fcdd3f6`, including the published artifacts/mesh tuple. All inherited paths are allowed solely for this merge; retain this branch's BRANCH.md on add/add conflict. Impact: unchanged main bytes/history, exceeding the authored-diff limit; rollback: separately authorized merge revert. Track contains all 342 prior branch events and matches main byte-for-byte; acceptance refresh belongs to the designated Track writer.
   - [x] `BR-CM-W0-EX4`: conductor packet `app-W0c.md` explicitly orders the W0-close.c receipt template at `docs/runbooks/app-cm-baseline-restore/receipts/TEMPLATE.md` in this worktree plus the index entry in `docs/baselines/app-cm-w0/baseline.md`. Impact: one template doc + one table cell, no code, no cluster contact; rollback: remove the template file and revert the cell.
   - [x] `BR142-EX5`: owner 28 October instruction explicitly requests merging origin/main `ea20bd9c026e9717d911514e763f8911b6981dde` into #702, preserving W0's BRANCH.md. Additional Allowed Paths above apply only to unchanged inherited main bytes/history in this merge and are removed in the reconciliation commit. Impact: inherited merge exceeds 150 lines; W0-authored changes remain below 150 lines per commit, with no product edits. Rollback: separately authorized merge revert. All 346 prior branch Track event IDs and all 370 main event IDs survive; acceptance refresh remains with the designated Track writer.
+  - [x] `BR142-EX6`: owner 29 October W0-close.c instruction requires merging origin/main `213638676730b25154e5fb4fda333f74da1980a3` before the local restore, without rebase. Temporary allowances above cover inherited bytes only and are removed next commit. Only BRANCH.md conflicts; preserve W0's plan. Impact: inherited merge exceeds 150 lines; authored commits remain bounded. Rollback: separately authorized merge revert. Both parents and merged Track stream have SHA-256 `f1bdd745448dfd0c76c198405512baf2fec73775e30f3e99a1c5b72cecdeee91`; no Track write, acceptance refresh remains with its designated writer.
 
 ## Feedback Loop
 - [ ] `attention`: B01/B02/B04 and B06 evidence supplied; current d is #796 (linked below). Published artifacts 0.2.4 supplies UP-T's adapter/SQL; receiving host authority/restart/conformance remains qualification. B03 and B08 remain open.
