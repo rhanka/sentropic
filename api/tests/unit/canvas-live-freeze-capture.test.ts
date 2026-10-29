@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
+import { isDeepStrictEqual } from 'node:util';
+import type { LiveParagraph } from '../../../packages/chat-core/src/live-document-port';
 import { captureBaselineDiff } from '../../src/services/canvas-live/freeze-capture';
 import { baseline, paragraph } from '../helpers/canvas-live';
 
@@ -6,8 +8,8 @@ const capture = (text: string) => ({ complete: true, fields: [{ fieldKey: 'body'
   blocks: [{ paragraphId: 'paragraph-a', serialized: text, representable: true }] }] });
 // Planned FE-3 witness: the injected Focus boundary sees the ORIGINAL baseline
 // on every freeze, including after a cumulative draft is undone back to it.
-const focusDouble = () => vi.fn((before, after, transactionId) => ({ transactionId,
-  changes: JSON.stringify(before) === JSON.stringify(after) ? [] : [{ before, after }] }));
+const focusDouble = () => vi.fn((before: LiveParagraph[], after: LiveParagraph[], transactionId: string) => ({ transactionId,
+  changes: isDeepStrictEqual(before, after) ? [] : [{ before, after }] }));
 
 describe('canvas live FE-3 baseline bridge', () => {
   it('should capture one cumulative baseline-relative diff and return empty after undo to baseline', () => {
