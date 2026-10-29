@@ -59,6 +59,7 @@
   - [x] Declare BRRC1-EXn with rationale, impact and rollback before any conditional edit.
 
 ## Feedback Loop
+- [x] F6 lifecycle recovery: all four account/admin endpoints have 503/pending regressions; destructive deletion preserves its transactional intent, and the existing periodic approval sweep retries committed intents even with no expired users. Approval expiry queues all users atomically before attempting deliveries.
 - [x] BRRC1-EX7: F6 directly requires the product session-lifecycle adapter to map issuer unavailability to 503 with cleared cookies; atomic account deletion queues IDs before commit. Impact: defined retryable failure after local revocation, no false issuer acknowledgement. Rollback: revert F6 as a unit while disabling remote authority.
 - [x] F6 recovery: canonical session/OAuth deletion atomically queues credential-free revocation intents in existing settings storage; authenticated issuer acknowledgements remove only the delivered intent. Pending intents remain after unavailable delivery and can be drained after restart.
 - [x] F6 transport: use the existing auth-idp ClusterIP HTTP service with exact S2S claims plus a fresh MAC binding method/path/body/token; require a request-bound authenticated durable acknowledgement. External HTTP and spoofed forwarding remain refused; no provisioning performed.
