@@ -6,7 +6,8 @@ git diff --quiet HEAD -- tools/memory-mcp-l5 packages Makefile || { echo 'Commit
 manifest=$1
 checkpoint=$2
 out=spec/evidence/memory-mcp-l5/r5-run
-test ! -e "$out" || { echo 'Immutable run output already exists' >&2; exit 2; }
+test ! -e "$out/exits.tsv" || { echo 'Immutable run output already exists' >&2; exit 2; }
+test -f "$out/execution-context.json" || { echo 'Execution context must precede test execution' >&2; exit 2; }
 mkdir -p "$out"
 trap 'make down API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-memory-l5 > "$out/cleanup.log" 2>&1' EXIT
 run() {
@@ -27,7 +28,8 @@ run source memory-l5-lot3-source
 run tooling memory-l5-tooling "MEMORY_L5_REPORT=/workspace/$out/tooling.json"
 run disabled-install memory-l5-disabled-install "ARTIFACT_MANIFEST=$manifest" "NATIVE_OUTPUT=$out/disabled-install"
 for scope in exports disabled-install identity-source-refusal sdk-discovery-call restart-lost-response confirmation-step-up; do
-  run "packed-$scope" memory-l5-packed "SCOPE=packed/$scope.test.ts" "ARTIFACT_MANIFEST=$manifest"
+  run "packed-$scope" memory-l5-packed "SCOPE=packed/$scope.test.ts" "ARTIFACT_MANIFEST=$manifest" \
+    "NATIVE_OUTPUT=$out/packed-disabled" "MEMORY_L5_REPORT=/workspace/$out/packed-$scope.json"
 done
 run collect memory-l5-collect "ARTIFACT_MANIFEST=$manifest" "CHECKPOINT=$checkpoint"
 run proposal memory-l5-checkpoint "ARTIFACT_MANIFEST=$manifest" "CHECKPOINT=$checkpoint" "CHECKPOINT_INPUTS=$out/checkpoint-inputs.json"
