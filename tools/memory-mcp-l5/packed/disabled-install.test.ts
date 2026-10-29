@@ -19,7 +19,7 @@ it('P08.packed.disabled-install: ordinary install and unselected root/metadata i
     expect(sha256(readCandidateInput(root, evidence.path))).toBe(evidence.sha256);
   }
   expect(result.passed).toBe(true);
-  expect(result.positiveControlBuilds).toBeGreaterThan(0);
+  expect(result.observerPositiveControlEvents).toBeGreaterThan(0);
   expect(result.nativeBuilds).toEqual([]);
   expect(result.runtimeCounts).toEqual({ 'provider-load': 0, 'store-open': 0, 'identity-bootstrap': 0, 'native-build': 0 });
 });

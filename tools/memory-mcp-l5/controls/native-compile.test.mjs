@@ -13,7 +13,8 @@ it('blocks an observed compiler execution that produces a real candidate object 
       expect(spawnSync('sh', ['-c', 'command -v "$1"', 'probe', binary]).status).not.toBe(0);
     }
     const addon = join(root, 'node_modules/fs-ext'); mkdirSync(addon, { recursive: true });
-    const source = join(addon, 'control.c'), object = join(addon, 'control.o');
+    const build = join(addon, 'build/Release/obj.target'); mkdirSync(build, { recursive: true });
+    const source = join(addon, 'control.c'), object = join(build, 'control.o');
     writeFileSync(source, 'int l5_native_control(void) { return 42; }\n');
     const trace = createDisabledTrace(root);
     const code = `const r=require('node:child_process').spawnSync('gcc',${JSON.stringify(['-c', source, '-o', object])},{cwd:${JSON.stringify(addon)},stdio:'inherit'});process.exit(r.status??1);`;
@@ -22,6 +23,7 @@ it('blocks an observed compiler execution that produces a real candidate object 
     expect(existsSync(object)).toBe(true);
     expect(readFileSync(object).subarray(0, 4).toString('hex')).toBe('7f454c46');
     expect(candidateNativeBuilds(trace.read(), root).some(row => row.detail.executable === 'gcc')).toBe(true);
+    expect(candidateNativeBuilds([], root).some(row => row.kind === 'native-build-output')).toBe(true);
     expect(() => assertNoCandidateNativeBuilds('', trace.read(), root)).toThrow(/candidate native build attempts/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });

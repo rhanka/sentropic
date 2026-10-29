@@ -7,13 +7,13 @@ import { createDisabledTrace, isNativeBuildProcess } from '../disabled-trace.mjs
 import { assertNoCandidateNativeBuilds, candidateNativeBuilds } from '../native-build.mjs';
 it('ignores npm script declarations and an executed unrelated tree-sitter build', () => {
   const root = '/fixture/consumer';
-  const row = { kind: 'native-build', detail: { executable: 'node-gyp', argv: ['rebuild'],
+  const row = { kind: 'native-build', detail: { executable: 'gcc', argv: ['-c', 'binding.c'],
     cwd: root + '/node_modules/tree-sitter-lua' } };
   expect(assertNoCandidateNativeBuilds('> node-gyp rebuild\nbetter-sqlite3 node-gyp rebuild', [row], root)).toEqual({ candidateNativeBuildCount: 0 });
   expect(candidateNativeBuilds([{ ...row, detail: { ...row.detail, cwd: '/other/node_modules/better-sqlite3' } }], root)).toEqual([]);
   expect(candidateNativeBuilds([{ ...row, detail: { ...row.detail, cwd: root + '/node_modules/fs-ext' } }], root)).toHaveLength(1);
 });
-it('still blocks a real node-gyp rebuild invocation in the candidate closure', () => {
+it('does not count an observed build orchestrator without compiler execution or object outputs', () => {
   const root = mkdtempSync(join(tmpdir(), 'l5-native-control-'));
   try {
     const target = join(root, 'node_modules/better-sqlite3'); mkdirSync(target, { recursive: true });
@@ -25,8 +25,9 @@ it('still blocks a real node-gyp rebuild invocation in the candidate closure', (
     const run = spawnSync(process.execPath, ['-e', source], { env: { ...process.env, ...trace.env }, encoding: 'utf8' });
     expect(run.status).toBe(0);
     expect(run.stdout).toMatch(/^\d+$/);
-    expect(candidateNativeBuilds(trace.read(), root).length).toBeGreaterThan(0);
-    expect(() => assertNoCandidateNativeBuilds('', trace.read(), root)).toThrow(/candidate native build attempts/);
+    expect(trace.read().some(row => row.kind === 'native-build')).toBe(true);
+    expect(candidateNativeBuilds(trace.read(), root)).toEqual([]);
+    expect(() => assertNoCandidateNativeBuilds('', trace.read(), root)).not.toThrow();
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 it('does not treat version/help checks, configuration or cleanup as native compilation', () => {
@@ -38,4 +39,18 @@ it('does not treat version/help checks, configuration or cleanup as native compi
   expect(isNativeBuildProcess('gcc', ['-c', 'binding.c', '-o', 'binding.o'])).toBe(true);
   expect(isNativeBuildProcess('gcc', ['-v', '-c', 'binding.c'])).toBe(true);
   expect(isNativeBuildProcess('make', ['clean', 'all'])).toBe(true);
+});
+it('ignores prebuilt native modules and unrelated outputs but catches candidate source-build objects', () => {
+  const root = mkdtempSync(join(tmpdir(), 'l5-build-output-'));
+  try {
+    const addon = join(root, 'node_modules/fs-ext/build/Release');
+    const unrelated = join(root, 'node_modules/tree-sitter-lua/build/Release');
+    mkdirSync(addon, { recursive: true }); mkdirSync(unrelated, { recursive: true });
+    writeFileSync(join(addon, 'prebuilt.node'), 'downloaded prebuilt');
+    writeFileSync(join(unrelated, 'parser.o'), 'unrelated object');
+    expect(candidateNativeBuilds([], root)).toEqual([]);
+    writeFileSync(join(addon, 'binding.o'), 'candidate source-build output');
+    expect(candidateNativeBuilds([], root)).toMatchObject([{ kind: 'native-build-output' }]);
+    expect(() => assertNoCandidateNativeBuilds('', [], root)).toThrow(/candidate native build attempts/);
+  } finally { rmSync(root, { recursive: true, force: true }); }
 });
