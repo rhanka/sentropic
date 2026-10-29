@@ -61,6 +61,7 @@
   - [ ] Regenerate/check/test tuple, retain archive and SHA-256 in shared e10-artifacts; C9 request explicitly names dff737ce → dd0cccbd under 1.0.0.
 - [ ] **Lot E11b-2 — Validation and draft PR**
   - [ ] Typecheck/lint affected cluster-mesh paths; memory-e11-test and memory-e11-check run in CI.
+  - [x] Local typecheck passes. Full memory run identified one old C6 null-hash expectation (220 pass); update it to the shipped declaration hash/status and rerun the affected suite.
   - [x] Vendor historical input inventory excerpt, reservation and producer record so CI needs no owner-local Markdown files; these records do not promote current qualification.
   - [x] Retain the receiver's exact readHostTuple excerpt for the development-version refusal test; this excerpt is evaluated with explicit dependencies, not executed as a standalone CLI.
   - [x] Retain the receiver format reference; document the two explicit excerpts and distinguish historical records from fresh qualification evidence.

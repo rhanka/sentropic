@@ -28,6 +28,10 @@ memory-e11-retain:
 	@test -f "$(E11_INPUT)/e2-host-tuple.v1.json"
 	@mkdir -p "$(E11_RETAIN)"
 	@cp -a "$(E11_INPUT)/." "$(E11_RETAIN)/"
+	@mkdir -p "$(E11_REPOSITORY)/.tmp/engram-e2-host-tuple/e10-artifacts"
+	@cp "$(E11_INPUT)/mesh.tgz" "$(E11_REPOSITORY)/.tmp/engram-e2-host-tuple/e10-artifacts/sentropic-cluster-mesh-0.24.0-dev.7.tgz"
+	@cd "$(E11_REPOSITORY)/.tmp/engram-e2-host-tuple/e10-artifacts" && \
+	  sha256sum sentropic-cluster-mesh-0.24.0-dev.7.tgz > sentropic-cluster-mesh-0.24.0-dev.7.tgz.sha256
 
 .PHONY: memory-e11-snapshot
 memory-e11-snapshot:
