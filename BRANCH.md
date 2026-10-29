@@ -62,8 +62,9 @@
   - [x] Compose canonical store, shared engine/read facets and nine bindings through `definition` only.
   - [x] Preserve producer schemas, receipts, confirmation guard and trusted context.
 - [ ] **Lot 3 — Qualification and handoff**
-  - [ ] Run focused PostgreSQL and transport tests, typecheck, package build and regression suite.
-  - [ ] Run scope check before each atomic commit.
+  - [x] Pass lint, source/test typechecks, package build, launcher syntax and the unit/regression suite in isolated Docker.
+  - [ ] Pass positive PostgreSQL and transport tests; blocked by the pinned candidate's split provenance instance.
+  - [x] Run mechanical scope checks; final full branch diff passes C2.
   - [ ] Complete consensus review and reconcile findings.
   - [x] Document the exact host launch line and required definition bindings in `packages/cluster-mesh/docs/memory-mcp.md`.
   - [x] Open draft PR to main: https://github.com/rhanka/sentropic/pull/844.
