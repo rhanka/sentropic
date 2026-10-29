@@ -2054,6 +2054,11 @@ publish-harness-token: build-harness ## Publish @sentropic/harness using NPM_TOK
 
 IDP_SYNC_KUBECTL_IMAGE := registry.k8s.io/kubectl:v1.35.0@sha256:0bb95b2a450875fc8ceaea2f9987a99fe27c228846e2e00b93b65ebb0d59034e
 include deploy/ci/artifact-content/tests.mk
+
+.PHONY: test-artifact-content
+test-artifact-content: ## Qualify content process behavior, types and lint on the API test executor
+	@$(MAKE) test-api-endpoints SCOPE=apps/artifact-content/tests API_TEST_ARGS="--config ../apps/artifact-content/vitest.config.ts --no-file-parallelism" API_TEST_WORKERS=1 ENV=$(ENV)
+	@$(API_TEST_RUN) api sh -lc 'npm exec -- tsc --project ../apps/artifact-content/tsconfig.json && cd /workspace/apps/artifact-content && npm exec -- eslint src tests'
 .PHONY: test-idp-sync-selftest
 test-idp-sync-selftest: ## Build and check the IdP sync bundles locally without cluster access (BR45-EX1)
 	@case "$(ENV)" in test-*) ;; *) echo "ERROR: use ENV=test-*"; exit 1 ;; esac
