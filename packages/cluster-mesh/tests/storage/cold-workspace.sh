@@ -4,11 +4,12 @@ set -eu
 workspace=/tmp/cm-workspace
 export CANDIDATE_NPM_VERSION="$(npm --version)"
 prepared=0
-if [ -n "${CI_PACKAGE_CANDIDATES:-}" ] && [ "$CM_ACTION" != candidate ]; then
+if [ -n "${CI_PACKAGE_CANDIDATES:-}" ] && { [ "$CM_ACTION" != candidate ] || [ -f "$CI_PACKAGE_CANDIDATES/candidates.json" ]; }; then
   cd /source
   MANIFEST_GUARD_TOOL_DIR=/tmp/cm-tools node scripts/ci/package-candidate.mjs verify-prepared "$CI_PACKAGE_CANDIDATES" cluster-mesh
   tar -xzf "$CI_PACKAGE_CANDIDATES/prepared.tgz" -C /tmp
   MANIFEST_GUARD_TOOL_DIR=/tmp/cm-tools node scripts/ci/package-candidate.mjs verify "$CI_PACKAGE_CANDIDATES" cluster-mesh
+  if [ "$CM_ACTION" = candidate ]; then exit 0; fi
   prepared=1
 else
 mkdir -p "$workspace"
