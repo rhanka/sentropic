@@ -168,16 +168,16 @@ test('should authenticate current-attempt receipts with read-only permissions an
     assert.equal(endpoint, actions.listJobsForWorkflowRunAttempt);
     requests.push(input);
     // Octokit's paginator returns the flattened members of all pages.
-    return [1, 2].map(id => ({ id, run_id: 7, run_attempt: 3 }));
+    return Array.from({ length: 65 }, (_, i) => ({ id: i + 1, run_id: 7, run_attempt: 3 }));
   } };
   const process = { env: { GITHUB_RUN_ATTEMPT: '3', GITHUB_WORKFLOW_SHA: 'workflow' } };
   await execute(() => files, context, github, process);
-  assert.deepEqual(requests, [params, { ...params, per_page: 100 }]);
-  assert.deepEqual(captured.jobs.map(job => job.id), [1, 2]);
+  assert.deepEqual(requests, [params, { ...params, per_page: 30 }]);
+  assert.deepEqual(captured.jobs.map(job => job.id), Array.from({ length: 65 }, (_, i) => i + 1));
   assert.equal(captured.run.run_attempt, 3);
   assert.equal(captured.sourceSha, 'abc');
   assert.equal(captured.workflowSha, 'workflow');
-  for (const status of [403, 503]) {
+  for (const status of [403, 502, 503]) {
     const reject = async () => { throw new Error(`HTTP ${status}`); };
     for (const client of [
       { ...github, rest: { actions: { ...actions, getWorkflowRunAttempt: reject } } },

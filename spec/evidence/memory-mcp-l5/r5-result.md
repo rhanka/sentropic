@@ -4,7 +4,7 @@
 
 Qualification date: 2026-10-29. Author: Codex, requested `gpt-6.1-sol`, high.
 Base: `c37662a208a19ae12377d1a0aec2c7610c4bc0aa` (`origin/main` when the branch was created).
-The candidate remains outside E2; no package, product lock, frozen contract, gate or CI definition changes.
+The candidate remains outside E2; no package, product lock, frozen contract or acceptance rule changes. BRR5-EX1 changes only the CI job API page size in the collector and final guard, preserving complete pagination.
 
 ## Identity
 
@@ -67,6 +67,10 @@ Owners/acceptance: the L5 harness owner supplies the missing lots/proofs/verifie
 Deployed host tenancy/policy bindings, native SQLite/PostgreSQL parity and key cleanup remain **unverified**.
 
 ## Cleanup and delivery
+
+CI on first delivery head `d6cc92bc749474914fcaacfceb61be8df26bbc06`: run `40860736080` attempt 1 was cancelled (68 successful jobs; cancellation origin unestablished). Attempt 2 retained successful jobs and passed every test, including all E2E groups, but its collector failed with GitHub HTTP 502 reading current-attempt job pages of 100; the missing capture then failed artifact upload. No CI success is inferred from those partial results.
+The same API read succeeds with pages of 30; four pages returned all 99 then-reported jobs with 99 unique IDs. [r5-ci-pagination.json](r5-ci-pagination.json) retains the public endpoint, failed collector job and measured counts. BRR5-EX1 reduces both authenticated capture reads to 30 while retaining `github.paginate`, current-attempt binding, permissions and fail-closed errors. No job or verdict requirement is skipped.
+`make test-ci-expected-results ENV=test-memory-l5` passes 24 tests, including retention of 65 jobs beyond a page and fail-closed 403/502/503 checks. `make memory-l5-tooling ENV=test-memory-l5` passes all 104 tests again. Logs are retained as `r5-ci-pagination-tests.log.gz` and `r5-tooling-pagination.log.gz`; final-head CI remains required after this correction.
 
 `make down ENV=test-memory-l5` completed under the same flock; `make ps ENV=test-memory-l5` showed no services. Diagnostic containers use `--rm`; no development environment was used.
 Mechanical branch/scope checks pass. Commits contain at most 150 changed lines and no attribution trailers.
