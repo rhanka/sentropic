@@ -125,6 +125,11 @@ test('should gate the integrated client runtime through the core validator and O
     assert.ok(steps.includes(target), target);
   }
   assert.match(steps, /PEERS=svelte@5\.55\.7,@sentropic\/chat-ui@0\.34\.1/);
+  const pack = workflow.jobs['validate-chat-core'].steps.find(step => step.id === 'pack');
+  assert.match(pack.run, /PACK_OUTPUT_FILE="\$GITHUB_OUTPUT"/);
+  const qualify = workflow.jobs['validate-chat-core'].steps.find(step => step.run?.includes('make qualify-published-install'));
+  assert.equal(qualify.env.CANDIDATE_TARBALL, '${{ steps.pack.outputs.tarball }}');
+  assert.match(qualify.run, /TARBALL="\$CANDIDATE_TARBALL"/);
   assert.deepEqual(workflow.jobs['publish-chat-core'].needs, ['changes', 'validate-chat-core']);
   assert.equal(workflow.jobs['publish-chat-core'].permissions['id-token'], 'write');
   assert.equal(workflow.jobs['validate-chat-runtime'], undefined);

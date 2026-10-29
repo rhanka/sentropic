@@ -38,6 +38,11 @@
   - [x] BR1-EX2: conductor explicitly requires workflow publisher/filter/bootstrap removal and unchanged validation gates under chat-core; rollback restores runtime lane.
 
 ## Feedback Loop
+- [x] Review F2 accepted: derive the qualification archive from guarded pack outputs so future core version bumps need no workflow path change.
+- [x] Review F1 contested: chat-server's unchanged ^0.1.2 intentionally resolves published core 0.1.7; no server-root code/API changed. Updating an unrelated release's dependency is outside this packaging migration; core/runtime tests and clean archive probe directly qualify 0.2.0.
+- [x] Merge origin/main c37662a20 without rebase; only BRANCH.md conflicts, keep this plan; inbound changes are W0 documentation, no Track/source changes.
+- [x] Qualification passes for exact chat-core archive d4914ccbd260d09e074332f980d162e0e2c0e9a08ba15abc980f326501bee0cd: root without optional peers, all runtime entries with published peers.
+- [x] Runtime/core 692 tests, manifest guard 217 tests, expected-CI/DAG 33 tests pass; source/build unchanged by main integration.
 - [x] Packaging implementation slice 9 committed with mechanical scope validation.
 - [x] Packaging implementation slice 8 committed with mechanical scope validation.
 - [x] Packaging implementation slice 7 committed with mechanical scope validation.
