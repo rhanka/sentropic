@@ -11,7 +11,8 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 export async function installConsumer(args, { cwd = process.cwd(), env = process.env, stdio = 'inherit' } = {}) {
   if (args[0] !== 'install') throw new Error('Only packed-consumer install is supported');
   if (args.some(arg => arg.startsWith('--registry') || /^(https?:|git\+|github:)/.test(arg))) throw new Error('Consumer cannot override frozen registry');
-  const registry = await frozenRegistry(lockedVersions(root), candidateArchives(args, cwd));
+  const versions = lockedVersions(root);
+  const registry = await frozenRegistry(versions, candidateArchives(args, cwd));
   const prefixIndex = args.indexOf('--prefix');
   const consumer = prefixIndex < 0 ? cwd : path.resolve(cwd, args[prefixIndex + 1]);
   const lockPath = path.join(consumer, 'package-lock.json');
@@ -34,7 +35,23 @@ export async function installConsumer(args, { cwd = process.cwd(), env = process
       child.once('error', reject);
       child.once('close', code => resolve(code ?? 1));
     });
-  } finally { await registry.close(); fs.rmSync(cache, { recursive: true, force: true }); }
+  } finally {
+    // Retained consumer locks must replay after this temporary registry is closed.
+    if (fs.existsSync(lockPath)) {
+      const lock = JSON.parse(fs.readFileSync(lockPath));
+      for (const [location, record] of Object.entries(lock.packages ?? {})) {
+        if (!record.resolved?.startsWith(registry.url)) continue;
+        const candidate = registry.candidates.find(c => c.integrity === record.integrity);
+        const name = record.name ?? location.split('node_modules/').at(-1);
+        const locked = versions.get(name)?.get(record.version);
+        if (candidate) record.resolved = `file:${candidate.file}`;
+        else if (locked?.dist.integrity === record.integrity) record.resolved = locked.dist.tarball;
+        else throw new Error(`Consumer lock escaped frozen inputs: ${name}@${record.version}`);
+      }
+      fs.writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n');
+    }
+    await registry.close(); fs.rmSync(cache, { recursive: true, force: true });
+  }
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
