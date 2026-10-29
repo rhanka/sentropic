@@ -1,6 +1,7 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createHash } from 'node:crypto';
 import { eq, inArray, like } from 'drizzle-orm';
 import { SignJWT } from 'jose';
 import { Hono } from 'hono';
@@ -9,7 +10,8 @@ import { request as httpRequest, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../../../src/db/client';
-import { settings, users, userSessions, workspaces } from '../../../src/db/schema';
+import { serviceClients, settings, users, userSessions, workspaces } from '../../../src/db/schema';
+import { env } from '../../../src/config/env';
 import { createSession, revokeSession, revokeAllSessions, validateSession } from '../../../src/services/session-manager';
 import { getRemoteSessionAuthority } from '../../../src/services/auth/remote-private-session';
 import { resolveRemoteLogin } from '../../../src/services/auth/remote-session';
@@ -28,6 +30,7 @@ const issuer = 'https://idp.example.test', resource = `${issuer}/remote-revocati
 const clientId = 'test-product-revoker', path = '/api/v1/auth/session/remote-revocations';
 let userId: string, directory: string;
 const servers: Server[] = [];
+const testEnv = { DISABLE_RATE_LIMIT: env.DISABLE_RATE_LIMIT, OAUTH_ISSUER_URL: env.OAUTH_ISSUER_URL };
 beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), 'rc1-product-revoke-'));
   vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
@@ -48,6 +51,8 @@ afterEach(async () => {
   await db.delete(settings).where(like(settings.key, 'remote_session_revocation:%'));
   await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
   await db.delete(users).where(eq(users.id, userId));
+  await db.delete(serviceClients).where(eq(serviceClients.clientId, clientId));
+  Object.assign(env, testEnv);
   vi.unstubAllEnvs(); vi.unstubAllGlobals();
   vi.restoreAllMocks();
   rmSync(directory, { recursive: true, force: true });
@@ -58,7 +63,7 @@ async function bearer(change: Record<string, unknown> = {}) {
     scope: 'remote.sessions.revoke', exp: Math.floor(Date.now() / 1000) + 60, ...change })
     .setProtectedHeader({ alg: 'EdDSA', kid: key.kid }).sign(key.privateKey!);
 }
-async function bridge() {
+async function bridge(realToken = false) {
   const token = await bearer(), idp = createIdpApp();
   // Real node-server plain socket: same final hop as the deployed ClusterIP and TLS ingress.
   const server = await new Promise<Server>(resolve => {
@@ -71,20 +76,21 @@ async function bridge() {
   });
   servers.push(server);
   const transport = vi.fn(async (url: string, init: RequestInit) => {
-    if (url.endsWith('/oauth/token')) {
+    if (url.endsWith('/oauth/token') && !realToken) {
       expect(new URLSearchParams(String(init.body)).get('scope')).toBe('remote.sessions.revoke');
       return Response.json({ access_token: token, token_type: 'Bearer' });
     }
-    expect(url).toBe(`${revocationServiceOrigin}${path}`);
+    const target = new URL(url);
+    expect([issuer, revocationServiceOrigin]).toContain(target.origin);
     // Node fetch rewrites Host for the loopback URL; node:http preserves the service Host.
     return new Promise<Response>((resolve, reject) => {
-      const request = httpRequest(`http://127.0.0.1:${(server.address() as AddressInfo).port}${path}`, {
+      const request = httpRequest(`http://127.0.0.1:${(server.address() as AddressInfo).port}${target.pathname}`, {
         method: 'POST', headers: { ...init.headers, host: 'auth-idp:8787', 'x-forwarded-proto': 'https' },
       }, incoming => {
         const chunks: Buffer[] = [];
         incoming.on('data', chunk => chunks.push(Buffer.from(chunk)));
         incoming.on('end', () => resolve(new Response(incoming.statusCode === 204 ? null : Buffer.concat(chunks), {
-          status: incoming.statusCode, headers: { 'x-revocation-ack': String(incoming.headers['x-revocation-ack'] ?? '') },
+          status: incoming.statusCode, headers: incoming.headers as Record<string, string>,
         })));
         incoming.on('error', reject);
       });
@@ -96,6 +102,62 @@ async function bridge() {
   return transport;
 }
 describe('RC1 product to issuer revocation', () => {
+  it('should acknowledge more than 40 deliveries with the deployed rate limiters enabled', async () => {
+    env.DISABLE_RATE_LIMIT = undefined;
+    env.OAUTH_ISSUER_URL = issuer;
+    await db.insert(serviceClients).values({ id: crypto.randomUUID(), clientId,
+      clientSecretHash: createHash('sha256').update(process.env.REMOTE_ACTION_REVOCATION_CLIENT_SECRET!).digest('hex'),
+      allowedScopes: ['remote.sessions.revoke'], resourceIndicators: [resource] });
+    const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
+    const transport = await bridge(true);
+    vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
+    // The first delivery obtains a real S2S token through the same limiter bindings.
+    await revokeSession(tokens.sessionId);
+    // Exhaust the anonymous peer's shared auth bucket without touching the S2S budget.
+    let probe: Response | undefined;
+    for (let index = 0; index < 41; index++) {
+      probe = await fetch(`${revocationServiceOrigin}/api/v1/auth/rate-limit-probe`, { method: 'POST' });
+    }
+    expect(probe!.status).toBe(429);
+    for (let index = 0; index < 60; index++) await revokeSession(crypto.randomUUID());
+    expect(transport.mock.calls.filter(([url]) => url.endsWith('/oauth/token'))).toHaveLength(1);
+    const deliveries = transport.mock.calls.flatMap(([url], index) => url.endsWith(path) ? [index] : []);
+    expect(deliveries).toHaveLength(61);
+    for (const index of deliveries) {
+      const response = await transport.mock.results[index].value;
+      expect(response.status).toBe(204);
+      expect(response.headers.get('ratelimit-policy')).toBe('120;w=60');
+    }
+    expect(await pendingRemoteRevocations()).toEqual([]);
+    vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
+    expect(getRemoteSessionAuthority()!.find(tokens.sessionId)?.revoked).toBe(true);
+  });
+  it('should charge only token-and-MAC authenticated requests to the S2S client budget', async () => {
+    env.DISABLE_RATE_LIMIT = undefined;
+    const transport = await bridge();
+    const authorization = `Bearer ${await bearer()}`;
+    const body = JSON.stringify({ sessionIds: [crypto.randomUUID()] });
+    for (let index = 0; index < 121; index++) {
+      const response = await fetch(`${revocationServiceOrigin}${path}`, { method: 'POST', body,
+        headers: { authorization } });
+      expect(response.status).toBe(401);
+    }
+    vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
+    for (let index = 0; index < 120; index++) await revokeSession(crypto.randomUUID());
+    await expect(revokeSession(crypto.randomUUID())).rejects.toMatchObject({ code: 'authority_unavailable' });
+    expect((await transport.mock.results.at(-1)!.value).status).toBe(429);
+    expect(await pendingRemoteRevocations()).toHaveLength(1);
+  });
+  it('should renew the cached S2S token shortly before its expiry', async () => {
+    const transport = await bridge();
+    vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
+    await revokeSession(crypto.randomUUID());
+    await revokeSession(crypto.randomUUID());
+    expect(transport.mock.calls.filter(([url]) => url.endsWith('/oauth/token'))).toHaveLength(1);
+    vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 40_000);
+    await revokeSession(crypto.randomUUID());
+    expect(transport.mock.calls.filter(([url]) => url.endsWith('/oauth/token'))).toHaveLength(2);
+  });
   it.each(['logout', 'logout-all'])('should clear both cookies and return pending 503 for unavailable %s', async operation => {
     const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
     const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
@@ -211,6 +273,11 @@ describe('RC1 product to issuer revocation', () => {
     expect(response.status).toBe(503);
     expect(await response.json()).toEqual({ error: 'authority_unavailable', revocation: 'pending' });
     expect(response.headers.get('retry-after')).toBe('60');
+    if (admin) expect(response.headers.get('set-cookie')).toBeNull();
+    else {
+      expect(response.headers.get('set-cookie')).toContain('session=;');
+      expect(response.headers.get('set-cookie')).toContain('refresh_token=;');
+    }
     if (operation.endsWith('delete')) expect(await db.select().from(users).where(eq(users.id, userId))).toEqual([]);
     expect(await db.select().from(userSessions).where(eq(userSessions.userId, userId))).toEqual([]);
     if (operation.endsWith('delete')) expect(await db.select().from(workspaces).where(eq(workspaces.id, workspaceId))).toEqual([]);
@@ -260,13 +327,17 @@ describe('RC1 product to issuer revocation', () => {
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
   });
   it.each([{ scope: 'remote.evidence.issue' }, { aud: 'other' }, { client_id: 'other' },
-    { sub: 'user' }, { cnf: { jkt: 'bound-token' } }, { exp: 1 }])
-  ('should refuse unauthorized revocation claims %j', async change => {
-    const token = await bearer(change);
+    { sub: 'user' }, { cnf: { jkt: 'bound-token' } }, { exp: 1 }, {}])
+  ('should enforce revocation token claims with an authenticated body %j', async change => {
+    const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
+    const authorization = `Bearer ${await bearer(change)}`;
+    const body = JSON.stringify({ sessionIds: [tokens.sessionId] });
     const result = await createIdpApp().request(`${issuer}${path}`, { method: 'POST',
-      headers: { authorization: `Bearer ${token}` }, body: 'invalid' });
-    expect(result.status).toBe(401);
-    expect(await result.json()).toEqual({ error: 'authentication_required' });
+      headers: { authorization, ...signRevocation(body, authorization) }, body });
+    const valid = Object.keys(change).length === 0;
+    expect(result.status).toBe(valid ? 204 : 401);
+    if (!valid) expect(await result.json()).toEqual({ error: 'authentication_required' });
+    expect(getRemoteSessionAuthority()!.find(tokens.sessionId)?.revoked).toBe(valid);
   });
   it('should delete the DB session even when issuer delivery fails', async () => {
     const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
