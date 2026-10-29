@@ -11,10 +11,24 @@ function fixture() {
   const stream = { set: vi.fn((key: string, handler: (event: StreamHubEvent) => void) => { handlers.set(key, handler); }), delete: vi.fn((key: string) => { handlers.delete(key); }) };
   const onError = vi.fn();
   const provider = createCanvasProvider({ scopeRef: 'folder:f', objectType: 'folder', objectId: 'f', currentActorId: 'a', locks: locks as unknown as typeof ObjectLocks, stream, onError });
-  return { provider, locks, lock, presence, stream, handlers, onError, unit: { scopeRef: 'folder:f', unitRef: 'description' } };
+  return { provider, locks, lock, presence, stream, handlers, onError, unit: { scopeRef: 'folder:f' } };
 }
 const flush = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 describe('canvas collaboration provider', () => {
+  it('should not acquire a new lock when a non-holder refreshes an empty or foreign lock', async () => {
+    const f = fixture(); f.locks.fetchLock.mockResolvedValueOnce(null as never);
+    expect((await f.provider.refreshLock(f.unit)).holder).toBeNull();
+    f.locks.fetchLock.mockResolvedValueOnce({ ...f.lock, lockedBy: { ...f.lock.lockedBy, userId: 'b' } });
+    expect((await f.provider.refreshLock(f.unit)).holder?.actorId).toBe('b');
+    expect(f.locks.acquireLock).not.toHaveBeenCalled();
+  });
+  it('should refuse unsupported per-unit lock claims before namespace calls or subscription', async () => {
+    const f = fixture(); const unit = { ...f.unit, unitRef: 'notes' };
+    await expect(f.provider.acquireLock(unit)).rejects.toThrow('scope-denied');
+    await expect(f.provider.releaseLock(unit)).rejects.toThrow('scope-denied');
+    expect(() => f.provider.subscribeLock(unit, vi.fn())).toThrow('scope-denied');
+    expect(f.locks.acquireLock).not.toHaveBeenCalled(); expect(f.locks.releaseLock).not.toHaveBeenCalled();
+  });
   it('should adapt all lock operations to the existing object-lock API', async () => {
     const f = fixture();
     expect(await f.provider.acquireLock(f.unit)).toMatchObject({ acquired: true, lock: { unit: f.unit, holder: { actorId: 'a', displayLabel: 'Alice' }, expiresAt: f.lock.expiresAt } });

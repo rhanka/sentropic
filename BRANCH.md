@@ -40,6 +40,7 @@
   - [ ] Record BRH1-EXn, reason, impact and rollback before any conditional path change.
 
 ## Feedback Loop
+- [x] R1 reviews request schema/session refresh, composed revocation, holder-only renewal, explicit object-level L0 granularity and bounded draft recovery lifetime; add RED witnesses before correction.
 - [x] CL-1M gate: consume published DS pure types at the adapter boundary when available; preparation shapes are host-local, not a publication/conformance claim.
 - [x] H3 gate: actual Y.Doc/Awareness transport factory and production binding/registry-update conformance remain unqualified.
 - [x] H2 gate: admission storage is injected; restart witnesses recreate the service over retained records, not a production durable-store claim.
