@@ -1,7 +1,7 @@
 # MCP-L5 Lot 2 durable reference
 
 Status: **unverified for installed E2/host acceptance**. Draft PR [#771](https://github.com/rhanka/sentropic/pull/771) targets main; do not merge.
-Author: Codex, requested model `gpt-6.1-sol`, effort `high`. Source branch: `feat/memory-l5-lot2`, based on `origin/fix/memory-l5-p09-p3` at `9ba0e9d69dd06322d9fcfe770b69ff7d1f7d6191`. Merge main after #769 lands; never rebase.
+Author: Codex, requested model `gpt-6.1-sol`, effort `high`. Source branch: `feat/memory-l5-lot2`, rebased onto `origin/main@2ea238790fe992cdbb8e0202b1a73a937b6a1793` on 2026-10-29 per COMMON-RULES. Both conflicts concerned only the branch plan. No frozen input was changed. Broker is private; no published package source changed, so no publication version comparison applies.
 
 The public `@sentropic/mcp-broker/memory-reference` entry exports `SqliteMemoryWorkflowStoreV1`; broker root and pure memory contracts do not activate SQLite. Broker version is 0.2.0. Workflow state uses owned files, immediate transactions, WAL/FULL, bounded contention, nine-part principal-scoped reservation keys, immutable preimages/digests/policy/default/audit records, finite claims and persisted confirmation/canonical replay pointers. An expired executing lease cannot become a fresh execution. Unknown outcomes remain closed until canonical proof is available. The host must supply and enforce canonical fencing separately.
 
@@ -35,8 +35,8 @@ After a real manifest is received, the gate also requires `LOT2_CANONICAL_REPORT
 5. Authoritative production enrollment/assurance and authenticated reattachment mappings, current L0 detached owner/role dispositions and later owner UAT. The committed production policy stays closed until these exist.
 6. Lot 6 reruns all durable cases through the final exact E4 and obtains the co-accepted checkpoint before L4 exit. Neither source CI nor E2 preparation accepts E4.
 
-Peer reviews remain pending the permission required by `rules/subagents.md`; no reviewer or consensus verdict is fabricated. CI is pending until the final head's run completes.
+The post-rebase source gate passed again on 2026-10-29 (`memory-l5-gate LOT=reference`, retained P3, typechecks, 55 files/114 edges, 112 tooling tests and package tests; shared flock, `ENV=test-memory-l5` last). No pr771 review file exists in the shared review directory. Independent review selection is pending: no session catalog endpoint is configured, and the installed `remote llm-mesh start` fails while reading missing account configuration. No peer or consensus verdict is claimed. CI remains required on the pushed final head.
 
-## Lot 3 estimate
+## Successor scope
 
-**5–8 implementation hours**, matching the approved schedule, after Lot 2's real host acceptance. Scope: two explicit memory profiles, complete verified context/envelope propagation, unchanged existing-provider behavior and the corrected P09 inventory of 18 suites. Artifact wait, CI queue and external review/acceptance time are additional elapsed time.
+Lot 3 retains the corrected P09 inventory of 18 suites. Installed transport and canonical-store acceptance remain distinct from these reference source checks.
