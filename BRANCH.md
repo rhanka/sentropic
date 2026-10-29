@@ -33,6 +33,7 @@
 - [x] No previously admitted runtime exists: rollback must restore the explicitly blocked S2a state.
 - [ ] Independent scanner/verifier admission requires reviewed evidence, not an author-set boolean.
 - [ ] All missing inputs will be named in the final verdict; fixture passes cannot close live gates.
+- [x] Qualification verdict: NOT QUALIFIED; exact missing artifacts/access/analyzer/builder inputs and all receipts in `docs/security/trivy-s2b-qualify.md`.
 
 ## AI Flaky tests
 - [x] No AI inference or timeout increases in this lot.
@@ -68,7 +69,7 @@
   - [ ] Measure cold/warm, refresh, remote/rebuild and CI critical path with queue separate.
   - [x] Measure archive cold/warm and DB acquisition/restoration; observe actual remote authorization refusal and absence of isolated builder.
 - [ ] **Lot 3 — Verification and delivery**
-  - [ ] Scoped tests: `scripts/security/daily/toolchain-contract.test.mjs`, `scripts/security/daily/trivy.test.mjs` and qualification regressions.
+  - [x] Scoped tests: `scripts/security/daily/toolchain-contract.test.mjs`, `scripts/security/daily/trivy.test.mjs` and qualification regressions.
   - [x] Fix archive report identity using a process-local proof issued only after preparation verifies archive bytes; cloned JSON cannot grant that proof.
   - [x] Final `make test-security-daily` (125 passing) and `make test-security-parser` (17 passing); scoped `make down` completed.
   - [ ] Reconcile independent peer reviews; record CLOSED / STILL BLOCKED with exact missing inputs under `docs/security/`.
