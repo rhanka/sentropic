@@ -74,6 +74,7 @@
   - [x] Add nine isolated qualification dispatch cases using the original source/storage/crash/installed/upgrade/lazy/stateful commands; add clean-consumer negatives for unlisted primary bytes and wrong source SHA.
   - [x] Declare nine fail-fast-disabled cluster matrix members, each with its own runner workspace/environment and read-only source permission, downloading/verifying the same producer bundle before dispatch.
   - [x] Route source, audits, storage and stateful checks through the lane dispatcher; remove their repeated build/preparation steps from the serialized workflow body.
+  - [x] Remove the remaining serialized installed/upgrade/lazy/install steps now owned by independent lanes; teardown each lane's database/network and Compose environment with unconditional cleanup.
   - [ ] Refactor the four named cluster preparation/Make files; separate static/source, PostgreSQL conformance, comments storage, crash recovery, candidate packing, and installed lanes; each mutating lane owns its workspace/database/ports.
   - [ ] Preserve existing `postgres-crashes.spec.ts`, `installed-major-upgrade.mjs`, `installed-bare.mjs`, and all packaging suite membership; maintain seed → crash/restart → verify inside each crash fixture.
   - [ ] Add `package-qualification-dag.test.mjs` (new): no installed check before packing, no second candidate build, distinct mutable fixture roots, lazy bare/selected-peer/latest-in-range/global-consumer cases retained.
