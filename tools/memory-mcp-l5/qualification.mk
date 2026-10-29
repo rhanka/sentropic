@@ -24,6 +24,10 @@ memory-l5-collect: memory-l5-proposal-runtime
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e ARTIFACT_MANIFEST="$(ARTIFACT_MANIFEST)" -e CHECKPOINT="$(CHECKPOINT)" -e MEMORY_L5_SOURCE_HEAD="$$(git rev-parse HEAD)" -e MEMORY_L5_BASE="$$(git merge-base origin/main HEAD)" -e GITHUB_RUN_ID -e GITHUB_RUN_ATTEMPT -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/collect.mjs
 
 .PHONY: memory-l5-disabled-install
+.PHONY: memory-l5-native-positive
+memory-l5-native-positive: memory-l5-proposal-runtime
+	@test -n "$(MEMORY_L5_REPORT)"
+	@docker run --rm -e HOME=/tmp -e CONTROL_UID="$$(id -u)" -e CONTROL_GID="$$(id -g)" -e MEMORY_L5_REPORT="$(MEMORY_L5_REPORT)" -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'set -eu; apt-get update -qq; apt-get install --no-install-recommends -y gcc libc6-dev >/dev/null; for binary in python python2 python3; do ! command -v "$$binary"; done; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 >/dev/null; mkdir -p tools/memory-mcp-l5/node_modules; trap '\''rm -rf tools/memory-mcp-l5/node_modules; test ! -f "$$MEMORY_L5_REPORT" || chown "$$CONTROL_UID:$$CONTROL_GID" "$$MEMORY_L5_REPORT"'\'' EXIT; ln -s "$$tool_dir/node_modules/vitest" tools/memory-mcp-l5/node_modules/vitest; "$$tool_dir/node_modules/.bin/vitest" run controls/native-compile.test.mjs --root tools/memory-mcp-l5 --environment node --reporter=json --outputFile="$$MEMORY_L5_REPORT"'
 memory-l5-disabled-install: memory-l5-proposal-runtime
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e ARTIFACT_MANIFEST="$(ARTIFACT_MANIFEST)" -e NATIVE_OUTPUT="$(NATIVE_OUTPUT)" -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/disabled-install.mjs
 
