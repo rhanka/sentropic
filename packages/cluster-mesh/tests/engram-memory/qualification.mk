@@ -34,16 +34,16 @@ memory-stage-b-locked:
 # E10 installed injection proof: clean consumer outside repository resolution.
 INSTALLED_DIR ?= tmp/installed-memory-e10
 INSTALLED_ENGRAM_TGZ ?= $(shell git rev-parse --path-format=absolute --git-common-dir | sed 's@/\.git$$@@')/.tmp/engram-e2-host-tuple/e11-current/engram.tgz
-INSTALLED_MESH_VERSION ?= 0.24.0-dev.7
+INSTALLED_MESH_VERSION ?= 0.24.0
 INSTALLED_RECEIPTS ?= $(INSTALLED_DIR)
 .PHONY: installed-memory installed-memory-locked
 installed-memory:
-	@test -n "$(filter test-mem-e10 test-mem-e10-fin test-e2-int test-mem-batch1 test-mem-e11b,$(ENV))"
+	@test -n "$(filter test-mem-e10 test-mem-e10-fin test-e2-int test-mem-batch1 test-mem-e11b test-mem-release,$(ENV))"
 	@flock "$(E2_LOCK)" $(MAKE) -f Makefile -f $(MEMORY_QUALIFICATION_MK) installed-memory-locked ENV=$(ENV)
 
 # Internal entry: caller holds the machine-wide lock through cleanup.
 installed-memory-locked:
-	@test -n "$(filter test-mem-e10 test-mem-e10-fin test-e2-int test-mem-batch1 test-mem-e11b,$(ENV))"
+	@test -n "$(filter test-mem-e10 test-mem-e10-fin test-e2-int test-mem-batch1 test-mem-e11b test-mem-release,$(ENV))"
 	@test -z "$$(git status --porcelain)" || { echo 'Installed receipt requires a clean committed tree'; exit 1; }
 	@printf '%s  %s\n' 32d47df1880cf5c43b0f16145f75aebeda5fd341d8b1317f3b89acc428bbd05b "$(INSTALLED_ENGRAM_TGZ)" | sha256sum -c -
 	@printf '%s  %s\n' 1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730 tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json | sha256sum -c -

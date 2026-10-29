@@ -153,6 +153,8 @@ jobs:
           flock "$E2_LOCK" make -f Makefile -f tools/engram-e11/e11.mk memory-e11-installed ENV=test-e2-int
           make -f Makefile -f tools/engram-e11/e11.mk memory-e11-snapshot ENV=test-e2-int
           flock "$E2_LOCK" make -f Makefile -f tools/engram-e11/e11.mk memory-e11-generate memory-e11-test memory-e11-check ENV=test-e2-int
+      - name: Qualify stable E10 installed memory and two-process reopen
+        run: make -f Makefile -f packages/cluster-mesh/tests/engram-memory/qualification.mk installed-memory INSTALLED_ENGRAM_TGZ="$PWD/tmp/engram-e11-reviewed/tmp/engram-e11-current/engram.tgz" ENV=test-e2-int
       - name: Retain job URLs
         if: always()
         env:
@@ -172,6 +174,8 @@ jobs:
             tmp/engram-e11-current/**
             tmp/engram-e11-reviewed/tmp/engram-e2-receipts/**
             tmp/engram-e11-reviewed/tmp/engram-e11-current/**
+            tmp/installed-memory-e10/**
+            '!tmp/**/node_modules/**'
           retention-days: 30
           if-no-files-found: error
 
