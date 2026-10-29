@@ -1113,6 +1113,15 @@ engram-e2-postgres-up:
 	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-mem-release test-memory-mcp,$(ENV))"
 	@$(ARTIFACTS_COMPOSE) up -d --wait postgres
 
+.PHONY: memory-mcp-qualify
+memory-mcp-qualify: ## Require the candidate memory MCP tools on real isolated PostgreSQL
+	@test "$(ENV)" = test-memory-mcp
+	@set -eu; mkdir -p tmp/memory-mcp-receipts "$$(dirname "$(E2_LOCK)")"; \
+		trap 'flock "$(E2_LOCK)" $(MAKE) down ENV=$(ENV)' EXIT; \
+		flock "$(E2_LOCK)" $(MAKE) engram-e2-postgres-up ENV=$(ENV); \
+		set -o pipefail; flock "$(E2_LOCK)" $(MAKE) test-cluster-mesh SCOPE=mcp-memory \
+		CM_PG_URL=postgresql://app:app@postgres:5432/app ENV=$(ENV) 2>&1 | tee tmp/memory-mcp-receipts/tools.log
+
 engram-e2-stable-publish-guard:
 	@version="$$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' packages/cluster-mesh/package.json | head -1)"; \
 		[[ "$$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$$ ]] || { echo 'Only stable Cluster Mesh versions may be published'; exit 1; }

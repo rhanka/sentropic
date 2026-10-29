@@ -29,6 +29,7 @@
 
 ## Feedback Loop
 - [x] BRMEM-EX1: allow Makefile changes for the dedicated PostgreSQL test environment and hash-pinned candidate test provisioning; additive test tooling only; rollback removes those additions.
+- [x] BRMEM-EX2: allow `.github/workflows/ci.yml` to require the isolated memory MCP PostgreSQL campaign when validating cluster-mesh; rollback removes the added step; no publication or release-gate exemption.
 - [x] Keep the supplied candidate as a hash-checked test-only fixture so CI can qualify identical unpublished peer bytes.
 - [x] Record unanswered producer questions in root `.tmp/memory-mcp-builtin/questions.md`; choose the narrowest compatible composition.
 

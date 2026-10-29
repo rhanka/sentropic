@@ -8,7 +8,7 @@ const open = async (tenant = 'tenant-a') => {
   const host = await memoryMcpHost(tenant); hosts.push(host); return host;
 };
 const value = (result: unknown): any => {
-  expect(result).toMatchObject({ isError: false, structuredContent: { ok: true } });
+  expect(result, JSON.stringify(result)).toMatchObject({ isError: false, structuredContent: { ok: true } });
   return (result as any).structuredContent.output.value;
 };
 
