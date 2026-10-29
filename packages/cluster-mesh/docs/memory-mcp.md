@@ -49,8 +49,10 @@ schemas, uses qualified platform bridge/schema loaders, and preserves the
 producer's schemas, annotations, metadata, text and structured receipts.
 Attach the resulting SDK server to the host's stdio or HTTP transport.
 The host resolver must verify HTTP authentication or establish stdio identity
-out of band. h2a can register these tools on its existing server through this
-same entry; this library does not alter an agent's h2a installation or opt-ins.
+out of band. An h2a host must merge the runtime's descriptors and adapter
+dispatch into its single tool registry before its SDK handler registration.
+The stdio example owns a fresh server. This library does not alter an agent's
+h2a installation or opt-ins.
 
 The shipped stdio example loads a trusted host module exporting
 `async createHost({modules})`. It returns `{definition, transport,
