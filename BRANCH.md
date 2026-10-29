@@ -44,6 +44,15 @@
   - `scripts/ci/ci-expected-results.test.mjs`
   - `scripts/security/security-parser-test.sh`
   - `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`
+  - `api/tests/fixtures/canvas-live/b1-save-payloads.json`
+  - `ui/tests/fixtures/canvas-live/b1-content.json`
+  - `docs/canvas-live/h0-corpus.md`
+  - `docs/canvas-live/h0-gates.md`
+  - `docs/canvas-live/h0-inputs.sha256`
+  - `docs/canvas-live/h0-inventory.md`
+  - `docs/canvas-live/h0-transfer-receipts.md`
+  - `docs/canvas-live/h0-validation.md`
+  - `docs/canvas-live/verify-h0.sh`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -59,6 +68,7 @@
   - [x] Declare BRRC1-EXn with rationale, impact and rollback before any conditional edit.
 
 ## Feedback Loop
+- [x] BRRC1-EX8: import origin/main a3204932e by merge after F6; preserve this PR's BRANCH.md on conflict. The nine additionally allowed canvas fixture/documentation paths are inherited only and must match main byte for byte. Impact: qualify the exact merged head without rebasing or changing upstream work. Rollback: revert the merge; Track blobs are identical before integration. The authored-change 150-line limit excludes the identity-preserving upstream merge.
 - [x] F6 logout regressions use the actual packaged logout adapter and logout-all handler; unavailable issuer delivery returns pending 503, clears session and refresh cookies, removes DB sessions, and the later sweep tombstones authority before shared-row restoration.
 - [x] F6 topology regressions use an actual plain HTTP node-server listener for successful lifecycle delivery. Missing/wrong MAC, modified body, stale timestamp, spoofed forwarded-proto and forged 204 acknowledgement are refused; failed acknowledgement retains the durable retry intent.
 - [x] F6 lifecycle recovery: all four account/admin endpoints have 503/pending regressions; destructive deletion preserves its transactional intent, and the existing periodic approval sweep retries committed intents even with no expired users. Approval expiry queues all users atomically before attempting deliveries.
