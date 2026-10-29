@@ -29,8 +29,9 @@
 ## UAT Management (in orchestration context)
 - [x] No product UAT; actual owner assurance/provenance gates stay pending.
 ## Plan / Todo (lot-based)
-- [ ] Lot 1: add native process observer and candidate-root attribution predicate; tests/disabled-install.test.mjs must ignore unrelated tree-sitter and catch a real node-gyp invocation.
+- [x] Lot 1: add native process observer and candidate-root attribution predicate; tests/disabled-install.test.mjs ignores unrelated tree-sitter and catches a real node-gyp invocation.
   - [x] Retain the producer observer as an L5-owned tool; record executed native commands independently of attribution, including direct node node-gyp.js builds. Candidate bytes unchanged.
   - [x] Tooling passes 139 tests, including an actual node-gyp rebuild invocation that the candidate predicate blocks and the unrelated tree-sitter refusal regression.
 - [ ] Lot 2: run ordinary candidate installation with scripts and optional dependencies enabled; retain logs, trace and positive control; wire packed/disabled-install.test.ts and make target.
+  - [x] Add the ordinary-install runner, packed disabled/exports cases and make delegation; execution on exact bytes remains part of the final run. Retain compressed logs/traces and compact hashed JSON.
 - [ ] Lot 3: tooling/scope checks, review dossier, draft PR and exact-head CI; cleanup.

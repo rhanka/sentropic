@@ -54,9 +54,9 @@ export function assembleCandidate(root, prePath, inputs, head) {
   return manifest;
 }
 
-export function writeImmutable(root, path, doc) {
+export function writeImmutable(root, path, doc, { compact = false } = {}) {
   // Validate the output path with the same confined reader as artifact inputs.
-  const bytes = Buffer.from(JSON.stringify(doc, null, 2) + '\n');
+  const bytes = Buffer.from(JSON.stringify(doc, null, compact ? 0 : 2) + '\n');
   const target = resolve(root, path);
   if (!target.startsWith(resolve(root) + '/')) throw Error('candidate: output outside root');
   let ancestor = dirname(target);
@@ -82,6 +82,6 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     if (!argv.includes('--inputs') || !argv.includes('--head') || !argv.includes('--manifest')) throw Error('candidate: --inputs, --head and --manifest required');
     const manifest = assembleCandidate(root, 'tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json',
       JSON.parse(inside(root, input)), arg('--head'));
-    console.log(JSON.stringify({ ...writeImmutable(root, arg('--manifest'), manifest), qualificationAccepted: false }));
+    console.log(JSON.stringify({ ...writeImmutable(root, arg('--manifest'), manifest, { compact: true }), qualificationAccepted: false }));
   } catch (error) { console.error(error.message); process.exitCode = 1; }
 }
