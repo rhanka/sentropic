@@ -3,8 +3,8 @@
 ## Objective
 - [x] Implement durable workflow reference and fail-closed P3/E2 receiving harness; retain missing host acceptance explicitly.
 ## Scope / Guardrails
-- [x] Worktree tmp/worktrees/mem-l5-lot2; branch feat/memory-l5-lot2; base origin/fix/memory-l5-p09-p3; merge only.
-- [x] Preserve catalog, l0-freeze and P3 bytes; no Python; shared Docker lock; ENV=test-mem-l5-lot2 last.
+- [x] Worktree tmp/worktrees/mem-l5-lot2; branch feat/memory-l5-lot2; rebased onto origin/main 2ea238790 on 2026-10-29 per COMMON-RULES.
+- [x] Preserve catalog, l0-freeze and P3 bytes; shared Docker lock; ENV=test-memory-l5 last.
 - [x] Disposable official containers only; ports 9625/5825/1725; no application services required.
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -65,3 +65,5 @@
   - [x] Merge main ab981b16d (#756); preserve this Lot 2 plan, identical Track blobs and frozen P3 bytes; no authored restore-tooling changes. P3 #769 remains open.
   - [x] Rerun the full source gate after main integration: tooling 112 and Lot 1/platform/broker 193 passed; no qualification acceptance.
   - [ ] Final-head CI and independent peer review remain pending; installed acceptance is blocked on the real host tuple.
+  - [x] Resume #771 under the owner harness completion request; no pr771 review files exist in the shared review directory. The broker is private, so the publication version gate is inapplicable; no public package source changed.
+  - [x] Post-rebase source gate passed: memory-l5-gate LOT=reference with retained P3, typechecks, 55-file/114-edge graph and 112 tooling tests; ENV=test-memory-l5 last, shared flock.
