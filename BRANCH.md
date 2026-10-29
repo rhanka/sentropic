@@ -40,6 +40,7 @@
   - [ ] Record BRH1-EXn, reason, impact and rollback before any conditional path change.
 
 ## Feedback Loop
+- [x] R2: reproduce field-local denial incorrectly revoking sibling bindings, and remote closure on edit leaving observer residue; add timestamp error regression evidence.
 - [x] R1 reviews request schema/session refresh, composed revocation, holder-only renewal, explicit object-level L0 granularity and bounded draft recovery lifetime; add RED witnesses before correction.
 - [x] Observe three composed-lifetime RED failures; reject cross-kind actor-id reuse and invalidate closed registry admissions/listeners while retaining document resources.
 - [x] Observe two L0 RED failures; restrict renewal to current holders and reject unsupported unitRef claims before namespace calls.

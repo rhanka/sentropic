@@ -8,9 +8,10 @@ function fixture() {
   let actor = { actorId: 'a', kind: 'human' as 'human' | 'agent', displayLabel: 'A', color: '#123456' };
   const principal = () => ({ tenantId: 't', workspaceId: 'w', actor });
   const facts = { documentId: 'canvas:a', sessionId: 's', profileId: 'full@1', schemaEpoch: '2', fields: ['description', 'notes'] };
+  let grantedFields = facts.fields;
   const records = new Map<string, AdmissionRecord>(); const drafts = new Map<string, PreservedDraft>(); const pending = new Map<string, string>();
   let epoch = 0; let client = 10;
-  const ports = { authenticate: async () => structuredClone(principal()), document: async () => structuredClone(facts), authorize: async () => ({ ...principal(), documentId: facts.documentId, fields: facts.fields, operations: ['read', 'edit'] }), epoch: () => `epoch-${++epoch}`,
+  const ports = { authenticate: async () => structuredClone(principal()), document: async () => structuredClone(facts), authorize: async () => ({ ...principal(), documentId: facts.documentId, fields: grantedFields, operations: ['read', 'edit'] }), epoch: () => `epoch-${++epoch}`,
     update: async (key: string, change: (old?: AdmissionRecord) => AdmissionRecord) => { const result = change(records.get(key)); records.set(key, structuredClone(result)); return structuredClone(result); },
     captureDraft: async () => ({ draftId: 'capture-1', bytes: new Uint8Array([0, 255, 65]) }),
   };
@@ -30,9 +31,33 @@ function fixture() {
   return { provider, registry, authority, facts, records, resource, disconnected, drafts, pending,
     input: () => ({ binding: { documentId: facts.documentId, fieldKey: 'notes' }, actor, profileId: facts.profileId, schemaEpoch: facts.schemaEpoch }),
     use: (id: string, kind: 'human' | 'agent' = 'human') => { actor = { ...actor, actorId: id, kind }; },
+    allowFields: (fields: string[]) => { grantedFields = fields; },
   };
 }
 describe('canvas live composed lifetime', () => {
+  it('should release a denied field and its listener while another authorized field stays live', async () => {
+    const f = fixture(); const notes = await f.provider.openLiveSession(f.input());
+    const descriptionInput = () => ({ ...f.input(), binding: { ...f.input().binding, fieldKey: 'description' } });
+    const description = await f.provider.openLiveSession(descriptionInput());
+    const notesUpdates = vi.fn(); const descriptionUpdates = vi.fn();
+    await f.provider.subscribeActors(notes.identity, notesUpdates); await f.provider.subscribeActors(description.identity, descriptionUpdates);
+    f.allowFields(['description']);
+    await expect(f.provider.resolveBinding(notes.identity)).rejects.toMatchObject({ code: 'scope-denied' });
+    expect(notesUpdates.mock.lastCall![0]).toEqual([]);
+    expect((await f.provider.resolveBinding(description.identity)).text).toBeDefined();
+    await expect(f.provider.authorizeBinding(description.identity, 'edit')).resolves.toBeUndefined();
+    const stoppedCount = notesUpdates.mock.calls.length;
+    f.use('b', 'agent'); const b = await f.provider.openLiveSession(descriptionInput());
+    expect(descriptionUpdates.mock.lastCall![0]).toHaveLength(2); expect(notesUpdates).toHaveBeenCalledTimes(stoppedCount);
+    expect(f.disconnected).not.toHaveBeenCalled(); await notes.dispose(); await b.dispose(); await description.dispose();
+  });
+  it('should invalidate a remotely closed admission on the next edit authorization without requiring a read', async () => {
+    const f = fixture(); const handle = await f.provider.openLiveSession(f.input()); const updates = vi.fn();
+    await f.provider.subscribeActors(handle.identity, updates);
+    for (const record of f.records.values()) record.closed = true;
+    await expect(f.provider.authorizeBinding(handle.identity, 'edit')).rejects.toMatchObject({ code: 'revoked' });
+    expect(updates.mock.lastCall![0]).toEqual([]); expect(f.disconnected).toHaveBeenCalledTimes(1);
+  });
   it('should support explicit host session close and rotation without stale handles disturbing the new session', async () => {
     const f = fixture(); const old = await f.provider.openLiveSession(f.input()); const record = [...f.records.values()][0];
     const text = (await f.provider.resolveBinding(old.identity)).text;
