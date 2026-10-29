@@ -10,14 +10,15 @@
 # package (and every version without a receipt) comes from the registry. Each fixture records its
 # sources in sources.txt.
 set -eu
+source_root=$(cd ../.. && pwd)
 work="$1"
 if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" = activation ]; then
   mkdir -p "$work/tools" "$work/artifacts-consumer"
   npm view @sentropic/artifacts version
-  npm install --prefix "$work/tools" --no-audit --no-fund vitest@4.1.5 typescript@5.9.3 @types/node@22 >/dev/null
+  node "$source_root/scripts/ci/locked-tools.mjs" --prefix "$work/tools" --no-audit --no-fund vitest@4.1.5 typescript@5.9.3 @types/node@22 >/dev/null
   (cd ../artifacts && npm pack --silent --pack-destination "$work" >/dev/null)
   printf '{"type":"module","private":true}\n' > "$work/artifacts-consumer/package.json"
-  (cd "$work/artifacts-consumer" && npm install --no-audit --no-fund "$work"/sentropic-artifacts-*.tgz pg@8.22.0 @types/pg@8.20.0 >/dev/null)
+  (cd "$work/artifacts-consumer" && node "$source_root/scripts/ci/locked-consumer.mjs" --no-audit --no-fund "$work"/sentropic-artifacts-*.tgz pg@8.22.0 @types/pg@8.20.0 >/dev/null)
   exit 0
 fi
 here="$(pwd)/tests/packaging"
@@ -50,7 +51,7 @@ siblings="$work/siblings"
 
 # Qualification tools, isolated from every fixture tree (semver: the pinned guard semver of loadSiblings).
 if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
-npm install --prefix "$work/tools" $quiet vitest@4.1.5 typescript@5.9.3 @types/node@22 esbuild@0.25.12 semver@7.7.2 >/dev/null
+node "$source_root/scripts/ci/locked-tools.mjs" --prefix "$work/tools" $quiet vitest@4.1.5 typescript@5.9.3 @types/node@22 esbuild@0.25.12 semver@7.7.2 >/dev/null
 fi
 if [ -n "${CLUSTER_MESH_SIBLING_RECEIPTS:-}" ]; then
   MANIFEST_GUARD_TOOL_DIR="$work/tools" node "$here/siblings.mjs" verify "$CLUSTER_MESH_SIBLING_RECEIPTS" "$siblings"
@@ -219,7 +220,7 @@ stage() {
 # Bare consumer: the candidate only; optional peers stay absent.
 if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
 fixture bare
-(cd "$work/bare" && npm install $quiet "$tgz" >/dev/null)
+(cd "$work/bare" && node "$source_root/scripts/ci/locked-consumer.mjs" $quiet "$tgz" >/dev/null)
 fi
 
 # Selected consumer: start from E8's committed lock, substituting the local artifacts candidate.
@@ -240,9 +241,9 @@ consumer "$work/selected" "@sentropic/llm-mesh=$mesh_spec" \
   "@sentropic/artifacts=$artifacts_spec"
 sources "$work/selected"
 if grep -q ' sibling ' "$work/selected/sources.txt" || [ "$artifacts_spec" = "file:$artifacts_tgz" ]; then
-  (cd "$work/selected" && npm install $quiet >/dev/null)
+  (cd "$work/selected" && node "$source_root/scripts/ci/locked-consumer.mjs" $quiet >/dev/null)
 elif [ "${REFRESH_LOCK:-}" = 1 ]; then
-  (cd "$work/selected" && npm install $quiet >/dev/null)
+  (cd "$work/selected" && node "$source_root/scripts/ci/locked-consumer.mjs" $quiet >/dev/null)
 else
   (cd "$work/selected" && npm ci $quiet >/dev/null)
 fi
@@ -261,14 +262,14 @@ if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
 consumer "$work/selected-session" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/llm-mesh=$mesh_spec" \
   "@sentropic/llm-gateway=$gateway_spec" "@sentropic/auth-hono=0.15.0" "hono=4.10.7"
 sources "$work/selected-session"
-(cd "$work/selected-session" && npm install $quiet >/dev/null)
+(cd "$work/selected-session" && node "$source_root/scripts/ci/locked-consumer.mjs" $quiet >/dev/null)
 tuple selected-session
 fi
 
 # MCP consumer: only mesh is declared; platform and SDK resolve transitively.
 if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
 consumer "$work/mcp-consumer" "@sentropic/cluster-mesh=file:$tgz"
-(cd "$work/mcp-consumer" && npm install $quiet >/dev/null)
+(cd "$work/mcp-consumer" && node "$source_root/scripts/ci/locked-consumer.mjs" $quiet >/dev/null)
 tuple mcp-consumer
 fi
 
@@ -278,7 +279,7 @@ fi
 if [ "$CM_ARTIFACTS_COMPAT" = 1 ]; then
   consumer "$work/artifacts-consumer" "@sentropic/cluster-mesh=file:$tgz" "@sentropic/artifacts=file:$artifacts_tgz"
   sources "$work/artifacts-consumer"
-  (cd "$work/artifacts-consumer" && npm install $quiet >/dev/null)
+  (cd "$work/artifacts-consumer" && node "$source_root/scripts/ci/locked-consumer.mjs" $quiet >/dev/null)
   tuple artifacts-consumer
 else
   echo '[artifacts] optional tuple refused: declared platform peer excludes candidate'
@@ -296,7 +297,7 @@ attempt() {
   dir="$1"
   label="$2"
   shift 2
-  if (cd "$dir" && npm install --no-audit --no-fund --loglevel=warn "$@" >/dev/null 2>"$dir/npm-$label.stderr"); then code=0; else code=$?; fi
+  if (cd "$dir" && node "$source_root/scripts/ci/locked-consumer.mjs" --no-audit --no-fund --loglevel=warn "$@" >/dev/null 2>"$dir/npm-$label.stderr"); then code=0; else code=$?; fi
   if grep -q ERESOLVE "$dir/npm-$label.stderr"; then eresolve=yes; else eresolve=no; fi
   printf '%s-exit=%s\n%s-eresolve=%s\n%s-installed=%s\n' "$label" "$code" "$label" "$eresolve" "$label" "$(installed "$dir")" \
     >> "$dir/npm-install-detail"
@@ -330,10 +331,10 @@ if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" != artifacts ]; then
 stage separate-runtime
 stage global-consumer
 stage global-consumer-pinned
-npm install -g --prefix "$work/global" $quiet "$work/src/fixture-separate-runtime-1.0.0.tgz" >/dev/null
-npm install -g --prefix "$work/global" $quiet "$work/src/fixture-global-consumer-1.0.0.tgz" >/dev/null
-npm install -g --prefix "$work/global-pinned" $quiet "$work/src/fixture-separate-runtime-1.0.0.tgz" >/dev/null
-npm install -g --prefix "$work/global-pinned" $quiet "$work/src/fixture-global-consumer-pinned-1.0.0.tgz" >/dev/null
+node "$source_root/scripts/ci/locked-consumer.mjs" -g --prefix "$work/global" $quiet "$work/src/fixture-separate-runtime-1.0.0.tgz" >/dev/null
+node "$source_root/scripts/ci/locked-consumer.mjs" -g --prefix "$work/global" $quiet "$work/src/fixture-global-consumer-1.0.0.tgz" >/dev/null
+node "$source_root/scripts/ci/locked-consumer.mjs" -g --prefix "$work/global-pinned" $quiet "$work/src/fixture-separate-runtime-1.0.0.tgz" >/dev/null
+node "$source_root/scripts/ci/locked-consumer.mjs" -g --prefix "$work/global-pinned" $quiet "$work/src/fixture-global-consumer-pinned-1.0.0.tgz" >/dev/null
 fi
 
 old_installed="@sentropic/llm-mesh@0.21.2 @sentropic/llm-gateway@0.18.0"
