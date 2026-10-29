@@ -17,6 +17,7 @@ import { createIdpApp } from '../../../../apps/auth-idp/idp-app';
 import { accountRouter } from '../../../src/routes/namespaces/auth/account';
 import { adminRouter } from '../../../src/routes/namespaces/admin-product-authority';
 import { runAdminApprovalSweep } from '../../../src/services/admin-approval-sweep';
+import { signRevocation, revocationServiceOrigin } from '../../../src/services/auth/remote-revocation-transport';
 
 const issuer = 'https://idp.example.test', resource = `${issuer}/remote-revocation`;
 const clientId = 'test-product-revoker', path = '/api/v1/auth/session/remote-revocations';
@@ -53,7 +54,7 @@ async function bridge() {
       expect(new URLSearchParams(String(init.body)).get('scope')).toBe('remote.sessions.revoke');
       return Response.json({ access_token: token, token_type: 'Bearer' });
     }
-    expect(url).toBe(`${issuer}${path}`);
+    expect(url).toBe(`${revocationServiceOrigin}${path}`);
     vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
     try { return await idp.request(url, init); }
     finally { vi.stubEnv('REMOTE_ACTION_ROLE', 'product'); }
@@ -218,6 +219,7 @@ describe('RC1 product to issuer revocation', () => {
     const body = failure === 'duplicate' ? '{"sessionIds":[],"sessionIds":[]}'
       : failure === 'oversize' ? 'x'.repeat(8193) : failure === 'empty' ? '{"sessionIds":[]}'
         : JSON.stringify({ sessionIds: [tokens.sessionId], ...(failure === 'extra-field' ? { restore: true } : {}) });
+    Object.assign(headers, signRevocation(body, headers.authorization ?? ''));
     const result = await createIdpApp().request(`${failure === 'http' ? 'http://idp.example.test' : issuer}${path}`,
       { method: 'POST', headers, body });
     expect(result.status).toBe(['browser', 'cookie', 'http'].includes(failure) ? 403 : failure === 'anonymous' ? 401 : 400);

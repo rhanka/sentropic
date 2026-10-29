@@ -1,6 +1,7 @@
 import { logger } from '../../logger';
 import { closeRemoteSessionAuthority, getRemoteSessionAuthority } from './remote-private-session';
 import { RemoteAuthorityError } from './remote-contract';
+import { revocationMac, revocationPath, revocationServiceOrigin, signRevocation, validRevocationMac } from './remote-revocation-transport';
 
 export interface RemoteSessionRevocation { sessionIds: string[]; userId?: string }
 
@@ -54,10 +55,16 @@ export async function tombstoneRemoteSessions(input: RemoteSessionRevocation): P
     const token = await result.json() as { access_token?: string; token_type?: string };
     if (!token.access_token || token.token_type?.toLowerCase() !== 'bearer') throw new Error();
     for (let index = 0; index < Math.max(1, input.sessionIds.length); index += 16) {
-      const response = await post('/api/v1/auth/session/remote-revocations', JSON.stringify({
+      const body = JSON.stringify({
         sessionIds: input.sessionIds.slice(index, index + 16), ...(input.userId ? { userId: input.userId } : {}),
-      }), { 'content-type': 'application/json', authorization: `Bearer ${token.access_token}` });
-      if (response.status !== 204) throw new Error();
+      });
+      const authorization = `Bearer ${token.access_token}`;
+      const signed = signRevocation(body, authorization);
+      const response = await fetch(`${revocationServiceOrigin}${revocationPath}`, { method: 'POST', body,
+        headers: { 'content-type': 'application/json', authorization, ...signed },
+        redirect: 'error', signal: AbortSignal.timeout(5000) });
+      if (response.status !== 204 || !validRevocationMac(revocationMac('ack', signed['x-revocation-mac']),
+        response.headers.get('x-revocation-ack'))) throw new Error();
     }
   } catch {
     // The DB deletion is already committed. Never claim issuer acknowledgement on delivery failure.
