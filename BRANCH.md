@@ -108,3 +108,5 @@
 - [x] Formatter slice 3: source-only H2 formatting.
 
 - [x] Formatter slice 4: source-only H2 formatting.
+
+- [x] Formatter slice 5: source-only H2 formatting.
