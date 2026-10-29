@@ -24,6 +24,7 @@
   - `.github/workflows/**`
   - `**/Dockerfile*`
   - `docker-compose*.yml`
+  - `apps/**/Dockerfile*`
 - **Forbidden Paths (must not change in this branch)**:
   - `.cursor/rules/**`
   - `api/src/**`
