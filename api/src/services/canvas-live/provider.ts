@@ -52,7 +52,7 @@ export class LiveSessionProvider {
     await this.checked(identity, operation);
   }
   async subscribeActors(identity: FieldBindingIdentity, callback: (actors: RegistryActor[]) => void) {
-    return this.registry.subscribeActors(await this.checked(identity, 'read'), callback);
+    return this.registry.subscribeActors(await this.checked(identity, 'read'), callback, identity.fieldKey);
   }
   async closeLiveSession(identity: FieldBindingIdentity): Promise<void> {
     const principal = await this.ports.authenticate();
@@ -82,8 +82,10 @@ export class LiveSessionProvider {
     if (entry.revoked) throw new AdmissionError('revoked');
     try { return await this.authority.check(entry.record, identity.fieldKey, operation); }
     catch (error) {
-      if (operation === 'read' && error instanceof AdmissionError
-        && (error.code === 'revoked' || error.code === 'scope-denied')) this.invalidate(entry.record);
+      if (error instanceof AdmissionError && error.code === 'revoked') this.invalidate(entry.record);
+      else if (operation === 'read' && error instanceof AdmissionError && error.code === 'scope-denied') {
+        this.registry.releaseField(entry.record, identity.fieldKey); entry.revoked = true;
+      }
       throw error;
     }
   }
