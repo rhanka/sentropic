@@ -58,6 +58,7 @@
 - [x] **Exception process**: BR-CM-W3-EX1 below is the bounded inherited T3 build/deploy exception.
 
 ## Feedback Loop
+- [x] Topic cleanup batch 2: remove W3.b/W3.c/W3.d wrappers; content tests/types/lint, production runtime/hash/receipt guards and closed-overlay gates remain in standard CI.
 - [x] Topic cleanup batch 1: remove W1.c, W3.a and W4.b wrappers; their API endpoints/services and API type/lint remain in standard CI.
 - [x] Integration render regression: automatic merge duplicated API container env. Combine decision secret references and explicit artifact flags in one list; preserve envFrom and all flags at 0. The existing overlay render gate reproduces the failure and verifies the correction.
 - [x] BR143-EX2 / explicit owner request: remove all six app-cm topic workflows after preserving every gate in ci.yml. Add test-artifact-content to the existing API unit executor for content tests/types/lint; existing API endpoints/services, API quality, manifest and image jobs retain all other gates. Impact: main PR CI owns qualification; rollback restores the topic workflows and removes only this additive gate.
