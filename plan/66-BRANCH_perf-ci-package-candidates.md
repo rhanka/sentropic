@@ -35,6 +35,11 @@
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
+- [x] BR-80 execution starts from merged BR-79 `ecca3a0d50526a25e0b76e5955f26f2557c8e0b0`; owner overrides local ENV to `test-ci-br80` and requires merge-only updates.
+- [x] Baseline predecessor PR 40748328717 attempt 1, head 949d47c8ced0426a010da639ac910229d5699874: cluster 991s (123051431364), common guard 65s (123051430739), mesh 71s (123051431590), gateway 199s (123051431190). Raw receipts: `.tmp/ci-br80/receipts/40748328717/`; study section 13 records limits and step spans.
+- [ ] Main push 40790421598 at ecca3a0d5 is initially queued; capture its completed spans before claiming a new-base baseline.
+- [ ] Additional bounded paths require owner response: exact serialized wiring fixtures, the BR-79 independent-validator policy, and the stateful consumer's five duplicate packs. They remain unmodified pending permission; no assertion is removed to bypass them.
+- [ ] Retain inherited UI 255s/180s, IdP 233s/150s, complete scan-path/admission and warm/cold/rollback gaps. BR-80's package changes do not close these acceptance items.
 - [ ] BR80-EX1 — Planned workflow exception: refactor `validate-cluster-mesh`, `validate-publishable-manifests`, `validate-llm-mesh`, and `validate-llm-gateway` around shared immutable candidate receipts. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
 - [ ] BR80-EX2 — Planned Makefile exception: change `cluster-mesh-workspace`, `pack-cluster-mesh`, `manifest_guard_pack`, and `pack-candidate-siblings`; add candidate/DAG fixture test targets without shared mutable state. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 

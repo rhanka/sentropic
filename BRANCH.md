@@ -37,6 +37,10 @@
 ## Feedback Loop
 - [x] Predecessors read: BR-78 #811 and BR-79 #826. UI 255s/180s, IdP 233s/150s, runner admission and uncompleted rollback/warm/cold campaigns remain open; BR-80 does not close them by DAG shape.
 - [ ] BR80-Q1: request bounded fixture-only BR80-EX3 for `scripts/ci/publishable-ci-wiring.test.mjs`, whose exact serialized command/order assertions block the planned independent lanes; awaiting owner response before editing it.
+- [ ] BR80-Q2: request BR80-EX4 for `scripts/ci/ci-expected-results.mjs` and its policy/DAG fixtures: permit only the declared candidate dependencies while retaining complete-result and security barriers; awaiting owner response.
+- [ ] BR80-Q3: request BR80-EX5 for `packages/cluster-mesh/tests/packaging/stateful-consumer.sh`: replace its five duplicate packs with verified archives; retain every existing assertion and suite; awaiting owner response.
+- [x] Baseline PR 40748328717 attempt 1, head 949d47c8ced0426a010da639ac910229d5699874, success: cluster 991s/123051431364; manifests 65s/123051430739; mesh 71s/123051431590; gateway 199s/123051431190. Raw paginated receipts: `.tmp/ci-br80/receipts/40748328717/`.
+- [x] Inspect inherited IdP receipt 123085229315: checkout/setup 31/11s, API transfer/load 3/22s, toolbox 16/34s, browser 14/16s, startup 45s, smoke 5s, teardown 31s; no optimization or <=150s acceptance claimed.
 - [ ] BR80-EX1 — Planned workflow exception: refactor `validate-cluster-mesh`, `validate-publishable-manifests`, `validate-llm-mesh`, and `validate-llm-gateway` around shared immutable candidate receipts. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
 - [ ] BR80-EX2 — Planned Makefile exception: change `cluster-mesh-workspace`, `pack-cluster-mesh`, `manifest_guard_pack`, and `pack-candidate-siblings`; add candidate/DAG fixture test targets without shared mutable state. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 
@@ -89,6 +93,7 @@
   - [ ] Preserve missing durations as **to measure**; publish all failures, cancellations, retries, queue time, runner-minutes, and threshold breaches alongside successes.
   - [ ] Rollback drill: restore the prior isolated preparation and serialized qualification recipes, discard only affected candidate receipts, and rerun all preserved storage/installed assertions.
 - [ ] **Lot 4 — Docs consolidation**
+  - [x] Record the identified predecessor package baseline and inherited IdP stage spans in study section 13 and plan/66; post-change timings and exact-head acceptance remain open.
   - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.

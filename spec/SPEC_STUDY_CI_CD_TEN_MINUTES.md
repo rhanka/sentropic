@@ -683,3 +683,50 @@ or scheduling ceilings. Measure admission after that split and resolve capacity
 with the owner if waits persist. BR-81 supplies deterministic runtime journeys;
 BR-84 owns repeated warm/cold whole-train proof and every breach. Exact-head
 green CI is still required after review fixes; these carried budgets stay open.
+
+## 13. BR-80 package candidates — implementation and baseline
+
+BR-80 starts at merge `ecca3a0d50526a25e0b76e5955f26f2557c8e0b0` in
+`tmp/worktrees/ci-package-candidates`, branch `perf/ci-package-candidates`.
+Local qualification uses `ENV=test-ci-br80`, slot 0 ports 9400/5600/1500,
+and the machine-wide Docker flock. Main push run `40790421598` remains queued
+at the initial capture; an unstarted run supplies no execution measurement.
+
+The completed predecessor receipt is PR run
+[40748328717](https://github.com/rhanka/sentropic/actions/runs/40748328717),
+attempt 1, head `949d47c8ced0426a010da639ac910229d5699874`, success.
+Its workflow SHA-256 is
+`f268d4ea1b4d64137ab93741a26ee78063c5d385b471bb9e88e0807d6e9e8b0a`.
+Raw attempt/job/step JSON and per-job TSV are retained under
+`.tmp/ci-br80/receipts/40748328717/`. Runner class is `ubuntu-latest`;
+package-tool cache warmth is unidentified. These are complete job spans,
+excluding admission, and are distinct from the older 664/125s study anchors.
+
+| Baseline job | Job ID | Seconds |
+| --- | --- | --- |
+| Cluster qualification | 123051431364 | 991 |
+| Common manifest guard | 123051430739 | 65 |
+| LLM mesh | 123051431590 | 71 |
+| LLM gateway | 123051431190 | 199 |
+
+Cluster steps include storage/recovery 262s, typecheck 51s, source tests 104s,
+stateful installed contracts 89s, build 49s, guarded pack 53s, installed
+comments 28s, major upgrade 25s, and lazy qualification 294s. Candidate install
+was legitimately skipped in that predecessor's WARN classification; BR-80
+requires its selected candidate lane. No skipped duration counts as a pass.
+
+The inherited IdP 233s receipt has checkout/setup 31/11s; API download/load
+3/22s, toolbox 16/34s, browser 14/16s; startup 45s, actual screen smoke 5s,
+teardown 31s. These identified spans guide a future bounded optimization;
+BR-80 does not change IdP code, image profiles, extensions or security policy.
+UI 255s/180s, IdP 233s/150s and runner-admission breaches remain open.
+
+The package design builds the topological closure into immutable archives and
+an independently hashed preparation archive. Every source lane extracts into
+fresh container storage; installed consumers receive only archives. Nine
+cluster members preserve source/audits, PostgreSQL, comments, crash ordering,
+installed comments, major upgrade, stateful contracts, lazy tuples and clean
+entry-point qualification. Actual matrix members and the producer join the
+existing fail-closed final verdict. Post-change run IDs, warm/cold timing,
+complete branch <=210s/common guard <=75s acceptance and rollback remain
+**to measure** until completed exact-head qualification exists.
