@@ -63,7 +63,7 @@
   - [x] Verify branch mechanically with harness C1 and declare exact scope before implementation.
 - [ ] **Lot 1 — Frozen scanner policy and source evidence**
   - [ ] Resolve upstream index/platform/config and signature; inspect release and both security advisories.
-  - [ ] Freeze pins, minimum version, exact publisher, trusted DB/rules sources and explicit missing admissions.
+  - [x] Freeze pins, minimum version, exact publisher, trusted DB/rules sources and explicit missing admissions.
 - [ ] **Lot 2 — Acquisition and execution contracts**
   - [ ] Acquire DB once per campaign through allowed OCI origin; verify descriptors and hashes before atomic cache publication.
   - [ ] Validate schema/dates and cache bytes after restoration; block missing/corrupt/stale/incompatible data.
