@@ -9,9 +9,10 @@ function fixture() {
   const principal = () => ({ tenantId: 't', workspaceId: 'w', actor });
   const facts = { documentId: 'canvas:a', sessionId: 's', profileId: 'full@1', schemaEpoch: '2', fields: ['description', 'notes'] };
   let grantedFields = facts.fields;
+  let grantWithdrawn = false;
   const records = new Map<string, AdmissionRecord>(); const drafts = new Map<string, PreservedDraft>(); const pending = new Map<string, string>();
   let epoch = 0; let client = 10;
-  const ports = { authenticate: async () => structuredClone(principal()), document: async () => structuredClone(facts), authorize: async () => ({ ...principal(), documentId: facts.documentId, fields: grantedFields, operations: ['read', 'edit'] }), epoch: () => `epoch-${++epoch}`,
+  const ports = { authenticate: async () => structuredClone(principal()), document: async () => structuredClone(facts), authorize: async () => grantWithdrawn ? null : ({ ...principal(), documentId: facts.documentId, fields: grantedFields, operations: ['read', 'edit'] }), epoch: () => `epoch-${++epoch}`,
     update: async (key: string, change: (old?: AdmissionRecord) => AdmissionRecord) => { const result = change(records.get(key)); records.set(key, structuredClone(result)); return structuredClone(result); },
     captureDraft: async () => ({ draftId: 'capture-1', bytes: new Uint8Array([0, 255, 65]) }),
   };
@@ -32,6 +33,7 @@ function fixture() {
     input: () => ({ binding: { documentId: facts.documentId, fieldKey: 'notes' }, actor, profileId: facts.profileId, schemaEpoch: facts.schemaEpoch }),
     use: (id: string, kind: 'human' | 'agent' = 'human') => { actor = { ...actor, actorId: id, kind }; },
     allowFields: (fields: string[]) => { grantedFields = fields; },
+    withdrawGrant: () => { grantWithdrawn = true; },
   };
 }
 describe('canvas live composed lifetime', () => {
@@ -42,6 +44,7 @@ describe('canvas live composed lifetime', () => {
     const notesUpdates = vi.fn(); const descriptionUpdates = vi.fn();
     await f.provider.subscribeActors(notes.identity, notesUpdates); await f.provider.subscribeActors(description.identity, descriptionUpdates);
     f.allowFields(['description']);
+    await expect(f.provider.resolveBinding(notes.identity)).rejects.toMatchObject({ code: 'scope-denied' });
     await expect(f.provider.resolveBinding(notes.identity)).rejects.toMatchObject({ code: 'scope-denied' });
     expect(notesUpdates.mock.lastCall![0]).toEqual([]);
     expect((await f.provider.resolveBinding(description.identity)).text).toBeDefined();
@@ -57,6 +60,17 @@ describe('canvas live composed lifetime', () => {
     for (const record of f.records.values()) record.closed = true;
     await expect(f.provider.authorizeBinding(handle.identity, 'edit')).rejects.toMatchObject({ code: 'revoked' });
     expect(updates.mock.lastCall![0]).toEqual([]); expect(f.disconnected).toHaveBeenCalledTimes(1);
+  });
+  it.each(['read', 'edit'])('should revoke every field on %s when admission closure and membership withdrawal occur together', async (operation) => {
+    const f = fixture(); const notes = await f.provider.openLiveSession(f.input());
+    const description = await f.provider.openLiveSession({ ...f.input(), binding: { ...f.input().binding, fieldKey: 'description' } });
+    const notesUpdates = vi.fn(); const descriptionUpdates = vi.fn();
+    await f.provider.subscribeActors(notes.identity, notesUpdates); await f.provider.subscribeActors(description.identity, descriptionUpdates);
+    for (const record of f.records.values()) record.closed = true;
+    f.withdrawGrant();
+    await expect(f.provider.authorizeBinding(notes.identity, operation)).rejects.toMatchObject({ code: 'revoked' });
+    expect(notesUpdates.mock.lastCall![0]).toEqual([]); expect(descriptionUpdates.mock.lastCall![0]).toEqual([]);
+    expect(f.disconnected).toHaveBeenCalledTimes(1);
   });
   it('should support explicit host session close and rotation without stale handles disturbing the new session', async () => {
     const f = fixture(); const old = await f.provider.openLiveSession(f.input()); const record = [...f.records.values()][0];

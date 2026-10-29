@@ -40,6 +40,7 @@
   - [ ] Record BRH1-EXn, reason, impact and rollback before any conditional path change.
 
 ## Feedback Loop
+- [x] R3: add closure-plus-membership-withdrawal read/edit witnesses and a repeated field-denial code witness before correcting classification.
 - [x] R2: reproduce field-local denial incorrectly revoking sibling bindings, and remote closure on edit leaving observer residue; add timestamp error regression evidence.
 - [x] Observe both R2 lifetime cases RED; release only a denied field and its subscribers, and invalidate a closed admission on any operation.
 - [x] R1 reviews request schema/session refresh, composed revocation, holder-only renewal, explicit object-level L0 granularity and bounded draft recovery lifetime; add RED witnesses before correction.
