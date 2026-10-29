@@ -606,7 +606,8 @@ describe('Queue - generic workflow transition runtime behind Flow ports', () => 
     expect(todoSyncResult).toMatchObject({ status: 'completed' });
   });
 
-  it('recovers all_main joins when prerequisite tasks complete concurrently', async () => {
+  it.each(['before-state-commit', 'after-state-snapshot'] as const)(
+    'recovers all_main joins when prerequisite tasks complete concurrently (%s)', async (interleaving) => {
     const { workflowDefinitionId, workflowRunId } = await seedWorkflowRuntime({
       workflowKey: 'matrix_barrier_race_runtime_test',
       state: {
@@ -730,26 +731,71 @@ describe('Queue - generic workflow transition runtime behind Flow ports', () => 
         completion,
       });
 
-    await Promise.all([
-      completeList({
-        output: {
-          initiativeCount: 2,
+    const barrier = () => {
+      let release!: () => void;
+      const wait = new Promise<void>((resolve) => { release = resolve; });
+      return { wait, release };
+    };
+    const matrixReached = barrier();
+    const listReached = barrier();
+    const allowMatrix = barrier();
+    const allowList = barrier();
+    if (interleaving === 'before-state-commit') {
+      const merge = queueManager.mergeWorkflowRunState.bind(queueManager);
+      vi.spyOn(queueManager, 'mergeWorkflowRunState').mockImplementation(async (params: any) => {
+        if (params.statePatch?.generation) {
+          listReached.release();
+          await allowList.wait;
+        }
+        return merge(params);
+      });
+    } else {
+      const load = queueManager.loadWorkflowRuntimeDefinition.bind(queueManager);
+      let reads = 0;
+      vi.spyOn(queueManager, 'loadWorkflowRuntimeDefinition').mockImplementation(async (...args: any[]) => {
+        reads += 1;
+        if (reads === 1) {
+          matrixReached.release();
+          await allowMatrix.wait;
+        } else if (reads === 2) {
+          listReached.release();
+          await allowList.wait;
+        }
+        return load(...args);
+      });
+    }
+    const listResult = {
+      output: {
+        initiativeCount: 2,
+      },
+      statePatch: {
+        generation: {
+          initiatives: [
+            { id: 'initiative-1', name: 'Initiative 1' },
+            { id: 'initiative-2', name: 'Initiative 2' },
+          ],
         },
-        statePatch: {
-          generation: {
-            initiatives: [
-              { id: 'initiative-1', name: 'Initiative 1' },
-              { id: 'initiative-2', name: 'Initiative 2' },
-            ],
-          },
-        },
-      }),
-      completeMatrix({
-        output: {
-          generated: true,
-        },
-      }),
-    ]);
+      },
+    };
+    const matrixResult = {
+      output: {
+        generated: true,
+      },
+    };
+    if (interleaving === 'before-state-commit') {
+      const list = completeList(listResult);
+      await listReached.wait;
+      try { await completeMatrix(matrixResult); } finally { allowList.release(); }
+      await list;
+    } else {
+      const matrix = completeMatrix(matrixResult);
+      await matrixReached.wait;
+      const list = completeList(listResult);
+      await listReached.wait;
+      allowMatrix.release();
+      try { await matrix; } finally { allowList.release(); }
+      await list;
+    }
 
     expect(addJobSpy).toHaveBeenCalledTimes(2);
     const [todoSyncResult] = await db
