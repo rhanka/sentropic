@@ -52,7 +52,8 @@
   - [x] Add a reproducible bounded OCI sizing experiment; keep production ingestion unchanged until measurements complete.
   - [ ] Independently retrieve scanner/verifier bytes, bundles and roots; verify offline.
   - [ ] Inventory image filesystem, native executable dependencies and actual runtime commands without Python.
-  - [ ] Measure Java compressed/expanded bytes, memory and transfer; implement and test a bounded kind-specific fix.
+  - [x] Measure Java: 991026356 compressed / 1565823119 expanded bytes, 86364 KiB Node RSS, 86.4 s transfer; propose bounded per-kind limits.
+  - [ ] Verify the Java limit fix with regressions and real ingestion.
   - [ ] Acquire fresh vulnerability/Java receipts and freeze IaC bytes; preserve exact hashes.
 - [ ] **Lot 2 — Targets and real trials**
   - [ ] Resolve all three main targets with source-SHA/platform provenance and retain complete reports.

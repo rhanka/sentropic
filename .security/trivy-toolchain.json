@@ -18,8 +18,10 @@
     "contentAdmitted": false
   },
   "data": {
-    "vulnerability": { "repository": "ghcr.io/aquasecurity/trivy-db", "tag": "2", "schema": 2 },
-    "java": { "repository": "ghcr.io/aquasecurity/trivy-java-db", "tag": "1", "schema": 1 },
+    "vulnerability": { "repository": "ghcr.io/aquasecurity/trivy-db", "tag": "2", "schema": 2, "maxLayerBytes": 536870912, "maxExpandedBytes": 4294967296 },
+    "java": { "repository": "ghcr.io/aquasecurity/trivy-java-db", "tag": "1", "schema": 1,
+      "maxLayerBytes": 1342177280, "maxExpandedBytes": 2147483648,
+      "acquisition": { "requestTimeoutMs": 120000, "budgetMs": 180000 } },
     "checks": { "repository": "ghcr.io/aquasecurity/trivy-checks", "tag": "1", "qualified": false },
     "maxAgeSeconds": 86400,
     "trust": "TLS origin plus OCI integrity and trusted ingestion receipt; DB publisher signature not established",
