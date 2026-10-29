@@ -29,6 +29,9 @@ const transform = (source, file) => {
 `;
   const preload = join(directory, 'trace-preload.cjs');
   writeFile(preload, common + '\nconst isNativeBuildProcess = ' + isNativeBuildProcess.toString() + ';\n' + String.raw`
+if (isNativeBuildProcess(process.execPath, process.argv.slice(1))) {
+  trace('native-build', { method: 'startup', executable: process.execPath, argv: process.argv.slice(1), cwd: process.cwd() });
+}
 const Module = require('node:module');
 const child = require('node:child_process');
 const compile = Module.prototype._compile;
