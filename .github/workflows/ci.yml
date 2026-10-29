@@ -1194,13 +1194,16 @@ jobs:
       - name: Build Chat Core
         run: make build-chat-core test-pkg-chat-core ENV=test-ci-chat-core
       - name: Pack Chat Core
+        id: pack
         env:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-chat-core PACK_DESTINATION=tmp/chat-core-package ENV=test-ci-chat-core
+        run: make pack-chat-core PACK_DESTINATION=tmp/chat-core-package PACK_OUTPUT_FILE="$GITHUB_OUTPUT" ENV=test-ci-chat-core
       - name: Qualify standalone client runtime against published peers
-        run: make qualify-published-install TARBALL=tmp/chat-core-package/sentropic-chat-core-0.2.0.tgz PEERS=svelte@5.55.7,@sentropic/chat-ui@0.34.1 REPORT_DIR=tmp/chat-core-package/qualification QUALIFY_HEAD_SHA=${{ github.event.pull_request.head.sha || github.sha }} ENV=test-ci-chat-core
+        env:
+          CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: make qualify-published-install TARBALL="$CANDIDATE_TARBALL" PEERS=svelte@5.55.7,@sentropic/chat-ui@0.34.1 REPORT_DIR=tmp/chat-core-package/qualification QUALIFY_HEAD_SHA=${{ github.event.pull_request.head.sha || github.sha }} ENV=test-ci-chat-core
       - name: Retain Chat Core qualification evidence
         uses: actions/upload-artifact@v7
         with:
