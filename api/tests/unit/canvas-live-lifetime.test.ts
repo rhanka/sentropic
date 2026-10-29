@@ -75,6 +75,8 @@ describe('canvas live composed lifetime', () => {
   it('should reject a different actor kind reusing an existing host actor id without corrupting the admission', async () => {
     const f = fixture(); await f.provider.openLiveSession(f.input()); const before = structuredClone([...f.records.values()]);
     f.use('a', 'agent'); await expect(f.provider.openLiveSession(f.input())).rejects.toMatchObject({ code: 'actor-denied' });
+    await expect(f.provider.openLiveSession({ ...f.input(), schemaEpoch: '1' })).rejects.toMatchObject({ code: 'actor-denied' });
+    expect(f.drafts.size).toBe(0); expect(f.pending.size).toBe(0);
     expect([...f.records.values()]).toEqual(before);
   });
 });
