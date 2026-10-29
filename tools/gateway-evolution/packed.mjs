@@ -53,6 +53,11 @@ export const preparePackedGate = async ({ manifestPath, scope, output }) => {
   await fs.writeFile(join(output, 'expected.json'), JSON.stringify(expected), { flag: 'wx' });
   await fs.writeFile(join(output, 'scopes.json'), JSON.stringify(tests.map((name) => `packed/${name}`)), { flag: 'wx' });
   await fs.writeFile(join(output, 'execute.mjs'), EXECUTE, { flag: 'wx' });
+  await fs.mkdir(join(output, 'scripts/ci'), { recursive: true });
+  for (const name of ['locked-consumer.mjs', 'frozen-registry.mjs', 'tool-locks.json']) {
+    await fs.copyFile(`scripts/ci/${name}`, join(output, 'scripts/ci', name));
+  }
+  await fs.copyFile('package-lock.json', join(output, 'scripts/ci/root-package-lock.json'));
   return { tests, packages: Object.keys(expected) };
 };
 const EXECUTE = `import {readFile} from 'node:fs/promises';
