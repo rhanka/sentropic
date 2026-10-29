@@ -55,8 +55,9 @@
   - [ ] Inventory image filesystem, native executable dependencies and actual runtime commands without Python.
   - [x] Pull exact platform image, export without execution, inventory APK/filesystem and decode 375 Trivy / 281 Cosign Go dependencies; no Python filesystem matches.
   - [x] Measure Java: 991026356 compressed / 1565823119 expanded bytes, 86364 KiB Node RSS, 86.4 s transfer; propose bounded per-kind limits.
-  - [ ] Verify the Java limit fix with regressions and real ingestion.
-  - [ ] Acquire fresh vulnerability/Java receipts and freeze IaC bytes; preserve exact hashes.
+  - [x] Verify the Java limit fix with regressions and real ingestion (161.2 s cold, 5.0 s hash-checked restore).
+  - [x] Acquire fresh vulnerability/Java receipts and freeze IaC bytes; preserve exact hashes.
+  - [x] Deny current scanner/verifier admission: all-severity self-scans expose HIGH/CRITICAL dependencies; frozen IaC bundle yields zero Compose configs.
 - [ ] **Lot 2 — Targets and real trials**
   - [ ] Resolve all three main targets with source-SHA/platform provenance and retain complete reports.
   - [x] Scan all three authenticated main-CI archives cold/warm with immutable archive/config hashes; remote provenance blocked by API/UI config mismatch and absent toolbox tag.
@@ -66,6 +67,7 @@
   - [ ] Measure cold/warm, refresh, remote/rebuild and CI critical path with queue separate.
 - [ ] **Lot 3 — Verification and delivery**
   - [ ] Scoped tests: `scripts/security/daily/toolchain-contract.test.mjs`, `scripts/security/daily/trivy.test.mjs` and qualification regressions.
+  - [x] Fix archive report identity using a process-local proof issued only after preparation verifies archive bytes; cloned JSON cannot grant that proof.
   - [ ] Final `make test-security-daily` and `make test-security-parser`; cleanup with `make down`.
   - [ ] Reconcile independent peer reviews; record CLOSED / STILL BLOCKED with exact missing inputs under `docs/security/`.
   - [ ] Mechanical scope check before every commit; no publishable package source changes.

@@ -7,8 +7,9 @@ scanner='aquasec/trivy@sha256:2e6c00d711ab4ae41d8a30c2c1fd3bd3b62704c177bb120f95
 verifier_hash='46dbdcb5467a3dfec2526923d0b3365e40c8d9dc00ec23d5aca3437449e8cbfd'
 curl --fail --silent --show-error --location --max-time 120 \
   https://github.com/sigstore/cosign/releases/download/v3.0.2/cosign-linux-amd64 \
-  -o "$evidence/cosign"
-printf '%s  %s\n' "$verifier_hash" "$evidence/cosign" | sha256sum --check
+  -o "$evidence/cosign.pending"
+printf '%s  %s\n' "$verifier_hash" "$evidence/cosign.pending" | sha256sum --check
+mv "$evidence/cosign.pending" "$evidence/cosign"
 chmod 500 "$evidence/cosign"
 /usr/bin/time -v -o "$evidence/scanner-cold-pull.time" docker pull --platform linux/amd64 "$scanner"
 /usr/bin/time -v -o "$evidence/scanner-warm-pull.time" docker pull --platform linux/amd64 "$scanner"

@@ -15,6 +15,7 @@ common=(--pull=never --read-only --cap-drop=ALL --security-opt=no-new-privileges
 flags=(--config /dev/null --ignorefile /dev/null --cache-dir /cache --cache-backend memory
   --scanners vuln --format json --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --exit-code 0 --parallel 1
   --skip-db-update --skip-java-db-update --offline-scan --skip-version-check --disable-telemetry)
+blocked=0
 for kind in api api-tool ui; do
   folder="$evidence/main-40832206894/$kind-image"
   for temperature in cold warm; do
@@ -32,5 +33,8 @@ for kind in api api-tool ui; do
     printf '{"exitCode":%s,"elapsedMs":%s}\n' "$status" "$elapsed" > "$folder/$temperature-execution.json"
     docker inspect --format '{{json .State}}' "$name" > "$folder/$temperature-state.json"
     docker rm "$name" >/dev/null
+    test "$status" = 0 || blocked=1
+    jq -e '.SchemaVersion == 2 and (.Results | length) > 0' "$folder/$temperature-report.json" >/dev/null || blocked=1
   done
 done
+exit "$blocked"
