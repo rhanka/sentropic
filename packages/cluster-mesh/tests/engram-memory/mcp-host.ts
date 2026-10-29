@@ -13,7 +13,7 @@ import { mcpRecovery } from './mcp-recovery.js';
 import { mcpContext } from './mcp-context.js';
 export { captureInput } from './mcp-dependencies.js';
 
-export async function memoryMcpHost(tenant = 'tenant-a') {
+export async function memoryMcpDefinition(tenant = 'tenant-a') {
   if (!process.env.CM_PG_URL) throw new Error('memory MCP qualification requires real PostgreSQL via CM_PG_URL');
   const pg = await memoryPgHost();
   const scope = { tenantId: tenant, workspaceId: 'workspace-memory' };
@@ -43,7 +43,6 @@ export async function memoryMcpHost(tenant = 'tenant-a') {
     confirm: async bound => approved && bound.elicitation_ref === 'elicitation-memory',
     keyCustody: { confirmDestroyed: async () => true }, coverage: { verify: async () => ({ complete: false }) } };
   await pg.tx.run(false, session => session.execute({ text: `CREATE TABLE "${pg.name}".mcp_audit(entry jsonb NOT NULL)`, values: [] }));
-  const modules = createModuleRegistry();
   const descriptors = structuredClone(MEMORY_PROVIDER_MANIFEST.tools);
   const plan = Object.freeze({ resolveTool: (name: string) => {
     const tool = descriptors.find(t => t.name === name);
@@ -62,20 +61,28 @@ export async function memoryMcpHost(tenant = 'tenant-a') {
       pagination: { contractVersion: '1.0.0', engramOwnsSigningSecret: false }, lifecycle: { contractVersion: '1.0.0' } },
     provenance: { approvalRef: 'memory-test-approval', revision: '1', reviewedBy: ['memory-test-owner'] },
   };
+  return { definition, context: (args = {}) => mcpContext(tenant, scopeRef, storeId, args),
+    confirm: (value: boolean) => { approved = value; }, close: () => pg.close() };
+}
+
+export async function memoryMcpHost(tenant = 'tenant-a') {
+  const host = await memoryMcpDefinition(tenant);
+  const { definition } = host;
+  const modules = createModuleRegistry();
   const builtin = createEngramMemoryBuiltin({ modules, definition });
   const registry = createMcpRegistry({ modules, builtins: [builtin] });
   registry.select(['sentropic.engram.memory']);
   registry.configure('sentropic.engram.memory', { mode: 'embedded-local', hostBindingRef: 'host-memory' });
   const result = await registry.compile({ bindings: {}, compatibility: {
     'sentropic.engram.memory': { manifestDigest: computeManifestDigest(MEMORY_PROVIDER_MANIFEST) } } });
-  if (!result.ok) { await builtin.runtime()?.close(); await kernel.ownership?.release(); await pg.close();
+  if (!result.ok) { await builtin.runtime()?.close(); await definition.storage.kernel.ownership?.release(); await host.close();
     throw new Error(JSON.stringify(result.diagnostics)); }
   const runtime = builtin.runtime()!;
   return { runtime, builtin, registry, modules, definition, manifest: MEMORY_PROVIDER_MANIFEST,
-    context: (args = {}) => mcpContext(tenant, scopeRef, storeId, args),
-    call: (tool: string, args: any) => runtime.server.callTool(tool, args, mcpContext(tenant, scopeRef, storeId, args),
+    context: host.context,
+    call: (tool: string, args: any) => runtime.server.callTool(tool, args, host.context(args),
       { idempotencyKey: args.idempotency_key, elicitationRef: 'elicitation-memory' }),
-    confirm: (value: boolean) => { approved = value; },
-    close: async () => { await runtime.close(); await pg.close(); },
+    confirm: host.confirm,
+    close: async () => { await runtime.close(); await host.close(); },
   };
 }

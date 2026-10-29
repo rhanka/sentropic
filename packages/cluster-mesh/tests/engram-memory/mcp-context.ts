@@ -9,6 +9,8 @@ export function mcpContext(tenant: string, scopeRef: string, storeId: string,
     surface: 'backend', mcpClient: { clientId: 'client-memory', client: 'codex' },
     workspaceRef: 'workspace-memory', session: { mcpSessionId: 'session-memory' }, tenantRef: tenant,
     connectorInstanceId: 'connector-memory', consentRefs: [], grantRefs: [],
+    getSecret: async () => { throw new Error('memory fixture does not expose secrets'); },
+    connectorConfig: {}, audit: { emit: async () => { throw new Error('use the PostgreSQL memory audit port'); } }, logger: undefined,
     memory: { expectedActiveGeneration: '1', expectedPolicyEpoch: '1', now: NOW, binding: {
       issuer: 'issuer-memory', sub: 'user-memory', tid: tenant, claims: ['sub', 'tid'], claims_provenance_receipt: D,
       principal_namespace: 'namespace-memory', principal_id: 'user-memory', tenant_id: tenant,
@@ -23,5 +25,5 @@ export function mcpContext(tenant: string, scopeRef: string, storeId: string,
       transport_scopes: ['mcp:discover', 'mcp:tools:invoke'], elicitation_ref: 'elicitation-memory',
       ...(args.idempotency_key ? { idempotency_key: args.idempotency_key } : {}), neutral_credential: `credential-${tenant}`,
     } },
-  } as StpConnectorContext;
+  };
 }
