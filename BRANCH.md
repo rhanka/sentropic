@@ -37,4 +37,5 @@
 - [ ] Lot 1: run memory-l5-qualify; retain every command/exit, raw assertions, native positive controls, manifest and strict checkpoint proposal/result.
   - [x] Add process-time report binding with immutable raw JSON retention; source-only reports retain that mode and cannot become installed E4 evidence.
   - [x] Wire tooling, Lot 3 and packed report producers into the full attempt; retain explicit missing-file/process failures and do not stamp old reports at collection time.
+  - [x] An actual GCC compilation produced an ELF object under the candidate addon path and was blocked by the predicate. The disposable positive-control container adds compiler tools; ordinary candidate installation keeps the original unmodified pinned image. The control also verifies that no Python executable is present.
 - [ ] Lot 2: document the actual verdict and exact remaining owner actions, scope/review/CI checks, PR and cleanup; do not issue a false L5 acceptance.
