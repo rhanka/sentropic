@@ -8,6 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
 import { failClosedReport, inventoryRepository, normalizeRegister, summarizeBacklog } from './inventory.mjs';
 import { canonicalAliases, joinRegister, loadContract, validDate } from './schema.mjs';
+import { policy as trivyPolicy } from './toolchain-contract.mjs';
 
 const hash = (bytes) => `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
 const npmArgs = ['audit', '--json', '--package-lock-only', '--ignore-scripts',
@@ -207,6 +208,10 @@ export async function main() {
     repository: 'rhanka/sentropic', contract, rows, run: npmRunner(root, inventory) });
   report.registerHash = hash(register);
   report.policyHash = hash(readFileSync(join(root, '.security/security-fix.json')));
+  report.trivyPreparation = { option: trivyPolicy.option, qualified: trivyPolicy.qualified,
+    version: trivyPolicy.version, indexDigest: trivyPolicy.indexDigest, manifestDigest: trivyPolicy.manifestDigest,
+    policyHash: hash(readFileSync(new URL('../../../.security/trivy-toolchain.json', import.meta.url))),
+    blockers: trivyPolicy.blockers };
   // Local raw receipt only; S3 owns public validation/redaction, retention and publication.
   process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
   return report.status === 'complete-clean' ? 0 : 1;
