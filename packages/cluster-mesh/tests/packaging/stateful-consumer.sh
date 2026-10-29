@@ -4,8 +4,15 @@ set -eu
 source_root=$(cd ../.. && pwd)
 pack_dir=$(mktemp -d)
 consumer=$(mktemp -d)
+pack_candidate() {
+  if [ -n "${CI_PACKAGE_CANDIDATES:-}" ]; then
+    (cd "$source_root" && node scripts/ci/package-candidate.mjs copy "$CI_PACKAGE_CANDIDATES" "$1" "$pack_dir")
+  else
+    (cd "$source_root/packages/$1" && npm pack --pack-destination "$pack_dir" --silent)
+  fi
+}
 for package in oauth-verify mcp-auth mcp-platform cluster-mesh; do
-  (cd "$source_root/packages/$package" && npm pack --pack-destination "$pack_dir" --silent)
+  pack_candidate "$package"
 done
 sha256sum "$pack_dir"/*.tgz
 node tests/packaging/candidate-platform-registry.mjs ../mcp-platform/package.json \
@@ -107,7 +114,7 @@ node --input-type=module -e '
   console.log("INSTALLED_STATEFUL_C1_C7_OK");
 '
 # Qualify the optional variant after the explicit twelve-tool core consumer.
-(cd "$source_root/packages/artifacts" && npm pack --pack-destination "$pack_dir" --silent)
+pack_candidate artifacts
 sha256sum "$pack_dir"/sentropic-artifacts-*.tgz
 npm install --ignore-scripts --no-audit --no-fund "$pack_dir"/sentropic-artifacts-*.tgz >/dev/null
 test ! -L node_modules/@sentropic/artifacts

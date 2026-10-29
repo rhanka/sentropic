@@ -141,8 +141,20 @@ export function verifyPrepared(dir, tuple) {
   return index;
 }
 
+export function copyCandidate(dir, tuple, slug, destination, { root = process.cwd() } = {}) {
+  const index = verifyCandidates(dir, tuple, ['cluster-mesh'], { root });
+  const receipt = index.receipts.find(row => row.slug === slug);
+  if (!receipt) fail(`missing selected candidate: ${slug}`);
+  fs.mkdirSync(destination, { recursive: true });
+  const archive = path.join(destination, path.basename(receipt.file));
+  fs.copyFileSync(path.join(dir, receipt.file), archive);
+  if (sha256File(archive) !== receipt.sha256) fail(`copied candidate hash mismatch: ${slug}`);
+  return archive;
+}
+
 export async function main([command, dir, ...roots]) {
   const root = process.cwd(), tuple = candidateTuple(root);
+  if (command === 'copy') return console.log(copyCandidate(dir, tuple, roots[0], roots[1]));
   if (command === 'produce') return produceCandidates({ root, dir, roots, tuple,
     tsc: '/tmp/cm-tools/node_modules/.bin/tsc' });
   if (command === 'verify') return verifyCandidates(dir, tuple, roots);
