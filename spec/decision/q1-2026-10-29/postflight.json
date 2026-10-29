@@ -1,0 +1,1 @@
+{"at":"2026-10-29T06:27:58.084Z","hostAttemptsPerCandidate":3,"dispatches":{"typesafe":2,"openai":3},"chargedMicroUsd":"77","budget":{"spent_micro_usd":"77","reserved_micro_usd":"0","cap_micro_usd":"10000"},"secretScan":"passed against injected credentials and trimmed forms","identitiesMatched":true,"pendingReconciliation":false,"furtherLiveCalls":"forbidden for this run"}
