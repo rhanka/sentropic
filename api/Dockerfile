@@ -268,8 +268,8 @@ WORKDIR /workspace
 ENV NODE_ENV=production
 COPY --from=production-dependencies /workspace /workspace
 # Runtime entrypoints and boot migrations use Node directly, never npm/npx.
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx --no-install /root/.npm && \
-    ! command -v npm && ! command -v npx --no-install && test ! -e /root/.npm
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /root/.npm && \
+    ! command -v npm && ! command -v npx && test ! -e /root/.npm
 COPY --from=build /workspace/api/dist /workspace/api/dist
 # BR-39 deploy (D4-a) — bundle the standalone IdP entrypoint + its login/consent
 # screens into the SAME image. The api runtime is untouched (default CMD below);
