@@ -64,6 +64,13 @@ test('should prepare immutable remote and disconnected archive scans with isolat
   assert.throws(() => validateImageReport(report, { ...offline.target }), /target identity/);
   assert.throws(() => validateImageReport(report.replace('container_image', 'filesystem'), offline.target), /target identity/);
   assert.throws(() => validateImageReport(report.replace(target().configDigest, digest('wrong')), offline.target), /target identity/);
+  const ref = `urn:oci-archive:${digest('archive')}`;
+  const archivedTarget = { ...target(), ref, provenance: { ...target().provenance, imageRef: ref } };
+  const archived = await prepareImageScan({ ...options, target: archivedTarget, archive: { path, digest: digest('archive') } });
+  assert.equal(validateImageReport(report, archived.target).Metadata.ImageID, target().configDigest);
+  assert.throws(() => validateTarget(archivedTarget, sourceSha, 'api-toolbox'), /immutable image\/archive/);
+  await assert.rejects(prepareImageScan({ ...options, target: archivedTarget,
+    archive: { path, digest: digest('different') } }), /immutable image\/archive/);
   await assert.rejects(prepareImageScan({ ...options, archive: { path, digest: digest('bad') } }), /archive integrity/);
   await assert.rejects(prepareImageScan({ ...options, snapshots: { vulnerability: snapshots.vulnerability } }), /Java/);
   await assert.rejects(prepareImageScan({ ...options, now: now + 86400000 }), /freshness/);

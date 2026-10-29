@@ -63,6 +63,7 @@
 - [ ] **Lot 2 — Targets and real trials**
   - [ ] Resolve all three main targets with source-SHA/platform provenance and retain complete reports.
   - [x] Scan all three authenticated main-CI archives cold/warm with immutable archive/config hashes; remote provenance blocked by API/UI config mismatch and absent toolbox tag.
+  - [x] Requalify newly available current-main `2ea238790` archives from run `40876641000`; validate real reports and same-snapshot pairs with hash-bound archive identities; current remote API/toolbox absent and UI mismatched.
   - [ ] Exercise network/rate-limit, missing/corrupt/stale/incompatible cache, malicious config, expiry and changed snapshot pairs.
   - [x] Twelve recorded trials reject network/TCP faults, damaged/incompatible/expired data, unknown sources and changed snapshots; previous main policy restores blocked S2a.
   - [ ] Inspect process/mount/credential isolation and exercise rollback to blocked S2a.

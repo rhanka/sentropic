@@ -2,6 +2,7 @@
 SECQUAL_DIR := $(CURDIR)/tmp/security-qualify
 SECQUAL_NODE := node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
 SECQUAL_SCANNER := aquasec/trivy@sha256:2e6c00d711ab4ae41d8a30c2c1fd3bd3b62704c177bb120f95012e939edfb3df
+export SECQUAL_COHORT ?= main-40832206894
 SECQUAL_RUN = docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges --pids-limit=128 --memory=512m --cpus=1 --tmpfs /tmp:rw,nosuid,nodev,noexec,size=128m -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -v "$(SECQUAL_DIR):/evidence" -w /workspace
 
 .PHONY: security-qualify-measure
@@ -61,6 +62,10 @@ security-qualify-verifier-candidate: security-qualify-scanner
 security-qualify-receipts: ## Publish only the fixed allowlist of public qualification evidence
 	@mkdir -p docs/security/sec-s2b-qualify
 	@$(SECQUAL_RUN) --network=none -v "$(CURDIR)/docs/security/sec-s2b-qualify:/receipts" $(SECQUAL_NODE) node scripts/security/daily/qualify-publish.mjs
+
+.PHONY: security-qualify-current-receipts
+security-qualify-current-receipts:
+	@$(SECQUAL_RUN) --network=none -v "$(CURDIR)/docs/security/sec-s2b-qualify:/receipts" $(SECQUAL_NODE) node scripts/security/daily/qualify-current.mjs
 
 .PHONY: security-qualify-cosign-help
 security-qualify-cosign-help:
