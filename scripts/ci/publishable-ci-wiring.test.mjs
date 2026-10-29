@@ -32,6 +32,16 @@ const recipe = (target) => {
 };
 const needsOf = (job) => [jobs[job].needs ?? []].flat();
 
+test('isolated MCP platform build guard admits test environments and refuses other projects', () => {
+  const guard = recipe('immo-861-build-mcp-platform').split('\n')[0].replace(/^\t@/, '');
+  for (const env of ['test-861-int', 'test-861-gaps', 'test-artifacts-021', 'test-artifacts-022',
+    'test-mem-e11', 'test-mem-e11b', 'test-mem-release', 'dev', 'test-unrelated']) {
+    const result = spawnSync('/bin/sh', ['-c', guard.replaceAll('$(ENV)', env)], { encoding: 'utf8' });
+    assert.ifError(result.error);
+    assert.equal(result.status, ['dev', 'test-unrelated'].includes(env) ? 1 : 0, `${env}: ${result.stderr}`);
+  }
+});
+
 test('E2 gates run for the final main PR and preserve the reviewed candidate proof', () => {
   const scope = jobs.changes.steps.find((s) => s.id === 'engram_e2_scope');
   const selected = scope.env.SELECTED.slice(3, -3);

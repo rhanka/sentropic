@@ -1622,7 +1622,7 @@ build-mcp-platform: install-internal-packages ## Build @sentropic/mcp-platform d
 
 .PHONY: immo-861-build-mcp-platform freeze-types
 immo-861-build-mcp-platform: install-internal-packages
-	@case "$(ENV)" in test-861-int|test-861-gaps|test-artifacts-021|test-artifacts-022|test-mem-e11|test-mem-e11b test-mem-release) ;; *) exit 1 ;; esac
+	@case "$(ENV)" in test-861-int|test-861-gaps|test-artifacts-021|test-artifacts-022|test-mem-e11|test-mem-e11b|test-mem-release) ;; *) exit 1 ;; esac
 	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; rm -rf dist node_modules; tool_dir="$$(mktemp -d)"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 
 freeze-types:
