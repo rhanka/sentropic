@@ -25,6 +25,9 @@ export function lockedVersions(root) {
   for (const profile of Object.values(JSON.parse(fs.readFileSync(path.join(root, 'scripts/ci/tool-locks.json'))))) {
     addLock(versions, profile.lock);
   }
+  for (const profile of Object.values(JSON.parse(fs.readFileSync(path.join(root, 'scripts/ci/consumer-locks.json'))))) {
+    addLock(versions, profile.lock);
+  }
   const selected = path.join(root, 'packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json');
   if (fs.existsSync(selected)) addLock(versions, JSON.parse(fs.readFileSync(selected)));
   return versions;
