@@ -141,7 +141,10 @@ jobs:
           ref: ${{ github.event.pull_request.head.sha }}
       - name: Qualify exact E2 head with retained Make receipts
         run: make engram-e2-qualify ENV=test-e2-int
+      - name: Prepare approved dev.7 E11 proof independently of the stable head
+        run: make -f Makefile -f tools/engram-e11/e11.mk memory-e11-reviewed-prepare ENV=test-e2-int
       - name: Qualify E11 installed tuple and run generator checks
+        working-directory: tmp/engram-e11-reviewed
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -167,6 +170,8 @@ jobs:
             tmp/engram-e2-receipts/**
             tmp/memory-stage-b/**
             tmp/engram-e11-current/**
+            tmp/engram-e11-reviewed/tmp/engram-e2-receipts/**
+            tmp/engram-e11-reviewed/tmp/engram-e11-current/**
           retention-days: 30
           if-no-files-found: error
 
@@ -549,10 +554,10 @@ jobs:
           filters: |
             publishable_package_files:
               - 'packages/*/**'
-      - name: Scope E2 qualification to its integration base (BR-E2-EX1)
+      - name: Select E2 topic and final integration qualification (BR-E2-EX1)
         id: engram_e2_scope
         env:
-          SELECTED: ${{ github.base_ref == 'feat/engram-e2-integration' && steps.filter.outputs.engram_e2 == 'true' }}
+          SELECTED: ${{ (github.base_ref == 'feat/engram-e2-integration' || (github.base_ref == 'main' && github.head_ref == 'feat/engram-e2-integration')) && steps.filter.outputs.engram_e2 == 'true' }}
         run: echo "selected=$SELECTED" >> "$GITHUB_OUTPUT"
       - name: Retain expected execution set before dispatch (BR76-EX1)
         id: ci_expected
