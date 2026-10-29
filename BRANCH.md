@@ -69,9 +69,9 @@
   - [x] Recovery RED: Docker Vitest fails on missing persistence module, before implementation.
   - [x] PostgreSQL crash/rollback, restart, idempotency, journal metadata and tenant witnesses authored before adapter implementation.
   - [x] Replace stub with host-only persistence contract; chat-core 0.2.0 exceeds npm 0.1.7 (Docker npm view).
-  - [ ] RED `api/tests/unit/canvas-live-recovery.test.ts`: checkpoints, replay, delete set/vector, epoch, corrupted watermark, tenant isolation.
-  - [ ] RED `api/tests/unit/canvas-live-journal.test.ts`: receipts, inverse/provenance atomicity, publish after commit, rebuild after failure, retention.
-  - [ ] RED `api/tests/unit/canvas-live-freeze-capture.test.ts`: cumulative retained-baseline diff and undo to baseline.
+  - [x] RED `api/tests/unit/canvas-live-recovery.test.ts`: checkpoints, replay, delete set/vector, epoch, corrupted watermark, tenant isolation.
+  - [x] RED `api/tests/unit/canvas-live-journal.test.ts`: receipts, inverse/provenance atomicity, publish after commit, rebuild after failure; retention witness follows.
+  - [x] RED `api/tests/unit/canvas-live-freeze-capture.test.ts`: cumulative retained-baseline diff and undo to baseline.
   - [ ] RED `api/tests/api/canvas-live-persistence.test.ts`: real PostgreSQL rollback, restart, duplicate keys and scope.
 - [ ] **Lot 2 — Durable database adapter**
   - [ ] Sequence journal, atomic encoded-state checkpoints, immutable baseline, scoped migration/schema and DATA_MODEL.
