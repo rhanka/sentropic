@@ -20,6 +20,11 @@ function fixture() {
   return { record, registry: new SessionRegistry({ create, clientId: () => ++clientId }), create, connect, disconnected, removed, createdNames };
 }
 describe('canvas live binding registry', () => {
+  it.each([[''], ['notes', 'notes'], ['field:notes'], ['description', '']])('should reject malformed descriptor fields %j before any shared type is created', (fields) => {
+    const f = fixture();
+    expect(() => f.registry.open({ ...f.record, fields }, fields[0])).toThrow('invalid-binding');
+    expect(f.create).not.toHaveBeenCalled(); expect(f.createdNames).toEqual([]);
+  });
   it('should keep notes live when description unmounts, close only after the last mount, and retain state', async () => {
     const f = fixture(); const a = f.registry.open(f.record, 'description'); const b = f.registry.open(f.record, 'notes');
     const notes = f.registry.resolveBinding(f.record, b.identity); const text = notes.text as { value: string };
