@@ -1,4 +1,9 @@
-import type { ClusterMeshHonoNamespaceModule } from '@sentropic/cluster-mesh';
+import { createClusterMeshModules, type ClusterMeshHonoNamespaceModule } from '@sentropic/cluster-mesh';
+import { createLlmMeshNamespaceModule as composeLlmMesh } from '@sentropic/cluster-mesh/compose/llm-mesh';
+import { loadLlmMeshJevTransport } from '@sentropic/cluster-mesh/loaders/llm-mesh/transport/jev';
+import { createDecisionRouter, unavailableDecisionRouter } from './decision-router';
+import { createDecisionRuntime } from '../../services/decision-runtime';
+import { decisionProfile } from '../../services/decision-host';
 import {
   createLlmMeshRouter,
   type CreateLlmMeshRouterOptions,
@@ -123,6 +128,7 @@ export interface CreateLlmMeshNamespaceModuleOptions {
   readonly authenticate?: MiddlewareHandler;
   readonly authorizeAdmin?: MiddlewareHandler;
   readonly routerOptions?: CreateLlmMeshRouterOptions;
+  readonly decisionRouter?: Hono;
 }
 
 export const createLlmMeshNamespaceModule = (
@@ -139,6 +145,7 @@ export const createLlmMeshNamespaceModule = (
       router.use(path, options.authorizeAdmin ?? requireAdmin);
     }
     applyLlmMeshAuthorFence(router);
+    router.route('/llm-mesh', options.decisionRouter ?? unavailableDecisionRouter());
     router.route('/', createLlmMeshRouter(
       options.routerOptions ?? createProductLlmMeshRouterOptions(),
     ));
@@ -146,4 +153,18 @@ export const createLlmMeshNamespaceModule = (
   },
 });
 
-export const productLlmMeshModule = createLlmMeshNamespaceModule();
+const prepareProductLlmMeshModule = async (): Promise<ClusterMeshHonoNamespaceModule> => {
+  try {
+    const modules = createClusterMeshModules();
+    const profile = decisionProfile(process.env.DECISION_EXECUTION_PROFILE);
+    const transport = await loadLlmMeshJevTransport(modules);
+    const prepared = await composeLlmMesh(modules, { enabled: true, decision: true, createRouter: (input) =>
+      createLlmMeshNamespaceModule({ decisionRouter: createDecisionRouter({ profile,
+        forCaller: createDecisionRuntime(input, transport.createJevTransport({ fetch: globalThis.fetch }), profile),
+      }) }).createRouter({} as never),
+    });
+    return { ...prepared, createRouter: (input) => prepared.createRouter(input ?? ({} as never)) };
+  } catch { return createLlmMeshNamespaceModule(); }
+};
+
+export const productLlmMeshModule = await prepareProductLlmMeshModule();
