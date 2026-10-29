@@ -135,6 +135,57 @@ The validated working bundle is `/home/antoinefa/src/sentropic/.tmp/focus-ci-eff
 
 The [pinned workflow](https://github.com/rhanka/sentropic/blob/441453966a4dfac12c220f154508d7ab1ee3c237/.github/workflows/ci.yml) and [Makefile](https://github.com/rhanka/sentropic/blob/441453966a4dfac12c220f154508d7ab1ee3c237/Makefile) govern historical interpretation. Every implementation branch rechecks the then-current files before changing them. The current-main 138-second UI example replaces the earlier 129-second label; the 495-second UI and 199-second scan examples belong to the broad PR. Historical publisher runs remain historical. No unmeasured cold branch, skipped test, or already-published version receives an invented duration or success credit.
 
+## Artifact storage — transport lifetime correction (2026-10-29)
+
+The account audit measured sentropic at 97–99.7% of Actions storage:
+7,717 active artifacts / **4,017 GB**, including 3,566 Docker-image artifacts
+/ **4,008 GB** and 36 desktop-download artifacts / **2.5 GB**. After BR-78,
+the observed partial-day rate projects to roughly **130 GB/day**. These are
+audit observations/projections, not measurements of this retention change.
+Source: `artifacts-audit.md`, 2026-10-29, retained with paginated API and daily
+billing data in the supplied `ci-study` audit bundle; the audit's original
+local path is `/home/antoinefa/.cache-tmp/claude-1000/-home-antoinefa-src-poc-k8s/fc703350-bfba-4a32-97bf-ce7041335aba/scratchpad/ci-study/artifacts-audit.md`.
+
+`fix/ci-artifact-retention` changes only the five transport uploads to
+`retention-days: 1`, replacing their inherited 90-day lifetime. The final
+`ci-gate` also waits for both image publishers and preproduction deployment.
+An `always()` step then paginates **this run's** artifacts and deletes only
+the five exact names below. Only this job receives `actions: write`; fork
+PRs retain one-day expiry because their token is read-only. Cancellation
+before cleanup also falls back to expiry. API failures fail the cleanup step;
+the existing required-result verdict and all gates remain enforced.
+
+| Transport artifact | Consumers completed before cleanup |
+| --- | --- |
+| api-image | API test matrix, browser E2E, VSCode E2E, IdP screen smoke, restore smoke, API scan, API image publisher |
+| api-tool-image | API test matrix, IdP screen smoke, restore smoke, toolbox scan |
+| ui-image | Browser E2E, VSCode E2E, UI scan, UI image publisher |
+| e2e-image | Browser E2E, VSCode E2E, IdP screen smoke, browser-image scan |
+| desktop-download | Container UI build and static UI build (including Pages upload) |
+
+Every download uses the default current run; no cross-run consumer requires
+keeping these five artifacts. `deploy-preprod` checks immutable registry
+tags and deploys from the registry; it does not fetch an earlier run's Actions
+artifacts. Package publishers use their source/registry flow. Package-candidate,
+qualification, security, capacity and Pages artifacts are outside the delete
+allowlist. Selective reruns after cleanup need a full workflow rerun to recreate
+transport artifacts; cancelled/fork runs keep them for at most one day.
+
+Stock after deployment is **not yet measured**: changing upload retention does
+not shorten existing artifacts' expiry. This branch does not delete historical
+stock or change repository-level artifact/log retention. At the observed rate,
+one-day fallback bounds new transport stock to about 130 GB; successful cleanup
+removes it after consumers finish. Neither figure is a measured account-stock
+reduction. Retain exact-head CI and run-artifact API results with the PR before
+claiming the cleanup works in GitHub Actions.
+
+Coordination: open PR #829 (BR-80) changes package-candidate wiring in the same
+workflow. Preserve its jobs, needs and candidate artifacts; the retention diff
+is confined to the five upload inputs and the final gate. This section is
+separate from BR-80's appended implementation receipts to reduce rebase overlap.
+Rollback: revert the cleanup step, its extra needs/job permission, and the five
+retention inputs together; restore no other workflow policy.
+
 ## 9. BR-76 implementation receipts
 
 BR-76 added `scripts/ci/ci-run-metrics.mjs` (durations from identified
