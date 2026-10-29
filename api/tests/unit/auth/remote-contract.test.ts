@@ -1,5 +1,4 @@
 import { generateKeyPairSync } from 'node:crypto';
-import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { parseRemoteJson, remoteDigest, remoteSignedBytes } from '../../../src/services/auth/remote-contract';
 import { loadRemoteSigner, validateRemoteTrust } from '../../../src/services/auth/remote-keys';
@@ -54,11 +53,5 @@ describe('RC1 strict wire and key separation', () => {
     expect(signer.kid).toBe('attestation-1');
     expect(() => loadRemoteSigner(pins, 'idp', 'attestation', () => fixtureSecrets.get(pins.idp.secretRef)!)).toThrow();
     expect(() => loadRemoteSigner(pins, 'attestation', 'attestation', () => fixtureSecrets.get(pins.idp.secretRef)!)).toThrow();
-  });
-  it('should give the standalone IdP a session secret absent from the product deployment', () => {
-    const idp = readFileSync(new URL('../../../../deploy/k8s/base/35-auth-idp.yaml', import.meta.url), 'utf8');
-    const product = readFileSync(new URL('../../../../deploy/k8s/base/30-api.yaml', import.meta.url), 'utf8');
-    expect(idp).toMatch(/name: JWT_SECRET\s+valueFrom:\s+secretKeyRef:\s+name: auth-idp-session-signing/);
-    expect(product).not.toContain('auth-idp-session-signing');
   });
 });

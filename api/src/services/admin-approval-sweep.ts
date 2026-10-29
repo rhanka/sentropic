@@ -2,6 +2,7 @@ import { db } from '../db/client';
 import { userSessions, users } from '../db/schema';
 import { and, eq, inArray, lt } from 'drizzle-orm';
 import { logger } from '../logger';
+import { tombstoneRemoteSessions } from './auth/remote-revocation';
 
 export async function runAdminApprovalSweep(): Promise<{ expiredCount: number }> {
   const now = new Date();
@@ -29,9 +30,17 @@ export async function runAdminApprovalSweep(): Promise<{ expiredCount: number }>
     .where(inArray(users.id, ids));
 
   // Revoke all sessions so next login uses the reduced effective role immediately.
-  await db.delete(userSessions).where(inArray(userSessions.userId, ids));
+  const deleted = await db.delete(userSessions).where(inArray(userSessions.userId, ids))
+    .returning({ id: userSessions.id, userId: userSessions.userId });
+  // Finish all database removals before issuer delivery; one failure must not skip other users.
+  const deliveries = await Promise.allSettled(ids.map(userId => tombstoneRemoteSessions({
+    userId, sessionIds: deleted.filter(row => row.userId === userId).map(row => row.id),
+  })));
+  const failedUserIds = ids.filter((_, index) => deliveries[index].status === 'rejected');
+  if (failedUserIds.length) logger.error({ code: 'authority_unavailable', userIds: failedUserIds },
+    'Admin approval sweep: issuer revocation requires recovery');
 
-  logger.info({ count: ids.length }, 'Admin approval sweep: moved users to read-only and revoked sessions');
+  logger.info({ count: ids.length }, 'Admin approval sweep: moved users to read-only and removed database sessions');
   return { expiredCount: ids.length };
 }
 

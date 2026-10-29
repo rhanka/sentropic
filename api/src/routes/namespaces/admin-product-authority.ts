@@ -16,6 +16,8 @@ import {
   webauthnCredentials
 } from '../../db/schema';
 import { getTenantResolutionMetrics } from '../../services/tenancy/tenant-resolution-metrics';
+import { revokeAllSessions } from '../../services/session-manager';
+import { tombstoneRemoteSessions } from '../../services/auth/remote-revocation';
 import {
   captureConnectorGrantsForTeardown,
   recordConnectorGrantTombstones,
@@ -213,7 +215,7 @@ adminRouter.post('/users/:id/disable', zValidator('json', disableSchema), async 
     })
     .where(eq(users.id, userId));
 
-  await db.delete(userSessions).where(eq(userSessions.userId, userId));
+  await revokeAllSessions(userId);
   return c.json({ success: true });
 });
 
@@ -283,7 +285,7 @@ adminRouter.delete('/users/:id', async (c) => {
     ...(workspaceId ? { workspaceId } : {}),
   });
 
-  await db.transaction(async (tx) => {
+  const deletedSessions = await db.transaction(async (tx) => {
     // Atomic with the destruction: tombstone and delete commit or roll back together.
     await recordConnectorGrantTombstones(tx, capturedGrants);
 
@@ -349,7 +351,7 @@ adminRouter.delete('/users/:id', async (c) => {
     }
 
     // Auth artifacts
-    await tx.delete(userSessions).where(eq(userSessions.userId, userId));
+    const sessions = await tx.delete(userSessions).where(eq(userSessions.userId, userId)).returning({ id: userSessions.id });
     await tx.delete(webauthnCredentials).where(eq(webauthnCredentials.userId, userId));
     await tx.delete(webauthnChallenges).where(eq(webauthnChallenges.userId, userId));
 
@@ -364,11 +366,16 @@ adminRouter.delete('/users/:id', async (c) => {
 
     // Finally delete user
     await tx.delete(users).where(eq(users.id, userId));
+    return sessions;
   });
 
   // Only after a successful commit — a rolled-back transaction must not leave a revoked grant
   // behind for an account that still exists.
-  await revokeCapturedConnectorGrants(capturedGrants);
+  try {
+    await revokeCapturedConnectorGrants(capturedGrants);
+  } finally {
+    await tombstoneRemoteSessions({ sessionIds: deletedSessions.map(row => row.id), userId });
+  }
 
   return c.json({ success: true });
 });
