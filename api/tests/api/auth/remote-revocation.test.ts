@@ -4,6 +4,9 @@ import { join } from 'node:path';
 import { eq, inArray, like } from 'drizzle-orm';
 import { SignJWT } from 'jose';
 import { Hono } from 'hono';
+import { serve } from '@hono/node-server';
+import type { Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../../../src/db/client';
 import { settings, users, userSessions, workspaces } from '../../../src/db/schema';
@@ -23,6 +26,8 @@ import { pendingRemoteRevocations } from '../../../src/services/auth/remote-revo
 const issuer = 'https://idp.example.test', resource = `${issuer}/remote-revocation`;
 const clientId = 'test-product-revoker', path = '/api/v1/auth/session/remote-revocations';
 let userId: string, directory: string;
+const networkFetch = globalThis.fetch.bind(globalThis);
+const servers: Server[] = [];
 beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), 'rc1-product-revoke-'));
   vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
@@ -36,6 +41,10 @@ beforeEach(async () => {
   await db.insert(users).values({ id: userId, email: `${userId}@example.test`, emailVerified: true, role: 'editor' });
 });
 afterEach(async () => {
+  for (const server of servers.splice(0)) {
+    server.closeAllConnections();
+    await new Promise<void>((resolve, reject) => server.close(error => error ? reject(error) : resolve()));
+  }
   await db.delete(settings).where(like(settings.key, 'remote_session_revocation:%'));
   await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
   await db.delete(users).where(eq(users.id, userId));
@@ -51,20 +60,60 @@ async function bearer(change: Record<string, unknown> = {}) {
 }
 async function bridge() {
   const token = await bearer(), idp = createIdpApp();
+  // Real node-server plain socket: same final hop as the deployed ClusterIP and TLS ingress.
+  const server = await new Promise<Server>(resolve => {
+    const listener = serve({ port: 0, hostname: '127.0.0.1', fetch: async request => {
+      expect(new URL(request.url).protocol).toBe('http:');
+      vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
+      try { return await idp.fetch(request); }
+      finally { vi.stubEnv('REMOTE_ACTION_ROLE', 'product'); }
+    } }, () => resolve(listener as Server));
+  });
+  servers.push(server);
   const transport = vi.fn(async (url: string, init: RequestInit) => {
     if (url.endsWith('/oauth/token')) {
       expect(new URLSearchParams(String(init.body)).get('scope')).toBe('remote.sessions.revoke');
       return Response.json({ access_token: token, token_type: 'Bearer' });
     }
     expect(url).toBe(`${revocationServiceOrigin}${path}`);
-    vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
-    try { return await idp.request(url, init); }
-    finally { vi.stubEnv('REMOTE_ACTION_ROLE', 'product'); }
+    return networkFetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}${path}`,
+      { ...init, headers: { ...init.headers, host: 'auth-idp:8787', 'x-forwarded-proto': 'https' } });
   });
   vi.stubGlobal('fetch', transport);
   return transport;
 }
 describe('RC1 product to issuer revocation', () => {
+  it.each(['missing-mac', 'altered-body', 'stale-stamp', 'wrong-key', 'forged-forwarded-proto'])
+  ('should refuse %s on the plain HTTP final hop', async failure => {
+    const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
+    const authorization = `Bearer ${await bearer()}`;
+    let body = JSON.stringify({ sessionIds: [tokens.sessionId] });
+    const signed = signRevocation(body, authorization);
+    if (failure === 'missing-mac') delete signed['x-revocation-mac'];
+    if (failure === 'altered-body') body = JSON.stringify({ sessionIds: [tokens.sessionId], userId });
+    if (failure === 'stale-stamp') signed['x-revocation-stamp'] = `1000000000000:${crypto.randomUUID()}`;
+    if (failure === 'wrong-key') vi.stubEnv('REMOTE_ACTION_REVOCATION_CLIENT_SECRET', crypto.randomUUID());
+    const url = failure === 'forged-forwarded-proto' ? `http://idp.example.test${path}` : `${revocationServiceOrigin}${path}`;
+    const response = await createIdpApp().request(url, { method: 'POST', body,
+      headers: { authorization, ...signed, 'x-forwarded-proto': 'https' } });
+    expect(response.status).toBe(failure === 'forged-forwarded-proto' ? 403 : 401);
+    expect(getRemoteSessionAuthority()!.find(tokens.sessionId)?.revoked).toBe(false);
+  });
+  it('should retain a retry intent when an intermediary forges a 204 acknowledgement', async () => {
+    const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
+    const token = await bearer();
+    vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => url.endsWith('/oauth/token')
+      ? Response.json({ access_token: token, token_type: 'Bearer' })
+      : new Response(null, { status: 204, headers: { 'x-revocation-ack': '0'.repeat(64) } })));
+    await expect(revokeSession(tokens.sessionId)).rejects.toMatchObject({ code: 'authority_unavailable' });
+    expect(await pendingRemoteRevocations()).toHaveLength(1);
+    await bridge();
+    await runAdminApprovalSweep();
+    expect(await pendingRemoteRevocations()).toEqual([]);
+    vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
+    expect(getRemoteSessionAuthority()!.find(tokens.sessionId)?.revoked).toBe(true);
+  });
   function lifecycleApp(workspaceId: string, admin = false) {
     return new Hono().use('*', async (c, next) => {
       c.set('user', { userId: admin ? 'test-admin' : userId, workspaceId,
