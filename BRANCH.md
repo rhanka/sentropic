@@ -4,6 +4,7 @@
 - [ ] Qualify all 23 Stage B cases through the installed handle, ship C6 declaration in dev.7, and regenerate the 21-slot tuple; stop for an evidenced Engram-side blocker.
 
 ## Scope / Guardrails
+- [x] Stable release blocker: Comments self-leaf catalog excluded 0.24.0 at its upper bound. Admit 0.24.x with <0.25.0; retain current-release peer enforcement and next-minor refusal regressions. Refresh archive identities and rerun installed qualification after this byte change.
 - [x] Stable E10 installed campaign explicitly requires mesh 0.24.0 and Engram 0.21.3, with a fresh consumer lock, types/runtime closure and two-process reopen; the immutable reviewed dev.7 campaign remains pinned independently.
 - [x] Release regression coverage checks E2 selection for integration → main, exclusion of unrelated PRs and preservation of all seven E11 proof steps; packaging selects the stable local archive without a registry request for unpublished 0.24.0.
 - [x] Final main-PR routing retains every E2 lane and replays the reviewed E11 dev.7 proof in a detached checkout; the current stable head has its own installed Stage B receipts. No topic-only workflow file exists on integration.
