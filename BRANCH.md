@@ -51,7 +51,9 @@
 - [ ] **Lot 1 — Acquisition and admission evidence**
   - [x] Add a reproducible bounded OCI sizing experiment; keep production ingestion unchanged until measurements complete.
   - [ ] Independently retrieve scanner/verifier bytes, bundles and roots; verify offline.
+  - [x] Verify retained index bytes with Cosign DSSE attestation, exact issuer/identity and retained roots under `--network=none` (Verified OK).
   - [ ] Inventory image filesystem, native executable dependencies and actual runtime commands without Python.
+  - [x] Pull exact platform image, export without execution, inventory APK/filesystem and decode 375 Trivy / 281 Cosign Go dependencies; no Python filesystem matches.
   - [x] Measure Java: 991026356 compressed / 1565823119 expanded bytes, 86364 KiB Node RSS, 86.4 s transfer; propose bounded per-kind limits.
   - [ ] Verify the Java limit fix with regressions and real ingestion.
   - [ ] Acquire fresh vulnerability/Java receipts and freeze IaC bytes; preserve exact hashes.
