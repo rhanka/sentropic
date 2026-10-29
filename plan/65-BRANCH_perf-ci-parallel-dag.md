@@ -6,7 +6,7 @@
 
 ## Scope / Guardrails
 - [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`; all timings below are **budget to measure**, not delivered results.
-- [ ] Work only in `tmp/worktrees/ci-parallel-dag`; rebase on main after predecessor merge; one implementation branch active on the shared workflow/Makefile.
+- [x] Work only in `tmp/worktrees/ci-parallel-dag`; merge main only, never rebase (owner override); one implementation branch active on the shared workflow/Makefile.
 - [ ] Make entry points only; `ENV` last; tests on `ENV=test-ci-parallel-dag` or `ENV=e2e-ci-parallel-dag`, never `dev`; no secrets in evidence.
 - [ ] Slot 0 owner: branch author; API_PORT=9395, UI_PORT=5595, MAILDEV_UI_PORT=1495; verify availability before starting services and pass all three ports to service commands.
 - [ ] No migrations; keep root dev stable; no timeout inflation, removed assertions, or attribution trailers; commits ≤150 changed lines through `make commit` with scope checks.
@@ -32,6 +32,13 @@
 - [ ] BR79-EX2 — Planned Makefile exception: expose independent extension, desktop, UI test/profile, scanner, and runtime startup targets; preserve build-input ordering. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
+- [x] BR-79 execution: branch `perf/ci-parallel-dag`, base `origin/main` c8ec01237, worktree `tmp/worktrees/ci-parallel-dag`, draft PR #826. Owner overrides: merge only, local `ENV=test-ci-br79`, shared Docker lock, no Python or attribution trailers.
+- [x] Implementation separates runtime artifact readiness from static/security release barriers; independent desktop/UI tests/static profile, four container lanes and four SAST/SCA matrix members retain complete final membership.
+- [x] Initial local checks pass: 6 DAG, 24 expected-result, 134 publication tests, parser negatives, capacity shape, version filters and the 56-spec E2E inventory. Requalify after final edits; this is not final-head CI.
+- [x] Study section 12 records reviewed-head run 40748328717 attempt 1 at 949d47c8c, completed/success; all-job durations/admission and raw job/step receipts are in `.tmp/ci-br79/receipts/40748328717/`. Main 40736913130 is completed/failure (comments packaging ECONNRESET); initial PR 40741770463 is completed/cancelled. Neither supplies successful acceptance.
+- [x] Carry to BR-80, owner CI train author: Lot 2 EX3 authorization and Chrome/VSCode fan-out/profile identity; Lot 3 UAT, rollback execution and measured budgets (IdP 233s vs <=150s; admission up to 2649s vs <=60s); Lot 5 broader local full-suite/build validation. BRANCH.md defines the exact remainder; this PR still requires changed-file fixtures and exact-head green CI.
+- [x] Next actions: BR-80 reduces package-lane pressure and retains runner-admission measurements; inspect the complete IdP path before optimizing with unchanged assertions. BR-81 owns deterministic journeys; BR-84 repeats warm/cold whole-train proof. No completed timing acceptance or extension fan-out is claimed.
+- [ ] BR79-EX3 owner decision for bounded `ui/Dockerfile` stage separation is carried to BR-80; BR-79 does not authorize or change that path. Both existing extension builds/assertions remain active meanwhile.
 
 ## AI Flaky tests
 - [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
