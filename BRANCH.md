@@ -55,6 +55,7 @@
 - [x] **Exception process**: BR143-EX1 covers the completed inherited merge only; BR143-EX2 covers topic workflow retirement and equivalent CI gates.
 
 ## Feedback Loop
+- [x] Owner rebase request (29 October 2026) supersedes historical merge-only guardrails: rebase onto main with #831/#834, retain both migration/build intents and main version pins, restore the integrated artifacts workspace dependency, then force-with-lease only this PR branch. Post-Rebase Gate: no package source or manifest differs from main, so no publication bump is required.
 - [x] N6 now blocks exact-head CI: unit job 123405258615 has 517/517 passing receiving tests but an uncaught 57P01 on the activation conformance database. Track physical client end events, await them after pool.end and remove forced DROP in activation/migration fixtures, matching the existing publication/credential teardown. Retain all assertions and imported vectors; no error suppression or timeout increase.
 - [x] Gate inventory refinement: API unit/endpoint defaults do not include tests/services/catalog. The explicit test-app-cluster-mesh aggregate retains the complete union of topic workflow scopes (including catalogue services/characterization) plus content tests/types/lint on the existing unit toolbox.
 - [x] Topic cleanup batch 2: remove W3.b/W3.c/W3.d wrappers; content tests/types/lint, production runtime/hash/receipt guards and closed-overlay gates remain in standard CI.
