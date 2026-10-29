@@ -18,7 +18,10 @@ export function verifyCheckpoint(checkpoint: LiveCheckpoint, state: Pick<LiveDoc
     || checkpoint.schemaEpoch !== state.schemaEpoch || !Number.isSafeInteger(checkpoint.journalWatermark)
     || checkpoint.journalWatermark < 0 || checkpoint.journalWatermark > state.head) throw new Error('checkpoint-integrity');
 }
-export function restoreDocument<D>(state: LiveDocumentState, codec: DocumentCodec<D>): D {
+export function restoreDocument<D>(
+  state: LiveDocumentState,
+  codec: DocumentCodec<D>
+): D {
   const checkpoint = state.checkpoint;
   if (checkpoint) verifyCheckpoint(checkpoint, state);
   if (state.journal.length !== state.head) throw new Error('journal-gap');

@@ -1,27 +1,50 @@
 import { createHash } from 'node:crypto';
 import type {
-  LiveCommit, LiveDocumentIdentity, LiveJournalEntry, LivePatchKey,
+  LiveCommit,
+  LiveDocumentIdentity,
+  LiveJournalEntry,
+  LivePatchKey,
 } from '../../../../packages/chat-core/src/live-document-port';
 
 /** Stable digests also bind checkpoint watermarks to their encoded state. */
 export function canonical(value: unknown): string {
   if (value === null || typeof value !== 'object') return JSON.stringify(value);
   if (Array.isArray(value)) return `[${value.map(canonical).join(',')}]`;
-  return `{${Object.entries(value).filter(([, v]) => v !== undefined)
+  return `{${Object.entries(value)
+    .filter(([, v]) => v !== undefined)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(',')}}`;
+    .map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`)
+    .join(',')}}`;
 }
-export const digest = (value: unknown): string => createHash('sha256').update(canonical(value)).digest('hex');
-export const commitDigest = (input: LiveCommit): string => digest({ ...input,
-  formattingIntents: input.formattingIntents.map(intent => {
-    const { seq: _seq, ...semantic } = intent as typeof intent & { seq?: number };
-    return semantic;
-  }),
-});
-export function sequenceEntry(journal: readonly LiveJournalEntry[], input: LiveCommit, seq: number): LiveJournalEntry {
-  let intentSeq = journal.reduce((total, entry) => total + entry.formattingIntents.length, 0);
-  return { ...input, seq, digest: commitDigest(input),
-    formattingIntents: input.formattingIntents.map(intent => ({ ...intent, seq: ++intentSeq })),
+export const digest = (value: unknown): string =>
+  createHash('sha256').update(canonical(value)).digest('hex');
+export const commitDigest = (input: LiveCommit): string =>
+  digest({
+    ...input,
+    formattingIntents: input.formattingIntents.map((intent) => {
+      const { seq: _seq, ...semantic } = intent as typeof intent & {
+        seq?: number;
+      };
+      return semantic;
+    }),
+  });
+export function sequenceEntry(
+  journal: readonly LiveJournalEntry[],
+  input: LiveCommit,
+  seq: number
+): LiveJournalEntry {
+  let intentSeq = journal.reduce(
+    (total, entry) => total + entry.formattingIntents.length,
+    0
+  );
+  return {
+    ...input,
+    seq,
+    digest: commitDigest(input),
+    formattingIntents: input.formattingIntents.map((intent) => ({
+      ...intent,
+      seq: ++intentSeq,
+    })),
   };
 }
 export const patchKey = (key: LivePatchKey): string => canonical([
@@ -33,7 +56,8 @@ export const transactionKey = (input: LiveCommit): string => canonical([
 export function duplicate(journal: readonly LiveJournalEntry[], input: LiveCommit): LiveJournalEntry | undefined {
   const previous = journal.find(e => transactionKey(e) === transactionKey(input));
   if (previous) {
-    if (previous.digest !== commitDigest(input)) throw new Error('idempotency-conflict');
+    if (previous.digest !== commitDigest(input))
+      throw new Error('idempotency-conflict');
     return previous;
   }
   const terminal = input.receipt && journal.find(e => e.receipt && patchKey(e.receipt.key) === patchKey(input.receipt!.key));

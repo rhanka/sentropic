@@ -53,7 +53,7 @@ export class PgLiveDocumentStore implements LiveDocumentStore {
     });
   }
   load(identity: LiveDocumentIdentity): Promise<LiveDocumentState> {
-    return this.transaction(client => this.read(client, identity));
+    return this.transaction((client) => this.read(client, identity));
   }
   commit(identity: LiveDocumentIdentity, expectedHead: number, input: LiveCommit): Promise<LiveJournalEntry> {
     const frozen = structuredClone(input);
