@@ -33,6 +33,18 @@ function fixture() {
   };
 }
 describe('canvas live composed lifetime', () => {
+  it('should support explicit host session close and rotation without stale handles disturbing the new session', async () => {
+    const f = fixture(); const old = await f.provider.openLiveSession(f.input()); const record = [...f.records.values()][0];
+    const text = (await f.provider.resolveBinding(old.identity)).text;
+    f.registry.closeSession(record);
+    expect(() => f.registry.open(record, 'notes')).toThrow('invalid-binding');
+    expect(() => f.registry.subscribeActors(record, vi.fn())).toThrow('invalid-binding');
+    f.facts.sessionId = 'new-session'; const current = await f.provider.openLiveSession(f.input());
+    await expect(f.provider.resolveBinding(old.identity)).rejects.toMatchObject({ code: 'revoked' });
+    await old.dispose(); expect((await f.provider.resolveBinding(current.identity)).text).toBe(text);
+    expect(f.disconnected).toHaveBeenCalledTimes(1); await current.dispose();
+    expect(f.disconnected).toHaveBeenCalledTimes(2);
+  });
   it('should rejoin the retained resource after an authoritative schema migration and consume the acknowledged pending draft', async () => {
     const f = fixture(); const oldInput = f.input(); const old = await f.provider.openLiveSession(oldInput);
     const text = f.registry.resolveBinding([...f.records.values()][0], old.identity).text;
