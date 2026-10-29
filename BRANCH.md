@@ -73,7 +73,7 @@
   - [x] Keep unqualified execution gated and daily job off; expose frozen preparation identities in raw receipts.
 - [ ] **Lot 3 — Security regression fixtures**
   - [ ] `toolchain-contract.test.mjs`: pin/version, publisher/platform/source, cache corruption/schema/dates and bounded acquisition failures.
-  - [ ] `trivy.test.mjs`: sandbox flags, environment isolation, report/target mismatch and unqualified execution refusal.
+  - [x] `trivy.test.mjs`: sandbox flags, environment isolation, report/target mismatch and unqualified execution refusal; four tests pass.
   - [ ] Existing `schema.test.mjs`, `inventory.test.mjs`, `scan.test.mjs` plus required wiring entrypoint and `test-security-parser`.
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] Document source receipts, frozen identities, trust limits, qualification matrix and rollback in `docs/security/trivy-s2b.md`.
