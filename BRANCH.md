@@ -1,87 +1,53 @@
-# Feature: Prepare hardened Trivy image lane (S2b option B)
+# Chore: backup reader credential cycle
 
 ## Objective
-- [x] Prepare upstream Trivy by immutable image digest with trusted DB acquisition and fail-closed execution; qualification and daily activation remain blocked.
+- [ ] Enable read-only production backup recovery for the sentropic tenant.
 
 ## Scope / Guardrails
-- [x] Owner-authorized default B from dossier r2, SHA-256 `b4de75e7e2d5bca48ea1d9571c797d65c0e9262259c54d772a57f2f81c9817a1`; no toolbox Dockerfile change.
-- [x] Branch `feat/sec-s2b-trivy-b` from `origin/main` at `213638676`; isolated worktree `tmp/worktrees/sec-s2b`.
-- [x] Make only; zero Python; selective staging; commits at most 150 changed lines without AI trailers; merge updates only.
-- [x] Docker uses the shared `.tmp/packets/DOCKER-LOCK.md` flock and scoped teardown; `ENV=test-sec-s2b` always last.
-- [x] Fixture containers bind no ports; reserved API/UI/Maildev ports 9410/5610/1510 remain unused.
-- [x] Preserve disabled auto-fix, S2c/S3 and all missing S2b evidence; no schedule, publisher, credentials or merge actor.
-- [x] Keep source, target and DB isolated from the scanner; no host Docker socket or credential mounts in scanner execution.
+- [x] Worktree `tmp/backup-reader-cred`, branch `chore/backup-reader-cred`, base `origin/main`.
+- [x] Make-only; `ENV=test-backup-reader` last; no services or cluster resources.
+- [x] Secret material belongs only in the ignored root `.env` with mode `0600`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `.security/trivy-toolchain.json`
-  - `scripts/security/daily/toolchain*.mjs`
-  - `scripts/security/daily/trivy*.mjs`
-  - `scripts/security/daily/scan.mjs`
-  - `scripts/security/daily/scan.test.mjs`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `docs/security/trivy-s2b.md`
-  - `Makefile`
+  - `docs/runbooks/backup-credentials/CRED_CYCLE.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `api/Dockerfile`
-  - `ui/Dockerfile`
+  - `Makefile`
   - `docker-compose*.yml`
-  - `.github/workflows/**`
   - `.cursor/rules/**`
-  - `.security/security-fix.json`
-  - `.security/vulnerability-register.yaml`
-  - `packages/**`
-  - `.track/**`
-  - `plan/**`
+  - `.env`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `Makefile` (SECDAILY-EX1, daily Trivy preparation/test recipes only)
+  - `.github/workflows/**`
 - **Exception process**:
-  - [x] Declare additional exceptions with reason, impact and rollback before editing.
+  - [x] Operational commands use an ephemeral Makefile; inherited main changes only under BR-CRED-EX1.
+  - [x] BR-CRED-EX1: owner authorizes merging origin/main if needed, without rebase. GitHub reported a conflict; merge `e938151c0942679d37f88c7ffb4a2c3df048627a`, preserving this plan. Inherited main bytes only are exempt from scope and the 150-line authored-change limit; validate scope relative to origin/main. Impact: upstream history retained, no authored product change; rollback requires a separately authorized merge revert. Both parents have identical Track trees; Track acceptance refresh belongs to its designated writer.
 
 ## Feedback Loop
-- [x] SECDAILY-EX1: approved plan permits daily scanner pin/isolation recipes. Impact limited to preparation and fixture targets; rollback removes those targets and retains S2a blocked state. Toolbox exception is not opened.
-- [ ] S2B-Q1, conductor, blocked: verifier admission, publisher identity/signature receipt and content review of exact index/platform pins.
-- [ ] S2B-Q2, conductor, blocked: live DB provenance/integrity/freshness, Java/IaC data, immutable targets with exact source/platform, zero-Python runtime inventory.
-- [ ] S2B-Q3, conductor, blocked: real offline/rate-limit/corruption/rollback exercises and cold/warm remote/rebuild measurements including full CI critical path.
-- [x] Live DB preparation: vulnerability snapshot ingested and restored; Java layer 991,026,356 bytes refused by the 512 MiB bound. Preparation exits nonzero; scoped teardown succeeds. Receipts and source evidence in root `.tmp/sec-s2b-evidence/`.
-- [x] S2B-R1, author, selection-failed: live model catalog unavailable for two distinct eligible Claude-hosted reviewers. No peer dispatched or consensus claimed; exact target/code hashes and failure recorded in root `.tmp/sec-s2b-evidence/review.md`. Independent review remains a qualification gate.
-- [x] S2B-F1, author, resolved: reproduced loss of raw diagnostics on rejected image reports; bounded stdout/stderr and process/DB identities now accompany rejection errors. Regression retained; no qualification bypass.
-- [x] Shared Track remains owned by its designated writer; no event writes from this lot.
+- [ ] BR-CRED-01 | blocked | operator | 2026-10-29: reader LIST refused (403); operator GetBucketPolicy also returns 403. Bucket policy is the likely cause but was not read; cause unverified, reader unusable pending resolution. Preserve the restrictive IAM condition.
 
 ## AI Flaky tests
-- [x] Deterministic fixtures only; failures block delivery and timeouts are not increased.
+- [x] None; documentation-only diff.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch**: bounded author lot with serial Docker campaigns.
-- [ ] **Multi-branch**: not required.
+- [x] Single author; no parallel implementation.
 
 ## UAT Management (in orchestration context)
-- [x] Web, Chrome and VSCode UAT not applicable; no application changes.
-- [x] Operator UAT: inspect source evidence, immutable pins, live acquisition/refusal receipts and qualification gaps.
+- [x] No UI change; acceptance is real S3 authorization and recovery verification.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and admission**
-  - [x] Read rules, approved plan, historical reviews, S1 receipt, dossier r2 and merged S1/S2a.
-  - [x] Verify branch mechanically with harness C1 and declare exact scope before implementation.
-- [x] **Lot 1 — Frozen scanner policy and source evidence**
-  - [x] Resolve upstream index/platform/config and exact-identity signature; inspect immutable release and both live security advisories.
-  - [x] Freeze pins, minimum version, exact publisher, trusted DB/rules sources and explicit missing admissions.
-- [x] **Lot 2 — Acquisition and execution contracts**
-  - [x] Acquire DB once per campaign through allowed OCI origin; verify descriptors and hashes before atomic cache publication.
-  - [x] Validate schema/dates and cache bytes after restoration; block missing/corrupt/stale/incompatible data.
-  - [x] Prepare socket-free, least-privilege remote/archive scans with immutable target/source/platform proof and frozen flags/data.
-  - [x] Reject caller configuration and untrusted mirrors before acquisition; no automatic mirror fallback.
-  - [x] Reject silent Java/IaC fallback and preserve all-severity raw diagnostics; live Java layer exceeds the prepared bound and stays blocked.
-  - [x] Keep unqualified execution gated and daily job off; bind scanner/policy/flags/DB identities across comparisons and recheck freshness before merge.
-- [x] **Lot 3 — Security regression fixtures**
-  - [x] `toolchain-contract.test.mjs`: pin/version, publisher/platform/source, cache corruption/schema/dates, hostile archives and bounded acquisition failures; eight tests pass.
-  - [x] `trivy.test.mjs`: sandbox flags, environment isolation, report/target mismatch, diagnostic retention and unqualified execution refusal; five tests pass.
-  - [x] Existing `schema.test.mjs`, `inventory.test.mjs`, `scan.test.mjs` plus required wiring entrypoint: 150/150 pass; parser: 17/17 cases pass.
-- [x] **Lot N-1 — Docs consolidation**
-  - [x] Document source receipts, frozen identities, trust limits, qualification matrix and rollback in `docs/security/trivy-s2b.md`.
-- [ ] **Lot N — Final validation**
-  - [x] Scoped fixtures, daily suite and final required wiring validation pass under flock with dedicated teardown.
-  - [x] C1/C2 pass; all commits at most 150 changed lines; clean diff, no AI trailers and forbidden paths byte-identical to base.
-  - [ ] Create draft PR to main with this plan as body; verify CI completed/success on exact head.
-  - [ ] Report PR/head and remaining evidence; retain BRANCH.md, disabled service and qualification blockers; no merge.
+- [x] **Lot 0 — Baseline and authorization**
+  - [x] Read owner approval, repository rules, immo credential cycle, W0-close.c packet.
+  - [x] Create isolated branch from fetched `origin/main`; mechanical branch check passes.
+- [ ] **Lot 1 — Provision and verify**
+  - [x] Create dedicated application, conditional read-only IAM policy, expiring API key.
+  - [x] Store four requested variable names directly in ignored root `.env`; no values displayed.
+  - [x] Real PUT probe returns HTTP 403 AccessDenied; no object created.
+  - [ ] Successful LIST, versions, HEAD, and versioned GET; effective bucket restriction proven.
+- [x] **Lot 2 — Docs consolidation**
+  - [x] Record names, storage, expiry, rotation, revocation, checks, and current blocker.
+  - [x] Address Opus r1 C1/C2: link the completed owner-selected live-dump restore receipt in #702, distinguish S3 recovery, record the unverified LIST cause and withdrawn Kubernetes request.
+- [ ] **Lot 3 — Final validation**
+  - [x] Mechanical scope check passes; plan and runbook split into commits below 150 lines.
+  - [ ] Draft PR using this plan as body; CI success on its exact head.
+  - [x] W0-close.c completed on 2026-10-29 from a live production dump per owner decision; reader absent from that restore path, Kubernetes request withdrawn.
