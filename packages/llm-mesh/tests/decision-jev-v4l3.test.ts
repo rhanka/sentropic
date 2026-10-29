@@ -32,7 +32,7 @@ describe('P25 JEV 1.13.0 documented answer discriminator', () => {
   });
   it('should keep the pinned baseline unqualified without upgrading its model', () => {
     expect(jevDescriptor.wireModel).toBe('jev-1.13.0');
-    expect(jevDescriptor.acceptedServedModelIds).toEqual([]);
+    expect(jevDescriptor.acceptedServedModelIds).toEqual(['jev-1.13.0']);
     expect(jevDescriptor.qualification).toMatchObject({ servedIdentity: 'unqualified', billingBound: 'unqualified' });
   });
   it.each(fixtures)('should require the versioned discriminator at the provider boundary for $answer.type', ({ criterion, answer }) => {

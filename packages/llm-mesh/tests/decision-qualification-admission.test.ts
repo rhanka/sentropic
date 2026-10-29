@@ -42,7 +42,6 @@ describe('production prerequisites and isolated qualification', () => {
       if (gate === 'calibration') f.options.readiness!.assessments = [];
       if (gate === 'identity') {
         f.descriptor.qualification.servedIdentity = 'unqualified';
-        f.descriptor.acceptedServedModelIds = [];
         f.options.registry = createProviderRegistry([createJevAdapter({ descriptor: f.descriptor, transport: f.transport })]);
         expect(discoverDecisionEvaluator(f.descriptor, { ...f.options.readiness!, price: decisionPrice() }, f.request))
           .toMatchObject({ identityQualified: false, productionReady: false, reasons: expect.arrayContaining(['identity-unqualified']) });
