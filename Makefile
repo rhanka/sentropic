@@ -898,8 +898,9 @@ publishable-sibling-collect: ## Internal: verify sibling pack receipts and write
 publishable-manifests-inventory: ## Internal step of check-publishable-manifests: classify packages, audit WARN snapshots
 	@mkdir -p "$(MANIFEST_REPORT_DIR)"
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
+		-e CI_PACKAGE_CANDIDATES="$(if $(CI_PACKAGE_CANDIDATES),/workspace/$(CI_PACKAGE_CANDIDATES))" -e CANDIDATE_NODE_IMAGE="$(LLM_MESH_NODE_IMAGE)" \
 		-v "$(CURDIR):/workspace" -v "$(abspath $(MANIFEST_REPORT_DIR)):/reports" -w /workspace $(MANIFEST_GUARD_IMAGE) \
-		sh -lc 'set -eu; $(MANIFEST_GUARD_TOOLS); node scripts/ci/publishable-manifests.mjs inventory --report-dir /reports'
+		sh -lc 'set -eu; export CANDIDATE_NPM_VERSION="$$(npm --version)"; $(MANIFEST_GUARD_TOOLS); node scripts/ci/publishable-manifests.mjs inventory --report-dir /reports'
 
 test-publishable-manifests: ## Run publishable manifest guard fixture tests in Docker
 	@$(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-llm-judge,$(ENV)),$(CM_RUN),docker run --rm) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-llm-judge,$(ENV)),$(CM_RUN_IMAGE),$(MANIFEST_GUARD_IMAGE)) \
