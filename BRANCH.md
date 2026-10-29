@@ -76,7 +76,7 @@
   - [ ] Register actors/awareness explicitly and deliver registry updates, including leave/revocation.
 - [ ] **Lot 3 — Provider RED witnesses and adapters**
   - [x] Define executable fake-provider coverage for all lock/presence methods, stream recovery and L0/L2 edit posture.
-  - [ ] Add ui/tests/adapters/canvas-live-provider.test.ts; observe RED for every lock/presence method and stream recovery.
+  - [x] Add ui/tests/adapters/canvas-live-provider.test.ts; observe RED for every lock/presence method and stream recovery (5 assertion failures at 6dd17b1e3).
   - [ ] Reuse existing namespace locks/presence ports and object-lock client; no parallel API.
   - [ ] Gate controlled L0 editing with locks, keep admitted L2 participants editable together.
 - [ ] **Lot 4 — Qualification and handoff**
