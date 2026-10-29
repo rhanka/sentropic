@@ -64,6 +64,15 @@ case "$CM_ACTION" in
     "$tsc" --noEmit -p tsconfig.json
     if [ "$CM_ACTION" = gateway-check ]; then "$tsc" --noEmit -p tsconfig.test.json; fi
     /tmp/cm-tools/node_modules/.bin/vitest run tests --environment node --maxWorkers=1 ;;
+  memory-mcp-static)
+    "$tsc" --noEmit -p tsconfig.json
+    "$tsc" --noEmit -p tsconfig.test.json
+    "$tsc" -p tsconfig.json
+    node tests/engram-memory/package-contract.mjs
+    node --check examples/memory-mcp-stdio.mjs
+    /tmp/cm-tools/node_modules/.bin/vitest run tests --environment node --maxWorkers=1 \
+      --exclude tests/engram-memory/durable-memory.spec.ts \
+      --exclude 'tests/engram-memory/mcp-memory-*.spec.ts' ;;
   memory-mcp)
     # Keep diagnostics from independent static and behavioral checks in one receipt.
     status=0
