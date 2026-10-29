@@ -1589,9 +1589,9 @@ jobs:
       - name: Test API gateway package version evidence
         if: matrix.suite == 'unit'
         run: make test-api-unit SCOPE=tests/unit/gateway-package-version.test.ts ENV=test-ci-api
-      - name: Qualify artifact content tests, types and lint
+      - name: Qualify app cluster-mesh host, reader, catalog and content
         if: matrix.suite == 'unit'
-        run: make test-artifact-content ENV=test-ci-api
+        run: make test-app-cluster-mesh ENV=test-ci-api
       - name: Test API (${{ matrix.suite }})
         run: |
           if [ "${{ matrix.suite }}" = "endpoints" ]; then
