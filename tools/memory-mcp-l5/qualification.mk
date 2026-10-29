@@ -18,3 +18,7 @@ memory-l5-qualify: memory-l5-proposal-runtime
 	@ENV="$(ENV)" sh tools/memory-mcp-l5/qualify.sh "$(ARTIFACT_MANIFEST)" "$(CHECKPOINT)"
 memory-l5-collect: memory-l5-proposal-runtime
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e ARTIFACT_MANIFEST="$(ARTIFACT_MANIFEST)" -e CHECKPOINT="$(CHECKPOINT)" -e MEMORY_L5_SOURCE_HEAD="$$(git rev-parse HEAD)" -e MEMORY_L5_BASE="$$(git merge-base origin/main HEAD)" -e GITHUB_RUN_ID -e GITHUB_RUN_ATTEMPT -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/collect.mjs
+
+.PHONY: memory-l5-disabled-install
+memory-l5-disabled-install: memory-l5-proposal-runtime
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e ARTIFACT_MANIFEST="$(ARTIFACT_MANIFEST)" -e NATIVE_OUTPUT="$(NATIVE_OUTPUT)" -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/disabled-install.mjs

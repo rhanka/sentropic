@@ -25,6 +25,7 @@ run lot3 memory-l5-test LOT=3 "ARTIFACT_MANIFEST=$manifest"
 if [ -e tmp/memory-l5-lot3-results ]; then mv tmp/memory-l5-lot3-results "$out/prior-source-reports"; fi
 run source memory-l5-lot3-source
 run tooling memory-l5-tooling "MEMORY_L5_REPORT=/workspace/$out/tooling.json"
+run disabled-install memory-l5-disabled-install "ARTIFACT_MANIFEST=$manifest" "NATIVE_OUTPUT=$out/disabled-install"
 for scope in exports disabled-install identity-source-refusal sdk-discovery-call restart-lost-response confirmation-step-up; do
   run "packed-$scope" memory-l5-packed "SCOPE=packed/$scope.test.ts" "ARTIFACT_MANIFEST=$manifest"
 done

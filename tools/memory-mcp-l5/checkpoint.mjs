@@ -20,11 +20,11 @@ export function produceCheckpoint(root, path, manifestPath, input) {
     artifacts: manifest.artifacts.map(({ archive, ...artifact }) => ({ ...artifact, archiveRef: archive })),
     closure: { ...observed.closure, artifactManifestSha256: sha256(bytes) }, proofs: bundle.proofs };
   checkpoint.tupleSha256 = computeTupleSha256(checkpoint);
-  const ref = writeImmutable(root, path, checkpoint);
+  const ref = writeImmutable(root, path, checkpoint, { compact: true });
   const failures = [...bundle.failures, ...checkCheckpoint(checkpoint, { baseDir: root })];
   const result = { checkpoint: ref, accepted: failures.length === 0,
     verdict: failures.length ? 'NOT QUALIFIED' : 'QUALIFIED', failures };
-  writeImmutable(root, path + '.validation.json', result);
+  writeImmutable(root, path + '.validation.json', result, { compact: true });
   return result;
 }
 

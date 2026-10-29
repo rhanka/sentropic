@@ -60,7 +60,7 @@ export function retainProofBundle(root, directory, catalog, reportPaths, binding
   for (const row of catalog.proofs) {
     const current = { ...binding, command: binding.commands?.[row.id] ?? binding.command };
     const actual = bundleProof(row, inputs, current);
-    const ref = writeImmutable(root, `${directory}/${row.id}.json`, actual.report);
+    const ref = writeImmutable(root, `${directory}/${row.id}.json`, actual.report, { compact: true });
     proofs.push({ id: row.id, files: row.files, command: current.command,
       sourceHead: binding.sourceHead, artifactManifestSha256: binding.artifactManifestSha256,
       runId: binding.runId, attempt: binding.attempt, result: { ...actual.result, ...ref } });
