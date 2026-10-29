@@ -10,7 +10,7 @@ export function installTools(args, { run = spawnSync } = {}) {
   if (prefixIndex < 0 || !args[prefixIndex + 1]) throw new Error('--prefix is required');
   const prefix = path.resolve(args[prefixIndex + 1]);
   const rest = args.filter((_, i) => i !== prefixIndex && i !== prefixIndex + 1);
-  const allowed = new Set(['--no-save', '--no-audit', '--no-fund', '--ignore-scripts', '--install-strategy=shallow', '--loglevel=error']);
+  const allowed = new Set(['--no-save', '--no-audit', '--no-fund', '--ignore-scripts', '--install-strategy=shallow', '--loglevel=error', '--os=win32', '--cpu=x64']);
   for (const arg of rest) if (arg.startsWith('-') && !allowed.has(arg)) throw new Error(`Unsupported locked tool option: ${arg}`);
   const specs = rest.filter(arg => !arg.startsWith('-')).sort();
   const shallow = rest.includes('--install-strategy=shallow');
@@ -25,6 +25,7 @@ export function installTools(args, { run = spawnSync } = {}) {
   const ciArgs = ['ci', '--prefix', prefix, '--no-audit', '--no-fund'];
   if (rest.includes('--ignore-scripts')) ciArgs.push('--ignore-scripts');
   if (shallow) ciArgs.push('--install-strategy=shallow');
+  ciArgs.push(...rest.filter(arg => arg.startsWith('--os=') || arg.startsWith('--cpu=')));
   const result = run('npm', ciArgs, { stdio: 'inherit' });
   if (result.error) throw result.error;
   if (result.status !== 0) throw new Error(`Locked tool install failed: ${result.status}`);

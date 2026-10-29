@@ -97,5 +97,5 @@ export async function frozenRegistry(versions, archives = []) {
   });
   await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
   const url = `http://127.0.0.1:${server.address().port}`;
-  return { url, close: () => new Promise(resolve => server.close(resolve)) };
+  return { url, candidates, close: () => new Promise(resolve => server.close(resolve)) };
 }
