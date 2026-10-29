@@ -6,7 +6,8 @@ export function mcpContext(tenant: string, scopeRef: string, storeId: string,
   return {
     requestId: 'request-memory', correlationId: 'correlation-memory', auditId: 'audit-memory',
     principal: { sub: 'user-memory', claims: { sub: 'user-memory', tid: tenant }, scopes: ['mcp:discover', 'mcp:tools:invoke'], tenantRef: tenant, authTime: NOW },
-    surface: 'backend', session: { mcpSessionId: 'session-memory' }, tenantRef: tenant,
+    surface: 'backend', mcpClient: { clientId: 'client-memory', client: 'codex' },
+    workspaceRef: 'workspace-memory', session: { mcpSessionId: 'session-memory' }, tenantRef: tenant,
     connectorInstanceId: 'connector-memory', consentRefs: [], grantRefs: [],
     memory: { expectedActiveGeneration: '1', expectedPolicyEpoch: '1', now: NOW, binding: {
       issuer: 'issuer-memory', sub: 'user-memory', tid: tenant, claims: ['sub', 'tid'], claims_provenance_receipt: D,
