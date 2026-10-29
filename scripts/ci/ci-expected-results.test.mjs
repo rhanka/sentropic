@@ -314,7 +314,7 @@ test('should derive selected expanded members before dispatch independently of r
 test('all-success selected sets pass', () => {
   const verdict = evaluateExpected({
     expected: [selected('build-api-image'), selected('ci-gate')],
-    executed: [ran('build-api-image', 'success'), ran('ci-gate', 'neutral')],
+    executed: [ran('build-api-image', 'success'), ran('ci-gate', 'success')],
   });
   assert.equal(verdict.ok, true);
   assert.deepEqual(verdict.failures, []);
@@ -352,6 +352,17 @@ test('unexpectedly skipped required members are rejected', () => {
   });
   assert.equal(verdict.ok, false);
   assert.equal(verdict.failures[0].reason, 'unexpectedly-skipped');
+});
+
+test('should block failed or absent static and security lanes after browsers finish', () => {
+  const expected = ['test-e2e', 'typecheck-lint-ui', 'security-sast-sca', 'security-container'].map(selected);
+  const good = expected.map(row => ran(row.job, 'success'));
+  for (const job of expected.slice(1).map(row => row.job)) {
+    for (const conclusion of ['failure', 'skipped', 'cancelled', 'neutral', '']) {
+      assert.equal(evaluateExpected({ expected, executed: good.map(row => row.job === job ? ran(job, conclusion) : row) }).ok, false);
+    }
+    assert.equal(evaluateExpected({ expected, executed: good.filter(row => row.job !== job) }).ok, false);
+  }
 });
 
 test('expanded matrix members are enforced individually', () => {
