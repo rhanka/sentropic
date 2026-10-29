@@ -266,7 +266,7 @@ export function evaluateExpected({ expected = [], executed = [] } = {}) {
       continue;
     }
     const conclusion = normalizeConclusion(row.conclusion);
-    if (conclusion === 'success' || conclusion === 'neutral') {
+    if (conclusion === 'success') {
       passed.push(name);
     } else if (conclusion === 'skipped') {
       failures.push({ job: name, reason: 'unexpectedly-skipped', conclusion });
