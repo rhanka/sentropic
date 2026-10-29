@@ -13,7 +13,7 @@
  * must not inherit each other's read state.
  */
 
-import type { ChatUiStorageAdapter } from '@sentropic/chat-runtime/hosts/createWebHost';
+import type { ChatUiStorageAdapter } from '../hosts/createWebHost.js';
 import type { AgentsEntry } from '@sentropic/chat-ui/state/agentsEntry';
 
 export type AgentsViewMarkersConfig = {
