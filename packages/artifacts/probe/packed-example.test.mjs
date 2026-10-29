@@ -23,7 +23,7 @@ test('packed Radar example compiles using only installed public entrypoints', ()
   writeFileSync(`${consumer}/package.json`, JSON.stringify({ private: true, type: 'module' }));
   const offline = process.env.ARTIFACTS_OFFLINE_TOOLS;
   if (offline) {
-    execFileSync('npm', ['install', '--prefix', consumer, '--ignore-scripts', '--strict-peer-deps',
+    execFileSync(process.execPath, ['/workspace/scripts/ci/locked-consumer.mjs', '--prefix', consumer, '--ignore-scripts', '--strict-peer-deps',
       '--offline', '--no-audit', '--no-fund', archive,
       resolve('tools/memory-mcp-l5/artifacts/archives/sentropic-mcp-platform-0.4.0-2ad8a40fa38f4289fe177f58d75bc3317a50dd1b7a3ca693cf55cff2ff72cc9d.tgz')], { stdio: 'inherit' });
     for (const name of readdirSync(offline).filter((name) => name !== '@sentropic' && name !== '.bin')) {
@@ -31,7 +31,7 @@ test('packed Radar example compiles using only installed public entrypoints', ()
     }
     mkdirSync(`${consumer}/node_modules/.bin`, { recursive: true });
     copyFileSync(`${offline}/typescript/bin/tsc`, `${consumer}/node_modules/typescript/bin/tsc`);
-  } else execFileSync('npm', ['install', '--prefix', consumer, '--ignore-scripts', '--strict-peer-deps',
+  } else execFileSync(process.execPath, ['/workspace/scripts/ci/locked-consumer.mjs', '--prefix', consumer, '--ignore-scripts', '--strict-peer-deps',
     '--no-audit', '--no-fund', archive, 'typescript@5.4.5', '@types/node@22',
     'pg@8.22.0', '@types/pg@8.20.0', '@sentropic/mcp-platform@0.4.0'], { stdio: 'pipe' });
   const installed = `${consumer}/node_modules/@sentropic/artifacts`;

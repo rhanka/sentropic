@@ -13,7 +13,7 @@ test('should strictly install the packed mesh with Radar llm-mesh 0.19.2', () =>
     writeFileSync(`${consumer}/package.json`, JSON.stringify({ private: true, dependencies: {
       [mesh.name]: `file:${mesh.path}`, '@sentropic/llm-mesh': '0.19.2',
     } }));
-    const result = spawnSync('npm', ['install', '--package-lock-only', '--strict-peer-deps',
+    const result = spawnSync(process.execPath, ['/workspace/scripts/ci/locked-consumer.mjs', '--package-lock-only', '--strict-peer-deps',
       '--ignore-scripts', '--no-audit', '--no-fund'], { cwd: consumer, encoding: 'utf8' });
     assert.equal(result.status, 0, result.stderr);
   } finally { rmSync(consumer, { recursive: true, force: true }); }
