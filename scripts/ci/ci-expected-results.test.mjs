@@ -56,7 +56,7 @@ test('should keep validators independent without static capacity mutexes', () =>
   const validators = Object.entries(workflow.jobs).filter(([name]) =>
     /^validate-/.test(name) && !['validate-publishable-manifests', 'validate-ci-capacity-metrics', 'validate-idp-sync'].includes(name)
     || name === 'memory-l5-qualification');
-  assert.equal(validators.length, 25);
+  assert.equal(validators.length, 24);
   for (const [name, job] of validators) {
     assert.deepEqual(job.needs, ['changes'], name);
     assert.equal(job.concurrency, undefined, name);
@@ -99,7 +99,7 @@ test('should exercise the real publication DAG on a branch without running regis
   const changes = Object.fromEntries(Object.keys(workflow.jobs.changes.outputs).map(key => [key, key === 'engram_e2' ? 'false' : 'true']));
   const context = { changes, ref: 'refs/heads/topic', event: 'workflow_dispatch', inputs: { capacity_publish_dry_run: true } };
   const selected = workflowExpected(workflow, context).filter(row => row.selected && row.job.startsWith('publish-'));
-  assert.equal(selected.length, 22);
+  assert.equal(selected.length, 21);
   for (const { job: name } of selected) {
     const steps = workflow.jobs[name].steps;
     const dry = steps.find(step => step.name === 'Dry-run package publication');
@@ -117,6 +117,19 @@ test('should exercise the real publication DAG on a branch without running regis
   }
   const normal = workflowExpected(workflow, { ...context, inputs: { capacity_publish_dry_run: false } });
   assert.equal(normal.some(row => row.selected && row.job.startsWith('publish-')), false);
+});
+
+test('should gate the integrated client runtime through the core validator and OIDC publisher', () => {
+  const steps = workflow.jobs['validate-chat-core'].steps.map(step => step.run ?? '').join('\n');
+  for (const target of ['typecheck-chat-core', 'build-chat-core', 'test-pkg-chat-core', 'pack-chat-core', 'qualify-published-install']) {
+    assert.ok(steps.includes(target), target);
+  }
+  assert.match(steps, /PEERS=svelte@5\.55\.7,@sentropic\/chat-ui@0\.34\.1/);
+  assert.deepEqual(workflow.jobs['publish-chat-core'].needs, ['changes', 'validate-chat-core']);
+  assert.equal(workflow.jobs['publish-chat-core'].permissions['id-token'], 'write');
+  assert.equal(workflow.jobs['validate-chat-runtime'], undefined);
+  assert.equal(workflow.jobs['publish-chat-runtime'], undefined);
+  assert.ok(workflow.jobs['ci-gate'].needs.includes('validate-chat-core'));
 });
 
 test('should bound simultaneous execution slots across dependency joins and matrix caps', () => {
