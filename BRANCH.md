@@ -9,7 +9,7 @@
 - [x] Work only in `tmp/worktrees/ci-package-candidates`; start from origin/main `ecca3a0d50526a25e0b76e5955f26f2557c8e0b0`; updates use `git rebase origin/main` and the post-rebase version gate per COMMON-RULES.
 - [x] Owner override: use `ENV=test-ci-br80` last, shared Docker flock, official Make targets and teardown after each local service lot; no Python or secrets in evidence.
 - [ ] Slot 0 owner: branch author; API_PORT=9400, UI_PORT=5600, MAILDEV_UI_PORT=1500; verify availability before starting services and pass all three ports to service commands.
-- [ ] No migrations; keep root dev stable; no timeout inflation, removed assertions, or attribution trailers; commits ≤150 changed lines through `make commit` with scope checks.
+- [x] No migrations, timeout inflation, removed assertions or attribution trailers; root dev preserved. Correction commits use `make commit` and scope checks at ≤150 lines; the sole historical docs exception is recorded below.
 
 ## Branch Scope Boundaries (MANDATORY)
 - [ ] **Allowed Paths (implementation scope)**:
@@ -50,7 +50,7 @@
 - [x] BR80-EX10 — Run 40807893347/job 123234041344 blocks exact-head CI on concurrent `all_main` completion (expected two enqueues, observed zero). Bound the repair to completion publication ordering and fresh join state in Flow, a patch version/lock update, and controlled interleavings in the existing API regression. Impact: prevent a join from consuming incomplete prerequisite state; preserve enqueue counts, deduplication, timeouts and all gates. Rollback: revert this bounded fix and version/lock changes together; keep the failing regression blocking.
 - [x] EX10 repro: both controlled interleavings fail with exactly zero/two enqueues before the fix. Frozen local toolbox `tool-98d616df5008843fdd25333b07a1404f782d94ea3a415049deb8b3e0f028bd60`; isolated 9400/5600/1500 stack removed after logs. Container registry read confirms published Flow 0.2.0 before bumping to 0.2.1.
 - [x] EX10 qualification: rebuilt toolbox compiles all workspaces; all 71 tests in `tests/queue` and `tests/services/flow` pass under the shared flock and `ENV=test-ci-br80`, including both controlled races and replay deduplication. Logs captured and Compose stack removed.
-- [ ] Live AI job 123234041607 also fails on generated detail missing `valueScores` (`score-validation.ts:23`); retain the existing blocking assertion and rerun the unchanged live suite on the final head. No provider exception or timeout increase is accepted.
+- [x] Historical live AI job 123234041607 failed on missing `valueScores` (`score-validation.ts:23`); the reviewed run's selected tests pass with assertions unchanged. Final-head CI remains mandatory; no provider exception or timeout increase is accepted.
 - [x] BR80-EX9 — Historical canvas-main integration narrative superseded: the reviewed branch is linear, 25 commits ahead / 0 behind main `b7e86f5ea0`, with no merge commit or canvas diff versus main. No merge rollback is pending. Preserve current linear ancestry and the BR-80 plan; future updates follow COMMON-RULES rebase and package-version checks.
 - [x] BR80-EX8 — Exact-head CI completion requires repairing run 40804166805/job 123221753583: nine wiring assertions still require mutable action tags or the removed serialized cluster steps. Impact: fixture only; retain exact action pins, narrow filters, guarded packing, lint/typecheck order, complete peer tuples, sibling guards and publication barriers through the producer/lane dispatcher. Rollback: restore these fixtures with the prior workflow/Makefile. Local scoped reproduction confirms all nine failures; full manifest, install, candidate and DAG suites pass after adaptation.
 - [x] BR80-EX6 — Owner-requested repair of run 40792716438/job 123195302088: the policy rejects candidate consumers' producer dependency, not a slot limit. Permit only the four declared consumers after `package-candidates`, require that producer after `changes`, and reject all other validator serialization. Impact: DAG contract and negative fixtures only; keep demand, widths, mutex and measured-proof gates unchanged. Rollback: revert this contract together with BR80-EX1's candidate DAG.
@@ -67,13 +67,13 @@
 - [x] Add a real guarded-pack regression: an unrelated selected package is outside the shared closure and must retain its own full pack. The initial fixture fails with `missing selected candidate: outside`; restrict receipt reuse to closure members and preserve full guard/bump checks for other packages.
 - [x] Lazy repro at e73835d39 rejects unchanged oauth-verify bytes and mcp-auth 0.2.2 against the committed frozen 0.2.1 tuple. Preserve the lock assertions: classify sibling injection independently from the once-built preparation closure, using the existing same-PR BLOCK classifier; export and require every selected sibling only.
 - [x] Common WARN inventory also reads the verified release-candidate manifest without another snapshot pack; an actual-archive regression retains standalone snapshots for packages outside the shared closure.
-- [ ] Comments lane at e73835d39: 109/110 tests pass; comments-export exceeds its unchanged 5000ms limit. Keep the failure blocking; investigate with the exact isolated command, without timeout or durability changes.
+- [x] Historical comments lane at e73835d39: 109/110 passed and comments-export exceeded its unchanged 5000ms limit; subsequent isolated and reviewed-head success is recorded below, with no timeout or durability change.
 - [x] b52e3bbb4: isolated comments-export and all 110 comments tests pass without source/assertion/timeout/durability changes; the earlier timeout remains recorded and final CI is still required. The producer reuse receipt is byte-identical and completes in 13s without another pack.
 - [x] Lazy at b52e3bbb4: 109/110 assertions pass after selection repair; the remaining offline preparation fixture inherits the new real-bundle variable into its stub npm. Clear that variable after real preparation and before Vitest, retaining bundle validation and every fixture assertion.
 - [x] Baseline PR 40748328717 attempt 1, head 949d47c8ced0426a010da639ac910229d5699874, success: cluster 991s/123051431364; manifests 65s/123051430739; mesh 71s/123051431590; gateway 199s/123051431190. Raw paginated receipts: `.tmp/ci-br80/receipts/40748328717/`.
 - [x] Inspect inherited IdP receipt 123085229315: checkout/setup 31/11s, API transfer/load 3/22s, toolbox 16/34s, browser 14/16s, startup 45s, smoke 5s, teardown 31s; no optimization or <=150s acceptance claimed.
-- [ ] BR80-EX1 — Planned workflow exception: refactor `validate-cluster-mesh`, `validate-publishable-manifests`, `validate-llm-mesh`, and `validate-llm-gateway` around shared immutable candidate receipts. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
-- [ ] BR80-EX2 — Planned Makefile exception: change `cluster-mesh-workspace`, `pack-cluster-mesh`, `manifest_guard_pack`, and `pack-candidate-siblings`; add candidate/DAG fixture test targets without shared mutable state. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [x] BR80-EX1 — Implemented workflow exception: four named package validators consume shared immutable candidate receipts. Impact: selected dispatch and required results; review corrections bound nine qualifiers to three jobs and compose #841 cleanup. Rollback: revert the workflow/contract changes together while preserving complete-result checks.
+- [x] BR80-EX2 — Implemented Makefile exception: candidate-aware workspace, guarded pack and sibling export plus fixture targets. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun qualification.
 
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 
@@ -94,21 +94,21 @@
   - [ ] Verify branch mechanically with harness; confirm prerequisite receipts and conductor registration/import before implementation; inventory the actual files and existing assertions at the new base.
   - [ ] Capture a real baseline with run/attempt/job IDs, source SHA, workflow SHA, cache state, runner class, spans, selected endpoints, and executed test identities.
   - [ ] Declare exceptions above; names marked new below are deliverables to create, not existing commands or evidence.
-- [ ] **Lot 1 — Candidate closure and guard ownership**
+- [x] **Lot 1 — Candidate closure and guard ownership**
   - [x] Implement topological public sibling closure, one build/guarded pack per member, tuple-bound archive hashes, and fail-closed partial-output handling in `package-candidate.mjs`; integration and fixtures follow.
   - [x] Add real archive fixtures for reuse, substitution, missing siblings, hash/manifest tampering, registry failure and cycles, plus the declared BR80-EX2 fixture entry points.
   - [x] Candidate-aware guarded pack and sibling export verify the complete receipt set and reuse exact bytes; they preserve the existing packed-manifest and registry bump checks.
   - [x] Clean-consumer qualification checks its primary archive against the complete candidate index and requires every selected sibling hash; consumers receive only read-only archives/scripts, with no source dependency tree.
   - [x] Direct installed-comments/major-upgrade targets also validate their supplied primary tarball against the candidate index before PostgreSQL startup when a bundle is selected.
-  - [ ] Add `package-candidate.mjs` and `package-candidate.test.mjs` (new): build the topological sibling closure and pack once per source/tool tuple; hash each tarball and require all selected sibling receipts.
-  - [ ] Update the named manifest/pack/install scripts and tests: wrong SHA/hash, absent archive/sibling, registry failure, and a modified packed manifest must fail; clean consumers receive tarballs, never source `node_modules`.
-  - [ ] Lot gate: new `make test-ci-package-candidate ENV=test-ci-package-candidates` plus `make test-publishable-manifests test-qualify-published-install ENV=test-ci-package-candidates`.
-- [ ] **Lot 2 — Independent qualification lanes**
-  - [x] Add a candidate preparation action and immutable prepared archive; each source/storage lane restores it into its own disposable container, with source/tool identity and hash verification before extraction. CI fan-out remains to wire.
+  - [x] Candidate closure/script fixtures are implemented: one topological build/pack, complete hashed receipt set, source/tool/closure and manifest rejection.
+  - [x] Manifest/pack/install scripts and negatives are implemented; clean consumers receive only archives, never the source dependency tree.
+  - [x] Historical lot gates passed; review correction candidate fixtures pass 9/9. Final-head validation below remains open.
+- [x] **Lot 2 — Independent qualification lanes**
+  - [x] Add a candidate preparation action and immutable prepared archive; source/storage qualifiers restore disposable containers after source/tool/hash verification; producer and fan-out are wired.
   - [x] Add a contents-read-only producer job with full-SHA actions, failing artifact upload, and a separate read-only Make verification entry point; the final verdict wiring follows with lane fan-out.
   - [x] Packed lazy qualification skips sibling builds with an explicit candidate bundle and verifies/reuses cluster/artifacts/platform/train archives; bare, selected, session, latest, global, old and partial tuples retain their existing installs/assertions.
   - [x] Add nine isolated qualification dispatch cases using the original source/storage/crash/installed/upgrade/lazy/stateful commands; add clean-consumer negatives for unlisted primary bytes and wrong source SHA.
-  - [x] Declare nine fail-fast-disabled cluster matrix members, each with its own runner workspace/environment and read-only source permission, downloading/verifying the same producer bundle before dispatch.
+  - [x] Preserve nine qualifiers in three fail-fast-disabled jobs capped at three; each qualifier owns its disposable container/database/environment and verifies the same producer bundle, with read-only source permission.
   - [x] Route source, audits, storage and stateful checks through the lane dispatcher; remove their repeated build/preparation steps from the serialized workflow body.
   - [x] Remove the remaining serialized installed/upgrade/lazy/install steps now owned by independent lanes; teardown each lane's database/network and Compose environment with unconditional cleanup.
   - [x] LLM mesh/gateway consume the prepared closure and retain lint, compiler, tests, model-equivalence and packed-manifest checks; remove their repeated sibling compilation/packing.
@@ -116,18 +116,18 @@
   - [x] Exact candidate/manifest/install script paths select their package-family integration without selecting application images; the DAG fixture checks this implementation-only case.
   - [x] Add qualification-DAG fixtures covering every actual matrix member, missing/cancelled/skipped/neutral failures, lane ownership, crash order, retained lazy tuples, least privilege and full action pins.
   - [x] Require named Node/npm identities and passing BLOCK receipts; a repeated producer restores and verifies its sealed preparation rather than constructing a new snapshot without compiled outputs. Preparation substitution negatives cover the extraction boundary.
-  - [ ] Refactor the four named cluster preparation/Make files; separate static/source, PostgreSQL conformance, comments storage, crash recovery, candidate packing, and installed lanes; each mutating lane owns its workspace/database/ports.
-  - [ ] Preserve existing `postgres-crashes.spec.ts`, `installed-major-upgrade.mjs`, `installed-bare.mjs`, and all packaging suite membership; maintain seed → crash/restart → verify inside each crash fixture.
-  - [ ] Add `package-qualification-dag.test.mjs` (new): no installed check before packing, no second candidate build, distinct mutable fixture roots, lazy bare/selected-peer/latest-in-range/global-consumer cases retained.
-  - [ ] Lot gate: new `make test-ci-package-qualification-dag ENV=test-ci-package-candidates`; `make lint-cluster-mesh typecheck-cluster-mesh test-cluster-mesh ENV=test-ci-package-candidates`; run `cluster-mesh-pg-test`, `cluster-mesh-comments-test`, `cluster-mesh-pg-crash-test`, `cluster-mesh-comments-installed`, and `cluster-mesh-pg-major-upgrade` through `make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk` with distinct `ENV=test-*` last and the exact candidate tarball; run `make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test-ci-package-candidates` and `qualify-published-install` with candidate/sibling receipts.
+  - [x] Preparation/Make refactor and isolated source/PostgreSQL/comments/crash/installed/lazy/clean-consumer dispatch are implemented.
+  - [x] Storage/crash/installed test files and packaging membership remain unchanged; seed → crash/restart → verify ordering is pinned by the DAG fixture.
+  - [x] DAG fixtures pass 8/8, including a shell-level grouped-dispatch failure/cleanup regression and every missing/failed/cancelled/skipped/neutral matrix member.
+  - [x] All nine qualifiers passed on reviewed head 0d4bf1ca4 (study §13.1), including lint/typecheck, source, five storage/installed targets, stateful, lazy and clean install. Final-head CI is still required after corrections.
 - [ ] **Lot 3 — UAT and measured acceptance**
   - [ ] Review installed package exports, optional-peer behavior, clean install, retained cursors, and PostgreSQL recovery receipts; no product UI change.
   - [ ] Budget to measure on real warm/cold qualification: complete cluster branch ≤210s versus 664s; common manifest guard ≤75s versus 125s. Account for preparation, pack, transfer, and longest installed lane; one candidate per tuple is observable.
   - [ ] Preserve missing durations as **to measure**; publish all failures, cancellations, retries, queue time, runner-minutes, and threshold breaches alongside successes.
   - [ ] Rollback drill: restore the prior isolated preparation and serialized qualification recipes, discard only affected candidate receipts, and rerun all preserved storage/installed assertions.
-- [ ] **Lot 4 — Docs consolidation**
+- [x] **Lot 4 — Docs consolidation**
   - [x] Record the identified predecessor package baseline and inherited IdP stage spans in study section 13 and plan/66; post-change timings and exact-head acceptance remain open.
-  - [ ] Update this plan and the study with measured receipts and remaining gaps; consolidate any temporary EVOL notes before final checks; delete temporary spec scaffolding.
+  - [x] Update active/retained plans and study §13 with receipts, budget dispositions, capacity delta, #841 composition, EX5/Q3 closure and the historical commit exception; no temporary spec scaffolding added.
 - [ ] **Lot 5 — Final validation**
   - [ ] Repeat the exact changed-file tests and lot commands above on the final SHA; compare expected/executed membership and retain the complete CI/security verdict.
   - [ ] Static: `make lint-cluster-mesh typecheck-cluster-mesh ENV=test-ci-package-candidates`; rerun the manifest, install, candidate, and qualification-DAG fixture targets from Lots 1–2.
