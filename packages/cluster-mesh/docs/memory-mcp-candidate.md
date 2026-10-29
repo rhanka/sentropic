@@ -1,55 +1,45 @@
-# Pinned candidate qualification blocker
+# Pinned candidate qualification
 
-Candidate: `@sentropic/engram` 0.22.0 archive with SHA-256
-`965c93e326df9866584261061f4e49571cfd74dfe1dc258c0c6894eea121a4e9`.
-Owner: Engram packaging. Consumer: cluster-mesh memory MCP builtin.
+The development-only `@sentropic/engram` 0.22.0 fixture is pinned to:
 
-The two installed ESM entries independently bundle
-`engram-memory/dist/store-factory.js` and its private `fencedFactoryStores`
-WeakSet:
+| Field | Value |
+| --- | --- |
+| SHA-256 | `0e740e5c8fd9d8bc167d6efcdd0e2bf86a2af5c6accfc2bc1c464e4477b14f08` |
+| Integrity | `sha512-YuHv8eJ/rsijXI4ylv+vare3Bu4gCnh3mS3QmDz36T9aJ9pJgjBwXcuTCATBV9C8RQGfYYuFwjkLazrDDILMNQ==` |
+| Engram source | `2bd7da41779305831b16c94f1272ab3b9d38128e` |
 
-- `dist/memory-substrate.js:741` declares its registry; line 747 marks the
-  fenced store returned by the neutral adapter.
-- `dist/mcp-memory.js:6976` declares another registry; line 6982 checks that
-  second registry when the MCP engine or read facets admit a store.
-- `dist/mcp-memory.js:8296` applies the provenance check on engine effects;
-  line 9272 applies it on current reads.
+The Docker qualification checks both hashes before installing the archive.
+The archive is outside the published package file set; the frozen substrate
+development lock remains unchanged. No published older MCP peer is substituted.
 
-The archive exports different `createMemoryPortV2` function instances from
-these entries. The substrate's canonical PostgreSQL store is therefore absent
-from the MCP entry's private registry. Its readiness receipt and real fence
-do not override this check.
+The producer code-splits its public ESM entries over one internal chunk.
+`/memory-substrate` and `/mcp-memory` share the engine factory and its private
+fenced-store provenance instance. The public exports and neutral contract
+remain unchanged. The builtin still requires shared factory identity before
+opening storage. `tests/mcp-memory.spec.ts` deliberately supplies split
+instances and requires atomic refusal, zero storage opens and no compiled
+registry. No private stamp or unfenced exemption is introduced.
 
-Observed at consumer commit `b62a1117c` before the receiver added the startup
-refusal: `make memory-mcp-qualify ENV=test-memory-mcp` ran the source and test
-TypeScript checks successfully, then failed five of eleven assertions across
-the PostgreSQL, stdio and HTTP files. The three direct lifecycle tests all
-failed at the first capture with the producer's closed domain result:
+The superseded archive (`965c93e326df9866584261061f4e49571cfd74dfe1dc258c0c6894eea121a4e9`)
+bundled two private registries and was refused by this guard. It is no longer
+the development peer.
 
-```json
-{"ok":false,"auditId":"audit-memory","redactionClass":"high","error":{"code":"CAPABILITY_UNAVAILABLE","message":"Requested memory capability or required neutral port facet is unavailable.","retriable":false}}
-```
+The new archive exposed a consumer adapter defect during forget: lexical
+removal carries the contract's UTF-8 JSON `null` marker, while the adapter
+required an object for every index write. The adapter now preserves that
+marker for `memory-accepted-lexical`; other non-object values remain refused.
+Lexical removal reads the admitted record's existing index identity within
+the same transaction and preserves it while replacing the result with JCS
+`null`. It requires that identity to exist. The separate commit index still
+preserves producer intent.
+The PostgreSQL lifecycle and wire-adaptation regression tests cover this path.
 
-Static discovery, peer absence/version/shape refusals and unselected lazy
-loading passed. HTTP and stdio preserved discovery schemas. No successful
-capture/admission/recall/withdraw/forget qualification is claimed.
+Run `make memory-mcp-qualify ENV=test-memory-mcp` for all six required positive
+PostgreSQL, stdio and HTTP cases plus static/lazy/refusal cases and a
+separate-process round trip through the shipped stdio launcher. This target
+requires the positive cases without skips and shuts down the isolated stack.
 
-The receiver now requires the public entries to share their engine factory
-instance and refuses split instances before opening the canonical store.
-There is no fallback, provenance stamp injection, native private opener,
-unfenced exemption or replacement memory semantics. Positive PostgreSQL
-tests remain required and blocking.
-
-Required producer delivery: package the public substrate, engine and read
-facets over the same private store-factory instance, preserving the private
-provenance gate. Qualify the exact installed archive by opening the neutral
-PostgreSQL store through `/memory-substrate` and using it through
-`/mcp-memory` for all six tools. Validate pending versus admitted visibility,
-receipts, confirmation refusal and two-tenant isolation over stdio and HTTP.
-Supply the resulting immutable candidate hash; publication still requires
-the separate L5 qualification and receiving acknowledgement.
-
-The owner also forbids a release bump depending on unpublished engram. The
-public registry returned engram 0.21.3 during this campaign, so cluster-mesh
-stays 0.24.0 in this draft. The mandatory package-bump CI gate is expected
-to refuse this head; no release-gate exemption is introduced.
+The public registry still supplies engram 0.21.3. The owner instruction keeps
+cluster-mesh at 0.24.0 until the producer's publication prerequisite changes.
+The mandatory package-bump CI gate therefore remains a release blocker for
+this draft; no exemption or publication is introduced here.
