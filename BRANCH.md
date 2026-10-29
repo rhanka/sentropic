@@ -68,6 +68,7 @@
   - [ ] Lot gate: new `make test-ci-package-candidate ENV=test-ci-package-candidates` plus `make test-publishable-manifests test-qualify-published-install ENV=test-ci-package-candidates`.
 - [ ] **Lot 2 — Independent qualification lanes**
   - [x] Add a candidate preparation action and immutable prepared archive; each source/storage lane restores it into its own disposable container, with source/tool identity and hash verification before extraction. CI fan-out remains to wire.
+  - [x] Packed lazy qualification skips sibling builds with an explicit candidate bundle and verifies/reuses cluster/artifacts/platform/train archives; bare, selected, session, latest, global, old and partial tuples retain their existing installs/assertions.
   - [ ] Refactor the four named cluster preparation/Make files; separate static/source, PostgreSQL conformance, comments storage, crash recovery, candidate packing, and installed lanes; each mutating lane owns its workspace/database/ports.
   - [ ] Preserve existing `postgres-crashes.spec.ts`, `installed-major-upgrade.mjs`, `installed-bare.mjs`, and all packaging suite membership; maintain seed → crash/restart → verify inside each crash fixture.
   - [ ] Add `package-qualification-dag.test.mjs` (new): no installed check before packing, no second candidate build, distinct mutable fixture roots, lazy bare/selected-peer/latest-in-range/global-consumer cases retained.
