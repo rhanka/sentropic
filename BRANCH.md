@@ -35,4 +35,5 @@
 ## UAT Management (in orchestration context)
 - [x] No web, Chrome or VSCode behavior change; workflow qualification supplies acceptance.
 ## Feedback Loop
+- [x] Fresh paginated stock read: 2,714.98 GB before this branch ran, versus audit 4,017 GB; no attribution to this change; repository log-retention GET remains 90 days.
 - [x] No scope exception; historical stock purge and registry transport redesign remain outside scope.
