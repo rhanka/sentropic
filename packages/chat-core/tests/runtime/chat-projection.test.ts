@@ -4,14 +4,14 @@ import {
   projectAssistantRunSegments,
   type ProjectedRunSegment,
   type ProjectionStreamEvent,
-} from '../src/utils/chat-run-projection.js';
+} from '../../src/runtime/utils/chat-run-projection.js';
 import {
   buildFallbackProjectedSegments,
   buildProjectedTimeline,
   type ChatMessageAttachment,
   type ChatProjectionComputation,
   type ChatProjectionMessage,
-} from '../src/state/chatProjection.js';
+} from '../../src/runtime/state/chatProjection.js';
 
 type Message = ChatProjectionMessage & {
   sessionId?: string;

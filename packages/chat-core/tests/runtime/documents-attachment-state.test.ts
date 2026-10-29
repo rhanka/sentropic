@@ -10,8 +10,8 @@ import {
   composerAttachmentListReducer,
   buildSentAttachments,
   buildAttachmentBandItems,
-} from '../src/documents/attachmentState.js';
-import type { ChatComposerAttachmentDraft } from '../src/documents/types.js';
+} from '../../src/runtime/documents/attachmentState.js';
+import type { ChatComposerAttachmentDraft } from '../../src/runtime/documents/types.js';
 
 // ---------------------------------------------------------------------------
 // createComposerAttachmentId

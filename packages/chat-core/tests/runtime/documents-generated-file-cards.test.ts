@@ -10,8 +10,8 @@ import {
   normalizeGeneratedFileCard,
   extractGeneratedFileCardsFromRuntimeSummary,
   extractGeneratedFileCardsFromEvents,
-} from '../src/documents/generatedFileCards.js';
-import type { ChatGeneratedFileCard } from '../src/documents/types.js';
+} from '../../src/runtime/documents/generatedFileCards.js';
+import type { ChatGeneratedFileCard } from '../../src/runtime/documents/types.js';
 
 // ---------------------------------------------------------------------------
 // normalizeGeneratedFileCard

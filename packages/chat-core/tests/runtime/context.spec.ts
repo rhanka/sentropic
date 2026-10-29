@@ -23,10 +23,10 @@ import {
   toChatRouteContextKey,
   upsertRouteContextEntry,
   selectActiveChatContexts,
-} from '../src/context/context-entry.js';
-import { createContextModule } from '../src/context/module.js';
-import type { ContextHost } from '../src/context/module.js';
-import type { ChatContextEntry } from '../src/state/chat-context.js';
+} from '../../src/runtime/context/context-entry.js';
+import { createContextModule } from '../../src/runtime/context/module.js';
+import type { ContextHost } from '../../src/runtime/context/module.js';
+import type { ChatContextEntry } from '../../src/runtime/state/chat-context.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -535,27 +535,27 @@ describe('domain neutrality: zero sentropic domain strings in src/context/', () 
 
 describe('context/index.ts re-exports', () => {
   it('exports createContextModule', async () => {
-    const mod = await import('../src/context/index.js');
+    const mod = await import('../../src/runtime/context/index.js');
     expect(typeof mod.createContextModule).toBe('function');
   });
 
   it('exports toChatRouteContextKey', async () => {
-    const mod = await import('../src/context/index.js');
+    const mod = await import('../../src/runtime/context/index.js');
     expect(typeof mod.toChatRouteContextKey).toBe('function');
   });
 
   it('exports upsertRouteContextEntry', async () => {
-    const mod = await import('../src/context/index.js');
+    const mod = await import('../../src/runtime/context/index.js');
     expect(typeof mod.upsertRouteContextEntry).toBe('function');
   });
 
   it('exports selectActiveChatContexts', async () => {
-    const mod = await import('../src/context/index.js');
+    const mod = await import('../../src/runtime/context/index.js');
     expect(typeof mod.selectActiveChatContexts).toBe('function');
   });
 
   it('keeps the visual noop provider outside the runtime', async () => {
-    const mod = await import('../src/context/index.js');
+    const mod = await import('../../src/runtime/context/index.js');
     expect(mod).not.toHaveProperty('createNoopChatContextProvider');
   });
 });

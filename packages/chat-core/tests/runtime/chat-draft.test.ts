@@ -9,7 +9,7 @@ import {
   syncDraftFromInput,
   isAssistantMessageInProgress,
   resolveComposerSteerState,
-} from '../src/state/chatDraft.js';
+} from '../../src/runtime/state/chatDraft.js';
 
 describe('chat draft and composer state', () => {
   it('syncs external drafts into input and input edits back into draft', () => {

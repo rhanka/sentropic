@@ -34,7 +34,7 @@ describe('comments runtime export registration', () => {
 
 describe('comments module — module loading', () => {
   it('should load comments/index without error', async () => {
-    const mod = await import('../src/comments/index.js');
+    const mod = await import('../../src/runtime/comments/index.js');
     expect(typeof mod).toBe('object');
     expect(typeof mod.createCommentState).toBe('function');
     expect(typeof mod.buildCommentThreads).toBe('function');
@@ -43,12 +43,12 @@ describe('comments module — module loading', () => {
   });
 
   it('should load comments/host without error', async () => {
-    const mod = await import('../src/comments/host.js');
+    const mod = await import('../../src/runtime/comments/host.js');
     expect(typeof mod).toBe('object');
   });
 
   it('should load comments/utils without error', async () => {
-    const mod = await import('../src/comments/utils.js');
+    const mod = await import('../../src/runtime/comments/utils.js');
     expect(typeof mod.buildCommentThreads).toBe('function');
     expect(typeof mod.getMentionCandidate).toBe('function');
     expect(typeof mod.getMentionMatches).toBe('function');
@@ -62,9 +62,9 @@ describe('comments module — module loading', () => {
 // 3. CommentHost fake-host harness
 // ---------------------------------------------------------------------------
 
-import type { CommentHost } from '@sentropic/chat-runtime/comments';
+import type { CommentHost } from '../../src/runtime/comments/index.js';
 import type { CommentItem, MentionMember, CommentCurrentUser } from '@sentropic/chat-ui/comments';
-import { createCommentState } from '@sentropic/chat-runtime/comments';
+import { createCommentState } from '../../src/runtime/comments/index.js';
 
 const makeItem = (overrides: Partial<CommentItem> = {}): CommentItem => ({
   id: 'c1',
@@ -215,7 +215,7 @@ describe('comments module — createCommentState factory', () => {
   it('initial snapshot should have empty threads and messages', () => {
     const host = new FakeCommentHost();
     const state = createCommentState(host, presentation);
-    let snap: import('../src/comments/state.js').CommentStateSnapshot | null = null;
+    let snap: import('../../src/runtime/comments/state.js').CommentStateSnapshot | null = null;
     state.subscribe((s) => { snap = s; })();
     expect(snap).not.toBeNull();
     expect(snap!.commentThreads).toHaveLength(0);
@@ -229,7 +229,7 @@ describe('comments module — createCommentState factory', () => {
     const host = new FakeCommentHost();
     host.comments = [makeItem({ thread_id: 'thread_1' })];
     const state = createCommentState(host, presentation);
-    let snap: import('../src/comments/state.js').CommentStateSnapshot | null = null;
+    let snap: import('../../src/runtime/comments/state.js').CommentStateSnapshot | null = null;
     state.subscribe((s) => { snap = s; });
     // setContext triggers loadCommentThreads internally
     state.actions.setContext({ contextType: 'project', contextId: 'proj_1' });
@@ -242,7 +242,7 @@ describe('comments module — createCommentState factory', () => {
     const host = new FakeCommentHost();
     host.comments = [makeItem({ thread_id: 'thread_1' })];
     const state = createCommentState(host, presentation);
-    let snap: import('../src/comments/state.js').CommentStateSnapshot | null = null;
+    let snap: import('../../src/runtime/comments/state.js').CommentStateSnapshot | null = null;
     state.subscribe((s) => { snap = s; });
     state.actions.setContext({ contextType: 'project', contextId: 'proj_1' });
     await state.actions.loadCommentThreads({});
@@ -272,7 +272,7 @@ import {
   getMentionMatches,
   buildCommentThreads,
   isCommentByUser,
-} from '../src/comments/utils.js';
+} from '../../src/runtime/comments/utils.js';
 
 describe('comments module — utility functions', () => {
   describe('getMentionCandidate', () => {
