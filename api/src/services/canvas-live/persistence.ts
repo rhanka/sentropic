@@ -1,7 +1,7 @@
 import type {
   LiveAdmission, LiveBaseline, LiveCheckpoint, LiveCommit, LiveDocumentIdentity,
   LiveDocumentState, LiveDocumentStore, LiveJournalEntry,
-} from '../../../../../packages/chat-core/src/live-document-port';
+} from '../../../../packages/chat-core/src/live-document-port';
 import { commitDigest, digest, duplicate, validateCommit } from './journal';
 
 export interface DocumentCodec<D> {

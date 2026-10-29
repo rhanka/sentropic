@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type {
   LiveCommit, LiveDocumentIdentity, LiveJournalEntry, LivePatchKey,
-} from '../../../../../packages/chat-core/src/live-document-port';
+} from '../../../../packages/chat-core/src/live-document-port';
 
 /** Stable digests also bind checkpoint watermarks to their encoded state. */
 export function canonical(value: unknown): string {
