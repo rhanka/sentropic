@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import { createDisabledTrace } from '../disabled-trace.mjs';
 import { assertNoCandidateNativeBuilds, candidateNativeBuilds } from '../native-build.mjs';
 
-it('blocks an observed compiler execution that produces a real candidate object file', () => {
+it.each(['spawnSync', 'spawn'])('blocks an observed %s compiler execution that produces a real candidate object file', method => {
   const root = mkdtempSync(join(tmpdir(), 'l5-real-compile-'));
   try {
     for (const binary of ['python', 'python2', 'python3']) {
@@ -17,7 +17,7 @@ it('blocks an observed compiler execution that produces a real candidate object 
     const source = join(addon, 'control.c'), object = join(build, 'control.o');
     writeFileSync(source, 'int l5_native_control(void) { return 42; }\n');
     const trace = createDisabledTrace(root);
-    const code = `const r=require('node:child_process').spawnSync('gcc',${JSON.stringify(['-c', source, '-o', object])},{cwd:${JSON.stringify(addon)},stdio:'inherit'});process.exit(r.status??1);`;
+    const code = `const r=require('node:child_process')[${JSON.stringify(method)}]('gcc',${JSON.stringify(['-c', source, '-o', object])},{cwd:${JSON.stringify(addon)},stdio:'inherit'});if(r.on)r.on('close',code=>process.exit(code??1));else process.exit(r.status??1);`;
     const run = spawnSync(process.execPath, ['-e', code], { env: { ...process.env, ...trace.env }, encoding: 'utf8' });
     expect(run.status, run.stderr).toBe(0);
     expect(existsSync(object)).toBe(true);

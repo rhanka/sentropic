@@ -56,11 +56,20 @@ for (const method of ['spawn', 'spawnSync', 'exec', 'execSync', 'execFile', 'exe
     const context = String(options.cwd ?? process.cwd()) + ' ' + (options.env?.npm_package_name ?? process.env.npm_package_name ?? '');
     trace('lifecycle', context + ' ' + command);
     const cwd = options.cwd instanceof URL ? require('node:url').fileURLToPath(options.cwd) : require('node:path').resolve(String(options.cwd ?? process.cwd()));
-    if (['spawn', 'spawnSync', 'execFile', 'execFileSync'].includes(method) && !options.shell &&
-        isNativeBuildProcess(args[0], Array.isArray(args[1]) ? args[1] : [])) {
-      trace('native-build', { method, executable: String(args[0]), argv: Array.isArray(args[1]) ? args[1] : [], cwd });
+    const nativeCall = ['spawn', 'spawnSync', 'execFile', 'execFileSync'].includes(method) && !options.shell &&
+        isNativeBuildProcess(args[0], Array.isArray(args[1]) ? args[1] : []);
+    const observed = () => trace('native-build', { method, executable: String(args[0]), argv: Array.isArray(args[1]) ? args[1] : [], cwd });
+    if (!nativeCall) return original.apply(this, args);
+    try {
+      const result = original.apply(this, args);
+      if (method.endsWith('Sync')) {
+        if (!result?.error) observed();
+      } else result.once('spawn', observed);
+      return result;
+    } catch (error) {
+      if (Number.isInteger(error.status) || error.pid > 0) observed();
+      throw error;
     }
-    return original.apply(this, args);
   };
 }
 require('node:module').syncBuiltinESMExports();

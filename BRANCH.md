@@ -42,4 +42,7 @@
   - [ ] Execute and retain P09 regressions before the E2 acceptance check; preserve LOT=3's E2 refusal and all later installed gates. Retain actual assertion names and source-byte-bound complete suites for frozen family IDs; never map E4 canonical cases by suite alone.
   - [x] Retain the first tooling failure: the zeroed-generation negative case exceeded its five-second timer under concurrent workers. Isolate qualification workers with maxWorkers=1, as the Lot 3 runner already does; no timer or assertion is changed.
   - [x] Tooling after worker isolation: 144 passed, zero failed/skipped/todo; the complete fingerprint-negative suite passes with its original timer. Actual full qualification remains the next step.
+  - [x] First complete post-reboot attempt retained by hash: P09 18 suites/90 assertions, P10 24 assertions, native/disabled controls pass; strict verdict NOT QUALIFIED. Preserve the full archive before the final correction.
+  - [x] Reproduced a failed /missing/gcc spawn incorrectly counted as execution. Record native subprocess evidence only after a successful spawn (including real compiler exits with failure); keep source-object detection and real sync/async compiler controls.
+  - [x] Full qualification routes LOT=2/3 to the separate canonical lot2-manifest.json, preserving the L4 candidate manifest for candidate proofs; absent or unverified E2 inputs still refuse.
 - [ ] Lot 2: document the actual verdict and exact remaining owner actions, scope/review/CI checks, PR and cleanup; do not issue a false L5 acceptance.
