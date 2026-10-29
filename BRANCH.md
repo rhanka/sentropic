@@ -49,6 +49,7 @@
 - [x] Extend host-close/session-rotation coverage and require stale handles to leave a new session intact; update revoked-resolution refusal expectation.
 - [x] Refuse subscriptions to explicitly closed sessions and scope invalidation to the exact session identity.
 - [x] Extend actor-kind collision denial to incompatible-schema requests before any draft recovery state can be written.
+- [x] Observe the incompatible-schema actor-collision RED; check stored actor kind before schema refusal and distinguish disposed from revoked test expectations.
 - [x] CL-1M gate: consume published DS pure types at the adapter boundary when available; preparation shapes are host-local, not a publication/conformance claim.
 - [x] H3 gate: actual Y.Doc/Awareness transport factory and production binding/registry-update conformance remain unqualified.
 - [x] H2 gate: admission storage is injected; restart witnesses recreate the service over retained records, not a production durable-store claim.
