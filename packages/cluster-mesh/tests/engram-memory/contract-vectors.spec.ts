@@ -188,7 +188,8 @@ describe('C6 additive asset freeze', () => {
     });
     expect(inventory.asset).toMatchObject({
       name: MEMORY_NEUTRAL_CONTRACT.name, version: MEMORY_NEUTRAL_CONTRACT.version,
-      declarationSha256: null, status: 'final bytes pending',
+      declarationSha256: '5a8c13c51eb00b350fae0b271d5357f54bdb01c930d607f679372bebff773229',
+      status: 'standalone candidate bytes bound; producer ACK pending',
     });
     expect(inventory.declarationDesign.handleMethods).toEqual(MEMORY_NEUTRAL_HANDLE_METHODS);
     expect(inventory.declarationDesign.boundMethods).toEqual(MEMORY_NEUTRAL_HANDLE_METHODS);
