@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import test from 'node:test';
-import { evaluateExpected, workflowExpected } from './ci-expected-results.mjs';
+import { evaluateExpected, evaluateSelection, workflowExpected } from './ci-expected-results.mjs';
 
 const require = createRequire(path.join(process.env.CI_EXPECTED_TOOL_DIR, 'package.json'));
 const workflow = require('yaml').parse(fs.readFileSync('.github/workflows/ci.yml', 'utf8'));
@@ -36,6 +36,22 @@ test('should reject every missing, failed, cancelled or skipped actual qualifica
     assert.equal(evaluateExpected({ expected, executed: executed.filter(row => row.job !== job) }).ok, false);
     for (const conclusion of ['failed', 'cancelled', 'skipped', 'neutral']) {
       assert.equal(evaluateExpected({ expected, executed: executed.map(row => row.job === job ? { ...row, conclusion } : row) }).ok, false);
+    }
+  }
+});
+
+test('should qualify candidate implementation changes while application image steps remain unselected', () => {
+  const expected = workflowExpected(workflow, { event: 'pull_request', changes: { package_candidates: 'true' } });
+  for (const name of ['package-candidates', 'validate-llm-mesh', 'validate-llm-gateway', ...lanes.map(lane => `validate-cluster-mesh (${lane})`)]) {
+    assert.equal(expected.find(row => row.job === name)?.selected, true, name);
+  }
+  for (const name of ['build-api-image', 'build-ui', 'build-e2e']) {
+    for (const step of jobs[name].steps) {
+      assert.ok(step.if, `${name}: explicit step selection`);
+      assert.equal(evaluateSelection(step.if, key => {
+        assert.ok(key.startsWith('needs.changes.outputs.'));
+        return key.endsWith('.package_candidates') ? 'true' : 'false';
+      }), false, `${name}: ${step.name ?? step.uses}`);
     }
   }
 });

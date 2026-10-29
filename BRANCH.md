@@ -90,6 +90,7 @@
   - [x] Remove the remaining serialized installed/upgrade/lazy/install steps now owned by independent lanes; teardown each lane's database/network and Compose environment with unconditional cleanup.
   - [x] LLM mesh/gateway consume the prepared closure and retain lint, compiler, tests, model-equivalence and packed-manifest checks; remove their repeated sibling compilation/packing.
   - [x] The common inventory verifies shared BLOCK candidate receipts rather than repacking their closure. The producer is a direct final-gate/capacity-receipt dependency; actual cluster matrix members remain in the complete-result manifest.
+  - [x] Exact candidate/manifest/install script paths select their package-family integration without selecting application images; the DAG fixture checks this implementation-only case.
   - [x] Add qualification-DAG fixtures covering every actual matrix member, missing/cancelled/skipped/neutral failures, lane ownership, crash order, retained lazy tuples, least privilege and full action pins.
   - [x] Require named Node/npm identities and passing BLOCK receipts; a repeated producer restores and verifies its sealed preparation rather than constructing a new snapshot without compiled outputs. Preparation substitution negatives cover the extraction boundary.
   - [ ] Refactor the four named cluster preparation/Make files; separate static/source, PostgreSQL conformance, comments storage, crash recovery, candidate packing, and installed lanes; each mutating lane owns its workspace/database/ports.
