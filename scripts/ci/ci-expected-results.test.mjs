@@ -235,7 +235,7 @@ test('should authenticate current-attempt receipts and fail closed on API errors
 });
 
 test('should delete only current-run transport artifacts after success and retain them after any failure or cancellation', async () => {
-  const names = ['api-tool-image', 'api-image', 'ui-image', 'e2e-image', 'desktop-download'];
+  const names = ['api-tool-image', 'api-image', 'ui-image', 'e2e-image', 'desktop-download', 'package-candidates'];
   const job = workflow.jobs['delete-transport-artifacts'];
   assert.equal(job.if, 'always() && !cancelled() && inputs.decision_fixtures_only != true');
   assert.deepEqual(job.permissions, { actions: 'write' });
@@ -275,9 +275,9 @@ test('should delete only current-run transport artifacts after success and retai
   const context = { repo: { owner: 'rhanka', repo: 'sentropic' }, runId: 7 };
   const process = { env: { GITHUB_RUN_ATTEMPT: '3' } };
   const list = Symbol('list run artifacts'), jobsList = Symbol('list current-attempt jobs'), deleted = [];
-  const jobs = [...consumers].map(name => ({ name, conclusion: 'success' }));
-  jobs.push({ name: 'publish-cluster-mesh', conclusion: 'skipped' },
-    { name: 'validate-publishable-manifests', conclusion: 'success' });
+  const jobs = [...consumers].map(name => ({ name, status: 'completed', conclusion: 'success' }));
+  jobs.push({ name: 'publish-cluster-mesh', status: 'completed', conclusion: 'skipped' },
+    { name: 'validate-publishable-manifests', status: 'completed', conclusion: 'success' });
   let artifactReads = 0, jobReads = 0;
   const github = { rest: { actions: { listWorkflowRunArtifacts: list, listJobsForWorkflowRunAttempt: jobsList,
     deleteArtifact: async input => deleted.push(input) } }, paginate: async (endpoint, input) => {
@@ -289,13 +289,13 @@ test('should delete only current-run transport artifacts after success and retai
       assert.equal(endpoint, list);
       assert.deepEqual(input, { ...context.repo, run_id: 7, per_page: 100 });
       artifactReads++;
-      return [...names, 'security-container-api-results', 'ci-expected-7-1', 'package-candidates', 'api-image-other']
+      return [...names, 'security-container-api-results', 'ci-expected-7-1', 'qualify-cluster-mesh-candidate-0', 'api-image-other']
         .map((name, id) => ({ id, name, size_in_bytes: 10 }));
     } };
   await execute(context, github, { info() {} }, process);
   assert.equal(jobReads, 1);
   assert.deepEqual(deleted, names.map((_, artifact_id) => ({ ...context.repo, artifact_id })));
-  for (const job of jobs) for (const conclusion of ['failure', 'cancelled']) {
+  for (const job of jobs) for (const conclusion of ['failure', 'cancelled', 'timed_out', 'neutral', 'action_required', null]) {
     const original = job.conclusion;
     job.conclusion = conclusion;
     deleted.length = 0;
@@ -304,6 +304,13 @@ test('should delete only current-run transport artifacts after success and retai
     assert.deepEqual(deleted, [], `${job.name}: ${conclusion} must preserve artifacts for selective reruns`);
     assert.equal(artifactReads, 0);
     job.conclusion = original;
+  }
+  for (const job of jobs) for (const status of ['queued', 'in_progress', undefined]) {
+    job.status = status;
+    deleted.length = 0;
+    await execute(context, github, { info() {} }, process);
+    assert.deepEqual(deleted, [], `${job.name}: ${status} must preserve artifacts`);
+    job.status = 'completed';
   }
   for (const operation of ['jobs', 'list', 'delete']) {
     const reject = async () => { throw Error('HTTP 403'); };
