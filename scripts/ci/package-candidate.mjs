@@ -39,6 +39,7 @@ export function candidateClosure(root, roots) {
 
 export function candidateTuple(root, env = process.env) {
   if (!/^[a-f0-9]{40}$/.test(env.MANIFEST_HEAD_SHA ?? '')) fail('candidate source SHA is required');
+  if (!env.CANDIDATE_NODE_IMAGE || !env.CANDIDATE_NPM_VERSION) fail('candidate Node image and npm version are required');
   return { head_sha: env.MANIFEST_HEAD_SHA, node: process.version, architecture: process.arch,
     image: env.CANDIDATE_NODE_IMAGE, npm: env.CANDIDATE_NPM_VERSION,
     lock: sha256File(path.join(root, 'package-lock.json')),
@@ -60,7 +61,7 @@ export function verifyCandidateArchives(dir, index, { semver } = {}) {
   const seen = new Set();
   for (const slug of index.order) {
     const receipt = index.receipts.find(row => row.slug === slug);
-    if (!receipt || seen.has(slug) || receipt.guard !== 'pass' || receipt.evidence !== 'release-candidate'
+    if (!receipt || seen.has(slug) || receipt.guard !== 'pass' || receipt.manifest_mode !== 'block' || receipt.evidence !== 'release-candidate'
       || receipt.head_sha !== index.tuple.head_sha) fail(`missing or invalid candidate receipt: ${slug}`);
     seen.add(slug);
     if (typeof receipt.file !== 'string' || path.isAbsolute(receipt.file) || receipt.file.split('/').includes('..')) fail('invalid candidate archive path');
@@ -119,6 +120,14 @@ export function verifyCandidateSelection(dir, headSha, primary) {
   return index;
 }
 
+export function verifyPrepared(dir, tuple) {
+  const index = json(path.join(dir, 'candidates.json'));
+  if (JSON.stringify(index.tuple) !== JSON.stringify(tuple)
+    || index.prepared?.file !== 'prepared.tgz'
+    || sha256File(path.join(dir, 'prepared.tgz')) !== index.prepared.sha256) fail('prepared candidate hash/tuple mismatch');
+  return index;
+}
+
 export async function main([command, dir, ...roots]) {
   const root = process.cwd(), tuple = candidateTuple(root);
   if (command === 'produce') return produceCandidates({ root, dir, roots, tuple,
@@ -137,11 +146,7 @@ export async function main([command, dir, ...roots]) {
   }
   if (command === 'verify-prepared') {
     // Verify the prepared archive before extraction; package bytes are checked after tools restore.
-    const index = json(path.join(dir, 'candidates.json'));
-    if (JSON.stringify(index.tuple) !== JSON.stringify(tuple)
-      || index.prepared?.file !== 'prepared.tgz'
-      || sha256File(path.join(dir, 'prepared.tgz')) !== index.prepared.sha256) fail('prepared candidate hash/tuple mismatch');
-    return index;
+    return verifyPrepared(dir, tuple);
   }
   fail('expected produce|verify DIR ROOT...');
 }

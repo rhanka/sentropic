@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { Writable } from 'node:stream';
-import { candidateClosure, produceCandidates, verifyCandidates } from './package-candidate.mjs';
+import { candidateClosure, produceCandidates, verifyCandidates, verifyPrepared } from './package-candidate.mjs';
 import { commandPack, runNpmPack, sha256File } from './publishable-manifests.mjs';
 
 const tuple = { head_sha: 'a'.repeat(40), node: process.version, image: 'node:test', npm: '11.0.0' };
@@ -71,4 +71,17 @@ test('should reject workspace dependency cycles and missing roots', t => {
   write(path.join(opts.root, 'packages/leaf/package.json'), { name: '@fx/leaf', version: '1.0.0', peerDependencies: { '@fx/root': '*' } });
   assert.throws(() => candidateClosure(opts.root, ['root']), /cycle/);
   assert.throws(() => candidateClosure(opts.root, ['missing']), /missing public candidate/);
+});
+
+test('should reject unsealed, substituted and corrupted preparation before extraction', async t => {
+  const opts = fixture(t); const { result } = await produce(opts);
+  assert.throws(() => verifyPrepared(opts.dir, tuple), /prepared candidate hash\/tuple mismatch/);
+  const archive = path.join(opts.dir, 'prepared.tgz');
+  fs.writeFileSync(archive, 'immutable preparation');
+  result.prepared = { file: 'prepared.tgz', sha256: sha256File(archive) };
+  write(path.join(opts.dir, 'candidates.json'), result);
+  assert.equal(verifyPrepared(opts.dir, tuple).prepared.sha256, sha256File(archive));
+  assert.throws(() => verifyPrepared(opts.dir, { ...tuple, npm: 'different' }), /tuple mismatch/);
+  fs.appendFileSync(archive, 'changed');
+  assert.throws(() => verifyPrepared(opts.dir, tuple), /hash\/tuple mismatch/);
 });
