@@ -1,68 +1,48 @@
-# Feature: Decision API host and authoritative remote pricing
+# Feature: Prepare hardened Trivy image lane (S2b option B)
 
 ## Objective
-- [x] Integrate JEV and OpenAI Decisions into the authenticated API through cluster-mesh, with durable financial ports and fail-closed production readiness.
+- [ ] Prepare upstream Trivy by immutable image digest with trusted DB acquisition and fail-closed execution; qualification and daily activation remain blocked.
 
 ## Scope / Guardrails
-- [x] Owner priority 2026-10-28: integrate both remote backends; local hosting remains deferred.
-- [x] Base: origin/main de7ab8d31; branch feat/decision-host-h1; worktree tmp/worktrees/decision-h1.
-- [x] No live provider requests, spend, deployment, PR merge, rebase, Python or AI commit trailers.
-- [x] Use existing make targets; ENV=test-decision-h1 last; API_PORT=8798 UI_PORT=5198 MAILDEV_UI_PORT=1098.
-- [x] Serialize Docker steps with flock; tear down the isolated environment after each step.
-- [x] One additive control migration; atomic make commits at most 150 changed lines.
-- [x] Qualification is host-selected and admin-only; production stays unqualified.
+- [x] Owner-authorized default B from dossier r2, SHA-256 b4de75e7 prefix; no toolbox Dockerfile change.
+- [x] Branch `feat/sec-s2b-trivy-b` from `origin/main` at `213638676`; isolated worktree `tmp/worktrees/sec-s2b`.
+- [x] Make only; zero Python; selective staging; commits at most 150 changed lines without AI trailers; merge updates only.
+- [x] Docker uses the shared `.tmp/packets/DOCKER-LOCK.md` flock and scoped teardown; `ENV=test-sec-s2b` always last.
+- [x] Fixture containers bind no ports; reserved API/UI/Maildev ports 9410/5610/1510 remain unused.
+- [x] Preserve disabled auto-fix, S2c/S3 and all missing S2b evidence; no schedule, publisher, credentials or merge actor.
+- [x] Keep source, target and DB isolated from the scanner; no host Docker socket or credential mounts in scanner execution.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `.github/workflows/ci.yml`
+  - `.security/trivy-toolchain.json`
+  - `scripts/security/daily/toolchain*.mjs`
+  - `scripts/security/daily/trivy*.mjs`
+  - `scripts/security/daily/scan.mjs`
+  - `scripts/security/daily/scan.test.mjs`
   - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `api/src/routes/namespaces/llm-mesh.ts`
-  - `api/src/routes/namespaces/llm-mesh-cutover.ts`
-  - `api/src/routes/namespaces/decision*.ts`
-  - `api/src/services/decision*.ts`
-  - `api/src/services/llm-metering/decision*.ts`
-  - `api/src/services/llm-metering/budget-admission.ts`
-  - `api/src/services/llm-metering/model-pricing-writer.ts`
-  - `api/src/db/control-schema.ts`
-  - `api/vitest.config.ts`
-  - `api/drizzle/control/*decision*.sql`
-  - `api/drizzle/control/meta/_journal.json`
-  - `api/tests/unit/decision*.test.ts`
-  - `api/tests/api/decision*.test.ts`
-  - `api/tests/api/llm-admission-schema.test.ts`
-  - `packages/llm-mesh/src/decision/descriptor.ts`
-  - `packages/llm-mesh/package.json`
-  - `packages/llm-mesh/tests/decision-fixtures.ts`
-  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
-  - `packages/cluster-mesh/tests/decision-receipts.spec.ts`
-  - `packages/cluster-mesh/tests/fixtures/train.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `package-lock.json`
-  - `spec/decision/api-host.md`
+  - `docs/security/trivy-s2b.md`
+  - `Makefile`
 - **Forbidden Paths (must not change in this branch)**:
-  - `docker-compose.*.yml`
-  - `.cursor/rules/**`
-  - `.track/**`
-  - `plan/NN-BRANCH_*.md`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `Makefile` (BR822-EX3: Decision secret names only)
-  - `docker-compose.yml` (BR822-EX3: Decision environment names only)
-  - `deploy/k8s/base/30-api.yaml` (BR822-EX3: optional Decision secret references only)
-  - `api/drizzle/*.sql` (maximum one migration; control uses its existing migration lane)
+  - `api/Dockerfile`
+  - `ui/Dockerfile`
+  - `docker-compose*.yml`
   - `.github/workflows/**`
+  - `.cursor/rules/**`
+  - `.security/security-fix.json`
+  - `.security/vulnerability-register.yaml`
+  - `packages/**`
+  - `.track/**`
+  - `plan/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile` (SECDAILY-EX1, daily Trivy preparation/test recipes only)
 - **Exception process**:
-  - [x] Declare BRH-EXn with reason, impact and rollback before changing conditional paths.
+  - [x] Declare additional exceptions with reason, impact and rollback before editing.
 
 ## Feedback Loop
-- [x] H1-R2-MERGE-2 — Main advanced during CI: merge origin/main ecca3a0d5 (PR #826), keeping this plan as the sole conflict resolution and retaining incoming DAG changes. Head 80c7183eb passed full PR CI 40774107205 and all four required checks; the new merge head must pass separately. No rebase or Track writes.
-- [x] H1-R2-MERGE — Merge origin/main 8d37455df without rebase; BRANCH.md was the sole conflict and this PR's plan is retained. Incoming changes are unchanged; both parents and the merge retain identical Track files, with no Track writes.
-- [x] H1-R2-F7 — Fixture dispatch always runs ci-gate and fails before checkout or artifacts with an explicit refusal; ordinary gate evaluation is unchanged. Regression reproduced the skipped gate, then all 137 Docker-hosted workflow wiring tests passed, including execution of the refusal step.
-- [x] H1-R1-MERGE — Retain both manual workflow inputs, guarded inherited secrets, main's image cache configuration and the Decision plan while merging c8ec01237; no Track writes.
-- [x] BR822-EX4 — Merged origin/main c8ec01237 in 93de7e1ee to resolve the workflow conflict blocking pull_request CI; no rebase. Impact: inherited reviewed CI-image changes, retained Decision guards and this plan; temporary integration allowances removed. Rollback: revert the merge. Both parent event logs retain all 370 event IDs; acceptance writes remain with the designated conductor.
-- [x] H1-R1-CI-03 — Full endpoints shard reproduced absent Compose profile becoming an invalid empty profile (five Decision route assertions). Pass DECISION_EXECUTION_PROFILE by name: Compose config verifies absence remains unset, preserving production refusal; explicit empty/unknown values remain unavailable. All 136 wiring tests pass; full PR rerun remains H1-R1-F1.
-- [x] H1-R1-CI-02 — Full PR run 40735442415 reproduced three cluster-mesh tuple mismatches: frozen 0.32.0 vs candidate 0.32.1. Aligned the test tuple and selected lock to the guarded candidate archive; all 1,228 locally enabled cluster-mesh tests passed (138 environment-dependent skips). Integrity enforcement and every gate retained.
+- [x] SECDAILY-EX1: approved plan permits daily scanner pin/isolation recipes. Impact limited to preparation and fixture targets; rollback removes those targets and retains S2a blocked state. Toolbox exception is not opened.
+- [ ] S2B-Q1, conductor, blocked: verifier admission, publisher identity/signature receipt and content review of exact index/platform pins.
+- [ ] S2B-Q2, conductor, blocked: live DB provenance/integrity/freshness, Java/IaC data, immutable targets with exact source/platform, zero-Python runtime inventory.
 - [x] BR822-EX3 — Owner-requested Decision provisioning in Compose, k8s-bundle-secret and the API env template. Impact: pass JEV_API_KEY and DECISION_EXECUTION_PROFILE by name only; missing values stay unavailable, production refuses; no deployment or credential provisioning. Rollback: remove these two entries/references from each surface.
 - [x] H1-R1-F2 — Exclude fixture dispatch from deployment, release verification and inherited secrets; main dispatch regression reproduced deployment access, then all 135 workflow wiring tests passed without weakening ordinary gates.
 - [x] H1-R1-F5 — Compose and Kubernetes pass Decision names only, with optional secret references and no activation default; all 136 workflow/provisioning tests passed, including fail-closed wiring assertions.
