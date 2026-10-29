@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { json } from './bindings.mjs';
-import { profileCases } from './candidates.mjs';
+import { candidate, profileCases } from './candidates.mjs';
 
 export function qualifyProfiles(b, mesh, claims) {
   const report = json(b.read('stage-b-result.json'));
@@ -23,6 +23,7 @@ export function qualifyProfiles(b, mesh, claims) {
   assert.equal(entry.version, mesh.version);
   assert.equal(entry.integrity, mesh.integrity, 'Stage B must exercise the identical mesh archive');
   assert.equal(lock.packages['node_modules/@sentropic/engram'].version, '0.21.3');
+  assert.equal(lock.packages['node_modules/@sentropic/engram'].integrity, candidate.engram.integrity);
   return claims.map((claim) => ({ ...claim, status: 'QUALIFIED',
     cases: profileCases[claim.name].map((name) => `${claim.name}/${name}`),
     evidence: 'stage-b-result.json', evidenceSha256: b.files['stage-b-result.json'].sha256,
