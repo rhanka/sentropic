@@ -23,7 +23,7 @@ const bindingKey = (r: AdmissionRecord, field: string) => JSON.stringify([actorK
 const admissionRef = (r: AdmissionRecord) => JSON.stringify([documentKey(r), r.sessionId, actorKey(r)]);
 export class SessionRegistry {
   private readonly sessions = new Map<string, LocalSession>();
-  private readonly listeners = new Map<string, Set<{ owner: string; sessionId: string; callback: (actors: RegistryActor[]) => void }>>();
+  private readonly listeners = new Map<string, Set<{ owner: string; sessionId: string; fieldKey?: string; callback: (actors: RegistryActor[]) => void }>>();
   private readonly revoked = new Set<string>();
   constructor(private readonly factory: { create(record: AdmissionRecord): SessionResource; clientId(): number }) {}
   open(record: AdmissionRecord, fieldKey: string) {
@@ -77,12 +77,12 @@ export class SessionRegistry {
     if (!entry?.tokens.size) throw new AdmissionError('invalid-binding');
     return entry.binding;
   }
-  subscribeActors(record: AdmissionRecord, callback: (actors: RegistryActor[]) => void): () => void {
+  subscribeActors(record: AdmissionRecord, callback: (actors: RegistryActor[]) => void, fieldKey?: string): () => void {
     this.assertAdmission(record);
     const session = this.sessions.get(documentKey(record));
     if (session) this.assertSession(session, record);
     const key = documentKey(record); const callbacks = this.listeners.get(key) ?? new Set();
-    const listener = { owner: admissionRef(record), sessionId: record.sessionId, callback };
+    const listener = { owner: admissionRef(record), sessionId: record.sessionId, fieldKey, callback };
     this.listeners.set(key, callbacks); callbacks.add(listener);
     callback(structuredClone([...this.sessions.get(key)?.actors.values() ?? []]));
     return () => { callbacks.delete(listener); if (!callbacks.size) this.listeners.delete(key); };
@@ -95,6 +95,14 @@ export class SessionRegistry {
     for (const [entryKey, entry] of session.bindings) if (entry.actorKey === actorKey(record)) {
       entry.tokens.clear(); session.bindings.delete(entryKey);
     }
+    this.prune(key, session);
+  }
+  releaseField(record: AdmissionRecord, fieldKey: string): void {
+    const key = documentKey(record); const session = this.sessions.get(key);
+    if (!session || session.sessionId !== record.sessionId) return;
+    const entryKey = bindingKey(record, fieldKey); const entry = session.bindings.get(entryKey);
+    if (entry) { entry.tokens.clear(); session.bindings.delete(entryKey); }
+    this.dropListeners(key, (listener) => listener.owner === admissionRef(record) && listener.fieldKey === fieldKey);
     this.prune(key, session);
   }
   closeSession(record: AdmissionRecord): void {
@@ -123,7 +131,7 @@ export class SessionRegistry {
   private emit(key: string, session: LocalSession) {
     for (const listener of this.listeners.get(key) ?? []) listener.callback(structuredClone([...session.actors.values()]));
   }
-  private dropListeners(key: string, matches: (listener: { owner: string; sessionId: string }) => boolean) {
+  private dropListeners(key: string, matches: (listener: { owner: string; sessionId: string; fieldKey?: string }) => boolean) {
     const listeners = this.listeners.get(key);
     for (const listener of listeners ?? []) if (matches(listener)) { listeners!.delete(listener); listener.callback([]); }
     if (!listeners?.size) this.listeners.delete(key);
