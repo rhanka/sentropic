@@ -796,7 +796,7 @@ jobs:
           name: package-candidates
           path: tmp/ci-package-candidates/
           compression-level: 0
-          retention-days: 7
+          retention-days: 1
           if-no-files-found: error
 
   validate-llm-mesh:
@@ -3139,11 +3139,12 @@ jobs:
             const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
               { ...context.repo, run_id: context.runId,
                 attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT), per_page: 100 });
-            if (jobs.some(job => ['failure', 'cancelled'].includes(job.conclusion))) {
+            if (jobs.filter(job => !['ci-gate', 'delete-transport-artifacts'].includes(job.name))
+              .some(job => job.status !== 'completed' || !['success', 'skipped'].includes(job.conclusion))) {
               core.info('Preserving transport artifacts for selective reruns after failure or cancellation.');
               return;
             }
-            const names = new Set(['api-tool-image', 'api-image', 'ui-image', 'e2e-image', 'desktop-download']);
+            const names = new Set(['api-tool-image', 'api-image', 'ui-image', 'e2e-image', 'desktop-download', 'package-candidates']);
             const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts,
               { ...context.repo, run_id: context.runId, per_page: 100 });
             for (const artifact of artifacts.filter(item => names.has(item.name))) {
