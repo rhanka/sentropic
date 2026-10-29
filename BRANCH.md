@@ -34,14 +34,15 @@
 - [ ] Record the minimal actual owner action or authenticated L6/L8 deferral; do not manufacture either.
 ## Plan / Todo (lot-based)
 - [x] Lot 0: read common/project rules, retained L5 specification, P3 inventory, catalog, existing receipt verifier and latest #777 review.
-- [ ] Lot 1: candidate assembly with archive identity, P3/build-receipt binding and immutable output; tests/candidate.test.mjs covers tampering, missing roles and contract drift.
+- [x] Lot 1: candidate assembly with archive identity, P3/build-receipt binding and immutable output; tests/candidate.test.mjs covers tampering, missing roles and contract drift.
   - [x] Add candidate.mjs: preserve and verify P3 peers/inventory, E4 receipt and every archive; write immutable candidate bytes and sidecar without issuing acceptance.
   - [x] Candidate tampering, identity, duplicate-role and immutable-path regressions pass; full tooling suite: 122 tests passed.
-- [ ] Lot 2: report bundling and checkpoint production; tests/proof-bundle.test.mjs covers absent/duplicate/nonexecuted/failed/skipped/stale/cross-manifest assertions; keep strict receipt rejection.
+- [x] Lot 2: report bundling and checkpoint production; tests/proof-bundle.test.mjs covers absent/duplicate/nonexecuted/failed/skipped/stale/cross-manifest assertions; keep strict receipt rejection.
   - [x] Add proof-bundle.mjs: retain actual case names/statuses, reject missing or stale execution bindings and source reports for E4, and hash immutable per-proof reports.
   - [x] Add checkpoint.mjs to produce strict-verifier proposals and rejection receipts; unknown owner/CI/acceptance fields remain absent.
   - [x] Tooling passes 134 tests; add memory-l5-candidate and memory-l5-checkpoint make delegations without changing P3 producing recipes.
-- [ ] Lot 3: resolve predecessor dispositions against the approved memory-first transfer, preserving all later R2/R7a obligations.
+- [x] Lot 3: resolve predecessor dispositions against the approved memory-first transfer, preserving all later R2/R7a obligations.
   - [x] Add digest-pinned transfer resolution: L0 fixture must exist with its P3 hash; four remote suites remain explicit later R2/R7a 22-suite obligations. Frozen catalog unchanged.
   - [x] Tooling passes 137 tests, including the incomplete-checkpoint regression: missing owner/CI/acceptance fields stay absent and the proposal is rejected.
+  - [x] Add a full-attempt make runner that retains each command/log/exit, raw Vitest reports, catalog gaps, checkpoint proposal and strict receipt verdict; cleanup runs on exit.
 - [ ] Lot 4: scope-check and tooling gate; record review selection, push PR and verify exact-head CI; no publication or merge.
