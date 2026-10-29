@@ -59,6 +59,7 @@
   - [x] Declare BRRC1-EXn with rationale, impact and rollback before any conditional edit.
 
 ## Feedback Loop
+- [x] F6 logout regressions use the actual packaged logout adapter and logout-all handler; unavailable issuer delivery returns pending 503, clears session and refresh cookies, removes DB sessions, and the later sweep tombstones authority before shared-row restoration.
 - [x] F6 topology regressions use an actual plain HTTP node-server listener for successful lifecycle delivery. Missing/wrong MAC, modified body, stale timestamp, spoofed forwarded-proto and forged 204 acknowledgement are refused; failed acknowledgement retains the durable retry intent.
 - [x] F6 lifecycle recovery: all four account/admin endpoints have 503/pending regressions; destructive deletion preserves its transactional intent, and the existing periodic approval sweep retries committed intents even with no expired users. Approval expiry queues all users atomically before attempting deliveries.
 - [x] BRRC1-EX7: F6 directly requires the product session-lifecycle adapter to map issuer unavailability to 503 with cleared cookies; atomic account deletion queues IDs before commit. Impact: defined retryable failure after local revocation, no false issuer acknowledgement. Rollback: revert F6 as a unit while disabling remote authority.
