@@ -100,3 +100,5 @@
   - [ ] Draft PR using this BRANCH.md as body; initial plan comment.
   - [ ] CI completed/success on the exact reported head; record PR and SHA.
   - [ ] Inspect service logs and `make down` after validation.
+
+- [x] Formatter slice 1: apply repository style to new H2 source only.
