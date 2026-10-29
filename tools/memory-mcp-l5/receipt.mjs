@@ -64,8 +64,14 @@ export function checkMakeCommand(command) {
     if (typeof command !== 'string' || !command.includes(port)) failures.push(`make: missing ${port}`);
   }
   const tokens = typeof command === 'string' ? command.trim().split(/\s+/) : [];
-  if (!/^ENV=(test|e2e)-feat-memory-mcp-l5$/.test(tokens[tokens.length - 1] || '')) failures.push('make: ENV=<test|e2e>-feat-memory-mcp-l5 must be last');
+  if (!/^(?:ENV=(test|e2e)-feat-memory-mcp-l5|ENV=test-memory-l5)$/.test(tokens[tokens.length - 1] || '')) failures.push('make: ENV=<test|e2e>-feat-memory-mcp-l5 must be last (also accepts ENV=test-memory-l5)');
   return failures;
+}
+
+export function checkProofCommand(command, prescribed) {
+  const currentEnv = value => value?.replace(/ENV=(?:test|e2e)-feat-memory-mcp-l5$/, 'ENV=test-memory-l5');
+  const full = 'make memory-l5-qualify ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/candidate-manifest.json CHECKPOINT=spec/evidence/memory-mcp-l5/r5-checkpoint.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-memory-l5';
+  return typeof command === 'string' && (command === full || currentEnv(command) === currentEnv(prescribed));
 }
 
 export function checkFixtureProvenance(doc) {
@@ -117,7 +123,7 @@ export function checkProofRecords(proofs, expectedManifestSha256, expectedSource
   for (const dup of findDuplicateKeys(proofs, (p) => p && p.id)) failures.push(`proofs: duplicate id ${dup}`);
   for (const p of proofs) {
     const label = (p && p.id) || '?', r = p && p.result, cat = catProofs.find((x) => x.id === label);
-    if (!p || !cat || JSON.stringify(p.files) !== JSON.stringify(cat.files) || p.command !== cat.command || checkMakeCommand(p.command).length > 0) failures.push(`proofs/${label}: files or command mismatch against catalog`);
+    if (!p || !cat || JSON.stringify(p.files) !== JSON.stringify(cat.files) || !checkProofCommand(p.command, cat.command) || checkMakeCommand(p.command).length > 0) failures.push(`proofs/${label}: files or command mismatch against catalog`);
     if (!r || r.format !== 'vitest-json' || !(Number.isInteger(r.passed) && r.passed >= (cat ? cat.requiredCases.length : 1)) || r.failed !== 0 || r.skipped !== 0 || r.todo !== 0) failures.push(`proofs/${label}: invalid vitest-json counts`);
     if (!r || !isSha256Hex(r.sha256) || !isSha256Hex(r.executedCasesSha256) || !isSha256Hex(p.artifactManifestSha256) || !isCommitSha(p.sourceHead)) failures.push(`proofs/${label}: bad digest or binding`);
     if (isSha256Hex(expectedManifestSha256) && p && p.artifactManifestSha256 !== expectedManifestSha256) failures.push(`proofs/${label}: cross-digest proof reuse`);

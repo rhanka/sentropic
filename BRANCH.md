@@ -1,75 +1,51 @@
-# Feature: Decision Q1 live qualification smoke
+# Feature: Rerun L5 on the exact Engram 0.22.0 candidate
 
 ## Objective
-- [ ] Record bounded live protocol and identity evidence for JEV and OpenAI Decisions; keep production refused pending OD-4 calibration.
-
+- [x] Retain the exact 965c93e3 candidate manifest, full L5 attempt, per-case bundle and strict checkpoint verdict without inventing acceptance.
 ## Scope / Guardrails
-- [x] Owner GO dated 2026-10-29; spec v4 section 7.4; H1/H2 base `213638676`.
-- [x] Worktree `tmp/worktrees/decision-q1`, branch `feat/decision-q1-live`, mono-branch.
-- [x] Make only; no Python; secrets enter Compose from the existing root `.env` without copying values.
-- [x] Maximum three attempts per candidate, counting failed, refused and ambiguous calls; no retries.
-- [x] Local qualification only, `ENV=test-decision-q1` last; API 8802, UI 5202, Maildev 1102.
-- [x] Serialize Docker with `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; run `make down` afterward.
-
+- [x] Worktree tmp/worktrees/memory-l5-r5-checkpoint; branch feat/memory-l5-r5-checkpoint; follows #843; preserve producer/P3/catalog/L0 bytes.
+- [x] Make-only, shared Docker flock, pinned Node image, ports 9625/5825/1725, ENV=test-memory-l5 last; cleanup after.
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `spec/decision/**`
-  - `packages/llm-mesh/src/decision/descriptor.ts`
-  - `packages/llm-mesh/src/decision/openai-descriptor.ts`
-  - `packages/llm-mesh/src/decision/descriptor-validation.ts`
-  - `packages/llm-mesh/package.json`
-  - `package-lock.json`
-  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
-  - `packages/llm-mesh/tests/decision-jev-v4l3.test.ts`
-  - `packages/llm-mesh/tests/decision-qualification-admission.test.ts`
-  - `packages/llm-mesh/tests/decision-qualification.test.ts`
-  - `packages/llm-mesh/tests/decision-jev-request.test.ts`
-  - `packages/llm-mesh/tests/decision-openai-routing.test.ts`
-  - `packages/cluster-mesh/tests/fixtures/train.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-- **Forbidden Paths (must not change in this branch)**:
+  - `tools/memory-mcp-l5/**`
+  - `spec/evidence/memory-mcp-l5/**`
   - `Makefile`
+- **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `api/**`
+  - `.track/**`
+  - `packages/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
-
+- **Exception process**:
+  - [x] L5R5-EX1: forward execution-bound JSON from existing test targets only; no P3 producing recipe, frozen catalog or installed-E4 requirement changes. Rollback the report delegation.
 ## Feedback Loop
-- [x] No calibration authorized; live observations cannot qualify immutable weights, billing beyond the admitted bound, or production readiness.
-- [x] Q1-CRED-01: JEV preflight refused peripheral whitespace; normalized transiently after Compose injection, source env unchanged; refusal consumes attempt 1.
-- [x] Q1-INV-01: parser previously forbade observed IDs with unqualified production status; permit evidence inventory while retaining admission gates; regression keeps nonempty IDs and proves production refusal.
-- [ ] Q1-REV-01: conductor to select two exact complementary reviewer models before merge; h2a discovery has host presence but no model identities, no configured gateway catalog; no consensus claimed.
-- [x] Q1-CI-01: reproduced job 123314702961's three stale-version failures; rebound independent train and selected fixture to llm-mesh 0.32.2 and guarded archive SHA-512; 1,228 cluster-mesh tests and scope pass, 138 expected skips; see `spec/decision/q1-2026-10-29/ci-repair.md`.
-
+- [x] No signed owner UAT, L0 authorization or role acceptance is fabricated. Exact minimal actions are listed in r5-result.md.
+- [x] Separate ordinary-install attribution from remaining inventory, installed proof and provenance gates.
+- [ ] Final-head CI and independent complementary reviews remain required; no merge.
 ## AI Flaky tests
-- [x] No flaky acceptance or additional live calls beyond the cap.
-
+- [x] No waiver or timeout change.
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; no integration from other branches.
-
+- [x] Sequential dependent PR; exact-byte qualification with retained rejected proposals when gates fail.
 ## UAT Management (in orchestration context)
-- [x] API-only qualification fixture; no UI, Chrome or VSCode surface change.
-
+- [ ] Record authenticated owner pass or authorized L6/L8 deferral only when actually supplied.
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read master/workflow rules, spec section 7.4, API host and descriptors; mechanical branch check passed.
-  - [x] Verify ports, credential names, control pricing and isolated stack.
-- [x] **Lot 1 — Bounded live evidence**
-  - [x] Fix a public synthetic binary criterion and retain only that fixture input.
-  - [x] No documented zero-cost Decisions entitlement probe established; first POST counts as attempt 1.
-  - [x] Record served identity, tokens, priced cost, billing bound, latency, verdict shape and refusals per attempt.
-  - [x] Fail closed on descriptor identity mismatch; three calls per candidate including the JEV preflight refusal, five egresses total, 77 micro-USD.
-- [x] **Lot 2 — Evidence and descriptors**
-  - [x] Retain scrubbed receipts in `spec/decision/`; accepted identities/evidenceRefs cite only observed results.
-  - [x] Bump llm-mesh from published 0.32.1 to 0.32.2; align workspace lock and public version assertion.
-  - [x] Preserve unqualified production and OD-4 calibration requirement; 16 host/route tests pass.
-- [ ] **Lot 3 — Final validation and draft PR**
-  - [x] Mesh descriptor, qualification, adapter, pricing, public and request suites: 88 files / 1,566 tests pass.
-  - [x] llm-mesh typecheck/lint and mechanical scope checks pass; commits at most 150 lines.
-  - [x] Secret scan, attempt counts, identity comparison and durable 77 micro-USD ledger verified; zero reserved/pending.
-  - [x] Stop local stack with `make down`; publish report `spec/decision/q1-live-smoke.md`.
-  - [x] Draft PR #834 created against main; exact-head CI remains the final checkpoint.
-  - [ ] Observe CI completed/success on exact head; report head, 77 micro-USD and candidate outcomes.
+- [ ] Lot 0: verify candidate SHA-256/SHA-512, producer P3/source/peer binding and registry mesh archive; assemble immutable inputs and manifest.
+  - [x] Add exact-byte input collector; the registry mesh source commit comes from the archive-bound SLSA payload, with signature authentication explicitly unestablished.
+  - [x] Independently measured candidate SHA-256/SHA-512 and P3/source/peer bindings match; mesh 0.22.4 archive integrity and SLSA subject match. Retain exact archive bytes and observed source 440599d04e91bb33e3874588f067c6a90bffd1b3 without claiming authenticated acceptance.
+- [x] Lot 1: run memory-l5-qualify; retain every command/exit, raw assertions, native positive controls, manifest and strict checkpoint proposal/result.
+  - [x] Add process-time report binding with immutable raw JSON retention; source-only reports retain that mode and cannot become installed E4 evidence.
+  - [x] Wire tooling, Lot 3 and packed report producers into the full attempt; retain explicit missing-file/process failures and do not stamp old reports at collection time.
+  - [x] An actual GCC compilation produced an ELF object under the candidate addon path and was blocked by the predicate. The disposable positive-control container adds compiler tools; ordinary candidate installation keeps the original unmodified pinned image. The control also verifies that no Python executable is present.
+  - [x] Compile attribution now requires an observed candidate compiler or concrete candidate source-build object outputs; node-gyp/make dispatch alone and downloaded prebuilt .node files are not compilation proof. Keep the full native check and actual-compiler regression.
+  - [x] Execute and retain P09 regressions before the E2 acceptance check; preserve LOT=3's E2 refusal and all later installed gates. Retain actual assertion names and source-byte-bound complete suites for frozen family IDs; never map E4 canonical cases by suite alone.
+  - [x] Retain the first tooling failure: the zeroed-generation negative case exceeded its five-second timer under concurrent workers. Isolate qualification workers with maxWorkers=1, as the Lot 3 runner already does; no timer or assertion is changed.
+  - [x] Tooling after worker isolation: 144 passed, zero failed/skipped/todo; the complete fingerprint-negative suite passes with its original timer. Actual full qualification remains the next step.
+  - [x] First complete post-reboot attempt retained by hash: P09 18 suites/90 assertions, P10 24 assertions, native/disabled controls pass; strict verdict NOT QUALIFIED. Preserve the full archive before the final correction.
+  - [x] Reproduced a failed /missing/gcc spawn incorrectly counted as execution. Record native subprocess evidence only after a successful spawn (including real compiler exits with failure); keep source-object detection and real sync/async compiler controls.
+  - [x] Full qualification routes LOT=2/3 to the separate canonical lot2-manifest.json, preserving the L4 candidate manifest for candidate proofs; absent or unverified E2 inputs still refuse.
+- [ ] Lot 2: document the actual verdict and exact remaining owner actions, scope/review/CI checks, PR and cleanup; do not issue a false L5 acceptance.
+  - [x] Final source 99f95df13: tooling 146, P09 90, P10 24, actual compiler controls 2 passed. Strict checkpoint rejected with 1417 failures; retain final raw archive and exact remaining gates. CI/reviews and installed acceptance remain open.
+  - [x] Commit compact P01–P05 observations and digest sidecars; source-only and missing E4 cases remain explicitly unaccepted.
+  - [x] Commit P06–P10 bundles and sidecars; P09/P10 pass without claiming installed acceptance for P06–P08. Final down/ps and final-head CI inspection follow the evidence push; reviews remain selection-failed.

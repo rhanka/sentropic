@@ -1,0 +1,73 @@
+{
+  "manifestVersion": 1,
+  "stage": "lot2",
+  "status": "unverified",
+  "preCandidate": {
+    "path": "tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json",
+    "sha256": "1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730"
+  },
+  "e2": {
+    "name": "@sentropic/engram",
+    "version": "0.21.2",
+    "path": "spec/evidence/memory-mcp-l5/lot2/archives/eaf9a3d520aa9d35b261b406313745b4076299b9087eafc1ce076c49e0a34cc1.tgz",
+    "sha256": "eaf9a3d520aa9d35b261b406313745b4076299b9087eafc1ce076c49e0a34cc1",
+    "integrity": "sha512-RtifmT4E9to98b9zW9s0cLL/yajsu5ZQ+PwzjPD4iIXjKn+2dlYyamx5j7yXeCgNKAMoXQTKstdVljwp2nri1A=="
+  },
+  "backend": {
+    "path": "spec/evidence/memory-mcp-l5/lot2/pending-host/backend.tgz",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+    "name": "@sentropic/cluster-mesh",
+    "version": "unverified",
+    "integrity": "sha512-unverified"
+  },
+  "neutralDeclarations": {
+    "path": "spec/evidence/memory-mcp-l5/lot2/pending-host/neutral-declarations.json",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "hostProfile": {
+    "path": "spec/evidence/memory-mcp-l5/lot2/pending-host/host-profile.json",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "lock": {
+    "path": "spec/evidence/memory-mcp-l5/lot2/pending-host/package-lock.json",
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "closure": [
+    {
+      "name": "@sentropic/engram",
+      "version": "0.21.2",
+      "path": "spec/evidence/memory-mcp-l5/lot2/archives/eaf9a3d520aa9d35b261b406313745b4076299b9087eafc1ce076c49e0a34cc1.tgz",
+      "sha256": "eaf9a3d520aa9d35b261b406313745b4076299b9087eafc1ce076c49e0a34cc1",
+      "integrity": "sha512-RtifmT4E9to98b9zW9s0cLL/yajsu5ZQ+PwzjPD4iIXjKn+2dlYyamx5j7yXeCgNKAMoXQTKstdVljwp2nri1A=="
+    }
+  ],
+  "runtime": {
+    "imageDigest": "node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6",
+    "nodeVersion": "24.21.0",
+    "sqliteVersion": "unverified",
+    "python": false,
+    "nativeAddonCompilation": false
+  },
+  "acknowledgements": {
+    "g1": {
+      "path": "spec/evidence/memory-mcp-l5/lot2/pending-host/g1.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "g2": {
+      "path": "spec/evidence/memory-mcp-l5/lot2/pending-host/g2.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "g3": {
+      "path": "spec/evidence/memory-mcp-l5/lot2/pending-host/g3.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "g4": {
+      "path": "spec/evidence/memory-mcp-l5/lot2/pending-host/g4.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    "c9": {
+      "path": "spec/evidence/memory-mcp-l5/lot2/pending-host/c9.json",
+      "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  }
+}
