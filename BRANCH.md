@@ -97,8 +97,9 @@
   - [x] All four H2 suites GREEN (20 tests); real isolated PostgreSQL crash/rollback/restart witnesses; chat-core regression suite 252/252.
   - [x] Root Docker npm ci dry-run passed after dependency correction; chat-server 0.4.1 exceeds published 0.4.0.
   - [x] Final local checks: H2 20/20, chat-core 252/252, chat-server 29/29, scoped strict typecheck, ESLint and Prettier all passed.
+  - [x] Final self-review RED reproduced locale-dependent Unicode digest ordering; use deterministic code-unit key order and expose the complete substantive port types.
   - [ ] Review with at least two peers and resolve findings.
-  - [ ] `make scope-check` before every commit; verify no out-of-scope hunks.
-  - [ ] Draft PR using this BRANCH.md as body; initial plan comment.
+  - [x] `make scope-check` before every commit; verified every hunk serves H2 or its directly blocking manifest dependency.
+  - [x] Draft PR #833 uses this BRANCH.md as body; initial five-step plan comment posted.
   - [ ] CI completed/success on the exact reported head; record PR and SHA.
   - [ ] Inspect service logs and `make down` after validation.
