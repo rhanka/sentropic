@@ -50,4 +50,14 @@ The producer is **gr-conductor**. Every row below requires the verified P3-bound
 
 All `packages/mcp-platform/src` changes are removed from #777, resolving the bump-policy conflict without changing the freeze or bypassing the gate. Final-head Actions results remain separately required.
 
-Lot 4 estimate: **6-10 agent-hours after its actual inputs and S1 are ready**, excluding producer/owner/CI queue waits. No merge, publication, registry registration or deployed activation is claimed by this PR.
+## 2026-10-29 resume
+
+Replayed this branch's commits onto rebased #771, then ran `git rebase origin/main` at `2ea238790fe992cdbb8e0202b1a73a937b6a1793`. Preserve main's mesh 0.24.0 and current lock entry; the historical mesh 0.22.4 source-version statements above describe the earlier run. No public package source differs from main, so no new publication version gate applies. P3 and the frozen catalog remain unchanged.
+
+The latest supplied review, `.h2a/reviews/pr777_opus_r3.md`, approves the platform split and retains final-head CI as its merge gate. Its published-runtime observation is addressed with a Vitest canary: the disposable checkout TS sibling throws at import, while the published JS remains byte-identical to the archive. Loading checkout TS instead of published JS therefore fails the gate even when the two modules have identical exports. The initial export-difference canary failed because the published archive also exports the native-wire registration function; the replacement directly tests resolution.
+
+The strict `memory-l5-test LOT=3` now reaches the real Lot 2 prerequisite and refuses the absent verified manifest, rather than reporting an unsupported lot. Source regression checks and installed qualification remain distinct. Independent final-head review selection is pending catalog access; the installed mesh launcher fails on absent account configuration. No consensus is claimed.
+
+The resumed working-tree source run passes 123 platform tests (including the canary), 23 mesh tests and 27 broker tests, with all 18 P09 files executed and zero failed/skipped/todo cases. These counts cover the rebase plus the canary changes described here; the historical `source-evidence.json` is retained under its original tested commit and is not relabeled as a final-head or installed proof.
+
+No merge, publication, registry registration or deployed activation is claimed by this PR.
