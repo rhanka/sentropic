@@ -59,8 +59,10 @@
   - [ ] Acquire fresh vulnerability/Java receipts and freeze IaC bytes; preserve exact hashes.
 - [ ] **Lot 2 — Targets and real trials**
   - [ ] Resolve all three main targets with source-SHA/platform provenance and retain complete reports.
+  - [x] Scan all three authenticated main-CI archives cold/warm with immutable archive/config hashes; remote provenance blocked by API/UI config mismatch and absent toolbox tag.
   - [ ] Exercise network/rate-limit, missing/corrupt/stale/incompatible cache, malicious config, expiry and changed snapshot pairs.
   - [ ] Inspect process/mount/credential isolation and exercise rollback to blocked S2a.
+  - [x] Capture scanner process/mount/environment-name inventories; no network, credentials, daemon socket or writable target/DB mounts.
   - [ ] Measure cold/warm, refresh, remote/rebuild and CI critical path with queue separate.
 - [ ] **Lot 3 — Verification and delivery**
   - [ ] Scoped tests: `scripts/security/daily/toolchain-contract.test.mjs`, `scripts/security/daily/trivy.test.mjs` and qualification regressions.
