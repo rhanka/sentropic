@@ -1,5 +1,7 @@
 # Trivy S2b: hardened option B preparation
 
+Qualification follow-up: [live trials, bounded Java fix and per-blocker verdicts](trivy-s2b-qualify.md). The current image/verifier candidates are denied admission by real HIGH/CRITICAL findings; service remains OFF.
+
 This is an unqualified preparation lane. The daily service remains disabled, S2a still emits incomplete coverage, and no scheduler or automatic merger is introduced. The owner has not answered the dossier; its stated default authorizes preparing B while preserving qualification blockers. No toolbox Dockerfile is changed.
 
 The binding dossier is `dossier-r2.md`, SHA-256 `b4de75e7e2d5bca48ea1d9571c797d65c0e9262259c54d772a57f2f81c9817a1`, in the conductor's `.tmp/dossier-trivy-s2b/`. The approved plan is `.tmp/daily-sec-fix/spec-plan.md` r4. Dependencies [S1 #732](https://github.com/rhanka/sentropic/pull/732) and [S2a #786](https://github.com/rhanka/sentropic/pull/786) are merged and ancestors of this branch's base `213638676`.
