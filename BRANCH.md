@@ -75,6 +75,7 @@
   - [x] RED `api/tests/api/canvas-live-persistence.test.ts`: missing adapter module; real PostgreSQL rollback, restart, duplicate keys and scope.
 - [ ] **Lot 2 — Durable database adapter**
   - [x] Added one idempotent branch migration and scoped three-table schema; documented full retention and H1/H3/H4/H10 integration boundaries.
+  - [x] Implemented PostgreSQL row-locked transactions, synchronous WAL commit, immutable checkpoint history and duplicate-payload fencing.
   - [ ] Sequence journal, atomic encoded-state checkpoints, immutable baseline, scoped migration/schema and DATA_MODEL.
   - [ ] Durable roster, registry origins, admissions/acknowledgements, freeze exclusions/digest, refusals, receipts, inverse and revert records.
   - [ ] Transactionally commit update/receipt/inverse/formatting intents; preserve retained dependency references during compaction.
