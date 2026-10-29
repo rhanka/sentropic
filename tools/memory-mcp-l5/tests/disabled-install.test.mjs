@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:
 import { dirname, join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
-import { createDisabledTrace } from '../disabled-trace.mjs';
+import { createDisabledTrace, isNativeBuildProcess } from '../disabled-trace.mjs';
 import { assertNoCandidateNativeBuilds, candidateNativeBuilds } from '../native-build.mjs';
 it('ignores npm script declarations and an executed unrelated tree-sitter build', () => {
   const root = '/fixture/consumer';
@@ -28,4 +28,14 @@ it('still blocks a real node-gyp rebuild invocation in the candidate closure', (
     expect(candidateNativeBuilds(trace.read(), root).length).toBeGreaterThan(0);
     expect(() => assertNoCandidateNativeBuilds('', trace.read(), root)).toThrow(/candidate native build attempts/);
   } finally { rmSync(root, { recursive: true, force: true }); }
+});
+it('does not treat version/help checks, configuration or cleanup as native compilation', () => {
+  for (const [executable, argv] of [['node-gyp', ['--version']], ['gcc', ['--version']],
+    ['make', ['--help']], ['node-gyp', ['configure']], ['make', ['clean']]]) {
+    expect(isNativeBuildProcess(executable, argv)).toBe(false);
+  }
+  expect(isNativeBuildProcess('node-gyp', ['rebuild'])).toBe(true);
+  expect(isNativeBuildProcess('gcc', ['-c', 'binding.c', '-o', 'binding.o'])).toBe(true);
+  expect(isNativeBuildProcess('gcc', ['-v', '-c', 'binding.c'])).toBe(true);
+  expect(isNativeBuildProcess('make', ['clean', 'all'])).toBe(true);
 });

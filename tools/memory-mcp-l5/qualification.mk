@@ -22,3 +22,11 @@ memory-l5-collect: memory-l5-proposal-runtime
 .PHONY: memory-l5-disabled-install
 memory-l5-disabled-install: memory-l5-proposal-runtime
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e ARTIFACT_MANIFEST="$(ARTIFACT_MANIFEST)" -e NATIVE_OUTPUT="$(NATIVE_OUTPUT)" -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) node tools/memory-mcp-l5/disabled-install.mjs
+
+# Network/lifecycle preparation runs before Vitest's per-case timer. The assertion
+# consumes the fresh, digest-bound observation; it cannot reuse another tuple.
+.PHONY: memory-l5-packed-disabled
+memory-l5-packed-disabled: memory-l5-proposal-runtime
+	@test -n "$(ARTIFACT_MANIFEST)" -a -n "$(NATIVE_OUTPUT)"
+	@$(MAKE) memory-l5-disabled-install ARTIFACT_MANIFEST="$(ARTIFACT_MANIFEST)" NATIVE_OUTPUT="$(NATIVE_OUTPUT)" API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e ARTIFACT_MANIFEST="$(ARTIFACT_MANIFEST)" -e DISABLED_INSTALL_RESULT="/workspace/$(NATIVE_OUTPUT)/result.json" -e MEMORY_L5_REPORT="$(MEMORY_L5_REPORT)" -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; trap '\''rm -rf tools/memory-mcp-l5/node_modules'\'' EXIT; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 >/dev/null; mkdir -p tools/memory-mcp-l5/node_modules; ln -s "$$tool_dir/node_modules/vitest" tools/memory-mcp-l5/node_modules/vitest; set --; if [ -n "$$MEMORY_L5_REPORT" ]; then set -- --reporter=json --outputFile="$$MEMORY_L5_REPORT"; fi; "$$tool_dir/node_modules/.bin/vitest" run packed/disabled-install.test.ts --environment node --root tools/memory-mcp-l5 "$$@"'
