@@ -54,6 +54,26 @@ import {
   type TestUser,
 } from '../utils/auth-helper';
 
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const original = await importOriginal<typeof import('node:fs/promises')>();
+  const historicalJournal = new URL(
+    '../fixtures/historical/transfers-0c5aef04/api/drizzle/meta/_journal.json', import.meta.url,
+  );
+  const currentJournal = new URL('../../drizzle/meta/_journal.json', import.meta.url);
+  return {
+    ...original,
+    // Compare frozen and current routers with the same external schema metadata.
+    // Synchronous provenance reads below still verify the unchanged frozen bytes.
+    readFile: new Proxy(original.readFile, {
+      apply(target, receiver, [path, ...options]) {
+        const input = path instanceof URL && path.href === historicalJournal.href
+          ? currentJournal : path;
+        return Reflect.apply(target, receiver, [input, ...options]);
+      },
+    }),
+  };
+});
+
 const key = { compositionRoot: 'product' as const, namespace: '/transfers' as const };
 const cutovers = new PostgresClusterMeshCutoverStore();
 const clearCutover = () => db.delete(clusterMeshNamespaceCutovers).where(and(
@@ -206,12 +226,18 @@ describe('cluster mesh transfers cutover', () => {
     );
     const legacyResponse = await request(historical);
     const candidateResponse = await request(candidate());
+    expect(legacyResponse.status).toBe(200);
     expect(candidateResponse.status).toBe(legacyResponse.status);
     expect(candidateResponse.headers.get('content-type')).toBe(legacyResponse.headers.get('content-type'));
     expect(candidateResponse.headers.get('content-disposition'))
       .toBe(legacyResponse.headers.get('content-disposition'));
     const legacyZip = await JSZip.loadAsync(await legacyResponse.arrayBuffer());
     const candidateZip = await JSZip.loadAsync(await candidateResponse.arrayBuffer());
+    const currentJournal = JSON.parse(readFileSync(
+      new URL('../../drizzle/meta/_journal.json', import.meta.url), 'utf8',
+    )) as { entries: Array<{ tag: string }> };
+    expect(JSON.parse(await candidateZip.file('manifest.json')!.async('string')).schema_version)
+      .toBe(currentJournal.entries[currentJournal.entries.length - 1].tag);
     expect(Object.keys(candidateZip.files).sort()).toEqual(Object.keys(legacyZip.files).sort());
     for (const path of ['manifest.json', 'meta.json']) {
       expect(await candidateZip.file(path)!.async('string'))

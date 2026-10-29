@@ -32,6 +32,8 @@
   - `api/tests/unit/canvas-live-freeze-capture.test.ts`
   - `api/tests/helpers/canvas-live.ts`
   - `api/tests/api/canvas-live-persistence.test.ts`
+  - `api/tests/api/cluster-mesh-transfers-cutover.test.ts`
+  - `api/tests/fixtures/historical/transfers-0c5aef04/README.md`
   - `api/package.json`
   - `api/package-lock.json`
   - `package-lock.json`
@@ -47,6 +49,7 @@
   - [x] Record BRH2-EXn reason, impact and rollback before any additional conditional change.
 
 ## Feedback Loop
+- [x] BRH2-EX2 — CI job 123301301873 fails full manifest parity because the historical router reads pinned journal 0043 while the product reads H2 journal 0048; session-denial logs belong to passing chat tests. Scope: parity harness and fixture documentation only. Bridge historical journal reads to the current product input, preserve pinned bytes/digests and complete archive equality. Rollback: revert the test bridge and documentation together.
 - [ ] Peer dispatch awaits the owner's reply to the repository-mandated launch approval request; no consensus review is claimed. Dossier: `.tmp/canvas-h2-review/dossier.md` in the main workspace.
 - [x] BRH2-EX1 — Root Docker npm ci dry-run reproduced missing chat-core 0.1.7: chat-server's old dependency excludes 0.2.0. Scope: its manifest and existing locks only. Advance to the new substantive port rather than installing another old stub; no server source changes. Rollback: revert manifest and matching lock entries together.
 - [ ] Deferred integration: H1 final admission/registry wiring waits for #830 merge; H3 owns real provider conformance, H4 real inverse qualification, H5 publication authority, H10 production activation/N4 retirement.
@@ -94,6 +97,7 @@
   - [x] Map complete captured blocks by manifest identities to pinned Focus `diffParagraphs`; preserve baseline at reconnect.
   - [x] GREEN cumulative diff, undo-empty and invalid capture refusal witnesses.
 - [ ] **Lot 5 — Docs consolidation and final validation**
+  - [x] CI parity correction: isolated Docker RED reproduces the schema tag/hash mismatch without other tests; GREEN targeted suite 8/8, exact endpoints shard 3/4 480/480, H2 four-file regression 22/22. Shared flock, prescribed ports and ENV=test-canvas-h2; runtime health 200 and make down after validation.
   - [x] Typecheck and lint passed for H2 services, schema, package port and tests; formatter applied to new source only in ≤150-line slices.
   - [x] All four H2 suites GREEN (20 tests); real isolated PostgreSQL crash/rollback/restart witnesses; chat-core regression suite 252/252.
   - [x] Root Docker npm ci dry-run passed after dependency correction; chat-server 0.4.1 exceeds published 0.4.0.
