@@ -46,6 +46,7 @@
 - [x] Compose provider resolution, operation authorization, actor subscriptions and admission closure with authoritative checks and registry invalidation.
 - [x] Define explicit immutable capture-id reuse refusal, latest-capture recovery, pending-consumption and actor-scoped discard witnesses.
 - [x] Observe three draft-lifetime RED failures; implement immutable capture identity, acknowledged pending consumption and explicit discard with compare-and-clear semantics.
+- [x] Extend host-close/session-rotation coverage and require stale handles to leave a new session intact; update revoked-resolution refusal expectation.
 - [x] CL-1M gate: consume published DS pure types at the adapter boundary when available; preparation shapes are host-local, not a publication/conformance claim.
 - [x] H3 gate: actual Y.Doc/Awareness transport factory and production binding/registry-update conformance remain unqualified.
 - [x] H2 gate: admission storage is injected; restart witnesses recreate the service over retained records, not a production durable-store claim.

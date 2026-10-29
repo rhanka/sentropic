@@ -32,7 +32,7 @@ describe('canvas live binding registry', () => {
     expect(f.registry.resolveBinding(f.record, b.identity)).toBe(notes);
     text.value += '+local'; expect(text.value).toBe('remote+local'); expect(f.disconnected).not.toHaveBeenCalled();
     await b.dispose(); expect(f.disconnected).toHaveBeenCalledTimes(1);
-    expect(() => f.registry.resolveBinding(f.record, b.identity)).toThrow('invalid-binding');
+    expect(() => f.registry.resolveBinding(f.record, b.identity)).toThrow('revoked');
     const reopened = f.registry.open(f.record, 'notes');
     expect(f.registry.resolveBinding(f.record, reopened.identity).text).toBe(text);
     expect(f.create).toHaveBeenCalledTimes(1); expect(f.connect).toHaveBeenCalledTimes(2);
