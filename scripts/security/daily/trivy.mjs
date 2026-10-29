@@ -59,18 +59,34 @@ export async function prepareImageScan({ target, sourceSha, key, snapshots, arch
     scannerIdentity: { version: policy.version, indexDigest: policy.indexDigest, manifestDigest: policy.manifestDigest } };
 }
 
-export function validateImageReport(stdout, target) {
-  const parsed = failClosedReport(stdout);
-  requireEvidence(parsed.SchemaVersion === 2 && parsed.Metadata?.ImageID === target.configDigest &&
-    parsed.Metadata?.RepoDigests?.includes(target.ref), 'report target identity');
-  const actual = parsed.Results.map((result) => `${result.Target}|${result.Class}|${result.Type}`).sort();
-  requireEvidence(JSON.stringify(actual) === JSON.stringify([...target.expectedResults].sort()), 'partial image coverage');
-  for (const result of parsed.Results) for (const finding of result.Vulnerabilities || []) {
-    requireEvidence(typeof finding.VulnerabilityID === 'string' && typeof finding.PkgName === 'string' &&
-      typeof finding.InstalledVersion === 'string' &&
-      ['UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(finding.Severity), 'malformed vulnerability');
+const reportLimit = 16 * 1024 * 1024;
+function retainDiagnostics(error, stdout, result) {
+  const bytes = Buffer.from(typeof stdout === 'string' ? stdout : '');
+  const retained = bytes.subarray(0, reportLimit).toString();
+  error.scanEvidence = { status: result.status, signal: result.signal || null,
+    processError: typeof result.error?.message === 'string' ? result.error.message.slice(0, 4096) : null,
+    stdout: retained, rawHash: digest(retained), reportBytes: bytes.length, truncated: bytes.length > reportLimit,
+    stderr: Buffer.from(typeof result.stderr === 'string' ? result.stderr : '').subarray(0, reportLimit).toString() };
+  return error;
+}
+export function validateImageReport(stdout, target, execution = { status: 0 }) {
+  try {
+    requireEvidence(execution.status === 0 && !execution.error && !execution.signal, 'Trivy command failed');
+    requireEvidence(typeof stdout === 'string' && Buffer.byteLength(stdout) <= reportLimit, 'report byte/type bound');
+    const parsed = failClosedReport(stdout);
+    requireEvidence(parsed.SchemaVersion === 2 && parsed.Metadata?.ImageID === target.configDigest &&
+      parsed.Metadata?.RepoDigests?.includes(target.ref), 'report target identity');
+    const actual = parsed.Results.map((result) => `${result.Target}|${result.Class}|${result.Type}`).sort();
+    requireEvidence(JSON.stringify(actual) === JSON.stringify([...target.expectedResults].sort()), 'partial image coverage');
+    for (const result of parsed.Results) for (const finding of result.Vulnerabilities || []) {
+      requireEvidence(typeof finding.VulnerabilityID === 'string' && typeof finding.PkgName === 'string' &&
+        typeof finding.InstalledVersion === 'string' &&
+        ['UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(finding.Severity), 'malformed vulnerability');
+    }
+    return parsed;
+  } catch (error) {
+    throw retainDiagnostics(error, stdout, execution);
   }
-  return parsed;
 }
 
 export async function executeImageScan(options, scannerEvidence, execute) {
@@ -80,10 +96,15 @@ export async function executeImageScan(options, scannerEvidence, execute) {
   requireEvidence(typeof execute === 'function', 'trusted credential-free supervisor required');
   const result = await execute(plan.command, plan.args, { env: { PATH: '/usr/bin:/bin' },
     shell: false, timeout: 300000, maxBuffer: 16 * 1024 * 1024 });
-  requireEvidence(result.status === 0 && !result.error && !result.signal, 'Trivy command failed');
-  validateImageReport(result.stdout, plan.target);
-  // A DB that expired during scanning cannot support absence/reconciliation/merge.
-  for (const snapshot of Object.values(plan.snapshots)) await restoreSnapshot(snapshot);
+  try {
+    validateImageReport(result.stdout, plan.target, result);
+    // A DB that expired during scanning cannot support absence/reconciliation/merge.
+    for (const snapshot of Object.values(plan.snapshots)) await restoreSnapshot(snapshot);
+  } catch (error) {
+    if (!error.scanEvidence) retainDiagnostics(error, result.stdout, result);
+    Object.assign(error.scanEvidence, { scannerIdentity: plan.scannerIdentity, databaseIdentity: plan.databaseIdentity });
+    throw error;
+  }
   return { ...result, rawHash: digest(result.stdout), scannerIdentity: plan.scannerIdentity,
     databaseIdentity: plan.databaseIdentity, target: plan.target, sourceSha: plan.sourceSha,
     parametersHash: plan.parametersHash, policyHash: plan.policyHash, snapshots: plan.snapshots };
