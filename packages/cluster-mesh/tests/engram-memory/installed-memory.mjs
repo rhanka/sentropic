@@ -51,7 +51,7 @@ const meshPkg = JSON.parse(await readFile(
 const engramPkg = JSON.parse(await readFile(
   new URL('./node_modules/@sentropic/engram/package.json', import.meta.url), 'utf8'));
 assert.equal(engramPkg.version, '0.21.3');
-assert.equal(meshPkg.version, '0.24.0-dev.7', 'candidate mesh tarball version');
+assert.equal(meshPkg.version, '0.24.0', 'stable release mesh tarball version');
 
 const pg = (await import('pg')).default;
 const meshMemory = await import('@sentropic/cluster-mesh/engram-memory');
