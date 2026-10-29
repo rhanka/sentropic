@@ -26,6 +26,9 @@
   - `packages/llm-mesh/tests/decision-qualification.test.ts`
   - `packages/llm-mesh/tests/decision-jev-request.test.ts`
   - `packages/llm-mesh/tests/decision-openai-routing.test.ts`
+  - `packages/cluster-mesh/tests/fixtures/train.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -39,6 +42,7 @@
 - [x] Q1-CRED-01: JEV preflight refused peripheral whitespace; normalized transiently after Compose injection, source env unchanged; refusal consumes attempt 1.
 - [x] Q1-INV-01: parser previously forbade observed IDs with unqualified production status; permit evidence inventory while retaining admission gates; regression keeps nonempty IDs and proves production refusal.
 - [ ] Q1-REV-01: conductor to select two exact complementary reviewer models before merge; h2a discovery has host presence but no model identities, no configured gateway catalog; no consensus claimed.
+- [x] Q1-CI-01: reproduced job 123314702961's three stale-version failures; rebound independent train and selected fixture to llm-mesh 0.32.2 and guarded archive SHA-512; 1,228 cluster-mesh tests and scope pass, 138 expected skips; see `spec/decision/q1-2026-10-29/ci-repair.md`.
 
 ## AI Flaky tests
 - [x] No flaky acceptance or additional live calls beyond the cap.
@@ -67,5 +71,5 @@
   - [x] llm-mesh typecheck/lint and mechanical scope checks pass; commits at most 150 lines.
   - [x] Secret scan, attempt counts, identity comparison and durable 77 micro-USD ledger verified; zero reserved/pending.
   - [x] Stop local stack with `make down`; publish report `spec/decision/q1-live-smoke.md`.
-  - [ ] Create draft PR to main using this plan; final PR/comment records exact-head CI after this checkpoint.
+  - [x] Draft PR #834 created against main; exact-head CI remains the final checkpoint.
   - [ ] Observe CI completed/success on exact head; report head, 77 micro-USD and candidate outcomes.
