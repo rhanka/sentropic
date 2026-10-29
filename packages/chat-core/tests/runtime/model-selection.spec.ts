@@ -10,7 +10,7 @@ import {
   type ModelCatalogModel,
   type ModelCatalogProvider,
 } from '@sentropic/chat-ui/utils/model-selection';
-import { coerceSelectionToValidEntry, resolveHydratedModelSelection } from '../src/utils/modelSelectionPolicy.js';
+import { coerceSelectionToValidEntry, resolveHydratedModelSelection } from '../../src/runtime/utils/modelSelectionPolicy.js';
 
 // ---------------------------------------------------------------------------
 // Fixtures

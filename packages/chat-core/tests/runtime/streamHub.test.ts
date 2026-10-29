@@ -6,8 +6,8 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import { createStreamHub } from '../src/client/streamHub.js';
-import type { RuntimePortLike, StreamHubEvent } from '../src/client/streamTypes.js';
+import { createStreamHub } from '../../src/runtime/client/streamHub.js';
+import type { RuntimePortLike, StreamHubEvent } from '../../src/runtime/client/streamTypes.js';
 
 class FakeEventSource {
   readonly url: string;
