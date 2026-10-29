@@ -1019,6 +1019,12 @@ CI_PACKAGE_CANDIDATES ?=
 .PHONY: ci-package-candidate
 ci-package-candidate:
 	@$(MAKE) cluster-mesh-workspace CM_ACTION=candidate CI_PACKAGE_CANDIDATES=tmp/ci-package-candidates ENV=$(ENV)
+.PHONY: ci-package-verify
+ci-package-verify:
+	@test -n "$(CI_PACKAGE_CANDIDATES)"
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(MANIFEST_GUARD_ENV) \
+		-e CANDIDATE_NODE_IMAGE="$(LLM_MESH_NODE_IMAGE)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		sh -ec 'export CANDIDATE_NPM_VERSION="$$(npm --version)"; $(MANIFEST_GUARD_TOOLS); node scripts/ci/package-candidate.mjs verify "$(CI_PACKAGE_CANDIDATES)" cluster-mesh'
 cluster-mesh-workspace:
 	@$(CM_RUN) -u "$$(id -u):$$(id -g)" \
 		-e HOME=/tmp -e CM_ACTION="$(CM_ACTION)" -e CM_PEER_TOOLS="$(CLUSTER_MESH_PEER_TOOLS)" \
