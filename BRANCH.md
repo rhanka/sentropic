@@ -65,7 +65,7 @@
   - [ ] Resolve upstream index/platform/config and signature; inspect release and both security advisories.
   - [x] Freeze pins, minimum version, exact publisher, trusted DB/rules sources and explicit missing admissions.
 - [ ] **Lot 2 — Acquisition and execution contracts**
-  - [ ] Acquire DB once per campaign through allowed OCI origin; verify descriptors and hashes before atomic cache publication.
+  - [x] Acquire DB once per campaign through allowed OCI origin; verify descriptors and hashes before atomic cache publication.
   - [ ] Validate schema/dates and cache bytes after restoration; block missing/corrupt/stale/incompatible data.
   - [ ] Prepare socket-free, least-privilege remote/archive scans with immutable target/source/platform proof and frozen flags/data.
   - [x] Reject caller configuration and untrusted mirrors before acquisition; no automatic mirror fallback.
