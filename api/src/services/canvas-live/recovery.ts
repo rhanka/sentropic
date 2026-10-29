@@ -8,13 +8,20 @@ export interface PreservedDraft {
 export interface RecoveryPorts {
   update(key: string, change: (old?: PreservedDraft) => PreservedDraft): Promise<PreservedDraft>;
   migrate(bytes: Uint8Array, from: Pick<PreservedDraft, 'profileId' | 'schemaEpoch'>, to: DocumentFacts): Promise<Uint8Array>;
+  pending(key: string, draftId?: string): Promise<string | null>;
 }
 export class DraftRecovery {
   constructor(private readonly ports: RecoveryPorts) {}
   async preserve(principal: Principal, documentId: string, id: string, draft: PreservedDraft): Promise<PreservedDraft> {
-    return this.ports.update(this.key(principal, documentId, id), (old) => old ?? {
+    const saved = await this.ports.update(this.key(principal, documentId, id), (old) => old ?? {
       bytes: draft.bytes.slice(), profileId: draft.profileId, schemaEpoch: draft.schemaEpoch,
     });
+    await this.ports.pending(admissionKey(principal, documentId), id);
+    return saved;
+  }
+  async requirePendingAcknowledged(principal: Principal, facts: DocumentFacts): Promise<void> {
+    const id = await this.ports.pending(admissionKey(principal, facts.documentId));
+    if (id) await this.requireAcknowledged(principal, facts, id);
   }
   async prepare(principal: Principal, facts: DocumentFacts, id: string, branch: 'client-upgrade' | 'draft-migration'): Promise<PreservedDraft> {
     if (branch !== 'client-upgrade' && branch !== 'draft-migration') throw new AdmissionError('incompatible-schema');
