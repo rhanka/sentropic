@@ -49,9 +49,10 @@ export function mcpDependencies(scope_ref: string): Omit<MemoryEngineDependencie
         plaintext.delete(key_ref.slice(4));
         return { ok: true, value: { destroyed: true, receipt_digest: receiptDigest('key-destruction', { destroyed: true, key_ref }) } };
       },
+      rotate: async () => { throw new Error('key rotation is outside this test fixture'); },
     },
     evidence_verifier: {
-      version: 1, verifier_id: 'memory-test-verifier', verifier_version: '1',
+      verifier_id: 'memory-test-verifier', verifier_version: '1',
       classify: async ({ payload_digest }) => {
         const body = { class: 'earned' as const, evidence_digest: D, verifier_id: 'memory-test-verifier', verifier_version: '1', issued_at: NOW, revocation_epoch: '0' };
         return { ok: true, value: { ...body, receipt_digest: receiptDigest('earned-trust', { ...body, payload_digest }) } };

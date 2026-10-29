@@ -69,6 +69,7 @@
   - [x] Pass lint, source/test typechecks, package build, launcher syntax and the unit/regression suite in isolated Docker.
   - [x] Pass all six positive PostgreSQL and transport tests plus the atomic split-provenance refusal.
   - [x] Pass a separate-process round trip through `examples/memory-mcp-stdio.mjs` with the explicit PostgreSQL fixture host.
+  - [x] Typecheck the launcher host, context and dependency fixtures with the emitted library; require compiler success before launching.
   - [x] Run mechanical scope checks; final full branch diff passes C2.
   - [ ] Complete consensus review and reconcile findings.
   - [x] Document the exact host launch line and required definition bindings in `packages/cluster-mesh/docs/memory-mcp.md`.

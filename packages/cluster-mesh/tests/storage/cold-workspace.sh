@@ -65,6 +65,13 @@ mkdir -p ../../.h2a
 if [ -f /source/.h2a/pg-crash-witness.json ]; then
   cp /source/.h2a/pg-crash-witness.json ../../.h2a/
 fi
+memory_mcp_launcher() {
+  printf '%s\n' '{"extends":"./tsconfig.json","compilerOptions":{"rootDir":".","outDir":".memory-launcher","declaration":false,"declarationMap":false},"include":["src/**/*.ts","tests/engram-memory/mcp-launcher-host.ts"],"exclude":["dist","node_modules"]}' > tsconfig.memory-launcher.json
+  "$tsc" -p tsconfig.memory-launcher.json || return
+  ln -s ../assets .memory-launcher/assets || return
+  ln -s .memory-launcher/src dist || return
+  node tests/engram-memory/mcp-launcher-roundtrip.mjs
+}
 case "$CM_ACTION" in
   mesh-check|gateway-check)
     if [ "$CM_ACTION" = mesh-check ]; then cd ../llm-mesh; else cd ../llm-gateway; fi
@@ -72,6 +79,8 @@ case "$CM_ACTION" in
     "$tsc" --noEmit -p tsconfig.json
     if [ "$CM_ACTION" = gateway-check ]; then "$tsc" --noEmit -p tsconfig.test.json; fi
     /tmp/cm-tools/node_modules/.bin/vitest run tests --environment node --maxWorkers=1 ;;
+  memory-mcp-launcher)
+    memory_mcp_launcher ;;
   memory-mcp-static)
     "$tsc" --noEmit -p tsconfig.json
     "$tsc" --noEmit -p tsconfig.test.json
@@ -87,6 +96,7 @@ case "$CM_ACTION" in
     "$tsc" --noEmit -p tsconfig.json || status=1
     "$tsc" --noEmit -p tsconfig.test.json || status=1
     /tmp/cm-tools/node_modules/.bin/vitest run mcp-memory --environment node --maxWorkers=1 || status=1
+    if [ "$status" = 0 ]; then memory_mcp_launcher || status=1; fi
     exit "$status" ;;
   platform-test)
     cd ../mcp-platform
