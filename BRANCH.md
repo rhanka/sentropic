@@ -4,7 +4,7 @@
 - [ ] Prepare upstream Trivy by immutable image digest with trusted DB acquisition and fail-closed execution; qualification and daily activation remain blocked.
 
 ## Scope / Guardrails
-- [x] Owner-authorized default B from dossier r2, SHA-256 b4de75e7 prefix; no toolbox Dockerfile change.
+- [x] Owner-authorized default B from dossier r2, SHA-256 `b4de75e7e2d5bca48ea1d9571c797d65c0e9262259c54d772a57f2f81c9817a1`; no toolbox Dockerfile change.
 - [x] Branch `feat/sec-s2b-trivy-b` from `origin/main` at `213638676`; isolated worktree `tmp/worktrees/sec-s2b`.
 - [x] Make only; zero Python; selective staging; commits at most 150 changed lines without AI trailers; merge updates only.
 - [x] Docker uses the shared `.tmp/packets/DOCKER-LOCK.md` flock and scoped teardown; `ENV=test-sec-s2b` always last.
@@ -44,6 +44,7 @@
 - [ ] S2B-Q1, conductor, blocked: verifier admission, publisher identity/signature receipt and content review of exact index/platform pins.
 - [ ] S2B-Q2, conductor, blocked: live DB provenance/integrity/freshness, Java/IaC data, immutable targets with exact source/platform, zero-Python runtime inventory.
 - [ ] S2B-Q3, conductor, blocked: real offline/rate-limit/corruption/rollback exercises and cold/warm remote/rebuild measurements including full CI critical path.
+- [x] Live DB preparation: vulnerability snapshot ingested and restored; Java layer 991,026,356 bytes refused by the 512 MiB bound. Preparation exits nonzero; scoped teardown succeeds. Receipts and source evidence in root `.tmp/sec-s2b-evidence/`.
 - [x] Shared Track remains owned by its designated writer; no event writes from this lot.
 
 ## AI Flaky tests
@@ -55,7 +56,7 @@
 
 ## UAT Management (in orchestration context)
 - [x] Web, Chrome and VSCode UAT not applicable; no application changes.
-- [ ] Operator UAT: inspect source evidence, immutable pins, refusal receipts and qualification gaps.
+  - [x] Operator UAT: inspect source evidence, immutable pins, live acquisition/refusal receipts and qualification gaps.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and admission**
@@ -72,13 +73,13 @@
   - [x] Reject silent Java/IaC fallback and preserve all-severity raw diagnostics; live Java layer exceeds the prepared bound and stays blocked.
   - [x] Keep unqualified execution gated and daily job off; bind scanner/policy/flags/DB identities across comparisons and recheck freshness before merge.
 - [ ] **Lot 3 — Security regression fixtures**
-  - [x] `toolchain-contract.test.mjs`: pin/version, publisher/platform/source, cache corruption/schema/dates and bounded acquisition failures; six tests pass.
+  - [x] `toolchain-contract.test.mjs`: pin/version, publisher/platform/source, cache corruption/schema/dates, hostile archives and bounded acquisition failures; eight tests pass.
   - [x] `trivy.test.mjs`: sandbox flags, environment isolation, report/target mismatch and unqualified execution refusal; four tests pass.
-  - [ ] Existing `schema.test.mjs`, `inventory.test.mjs`, `scan.test.mjs` plus required wiring entrypoint and `test-security-parser`.
+  - [x] Existing `schema.test.mjs`, `inventory.test.mjs`, `scan.test.mjs` plus required wiring entrypoint: 149/149 pass; parser: 17/17 cases pass.
 - [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Document source receipts, frozen identities, trust limits, qualification matrix and rollback in `docs/security/trivy-s2b.md`.
+  - [x] Document source receipts, frozen identities, trust limits, qualification matrix and rollback in `docs/security/trivy-s2b.md`.
 - [ ] **Lot N — Final validation**
-  - [x] Scoped fixtures and full daily suite pass under flock with dedicated teardown; required wiring validation follows.
+  - [x] Scoped fixtures, daily suite and final required wiring validation pass under flock with dedicated teardown.
   - [ ] Check scope before each commit; verify diff, commit sizes and no AI trailers.
   - [ ] Create draft PR to main with this plan as body; verify CI completed/success on exact head.
   - [ ] Report PR/head and remaining evidence; retain BRANCH.md, disabled service and qualification blockers; no merge.
