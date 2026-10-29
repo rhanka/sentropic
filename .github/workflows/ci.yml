@@ -838,44 +838,8 @@ jobs:
         run: make ci-package-verify ENV=test-ci-br80-${{ matrix.lane }}
       - name: Export verified sibling archives without packing
         run: make pack-candidate-siblings PACKAGE=cluster-mesh SIBLING_DIR=tmp/ci-manifest-guard/siblings/cluster-mesh ENV=test-ci-br80-${{ matrix.lane }}
-      - name: Prepare and audit Cluster Mesh storage dependencies
-        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-storage-deps-audit ENV=test-ci-cluster-mesh
-      - name: Prepare and audit the optional frozen comments peer
-        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-comments-deps-audit ENV=test-ci-cluster-mesh
-      - name: Qualify Cluster Mesh Postgres storage and server recovery
-        run: |
-          make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test ENV=test-ci-cluster-mesh-pg
-          make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-comments-test ENV=test-ci-cluster-mesh-pg
-          make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-crash-test ENV=test-ci-cluster-mesh-pg
-      - name: Remove isolated Cluster Mesh Postgres service and volume
-        if: always()
-        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-down ENV=test-ci-cluster-mesh-pg
-      - name: Lint Cluster Mesh
-        run: make lint-cluster-mesh ENV=test-ci-cluster-mesh
-      - name: Typecheck Cluster Mesh
-        run: make typecheck-cluster-mesh ENV=test-ci-cluster-mesh
-      - name: Test Cluster Mesh
-        run: make test-cluster-mesh ENV=test-ci-cluster-mesh
-      - name: Qualify installed stateful MCP contracts
-        run: make cluster-mesh-workspace CM_ACTION=stateful-consumer ENV=test-cm-wrap
-      - name: Build Cluster Mesh
-        run: make build-cluster-mesh ENV=test-ci-cluster-mesh
-      # Release train (BRDP-EX10): pack the candidate and its same-PR siblings first so the packed lazy
-      # qualification resolves unpublished train siblings from their verified archives.
-      - name: Pack Cluster Mesh
-        id: pack
-        env:
-          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
-          CI_MANIFEST_EVENT: ${{ github.event_name }}
-          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-cluster-mesh PACK_DESTINATION=tmp/ci-manifest-guard/candidate/cluster-mesh PACK_OUTPUT_FILE="$GITHUB_OUTPUT" ENV=test-ci-cluster-mesh
-      - name: Pack Cluster Mesh same-PR BLOCK siblings
-        # Prepare embedded dependencies before any installed candidate qualification.
-        env:
-          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
-          CI_MANIFEST_EVENT: ${{ github.event_name }}
-          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-candidate-siblings PACKAGE=cluster-mesh SIBLING_DIR=tmp/ci-manifest-guard/siblings/cluster-mesh ENV=test-ci-cluster-mesh
+      - name: Qualify the isolated package lane
+        run: make ci-package-qualification PACKAGE_LANE=${{ matrix.lane }} ENV=test-ci-br80-${{ matrix.lane }}
       - name: Qualify installed comments on an injected single-session Postgres host
         env:
           CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
