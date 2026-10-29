@@ -34,12 +34,14 @@
   - [ ] `scripts/ci/ci-expected-results.mjs`; `scripts/ci/ci-expected-results.test.mjs` under BR80-EX6.
   - [ ] `tools/memory-mcp-l5/tests/ci-contract.test.mjs` under BR80-EX7.
   - [ ] `scripts/ci/publishable-ci-wiring.test.mjs` under BR80-EX8.
+  - [x] `packages/cluster-mesh/tests/packaging/stateful-consumer.sh`; `packages/llm-gateway/tests/auth-subpaths.test.ts` under BR80-EX5.
   - [ ] `api/tests/fixtures/canvas-live/**`; `docs/canvas-live/**`; `ui/tests/fixtures/canvas-live/**` under BR80-EX9, unchanged imports from main only.
   - [ ] `api/tests/queue/workflow-transition-runtime.test.ts`; `packages/flow/src/dispatch.ts`; `packages/flow/package.json`; `package-lock.json` under BR80-EX10.
 
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
+- [x] BR80-EX5 — Owner review-repair request authorizes receipt reuse in stateful-consumer and gateway auth-subpaths setup. Replace duplicate candidate builds/packs only when the shared bundle is selected; verify the complete tuple/closure and copied archive digest at use. Keep standalone qualification and every assertion, peer tuple and test member. Impact: qualification setup only; rollback: revert these setup changes and retain the exact-bytes objective as unmet.
 - [x] BR80-EX10 — Run 40807893347/job 123234041344 blocks exact-head CI on concurrent `all_main` completion (expected two enqueues, observed zero). Bound the repair to completion publication ordering and fresh join state in Flow, a patch version/lock update, and controlled interleavings in the existing API regression. Impact: prevent a join from consuming incomplete prerequisite state; preserve enqueue counts, deduplication, timeouts and all gates. Rollback: revert this bounded fix and version/lock changes together; keep the failing regression blocking.
 - [x] EX10 repro: both controlled interleavings fail with exactly zero/two enqueues before the fix. Frozen local toolbox `tool-98d616df5008843fdd25333b07a1404f782d94ea3a415049deb8b3e0f028bd60`; isolated 9400/5600/1500 stack removed after logs. Container registry read confirms published Flow 0.2.0 before bumping to 0.2.1.
 - [x] EX10 qualification: rebuilt toolbox compiles all workspaces; all 71 tests in `tests/queue` and `tests/services/flow` pass under the shared flock and `ENV=test-ci-br80`, including both controlled races and replay deduplication. Logs captured and Compose stack removed.
@@ -54,8 +56,8 @@
 - [x] Predecessors read: BR-78 #811 and BR-79 #826. UI 255s/180s, IdP 233s/150s, runner admission and uncompleted rollback/warm/cold campaigns remain open; BR-80 does not close them by DAG shape.
 - [x] BR80-Q1: the owner's exact-head successful CI request covers this evidenced blocker; BR80-EX8 bounds the wiring-fixture adaptation without removing gate obligations.
 - [x] BR80-Q2: owner explicitly requested the capacity-policy repair in this session; BR80-EX6 bounds the implementation and fixtures while retaining complete-result and security barriers.
-- [ ] BR80-Q3: request BR80-EX5 for `packages/cluster-mesh/tests/packaging/stateful-consumer.sh`: replace its five duplicate packs with verified archives; retain every existing assertion and suite; awaiting owner response.
-- [ ] BR80-Q3 extension: the preserved `packages/llm-gateway/tests/auth-subpaths.test.ts` also compiles and repacks mesh/gateway candidates; its archive setup needs the same bounded receipt-reuse exception. Assertions and suite membership must remain unchanged.
+- [x] BR80-Q3: BR80-EX5 replaces the five stateful-consumer packs with verified candidate archive copies when the bundle is selected; all assertions and suites remain.
+- [x] BR80-Q3 extension: gateway auth-subpaths uses the same verified mesh/gateway receipt bytes without another compile/pack when the bundle is selected; standalone setup and all assertions remain.
 - [x] Gateway snapshot repro at c48a42fae: 77 files/1367 tests pass, but auth-subpaths cannot resolve its expected package-local node_modules/vitest. Restore that tooling link only inside the disposable gateway workspace; rerun the unchanged suite.
 - [x] Add a real guarded-pack regression: an unrelated selected package is outside the shared closure and must retain its own full pack. The initial fixture fails with `missing selected candidate: outside`; restrict receipt reuse to closure members and preserve full guard/bump checks for other packages.
 - [x] Lazy repro at e73835d39 rejects unchanged oauth-verify bytes and mcp-auth 0.2.2 against the committed frozen 0.2.1 tuple. Preserve the lock assertions: classify sibling injection independently from the once-built preparation closure, using the existing same-PR BLOCK classifier; export and require every selected sibling only.

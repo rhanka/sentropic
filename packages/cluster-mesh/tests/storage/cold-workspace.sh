@@ -49,6 +49,7 @@ done
 fi
 cd "$workspace"
 export NODE_PATH=/tmp/cm-tools/node_modules
+export MANIFEST_GUARD_TOOL_DIR=/tmp/cm-tools
 tsc=/tmp/cm-tools/node_modules/.bin/tsc
 cd packages/cluster-mesh
 mkdir -p ../../.h2a

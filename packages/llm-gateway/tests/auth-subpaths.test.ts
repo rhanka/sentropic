@@ -30,17 +30,26 @@ let servicePublished = false;
 const meshVersion = JSON.parse(readFileSync('../llm-mesh/package.json', 'utf8')).version as string;
 let meshSpec: string;
 const meshSource = 'workspace-candidate';
+const candidateBundle = process.env.CI_PACKAGE_CANDIDATES;
+const sourceRoot = join(process.cwd(), '../..');
+const copyCandidate = (slug: string) => run(process.execPath,
+  [join(sourceRoot, 'scripts/ci/package-candidate.mjs'), 'copy', candidateBundle!, slug, temp], sourceRoot).trim();
 const resolveMesh = () => {
+  if (candidateBundle) { meshSpec = copyCandidate('llm-mesh'); return; }
   const packedMesh = JSON.parse(run('npm', ['pack', '--json', '--pack-destination', temp], join(process.cwd(), '../llm-mesh')));
   meshSpec = join(temp, packedMesh[0].filename);
 };
 
 beforeAll(() => {
+  if (candidateBundle) {
+    tarball = copyCandidate('llm-gateway');
+  } else {
   run(process.execPath, [tsc, '-p', 'tsconfig.json'], process.cwd());
   cpSync('dist', join(candidate, 'dist'), { recursive: true });
   for (const file of ['package.json', 'README.md', 'LICENSE']) cpSync(file, join(candidate, file));
   const packed = JSON.parse(run('npm', ['pack', '--json', '--pack-destination', temp], candidate));
   tarball = join(temp, packed[0].filename);
+  }
   resolveMesh();
   rmSync(qualification, { recursive: true, force: true });
   mkdirSync(qualification, { recursive: true });
