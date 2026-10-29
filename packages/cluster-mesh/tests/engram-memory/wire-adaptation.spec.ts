@@ -127,16 +127,16 @@ describe('memory K7/K8 wire adaptation', () => {
   });
   it('should accept the canonical lexical tombstone when a record leaves accepted-current', () => {
     const key = JSON.stringify(['memory-lexical-v1', 'scope-memory', 'record-memory']);
-    const pg = neutralUnitToPg(unit({ indexWrites: [
-      { index: 'memory-accepted-lexical', key, value: memoryJcs(null) },
-    ] }));
     const accepted = neutralUnitToPg(unit({ indexWrites: [
       { index: 'memory-accepted-lexical', key, value: memoryJcs({ record_digest: 'sha256:record' }) },
     ] }));
-    expect(pg.indexWrites).toEqual([{ key, digest: expect.stringMatching(/^sha256:[0-9a-f]{64}$/),
+    const removal = unit({ indexWrites: [{ index: 'memory-accepted-lexical', key, value: memoryJcs(null) }] });
+    const pg = neutralUnitToPg(removal, new Map([[key, accepted.indexWrites[0]!.digest]]));
+    expect(pg.indexWrites).toEqual([{ key, digest: 'sha256:record',
       resultIds: [], resultHash: 'null' }]);
     expect(pg.indexWrites[0]!.digest).toBe(accepted.indexWrites[0]!.digest);
     expect(accepted.indexWrites[0]!.resultHash).toBe(memoryJcs({ record_digest: 'sha256:record' }).data);
+    expect(() => neutralUnitToPg(removal)).toThrow('lexical removal requires the existing index identity');
   });
   it.each([
     ['memory-accepted-lexical', '[]'], ['memory-accepted-lexical', 'false'],

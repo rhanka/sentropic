@@ -38,7 +38,7 @@
 - [ ] BLOCKED — Published engram is still 0.21.3; retain cluster-mesh 0.24.0 per owner instruction. The release bump gate cannot pass for this draft without a changed publication prerequisite.
 - [x] Static validation: lint, source/test typechecks, build and launcher syntax pass; unit lane: 159 files, 1420 tests pass; 245 existing conditional tests are outside this unit lane.
 - [x] Positive qualification: six required PostgreSQL/stdio/HTTP tests and six static/lazy/refusal tests pass; no required case is skipped. Forget replay preserves its receipt.
-- [x] Fix the directly exposed consumer lexical-index adapter: preserve the canonical null tombstone and mutable projection bytes under a stable index identity; commit proofs and provenance remain enforced.
+- [x] Fix the directly exposed consumer lexical-index adapter: preserve the canonical null tombstone and mutable projection bytes under the existing admitted index identity; commit proofs and provenance remain enforced.
 - [ ] Consensus review pending: Muse startup failed on its read-only session directory; automatic approval review rejected the Gemini Argon fallback's external source-code payload. No consensus verdict is claimed.
 
 ## AI Flaky tests
@@ -68,6 +68,7 @@
 - [ ] **Lot 3 — Qualification and handoff**
   - [x] Pass lint, source/test typechecks, package build, launcher syntax and the unit/regression suite in isolated Docker.
   - [x] Pass all six positive PostgreSQL and transport tests plus the atomic split-provenance refusal.
+  - [x] Pass a separate-process round trip through `examples/memory-mcp-stdio.mjs` with the explicit PostgreSQL fixture host.
   - [x] Run mechanical scope checks; final full branch diff passes C2.
   - [ ] Complete consensus review and reconcile findings.
   - [x] Document the exact host launch line and required definition bindings in `packages/cluster-mesh/docs/memory-mcp.md`.
