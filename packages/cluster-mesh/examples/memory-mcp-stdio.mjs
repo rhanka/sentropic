@@ -33,8 +33,8 @@ try {
   const stdio = await loadMcpPlatformStdio(modules);
   process.once('SIGINT', () => { void close(); });
   process.once('SIGTERM', () => { void close(); });
-  await server.connect(stdio.createStdioTransport());
   process.stdin.once('end', () => { void close(); });
+  await server.connect(stdio.createStdioTransport());
 } catch {
   await close();
   process.stderr.write('Memory MCP host startup failed\n');

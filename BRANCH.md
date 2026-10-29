@@ -66,7 +66,8 @@
   - [ ] Run scope check before each atomic commit.
   - [ ] Complete consensus review and reconcile findings.
   - [x] Document the exact host launch line and required definition bindings in `packages/cluster-mesh/docs/memory-mcp.md`.
-  - [ ] Open draft PR to main; wait for CI completed/success on exact head.
+  - [x] Open draft PR to main: https://github.com/rhanka/sentropic/pull/844.
+  - [ ] Wait for CI completed/success on exact head; producer closure and release prerequisites remain blocking.
   - [ ] Run `make down ENV=test-memory-mcp`.
 
 ## Deferred to BR-XX

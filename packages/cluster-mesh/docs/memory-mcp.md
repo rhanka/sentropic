@@ -10,6 +10,9 @@ This draft qualifies the engram 0.22.0 candidate with SHA-256
 `965c93e326df9866584261061f4e49571cfd74dfe1dc258c0c6894eea121a4e9`.
 The test archive is a development fixture, outside the published file set.
 Release versioning and the published peer pin await engram L5 qualification.
+The pinned archive currently fails the shared-provenance requirement; see
+[candidate qualification blocker](memory-mcp-candidate.md). It is refused
+before storage opens. The launch command below requires a compatible peer.
 
 The host supplies an `EngramMemoryDefinitionOptions` through `definition`.
 It contains persisted host/tenant opt-ins, an opened PostgreSQL kernel,
