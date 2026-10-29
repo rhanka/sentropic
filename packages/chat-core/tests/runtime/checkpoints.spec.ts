@@ -499,7 +499,7 @@ describe('fake-host harness (end-to-end)', () => {
 // 6. Zero sentropic domain strings in src/checkpoints/
 // ---------------------------------------------------------------------------
 describe('sentropic-string scan', () => {
-  const CHECKPOINTS_SRC = path.join(process.cwd(), 'src', 'checkpoints');
+  const CHECKPOINTS_SRC = path.join(process.cwd(), 'src', 'runtime', 'checkpoints');
   const DOMAIN_STRINGS = [
     'organization',
     'folder',

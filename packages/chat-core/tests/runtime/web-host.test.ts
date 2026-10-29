@@ -7,7 +7,7 @@ import type { StreamHubClient } from '../../src/runtime/client/streamTypes';
 import type { LocalToolsAdapter } from '../../src/runtime/hosts/types.js';
 import { createWebHost } from '../../src/runtime/hosts/createWebHost';
 
-const hostPath = resolve(process.cwd(), 'src/hosts/createWebHost.ts');
+const hostPath = resolve(process.cwd(), 'src/runtime/hosts/createWebHost.ts');
 
 const createTransport = (): ChatCoreTransport => ({
   openStream: vi.fn(() => ({ close: vi.fn() }) as unknown as EventSource),

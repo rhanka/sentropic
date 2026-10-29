@@ -33,9 +33,9 @@ import {
 
 // ---------------------------------------------------------------------------
 // Fixture loading helpers
-// The Makefile runs vitest from /workspace/packages/chat-ui (process.cwd()).
+// The Makefile runs vitest from /workspace/packages/chat-core (process.cwd()).
 // ---------------------------------------------------------------------------
-const FIXTURES_DIR = path.join(process.cwd(), 'tests', 'fixtures', 'streams');
+const FIXTURES_DIR = path.join(process.cwd(), 'tests', 'runtime', 'fixtures', 'streams');
 
 function loadNdjson(filename: string): ProjectionStreamEvent[] {
   const text = fs.readFileSync(path.join(FIXTURES_DIR, filename), 'utf8');

@@ -223,17 +223,17 @@ describe('ChatCoreHost — export surface registration', () => {
   const pkgJson = JSON.parse(
     fs.readFileSync(path.join(PACKAGE_ROOT, 'package.json'), 'utf8'),
   ) as { version: string; exports: Record<string, unknown> };
-  const SUBPATH = './client/chat-core-host';
+  const SUBPATH = './runtime/client/chat-core-host';
 
   it('should export the chat-core-host subpath in package.json', () => {
     expect(Object.keys(pkgJson.exports)).toContain(SUBPATH);
   });
 
-  it('should identify the initial runtime candidate version', () => {
-    expect(pkgJson.version).toBe('0.1.0');
+  it('should identify the chat-core minor runtime release', () => {
+    expect(pkgJson.version).toBe('0.2.0');
   });
 
-  it('should resolve the chat-core-host source file to an existing path', () => {
+  it('should resolve the compiled chat-core-host entry to an existing path', () => {
     const entry = pkgJson.exports[SUBPATH] as Record<string, string> | undefined;
     expect(entry).toBeTruthy();
     const file = (entry?.['import'] ?? entry?.['types'])?.replace('*', SUBPATH.slice(2)) as string;
@@ -250,7 +250,7 @@ describe('ChatCoreHost — export surface registration', () => {
 describe('ChatCoreHost — sentropic-string scan', () => {
   const PACKAGE_ROOT = process.cwd();
   const contractSource = fs.readFileSync(
-    path.join(PACKAGE_ROOT, 'src', 'client', 'chat-core-host.ts'),
+    path.join(PACKAGE_ROOT, 'src', 'runtime', 'client', 'chat-core-host.ts'),
     'utf8',
   );
 
