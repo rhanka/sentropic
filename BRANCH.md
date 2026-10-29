@@ -47,6 +47,7 @@
   - [x] Record BRH2-EXn reason, impact and rollback before any additional conditional change.
 
 ## Feedback Loop
+- [ ] Peer dispatch awaits the owner's reply to the repository-mandated launch approval request; no consensus review is claimed. Dossier: `.tmp/canvas-h2-review/dossier.md` in the main workspace.
 - [x] BRH2-EX1 — Root Docker npm ci dry-run reproduced missing chat-core 0.1.7: chat-server's old dependency excludes 0.2.0. Scope: its manifest and existing locks only. Advance to the new substantive port rather than installing another old stub; no server source changes. Rollback: revert manifest and matching lock entries together.
 - [ ] Deferred integration: H1 final admission/registry wiring waits for #830 merge; H3 owns real provider conformance, H4 real inverse qualification, H5 publication authority, H10 production activation/N4 retirement.
 - [x] User instruction replaces the LiveDocumentStore stub now; one exported substantive port, no alias or fallback.
@@ -96,7 +97,7 @@
   - [x] Typecheck and lint passed for H2 services, schema, package port and tests; formatter applied to new source only in ≤150-line slices.
   - [x] All four H2 suites GREEN (20 tests); real isolated PostgreSQL crash/rollback/restart witnesses; chat-core regression suite 252/252.
   - [x] Root Docker npm ci dry-run passed after dependency correction; chat-server 0.4.1 exceeds published 0.4.0.
-  - [x] Final local checks: H2 20/20, chat-core 252/252, chat-server 29/29, scoped strict typecheck, ESLint and Prettier all passed.
+  - [x] Final local checks: H2 22/22, chat-core 252/252, chat-server 29/29, scoped strict typecheck, ESLint and Prettier all passed.
   - [x] Final self-review RED reproduced locale-dependent Unicode digest ordering; use deterministic code-unit key order and expose the complete substantive port types.
   - [x] Frozen DS shape re-read: use AnchorRange start/end, preserve receipt reasons/conflicts and lossless marks; RED reproduced transient rate-limit storage, now refused before commit.
   - [x] Typecheck RED then storage witness cover authoritative/preserved-draft migration records and draft/profile/epoch-linked acknowledgements (§4.8.1).
@@ -104,4 +105,4 @@
   - [x] `make scope-check` before every commit; verified every hunk serves H2 or its directly blocking manifest dependency.
   - [x] Draft PR #833 uses this BRANCH.md as body; initial five-step plan comment posted.
   - [ ] CI completed/success on the exact reported head; record PR and SHA.
-  - [ ] Inspect service logs and `make down` after validation.
+  - [x] PostgreSQL test stack health passed; all runs torn down; explicit locked `make down` and `make ps` confirm no H2 services. No application runtime is activated in H2.
