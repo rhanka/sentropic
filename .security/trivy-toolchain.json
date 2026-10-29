@@ -33,7 +33,7 @@
   "blockers": [
     "Independent admission of a patched scanner, the frozen Cosign 3.1.4 candidate and retained roots: scanner still contains HIGH/CRITICAL findings (docs/security/trivy-s2b-qualify.md)",
     "Frozen IaC rules load offline but detect zero Compose configurations; complete declared IaC coverage and report adaptation are missing",
-    "Three canonical remote targets need matching trusted source-SHA/config/platform receipts: API/UI registry configs differ from main-CI archives and toolbox tag is absent",
+    "Current-main archive identities are verified; canonical remote API/toolbox tags are absent and UI registry config differs from its main-CI archive; independent completeness admission remains pending",
     "Successful remote scan needs narrowly scoped pull authorization; broad operator credentials must stay outside scanner tools",
     "Isolated rebuild requires an admitted builder without shared daemon or secrets; approved Node sandbox has no builder",
     "Successful remote/rebuild measurements and CI critical path at most 600 seconds remain missing; S2c/S3 are separate gates"

@@ -2,6 +2,8 @@
 # Experimental, all-severity scans of authenticated main-CI archives; never service admission.
 set -euo pipefail
 evidence="$PWD/tmp/security-qualify"
+cohort=${SECQUAL_COHORT:-main-40832206894}
+[[ "$cohort" = main-40832206894 || "$cohort" = main-40876641000 ]]
 scanner='aquasec/trivy@sha256:2e6c00d711ab4ae41d8a30c2c1fd3bd3b62704c177bb120f95012e939edfb3df'
 vulnerability=$(find "$evidence/cache" -mindepth 1 -maxdepth 1 -type d -name 'vulnerability-*')
 java=$(find "$evidence/cache" -mindepth 1 -maxdepth 1 -type d -name 'java-*')
@@ -17,7 +19,7 @@ flags=(--config /dev/null --ignorefile /dev/null --cache-dir /cache --cache-back
   --skip-db-update --skip-java-db-update --offline-scan --skip-version-check --disable-telemetry)
 blocked=0
 for kind in api api-tool ui; do
-  folder="$evidence/main-40832206894/$kind-image"
+  folder="$evidence/$cohort/$kind-image"
   for temperature in cold warm; do
     name="test-sec-qualify-$kind-$temperature"
     start=$(date +%s%N)
