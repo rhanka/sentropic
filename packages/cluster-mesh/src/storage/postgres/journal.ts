@@ -4,9 +4,26 @@ import type { RootConsumer, RootJournalEvent } from '../staged-state.js';
 import { StorageCapacityExceededError, StorageCasConflictError, StorageInvalidCommandError } from '../errors.js';
 import type { PgCore } from './core.js';
 import type { PgJournalDraft, PgSession } from './protocol.js';
-import { decodePgCounter, decodePgJson, decodePgText } from './codec.js';
+import { decodePgCounter, decodePgCounterU64, decodePgJson, decodePgText } from './codec.js';
 import { PostgresStorageError } from './errors.js';
 import { createHash } from 'node:crypto';
+export type PgPosition = string | bigint | number;
+// Numbers are accepted only as legacy safe inputs, never as database counters.
+export const pgPosition = (value: PgPosition): string => {
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value < 0)
+      throw new StorageInvalidCommandError('invalid journal position');
+    return String(value);
+  }
+  return decodePgCounterU64(value);
+};
+type PgConsumer = Omit<RootConsumer, 'cursor' | 'scanned' | 'failedSeq'> & {
+  cursor: string; scanned: string; failedSeq: string | null;
+};
+type PgJournalEvent = Omit<RootJournalEvent, 'seq' | 'segment'> & {
+  readonly seq: string;
+  readonly segment?: { readonly operationKey: string; readonly from: string; readonly to: string };
+};
 export const currentPgJournalFence = async (core: PgCore, grant: ScopeGrant<unknown>): Promise<JournalFence> =>
   core.tx.run(false, async (session) => {
     await core.check(session, grant, 'maintain', true);
@@ -22,7 +39,7 @@ export const currentPgJournalFence = async (core: PgCore, grant: ScopeGrant<unkn
     });
     const fence = {
       fenceId: lane,
-      epoch: decodePgCounter(result.rows[0]?.epoch),
+      epoch: decodePgCounterU64(result.rows[0]?.epoch),
       incarnation: core.incarnation,
       ownerId: grant.principalId,
     };
@@ -59,12 +76,12 @@ export const pgConsumer = async (
   grant: ScopeGrant<unknown>,
   consumer: string,
   lock = true,
-): Promise<RootConsumer> => {
+): Promise<PgConsumer> => {
   if (typeof consumer !== 'string' || !consumer || consumer.length > 1024)
     throw new StorageInvalidCommandError('invalid consumer');
-  const initial: RootConsumer = {
-    cursor: 0,
-    scanned: 0,
+  const initial: PgConsumer = {
+    cursor: '0',
+    scanned: '0',
     status: 'running',
     failedEvent: null,
     failedReason: null,
@@ -83,12 +100,12 @@ export const pgConsumer = async (
     values: [core.roots.key(grant.scope), consumer],
   });
   if (!result.rows[0]) return initial;
-  const state = decodePgJson<RootConsumer>(decodePgText(result.rows[0].state));
+  const state = decodePgJson<PgConsumer>(decodePgText(result.rows[0].state));
+  state.cursor = pgPosition(state.cursor);
+  state.scanned = pgPosition(state.scanned);
+  if (state.failedSeq !== null) state.failedSeq = pgPosition(state.failedSeq);
   if (
-    !Number.isSafeInteger(state.cursor) ||
-    !Number.isSafeInteger(state.scanned) ||
-    state.cursor < 0 ||
-    state.scanned < state.cursor ||
+    BigInt(state.scanned) < BigInt(state.cursor) ||
     !['running', 'paused', 'stalled'].includes(state.status) ||
     !Array.isArray(state.actions)
   )
@@ -100,7 +117,7 @@ export const savePgConsumer = async (
   session: PgSession,
   grant: ScopeGrant<unknown>,
   consumer: string,
-  state: RootConsumer,
+  state: PgConsumer,
 ): Promise<void> => {
   await session.execute({
     text: `UPDATE ${core.roots.schema}.consumers SET state=$1::jsonb WHERE scope_key=$2 AND consumer=$3`,
@@ -110,13 +127,12 @@ export const savePgConsumer = async (
 export const readPgJournal = async (
   core: PgCore,
   grant: ScopeGrant<unknown>,
-  after: number,
+  suppliedAfter: PgPosition,
   limit: number,
   consumer?: string,
 ) => {
+  const after = BigInt(pgPosition(suppliedAfter));
   if (
-    !Number.isSafeInteger(after) ||
-    after < 0 ||
     !Number.isSafeInteger(limit) ||
     limit < 1 ||
     limit > core.work().maxRecords
@@ -126,10 +142,10 @@ export const readPgJournal = async (
     await core.check(session, grant, 'read');
     if (consumer !== undefined) await core.check(session, grant, 'maintain', true);
     const base = await core.roots.capture(session, grant.scope);
-    const watermark = pgSafeCounter(base.sequence);
-    if (after > watermark) throw new StorageInvalidCommandError('journal position exceeds watermark');
+    const watermark = decodePgCounterU64(base.sequence);
+    if (after > BigInt(watermark)) throw new StorageInvalidCommandError('journal position exceeds watermark');
     const state = consumer === undefined ? undefined : await pgConsumer(core, session, grant, consumer);
-    const events: RootJournalEvent[] = [];
+    const events: PgJournalEvent[] = [];
     if (!state || state.status === 'running') {
       const result = core.options.outbox
         ? {
@@ -140,16 +156,16 @@ export const readPgJournal = async (
           }
         : await session.execute({
             text: `SELECT j.sequence::text, j.event::text FROM ${core.roots.schema}.journal AS j
-        WHERE j.scope_key=$1 AND j.sequence>$2::bigint ORDER BY j.sequence
+        WHERE j.scope_key=$1 AND j.sequence>$2::numeric ORDER BY j.sequence
         LIMIT $3`,
             values: [core.roots.key(grant.scope), String(after), limit],
           });
       for (const row of result.rows) {
-        const seq = pgSafeCounter(row.sequence);
+        const seq = decodePgCounterU64(row.sequence);
         const event = decodePgJson<PgJournalDraft>(decodePgText(row.event));
-        if (seq !== after + events.length + 1 || String(seq) !== event.seq || typeof event.eventId !== 'string')
+        if (BigInt(seq) !== after + BigInt(events.length) + 1n || seq !== event.seq || typeof event.eventId !== 'string')
           throw new PostgresStorageError('corruption');
-        const value: RootJournalEvent = {
+        const value: PgJournalEvent = {
           ...event,
           seq,
           scope: { ...grant.scope },
@@ -157,8 +173,8 @@ export const readPgJournal = async (
             ? {
                 segment: {
                   ...event.segment,
-                  from: pgSafeCounter(event.segment.from),
-                  to: pgSafeCounter(event.segment.to),
+                  from: decodePgCounterU64(event.segment.from),
+                  to: decodePgCounterU64(event.segment.to),
                 },
               }
             : { segment: undefined }),
@@ -170,11 +186,11 @@ export const readPgJournal = async (
           break;
         events.push(value);
         if (state) {
-          if (after <= state.scanned) state.scanned = Math.max(state.scanned, seq);
+          if (after <= BigInt(state.scanned) && BigInt(seq) > BigInt(state.scanned)) state.scanned = seq;
           if (state.retryAuthorized && state.failedEvent === value.eventId) state.deliveredPoison = true;
         }
       }
-      if (events.length === 0 && after < watermark)
+      if (events.length === 0 && after < BigInt(watermark))
         throw new StorageCapacityExceededError('journal replay is unavailable or event exceeds its byte budget');
     }
     if (state) await savePgConsumer(core, session, grant, consumer!, state);
@@ -185,24 +201,25 @@ export const checkpointPgJournal = async (
   core: PgCore,
   grant: ScopeGrant<unknown>,
   consumer: string,
-  expected: number,
-  next: number,
+  suppliedExpected: PgPosition,
+  suppliedNext: PgPosition,
   fence: JournalFence,
 ): Promise<void> => {
+  const expected = pgPosition(suppliedExpected);
+  const next = pgPosition(suppliedNext);
   await core.tx.run(false, async (session) => {
     await assertPgJournalFence(core, session, grant, fence);
     const state = await pgConsumer(core, session, grant, consumer);
     if (state.cursor !== expected) throw new StorageCasConflictError('checkpoint changed');
     if (
-      !Number.isSafeInteger(next) ||
-      next < expected ||
-      next > state.scanned ||
+      BigInt(next) < BigInt(expected) ||
+      BigInt(next) > BigInt(state.scanned) ||
       state.status !== 'running' ||
-      (state.failedSeq !== null && next >= state.failedSeq && (!state.retryAuthorized || !state.deliveredPoison))
+      (state.failedSeq !== null && BigInt(next) >= BigInt(state.failedSeq) && (!state.retryAuthorized || !state.deliveredPoison))
     )
       throw new StorageInvalidCommandError('checkpoint exceeds delivered progress or unresolved poison');
     state.cursor = next;
-    if (state.failedSeq !== null && next >= state.failedSeq) {
+    if (state.failedSeq !== null && BigInt(next) >= BigInt(state.failedSeq)) {
       state.failedSeq = null;
       state.failedEvent = null;
       state.failedReason = null;
@@ -222,7 +239,7 @@ export const inspectPgConsumer = async (core: PgCore, grant: ScopeGrant<unknown>
       status: state.status,
       failedEvent: state.failedEvent,
       failedReason: state.failedReason,
-      lag: pgSafeCounter(base.sequence) - state.cursor,
+      lag: (BigInt(decodePgCounterU64(base.sequence)) - BigInt(state.cursor)).toString(),
     };
   });
 export const operatePgConsumer = async (
@@ -247,10 +264,11 @@ export const operatePgConsumer = async (
             text: `SELECT sequence::text FROM ${core.roots.schema}.journal WHERE scope_key=$1 AND event_id=$2`,
             values: [core.roots.key(grant.scope), eventId],
           });
-      const seq = rows.rows[0] ? pgSafeCounter(rows.rows[0].sequence) : -1;
+      const seq = rows.rows[0] ? decodePgCounterU64(rows.rows[0].sequence) : null;
       if (
-        seq <= state.cursor ||
-        seq > state.scanned ||
+        seq === null ||
+        BigInt(seq) <= BigInt(state.cursor) ||
+        BigInt(seq) > BigInt(state.scanned) ||
         !reason ||
         reason.length > 4096 ||
         (state.failedEvent !== null && state.failedEvent !== eventId)

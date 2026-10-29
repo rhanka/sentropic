@@ -1,5 +1,33 @@
 # PLAN - Orchestrated Roadmap
 
+## Engram E2 — E10 registration (updated 2026-10-28)
+
+- E10: `feat/cluster-mesh-engram-e10`, targeting `feat/engram-e2-integration` (current integration base `7abd70fd3`, #821 merged, PR #803); merge only, never rebase.
+- Worktree: `tmp/worktrees/mem-e10-fin`; [branch plan](tmp/worktrees/mem-e10-fin/BRANCH.md).
+- Scope: installed injection proof only — `installed-memory.mjs`, `installed-hydration.mjs`, `installed-memory-types.ts`, `qualification.mk` lane, `installed-receipt.json` and retained consumer `package.json`/lock under `packages/cluster-mesh/tests/engram-memory/`, plus `packages/cluster-mesh/docs/engram-memory-k7.md`.
+- Historical E10 bindings: Engram `0.22.0` tarball sha256 `26a0edd50c338f30593d22ae1f06ac13d82f5557f18558750659bcfefec64c10`; candidate mesh `0.24.0-dev.5` built from source head `cf1e537a8` without stamping, tarball sha256 `11a8fe858d1abecde50e003c191a8600db4880f4382c8ce3ffa2bb44c09df8e4`.
+- Inherited #821: Engram `0.21.3` supplies the producer-owned intentHash carrier; cluster-mesh `0.24.0-dev.6` persists and returns it unchanged. The E10 installed receipt is retained without rerun.
+- Environment owner: E10 author, `ENV=test-mem-e10`, ports API 8791, UI 5191, Maildev UI 1091; shared Docker lock; `make down ENV=test-mem-e10` after each container step.
+- Downstream: E11 regenerates the final `e2-host-tuple/v1` on cluster-mesh `0.24.0-dev.6` + Engram `0.21.3` (+ L4 `0.22.0` candidate when re-qualified); E10 dev.5/0.22.0 evidence remains historical.
+
+## Engram E2 — E0 registration (2026-10-26)
+
+- E0: `feat/cluster-mesh-engram-e0`, targeting `feat/engram-e2-integration`.
+- Worktree: `tmp/worktrees/mem-e0`; [branch plan](tmp/worktrees/mem-e0/BRANCH.md).
+- Approved r3: `.tmp/engram-e2-host-tuple/plan.md`; deliverable 1, C6 asset freeze only.
+- Dependencies: #709 independent landing, Immo 0.22.0, E2-D1 0.22.1 (#729),
+  BR-E2-EX1 (#755), E2-Q1 PG-first agreement and recorded maintainer ACK.
+- Integration base includes main `6c3f9f04a`; first topic executes the required
+  unchanged/corrected bump probes before implementation admission.
+- Environment owner: E0 code author, `ENV=test-e2-int`, existing E2 Compose route,
+  no host ports published. Shared Docker lock serializes every build/test/start;
+  tear down the project after every step. Do not overlap another E2 owner.
+- Sole metadata writer: E0 author for this topic's pack-only `0.23.0-dev.N` bump;
+  no publication. Stable 0.23.0 and declaration packaging remain integration tasks.
+- Downstream: E1 counters, E6 projection draft and E8 liaison draft depend on E0;
+  E6 integrates after E2, E8 after E7. SQLite planning checkpoint: 2026-10-30.
+
+
 Status: Updated 2026-05-30 (reconciled with merged PRs — see addenda below) — BR-14c (`feat/llm-mesh-sdk`) MERGED (PR #141, 2026-05-11), BR-14g (model catalog GPT-5.5 + Opus 4.7) MERGED (PR #146), BR-24 (`chore/node24-actions-upgrade`) MERGED (PR #147), `fix-mistral` MERGED (PR #145). BR-23 (`feat/multi-agent-framework-comparison`) study MERGED 2026-05-14 (PR #148, no runtime code); architecture decisions closed in `spec/SPEC_STUDY_ARCHITECTURE_BOUNDARIES.md` (single generic `CheckpointStore<T>`, single composable federated `ToolRegistry`, separate `@sentropic/marketplace`, façade-first `@sentropic/flow` extraction preserving agent templating invariant). BR-14b MERGED 2026-05-16 (PR #158) — `@sentropic/chat-core` extracted (contracts + events absorbed via BR14b-EX1) and chat-service modularized above the mesh runtime. BR-14a MERGED 2026-05-23 (PR #164, relaunched as `feat/chat-ui-sdk-v2`) — `@sentropic/chat-ui` extracted across web/Chrome/VSCode; target renamed `@sentropic/chat` → `@sentropic/chat-ui`. BR-25 (`chore/rules-skills-audit`) in study mode (17/46 checkboxes). BR-31 (`chore/make-to-nx-study`) STUDY CLOSED 2026-05-13 — recommendation REJECT (commits `681790fa` + `38d8f1d3`); no code change. BR-26 (`feat/openerp-runtime-requirements`) SCAFFOLDED 2026-05-14 (PR #151) — OpenERP project runtime requirements (MCP, OTel hooks, policy hooks, identity, marketplace primitives, sandbox); reserves slots BR-27..30 for OpenERP implementation follow-ups. Original BR-26..30 slots remapped to BR-32..36 to avoid collision. Forthcoming sentropic branches: BR-32 (flow-runtime-extract), BR-33 (managed-marketplace), BR-34 (graphify-fusion), BR-35 (persistence-git-adapter), BR-36 (external-triggers), BR-38a/BR-38b (vision/image), BR-39a/BR-39b (auth modules). Execution order (BR-14b → BR-14a → BR-32 → BR-19 now all MERGED; remaining): BR-33 → BR-35 → BR-36 → BR-14e → BR-14d. See §5 Scheduling, `TRANSITION.md`, and `spec/SPEC_EVOL_SENTROPIC_BR14_ORCHESTRATION.md`.
 Status addendum 2026-09-25: **BRERAD `chore/eradicate-cli-focus` — `packages/cli` (`@sentropic/cli`, `stp`), `packages/build-cli` and `packages/focus` eradicated from sentropic; the API no longer consumes focus.** CLI = h2a; focus = h2a. BR-42a/42i/42h entries that target these packages are superseded; the CI guard `make check-eradicated-packages` forbids their return.
 Status addendum 2026-08-11: **BR-74 `fix/llm-gateway-compaction-usage` MERGED in PR #532; downstream h2a release in progress.** The routed Anthropic input-usage fix is published as `@sentropic/llm-gateway@0.13.1` after exact-tarball Hono and real Claude two-compaction UAT. The archived execution plan is `plan/done/74-BRANCH_fix-llm-gateway-compaction-usage.md`; h2a owns its published 0.94.x integration, regular-CI release, redeployment, and final real Claude validation. Canonical contract: `spec/SPEC_EVOL_LLM_MESH_GATEWAY_ROUTING.md`.

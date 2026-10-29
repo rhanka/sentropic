@@ -75,13 +75,17 @@ export {
   type MemoryCommitIdentity,
   type MemoryReplayDecision,
 } from './replay-policy.js';
+export { createMemoryCommitResultRecovery, type MemoryCommitResultSource } from './commit-result-recovery.js';
 export {
   createMemoryPostgresRegistration,
   createMemoryPostgresStorage,
+  checkMemoryPostgresDriver,
+  verifyMemoryPostgresProvider,
   resolveMemoryCurrentFromAggregates,
   validateMemoryEffects,
   type MemoryCurrentStateResolver,
   type MemoryPostgresRegistration,
+  type MemoryPostgresDriverProvider,
   type MemoryStoredAggregate,
 } from './postgres.js';
 export {
@@ -111,6 +115,66 @@ export {
   memorySqliteQuery,
   MEMORY_SQLITE_QUERY_NAMES,
 } from './sqlite-queries.js';
+export {
+  MEMORY_HANDLE_OPERATIONS,
+  assembleMemoryHostBinding,
+  assertMaintainGrantLive,
+  verifyHostBinding,
+  issueContinuationGrant,
+  reattachMemoryMaintenance,
+  proveForRecoveryAuthorized,
+  MemoryMaintenanceNotFoundError,
+  type MemoryAuthorityCheck,
+  type MemoryMaintainGrant,
+  type MemoryNeutralGrant,
+  type MemoryHostBinding,
+  type MemoryHostBindingInput,
+  type MemoryContinuation,
+  type MemoryContinuationAttestation,
+} from './binding.js';
+export {
+  openMemoryMaintenance,
+  type MemoryMaintenancePorts,
+  type MemoryMaintenanceRunner,
+} from './host-maintenance.js';
+export {
+  createMemoryHostLedger,
+  createMemoryHostLedgerAsync,
+  openMemoryPostgresHostLedger,
+  proveForRecovery,
+  type HostLedgerEntry,
+  type HostLedgerState,
+  type HostRecoveryProof,
+  type MemoryAuthorityLedger,
+  type MemoryHostLedger,
+  type MemoryPostgresHostLedger,
+} from './ledger.js';
+
+export {
+  captureProofToKernel,
+  captureProofToWire,
+  createMemoryNeutralTransaction,
+  isMemoryCaptureKey,
+  isMemoryOutcomeKey,
+  journalBytesWithIntentHash,
+  memoryCommitIndexKey,
+  memoryNeutralFailure,
+  neutralQueryResult,
+  neutralUnitToPg,
+  stripJournalIntentHash,
+  translateMemoryAggregateRead,
+  translateMemoryUpdateWrite,
+  type MemoryKernelTransactionPort,
+} from './wire-adaptation.js';
+export {
+  createMemoryNeutralHandle,
+  type CreateMemoryNeutralHandleInput,
+  type MemoryNeutralBoundPort,
+  type MemoryNeutralHandleAssembly,
+  type MemoryNeutralHostDriver,
+  type MemoryNeutralHostSession,
+  type MemoryNeutralKernelPort,
+} from './neutral-handle.js';
 
 /** Reserved trusted-service options for the memory module. No service is required in G1a. */
 export interface MemoryServiceOptions {

@@ -48,7 +48,7 @@ describe('G1 SQLite registration against the installed substrate', () => {
     expect(registration.descriptor.contractVersion).toBe(MEMORY_CONTRACT_VERSION);
     expect(registration.descriptor.contractDigest).toBe(MEMORY_CONTRACT_DIGEST);
     expect(registration.descriptor.contractDigest).toBe(
-      'sha256:dff737ced37d801ef48bb4d7088fc4fbc92021d21fe2034ff33ea643b49bec28',
+      'sha256:dd0cccbd6e5e29766fbc9c48351ffe58f5b0a3162152f5ff02da0798c3244fee',
     );
     expect(registration.qualification.engineFloor).toBe(MEMORY_SQLITE_ENGINE_FLOOR);
     expect(registration.qualification.journalMode).toBe('WAL');

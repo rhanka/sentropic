@@ -33,7 +33,7 @@
     "glob": "^11.1.0",
     "ip-address": "^10.3.1",
     "source-map-js": "1.2.2",
-    "@sentropic/engram@0.21.1": {
+    "@sentropic/engram@0.21.3": {
       "officeparser": "8.2.0"
     }
   }

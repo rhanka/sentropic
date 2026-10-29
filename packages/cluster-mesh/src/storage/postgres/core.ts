@@ -3,6 +3,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { validateScopeGrant, type ScopeGrant } from '../authority.js';
 import {
   DEFAULT_WORK_LIMITS,
+  isU64Counter,
   validateWorkLimits,
   validateWriterFence,
   type EncodedValue,
@@ -11,15 +12,47 @@ import {
   type WorkLimits,
   type WriterFence,
 } from '../contracts.js';
+// Exact-u64 fence epochs (E2): the neutral WriterFence stays safe-only, but
+// the PG fence/provision paths additionally accept canonical u64 epochs so
+// ownership epochs persist exactly through the signed-64 crossing.
+const isU64Fence = (fence: WriterFence): boolean => {
+  if (typeof fence !== 'object' || fence === null) return false;
+  const candidate = fence as unknown as Record<string, unknown>;
+  return (
+    typeof candidate['fenceId'] === 'string' &&
+    (candidate['fenceId'] as string).length > 0 &&
+    (candidate['fenceId'] as string).length <= 256 &&
+    !(candidate['fenceId'] as string).includes('\0') &&
+    isU64Counter(candidate['epoch'])
+  );
+};
 import type { CommitReceipt } from '../atomic.js';
 import { StorageDeniedError, StorageInvalidCommandError } from '../errors.js';
 import { createStaticAuthorityPort } from '../kernel.js';
 import { HmacExactHeadBoundaryProvider, type ChainBoundaryProvider } from '../tokens.js';
 import { PgRoots, pgJsonBytes, type PgRoot } from './roots.js';
-import { PgTransactions } from './transactions.js';
-import { decodePgText, decodePgUtf8 } from './codec.js';
+import { DEFAULT_PG_BUDGETS, PgTransactions, withPgTxTimeouts } from './transactions.js';
+import { decodePgUtf8 } from './codec.js';
 import { PostgresStorageError } from './errors.js';
 import { loadPgAssets, verifyPgInstallation } from './migrations.js';
+import { CanonicalInstanceRegistry, CanonicalOwnershipError } from '../instance-ownership.js';
+import {
+  acquirePgInstanceOwnership,
+  acquisitionRaced,
+  DEFAULT_LEASE_MS,
+  expirePgInstanceLease,
+  resolvePgStoreKey,
+  verifyPgInstanceOwnership,
+  type PgInstanceOwnershipSession,
+} from './instance-ownership.js';
+import {
+  assertNoDeprecatedAssetNames,
+  assertPgOwnershipCatalog,
+  chainPossessionGuard,
+  createOwnershipCell,
+  ensurePgModuleRecord,
+  wrapDriverWithOwnership,
+} from './instance-guard.js';
 import { validatePgLayout, type PgSession, type PostgresStorageOptions } from './protocol.js';
 import { validateModuleDescriptor } from '../descriptor.js';
 const freezeRegistration = (value: unknown): void => {
@@ -60,6 +93,7 @@ export class PgCore {
   constructor(
     readonly options: PostgresStorageOptions,
     readonly incarnation: string,
+    readonly ownership: PgInstanceOwnershipSession | null = null,
   ) {
     if (typeof options.cursorSecret !== 'string' || !options.cursorSecret.trim()) {
       throw new StorageInvalidCommandError('durable Postgres storage requires a stable cursorSecret');
@@ -171,21 +205,21 @@ export class PgCore {
     return { ...limits };
   }
   async fence(session: PgSession, grant: ScopeGrant<unknown>, fence: WriterFence): Promise<void> {
-    if (!validateWriterFence(fence).ok) throw new StorageInvalidCommandError('invalid writer fence');
+    if (!validateWriterFence(fence).ok && !isU64Fence(fence)) throw new StorageInvalidCommandError('invalid writer fence');
     const result = await session.execute({
-      text: `SELECT epoch::text FROM ${this.roots.schema}.fences WHERE scope_key=$1 AND lane=$2 AND owner=$3 AND incarnation=$4 AND epoch=$5::bigint AND
+      text: `SELECT epoch::text FROM ${this.roots.schema}.fences WHERE scope_key=$1 AND lane=$2 AND owner=$3 AND incarnation=$4 AND epoch=$5::numeric AND
         (lease_until IS NULL OR lease_until>clock_timestamp()) FOR SHARE`,
       values: [this.roots.key(grant.scope), fence.fenceId, grant.principalId, this.incarnation, fence.epoch],
     });
     if (result.rows.length !== 1) throw new StorageInvalidCommandError('stale writer ownership or expired lease');
   }
   async provision(grant: ScopeGrant<unknown>, fence: WriterFence, leaseUntil: string | null = null): Promise<void> {
-    if (!validateWriterFence(fence).ok) throw new StorageInvalidCommandError('invalid writer fence');
+    if (!validateWriterFence(fence).ok && !isU64Fence(fence)) throw new StorageInvalidCommandError('invalid writer fence');
     await this.tx.run(false, async (session) => {
       await this.check(session, grant, 'write', true);
       const result = await session.execute({
         text: `INSERT INTO ${this.roots.schema}.fences(scope_key, lane, owner, incarnation, epoch, lease_until)
-        VALUES($1, $2, $3, $4, $5::bigint, $6::timestamptz)
+        VALUES($1, $2, $3, $4, $5::numeric, $6::timestamptz)
         ON CONFLICT(scope_key, lane) DO UPDATE SET owner=excluded.owner, epoch=excluded.epoch, lease_until=excluded.lease_until WHERE
         ${this.roots.schema}.fences.epoch<excluded.epoch OR
         (${this.roots.schema}.fences.epoch=excluded.epoch AND ${this.roots.schema}.fences.owner=excluded.owner
@@ -218,38 +252,97 @@ export class PgCore {
 }
 export const openPgCore = async (options: PostgresStorageOptions): Promise<PgCore> => {
   if (!options.history) throw new PostgresStorageError('configuration');
-  const provisional = new PgCore(options, options.incarnation ?? `store:${randomUUID()}`);
+  // Opt-in canonical ownership wraps the driver before any transaction, so
+  // every kernel transaction verifies (and renews) the retained session on
+  // its own session. Without opt-in the driver passes through untouched.
+  const optIn = options.canonicalOwnership;
+  const cell = optIn ? createOwnershipCell('', options.moduleId, optIn.leaseMs ?? DEFAULT_LEASE_MS) : null;
+  // Timeout-first driver (G-P1): wait timeouts apply right after BEGIN, so
+  // the ownership retained-session renew/verify stacked above also runs
+  // bounded. `run` re-applies the same values afterwards (idempotent).
+  const timed = withPgTxTimeouts(options.driver, Object.freeze({ ...DEFAULT_PG_BUDGETS, ...options.budgets }));
+  const wrapped = cell ? wrapDriverWithOwnership(timed, cell) : null;
+  // Release runs on the timeout-guarded driver WITHOUT the ownership
+  // renewal: expiring the lease is the opposite of renewing it, and the
+  // DELETE predicate (module, instance, epoch) already leaves a taken-over
+  // successor row alone. A stale handle is therefore a silent no-op per the
+  // neutral registry contract, never a renewal refusal.
+  const releaseTx = new PgTransactions(timed, options.budgets);
+  const provisional = new PgCore(
+    wrapped ? { ...options, driver: wrapped.driver } : options,
+    options.incarnation ?? `store:${randomUUID()}`,
+  );
   options = provisional.options;
+  if (cell) cell.schema = provisional.roots.schema;
   const assets = options.assets ?? (await loadPgAssets());
-  const incarnation = await provisional.tx.run(false, async (session) => {
+  assertNoDeprecatedAssetNames(assets);
+  const opened = await provisional.tx.run(false, async (session) => {
+    if (cell && optIn) {
+      // G-P0a: the ownership catalog is a precondition of an opt-in open,
+      // checked before installation attestation so a missing or tampered
+      // catalog refuses with `open-refused` (registry/SQLite parity) rather
+      // than surfacing as schema drift.
+      await assertPgOwnershipCatalog(session, options.layout.dataSchema);
+    }
     await verifyPgInstallation(session, options.layout, assets, options.history);
-    await session.execute({
-      text: `INSERT INTO ${provisional.roots.schema}.modules(module, incarnation) VALUES($1, $2) ON CONFLICT(module) DO NOTHING`,
-      values: [options.moduleId, provisional.incarnation],
-    });
-    const result = await session.execute({
-      text: `SELECT incarnation, descriptor_digest FROM ${provisional.roots.schema}.modules WHERE module=$1`,
-      values: [options.moduleId],
-    });
-    const stored = decodePgText(result.rows[0]?.incarnation);
-    if (options.incarnation !== undefined && options.incarnation !== stored)
-      throw new PostgresStorageError('configuration');
     const wanted = provisional.options.descriptor
       ? createHash('sha256').update(JSON.stringify(provisional.options.descriptor), 'utf8').digest('hex')
       : null;
-    const registered = result.rows[0]?.descriptor_digest;
-    if (registered !== null && registered !== wanted) throw new PostgresStorageError('configuration');
-    if (wanted && registered === null) {
-      const pinned = await session.execute({
-        text: `UPDATE ${provisional.roots.schema}.modules SET descriptor_digest=$1
-        WHERE module=$2 AND descriptor_digest IS NULL
-        AND NOT EXISTS(SELECT 1 FROM ${provisional.roots.schema}.scopes
-        WHERE module=$2 AND version>0) RETURNING module`,
-        values: [wanted, options.moduleId],
-      });
-      if (pinned.rows.length !== 1) throw new PostgresStorageError('configuration');
+    const stored = await ensurePgModuleRecord(session, provisional.roots.schema, {
+      moduleId: options.moduleId,
+      incarnation: options.incarnation,
+      effectiveIncarnation: provisional.incarnation,
+      wantedDescriptorDigest: wanted,
+    });
+    let ownership: PgInstanceOwnershipSession | null = null;
+    if (cell && optIn) {
+      // The open transaction retains the winning lease. A live holder
+      // refuses the open promptly (no queue, never supersede).
+      const storeKey = resolvePgStoreKey(options.layout.dataSchema, options.moduleId);
+      const registry = optIn.registry ?? new CanonicalInstanceRegistry();
+      const won = await acquirePgInstanceOwnership(
+        session,
+        provisional.roots.schema,
+        storeKey,
+        options.moduleId,
+        registry,
+        cell.leaseMs,
+      );
+      cell.handle = won.handle;
+      ownership = {
+        handle: won.handle,
+        verify: (verifySession) =>
+          verifyPgInstanceOwnership(verifySession, cell.schema, cell.moduleId, won.handle, cell.released),
+        release: async () => {
+          // Idempotent like the neutral registry: a repeated or stale
+          // release is a no-op and must never clear a successor row. The
+          // release transaction bypasses the renewal (see releaseTx), so
+          // the predicate in expirePgInstanceLease is what runs — not the
+          // short-circuit above.
+          if (cell.released) return;
+          await releaseTx.run(false, (releaseSession) =>
+            expirePgInstanceLease(releaseSession, cell.schema, cell.moduleId, won.handle),
+          );
+          cell.released = true;
+          registry.release(won.registryHandle);
+        },
+      };
     }
-    return stored;
+    return { stored, ownership };
+  }).catch((error: unknown) => {
+    // A serialization race lost at COMMIT time is still a concurrent
+    // acquisition: refuse it as `instance-busy`, never a lock error.
+    if (cell && optIn && acquisitionRaced(error)) {
+      throw new CanonicalOwnershipError('instance-busy', 'concurrent acquisition in progress');
+    }
+    throw error;
   });
-  return new PgCore(options, incarnation);
+  // G-P0b: for opt-in kernels the durable guard runs on the committing
+  // session itself through the existing onCommitPossession seam (no second
+  // transaction, no transaction rewiring). Other kernels keep their hook.
+  const chained: PostgresStorageOptions =
+    cell && wrapped
+      ? { ...options, onCommitPossession: chainPossessionGuard(wrapped.useSession, cell, options.onCommitPossession) }
+      : options;
+  return new PgCore(chained, opened.stored, opened.ownership);
 };
