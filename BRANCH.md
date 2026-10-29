@@ -36,6 +36,9 @@
 - [x] Record unanswered producer questions in root `.tmp/memory-mcp-builtin/questions.md`; choose the narrowest compatible composition.
 - [ ] BLOCKED — Engram 0.22.0 candidate public entries duplicate the private fenced-store registry: real PostgreSQL captures return `CAPABILITY_UNAVAILABLE`. Owner: Engram packaging; preserve the private provenance gate and share the engine/store-factory instance across public entries. The builtin now refuses this composition atomically before opening storage.
 - [ ] BLOCKED — Published engram is still 0.21.3; retain cluster-mesh 0.24.0 per owner instruction. The release bump gate cannot pass for this draft without a changed publication prerequisite.
+- [x] Static validation: lint, source/test typechecks, build and launcher syntax pass; unit lane: 159 files, 1420 tests pass; 245 existing conditional tests are outside this unit lane.
+- [ ] Positive qualification: six required PostgreSQL/stdio/HTTP tests fail on the atomic producer-instance refusal; six static/lazy/refusal tests pass. No required positive case is skipped.
+- [ ] Consensus review pending: no live mesh catalog is configured for resolving exact complementary reviewer identities; no consensus verdict is claimed.
 
 ## AI Flaky tests
 - [x] No accepted flaky tests; no timeout increases.
@@ -69,7 +72,7 @@
   - [x] Document the exact host launch line and required definition bindings in `packages/cluster-mesh/docs/memory-mcp.md`.
   - [x] Open draft PR to main: https://github.com/rhanka/sentropic/pull/844.
   - [ ] Wait for CI completed/success on exact head; producer closure and release prerequisites remain blocking.
-  - [ ] Run `make down ENV=test-memory-mcp`.
+  - [x] Run `make down ENV=test-memory-mcp`; isolated project has no remaining containers.
 
 ## Deferred to BR-XX
 - [x] Publication and release pinning await L5 qualification and published engram 0.22.0.
