@@ -58,6 +58,7 @@ fi
 case "$CM_ACTION" in
   mesh-check|gateway-check)
     if [ "$CM_ACTION" = mesh-check ]; then cd ../llm-mesh; else cd ../llm-gateway; fi
+    ln -s /tmp/cm-tools/node_modules node_modules
     "$tsc" --noEmit -p tsconfig.json
     if [ "$CM_ACTION" = gateway-check ]; then "$tsc" --noEmit -p tsconfig.test.json; fi
     /tmp/cm-tools/node_modules/.bin/vitest run tests --environment node --maxWorkers=1 ;;
