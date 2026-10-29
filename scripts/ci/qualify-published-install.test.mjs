@@ -229,8 +229,8 @@ test('registry-not-yet-visible classifier: ETARGET/E404/notarget only', () => {
 
 test('post-publication: a lagging registry PEERS version is retried until visible', async () => {
   const { peer, host } = peerHost();
-  // The core install reads the optional peer packument once (ignored 404); the first PEERS install gets the second 404.
-  const server = await serveRegistry([host, peer], { lag: { '@fx/lagpeer': 2 } });
+  // Core installation uses frozen metadata. The first explicit peer fetch gets a 404, then becomes visible.
+  const server = await serveRegistry([host, peer], { lag: { '@fx/lagpeer': 1 } });
   try {
     const reportDir = tmp('qrep-');
     const code = await qualify({ pkg: '@fx/host@1.0.0', peers: ['@fx/lagpeer@1.0.0'], mode: 'post-publication', registry: server.url, reportDir, attempts: 3, delaySeconds: 0 });
