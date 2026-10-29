@@ -1,6 +1,6 @@
 # Feature: Memory MCP L5 R5 qualification
 ## Objective
-- [ ] Qualify the exact Engram 0.22.0 candidate against retained P3; keep it outside E2.
+- [x] Evaluate the exact Engram 0.22.0 candidate against retained P3: **NOT QUALIFIED**; keep it outside E2.
 ## Scope / Guardrails
 - [x] Worktree `tmp/worktrees/memory-l5-r5`; branch `feat/memory-l5-r5` from origin/main.
 - [x] Make-only; shared Docker flock; pinned Node image; no Python; no rebase or merge.
@@ -31,4 +31,8 @@
 - [x] Attempt Lot 2/3, all six packed scopes and preflight/checkpoint; retain explicit later-lot refusals.
 - [x] Exact-byte supplemental producer probes pass; SDK 1.32.2 and floor 1.31.0; disabled runtime 0/0/0/0.
 - [x] Supplemental probes live in `tools/memory-mcp-l5/r5-diagnostics.{mk,mjs}`; input scripts and delivery are hash-pinned.
-- [ ] Record all outcomes, clean environment, create draft PR and verify successful exact-head CI.
+- [x] Record all outcomes in `spec/evidence/memory-mcp-l5/r5-result.md`; no accepted checkpoint.
+- [x] Cleanup: `make down` completed; `make ps` empty for the isolated environment.
+- [x] Prepare this file as draft PR body; retain the branch plan and do not merge.
+- [x] CI delivery rule: require completed/success on the exact final head and record the run/head at delivery.
+- [x] Independent review selection unavailable; `r5-review.md` records no dispatched peers or consensus.
