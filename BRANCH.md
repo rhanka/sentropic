@@ -46,6 +46,6 @@
 - [x] **Lot 2 — Docs consolidation**
   - [x] Record names, storage, expiry, rotation, revocation, checks, and current blocker.
 - [ ] **Lot 3 — Final validation**
-  - [ ] Mechanical scope check and atomic commit below 150 lines.
+  - [x] Mechanical scope check passes; plan and runbook split into commits below 150 lines.
   - [ ] Draft PR using this plan as body; CI success on its exact head.
   - [ ] Resume local W0-close.c only after the reader passes positive access checks.
