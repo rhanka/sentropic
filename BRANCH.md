@@ -46,7 +46,7 @@
   - [x] Create isolated worktree and pass mechanical harness branch check.
   - [x] Verify candidate tarball hash.
 - [ ] **Lot 1 — Contract tests first**
-  - [ ] Add `tests/mcp-memory.spec.ts`: static catalog, schemas, lazy selection and atomic peer refusal.
+  - [x] Add `tests/mcp-memory.spec.ts`: static catalog, lazy selection and atomic peer refusal; red: missing builtin entry.
   - [ ] Add `tests/engram-memory/mcp-memory-pg.spec.ts`: all six tools, confirmation guard and two-tenant isolation on real PostgreSQL.
   - [ ] Add transport coverage for stdio and HTTP using the same compiled definition.
   - [ ] Demonstrate expected failures before implementation.
