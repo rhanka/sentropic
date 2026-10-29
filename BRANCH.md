@@ -54,7 +54,7 @@
   - [x] Freeze 50 isolated tool profiles with exact transitive versions and integrity.
   - [ ] Commit installation graphs and replace live tool resolution.
   - [ ] Preserve isolated builds and tarball consumers.
-  - [ ] Guard against unlocked npm/npx resolution, including regression fixtures.
+  - [x] Guard against unlocked npm/npx resolution, including regression fixtures.
 - [ ] **Lot 2 — Security evidence**
   - [ ] Record fixed finding and coverage in security notes/register.
 - [ ] **Lot 3 — Validation and delivery**
