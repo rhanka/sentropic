@@ -15,6 +15,14 @@ function fixture() {
 }
 const flush = async () => { await Promise.resolve(); await Promise.resolve(); await Promise.resolve(); };
 describe('canvas collaboration provider', () => {
+  it('should surface a malformed authoritative timestamp and retain the last delivered lock snapshot', async () => {
+    const f = fixture(); const received = vi.fn(); const stop = f.provider.subscribeLock(f.unit, received);
+    await flush(); expect(received).toHaveBeenCalledTimes(1);
+    f.locks.fetchLock.mockResolvedValueOnce({ ...f.lock, expiresAt: 'invalid timestamp' });
+    for (const handler of f.handlers.values()) handler({ type: 'ping', data: {} });
+    await flush(); expect(f.onError).toHaveBeenCalledTimes(1); expect(received).toHaveBeenCalledTimes(1);
+    expect(received.mock.lastCall![0].holder.actorId).toBe('a'); stop();
+  });
   it('should not acquire a new lock when a non-holder refreshes an empty or foreign lock', async () => {
     const f = fixture(); f.locks.fetchLock.mockResolvedValueOnce(null as never);
     expect((await f.provider.refreshLock(f.unit)).holder).toBeNull();
