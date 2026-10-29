@@ -54,6 +54,7 @@
 - [x] **Lot 1 — Locked tool and workspace installs**
   - [x] Freeze 50 isolated tool profiles with exact transitive versions and integrity.
   - [x] Remove container install fallbacks and implicit executable downloads.
+  - [x] Include the new API and E2E tool lock inputs in content-addressed image versions.
   - [x] Commit installation graphs and replace live tool resolution.
   - [x] Preserve isolated builds and tarball consumers.
   - [x] Guard against unlocked npm/npx resolution, including regression fixtures.
