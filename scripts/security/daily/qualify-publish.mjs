@@ -13,6 +13,7 @@ async function retain(source, destination, decode = bytes => JSON.parse(bytes)) 
   const data = decode(bytes);
   const published = `${JSON.stringify(data)}\n`;
   const group = source.startsWith('main-40832206894/') ? `target-${source.split('/')[1].replace('-image', '')}`
+    : source.startsWith('cosign-latest') || source.startsWith('verifier-latest') ? 'verifier-candidate'
     : source.startsWith('java-fixture/') ? 'java-control'
     : source.includes('self') ? 'self-scans'
     : source.startsWith('remote') || source.startsWith('rebuild') ? 'performance'
@@ -26,9 +27,12 @@ async function retain(source, destination, decode = bytes => JSON.parse(bytes)) 
     publishedValueHash: digest(published) });
 }
 for (const file of ['ingestion', 'java-measurement', 'checks-measurement', 'failure-trials',
-  'scanner-self-report', 'verifier-self-report', 'iac-report', 'main-ci', 'green-main-ci', 'rollback-policy', 'remote-execution']) {
+  'scanner-self-report', 'verifier-self-report', 'iac-report', 'main-ci', 'green-main-ci', 'rollback-policy', 'remote-execution',
+  'cosign-latest-release', 'trivy-latest-release', 'verifier-latest-report']) {
   await retain(`${file}.json`, `${file}.json`);
 }
+await retain('verifier-latest-inventory.jsonl', 'inventory.json');
+for (const file of ['verifier-latest-offline.log', 'cosign-latest-buildinfo.txt']) await retain(file, `${file}.json`, bytes => ({ text: bytes.toString() }));
 for (const file of ['remote', 'rebuild-probe', 'write-isolation']) await retain(`${file}.log`, `${file}.json`, bytes => ({ text: bytes.toString() }));
 for (const file of ['index', 'manifest', 'config', 'trusted_root',
   'bundle-356b2dc09aa14e36a3a6fb88708f224261c1d8f451e502310308800b8e05bfb6']) {

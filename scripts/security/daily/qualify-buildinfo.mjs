@@ -1,7 +1,9 @@
 // Decode the native Go build-info header; no Go toolchain or install hooks are needed.
 import { readFile, writeFile } from 'node:fs/promises';
 import { digest, requireEvidence } from './toolchain-contract.mjs';
-for (const name of ['trivy', 'cosign']) {
+const requested = process.argv.slice(2);
+for (const name of requested.length ? requested : ['trivy', 'cosign']) {
+  requireEvidence(['trivy', 'cosign', 'cosign-latest'].includes(name), 'native inventory filename');
   const bytes = await readFile(`/evidence/${name}`);
   const offset = bytes.indexOf(Buffer.from('\xff Go buildinf:', 'latin1'));
   requireEvidence(offset >= 0 && bytes[offset + 14] === 8 && bytes[offset + 15] === 2, 'Go inline build info');

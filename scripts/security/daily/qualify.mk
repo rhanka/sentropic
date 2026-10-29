@@ -52,6 +52,11 @@ security-qualify-scans security-qualify-ancillary security-qualify-java: securit
 security-qualify-remote: security-qualify-scanner
 	@bash scripts/security/daily/qualify-remote.sh
 
+.PHONY: security-qualify-verifier-candidate
+security-qualify-verifier-candidate: security-qualify-scanner
+	@bash scripts/security/daily/qualify-verifier-candidate.sh
+	@$(SECQUAL_RUN) --network=none $(SECQUAL_NODE) node scripts/security/daily/qualify-buildinfo.mjs cosign-latest > "$(SECQUAL_DIR)/verifier-latest-inventory.jsonl"
+
 .PHONY: security-qualify-receipts
 security-qualify-receipts: ## Publish only the fixed allowlist of public qualification evidence
 	@mkdir -p docs/security/sec-s2b-qualify
