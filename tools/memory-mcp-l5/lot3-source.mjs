@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { resolve, relative, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { executeProof } from './execution.mjs';
 import { sha256 } from './precandidate.mjs';
 import { P3_SHA256 } from './lot2-manifest.mjs';
 import { verifyRetainedP3 } from './lot2-retained.mjs';
@@ -83,8 +83,9 @@ export function runLot3Source(root, reports, retainedRoot) {
     dispositions, waitingFor: WAITING_FOR };
   for (const [pkg, files] of [['mcp-platform', selected.platform], ['cluster-mesh', selected.mesh], ['mcp-broker', selected.broker]]) {
     const packageRoot = join(root, 'packages', pkg), reportPath = join(reports, `${pkg}.json`);
-    const run = spawnSync(process.execPath, [join(process.env.NODE_PATH, 'vitest/vitest.mjs'), 'run', ...files,
-      '--environment', 'node', '--maxWorkers=1', '--reporter=json', `--outputFile=${reportPath}`], { cwd: packageRoot, stdio: 'inherit' });
+    const run = executeProof({ root: retainedRoot, output: reportPath, executable: process.execPath,
+      args: [join(process.env.NODE_PATH, 'vitest/vitest.mjs'), 'run', ...files,
+        '--environment', 'node', '--maxWorkers=1'], cwd: packageRoot, executionMode: 'source-only' });
     if (run.error || run.status !== 0) throw Error(`Lot 3 ${pkg} failed: ${run.error?.message ?? run.status}`);
     const bytes = readFileSync(reportPath), report = JSON.parse(bytes);
     validateLot3Report(report, files, packageRoot);

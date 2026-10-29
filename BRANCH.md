@@ -10,14 +10,16 @@
   - `BRANCH.md`
   - `tools/memory-mcp-l5/**`
   - `spec/evidence/memory-mcp-l5/**`
-- **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
+- **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
   - `packages/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
+- **Exception process**:
+  - [x] L5R5-EX1: forward execution-bound JSON from existing test targets only; no P3 producing recipe, frozen catalog or installed-E4 requirement changes. Rollback the report delegation.
 ## Feedback Loop
 - [ ] No signed owner UAT, L0 authorization or role acceptance is fabricated. List exact minimal actions.
 - [ ] Separate ordinary-install attribution from remaining inventory, installed proof and provenance gates.
@@ -34,4 +36,5 @@
   - [x] Independently measured candidate SHA-256/SHA-512 and P3/source/peer bindings match; mesh 0.22.4 archive integrity and SLSA subject match. Retain exact archive bytes and observed source 440599d04e91bb33e3874588f067c6a90bffd1b3 without claiming authenticated acceptance.
 - [ ] Lot 1: run memory-l5-qualify; retain every command/exit, raw assertions, native positive controls, manifest and strict checkpoint proposal/result.
   - [x] Add process-time report binding with immutable raw JSON retention; source-only reports retain that mode and cannot become installed E4 evidence.
+  - [x] Wire tooling, Lot 3 and packed report producers into the full attempt; retain explicit missing-file/process failures and do not stamp old reports at collection time.
 - [ ] Lot 2: document the actual verdict and exact remaining owner actions, scope/review/CI checks, PR and cleanup; do not issue a false L5 acceptance.

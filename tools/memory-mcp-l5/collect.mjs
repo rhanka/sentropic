@@ -15,6 +15,10 @@ for (const pkg of ['mcp-platform', 'cluster-mesh', 'mcp-broker']) {
   if (existsSync(from)) { cpSync(from, to, { force: false, errorOnExist: true }); reports.push(to); }
 }
 if (existsSync(`${out}/tooling.json`)) reports.push(`${out}/tooling.json`);
+for (const name of ['exports', 'disabled-install', 'identity-source-refusal', 'sdk-discovery-call', 'restart-lost-response', 'confirmation-step-up']) {
+  const path = `${out}/packed-${name}.json`;
+  if (existsSync(path)) reports.push(path);
+}
 const pre = json('tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json');
 const contracts = { specSha256: pre.source.specSha256, l0Commit: pre.source.l0Commit,
   l0Freeze: ref('spec/evidence/memory-mcp-l5/l0-freeze.json') };
@@ -29,10 +33,9 @@ const observed = { source: { repository: 'rhanka/sentropic', head: sourceHead,
   base: process.env.MEMORY_L5_BASE, checkout: sourceHead }, contracts, assurance,
   closure: { sdkRange: pre.source.sdkRange, declaredLockSha256: pre.source.declaredLockSha256,
     referenceExport: '@sentropic/mcp-broker/memory-reference' } };
-const binding = { sourceHead, artifactManifestSha256: sha256(manifestBytes),
-  command: `make memory-l5-qualify ARTIFACT_MANIFEST=${process.env.ARTIFACT_MANIFEST} CHECKPOINT=${process.env.CHECKPOINT} API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-memory-l5`,
-  runId: process.env.GITHUB_RUN_ID || 'local', attempt: Number(process.env.GITHUB_RUN_ATTEMPT || 0) };
-// Raw Vitest reports are retained unchanged: they do not acquire fabricated bindings.
+const { binding } = json(`${out}/execution-context.json`);
+if (binding.sourceHead !== sourceHead || binding.artifactManifestSha256 !== sha256(manifestBytes)) throw Error('collect: execution context mismatch');
+// The executor retained raw bytes and bound them during the actual launch.
 writeImmutable(root, `${out}/checkpoint-inputs.json`, { binding, reports, observed });
 writeImmutable(root, `${out}/predecessors.json`, resolvePredecessors(root, PROOF_CATALOG));
 writeImmutable(root, `${out}/availability.json`, PROOF_CATALOG.proofs.map(p => ({ id: p.id,

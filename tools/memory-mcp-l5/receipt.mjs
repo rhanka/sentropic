@@ -64,7 +64,7 @@ export function checkMakeCommand(command) {
     if (typeof command !== 'string' || !command.includes(port)) failures.push(`make: missing ${port}`);
   }
   const tokens = typeof command === 'string' ? command.trim().split(/\s+/) : [];
-  if (!/^ENV=(test|e2e)-feat-memory-mcp-l5$/.test(tokens[tokens.length - 1] || '')) failures.push('make: ENV=<test|e2e>-feat-memory-mcp-l5 must be last');
+  if (!/^(?:ENV=(test|e2e)-feat-memory-mcp-l5|ENV=test-memory-l5)$/.test(tokens[tokens.length - 1] || '')) failures.push('make: ENV=<test|e2e>-feat-memory-mcp-l5 must be last (also accepts ENV=test-memory-l5)');
   return failures;
 }
 

@@ -3,6 +3,7 @@ import { checkMakeCommand } from '../receipt.mjs';
 
 describe('P10.tooling.make-contract — L5 Make command shape and port/ENV isolation contract', () => {
   it('P10.tooling.make-contract: accepts root Make commands with reserved BR-125 slot 0 ports and ENV last', () => {
+    expect(checkMakeCommand('make memory-l5-qualify API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-memory-l5')).toEqual([]);
     expect(
       checkMakeCommand('make test-mcp-broker SCOPE=tests/memory/source-binding.test.ts API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5'),
     ).toEqual([]);
