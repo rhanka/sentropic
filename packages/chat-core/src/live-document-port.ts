@@ -112,13 +112,43 @@ export interface LiveAdmission extends LiveDocumentIdentity {
   closed: boolean;
 }
 export type LiveSessionRecord =
-  | { kind: 'admission'; admission: LiveAdmission }
-  | { kind: 'acknowledgement'; actorId: string; sessionEpoch: string; digest: string }
-  | { kind: 'roster'; actors: readonly { actorId: string; origin: string; awarenessClientId: number }[] }
-  | { kind: 'freeze'; returnId: string; lineageId: string; head: string | null;
-      excludedActorIds: readonly string[]; captureDigest: string; pendingPublication: boolean }
-  | { kind: 'ingress-refusal'; actorId: string; reason: string; payloadHash: string }
-  | { kind: 'revert'; key: LivePatchKey; revertId: string; revertedBy: string; receipt: unknown };
+  | { kind: "admission"; admission: LiveAdmission }
+  | {
+      kind: "acknowledgement";
+      actorId: string;
+      sessionEpoch: string;
+      digest: string;
+    }
+  | {
+      kind: "roster";
+      actors: readonly {
+        actorId: string;
+        origin: string;
+        awarenessClientId: number;
+      }[];
+    }
+  | {
+      kind: "freeze";
+      returnId: string;
+      lineageId: string;
+      head: string | null;
+      excludedActorIds: readonly string[];
+      captureDigest: string;
+      pendingPublication: boolean;
+    }
+  | {
+      kind: "ingress-refusal";
+      actorId: string;
+      reason: string;
+      payloadHash: string;
+    }
+  | {
+      kind: "revert";
+      key: LivePatchKey;
+      revertId: string;
+      revertedBy: string;
+      receipt: unknown;
+    };
 export interface LiveCommit {
   transactionId: string;
   sessionId: string;
@@ -154,8 +184,20 @@ export interface LiveDocumentState {
   journal: LiveJournalEntry[];
 }
 export interface LiveDocumentStore {
-  open(identity: LiveDocumentIdentity, baseline: LiveBaseline, schemaEpoch: string): Promise<LiveDocumentState>;
+  open(
+    identity: LiveDocumentIdentity,
+    baseline: LiveBaseline,
+    schemaEpoch: string,
+  ): Promise<LiveDocumentState>;
   load(identity: LiveDocumentIdentity): Promise<LiveDocumentState>;
-  commit(identity: LiveDocumentIdentity, expectedHead: number, commit: LiveCommit): Promise<LiveJournalEntry>;
-  checkpoint(identity: LiveDocumentIdentity, expectedHead: number, checkpoint: LiveCheckpoint): Promise<void>;
+  commit(
+    identity: LiveDocumentIdentity,
+    expectedHead: number,
+    commit: LiveCommit,
+  ): Promise<LiveJournalEntry>;
+  checkpoint(
+    identity: LiveDocumentIdentity,
+    expectedHead: number,
+    checkpoint: LiveCheckpoint,
+  ): Promise<void>;
 }
