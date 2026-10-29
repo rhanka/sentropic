@@ -55,7 +55,7 @@
   - [x] Add `src/integrations/mcp/memory.ts` and `src/loaders/mcp/memory.ts` with the existing topology guard.
   - [x] Extend module catalog, contracts, exports and loader barrel.
   - [x] Compose canonical store, shared engine/read facets and nine bindings through `definition` only.
-  - [ ] Preserve producer schemas, receipts, confirmation guard and trusted context.
+  - [x] Preserve producer schemas, receipts, confirmation guard and trusted context.
 - [ ] **Lot 3 — Qualification and handoff**
   - [ ] Run focused PostgreSQL and transport tests, typecheck, package build and regression suite.
   - [ ] Run scope check before each atomic commit.
