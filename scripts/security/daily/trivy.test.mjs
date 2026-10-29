@@ -96,3 +96,12 @@ test('should never execute unqualified scanners or silently substitute IaC rules
   assert.deepEqual(report.snapshots, {});
   await assert.rejects(preflight('--db-repository=evil'), /unknown preparation operation/);
 });
+
+test('should retain bounded raw diagnostics when process or report validation fails', () => {
+  assert.throws(() => validateImageReport('partial raw report', target(), { status: 1, stderr: 'download blocked' }),
+    (error) => error.scanEvidence?.stdout === 'partial raw report' &&
+      error.scanEvidence?.stderr === 'download blocked' && error.scanEvidence?.status === 1);
+  assert.throws(() => validateImageReport('x'.repeat(16 * 1024 * 1024 + 1), target()),
+    (error) => error.scanEvidence?.truncated === true && error.scanEvidence.reportBytes === 16 * 1024 * 1024 + 1 &&
+      Buffer.byteLength(error.scanEvidence.stdout) === 16 * 1024 * 1024);
+});
