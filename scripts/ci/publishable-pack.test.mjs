@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { Writable } from 'node:stream';
+import { candidateTuple } from './package-candidate.mjs';
 import { GuardError, TRANSIENT_HINT, commandPack, commandPublish, commandWait, createRegistry, diffDependencyMaps, isTransientError, runNpmPack, sha256File, waitBudget, withManifestTransform } from './publishable-manifests.mjs';
 
 const sink = () => {
@@ -114,6 +115,43 @@ test('manifest transform is restored after success and failure', () => {
   assert.equal(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'), before);
   assert.throws(() => withManifestTransform(dir, () => { throw new Error('boom'); }), /boom/);
   assert.equal(fs.readFileSync(path.join(dir, 'package.json'), 'utf8'), before);
+});
+
+function sharedCandidateFixture() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'shared-pack-'));
+  fs.mkdirSync(path.join(root, 'packages'));
+  fs.mkdirSync(path.join(root, '.github/workflows'), { recursive: true });
+  fs.writeFileSync(path.join(root, '.github/workflows/ci.yml'), 'fixture workflow');
+  fs.writeFileSync(path.join(root, 'package-lock.json'), '{}');
+  for (const slug of ['cluster-mesh', 'outside']) {
+    const manifest = slug === 'cluster-mesh' ? { scripts: { prepack: 'node hook.cjs' } } : {};
+    fs.renameSync(fixture(slug, manifest, { 'hook.cjs': "require('fs').appendFileSync('pack-count', 'packed\\n');" }), path.join(root, 'packages', slug));
+  }
+  const dir = path.join(root, 'bundle'), candidateDir = path.join(root, 'packages/cluster-mesh');
+  const { archive } = runNpmPack(candidateDir, path.join(dir, 'cluster-mesh'));
+  const env = { CI_PACKAGE_CANDIDATES: dir, MANIFEST_HEAD_SHA: 'a'.repeat(40),
+    CANDIDATE_NODE_IMAGE: 'node:fixture', CANDIDATE_NPM_VERSION: '11.fixture' };
+  fs.writeFileSync(path.join(dir, 'candidates.json'), JSON.stringify({ schema: 1, roots: ['cluster-mesh'],
+    order: ['cluster-mesh'], tuple: candidateTuple(root, env), receipts: [{ slug: 'cluster-mesh',
+      name: '@fx/cluster-mesh', version: '1.0.0', guard: 'pass', manifest_mode: 'block',
+      evidence: 'release-candidate', head_sha: env.MANIFEST_HEAD_SHA,
+      file: `cluster-mesh/${path.basename(archive)}`, sha256: sha256File(archive) }] }));
+  return { root, env, archive, candidateDir };
+}
+
+test('should guard unrelated selected packages with their own full pack outside the shared closure', async () => {
+  const { root, env } = sharedCandidateFixture();
+  const result = await pack(path.join(root, 'packages/outside'), { env });
+  assert.equal(result.code, 0);
+  assert.equal(result.receipt.name, '@fx/outside');
+});
+
+test('should guard exactly the shared archive without executing its pack lifecycle again', async () => {
+  const { root, env, archive, candidateDir } = sharedCandidateFixture();
+  const result = await pack(candidateDir, { env, destination: path.join(root, 'consumer-pack') });
+  assert.equal(result.code, 0);
+  assert.equal(result.receipt.sha256, sha256File(archive));
+  assert.equal(fs.readFileSync(path.join(candidateDir, 'pack-count'), 'utf8'), 'packed\n');
 });
 
 // ---- D7 bump gate
