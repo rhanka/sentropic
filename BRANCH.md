@@ -69,6 +69,7 @@
   - [x] Declare BRRC1-EXn with rationale, impact and rollback before any conditional edit.
 
 ## Feedback Loop
+- [x] F6 final local validation after main integration: 232 affected tests pass (74 RC1 API, 128 RC1 unit, 11 session-manager, 11 session API, 1 admin lifecycle, 7 connector teardown); API/IdP typechecks and API lint pass; 70 offline IdP selftests pass with both overlays rendered. Socket origin, content/ack integrity, external HTTP refusal, 503 cookies, durable deletion and scheduled retry are covered. Receipts: RC1-f6-final-local.log and RC1-f6-manifest.log; test-rc1 torn down. Exact-head CI is recorded separately after push; no provisioning or PR merge.
 - [x] BRRC1-EX9: F6's authenticated service channel requires API-to-IdP ingress through the existing default-deny NetworkPolicy. Add only same-namespace sentropic/api to sentropic/auth-idp TCP 8787, with manifest selftests pinning selectors, port and Service target. Impact: enables the signed deny-only channel; no public HTTP relaxation or live apply. Rollback: remove this policy together with F6 transport.
 - [x] F6 socket fixture correction: Node fetch rewrites Host when redirecting the service URL to loopback; use node:http to preserve the deployed auth-idp Host, and assert the node-server's reconstructed origin. Temporary diagnostics removed; no product transport relaxation.
 - [x] F6 typecheck caught the bounded reader's Uint8Array boundary; request MAC now hashes raw body bytes directly, preserving byte integrity without coercion or decoding.
