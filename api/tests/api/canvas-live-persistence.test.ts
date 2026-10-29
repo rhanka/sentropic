@@ -58,8 +58,12 @@ describe('canvas live PostgreSQL durability', () => {
     first.formattingIntents = [{ ...intent('agent-intent'), source: { kind: 'agent-patch', key: first.receipt!.key, operationIndex: 0 } }];
     first.records = [
       { kind: 'admission', admission: { ...admission, ...id } },
+      { kind: 'migration', target: 'preserved-draft', actorId: 'agent-a', sessionEpoch: 'epoch-a',
+        origin: 'host:migration', fromSchemaEpoch: '0', toSchemaEpoch: '1', draftId: 'draft-a',
+        beforeDigest: 'preserved-bytes', afterDigest: 'migrated-bytes' },
       { kind: 'roster', actors: [{ actorId: 'agent-a', origin: 'agent:agent-a', awarenessClientId: 7 }] },
-      { kind: 'acknowledgement', actorId: 'agent-a', sessionEpoch: 'epoch-a', digest: 'migration-ack' },
+      { kind: 'acknowledgement', actorId: 'agent-a', sessionEpoch: 'epoch-a', digest: 'migration-ack',
+        profileId: 'prose', schemaEpoch: '1', draftId: 'draft-a' },
       { kind: 'freeze', returnId: 'return-a', lineageId: baseline.lineageId, head: null,
         excludedActorIds: ['offline-peer'], captureDigest: 'capture-a', pendingPublication: true },
       { kind: 'ingress-refusal', actorId: 'bad-actor', reason: 'scope-denied', payloadHash: 'bad-payload' },
