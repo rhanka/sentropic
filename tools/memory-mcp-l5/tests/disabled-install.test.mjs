@@ -54,3 +54,13 @@ it('ignores prebuilt native modules and unrelated outputs but catches candidate 
     expect(() => assertNoCandidateNativeBuilds('', [], root)).toThrow(/candidate native build attempts/);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
+it.each(['spawnSync', 'spawn'])('does not count a compiler that could not be spawned with %s', method => {
+  const root = mkdtempSync(join(tmpdir(), 'l5-missing-compiler-'));
+  try {
+    const addon = join(root, 'node_modules/fs-ext'); mkdirSync(addon, { recursive: true });
+    const trace = createDisabledTrace(root);
+    const source = `const r=require('node:child_process')[${JSON.stringify(method)}]('/missing/gcc', ['-c','binding.c'], {cwd:${JSON.stringify(addon)}}); if(r.on) r.on('error',()=>{});`;
+    expect(spawnSync(process.execPath, ['-e', source], { env: { ...process.env, ...trace.env } }).status).toBe(0);
+    expect(candidateNativeBuilds(trace.read(), root)).toEqual([]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
