@@ -28,7 +28,7 @@ import {
 } from '../../../services/connector-grant-teardown';
 
 export const accountRouter = new Hono();
-accountRouter.onError(remoteRevocationError);
+accountRouter.onError((error, c) => remoteRevocationError(error, c, true));
 
 accountRouter.get('/', async (c) => {
   const { userId, workspaceId, role } = c.get('user');

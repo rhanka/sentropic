@@ -88,7 +88,7 @@ export const sessionLifecycleHandlers: SessionRouteHandlers = {
   async logout(c) {
     try { return await packaged.logout!(c); }
     catch (error) {
-      if (error instanceof RemoteAuthorityError) return remoteRevocationError(error, c);
+      if (error instanceof RemoteAuthorityError) return remoteRevocationError(error, c, true);
       throw error;
     }
   },
@@ -104,7 +104,7 @@ export const sessionLifecycleHandlers: SessionRouteHandlers = {
       logger.info({ userId: session.userId }, 'All sessions logged out');
       return c.json({ success: true, message: 'Logged out from all devices' });
     } catch (error) {
-      if (error instanceof RemoteAuthorityError) return remoteRevocationError(error, c);
+      if (error instanceof RemoteAuthorityError) return remoteRevocationError(error, c, true);
       logger.error({ err: error }, 'Error logging out all sessions');
       return c.json({ error: 'Failed to logout from all devices' }, 500);
     }
