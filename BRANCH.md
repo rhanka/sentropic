@@ -24,8 +24,8 @@
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0** — Read rules/project/plans/study/audit; isolated worktree and mechanical branch check; inspect consumers and #829.
-- [ ] **Lot 1** — Five retention values; final-gate publication/deploy join; current-run allowlist cleanup with job-only write permission; retain cancellation/fork fallback.
-- [ ] **Lot 2** — Extend `scripts/ci/ci-expected-results.test.mjs`; run `make ci-capacity-policy test-ci-expected-results test-ci-dag ENV=test-ci-artifact-retention`; record storage/consumer evidence in CI study.
+- [x] **Lot 1** — Five retention values; final-gate publication/deploy join; current-run allowlist cleanup with job-only write permission; retain cancellation/fork fallback.
+- [x] **Lot 2** — Extended `scripts/ci/ci-expected-results.test.mjs`; `make ci-capacity-policy test-ci-expected-results test-ci-dag ENV=test-ci-artifact-retention` passes (25 + 8 tests); recorded storage/consumer evidence in CI study.
 - [ ] **Lot 3** — Scope check before each commit, review, draft PR and execution-plan comment, completed successful exact-head CI, owned `make down` and `make ps`.
 
 ## AI Flaky tests
