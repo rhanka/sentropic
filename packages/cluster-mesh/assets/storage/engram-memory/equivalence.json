@@ -1,6 +1,6 @@
 {
   "format": "engram-memory-profile-equivalence/v1",
-  "contractDigest": "sha256:dff737ced37d801ef48bb4d7088fc4fbc92021d21fe2034ff33ea643b49bec28",
+  "contractDigest": "sha256:dd0cccbd6e5e29766fbc9c48351ffe58f5b0a3162152f5ff02da0798c3244fee",
   "neutralClaims": [
     {
       "name": "atomic-units-v1",

@@ -2,25 +2,136 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
+import { isPackOnlyDevBump, LATEST_PUBLISHED_CLUSTER_MESH, RESERVED_NEXT } from '../fixtures/reserved-versions.js';
 import { artifactsCompatible } from './helpers.js';
 
-it('should keep the frozen selected fixture aligned with the candidate release tuple', () => {
+type CandidatePackage = {
+  name: string;
+  version: string;
+  dependencies?: Record<string, string>;
+  peerDependencies?: Record<string, string>;
+};
+
+// Frozen-pin extraction shared by the file-driven and synthetic checks: the
+// fixture must pin a stable release tarball, never a prerelease.
+const frozenBaseOf = (fixtureDependencies: Record<string, string>): string => {
+  const frozen = /^file:\.\.\/sentropic-cluster-mesh-(\d+\.\d+\.\d+)\.tgz$/.exec(
+    fixtureDependencies['@sentropic/cluster-mesh'],
+  );
+  expect(frozen, 'frozen fixture must pin a stable release tarball').not.toBeNull();
+  return frozen![1];
+};
+
+// Single-candidate alignment: the pack-only tolerance applies to the
+// cluster-mesh candidate only, and only for a `<reservedNext>-dev.N` workspace
+// version against the latest published pin; every other shape takes the strict
+// pin path (fixture spec and lock entry must equal the candidate version).
+const checkCandidateAlignment = (
+  candidate: CandidatePackage,
+  fixtureDependencies: Record<string, string>,
+  lockPackages: Record<string, { version?: string; dependencies?: unknown; peerDependencies?: unknown }>,
+): void => {
+  const entry = lockPackages[`node_modules/${candidate.name}`];
+  const spec = candidate.name === '@sentropic/cluster-mesh'
+    ? `file:../sentropic-cluster-mesh-${candidate.version}.tgz`
+    : candidate.version;
+  if (candidate.name === '@sentropic/cluster-mesh'
+    && fixtureDependencies[candidate.name] !== spec) {
+    const frozenBase = frozenBaseOf(fixtureDependencies);
+    // Pack-only topic bump: the frozen fixture keeps tracking the last release
+    // tuple instead of churning per dev version; the lock entry must match it.
+    expect(isPackOnlyDevBump(candidate.version, frozenBase, RESERVED_NEXT)).toBe(true);
+    expect(entry.version).toBe(frozenBase);
+  } else {
+    expect(fixtureDependencies[candidate.name]).toBe(spec);
+    expect(entry.version).toBe(candidate.version);
+  }
+  expect(entry.dependencies).toEqual(candidate.dependencies);
+  expect(entry.peerDependencies).toEqual(candidate.peerDependencies);
+};
+
+describe('isPackOnlyDevBump', () => {
+  it.each([
+    ['0.24.0-dev.1', '0.23.2', '0.24.0', true],
+    ['0.24.0-dev.2', '0.23.2', '0.24.0', true],
+    ['0.24.0-dev.99', '0.23.2', '0.24.0', true],
+    ['0.22.1', '0.23.2', '0.24.0', false],
+    ['0.23.2', '0.23.2', '0.24.0', false],
+    ['0.25.0-dev.1', '0.23.2', '0.24.0', false],
+    ['0.23.0-dev.14', '0.23.2', '0.24.0', false],
+    ['0.24.0-dev.1', '0.23.2', '0.25.0', false],
+    ['0.24.0-dev.1', '0.22.1', '0.24.0', false],
+    ['0.24.0-dev.2', '0.22.4', '0.24.0', false],
+    ['0.24.0-dev.1', '0.24.0', '0.24.0', false],
+    ['0.24.0-rc.1', '0.23.2', '0.24.0', false],
+  ])('isPackOnlyDevBump(%s, %s, %s) === %s', (workspaceVersion, publishedPin, reservedNext, expected) => {
+    expect(isPackOnlyDevBump(workspaceVersion, publishedPin, reservedNext)).toBe(expected);
+  });
+});
+
+it('should keep the selected fixture aligned with the candidate release tuple', () => {
   const fixture = JSON.parse(readFileSync(new URL('./fixtures/selected/package.json', import.meta.url), 'utf8'));
   const lock = JSON.parse(readFileSync(new URL('./fixtures/selected/package-lock.json', import.meta.url), 'utf8'));
   expect(lock.packages[''].dependencies).toEqual(fixture.dependencies);
   for (const slug of ['cluster-mesh', 'llm-mesh', 'llm-gateway']) {
     const candidate = JSON.parse(readFileSync(new URL(`../../../${slug}/package.json`, import.meta.url), 'utf8'));
-    const spec = slug === 'cluster-mesh' ? `file:../sentropic-${slug}-${candidate.version}.tgz` : candidate.version;
-    expect(fixture.dependencies[candidate.name]).toBe(spec);
-    const entry = lock.packages[`node_modules/${candidate.name}`];
-    expect(entry.version).toBe(candidate.version);
-    expect(entry.dependencies).toEqual(candidate.dependencies);
-    expect(entry.peerDependencies).toEqual(candidate.peerDependencies);
+    checkCandidateAlignment(candidate, fixture.dependencies, lock.packages);
   }
 });
 
-it('should install only compatible packed artifacts and exclude an incompatible optional tuple without registry access', () => {
+describe('pack-only dev alignment', () => {
+  const files = () => ({
+    fixture: JSON.parse(readFileSync(new URL('./fixtures/selected/package.json', import.meta.url), 'utf8')),
+    lock: JSON.parse(readFileSync(new URL('./fixtures/selected/package-lock.json', import.meta.url), 'utf8')),
+    candidate: JSON.parse(readFileSync(new URL('../../../cluster-mesh/package.json', import.meta.url), 'utf8')),
+  });
+
+  it('should apply the frozen pin to a reserved-next dev candidate in CI', () => {
+    const { fixture, lock, candidate } = files();
+    const frozenDependencies = {
+      ...fixture.dependencies,
+      '@sentropic/cluster-mesh': `file:../sentropic-cluster-mesh-${LATEST_PUBLISHED_CLUSTER_MESH}.tgz`,
+    };
+    const frozenPackages = {
+      ...lock.packages,
+      'node_modules/@sentropic/cluster-mesh': {
+        ...lock.packages['node_modules/@sentropic/cluster-mesh'],
+        version: LATEST_PUBLISHED_CLUSTER_MESH,
+      },
+    };
+    expect(() => checkCandidateAlignment(
+      { ...candidate, version: `${RESERVED_NEXT}-dev.1` }, frozenDependencies, frozenPackages,
+    )).not.toThrow();
+  });
+
+  it('should keep the strict path for a stale pin under a reserved-next dev candidate', () => {
+    const { fixture, lock, candidate } = files();
+    const staleDependencies = {
+      ...fixture.dependencies,
+      '@sentropic/cluster-mesh': 'file:../sentropic-cluster-mesh-0.22.1.tgz',
+    };
+    const stalePackages = {
+      ...lock.packages,
+      'node_modules/@sentropic/cluster-mesh': {
+        ...lock.packages['node_modules/@sentropic/cluster-mesh'],
+        version: '0.22.1',
+      },
+    };
+    expect(() => checkCandidateAlignment(
+      { ...candidate, version: `${RESERVED_NEXT}-dev.1` }, staleDependencies, stalePackages,
+    )).toThrow();
+  });
+
+  it('should keep the strict path for a stable candidate that is not the pin', () => {
+    const { fixture, lock, candidate } = files();
+    expect(() => checkCandidateAlignment(
+      { ...candidate, version: '0.22.1' }, fixture.dependencies, lock.packages,
+    )).toThrow();
+  });
+});
+
+it('should install compatible packed artifacts and fetch the frozen mesh pin only when absent locally', () => {
   const root = mkdtempSync(join(tmpdir(), 'prepare-artifacts-'));
   const work = join(root, 'work');
   try {
@@ -32,6 +143,7 @@ const path = require('node:path');
 const args = process.argv.slice(2);
 if (args[0] === 'pack') {
   const dest = args[args.indexOf('--pack-destination') + 1];
+  fs.appendFileSync(path.join(dest, 'pack-requests.txt'), JSON.stringify(args) + '\\n');
   const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
   fs.writeFileSync(path.join(dest, pkg.name.replace('@', '').replace('/', '-') + '-' + pkg.version + '.tgz'), JSON.stringify(pkg));
 } else if (['install', 'ci'].includes(args[0]) && !args.includes('--prefix')) {
@@ -44,6 +156,15 @@ if (args[0] === 'pack') {
       encoding: 'utf8',
     });
     expect(result.status, result.stderr).toBe(0);
+    const requests = readFileSync(join(work, 'pack-requests.txt'), 'utf8').trim().split('\n')
+      .map((line) => JSON.parse(line) as string[]);
+    const { fixture, candidate: meshCandidate } = {
+      fixture: JSON.parse(readFileSync(new URL('./fixtures/selected/package.json', import.meta.url), 'utf8')),
+      candidate: JSON.parse(readFileSync(new URL('../../../cluster-mesh/package.json', import.meta.url), 'utf8')),
+    };
+    const frozen = frozenBaseOf(fixture.dependencies);
+    expect(requests.flatMap((args) => args.filter((arg) => arg.startsWith('@sentropic/cluster-mesh@'))))
+      .toEqual(frozen === meshCandidate.version ? [] : [`@sentropic/cluster-mesh@${frozen}`]);
     const dependency = (fixture: string) => JSON.parse(readFileSync(join(work, fixture, 'package.json'), 'utf8'))
       .dependencies['@sentropic/artifacts'] as string;
     if (!artifactsCompatible) {

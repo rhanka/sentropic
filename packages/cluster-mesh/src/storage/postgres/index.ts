@@ -24,6 +24,7 @@ export const createPostgresKernel = async (options: PostgresStorageOptions) => {
   const adapter = Object.freeze({ moduleId: core.options.moduleId, incarnation: core.incarnation, bind });
   return Object.freeze({
     ...adapter,
+    ownership: core.ownership,
     bindNew: async (supplied: ScopeGrant<unknown>): Promise<PgScoped> => {
       const grant = ownPgValue(supplied);
       await core.issue(grant);
