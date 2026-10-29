@@ -7,3 +7,8 @@ SECQUAL_RUN = docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-p
 security-qualify-measure: ## Measure actual OCI data bytes without admitting the toolchain
 	@mkdir -p "$(SECQUAL_DIR)" && chmod 700 "$(SECQUAL_DIR)"
 	@$(SECQUAL_RUN) $(SECQUAL_NODE) node scripts/security/daily/qualify-acquisition.mjs $(KIND)
+
+.PHONY: security-qualify-acquire
+security-qualify-acquire: ## Exercise production ingestion and hash-checked warm restoration
+	@mkdir -p "$(SECQUAL_DIR)" && chmod 700 "$(SECQUAL_DIR)"
+	@$(SECQUAL_RUN) $(SECQUAL_NODE) node scripts/security/daily/qualify-cache.mjs
