@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/cluster-mesh",
-  "version": "0.23.5",
+  "version": "0.24.0",
   "description": "Injectable Cluster Mesh control-plane contracts, namespace modules, and single-instance runtime.",
   "type": "module",
   "license": "MIT",
@@ -179,6 +179,7 @@
   },
   "files": [
     "dist",
+    "contracts",
     "assets/storage",
     "README.md",
     "LICENSE"
@@ -229,7 +230,7 @@
     "jose": { "optional": true }
   },
   "devDependencies": {
-    "@sentropic/engram": "0.21.1",
+    "@sentropic/engram": "0.21.3",
     "@types/node": "^22.10.10",
     "typescript": "5.4.5"
   }

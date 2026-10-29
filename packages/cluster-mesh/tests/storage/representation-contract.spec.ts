@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { MemoryBackend, backendScopeKey, createBackendScopeState } from '../../src/storage/backend.js';
+import {
+  MemoryBackend,
+  backendScopeKey,
+  compareBackendAllocationU64,
+  createBackendScopeState,
+  incrementBackendAllocation,
+  incrementBackendAllocationU64,
+} from '../../src/storage/backend.js';
 import { IndexedHistory } from '../../src/storage/indexed-history.js';
 import { RootMutationCoordinator } from '../../src/storage/mutation-coordinator.js';
 import { createKernel } from '../../src/storage/kernel.js';
@@ -39,5 +46,13 @@ describe('memory representation composition contract', () => {
       .rejects.toMatchObject({ code: 'invalid-command' });
     expect(await bound.readPage('covered', 1, null, 4096))
       .toEqual({ outcome: 'inaccessible', records: [], nextCursor: null });
+  });
+
+  it('should keep safe allocation while exposing exact u64 allocation', () => {
+    expect(incrementBackendAllocation('41')).toBe('42');
+    expect(() => incrementBackendAllocation('9007199254740992')).toThrow('invalid allocation');
+    expect(incrementBackendAllocationU64('9007199254740991')).toBe('9007199254740992');
+    expect(incrementBackendAllocationU64('18446744073709551615')).toBeUndefined();
+    expect(compareBackendAllocationU64('9007199254740991', '9007199254740992')).toBe(-1);
   });
 });

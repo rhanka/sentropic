@@ -17,7 +17,7 @@ export const MEMORY_CONTRACT_VERSION = 'memory-binding-v1' as const;
 
 /** Pinned contract-manifest digest, co-signed C2/C6. Never recomputed silently. */
 export const MEMORY_CONTRACT_DIGEST =
-  'sha256:dff737ced37d801ef48bb4d7088fc4fbc92021d21fe2034ff33ea643b49bec28' as const;
+  'sha256:dd0cccbd6e5e29766fbc9c48351ffe58f5b0a3162152f5ff02da0798c3244fee' as const;
 
 export const MEMORY_REQUIRED_PROFILES = Object.freeze([
   'atomic-units-v1',
@@ -155,6 +155,7 @@ export const MEMORY_ASSET_MANIFEST = Object.freeze({
     'profileClaims with pinned versions and semantic digests (binding §6.3)',
     'memory-* named queries and scope-chain-index for memory-journal (binding §4.1)',
     'memory key encodings, codec manifest, and index policies in the contract digest (binding §§2.2.3, 3.1, 3.2, 5.3)',
+    'NeutralAtomicUnit.intentHash Engram-carried intent hash persisted and returned byte for byte (binding §5.3 rule 5)',
   ]),
 });
 

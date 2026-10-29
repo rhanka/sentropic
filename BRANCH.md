@@ -1,117 +1,142 @@
-# Feature: Freeze the app cluster-mesh W0 baseline
+# Feature: Engram E11b installed Stage B and C6 closure
 
 ## Objective
-- [ ] Freeze the real baseline and W2/W4/P handoffs for the approved app switch plan; submit a draft PR and stop.
+- [ ] Qualify all 23 Stage B cases through the installed handle, ship C6 declaration in dev.7, and regenerate the 21-slot tuple; stop for an evidenced Engram-side blocker.
 
 ## Scope / Guardrails
-- [x] Owner GO: 2026-10-18 launch packet, AGENT_SIG:7f3a9c2e1b; W0 only, no PR merge or deployment; 19 October follow-up authorizes main integration under BR142-EX2.
-- [x] Approved plan: `/home/antoinefa/src/sentropic/.tmp/app-switch-week/plan.md`, SHA-256 `166e9bbf2c580ee61b3decc9c3a4c758db579a38783eb212cf80f0a3a43c816a`, section 3.
-- [x] Isolated worktree: `tmp/worktrees/app-cm-w0`; branch `feat/app-cm-w0-baseline`; initial HEAD/origin/main `9ed96eb83cd77da710f1adeb83a19e425d6c4910`.
-- [x] Production access is read-only; 22 October owner authorization permits tenant-admin exec into existing PostgreSQL pods for migration-bookkeeping SELECTs only, plus backup catalogue/status/receipt reads; no Secret values in records, migration execution, service starts or live data changes.
-- [x] Make-only commands, `ENV` last; atomic W0-authored commits at most 150 changed lines, selective staging, `make scope-check` then `make commit`; owner-requested upstream merge carries inherited changes under BR142-EX2.
-- [x] English records with owner quotations retained verbatim; no W0-authored product/API/UI/package/lock/deployment changes; no migration file on W0; inherited main changes only under BR142-EX2.
-- [x] Root dev 8787/5173/1080 and D2 9381/5581/1481, 9382/5582/1482 remain reserved to their owners.
-- [x] W0 runtime slot: `test-app-cm-w0`, API/UI/Maildev UI 9710/5910/1810; no service listeners started.
-- [x] 26 October follow-up: execute only plan-v2 W0-close.a/d; merge current main without rebasing, preserve historical readings, use `ENV=test-app-w0`; no restore, PR merge or deployment.
-- [x] 28 October resync: worktree `tmp/worktrees/app-w0-resync`, same branch; owner requests merge of current main, #796 reference reconciliation, deviation dispositions, PR-body update, push and successful exact-head CI; W0-close.c stays BLOCKED.
-- [x] 29 October owner decision supersedes c's cluster prerequisites: restore the already-local live production dump in `tmp/app-w0c-local`, branch `op/app-w0c-local`, to isolated `test-app-w0c`; ports 8803/5203/1103, Docker under the shared flock. Verify counts/frontiers/authority, stop and erase local data, retain aggregate receipt, push to #702 and require successful exact-head CI. No production write or PR merge.
+- [x] PR #831 refresh after #702: merge origin/main c37662a20 without rebase; retain the integration plan and inherit the complete W0 baseline/restore documentation. The sole conflict is BRANCH.md; package, lock, Makefile, CI and Track bytes are unchanged from f0e0b15a9, so its stable successor remains byte-valid.
+- [x] PR #831 release refresh: merge origin/main e938151c0 (#832), retain this integration plan and preserve Trivy tooling/tests alongside the MCP guard regression; no Track event differences. Stable successor evidence is generated externally on the final committed head.
+- [x] PR #831 Opus R1: restore the MCP platform guard alternation; required publishable CI wiring tests execute all admitted environments and refuse unrelated projects. Regression fails with shell exit 2 before the fix.
+- [x] Packaging regression caught a duplicate local candidate name in the stable-fixture assertion; distinguish meshCandidate from the later artifacts candidate. Package bytes are unchanged by this test-only correction.
+- [x] Stable release blocker: Comments self-leaf catalog excluded 0.24.0 at its upper bound. Admit 0.24.x with <0.25.0; retain current-release peer enforcement and next-minor refusal regressions. Refresh archive identities and rerun installed qualification after this byte change.
+- [x] Stable E10 installed campaign explicitly requires mesh 0.24.0 and Engram 0.21.3, with a fresh consumer lock, types/runtime closure and two-process reopen; the immutable reviewed dev.7 campaign remains pinned independently.
+- [x] Release regression coverage checks E2 selection for integration → main, exclusion of unrelated PRs and preservation of all seven E11 proof steps; packaging selects the stable local archive without a registry request for unpublished 0.24.0.
+- [x] Final main-PR routing retains every E2 lane and replays the reviewed E11 dev.7 proof in a detached checkout; the current stable head has its own installed Stage B receipts. No topic-only workflow file exists on integration.
+- [x] Release manifest and root lock select reserved stable 0.24.0; selected packed fixture and train version agree. Registry latest rechecked as 0.23.5; CI-only publication on main remains pending.
+- [x] Release integrator: merge `origin/main` a3204932e420efe6eeafa3428459fadb7f215aa7 into integration b90fc4ee6; preserve all main changes and union Makefile selectors. Imported changes are inherited from that main parent; no Track events changed.
+- [x] Branch `feat/cluster-mesh-engram-e11b` from integration `fa900e335`; worktree `tmp/worktrees/mem-e11b`; mechanical branch PASS; merge only, never rebase.
+- [x] Owner-directed pack-only dev.7; no publication, artifacts source edits or receiving ACK.
+- [x] Read-only E2 inputs: published Engram 0.21.3 `32d47df1…`, mesh dev.6 `ff79088e…`, contract pair `55f8d457…` / `dd0cccbd…`; L4 MCP 0.22.0 is separate L5 scope (plan E11 line 120).
+- [x] Node 24 through make and Docker flock; no Python; ENV=test-mem-e11b last; make down after each Docker step.
+- [x] Isolated Compose PostgreSQL only, no host ports; API 9055, UI 5255, Maildev 1155 reserved; owner environments untouched.
+- [x] Atomic make commits at most 150 changed lines; selective staging; no AI trailers.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `packages/cluster-mesh/**` (reviewed E0–E11b aggregate and final release qualification)
+  - `PLAN.md` (inherited E2 plan entries)
+  - `package.json` (inherited E2 workspace qualification tools)
+  - `scripts/ci/publishable-ci-wiring.test.mjs` (final main-PR gate routing)
   - `BRANCH.md`
-  - `docs/baselines/app-cm-w0/**`
-  - `.h2a/owner-questions-w0.md`
-  - `docs/runbooks/app-cm-baseline-restore/receipts/**`
+  - `tools/engram-e11/**`
+  - `Makefile` (BR11-EX1)
+  - `packages/cluster-mesh/tests/engram-memory/**`
+  - `packages/cluster-mesh/tests/storage/cold-workspace.sh`
+  - `packages/cluster-mesh/src/engram-memory/**`
+  - `packages/cluster-mesh/src/storage/postgres/effects.ts` (BR11B-EX3)
+  - `packages/cluster-mesh/contracts/**`
+  - `packages/cluster-mesh/.gitignore`
+  - `packages/cluster-mesh/assets/storage/engram-memory/**`
+  - `packages/cluster-mesh/package.json`
+  - `package-lock.json`
+  - `.github/workflows/ci.yml` (BR11B-EX2)
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
+  - `packages/engram/**`
+  - `tools/memory-mcp-l5/artifacts/**`
   - `docker-compose*.yml`
-  - `.cursor/rules/**`
-  - `api/**`
-  - `ui/**`
-  - `apps/**`
-  - `packages/**`
-  - `deploy/**`
-  - `.github/**`
   - `.track/**`
-  - `plan/**`
+  - `.cursor/rules/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - None; downstream W3/P exceptions are recorded as handoffs, not exercised here.
+  - [x] None beyond BR11-EX1.
 - **Exception process**:
-  - Declare `BR-CM-W0-EXn` with reason, impact and rollback before any scope expansion.
-  - [x] `BR-CM-W0-EX1`: owner follow-up explicitly requests `.h2a/owner-questions-w0.md` in French; impact is one decision-preparation record, no operator/key assignment; rollback removes that record. Other records remain English.
-  - [x] `BR142-EX2`: owner follow-up explicitly requested merging origin/main `cf0ad8ee44f9bb7cf4ad1222a468172f0f77fc2d` into W0. Integrated unchanged upstream bytes at fe26214df; temporary allowances removed. Impact: main history and its existing package/lock/CI/spec/plan changes entered this branch; rollback: owner-authorized merge revert. No PR merge or deployment is authorized.
-  - [x] `BR142-EX3`: owner requests merging origin/main `fbfe68f0e40d386e6b3429abc2ea8f868fcdd3f6`, including the published artifacts/mesh tuple. All inherited paths are allowed solely for this merge; retain this branch's BRANCH.md on add/add conflict. Impact: unchanged main bytes/history, exceeding the authored-diff limit; rollback: separately authorized merge revert. Track contains all 342 prior branch events and matches main byte-for-byte; acceptance refresh belongs to the designated Track writer.
-  - [x] `BR-CM-W0-EX4`: conductor packet `app-W0c.md` explicitly orders the W0-close.c receipt template at `docs/runbooks/app-cm-baseline-restore/receipts/TEMPLATE.md` in this worktree plus the index entry in `docs/baselines/app-cm-w0/baseline.md`. Impact: one template doc + one table cell, no code, no cluster contact; rollback: remove the template file and revert the cell.
-  - [x] `BR142-EX5`: owner 28 October instruction explicitly requests merging origin/main `ea20bd9c026e9717d911514e763f8911b6981dde` into #702, preserving W0's BRANCH.md. Additional Allowed Paths above apply only to unchanged inherited main bytes/history in this merge and are removed in the reconciliation commit. Impact: inherited merge exceeds 150 lines; W0-authored changes remain below 150 lines per commit, with no product edits. Rollback: separately authorized merge revert. All 346 prior branch Track event IDs and all 370 main event IDs survive; acceptance refresh remains with the designated Track writer.
-  - [x] `BR142-EX6`: owner 29 October W0-close.c instruction requires merging origin/main `213638676730b25154e5fb4fda333f74da1980a3` before the local restore, without rebase. Temporary allowances above cover inherited bytes only and are removed next commit. Only BRANCH.md conflicts; preserve W0's plan. Impact: inherited merge exceeds 150 lines; authored commits remain bounded. Rollback: separately authorized merge revert. Both parents and merged Track stream have SHA-256 `f1bdd745448dfd0c76c198405512baf2fec73775e30f3e99a1c5b72cecdeee91`; no Track write, acceptance refresh remains with its designated writer.
-  - [x] `BR-CM-W0-EX7`: owner 29 October instruction explicitly requests the real aggregate local-restore receipt under `docs/runbooks/app-cm-baseline-restore/receipts/**`, superseding the external-receipt convention for c. Impact: counts/hashes/commands/limitations only, no personal data or secrets; rollback removes the new receipt/index. Main merge temporary allowances removed; no authored product change.
-
-## Feedback Loop
-- [ ] `attention`: B01/B02/B04 and B06 evidence supplied; current d is #796 (linked below). Published artifacts 0.2.4 supplies UP-T's adapter/SQL; receiving host authority/restart/conformance remains qualification. W0-close.c/B03 local recovery is DONE per 29 October owner decision; B08 remains open.
-- [x] `acknowledge`: F3/F4 owner answers Q1–Q4 copied verbatim into owner-decisions.md; owner holds all human roles, agents execute, no staffed windows or temporal slot bookings are required because there are no users; owner signs with a later-enrolled dedicated identity/key.
-- [x] `W0-close.c / B03 DONE`: 29 October owner-selected live production dump restored locally in `test-app-w0c`; [receipt](docs/runbooks/app-cm-baseline-restore/receipts/restore-local-20261029T084403Z.md) records exact bytes/hash, 91 matching table counts, schema/frontiers, 18 matching authority-table hashes and 14-second restore. No revoked-reader row exists; runtime denial, S3-object and blob/Kubernetes recovery are unproven. Environment/volume and dump removed. K8s target/bucket prerequisites withdrawn for c; B08 final-head reconciliation and production authorization remain separate.
-- [x] `W0-DEV1` / #756 target deviation: merged to main as [ab981b16d](https://github.com/rhanka/sentropic/commit/ab981b16d), instead of targeting #702 before B08; no prior owner authorization source found. Disposition: retain history, incorporate through main merge, index the [runbook](docs/runbooks/app-cm-baseline-restore.md) and #756 in baseline/authorization; Opus accepts b's 43/43 guard evidence. This does not execute c or authorize production.
-- [x] `W0-DEV2` / gate-order deviation: W1–W4 entered `feat/app-cm-integration` before W0-close.e, contrary to plan-v2 lines 134/171; no prior owner authorization source found. Disposition: retain history and record retrospective a/b/d consistency qualification in the 28 October Opus receipt; integration exact-head full CI and c/B08 acceptance remain conductor gates. No retroactive W0-close.e acceptance or production GO is inferred.
-- [x] `W0-DEV3` / missing review source: Astra r1 `pr702_astra_r1.md` at `ce26bb090` is absent from disk/history. Disposition: preserve source-gap attribution; F1 B01/B02 closed, B03 partial/BLOCKED; F2 B04 closed; F3 Q1/Q2 closed; F4 Q3/Q4 decided with B05 enrollment/fingerprint pending. Statuses reconstructed from `.tmp/packets/702-*.md`, BRANCH.md and authorization.md are not the original review or final-head acceptance.
-- [x] Independent evidence: `/home/antoinefa/src/sentropic/.tmp/app-switch-week/W0e-receipt-opus.md` (28 October) accepts a/b/d on cited heads, blocks c and rejects overall W0. Record Opus in place of the planned Astra pairing for conductor reconciliation; independent final-head acceptance remains pending.
-- [x] `clarification`: D2/#677 owns control 0012–0019; W1 withdraws 0017 and reserves verified-free 0020. O1 owns 9495/5695/1595; app ports remain in reservations.md; W2.b alone reconciles API manifest/root/API locks.
-- [x] Track import belongs to the designated root writer; this concurrent worktree updates mergeable source records only (`track-operation` contract).
-
-## AI Flaky tests
-- [x] No AI/provider tests needed for records; no accepted flakes or timeout changes.
-
-## Orchestration Mode (AI-selected)
-- [x] **Mono-branch**: one W0 coder, records only; owner-requested main integration under BR142-EX2.
-- [ ] **Multi-branch**: downstream T1/T2/T3/T4/TG/T5 retain technical ordering/file ownership; no staffed slot reservations required or downstream branches launched by W0.
-
-## UAT Management (in orchestration context)
-- [x] No UI behavior changes or root-dev UAT; production qualification belongs to W5.
+  - [x] BR11B-EX1: add test-mem-e11b selectors and an installed Stage B action to existing make routing; impact isolated qualification only; rollback selectors/action.
+  - [x] BR11B-EX2: run E11 tooling tests/check in CI with deterministic inputs; impact tuple tooling coverage; rollback workflow step.
+  - [x] BR11B-EX3: installed C5 exposes missing u64 chain-allocation exhaustion check in PG effects; add only the upper-bound guard, preserving generic safe-number dense positions and frozen SQL. Rollback guard.
+  - [x] BR11-EX1: add only test-mem-e11 to host scope-check selector, avoiding an unrelated harness build; impact validation routing; rollback remove selector.
+  - [x] BR11-EX2: owner-requested 0.21.3/dev.6 clean install proof uses existing qualification Compose, PostgreSQL and down selectors for test-mem-e11; rollback those three selector entries together. No package/source/lock edits.
+  - [x] BR11-EX3: owner-requested CI diagnosis adds test-mem-e11 to E2 qualification, lint/wiring and packed-platform build selectors, and preserves packed-consumer npm stderr. Impact: run the same gates in the owned Compose environment and expose install failures; rollback these selector/logging changes. No assertion, dependency, lock or workflow changes.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline and evidence boundaries**
-  - [x] W0-close.a/B01: 26 October endpoint-to-Service/Pod routing, public HTTPS body hashes, live ConfigMap/template/environment hashes and refreshed image identities recorded; BR142-EX3 temporary merge allowance removed.
-  - [x] W0-close.a/B02: current package-journal discovery and complete cutover/author/generation/lease inventory recorded; absent runtime authority is explicit and positive fencing remains W2 qualification.
-  - [x] W0-close.a/B04: dated scoped SQL inventory and per-source leave-in-place disposition; 4 unscoped chat messages explicitly excluded from import, legacy readers retained.
-  - [x] W0-close.a/B04 object/ACL evidence: 14 scoped S3 reads/checksums, size matches, private ACLs and failed anonymous HEADs recorded; no content/keys/credentials exported or objects changed.
-  - [x] W0-close.d probe runner uses the existing pinned Compose qualification service and matching down target; preserve historical defaults while accepting the current published-fit probe/tuple.
-  - [x] Read MASTER/workflow, README/TODO/PLAN, branch template and approved owner request/plan.
-  - [x] Mechanical `harness check branch` passes; branch is clean and starts at pinned main.
-  - [x] Follow-up: branch verified, remote pulled with fast-forward only, main integrated under BR142-EX2; identical Track blobs and all 342 event IDs preserved. Track acceptance refresh stays with the designated root writer.
-  - [x] 26 October: current main merged under BR142-EX3; only BRANCH.md conflicted, retained W0 plan; no source/lock/package conflict resolution or rebase.
-  - [x] 28 October: origin/main `ea20bd9c0` merged under BR142-EX5; only BRANCH.md conflicted, retained W0 plan; Track event containment passes for both parents, with no Track edits by this author.
-  - [x] Record available runtime evidence, pending operator facts, endpoint parity, configured domains and generated-content authorities in `docs/baselines/app-cm-w0/baseline.md`.
-  - [x] Pin exact releases, selected peers, integrities and lock/config hashes in `published-tuple.json`.
-  - [x] F1/F2 follow-up: add standalone read-only metadata/archive collectors; validate COPY counting with a two-table fixture before recording historical aggregates.
-  - [x] F1/F2 follow-up: preserve dated offline journal/content counts and existing CI SQL backup/restore metadata in recovery-readings.md; current tenant recovery/object/ACL proof remains open.
-  - [x] F1 follow-up: record inactive-cluster deployment/config identities and hashes, zero pod lists, actual OVH RBAC denials and exact missing current-tenant access in cluster-readings.md.
-  - [x] 21 October B01 follow-up: verify branch/pull; tenant-admin GETs only; record prod/preprod/remote running digests, pod UID/start, controller chains, content-role absence and config names/resourceVersions; delete temporary mode-600 kubeconfig; B02/B03 remain pending, no DB access.
-  - [x] 22 October B02/B03 follow-up: verify branch/pull; owner-authorized read-only migration discovery/count/max/frontiers in prod/preprod and latest backup status/upload receipts recorded in migration-backup-readings-2026-10-22.md; temporary mode-600 kubeconfigs deleted, no refusal; runtime/package state, private object checkpoint and restore proof remain pending.
-- [ ] **Lot 1 — Frozen implementation handoffs**
-  - [x] W0-close.d/B06: 747 ref / 263 worktree nonlocal scan; withdraw 0017, reserve control 0020, freeze main/upstream/next-branch bases and W2.b's sole lock-writer turn.
-  - [x] Historical W0-close.d tuple/profile: 26 October 0.2.0/0.22.1 fit retained as dated evidence; superseded by #796 below, including the then-missing UP-T handoff.
-  - [x] Current W0-close.d: [#796](https://github.com/rhanka/sentropic/pull/796), integration merge `ea8e84431`; immutable [tuple](https://github.com/rhanka/sentropic/blob/ea8e84431/docs/baselines/app-cm-w0/published-tuple.json) and [qualification](https://github.com/rhanka/sentropic/blob/ea8e84431/docs/baselines/app-cm-w0/tuple-refresh-2026-10-27.md), linked without copying integration code/locks. Artifacts 0.2.4, cluster-mesh 0.22.4, llm-mesh 0.28.1, gateway 0.21.3; APP-P1 `020aacfec500d754b76c90d3ad4a05097e0f996b8b9282145ca458917ea6fb27`.
-  - [x] Record the W2 host-fit prototype and exact provider/transport preservation contract in `host-fit.md`.
-  - [x] Freeze W4 context construction, signatures, caller changes and acceptance tests in `catalog-context.md`.
-  - [x] Pin P canonical verifier, vectors and trust/key authorization contract in `promotion-contract.md` and `verifier-vectors.json`; Q3/Q4 settle signer/key source, with enrollment and public fingerprint deferred under B05.
-- [ ] **Lot 2 — Dispatch and authorization register**
-  - [x] Record migration IDs, isolated ports, six-step train order and shared-file writers in `reservations.md`; Q1 assigns human roles to the owner with agent execution; Q2 removes staffed-window/slot booking from W0 acceptance.
-  - [x] Record pending runtime/operator/key/approval dependencies, owners, deadlines and observable gates in `authorization.md`.
-  - [x] F3/F4 follow-up: prepare the requested French owner questions with context, options, consequences and explicitly provisional recommendations; no assignments or keys invented.
-  - [x] Record the supplied Q1–Q4 answers verbatim and update plan-dependent ownership, scheduling and signer/key handoffs; dedicated-key enrollment is a later authorized action, fingerprint pending, no private key collected.
-  - [x] Enumerate remaining W0 acceptance blockers precisely: serving-cluster/DB/backup/object access and F1/F2 receipts/disposition, B06 nonlocal migration-0017 reconciliation and B08 independent final-head review; distinguish later technical/action gates.
-  - [x] Consolidate findings into the bounded downstream branch handoffs, including W3/T3 EX1 and P/TG EX2.
-- [ ] **Lot 3 — Final validation and draft delivery**
-  - [x] W0-close.c: execute owner-authorized isolated local restore, verify schema/counts/tenant-authority facts, record recovery duration and limits, stop/remove project data and delete the dump; aggregate receipt committed under BR-CM-W0-EX7.
-  - [x] W0-close.c reconciliation: baseline/authorization/README and external readiness updated with the receipt/hash and explicit local live-dump proof limits; `w0-record-check` passes (vectors, canonical hash, verifier/source bytes and links), diff hygiene checked, matching probe cleanup performed. Exact-head successful CI remains required at delivery; B08 is separate.
-  - [x] 28 October resync: retain merge `2d64d4e9f`, reconcile d through #796 links, record W0-DEV1/2/3 dispositions and keep c BLOCKED; API/UI/runtime tests are not applicable to these record edits. Exact-head CI is required after push, independently of W0 acceptance.
-  - [x] W0-close.a/d: baseline/authorization/catalogue/README consolidated around dated current receipts; B03/B08 remain open, UP-T W1.c dependency explicit, no restore or PR merge.
-  - [x] W0-close.a/d verification: strict published fit and original vector/source/link checks pass; payload asset comparisons, JSON/diff hygiene, mechanical C1/C2 and matching locked Compose cleanup recorded in verification-2026-10-26.md; exact pushed-head CI checked at delivery.
-  - [x] Check JSON, source citations, secret hygiene, reservations, prototype/verifier evidence and every diff hunk; run `make scope-check` before each commit.
-  - [x] Reproducible committed `probe.mk`: `w0-host-fit` and `w0-record-check` pass on the pinned Node image, exact selectors and frozen public vectors; no product services/credentials.
-  - [x] Follow-up validation: w0-record-check passes; 34 local record/dossier links and retained CI JSON checked; COPY fixture passes; live digests and independent acceptance stay pending.
-  - [x] Owner-answer follow-up validation: byte-for-byte Q1–Q4 copy, current record links/vectors and frozen source hashes at tuple.sourceSha pass after main integration; no private-key markers found; scope and diff hygiene checked before commit.
-  - [x] API/UI/E2E/security suites: not applicable to documentation-only W0; downstream file-level gates are retained in handoffs.
-  - [ ] Independent acceptance-scope review; coding instance does not review itself.
-  - [x] Prepare this exact file as draft PR body; preserve pending evidence/review gates and the separate production authorization register.
-  - [x] Initial draft PR #702 and required execution-plan comment delivered at reviewed head ce26bb090bf1d2a43a00d9c97671269e18152e52; follow-up evidence updates the same draft.
-  - [ ] Report PR number and exact head SHA, then stop; keep BRANCH.md and leave merge/deployment to separately authorized actors.
+- [x] **Lot E11b-0 — Evidence and installed qualification**
+  - [x] Read #789 scope: E7 supplies host binding/maintenance, not the neutral fenced handle; E10a supplies the installed handle. Stage B still uses fixture glue and unconditional skips.
+  - [x] Replace fixture handle/codec/fence authority with shipped createMemoryNeutralHandle; reacquire a fresh assembly on every reopen. Qualification follows in the installed runner.
+  - [x] Add installed consumer routing with source-free runtime/assets, remove unconditional skips, and add a separate Stage B CI lane; qualification remains pending until all behaviors pass.
+  - [x] First installed run: 16/23 behaviors pass; fix adapter Number narrowing using E2 U64AtomicUnit, align fixture store identity, and exercise bijection after releasing the live holder. No Engram change identified.
+  - [x] Replace fixture handle with shipped factory; run durable-memory.spec.ts (all 23 behaviors) from a clean packed consumer with real PostgreSQL, including independent crash/ownership processes.
+  - [x] Installed dev.7 run d1726c309: 23 behaviors + inventory pass, zero skip/todo; stage-b.status exit=0 cleanup=0; archive SHA-256 7aeb92cf…395e271. Retain JSON result and exact archive for tuple binding.
+  - [x] No Engram-owner change is required: 23/23 pass on published 0.21.3 after the bounded host fixes.
+  - [x] Remove the unused fixture codec/handle helper and describe standalone E10 coverage separately from the passing installed Stage B campaign; preserve historical checked-in receipts verbatim.
+- [x] **Lot E11b-1 — Package and tuple**
+  - [x] Pack dev.7 with standalone neutral declaration; bind slot 15 SHA-256 and derive neutralContract.status from slot 15.
+  - [x] Add build-time standalone C6 emission from tsc declarations; no external imports; expected SHA-256 5a8c13c5…773229, verified against dev.6 declaration with only its source-map comment removed.
+  - [x] Pin dev.7 archive/SRI and d1726c309 source; prepare from installed Stage B archive and fresh locked E10 consumer, with unmodified lane assertions and standalone compilation. Each new tuple binds its own logs/locks; historical tuple stays immutable.
+  - [x] Derive five QUALIFIED claims only from all 23 named passing cases plus inventory, zero skipped/todo, identical installed archive SRI, packed claim identities and cleanup success. Slot 15 checks compiled standalone bytes; neutralContract.status follows slot 15; C9 names the 1.0.0 digest supersession.
+  - [x] Update installed-memory.mjs/qualification.mk to 0.21.3/dev.7; clean npm-ci/type/runtime/two-process proof and standalone compilation pass, cleanup=0; qualify five profiles from zero-skip evidence.
+  - [x] Regenerate/check/test tuple 29c83333e34363c515dec2e92c00129f5a0d411df2a4d1be368c7a4531fc7a0a, 10/10 tests; retain bundle in e11b-current and archive/SHA-256 in shared e10-artifacts; no PENDING input slot; C9 explicitly names dff737ce → dd0cccbd under 1.0.0.
+- [ ] **Lot E11b-2 — Validation and draft PR**
+  - [ ] Typecheck/lint affected cluster-mesh paths; memory-e11-test and memory-e11-check run in CI.
+  - [x] Local typecheck passes. Full memory run identified one old C6 null-hash expectation (220 pass); update it to the shipped declaration hash/status and rerun the affected suite.
+  - [x] Local lint passes. Refresh source snapshot to 2d9d5da97 for E10 coverage labels/C6 expectation; original dev.7 pack source remains d1726c309 and packed-source diff is empty. Reuse the retained install lock.
+  - [x] Focused corrected C6 suite passes 17/17; repeated E10 installed proof and tuple tests/check pass; owned make down succeeds. CI will rerun the full suite on the PR head.
+  - [x] Vendor historical input inventory excerpt, reservation and producer record so CI needs no owner-local Markdown files; these records do not promote current qualification.
+  - [x] Retain the receiver's exact readHostTuple excerpt for the development-version refusal test; this excerpt is evaluated with explicit dependencies, not executed as a standalone CLI.
+  - [x] Retain the receiver format reference; document the two explicit excerpts and distinguish historical records from fresh qualification evidence.
+  - [x] Wire CI to prepare/lock/install the same pinned candidate, generate its own tuple, run memory-e11-test and memory-e11-check, and upload complete receipts; add negative Stage B promotion tests.
+  - [ ] Draft PR to feat/engram-e2-integration; completed/success exact-head CI retained externally; no merge/publication.
+- [x] **Lot E11-4 — Integration refresh**
+  - [x] Diagnose run 40741738278: common lane fails resolving AWS core ^3.978.7 at 18:45:38 UTC; registry publication occurred at 18:47:57 UTC. Unmodified common target passes locally (11 tests).
+  - [x] Packed-consumer probe passes in test-mem-e11 through PACKED_ADAPTERS_OK; artifacts tarball SHA-256 matches the failed CI job exactly. Preserve npm stderr for future failures.
+  - [x] Prior E11 complete E2 qualification and tuple check: .tmp/packets/pr818-ci-40741738278/LOCAL-RECEIPT.md and FINAL-RECEIPT.md (review #818 r1).
+  - [x] Merge integration after #821/#803, never rebase; retain E11 plan and union all Makefile environment selectors. No `.track` changes on either side of this merge.
+  - [x] Generate/check the 0.21.3/dev.6 tuple and receiving checklist; preserve evidenced Stage B gaps.
+  - [x] Stage published Engram and retained dev.6; adapt only E10 consumer version/archive assertions, never package bytes or artifacts sources.
+  - [x] Add make-owned E2 lock freeze and strict fresh npm-ci campaign with source/PG identity, lock comparison, type/runtime proof and automatic owned-stack cleanup.
+  - [x] Pin integration source/tree, 0.21.3 SHA-256/SRI, dev.6 SHA-256/SRI and the producer neutral JCS bytes.
+  - [x] Checker recomputes the domain-separated contract digest, compares mesh/producer manifest bytes and validates the explicit E10 consumer adaptation and installed closure.
+  - [x] Resolve all 0.21.3-dependent slot reasons; preserve independent Stage B, standalone declaration, CI and release/ACK gates explicitly.
+  - [x] Emit resolved contract path/hash/digest and installed-candidate provenance; retain the separate L5 exclusion and pack source head.
+  - [x] Update receiving shape/refusal checks for resolved JCS bytes and explicit remaining slots 15/16/21; reject manual promotion.
+  - [x] First campaign passed runtime/types and cleanup; finalizer caught a relative tsc entry path. Pass the absolute consumer entry, retaining the strict closure guard, and rerun.
+  - [x] Replace historical receiving checklist with exact 0.21.3/dev.6/contract/image values, independent qualification gaps and ordered release/ACK handoff.
+  - [x] Second campaign passes runtime/types, absolute closure and cleanup; producer manifest is internal, so inspect an in-memory export without changing installed bytes, then rerun only finalization.
+  - [x] Static verification binds all three adapted consumer entry/helper/type files independently of the observed import closure, plus the complete transformation receipt.
+  - [x] Producer extraction passes. First tuple test exposed the mesh manifest wrapper; compare its manifest, canonical bytes, byte hash and digest rather than the enclosing metadata object.
+  - [x] Freeze successful E2 receipt, package/lock, campaign log/status and adaptation hashes as checker anchors; successor reruns require an explicit reviewed evidence update.
+  - [x] E10 final-head CI `cfd45de4d54651626e97113494b9d7bd108998c8` completed/success in run 40727760123; bind that exact receipt as slot 21. E11 exact-head CI stays a separate post-push receipt to avoid self-reference.
+  - [x] Nine tests pass, generation/check exit 0, cleanup 0; tuple SHA-256 `66fa8eeef276dfd73fdb9440f589dbdeff33417e8650b55ac354e894cd547527`; complete bundle retained in `.tmp/engram-e2-host-tuple/e11-current/`.
+  - [x] Prior E11 exact head 6a8eee916 CI run 40773445916 completed/success; #818 r1 verified 63 passed jobs, 26 skipped; no publication or ACK.
+- [x] **Lot E11-0 — Baseline and scope**
+  - [x] Read MASTER/workflow, plan E11, PR #803 E11 inputs, Opus r3 21-entry inventory, RESERVATION.md and Docker lock packet; mechanical branch PASS.
+- [x] **Lot E11-1 — Generator and checker**
+  - [x] File/archive binding primitives and deterministic comparison added; final acceptance refuses preparation.
+  - [x] Pin current candidate hashes and snapshot committed E10 inputs without changing its sources or locks.
+  - [x] Encode all 21 input categories and independent receiving gates with explicit PENDING reasons.
+  - [x] Validate source/package, tarball identities, retained locks, installed closure, migration bytes, engines and exact profile statuses.
+  - [x] First real fixture run exposed a root-level hydration helper in E10 runtimeClosure; bind its retained bytes to the committed lane snapshot and compare installed locks byte-for-byte.
+  - [x] Preserve documented receiving top-level fields; null C6 final path/hash and empty qualified profiles deliberately retain source-gap; bind format/receiving-validator evidence.
+  - [x] Execute the retained receiver's actual shape gate against preparation and require source-gap for development backend, missing C6 final bytes and unqualified profiles.
+  - [x] Add `tools/engram-e11/{tuple,bindings,slots}.mjs` and candidate spec; hash files/tarballs/backend/C6/locks; reject drift and status promotion.
+  - [x] Add `tools/engram-e11/e11.mk`: pinned Node 24, temporary evidence, deterministic dry-run/check; no lock regeneration.
+  - [x] Add `tools/engram-e11/tuple.test.mjs`: tampering, missing input, pending/final refusal, deterministic output.
+- [x] **Lot E11-2 — Receiving handoff**
+  - [x] Add `tools/engram-e11/README.md`: 21 categories, PENDING reasons, retained-lock install, reservation, main PR, CI publication, byte recheck, separate C9/L5 ACKs.
+- [ ] **Lot E11-3 — Evidence and draft PR**
+  - [x] Run make tests and candidate dry-run/check under flock: 9/9 passed, generation/check exit 0; tuple SHA-256 `9edee7d7998addd6ddc2ff383989d3fd0805d2dc3f84fd467604f40e8438a2cd`; PENDING inventory in `tools/engram-e11/DRY-RUN.md`.
+  - [x] Retain complete bundle via memory-e11-retain outside the worktree; cleanup via make down after Docker verification.
+  - [ ] Review scoped diff; draft PR against feat/engram-e2-integration; completed/success CI on exact head; no merge/publication.
+
+## AI Flaky tests
+- [x] No provider tests or flaky exceptions.
+
+## Orchestration Mode (AI-selected)
+- [x] Mono-branch, one author; no delegated implementation.
+
+## UAT Management (in orchestration context)
+- [x] Evidence tooling only; web, Chrome and VSCode unaffected; deterministic checks and negative tests.
+
+## Feedback Loop
+- [x] #821/#803 merged into integration; published 0.21.3/dev.6 carry producer intentHash, and the neutral JCS byte/digest pair is resolved.
+- [x] E9/host-binding source gap resolved in E11b: all 23 Stage B behaviors pass through the installed dev.7 handle, no blocked markers.
+- [x] C6 packaging source gap resolved in dev.7: standalone declaration SHA-256 5a8c13c51eb00b350fae0b271d5357f54bdb01c930d607f679372bebff773229, compiled in the installed closure; C9 remains a separate owner ACK.
+- [ ] PENDING conductor/release owners: stable reserved-version qualification, integration → main PR, CI-only publication, published-byte recheck, producer C9 ACK and receiving ACK.
+- [x] Review author: host codex, model gpt-6.1-sol, effort high (owner declaration).

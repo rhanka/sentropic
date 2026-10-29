@@ -67,6 +67,14 @@ if [ -n "$receipt" ]; then
   cp "$receipt" "$tgz"
 fi
 
+# Selected tuple: use its locally packed stable or development tarball when
+# present; fetch a frozen published pin only when the selected file is absent.
+frozen_pin="$(grep -o 'sentropic-cluster-mesh-[0-9][0-9A-Za-z.-]*\.tgz' tests/packaging/fixtures/selected/package.json | head -n 1)"
+if [ ! -f "$work/$frozen_pin" ]; then
+  frozen_version="${frozen_pin%.tgz}"; frozen_version="${frozen_version#sentropic-cluster-mesh-}"
+  npm pack --silent --pack-destination "$work" "@sentropic/cluster-mesh@$frozen_version" >/dev/null
+fi
+
 # Artifacts is an unpublished candidate, also exercised by the dedicated consumer below.
 # Reuse these exact bytes in every consumer that selects it, preferring a verified receipt.
 (cd ../artifacts && npm pack --silent --pack-destination "$work/src" >/dev/null)

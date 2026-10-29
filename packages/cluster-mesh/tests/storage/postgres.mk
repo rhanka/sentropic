@@ -96,6 +96,16 @@ cluster-mesh-comments-test:
 	@$(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test SCOPE=comments- API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
 
 CM_COMMENTS_TARBALL ?= .h2a/build/cm-comments-candidate/sentropic-cluster-mesh-0.19.0.tgz
+# Frozen released pin from the bare probe's gate contract. The selected
+# packaging fixture can pin the local development candidate independently.
+CM_PACK_ONLY_PIN ?= $(shell sed -n "s/^export const LATEST_PUBLISHED_CLUSTER_MESH = '\([^']*\)';/\1/p" packages/cluster-mesh/tests/storage/pack-only-dev-gate.mjs)
+# On a pack-only dev candidate the leaf is refused by design (#767): the bare
+# probe tolerates that refusal, while the installed consumer qualifies the
+# released pin instead of the unresolvable dev leaf. Release candidates keep
+# qualifying their own tarball. The -dev. switch is wider than the exact
+# #774 pair; this stays safe because the bare probe runs first in the same
+# set -eu recipe and fails any -dev. candidate outside the pair.
+CM_CONSUMER_MESH ?= $(if $(findstring -dev.,$(notdir $(CM_COMMENTS_TARBALL))),@sentropic/cluster-mesh@$(CM_PACK_ONLY_PIN),/candidate.tgz)
 CM_COMMENTS_REPORT ?= .h2a/build/comments-installed
 CM_COMMENTS_SIBLING_FLAGS = $(if $(SIBLING_ARCHIVES_FILE),$(if $(and $(filter 1,$(words $(SIBLING_ARCHIVES_FILE))),$(filter tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json,$(SIBLING_ARCHIVES_FILE))),-v "$(CURDIR):/workspace:ro" -e CM_COMMENTS_SIBLINGS=/workspace/$(SIBLING_ARCHIVES_FILE) -e CLUSTER_MESH_HEAD_SHA="$$(git rev-parse HEAD)",$(error SIBLING_ARCHIVES_FILE must be tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json)))
 define CM_COMMENTS_SIBLING_SETUP
@@ -113,13 +123,14 @@ cluster-mesh-comments-installed: cluster-mesh-pg-up
 	@mkdir -p "$(CM_COMMENTS_REPORT)"
 	@docker run --rm --init --network "$(CM_PG_NAME)" $(CM_COMMENTS_SIBLING_FLAGS) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/comments-npm-cache \
 		-e CM_PG_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME):5432/storage_test" \
+		-e CM_PACK_ONLY_PIN="$(CM_PACK_ONLY_PIN)" \
 		-v "$(abspath $(CM_COMMENTS_TARBALL)):/candidate.tgz:ro" -v "$(abspath $(CM_COMMENTS_REPORT)):/reports" \
 		-v "$(CURDIR)/packages/cluster-mesh/tests/storage:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(CM_COMMENTS_SIBLING_SETUP) \
-		mkdir -p /tmp/comments-bare /tmp/comments-consumer; cp /probe/installed-bare.mjs /tmp/comments-bare/; cd /tmp/comments-bare; \
+		mkdir -p /tmp/comments-bare /tmp/comments-consumer; cp /probe/installed-bare.mjs /probe/pack-only-dev-gate.mjs /tmp/comments-bare/; cd /tmp/comments-bare; \
 		npm install --omit=optional --ignore-scripts --no-audit --no-fund /candidate.tgz >/dev/null; node installed-bare.mjs > /reports/bare.json; \
 		cd /tmp/comments-consumer; cp /probe/installed-*.mjs .; \
 		npm init -y >/dev/null; npm pkg set "overrides.zod=^4.6.6"; \
-		npm install --omit=optional --ignore-scripts --no-audit --no-fund --save-exact /candidate.tgz @sentropic/comments@0.3.0 >/dev/null; \
+		npm install --omit=optional --ignore-scripts --no-audit --no-fund --save-exact $(CM_CONSUMER_MESH) @sentropic/comments@0.3.0 >/dev/null; \
 		npm install --save-dev --ignore-scripts --no-audit --no-fund --save-exact pg@8.16.3 >/dev/null; \
 		cp node_modules/@sentropic/cluster-mesh/assets/storage/comments/oracle/conformance.mjs installed-oracle.mjs; \
 		npm ls --all --omit=dev --json > /reports/production-tree.json; cp package-lock.json /reports/consumer-package-lock.json; \
