@@ -8,7 +8,8 @@ import { spawnSync } from 'node:child_process';
 if (process.env.CI || !process.argv.includes('--write-locks')) {
   throw new Error('Tool lock updates require explicit --write-locks outside CI');
 }
-const catalogUrl = new URL('./tool-locks.json', import.meta.url);
+for (const catalogName of ['tool-locks.json', 'consumer-locks.json']) {
+const catalogUrl = new URL(`./${catalogName}`, import.meta.url);
 const catalog = JSON.parse(fs.readFileSync(catalogUrl));
 for (const [key, profile] of Object.entries(catalog)) {
   const prefix = fs.mkdtempSync(path.join(os.tmpdir(), 'ci-lock-update-'));
@@ -24,3 +25,4 @@ for (const [key, profile] of Object.entries(catalog)) {
 }
 const text = '{\n' + Object.entries(catalog).map(([key, value]) => `  ${JSON.stringify(key)}:${JSON.stringify(value)}`).join(',\n') + '\n}\n';
 fs.writeFileSync(catalogUrl, text);
+}
