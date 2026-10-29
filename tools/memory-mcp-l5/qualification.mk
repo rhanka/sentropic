@@ -1,4 +1,5 @@
 # Post-P3 consumers only. Frozen pre-candidate producing recipes remain unchanged.
+-include tools/memory-mcp-l5/r5-inputs.mk
 .PHONY: memory-l5-candidate memory-l5-checkpoint memory-l5-proposal-runtime
 memory-l5-proposal-runtime: memory-l5-runtime
 	@test "$(ENV)" = test-memory-l5 || { echo 'ENV=test-memory-l5 required' >&2; exit 1; }
