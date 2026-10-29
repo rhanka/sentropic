@@ -22,6 +22,7 @@ import { adminRouter } from '../../../src/routes/namespaces/admin-product-author
 import { runAdminApprovalSweep } from '../../../src/services/admin-approval-sweep';
 import { signRevocation, revocationServiceOrigin } from '../../../src/services/auth/remote-revocation-transport';
 import { pendingRemoteRevocations } from '../../../src/services/auth/remote-revocation-outbox';
+import { sessionLifecycleHandlers } from '../../../src/routes/namespaces/session-lifecycle';
 
 const issuer = 'https://idp.example.test', resource = `${issuer}/remote-revocation`;
 const clientId = 'test-product-revoker', path = '/api/v1/auth/session/remote-revocations';
@@ -83,6 +84,29 @@ async function bridge() {
   return transport;
 }
 describe('RC1 product to issuer revocation', () => {
+  it.each(['logout', 'logout-all'])('should clear both cookies and return pending 503 for unavailable %s', async operation => {
+    const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
+    const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
+    vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('issuer unavailable')));
+    const app = new Hono().delete('/logout', c => sessionLifecycleHandlers.logout!(c))
+      .delete('/logout-all', c => sessionLifecycleHandlers.logoutAll!(c));
+    const response = await app.request(`https://product.example.test/${operation}`, {
+      method: 'DELETE', headers: { cookie: `session=${tokens.sessionToken}; refresh_token=${tokens.refreshToken}` },
+    });
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: 'authority_unavailable', revocation: 'pending' });
+    expect(response.headers.get('set-cookie')).toContain('session=;');
+    expect(response.headers.get('set-cookie')).toContain('refresh_token=;');
+    expect(await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId))).toEqual([]);
+    expect(await pendingRemoteRevocations()).toHaveLength(1);
+    await bridge();
+    await runAdminApprovalSweep();
+    expect(await pendingRemoteRevocations()).toEqual([]);
+    vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
+    await db.insert(userSessions).values(row);
+    expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
+  });
   it.each(['missing-mac', 'altered-body', 'stale-stamp', 'wrong-key', 'forged-forwarded-proto'])
   ('should refuse %s on the plain HTTP final hop', async failure => {
     const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
