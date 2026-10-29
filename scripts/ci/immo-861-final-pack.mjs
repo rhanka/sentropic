@@ -3,14 +3,15 @@ import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { mkdirSync, readFileSync, readdirSync, renameSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { installTools } from './locked-tools.mjs';
 
 const run = (command, args, options = {}) => execFileSync(command, args, { encoding: 'utf8', ...options });
 const out = resolve(process.env.CANDIDATE_OUT ?? 'tmp/final-861');
 const siblings = resolve('tmp/ci-manifest-guard/siblings/cluster-mesh');
 mkdirSync(out, { recursive: true });
 mkdirSync('/tmp/final-tools', { recursive: true });
-run('npm', ['install', '--prefix', '/tmp/final-tools', '--no-save', '--no-audit', '--no-fund',
-  'semver@7.7.2', 'typescript@5.4.5', '@types/node'], { stdio: 'inherit' });
+installTools(['--prefix', '/tmp/final-tools', '--no-save', '--no-audit', '--no-fund',
+  'semver@7.7.2', 'typescript@5.4.5', '@types/node']);
 run('/tmp/final-tools/node_modules/.bin/tsc', ['-p', 'packages/llm-mesh/tsconfig.json',
   '--typeRoots', '/tmp/final-tools/node_modules/@types'], { stdio: 'inherit' });
 const env = { ...process.env, MANIFEST_GUARD_TOOL_DIR: '/tmp/final-tools',
