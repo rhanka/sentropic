@@ -38,6 +38,7 @@
   - [x] BR1-EX2: conductor explicitly requires workflow publisher/filter/bootstrap removal and unchanged validation gates under chat-core; rollback restores runtime lane.
 
 ## Feedback Loop
+- [x] Packaging implementation slice 8 committed with mechanical scope validation.
 - [x] Packaging implementation slice 7 committed with mechanical scope validation.
 - [x] Packaging implementation slice 6 committed with mechanical scope validation.
 - [x] Packaging implementation slice 5 committed with mechanical scope validation.
