@@ -6,13 +6,13 @@
 
 ## Scope / Guardrails
 - [x] Source: `.tmp/app-switch-week/plan-v2.md`; W0-close.e Opus/Sol final receipts and N5; historical W3.d checklist retained below.
-- [x] Base `origin/feat/app-cm-integration` at `1a85aa8b4`; branch `feat/app-cm-integration`; worktree `tmp/worktrees/app-cm-integration`; merge main `c37662a20`.
+- [x] Branch `feat/app-cm-integration`; worktree `tmp/worktrees/app-cm-integration`; replayed onto main `b7e86f5ea`; source-lot identities below are historical, not final-head ancestry.
 - [x] Make-only; shared Docker flock `/home/antoinefa/.cache-tmp/sentropic-docker.lock`; no parallel builds.
 - [x] Local make commands end with `ENV=test-app-int`; reserved API/UI/Maildev ports 9718/5918/1818; no local service stack started.
-- [x] No cluster operations, production activation, Python, rebase, force-push, AI trailers or destructive cleanup.
+- [x] No production activation, Python, AI trailers or destructive cleanup; owner-authorized rebase and force-with-lease apply only to this PR branch.
 - [x] Serving, reader activation and host publication remain explicitly disabled before FIRST-IMMO, including main auto-deploys.
 - [x] API remains the sole migration executor; content starts only the compiled content entrypoint.
-- [x] Atomic commits under 150 changed lines; selective staging; `make commit` only.
+- [x] New correction commits stay within 150 changed lines; selective staging; `make commit` only. Historical size violations are disclosed below, not exempted as merge content.
 - [x] External DNS/TLS/IAM/storage provisioning and positive live activation belong to tenant/W3.e/W5 lanes.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -55,6 +55,10 @@
 - [x] **Exception process**: BR143-EX1 covers the completed inherited merge only; BR143-EX2 covers topic workflow retirement and equivalent CI gates.
 
 ## Feedback Loop
+- [x] PR837-R1-1: CI log 123666763408 proves the immutable root-mount inventory omitted W3.a's POST reader-activation route. Add it to IMMUTABLE_ARTIFACT_ROUTES without changing production fences, timeouts or skips; final-head CI remains required.
+- [x] PR837-R1-7: inherited replay commits exceed 150 changed lines: 8dab28051 (208), 0ef65483b (199), 34ef1adc5 (196), 2f7e0e65f (181), b97efabb9 (180), 56ce57aac (168), 4217bd8ca (161). These are historical rule violations, not covered by BR143-EX1; no retrospective exemption or history rewrite is claimed.
+- [ ] PR837-R1-4 / owner Antoine (product): approved tenant membership is a prerequisite for every chat server tool, including in TENANT_RESOLUTION_MODE=shadow. Missing/requested/revoked membership yields text-only chat; owner acceptance and final-head chat CI remain pre-merge gates.
+- [ ] PR837-R1-6 / code author: execute API migrations twice on an isolated restored W0 baseline. The recorded exact dump and restore volume were deleted; locate identical baseline bytes before claiming this gate closed.
 - [x] Owner rebase request (29 October 2026) supersedes historical merge-only guardrails: rebase onto main with #831/#834, retain both migration/build intents and main version pins, restore the integrated artifacts workspace dependency, then force-with-lease only this PR branch. Post-Rebase Gate: no package source or manifest differs from main, so no publication bump is required.
 - [x] N6 now blocks exact-head CI: unit job 123405258615 has 517/517 passing receiving tests but an uncaught 57P01 on the activation conformance database. Track physical client end events, await them after pool.end and remove forced DROP in activation/migration fixtures, matching the existing publication/credential teardown. Retain all assertions and imported vectors; no error suppression or timeout increase.
 - [x] Gate inventory refinement: API unit/endpoint defaults do not include tests/services/catalog. The explicit test-app-cluster-mesh aggregate retains the complete union of topic workflow scopes (including catalogue services/characterization) plus content tests/types/lint on the existing unit toolbox.
@@ -74,7 +78,7 @@
 - [x] No AI tests or flaky exception selected; deterministic manifest and denial checks only.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; merge integration updates only; no cherry-picks or rebase.
+- [x] Mono-branch; main updates use rebase per COMMON-RULES; no cherry-picks; push only this branch with force-with-lease when rebased.
 
 ## UAT Management (in orchestration context)
 - [x] Offline manifest inspection and local denial checks only; no root dev services or live browser activation.
@@ -83,7 +87,7 @@
 - [x] Integration lot 0: mechanical C1, merge main without rebase, explain all conflicts in the merge body; identical Track blobs in both parents/result.
 - [x] Integration lot 1: remove six topic workflows and preserve every gate, including services/catalog, content types/lint, image runtime/identity and manifest denials.
 - [x] Integration lot 2: 54 closed-overlay checks, IdP/restore parent controls, static canonical image and CI hash filters pass under the shared Docker lock.
-- [x] Integration ancestry: #773/#780/#794/#784/#785/#791/#806/#810/#813/#812/#814/#795/#807/#796 source heads are all ancestors.
+- [x] Historical train: #773/#780/#794/#784/#785/#791/#806/#810/#813/#812/#814/#795/#807/#796 were integrated before replay; their heads are not ancestors of the rebased branch. Patch-equivalence receipt and final-head review are required.
 - [ ] Integration lot 3: draft PR to main, final-head CI success, cleanup receipt and head report; no merge.
 - [ ] Deferred W3.e: real HTTPS isolation after FIRST-IMMO; W4.c positive UI path follows it.
 - [ ] Deferred W5: protected promotion/trust/signature/approval, integrated journey and exact-object/version/grants/blobs/runtime revoked-reader restore remainder, then observation.
