@@ -36,6 +36,8 @@ if [ "$CM_ACTION" = memory-lot3 ]; then
   cp -R "$published/package/dist" packages/mcp-platform/dist
   # Existing tests import ../src/*.js; execute the identical published JS there too.
   cp -R "$published/package/dist/." packages/mcp-platform/src/
+  # A resolver choosing the TS sibling must fail, even if both exports agree.
+  printf '\nthrow new Error("Lot 3 loaded checkout TS instead of published JS");\n' >> packages/mcp-platform/src/transport/bridge.ts
   export MEMORY_L5_PLATFORM_ARCHIVE="$archive"
 fi
 cd packages/cluster-mesh

@@ -3,10 +3,10 @@
 ## Objective
 - [x] Prove independent Lot 3 regressions on published platform 0.4.0; preserve P3 and block dependent memory transport cases.
 ## Scope / Guardrails
-- [x] Worktree tmp/worktrees/mem-l5-lot3; branch feat/memory-l5-lot3; base origin/feat/memory-l5-lot2; merge only; merge main after #771 merges.
+- [x] Worktree tmp/worktrees/mem-l5-lot3; branch feat/memory-l5-lot3; replayed onto rebased #771 then git rebase origin/main on 2026-10-29; no merge before predecessor acceptance.
 - [x] Approved schedule supersedes R2/R7a/R3 dependency; retain 18 P09 suites and current remote-binding refusal.
 - [x] P3 1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730 immutable; frozen catalog/contracts/fixtures untouched.
-- [x] Shared Docker lock; official disposable containers; no Python; ENV=test-mem-l5-lot3 last; schedule ports 9625/5825/1725; no application services.
+- [x] Shared Docker lock; official disposable containers; ENV=test-memory-l5 last; ports 9625/5825/1725; no application services.
 - [x] Tests first; selective staging; make commit only; under 150 lines per commit; draft PR to main; no merge.
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -76,4 +76,7 @@
   - [x] Replace superseded transport claims with the precise independent/blocked split in the report and Opus r2 dossier.
   - [x] Fresh source head baf55ae8e: 122 platform, 23 mesh and 27 broker tests passed against published platform 0.4.0; all 18 P09 files retained.
 - [ ] Lot 4: push #777 and separate draft against main; final-head CI; no merge or publication.
-  - [ ] Independent review remains open; no new peer launch authorized in this packet.
+  - [ ] Independent review remains open; catalog discovery is pending the installed mesh launcher failure.
+  - [x] pr777_opus_r3: r2 P1-A is resolved and no blocking source request remains; final-head CI remains mandatory. Add a Vitest resolver canary for the r3 published-JS observation.
+  - [x] Post-rebase version gate: no public package source differs from main; preserve cluster-mesh 0.24.0 and its current lock entry instead of restoring historical 0.22.4 metadata.
+  - [x] Post-rebase working-tree source run: 123 platform (including the poisoned-TS resolver canary), 23 mesh and 27 broker tests passed; all 18 P09 files executed with no skipped/todo cases. Final-head CI remains required.

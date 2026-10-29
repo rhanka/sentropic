@@ -63,6 +63,17 @@ export function runLot3Source(root, reports, retainedRoot) {
     if (relative(root, resolve(root, file)).startsWith('..') || !existsSync(resolve(root, file))) throw Error(`Lot 3 required file absent: ${file}`);
   }
   mkdirSync(reports, { recursive: true });
+  // Exercise the same Vitest resolver as the catalog tests.
+  // cold-workspace poisons the TS sibling so source substitution fails loudly.
+  const canary = 'tests/lot3-published-runtime.test.ts';
+  writeFileSync(join(root, 'packages/mcp-platform', canary), [
+    "import { it, expect } from 'vitest';",
+    "import * as bridge from '../src/transport/bridge.js';",
+    "it('loads the frozen published bridge through Vitest', () => {",
+    "  expect(bridge.registerBridgeTools).toBeTypeOf('function');",
+    '});', '',
+  ].join('\n'));
+  selected.platform.push(canary);
   const summary = { sourceOnly: true, qualificationAccepted: false, preCandidateSha256: P3_SHA256,
     runtimePlatform: { version: '0.4.0', publishedBytes: true,
       archiveSha256: platformArchiveSha256 },
