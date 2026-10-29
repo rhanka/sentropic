@@ -96,9 +96,9 @@
   - [x] Typecheck and lint passed for H2 services, schema, package port and tests; formatter applied to new source only in ≤150-line slices.
   - [x] All four H2 suites GREEN (20 tests); real isolated PostgreSQL crash/rollback/restart witnesses; chat-core regression suite 252/252.
   - [x] Root Docker npm ci dry-run passed after dependency correction; chat-server 0.4.1 exceeds published 0.4.0.
+  - [x] Final local checks: H2 20/20, chat-core 252/252, chat-server 29/29, scoped strict typecheck, ESLint and Prettier all passed.
   - [ ] Review with at least two peers and resolve findings.
   - [ ] `make scope-check` before every commit; verify no out-of-scope hunks.
   - [ ] Draft PR using this BRANCH.md as body; initial plan comment.
   - [ ] CI completed/success on the exact reported head; record PR and SHA.
   - [ ] Inspect service logs and `make down` after validation.
-
