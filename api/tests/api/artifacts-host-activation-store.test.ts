@@ -10,6 +10,7 @@ import { createArtifactHostActivationStorage } from '../../src/services/artifact
 if (!process.env.DATABASE_URL) throw new Error('Activation conformance requires a wired PostgreSQL executor');
 const admin = new Pool({ connectionString: process.env.DATABASE_URL });
 let pool: Pool;
+let connectionEnds: Promise<void>[];
 let database: string;
 const binding = { subjectId: 'reader', artifactId: 'artifact', releaseId: 'release', channel: 'stable' as const,
   nonceDigest: 'a'.repeat(64), sessionId: 'session', profileDigest: 'b'.repeat(64),
@@ -22,12 +23,17 @@ beforeEach(async () => {
   const url = new URL(process.env.DATABASE_URL!);
   url.pathname = `/${database}`;
   pool = new Pool({ connectionString: url.toString() });
+  connectionEnds = [];
+  pool.on('connect', client => {
+    connectionEnds.push(new Promise<void>(resolve => client.once('end', resolve)));
+  });
   await runMigrations(pool);
 });
 afterEach(async () => {
   vi.restoreAllMocks();
   await pool.end();
-  await admin.query(`DROP DATABASE "${database}" WITH (FORCE)`);
+  await Promise.all(connectionEnds);
+  await admin.query(`DROP DATABASE "${database}"`);
 });
 afterAll(() => admin.end());
 
