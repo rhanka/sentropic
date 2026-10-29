@@ -95,11 +95,11 @@
   - [x] Document new public imports and unchanged release/ownership gates in chat-core README.
 - [ ] **Lot 3 — Qualification and review**
   - [x] Core typecheck/build and 692 core/runtime tests pass; permission/replay/history/transport/optional modules retained; 81.05% line coverage.
-  - [ ] Run manifest guard and CI policy tests; pack and qualify exact chat-core archive.
+  - [x] Run manifest guard and CI policy tests; pack and qualify exact chat-core archive.
   - [ ] Obtain complementary review and resolve findings.
   - [ ] Run make scope-check before every commit; verify final diff and clean up test environment.
 - [ ] **Lot 4 — Draft PR and downstream update**
-  - [ ] Open draft PR to main using this plan; monitor exact-head CI to green.
+  - [x] Open draft PR #836 to main using this plan; exact-head CI remains pending.
   - [ ] Adapt all #819 imports/dependencies to chat-core/runtime and the new minor.
   - [ ] After packaging PR merges, merge origin/main into #819; never rebase.
   - [ ] Monitor #819 CI to green; report both PR links and heads.
