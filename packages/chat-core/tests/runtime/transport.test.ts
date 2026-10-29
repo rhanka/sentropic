@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createDefaultTransport,
   type ChatCoreTransport,
-} from '../src/client/transport.js';
+} from '../../src/runtime/client/transport.js';
 
 class FakeEventSource {
   readonly url: string;

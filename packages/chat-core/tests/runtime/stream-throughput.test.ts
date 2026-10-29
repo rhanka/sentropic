@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
-import { StreamHistory } from '../src/client/streamHistory.js';
-import type { StreamHubEvent } from '../src/client/streamTypes.js';
+import { StreamHistory } from '../../src/runtime/client/streamHistory.js';
+import type { StreamHubEvent } from '../../src/runtime/client/streamTypes.js';
 
 const contentDelta = (
   sequence: number,

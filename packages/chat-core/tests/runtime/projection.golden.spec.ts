@@ -22,14 +22,14 @@ import {
   mergeProjectionHistoryEvents,
   appendLiveProjectionEvent,
   type ProjectionStreamEvent,
-} from '../src/utils/chat-run-projection.js';
+} from '../../src/runtime/utils/chat-run-projection.js';
 
 import {
   buildProjectedTimeline,
   buildFallbackProjectedSegments,
   type ChatProjectionMessage,
   type ChatProjectionComputation,
-} from '../src/state/chatProjection.js';
+} from '../../src/runtime/state/chatProjection.js';
 
 // ---------------------------------------------------------------------------
 // Fixture loading helpers

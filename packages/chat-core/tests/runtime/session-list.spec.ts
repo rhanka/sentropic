@@ -14,7 +14,7 @@ import {
   type SessionRow,
   projectRestoredTimeline,
   projectSessionList,
-} from '../src/state/sessionList.js';
+} from '../../src/runtime/state/sessionList.js';
 
 // ---------------------------------------------------------------------------
 // projectSessionList
