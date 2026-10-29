@@ -60,7 +60,7 @@
   - [ ] Run focused PostgreSQL and transport tests, typecheck, package build and regression suite.
   - [ ] Run scope check before each atomic commit.
   - [ ] Complete consensus review and reconcile findings.
-  - [ ] Document the exact host launch line and required definition bindings.
+  - [x] Document the exact host launch line and required definition bindings in `packages/cluster-mesh/docs/memory-mcp.md`.
   - [ ] Open draft PR to main; wait for CI completed/success on exact head.
   - [ ] Run `make down ENV=test-memory-mcp`.
 
