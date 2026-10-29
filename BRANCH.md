@@ -102,3 +102,5 @@
   - [ ] Inspect service logs and `make down` after validation.
 
 - [x] Formatter slice 1: apply repository style to new H2 source only.
+
+- [x] Formatter slice 2: continue source-only H2 formatting.
