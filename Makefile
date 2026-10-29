@@ -15,7 +15,7 @@ MANIFEST_PACK_RUN = $(MANIFEST_GUARD_RUN)
 MANIFEST_PACK_IMAGE = $(MANIFEST_GUARD_IMAGE)
 CM_RUN = docker run --rm --init $(CM_DOCKER_NETWORK)
 CM_RUN_IMAGE = $(LLM_MESH_NODE_IMAGE)
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-artifacts-021 test-artifacts-022 test-llm-judge),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-mem-release test-artifacts-021 test-artifacts-022 test-llm-judge),)
 ARTIFACTS_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.immo-861.yml
 ARTIFACTS_RUN = $(ARTIFACTS_COMPOSE) run --rm --no-deps
 ARTIFACTS_RUN_IMAGE = qualification
@@ -67,7 +67,7 @@ export API_TOOL_IMAGE_NAME ?= sentropic-api-tools
 # Include source inputs: the toolbox contains test sources and built workspaces.
 # Hash paths as well as bytes, so additions, deletions and renames invalidate it.
 ifndef API_TOOL_VERSION
-API_TOOL_VERSION := tool-$(shell git ls-files --cached --others --exclude-standard --deduplicate -z -- api packages apps ui scripts tools .security package.json package-lock.json .dockerignore e2e/package.json e2e/package-lock.json | LC_ALL=C sort -z | while IFS= read -r -d '' file; do if [ -f "$$file" ]; then printf '%s\0' "$$file"; fi; done | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
+API_TOOL_VERSION := tool-$(shell git ls-files --cached --others --exclude-standard --deduplicate -z -- api packages apps ui scripts tools .security package.json package-lock.json .dockerignore e2e/package.json e2e/package-lock.json e2e/tests/fixtures | LC_ALL=C sort -z | while IFS= read -r -d '' file; do if [ -f "$$file" ]; then printf '%s\0' "$$file"; fi; done | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
 endif
 export API_TOOL_VERSION
 API_TOOL_IMAGE = $(if $(REGISTRY),$(REGISTRY)/)$(API_TOOL_IMAGE_NAME):$(API_TOOL_VERSION)
@@ -297,7 +297,7 @@ build: build-ui build-api ## Build UI and API artifacts
 
 .PHONY: build-ui-image
 build-ui-image: ## Build the UI Docker image for production
-	TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml build --no-cache \
+	TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml build \
 		--build-arg VITE_EXTENSION_PROFILE=$(VITE_EXTENSION_PROFILE_BUILD) \
 		--build-arg VITE_EXTENSION_API_BASE_URL=$(VITE_EXTENSION_API_BASE_URL_BUILD) \
 		--build-arg VITE_EXTENSION_APP_BASE_URL=$(VITE_EXTENSION_APP_BASE_URL_BUILD) \
@@ -553,13 +553,11 @@ lock-e2e: ## Update e2e package-lock.json using Node container (no compose servi
 
 .PHONY: save-ui
 save-ui: ## Save UI Docker image as tar artifact
-	@echo "💾 Saving UI image as artifact..."
-	@docker save $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) -o ui-image.tar
+	@$(MAKE) ci-save-image IMAGE_KIND=ui IMAGE_REF=$(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) ENV=$(ENV)
 
 .PHONY: load-ui
 load-ui:
-	@echo "📥 Loading UI image from artifact..."
-	@docker load -i ui-image.tar
+	@$(MAKE) ci-load-image IMAGE_KIND=ui IMAGE_REF=$(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) ENV=$(ENV)
 
 .PHONY: build-api-image build-api-image-fresh
 build-api-image: ## Reuse the canonical production image when its tag exists; build only on established absence
@@ -573,14 +571,12 @@ build-api: build-api-image
 
 .PHONY: save-api
 save-api: ## Save API Docker image as tar artifact
-	@echo "💾 Saving API image as artifact..."
 	@$(MAKE) record-api-image ENV=$(ENV)
-	@docker save $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) -o api-image.tar
+	@$(MAKE) ci-save-image IMAGE_KIND=api IMAGE_REF=$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) ENV=$(ENV)
 
 .PHONY: load-api
 load-api:
-	@echo "📥 Loading API image from artifact..."
-	@docker load -i api-image.tar
+	@$(MAKE) ci-load-image IMAGE_KIND=api IMAGE_REF=$(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) ENV=$(ENV)
 	@$(MAKE) verify-api-image ENV=$(ENV)
 
 .PHONY: record-api-image verify-api-image
@@ -613,6 +609,10 @@ api-tool-version: ## Print the content-addressed CI toolbox tag
 test-ci-api-tooling: ci-test-env ## Regress toolbox references, cache fallback logs and hash inputs
 	@bash scripts/test-api-tooling.sh $(or $(CI_TOOLING_CASE),all)
 
+.PHONY: test-ci-image-receipts
+test-ci-image-receipts: ci-test-env ## Reject incorrect source, workflow, archive and loaded-image identities
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(LLM_MESH_NODE_IMAGE) node --test scripts/ci/image-receipt.test.mjs
+
 .PHONY: test-ci-api-tool-runtime
 test-ci-api-tool-runtime: ci-test-env ## Verify npm runners and rebuilt esbuild Node interfaces
 	@docker run --rm $(API_TOOL_IMAGE) node -e 'const {execFileSync}=require("node:child_process"); execFileSync("npm",["--version"],{stdio:"inherit"}); execFileSync("npx",["--no-install","vitest","--version"],{stdio:"inherit"}); for(const path of ["/workspace/node_modules/esbuild","/workspace/node_modules/@esbuild-kit/core-utils/node_modules/esbuild"]){const tool=require(path); const result={exports:null}; new Function("module",tool.transformSync("module.exports = 6 * 7 as number",{loader:"ts"}).code)(result); if(result.exports!==42)throw Error("esbuild transform failed: "+path); console.log("PASS: esbuild",tool.version,"TypeScript transform and Node protocol");}'
@@ -633,10 +633,78 @@ pull-api-tool-image: ## Pull the toolbox by its input hash
 	@docker pull $(API_TOOL_IMAGE)
 
 save-api-tool: ## Save the toolbox for CI artifact transport
-	@docker save $(API_TOOL_IMAGE) -o api-tool-image.tar
+	@$(MAKE) ci-save-image IMAGE_KIND=api-tool IMAGE_REF=$(API_TOOL_IMAGE) ENV=$(ENV)
 
 load-api-tool: ## Load the toolbox from a CI artifact
-	@docker load -i api-tool-image.tar
+	@$(MAKE) ci-load-image IMAGE_KIND=api-tool IMAGE_REF=$(API_TOOL_IMAGE) ENV=$(ENV)
+
+# BR78-EX2: byte verification uses runner Node, without a browser/compiler image.
+IMAGE_ARCHIVE = $(IMAGE_KIND)-image.tar.zst
+IMAGE_RECEIPT = $(IMAGE_KIND)-image.json
+.PHONY: ci-save-image ci-load-image
+ci-save-image:
+	@set -o pipefail; docker save $(IMAGE_REF) | zstd -T0 -1 > $(IMAGE_ARCHIVE)
+	@node scripts/ci/image-receipt.mjs write $(IMAGE_KIND) $(IMAGE_REF) $(IMAGE_ARCHIVE) $(IMAGE_RECEIPT)
+ci-load-image:
+	@node scripts/ci/image-receipt.mjs verify $(IMAGE_KIND) $(IMAGE_REF) $(IMAGE_ARCHIVE) $(IMAGE_RECEIPT)
+	@set -o pipefail; zstd -dc $(IMAGE_ARCHIVE) | docker load
+	@node scripts/ci/image-receipt.mjs loaded $(IMAGE_KIND) $(IMAGE_REF) $(IMAGE_ARCHIVE) $(IMAGE_RECEIPT)
+
+# Persistent layer caches are an optimization; BuildKit still keys every COPY/ARG.
+export IMAGE_PLATFORM ?= linux/amd64
+CI_IMAGE_CACHE ?= 0
+CI_IMAGE_CACHE_FLAGS = $(if $(filter 1,$(CI_IMAGE_CACHE)),--cache-from type=gha$(comma)scope=br78-v1-$(IMAGE_KIND)-$(IMAGE_PLATFORM) --cache-to type=gha$(comma)scope=br78-v1-$(IMAGE_KIND)-$(IMAGE_PLATFORM)$(comma)mode=max,--no-cache)
+comma := ,
+CI_IMAGE_BUILD = docker buildx build --platform $(IMAGE_PLATFORM) $(CI_IMAGE_CACHE_FLAGS) --load
+.PHONY: ci-build-api ci-build-api-tool ci-build-ui ci-build-e2e
+ci-build-api:
+	@$(MAKE) ci-build-api-target IMAGE_KIND=api ENV=$(ENV)
+ci-build-api-target:
+	@$(CI_IMAGE_BUILD) --target production -f api/Dockerfile -t $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) .
+	@$(MAKE) record-api-image ENV=$(ENV)
+ci-build-api-tool:
+	@$(MAKE) ci-build-api-tool-target IMAGE_KIND=api-tool ENV=$(ENV)
+ci-build-api-tool-target:
+	@$(CI_IMAGE_BUILD) --target ci-tools -f api/Dockerfile -t $(API_TOOL_IMAGE) .
+ci-build-ui:
+	@$(MAKE) ci-build-ui-target IMAGE_KIND=ui ENV=$(ENV)
+ci-build-ui-target:
+	@$(CI_IMAGE_BUILD) --target production -f ui/Dockerfile -t $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) \
+		--build-arg VITE_API_BASE_URL=/api/v1 --build-arg VITE_EXTENSION_PROFILE=$(VITE_EXTENSION_PROFILE_BUILD) \
+		--build-arg VITE_EXTENSION_API_BASE_URL=$(VITE_EXTENSION_API_BASE_URL_BUILD) \
+		--build-arg VITE_EXTENSION_APP_BASE_URL=$(VITE_EXTENSION_APP_BASE_URL_BUILD) \
+		--build-arg VITE_EXTENSION_WS_BASE_URL=$(VITE_EXTENSION_WS_BASE_URL_BUILD) .
+.PHONY: ci-test-ui
+.PHONY: ci-build-desktop
+ci-build-desktop: ci-test-env ## Independent embedded desktop producer (BR79-EX2)
+	@$(MAKE) package-desktop-windows ENV=$(ENV)
+	@test -s ui/static/cowork-desktop/cowork.exe && test -s ui/static/cowork-desktop/cowork-desktop-metadata.json
+
+ci-test-ui: ci-test-env
+	@docker buildx build --platform $(IMAGE_PLATFORM) --no-cache-filter=ui-tests \
+		$(if $(filter 1,$(CI_IMAGE_CACHE)),--cache-from type=gha$(comma)scope=br78-v1-ui-$(IMAGE_PLATFORM)) \
+		--target ui-test-output --output type=local,dest=.tmp/ci-ui-tests -f ui/Dockerfile \
+		--build-arg VITE_API_BASE_URL=$(VITE_API_BASE_URL) \
+		--build-arg VITE_EXTENSION_PROFILE=$(VITE_EXTENSION_PROFILE) \
+		--build-arg VITE_EXTENSION_API_BASE_URL=$(VITE_EXTENSION_API_BASE_URL) \
+		--build-arg VITE_EXTENSION_APP_BASE_URL=$(VITE_EXTENSION_APP_BASE_URL) \
+		--build-arg VITE_EXTENSION_WS_BASE_URL=$(VITE_EXTENSION_WS_BASE_URL) .
+.PHONY: ci-build-ui-static
+ci-build-ui-static:
+	@$(MAKE) ci-build-ui-static-target IMAGE_KIND=ui-static ENV=$(ENV)
+ci-build-ui-static-target:
+	@docker buildx build --platform $(IMAGE_PLATFORM) $(CI_IMAGE_CACHE_FLAGS) \
+		$(if $(filter 1,$(CI_IMAGE_CACHE)),--cache-from type=gha$(comma)scope=br78-v1-ui-$(IMAGE_PLATFORM)) \
+		--target static-output --output type=local,dest=ui/build -f ui/Dockerfile \
+		--build-arg VITE_API_BASE_URL=$(VITE_API_BASE_URL) \
+		--build-arg VITE_EXTENSION_PROFILE=$(VITE_EXTENSION_PROFILE) \
+		--build-arg VITE_EXTENSION_API_BASE_URL=$(VITE_EXTENSION_API_BASE_URL) \
+		--build-arg VITE_EXTENSION_APP_BASE_URL=$(VITE_EXTENSION_APP_BASE_URL) \
+		--build-arg VITE_EXTENSION_WS_BASE_URL=$(VITE_EXTENSION_WS_BASE_URL) .
+ci-build-e2e:
+	@$(MAKE) ci-build-e2e-target IMAGE_KIND=e2e ENV=$(ENV)
+ci-build-e2e-target:
+	@$(CI_IMAGE_BUILD) -f e2e/Dockerfile -t $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) e2e
 
 publish-api-tool-image: docker-login ## Publish the non-shipping toolbox for reuse across CI runs
 	@docker push $(API_TOOL_IMAGE)
@@ -734,6 +802,10 @@ endef
 pack-publishable-manifest: ## Real npm pack + packed-manifest guard for an already built PACKAGE=<slug> [PACK_DESTINATION=<dir>]
 	@printf '%s' "$(PACKAGE)" | grep -Eq '^[a-z0-9][a-z0-9-]*$$' || { echo "ERROR: PACKAGE=<slug> is required"; exit 1; }
 	$(call manifest_guard_pack,$(PACKAGE))
+
+.PHONY: pack-live-speech
+pack-live-speech: ## Build and guard the L2 archive in transient container storage
+	$(call manifest_guard_pack,live-speech,. /workspace/packages/live-speech/pack.sh;)
 
 check-publishable-manifest: ## Strictly inspect one real archive TARBALL=<path> [SOURCE_MANIFEST=<path>]
 	@test -f "$(TARBALL)" || { echo "ERROR: TARBALL=<path> must be an existing file"; exit 1; }
@@ -842,7 +914,7 @@ ci-capacity-status: ## Inspect CI_RUN_ID without cancelling or retrying any job
 	@gh run view $(CI_RUN_ID) --repo rhanka/sentropic --json databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,jobs --jq '{databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,pendingOrFailed: [.jobs[] | select(.conclusion != "success" and .conclusion != "skipped") | {databaseId,name,status,conclusion,startedAt,completedAt}]}'
 .PHONY: ci-capacity-publish-dry-run
 ci-capacity-publish-dry-run: ## Exercise a publisher's real guarded pack without registry writes
-	@case '$(PACKAGE)' in llm-mesh|llm-gateway|cluster-mesh|chat-ui|cited-source-viewer|cowork-bridge|cowork-desktop|oauth-verify|mcp-auth|mcp-platform|artifacts|auth-hono|auth-client|auth-ui|contracts|events|chat-core|chat-server|comments|flow|harness) ;; *) echo 'Invalid dry-run package'; exit 1;; esac
+	@case '$(PACKAGE)' in llm-mesh|llm-gateway|cluster-mesh|chat-runtime|chat-ui|cited-source-viewer|cowork-bridge|cowork-desktop|oauth-verify|mcp-auth|mcp-platform|artifacts|auth-hono|auth-client|auth-ui|contracts|events|chat-core|chat-server|comments|flow|harness) ;; *) echo 'Invalid dry-run package'; exit 1;; esac
 	@$(MAKE) --no-print-directory pack-$(PACKAGE) MANIFEST_REPORT_DIR=tmp/ci-capacity/publish-$(PACKAGE) ENV=$(ENV)
 	@jq -n --arg package '$(PACKAGE)' --arg run "$$GITHUB_RUN_ID" --arg sha "$$GITHUB_SHA" '{package: $$package, runId: $$run, headSha: $$sha, mode: "guarded-pack-no-publication", completed: true}' | tee tmp/ci-capacity/publish-$(PACKAGE)/dry-run.json
 CI_EXPECTED_ATTEMPT ?= $(CI_RUN_ATTEMPT)
@@ -873,6 +945,19 @@ test-ci-run-metrics: ## Run ci-run-metrics fixture tests in Docker (BR76-EX2)
 test-ci-expected-results: ## Run ci-expected-results fixture tests in Docker (BR76-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-expected-results.test.mjs'
 
+.PHONY: test-ci-dag
+test-ci-dag: ## Qualify artifact dispatch, complete verdict and rollback (BR79-EX2)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-dag.test.mjs'
+
+.PHONY: ci-security-join
+ci-security-join: ## Reject missing, failed or unexpectedly skipped scan lanes
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e CI_SECURITY_NEEDS -e CI_SECURITY_CATEGORY -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-dag.mjs --security-join
+
+.PHONY: ci-dag-receipt
+ci-dag-receipt: ## Emit identified runtime readiness from a completed capture
+	@test -n "$(RUN_FILE)"
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-dag.mjs --readiness $(RUN_FILE)
+
 
 .PHONY: typecheck
 .NOTPARALLEL: typecheck
@@ -893,8 +978,8 @@ typecheck-llm-mesh: ## Run @sentropic/llm-mesh type checks
 
 .PHONY: lint-llm-mesh lint-llm-gateway lint-cluster-mesh
 lint-llm-mesh lint-llm-gateway lint-cluster-mesh: lint-%: ## Lint a root-owned mesh/gateway package
-	@$(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b,$(ENV)),$(CM_RUN),docker run --rm) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" \
-		-w /workspace/packages/$* $(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b,$(ENV)),$(CM_RUN_IMAGE),$(LLM_MESH_NODE_IMAGE)) sh -lc 'set -eu; \
+	@$(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b test-mem-release,$(ENV)),$(CM_RUN),docker run --rm) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" \
+		-w /workspace/packages/$* $(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b test-mem-release,$(ENV)),$(CM_RUN_IMAGE),$(LLM_MESH_NODE_IMAGE)) sh -lc 'set -eu; \
 		tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" \
 			--no-save --no-audit --no-fund eslint@10.0.2 typescript-eslint@8.56.1 >/dev/null; \
 		printf "%s\n" "import tseslint from '\''typescript-eslint'\'';" \
@@ -929,7 +1014,7 @@ E2_LOCK ?= /home/antoinefa/.cache-tmp/sentropic-docker.lock
 E2_RECEIPTS ?= tmp/engram-e2-receipts
 .PHONY: engram-e2-qualify engram-e2-lane engram-e2-stable-publish-guard
 engram-e2-qualify: ## Qualify an exact E2 topic head and retain per-lane receipts
-	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b,$(ENV))"
+	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b test-mem-release,$(ENV))"
 	@mkdir -p "$(E2_RECEIPTS)" "$$(dirname "$(E2_LOCK)")"
 	@set -eu; base="$${E2_BASE_SHA:-origin/main}"; head="$$(git rev-parse HEAD)"; \
 		{ date -u +%FT%TZ; printf 'head=%s\nbase=%s\nmerge-base=%s\n' "$$head" "$$(git rev-parse "$$base")" "$$(git merge-base "$$base" "$$head")"; \
@@ -943,7 +1028,7 @@ engram-e2-qualify: ## Qualify an exact E2 topic head and retain per-lane receipt
 		done
 
 engram-e2-lane: ## Run one lane under the caller's shared Docker lock
-	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b,$(ENV))"
+	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b test-mem-release,$(ENV))"
 	@mkdir -p "$(E2_RECEIPTS)"
 	@set -euo pipefail; \
 		trap 'status=$$?; trap - EXIT; set +e; $(MAKE) down ENV=$(ENV) >> "$(E2_RECEIPTS)/$(E2_LANE).log" 2>&1; cleanup=$$?; printf "exit=%s\ncleanup=%s\n" "$$status" "$$cleanup" > "$(E2_RECEIPTS)/$(E2_LANE).status"; sha256sum "$(E2_RECEIPTS)/$(E2_LANE).log" "$(E2_RECEIPTS)/$(E2_LANE).status" "$(E2_RECEIPTS)/$(E2_LANE).inventory" > "$(E2_RECEIPTS)/$(E2_LANE).sha256"; test "$$status" -eq 0 && test "$$cleanup" -eq 0' EXIT; \
@@ -966,7 +1051,7 @@ engram-e2-lane: ## Run one lane under the caller's shared Docker lock
 
 .PHONY: engram-e2-mechanical
 engram-e2-mechanical:
-	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b,$(ENV))"
+	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b test-mem-release,$(ENV))"
 	@$(CM_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" \
 		-e E2_BRANCH="$${E2_HEAD_REF:-$$(git branch --show-current)}" \
 		-e E2_EXPECTED_BRANCH="$${E2_HEAD_REF:-feat/engram-e2-integration}" \
@@ -977,7 +1062,7 @@ engram-e2-mechanical:
 
 .PHONY: engram-e2-postgres-up
 engram-e2-postgres-up:
-	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b,$(ENV))"
+	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-mem-release,$(ENV))"
 	@$(ARTIFACTS_COMPOSE) up -d --wait postgres
 
 engram-e2-stable-publish-guard:
@@ -1271,6 +1356,12 @@ publish-llm-mesh-token: verify-llm-mesh-cloud-code-oauth ## Publish @sentropic/l
 		-w /workspace/packages/llm-mesh \
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,llm-mesh,--access public --provenance=false)'
 
+.PHONY: typecheck-chat-runtime build-chat-runtime test-chat-runtime pack-chat-runtime
+typecheck-chat-runtime build-chat-runtime test-chat-runtime:
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e SCOPE="$(SCOPE)" -v "$(CURDIR):/workspace" -w /workspace/packages/chat-runtime $(LLM_MESH_NODE_IMAGE) sh scripts/run.sh $(patsubst %-chat-runtime,%,$@)
+pack-chat-runtime: build-chat-runtime
+	$(call manifest_guard_pack,chat-runtime,$(MANIFEST_DIST_FORM))
+
 .PHONY: typecheck-chat-ui
 typecheck-chat-ui: ## Run @sentropic/chat-ui type checks
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
@@ -1531,7 +1622,7 @@ build-mcp-platform: install-internal-packages ## Build @sentropic/mcp-platform d
 
 .PHONY: immo-861-build-mcp-platform freeze-types
 immo-861-build-mcp-platform: install-internal-packages
-	@case "$(ENV)" in test-861-int|test-861-gaps|test-artifacts-021|test-artifacts-022|test-mem-e11|test-mem-e11b) ;; *) exit 1 ;; esac
+	@case "$(ENV)" in test-861-int|test-861-gaps|test-artifacts-021|test-artifacts-022|test-mem-e11|test-mem-e11b test-mem-release) ;; *) exit 1 ;; esac
 	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; rm -rf dist node_modules; tool_dir="$$(mktemp -d)"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 
 freeze-types:
@@ -1743,6 +1834,43 @@ publish-auth-ui-token: build-auth-ui ## Publish @sentropic/auth-ui using NPM_TOK
 # BR-PKG-EX1 (Makefile exception): publish-chat-ui transiently rewrites package.json to dist-form,
 # runs the guarded tarball publication (BRCI-EX1), then restores the src-form package.json.
 # The committed repo package.json always stays src-form (exports -> ./src/...).
+.PHONY: publish-chat-runtime
+publish-chat-runtime: build-chat-runtime ## Publish @sentropic/chat-runtime from CI OIDC trusted publishing (dist-form tarball via transient package.json rewrite — BR-PKG-EX1)
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e GITHUB_ACTIONS \
+		-e GITHUB_REPOSITORY \
+		-e GITHUB_REF \
+		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
+		-e ACTIONS_ID_TOKEN_REQUEST_URL \
+		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/chat-runtime \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/tmp/pkg-src-backup.json; $(call manifest_guard_publish,chat-runtime,--access public)'
+
+.PHONY: publish-chat-runtime-token
+publish-chat-runtime-token: build-chat-runtime ## Publish @sentropic/chat-runtime using a token read from NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-chat-runtime in CI)
+	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace" \
+		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
+		-w /workspace/packages/chat-runtime \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/tmp/pkg-src-backup.json; $(call manifest_guard_publish,chat-runtime,--access public --provenance=false)'
+
 .PHONY: publish-chat-ui
 publish-chat-ui: build-chat-ui ## Publish @sentropic/chat-ui from CI OIDC trusted publishing (dist-form tarball via transient package.json rewrite — BR-PKG-EX1)
 	@docker run --rm \
@@ -1925,7 +2053,9 @@ test-idp-sync-sql: ## Test isolated IdP SQL and imported-client authorize accept
 		sh -ec 'npm install --prefix /tmp/idp-tools --ignore-scripts --no-audit --no-fund tsx@4.20.6 >/dev/null; /tmp/idp-tools/node_modules/.bin/tsx deploy/ci/idp-identity-sync/authorize.selftest.mjs'
 
 .PHONY: scope-check
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-sec-zod4 test-artifacts-021 test-artifacts-022 test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-resync-752 test-llm-judge test-mem-e11 test-mem-e11b),)
+include docs/governance/kit/artifact-weight.mk
+
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-sec-zod4 test-artifacts-021 test-artifacts-022 test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-resync-752 test-llm-judge test-mem-e11 test-mem-e11b test-mem-release test-artifact-weight),)
 scope-check: ## Advisory C2 scope-check via the installed host harness (BR861-EX1, BR01-EX2)
 	@files="$$( { git diff --cached --name-only $(SCOPE_BASE); git diff --name-only $(SCOPE_BASE); } | sort -u | paste -sd, - )"; \
 	harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
@@ -2356,6 +2486,18 @@ test: test-api test-ui test-e2e ## Run all tests
 test-llm-mesh: ## Run @sentropic/llm-mesh tests
 	@$(ARTIFACTS_RUN) -v "$(CURDIR):/workspace" -w /workspace/packages/llm-mesh $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/llm-mesh/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node >/dev/null; if [ -n "$$scope" ]; then NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 
+# BR04-EX1 — @sentropic/live-speech bench (r3 L3 bench lane; P1-5/P2-1).
+# Compiles the session to a scratch dist (never committed), installs the pinned
+# engine stack with --ignore-scripts (no cmake in the pinned image, so the native
+# bridge cannot build there), then runs bench/run-local-bench.mjs. Without a
+# provisioned models directory the bench records pending with the exact blocker
+# (exit 2); a measured row requires the qualified host provisioning documented in
+# bench/l3-g-native.receipt.json. OUT= selects the receipt path (default /tmp,
+# outside the repo, so manual runs never dirty the tree).
+.PHONY: bench-live-speech
+bench-live-speech: ## Run @sentropic/live-speech bench (OUT=<receipt path>)
+	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/live-speech $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; out="$(OUT)"; out="$${out:-/tmp/live-speech-docker-bench.receipt.json}"; tool_dir="$$(mktemp -d)"; trap "rm -rf $$tool_dir" EXIT; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund typescript@5.4.5 @types/node faster-whisper-ts@1.2.1 onnxruntime-node@1.24.3 >/dev/null; npm install --prefix "$$tool_dir" --package-lock-only --ignore-scripts --no-audit --no-fund >/dev/null; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json --rootDir . --outDir "$$tool_dir/dist" --declaration false --sourceMap false --declarationMap false --typeRoots "$$tool_dir/node_modules/@types" || true; test -f "$$tool_dir/dist/src/node/local-stt.js" || { echo "bench: tsc emit failed" >&2; exit 1; }; mkdir -p "$$tool_dir/dist/src/node/engines"; cp src/node/stt-worker.mjs "$$tool_dir/dist/src/node/stt-worker.mjs"; cp src/node/engines/faster-whisper.mjs "$$tool_dir/dist/src/node/engines/"; node bench/run-local-bench.mjs --dist "$$tool_dir/dist/src" --install-lock "$$tool_dir/package-lock.json" --out "$$out"'
+
 # BR-LB-EX1 — @sentropic/llm-gateway tests (WP16 Layer-B; owner-approved 2026-06-22).
 # Mirrors test-auth-hono: build the sibling @sentropic/llm-mesh dist, symlink it + hono +
 # vitest into the gateway's node_modules, then run vitest over tests (node env).
@@ -2491,13 +2633,11 @@ build-e2e:
 
 .PHONY: save-e2e
 save-e2e:
-	@echo "💾 Saving E2E image as artifact..."
-	@docker save $(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) -o e2e-image.tar
+	@$(MAKE) ci-save-image IMAGE_KIND=e2e IMAGE_REF=$(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) ENV=$(ENV)
 
 .PHONY: load-e2e
 load-e2e:
-	@echo "📦 Loading E2E image from artifact..."
-	@docker load -i e2e-image.tar
+	@$(MAKE) ci-load-image IMAGE_KIND=e2e IMAGE_REF=$(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) ENV=$(ENV)
 
 .PHONY: run-e2e
 run-e2e:
@@ -2722,19 +2862,25 @@ up-idp-sut: up-api-sut ## Start the compiled IdP on the production API's migrate
 	$(CI_COMPOSE) run --rm --no-deps api npm run oauth:seed-clients
 	# Production CSP permits HTTPS RP redirects; this callback is intercepted by Playwright.
 	$(CI_COMPOSE) exec -T postgres psql -U app -d app -v ON_ERROR_STOP=1 -c "UPDATE oauth_clients SET redirect_uris=ARRAY['https://ci-rp.invalid/auth/oauth/callback'] WHERE client_id='design-system';"
-	$(CI_COMPOSE) up --no-build -d --wait auth-idp
-smoke-idp-screens-ci: ci-test-env ## Run the existing screen smoke from the cached toolbox against compiled IdP
+	@printf '%s\n' 'services:' '  auth-idp:' '    environment:' \
+		'      OAUTH_ISSUER_URL: http://localhost:8787' \
+		'      AUTH_CALLBACK_BASE_URL: http://localhost:8787' \
+		'      UI_BASE_URL: http://localhost:8787' \
+		| $(CI_COMPOSE) -f - up --no-build -d --wait auth-idp
+smoke-idp-screens-ci: ci-test-env ## Run the screen smoke using the qualified E2E browser against compiled IdP
 	@set -eu; seed="$$(mktemp)"; trap 'rm -f "$$seed"' EXIT; \
 	smoke_email="idp-screen-smoke-$$(date +%s%N)@example.com"; \
 	$(CI_COMPOSE) run --rm --no-deps -w /workspace -e SCREEN_SMOKE_EMAIL="$$smoke_email" api npx --no-install tsx apps/auth-idp/screen-smoke-seed.ts > "$$seed"; \
 	user_id="$$(sed -n 's/^USER_ID=//p' "$$seed")"; session_token="$$(sed -n 's/^SESSION_TOKEN=//p' "$$seed")"; \
 	test -n "$$user_id"; test -n "$$session_token"; \
-	$(CI_COMPOSE) run --rm --no-deps -w /workspace/e2e \
-		-e IDP_BASE_URL=http://auth-idp:8787 -e USER_ID="$$user_id" -e SESSION_TOKEN="$$session_token" \
+	idp_container="$$( $(CI_COMPOSE) ps -q auth-idp )"; test -n "$$idp_container"; \
+	docker run --rm --network "container:$$idp_container" -w /app \
+		-v "$(CURDIR)/apps/auth-idp/screen-smoke.ts:/app/idp-screen-smoke.ts:ro" \
+		-e IDP_BASE_URL=http://localhost:8787 -e USER_ID="$$user_id" -e SESSION_TOKEN="$$session_token" \
 		-e SCREEN_SMOKE_REDIRECT_URI=https://ci-rp.invalid/auth/oauth/callback \
 		-e SCREEN_SMOKE_EMAIL="$$smoke_email" \
-		-e PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium \
-		api sh -ec 'cp ../apps/auth-idp/screen-smoke.ts ./idp-screen-smoke.ts; node ./idp-screen-smoke.ts'
+		$(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION) node --input-type=module -e \
+		'import { chromium } from "playwright"; process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH = chromium.executablePath(); console.log("IdP Chromium:", chromium.executablePath()); await import("./idp-screen-smoke.ts");'
 
 .PHONY: up-ui
 up-ui: ## Start the ui stack in detached mode
@@ -2742,7 +2888,7 @@ up-ui: ## Start the ui stack in detached mode
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-artifacts-021 test-artifacts-022 test-llm-judge),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-mem-release test-artifacts-021 test-artifacts-022 test-llm-judge),)
 	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans
 else
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down
@@ -3305,6 +3451,20 @@ test-security-parser: ## Verify security reports fail closed and preserve real f
 	@bash -n scripts/security/security-parser.sh scripts/security/security-compliance.sh scripts/security/security-parser-test.sh
 	@bash scripts/security/security-parser-test.sh
 
+# SECDAILY-EX1: raw daily adapter; immutable scanner/DB and native SAST await S2b/S2c.
+.PHONY: security-daily-scan test-security-daily
+security-daily-scan: ## Emit a local raw receipt; incomplete coverage exits nonzero
+	@set -eu; source_sha="$$(git rev-parse --verify HEAD)"; \
+		tree_status="$$(git status --porcelain --untracked-files=normal)"; \
+		if [ -n "$$tree_status" ]; then echo 'incomplete-scan: clean source tree required (including untracked files)' >&2; exit 1; fi; \
+		docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges --memory=512m --cpus=1 --tmpfs /tmp:rw,nosuid,nodev,size=128m \
+		-u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -e SECURITY_DAILY_SOURCE_SHA="$$source_sha" \
+		-v "$(CURDIR):/workspace:ro" -w /workspace $(MEMORY_L5_NODE_IMAGE) \
+		sh -ec 'tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund yaml@2.8.1 semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node scripts/security/daily/scan.mjs'
+
+test-security-daily: ## Run daily inventory, schema and adapter regressions in the approved pinned Node lane
+	@$(MAKE) test-publishable-manifests MANIFEST_GUARD_IMAGE="$(MEMORY_L5_NODE_IMAGE)" SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs scripts/security/daily/scan.test.mjs" ENV=$(ENV)
+
 .PHONY: test-%-security-container
 test-%-security-container: ## Run container scan (Trivy) on service image (usage: make test-api-security-container, make test-ui-security-container)
 	@echo "🔒 Security: Running container scan on $*..."
@@ -3320,6 +3480,10 @@ test-%-security-container: ## Run container scan (Trivy) on service image (usage
 		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json; \
 	elif [ "$*" = "api-tool" ]; then \
 		IMAGE_NAME="$(API_TOOL_IMAGE)"; \
+		echo "  Scanning image: $$IMAGE_NAME"; \
+		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json; \
+	elif [ "$*" = "e2e" ]; then \
+		IMAGE_NAME="$(REGISTRY)/$(E2E_IMAGE_NAME):$(E2E_VERSION)"; \
 		echo "  Scanning image: $$IMAGE_NAME"; \
 		docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image --severity HIGH,CRITICAL --format json --quiet $$IMAGE_NAME > .security/container-$*.json; \
 	else \
@@ -4309,3 +4473,5 @@ memory-l5-gate: memory-l5-runtime ## L5 lot gate aggregate: lint, tooling, LOT t
 .PHONY: smoke-mcp-broker-github
 smoke-mcp-broker-github: ## Run the REAL live-network github-through-the-generic-broker smoke (BR-72 DEPTH Lot 2, BR72-EX1) — hits https://api.github.com, not hermetic
 	@docker run --rm -e GITHUB_TOKEN -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-broker $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; rm -rf node_modules; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund tsx@4.19.2 >/dev/null; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsx" scripts/smoke-broker-github.mjs'
+
+-include packages/live-speech/verify.mk

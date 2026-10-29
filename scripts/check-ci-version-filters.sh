@@ -93,10 +93,24 @@ check_component() {
 
 check_component API_VERSION api
 check_component UI_VERSION ui
+check_component E2E_VERSION api
+
+# Receipts are executable image qualification inputs; future changes must select
+# producers and consumers even when Makefile and the workflow are unchanged.
+for path in scripts/ci/image-receipt.mjs scripts/ci/image-receipt.test.mjs; do
+  found=0
+  while IFS= read -r pattern; do
+    if covers "$pattern" "$path"; then found=1; break; fi
+  done <<< "$(filter_patterns global)"
+  if [ "$found" -eq 0 ]; then
+    echo "::error::$path must select global image qualification"
+    fail=1
+  fi
+done
 
 if [ "$fail" -ne 0 ]; then
   echo "❌ CI change-filters are not a superset of the image content-hash inputs."
   exit 1
 fi
 
-echo "✅ CI change-filters cover every API_VERSION/UI_VERSION hash input."
+echo "✅ CI change-filters cover API/UI/E2E image hash inputs and image receipt guards."

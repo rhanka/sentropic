@@ -11,6 +11,7 @@ import { BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, dependencyFlo
 // Register the S1 contracts in the existing required, credential-free Node validation lane.
 import '../security/daily/schema.test.mjs';
 import '../security/daily/inventory.test.mjs';
+import '../security/daily/scan.test.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const YAML = createRequire(path.join(process.env.MANIFEST_GUARD_TOOL_DIR, 'package.json'))('yaml');
@@ -48,11 +49,16 @@ test('changes: boolean filter step without file lists plus a separate single-fil
   assert.equal(out.manifest_guard, '${{ steps.filter.outputs.manifest_guard }}');
 });
 
-test('dedicated manifest_guard filter: scripts/ci never fans out through global, api/ui/e2e or _publish', () => {
+test('dedicated manifest_guard filter: only exact image guards also select global qualification', () => {
   const filters = YAML.parse(jobs.changes.steps.find((s) => s.id === 'filter').with.filters);
   assert.deepEqual(filters.manifest_guard, ['scripts/ci/**']);
+  const imageGuards = ['scripts/ci/image-receipt.mjs', 'scripts/ci/image-receipt.test.mjs'];
+  assert.deepEqual(filters.global.filter(g => g.startsWith('scripts/ci')), imageGuards);
   for (const [name, globs] of Object.entries(filters)) {
-    if (name !== 'manifest_guard') assert.ok(!globs.some((g) => g.startsWith('scripts/ci')), `${name} must not include scripts/ci`);
+    if (name === 'manifest_guard') continue;
+    for (const glob of globs.filter(g => g.startsWith('scripts/ci'))) {
+      assert.ok(name === 'global' && imageGuards.includes(glob), `${name} must not include ${glob}`);
+    }
   }
 });
 
@@ -84,7 +90,7 @@ test('ci-gate aggregates every PR job, stays unconditional and is a leaf', () =>
   const gate = jobs['ci-gate'];
   assert.equal(gate.if, 'always()', 'the gate must report failure after upstream failure or cancellation');
   assert.equal(gate.name, undefined, 'the required context must stay ci-gate');
-  assert.deepEqual(gate.permissions, { contents: 'read' });
+  assert.deepEqual(gate.permissions, { contents: 'read', actions: 'read' });
   assert.deepEqual([...needsOf('ci-gate')].sort(), Object.keys(jobs).filter((name) => !excluded(name)).sort(), 'every PR job must be in ci-gate.needs');
   for (const name of Object.keys(jobs)) {
     assert.ok(!needsOf(name).includes('ci-gate'), `${name} must not need ci-gate`);
@@ -202,7 +208,16 @@ test('every validation pack step receives the CI context and an explicit ENV', (
       assert.match(step.run, / ENV=test-ci-[a-z-]+$/);
     }
   }
-  assert.equal(count, PACK_TARGETS.length);
+  // Live speech uses the shared inventory's BLOCK pack and a separate deterministic workflow.
+  assert.equal(count, PACK_TARGETS.filter((slug) => slug !== 'live-speech').length);
+  assert.ok(PACK_TARGETS.includes('live-speech'));
+  assert.ok(jobs['validate-publishable-manifests'].steps.some((step) =>
+    step.run === 'make check-publishable-manifests ENV=test-ci-manifests'));
+  const speech = YAML.parse(fs.readFileSync(path.join(root, '.github/workflows/live-speech.yml'), 'utf8'));
+  const speechRuns = speech.jobs['validate-live-speech'].steps.map((step) => step.run);
+  for (const gate of ['typecheck', 'lint', 'test', 'build']) {
+    assert.ok(speechRuns.includes(`make ${gate}-live-speech ENV=test-stt-l2`));
+  }
 });
 
 test('lint wiring follows baseline evidence, independently per package, before typecheck', () => {
@@ -498,7 +513,7 @@ test('Cluster Mesh publication tolerates registry visibility beyond the old 18-r
 
 test('gateway mesh wait resolves a union range to an exact dependency floor', () => {
   for (const [range, expected] of [['^0.27.0', '0.27.0'], ['^0.27.0 || ^0.28.0', '0.27.0'],
-    ['>=0.28.1 <0.29.0', '0.28.1']]) assert.equal(dependencyFloor(range), expected);
+    ['^0.28.0', '0.28.0'], ['>=0.28.1 <0.29.0', '0.28.1']]) assert.equal(dependencyFloor(range), expected);
   for (const range of ['', 'latest', 'file:../llm-mesh', '>2.0.0 <1.0.0']) {
     assert.throws(() => dependencyFloor(range));
   }
@@ -506,7 +521,7 @@ test('gateway mesh wait resolves a union range to an exact dependency floor', ()
   assert.ok(command, 'execute the real Make version selector without polling the registry');
   const result = spawnSync('sh', ['-ec', command], { cwd: root, encoding: 'utf8' });
   assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.stdout, '0.27.0');
+  assert.equal(result.stdout, '0.28.0');
 });
 
 test('llm-gateway registry waits bypass caches with the 18 x 10 s budget', () => {

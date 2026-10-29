@@ -3,7 +3,7 @@ import { createModuleRegistry } from '../src/modules/registry.js';
 import { PackageTree, moduleSource } from './fixtures/package-tree.js';
 
 describe('speech peer admission', () => {
-  it.each(['0.19.2', '0.22.0', '0.26.9', '0.27.1', '0.27.9', '0.31.0'])(
+  it.each(['0.19.2', '0.22.0', '0.26.9', '0.27.1', '0.27.9', '0.33.0'])(
     'should refuse speech on llm-mesh %s before evaluating the peer', async (version) => {
       const tree = new PackageTree();
       try {
@@ -12,11 +12,11 @@ describe('speech peer admission', () => {
           exports: { './speech': { source: 'throw new Error("must not evaluate");' } } });
         await expect(createModuleRegistry({}, { anchorDir }).load('speech')).rejects.toMatchObject({
           code: 'cluster_mesh_module_unavailable', moduleId: 'speech', reason: 'incompatible_version',
-          packageName: '@sentropic/llm-mesh', installedVersion: version, requiredRange: '>=0.28.0 <0.31.0',
+          packageName: '@sentropic/llm-mesh', installedVersion: version, requiredRange: '>=0.28.0 <0.33.0',
         });
       } finally { tree.cleanup(); }
     });
-  it.each(['0.28.0', '0.29.0', '0.30.0'].flatMap((version) => [false, true].map((present) => ({ version, present }))))(
+  it.each(['0.28.0', '0.29.0', '0.30.0', '0.31.0', '0.32.0'].flatMap((version) => [false, true].map((present) => ({ version, present }))))(
     'should check speech export evidence on llm-mesh $version (present=$present)', async ({ version, present }) => {
     const tree = new PackageTree();
     try {

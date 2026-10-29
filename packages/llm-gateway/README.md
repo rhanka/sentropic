@@ -1,5 +1,80 @@
 # @sentropic/llm-gateway
 
+## Speech accounting binding (L8)
+
+The additive `speech/admission`, `speech/usage` and `speech/settlement` subpaths provide the
+speech accounting policy. They do not install a ledger, expose an unauthenticated speech endpoint,
+or enable paid speech on the existing gateway host. **G-LEDGER remains open:** the current application
+adapter supports monthly text budgets, not native audio units and aggregate UTC-day/campaign holds.
+L9/L13 must remain fixture-only until the ledger owner supplies and qualifies the binding below.
+This PR is **L8a policy/contracts**; L8 acceptance remains **conditional**. The separate **L8b durable
+owner-adapter** sub-lot (gateway/ledger owner + Sol, recorded 2026-10-27 in BRANCH.md) provides the
+real DB binding and qualification. L8a does not establish M1 readiness.
+
+`SpeechLedgerPort` is a transaction view over the owner's existing `control.budgets`,
+`control.budget_holds`, `control.cost_ledger`, allocator receipts and pool leases. Implementing it
+requires the ledger owner; substituting a memory store does not qualify cloud admission. The test
+fixture models rollback and serialized reservations only. Its restart test restores serialized
+bytes; it is not evidence that a production database adapter survives a process crash.
+
+The host must provide:
+
+- Atomic commit/rollback across holds, settlement entries, all applicable owner budget buckets and
+  pool leases, with the same deterministic locking order as admission, settlement and reaping.
+  `lock` must serialize a campaign across providers/accounts and replicas, plus the operation and
+  account lease; uniqueness must fence duplicate operation and settlement IDs.
+- One trusted campaign reference for the whole qualification campaign. UTC daily and lifetime
+  campaign totals include both spent and outstanding reservations. The hard maxima are USD 5/day
+  and USD 20/campaign; host overrides only tighten them. Preserve stricter existing budget windows
+  and sub-envelopes in the same transaction; never route around them through a different campaign.
+- Auth-derived `CostContext`, the admitted configuration/provider/model/placement revision, a
+  redacted account/seat reference, and authoritative allocator/native-turn/backend-operation links.
+  The native backend is already counted by its allocator; speech entries always add zero native
+  counted units and link its billing operation. Speech authorization never grants extra agent quota.
+  A reserved turn may have no native turn ID until its acknowledgement arrives, as in the L2 journal;
+  the stable submit key, backend operation and allocator receipt still have to match.
+- Current region-specific USD price revisions with native duration/token/character rates, all fees
+  included, and ceilings for every priced dimension. The price is pinned for settlement. Unknown
+  dimensions remain absent; captured seconds and local compute time are observational, not tokens.
+- Existing owner retention/access policies for minimized metadata. Never persist audio, transcript,
+  secrets or provider payloads in holds or settlement entries. This is a cloud accounting binding;
+  local-engine zero-external-cost operational receipts remain with live-speech.
+
+Call `admitSpeech` before opening a provider connection, then await `markSpeechDispatched` and open
+only if it returns `true`. Admission replay recovers a hold; it is not dispatch permission. An
+ambiguous dispatch acknowledgement is not retryable: retain the reservation and reconcile it.
+The transport must enforce the returned deadline, configured concurrency, input duration, connected
+silence and output ceilings, including after cancellation/disconnect. Stop and playback clearing
+never require a fresh quota admission. No user cancellation is reported as provider unhealthiness.
+Each connection ends within its admitted UTC day; renewal/reconnect/retry uses a new bounded operation
+under the same session and campaign. No automatic provider fallback is authorized.
+
+`recordSpeechUsage` persists cumulative snapshots or incremental event deltas on the hold, deduplicated
+by provider event and revision. Cumulative revisions are monotonic for the operation. Incremental
+revisions replace that event's prior contribution. Captured-audio overlap is deduplicated by the
+capture adapter before reporting; repeated local computation is a separate dimension.
+
+`settleSpeech` accepts complete final usage with a provider revision, or writes one conservative
+estimate when final dimensions are missing. It atomically moves the hold into spent liability.
+Later complete revisions append positive/negative adjustments referencing the original entry,
+and change budget spend by the difference only. Provider-billed discarded/unheard output remains
+billable. Replay is a no-op; storage failures retain the hold. `releaseSpeech` frees only a hold
+that never acquired its durable dispatch marker. The owner reaper must use these same semantics:
+expired dispatched holds retain or settle worst-case liability, never expire as free speech.
+
+L7 can import `reconcileSpeech` from `@sentropic/llm-gateway/speech/settlement`. Supply a complete,
+consistent owner snapshot of holds, allocator admissions and settlement entries for the audited scope.
+Rows retain operation/attempt IDs, allocator receipt, submit key/epoch and usage entry references.
+Issues identify duplicated allocator admissions for a scoped turn, uncounted dispatched admissions,
+duplicate usage receipts/roots, missing usage, orphan entries/adjustments and identity mismatches.
+STT/TTS may share one allocator admission; signed adjustments share one root. The projection reads
+owner data without allocating units or creating another ledger; real DB snapshot delivery belongs to L8b.
+
+G-LEDGER acceptance requires real database tests for restart, concurrent reservations across replicas,
+daily rollover, settlement crash/replay, estimate/adjustment persistence and unavailable-store refusal.
+Provider bounds, entitlement, current prices/retention and real charged usage remain G-CLOUD evidence
+for L9/L13; the policy fixture alone does not close either gate.
+
 An authenticated and metered LLM egress data plane. It exposes Anthropic
 Messages and OpenAI Chat Completions wires, normalizes them to the canonical
 `@sentropic/llm-mesh` request, and executes a bounded opaque route plan.

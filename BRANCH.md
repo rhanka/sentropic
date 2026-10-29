@@ -4,6 +4,7 @@
 - [ ] Qualify all 23 Stage B cases through the installed handle, ship C6 declaration in dev.7, and regenerate the 21-slot tuple; stop for an evidenced Engram-side blocker.
 
 ## Scope / Guardrails
+- [x] Release integrator: merge `origin/main` a3204932e420efe6eeafa3428459fadb7f215aa7 into integration b90fc4ee6; preserve all main changes and union Makefile selectors. Imported changes are inherited from that main parent; no Track events changed.
 - [x] Branch `feat/cluster-mesh-engram-e11b` from integration `fa900e335`; worktree `tmp/worktrees/mem-e11b`; mechanical branch PASS; merge only, never rebase.
 - [x] Owner-directed pack-only dev.7; no publication, artifacts source edits or receiving ACK.
 - [x] Read-only E2 inputs: published Engram 0.21.3 `32d47df1…`, mesh dev.6 `ff79088e…`, contract pair `55f8d457…` / `dd0cccbd…`; L4 MCP 0.22.0 is separate L5 scope (plan E11 line 120).
@@ -13,6 +14,10 @@
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `packages/cluster-mesh/**` (reviewed E0–E11b aggregate and final release qualification)
+  - `PLAN.md` (inherited E2 plan entries)
+  - `package.json` (inherited E2 workspace qualification tools)
+  - `scripts/ci/publishable-ci-wiring.test.mjs` (final main-PR gate routing)
   - `BRANCH.md`
   - `tools/engram-e11/**`
   - `Makefile` (BR11-EX1)
