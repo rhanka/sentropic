@@ -724,9 +724,70 @@ UI 255s/180s, IdP 233s/150s and runner-admission breaches remain open.
 The package design builds the topological closure into immutable archives and
 an independently hashed preparation archive. Every source lane extracts into
 fresh container storage; installed consumers receive only archives. Nine
-cluster members preserve source/audits, PostgreSQL, comments, crash ordering,
+qualifiers in three bounded jobs preserve source/audits, PostgreSQL, comments, crash ordering,
 installed comments, major upgrade, stateful contracts, lazy tuples and clean
 entry-point qualification. Actual matrix members and the producer join the
-existing fail-closed final verdict. Post-change run IDs, warm/cold timing,
-complete branch <=210s/common guard <=75s acceptance and rollback remain
-**to measure** until completed exact-head qualification exists.
+existing fail-closed final verdict. Stateful and gateway auth-subpaths now copy
+verified receipt bytes when a bundle is selected; their assertions are unchanged.
+Prepared source integrity trusts same-run immutable artifact transport plus tuple
+lock/workflow hashes; the preparation has no independent source-tree digest.
+
+### 13.1 First measured result and failed budgets
+
+[Run 40928684313](https://github.com/rhanka/sentropic/actions/runs/40928684313),
+attempt 1, `pull_request`, head `0d4bf1ca42d9e7e3fbd5b0492829efc70d2ee8b9`,
+workflow SHA-256 `f7ee1d0340f78757039636d8319d1aea1943812c87687bee885a412e28d665ef`,
+runner `ubuntu-latest`, package-tool warmth unidentified. Paginated raw jobs/run
+are retained in `.tmp/ci-br80/review-r1-jobs.json` and `review-r1-run.json`.
+These completed job spans are valid measurements; the run remains queued on
+`security-container` 123683980274, so no whole-run success is claimed.
+
+| Completed job | Job ID | Seconds |
+| --- | --- | --- |
+| Changes | 123640990850 | 19 |
+| Candidate producer | 123651400522 | 97 |
+| Source | 123663293264 | 149 |
+| PostgreSQL / comments / crash | 123663293179 / 123663293239 / 123663293163 | 91 / 81 / 65 |
+| Installed / major | 123663293052 / 123663293223 | 59 / 51 |
+| Stateful / lazy / clean install | 123663293192 / 123663293268 / 123663293148 | 59 / 121 / 53 |
+| Mesh / gateway | 123663292634 / 123663292644 | 71 / 107 |
+| Common manifest guard | 123663292699 | 82 |
+
+Execution path: producer 97 + longest qualifier 149 = **246s**, or **265s**
+including classification, exceeding **<=210s** by 36–55s. Common guard **82s**
+exceeds **<=75s** by 7s and the measured 65s predecessor by 17s. Package-family
+runner execution totals 1,186s versus predecessor 1,326s; this is not wall time.
+Producer admission is 1,216s; source consumer admission is 1,342s. Changes-end
+18:31:48Z to last cluster completion 19:18:32Z is 2,804s including admission.
+No queue span, skipped result or partial run is credited toward acceptance.
+
+Disposition: **defer by name to BR-84**, without raising either threshold.
+`BR84-BR80-CLUSTER` (owner: CI-train author on BR-84) must optimize and measure
+the complete producer/transfer/grouped-qualification path at <=210s, including
+the admission breakdown. `BR84-BR80-MANIFEST` (same owner) must investigate the
+82s guard and qualify <=75s. Both require identified repeated warm/cold runs,
+job/attempt/head/workflow receipts and preserved complete-result assertions.
+The three-job reduction below changes the path; its new timing is unmeasured.
+Rollback, whole-train timing and exact-head terminal CI remain open.
+
+### 13.2 Capacity and transport composition
+
+Against main `b7e86f5ea0`, reviewed head adds **+9 jobs / +8 concurrent slots**:
+PR jobs 73→82, push 98→107, PR/push demand 65/64→73/72; cluster-only PR 11→20,
+guard-scripts-only PR 10→22. The earlier “unchanged 73/72” compared only the
+policy repair, not main. Corrected CI groups all nine qualifiers into three
+jobs capped at three, removes six jobs/slots and preserves isolated namespaces,
+every assertion, per-qualifier cleanup and failure aggregation. The #841 cleanup
+adds one sequential job: net **+4 jobs / +2 concurrent slots** versus main,
+PR/push 77/102 selected jobs and 67/66 slot demand. Against the **40-slot account
+cap**, this bounds BR-80's added pressure but does not qualify account admission;
+BR-84 owns the remaining measured admission/whole-train budget disposition.
+
+Compose #841's cleanup with the union exemptions `ci-gate`, `ci-capacity-receipts`,
+`delete-transport-artifacts`; keep the producer in capacity needs. All six
+transport artifacts use one-day retention, including `package-candidates`
+(artifact 12923722892, 167,402,696 bytes measured). Delete current-run allowlisted
+transport only after successful completed consumers; retain unsuccessful or
+incomplete attempts and fork/cancellation/API-error fallback. Evidence reports
+are excluded. Wiring/expected-results/DAG contracts qualify this composed tree;
+the second PR to land must preserve these resolutions and repeat the suites.
