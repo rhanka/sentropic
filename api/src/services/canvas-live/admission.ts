@@ -26,11 +26,11 @@ export class AdmissionAuthority {
     if (!sameActor(principal.actor, input.actor)) throw new AdmissionError('actor-denied');
     const { grant, facts } = await this.current(principal, input.binding.documentId);
     if (!grant.fields.includes(input.binding.fieldKey) || !grant.operations.includes('read')) throw new AdmissionError('scope-denied');
-    if (input.profileId !== facts.profileId || input.schemaEpoch !== facts.schemaEpoch) throw new AdmissionError('incompatible-schema');
     if (input.binding.sessionId !== undefined && input.binding.sessionId !== facts.sessionId) throw new AdmissionError('invalid-binding');
     return this.ports.update(admissionKey(principal, facts.documentId), (old) => {
       // Host actor ids are globally unique across kinds, including closed admissions.
       if (old && !sameActor(old.actor, principal.actor)) throw new AdmissionError('actor-denied');
+      if (input.profileId !== facts.profileId || input.schemaEpoch !== facts.schemaEpoch) throw new AdmissionError('incompatible-schema');
       const continuing = old && !old.closed;
       if (continuing && !old.fields.includes(input.binding.fieldKey)) throw new AdmissionError('scope-denied');
       return {
