@@ -645,11 +645,12 @@ jobs:
   # skipped `changes` cannot silently skip this required check; never a publisher dependency.
   validate-publishable-manifests:
     runs-on: ubuntu-latest
-    needs: [changes]
+    needs: [changes, package-candidates]
     if: always() && !cancelled() && inputs.decision_fixtures_only != true
     permissions:
       contents: read
     env:
+      CI_PACKAGE_CANDIDATES: ${{ needs.package-candidates.result == 'success' && 'tmp/ci-package-candidates' || '' }}
       CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
       CI_MANIFEST_CHANGES_RESULT: ${{ needs.changes.result }}
       CI_MANIFEST_EVENT: ${{ github.event_name }}
@@ -657,18 +658,28 @@ jobs:
       CI_MANIFEST_BEFORE_SHA: ${{ github.event.before }}
       CI_MANIFEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Setup Docker
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Require every selected candidate producer
+        if: needs.package-candidates.result != 'skipped'
+        run: test '${{ needs.package-candidates.result }}' = success
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        if: needs.package-candidates.result == 'success'
+        with:
+          name: package-candidates
+          path: tmp/ci-package-candidates
       - name: Check eradicated packages (CLI and focus are owned by h2a)
         run: make check-eradicated-packages ENV=test-ci-manifests
       - name: Test publishable manifest guard and consumer qualification
         run: make test-publishable-manifests test-qualify-published-install ENV=test-ci-manifests
+      - name: Test candidate identity and qualification DAG
+        run: make test-ci-package-candidate test-ci-package-qualification-dag ENV=test-ci-manifests
       - name: Check publishable manifests
         run: make check-publishable-manifests ENV=test-ci-manifests
       - name: Upload publishable manifest reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: publishable-manifests
           path: tmp/ci-manifest-guard/manifests/**
@@ -3014,6 +3025,7 @@ jobs:
       - qualify-engram-e2
       - changes
       - validate-publishable-manifests
+      - package-candidates
       - build-e2e
       - typecheck-lint-ui
       - typecheck-lint-api
@@ -3134,7 +3146,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-    needs: [changes, enforce-package-bump, build-e2e, typecheck-lint-ui, typecheck-lint-api,
+    needs: [changes, package-candidates, enforce-package-bump, build-e2e, typecheck-lint-ui, typecheck-lint-api,
       validate-idp-sync, validate-llm-mesh, validate-cluster-mesh, validate-llm-gateway,
       validate-chat-ui, validate-cited-source-viewer, validate-cowork-bridge, validate-oauth-verify,
       validate-mcp-auth, validate-mcp-platform, validate-auth-hono, validate-auth-client,

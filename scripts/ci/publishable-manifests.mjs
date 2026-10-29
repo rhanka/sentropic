@@ -758,6 +758,11 @@ export async function commandInventory(opts, { env = process.env, root = process
   if (!context) throw new GuardError('inventory requires a validated CI context (MANIFEST_CONTEXT_FILE or CI_MANIFEST_CONTEXT); refusing to guess');
   const semver = loadSemver();
   const packages = enumeratePackages(root, reporter);
+  let candidates = null;
+  if (env.CI_PACKAGE_CANDIDATES) {
+    const { candidateTuple, verifyCandidates } = await import('./package-candidate.mjs');
+    candidates = verifyCandidates(env.CI_PACKAGE_CANDIDATES, candidateTuple(root, env), ['cluster-mesh'], { root });
+  }
   const snapshots = new Map();
   const takeSnapshot = (slug) => {
     if (!snapshots.has(slug)) {
@@ -798,7 +803,7 @@ export async function commandInventory(opts, { env = process.env, root = process
     if (severity === 'block') {
       blockList.push(slug);
       if (!PACK_TARGETS.includes(slug)) reporter.error(slug, `missing pack lane: ${slug} is selected (BLOCK) but has no make pack-${slug} target`);
-      entry.candidate = 'full pack via make pack-' + slug;
+      entry.candidate = candidates?.order.includes(slug) ? 'verified shared release-candidate' : 'full pack via make pack-' + slug;
     } else {
       const snap = takeSnapshot(slug);
       if (!snap.ok) {
@@ -816,7 +821,7 @@ export async function commandInventory(opts, { env = process.env, root = process
   }
   report.summary = { errors: reporter.errors, warnings: reporter.warnings, block: blockList };
   reporter.write('classification.json', report);
-  reporter.write('block-packages.txt', blockList.map((s) => `${s}\n`).join(''));
+  reporter.write('block-packages.txt', blockList.filter(slug => !candidates?.order.includes(slug)).map((s) => `${s}\n`).join(''));
   (out ?? process.stdout).write(`inventory: ${packages.size} public packages, BLOCK=[${blockList.join(' ')}], errors=${reporter.errors}, warnings=${reporter.warnings}\n`);
   return reporter.errors === 0 ? 0 : 1;
 }
