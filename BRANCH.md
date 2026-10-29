@@ -20,7 +20,8 @@
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
 - **Exception process**:
-  - [x] No tracked scope exception; operational commands use an ephemeral Makefile.
+  - [x] Operational commands use an ephemeral Makefile; inherited main changes only under BR-CRED-EX1.
+  - [x] BR-CRED-EX1: owner authorizes merging origin/main if needed, without rebase. GitHub reported a conflict; merge `e938151c0942679d37f88c7ffb4a2c3df048627a`, preserving this plan. Inherited main bytes only are exempt from scope and the 150-line authored-change limit; validate scope relative to origin/main. Impact: upstream history retained, no authored product change; rollback requires a separately authorized merge revert. Both parents have identical Track trees; Track acceptance refresh belongs to its designated writer.
 
 ## Feedback Loop
 - [ ] BR-CRED-01 | blocked | operator | 2026-10-29: reader LIST refused (403); operator GetBucketPolicy also returns 403. Bucket policy is the likely cause but was not read; cause unverified, reader unusable pending resolution. Preserve the restrictive IAM condition.
