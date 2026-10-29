@@ -44,11 +44,11 @@ export class AdmissionAuthority {
   async check(record: AdmissionRecord, field: string, operation: string): Promise<AdmissionRecord> {
     const principal = await this.ports.authenticate();
     this.assertOwner(principal, record);
-    const { grant, facts } = await this.current(principal, record.documentId);
     const stored = await this.ports.update(admissionKey(principal, record.documentId), (old) => {
       this.assertActive(old, record);
       return old!;
     });
+    const { grant, facts } = await this.current(principal, record.documentId);
     if (stored.profileId !== facts.profileId || stored.schemaEpoch !== facts.schemaEpoch) throw new AdmissionError('incompatible-schema');
     if (!stored.fields.includes(field) || !grant.fields.includes(field)
       || !stored.operations.includes(operation) || !grant.operations.includes(operation)) throw new AdmissionError('scope-denied');

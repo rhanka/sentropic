@@ -4,7 +4,7 @@ import type { OpenSessionInput, FieldBindingIdentity } from './contracts';
 import { AdmissionError } from './contracts';
 import type { DraftRecovery } from './recovery';
 import type { SessionRegistry, RegistryActor } from './session-registry';
-interface LocalAdmission { record: AdmissionRecord; count: number; revoked: boolean }
+interface LocalAdmission { record: AdmissionRecord; count: number; revoked: boolean; denied?: boolean }
 
 export class LiveSessionProvider {
   private readonly bindings = new Map<string, LocalAdmission>();
@@ -35,7 +35,7 @@ export class LiveSessionProvider {
     const handle = this.registry.open(record, input.binding.fieldKey);
     const key = this.key(record, handle.identity);
     const existing = this.bindings.get(key);
-    const entry = existing && !existing.revoked && existing.record.sessionEpoch === record.sessionEpoch
+    const entry = existing && !existing.revoked && !existing.denied && existing.record.sessionEpoch === record.sessionEpoch
       ? existing : { record, count: 0, revoked: false };
     this.bindings.set(key, entry); ++entry.count;
     let disposed = false;
@@ -80,11 +80,15 @@ export class LiveSessionProvider {
     const entry = this.bindings.get(this.key(principal, identity));
     if (!entry) throw new AdmissionError('invalid-binding');
     if (entry.revoked) throw new AdmissionError('revoked');
-    try { return await this.authority.check(entry.record, identity.fieldKey, operation); }
+    try {
+      const current = await this.authority.check(entry.record, identity.fieldKey, operation);
+      if (entry.denied) throw new AdmissionError('scope-denied');
+      return current;
+    }
     catch (error) {
       if (error instanceof AdmissionError && error.code === 'revoked') this.invalidate(entry.record);
       else if (operation === 'read' && error instanceof AdmissionError && error.code === 'scope-denied') {
-        this.registry.releaseField(entry.record, identity.fieldKey); entry.revoked = true;
+        this.registry.releaseField(entry.record, identity.fieldKey); entry.denied = true;
       }
       throw error;
     }
