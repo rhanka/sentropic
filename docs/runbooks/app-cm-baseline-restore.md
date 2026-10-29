@@ -6,6 +6,20 @@ a real cluster is W0-close.c, performed by the tenant — not by this lot.
 
 ## 1. What the target does
 
+### Schema rollback after app integration
+
+Keep `APP_ARTIFACT_HOST_ENABLED`, `APP_ARTIFACT_CONTENT_ENABLED` and
+`APP_ARTIFACT_READER_ENABLED` explicitly at `0`, then revert API/content images
+and configuration to the previously qualified closed release. Migration
+`0020_app_artifact_host.sql` is additive: retain `control.artifact_host_kv`,
+the nullable unique control-journal `asset_id` column and migration receipts.
+There is no down migration; do not drop those objects, delete receipts or
+rewind either journal to roll back an image. Retain artifact tables and private
+blobs so a later forward deployment can reconcile their existing state.
+API remains the only migration executor; content never executes migrations.
+Logical data recovery is a separate isolated, verified restore operation;
+an image revert is not a claim that data or schema was restored.
+
 1. Runs every guard BEFORE any `kubectl` write: backup-key shape, identity,
    namespace, PG host, DB name and bucket checks (full list in section 4).
 2. Reads the backup source bucket from the restore-namespace credential only.
