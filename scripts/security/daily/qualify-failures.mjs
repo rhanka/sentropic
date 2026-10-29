@@ -79,6 +79,8 @@ const before = { status: 0, rawHash: digest('before'), target: { key: 'api-produ
 const after = { ...before, databaseIdentity: { ...before.databaseIdentity, java: { receiptHash: digest('new snapshot') } } };
 await rejects('changed snapshot invalidates comparison', () => validateComparison(before, after), /rescan both inputs/);
 await rejects('rollback: restored blocked S2a state', () => executeImageScan({}, {}, () => assert.fail('must not execute')), /qualification pending/);
+const rollbackPolicy = JSON.parse(await readFile('/evidence/rollback-policy.json'));
+await rejects('rollback: previous main policy refuses admission', () => assertQualified(rollbackPolicy), /qualification pending/);
 assert.throws(() => assertQualified(), /qualification pending/);
 for (const s of Object.values(snapshots)) validateFreshness(s.receipt.metadata, s.receipt.metadata.Version);
 await writeFile('/evidence/failure-trials.json', `${JSON.stringify({ observedAt: new Date().toISOString(), results,
