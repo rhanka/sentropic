@@ -68,6 +68,7 @@
   - [ ] Persist sessionEpoch through restart/reconnect; close/new admission alone rotates it.
   - [ ] Refuse schema/profile before binding; preserve draft bytes; require actor/draft acknowledgement for both recovery branches.
 - [ ] **Lot 2 — Session registry RED witnesses and lifetime**
+  - [x] Implement document resource ownership, per-mount leases, field namespaces and explicit actor/awareness update delivery.
   - [x] Define executable registry lifetime, isolation, identity and actor-update witnesses behind the H3 factory port.
   - [x] Add api/tests/unit/canvas-live-provider.test.ts registry cases and observe RED (8 failures at 708de0636; recovery suite 3 failures).
   - [ ] Resolve complete identities only; isolate tenants; share one document session and awareness across fields.
