@@ -34,7 +34,7 @@
 - [ ] Lot 0: verify candidate SHA-256/SHA-512, producer P3/source/peer binding and registry mesh archive; assemble immutable inputs and manifest.
   - [x] Add exact-byte input collector; the registry mesh source commit comes from the archive-bound SLSA payload, with signature authentication explicitly unestablished.
   - [x] Independently measured candidate SHA-256/SHA-512 and P3/source/peer bindings match; mesh 0.22.4 archive integrity and SLSA subject match. Retain exact archive bytes and observed source 440599d04e91bb33e3874588f067c6a90bffd1b3 without claiming authenticated acceptance.
-- [ ] Lot 1: run memory-l5-qualify; retain every command/exit, raw assertions, native positive controls, manifest and strict checkpoint proposal/result.
+- [x] Lot 1: run memory-l5-qualify; retain every command/exit, raw assertions, native positive controls, manifest and strict checkpoint proposal/result.
   - [x] Add process-time report binding with immutable raw JSON retention; source-only reports retain that mode and cannot become installed E4 evidence.
   - [x] Wire tooling, Lot 3 and packed report producers into the full attempt; retain explicit missing-file/process failures and do not stamp old reports at collection time.
   - [x] An actual GCC compilation produced an ELF object under the candidate addon path and was blocked by the predicate. The disposable positive-control container adds compiler tools; ordinary candidate installation keeps the original unmodified pinned image. The control also verifies that no Python executable is present.
@@ -48,3 +48,4 @@
 - [ ] Lot 2: document the actual verdict and exact remaining owner actions, scope/review/CI checks, PR and cleanup; do not issue a false L5 acceptance.
   - [x] Final source 99f95df13: tooling 146, P09 90, P10 24, actual compiler controls 2 passed. Strict checkpoint rejected with 1417 failures; retain final raw archive and exact remaining gates. CI/reviews and installed acceptance remain open.
   - [x] Commit compact P01–P05 observations and digest sidecars; source-only and missing E4 cases remain explicitly unaccepted.
+  - [x] Commit P06–P10 bundles and sidecars; P09/P10 pass without claiming installed acceptance for P06–P08. Final down/ps and final-head CI inspection follow the evidence push; reviews remain selection-failed.
