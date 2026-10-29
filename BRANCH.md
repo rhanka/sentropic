@@ -1,63 +1,90 @@
-# Feature: Decision API host and authoritative remote pricing
+# Feature: Canvas live H2 durable store, journal and baseline bridge
 
 ## Objective
-- [x] Integrate JEV and OpenAI Decisions into the authenticated API through cluster-mesh, with durable financial ports and fail-closed production readiness.
+- [ ] Deliver approved host plan r3 H2 (`a48f54be6ce82b05e697f1c3f7dbc433ed60b69f5c2e377b6fb71faad9ababe7`) and DS persistence contract §7.4 (`161c5dac35d1cfe6b4a1937fe2f38f900e3f73d24cbae1cbb802b4036ee36834`).
 
 ## Scope / Guardrails
-- [x] Owner priority 2026-10-28: integrate both remote backends; local hosting remains deferred.
-- [x] Base: origin/main de7ab8d31; branch feat/decision-host-h1; worktree tmp/worktrees/decision-h1.
-- [x] No live provider requests, spend, deployment, PR merge, rebase, Python or AI commit trailers.
-- [x] Use existing make targets; ENV=test-decision-h1 last; API_PORT=8798 UI_PORT=5198 MAILDEV_UI_PORT=1098.
-- [x] Serialize Docker steps with flock; tear down the isolated environment after each step.
-- [x] One additive control migration; atomic make commits at most 150 changed lines.
-- [x] Qualification is host-selected and admin-only; production stays unqualified.
+- [x] H0 merged in #823; H1 #830 identity/admission contract is the dependency, developed alongside a fake registry.
+- [x] Branch `feat/canvas-live-h2` from `origin/main`; worktree `tmp/worktrees/canvas-h2`.
+- [x] Make-only, Docker-first, no Python, no user-visible behavior change.
+- [x] `ENV=test-canvas-h2` last; `API_PORT=8801 UI_PORT=5201 MAILDEV_UI_PORT=1101`.
+- [x] Docker operations hold `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; finish with `make down`.
+- [x] One branch migration maximum; no storage expiry invented; artifacts lifecycle remains authoritative.
+- [x] Atomic commits ≤150 changed lines through `make commit`; selective staging; merge only, never rebase.
+- [x] Draft PR to main; retain BRANCH.md; no merge requested.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `.github/workflows/ci.yml`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `api/src/routes/namespaces/llm-mesh.ts`
-  - `api/src/routes/namespaces/llm-mesh-cutover.ts`
-  - `api/src/routes/namespaces/decision*.ts`
-  - `api/src/services/decision*.ts`
-  - `api/src/services/llm-metering/decision*.ts`
-  - `api/src/services/llm-metering/budget-admission.ts`
-  - `api/src/services/llm-metering/model-pricing-writer.ts`
-  - `api/src/db/control-schema.ts`
-  - `api/vitest.config.ts`
-  - `api/drizzle/control/*decision*.sql`
-  - `api/drizzle/control/meta/_journal.json`
-  - `api/tests/unit/decision*.test.ts`
-  - `api/tests/api/decision*.test.ts`
-  - `api/tests/api/llm-admission-schema.test.ts`
-  - `packages/llm-mesh/src/decision/descriptor.ts`
-  - `packages/llm-mesh/package.json`
-  - `packages/llm-mesh/tests/decision-fixtures.ts`
-  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
-  - `packages/cluster-mesh/tests/decision-receipts.spec.ts`
-  - `packages/cluster-mesh/tests/fixtures/train.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `package-lock.json`
-  - `spec/decision/api-host.md`
+  - `packages/chat-core/src/live-document-port.ts`
+  - `packages/chat-core/src/ports.ts`
+  - `packages/chat-core/package.json`
+  - `api/src/services/canvas-live/persistence.ts`
+  - `api/src/services/canvas-live/pg-store.ts`
+  - `api/src/services/canvas-live/journal.ts`
+  - `api/src/services/canvas-live/freeze-capture.ts`
+  - `api/src/db/schema.ts`
+  - `api/drizzle/0048_canvas_live_h2.sql`
+  - `api/drizzle/meta/_journal.json`
+  - `api/tests/unit/canvas-live-recovery.test.ts`
+  - `api/tests/unit/canvas-live-journal.test.ts`
+  - `api/tests/unit/canvas-live-freeze-capture.test.ts`
+  - `api/tests/helpers/canvas-live.ts`
+  - `api/tests/api/canvas-live-persistence.test.ts`
+  - `api/package.json`
+  - `api/package-lock.json`
+  - `spec/DATA_MODEL.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `docker-compose.*.yml`
+  - `Makefile`
+  - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.track/**`
-  - `plan/NN-BRANCH_*.md`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `Makefile` (BR822-EX3: Decision secret names only)
-  - `docker-compose.yml` (BR822-EX3: Decision environment names only)
-  - `deploy/k8s/base/30-api.yaml` (BR822-EX3: optional Decision secret references only)
-  - `api/drizzle/*.sql` (maximum one migration; control uses its existing migration lane)
   - `.github/workflows/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (one named migration above only)
 - **Exception process**:
-  - [x] Declare BRH-EXn with reason, impact and rollback before changing conditional paths.
+  - [x] Record BRH2-EXn reason, impact and rollback before any additional conditional change.
 
 ## Feedback Loop
-- [x] H1-R2-MERGE-2 — Main advanced during CI: merge origin/main ecca3a0d5 (PR #826), keeping this plan as the sole conflict resolution and retaining incoming DAG changes. Head 80c7183eb passed full PR CI 40774107205 and all four required checks; the new merge head must pass separately. No rebase or Track writes.
-- [x] H1-R2-MERGE — Merge origin/main 8d37455df without rebase; BRANCH.md was the sole conflict and this PR's plan is retained. Incoming changes are unchanged; both parents and the merge retain identical Track files, with no Track writes.
-- [x] H1-R2-F7 — Fixture dispatch always runs ci-gate and fails before checkout or artifacts with an explicit refusal; ordinary gate evaluation is unchanged. Regression reproduced the skipped gate, then all 137 Docker-hosted workflow wiring tests passed, including execution of the refusal step.
-- [x] H1-R1-MERGE — Retain both manual workflow inputs, guarded inherited secrets, main's image cache configuration and the Decision plan while merging c8ec01237; no Track writes.
-- [x] BR822-EX4 — Merged origin/main c8ec01237 in 93de7e1ee to resolve the workflow conflict blocking pull_request CI; no rebase. Impact: inherited reviewed CI-image changes, retained Decision guards and this plan; temporary integration allowances removed. Rollback: revert the merge. Both parent event logs retain all 370 event IDs; acceptance writes remain with the designated conductor.
+- [ ] Deferred integration: H1 final admission/registry wiring waits for #830 merge; H3 owns real provider conformance, H4 real inverse qualification, H5 publication authority, H10 production activation/N4 retirement.
+- [x] User instruction replaces the LiveDocumentStore stub now; one exported substantive port, no alias or fallback.
+- [x] Focus editing API pinned to h2a `98060bd0a`, package `@sentropic/focus@0.5.0`; dependency alias avoids the unrelated app-local Focus package.
+
+## AI Flaky tests
+- [x] No AI calls in H2 acceptance; no flaky exceptions requested.
+
+## Orchestration Mode (AI-selected)
+- [x] Mono-branch; single code author; merge-only integration.
+
+## UAT Management (in orchestration context)
+- [x] No UI, Chrome or VSCode flow changes; acceptance uses host service and database witnesses.
+
+## Plan / Todo (lot-based)
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read MASTER, workflow, testing, API services, data and schema migration rules, template and approved H2.
+  - [x] Create isolated worktree and mechanically pass `harness check branch`.
+  - [x] Define scope, test environment, ports and Docker lock.
+- [ ] **Lot 1 — Port and RED witnesses**
+  - [ ] Replace stub with host-only persistence contract; bump chat-core after published-version check.
+  - [ ] RED `api/tests/unit/canvas-live-recovery.test.ts`: checkpoints, replay, delete set/vector, epoch, corrupted watermark, tenant isolation.
+  - [ ] RED `api/tests/unit/canvas-live-journal.test.ts`: receipts, inverse/provenance atomicity, publish after commit, rebuild after failure, retention.
+  - [ ] RED `api/tests/unit/canvas-live-freeze-capture.test.ts`: cumulative retained-baseline diff and undo to baseline.
+  - [ ] RED `api/tests/api/canvas-live-persistence.test.ts`: real PostgreSQL rollback, restart, duplicate keys and scope.
+- [ ] **Lot 2 — Durable database adapter**
+  - [ ] Sequence journal, atomic encoded-state checkpoints, immutable baseline, scoped migration/schema and DATA_MODEL.
+  - [ ] Durable roster, registry origins, admissions/acknowledgements, freeze exclusions/digest, refusals, receipts, inverse and revert records.
+  - [ ] Transactionally commit update/receipt/inverse/formatting intents; preserve retained dependency references during compaction.
+- [ ] **Lot 3 — Recovery and commit-gated publication**
+  - [ ] Restore fresh document from checkpoint plus exact suffix; reject inconsistent watermark and digest.
+  - [ ] Rebuild committed state after candidate persistence failure; gate all further publication until recovery succeeds.
+  - [ ] GREEN recovery and journal witnesses, including semantic same-value formatting reassertion.
+- [ ] **Lot 4 — FE-3 baseline bridge**
+  - [ ] Map complete captured blocks by manifest identities to pinned Focus `diffParagraphs`; preserve baseline at reconnect.
+  - [ ] GREEN cumulative diff, undo-empty and invalid capture refusal witnesses.
+- [ ] **Lot 5 — Docs consolidation and final validation**
+  - [ ] Typecheck, lint, formatting and package-port checks.
+  - [ ] All four scoped H2 suites GREEN on real isolated PostgreSQL where applicable.
+  - [ ] Review with at least two peers and resolve findings.
+  - [ ] `make scope-check` before every commit; verify no out-of-scope hunks.
+  - [ ] Draft PR using this BRANCH.md as body; initial plan comment.
+  - [ ] CI completed/success on the exact reported head; record PR and SHA.
+  - [ ] Inspect service logs and `make down` after validation.
