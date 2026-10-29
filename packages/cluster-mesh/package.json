@@ -183,6 +183,7 @@
   },
   "files": [
     "dist",
+    "examples/memory-mcp-stdio.mjs",
     "contracts",
     "assets/storage",
     "README.md",
@@ -214,6 +215,7 @@
     "hono": "^4.10.7"
   },
   "peerDependencies": {
+    "@sentropic/engram": ">=0.22.0 <0.23.0",
     "@sentropic/comments": "^0.3.0",
     "@sentropic/llm-mesh": "0.19.2 || >=0.22.0 <0.33.0",
     "@sentropic/llm-gateway": ">=0.19.0 <0.23.0",
@@ -224,6 +226,7 @@
     "jose": "^5.10.0"
   },
   "peerDependenciesMeta": {
+    "@sentropic/engram": { "optional": true },
     "@sentropic/comments": { "optional": true },
     "@sentropic/llm-mesh": { "optional": true },
     "@sentropic/llm-gateway": { "optional": true },
