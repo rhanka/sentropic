@@ -25,11 +25,13 @@ export class LiveSessionProvider {
         await this.recovery.preserve(principal, input.binding.documentId, draft.draftId, {
           bytes: draft.bytes, profileId: input.profileId, schemaEpoch: input.schemaEpoch,
         });
+        throw new AdmissionError('incompatible-schema', draft.draftId);
       }
       throw error;
     }
     await this.recovery.requirePendingAcknowledged(record, record);
     record = await this.authority.check(record, input.binding.fieldKey, 'read');
+    await this.recovery.consumePendingAcknowledged(record, record);
     const handle = this.registry.open(record, input.binding.fieldKey);
     const key = this.key(record, handle.identity);
     const existing = this.bindings.get(key);
@@ -65,6 +67,10 @@ export class LiveSessionProvider {
   async acknowledgeDraftRecovery(input: OpenSessionInput, draftId: string) {
     const record = await this.authority.open(input);
     await this.recovery.acknowledge(record, record, draftId);
+  }
+  async discardDraftRecovery(input: OpenSessionInput, draftId: string) {
+    const record = await this.authority.open(input);
+    await this.recovery.discard(record, record, draftId);
   }
   private key(principal: Principal, identity: FieldBindingIdentity) {
     return JSON.stringify([admissionKey(principal, identity.documentId), identity.sessionId, identity.fieldKey]);

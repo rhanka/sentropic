@@ -28,6 +28,7 @@ export class SessionRegistry {
   constructor(private readonly factory: { create(record: AdmissionRecord): SessionResource; clientId(): number }) {}
   open(record: AdmissionRecord, fieldKey: string) {
     this.assertAdmission(record);
+    if (!/^(0|[1-9]\d*)$/.test(record.schemaEpoch)) throw new AdmissionError('incompatible-schema');
     if (record.closed || !validFields(record.fields) || !record.fields.includes(fieldKey)) throw new AdmissionError('invalid-binding');
     const key = documentKey(record); let session = this.sessions.get(key);
     if (!session) {
