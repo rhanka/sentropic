@@ -8,7 +8,8 @@ trap 'rm -rf "$TMP_DIR"' EXIT
 expect_failure() {
     local label="$1"
     local input="$2"
-    if bash scripts/security/security-parser.sh container "$input" "$TMP_DIR/output.yaml" api >/dev/null 2>&1; then
+    local scan_type="${3:-container}"
+    if bash scripts/security/security-parser.sh "$scan_type" "$input" "$TMP_DIR/output.yaml" api >/dev/null 2>&1; then
         echo "FAIL: $label was accepted"
         exit 1
     fi
@@ -22,6 +23,12 @@ printf '%s\n' '{"Results":[]}' > "$TMP_DIR/synthetic-empty.json"
 expect_failure "empty report" "$TMP_DIR/empty.json"
 expect_failure "malformed report" "$TMP_DIR/malformed.json"
 expect_failure "synthetic empty Trivy report" "$TMP_DIR/synthetic-empty.json"
+
+for scan_type in sast sca container iac; do
+    expect_failure "$scan_type missing report" "$TMP_DIR/missing.json" "$scan_type"
+    expect_failure "$scan_type empty report" "$TMP_DIR/empty.json" "$scan_type"
+    expect_failure "$scan_type malformed report" "$TMP_DIR/malformed.json" "$scan_type"
+done
 
 cat > "$TMP_DIR/npm-audit.json" <<'JSON'
 {
