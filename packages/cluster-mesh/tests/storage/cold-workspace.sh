@@ -64,6 +64,13 @@ case "$CM_ACTION" in
     "$tsc" --noEmit -p tsconfig.json
     if [ "$CM_ACTION" = gateway-check ]; then "$tsc" --noEmit -p tsconfig.test.json; fi
     /tmp/cm-tools/node_modules/.bin/vitest run tests --environment node --maxWorkers=1 ;;
+  memory-mcp)
+    # Keep diagnostics from independent static and behavioral checks in one receipt.
+    status=0
+    "$tsc" --noEmit -p tsconfig.json || status=1
+    "$tsc" --noEmit -p tsconfig.test.json || status=1
+    /tmp/cm-tools/node_modules/.bin/vitest run mcp-memory --environment node --maxWorkers=1 || status=1
+    exit "$status" ;;
   platform-test)
     cd ../mcp-platform
     /tmp/cm-tools/node_modules/.bin/vitest run "${CM_SCOPE:-tests}" --environment node --maxWorkers=1 ;;
