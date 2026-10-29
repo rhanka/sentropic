@@ -755,6 +755,29 @@ jobs:
       - name: Gate transactional SQL on a disposable database
         run: make test-idp-sync-sql ENV=test-idp-sync
 
+  # BR80-EX1: immutable archives and preparation, never a shared mutable workspace.
+  package-candidates:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: always() && !cancelled() && (needs.changes.outputs.cluster_mesh == 'true' || needs.changes.outputs.llm_mesh == 'true' || needs.changes.outputs.llm_gateway == 'true' || needs.changes.outputs.global == 'true')
+    permissions:
+      contents: read
+    env:
+      CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+      CI_MANIFEST_EVENT: ${{ github.event_name }}
+      CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Build and guard the complete candidate closure once
+        run: make ci-package-candidate ENV=test-ci-br80
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: package-candidates
+          path: tmp/ci-package-candidates/
+          compression-level: 0
+          retention-days: 7
+          if-no-files-found: error
+
   validate-llm-mesh:
     runs-on: ubuntu-latest
     needs: [changes]
