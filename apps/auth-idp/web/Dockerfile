@@ -12,7 +12,7 @@ WORKDIR /workspace
 COPY packages/auth-ui ./packages/auth-ui
 COPY apps/auth-idp/web/package.json apps/auth-idp/web/package-lock.json* ./apps/auth-idp/web/
 WORKDIR /workspace/apps/auth-idp/web
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+RUN npm ci
 # Security: audit production dependencies for HIGH/CRITICAL vulnerabilities.
 RUN npm audit --audit-level=high --omit=dev
 

@@ -1,7 +1,10 @@
 # syntax=docker/dockerfile:1.4
 FROM node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2 AS dependencies
 # Security: Pin npm to a known-good version (reproducible build) to fix glob vulnerabilities in npm dependencies
-RUN npm install -g npm@11.16.0
+COPY scripts/ci/locked-tools.mjs scripts/ci/tool-locks.json /opt/ci-tools/
+RUN node /opt/ci-tools/locked-tools.mjs --prefix /tmp/locked-npm --ignore-scripts npm@11.16.0 && \
+    rm -rf /usr/local/lib/node_modules/npm && \
+    cp -a /tmp/locked-npm/node_modules/npm /usr/local/lib/node_modules/npm && rm -rf /tmp/locked-npm
 # Security: Patch npm's bundled brace-expansion for CVE-2026-102276 / CVE-2026-102278
 RUN mkdir -p /tmp/brace-expansion-update && \
     cd /tmp/brace-expansion-update && \
@@ -97,8 +100,7 @@ COPY packages/connector-host/package.json ./packages/connector-host/package.json
 COPY packages/mcp-connector-google/package.json ./packages/mcp-connector-google/package.json
 COPY packages/ubo-contracts/package.json ./packages/ubo-contracts/package.json
 COPY packages/artifacts/package.json ./packages/artifacts/package.json
-RUN if [ -f package-lock.json ]; then npm ci --workspaces --include-workspace-root; \
-    else npm install --workspaces --include-workspace-root; fi
+RUN npm ci --workspaces --include-workspace-root
 # Security: audit production deps for HIGH/CRITICAL. Exception-aware gate
 # (GHSA allowlist + expiry) — see .security/audit-gate.mjs + vulnerability-register.yaml.
 COPY .security/audit-gate.mjs .security/audit-allowlist.json ./.security/
@@ -225,7 +227,7 @@ WORKDIR /workspace
 COPY packages/auth-ui ./packages/auth-ui
 COPY apps/auth-idp/web/package.json apps/auth-idp/web/package-lock.json* ./apps/auth-idp/web/
 WORKDIR /workspace/apps/auth-idp/web
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+RUN npm ci
 # Security: audit production dependencies for HIGH/CRITICAL vulnerabilities.
 RUN npm audit --audit-level=high --omit=dev
 COPY apps/auth-idp/web ./
@@ -243,7 +245,7 @@ RUN npm run build
 # with the SAME externals as the api build, so runtime deps resolve from the
 # pruned production node_modules; hono is inlined (it is a devDependency removed
 # by `npm prune --omit=dev`). The api default CMD is unchanged.
-RUN npx esbuild ../apps/auth-idp/index.ts \
+RUN npx --no-install esbuild ../apps/auth-idp/index.ts \
     --bundle --platform=node --target=node20 --format=esm \
     --outfile=../apps/auth-idp/dist/index.js \
     --external:pg --external:drizzle-orm --external:pino --external:pino-pretty \
@@ -266,8 +268,8 @@ WORKDIR /workspace
 ENV NODE_ENV=production
 COPY --from=production-dependencies /workspace /workspace
 # Runtime entrypoints and boot migrations use Node directly, never npm/npx.
-RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /root/.npm && \
-    ! command -v npm && ! command -v npx && test ! -e /root/.npm
+RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx --no-install /root/.npm && \
+    ! command -v npm && ! command -v npx --no-install && test ! -e /root/.npm
 COPY --from=build /workspace/api/dist /workspace/api/dist
 # BR-39 deploy (D4-a) — bundle the standalone IdP entrypoint + its login/consent
 # screens into the SAME image. The api runtime is untouched (default CMD below);
