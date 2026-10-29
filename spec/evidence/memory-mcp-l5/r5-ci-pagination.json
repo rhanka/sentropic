@@ -1,0 +1,26 @@
+{
+  "recordType": "blocking-ci-api-finding",
+  "runId": 40860736080,
+  "attempt": 2,
+  "head": "d6cc92bc749474914fcaacfceb61be8df26bbc06",
+  "collectorJobId": 123464227930,
+  "failedUrl": "https://api.github.com/repos/rhanka/sentropic/actions/runs/40860736080/attempts/2/jobs?per_page=100",
+  "failure": "HTTP 502 Server Error; capture.json was not produced; artifact upload rejected the missing file",
+  "successfulPageSize": 30,
+  "pages": 4,
+  "reportedJobs": 99,
+  "capturedJobs": 99,
+  "uniqueJobIds": 99,
+  "correction": "Keep github.paginate and authenticated current-attempt reads; reduce per_page to 30 in collector and final guard",
+  "acceptanceRulesChanged": false,
+  "ciExpectedResults": {
+    "passed": 24,
+    "failed": 0,
+    "skipped": 0
+  },
+  "memoryL5Tooling": {
+    "passed": 104,
+    "failed": 0,
+    "skipped": 0
+  }
+}
