@@ -675,6 +675,11 @@ ci-build-ui-target:
 		--build-arg VITE_EXTENSION_APP_BASE_URL=$(VITE_EXTENSION_APP_BASE_URL_BUILD) \
 		--build-arg VITE_EXTENSION_WS_BASE_URL=$(VITE_EXTENSION_WS_BASE_URL_BUILD) .
 .PHONY: ci-test-ui
+.PHONY: ci-build-desktop
+ci-build-desktop: ci-test-env ## Independent embedded desktop producer (BR79-EX2)
+	@$(MAKE) package-desktop-windows ENV=$(ENV)
+	@test -s ui/static/cowork-desktop/cowork.exe && test -s ui/static/cowork-desktop/cowork-desktop-metadata.json
+
 ci-test-ui: ci-test-env
 	@docker buildx build --platform $(IMAGE_PLATFORM) --no-cache-filter=ui-tests \
 		$(if $(filter 1,$(CI_IMAGE_CACHE)),--cache-from type=gha$(comma)scope=br78-v1-ui-$(IMAGE_PLATFORM)) \
@@ -939,6 +944,19 @@ test-ci-run-metrics: ## Run ci-run-metrics fixture tests in Docker (BR76-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node --test scripts/ci/ci-run-metrics.test.mjs
 test-ci-expected-results: ## Run ci-expected-results fixture tests in Docker (BR76-EX2)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-expected-results.test.mjs'
+
+.PHONY: test-ci-dag
+test-ci-dag: ## Qualify artifact dispatch, complete verdict and rollback (BR79-EX2)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) sh -ec '$(CI_EXPECTED_TOOLS); node --test scripts/ci/ci-dag.test.mjs'
+
+.PHONY: ci-security-join
+ci-security-join: ## Reject missing, failed or unexpectedly skipped scan lanes
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e CI_SECURITY_NEEDS -e CI_SECURITY_CATEGORY -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-dag.mjs --security-join
+
+.PHONY: ci-dag-receipt
+ci-dag-receipt: ## Emit identified runtime readiness from a completed capture
+	@test -n "$(RUN_FILE)"
+	@docker run --rm -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) node scripts/ci/ci-dag.mjs --readiness $(RUN_FILE)
 
 
 .PHONY: typecheck
