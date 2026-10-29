@@ -79,7 +79,7 @@ test('should refuse Stage B qualification with skips, missing or repeated cases,
   assert.throws(() => qualifyProfiles(bindings('/evidence'), { ...candidate.mesh, integrity: 'sha512-other' }, []), /identical mesh archive/);
 });
 
-test('should reproduce E2 bytes while refusing unqualified profiles and stable-release acceptance', () => {
+test('should reproduce qualified E2 candidate bytes while refusing stable-release acceptance', () => {
   const first = build('/evidence');
   const second = build('/evidence');
   assert.equal(canonical(first), canonical(second));

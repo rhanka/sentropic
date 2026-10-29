@@ -44,10 +44,13 @@ memory-e11-ci-input:
 	@gh api 'repos/rhanka/sentropic/actions/runs?head_sha=cfd45de4d54651626e97113494b9d7bd108998c8&event=pull_request&per_page=100' > "$(E11_INPUT)/e10-ci.json"
 
 # First freeze a new E2 consumer lock; qualification thereafter only uses npm ci.
-.PHONY: memory-e11-lock memory-e11-installed
-memory-e11-lock:
+.PHONY: memory-e11-stage memory-e11-lock memory-e11-installed
+memory-e11-stage:
 	@test -n "$(filter test-mem-e11 test-mem-e11b test-e2-int,$(ENV))"
 	@$(E11_RUN) node tools/engram-e11/stage.mjs /evidence
+
+memory-e11-lock: memory-e11-stage
+	@test -n "$(filter test-mem-e11 test-mem-e11b test-e2-int,$(ENV))"
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(E11_INPUT):/evidence" -w /evidence/consumer $(E11_IMAGE) \
 	  sh -ec 'test ! -e package-lock.json; npm install --package-lock-only --ignore-scripts --no-audit --no-fund'
 

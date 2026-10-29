@@ -55,7 +55,7 @@ export function build(root) {
       snapshotHead: candidate.snapshotHead, formatEvidence: 'format.md', receivingValidator: 'receiving-validator.mjs',
       reviewDisposition: 'Historical dev.4/dev.5/dev.6 anchors superseded by installed dev.7 Stage B qualification and published 0.21.3',
       excludedL5Candidate: 'L4 MCP 0.22.0 is separate L5 scope; plan E11 after E10 does not require it',
-      packedSourceHead: json(b.read('pack-receipt.json')).head_sha },
+      packedSourceHead: pack.originalPackHead, equivalentPackedSourceHead: pack.head_sha },
     slots: inputSlots, handoff, files: b.files };
   return tuple;
 }

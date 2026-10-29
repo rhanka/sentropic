@@ -62,6 +62,7 @@
 - [ ] **Lot E11b-2 — Validation and draft PR**
   - [ ] Typecheck/lint affected cluster-mesh paths; memory-e11-test and memory-e11-check run in CI.
   - [x] Local typecheck passes. Full memory run identified one old C6 null-hash expectation (220 pass); update it to the shipped declaration hash/status and rerun the affected suite.
+  - [x] Local lint passes. Refresh source snapshot to 2d9d5da97 for E10 coverage labels/C6 expectation; original dev.7 pack source remains d1726c309 and packed-source diff is empty. Reuse the retained install lock.
   - [x] Vendor historical input inventory excerpt, reservation and producer record so CI needs no owner-local Markdown files; these records do not promote current qualification.
   - [x] Retain the receiver's exact readHostTuple excerpt for the development-version refusal test; this excerpt is evaluated with explicit dependencies, not executed as a standalone CLI.
   - [x] Retain the receiver format reference; document the two explicit excerpts and distinguish historical records from fresh qualification evidence.
