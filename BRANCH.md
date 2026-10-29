@@ -38,6 +38,7 @@
   - [x] BR1-EX2: conductor explicitly requires workflow publisher/filter/bootstrap removal and unchanged validation gates under chat-core; rollback restores runtime lane.
 
 ## Feedback Loop
+- [x] Packaging implementation slice 2 committed with mechanical scope validation.
 - [x] Owner instruction: find another plan with no interactive npm login; use existing chat-core OIDC custody.
 - [x] #819 is `feat/chat-convergence-p1b` at `7a5285c26`; migrate after preparing this draft; merge origin/main only after this PR merges.
 - [x] Review author metadata: host codex; requested model gpt-6.1-sol; effort high.
