@@ -6,7 +6,7 @@ On 2026-10-29 at 18:45:50 UTC, four PR runs failed in `cluster-mesh-workspace` w
 | --- | --- | --- |
 | Package build, test, lint and publication tools | `scripts/ci/tool-locks.json`, one manifest and complete npm v3 lock per tool profile | `locked-tools.mjs` copies that profile into disposable storage and runs `npm ci`; unknown profiles fail |
 | Cold cluster-mesh workspace | Shallow tool profile, including optional peer tooling | Same `npm ci`, preserving nested transitive dependencies and explicit workspace links |
-| API, UI, IdP and mock container installs | Committed root or component lock | `npm ci` only; missing locks fail without an install fallback |
+| API, UI, IdP, E2E and mock container installs | Committed root or component lock, including the E2E npm bootstrap lock | `npm ci` only; missing locks fail without an install fallback |
 | Storage and comments dependency qualification | Committed `*.package-lock.json` beside each qualification manifest | Copy manifest and lock together, then `npm ci` |
 | Installed-consumer qualification | Explicit candidate archives plus registry records from the committed root, selected fixture and tool locks | `locked-consumer.mjs` exposes only these versions and integrity values through `frozen-registry.mjs`; no live registry packuments are queried |
 | Executable dispatch | Binaries installed by the preceding locked install | `npx --no-install`; no implicit tool download |

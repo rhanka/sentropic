@@ -60,7 +60,8 @@
 - [x] **Lot 2 — Security evidence**
   - [x] Record fixed finding and coverage in security notes/register.
 - [ ] **Lot 3 — Validation and delivery**
-  - [x] Cluster-mesh typecheck, 17 packaging preparation regressions and six install guard tests pass.
+  - [x] Cluster-mesh typecheck, 17 packaging preparation regressions and seven install guard tests pass.
+  - [x] Published-consumer qualification: 18 tests pass; manifest, security and CI wiring contracts: 219 tests pass.
   - [x] Diff review preserves API runtime npm removal and distinguishes executable checks from npx execution.
   - [ ] Run guard, cluster-mesh tests/typecheck, representative package and consumer checks.
   - [ ] Review changed install paths and run mechanical scope check before each commit.

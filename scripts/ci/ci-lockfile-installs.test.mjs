@@ -3,7 +3,9 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import http from 'node:http';
+import { createHash } from 'node:crypto';
 import { violations, inspect } from './ci-lockfile-installs.mjs';
 import { installTools } from './locked-tools.mjs';
 import { addLock, frozenRegistry, lockedVersions } from './frozen-registry.mjs';
@@ -90,4 +92,49 @@ test('should install real candidate tarballs and replay their lock after closing
 
 test('should prevent unlocked installation paths across the repository', () => {
   assert.deepEqual(inspect(new URL('../../', import.meta.url).pathname), []);
+});
+
+test('should install the locked transitive version even when upstream publishes a newer match', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'publication-race-'));
+  const stage = path.join(dir, 'package');
+  fs.mkdirSync(stage);
+  const artifacts = new Map();
+  for (const version of ['1.0.0', '1.0.1']) {
+    fs.writeFileSync(path.join(stage, 'package.json'), JSON.stringify({ name: 'race-child', version }));
+    const archive = path.join(dir, `${version}.tgz`);
+    execFileSync('tar', ['-czf', archive, '-C', dir, 'package']);
+    artifacts.set(version, fs.readFileSync(archive));
+  }
+  let metadataRequests = 0;
+  const upstream = http.createServer((req, res) => {
+    if (req.url.endsWith('.tgz')) { res.end(artifacts.get(req.url.slice(1, -4))); return; }
+    metadataRequests += 1;
+    res.setHeader('content-type', 'application/json');
+    res.end(JSON.stringify({ name: 'race-child', 'dist-tags': { latest: '1.0.1' }, versions: {
+      '1.0.1': { name: 'race-child', version: '1.0.1', dist: { tarball: `${upstreamUrl}/1.0.1.tgz` } },
+    } }));
+  });
+  await new Promise(resolve => upstream.listen(0, '127.0.0.1', resolve));
+  const upstreamUrl = `http://127.0.0.1:${upstream.address().port}`;
+  const registry = await frozenRegistry(new Map([['race-child', new Map([['1.0.0', {
+    name: 'race-child', version: '1.0.0', dist: { tarball: `${upstreamUrl}/1.0.0.tgz`,
+      integrity: `sha512-${createHash('sha512').update(artifacts.get('1.0.0')).digest('base64')}` },
+  }]])]]));
+  try {
+    const cwd = path.join(dir, 'consumer');
+    fs.mkdirSync(cwd);
+    fs.writeFileSync(path.join(cwd, 'package.json'), '{"private":true,"dependencies":{"race-child":"^1.0.0"}}');
+    const code = await new Promise((resolve, reject) => {
+      const child = spawn('npm', ['install', '--registry', registry.url, '--cache', path.join(dir, 'cache'),
+        '--ignore-scripts', '--no-audit', '--no-fund'], { cwd, stdio: 'ignore' });
+      child.once('error', reject); child.once('close', resolve);
+    });
+    assert.equal(code, 0);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(cwd, 'node_modules/race-child/package.json'))).version, '1.0.0');
+    assert.equal(metadataRequests, 0, 'live registry metadata must never influence the install');
+  } finally {
+    await registry.close();
+    await new Promise(resolve => upstream.close(resolve));
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
