@@ -295,7 +295,8 @@ export async function qualify(opts) {
       const published = await registry.fetchPublishedManifest(name, version);
       primary = published.manifest;
       report.resolved = { name, version, integrity: published.integrity, sha256: published.sha256 };
-      installSpec = `${name}@${version}`;
+      installSpec = path.join(consumer.dir, 'primary-candidate.tgz');
+      fs.writeFileSync(installSpec, published.bytes);
       if (opts.provenanceCommit) {
         // Attestations may lag the packument: wait within the same budget, then compare once.
         let doc = null;
@@ -360,7 +361,7 @@ export async function qualify(opts) {
     const installArgs = ['install', installSpec, '--save-exact', '--omit=dev', '--no-audit', '--no-fund'];
     let install;
     for (let i = 1; i <= attempts; i += 1) {
-      install = run('npm', installArgs, { cwd: consumer.dir, env, log });
+      install = run(process.execPath, [fileURLToPath(new URL('./locked-consumer.mjs', import.meta.url)), ...installArgs.slice(1)], { cwd: consumer.dir, env, log });
       if (install.status === 0) break;
       const missing = missingSibling(install.output);
       if (missing && (await confirmMissing(registry, missing, semver))) report.pendingSibling = { ...missing, intended: 'awaiting publication', attempt: i };
@@ -413,7 +414,13 @@ export async function qualify(opts) {
       let tries = 0;
       while (tries < attempts) {
         tries += 1;
-        r = run('npm', ['install', sib ? sib.file : `${name}@${version}`, '--save-exact', '--omit=dev', '--no-audit', '--no-fund'], { cwd: consumer.dir, env, log });
+        let archive = sib?.file;
+        if (!archive) {
+          const published = await registry.fetchPublishedManifest(name, version);
+          archive = path.join(consumer.dir, `${name.replace('/', '-')}-${version}.tgz`);
+          fs.writeFileSync(archive, published.bytes);
+        }
+        r = run(process.execPath, [fileURLToPath(new URL('./locked-consumer.mjs', import.meta.url)), archive, '--save-exact', '--omit=dev', '--no-audit', '--no-fund'], { cwd: consumer.dir, env, log });
         if (r.status === 0 || sib || !registryNotVisible(r.output) || tries === attempts) break;
         fs.appendFileSync(log, `waiting for optional peer ${name}@${version} (${tries}/${attempts})\n`);
         await sleep(delayMs);
