@@ -48,13 +48,13 @@
   - [x] Verify candidate tarball hash.
 - [ ] **Lot 1 — Contract tests first**
   - [x] Add `tests/mcp-memory.spec.ts`: static catalog, lazy selection and atomic peer refusal; red: missing builtin entry.
-  - [ ] Add `tests/engram-memory/mcp-memory-pg.spec.ts`: all six tools, confirmation guard and two-tenant isolation on real PostgreSQL.
+  - [x] Add `tests/engram-memory/mcp-memory-pg.spec.ts`: all six tools, confirmation guard and two-tenant isolation on real PostgreSQL.
   - [ ] Add transport coverage for stdio and HTTP using the same compiled definition.
   - [ ] Demonstrate expected failures before implementation.
 - [ ] **Lot 2 — Qualified builtin and composition**
-  - [ ] Add `src/integrations/mcp/memory.ts` and `src/loaders/mcp/memory.ts` with the existing topology guard.
+  - [x] Add `src/integrations/mcp/memory.ts` and `src/loaders/mcp/memory.ts` with the existing topology guard.
   - [x] Extend module catalog, contracts, exports and loader barrel.
-  - [ ] Compose canonical store, shared engine/read facets and nine bindings through `definition` only.
+  - [x] Compose canonical store, shared engine/read facets and nine bindings through `definition` only.
   - [ ] Preserve producer schemas, receipts, confirmation guard and trusted context.
 - [ ] **Lot 3 — Qualification and handoff**
   - [ ] Run focused PostgreSQL and transport tests, typecheck, package build and regression suite.
