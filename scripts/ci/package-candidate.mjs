@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { commandPack, DEP_SECTIONS, GuardError, inspectArchive, readPackedManifest, sha256File } from './publishable-manifests.mjs';
+import { classifyPackages, commandPack, createRegistry, DEP_SECTIONS, GuardError, inspectArchive, readContext, readPackedManifest, sha256File } from './publishable-manifests.mjs';
 
 const json = file => JSON.parse(fs.readFileSync(file, 'utf8'));
 const fail = message => { throw new GuardError(message); };
@@ -51,6 +51,7 @@ export function verifyCandidates(dir, tuple, roots, { semver, root = process.cwd
   const index = json(path.join(dir, 'candidates.json'));
   if (JSON.stringify(index.tuple) !== JSON.stringify(tuple)) fail('candidate source/tool tuple mismatch');
   if (index.schema !== 1 || JSON.stringify(index.roots) !== JSON.stringify(roots)
+    || !Array.isArray(index.siblingSelection) || index.siblingSelection.some(slug => !index.order.includes(slug))
     || JSON.stringify(index.order) !== JSON.stringify(candidateClosure(root, roots))) {
     fail('candidate closure mismatch');
   }
@@ -75,7 +76,7 @@ export function verifyCandidateArchives(dir, index, { semver } = {}) {
   return index;
 }
 
-export async function produceCandidates({ root, dir, roots, tuple, tsc, env = process.env, pack = commandPack }) {
+export async function produceCandidates({ root, dir, roots, tuple, tsc, env = process.env, pack = commandPack, registry = createRegistry() }) {
   if (fs.existsSync(path.join(dir, 'candidates.json'))) {
     return verifyCandidates(dir, tuple, roots, { root });
   }
@@ -93,13 +94,25 @@ export async function produceCandidates({ root, dir, roots, tuple, tsc, env = pr
     const receipt = json(path.join(reports, `${slug}.receipt.json`));
     receipts.push({ ...receipt, file: `${slug}/${path.basename(receipt.archive)}` });
   }
-  const index = { schema: 1, roots, order, tuple, receipts };
+  // Preparation closure and same-PR injection are distinct: unchanged frozen peers
+  // retain their registry/lock assertions, even though their sources are built once.
+  const context = readContext(env);
+  let siblingSelection = [];
+  if (context) {
+    const { classification } = await classifyPackages({ publicSlugs: order, context, completeInventory: false,
+      absent: async slug => {
+        const receipt = receipts.find(row => row.slug === slug);
+        return (await registry.lookup(receipt.name, receipt.version)).status === 'absent';
+      } });
+    siblingSelection = order.filter(slug => classification.get(slug).severity === 'block');
+  }
+  const index = { schema: 1, roots, order, tuple, receipts, siblingSelection };
   fs.writeFileSync(path.join(dir, 'candidates.json'), `${JSON.stringify(index, null, 2)}\n`);
   return index;
 }
 
-export function exportSiblings(dir, index, slug, destination) {
-  const selected = new Set(candidateClosure(process.cwd(), [slug]).filter(member => member !== slug));
+export function exportSiblings(dir, index, slug, destination, { root = process.cwd() } = {}) {
+  const selected = new Set(candidateClosure(root, [slug]).filter(member => member !== slug && index.siblingSelection.includes(member)));
   fs.mkdirSync(destination, { recursive: true });
   if (fs.readdirSync(destination).length) fail('sibling destination is not empty');
   const receipts = index.receipts.filter(row => selected.has(row.slug)).map(row => {
