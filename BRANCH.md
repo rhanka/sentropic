@@ -16,6 +16,7 @@
   - `scripts/**`
   - `tools/**`
   - `packages/**/tests/**`
+  - `packages/artifacts/probe/**`
   - `packages/**/scripts/**`
   - `packages/live-speech/*.sh`
   - `packages/live-speech/*.mk`
