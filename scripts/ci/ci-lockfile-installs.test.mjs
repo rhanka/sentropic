@@ -15,6 +15,9 @@ test('should reject range resolution in CI, container, Make and script install p
     ['.github/workflows/new.yml', 'run: npx --yes tool@^1'],
     ['api/Dockerfile', 'RUN if test -f package-lock.json; then npm ci; else npm install; fi'],
     ['scripts/tool.mjs', "execFileSync('npm', ['install', 'tool@1.0.0']);"],
+    ['scripts/tool.mjs', "execFileSync('npm',\n ['install', 'tool@1.0.0']);"],
+    ['scripts/tool.sh', 'npm \\\n install tool@1.0.0'],
+    ['packages/tool/package.json', '{"scripts":{"build":"npx tool@^1"}}'],
   ]) assert.equal(violations(file, source).length, 1, file);
   assert.deepEqual(violations('Makefile', 'lock-root:\n\tnpm install --package-lock-only\nbuild:\n\tnpm ci'), []);
   assert.deepEqual(violations('scripts/test.sh', 'npm ci\nnpx --no-install vitest run'), []);

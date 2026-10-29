@@ -416,11 +416,17 @@ export async function qualify(opts) {
         tries += 1;
         let archive = sib?.file;
         if (!archive) {
-          const published = await registry.fetchPublishedManifest(name, version);
-          archive = path.join(consumer.dir, `${name.replace('/', '-')}-${version}.tgz`);
-          fs.writeFileSync(archive, published.bytes);
+          try {
+            const published = await registry.fetchPublishedManifest(name, version);
+            archive = path.join(consumer.dir, `${name.replace('/', '-')}-${version}.tgz`);
+            fs.writeFileSync(archive, published.bytes);
+          } catch (error) {
+            const invisible = /is not published|published tarball missing/.test(error.message);
+            r = { status: 1, output: `${invisible ? 'ETARGET ' : ''}${error.message}` };
+            fs.appendFileSync(log, r.output + '\n');
+          }
         }
-        r = run(process.execPath, [fileURLToPath(new URL('./locked-consumer.mjs', import.meta.url)), archive, '--save-exact', '--omit=dev', '--no-audit', '--no-fund'], { cwd: consumer.dir, env, log });
+        if (archive) r = run(process.execPath, [fileURLToPath(new URL('./locked-consumer.mjs', import.meta.url)), archive, '--save-exact', '--omit=dev', '--no-audit', '--no-fund'], { cwd: consumer.dir, env, log });
         if (r.status === 0 || sib || !registryNotVisible(r.output) || tries === attempts) break;
         fs.appendFileSync(log, `waiting for optional peer ${name}@${version} (${tries}/${attempts})\n`);
         await sleep(delayMs);

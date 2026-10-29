@@ -26,6 +26,7 @@
   - `**/Dockerfile*`
   - `docker-compose*.yml`
   - `apps/**/Dockerfile*`
+  - `e2e/npm-toolchain/**`
 - **Forbidden Paths (must not change in this branch)**:
   - `.cursor/rules/**`
   - `api/src/**`
