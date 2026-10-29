@@ -6,8 +6,8 @@
 ## Scope / Guardrails
 - [x] Worktree: `tmp/worktrees/memory-mcp-builtin`; branch: `feat/cluster-mesh-memory-mcp`; base: `origin/main`.
 - [x] Make-only, Docker-first; shared Docker flock; `ENV=test-memory-mcp` last; shutdown after qualification.
-- [x] Candidate: engram 0.22.0, SHA-256 `965c93e326df9866584261061f4e49571cfd74dfe1dc258c0c6894eea121a4e9`.
-- [x] No publication or release version depending on unpublished engram; SQLite remains refused.
+- [x] Candidate: engram 0.22.0, SHA-256 `0e740e5c8fd9d8bc167d6efcdd0e2bf86a2af5c6accfc2bc1c464e4477b14f08`; source `2bd7da41779305831b16c94f1272ab3b9d38128e`.
+- [x] No publication or release version depending on unpublished engram; this builtin is PostgreSQL-only for milestone 1; SQLite is milestone 2.
 - [x] All host customization arrives through `definition`; no stub or fallback.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -34,11 +34,12 @@
 - [x] BR01-EX3: update root workspace optional peer metadata only; retain the frozen 0.21.3 substrate development lock. The Docker qualification explicitly installs the hash-pinned 0.22.0 peer; no runtime fallback. Rollback restores those metadata entries.
 - [x] Keep the supplied candidate as a hash-checked test-only fixture so CI can qualify identical unpublished peer bytes.
 - [x] Record unanswered producer questions in root `.tmp/memory-mcp-builtin/questions.md`; choose the narrowest compatible composition.
-- [ ] BLOCKED — Engram 0.22.0 candidate public entries duplicate the private fenced-store registry: real PostgreSQL captures return `CAPABILITY_UNAVAILABLE`. Owner: Engram packaging; preserve the private provenance gate and share the engine/store-factory instance across public entries. The builtin now refuses this composition atomically before opening storage.
+- [x] Repin the shared-chunk candidate from Engram source `2bd7da41779305831b16c94f1272ab3b9d38128e`; preserve the atomic split-engine/provenance refusal test and private gate.
 - [ ] BLOCKED — Published engram is still 0.21.3; retain cluster-mesh 0.24.0 per owner instruction. The release bump gate cannot pass for this draft without a changed publication prerequisite.
 - [x] Static validation: lint, source/test typechecks, build and launcher syntax pass; unit lane: 159 files, 1420 tests pass; 245 existing conditional tests are outside this unit lane.
-- [ ] Positive qualification: six required PostgreSQL/stdio/HTTP tests fail on the atomic producer-instance refusal; six static/lazy/refusal tests pass. No required positive case is skipped.
-- [ ] Consensus review pending: no live mesh catalog is configured for resolving exact complementary reviewer identities; no consensus verdict is claimed.
+- [x] Positive qualification: six required PostgreSQL/stdio/HTTP tests and six static/lazy/refusal tests pass; no required case is skipped. Forget replay preserves its receipt.
+- [x] Fix the directly exposed consumer lexical-index adapter: preserve the canonical null tombstone and mutable projection bytes under a stable index identity; commit proofs and provenance remain enforced.
+- [ ] Consensus review pending: Muse startup failed on its read-only session directory; automatic approval review rejected the Gemini Argon fallback's external source-code payload. No consensus verdict is claimed.
 
 ## AI Flaky tests
 - [x] No accepted flaky tests; no timeout increases.
@@ -54,19 +55,19 @@
   - [x] Read common rules, binding specification, handoff, launch contract and host bindings.
   - [x] Create isolated worktree and pass mechanical harness branch check.
   - [x] Verify candidate tarball hash.
-- [ ] **Lot 1 — Contract tests first**
+- [x] **Lot 1 — Contract tests first**
   - [x] Add `tests/mcp-memory.spec.ts`: static catalog, lazy selection and atomic peer refusal; red: missing builtin entry.
   - [x] Add `tests/engram-memory/mcp-memory-pg.spec.ts`: all six tools, confirmation guard and two-tenant isolation on real PostgreSQL.
   - [x] Add transport coverage for stdio and HTTP using the same compiled definition.
-  - [ ] Demonstrate expected failures before implementation.
-- [ ] **Lot 2 — Qualified builtin and composition**
+  - [x] Demonstrate candidate refusal and the real PostgreSQL forget failure before their corresponding fixes.
+- [x] **Lot 2 — Qualified builtin and composition**
   - [x] Add `src/integrations/mcp/memory.ts` and `src/loaders/mcp/memory.ts` with the existing topology guard.
   - [x] Extend module catalog, contracts, exports and loader barrel.
   - [x] Compose canonical store, shared engine/read facets and nine bindings through `definition` only.
   - [x] Preserve producer schemas, receipts, confirmation guard and trusted context.
 - [ ] **Lot 3 — Qualification and handoff**
   - [x] Pass lint, source/test typechecks, package build, launcher syntax and the unit/regression suite in isolated Docker.
-  - [ ] Pass positive PostgreSQL and transport tests; blocked by the pinned candidate's split provenance instance.
+  - [x] Pass all six positive PostgreSQL and transport tests plus the atomic split-provenance refusal.
   - [x] Run mechanical scope checks; final full branch diff passes C2.
   - [ ] Complete consensus review and reconcile findings.
   - [x] Document the exact host launch line and required definition bindings in `packages/cluster-mesh/docs/memory-mcp.md`.
