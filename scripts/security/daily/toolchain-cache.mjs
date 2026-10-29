@@ -25,6 +25,9 @@ function extract(archive, directory, filename) {
     names.every((name) => [filename, 'metadata.json'].includes(name)), 'DB archive paths');
   const entries = run(['-tvzf', archive]);
   requireEvidence(entries.length === 2 && entries.every((entry) => entry.startsWith('-')), 'DB archive links/type');
+  const sizes = entries.map((entry) => Number(entry.split(/\s+/)[2]));
+  requireEvidence(sizes.every((size) => Number.isSafeInteger(size) && size >= 0) &&
+    sizes.reduce((total, size) => total + size, 0) <= 4 * 1024 ** 3, 'DB expanded byte bound');
   run(['-xzf', archive, '--directory', directory, '--no-same-owner', '--no-same-permissions', '--', ...names]);
 }
 
