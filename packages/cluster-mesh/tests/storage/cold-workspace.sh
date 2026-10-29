@@ -20,6 +20,7 @@ tar --exclude=.git --exclude=node_modules --exclude=dist --exclude=tmp \
 cd "$workspace"
 test ! -d node_modules
 mkdir /tmp/cm-tools
+echo '965c93e326df9866584261061f4e49571cfd74dfe1dc258c0c6894eea121a4e9  /source/packages/cluster-mesh/tests/fixtures/sentropic-engram-0.22.0.tgz' | sha256sum -c -
 # Shallow keeps transitive dependents nested so an installed @sentropic/*
 # package can never shadow a workspace symlink below (a hoisted older
 # llm-mesh required by a peer tool would otherwise break sibling builds).
@@ -43,7 +44,7 @@ if [ "$CM_ACTION" = candidate ]; then
   node scripts/ci/package-candidate.mjs seal "$CI_PACKAGE_CANDIDATES" cluster-mesh
   exit 0
 fi
-for package in contracts events llm-mesh oauth-verify mcp-auth auth-hono llm-gateway mcp-platform artifacts comments; do
+for package in contracts events llm-mesh oauth-verify mcp-auth auth-hono llm-gateway mcp-platform mcp-broker artifacts comments; do
   "$tsc" --typeRoots /tmp/cm-tools/node_modules/@types -p "packages/$package/tsconfig.json"
 done
 fi
