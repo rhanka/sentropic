@@ -3128,7 +3128,7 @@ jobs:
               attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT) };
             const { data: run } = await github.rest.actions.getWorkflowRunAttempt(params);
             const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
-              { ...params, per_page: 100 });
+              { ...params, per_page: 30 });
             fs.writeFileSync('tmp/ci-capacity/capture.json', JSON.stringify({ run, jobs,
               sourceSha: run.head_sha, workflowSha: process.env.GITHUB_WORKFLOW_SHA ?? null }, null, 2));
       - name: Check required CI results
@@ -3177,7 +3177,7 @@ jobs:
             const { data: run } = await github.rest.actions.getWorkflowRunAttempt(
               { ...params, attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT) });
             const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
-              { ...params, attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT), per_page: 100 });
+              { ...params, attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT), per_page: 30 });
             const manifest = JSON.parse(fs.readFileSync('tmp/ci-capacity/expected.json'));
             const expected = manifest.expected;
             const packages = expected.filter(row => row.job.startsWith('publish-') && !row.job.endsWith('-image'));

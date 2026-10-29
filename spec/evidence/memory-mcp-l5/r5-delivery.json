@@ -1,0 +1,21 @@
+{
+  "recordType": "delivery-identity-not-acceptance",
+  "package": "@sentropic/engram@0.22.0",
+  "tarballSha256": "965c93e326df9866584261061f4e49571cfd74dfe1dc258c0c6894eea121a4e9",
+  "tarballIntegrity": "sha512-GTpbiHocqxLiyI1Syn1g26vOrh8+o9zTGFc2yKKrBGqE+strVqOlc9A+DJ1PRJEmPWuULG+vWB9Iebhy1r1Q7A==",
+  "members": 114,
+  "engramSourceCommit": "0db169cba322015e1ee1b1bdcab09fdc02440f37",
+  "producerCheckoutHead": "8e604b60e30085c0fcad40f299639150b2c4d17a",
+  "sentropicBase": "c37662a208a19ae12377d1a0aec2c7610c4bc0aa",
+  "preCandidateSha256": "1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730",
+  "preCandidateCommit": "c919b638686fb93c8c90a2634d3c004fd25348b3",
+  "candidateManifestSha256": "5c26148652fe18d7e77a0400ef361e879388b7482423827b610fc67817cadbb2",
+  "publisherAssetsSha256": "7440ba3af1eba7c03e1482dba96656803fd3ff71f395fb2242c037286e06ddd5",
+  "producerProbeSha256": "10da701db19f28d68421c5b0dbb818b6a2111ff931018d85cad35c0f88b0067a",
+  "producerTraceSha256": "76f5eac33db868c413e2b298abbfaff87c197ca6749ded6f8316825549bfab28",
+  "platform": "0.4.0",
+  "broker": "0.1.0",
+  "sdkPinned": "1.32.2",
+  "sdkFloor": "1.31.0",
+  "outsideE2": true
+}

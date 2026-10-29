@@ -1,0 +1,11 @@
+{
+  "sourceCommit": "0db169cba322015e1ee1b1bdcab09fdc02440f37",
+  "sourceSha256": "316f9d20b782c6c589aab97adf3f88be66b5c0396a728534845737134c61f3ce",
+  "installLogSha256": "dc319c4e2328f84150ce0f66bd1470b487be47da65b0fa35af7c234b525b5342",
+  "gate": "disabled-install native-build predicate at delivered source commit",
+  "status": "FAIL",
+  "failure": "disabled install: native build attempts observed:\n> node-gyp rebuild",
+  "classification": "environment-triggered false attribution in the producer test predicate; no demonstrated memory-native package compile",
+  "blocksOriginalGate": true,
+  "waived": false
+}
