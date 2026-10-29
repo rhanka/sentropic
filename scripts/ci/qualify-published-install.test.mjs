@@ -56,6 +56,20 @@ test('packed-manifest guard rejects file: dependencies before installing', async
   assert.match(readReport(reportDir).problems.join('\n'), /packed manifest guard: dependencies/);
 });
 
+test('should reject a primary tarball absent from the immutable candidate receipt set before install', async () => {
+  const tarball = build({ name: '@fx/primary', exports: './index.js' }, { 'index.js': 'export default 1;' });
+  const candidatesDir = tmp('candidate-index-'), headSha = 'a'.repeat(40), reportDir = tmp('qrep-');
+  fs.writeFileSync(path.join(candidatesDir, 'candidates.json'), JSON.stringify({
+    tuple: { head_sha: headSha }, order: [], receipts: [],
+  }));
+  assert.equal(await probe({ tarball, candidatesDir, headSha, reportDir }), 1);
+  assert.match(readReport(reportDir).problems.join('\n'), /primary archive differs/);
+  assert.equal(fs.existsSync(path.join(reportDir, 'production-tree.json')), false);
+  const wrongHead = tmp('qrep-');
+  assert.equal(await probe({ tarball, candidatesDir, headSha: 'b'.repeat(40), reportDir: wrongHead }), 1);
+  assert.match(readReport(wrongHead).problems.join('\n'), /source SHA mismatch/);
+});
+
 test('optional peer: core smoke independent of the peer, adapter covered only with explicit PEERS', async () => {
   const peer = build({ name: '@fx/peer', version: '2.0.0' }, { 'index.js': 'export const p = 2;' });
   const pkg = { name: '@fx/opt', peerDependencies: { '@fx/peer': '^2.0.0' }, peerDependenciesMeta: { '@fx/peer': { optional: true } }, exports: { '.': './index.js', './adapter': './adapter.js' } };
