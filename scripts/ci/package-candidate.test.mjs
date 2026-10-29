@@ -4,7 +4,7 @@ import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
 import { Writable } from 'node:stream';
-import { candidateClosure, exportSiblings, produceCandidates, verifyCandidates, verifyPrepared } from './package-candidate.mjs';
+import { candidateClosure, copyCandidate, exportSiblings, produceCandidates, verifyCandidates, verifyPrepared } from './package-candidate.mjs';
 import { commandPack, runNpmPack, sha256File } from './publishable-manifests.mjs';
 
 const tuple = { head_sha: 'a'.repeat(40), node: process.version, image: 'node:test', npm: '11.0.0' };
@@ -42,6 +42,21 @@ test('should reject source, tool and selected-closure substitution', async t => 
     assert.throws(() => verifyCandidates(opts.dir, { ...tuple, ...changed }, opts.roots, { root: opts.root }), /tuple mismatch/);
   }
   assert.throws(() => verifyCandidates(opts.dir, tuple, ['leaf'], { root: opts.root }), /closure mismatch/);
+});
+test('should copy exact qualification bytes and reject a substituted tuple or sibling', async t => {
+  const opts = fixture(t);
+  fs.renameSync(path.join(opts.root, 'packages/root'), path.join(opts.root, 'packages/cluster-mesh'));
+  opts.roots = ['cluster-mesh'];
+  const { result } = await produce(opts);
+  const destination = path.join(opts.root, 'consumer');
+  const copy = slug => copyCandidate(opts.dir, tuple, slug, destination, { root: opts.root });
+  assert.equal(sha256File(copy('cluster-mesh')), result.receipts[1].sha256);
+  assert.equal(sha256File(copy('leaf')), result.receipts[0].sha256);
+  assert.throws(() => copy('outside'), /missing selected candidate/);
+  assert.throws(() => copyCandidate(opts.dir, { ...tuple, head_sha: 'b'.repeat(40) }, 'leaf', destination,
+    { root: opts.root }), /tuple mismatch/);
+  fs.appendFileSync(path.join(opts.dir, result.receipts[0].file), 'tampered');
+  assert.throws(() => copy('cluster-mesh'), /hash mismatch/);
 });
 test('should reject missing sibling receipts and archives', async t => {
   const opts = fixture(t); const { result } = await produce(opts);
