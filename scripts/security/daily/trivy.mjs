@@ -4,6 +4,9 @@ import { assertQualified, digest, isDigest, policy, requireEvidence, validateSca
 import { hashFile, restoreSnapshot } from './toolchain-cache.mjs';
 import { failClosedReport } from './inventory.mjs';
 
+// Only the trusted preparation path can establish archive identity; JSON cannot mint this proof.
+const verifiedArchives = new WeakMap();
+
 export function validateTarget(target, sourceSha, key) {
   requireEvidence(/^[a-f0-9]{40}$/.test(sourceSha || '') &&
     ['api-production', 'api-toolbox', 'ui-production'].includes(key), 'target source/surface');
@@ -47,6 +50,8 @@ export async function prepareImageScan({ target, sourceSha, key, snapshots, arch
       'target archive integrity');
     mounts.push('--mount', `type=bind,src=${safePath(archive.path)},dst=/target/image.tar,readonly`);
     args.push('--input', '/target/image.tar');
+    target = { ...target };
+    verifiedArchives.set(target, { path: archive.path, digest: archive.digest });
   } else args.push('--image-src', 'remote', target.ref);
   return { command: 'docker', args: ['run', '--rm', '--pull=never', '--read-only', '--cap-drop=ALL',
     '--security-opt=no-new-privileges', '--user', '65532:65532', '--pids-limit', '128', '--memory', '4g', '--cpus', '1',
@@ -74,8 +79,11 @@ export function validateImageReport(stdout, target, execution = { status: 0 }) {
     requireEvidence(execution.status === 0 && !execution.error && !execution.signal, 'Trivy command failed');
     requireEvidence(typeof stdout === 'string' && Buffer.byteLength(stdout) <= reportLimit, 'report byte/type bound');
     const parsed = failClosedReport(stdout);
+    const archive = verifiedArchives.get(target);
+    const identityMatches = archive ? parsed.ArtifactName === '/target/image.tar' && parsed.ArtifactType === 'container_image'
+      : parsed.Metadata?.RepoDigests?.includes(target.ref);
     requireEvidence(parsed.SchemaVersion === 2 && parsed.Metadata?.ImageID === target.configDigest &&
-      parsed.Metadata?.RepoDigests?.includes(target.ref), 'report target identity');
+      identityMatches, 'report target identity');
     const actual = parsed.Results.map((result) => `${result.Target}|${result.Class}|${result.Type}`).sort();
     requireEvidence(JSON.stringify(actual) === JSON.stringify([...target.expectedResults].sort()), 'partial image coverage');
     for (const result of parsed.Results) for (const finding of result.Vulnerabilities || []) {
@@ -98,6 +106,8 @@ export async function executeImageScan(options, scannerEvidence, execute) {
     shell: false, timeout: 300000, maxBuffer: 16 * 1024 * 1024 });
   try {
     validateImageReport(result.stdout, plan.target, result);
+    const archive = verifiedArchives.get(plan.target);
+    if (archive) requireEvidence(await hashFile(archive.path) === archive.digest, 'target archive changed during scanning');
     // A DB that expired during scanning cannot support absence/reconciliation/merge.
     for (const snapshot of Object.values(plan.snapshots)) await restoreSnapshot(snapshot);
   } catch (error) {
