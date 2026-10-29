@@ -26,6 +26,14 @@ security-qualify-signature: ## Verify retained exact-index Sigstore material wit
 security-qualify-targets: ## Join trusted main-CI archives to immutable registry identities
 	@bash scripts/security/daily/qualify-targets.sh
 
+.PHONY: security-qualify-scans
+security-qualify-scans: ## Run cold/warm all-severity archive experiments with no network or daemon mount
+	@bash scripts/security/daily/qualify-scans.sh
+
+.PHONY: security-qualify-failures
+security-qualify-failures: ## Exercise real cache bytes and actual TCP faults in a disconnected container
+	@$(SECQUAL_RUN) --network=none -v "$(SECQUAL_EXPIRED_METADATA):/expired-metadata.json:ro" $(SECQUAL_NODE) node scripts/security/daily/qualify-failures.mjs
+
 .PHONY: security-qualify-cosign-help
 security-qualify-cosign-help:
 	@$(SECQUAL_RUN) --network=none $(SECQUAL_NODE) /evidence/cosign verify-blob-attestation --help > "$(SECQUAL_DIR)/cosign-help.txt"
