@@ -71,8 +71,10 @@ export const jevDescriptor: DecisionEvaluatorDescriptor = {
     bundleDigest: digestStructuredArtifact({ contract: 'jev-native', readout: 'jev-native-v1' }),
   },
   evaluator: { providerId: 'typesafe', evaluatorId: 'jev-1.13.0', revision: 'jev-1.13.0-mesh-v1-unqualified' },
-  wireModel: 'jev-1.13.0', acceptedServedModelIds: [],
-  qualification: { servedIdentity: 'unqualified', billingBound: 'unqualified', evidenceRefs: [] },
+  wireModel: 'jev-1.13.0', acceptedServedModelIds: ['jev-1.13.0'],
+  // Bounded live observations establish the returned ID, not immutable weights or calibration.
+  qualification: { servedIdentity: 'unqualified', billingBound: 'unqualified',
+    evidenceRefs: ['spec/decision/q1-live-smoke.md#jev'] },
   // JEV-BOUND-01 candidate only; qualification is required before financial admission.
   // JEV admits no billable output: the output rate must be zero, so the bound is 0.
   maxBillableInputTokens: 65_536, maxBillableOutputTokens: 0, maxRequestBytes: 256 * 1024, maxStateQuestionBytes: 32 * 1024,
