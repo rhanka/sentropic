@@ -8,6 +8,7 @@ import path from 'node:path';
 import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, dependencyFloor, publishFilter, waitForVersion } from './publishable-manifests.mjs';
+import { evaluateSelection } from './ci-expected-results.mjs';
 // Register the S1 contracts in the existing required, credential-free Node validation lane.
 import '../security/daily/schema.test.mjs';
 import '../security/daily/inventory.test.mjs';
@@ -65,7 +66,7 @@ test('dedicated manifest_guard filter: only exact image guards also select globa
 test('inventory job is always scheduled, credential-free and never a publisher/bootstrap dependency', () => {
   const job = jobs['validate-publishable-manifests'];
   assert.deepEqual(needsOf('validate-publishable-manifests'), ['changes']);
-  assert.equal(job.if, 'always() && !cancelled()');
+  assert.equal(job.if, 'always() && !cancelled() && inputs.decision_fixtures_only != true');
   assert.deepEqual(job.permissions, { contents: 'read' });
   assert.equal(job.env.CI_MANIFEST_CHANGES_RESULT, '${{ needs.changes.result }}');
   for (const [k, v] of Object.entries(CTX)) assert.equal(job.env[k], v);
@@ -84,17 +85,89 @@ test('inventory job is always scheduled, credential-free and never a publisher/b
   }
 });
 
-test('ci-gate aggregates every PR job, stays unconditional and is a leaf', () => {
+test('ci-gate aggregates every PR job, stays unconditional for normal runs and is a leaf', () => {
   const mainOnly = ['bootstrap-publish', 'verify-train-lock-integrity', 'deploy-preprod'];
   const excluded = (name) => name === 'ci-gate' || name.startsWith('publish-') || mainOnly.includes(name);
   const gate = jobs['ci-gate'];
-  assert.equal(gate.if, 'always()', 'the gate must report failure after upstream failure or cancellation');
+  assert.equal(gate.if, 'always()');
   assert.equal(gate.name, undefined, 'the required context must stay ci-gate');
   assert.deepEqual(gate.permissions, { contents: 'read', actions: 'read' });
   assert.deepEqual([...needsOf('ci-gate')].sort(), Object.keys(jobs).filter((name) => !excluded(name)).sort(), 'every PR job must be in ci-gate.needs');
   for (const name of Object.keys(jobs)) {
     assert.ok(!needsOf(name).includes('ci-gate'), `${name} must not need ci-gate`);
     if (excluded(name) && name !== 'ci-gate') assert.match(String(jobs[name].if ?? ''), /github\.ref == 'refs\/heads\/main'/, `${name} must stay main-only to be excluded`);
+  }
+});
+
+test('Decision offline mode is explicit, credential-free and cannot publish, while normal gates remain selected', () => {
+  const offline = jobs['decision-offline'];
+  assert.deepEqual(offline.permissions, { contents: 'read' });
+  assert.ok(!JSON.stringify(offline).includes('secrets.'));
+  for (const key of ['OPENAI_API_KEY', 'JEV_API_KEY']) assert.equal(offline.env[key], '');
+  for (const value of [undefined, false, true]) {
+    const lookup = (key) => key === 'inputs.decision_fixtures_only' ? value ?? 'none'
+      : key === 'github.event_name' ? 'workflow_dispatch' : key === 'github.ref' ? 'refs/heads/main'
+      : key === 'inputs.bootstrap_publish_target' ? 'llm-mesh' : '';
+    assert.equal(evaluateSelection(offline.if, lookup), value === true);
+    assert.equal(evaluateSelection(jobs['ci-gate'].if, lookup), true, 'the required gate must always run');
+    for (const name of ['changes', 'validate-publishable-manifests', 'bootstrap-publish']) {
+      assert.equal(evaluateSelection(jobs[name].if, lookup), value !== true, name);
+    }
+    const releaseLookup = (key) => key === 'needs.changes.result' ? 'success'
+      : /^needs\..+\.result$/.test(key) ? 'success' : lookup(key);
+    for (const name of ['deploy-preprod', 'verify-train-lock-integrity']) {
+      assert.equal(evaluateSelection(jobs[name].if, releaseLookup), value !== true, name);
+    }
+    // Skipped publishers must still deploy ordinary main changes, never fixtures.
+    const skippedLookup = (key) => /^needs\..+\.result$/.test(key) ? 'skipped' : lookup(key);
+    assert.equal(evaluateSelection(jobs['deploy-preprod'].if, skippedLookup), value !== true);
+  }
+  for (const expression of Object.values(ci.env).filter((value) => value.includes('secrets.'))) {
+    assert.match(expression, /inputs\.decision_fixtures_only != true && secrets\./);
+  }
+  const fixtureLookup = (key) => key === 'inputs.decision_fixtures_only' ? true
+    : key === 'github.ref' ? 'refs/heads/main' : key === 'github.event_name' ? 'workflow_dispatch'
+    : key.endsWith('.result') ? 'skipped' : '';
+  for (const [name, job] of Object.entries(jobs)) {
+    if (!JSON.stringify(job).includes('secrets.') && !name.startsWith('publish-')) continue;
+    assert.equal(evaluateSelection(job.if, fixtureLookup), false, `${name}: fixture dispatch cannot access secrets or publish`);
+  }
+});
+
+test('Decision fixture dispatch fails the required ci-gate before checkout or artifact access', () => {
+  const gate = jobs['ci-gate'];
+  assert.equal(gate.if, 'always()');
+  assert.equal(gate['continue-on-error'], undefined);
+  const refusal = gate.steps[0];
+  assert.equal(refusal.if, 'inputs.decision_fixtures_only == true');
+  assert.equal(refusal['continue-on-error'], undefined);
+  assert.equal(refusal.shell, 'bash');
+  for (const ref of ['refs/heads/main', 'refs/heads/feat/decision-host-h1']) {
+    for (const value of [undefined, false, true]) {
+      const lookup = (key) => key === 'inputs.decision_fixtures_only' ? value ?? 'none'
+        : key === 'github.ref' ? ref : key === 'github.event_name' ? 'workflow_dispatch'
+        : key.endsWith('.result') ? 'skipped' : '';
+      assert.equal(evaluateSelection(gate.if, lookup), true);
+      assert.equal(evaluateSelection(refusal.if, lookup), value === true);
+    }
+  }
+  const result = spawnSync('bash', ['-e', '-c', refusal.run], { encoding: 'utf8' });
+  assert.equal(result.status, 1, result.stderr);
+  assert.match(result.stdout, /::error::Fixture-only run is not merge evidence/);
+});
+
+test('Decision provisioning passes names through Compose and optional Kubernetes secret references without credentials or activation defaults', () => {
+  const compose = YAML.parse(fs.readFileSync(path.join(root, 'docker-compose.yml'), 'utf8'));
+  const deployment = YAML.parseAllDocuments(fs.readFileSync(path.join(root, 'deploy/k8s/base/30-api.yaml'), 'utf8'))
+    .map((doc) => doc.toJSON()).find((doc) => doc.kind === 'Deployment');
+  const api = deployment.spec.template.spec.containers.find((container) => container.name === 'api');
+  for (const [name, variable] of [['JEV_API_KEY', 'JEV'], ['DECISION_EXECUTION_PROFILE', 'DECISION_PROFILE']]) {
+    assert.ok(compose.services.api.environment.includes(name === 'JEV_API_KEY' ? `${name}=\${${name}:-}` : name));
+    assert.deepEqual(api.env.find((entry) => entry.name === name), {
+      name, valueFrom: { secretKeyRef: { name: 'sentropic-api', key: name, optional: true } },
+    });
+    assert.ok(recipe('k8s-bundle-secret').includes(`${variable}=$$(get ${name})`));
+    assert.ok(recipe('k8s-bundle-secret').includes(`--from-literal=${name}="$$${variable}"`));
   }
 });
 
@@ -315,7 +388,7 @@ test('release train: validation barrier, strict chain, serialization, lock-sync 
   assert.match(sync.run, /if \[ "\$manifest" != "\$locked" \]; then\n\s*echo "::error [^\n]*"\n\s*exit 1/);
   const verify = jobs['verify-train-lock-integrity'];
   assert.deepEqual(needsOf('verify-train-lock-integrity'), ['changes', 'publish-llm-mesh', 'publish-llm-gateway']);
-  assert.equal(verify.if, "!cancelled() && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && (needs.publish-llm-mesh.result == 'success' || needs.publish-llm-gateway.result == 'success')");
+  assert.equal(verify.if, "!cancelled() && inputs.decision_fixtures_only != true && needs.changes.result == 'success' && github.ref == 'refs/heads/main' && (needs.publish-llm-mesh.result == 'success' || needs.publish-llm-gateway.result == 'success')");
   assert.deepEqual(verify.permissions, { contents: 'read' });
   const check = verify.steps.find((s) => /check-train-lock-integrity/.test(s.run ?? ''));
   assert.deepEqual(check.env, { LLM_MESH_PUBLISH_RESULT: '${{ needs.publish-llm-mesh.result }}', LLM_GATEWAY_PUBLISH_RESULT: '${{ needs.publish-llm-gateway.result }}' });

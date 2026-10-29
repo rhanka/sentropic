@@ -96,6 +96,19 @@ spec:
         - name: api
           image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:main
           imagePullPolicy: Always
+          env:
+            - name: JEV_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: sentropic-api
+                  key: JEV_API_KEY
+                  optional: true
+            - name: DECISION_EXECUTION_PROFILE
+              valueFrom:
+                secretKeyRef:
+                  name: sentropic-api
+                  key: DECISION_EXECUTION_PROFILE
+                  optional: true
           envFrom:
             - configMapRef:
                 name: api

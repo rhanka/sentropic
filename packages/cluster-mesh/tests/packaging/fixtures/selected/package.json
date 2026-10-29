@@ -10,7 +10,7 @@
     "@sentropic/cluster-mesh": "file:../sentropic-cluster-mesh-0.23.5.tgz",
     "@sentropic/comments": "0.3.1",
     "@sentropic/llm-gateway": "0.22.2",
-    "@sentropic/llm-mesh": "0.32.0",
+    "@sentropic/llm-mesh": "0.32.1",
     "@sentropic/mcp-auth": "0.2.1",
     "@sentropic/artifacts": "0.1.4",
     "@sentropic/auth-hono": "0.17.0",
