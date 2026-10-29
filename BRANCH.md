@@ -19,6 +19,7 @@
   - `packages/chat-core/src/live-document-port.ts`
   - `packages/chat-core/src/ports.ts`
   - `packages/chat-core/package.json`
+  - `packages/chat-server/package.json`
   - `api/src/services/canvas-live/persistence.ts`
   - `api/src/services/canvas-live/pg-store.ts`
   - `api/src/services/canvas-live/journal.ts`
@@ -46,6 +47,7 @@
   - [x] Record BRH2-EXn reason, impact and rollback before any additional conditional change.
 
 ## Feedback Loop
+- [x] BRH2-EX1 — Root Docker npm ci dry-run reproduced missing chat-core 0.1.7: chat-server's old dependency excludes 0.2.0. Scope: its manifest and existing locks only. Advance to the new substantive port rather than installing another old stub; no server source changes. Rollback: revert manifest and matching lock entries together.
 - [ ] Deferred integration: H1 final admission/registry wiring waits for #830 merge; H3 owns real provider conformance, H4 real inverse qualification, H5 publication authority, H10 production activation/N4 retirement.
 - [x] User instruction replaces the LiveDocumentStore stub now; one exported substantive port, no alias or fallback.
 - [x] Focus editing API pinned to h2a `98060bd0a` (0.5.0, unpublished: npm E404); inject its exact diff contract and use the planned FE-3 test double, without substituting the app-local Focus package.
