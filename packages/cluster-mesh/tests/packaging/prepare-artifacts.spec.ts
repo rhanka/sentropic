@@ -158,13 +158,13 @@ if (args[0] === 'pack') {
     expect(result.status, result.stderr).toBe(0);
     const requests = readFileSync(join(work, 'pack-requests.txt'), 'utf8').trim().split('\n')
       .map((line) => JSON.parse(line) as string[]);
-    const { fixture, candidate } = {
+    const { fixture, candidate: meshCandidate } = {
       fixture: JSON.parse(readFileSync(new URL('./fixtures/selected/package.json', import.meta.url), 'utf8')),
       candidate: JSON.parse(readFileSync(new URL('../../../cluster-mesh/package.json', import.meta.url), 'utf8')),
     };
     const frozen = frozenBaseOf(fixture.dependencies);
     expect(requests.flatMap((args) => args.filter((arg) => arg.startsWith('@sentropic/cluster-mesh@'))))
-      .toEqual(frozen === candidate.version ? [] : [`@sentropic/cluster-mesh@${frozen}`]);
+      .toEqual(frozen === meshCandidate.version ? [] : [`@sentropic/cluster-mesh@${frozen}`]);
     const dependency = (fixture: string) => JSON.parse(readFileSync(join(work, fixture, 'package.json'), 'utf8'))
       .dependencies['@sentropic/artifacts'] as string;
     if (!artifactsCompatible) {
