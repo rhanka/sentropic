@@ -62,13 +62,15 @@
   - [ ] Resolve all three main targets with source-SHA/platform provenance and retain complete reports.
   - [x] Scan all three authenticated main-CI archives cold/warm with immutable archive/config hashes; remote provenance blocked by API/UI config mismatch and absent toolbox tag.
   - [ ] Exercise network/rate-limit, missing/corrupt/stale/incompatible cache, malicious config, expiry and changed snapshot pairs.
+  - [x] Twelve recorded trials reject network/TCP faults, damaged/incompatible/expired data, unknown sources and changed snapshots; previous main policy restores blocked S2a.
   - [ ] Inspect process/mount/credential isolation and exercise rollback to blocked S2a.
   - [x] Capture scanner process/mount/environment-name inventories; no network, credentials, daemon socket or writable target/DB mounts.
   - [ ] Measure cold/warm, refresh, remote/rebuild and CI critical path with queue separate.
+  - [x] Measure archive cold/warm and DB acquisition/restoration; observe actual remote authorization refusal and absence of isolated builder.
 - [ ] **Lot 3 — Verification and delivery**
   - [ ] Scoped tests: `scripts/security/daily/toolchain-contract.test.mjs`, `scripts/security/daily/trivy.test.mjs` and qualification regressions.
   - [x] Fix archive report identity using a process-local proof issued only after preparation verifies archive bytes; cloned JSON cannot grant that proof.
-  - [ ] Final `make test-security-daily` and `make test-security-parser`; cleanup with `make down`.
+  - [x] Final `make test-security-daily` (125 passing) and `make test-security-parser` (17 passing); scoped `make down` completed.
   - [ ] Reconcile independent peer reviews; record CLOSED / STILL BLOCKED with exact missing inputs under `docs/security/`.
   - [ ] Mechanical scope check before every commit; no publishable package source changes.
   - [ ] Draft PR to main with this plan as body and a 3–6 step plan comment; CI completed/success on exact head.
