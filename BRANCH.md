@@ -57,6 +57,7 @@
   - [x] Create isolated worktree and pass mechanical harness branch check.
 - [ ] **Lot 1 — Runtime sources and package contract**
   - [ ] Relocate source and tests into chat-core runtime directories without behavior changes.
+  - [x] Relocation slice 3 committed as unchanged source/test moves.
   - [x] Relocation slice 2 committed as unchanged source/test moves.
   - [x] Relocation slice 1 committed as unchanged source/test moves.
   - [ ] Export compiled runtime entrypoints/types and reserve registry-verified minor version.
