@@ -4,7 +4,7 @@ import type * as ObjectLocks from '$lib/utils/object-lock';
 import type { StreamHubEvent } from '@sentropic/chat-ui/client/streamTypes';
 
 function fixture() {
-  const lock = { id: 'l', workspaceId: 'w', objectType: 'folder' as const, objectId: 'f', lockedAt: 'now', expiresAt: 'later', lockedBy: { userId: 'a', email: null, displayName: 'Alice' }, unlockRequestedAt: null, unlockRequestedByUserId: null, unlockRequestMessage: null };
+  const lock = { id: 'l', workspaceId: 'w', objectType: 'folder' as const, objectId: 'f', lockedAt: '2026-10-28T00:00:00.000Z', expiresAt: '2026-10-28T00:01:00.000Z', lockedBy: { userId: 'a', email: null, displayName: 'Alice' }, unlockRequestedAt: null, unlockRequestedByUserId: null, unlockRequestMessage: null };
   const presence = { users: [{ userId: 'a', email: null, displayName: 'Alice' }, { userId: 'b', email: null, displayName: 'Bob' }], total: 2 };
   const locks = { fetchLock: vi.fn(async () => lock), acquireLock: vi.fn(async () => ({ acquired: true, lock })), releaseLock: vi.fn(async () => {}), requestUnlock: vi.fn(async () => ({ requested: true, lock })), acceptUnlock: vi.fn(async () => ({ accepted: true, lock })), forceUnlock: vi.fn(async () => ({ forced: true })), sendPresence: vi.fn(async () => presence), fetchPresence: vi.fn(async () => presence), leavePresence: vi.fn(async () => {}) };
   const handlers = new Map<string, (event: StreamHubEvent) => void>();
@@ -17,7 +17,7 @@ const flush = async () => { await Promise.resolve(); await Promise.resolve(); aw
 describe('canvas collaboration provider', () => {
   it('should adapt all lock operations to the existing object-lock API', async () => {
     const f = fixture();
-    expect(await f.provider.acquireLock(f.unit)).toMatchObject({ acquired: true, lock: { unit: f.unit, holder: { actorId: 'a', displayLabel: 'Alice' }, expiresAt: 'later' } });
+    expect(await f.provider.acquireLock(f.unit)).toMatchObject({ acquired: true, lock: { unit: f.unit, holder: { actorId: 'a', displayLabel: 'Alice' }, expiresAt: f.lock.expiresAt } });
     expect(await f.provider.refreshLock(f.unit)).toMatchObject({ holder: { actorId: 'a' } });
     await f.provider.releaseLock(f.unit); await f.provider.requestUnlock(f.unit); await f.provider.acceptUnlock(f.unit); await f.provider.forceUnlock(f.unit);
     expect(f.locks.acquireLock).toHaveBeenCalledTimes(2);
