@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createChatSessionRuntime } from '../src/state/chatSessionRuntime.js';
+import { createChatSessionRuntime } from '../../src/runtime/state/chatSessionRuntime.js';
 
 const createStreamClient = () => {
   const activeHandlers = new Map<string, (event: unknown) => void>();
