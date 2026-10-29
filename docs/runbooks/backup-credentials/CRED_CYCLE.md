@@ -1,8 +1,8 @@
 # Sentropic production backup reader credential cycle
 
-Operator and tenant: **sentropic**. Purpose: production PostgreSQL backup recovery,
-including the isolated local restore for app lot W0-close.c. Owner approved creation
-on 2026-10-29. Model: the immo `deploy/ci/bascule-preprod/CRED_CYCLE.md` 90-day cycle;
+Operator and tenant: **sentropic**. Purpose: production PostgreSQL backup recovery.
+Owner approved creation on 2026-10-29. Model: the immo
+`deploy/ci/bascule-preprod/CRED_CYCLE.md` 90-day cycle;
 immo credentials and resources are never used for sentropic recovery.
 
 ## Current state — BLOCKED (2026-10-29)
@@ -13,10 +13,21 @@ The policy has only `ObjectStorageReadOnly`, scoped to the configured project,
 with condition `resource.name == "sentropic-pgbackup"`. No write/delete/admin set.
 This conditional policy is **not a validated bucket-scoping mechanism**.
 
-Real reader LIST of `pg/*.sql.gz`: HTTP 403 AccessDenied. Real PUT of the unique
-probe `pg/__sentropic-backup-reader-denycheck-20261029T065600Z`: HTTP 403
+Real reader LIST of `pg/*.sql.gz` was refused: HTTP 403 AccessDenied. The reader
+is not usable until this authorization failure is resolved. The bucket policy is
+the likely cause, but the cause is **not verified**: the policy was not read,
+because the configured operator key also receives 403 on `GetBucketPolicy`.
+Real PUT of the unique probe
+`pg/__sentropic-backup-reader-denycheck-20261029T065600Z`: HTTP 403
 AccessDenied; no object created. This proves denied writing, not usable reading.
-No dump was downloaded and no restore was started. W0-close.c remains open.
+
+On **2026-10-29**, per owner decision, the app isolated restore **W0-close.c was
+completed** from a live production `pg_dump` obtained via `make db-backup-prod`
+using the tenant kubeconfig from `.env`, **not from the S3 backup object**.
+The [restore receipt in PR #702](https://github.com/rhanka/sentropic/blob/4ecfd73f3fea9dafd5024321b576be43531eb6f9/docs/runbooks/app-cm-baseline-restore/receipts/restore-local-20261029T084403Z.md)
+records the local restore and its proof limits. The reader was not on that restore
+path and remains unusable; this restore does not validate S3 backup recovery.
+The Kubernetes request for W0-close.c was withdrawn; no request is pending.
 
 [Scaleway's integration list](https://www.scaleway.com/en/docs/iam/policies-permissions/supported-products-resource-level/)
 does not include Object Storage. Its
