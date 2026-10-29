@@ -838,17 +838,12 @@ jobs:
       contents: read
     strategy:
       fail-fast: false
+      max-parallel: 3
       matrix:
         include:
-          - lane: source
-          - lane: postgres
-          - lane: comments
-          - lane: crash
-          - lane: installed
-          - lane: major
-          - lane: stateful
-          - lane: lazy
-          - lane: install
+          - lane: source installed major
+          - lane: postgres comments crash
+          - lane: lazy stateful install
     env:
       CI_PACKAGE_CANDIDATES: tmp/ci-package-candidates
     steps:
@@ -860,21 +855,30 @@ jobs:
           name: package-candidates
           path: tmp/ci-package-candidates
       - name: Verify the complete candidate closure
-        run: make ci-package-verify ENV=test-ci-br80-${{ matrix.lane }}
+        run: make ci-package-verify ENV=test-ci-br80
       - name: Export verified sibling archives without packing
-        run: make pack-candidate-siblings PACKAGE=cluster-mesh SIBLING_DIR=tmp/ci-manifest-guard/siblings/cluster-mesh ENV=test-ci-br80-${{ matrix.lane }}
+        run: make pack-candidate-siblings PACKAGE=cluster-mesh SIBLING_DIR=tmp/ci-manifest-guard/siblings/cluster-mesh ENV=test-ci-br80
       - name: Qualify the isolated package lane
-        run: make ci-package-qualification PACKAGE_LANE=${{ matrix.lane }} ENV=test-ci-br80-${{ matrix.lane }}
+        run: |
+          result=0
+          for lane in ${{ matrix.lane }}; do
+            make ci-package-qualification PACKAGE_LANE="$lane" ENV=test-ci-br80-$lane || result=1
+            make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-down ENV=test-ci-br80-$lane || result=1
+            make down ENV=test-ci-br80-$lane || result=1
+          done
+          exit "$result"
       - name: Remove installed comments qualification Postgres service and volume
         if: always()
         run: |
-          make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-down ENV=test-ci-br80-${{ matrix.lane }}
-          make down ENV=test-ci-br80-${{ matrix.lane }}
+          for lane in ${{ matrix.lane }}; do
+            make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-down ENV=test-ci-br80-$lane
+            make down ENV=test-ci-br80-$lane
+          done
       - name: Upload Cluster Mesh candidate qualification report
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: qualify-cluster-mesh-candidate-${{ matrix.lane }}
+          name: qualify-cluster-mesh-candidate-${{ strategy.job-index }}
           path: tmp/ci-manifest-guard/qualify-cluster-mesh/**
           retention-days: 7
           if-no-files-found: ignore
