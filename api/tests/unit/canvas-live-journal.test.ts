@@ -11,7 +11,7 @@ const setup = async () => {
 describe('canvas live durable acceptance boundary', () => {
   it('should publish only after update receipt inverse and semantic intents are committed', async () => {
     const { store, session, doc } = await setup();
-    const input = commit(update(doc, t => t.insert(0, 'a')));
+    const input = commit(update(doc, t => t.insert(0, 'a', { bold: true })));
     input.formattingIntents = [intent('agent-intent')];
     await session.accept(input, async entry => {
       const saved = await store.load(identity);
@@ -19,7 +19,9 @@ describe('canvas live durable acceptance boundary', () => {
       expect(entry.receipt?.affectedItems).toEqual(input.receipt?.affectedItems);
       expect(entry.formattingIntents).toEqual(input.formattingIntents);
     });
-    const human = commit(null, 'same-value');
+    const before = codec.encode(doc);
+    const human = commit(update(doc, t => t.format(0, 1, { bold: true })), 'same-value');
+    expect(codec.encode(doc)).toBe(before);
     human.actorId = 'human-a';
     delete human.receipt;
     human.formattingIntents = [{ ...intent('human-intent'), actorId: 'human-a',
@@ -70,5 +72,18 @@ describe('canvas live durable acceptance boundary', () => {
     await next.open({ ...baseline, headAtOpen: 'advanced-peer-head', baseHash: 'new-peer-hash' });
     expect(store.state.baseline).toEqual(baseline);
     expect(store.state.journal[0].sessionEpoch).toBe(admission.sessionEpoch);
+  });
+
+  it('should retain inverse read baseline and pending-publication dependencies without destructive compaction', async () => {
+    const { liveRetention } = await import('../../src/services/canvas-live/journal');
+    expect(Object.values(liveRetention).every(policy => policy === 'retain-all')).toBe(true);
+    const { store, session, doc, publish } = await setup();
+    const value = commit(update(doc, t => t.insert(0, 'retained')));
+    value.records = [{ kind: 'freeze', returnId: 'pending', lineageId: baseline.lineageId,
+      head: null, captureDigest: 'digest', excludedActorIds: [], pendingPublication: true }];
+    await session.accept(value, publish);
+    await session.checkpoint('checkpoint-a', '2026-10-29T00:00:00Z', 'host');
+    expect(store.state.journal[0]).toMatchObject(value);
+    expect(store.state.baseline).toEqual(baseline);
   });
 });

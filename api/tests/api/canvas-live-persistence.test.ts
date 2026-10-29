@@ -94,4 +94,18 @@ describe('canvas live PostgreSQL durability', () => {
     expect((await store.load(id)).baseline).toEqual(baseline);
     await expect(store.open(id, baseline, '2')).rejects.toThrow('schema-epoch-conflict');
   });
+
+  it('should recover a committed journal and checkpoint even when their acknowledgement is lost', async () => {
+    const doc = codec.create();
+    const value = input(update(doc, t => t.insert(0, 'committed')));
+    const crashing = new PgLiveDocumentStore(pool, phase => { if (phase === 'after-commit') throw new Error('lost-ack'); });
+    await expect(crashing.commit(id, 0, value)).rejects.toThrow('lost-ack');
+    expect((await store.load(id)).journal[0].receipt).toEqual(value.receipt);
+    const cp = checkpoint(doc, 1);
+    await expect(crashing.checkpoint(id, 1, cp)).rejects.toThrow('lost-ack');
+    const state = await store.load(id);
+    expect(state.checkpoint).toEqual(cp);
+    expect(codec.encode(restoreDocument(state, codec))).toBe(codec.encode(doc));
+    expect(await store.commit(id, 0, value)).toEqual(state.journal[0]);
+  });
 });
