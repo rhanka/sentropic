@@ -1090,10 +1090,26 @@ jobs:
       - uses: actions/checkout@v6
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
-      - name: Memory L5 Lot Gate (digest-pinned Node 24)
+      - name: Memory L5 source and reference gate (P3 retained; no checkpoint)
         env:
           MEMORY_L5_NODE_IMAGE: node:24-bookworm-slim@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6
-        run: make memory-l5-gate LOT=1 ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-feat-memory-mcp-l5
+        run: make memory-l5-gate LOT=reference ARTIFACT_MANIFEST=tools/memory-mcp-l5/artifacts/pre-candidate-manifest.json API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-mem-l5-lot2
+      - name: Memory L5 transport and exact P09 source regressions
+        run: make memory-l5-lot3-source API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-mem-l5-lot3
+      - name: Verify published archive bytes and retain Lot 3 evidence
+        run: make memory-l5-lot3-evidence ENV=test-mem-l5-lot3
+      - name: Retain Lot 3 source reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: memory-l5-lot3-source-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            tmp/memory-l5-lot3-results/
+            spec/evidence/memory-mcp-l5/lot3/
+          if-no-files-found: error
+      - name: Remove Lot 3 test stack
+        if: always()
+        run: make down API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-mem-l5-lot3
 
   validate-auth-hono:
     runs-on: ubuntu-latest

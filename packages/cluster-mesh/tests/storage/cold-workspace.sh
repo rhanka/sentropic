@@ -27,12 +27,31 @@ tsc=/tmp/cm-tools/node_modules/.bin/tsc
 for package in contracts events llm-mesh oauth-verify mcp-auth auth-hono llm-gateway mcp-platform artifacts comments; do
   "$tsc" --typeRoots /tmp/cm-tools/node_modules/@types -p "packages/$package/tsconfig.json"
 done
+if [ "$CM_ACTION" = memory-lot3 ]; then
+  archive=/source/tmp/lot3-inputs/published-mcp-platform-0.4.0.tgz
+  printf '67c9ab88ae51087a21a596facfc8330dea4c43128878c261a4136b6d458885e5  %s\n' "$archive" | sha256sum -c -
+  published=$(mktemp -d)
+  tar -xzf "$archive" -C "$published"
+  rm -rf packages/mcp-platform/dist
+  cp -R "$published/package/dist" packages/mcp-platform/dist
+  # Existing tests import ../src/*.js; execute the identical published JS there too.
+  cp -R "$published/package/dist/." packages/mcp-platform/src/
+  # A resolver choosing the TS sibling must fail, even if both exports agree.
+  printf '\nthrow new Error("Lot 3 loaded checkout TS instead of published JS");\n' >> packages/mcp-platform/src/transport/bridge.ts
+  export MEMORY_L5_PLATFORM_ARCHIVE="$archive"
+fi
 cd packages/cluster-mesh
 mkdir -p ../../.h2a
 if [ -f /source/.h2a/pg-crash-witness.json ]; then
   cp /source/.h2a/pg-crash-witness.json ../../.h2a/
 fi
 case "$CM_ACTION" in
+  memory-lot3)
+    "$tsc" -p ../mcp-broker/tsconfig.json
+    "$tsc" -p tsconfig.json
+    CLUSTER_MESH_PREPARE_ONLY=mcp sh tests/packaging/prepare.sh "$workspace/lot3-packaging"
+    export CLUSTER_MESH_PACKAGING_DIR="$workspace/lot3-packaging"
+    node ../../tools/memory-mcp-l5/lot3-source.mjs "$workspace" /source/tmp/memory-l5-lot3-results /source ;;
   platform-test)
     cd ../mcp-platform
     /tmp/cm-tools/node_modules/.bin/vitest run "${CM_SCOPE:-tests}" --environment node --maxWorkers=1 ;;

@@ -1,0 +1,11 @@
+{
+  "version": "production/v1",
+  "purpose": "production",
+  "issuer": "https://auth.sent-tech.ca",
+  "audience": "memory-l5",
+  "mappingStatus": "unverified",
+  "maxStepUpAgeSeconds": 300,
+  "keys": {},
+  "acr": [],
+  "amr": []
+}

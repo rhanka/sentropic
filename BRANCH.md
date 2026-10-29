@@ -1,75 +1,41 @@
-# Feature: Decision Q1 live qualification smoke
+# Feature: Attribute disabled-install native builds to the candidate
 
 ## Objective
-- [ ] Record bounded live protocol and identity evidence for JEV and OpenAI Decisions; keep production refused pending OD-4 calibration.
-
+- [ ] Replace the historical log-wide native-build predicate with observed candidate-attributed process evidence; retain positive build controls.
 ## Scope / Guardrails
-- [x] Owner GO dated 2026-10-29; spec v4 section 7.4; H1/H2 base `213638676`.
-- [x] Worktree `tmp/worktrees/decision-q1`, branch `feat/decision-q1-live`, mono-branch.
-- [x] Make only; no Python; secrets enter Compose from the existing root `.env` without copying values.
-- [x] Maximum three attempts per candidate, counting failed, refused and ambiguous calls; no retries.
-- [x] Local qualification only, `ENV=test-decision-q1` last; API 8802, UI 5202, Maildev 1102.
-- [x] Serialize Docker with `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; run `make down` afterward.
-
+- [x] Worktree tmp/worktrees/memory-l5-disabled-install; branch fix/memory-l5-disabled-install; follows #842; rebase onto main before delivery.
+- [x] Preserve candidate 965c93e3, P3, catalog and L0 bytes; no producer edits or gate waiver.
+- [x] Make-only, shared Docker flock, pinned Node image, ports 9625/5825/1725, ENV=test-memory-l5 last; make down after.
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `spec/decision/**`
-  - `packages/llm-mesh/src/decision/descriptor.ts`
-  - `packages/llm-mesh/src/decision/openai-descriptor.ts`
-  - `packages/llm-mesh/src/decision/descriptor-validation.ts`
-  - `packages/llm-mesh/package.json`
-  - `package-lock.json`
-  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
-  - `packages/llm-mesh/tests/decision-jev-v4l3.test.ts`
-  - `packages/llm-mesh/tests/decision-qualification-admission.test.ts`
-  - `packages/llm-mesh/tests/decision-qualification.test.ts`
-  - `packages/llm-mesh/tests/decision-jev-request.test.ts`
-  - `packages/llm-mesh/tests/decision-openai-routing.test.ts`
-  - `packages/cluster-mesh/tests/fixtures/train.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-- **Forbidden Paths (must not change in this branch)**:
+  - `tools/memory-mcp-l5/**`
+  - `spec/evidence/memory-mcp-l5/**`
   - `Makefile`
+- **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `api/**`
+  - `.track/**`
+  - `packages/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
-
+- **Exception process**:
+  - [x] L5DI-EX1: the requested disabled-install fix delegates packed preparation before Vitest and forwards its JSON report; no frozen producing recipe changes. Rollback this delegation only.
 ## Feedback Loop
-- [x] No calibration authorized; live observations cannot qualify immutable weights, billing beyond the admitted bound, or production readiness.
-- [x] Q1-CRED-01: JEV preflight refused peripheral whitespace; normalized transiently after Compose injection, source env unchanged; refusal consumes attempt 1.
-- [x] Q1-INV-01: parser previously forbade observed IDs with unqualified production status; permit evidence inventory while retaining admission gates; regression keeps nonempty IDs and proves production refusal.
-- [ ] Q1-REV-01: conductor to select two exact complementary reviewer models before merge; h2a discovery has host presence but no model identities, no configured gateway catalog; no consensus claimed.
-- [x] Q1-CI-01: reproduced job 123314702961's three stale-version failures; rebound independent train and selected fixture to llm-mesh 0.32.2 and guarded archive SHA-512; 1,228 cluster-mesh tests and scope pass, 138 expected skips; see `spec/decision/q1-2026-10-29/ci-repair.md`.
-
+- [x] Reproduced historical predicate failure: tree-sitter-lua node-gyp log line was attributed to memory; no demonstrated memory-native compilation in R5.
+- [ ] Independent reviews and exact-head CI remain required; no merge or publication.
 ## AI Flaky tests
-- [x] No flaky acceptance or additional live calls beyond the cap.
-
+- [x] No waiver or timeout change.
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; no integration from other branches.
-
+- [x] Sequential dependent PR; code author; complementary independent review when reachable.
 ## UAT Management (in orchestration context)
-- [x] API-only qualification fixture; no UI, Chrome or VSCode surface change.
-
+- [x] No product UAT; actual owner assurance/provenance gates stay pending.
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read master/workflow rules, spec section 7.4, API host and descriptors; mechanical branch check passed.
-  - [x] Verify ports, credential names, control pricing and isolated stack.
-- [x] **Lot 1 — Bounded live evidence**
-  - [x] Fix a public synthetic binary criterion and retain only that fixture input.
-  - [x] No documented zero-cost Decisions entitlement probe established; first POST counts as attempt 1.
-  - [x] Record served identity, tokens, priced cost, billing bound, latency, verdict shape and refusals per attempt.
-  - [x] Fail closed on descriptor identity mismatch; three calls per candidate including the JEV preflight refusal, five egresses total, 77 micro-USD.
-- [x] **Lot 2 — Evidence and descriptors**
-  - [x] Retain scrubbed receipts in `spec/decision/`; accepted identities/evidenceRefs cite only observed results.
-  - [x] Bump llm-mesh from published 0.32.1 to 0.32.2; align workspace lock and public version assertion.
-  - [x] Preserve unqualified production and OD-4 calibration requirement; 16 host/route tests pass.
-- [ ] **Lot 3 — Final validation and draft PR**
-  - [x] Mesh descriptor, qualification, adapter, pricing, public and request suites: 88 files / 1,566 tests pass.
-  - [x] llm-mesh typecheck/lint and mechanical scope checks pass; commits at most 150 lines.
-  - [x] Secret scan, attempt counts, identity comparison and durable 77 micro-USD ledger verified; zero reserved/pending.
-  - [x] Stop local stack with `make down`; publish report `spec/decision/q1-live-smoke.md`.
-  - [x] Draft PR #834 created against main; exact-head CI remains the final checkpoint.
-  - [ ] Observe CI completed/success on exact head; report head, 77 micro-USD and candidate outcomes.
+- [x] Lot 1: add native process observer and candidate-root attribution predicate; tests/disabled-install.test.mjs ignores unrelated tree-sitter and catches a real node-gyp invocation.
+  - [x] Retain the producer observer as an L5-owned tool; record executed native commands independently of attribution, including direct node node-gyp.js builds. Candidate bytes unchanged.
+  - [x] Tooling passes 139 tests, including an actual node-gyp rebuild invocation that the candidate predicate blocks and the unrelated tree-sitter refusal regression.
+- [ ] Lot 2: run ordinary candidate installation with scripts and optional dependencies enabled; retain logs, trace and positive control; wire packed/disabled-install.test.ts and make target.
+  - [x] Add the ordinary-install runner, packed disabled/exports cases and make delegation; execution on exact bytes remains part of the final run. Retain compressed logs/traces and compact hashed JSON.
+- [ ] Lot 3: tooling/scope checks, review dossier, draft PR and exact-head CI; cleanup.
+  - [x] Resume fix: prepare ordinary installation before the packed assertion, validate retained hashes and tuple, preserve the five-second timer and the native positive control.
+  - [x] Revalidated final observer bytes: 140 tooling tests pass; exact-candidate packed disabled-install passes with two positive-control observations and no candidate native build. CI/review remain separate pending gates.

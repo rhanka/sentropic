@@ -21,6 +21,8 @@ const SOURCE_ROOTS = [
   'packages/mcp-platform/src/memory/index.ts',
   'packages/mcp-broker/src/index.ts',
   'packages/mcp-broker/src/memory/index.ts',
+  'packages/mcp-broker/src/memory-reference/index.ts',
+  'tools/memory-mcp-l5/verifier.mjs',
   'packages/mcp-platform/src/transport/bridge.ts',
   'packages/mcp-platform/src/transport/dispatch.ts',
   'packages/mcp-platform/src/transport/result-codec.ts',
@@ -32,6 +34,11 @@ const EXTRA_FORBIDDEN_SPECIFIER_PARTS = [
 ];
 
 const DIST_ENTRIES = {
+  '@sentropic/mcp-broker/memory-reference': {
+    dist: 'packages/mcp-broker/dist/memory-reference/index.js',
+    dts: 'packages/mcp-broker/dist/memory-reference/index.d.ts',
+    inventory: { runtime: ['SqliteMemoryWorkflowStoreV1'], types: [] },
+  },
   '@sentropic/mcp-broker': {
     dist: 'packages/mcp-broker/dist/index.js',
     dts: 'packages/mcp-broker/dist/index.d.ts',
