@@ -54,7 +54,7 @@ describe('memory MCP over real PostgreSQL', () => {
     });
     host.confirm(true);
     expect(value(await host.call('engram_memory_withdraw', args))).toMatchObject({
-      receipt: { to_state: 'withdrawn' }, key_destruction_confirmed: true,
+      receipt: { to_state: 'withdrawn' }, key_destruction: 'complete',
     });
   });
 
