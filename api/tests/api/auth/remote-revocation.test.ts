@@ -5,7 +5,7 @@ import { eq, inArray, like } from 'drizzle-orm';
 import { SignJWT } from 'jose';
 import { Hono } from 'hono';
 import { serve } from '@hono/node-server';
-import type { Server } from 'node:http';
+import { request as httpRequest, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '../../../src/db/client';
@@ -27,7 +27,6 @@ import { sessionLifecycleHandlers } from '../../../src/routes/namespaces/session
 const issuer = 'https://idp.example.test', resource = `${issuer}/remote-revocation`;
 const clientId = 'test-product-revoker', path = '/api/v1/auth/session/remote-revocations';
 let userId: string, directory: string;
-const networkFetch = globalThis.fetch.bind(globalThis);
 const servers: Server[] = [];
 beforeEach(async () => {
   directory = mkdtempSync(join(tmpdir(), 'rc1-product-revoke-'));
@@ -64,7 +63,7 @@ async function bridge() {
   // Real node-server plain socket: same final hop as the deployed ClusterIP and TLS ingress.
   const server = await new Promise<Server>(resolve => {
     const listener = serve({ port: 0, hostname: '127.0.0.1', fetch: async request => {
-      expect(new URL(request.url).protocol).toBe('http:');
+      expect(new URL(request.url).origin).toBe(revocationServiceOrigin);
       vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
       try { return await idp.fetch(request); }
       finally { vi.stubEnv('REMOTE_ACTION_ROLE', 'product'); }
@@ -77,8 +76,21 @@ async function bridge() {
       return Response.json({ access_token: token, token_type: 'Bearer' });
     }
     expect(url).toBe(`${revocationServiceOrigin}${path}`);
-    return networkFetch(`http://127.0.0.1:${(server.address() as AddressInfo).port}${path}`,
-      { ...init, headers: { ...init.headers, host: 'auth-idp:8787', 'x-forwarded-proto': 'https' } });
+    // Node fetch rewrites Host for the loopback URL; node:http preserves the service Host.
+    return new Promise<Response>((resolve, reject) => {
+      const request = httpRequest(`http://127.0.0.1:${(server.address() as AddressInfo).port}${path}`, {
+        method: 'POST', headers: { ...init.headers, host: 'auth-idp:8787', 'x-forwarded-proto': 'https' },
+      }, incoming => {
+        const chunks: Buffer[] = [];
+        incoming.on('data', chunk => chunks.push(Buffer.from(chunk)));
+        incoming.on('end', () => resolve(new Response(incoming.statusCode === 204 ? null : Buffer.concat(chunks), {
+          status: incoming.statusCode, headers: { 'x-revocation-ack': String(incoming.headers['x-revocation-ack'] ?? '') },
+        })));
+        incoming.on('error', reject);
+      });
+      request.on('error', reject);
+      request.end(String(init.body));
+    });
   });
   vi.stubGlobal('fetch', transport);
   return transport;
