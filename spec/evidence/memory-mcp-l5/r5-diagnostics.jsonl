@@ -1,0 +1,10 @@
+{"gate":"delivery-binding","status":"PASS","evidence":{"sha256":"965c93e326df9866584261061f4e49571cfd74dfe1dc258c0c6894eea121a4e9","p3Digest":"1c96bada2a749155f29aae763fa73ea6379c385d619f70614110f59b6b10b730","members":114}}
+{"gate":"enabled-install","status":"PASS","evidence":"1.32.2"}
+{"gate":"enabled-probe","status":"PASS","evidence":["L4-ENABLED-PROBE-OK"]}
+{"gate":"invocation-probe","status":"PASS","evidence":["L4-INVOCATION-PROBE-OK"]}
+{"gate":"six-tool-probe","status":"PASS","evidence":["L4-SIX-TOOL-PROBE-OK"]}
+{"gate":"trace-positive-controls","status":"PASS","evidence":{"cjs-load":11,"cjs-compile":2,"esm-load":26,"provider-load":2,"store-open":1,"identity-bootstrap":1,"native-build":1}}
+{"gate":"disabled-install","status":"PASS","evidence":"ordinary closure; scripts enabled; optional dependencies included"}
+{"gate":"disabled-no-native-build","status":"PASS"}
+{"gate":"disabled-runtime","status":"PASS","evidence":{"markers":["L4-DISABLED-PROBE-OK"],"counts":{"provider-load":0,"store-open":0,"identity-bootstrap":0,"native-build":0}}}
+{"gate":"sdk-floor","status":"PASS","evidence":["L4-FLOOR-PROBE-OK","L4-SIX-TOOL-PROBE-OK"]}

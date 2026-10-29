@@ -18,7 +18,8 @@
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
 ## Feedback Loop
-- [ ] Preserve missing proof/checkpoint obligations as blockers; never weaken a gate.
+- [x] Preserve P01-P09 proof gaps and checkpoint obligations as blockers; never weaken a gate.
+- [x] R5-NATIVE: source-commit disabled gate FAIL reproduced on the real install log; false attribution to tree-sitter, retained as blocking.
 ## AI Flaky tests
 - [x] No accepted flakes or timeout changes.
 ## Orchestration Mode (AI-selected)
@@ -28,6 +29,6 @@
 ## Plan / Todo (lot-based)
 - [x] Verify tarball SHA-256/SHA-512 and retained P3; official Lot 1 passes (104 tooling + 183 package tests).
 - [x] Attempt Lot 2/3, all six packed scopes and preflight/checkpoint; retain explicit later-lot refusals.
-- [ ] Run exact-byte supplemental producer probes; investigate the reported native compilation without changing the gate.
+- [x] Exact-byte supplemental producer probes pass; SDK 1.32.2 and floor 1.31.0; disabled runtime 0/0/0/0.
 - [x] Supplemental probes live in `tools/memory-mcp-l5/r5-diagnostics.{mk,mjs}`; input scripts and delivery are hash-pinned.
 - [ ] Record all outcomes, clean environment, create draft PR and verify successful exact-head CI.
