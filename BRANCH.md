@@ -14,26 +14,14 @@
 - [x] W0 runtime slot: `test-app-cm-w0`, API/UI/Maildev UI 9710/5910/1810; no service listeners started.
 - [x] 26 October follow-up: execute only plan-v2 W0-close.a/d; merge current main without rebasing, preserve historical readings, use `ENV=test-app-w0`; no restore, PR merge or deployment.
 - [x] 28 October resync: worktree `tmp/worktrees/app-w0-resync`, same branch; owner requests merge of current main, #796 reference reconciliation, deviation dispositions, PR-body update, push and successful exact-head CI; W0-close.c stays BLOCKED.
+- [x] 29 October owner decision supersedes c's cluster prerequisites: restore the already-local live production dump in `tmp/app-w0c-local`, branch `op/app-w0c-local`, to isolated `test-app-w0c`; ports 8803/5203/1103, Docker under the shared flock. Verify counts/frontiers/authority, stop and erase local data, retain aggregate receipt, push to #702 and require successful exact-head CI. No production write or PR merge.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `docs/baselines/app-cm-w0/**`
   - `.h2a/owner-questions-w0.md`
-  - `.dockerignore`
-  - `.github/**`
-  - `Makefile`
-  - `api/**`
-  - `deploy/**`
-  - `docker-compose.yml`
-  - `docs/canvas-live/**`
-  - `e2e/**`
-  - `package-lock.json`
-  - `packages/**`
-  - `plan/**`
-  - `scripts/**`
-  - `spec/**`
-  - `ui/**`
+  - `docs/runbooks/app-cm-baseline-restore/receipts/**`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -56,6 +44,7 @@
   - [x] `BR-CM-W0-EX4`: conductor packet `app-W0c.md` explicitly orders the W0-close.c receipt template at `docs/runbooks/app-cm-baseline-restore/receipts/TEMPLATE.md` in this worktree plus the index entry in `docs/baselines/app-cm-w0/baseline.md`. Impact: one template doc + one table cell, no code, no cluster contact; rollback: remove the template file and revert the cell.
   - [x] `BR142-EX5`: owner 28 October instruction explicitly requests merging origin/main `ea20bd9c026e9717d911514e763f8911b6981dde` into #702, preserving W0's BRANCH.md. Additional Allowed Paths above apply only to unchanged inherited main bytes/history in this merge and are removed in the reconciliation commit. Impact: inherited merge exceeds 150 lines; W0-authored changes remain below 150 lines per commit, with no product edits. Rollback: separately authorized merge revert. All 346 prior branch Track event IDs and all 370 main event IDs survive; acceptance refresh remains with the designated Track writer.
   - [x] `BR142-EX6`: owner 29 October W0-close.c instruction requires merging origin/main `213638676730b25154e5fb4fda333f74da1980a3` before the local restore, without rebase. Temporary allowances above cover inherited bytes only and are removed next commit. Only BRANCH.md conflicts; preserve W0's plan. Impact: inherited merge exceeds 150 lines; authored commits remain bounded. Rollback: separately authorized merge revert. Both parents and merged Track stream have SHA-256 `f1bdd745448dfd0c76c198405512baf2fec73775e30f3e99a1c5b72cecdeee91`; no Track write, acceptance refresh remains with its designated writer.
+  - [x] `BR-CM-W0-EX7`: owner 29 October instruction explicitly requests the real aggregate local-restore receipt under `docs/runbooks/app-cm-baseline-restore/receipts/**`, superseding the external-receipt convention for c. Impact: counts/hashes/commands/limitations only, no personal data or secrets; rollback removes the new receipt/index. Main merge temporary allowances removed; no authored product change.
 
 ## Feedback Loop
 - [ ] `attention`: B01/B02/B04 and B06 evidence supplied; current d is #796 (linked below). Published artifacts 0.2.4 supplies UP-T's adapter/SQL; receiving host authority/restart/conformance remains qualification. B03 and B08 remain open.
