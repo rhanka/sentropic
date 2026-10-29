@@ -1,5 +1,5 @@
-import type { CommentHost } from '../../src/comments/host.js';
-import { createCommentRuntime } from '../../src/comments/runtime.js';
+import type { CommentHost } from '../../../src/runtime/comments/host.js';
+import { createCommentRuntime } from '../../../src/runtime/comments/runtime.js';
 import { getCommentAuthorLabel, getMentionLabel, type CommentItem } from '@sentropic/chat-ui/comments';
 
 /** Platform data adapter; all state and commands are the production comment runtime. */

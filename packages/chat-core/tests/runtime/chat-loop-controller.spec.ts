@@ -22,16 +22,16 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createChatLoopController } from '../src/state/chatLoopController.js';
+import { createChatLoopController } from '../../src/runtime/state/chatLoopController.js';
 import {
   projectAssistantRunSegments,
   countLinkedSteerMessages,
   type ProjectionStreamEvent,
-} from '../src/utils/chat-run-projection.js';
+} from '../../src/runtime/utils/chat-run-projection.js';
 import {
   buildProjectedTimeline,
   type ChatProjectionMessage,
-} from '../src/state/chatProjection.js';
+} from '../../src/runtime/state/chatProjection.js';
 
 // ---------------------------------------------------------------------------
 // Fixture loading
@@ -820,8 +820,8 @@ describe('chat-loop-controller: sentropic-string scan', () => {
  */
 function makeFakeTransport(
   overrides: Partial<{
-    sendMessageResponse: Partial<import('../src/state/chatLoopController.js').ControllerRunHandle>;
-    retryMessageResponse: Partial<import('../src/state/chatLoopController.js').ControllerRunHandle>;
+    sendMessageResponse: Partial<import('../../src/runtime/state/chatLoopController.js').ControllerRunHandle>;
+    retryMessageResponse: Partial<import('../../src/runtime/state/chatLoopController.js').ControllerRunHandle>;
   }> = {},
 ) {
   const defaultHandle = {
@@ -2013,7 +2013,7 @@ describe('chat-loop-controller: steer (slice 1F)', () => {
   // 12b. Ack is set during steer in-flight
   it('12b: sendSteer sets composerSteerAck with correct streamId and message', async () => {
     const ctrl = createChatLoopController<Msg>();
-    let ackDuringPost: import('../src/state/chatLoopController.js').ComposerSteerAck | null = null;
+    let ackDuringPost: import('../../src/runtime/state/chatLoopController.js').ComposerSteerAck | null = null;
     const { transport } = makeSteerTransport();
     const origPostSteer = transport.postSteer.bind(transport);
     transport.postSteer = async (streamId, message) => {

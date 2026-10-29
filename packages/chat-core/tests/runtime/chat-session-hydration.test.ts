@@ -10,7 +10,7 @@ import {
   parseSessionHistoryLine,
   shouldFlushHistoryStage,
   upsertSequencedMessage,
-} from '../src/state/chatSessionHydration';
+} from '../../src/runtime/state/chatSessionHydration';
 
 const enc = (s: string) => new TextEncoder().encode(s);
 

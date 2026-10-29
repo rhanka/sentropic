@@ -15,8 +15,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-import type { ChatCoreHost, SessionSummary, RunHandle, ModelCatalog, SendMessagePayload } from '../src/client/chat-core-host.js';
-import type { StreamHubClient, StreamHubEventHandler } from '../src/client/streamTypes.js';
+import type { ChatCoreHost, SessionSummary, RunHandle, ModelCatalog, SendMessagePayload } from '../../src/runtime/client/chat-core-host.js';
+import type { StreamHubClient, StreamHubEventHandler } from '../../src/runtime/client/streamTypes.js';
 
 // ---------------------------------------------------------------------------
 // 1. Fake host — compile proof (satisfies ChatCoreHost)

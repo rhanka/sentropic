@@ -25,7 +25,7 @@ import {
   applySessionCheckpoints,
   getCheckpointForUserMessage,
   openCheckpointPrompt,
-} from '../src/checkpoints/index.js';
+} from '../../src/runtime/checkpoints/index.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
