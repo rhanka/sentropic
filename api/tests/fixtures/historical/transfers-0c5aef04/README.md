@@ -12,3 +12,12 @@ bridges to current canonical product authorities. The storage bridge adapts the 
 raw S3-shaped calls to the unchanged canonical `ArtifactStorePort`; it does not implement a
 fake store. Production never imports or mounts this fixture, so it cannot act as a fallback
 or parallel author.
+
+The parity harness bridges only this router's asynchronous journal read to the
+current product journal. Both routers therefore execute against the same schema
+metadata, just as they share the canonical database and storage authorities.
+The frozen journal above remains unchanged and digest-checked as provenance.
+Full manifest bytes (including `schema_version` and `manifest_hash`), metadata,
+and document bytes remain equalities; the candidate's schema tag is also checked
+against the current journal. New migrations cannot invalidate parity solely by
+advancing this external input.
