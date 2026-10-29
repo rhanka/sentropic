@@ -98,6 +98,8 @@
   - [x] Root Docker npm ci dry-run passed after dependency correction; chat-server 0.4.1 exceeds published 0.4.0.
   - [x] Final local checks: H2 20/20, chat-core 252/252, chat-server 29/29, scoped strict typecheck, ESLint and Prettier all passed.
   - [x] Final self-review RED reproduced locale-dependent Unicode digest ordering; use deterministic code-unit key order and expose the complete substantive port types.
+  - [x] Frozen DS shape re-read: use AnchorRange start/end, preserve receipt reasons/conflicts and lossless marks; RED reproduced transient rate-limit storage, now refused before commit.
+  - [x] Typecheck RED then storage witness cover authoritative/preserved-draft migration records and draft/profile/epoch-linked acknowledgements (§4.8.1).
   - [ ] Review with at least two peers and resolve findings.
   - [x] `make scope-check` before every commit; verified every hunk serves H2 or its directly blocking manifest dependency.
   - [x] Draft PR #833 uses this BRANCH.md as body; initial five-step plan comment posted.

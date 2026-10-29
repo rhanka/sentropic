@@ -103,4 +103,14 @@ describe('canvas live durable acceptance boundary', () => {
     const { canonical } = await import('../../src/services/canvas-live/journal');
     expect(canonical({ 'ä': 1, z: 2 })).toBe('{"z":2,"ä":1}');
   });
+
+  it('should refuse DS transient rate-limit responses instead of storing terminal receipts', async () => {
+    const { store, session, publish } = await setup();
+    const value = commit(null);
+    value.receipt!.status = 'refused';
+    Object.assign(value.receipt!, { reason: 'rate-limited', transient: true, retryAfterMs: 500 });
+    await expect(session.accept(value, publish)).rejects.toThrow('transient-receipt');
+    expect(store.state.head).toBe(0);
+    expect(publish).not.toHaveBeenCalled();
+  });
 });

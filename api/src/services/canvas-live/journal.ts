@@ -93,6 +93,12 @@ export function validateCommit(
     throw new Error('invalid-journal-identity');
   }
   if (input.receipt) {
+    if (
+      input.receipt.transient ||
+      input.receipt.reason === 'rate-limited' ||
+      input.receipt.retryAfterMs !== undefined
+    )
+      throw new Error('transient-receipt');
     const { key, status, payloadHash } = input.receipt;
     if (
       key.documentId !== identity.documentId ||

@@ -49,7 +49,7 @@ export const commit = (encodedUpdate: string | null, transactionId = 'transactio
 export const intent = (intentId: string): LiveFormattingIntent => ({
   intentId, actorId: admission.actor.actorId, fieldKey: 'body',
   source: { kind: 'agent-patch', key: commit(null).receipt!.key, operationIndex: 0 },
-  mark: 'bold', value: true, range: { from: 'anchor-a', to: 'anchor-b' },
+  mark: 'bold', value: true, range: { start: 'anchor-a', end: 'anchor-b' },
   items: [{ client: 7, clock: 0 }],
 });
 

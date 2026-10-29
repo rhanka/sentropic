@@ -53,6 +53,14 @@ export interface LiveReceipt {
   key: LivePatchKey;
   payloadHash: string;
   status: "applied" | "refused";
+  reason?: string;
+  conflict?: unknown;
+  stateVectorAfter?: string;
+  detail?: string;
+  duplicate?: boolean;
+  /** Wire inputs may carry these; the durable boundary MUST refuse them. */
+  transient?: boolean;
+  retryAfterMs?: number;
   operationResults: readonly unknown[];
   affectedItems: readonly LiveAffectedItems[];
 }
@@ -67,7 +75,7 @@ export interface LiveAffectedItems {
   }[];
   deletedItems: readonly {
     text: string;
-    marks: readonly string[];
+    marks: readonly unknown[];
     isHardBreak: boolean;
     anchorBefore: string;
     anchorAfter: string;
@@ -92,7 +100,7 @@ export interface LiveFormattingIntent {
     | { kind: "human-transaction"; transactionId: string };
   mark: "bold" | "italic" | "code";
   value: true | null;
-  range: { from: string; to: string };
+  range: { start: string; end: string };
   items: readonly { client: number; clock: number }[];
 }
 /** H1 admission facts: epoch survives reconnect and changes only on new admission. */
@@ -114,10 +122,25 @@ export interface LiveAdmission extends LiveDocumentIdentity {
 export type LiveSessionRecord =
   | { kind: "admission"; admission: LiveAdmission }
   | {
+      kind: "migration";
+      target: "authoritative-document" | "preserved-draft";
+      actorId: string;
+      sessionEpoch: string;
+      origin: string;
+      fromSchemaEpoch: string;
+      toSchemaEpoch: string;
+      draftId?: string;
+      beforeDigest: string;
+      afterDigest: string;
+    }
+  | {
       kind: "acknowledgement";
       actorId: string;
       sessionEpoch: string;
       digest: string;
+      profileId?: string;
+      schemaEpoch?: string;
+      draftId?: string;
     }
   | {
       kind: "roster";
