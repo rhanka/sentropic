@@ -65,4 +65,3 @@ function readHostTuple(path) {
   for (const lock of doc.locks) bindFile(lock.path, lock.sha256, 'lock');
   return { bytes, doc, files };
 }
-
