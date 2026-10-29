@@ -309,6 +309,13 @@
       "when": 1792201313001,
       "tag": "0043_immo_token_exchange",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1793250000000,
+      "tag": "0048_canvas_live_h2",
+      "breakpoints": true
     }
   ]
 }
