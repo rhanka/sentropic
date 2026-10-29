@@ -4,7 +4,8 @@
 
 Qualification date: 2026-10-29. Author: Codex, requested `gpt-6.1-sol`, high.
 Base: `c37662a208a19ae12377d1a0aec2c7610c4bc0aa` (`origin/main` when the branch was created).
-The candidate remains outside E2; no package, product lock, frozen contract or acceptance rule changes. BRR5-EX1 changes only the CI job API page size in the collector and final guard, preserving complete pagination.
+BRR5-EX2 integrates later main `2ea238790fe992cdbb8e0202b1a73a937b6a1793` through merge `be9738ce62dad5e9498723c0d8e7a8f22389ef53`, preserving the R5 plan and pagination correction. [r5-main-merge.json](r5-main-merge.json) records both parents, zero dense combined diff lines, unchanged Track bytes and 370/370 event containment for each parent. No product edits against imported main or Track writes were authored; temporary import scope was removed.
+The candidate remains outside E2; no authored package or product lock changes, and no frozen contract or acceptance rule changes. BRR5-EX1 changes only the CI job API page size in the collector and final guard, preserving complete pagination.
 
 ## Identity
 
@@ -71,7 +72,8 @@ Deployed host tenancy/policy bindings, native SQLite/PostgreSQL parity and key c
 CI on first delivery head `d6cc92bc749474914fcaacfceb61be8df26bbc06`: run `40860736080` attempt 1 was cancelled (68 successful jobs; cancellation origin unestablished). Attempt 2 retained successful jobs and passed every test, including all E2E groups, but its collector failed with GitHub HTTP 502 reading current-attempt job pages of 100; the missing capture then failed artifact upload. No CI success is inferred from those partial results.
 The same API read succeeds with pages of 30; four pages returned all 99 then-reported jobs with 99 unique IDs. [r5-ci-pagination.json](r5-ci-pagination.json) retains the public endpoint, failed collector job and measured counts. BRR5-EX1 reduces both authenticated capture reads to 30 while retaining `github.paginate`, current-attempt binding, permissions and fail-closed errors. No job or verdict requirement is skipped.
 `make test-ci-expected-results ENV=test-memory-l5` passes 24 tests, including retention of 65 jobs beyond a page and fail-closed 403/502/503 checks. `make memory-l5-tooling ENV=test-memory-l5` passes all 104 tests again. Logs are retained as `r5-ci-pagination-tests.log.gz` and `r5-tooling-pagination.log.gz`; final-head CI remains required after this correction.
+After the main merge, the same 24 CI tests and 104 tooling tests pass again, and `memory-l5-verify` confirms unchanged P3 with 30 files/54 edges. [r5-post-merge-checks.log.gz](r5-post-merge-checks.log.gz) retains those checks. The candidate hash is absent from the imported E2 tuple inputs; imported product files match main exactly.
 
 `make down ENV=test-memory-l5` completed under the same flock; `make ps ENV=test-memory-l5` showed no services. Diagnostic containers use `--rm`; no development environment was used.
-Mechanical branch/scope checks pass. Commits contain at most 150 changed lines and no attribution trailers.
+Mechanical branch/scope checks pass. Authored commits contain at most 150 changed lines and no attribution trailers; the main merge carries existing main history with zero dense combined diff lines, rather than new product edits.
 The draft PR retains this result and requires completed/success CI on its exact final head. That GitHub run/head is recorded at delivery, without fabricating a signed L5 checkpoint or merging the PR.
