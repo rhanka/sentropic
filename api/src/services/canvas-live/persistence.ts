@@ -32,6 +32,15 @@ export function restoreDocument<D>(state: LiveDocumentState, codec: DocumentCode
     if (checkpoint) {
       codec.apply(doc, checkpoint.encodedState);
       if (codec.vector(doc) !== checkpoint.stateVector) throw new Error('checkpoint-vector');
+      // Full history is retained in H2. Verify actual watermark coverage as well
+      // as the seal, so even a resealed stale checkpoint cannot omit an update.
+      const prefix = codec.create();
+      try {
+        for (const entry of state.journal) {
+          if (entry.seq <= checkpoint.journalWatermark && entry.encodedUpdate !== null) codec.apply(prefix, entry.encodedUpdate);
+        }
+        if (codec.encode(prefix) !== codec.encode(doc)) throw new Error('checkpoint-coverage');
+      } finally { codec.destroy(prefix); }
     }
     for (const entry of state.journal) {
       if (entry.seq > (checkpoint?.journalWatermark ?? 0) && entry.encodedUpdate !== null) codec.apply(doc, entry.encodedUpdate);
@@ -81,6 +90,20 @@ export class DurableSession<D> {
       finally { this.codec.destroy(doc); }
     });
   }
+  checkpoint(checkpointId: string, createdAt: string, createdBy: string): Promise<LiveCheckpoint> {
+    return this.exclusive(async () => {
+      await this.check('read');
+      const state = await this.store.load(this.identity);
+      const doc = restoreDocument(state, this.codec);
+      try {
+        const checkpoint = sealCheckpoint({ checkpointId, documentId: this.identity.documentId,
+          encodedState: this.codec.encode(doc), stateVector: this.codec.vector(doc),
+          journalWatermark: state.head, schemaEpoch: state.schemaEpoch, createdAt, createdBy });
+        await this.store.checkpoint(this.identity, state.head, checkpoint);
+        return checkpoint;
+      } finally { this.codec.destroy(doc); }
+    });
+  }
   accept(input: LiveCommit, publish: (entry: LiveJournalEntry) => Promise<void>): Promise<LiveJournalEntry> {
     // Copy before queuing: a caller cannot mutate validated bytes while awaiting a lock.
     const frozen = structuredClone(input);
@@ -89,6 +112,7 @@ export class DurableSession<D> {
       if (frozen.actorId !== this.admission.actor.actorId || frozen.sessionEpoch !== this.admission.sessionEpoch
         || frozen.sessionId !== this.admission.sessionId) throw new Error('commit-admission-mismatch');
       validateCommit(this.identity, frozen);
+      if (this.admission.actor.kind === 'agent' && !frozen.receipt) throw new Error('agent-receipt-required');
       const state = await this.store.load(this.identity);
       const previous = duplicate(state.journal, frozen);
       if (previous) return previous;
