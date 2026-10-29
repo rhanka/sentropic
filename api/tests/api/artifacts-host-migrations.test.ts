@@ -18,6 +18,15 @@ const admin = new Pool({ connectionString: process.env.DATABASE_URL });
 let database: Pool;
 let databaseName: string;
 let connectionString: string;
+let connectionEnds: Promise<void>[];
+
+function createTrackedPool() {
+  const pool = new Pool({ connectionString });
+  pool.on('connect', client => {
+    connectionEnds.push(new Promise<void>(resolve => client.once('end', resolve)));
+  });
+  return pool;
+}
 
 beforeEach(async () => {
   databaseName = `w1a_${randomUUID().replaceAll('-', '')}`;
@@ -25,12 +34,14 @@ beforeEach(async () => {
   const url = new URL(process.env.DATABASE_URL!);
   url.pathname = `/${databaseName}`;
   connectionString = url.toString();
-  database = new Pool({ connectionString });
+  connectionEnds = [];
+  database = createTrackedPool();
 });
 
 afterEach(async () => {
   await database.end();
-  await admin.query(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
+  await Promise.all(connectionEnds);
+  await admin.query(`DROP DATABASE "${databaseName}"`);
 });
 
 afterAll(() => admin.end());
@@ -238,7 +249,8 @@ describe('artifact host migrations', () => {
     const value = await kv.get('scope/binding');
     expect(await createArtifactHostKv(database, 'scope-b').get('scope/binding')).toBeUndefined();
     await database.end();
-    database = new Pool({ connectionString });
+    await Promise.all(connectionEnds);
+    database = createTrackedPool();
     // A separate OS process has no access to a process-local KV or migration cache.
     const script = `const { Pool } = require('pg'); const pool = new Pool({connectionString: process.env.DATABASE_URL});
       (async () => {
