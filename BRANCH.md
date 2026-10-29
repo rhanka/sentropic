@@ -28,6 +28,7 @@
   - `api/src/routes/namespaces/auth/account.ts`
   - `api/src/routes/namespaces/session-lifecycle.ts`
   - `api/src/routes/namespaces/admin-product-authority.ts`
+  - `api/src/middleware/auth-rate-limiters.ts`
   - `api/src/services/admin-approval-sweep.ts`
   - `deploy/k8s/base/35-auth-idp.yaml`
   - `deploy/k8s/base/15-networkpolicy.yaml`
@@ -69,6 +70,8 @@
   - [x] Declare BRRC1-EXn with rationale, impact and rollback before any conditional edit.
 
 ## Feedback Loop
+- [x] BRRC1-EX10: C3 requires excluding only the exact revocation POST from anonymous auth/session budgets in api/src/middleware/auth-rate-limiters.ts. Impact: the route applies a separate authenticated-client budget after token and MAC verification; all other auth limits remain active. Rollback: revert the C3 limiter and token-reuse correction together. No provisioning or deployment.
+- [x] Opus r3 tests first: C1 now signs valid real-session bodies and includes a 204 control; C2 asserts both self-cookie clearing and absent admin Set-Cookie; C3 uses real enabled limiter bindings, real S2S token issuance and a plain HTTP socket. RED: 5 expected failures, 40 passing cases (RC1-r3-red.log).
 - [x] F6 final local validation after main integration: 232 affected tests pass (74 RC1 API, 128 RC1 unit, 11 session-manager, 11 session API, 1 admin lifecycle, 7 connector teardown); API/IdP typechecks and API lint pass; 70 offline IdP selftests pass with both overlays rendered. Socket origin, content/ack integrity, external HTTP refusal, 503 cookies, durable deletion and scheduled retry are covered. Receipts: RC1-f6-final-local.log and RC1-f6-manifest.log; test-rc1 torn down. Exact-head CI is recorded separately after push; no provisioning or PR merge.
 - [x] BRRC1-EX9: F6's authenticated service channel requires API-to-IdP ingress through the existing default-deny NetworkPolicy. Add only same-namespace sentropic/api to sentropic/auth-idp TCP 8787, with manifest selftests pinning selectors, port and Service target. Impact: enables the signed deny-only channel; no public HTTP relaxation or live apply. Rollback: remove this policy together with F6 transport.
 - [x] F6 socket fixture correction: Node fetch rewrites Host when redirecting the service URL to loopback; use node:http to preserve the deployed auth-idp Host, and assert the node-server's reconstructed origin. Temporary diagnostics removed; no product transport relaxation.
