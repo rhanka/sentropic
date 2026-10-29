@@ -17,7 +17,7 @@ test('should load actual llm-mesh 0.19.2 through packed mesh and facade entries'
     writeFileSync(`${consumer}/package.json`, JSON.stringify({ private: true, type: 'module', dependencies: {
       [mesh.name]: `file:${mesh.path}`, '@sentropic/llm-mesh': '0.19.2',
     } }));
-    run('npm', ['install', '--strict-peer-deps', '--ignore-scripts', '--no-audit', '--no-fund']);
+    run(process.execPath, ['/workspace/scripts/ci/locked-consumer.mjs', '--strict-peer-deps', '--ignore-scripts', '--no-audit', '--no-fund']);
     run('node', ['--input-type=module', '-e', `
       import assert from 'node:assert/strict';
       import { readFileSync, lstatSync } from 'node:fs';

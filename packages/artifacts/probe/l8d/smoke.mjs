@@ -25,7 +25,7 @@ writeFileSync(`${consumer}/types.mts`, [
 ].join('\n'));
 const results = [];
 for (const [command, args] of [
-  ['npm', ['install', '--strict-peer-deps', '--ignore-scripts', '--no-audit', '--no-fund']],
+  [process.execPath, ['/workspace/scripts/ci/locked-consumer.mjs', '--strict-peer-deps', '--ignore-scripts', '--no-audit', '--no-fund']],
   ['npm', ['ci', '--strict-peer-deps', '--ignore-scripts', '--no-audit', '--no-fund']],
   ['node', ['runtime.mjs']],
   ['node', ['node_modules/typescript/bin/tsc', '--noEmit', '--strict', '--module', 'NodeNext',
