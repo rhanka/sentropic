@@ -3422,6 +3422,7 @@ test-security-daily: ## Run daily inventory, schema and adapter regressions in t
 	@$(MAKE) test-publishable-manifests MANIFEST_GUARD_IMAGE="$(MEMORY_L5_NODE_IMAGE)" SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs scripts/security/daily/scan.test.mjs scripts/security/daily/toolchain-contract.test.mjs scripts/security/daily/trivy.test.mjs" ENV=$(ENV)
 
 # SECDAILY-EX1: explicit DB preparation, never scanner admission or scheduled activation.
+include scripts/security/daily/qualify.mk
 .PHONY: security-daily-trivy-status security-daily-trivy-prepare
 security-daily-trivy-status: ## Emit frozen option B identities and qualification gaps (exits nonzero)
 	@docker run --rm --network=none --read-only --cap-drop=ALL --security-opt=no-new-privileges \
