@@ -26,5 +26,8 @@
 ## UAT Management (in orchestration context)
 - [x] No UI change; deployed host/native stores/key cleanup remain unverified.
 ## Plan / Todo (lot-based)
-- [ ] Verify delivery and P3; run existing memory-l5 gates and reproduce disabled install.
+- [x] Verify tarball SHA-256/SHA-512 and retained P3; official Lot 1 passes (104 tooling + 183 package tests).
+- [x] Attempt Lot 2/3, all six packed scopes and preflight/checkpoint; retain explicit later-lot refusals.
+- [ ] Run exact-byte supplemental producer probes; investigate the reported native compilation without changing the gate.
+- [x] Supplemental probes live in `tools/memory-mcp-l5/r5-diagnostics.{mk,mjs}`; input scripts and delivery are hash-pinned.
 - [ ] Record all outcomes, clean environment, create draft PR and verify successful exact-head CI.
