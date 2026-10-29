@@ -4,7 +4,6 @@
 // helpers translate both ways at the neutral-handle boundary; validation,
 // allocation, durability and authority remain in the real kernel.
 
-import { createHash } from 'node:crypto';
 import { isCanonicalU64, isMemoryLexicalTombstone, MemoryCanonicalJsonError, memoryJcs, type MemoryEncodedValue } from './codec.js';
 import { isMemoryAdmissionOutcome, isMemoryCaptureProof } from './validation.js';
 import { StorageInvalidCommandError } from '../storage/errors.js';
@@ -130,7 +129,7 @@ export const stripJournalIntentHash = (data: string): string => {
   return memoryJcs(rest).data;
 };
 
-export const neutralUnitToPg = (unit: NeutralAtomicUnit): U64AtomicUnit => {
+export const neutralUnitToPg = (unit: NeutralAtomicUnit, lexicalIdentities: ReadonlyMap<string, string> = new Map()): U64AtomicUnit => {
   if (unit.relationships.length || unit.barriers.length || unit.purgeIntents.length) {
     throw Object.assign(new Error('unsupported memory effects'), { code: 'invalid-schema' });
   }
@@ -152,11 +151,14 @@ export const neutralUnitToPg = (unit: NeutralAtomicUnit): U64AtomicUnit => {
     indexWrites: unit.indexWrites.map((row) => {
       const lexical = row.index === 'memory-accepted-lexical';
       const value = lexical && isMemoryLexicalTombstone(row.value) ? null : parseStored(row.value.data);
+      const identity = lexicalIdentities.get(row.key);
+      if (value === null && identity === undefined) {
+        throw new StorageInvalidCommandError('lexical removal requires the existing index identity');
+      }
       return { key: row.key,
-        // Lexical rows are mutable projections. Bind the index identity to its
-        // key and retain current bytes in the replaceable result, including null.
-        digest: lexical ? `sha256:${createHash('sha256').update('sentropic.memory.lexical-index/v1\0').update(row.key).digest('hex')}`
-          : value!['record_digest'] as string ?? row.value.data,
+        // Removing a mutable projection retains the admitted record's immutable
+        // identity; only the current index result changes to the canonical null.
+        digest: value === null ? identity! : value['record_digest'] as string ?? row.value.data,
         resultIds: [], resultHash: lexical ? row.value.data : null };
     }),
     relationships: [], barriers: [], purgeIntents: [], moduleResult: unit.moduleResult,
@@ -224,7 +226,14 @@ export const createMemoryNeutralTransaction = (
       : null;
   },
   apply: async (unit) => {
-    const translated = neutralUnitToPg(unit);
+    const lexicalIdentities = new Map<string, string>();
+    for (const row of unit.indexWrites) {
+      if (row.index === 'memory-accepted-lexical' && isMemoryLexicalTombstone(row.value)) {
+        const previous = await tx.findIdempotency({ key: row.key });
+        if (previous) lexicalIdentities.set(row.key, previous.digest);
+      }
+    }
+    const translated = neutralUnitToPg(unit, lexicalIdentities);
     const commitIndex = options.identity ? [{
       key: memoryCommitIndexKey(options.identity),
       digest: unit.intentHash,
