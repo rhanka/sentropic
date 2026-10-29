@@ -62,6 +62,7 @@
   - [x] Create isolated worktree and pass harness check branch.
   - [x] Record exact environment, ports, scope and deferred publication gates.
 - [ ] **Lot 1 — Admission RED witnesses and authority**
+  - [x] Implement preserved-draft recovery with separate preparation and authenticated actor/draft acknowledgement; original bytes remain immutable.
   - [x] Add api/tests/unit/canvas-live-admission.test.ts; observe behavioral RED before implementation (10 failed assertions at 708de0636).
   - [ ] Deny cross-tenant, cross-field, forged actors, viewer edits and revoked admissions; reauthorize each operation.
   - [ ] Persist sessionEpoch through restart/reconnect; close/new admission alone rotates it.
