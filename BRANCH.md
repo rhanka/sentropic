@@ -71,29 +71,29 @@
   - [x] Read rules, approved plan, H0 receipts, DS provider/schema/binding contracts and namespace seams.
   - [x] Create isolated worktree and pass harness check branch.
   - [x] Record exact environment, ports, scope and deferred publication gates.
-- [ ] **Lot 1 — Admission RED witnesses and authority**
+- [x] **Lot 1 — Admission RED witnesses and authority**
   - [x] Join admission and draft recovery with an executable refusal-before-binding witness; pending recovery survives reconnect/service restart.
   - [x] Implement preserved-draft recovery with separate preparation and authenticated actor/draft acknowledgement; original bytes remain immutable.
   - [x] Add api/tests/unit/canvas-live-admission.test.ts; observe behavioral RED before implementation (10 failed assertions at 708de0636).
   - [x] Deny cross-tenant, cross-field, forged actors, viewer edits and revoked admissions; reauthorize each operation.
   - [x] Persist sessionEpoch through restart/reconnect; close/new admission alone rotates it.
   - [x] Refuse schema/profile before binding; preserve draft bytes; require actor/draft acknowledgement for both recovery branches (joined-provider RED observed before implementation).
-- [ ] **Lot 2 — Session registry RED witnesses and lifetime**
+- [x] **Lot 2 — Session registry RED witnesses and lifetime**
   - [x] Implement document resource ownership, per-mount leases, field namespaces and explicit actor/awareness update delivery.
   - [x] Define executable registry lifetime, isolation, identity and actor-update witnesses behind the H3 factory port.
   - [x] Add api/tests/unit/canvas-live-provider.test.ts registry cases and observe RED (8 failures at 708de0636; recovery suite 3 failures).
   - [x] Resolve complete identities only; isolate tenants; share one document session and awareness across fields.
   - [x] Refcount mounts, idempotent disposal, release transport on last binding, retain document state.
   - [x] Register actors/awareness explicitly and deliver registry updates, including leave/revocation.
-- [ ] **Lot 3 — Provider RED witnesses and adapters**
+- [x] **Lot 3 — Provider RED witnesses and adapters**
   - [x] Define executable fake-provider coverage for all lock/presence methods, stream recovery and L0/L2 edit posture.
   - [x] Add ui/tests/adapters/canvas-live-provider.test.ts; observe RED for every lock/presence method and stream recovery (5 assertion failures at 6dd17b1e3).
   - [x] Reuse existing namespace locks/presence ports and object-lock client; no parallel API.
   - [x] Gate controlled L0 editing with locks, keep admitted L2 participants editable together.
 - [ ] **Lot 4 — Qualification and handoff**
-  - [ ] Pass scoped API/UI suites, typecheck and lint; record commands and RED/GREEN evidence in docs/canvas-live/h1-validation.md.
+  - [x] Pass 33 API and 7 UI scoped tests plus API/UI typecheck/lint; record commands and RED/GREEN evidence in docs/canvas-live/h1-validation.md.
   - [ ] Reconcile independent consensus review; pass mechanical scope before each commit.
-  - [ ] Create draft PR to main using BRANCH.md; post plan and measured validation.
+  - [x] Create draft PR #830 to main using BRANCH.md; post the four-step plan; publish final measured validation externally.
   - [ ] Observe completed/success CI on exact final head; report PR and head without another commit.
   - [ ] Tear down ENV=test-canvas-h1 and leave worktree clean.
 
