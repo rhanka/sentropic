@@ -11,6 +11,7 @@ const inside = (root, path) => {
   if (!full.startsWith(base + '/')) throw Error('candidate: input outside root');
   return readInside(root, path);
 };
+export { inside as readCandidateInput };
 
 export function verifyCandidateArchive(root, artifact) {
   const bytes = inside(root, artifact.archive);
