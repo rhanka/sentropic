@@ -1,6 +1,12 @@
 import type {
-  LiveAdmission, LiveBaseline, LiveCheckpoint, LiveCommit, LiveDocumentIdentity,
-  LiveDocumentState, LiveDocumentStore, LiveJournalEntry,
+  LiveAdmission,
+  LiveBaseline,
+  LiveCheckpoint,
+  LiveCommit,
+  LiveDocumentIdentity,
+  LiveDocumentState,
+  LiveDocumentStore,
+  LiveJournalEntry,
 } from '../../../../packages/chat-core/src/live-document-port';
 import { commitDigest, digest, duplicate, validateCommit } from './journal';
 
@@ -11,12 +17,23 @@ export interface DocumentCodec<D> {
   vector(doc: D): string;
   destroy(doc: D): void;
 }
-export const sealCheckpoint = (input: Omit<LiveCheckpoint, 'digest'>): LiveCheckpoint => ({ ...input, digest: digest(input) });
-export function verifyCheckpoint(checkpoint: LiveCheckpoint, state: Pick<LiveDocumentState, 'identity' | 'schemaEpoch' | 'head'>): void {
+export const sealCheckpoint = (
+  input: Omit<LiveCheckpoint, 'digest'>
+): LiveCheckpoint => ({ ...input, digest: digest(input) });
+export function verifyCheckpoint(
+  checkpoint: LiveCheckpoint,
+  state: Pick<LiveDocumentState, 'identity' | 'schemaEpoch' | 'head'>
+): void {
   const { digest: expected, ...input } = checkpoint;
-  if (digest(input) !== expected || checkpoint.documentId !== state.identity.documentId
-    || checkpoint.schemaEpoch !== state.schemaEpoch || !Number.isSafeInteger(checkpoint.journalWatermark)
-    || checkpoint.journalWatermark < 0 || checkpoint.journalWatermark > state.head) throw new Error('checkpoint-integrity');
+  if (
+    digest(input) !== expected ||
+    checkpoint.documentId !== state.identity.documentId ||
+    checkpoint.schemaEpoch !== state.schemaEpoch ||
+    !Number.isSafeInteger(checkpoint.journalWatermark) ||
+    checkpoint.journalWatermark < 0 ||
+    checkpoint.journalWatermark > state.head
+  )
+    throw new Error('checkpoint-integrity');
 }
 export function restoreDocument<D>(
   state: LiveDocumentState,
@@ -38,22 +55,33 @@ export function restoreDocument<D>(
   try {
     if (checkpoint) {
       codec.apply(doc, checkpoint.encodedState);
-      if (codec.vector(doc) !== checkpoint.stateVector) throw new Error('checkpoint-vector');
+      if (codec.vector(doc) !== checkpoint.stateVector)
+        throw new Error('checkpoint-vector');
       // Full history is retained in H2. Verify actual watermark coverage as well
       // as the seal, so even a resealed stale checkpoint cannot omit an update.
       const prefix = codec.create();
       try {
         for (const entry of state.journal) {
-          if (entry.seq <= checkpoint.journalWatermark && entry.encodedUpdate !== null) codec.apply(prefix, entry.encodedUpdate);
+          if (
+            entry.seq <= checkpoint.journalWatermark &&
+            entry.encodedUpdate !== null
+          )
+            codec.apply(prefix, entry.encodedUpdate);
         }
-        if (codec.encode(prefix) !== codec.encode(doc)) throw new Error('checkpoint-coverage');
-      } finally { codec.destroy(prefix); }
+        if (codec.encode(prefix) !== codec.encode(doc))
+          throw new Error('checkpoint-coverage');
+      } finally {
+        codec.destroy(prefix);
+      }
     }
     for (const entry of state.journal) {
       if (entry.seq > (checkpoint?.journalWatermark ?? 0) && entry.encodedUpdate !== null) codec.apply(doc, entry.encodedUpdate);
     }
     return doc;
-  } catch (error) { codec.destroy(doc); throw error; }
+  } catch (error) {
+    codec.destroy(doc);
+    throw error;
+  }
 }
 
 /** Structural H1 AdmissionAuthority.check contract. The authenticated registry is
