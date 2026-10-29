@@ -93,7 +93,7 @@ jobs:
         run: test "$(git rev-parse HEAD)" = '${{ github.sha }}'
       - uses: docker/setup-buildx-action@v4
       - name: Validate workflow selection and publication guards
-        run: make test-publishable-manifests SCOPE=scripts/ci/publishable-ci-wiring.test.mjs ci-capacity-policy test-ci-expected-results ENV=test-decision-h1
+        run: make test-ci-lockfile-installs test-publishable-manifests SCOPE=scripts/ci/publishable-ci-wiring.test.mjs ci-capacity-policy test-ci-expected-results ENV=test-decision-h1
       - name: API typecheck, lint and isolated stack
         run: make typecheck-api lint-api up-api-test ENV=test-decision-h1
       - name: Decision host, HTTP, migration and metering regressions
