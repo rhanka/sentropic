@@ -23,7 +23,7 @@
   - [x] No tracked scope exception; operational commands use an ephemeral Makefile.
 
 ## Feedback Loop
-- [ ] BR-CRED-01 | blocked | operator | 2026-10-29: reader LIST returns 403; configured operator GET bucket policy returns 403. Bucket restriction requires Object Storage policy administration; preserve the restrictive IAM condition pending resolution.
+- [ ] BR-CRED-01 | blocked | operator | 2026-10-29: reader LIST refused (403); operator GetBucketPolicy also returns 403. Bucket policy is the likely cause but was not read; cause unverified, reader unusable pending resolution. Preserve the restrictive IAM condition.
 
 ## AI Flaky tests
 - [x] None; documentation-only diff.
@@ -45,7 +45,8 @@
   - [ ] Successful LIST, versions, HEAD, and versioned GET; effective bucket restriction proven.
 - [x] **Lot 2 — Docs consolidation**
   - [x] Record names, storage, expiry, rotation, revocation, checks, and current blocker.
+  - [x] Address Opus r1 C1/C2: link the completed owner-selected live-dump restore receipt in #702, distinguish S3 recovery, record the unverified LIST cause and withdrawn Kubernetes request.
 - [ ] **Lot 3 — Final validation**
   - [x] Mechanical scope check passes; plan and runbook split into commits below 150 lines.
   - [ ] Draft PR using this plan as body; CI success on its exact head.
-  - [ ] Resume local W0-close.c only after the reader passes positive access checks.
+  - [x] W0-close.c completed on 2026-10-29 from a live production dump per owner decision; reader absent from that restore path, Kubernetes request withdrawn.
