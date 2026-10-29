@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
+import { execFileSync } from 'node:child_process';
 import { violations, inspect } from './ci-lockfile-installs.mjs';
 import { installTools } from './locked-tools.mjs';
 import { addLock, frozenRegistry, lockedVersions } from './frozen-registry.mjs';
@@ -55,6 +56,31 @@ test('should have exact versions and integrity for every frozen registry artifac
     assert.match(version, /^\d+\.\d+\.\d+(?:[-+].*)?$/, `${name} version`);
     assert.match(entry.dist.integrity, /^sha(?:1|256|384|512)-[A-Za-z0-9+/=]+$/, `${name}@${version} integrity`);
   }
+});
+
+test('should install real candidate tarballs and replay their lock after closing the registry', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'locked-candidate-'));
+  try {
+    const archives = path.join(dir, 'archives');
+    fs.mkdirSync(archives);
+    for (const name of ['locked-parent', 'locked-child']) {
+      const stage = path.join(dir, name, 'package');
+      fs.mkdirSync(stage, { recursive: true });
+      fs.writeFileSync(path.join(stage, 'package.json'), JSON.stringify({ name, version: '1.0.0',
+        ...(name === 'locked-parent' ? { dependencies: { 'locked-child': '^1.0.0' } } : {}) }));
+      execFileSync('tar', ['-czf', path.join(archives, `${name}.tgz`), '-C', path.dirname(stage), 'package']);
+    }
+    const cwd = path.join(dir, 'consumer');
+    fs.mkdirSync(cwd);
+    fs.writeFileSync(path.join(cwd, 'package.json'), '{"private":true}');
+    execFileSync(process.execPath, [new URL('./locked-consumer.mjs', import.meta.url).pathname,
+      path.join(archives, 'locked-parent.tgz'), '--ignore-scripts'], { cwd, stdio: 'pipe' });
+    const lock = JSON.parse(fs.readFileSync(path.join(cwd, 'package-lock.json')));
+    assert.equal(lock.packages['node_modules/locked-child'].resolved, `file:${archives}/locked-child.tgz`);
+    assert.equal(fs.lstatSync(path.join(cwd, 'node_modules/locked-parent')).isSymbolicLink(), false);
+    execFileSync('npm', ['ci', '--offline', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd, stdio: 'pipe' });
+    assert.equal(JSON.parse(fs.readFileSync(path.join(cwd, 'node_modules/locked-child/package.json'))).version, '1.0.0');
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('should prevent unlocked installation paths across the repository', () => {
