@@ -33,17 +33,19 @@
   - [ ] `.github/workflows/ci.yml` under BR80-EX1; `Makefile` under BR80-EX2.
   - [ ] `scripts/ci/ci-expected-results.mjs`; `scripts/ci/ci-expected-results.test.mjs` under BR80-EX6.
   - [ ] `tools/memory-mcp-l5/tests/ci-contract.test.mjs` under BR80-EX7.
+  - [ ] `scripts/ci/publishable-ci-wiring.test.mjs` under BR80-EX8.
 
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
+- [x] BR80-EX8 — Exact-head CI completion requires repairing run 40804166805/job 123221753583: nine wiring assertions still require mutable action tags or the removed serialized cluster steps. Impact: fixture only; retain exact action pins, narrow filters, guarded packing, lint/typecheck order, complete peer tuples, sibling guards and publication barriers through the producer/lane dispatcher. Rollback: restore these fixtures with the prior workflow/Makefile. Local scoped reproduction confirms all nine failures; full manifest, install, candidate and DAG suites pass after adaptation.
 - [x] BR80-EX6 — Owner-requested repair of run 40792716438/job 123195302088: the policy rejects candidate consumers' producer dependency, not a slot limit. Permit only the four declared consumers after `package-candidates`, require that producer after `changes`, and reject all other validator serialization. Impact: DAG contract and negative fixtures only; keep demand, widths, mutex and measured-proof gates unchanged. Rollback: revert this contract together with BR80-EX1's candidate DAG.
 - [x] Capacity repro: 73 PR/72 push slots, `independentValidators: false`, unchanged API/E2E widths 15/5. The first repaired run reaches the previously blocked fixtures and exposes their old scalar cluster-job lookup; require every actual matrix member instead.
 - [x] BR80-EX7 — Owner-requested repair of run 40792716438/job 123195302026: L5's workflow fixture names the removed serialized pack step. Follow producer, download, verification and unconditional sibling export before qualification. Impact: fixture only; preserve all L5/runtime/SDK assertions. Rollback: restore the fixture together with the serialized DAG.
 - [x] Local capacity policy passes with unchanged 73/72 demand and unaccepted measured wall-clock proof; 35 metrics and 25 expected-results fixtures pass. L5 tooling passes all 104 tests after reproducing the original 103/104 failure.
 - [x] Reproduce both failures and qualify fixes under the shared Docker flock, `ENV=test-ci-br80` last, then teardown: capacity policy and all 60 fixtures pass; the complete `memory-l5-gate LOT=1` passes, including packed/source graphs, typechecks, 104 tooling tests and all lot-scoped package suites. Exact-head completed successful CI remains required.
 - [x] Predecessors read: BR-78 #811 and BR-79 #826. UI 255s/180s, IdP 233s/150s, runner admission and uncompleted rollback/warm/cold campaigns remain open; BR-80 does not close them by DAG shape.
-- [ ] BR80-Q1: request bounded fixture-only BR80-EX3 for `scripts/ci/publishable-ci-wiring.test.mjs`, whose exact serialized command/order assertions block the planned independent lanes; awaiting owner response before editing it.
+- [x] BR80-Q1: the owner's exact-head successful CI request covers this evidenced blocker; BR80-EX8 bounds the wiring-fixture adaptation without removing gate obligations.
 - [x] BR80-Q2: owner explicitly requested the capacity-policy repair in this session; BR80-EX6 bounds the implementation and fixtures while retaining complete-result and security barriers.
 - [ ] BR80-Q3: request BR80-EX5 for `packages/cluster-mesh/tests/packaging/stateful-consumer.sh`: replace its five duplicate packs with verified archives; retain every existing assertion and suite; awaiting owner response.
 - [ ] BR80-Q3 extension: the preserved `packages/llm-gateway/tests/auth-subpaths.test.ts` also compiles and repacks mesh/gateway candidates; its archive setup needs the same bounded receipt-reuse exception. Assertions and suite membership must remain unchanged.

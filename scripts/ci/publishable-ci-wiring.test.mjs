@@ -33,6 +33,7 @@ const recipe = (target) => {
   return m ? m[1] : null;
 };
 const needsOf = (job) => [jobs[job].needs ?? []].flat();
+const siblingRecipe = makefile.split('pack-candidate-siblings:')[1].split('\npublishable-sibling-plan:')[0];
 
 const assertActionsPermissions = (workflow) => {
   assert.deepEqual(workflow.permissions, { contents: 'read', actions: 'read' });
@@ -95,8 +96,8 @@ test('changes: boolean filter step without file lists plus a separate single-fil
   const steps = jobs.changes.steps;
   const filter = steps.find((s) => s.id === 'filter');
   const files = steps.find((s) => s.id === 'publishable_files');
-  assert.equal(filter.uses, 'dorny/paths-filter@v4');
-  assert.equal(files.uses, 'dorny/paths-filter@v4');
+  assert.equal(filter.uses, 'dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d');
+  assert.equal(files.uses, filter.uses);
   assert.equal(filter.with['list-files'], undefined);
   assert.equal(files.with['list-files'], 'json');
   assert.deepEqual(YAML.parse(files.with.filters), { publishable_package_files: ['packages/*/**'] });
@@ -114,17 +115,22 @@ test('dedicated manifest_guard filter: only exact image guards also select globa
   assert.deepEqual(filters.manifest_guard, ['scripts/ci/**']);
   const imageGuards = ['scripts/ci/image-receipt.mjs', 'scripts/ci/image-receipt.test.mjs'];
   assert.deepEqual(filters.global.filter(g => g.startsWith('scripts/ci')), imageGuards);
+  const candidateGuards = ['package-candidate.mjs', 'package-candidate.test.mjs', 'package-qualification-dag.test.mjs',
+    'publishable-manifests.mjs', 'publishable-manifests.test.mjs', 'publishable-pack.test.mjs',
+    'qualify-published-install.mjs', 'qualify-published-install.test.mjs'].map(name => `scripts/ci/${name}`);
+  assert.deepEqual(filters.package_candidates, candidateGuards);
   for (const [name, globs] of Object.entries(filters)) {
     if (name === 'manifest_guard') continue;
     for (const glob of globs.filter(g => g.startsWith('scripts/ci'))) {
-      assert.ok(name === 'global' && imageGuards.includes(glob), `${name} must not include ${glob}`);
+      assert.ok(name === 'global' && imageGuards.includes(glob)
+        || name === 'package_candidates' && candidateGuards.includes(glob), `${name} must not include ${glob}`);
     }
   }
 });
 
 test('inventory job is always scheduled, credential-free and never a publisher/bootstrap dependency', () => {
   const job = jobs['validate-publishable-manifests'];
-  assert.deepEqual(needsOf('validate-publishable-manifests'), ['changes']);
+  assert.deepEqual(needsOf('validate-publishable-manifests'), ['changes', 'package-candidates']);
   assert.equal(job.if, 'always() && !cancelled() && inputs.decision_fixtures_only != true');
   assert.deepEqual(job.permissions, { contents: 'read' });
   assert.equal(job.env.CI_MANIFEST_CHANGES_RESULT, '${{ needs.changes.result }}');
@@ -132,14 +138,14 @@ test('inventory job is always scheduled, credential-free and never a publisher/b
   const runs = job.steps.map((s) => s.run).filter(Boolean);
   assert.ok(runs.includes('make test-publishable-manifests test-qualify-published-install ENV=test-ci-manifests'));
   assert.ok(runs.includes('make check-publishable-manifests ENV=test-ci-manifests'));
-  const upload = job.steps.find((s) => s.uses === 'actions/upload-artifact@v4');
+  const upload = job.steps.find((s) => s.uses === 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9');
   assert.equal(upload.if, 'always()');
   assert.equal(upload.with['retention-days'], 7);
   assert.ok(!JSON.stringify(job).includes('secrets.'), 'no registry credentials or OIDC token');
   assert.ok(needsOf('ci-gate').includes('validate-publishable-manifests'), 'the aggregate gate enforces inventory validation');
   assert.ok(needsOf('delete-transport-artifacts').includes('validate-publishable-manifests'), 'cleanup must preserve artifacts after inventory failure');
   for (const name of Object.keys(jobs)) {
-    if (['ci-gate', 'delete-transport-artifacts'].includes(name)) continue;
+    if (['ci-gate', 'ci-capacity-receipts', 'delete-transport-artifacts'].includes(name)) continue;
     assert.ok(!needsOf(name).includes('validate-publishable-manifests'), `${name} must not need the inventory job`);
     assert.ok(!String(jobs[name].if ?? '').includes('validate-publishable-manifests'), `${name} must not gate on the inventory job`);
   }
@@ -342,7 +348,14 @@ test('every validation pack step receives the CI context and an explicit ENV', (
     }
   }
   // Live speech uses the shared inventory's BLOCK pack and a separate deterministic workflow.
-  assert.equal(count, PACK_TARGETS.filter((slug) => slug !== 'live-speech').length);
+  assert.equal(count, PACK_TARGETS.filter((slug) => !['live-speech', 'cluster-mesh'].includes(slug)).length);
+  const producer = jobs['package-candidates'];
+  for (const [k, v] of Object.entries(CTX)) assert.equal(producer.env[k], v);
+  assert.deepEqual(needsOf('package-candidates'), ['changes']);
+  assert.ok(producer.steps.some(step => step.run === 'make ci-package-candidate ENV=test-ci-br80'));
+  assert.match(recipe('ci-package-candidate'), /CM_ACTION=candidate CI_PACKAGE_CANDIDATES=tmp\/ci-package-candidates/);
+  const prepare = fs.readFileSync(path.join(root, 'packages/cluster-mesh/tests/storage/cold-workspace.sh'), 'utf8');
+  assert.match(prepare, /package-candidate\.mjs produce "\$CI_PACKAGE_CANDIDATES" cluster-mesh/);
   assert.ok(PACK_TARGETS.includes('live-speech'));
   assert.ok(jobs['validate-publishable-manifests'].steps.some((step) =>
     step.run === 'make check-publishable-manifests ENV=test-ci-manifests'));
@@ -356,12 +369,22 @@ test('every validation pack step receives the CI context and an explicit ENV', (
 test('lint wiring follows baseline evidence, independently per package, before typecheck', () => {
   for (const [slug, baseline] of Object.entries(LINT_BASELINE)) {
     const steps = jobs[`validate-${slug}`].steps;
-    const lint = steps.findIndex((s) => s.run === `make lint-${slug} ENV=test-ci-${slug}`);
-    const typecheck = steps.findIndex((s) => /make typecheck-/.test(s.run ?? ''));
+    const runs = slug === 'cluster-mesh' ? recipe('ci-package-qualification') : steps.map(s => s.run ?? '').join('\n');
+    const lint = runs.indexOf(`lint-${slug}`);
+    const typecheck = runs.indexOf(slug === 'cluster-mesh' ? 'typecheck-cluster-mesh' : `CM_ACTION=${slug === 'llm-mesh' ? 'mesh' : 'gateway'}-check`);
     if (baseline === 'pass') {
       assert.ok(lint > 0 && lint < typecheck, `${slug} lint wired before typecheck`);
-      assert.equal(steps[lint].env, undefined);
-      assert.equal(steps[lint]['continue-on-error'], undefined);
+      const step = steps.find(s => s.run?.includes(slug === 'cluster-mesh' ? 'make ci-package-qualification ' : `make lint-${slug} `));
+      assert.equal(step.env, undefined);
+      assert.equal(step['continue-on-error'], undefined);
+      if (slug === 'cluster-mesh') {
+        assert.ok(jobs['validate-cluster-mesh'].strategy.matrix.include.some(row => row.lane === 'source'));
+        assert.match(runs, /source\).*lint-cluster-mesh typecheck-cluster-mesh test-cluster-mesh/);
+      } else {
+        const prepare = fs.readFileSync(path.join(root, 'packages/cluster-mesh/tests/storage/cold-workspace.sh'), 'utf8');
+        assert.match(prepare, /mesh-check\|gateway-check\)[\s\S]*"\$tsc" --noEmit -p tsconfig\.json/);
+        assert.match(prepare, /"\$tsc" --noEmit -p tsconfig\.json[\s\S]*vitest run tests/);
+      }
     } else assert.equal(lint, -1, `${slug} failed baseline must stay unwired`);
     assert.ok(new RegExp(`^lint-llm-mesh lint-llm-gateway lint-cluster-mesh: lint-%:`, 'm').test(makefile));
   }
@@ -375,7 +398,7 @@ test('cluster-mesh qualification installs every declared optional Sentropic peer
   const required = Object.keys(manifest.peerDependencies).filter((name) =>
     name.startsWith('@sentropic/') && manifest.peerDependenciesMeta?.[name]?.optional);
   const steps = [
-    jobs['validate-cluster-mesh'].steps.find((s) => s.name === 'Qualify Cluster Mesh candidate install'),
+    { name: 'Cluster Mesh candidate install lane', run: recipe('ci-package-qualification').match(/install\) exec (.*) ;;/)?.[1] },
     jobs['publish-cluster-mesh'].steps.find((s) => s.run?.includes('make qualify-published-install PKG=')),
     jobs['bootstrap-publish'].steps.find((s) => s.name === 'Qualify bootstrap-published cluster-mesh'),
   ];
@@ -392,18 +415,28 @@ test('cluster-mesh qualification installs every declared optional Sentropic peer
 test('candidate and post-publication qualification for mcp-auth and cluster-mesh', () => {
   for (const [slug, peers] of [['mcp-auth', ' PEERS=hono@4.10.7'], ['cluster-mesh', CLUSTER_MESH_PEERS]]) {
     const steps = jobs[`validate-${slug}`].steps;
-    const pack = steps.find((s) => s.id === 'pack');
-    assert.equal(pack.run, `make pack-${slug} PACK_DESTINATION=tmp/ci-manifest-guard/candidate/${slug} PACK_OUTPUT_FILE="$GITHUB_OUTPUT" ENV=test-ci-${slug}`);
-    const siblings = steps.find((s) => s.run?.startsWith('make pack-candidate-siblings '));
-    const qualify = steps.find((s) => s.run?.startsWith('make qualify-published-install TARBALL='));
-    assert.equal(siblings.run, `make pack-candidate-siblings PACKAGE=${slug} SIBLING_DIR=tmp/ci-manifest-guard/siblings/${slug} ENV=test-ci-${slug}`);
-    // An unchanged mesh can still consume a BLOCK sibling; classification belongs to the sibling packer.
-    assert.equal(siblings.if, slug === 'cluster-mesh' ? undefined : "steps.pack.outputs.manifest_mode == 'block'");
-    for (const [key, value] of Object.entries(CTX)) assert.equal(siblings.env[key], value);
-    assert.ok(steps.indexOf(pack) < steps.indexOf(siblings) && steps.indexOf(siblings) < steps.indexOf(qualify), `${slug}: pack candidate and siblings before qualification`);
-    assert.equal(qualify.if, "steps.pack.outputs.manifest_mode == 'block'");
-    assert.equal(qualify.env.CANDIDATE_TARBALL, '${{ steps.pack.outputs.tarball }}');
-    assert.equal(qualify.run, `make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/${slug}/receipts.json${peers} REPORT_DIR=tmp/ci-manifest-guard/qualify-${slug} ENV=test-ci-${slug}`);
+    if (slug === 'cluster-mesh') {
+      assert.deepEqual(needsOf('validate-cluster-mesh'), ['changes', 'package-candidates']);
+      assert.equal(jobs['validate-cluster-mesh'].env.CI_PACKAGE_CANDIDATES, 'tmp/ci-package-candidates');
+      const verify = steps.findIndex(s => s.run === 'make ci-package-verify ENV=test-ci-br80-${{ matrix.lane }}');
+      const siblings = steps.findIndex(s => s.run === 'make pack-candidate-siblings PACKAGE=cluster-mesh SIBLING_DIR=tmp/ci-manifest-guard/siblings/cluster-mesh ENV=test-ci-br80-${{ matrix.lane }}');
+      const qualify = steps.findIndex(s => s.run === 'make ci-package-qualification PACKAGE_LANE=${{ matrix.lane }} ENV=test-ci-br80-${{ matrix.lane }}');
+      assert.ok(verify >= 0 && verify < siblings && siblings < qualify);
+      for (const index of [verify, siblings, qualify]) assert.equal(steps[index].if, undefined);
+      assert.match(recipe('ci-package-qualification'), /install\) exec \$\(MAKE\) qualify-published-install TARBALL="\$\$tarball" SIBLING_ARCHIVES_FILE=tmp\/ci-manifest-guard\/siblings\/cluster-mesh\/receipts\.json/);
+    } else {
+      const pack = steps.find((s) => s.id === 'pack');
+      assert.equal(pack.run, `make pack-${slug} PACK_DESTINATION=tmp/ci-manifest-guard/candidate/${slug} PACK_OUTPUT_FILE="$GITHUB_OUTPUT" ENV=test-ci-${slug}`);
+      const siblings = steps.find((s) => s.run?.startsWith('make pack-candidate-siblings '));
+      const qualify = steps.find((s) => s.run?.startsWith('make qualify-published-install TARBALL='));
+      assert.equal(siblings.run, `make pack-candidate-siblings PACKAGE=${slug} SIBLING_DIR=tmp/ci-manifest-guard/siblings/${slug} ENV=test-ci-${slug}`);
+      assert.equal(siblings.if, "steps.pack.outputs.manifest_mode == 'block'");
+      for (const [key, value] of Object.entries(CTX)) assert.equal(siblings.env[key], value);
+      assert.ok(steps.indexOf(pack) < steps.indexOf(siblings) && steps.indexOf(siblings) < steps.indexOf(qualify), `${slug}: pack candidate and siblings before qualification`);
+      assert.equal(qualify.if, "steps.pack.outputs.manifest_mode == 'block'");
+      assert.equal(qualify.env.CANDIDATE_TARBALL, '${{ steps.pack.outputs.tarball }}');
+      assert.equal(qualify.run, `make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/${slug}/receipts.json${peers} REPORT_DIR=tmp/ci-manifest-guard/qualify-${slug} ENV=test-ci-${slug}`);
+    }
     const publish = jobs[`publish-${slug}`].steps;
     const at = publish.findIndex((s) => s.run === `make publish-${slug}`);
     assert.match(publish[at + 1].run, new RegExp(`publish/${slug}\\.publish-output`));
@@ -461,16 +494,19 @@ test('release train: validation barrier, strict chain, serialization, lock-sync 
   }
   const steps = jobs['validate-cluster-mesh'].steps;
   const index = (pattern) => steps.findIndex((s) => pattern.test(s.run ?? ''));
-  const lazy = index(/packaging\.mk test-lazy-package/);
-  assert.ok(index(/make pack-cluster-mesh /) < index(/make pack-candidate-siblings /) && index(/make pack-candidate-siblings /) < lazy, 'candidate and siblings packed before the lazy qualification');
+  const qualify = index(/make ci-package-qualification /);
+  assert.ok(index(/make ci-package-verify /) >= 0 && index(/make ci-package-verify /) < index(/make pack-candidate-siblings /)
+    && index(/make pack-candidate-siblings /) < qualify, 'candidate and siblings verified before every qualification lane');
+  const dispatch = recipe('ci-package-qualification');
+  assert.match(dispatch, /lazy\).*packaging\.mk test-lazy-package SIBLING_ARCHIVES_FILE=tmp\/ci-manifest-guard\/siblings\/cluster-mesh\/receipts\.json ENV=\$\(ENV\)/);
   for (const target of ['cluster-mesh-comments-installed', 'cluster-mesh-pg-major-upgrade']) {
-    const installed = index(new RegExp(`\\b${target} `));
-    assert.ok(index(/make pack-candidate-siblings /) < installed, `${target}: embedded candidates packed first`);
-    assert.match(steps[installed].run, /SIBLING_ARCHIVES_FILE=tmp\/ci-manifest-guard\/siblings\/cluster-mesh\/receipts\.json/);
+    assert.ok(dispatch.includes(`target=${target}`), target);
   }
-  assert.equal(steps[lazy].if, undefined, 'lazy qualification always runs');
-  assert.match(steps[lazy].run, /if \[ -f "\$receipts" \]; then\n\s*make -f packages\/cluster-mesh\/packaging\.mk test-lazy-package SIBLING_ARCHIVES_FILE="\$receipts" ENV=test\n\s*else\n\s*make -f packages\/cluster-mesh\/packaging\.mk test-lazy-package ENV=test\n\s*fi/);
-  assert.match(steps[lazy].run, /receipts=tmp\/ci-manifest-guard\/siblings\/cluster-mesh\/receipts\.json/);
+  assert.match(dispatch, /"\$\$target" CM_COMMENTS_TARBALL="\$\$tarball" SIBLING_ARCHIVES_FILE=tmp\/ci-manifest-guard\/siblings\/cluster-mesh\/receipts\.json/);
+  assert.equal(steps[qualify].if, undefined, 'qualification always runs for each selected lane');
+  for (const lane of ['lazy', 'installed', 'major', 'install']) {
+    assert.ok(jobs['validate-cluster-mesh'].strategy.matrix.include.some(row => row.lane === lane), lane);
+  }
 });
 
 test('Makefile: every pack lane is a real guarded pack; no dry-run or raw publish remains', () => {
@@ -547,7 +583,9 @@ test('sibling Make targets gate PACKAGE/SIBLING_DIR on the host before docker an
   for (const target of ['pack-candidate-siblings', 'publishable-sibling-plan']) {
     assert.match(recipe(target).split('\n')[0], /^\t\$\(SIBLING_ARGS_GATE\)$/, `${target}: host gate is the first recipe line`);
   }
-  assert.match(recipe('pack-candidate-siblings'), /siblings '\$\(PACKAGE\)' '\$\(SIBLING_DIR\)'/);
+  assert.match(siblingRecipe, /siblings '\$\(PACKAGE\)' '\$\(SIBLING_DIR\)'/);
+  assert.match(siblingRecipe, /ifneq \(\$\(CI_PACKAGE_CANDIDATES\),\)/);
+  assert.match(siblingRecipe, /package-candidate\.mjs siblings "\$\(CI_PACKAGE_CANDIDATES\)" "\$\(PACKAGE\)" "\$\(SIBLING_DIR\)"/);
   const r = recipe('publishable-sibling-plan');
   assert.ok(r.indexOf("@case '$(PACKAGE)' in") < r.indexOf('$(ARTIFACTS_RUN)'), 'host slug check before container launch');
   assert.match(r, /-e PACKAGE="\$\(PACKAGE\)" -e SIBLING_DIR="\$\(SIBLING_DIR\)"/);
