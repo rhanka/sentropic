@@ -132,7 +132,7 @@ describe('memory K7/K8 wire adaptation', () => {
       { kind: 'chain-absent', chain: 'memory-journal' },
     ] }));
     expect(pg.guards).toEqual([
-      { kind: 'aggregate-version', key: 'k', version: 3 },
+      { kind: 'aggregate-version', key: 'k', version: '3' },
       { kind: 'head', chainId: 'memory-journal', hash: 'h' },
       { kind: 'absent', chainId: 'memory-journal' },
     ]);

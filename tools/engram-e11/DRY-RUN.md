@@ -1,25 +1,29 @@
-# E11 E2 generation receipt — 2026-10-28
+# E11b candidate generation receipt — 2026-10-29 UTC
 
-- PR: https://github.com/rhanka/sentropic/pull/818, base `feat/engram-e2-integration`; integration `32dd911be19f0874459a1b4e697d7175bb6b433f` merged, never rebased.
-- Tested tooling source: `182f307ecab67922ebeccae1042f28a7ee769689`; later documentation commits do not change generator/checker/configuration/test bytes.
-- Retained tuple and every referenced artifact: `.tmp/engram-e2-host-tuple/e11-current/e2-host-tuple.v1.json`; working bundle `tmp/engram-e11-current/`.
-- Tuple SHA-256: `66fa8eeef276dfd73fdb9440f589dbdeff33417e8650b55ac354e894cd547527`.
-- Installed receipt SHA-256: `0883c3516e1517e002d2e9eb7aad8ecf2e6e664f0522ff8d05002579f7816f70`.
-- Consumer package SHA-256: `f31251f0b9dcab86a1933b7d51e11a1fe130e1aee60a2d4661808322d139d970`.
-- Consumer lock SHA-256: `07457b5df26cbd8b6ccc7a5251010bc2e0a6aa7674add788cd9fc611f9dda125`.
-- Workspace lock SHA-256: `0611b91cd29ad752c2f703dcf1cd57efecc01c2b914a14e0c35f2ec12093440a`.
-- Campaign log SHA-256: `2dad9ecb81818dab6ad25ffb7f4db04493a53d8f18ee59f6274ef087b72a5ea5`; campaign `exit=0`, `cleanup=0`.
-- Checker report SHA-256: `57e00b2d22e931ab8615c6b61f554a1a434b8cac0f9a2afde5a55761741d3c20`; generation and checking both exit 0 and report the identical tuple hash.
-- Nine E11 tests pass, zero failures/skips/todo; deterministic generation, missing/tampered bytes, integrity substitution, unsafe paths, manual promotion and receiving/final refusals covered.
-- Fresh retained-lock npm ci installs published Engram 0.21.3 plus mesh dev.6; before/after lock comparison passes. Strict declaration compilation, real PostgreSQL capture/completion/admission/read, two-process reopen/replay, seven typed refusals and four K7 hydration-fault cases pass.
-- Node `v24.21.0`, npm `11.19.0`, PostgreSQL `17.11`, pg `8.22.0`. Exact images, ten migration hashes, host history and installed runtime/type closure are bound in the tuple.
-- Contract JCS: 4,012 bytes, SHA-256 `55f8d4572db7100e4dba0a135331cdeb1186458711f0c7202e5f0cd93a6dc759`; domain-separated digest `sha256:dd0cccbd6e5e29766fbc9c48351ffe58f5b0a3162152f5ff02da0798c3244fee`. Producer extraction and mesh canonical manifest compare exactly.
-- E10 final-head CI `cfd45de4d54651626e97113494b9d7bd108998c8`: completed/success, run `40727760123`. E11 exact-head CI is retained after push outside the tuple to avoid self-reference and moving that head.
-- Shared Docker flock used throughout; owned test stack cleaned after Docker steps. No publication, version bump, artifacts source edit, root lock edit, PR merge or ACK.
+- Branch: `feat/cluster-mesh-engram-e11b`, base integration `fa900e335`; worktree `tmp/worktrees/mem-e11b`. Merge only; no rebase, merge, publication or ACK.
+- Source snapshot: `2d9d5da97669199091700e138de638ca28b559c9`, tree `4f9ef09088d2fd28a451196c23151146bdd6bc64`. Original dev.7 pack source: `d1726c3092895d105eb1b56fe3357228b634760e`; source/assets/package diff is empty.
+- Retained tuple: `.tmp/engram-e2-host-tuple/e11b-current/e2-host-tuple.v1.json`.
+- Tuple SHA-256: `29c83333e34363c515dec2e92c00129f5a0d411df2a4d1be368c7a4531fc7a0a`.
+- All 21 input slots are VERIFIED-CANDIDATE. No input slot is PENDING. Five profile qualifications are QUALIFIED; overall tuple remains PENDING for the six release/ACK gates.
+- Engram 0.21.3 SHA-256: `32d47df1880cf5c43b0f16145f75aebeda5fd341d8b1317f3b89acc428bbd05b`.
+- Mesh dev.7 SHA-256: `7aeb92cfb97ef013ee0d6d50162f5b8dedebd51a44af2018c2e24ada2395e271`; archive and adjacent SHA-256 file copied to the shared `e10-artifacts/`.
+- Standalone C6 declaration SHA-256: `5a8c13c51eb00b350fae0b271d5357f54bdb01c930d607f679372bebff773229`. Included in the archive, checked against compiler output without its source-map comment, and independently compiled in the clean consumer.
+- Installed receipt SHA-256: `b1285247c2d09aea062a62f6e43e50fcb50714566b0ad8b57e411dd7d8b110b3`.
+- Consumer package SHA-256: `efbc3a4250c5b02efd5f18475c06d258fda85755a111224ed379d740b7a78b65`.
+- Consumer lock SHA-256: `39e3ef868fb71444667c6cb7045b10f5eca12b6887b76eb9ff9769e5393de872`.
+- Workspace lock SHA-256: `6d39c4459246f5870225d560b43bf744b700b4b6d99206780b2ddc3213f86ff0`.
+- E10 campaign log SHA-256: `7141f11a654ed09d385d7b8290a4352381274ecb3fb8ef8e0703df57dd993599`; exit=0, cleanup=0. Fresh retained-lock npm ci, before/after lock comparison, strict declaration compilation, real PostgreSQL capture/completion/admission/read, two-process reopen/replay, seven typed refusals and four K7 hydration-fault cases pass.
+- Installed Stage B JSON SHA-256: `911a1d530e0dfe64a5f023e4e25435d999a044d017d4487e400b1692777ad671`. All 23 behaviors plus inventory pass, zero skips/todo; campaign exit=0, cleanup=0. Includes real SIGKILL before/after COMMIT, second-holder/bijection/revocation/final-guard/C7, bounded reads, maintenance and u64 boundaries.
+- Node v24.21.0, npm 11.19.0, PostgreSQL 17.11, pg 8.22.0. Exact images, ten migration hashes, host history and installed runtime/type closure are bound in the tuple.
+- Contract JCS: 4,012 bytes, SHA-256 `55f8d4572db7100e4dba0a135331cdeb1186458711f0c7202e5f0cd93a6dc759`; digest `sha256:dd0cccbd6e5e29766fbc9c48351ffe58f5b0a3162152f5ff02da0798c3244fee`. Producer and mesh canonical manifests compare exactly.
+- Generation/check exit 0 with the identical tuple hash; 10 E11 tests pass, zero failures/skips/todo. Negative qualification tests reject skipped, missing, repeated or failed cases and a different installed archive.
+- Local typecheck and lint pass. Full memory run: 220 pass plus one obsolete C6 null-hash expectation; corrected focused contract suite: 17/17 pass. Exact-head CI must rerun the complete suite.
+- E10 historical exact-head CI remains bound as slot 21. E11b exact-head CI is recorded externally after push to avoid a self-reference. CI runs both installed campaigns and E11 tooling, retaining its own tuple/logs/locks over the same candidate bytes.
+- Shared Docker flock used throughout; owned stack cleaned with make down. No new peer consensus is claimed; this is the code-author delivery.
 
-## Five required profile identities
+## Five qualified profile identities
 
-All versions are `1`. These are declared identities, with equivalence `not-covered`; the installed proof does not qualify Stage B.
+All versions are `1`. Each QUALIFIED claim binds its named passing cases, installed mesh SHA-256 and Stage B report SHA-256.
 
 | Profile | Semantic digest |
 | --- | --- |
@@ -29,10 +33,6 @@ All versions are `1`. These are declared identities, with equivalence `not-cover
 | scope-outbox-v1 | `sha256:d4f1e16890c9541fada3e71e4ba7ba2016da5b07e26383979e29e42b7916b1ed` |
 | fenced-writers-v1 | `sha256:48cfb030a1a9c614de6170588116d1afe3d7c94acda79b4322b6b6d7d5156900` |
 
-## Remaining PENDING entries and handoff
+## Remaining handoff
 
-- Slot 15, C6 packaging owner: producer JCS bytes/digest are resolved. Dev.6 still omits its announced `contracts/engram-memory-neutral-contract-v1.d.ts` and retains pending declaration/agreement metadata. Require packaged standalone bytes, compilation and producer agreement.
-- Slot 16, E9/host-binding owner: integrated `durable-memory.spec.ts` explicitly blocks 23 Stage B cases on E7-fenced-writers; three also depend on E7 host reads. Require the complete zero-skip campaign through the shipped memory read/write and separate host maintenance bindings on the exact tuple. Never promote the current declared claims.
-- All other input slots are VERIFIED-CANDIDATE. Every prior reason tied to unpublished Engram 0.21.3, interim intentHash or successor dev.6 bytes is resolved. Plan E11 line 120 does not include the separate L4 MCP 0.22.0 candidate; L5 must bind that candidate independently.
-- After those gaps: qualify reserved stable bytes/locks; conductor integration → main PR and exact-head CI; CI-only `cluster-mesh@0.24.0` publication under the reservation; published-byte recheck; explicit producer C9 ACK; independent receiving ACK. Registry observation retained as HTTP 404 for 0.24.0; recheck before release.
-- Tuple remains PENDING; final gate refuses it. This receipt records generation and installed checks, without asserting final E2 acceptance or peer consensus. External reviews were requested under rules/subagents.md and were not launched without owner authorization.
+Qualify reserved stable bytes/locks; conductor integration → main PR and exact-head CI; CI-only cluster-mesh@0.24.0 publication under the reservation; published-byte recheck; explicit producer C9 ACK; independent receiving ACK. C9 must name this tuple and explicitly acknowledge the `dff737ce…` → `dd0cccbd…` digest supersession under unchanged neutral contract `1.0.0` (additive intentHash, #821). The separate L4 MCP 0.22.0 candidate is excluded from this E2 tuple.

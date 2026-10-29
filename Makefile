@@ -15,7 +15,7 @@ MANIFEST_PACK_RUN = $(MANIFEST_GUARD_RUN)
 MANIFEST_PACK_IMAGE = $(MANIFEST_GUARD_IMAGE)
 CM_RUN = docker run --rm --init $(CM_DOCKER_NETWORK)
 CM_RUN_IMAGE = $(LLM_MESH_NODE_IMAGE)
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-artifacts-021 test-artifacts-022 test-llm-judge),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-artifacts-021 test-artifacts-022 test-llm-judge),)
 ARTIFACTS_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.immo-861.yml
 ARTIFACTS_RUN = $(ARTIFACTS_COMPOSE) run --rm --no-deps
 ARTIFACTS_RUN_IMAGE = qualification
@@ -893,8 +893,8 @@ typecheck-llm-mesh: ## Run @sentropic/llm-mesh type checks
 
 .PHONY: lint-llm-mesh lint-llm-gateway lint-cluster-mesh
 lint-llm-mesh lint-llm-gateway lint-cluster-mesh: lint-%: ## Lint a root-owned mesh/gateway package
-	@$(if $(filter test-e2-int test-mem-batch1 test-mem-e11,$(ENV)),$(CM_RUN),docker run --rm) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" \
-		-w /workspace/packages/$* $(if $(filter test-e2-int test-mem-batch1 test-mem-e11,$(ENV)),$(CM_RUN_IMAGE),$(LLM_MESH_NODE_IMAGE)) sh -lc 'set -eu; \
+	@$(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b,$(ENV)),$(CM_RUN),docker run --rm) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" \
+		-w /workspace/packages/$* $(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b,$(ENV)),$(CM_RUN_IMAGE),$(LLM_MESH_NODE_IMAGE)) sh -lc 'set -eu; \
 		tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" \
 			--no-save --no-audit --no-fund eslint@10.0.2 typescript-eslint@8.56.1 >/dev/null; \
 		printf "%s\n" "import tseslint from '\''typescript-eslint'\'';" \
@@ -929,7 +929,7 @@ E2_LOCK ?= /home/antoinefa/.cache-tmp/sentropic-docker.lock
 E2_RECEIPTS ?= tmp/engram-e2-receipts
 .PHONY: engram-e2-qualify engram-e2-lane engram-e2-stable-publish-guard
 engram-e2-qualify: ## Qualify an exact E2 topic head and retain per-lane receipts
-	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e11,$(ENV))"
+	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b,$(ENV))"
 	@mkdir -p "$(E2_RECEIPTS)" "$$(dirname "$(E2_LOCK)")"
 	@set -eu; base="$${E2_BASE_SHA:-origin/main}"; head="$$(git rev-parse HEAD)"; \
 		{ date -u +%FT%TZ; printf 'head=%s\nbase=%s\nmerge-base=%s\n' "$$head" "$$(git rev-parse "$$base")" "$$(git merge-base "$$base" "$$head")"; \
@@ -938,12 +938,12 @@ engram-e2-qualify: ## Qualify an exact E2 topic head and retain per-lane receipt
 		sha256sum BRANCH.md Makefile .github/workflows/ci.yml packages/cluster-mesh/package.json package-lock.json; \
 		git ls-files '*package-lock.json' | xargs sha256sum; \
 		} > "$(E2_RECEIPTS)/context.txt"
-	@set -eu; for lane in mechanical wiring build typecheck lint memory common grants postgres; do \
+	@set -eu; for lane in mechanical wiring build typecheck lint memory stage-b common grants postgres; do \
 		flock "$(E2_LOCK)" $(MAKE) engram-e2-lane E2_LANE="$$lane" ENV=$(ENV); \
 		done
 
 engram-e2-lane: ## Run one lane under the caller's shared Docker lock
-	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e11,$(ENV))"
+	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b,$(ENV))"
 	@mkdir -p "$(E2_RECEIPTS)"
 	@set -euo pipefail; \
 		trap 'status=$$?; trap - EXIT; set +e; $(MAKE) down ENV=$(ENV) >> "$(E2_RECEIPTS)/$(E2_LANE).log" 2>&1; cleanup=$$?; printf "exit=%s\ncleanup=%s\n" "$$status" "$$cleanup" > "$(E2_RECEIPTS)/$(E2_LANE).status"; sha256sum "$(E2_RECEIPTS)/$(E2_LANE).log" "$(E2_RECEIPTS)/$(E2_LANE).status" "$(E2_RECEIPTS)/$(E2_LANE).inventory" > "$(E2_RECEIPTS)/$(E2_LANE).sha256"; test "$$status" -eq 0 && test "$$cleanup" -eq 0' EXIT; \
@@ -952,20 +952,21 @@ engram-e2-lane: ## Run one lane under the caller's shared Docker lock
 		wiring) args=(test-publishable-manifests 'SCOPE=scripts/ci/publishable-ci-wiring.test.mjs scripts/ci/ci-expected-results.test.mjs'); pattern='scripts/ci/publishable-ci-wiring.test.mjs' ;; \
 		build|typecheck|lint) args=("$(E2_LANE)-cluster-mesh"); pattern='packages/cluster-mesh/src/*' ;; \
 		memory) args=(test-cluster-mesh SCOPE=tests/engram-memory CM_PG_URL=postgresql://app:app@postgres:5432/app); pattern='packages/cluster-mesh/tests/engram-memory/*.spec.ts' ;; \
+		stage-b) args=(test-cluster-mesh SCOPE=tests/engram-memory/durable-memory.spec.ts CM_PG_URL=postgresql://app:app@postgres:5432/app); pattern='packages/cluster-mesh/tests/engram-memory/memory-*' ;; \
 		common) args=(test-cluster-mesh SCOPE=tests/storage/common-rule); pattern='packages/cluster-mesh/tests/storage/common-rule/*.spec.ts' ;; \
 		grants) args=(test-cluster-mesh SCOPE=tests/storage/scope-grant-modules.spec.ts); pattern='packages/cluster-mesh/tests/storage/scope-grant-modules.spec.ts' ;; \
 		postgres) args=(test-cluster-mesh SCOPE=tests/storage/postgres- CM_PG_URL=postgresql://app:app@postgres:5432/app); pattern='packages/cluster-mesh/tests/storage/postgres-*.spec.ts' ;; \
 		*) exit 1 ;; esac; \
 		git ls-files "$$pattern" > "$(E2_RECEIPTS)/$(E2_LANE).inventory"; \
 		if [ "$(E2_LANE)" = wiring ]; then git ls-files scripts/ci/ci-expected-results.test.mjs >> "$(E2_RECEIPTS)/$(E2_LANE).inventory"; fi; \
-		{ if [ "$(E2_LANE)" = postgres ] || [ "$(E2_LANE)" = memory ]; then \
+		{ if [ "$(E2_LANE)" = postgres ] || [ "$(E2_LANE)" = memory ] || [ "$(E2_LANE)" = stage-b ]; then \
 		  echo 'make engram-e2-postgres-up ENV=$(ENV)'; $(MAKE) engram-e2-postgres-up ENV=$(ENV); fi; \
 		printf 'make'; printf ' %q' "$${args[@]}"; printf ' ENV=$(ENV)\n'; \
 		$(MAKE) "$${args[@]}" ENV=$(ENV); } 2>&1 | tee "$(E2_RECEIPTS)/$(E2_LANE).log"
 
 .PHONY: engram-e2-mechanical
 engram-e2-mechanical:
-	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e11,$(ENV))"
+	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b,$(ENV))"
 	@$(CM_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" \
 		-e E2_BRANCH="$${E2_HEAD_REF:-$$(git branch --show-current)}" \
 		-e E2_EXPECTED_BRANCH="$${E2_HEAD_REF:-feat/engram-e2-integration}" \
@@ -976,7 +977,7 @@ engram-e2-mechanical:
 
 .PHONY: engram-e2-postgres-up
 engram-e2-postgres-up:
-	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11,$(ENV))"
+	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b,$(ENV))"
 	@$(ARTIFACTS_COMPOSE) up -d --wait postgres
 
 engram-e2-stable-publish-guard:
@@ -1530,7 +1531,7 @@ build-mcp-platform: install-internal-packages ## Build @sentropic/mcp-platform d
 
 .PHONY: immo-861-build-mcp-platform freeze-types
 immo-861-build-mcp-platform: install-internal-packages
-	@case "$(ENV)" in test-861-int|test-861-gaps|test-artifacts-021|test-artifacts-022|test-mem-e11) ;; *) exit 1 ;; esac
+	@case "$(ENV)" in test-861-int|test-861-gaps|test-artifacts-021|test-artifacts-022|test-mem-e11|test-mem-e11b) ;; *) exit 1 ;; esac
 	@$(ARTIFACTS_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/mcp-platform $(ARTIFACTS_RUN_IMAGE) sh -lc 'set -eu; rm -rf dist node_modules; tool_dir="$$(mktemp -d)"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package.json "$$tool_dir/package.json"; cp ../../tools/memory-mcp-l5/artifacts/toolchain/toolchain.package-lock.json "$$tool_dir/package-lock.json"; npm_config_cache=/tmp/npm-cache npm ci --prefix "$$tool_dir" --no-audit --no-fund >/dev/null; mkdir -p node_modules/@types; ln -sfn "$$tool_dir/node_modules/@types/node" node_modules/@types/node; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 
 freeze-types:
@@ -1924,7 +1925,7 @@ test-idp-sync-sql: ## Test isolated IdP SQL and imported-client authorize accept
 		sh -ec 'npm install --prefix /tmp/idp-tools --ignore-scripts --no-audit --no-fund tsx@4.20.6 >/dev/null; /tmp/idp-tools/node_modules/.bin/tsx deploy/ci/idp-identity-sync/authorize.selftest.mjs'
 
 .PHONY: scope-check
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-sec-zod4 test-artifacts-021 test-artifacts-022 test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-resync-752 test-llm-judge test-mem-e11),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-sec-zod4 test-artifacts-021 test-artifacts-022 test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-resync-752 test-llm-judge test-mem-e11 test-mem-e11b),)
 scope-check: ## Advisory C2 scope-check via the installed host harness (BR861-EX1, BR01-EX2)
 	@files="$$( { git diff --cached --name-only $(SCOPE_BASE); git diff --name-only $(SCOPE_BASE); } | sort -u | paste -sd, - )"; \
 	harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
@@ -2741,7 +2742,7 @@ up-ui: ## Start the ui stack in detached mode
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-artifacts-021 test-artifacts-022 test-llm-judge),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-artifacts-021 test-artifacts-022 test-llm-judge),)
 	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans
 else
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down

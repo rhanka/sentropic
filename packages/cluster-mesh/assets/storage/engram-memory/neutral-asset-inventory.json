@@ -5,8 +5,8 @@
     "version": "1.0.0",
     "source": "src/engram-memory/neutral-contract.ts",
     "declaration": "contracts/engram-memory-neutral-contract-v1.d.ts",
-    "declarationSha256": null,
-    "status": "final bytes pending"
+    "declarationSha256": "5a8c13c51eb00b350fae0b271d5357f54bdb01c930d607f679372bebff773229",
+    "status": "standalone candidate bytes bound; producer ACK pending"
   },
   "semanticManifest": "contract-manifest.json",
   "profileInventory": "equivalence.json",

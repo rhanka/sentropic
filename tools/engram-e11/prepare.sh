@@ -2,10 +2,13 @@
 set -euo pipefail
 repo="$1"
 out="$2"
-snapshot=32dd911be19f0874459a1b4e697d7175bb6b433f
-tree=9dcd865487004e28649f3d68c842f328cc4d1952
+snapshot=2d9d5da97669199091700e138de638ca28b559c9
+tree=4f9ef09088d2fd28a451196c23151146bdd6bc64
+packed=d1726c3092895d105eb1b56fe3357228b634760e
 test "$(git rev-parse "$snapshot^{tree}")" = "$tree"
-test -z "$(git diff --name-only eb79034df17ed5e2cb2ddcc3288b9b8bbb682120 "$snapshot" -- packages/cluster-mesh/src packages/cluster-mesh/assets packages/cluster-mesh/package.json)"
+test -z "$(git diff --name-only "$snapshot" HEAD -- packages/cluster-mesh)"
+test -z "$(git diff --name-only "$packed" "$snapshot" -- packages/cluster-mesh/src packages/cluster-mesh/assets packages/cluster-mesh/package.json)"
+rm -rf "$out/source"
 mkdir -p "$out/source" "$out/consumer" "$out/artifacts"
 git archive "$snapshot" packages/cluster-mesh/src packages/cluster-mesh/assets packages/cluster-mesh/package.json \
   packages/cluster-mesh/tests/engram-memory package-lock.json docker-compose.immo-861.yml \
@@ -13,16 +16,14 @@ git archive "$snapshot" packages/cluster-mesh/src packages/cluster-mesh/assets p
 tar -xf "$out/source.tar" -C "$out/source"
 printf "{\"snapshotHead\":\"%s\",\"qualifiedHead\":\"%s\",\"qualifiedTree\":\"%s\",\"packedDrift\":[]}\n" \
   "$snapshot" "$snapshot" "$tree" > "$out/source-identity.json"
-inputs="$repo/.tmp/engram-e2-host-tuple"
-cp "$inputs/e10-artifacts/sentropic-cluster-mesh-0.24.0-dev.6.tgz" "$out/mesh.tgz"
-cp "$inputs/neutral-contract-1.0.0.jcs.json" "$out/neutral-contract-1.0.0.jcs.json"
-cp "$inputs/engram-0.21.3.md" "$out/producer.md"
-cp "$inputs/e10-artifacts/e10a3-delivery.json" "$out/e10a3-delivery.json"
-cp "$inputs/e10-artifacts/e10a3-pack/cluster-mesh.receipt.json" "$out/pack-receipt.json"
-cp "$inputs/RESERVATION.md" "$out/reservation.md"
-cp "$repo/.h2a/reviews/pr803_opus_r3.md" "$out/review-r3.md"
-cp "$inputs/evidence/engram-e2-format-README.md" "$out/format.md"
-cp "$inputs/validator/scripts/memory-mcp-e2-manifest.mjs" "$out/receiving-validator.mjs"
+cp tmp/memory-stage-b/sentropic-cluster-mesh-0.24.0-dev.7.tgz "$out/mesh.tgz"
+cp tmp/memory-stage-b/stage-b-result.json "$out/"
+cp tmp/memory-stage-b/package-lock.json "$out/stage-b-lock.json"
+cp tmp/engram-e2-receipts/stage-b.log "$out/"
+cp tmp/engram-e2-receipts/stage-b.status "$out/"
+jq -j .canonicalManifest packages/cluster-mesh/assets/storage/engram-memory/contract-manifest.json > "$out/neutral-contract-1.0.0.jcs.json"
+cp tools/engram-e11/inputs/{producer.md,reservation.md,review-r3.md,format.md,receiving-validator.mjs} "$out/"
+printf '{"head_sha":"%s","originalPackHead":"%s","tarball_sha256":"%s"}\n' "$snapshot" "$packed" "$(sha256sum "$out/mesh.tgz" | cut -d' ' -f1)" > "$out/pack-receipt.json"
 curl -fsSL https://registry.npmjs.org/@sentropic%2fengram/0.21.3 -o "$out/engram-registry.json"
 curl -fsSL https://registry.npmjs.org/@sentropic/engram/-/engram-0.21.3.tgz -o "$out/engram.tgz"
 curl -sSL -o "$out/reserved-registry.json" -w "%{http_code}\n" https://registry.npmjs.org/@sentropic%2fcluster-mesh/0.24.0 > "$out/reserved-registry.status"

@@ -4,22 +4,26 @@ import { memoryCampaignHost } from './memory-pg-host.js';
 import { runMemoryU64Corpus } from './memory-u64.js';
 import { runMemoryOwnershipCorpus } from './memory-ownership.js';
 import { runMemoryBoundaryCorpus } from './memory-boundaries.js';
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
-// These explicit source gaps retain every case; they do not qualify Stage B.
-// Missing PostgreSQL remains an error when the actual host can be exercised.
+const installedRoot = process.env.MEMORY_INSTALLED_ROOT;
+if (!installedRoot) throw new Error('Stage B must run through the make-owned installed consumer');
+for (const name of ['@sentropic/cluster-mesh/engram-memory', '@sentropic/engram/memory-substrate']) {
+  expect(realpathSync(fileURLToPath(import.meta.resolve(name))).startsWith(`${installedRoot}/node_modules/`)).toBe(true);
+}
 runMemoryCorpus(memoryCampaignHost);
 runMemoryU64Corpus(memoryCampaignHost);
 runMemoryOwnershipCorpus(memoryCampaignHost);
 runMemoryBoundaryCorpus(memoryCampaignHost);
 
-it('inventory: should retain every blocked case without claiming host qualification', () => {
+it('inventory: should execute every Stage B case through the installed handle', () => {
   const expected = Object.entries(MEMORY_STAGE_B_CASES).flatMap(([profile, cases]) => cases.map((name) => `${profile}/${name}`));
   expect(memoryCaseInventory.slice().sort()).toEqual(expected.sort());
   expect(new Set(memoryCaseInventory).size).toBe(memoryCaseInventory.length);
-  expect(memoryBlockedCases.map(({ name }) => name).sort()).toEqual(expected.sort());
-  expect(memoryBlockedCases.every(({ blockers }) => blockers.includes('blocked: E7-fenced-writers'))).toBe(true);
-  expect(memoryBlockedCases.filter(({ blockers }) => blockers.includes('blocked: E7'))).toHaveLength(3);
+  expect(memoryBlockedCases).toEqual([]);
   console.info('MEMORY_STAGE_B_COUNTS', JSON.stringify(Object.fromEntries(Object.entries(MEMORY_STAGE_B_CASES)
     .map(([profile, cases]) => [profile, cases.length]))));
-  console.info('MEMORY_STAGE_B_DISPOSITION', JSON.stringify({ status: 'blocked', qualified: false, cases: memoryBlockedCases }));
+  // Qualification is determined from the runner's complete zero-skip result.
+  console.info('MEMORY_STAGE_B_INVENTORY', JSON.stringify({ cases: expected, installedRoot }));
 });

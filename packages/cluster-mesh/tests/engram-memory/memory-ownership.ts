@@ -15,12 +15,16 @@ export const runMemoryOwnershipCorpus = (open: () => Promise<MemoryCampaignHost>
     expect(valueOf(await h.store.readiness()).storage_epoch).toBe('1');
   });
   scenario('fenced-writers-v1/store-bijection: should refuse alternate store or scope identities and retain the legitimate binding', async (h) => {
+    // Release the live holder so the installed factory reaches the durable
+    // identity check rather than its earlier second-holder refusal.
+    await h.reopenBackend(false);
     await expect(h.handle.acquireFence({ scope: h.scopeBinding.scope, store_id: 'alternate-store', grant: h.binding.memoryGrant }))
       .rejects.toMatchObject({ code: 'fence-conflict', message: 'store_id and scope must be bijective' });
     await expect(h.handle.acquireFence({ scope: { ...h.scopeBinding.scope, workspaceId: 'foreign' },
       store_id: h.scopeBinding.store_id, grant: h.binding.memoryGrant })).rejects.toMatchObject({ code: 'unauthorized' });
+    await h.kernel.ownership!.release();
     await h.reopen();
-    expect(valueOf(await h.store.readiness()).storage_epoch).toBe('2');
+    expect(valueOf(await h.store.readiness()).storage_epoch).toBe('3');
   });
   scenario('fenced-writers-v1/revocation: should deny both present and absent original-result lookups after memory authority is revoked', async (h) => {
     valueOf(await h.store.commitPending(pendingCapture()));

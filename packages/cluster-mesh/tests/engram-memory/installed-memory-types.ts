@@ -1,6 +1,6 @@
 // E10 installed type proof: compiled only inside the clean consumer, so
 // every declaration below must resolve from the retained installed bytes
-// of @sentropic/engram 0.22.0 and the candidate @sentropic/cluster-mesh.
+// of @sentropic/engram 0.21.3 and the candidate @sentropic/cluster-mesh.
 import type {
   CanonicalMemoryStorePort,
   CaptureRequestV2,

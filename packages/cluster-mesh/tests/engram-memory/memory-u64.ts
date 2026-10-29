@@ -28,7 +28,9 @@ export const runMemoryU64Corpus = (open: () => Promise<MemoryCampaignHost>) => {
         await h.pg.tx.run(false, async (session) => {
           const base = await roots.capture(session, h.scopeBinding.scope, true);
           const root = await roots.put(session, base.root, 'chain', 'memory-journal', {
-            head: DIGEST, allocation: previous, count: previous, disposed: false,
+            // Allocation is the exact u64 high-water; dense positions count
+            // only retained fixture records and remain safe integers.
+            head: DIGEST, allocation: previous, count: 0, disposed: false,
           });
           await session.execute({ text: `UPDATE "${h.pg.name}".scopes SET root=$1,version=$2,sequence=$2 WHERE key=$3`,
             values: [root, previous, roots.key(h.scopeBinding.scope)] });
