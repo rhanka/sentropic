@@ -26,9 +26,14 @@ export function createCanvasProvider(options: ProviderOptions): {
 } {
   const { locks, stream, objectType, objectId, scopeRef, currentActorId } = options;
   const assertScope = (scope: string) => { if (scope !== scopeRef) throw new Error('scope-denied'); };
+  const assertUnit = (unit: Unit) => {
+    assertScope(unit.scopeRef);
+    // Existing L0 locks are object-level. H9 owns element-level claims.
+    if (unit.unitRef !== undefined) throw new Error('scope-denied');
+  };
   const actor = (id: string, label: string | null): Actor => ({ actorId: id, kind: 'human', displayLabel: label ?? id, color: 'transparent' });
   const lockState = (unit: Unit, lock: ObjectLocks.LockSnapshot | null): LockState => ({
-    unit: { ...unit }, holder: lock ? actor(lock.lockedBy.userId, lock.lockedBy.displayName) : null,
+    unit: { scopeRef: unit.scopeRef }, holder: lock ? actor(lock.lockedBy.userId, lock.lockedBy.displayName) : null,
     expiresAt: lock ? new Date(lock.expiresAt).toISOString() : null,
     unlockRequestedBy: lock?.unlockRequestedByUserId ? actor(lock.unlockRequestedByUserId, null) : null,
   });
@@ -52,15 +57,18 @@ export function createCanvasProvider(options: ProviderOptions): {
     return () => { active = false; ++version; stream.delete(key); };
   };
   return {
-    async acquireLock(unit) { assertScope(unit.scopeRef); const result = await locks.acquireLock(objectType, objectId); return { acquired: result.acquired, lock: lockState(unit, result.lock) }; },
-    async refreshLock(unit) { assertScope(unit.scopeRef); return lockState(unit, (await locks.acquireLock(objectType, objectId)).lock); },
-    async releaseLock(unit) { assertScope(unit.scopeRef); await locks.releaseLock(objectType, objectId); },
-    async requestUnlock(unit) { assertScope(unit.scopeRef); return lockState(unit, (await locks.requestUnlock(objectType, objectId)).lock); },
-    async acceptUnlock(unit) { assertScope(unit.scopeRef); return lockState(unit, (await locks.acceptUnlock(objectType, objectId)).lock); },
-    async forceUnlock(unit) { assertScope(unit.scopeRef); await locks.forceUnlock(objectType, objectId); },
+    async acquireLock(unit) { assertUnit(unit); const result = await locks.acquireLock(objectType, objectId); return { acquired: result.acquired, lock: lockState(unit, result.lock) }; },
+    async refreshLock(unit) {
+      assertUnit(unit); const current = await locks.fetchLock(objectType, objectId);
+      return lockState(unit, current?.lockedBy.userId === currentActorId ? (await locks.acquireLock(objectType, objectId)).lock : current);
+    },
+    async releaseLock(unit) { assertUnit(unit); await locks.releaseLock(objectType, objectId); },
+    async requestUnlock(unit) { assertUnit(unit); return lockState(unit, (await locks.requestUnlock(objectType, objectId)).lock); },
+    async acceptUnlock(unit) { assertUnit(unit); return lockState(unit, (await locks.acceptUnlock(objectType, objectId)).lock); },
+    async forceUnlock(unit) { assertUnit(unit); await locks.forceUnlock(objectType, objectId); },
     async recordPresence(scope) { assertScope(scope); return presenceState(await locks.sendPresence(objectType, objectId)); },
     async leavePresence(scope) { assertScope(scope); await locks.leavePresence(objectType, objectId); },
-    subscribeLock(unit, callback) { assertScope(unit.scopeRef); return watch('lock_update', async () => lockState(unit, await locks.fetchLock(objectType, objectId)), callback); },
+    subscribeLock(unit, callback) { assertUnit(unit); return watch('lock_update', async () => lockState(unit, await locks.fetchLock(objectType, objectId)), callback); },
     subscribePresence(scope, callback) { assertScope(scope); return watch('presence_update', async () => presenceState(await locks.fetchPresence(objectType, objectId)), callback); },
   };
 }
