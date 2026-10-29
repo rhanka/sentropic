@@ -18,9 +18,11 @@ test('should reject range resolution in CI, container, Make and script install p
     ['scripts/tool.mjs', "execFileSync('npm',\n ['install', 'tool@1.0.0']);"],
     ['scripts/tool.sh', 'npm \\\n install tool@1.0.0'],
     ['packages/tool/package.json', '{"scripts":{"build":"npx tool@^1"}}'],
+    ['scripts/tool.mjs', "execFileSync('npx', ['tool@^1']);"],
   ]) assert.equal(violations(file, source).length, 1, file);
   assert.deepEqual(violations('Makefile', 'lock-root:\n\tnpm install --package-lock-only\nbuild:\n\tnpm ci'), []);
   assert.deepEqual(violations('scripts/test.sh', 'npm ci\nnpx --no-install vitest run'), []);
+  assert.deepEqual(violations('api/Dockerfile', 'RUN rm /usr/local/bin/npx /root/.npm && ! command -v npx && test -e /app'), []);
 });
 
 test('should install tool graphs with npm ci and refuse uncommitted profiles', () => {

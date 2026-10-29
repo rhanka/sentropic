@@ -24,9 +24,11 @@ export function violations(file, source) {
     if (file === 'tools/memory-mcp-l5/pack.mjs' && i >= snapshotStart && i < snapshotEnd) return;
     const span = lines.slice(i, i + 8).join('\n');
     const call = /['"]npm['"]\s*,\s*\[\s*['"](?:install|i|exec)['"]/.exec(span);
+    const npxCall = /['"]npx['"]\s*,\s*\[\s*(?=['"])(?!['"]--no-install['"])/.exec(span);
     if (/\bnpm\s+(?:install|i|exec)\b/.test(line)
       || (call && call.index < line.length)
-      || /\bnpx\s+(?!--no-install\b)/.test(line)) problems.push(`${file}:${i + 1}: unlocked npm resolution`);
+      || (npxCall && npxCall.index < line.length)
+      || /(?:^|[;&|"'\s])npx\s+(?!--no-install\b)/.test(line.replace(/command\s+-v\s+npx\b/g, ''))) problems.push(`${file}:${i + 1}: unlocked npm resolution`);
   });
   return problems;
 }
