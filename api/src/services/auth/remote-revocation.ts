@@ -3,6 +3,7 @@ import { closeRemoteSessionAuthority, getRemoteSessionAuthority } from './remote
 import { RemoteAuthorityError } from './remote-contract';
 import { revocationMac, revocationPath, revocationServiceOrigin, signRevocation, validRevocationMac } from './remote-revocation-transport';
 import { acknowledgeRemoteRevocation, pendingRemoteRevocations, queueRemoteRevocation } from './remote-revocation-outbox';
+import { remoteRevocationToken } from './remote-revocation-token';
 
 export interface RemoteSessionRevocation { sessionIds: string[]; userId?: string }
 
@@ -43,22 +44,12 @@ export async function tombstoneRemoteSessions(input: RemoteSessionRevocation, pe
     const resource = process.env.REMOTE_ACTION_REVOCATION_RESOURCE;
     if (issuer.protocol !== 'https:' || issuer.username || issuer.password || issuer.search || issuer.hash
       || issuer.pathname !== '/' || !clientId || !secret || !resource) throw new Error();
-    const post = (path: string, body: string, headers: Record<string, string>) => fetch(`${issuer.origin}${path}`, {
-      method: 'POST', body, headers, redirect: 'error', signal: AbortSignal.timeout(5000),
-    });
-    const result = await post('/api/v1/auth/oauth/token', new URLSearchParams({ grant_type: 'client_credentials',
-      scope: 'remote.sessions.revoke', resource }).toString(), {
-      'content-type': 'application/x-www-form-urlencoded',
-      authorization: `Basic ${Buffer.from(`${encodeURIComponent(clientId)}:${encodeURIComponent(secret)}`).toString('base64')}`,
-    });
-    if (!result.ok) throw new Error();
-    const token = await result.json() as { access_token?: string; token_type?: string };
-    if (!token.access_token || token.token_type?.toLowerCase() !== 'bearer') throw new Error();
+    const token = await remoteRevocationToken(issuer.origin, clientId, secret, resource);
     for (let index = 0; index < Math.max(1, input.sessionIds.length); index += 16) {
       const body = JSON.stringify({
         sessionIds: input.sessionIds.slice(index, index + 16), ...(input.userId ? { userId: input.userId } : {}),
       });
-      const authorization = `Bearer ${token.access_token}`;
+      const authorization = `Bearer ${token}`;
       const signed = signRevocation(body, authorization);
       const response = await fetch(`${revocationServiceOrigin}${revocationPath}`, { method: 'POST', body,
         headers: { 'content-type': 'application/json', authorization, ...signed },
