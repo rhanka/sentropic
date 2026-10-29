@@ -1,7 +1,12 @@
 import type { Pool, PoolClient } from 'pg';
 import type {
-  LiveBaseline, LiveCheckpoint, LiveCommit, LiveDocumentIdentity, LiveDocumentState,
-  LiveDocumentStore, LiveJournalEntry,
+  LiveBaseline,
+  LiveCheckpoint,
+  LiveCommit,
+  LiveDocumentIdentity,
+  LiveDocumentState,
+  LiveDocumentStore,
+  LiveJournalEntry,
 } from '../../../../packages/chat-core/src/live-document-port';
 import { canonical, duplicate, sequenceEntry, validateCommit } from './journal';
 import { verifyCheckpoint } from './persistence';
@@ -48,7 +53,8 @@ export class PgLiveDocumentStore implements LiveDocumentStore {
       await client.query(`INSERT INTO canvas_live_documents (tenant_id,workspace_id,document_id,baseline,schema_epoch)
         VALUES ($1,$2,$3,$4,$5) ON CONFLICT DO NOTHING`, [...scope(identity), JSON.stringify(baseline), schemaEpoch]);
       const state = await this.read(client, identity);
-      if (state.schemaEpoch !== schemaEpoch) throw new Error('schema-epoch-conflict');
+      if (state.schemaEpoch !== schemaEpoch)
+        throw new Error('schema-epoch-conflict');
       return state;
     });
   }
