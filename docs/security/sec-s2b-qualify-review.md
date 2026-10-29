@@ -6,12 +6,12 @@ review-author:
   host: codex
   model: gpt-6.1-sol
   effort: high
-target-ref: f22d788197ddf6f427d502a663c6c098a9a3692a
+target-ref: bde825e8f916f53c11f76215a66c3d70947e1477
 target-paths: Makefile, .security/trivy-toolchain.json, scripts/security/daily, docs/security
 observed-failure: No pair of reachable eligible Claude-hosted model IDs could be resolved from an exposed live catalog or gateway endpoint. No peer was dispatched; no consensus verdict exists.
 ```
 
-Author metadata is the owner's declared launch identity, not an attestation of effective model routing. The target commit includes the complete code change and public evidence bundles, rebased onto main `2ea238790`. Review this immutable target; this selection receipt does not certify its content.
+Author metadata is the owner's declared launch identity, not an attestation of effective model routing. The target commit includes the complete code change, current-main archive identity validation and public evidence bundles, rebased onto main `2ea238790`. Review this immutable target; this selection receipt does not certify its content.
 
 The applied `/home/antoinefa/.codex/skills/harness/review/SKILL.md` requires “≥2 independent peers”, distinct `(profile, model)` pairs, and `candidate.profile != author.host && candidate.model != author.model`. Its launch path is the `h2a_run` MCP tool. That launch tool is available; no live model catalog tool or `ANTHROPIC_BASE_URL` endpoint was exposed in this author session. An available launcher does not establish eligible model identities. No guessed alias, duplicate reviewer or author's self-review was substituted.
 

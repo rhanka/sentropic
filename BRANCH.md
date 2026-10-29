@@ -75,6 +75,7 @@
   - [x] Fix archive report identity using a process-local proof issued only after preparation verifies archive bytes; cloned JSON cannot grant that proof.
   - [x] Final `make test-security-daily` (125 passing) and `make test-security-parser` (17 passing); scoped `make down` completed.
   - [x] Record CLOSED / STILL BLOCKED with exact missing inputs under `docs/security/`; independent review selection failed explicitly, with no consensus claimed.
+  - [x] Bind the independent review receipt to `bde825e8f`, including all current-main archive trials and the immutable archive identity fix.
   - [ ] Mechanical scope check before every commit; no publishable package source changes.
   - [x] Draft PR #840 to main with this plan as body and a five-step plan comment.
   - [x] Rebase onto current main; preserve this plan; split inherited plan replacement into commits below 150 lines; package bump gate N/A (no package source/manifest changes).
