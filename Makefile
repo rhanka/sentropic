@@ -4499,10 +4499,14 @@ memory-l5-packed: memory-l5-runtime ## L5 installed-consumer packed SDK suite, S
 	@test -n "$(ARTIFACT_MANIFEST)" || { echo "ERROR: memory-l5-packed requires ARTIFACT_MANIFEST=<path>" >&2; exit 1; }
 	@test -d tools/memory-mcp-l5/packed || { echo "ERROR: tools/memory-mcp-l5/packed is absent (arrives in Lot 4)" >&2; exit 1; }
 	@test -n "$(SCOPE)" || { echo "ERROR: memory-l5-packed requires SCOPE=packed/<file>" >&2; exit 1; }
+ifeq ($(SCOPE),packed/disabled-install.test.ts)
+	@$(MAKE) memory-l5-packed-disabled ARTIFACT_MANIFEST="$(ARTIFACT_MANIFEST)" NATIVE_OUTPUT="$(if $(NATIVE_OUTPUT),$(NATIVE_OUTPUT),tmp/memory-l5-disabled-$(shell date +%s%N))" MEMORY_L5_REPORT="$(MEMORY_L5_REPORT)" API_PORT=$(API_PORT) UI_PORT=$(UI_PORT) MAILDEV_UI_PORT=$(MAILDEV_UI_PORT) ENV=$(ENV)
+else
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.1.0 >/dev/null; mkdir -p tools/memory-mcp-l5/node_modules; ln -sfn "$$tool_dir/node_modules/vitest" tools/memory-mcp-l5/node_modules/vitest; trap "rm -rf tools/memory-mcp-l5/node_modules" EXIT; ARTIFACT_MANIFEST="$(ARTIFACT_MANIFEST)" "$$tool_dir/node_modules/.bin/vitest" run "$(SCOPE)" --environment node --root tools/memory-mcp-l5'
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace $(MEMORY_L5_NODE_IMAGE) sh -lc 'rm -rf tools/memory-mcp-l5/node_modules'
 
+endif
 .PHONY: memory-l5-toolchain-snapshot
 memory-l5-toolchain-snapshot: memory-l5-runtime ## Regenerate the P1 union toolchain snapshot from the pinned specs (explicit; review the diff)
 	@test -n "$(ENV)" || { echo "ERROR: memory-l5-toolchain-snapshot requires ENV=<env> last" >&2; exit 1; }

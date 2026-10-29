@@ -11,14 +11,16 @@
   - `BRANCH.md`
   - `tools/memory-mcp-l5/**`
   - `spec/evidence/memory-mcp-l5/**`
-- **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
+- **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
   - `packages/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
+- **Exception process**:
+  - [x] L5DI-EX1: the requested disabled-install fix delegates packed preparation before Vitest and forwards its JSON report; no frozen producing recipe changes. Rollback this delegation only.
 ## Feedback Loop
 - [x] Reproduced historical predicate failure: tree-sitter-lua node-gyp log line was attributed to memory; no demonstrated memory-native compilation in R5.
 - [ ] Independent reviews and exact-head CI remain required; no merge or publication.
@@ -35,3 +37,5 @@
 - [ ] Lot 2: run ordinary candidate installation with scripts and optional dependencies enabled; retain logs, trace and positive control; wire packed/disabled-install.test.ts and make target.
   - [x] Add the ordinary-install runner, packed disabled/exports cases and make delegation; execution on exact bytes remains part of the final run. Retain compressed logs/traces and compact hashed JSON.
 - [ ] Lot 3: tooling/scope checks, review dossier, draft PR and exact-head CI; cleanup.
+  - [x] Resume fix: prepare ordinary installation before the packed assertion, validate retained hashes and tuple, preserve the five-second timer and the native positive control.
+  - [x] Revalidated final observer bytes: 140 tooling tests pass; exact-candidate packed disabled-install passes with two positive-control observations and no candidate native build. CI/review remain separate pending gates.

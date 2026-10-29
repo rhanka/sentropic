@@ -4,11 +4,13 @@ import { join } from 'node:path';
 // Shared by the preload producer and the gate: declarations and shell dispatch
 // cannot establish which executable actually ran.
 export function isNativeBuildProcess(executable, argv = []) {
+  if (!Array.isArray(argv) || (argv.length === 1 && ['--version', '-v', '--help', '-h'].includes(argv[0]))) return false;
   const basename = String(executable).split(/[/\\]/).at(-1);
-  if (/^(?:node-gyp|make|cc|c\+\+|g\+\+|gcc|clang[^/\\]*)$/.test(basename)) return true;
-  return /^node(?:\.exe)?$/.test(basename) && Array.isArray(argv) &&
+  if (/^node-gyp(?:\.cmd)?$/.test(basename)) return argv.some(arg => ['build', 'rebuild'].includes(arg));
+  if (/^(?:make|cc|c\+\+|g\+\+|gcc|clang[^/\\]*)$/.test(basename)) return !(basename === 'make' && argv.length === 1 && argv[0] === 'clean');
+  return /^node(?:\.exe)?$/.test(basename) &&
     /(?:^|[/\\])node-gyp(?:\.js)?$/.test(String(argv[0])) &&
-    argv.some(arg => ['build', 'rebuild', 'configure'].includes(arg));
+    argv.some(arg => ['build', 'rebuild'].includes(arg));
 }
 
 /** Runs before npm and is inherited by every lifecycle Node process. Both
