@@ -142,6 +142,13 @@ The account audit measured sentropic at 97–99.7% of Actions storage:
 / **4,008 GB** and 36 desktop-download artifacts / **2.5 GB**. After BR-78,
 the observed partial-day rate projects to roughly **130 GB/day**. These are
 audit observations/projections, not measurements of this retention change.
+During authoring on 2026-10-29, a fresh paginated read of
+`GET repos/rhanka/sentropic/actions/artifacts?per_page=100` found 6,876
+artifacts / **2,714,981,013,935 bytes** (2,714.98 decimal GB), including
+2,711 allowlisted transport artifacts / **2,708,424,252,935 bytes**. The
+branch's first CI run was still queued: this stock decrease cannot be
+attributed to this branch. Pagination is a live snapshot, not an atomic
+inventory. The repository artifact/log-retention GET still reports 90 days.
 Source: `artifacts-audit.md`, 2026-10-29, retained with paginated API and daily
 billing data in the supplied `ci-study` audit bundle; the audit's original
 local path is `/home/antoinefa/.cache-tmp/claude-1000/-home-antoinefa-src-poc-k8s/fc703350-bfba-4a32-97bf-ce7041335aba/scratchpad/ci-study/artifacts-audit.md`.
