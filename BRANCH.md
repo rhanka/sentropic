@@ -67,10 +67,10 @@
 - [ ] **Lot 2 — Acquisition and execution contracts**
   - [x] Acquire DB once per campaign through allowed OCI origin; verify descriptors and hashes before atomic cache publication.
   - [x] Validate schema/dates and cache bytes after restoration; block missing/corrupt/stale/incompatible data.
-  - [ ] Prepare socket-free, least-privilege remote/archive scans with immutable target/source/platform proof and frozen flags/data.
+  - [x] Prepare socket-free, least-privilege remote/archive scans with immutable target/source/platform proof and frozen flags/data.
   - [x] Reject caller configuration and untrusted mirrors before acquisition; no automatic mirror fallback.
   - [ ] Reject silent Java/IaC fallback and preserve all-severity raw diagnostics.
-  - [ ] Keep unqualified code gated and daily job off.
+  - [x] Keep unqualified execution gated and daily job off; expose frozen preparation identities in raw receipts.
 - [ ] **Lot 3 — Security regression fixtures**
   - [ ] `toolchain-contract.test.mjs`: pin/version, publisher/platform/source, cache corruption/schema/dates and bounded acquisition failures.
   - [ ] `trivy.test.mjs`: sandbox flags, environment isolation, report/target mismatch and unqualified execution refusal.
