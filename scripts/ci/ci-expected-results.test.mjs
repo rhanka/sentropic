@@ -237,11 +237,11 @@ test('should authenticate current-attempt receipts and fail closed on API errors
 test('should delete only current-run transport artifacts after success and retain them after any failure or cancellation', async () => {
   const names = ['api-tool-image', 'api-image', 'ui-image', 'e2e-image', 'desktop-download', 'package-candidates'];
   const job = workflow.jobs['delete-transport-artifacts'];
-  assert.equal(job.if, 'always() && !cancelled() && inputs.decision_fixtures_only != true');
+  assert.equal(job.if, "always() && !cancelled() && inputs.decision_fixtures_only != true && needs.ci-gate.result == 'success'");
   assert.deepEqual(job.permissions, { actions: 'write' });
-  assert.deepEqual(job.needs, ['ci-capacity-receipts', 'validate-publishable-manifests',
+  assert.deepEqual(job.needs, ['ci-gate', 'ci-capacity-receipts', 'validate-publishable-manifests',
     'qualify-engram-e2', 'memory-l5-qualification', 'verify-train-lock-integrity']);
-  assert.ok(workflow.jobs['ci-gate'].needs.includes('delete-transport-artifacts'));
+  assert.ok(!workflow.jobs['ci-gate'].needs.includes('delete-transport-artifacts'));
   assert.equal(job.steps.length, 1);
   const cleanup = job.steps[0];
   assert.equal(cleanup.name, 'Delete consumed transport artifacts');
@@ -257,7 +257,7 @@ test('should delete only current-run transport artifacts after success and retai
   for (const [name, job] of Object.entries(workflow.jobs)) {
     if (name === 'decision-offline') {
       assert.match(job.if, /inputs.decision_fixtures_only == true/);
-    } else if (!['ci-gate', 'delete-transport-artifacts'].includes(name)) {
+    } else if (name !== 'delete-transport-artifacts') {
       assert.ok(ancestors.has(name), `${name} must finish before the success-only cleanup decision`);
     }
     for (const step of job.steps ?? []) {
@@ -276,6 +276,7 @@ test('should delete only current-run transport artifacts after success and retai
   const process = { env: { GITHUB_RUN_ATTEMPT: '3' } };
   const list = Symbol('list run artifacts'), jobsList = Symbol('list current-attempt jobs'), deleted = [];
   const jobs = [...consumers].map(name => ({ name, status: 'completed', conclusion: 'success' }));
+  jobs.push({ name: 'ci-gate', status: 'completed', conclusion: 'success' });
   jobs.push({ name: 'publish-cluster-mesh', status: 'completed', conclusion: 'skipped' },
     { name: 'validate-publishable-manifests', status: 'completed', conclusion: 'success' });
   let artifactReads = 0, jobReads = 0;
@@ -319,6 +320,20 @@ test('should delete only current-run transport artifacts after success and retai
       : { ...github, rest: { actions: { ...github.rest.actions, deleteArtifact: reject } } };
     await assert.rejects(execute(context, client, { info() {} }, process), /HTTP 403/);
   }
+});
+
+test('should await a successful final verdict before deletion without cycling its required set', () => {
+  const expected = workflowExpected(workflow, { event: 'pull_request', changes: { global: 'true' } });
+  assert.equal(expected.find(row => row.job === 'delete-transport-artifacts').required, false);
+  const executed = expected.filter(row => row.selected && row.job !== 'delete-transport-artifacts')
+    .map(row => ({ job: row.job, conclusion: 'success' }));
+  assert.equal(evaluateExpected({ expected, executed }).ok, true);
+  for (const result of ['failure', 'cancelled', 'skipped', 'neutral', '']) {
+    assert.equal(evaluateSelection(workflow.jobs['delete-transport-artifacts'].if,
+      key => key === 'needs.ci-gate.result' ? result : false), false, result);
+  }
+  assert.equal(evaluateSelection(workflow.jobs['delete-transport-artifacts'].if,
+    key => key === 'needs.ci-gate.result' ? 'success' : false), true);
 });
 
 test('should reject incomplete real gate contexts and missing expanded receipts through its exact script', () => {

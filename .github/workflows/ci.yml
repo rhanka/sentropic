@@ -3089,7 +3089,6 @@ jobs:
       - security-container-api
       - test-smoke-restore
       - ci-capacity-receipts
-      - delete-transport-artifacts
       - validate-ci-capacity-metrics
     steps:
       - name: Reject fixture-only merge evidence
@@ -3121,12 +3120,12 @@ jobs:
           CI_GATE_NEEDS: ${{ toJSON(needs) }}
         run: make ci-expected-results EXPECTED_FILE=tmp/ci-capacity/expected.json EXECUTED_FILE=tmp/ci-capacity/capture.json ENV=test-ci-62
 
-  # Only this job can delete artifacts; every consumer precedes capacity receipts.
+  # Only this job can delete artifacts, after the final verdict and every consumer.
   delete-transport-artifacts:
     runs-on: ubuntu-latest
-    needs: [ci-capacity-receipts, validate-publishable-manifests,
+    needs: [ci-gate, ci-capacity-receipts, validate-publishable-manifests,
       qualify-engram-e2, memory-l5-qualification, verify-train-lock-integrity]
-    if: always() && !cancelled() && inputs.decision_fixtures_only != true
+    if: always() && !cancelled() && inputs.decision_fixtures_only != true && needs.ci-gate.result == 'success'
     permissions:
       actions: write
     steps:
@@ -3139,7 +3138,7 @@ jobs:
             const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
               { ...context.repo, run_id: context.runId,
                 attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT), per_page: 100 });
-            if (jobs.filter(job => !['ci-gate', 'delete-transport-artifacts'].includes(job.name))
+            if (jobs.filter(job => job.name !== 'delete-transport-artifacts')
               .some(job => job.status !== 'completed' || !['success', 'skipped'].includes(job.conclusion))) {
               core.info('Preserving transport artifacts for selective reruns after failure or cancellation.');
               return;

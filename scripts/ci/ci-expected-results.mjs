@@ -250,9 +250,10 @@ export function workflowExpected(workflow, context = {}) {
       if (members && new Set(members).size !== members.length) {
         throw new Error(`Ambiguous truncated matrix names: ${name}`);
       }
-      // Existing train policy keeps this observer independent of promotion.
+      // Cleanup follows the final verdict; requiring it inside that verdict would cycle.
+      // Its failure still fails the complete Actions run required for handoff.
       return expandExpected([{ job: name, members, selected: selection(name),
-        required: name !== 'verify-train-lock-integrity' }]);
+        required: !['verify-train-lock-integrity', 'delete-transport-artifacts'].includes(name) }]);
     });
 }
 
