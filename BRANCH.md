@@ -63,8 +63,8 @@
 - [x] **Lot 0 — Baseline and constraints**
   - [x] Read master/workflow/testing, P0 boundary, manifests and publication targets.
   - [x] Create isolated worktree and pass mechanical harness branch check.
-- [ ] **Lot 1 — Runtime sources and package contract**
-  - [ ] Relocate source and tests into chat-core runtime directories without behavior changes.
+- [x] **Lot 1 — Runtime sources and package contract**
+  - [x] Relocate source and tests into chat-core runtime directories without behavior changes.
   - [x] Relocation slice 11 committed as unchanged source/test moves.
   - [x] Relocation slice 10 committed as unchanged source/test moves.
   - [x] Relocation slice 9 committed as unchanged source/test moves.
@@ -76,15 +76,15 @@
   - [x] Relocation slice 3 committed as unchanged source/test moves.
   - [x] Relocation slice 2 committed as unchanged source/test moves.
   - [x] Relocation slice 1 committed as unchanged source/test moves.
-  - [ ] Export compiled runtime entrypoints/types and reserve registry-verified minor version.
-  - [ ] Adapt source imports, fixtures, build/test dependencies and workspace lock metadata.
-  - [ ] Preserve existing chat-core root exports without browser runtime initialization.
-- [ ] **Lot 2 — Publication and validation wiring**
-  - [ ] Delete standalone package metadata/scripts, Make targets, workflow lane and manifest catalogs.
-  - [ ] Retain runtime behavior, package manifest, packed install and existing core gates.
-  - [ ] Document new public imports and unchanged release/ownership gates.
+  - [x] Export compiled runtime entrypoints/types and reserve registry-verified minor version 0.2.0 above npm 0.1.7.
+  - [x] Adapt source imports, fixtures, build/test dependencies and workspace lock metadata.
+  - [x] Preserve existing chat-core root exports without browser runtime initialization.
+- [x] **Lot 2 — Publication and validation wiring**
+  - [x] Delete standalone package metadata/scripts, Make targets, workflow lane and manifest catalogs.
+  - [x] Retain runtime behavior, package manifest, packed install and existing core gates.
+  - [x] Document new public imports and unchanged release/ownership gates in chat-core README.
 - [ ] **Lot 3 — Qualification and review**
-  - [ ] Run core typecheck/build and all existing core/runtime tests, including permission/replay/history/transport/optional modules.
+  - [x] Core typecheck/build and 692 core/runtime tests pass; permission/replay/history/transport/optional modules retained; 81.05% line coverage.
   - [ ] Run manifest guard and CI policy tests; pack and qualify exact chat-core archive.
   - [ ] Obtain complementary review and resolve findings.
   - [ ] Run make scope-check before every commit; verify final diff and clean up test environment.
