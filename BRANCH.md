@@ -45,12 +45,12 @@
   - [x] Verify names, IDs, ownership and creation date before Scaleway deletion.
   - [x] Delete only the API key, policy and application; verify absence.
   - [x] Remove exactly four reader lines; preserve other bytes and mode 0600.
-- [ ] **Lot 1 — Runbook correction**
-  - [ ] Document OVH BHS endpoint, region and bucket; dated wrong-provider revocation.
-  - [ ] Preserve the live pg_dump restore receipt and its S3 verification limit.
-  - [ ] Require an owner-authorized OVH read-only reader and documented .env rotation.
-  - [ ] API/UI/E2E tests: no changed or added test files; documentation-only validation.
+- [x] **Lot 1 — Runbook correction**
+  - [x] Document OVH BHS endpoint, region and bucket; dated wrong-provider revocation.
+  - [x] Preserve the live pg_dump restore receipt and its S3 verification limit.
+  - [x] Require an owner-authorized OVH read-only reader and documented .env rotation.
+  - [x] API/UI/E2E tests: no changed or added test files; documentation-only validation.
 - [ ] **Lot 2 — Final validation and draft PR**
-  - [ ] Review runbook facts and diff; run `make scope-check` and whitespace checks.
+  - [x] Review runbook facts and diff; run `make scope-check` and whitespace checks.
   - [ ] Create a draft PR with this branch plan as its body; never merge.
   - [ ] Verify CI is green on the reported head and report deleted names/IDs only.
