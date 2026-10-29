@@ -27,7 +27,7 @@ describe('P10.tooling.ci-contract — L5 CI, SDK floor, and Node/SQLite runtime 
     const download = meshJob.indexOf('uses: actions/download-artifact@');
     const verify = meshJob.indexOf('run: make ci-package-verify ENV=');
     const siblings = meshJob.indexOf('run: make pack-candidate-siblings PACKAGE=cluster-mesh');
-    const qualify = meshJob.indexOf('run: make ci-package-qualification PACKAGE_LANE=');
+    const qualify = meshJob.indexOf('make ci-package-qualification PACKAGE_LANE="$lane" ENV=test-ci-br80-$lane');
     expect(verify).toBeGreaterThan(download);
     expect(siblings).toBeGreaterThan(verify);
     expect(qualify).toBeGreaterThan(siblings);

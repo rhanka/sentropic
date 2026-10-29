@@ -33,6 +33,35 @@ const recipe = (target) => {
   return m ? m[1] : null;
 };
 const needsOf = (job) => [jobs[job].needs ?? []].flat();
+
+const assertActionsPermissions = (workflow) => {
+  assert.deepEqual(workflow.permissions, { contents: 'read', actions: 'read' });
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    if (name === 'delete-transport-artifacts') {
+      assert.deepEqual(job.permissions, { actions: 'write' });
+    } else {
+      assert.ok(job.permissions === undefined || typeof job.permissions === 'object', `${name}: explicit permission map required`);
+      assert.ok([undefined, 'read', 'none'].includes(job.permissions?.actions), `${name}: actions write is cleanup-only`);
+    }
+  }
+};
+
+test('should restrict Actions write to the transport deletion job', () => {
+  assertActionsPermissions(ci);
+  for (const name of Object.keys(jobs).filter(name => name !== 'delete-transport-artifacts')) {
+    const changed = structuredClone(ci);
+    changed.jobs[name].permissions = { ...changed.jobs[name].permissions, actions: 'write' };
+    assert.throws(() => assertActionsPermissions(changed), /actions write is cleanup-only/, name);
+    changed.jobs[name].permissions = 'write-all';
+    assert.throws(() => assertActionsPermissions(changed), /explicit permission map required/, name);
+  }
+  const changed = structuredClone(ci);
+  changed.permissions.actions = 'write';
+  assert.throws(() => assertActionsPermissions(changed));
+  changed.permissions = ci.permissions;
+  changed.jobs['delete-transport-artifacts'].permissions.contents = 'write';
+  assert.throws(() => assertActionsPermissions(changed));
+});
 const siblingRecipe = makefile.split('pack-candidate-siblings:')[1].split('\npublishable-sibling-plan:')[0];
 
 const assertActionsPermissions = (workflow) => {
@@ -378,7 +407,7 @@ test('lint wiring follows baseline evidence, independently per package, before t
       assert.equal(step.env, undefined);
       assert.equal(step['continue-on-error'], undefined);
       if (slug === 'cluster-mesh') {
-        assert.ok(jobs['validate-cluster-mesh'].strategy.matrix.include.some(row => row.lane === 'source'));
+        assert.ok(jobs['validate-cluster-mesh'].strategy.matrix.include.some(row => row.lane.split(' ').includes('source')));
         assert.match(runs, /source\).*lint-cluster-mesh typecheck-cluster-mesh test-cluster-mesh/);
       } else {
         const prepare = fs.readFileSync(path.join(root, 'packages/cluster-mesh/tests/storage/cold-workspace.sh'), 'utf8');
@@ -418,9 +447,9 @@ test('candidate and post-publication qualification for mcp-auth and cluster-mesh
     if (slug === 'cluster-mesh') {
       assert.deepEqual(needsOf('validate-cluster-mesh'), ['changes', 'package-candidates']);
       assert.equal(jobs['validate-cluster-mesh'].env.CI_PACKAGE_CANDIDATES, 'tmp/ci-package-candidates');
-      const verify = steps.findIndex(s => s.run === 'make ci-package-verify ENV=test-ci-br80-${{ matrix.lane }}');
-      const siblings = steps.findIndex(s => s.run === 'make pack-candidate-siblings PACKAGE=cluster-mesh SIBLING_DIR=tmp/ci-manifest-guard/siblings/cluster-mesh ENV=test-ci-br80-${{ matrix.lane }}');
-      const qualify = steps.findIndex(s => s.run === 'make ci-package-qualification PACKAGE_LANE=${{ matrix.lane }} ENV=test-ci-br80-${{ matrix.lane }}');
+      const verify = steps.findIndex(s => s.run === 'make ci-package-verify ENV=test-ci-br80');
+      const siblings = steps.findIndex(s => s.run === 'make pack-candidate-siblings PACKAGE=cluster-mesh SIBLING_DIR=tmp/ci-manifest-guard/siblings/cluster-mesh ENV=test-ci-br80');
+      const qualify = steps.findIndex(s => s.run?.includes('make ci-package-qualification PACKAGE_LANE="$lane" ENV=test-ci-br80-$lane'));
       assert.ok(verify >= 0 && verify < siblings && siblings < qualify);
       for (const index of [verify, siblings, qualify]) assert.equal(steps[index].if, undefined);
       assert.match(recipe('ci-package-qualification'), /install\) exec \$\(MAKE\) qualify-published-install TARBALL="\$\$tarball" SIBLING_ARCHIVES_FILE=tmp\/ci-manifest-guard\/siblings\/cluster-mesh\/receipts\.json/);
@@ -505,7 +534,7 @@ test('release train: validation barrier, strict chain, serialization, lock-sync 
   assert.match(dispatch, /"\$\$target" CM_COMMENTS_TARBALL="\$\$tarball" SIBLING_ARCHIVES_FILE=tmp\/ci-manifest-guard\/siblings\/cluster-mesh\/receipts\.json/);
   assert.equal(steps[qualify].if, undefined, 'qualification always runs for each selected lane');
   for (const lane of ['lazy', 'installed', 'major', 'install']) {
-    assert.ok(jobs['validate-cluster-mesh'].strategy.matrix.include.some(row => row.lane === lane), lane);
+    assert.ok(jobs['validate-cluster-mesh'].strategy.matrix.include.some(row => row.lane.split(' ').includes(lane)), lane);
   }
 });
 
