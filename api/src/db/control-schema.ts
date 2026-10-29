@@ -385,7 +385,7 @@ export const costLedger = controlSchema.table(
     runId: text('run_id'),                                // reserved
 
     // Call descriptor.
-    operation: text('operation').notNull(),               // 'generate' | 'stream'
+    operation: text('operation').notNull(),               // 'generate' | 'stream' | 'decision'
     providerId: text('provider_id').notNull(),
     modelId: text('model_id').notNull(),
     credentialSource: text('credential_source'),          // ResolvedProviderCredential.source
@@ -424,7 +424,7 @@ export const costLedger = controlSchema.table(
     createdAtIdx: index('cost_ledger_created_at_idx').on(table.createdAt),
     operationCheck: check(
       'cost_ledger_operation_check',
-      sql`${table.operation} IN ('generate', 'stream')`,
+      sql`${table.operation} IN ('generate', 'stream', 'decision')`,
     ),
     principalKindCheck: check(
       'cost_ledger_principal_kind_check',
@@ -529,8 +529,27 @@ export const budgets = controlSchema.table(
   }),
 );
 
+/** Decision accounting metadata and durable evaluator disable evidence. */
+export const decisionEvaluatorState = controlSchema.table('decision_evaluator_state', {
+  evaluatorKey: text('evaluator_key').primaryKey(),
+  disabled: boolean('disabled').notNull().default(false),
+  evidence: jsonb('evidence'),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+});
+
+export const decisionCalls = controlSchema.table('decision_calls', {
+  callId: text('call_id').primaryKey(),
+  tenantId: text('tenant_id').notNull(),
+  workspaceId: text('workspace_id').notNull(),
+  principalKey: text('principal_key').notNull(),
+  evaluatorKey: text('evaluator_key'),
+  holdId: text('hold_id').unique().references(() => budgetHolds.id),
+  receipt: jsonb('receipt'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+});
+
 /**
- * Immutable effective-dated component rates (micro-USD). Non-overlap per (provider, model) is
+ * Immutable effective-dated component rates (micro-USD). Non-overlap per (provider, model, protocol) is
  * enforced by the unique key plus the single-writer checked insert (B0-A4); only `effective_to`
  * of the open predecessor may be closed by that writer. No btree_gist / extension.
  */
@@ -540,6 +559,7 @@ export const modelPricing = controlSchema.table(
     id: text('id').primaryKey(),
     providerId: text('provider_id').notNull(),
     modelId: text('model_id').notNull(),
+    protocol: text('protocol').notNull().default('generation'),
     inputMicroUsdPerMtok: bigint('input_micro_usd_per_mtok', { mode: 'number' }).notNull(),
     outputMicroUsdPerMtok: bigint('output_micro_usd_per_mtok', { mode: 'number' }).notNull(),
     cachedInputMicroUsdPerMtok: bigint('cached_input_micro_usd_per_mtok', { mode: 'number' }),
@@ -557,6 +577,7 @@ export const modelPricing = controlSchema.table(
     effectiveUnique: uniqueIndex('model_pricing_provider_model_effective_from_unique').on(
       table.providerId,
       table.modelId,
+      table.protocol,
       table.effectiveFrom,
     ),
     windowCheck: check(

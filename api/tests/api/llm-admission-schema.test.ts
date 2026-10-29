@@ -90,7 +90,7 @@ describe('0008_llm_admission — expand-first shape', () => {
     expect(fk!.def).toBe('FOREIGN KEY (budget_strategy_id) REFERENCES control.tenant_budget_strategy(id) ON DELETE RESTRICT');
   });
 
-  it('keeps cost_ledger history-compatible: nullable new columns, unchanged CHECK and idempotency key', async () => {
+  it('keeps cost_ledger history-compatible: nullable new columns, Decision operation and idempotency key', async () => {
     const columns = await rows<{ column_name: string; is_nullable: string; column_default: string | null }>(sql`
       SELECT column_name, is_nullable, column_default FROM information_schema.columns
       WHERE table_schema = 'control' AND table_name = 'cost_ledger' AND column_name IN (${sql.join(NEW_LEDGER_COLUMNS.map((c) => sql`${c}`), sql`, `)})
@@ -99,7 +99,7 @@ describe('0008_llm_admission — expand-first shape', () => {
     expect(columns).toEqual([...NEW_LEDGER_COLUMNS].sort((a, b) => a.localeCompare(b, 'en')).map((column_name) => ({ column_name, is_nullable: 'YES', column_default: null })));
     const [operation] = await rows<{ def: string }>(sql`
       SELECT pg_get_constraintdef(oid) AS def FROM pg_constraint WHERE conname = 'cost_ledger_operation_check'`);
-    expect(operation!.def).toBe(`CHECK ((operation = ANY (ARRAY['generate'::text, 'stream'::text])))`);
+    expect(operation!.def).toBe(`CHECK ((operation = ANY (ARRAY['generate'::text, 'stream'::text, 'decision'::text]))) NOT VALID`);
     const [unique] = await rows<{ indexdef: string }>(sql`
       SELECT indexdef FROM pg_indexes WHERE schemaname = 'control' AND indexname = 'cost_ledger_idempotency_key_unique'`);
     expect(unique!.indexdef).toContain('UNIQUE INDEX');
@@ -114,7 +114,7 @@ describe('0008_llm_admission — expand-first shape', () => {
     const [pricing] = await rows<{ indexdef: string }>(sql`
       SELECT indexdef FROM pg_indexes WHERE indexname = 'model_pricing_provider_model_effective_from_unique'`);
     expect(pricing!.indexdef).toContain('UNIQUE INDEX');
-    expect(pricing!.indexdef).toContain('(provider_id, model_id, effective_from)');
+    expect(pricing!.indexdef).toContain('(provider_id, model_id, protocol, effective_from)');
     expect(await rows(sql`SELECT extname FROM pg_extension WHERE extname = 'btree_gist'`)).toEqual([]);
   });
 });
@@ -309,7 +309,8 @@ describe('0008_llm_admission — disposable upgrade and restore', () => {
     pool = open(names.upgrade);
     await migrate(drizzle(pool), control(CONTROL_DIR));
     const upgraded = await upgradedState(pool);
-    expect(upgraded).toEqual({ migrations: journal.entries.length, tables: NEW_TABLES, newRows: 0, attributed: 0, ledger: history });
+    // The Decision host migration adds two native prices while preserving historical financial rows.
+    expect(upgraded).toEqual({ migrations: journal.entries.length, tables: NEW_TABLES, newRows: 2, attributed: 0, ledger: history });
     expect((await query(pool, `SELECT bool_or(convalidated) AS any FROM pg_constraint WHERE conname LIKE 'cost_ledger_%_check'
       AND conname <> 'cost_ledger_operation_check'`))[0].any).toBe(false);
 
