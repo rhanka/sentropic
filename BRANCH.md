@@ -27,7 +27,11 @@
   - [x] No exceptions required.
 
 ## Feedback Loop
-- [x] No blocking operational issues; Scaleway revocation and local cleanup verified.
+- [x] Scaleway revocation and local cleanup verified.
+- [ ] CI-RUNNER — blocked; owner: GitHub Actions scheduler; observed 2026-10-29 12:39 UTC.
+  - [x] Both initial jobs await an unassigned ubuntu-latest runner; no failure annotations.
+  - [x] Other repository runs have remained queued since 10:35 UTC.
+  - [ ] Acceptance: successful CI on this draft PR's final head; no merge authorized.
 
 ## AI Flaky tests
 - [x] Not applicable: documentation only.
@@ -52,5 +56,5 @@
   - [x] API/UI/E2E tests: no changed or added test files; documentation-only validation.
 - [ ] **Lot 2 — Final validation and draft PR**
   - [x] Review runbook facts and diff; run `make scope-check` and whitespace checks.
-  - [ ] Create a draft PR with this branch plan as its body; never merge.
+  - [x] Create a draft PR with this branch plan as its body; never merge.
   - [ ] Verify CI is green on the reported head and report deleted names/IDs only.
