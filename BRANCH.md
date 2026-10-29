@@ -32,6 +32,8 @@
 - [x] BR01-EX2: allow `.github/workflows/ci.yml` to require the isolated memory MCP PostgreSQL campaign when validating cluster-mesh; rollback removes the added step; no publication or release-gate exemption.
 - [x] Keep the supplied candidate as a hash-checked test-only fixture so CI can qualify identical unpublished peer bytes.
 - [x] Record unanswered producer questions in root `.tmp/memory-mcp-builtin/questions.md`; choose the narrowest compatible composition.
+- [ ] BLOCKED — Engram 0.22.0 candidate public entries duplicate the private fenced-store registry: real PostgreSQL captures return `CAPABILITY_UNAVAILABLE`. Owner: Engram packaging; preserve the private provenance gate and share the engine/store-factory instance across public entries. The builtin now refuses this composition atomically before opening storage.
+- [ ] BLOCKED — Published engram is still 0.21.3; retain cluster-mesh 0.24.0 per owner instruction. The release bump gate cannot pass for this draft without a changed publication prerequisite.
 
 ## AI Flaky tests
 - [x] No accepted flaky tests; no timeout increases.
