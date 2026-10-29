@@ -8,7 +8,7 @@ import { verifyManifest } from './toolchain-oci.mjs';
 
 export async function hashFile(path) {
   const stat = await lstat(path);
-  requireEvidence(stat.isFile() && !stat.isSymbolicLink(), 'cache file type');
+  requireEvidence(stat.isFile() && !stat.isSymbolicLink() && stat.size <= 4 * 1024 ** 3, 'cache file type/size');
   const hash = createHash('sha256');
   for await (const bytes of createReadStream(path)) hash.update(bytes);
   return `sha256:${hash.digest('hex')}`;
@@ -79,6 +79,8 @@ async function acquire(client, kind, root, now) {
 
 export async function restoreSnapshot({ path, receiptHash, manifestDigest }, now = Date.now()) {
   requireEvidence(isDigest(receiptHash) && isDigest(manifestDigest), 'trusted cache receipt identity');
+  const receiptStat = await lstat(join(path, 'receipt.json'));
+  requireEvidence(receiptStat.isFile() && receiptStat.size <= 65536, 'cache receipt type/size');
   const bytes = await readFile(join(path, 'receipt.json'));
   requireEvidence(digest(bytes) === receiptHash, 'cache receipt integrity');
   const receipt = JSON.parse(bytes);
