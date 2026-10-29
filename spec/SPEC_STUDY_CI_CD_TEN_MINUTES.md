@@ -157,8 +157,11 @@ local path is `/home/antoinefa/.cache-tmp/claude-1000/-home-antoinefa-src-poc-k8
 `retention-days: 1`, replacing their inherited 90-day lifetime. The final
 `ci-gate` also waits for `delete-transport-artifacts`, which waits for every
 consumer through `ci-capacity-receipts`, including image publication and
-preproduction deployment. Its sole step paginates **this run's** artifacts
-and deletes only the five exact names below. Only the deletion job receives
+preproduction deployment, plus independent validators and train verification.
+Its sole step paginates the current attempt's jobs
+and preserves artifacts if any job failed or was cancelled, allowing selective
+reruns within the one-day retention window. Otherwise, it paginates **this run's**
+artifacts and deletes only the five exact names below. Only the deletion job receives
 `actions: write`; workflow defaults and `ci-gate` stay read-only. Fork
 PRs retain one-day expiry because their token is read-only. Cancellation
 before cleanup also falls back to expiry. API failures fail the cleanup step;
@@ -177,8 +180,8 @@ keeping these five artifacts. `deploy-preprod` checks immutable registry
 tags and deploys from the registry; it does not fetch an earlier run's Actions
 artifacts. Package publishers use their source/registry flow. Package-candidate,
 qualification, security, capacity and Pages artifacts are outside the delete
-allowlist. Selective reruns after cleanup need a full workflow rerun to recreate
-transport artifacts; cancelled/fork runs keep them for at most one day.
+allowlist. Failed, cancelled and fork runs keep transport artifacts for at most
+one day; successful runs delete them after consumers finish.
 
 Stock after deployment is **not yet measured**: changing upload retention does
 not shorten existing artifacts' expiry. This branch does not delete historical
