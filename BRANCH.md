@@ -1,75 +1,48 @@
-# Feature: Decision Q1 live qualification smoke
+# Feature: Produce exact-candidate L5 manifests and checkpoint evidence
 
 ## Objective
-- [ ] Record bounded live protocol and identity evidence for JEV and OpenAI Decisions; keep production refused pending OD-4 calibration.
-
+- [ ] Assemble the delivered 965c93e3 candidate, retain actual per-case results and produce a strictly verified checkpoint proposal.
 ## Scope / Guardrails
-- [x] Owner GO dated 2026-10-29; spec v4 section 7.4; H1/H2 base `213638676`.
-- [x] Worktree `tmp/worktrees/decision-q1`, branch `feat/decision-q1-live`, mono-branch.
-- [x] Make only; no Python; secrets enter Compose from the existing root `.env` without copying values.
-- [x] Maximum three attempts per candidate, counting failed, refused and ambiguous calls; no retries.
-- [x] Local qualification only, `ENV=test-decision-q1` last; API 8802, UI 5202, Maildev 1102.
-- [x] Serialize Docker with `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; run `make down` afterward.
-
+- [x] Worktree tmp/worktrees/memory-l5-checkpoint; branch feat/memory-l5-checkpoint; successor to #777; rebase onto origin/main before delivery.
+- [x] Make-only, shared Docker flock, pinned Node image, API_PORT=9625 UI_PORT=5825 MAILDEV_UI_PORT=1725 ENV=test-memory-l5 last; make down after.
+- [x] Preserve P3, L0, catalog and producer bytes; missing evidence blocks; no synthetic CI, owner action or acceptance.
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `spec/decision/**`
-  - `packages/llm-mesh/src/decision/descriptor.ts`
-  - `packages/llm-mesh/src/decision/openai-descriptor.ts`
-  - `packages/llm-mesh/src/decision/descriptor-validation.ts`
-  - `packages/llm-mesh/package.json`
-  - `package-lock.json`
-  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
-  - `packages/llm-mesh/tests/decision-jev-v4l3.test.ts`
-  - `packages/llm-mesh/tests/decision-qualification-admission.test.ts`
-  - `packages/llm-mesh/tests/decision-qualification.test.ts`
-  - `packages/llm-mesh/tests/decision-jev-request.test.ts`
-  - `packages/llm-mesh/tests/decision-openai-routing.test.ts`
-  - `packages/cluster-mesh/tests/fixtures/train.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-- **Forbidden Paths (must not change in this branch)**:
+  - `tools/memory-mcp-l5/**`
+  - `spec/evidence/memory-mcp-l5/**`
   - `Makefile`
+- **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `api/**`
+  - `.track/**`
+  - `packages/**/src/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
-
+- **Exception process**:
+  - [x] L5CP-EX1: bounded Make targets delegate candidate assembly and evidence production to tools; preserve frozen producing recipes. Rollback the new delegation only.
 ## Feedback Loop
-- [x] No calibration authorized; live observations cannot qualify immutable weights, billing beyond the admitted bound, or production readiness.
-- [x] Q1-CRED-01: JEV preflight refused peripheral whitespace; normalized transiently after Compose injection, source env unchanged; refusal consumes attempt 1.
-- [x] Q1-INV-01: parser previously forbade observed IDs with unqualified production status; permit evidence inventory while retaining admission gates; regression keeps nonempty IDs and proves production refusal.
-- [ ] Q1-REV-01: conductor to select two exact complementary reviewer models before merge; h2a discovery has host presence but no model identities, no configured gateway catalog; no consensus claimed.
-- [x] Q1-CI-01: reproduced job 123314702961's three stale-version failures; rebound independent train and selected fixture to llm-mesh 0.32.2 and guarded archive SHA-512; 1,228 cluster-mesh tests and scope pass, 138 expected skips; see `spec/decision/q1-2026-10-29/ci-repair.md`.
-
+- [ ] #771/#777 final-head CI and independent reviews remain gates; no merge is authorized.
+- [ ] P3 broker 0.1.0 lacks reference export; #771 reference 0.2.0 changes the inventory. Reject cross-inventory acceptance.
+- [ ] Platform profile/context cases remain subject to the separate #783 adoption and successor-freeze decision.
+- [ ] Authenticated owner UAT, detached L0 authorization and role acceptances must come from their authorized actors.
 ## AI Flaky tests
-- [x] No flaky acceptance or additional live calls beyond the cap.
-
+- [x] No flake waiver, skipped required case or timeout change.
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; no integration from other branches.
-
+- [x] Sequential dependent PRs; author implementation; independent review per harness review skill when reachable.
 ## UAT Management (in orchestration context)
-- [x] API-only qualification fixture; no UI, Chrome or VSCode surface change.
-
+- [ ] Record the minimal actual owner action or authenticated L6/L8 deferral; do not manufacture either.
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read master/workflow rules, spec section 7.4, API host and descriptors; mechanical branch check passed.
-  - [x] Verify ports, credential names, control pricing and isolated stack.
-- [x] **Lot 1 — Bounded live evidence**
-  - [x] Fix a public synthetic binary criterion and retain only that fixture input.
-  - [x] No documented zero-cost Decisions entitlement probe established; first POST counts as attempt 1.
-  - [x] Record served identity, tokens, priced cost, billing bound, latency, verdict shape and refusals per attempt.
-  - [x] Fail closed on descriptor identity mismatch; three calls per candidate including the JEV preflight refusal, five egresses total, 77 micro-USD.
-- [x] **Lot 2 — Evidence and descriptors**
-  - [x] Retain scrubbed receipts in `spec/decision/`; accepted identities/evidenceRefs cite only observed results.
-  - [x] Bump llm-mesh from published 0.32.1 to 0.32.2; align workspace lock and public version assertion.
-  - [x] Preserve unqualified production and OD-4 calibration requirement; 16 host/route tests pass.
-- [ ] **Lot 3 — Final validation and draft PR**
-  - [x] Mesh descriptor, qualification, adapter, pricing, public and request suites: 88 files / 1,566 tests pass.
-  - [x] llm-mesh typecheck/lint and mechanical scope checks pass; commits at most 150 lines.
-  - [x] Secret scan, attempt counts, identity comparison and durable 77 micro-USD ledger verified; zero reserved/pending.
-  - [x] Stop local stack with `make down`; publish report `spec/decision/q1-live-smoke.md`.
-  - [x] Draft PR #834 created against main; exact-head CI remains the final checkpoint.
-  - [ ] Observe CI completed/success on exact head; report head, 77 micro-USD and candidate outcomes.
+- [x] Lot 0: read common/project rules, retained L5 specification, P3 inventory, catalog, existing receipt verifier and latest #777 review.
+- [x] Lot 1: candidate assembly with archive identity, P3/build-receipt binding and immutable output; tests/candidate.test.mjs covers tampering, missing roles and contract drift.
+  - [x] Add candidate.mjs: preserve and verify P3 peers/inventory, E4 receipt and every archive; write immutable candidate bytes and sidecar without issuing acceptance.
+  - [x] Candidate tampering, identity, duplicate-role and immutable-path regressions pass; full tooling suite: 122 tests passed.
+- [x] Lot 2: report bundling and checkpoint production; tests/proof-bundle.test.mjs covers absent/duplicate/nonexecuted/failed/skipped/stale/cross-manifest assertions; keep strict receipt rejection.
+  - [x] Add proof-bundle.mjs: retain actual case names/statuses, reject missing or stale execution bindings and source reports for E4, and hash immutable per-proof reports.
+  - [x] Add checkpoint.mjs to produce strict-verifier proposals and rejection receipts; unknown owner/CI/acceptance fields remain absent.
+  - [x] Tooling passes 134 tests; add memory-l5-candidate and memory-l5-checkpoint make delegations without changing P3 producing recipes.
+- [x] Lot 3: resolve predecessor dispositions against the approved memory-first transfer, preserving all later R2/R7a obligations.
+  - [x] Add digest-pinned transfer resolution: L0 fixture must exist with its P3 hash; four remote suites remain explicit later R2/R7a 22-suite obligations. Frozen catalog unchanged.
+  - [x] Tooling passes 137 tests, including the incomplete-checkpoint regression: missing owner/CI/acceptance fields stay absent and the proposal is rejected.
+  - [x] Add a full-attempt make runner that retains each command/log/exit, raw Vitest reports, catalog gaps, checkpoint proposal and strict receipt verdict; cleanup runs on exit.
+- [ ] Lot 4: scope-check and tooling gate; record review selection, push PR and verify exact-head CI; no publication or merge.

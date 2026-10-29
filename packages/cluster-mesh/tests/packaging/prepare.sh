@@ -89,6 +89,21 @@ platform_tgz="$(ls "$work"/src/sentropic-mcp-platform-*.tgz)"
 receipt="$(node "$here/siblings.mjs" candidate "$siblings" @sentropic/mcp-platform "$MPLATFORM")"
 if [ -n "$receipt" ]; then cp "$receipt" "$platform_tgz"; fi
 
+# Lot 3's exact P09 subset needs only the existing MCP consumer, with unchanged packed bytes.
+if [ "${CLUSTER_MESH_PREPARE_ONLY:-}" = mcp ]; then
+  test -n "${MEMORY_L5_PLATFORM_ARCHIVE:-}"
+  cp "$MEMORY_L5_PLATFORM_ARCHIVE" "$platform_tgz"
+  node "$here/candidate-platform-registry.mjs" ../mcp-platform/package.json "$platform_tgz" > "$work/registry-url" &
+  registry_pid=$!
+  trap 'kill "$registry_pid" 2>/dev/null || true' EXIT
+  while [ ! -s "$work/registry-url" ]; do kill -0 "$registry_pid"; sleep 0.1; done
+  mkdir -p "$work/mcp-consumer"
+  node -e 'require("node:fs").writeFileSync(process.argv[1], JSON.stringify({private:true,type:"module",
+    dependencies:{"@sentropic/cluster-mesh":"file:"+process.argv[2]}}))' "$work/mcp-consumer/package.json" "$tgz"
+  (cd "$work/mcp-consumer" && npm_config_registry="$(cat "$work/registry-url")" npm install $quiet >/dev/null)
+  exit 0
+fi
+
 # Release-train specs for workspace packages that may be ahead of the registry
 # (pre-publication gate, e.g. before their publish jobs run): pack each one exactly as
 # published (dist built by the packaging.mk prerequisites), then resolve through the verified
