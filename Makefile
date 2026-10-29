@@ -2059,6 +2059,10 @@ include deploy/ci/artifact-content/tests.mk
 test-artifact-content: ## Qualify content process behavior, types and lint on the API test executor
 	@$(MAKE) test-api-endpoints SCOPE=apps/artifact-content/tests API_TEST_ARGS="--config ../apps/artifact-content/vitest.config.ts --no-file-parallelism" API_TEST_WORKERS=1 ENV=$(ENV)
 	@$(API_TEST_RUN) api sh -lc 'npm exec -- tsc --project ../apps/artifact-content/tsconfig.json && cd /workspace/apps/artifact-content && npm exec -- eslint src tests'
+
+.PHONY: test-app-cluster-mesh
+test-app-cluster-mesh: test-artifact-content ## Retain the app topic host, reader and catalogue receiving gates
+	@$(MAKE) test-api-endpoints SCOPE="tests/services/catalog tests/services/catalog-characterization.spec.ts tests/api/cluster-mesh-catalog.test.ts tests/api/catalog-auth-context.test.ts tests/api/artifacts-host-credentials.test.ts tests/api/app-mcp-registry.test.ts tests/api/app-mcp-installed.test.ts tests/api/app-artifacts-transport.test.ts tests/api/artifacts-reader-activation.test.ts tests/api/artifacts-host-activation-store.test.ts tests/api/artifacts-host-publication.test.ts tests/api/artifacts-host-migrations.test.ts tests/api/artifacts-host-recovery.test.ts tests/api/cluster-mesh-resources.test.ts tests/api/cluster-mesh-namespace-inventory.test.ts tests/api/cluster-mesh-session.test.ts tests/unit/auth/session-manager.test.ts" API_TEST_WORKERS=1 API_TEST_ARGS="--no-file-parallelism" ENV=$(ENV)
 .PHONY: test-idp-sync-selftest
 test-idp-sync-selftest: ## Build and check the IdP sync bundles locally without cluster access (BR45-EX1)
 	@case "$(ENV)" in test-*) ;; *) echo "ERROR: use ENV=test-*"; exit 1 ;; esac
