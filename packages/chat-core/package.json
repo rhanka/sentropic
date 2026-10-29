@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/chat-core",
-  "version": "0.1.7",
+  "version": "0.2.0",
   "description": "Chat orchestration core for @sentropic/* — port interfaces (CheckpointStore, MessageStore, SessionStore, StreamBuffer, LiveDocumentStore, ToolRegistry, EventSink, JobQueue, AgentRuntime). Adapters live in persistence-* / flow.",
   "type": "module",
   "license": "MIT",
@@ -15,7 +15,47 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    }
+    },
+    "./runtime": {"types":"./dist/runtime/index.d.ts","import":"./dist/runtime/index.js"},
+    "./runtime/checkpoints": {"types":"./dist/runtime/checkpoints/index.d.ts","import":"./dist/runtime/checkpoints/index.js"},
+    "./runtime/checkpoints/checkpointState": {"types":"./dist/runtime/checkpoints/checkpointState.d.ts","import":"./dist/runtime/checkpoints/checkpointState.js"},
+    "./runtime/checkpoints/classifier": {"types":"./dist/runtime/checkpoints/classifier.d.ts","import":"./dist/runtime/checkpoints/classifier.js"},
+    "./runtime/checkpoints/index": {"types":"./dist/runtime/checkpoints/index.d.ts","import":"./dist/runtime/checkpoints/index.js"},
+    "./runtime/client/chat-core-host": {"types":"./dist/runtime/client/chat-core-host.d.ts","import":"./dist/runtime/client/chat-core-host.js"},
+    "./runtime/client/replay": {"types":"./dist/runtime/client/replay.d.ts","import":"./dist/runtime/client/replay.js"},
+    "./runtime/client/streamHistory": {"types":"./dist/runtime/client/streamHistory.d.ts","import":"./dist/runtime/client/streamHistory.js"},
+    "./runtime/client/streamHub": {"types":"./dist/runtime/client/streamHub.d.ts","import":"./dist/runtime/client/streamHub.js"},
+    "./runtime/client/streamTypes": {"types":"./dist/runtime/client/streamTypes.d.ts","import":"./dist/runtime/client/streamTypes.js"},
+    "./runtime/client/transport": {"types":"./dist/runtime/client/transport.d.ts","import":"./dist/runtime/client/transport.js"},
+    "./runtime/comments": {"types":"./dist/runtime/comments/index.d.ts","import":"./dist/runtime/comments/index.js"},
+    "./runtime/comments/host": {"types":"./dist/runtime/comments/host.d.ts","import":"./dist/runtime/comments/host.js"},
+    "./runtime/comments/state": {"types":"./dist/runtime/comments/state.d.ts","import":"./dist/runtime/comments/state.js"},
+    "./runtime/comments/utils": {"types":"./dist/runtime/comments/utils.d.ts","import":"./dist/runtime/comments/utils.js"},
+    "./runtime/context": {"types":"./dist/runtime/context/index.d.ts","import":"./dist/runtime/context/index.js"},
+    "./runtime/context/context-entry": {"types":"./dist/runtime/context/context-entry.d.ts","import":"./dist/runtime/context/context-entry.js"},
+    "./runtime/context/module": {"types":"./dist/runtime/context/module.d.ts","import":"./dist/runtime/context/module.js"},
+    "./runtime/conversation": {"types":"./dist/runtime/conversation.d.ts","import":"./dist/runtime/conversation.js"},
+    "./runtime/documents": {"types":"./dist/runtime/documents/index.d.ts","import":"./dist/runtime/documents/index.js"},
+    "./runtime/documents/attachmentState": {"types":"./dist/runtime/documents/attachmentState.d.ts","import":"./dist/runtime/documents/attachmentState.js"},
+    "./runtime/documents/generatedFileCards": {"types":"./dist/runtime/documents/generatedFileCards.d.ts","import":"./dist/runtime/documents/generatedFileCards.js"},
+    "./runtime/hosts/createWebHost": {"types":"./dist/runtime/hosts/createWebHost.d.ts","import":"./dist/runtime/hosts/createWebHost.js"},
+    "./runtime/hosts/types": {"types":"./dist/runtime/hosts/types.d.ts","import":"./dist/runtime/hosts/types.js"},
+    "./runtime/state/agentsViewMarkers": {"types":"./dist/runtime/state/agentsViewMarkers.d.ts","import":"./dist/runtime/state/agentsViewMarkers.js"},
+    "./runtime/state/chat-context": {"types":"./dist/runtime/state/chat-context.d.ts","import":"./dist/runtime/state/chat-context.js"},
+    "./runtime/state/chatAttachments": {"types":"./dist/runtime/state/chatAttachments.d.ts","import":"./dist/runtime/state/chatAttachments.js"},
+    "./runtime/state/chatDraft": {"types":"./dist/runtime/state/chatDraft.d.ts","import":"./dist/runtime/state/chatDraft.js"},
+    "./runtime/state/chatLoopController": {"types":"./dist/runtime/state/chatLoopController.d.ts","import":"./dist/runtime/state/chatLoopController.js"},
+    "./runtime/state/chatProjection": {"types":"./dist/runtime/state/chatProjection.d.ts","import":"./dist/runtime/state/chatProjection.js"},
+    "./runtime/state/chatSessionHydration": {"types":"./dist/runtime/state/chatSessionHydration.d.ts","import":"./dist/runtime/state/chatSessionHydration.js"},
+    "./runtime/state/chatSessionRuntime": {"types":"./dist/runtime/state/chatSessionRuntime.d.ts","import":"./dist/runtime/state/chatSessionRuntime.js"},
+    "./runtime/state/conversationRuntime": {"types":"./dist/runtime/state/conversationRuntime.d.ts","import":"./dist/runtime/state/conversationRuntime.js"},
+    "./runtime/state/sessionList": {"types":"./dist/runtime/state/sessionList.d.ts","import":"./dist/runtime/state/sessionList.js"},
+    "./runtime/stores/localTools": {"types":"./dist/runtime/stores/localTools.d.ts","import":"./dist/runtime/stores/localTools.js"},
+    "./runtime/utils/chat-run-projection": {"types":"./dist/runtime/utils/chat-run-projection.d.ts","import":"./dist/runtime/utils/chat-run-projection.js"},
+    "./runtime/utils/chat-steer": {"types":"./dist/runtime/utils/chat-steer.d.ts","import":"./dist/runtime/utils/chat-steer.js"},
+    "./runtime/utils/chat-tool-scope": {"types":"./dist/runtime/utils/chat-tool-scope.d.ts","import":"./dist/runtime/utils/chat-tool-scope.js"},
+    "./runtime/utils/localToolStreamSync": {"types":"./dist/runtime/utils/localToolStreamSync.d.ts","import":"./dist/runtime/utils/localToolStreamSync.js"},
+    "./runtime/utils/model-selection": {"types":"./dist/runtime/utils/modelSelectionPolicy.d.ts","import":"./dist/runtime/utils/modelSelectionPolicy.js"}
   },
   "files": [
     "dist",
@@ -37,7 +77,11 @@
     "@sentropic/contracts": "^0.3.0",
     "@sentropic/events": "^0.2.1"
   },
+  "peerDependencies": {"svelte":"^5.0.0","@sentropic/chat-ui":"^0.34.1 || ^1.0.0"},
+  "peerDependenciesMeta": {"@sentropic/chat-ui":{"optional":true},"svelte":{"optional":true}},
   "devDependencies": {
+    "svelte": "^5.55.7",
+    "@sentropic/chat-ui": "^0.34.1",
     "@types/node": "^22.10.10",
     "typescript": "5.4.5"
   }
