@@ -237,7 +237,7 @@
     "jose": { "optional": true }
   },
   "devDependencies": {
-    "@sentropic/engram": "file:tests/fixtures/sentropic-engram-0.22.0.tgz",
+    "@sentropic/engram": "0.21.3",
     "@types/node": "^22.10.10",
     "typescript": "5.4.5"
   }

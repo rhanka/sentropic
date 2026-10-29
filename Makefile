@@ -994,8 +994,8 @@ typecheck-llm-mesh: ## Run @sentropic/llm-mesh type checks
 
 .PHONY: lint-llm-mesh lint-llm-gateway lint-cluster-mesh
 lint-llm-mesh lint-llm-gateway lint-cluster-mesh: lint-%: ## Lint a root-owned mesh/gateway package
-	@$(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b test-mem-release,$(ENV)),$(CM_RUN),docker run --rm) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" \
-		-w /workspace/packages/$* $(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b test-mem-release,$(ENV)),$(CM_RUN_IMAGE),$(LLM_MESH_NODE_IMAGE)) sh -lc 'set -eu; \
+	@$(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b test-mem-release test-memory-mcp,$(ENV)),$(CM_RUN),docker run --rm) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" \
+		-w /workspace/packages/$* $(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b test-mem-release test-memory-mcp,$(ENV)),$(CM_RUN_IMAGE),$(LLM_MESH_NODE_IMAGE)) sh -lc 'set -eu; \
 		tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" \
 			--no-save --no-audit --no-fund eslint@10.0.2 typescript-eslint@8.56.1 >/dev/null; \
 		printf "%s\n" "import tseslint from '\''typescript-eslint'\'';" \
