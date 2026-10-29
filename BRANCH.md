@@ -33,4 +33,5 @@
   - [x] Add exact-byte input collector; the registry mesh source commit comes from the archive-bound SLSA payload, with signature authentication explicitly unestablished.
   - [x] Independently measured candidate SHA-256/SHA-512 and P3/source/peer bindings match; mesh 0.22.4 archive integrity and SLSA subject match. Retain exact archive bytes and observed source 440599d04e91bb33e3874588f067c6a90bffd1b3 without claiming authenticated acceptance.
 - [ ] Lot 1: run memory-l5-qualify; retain every command/exit, raw assertions, native positive controls, manifest and strict checkpoint proposal/result.
+  - [x] Add process-time report binding with immutable raw JSON retention; source-only reports retain that mode and cannot become installed E4 evidence.
 - [ ] Lot 2: document the actual verdict and exact remaining owner actions, scope/review/CI checks, PR and cleanup; do not issue a false L5 acceptance.
