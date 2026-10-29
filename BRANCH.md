@@ -68,6 +68,7 @@
   - [x] Declare BRRC1-EXn with rationale, impact and rollback before any conditional edit.
 
 ## Feedback Loop
+- [x] F6 socket fixture correction: Node fetch rewrites Host when redirecting the service URL to loopback; use node:http to preserve the deployed auth-idp Host, and assert the node-server's reconstructed origin. Temporary diagnostics removed; no product transport relaxation.
 - [x] F6 typecheck caught the bounded reader's Uint8Array boundary; request MAC now hashes raw body bytes directly, preserving byte integrity without coercion or decoding.
 - [x] Integrated origin/main a3204932e after F6 with a two-parent merge; BRANCH.md was the sole conflict and this PR's plan was kept. Upstream canvas paths are unchanged; no rebase or provisioning.
 - [x] BRRC1-EX8: import origin/main a3204932e by merge after F6; preserve this PR's BRANCH.md on conflict. The nine additionally allowed canvas fixture/documentation paths are inherited only and must match main byte for byte. Impact: qualify the exact merged head without rebasing or changing upstream work. Rollback: revert the merge; Track blobs are identical before integration. The authored-change 150-line limit excludes the identity-preserving upstream merge.
