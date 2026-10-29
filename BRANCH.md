@@ -49,6 +49,7 @@
   - [x] Fetch origin/main, create isolated worktree, run `harness check branch` (PASS C1).
   - [x] Declare paths, environment, Makefile exception and immutable scanner identities.
 - [ ] **Lot 1 — Acquisition and admission evidence**
+  - [x] Add a reproducible bounded OCI sizing experiment; keep production ingestion unchanged until measurements complete.
   - [ ] Independently retrieve scanner/verifier bytes, bundles and roots; verify offline.
   - [ ] Inventory image filesystem, native executable dependencies and actual runtime commands without Python.
   - [ ] Measure Java compressed/expanded bytes, memory and transfer; implement and test a bounded kind-specific fix.
