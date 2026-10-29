@@ -49,7 +49,7 @@
 - [ ] **Lot 1 — Contract tests first**
   - [x] Add `tests/mcp-memory.spec.ts`: static catalog, lazy selection and atomic peer refusal; red: missing builtin entry.
   - [x] Add `tests/engram-memory/mcp-memory-pg.spec.ts`: all six tools, confirmation guard and two-tenant isolation on real PostgreSQL.
-  - [ ] Add transport coverage for stdio and HTTP using the same compiled definition.
+  - [x] Add transport coverage for stdio and HTTP using the same compiled definition.
   - [ ] Demonstrate expected failures before implementation.
 - [ ] **Lot 2 — Qualified builtin and composition**
   - [x] Add `src/integrations/mcp/memory.ts` and `src/loaders/mcp/memory.ts` with the existing topology guard.

@@ -71,7 +71,7 @@ export async function memoryMcpHost(tenant = 'tenant-a') {
   if (!result.ok) { await builtin.runtime()?.close(); await kernel.ownership?.release(); await pg.close();
     throw new Error(JSON.stringify(result.diagnostics)); }
   const runtime = builtin.runtime()!;
-  return { runtime, registry, modules, definition, manifest: MEMORY_PROVIDER_MANIFEST,
+  return { runtime, builtin, registry, modules, definition, manifest: MEMORY_PROVIDER_MANIFEST,
     context: (args = {}) => mcpContext(tenant, scopeRef, storeId, args),
     call: (tool: string, args: any) => runtime.server.callTool(tool, args, mcpContext(tenant, scopeRef, storeId, args),
       { idempotencyKey: args.idempotency_key, elicitationRef: 'elicitation-memory' }),
