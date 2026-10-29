@@ -20,6 +20,7 @@
   - `packages/chat-runtime/**`
   - `packages/chat-core/**`
   - `package-lock.json`
+  - `api/Dockerfile`
   - `scripts/ci/**`
   - `spec/CHAT_MIGRATION_P1.md`
 - **Forbidden Paths (must not change in this branch)**:
@@ -38,6 +39,10 @@
   - [x] BR1-EX2: conductor explicitly requires workflow publisher/filter/bootstrap removal and unchanged validation gates under chat-core; rollback restores runtime lane.
 
 ## Feedback Loop
+- [x] BR1-EX3: API image compilation needs the new runtime's neutral UI type peer, while visual workspace inputs remain excluded from API identity; install pinned published build peers transiently and remove them after core compilation. Rollback restores the original core build RUN.
+- [x] API build closure reproduced: hiding the absent visual workspace yields TS2307 for runtime peer contracts. Fix only the API builder's compilation dependency; server root and runtime execution stay unchanged.
+- [x] API isolated build now passes the exact Dockerfile core build RUN with the visual workspace hidden; published build peers are removed by its EXIT trap.
+- [x] Prepared P1 qualification passes UI typecheck, 533 unit/206 DOM tests, cowork desktop 52/bridge 27 tests, 217 manifest/25 policy tests, both guarded packs and installed-pair payload/remount/permission proof. #819 integration still waits for #836 merge.
 - [x] Review F2 accepted: derive the qualification archive from guarded pack outputs so future core version bumps need no workflow path change.
 - [x] Review F1 contested: chat-server's unchanged ^0.1.2 intentionally resolves published core 0.1.7; no server-root code/API changed. Updating an unrelated release's dependency is outside this packaging migration; core/runtime tests and clean archive probe directly qualify 0.2.0.
 - [x] Merge origin/main c37662a20 without rebase; only BRANCH.md conflicts, keep this plan; inbound changes are W0 documentation, no Track/source changes.
