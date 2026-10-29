@@ -4,6 +4,7 @@
 - [ ] Qualify all 23 Stage B cases through the installed handle, ship C6 declaration in dev.7, and regenerate the 21-slot tuple; stop for an evidenced Engram-side blocker.
 
 ## Scope / Guardrails
+- [x] Release manifest and root lock select reserved stable 0.24.0; selected packed fixture and train version agree. Registry latest rechecked as 0.23.5; CI-only publication on main remains pending.
 - [x] Release integrator: merge `origin/main` a3204932e420efe6eeafa3428459fadb7f215aa7 into integration b90fc4ee6; preserve all main changes and union Makefile selectors. Imported changes are inherited from that main parent; no Track events changed.
 - [x] Branch `feat/cluster-mesh-engram-e11b` from integration `fa900e335`; worktree `tmp/worktrees/mem-e11b`; mechanical branch PASS; merge only, never rebase.
 - [x] Owner-directed pack-only dev.7; no publication, artifacts source edits or receiving ACK.
