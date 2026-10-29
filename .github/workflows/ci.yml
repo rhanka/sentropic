@@ -48,6 +48,10 @@ on:
           - cited-source-viewer
           - artifacts
 
+permissions:
+  contents: read
+  actions: read
+
 env:
   REGISTRY: ${{ inputs.decision_fixtures_only != true && secrets.REGISTRY || 'local' }}
   ADMIN_EMAIL: ${{ inputs.decision_fixtures_only != true && secrets.ADMIN_EMAIL || 'decision-test@example.test' }}
@@ -2998,14 +3002,14 @@ jobs:
           make k8s-deploy-preprod KUBECONFIG="${KUBECONFIG}" ENV=ci-preprod
 
   # Aggregate every PR validation job so path-filtered skips satisfy one required check.
-  # Also wait for image publication/deployment before deleting transport artifacts.
+  # Cleanup waits for image publication/deployment through capacity receipts.
   # Package publishers/bootstrap and verify-train-lock-integrity do not use them.
   ci-gate:
     runs-on: ubuntu-latest
     if: always()
     permissions:
       contents: read
-      actions: write
+      actions: read
     needs:
       - decision-offline
       - enforce-package-bump
@@ -3061,10 +3065,8 @@ jobs:
       - security-container-api
       - test-smoke-restore
       - ci-capacity-receipts
+      - delete-transport-artifacts
       - validate-ci-capacity-metrics
-      - publish-api-image
-      - publish-ui-image
-      - deploy-preprod
     steps:
       - name: Reject fixture-only merge evidence
         if: inputs.decision_fixtures_only == true
@@ -3094,6 +3096,15 @@ jobs:
         env:
           CI_GATE_NEEDS: ${{ toJSON(needs) }}
         run: make ci-expected-results EXPECTED_FILE=tmp/ci-capacity/expected.json EXECUTED_FILE=tmp/ci-capacity/capture.json ENV=test-ci-62
+
+  # Only this job can delete artifacts; every consumer precedes capacity receipts.
+  delete-transport-artifacts:
+    runs-on: ubuntu-latest
+    needs: [ci-capacity-receipts]
+    if: always() && !cancelled() && inputs.decision_fixtures_only != true
+    permissions:
+      actions: write
+    steps:
       - name: Delete consumed transport artifacts
         # Fork tokens are read-only; cancellation also has the one-day expiry fallback.
         if: always() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
