@@ -2,7 +2,10 @@
 // Data-only: plain maps scoped by module/tenant/workspace. No pg, no
 // drizzle, no engram imports. Semantics live in record-runtime.ts; binding
 // lives in scope-runtime.ts. Public types documented for S1/P1 adapters.
+// E1 additive: exact-u64 allocation paths are opt-in; the legacy safe
+// increment below keeps its frozen behavior.
 
+import { compareU64Counter, isU64Counter, nextU64Counter } from './contracts.js';
 import type { CommitReceipt } from './atomic.js';
 import { IndexedMap, forkIndexedMap } from './indexed-map.js';
 import type { IndexedHistory } from './indexed-history.js';
@@ -146,6 +149,14 @@ export const incrementBackendAllocation = (allocation: string): string => {
   if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error(`invalid allocation: ${allocation}`);
   return String(parsed + 1);
 };
+
+// E1 opt-in exact-u64 backend allocation: BigInt end to end, never Number.
+// Returns undefined at 2^64-1 exhaustion instead of wrapping.
+export const isU64BackendAllocation = (allocation: unknown): boolean => isU64Counter(allocation);
+
+export const compareBackendAllocationU64 = (left: string, right: string): -1 | 0 | 1 => compareU64Counter(left, right);
+
+export const incrementBackendAllocationU64 = (allocation: string): string | undefined => nextU64Counter(allocation);
 
 // The backend addresses every handle of every kernel in this realm:
 // freezing the shared prototype closes the cross-module channel (O1, same

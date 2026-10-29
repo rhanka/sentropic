@@ -7,6 +7,6 @@
     "declarationMap": false,
     "sourceMap": false
   },
-  "include": ["src/**/*.ts", "tests/fixtures/types/**/*.ts"],
+  "include": ["src/**/*.ts", "tests/fixtures/types/**/*.ts", "tests/engram-memory/host-type-denial.spec.ts"],
   "exclude": ["dist", "node_modules"]
 }
