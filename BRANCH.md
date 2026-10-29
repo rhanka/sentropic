@@ -67,7 +67,7 @@
   - [x] Add api/tests/unit/canvas-live-admission.test.ts; observe behavioral RED before implementation (10 failed assertions at 708de0636).
   - [ ] Deny cross-tenant, cross-field, forged actors, viewer edits and revoked admissions; reauthorize each operation.
   - [ ] Persist sessionEpoch through restart/reconnect; close/new admission alone rotates it.
-  - [ ] Refuse schema/profile before binding; preserve draft bytes; require actor/draft acknowledgement for both recovery branches.
+  - [x] Refuse schema/profile before binding; preserve draft bytes; require actor/draft acknowledgement for both recovery branches (joined-provider RED observed before implementation).
 - [ ] **Lot 2 — Session registry RED witnesses and lifetime**
   - [x] Implement document resource ownership, per-mount leases, field namespaces and explicit actor/awareness update delivery.
   - [x] Define executable registry lifetime, isolation, identity and actor-update witnesses behind the H3 factory port.
