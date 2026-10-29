@@ -2078,7 +2078,7 @@ test-idp-sync-sql: ## Test isolated IdP SQL and imported-client authorize accept
 .PHONY: scope-check
 include docs/governance/kit/artifact-weight.mk
 
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-sec-zod4 test-artifacts-021 test-artifacts-022 test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-resync-752 test-llm-judge test-mem-e11 test-mem-e11b test-mem-release test-artifact-weight),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-sec-zod4 test-artifacts-021 test-artifacts-022 test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-resync-752 test-llm-judge test-mem-e11 test-mem-e11b test-mem-release test-artifact-weight test-memory-mcp),)
 scope-check: ## Advisory C2 scope-check via the installed host harness (BR861-EX1, BR01-EX2)
 	@files="$$( { git diff --cached --name-only $(SCOPE_BASE); git diff --name-only $(SCOPE_BASE); } | sort -u | paste -sd, - )"; \
 	harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"

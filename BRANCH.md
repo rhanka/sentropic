@@ -53,7 +53,7 @@
   - [ ] Demonstrate expected failures before implementation.
 - [ ] **Lot 2 — Qualified builtin and composition**
   - [ ] Add `src/integrations/mcp/memory.ts` and `src/loaders/mcp/memory.ts` with the existing topology guard.
-  - [ ] Extend module catalog, contracts, exports and loader barrel.
+  - [x] Extend module catalog, contracts, exports and loader barrel.
   - [ ] Compose canonical store, shared engine/read facets and nine bindings through `definition` only.
   - [ ] Preserve producer schemas, receipts, confirmation guard and trusted context.
 - [ ] **Lot 3 — Qualification and handoff**
