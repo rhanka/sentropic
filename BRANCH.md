@@ -1,13 +1,14 @@
 # Feature: app cluster-mesh integration
 
 ## Objective
-- [x] Deliver the content Kubernetes workload and isolated TLS routes without activating artifacts or accessing any cluster.
+- [x] Integrate the fourteen reviewed W1/W2/W3/W4/W0-close.d lots on main's accepted W0 baseline; keep serving, publication and activation closed.
+- [ ] Deliver a draft PR to main with successful CI on its exact head; do not merge.
 
 ## Scope / Guardrails
-- [x] Source: `.tmp/app-switch-week/plan-v2.md` W3.d and sections 3, 4, 5; W0 host-fit/reservations and W3.c inherited.
-- [x] Base `origin/feat/app-cm-integration` at `763bb9d7e`; branch `feat/app-cm-w3d`; worktree `tmp/worktrees/app-w3d`.
+- [x] Source: `.tmp/app-switch-week/plan-v2.md`; W0-close.e Opus/Sol final receipts and N5; historical W3.d checklist retained below.
+- [x] Base `origin/feat/app-cm-integration` at `1a85aa8b4`; branch `feat/app-cm-integration`; worktree `tmp/worktrees/app-cm-integration`; merge main `c37662a20`.
 - [x] Make-only; shared Docker flock `/home/antoinefa/.cache-tmp/sentropic-docker.lock`; no parallel builds.
-- [x] Every make command ends with `ENV=test-app-w3d`; ports API=8806, UI=5192, Maildev=1099.
+- [x] Local make commands end with `ENV=test-app-int`; reserved API/UI/Maildev ports 9718/5918/1818; no local service stack started.
 - [x] No cluster operations, production activation, Python, rebase, force-push, AI trailers or destructive cleanup.
 - [x] Serving, reader activation and host publication remain explicitly disabled before FIRST-IMMO, including main auto-deploys.
 - [x] API remains the sole migration executor; content starts only the compiled content entrypoint.
@@ -18,23 +19,16 @@
 - [x] **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
   - `.dockerignore`
-  - `.tmp/live-stt/**`
-  - `docker-compose.yml`
   - `.github/workflows/**`
-  - `.security/**`
   - `Makefile`
   - `api/**`
   - `apps/**`
   - `deploy/**`
   - `docs/**`
-  - `e2e/**`
-  - `package.json`
   - `package-lock.json`
-  - `packages/**`
-  - `plan/**`
   - `scripts/**`
   - `spec/**`
-  - `ui/**`
+  - `track/TRACK.md`
   - `deploy/k8s/base/artifact-content-*.yaml`
   - `deploy/k8s/base/kustomization.yaml`
   - `deploy/k8s/base/30-api.yaml`
@@ -48,14 +42,17 @@
   - `deploy/ci/idp-identity-sync/workflow.selftest.mjs`
   - `docs/runbooks/app-artifact-content-infrastructure.md`
 - [x] **Forbidden Paths (must not change in this branch)**:
-  - `docker-compose.*.yml`
+  - `docker-compose*.yml`
+  - `packages/**`
+  - `plan/**`
+  - `ui/**`
+  - `e2e/**`
   - `.cursor/rules/**`
   - `.track/**`
 - [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `Makefile`
   - `.github/workflows/ci.yml`
-  - `.github/workflows/app-cm-w3d.yml`
-- [x] **Exception process**: BR-CM-W3-EX1 below is the bounded inherited T3 build/deploy exception.
+- [x] **Exception process**: BR143-EX1 covers the completed inherited merge only; BR143-EX2 covers topic workflow retirement and equivalent CI gates.
 
 ## Feedback Loop
 - [x] Gate inventory refinement: API unit/endpoint defaults do not include tests/services/catalog. The explicit test-app-cluster-mesh aggregate retains the complete union of topic workflow scopes (including catalogue services/characterization) plus content tests/types/lint on the existing unit toolbox.
@@ -64,7 +61,7 @@
 - [x] Integration render regression: automatic merge duplicated API container env. Combine decision secret references and explicit artifact flags in one list; preserve envFrom and all flags at 0. The existing overlay render gate reproduces the failure and verifies the correction.
 - [x] BR143-EX2 / explicit owner request: remove all six app-cm topic workflows after preserving every gate in ci.yml. Add test-artifact-content to the existing API unit executor for content tests/types/lint; existing API endpoints/services, API quality, manifest and image jobs retain all other gates. Impact: main PR CI owns qualification; rollback restores the topic workflows and removes only this additive gate.
 - [x] BR143-EX1 / owner request 29 October 2026: merge origin/main c37662a20 without rebase. Imported reviewed main changes are inherited merge content, outside the 150-line authored-change budget. Resolve README/host-fit by retaining W0 local recovery and W4.b supersession; preserve both Docker build intents, both alias sets and both migration identities. Impact: refreshed integration base only, all production gates remain closed. Rollback: revert the merge on this integration branch; never rewrite main.
-- [x] BR143-EX1 scope: the following additional Allowed Paths apply only to unchanged origin/main imports and the six named conflict resolutions; later authored work requires the bounded integration scope.
+- [x] BR143-EX1 scope closed after the merge: main-only package, UI, E2E, plan and Compose paths are forbidden again; the allowed scope covers the existing app integration diff and directly blocking integration defects.
 - [x] BR03d-EX2 / owner acknowledgment: PR #814 correction request (2026-10-28), Opus r1 P2-2. Defer actual release digest to W5; existing prod `:main` and CD content-hash `newTag` remain acceptable only while all three API/content flags are explicitly `0` (health/denial, no private serving). Impact: closed workloads run registry tags until W5; render gate rejects any flag `1` without SHA-256 digest-pinned API/content images. Rollback: keep all flags `0` and restore the prior qualified image/config; W5 replaces tags with the tested published digest before any opening.
 - [x] BR03d-EX1 (mechanical alias of BR-CM-W3-EX1) / acknowledged by owner W3.d packet and W0 reservations: add a render-only Make target/include and CI invocation. Impact: offline qualification only; rollback: remove include/step and content resources, retain closed flags. No deploy target execution or general CI refactor.
 - [x] Tenant handoff: DNS/TLS provisioning, dedicated namespace-local credentials, private bucket checkpoint/restore and actual accepted image digest remain external receipts; document exact gates without asserting live readiness.
@@ -81,6 +78,13 @@
 - [x] Offline manifest inspection and local denial checks only; no root dev services or live browser activation.
 
 ## Plan / Todo (lot-based)
+- [x] Integration lot 0: mechanical C1, merge main without rebase, explain all conflicts in the merge body; identical Track blobs in both parents/result.
+- [x] Integration lot 1: remove six topic workflows and preserve every gate, including services/catalog, content types/lint, image runtime/identity and manifest denials.
+- [x] Integration lot 2: 54 closed-overlay checks, IdP/restore parent controls, static canonical image and CI hash filters pass under the shared Docker lock.
+- [x] Integration ancestry: #773/#780/#794/#784/#785/#791/#806/#810/#813/#812/#814/#795/#807/#796 source heads are all ancestors.
+- [ ] Integration lot 3: draft PR to main, final-head CI success, cleanup receipt and head report; no merge.
+- [ ] Deferred W3.e: real HTTPS isolation after FIRST-IMMO; W4.c positive UI path follows it.
+- [ ] Deferred W5: protected promotion/trust/signature/approval, integrated journey and exact-object/version/grants/blobs/runtime revoked-reader restore remainder, then observation.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read MASTER/workflow/testing, template, plan W3.d/dependencies/ownership, W0 reservations, W3.c entrypoint and image tests.
   - [x] Create isolated worktree and pass mechanical `harness check branch` before work.
