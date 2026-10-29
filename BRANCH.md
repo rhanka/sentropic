@@ -1,4 +1,4 @@
-# Feature: Lockfile-exact CI installations
+# Feature: fix(ci): enforce lockfile-exact installations
 
 ## Objective
 - [ ] Prevent CI and Make installs from selecting registry versions outside committed locks.
@@ -51,15 +51,16 @@
 - [x] **Lot 0 — Baseline**
   - [x] Read rules and lock incident evidence; mechanical branch check passed.
   - [x] Inventory Make, CI, scripts, Docker and installed-consumer paths.
-- [ ] **Lot 1 — Locked tool and workspace installs**
+- [x] **Lot 1 — Locked tool and workspace installs**
   - [x] Freeze 50 isolated tool profiles with exact transitive versions and integrity.
   - [x] Remove container install fallbacks and implicit executable downloads.
   - [x] Commit installation graphs and replace live tool resolution.
   - [x] Preserve isolated builds and tarball consumers.
   - [x] Guard against unlocked npm/npx resolution, including regression fixtures.
-- [ ] **Lot 2 — Security evidence**
+- [x] **Lot 2 — Security evidence**
   - [x] Record fixed finding and coverage in security notes/register.
 - [ ] **Lot 3 — Validation and delivery**
+  - [x] Cluster-mesh typecheck, 17 packaging preparation regressions and six install guard tests pass.
   - [ ] Run guard, cluster-mesh tests/typecheck, representative package and consumer checks.
   - [ ] Review changed install paths and run mechanical scope check before each commit.
   - [ ] Stop test environment with `make down`.
