@@ -1,81 +1,142 @@
-# Feature: Canvas live H0 contract and consumer preparation
+# Feature: Decision API host and authoritative remote pricing
 
 ## Objective
-- [x] Execute only H0 of approved host plan r3 (SHA-256 `a48f54be6ce82b05e697f1c3f7dbc433ed60b69f5c2e377b6fb71faad9ababe7`).
-- [x] Prepare evidence for existing Canvas L2-CB3 integration; no behavior change or adoption claim.
+- [x] Integrate JEV and OpenAI Decisions into the authenticated API through cluster-mesh, with durable financial ports and fail-closed production readiness.
 
 ## Scope / Guardrails
-- [x] Base: `origin/main` at `5e986a0b6cd2dfecfbde6a588d30055271124696`; branch `feat/canvas-live-h0`.
-- [x] Isolated worktree: `tmp/worktrees/canvas-h0`; root dev/UAT stays reserved for the owner.
-- [x] English documents and data only; no migrations, dependencies, runtime code or Python files.
-- [x] Make-only commands, `ENV` last; selective staging then separate `make commit`; each commit at most 150 changed lines.
-- [x] Merge only when later authorized; never rebase; no AI trailers.
-- [x] No service stack required; reserved test mapping: `ENV=test-canvas-h0`, API `9400`, UI `5600`, Maildev UI `1500` (not started).
-- [x] Preserve the frozen DS contract; do not create a second descriptor, vocabulary, generator or binding.
-- [x] All future behavior witnesses are RED-first; H0 records inputs and pending gates only.
+- [x] Owner priority 2026-10-28: integrate both remote backends; local hosting remains deferred.
+- [x] Base: origin/main de7ab8d31; branch feat/decision-host-h1; worktree tmp/worktrees/decision-h1.
+- [x] No live provider requests, spend, deployment, PR merge, rebase, Python or AI commit trailers.
+- [x] Use existing make targets; ENV=test-decision-h1 last; API_PORT=8798 UI_PORT=5198 MAILDEV_UI_PORT=1098.
+- [x] Serialize Docker steps with flock; tear down the isolated environment after each step.
+- [x] One additive control migration; atomic make commits at most 150 changed lines.
+- [x] Qualification is host-selected and admin-only; production stays unqualified.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [x] **Allowed Paths (implementation scope)**:
+- **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `docs/canvas-live/**`
-  - `api/tests/fixtures/canvas-live/**`
-  - `ui/tests/fixtures/canvas-live/**`
-- [x] **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
-  - `docker-compose*.yml`
+  - `.github/workflows/ci.yml`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
+  - `api/src/routes/namespaces/llm-mesh.ts`
+  - `api/src/routes/namespaces/llm-mesh-cutover.ts`
+  - `api/src/routes/namespaces/decision*.ts`
+  - `api/src/services/decision*.ts`
+  - `api/src/services/llm-metering/decision*.ts`
+  - `api/src/services/llm-metering/budget-admission.ts`
+  - `api/src/services/llm-metering/model-pricing-writer.ts`
+  - `api/src/db/control-schema.ts`
+  - `api/vitest.config.ts`
+  - `api/drizzle/control/*decision*.sql`
+  - `api/drizzle/control/meta/_journal.json`
+  - `api/tests/unit/decision*.test.ts`
+  - `api/tests/api/decision*.test.ts`
+  - `api/tests/api/llm-admission-schema.test.ts`
+  - `packages/llm-mesh/src/decision/descriptor.ts`
+  - `packages/llm-mesh/package.json`
+  - `packages/llm-mesh/tests/decision-fixtures.ts`
+  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
+  - `packages/cluster-mesh/tests/decision-receipts.spec.ts`
+  - `packages/cluster-mesh/tests/fixtures/train.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
+  - `package-lock.json`
+  - `spec/decision/api-host.md`
+- **Forbidden Paths (must not change in this branch)**:
+  - `docker-compose.*.yml`
   - `.cursor/rules/**`
-  - `plan/**`
-  - `api/src/**`
-  - `ui/src/**`
-  - `packages/**`
   - `.track/**`
-- [x] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql`
+  - `plan/NN-BRANCH_*.md`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile` (BR822-EX3: Decision secret names only)
+  - `docker-compose.yml` (BR822-EX3: Decision environment names only)
+  - `deploy/k8s/base/30-api.yaml` (BR822-EX3: optional Decision secret references only)
+  - `api/drizzle/*.sql` (maximum one migration; control uses its existing migration lane)
   - `.github/workflows/**`
-- [x] **Exception process**: record `BRH0-EXn`, rationale, impact and rollback before any exception; none required.
+- **Exception process**:
+  - [x] Declare BRH-EXn with reason, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
-- [x] Q-CL-1 **ANSWERED**, owner, 2026-10-28: « On fait un tiptap complet pas 59 migrations ». DS must cover every feature used by Sentropic editable surfaces, then all 24 sites migrate in one pass; no migration per field class.
-- [x] Q-B1-4, DS full editor-profile publication/B1 qualification and FE-3/FE-6 remain gates; a missing editing/paste capability means the DS editor-profile lot is incomplete.
-- [x] Approved plan r3: one 24-site CL-5 editor/FieldCard cutover after CL-2F; badge replacement stays H7/CL-1B with its own parity witness. H6 and H1–H5 retain their prerequisites.
-- [x] PR823 Opus r2 F2/F3 corrected (owner: H0 author, 2026-10-28): separate badge adoption and require the entire configured StarterKit 3.31.3 schema, editing/paste interactions and tiptap-markdown round-trip; tables/images alone have a DS raw-preservation guarantee. F1 requires CI success on the final exact head.
-- [x] PR823 Opus r1 F1/F2 corrected (owner: H0 author, 2026-10-28): record owner answer, require full-profile coverage and align N7/deletions with the single-pass adoption; independent re-review remains pending.
-- [x] DS publication, export qualification and N1–N8 deletion evidence remain pending until measured by their adoption owners.
-- [x] Apply Opus r2 notes touching H0: B-BRIDGE-1…7 traceability, cross-lot RED-first, `ports.ts:70–72`.
-- [x] Review F1–F6 accepted and corrected (owner: H0 author): normalize only actual text paths, distinguish list arrays/context passthrough and single-key override; repair provenance and evidence hashes.
-- [x] Review R3-1/R3-2 accepted and corrected (owner: H0 author): explicitly inbound-only normalization assertion; cite/hash list codec; assert manifest count.
-- [x] Procedure exception recorded (owner: H0 author): reviewer reported one prohibited Python call, repeated with jq; no artifact/result depends on it. Owner informed; no zero-Python review-process claim.
+- [x] H1-R2-MERGE-2 — Main advanced during CI: merge origin/main ecca3a0d5 (PR #826), keeping this plan as the sole conflict resolution and retaining incoming DAG changes. Head 80c7183eb passed full PR CI 40774107205 and all four required checks; the new merge head must pass separately. No rebase or Track writes.
+- [x] H1-R2-MERGE — Merge origin/main 8d37455df without rebase; BRANCH.md was the sole conflict and this PR's plan is retained. Incoming changes are unchanged; both parents and the merge retain identical Track files, with no Track writes.
+- [x] H1-R2-F7 — Fixture dispatch always runs ci-gate and fails before checkout or artifacts with an explicit refusal; ordinary gate evaluation is unchanged. Regression reproduced the skipped gate, then all 137 Docker-hosted workflow wiring tests passed, including execution of the refusal step.
+- [x] H1-R1-MERGE — Retain both manual workflow inputs, guarded inherited secrets, main's image cache configuration and the Decision plan while merging c8ec01237; no Track writes.
+- [x] BR822-EX4 — Merged origin/main c8ec01237 in 93de7e1ee to resolve the workflow conflict blocking pull_request CI; no rebase. Impact: inherited reviewed CI-image changes, retained Decision guards and this plan; temporary integration allowances removed. Rollback: revert the merge. Both parent event logs retain all 370 event IDs; acceptance writes remain with the designated conductor.
+- [x] H1-R1-CI-03 — Full endpoints shard reproduced absent Compose profile becoming an invalid empty profile (five Decision route assertions). Pass DECISION_EXECUTION_PROFILE by name: Compose config verifies absence remains unset, preserving production refusal; explicit empty/unknown values remain unavailable. All 136 wiring tests pass; full PR rerun remains H1-R1-F1.
+- [x] H1-R1-CI-02 — Full PR run 40735442415 reproduced three cluster-mesh tuple mismatches: frozen 0.32.0 vs candidate 0.32.1. Aligned the test tuple and selected lock to the guarded candidate archive; all 1,228 locally enabled cluster-mesh tests passed (138 environment-dependent skips). Integrity enforcement and every gate retained.
+- [x] BR822-EX3 — Owner-requested Decision provisioning in Compose, k8s-bundle-secret and the API env template. Impact: pass JEV_API_KEY and DECISION_EXECUTION_PROFILE by name only; missing values stay unavailable, production refuses; no deployment or credential provisioning. Rollback: remove these two entries/references from each surface.
+- [x] H1-R1-F2 — Exclude fixture dispatch from deployment, release verification and inherited secrets; main dispatch regression reproduced deployment access, then all 135 workflow wiring tests passed without weakening ordinary gates.
+- [x] H1-R1-F5 — Compose and Kubernetes pass Decision names only, with optional secret references and no activation default; all 136 workflow/provisioning tests passed, including fail-closed wiring assertions.
+- [ ] H1-R1-F1 — Push corrections and complete full pull_request CI with successful ci-gate on the exact final head; fixture-only success is insufficient.
+- [x] Track source artifact only: concurrent root .track changes belong to the designated conductor.
+- [x] H1-CI-01 — Fixture-only run 40729849776 passed; full PR CI is required separately by H1-R1-F1.
+- [x] H1-CI-02 — The fixture job cannot authenticate canonical registry-tag reuse. Use the official build-api-image-fresh target for its intentional local production build; the API checks and 146 fixture tests passed before that build in run 40724315953.
+- [x] H1-CI-03 — The cluster runner accepts one literal filter; tests/decision- selects both fixture files (9 tests passed locally). Run 40726186707 passed API checks, production build and llm-mesh before rejecting the prior two-path filter.
+- [x] BRH-EX1 — Add an explicit manual fixture-only mode to .github/workflows/ci.yml to fulfill the requested no-spend CI. Impact: dedicated API/mesh checks with no publication; ordinary PR/main runs unchanged. Rollback: remove that input, job and mode guards.
+- [x] BRH-EX2 — Merge origin/main 5e986a0b6 without rebase; retain the H1/H2 plan and incoming speech/release changes unchanged. Temporary merge-only allowances removed after fc2e12047; authored scope passed separately against the second parent. Rollback: revert the merge. Both parent event logs retain all 370 event IDs; Track acceptance remains with its designated conductor.
+- [ ] H1-REV-01 — Conductor handoff: review selection failed because discovery supplies no exact reviewer models; select two complementary host/model tuples before merge. Local dossier: root .tmp/decision-h1-review/selection.md; no consensus verdict.
 
 ## AI Flaky tests
-- [x] No AI tests or flaky acceptance requested for this documentation and fixture lot.
+- [x] Provider calls are forbidden in this lot; fixtures and fakes only; no flaky acceptance requested.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch**: one H0 author; no integration commits from other branches.
-- [ ] **Multi-branch**: inapplicable to this bounded preparation lot.
+- [x] Mono-branch, sequential author commits; PR merge only if subsequently authorized.
 
 ## UAT Management (in orchestration context)
-- [x] No UI/runtime behavior changes; web, Chrome and VSCode UAT are inapplicable to H0.
+- [x] API-only delivery; validate authenticated HTTP behavior with fixtures in the isolated test environment.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read MASTER, workflow, testing, harness and approved H0; verify input plan hash.
-  - [x] Fetch main, create requested worktree, run `harness check branch` (PASS C1).
-  - [x] Declare scope and prepare this file from `plan/BRANCH_TEMPLATE.md`.
-- [x] **Lot 1 — Mount and server inventory**
-  - [x] Record drift and all 24 mounts in 10 files, exactly one class and save authority per mount.
-  - [x] Inventory server descriptors, payloads, routes and settings/chat authorization without client lock gates.
-- [x] **Lot 2 — B1 real-content corpus**
-  - [x] Add API and UI JSON fixtures for prose, lists, matrix, three composers, plain fields and citations.
-  - [x] Identify source provenance, required full-profile parity and remaining Q-B1-4 decision; no accepted P0 editing/paste narrowing.
-- [x] **Lot 3 — Transfer register and gates**
-  - [x] Create N1–N8 receipts with source hashes, owners, consumers, exports, witnesses, disposition and deletion fields.
-  - [x] Add N8 correspondence; supersede older tree-binding and snapshot-only recovery wording.
-  - [x] Record installed-lock DS versions/digests, prerequisites and unqualified publication gates.
-- [ ] **Lot 4 — Docs consolidation and validation**
-  - [x] Validate fixture JSON, byte hashes, corpus coverage, mount uniqueness/counts, receipt completeness and source references.
-  - [x] Check diff contains only documentation/fixtures; `make scope-check` before each commit.
-  - [ ] Complete independent harness review; reconcile findings in the evidence note.
-  - [x] API/UI/E2E behavior tests: no test files changed; future adoption witness commands stay pending.
-  - [x] Create draft PR to main with this exact file as body and add the 3–6 step plan comment.
-  - [x] Correction head `495a35734c8657a0bbf24e9c96c0b8ba6b736312`: [CI 40741239069](https://github.com/rhanka/sentropic/actions/runs/40741239069) completed/success, including ci-gate; receipt-only final head must also pass before handoff with PR URL and SHA.
-  - [x] Leave BRANCH.md and branch intact for the draft handoff; no merge.
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read MASTER, workflow, spec-v4 deferred host lot, Decision ports, qualification gates and branch template.
+  - [x] Create requested worktree and mechanically pass harness check branch.
+  - [x] Record allowed paths, environment, ports and no-spend restriction.
+- [x] **H1 — API host junction**
+  - [x] Compose the Decision host lazily through cluster-mesh and add authenticated POST /api/v1/llm-mesh/decision.
+  - [x] Resolve verified workspace authorization and financial ownership outside caller JSON.
+  - [x] Reuse OPENAI_API_KEY; resolve the new JEV_API_KEY connection without logging secrets.
+  - [x] Implement durable Decision budget and receipt ports over llm-metering, including overrun disable and pending liability.
+  - [x] Add control migration and schema for metadata receipts and persistent evaluator disable evidence.
+  - [x] Add bounded database transactions, evaluator-first locks and owner-fenced hold/receipt persistence.
+  - [x] Adapt existing all-bucket admission with pinned prices, evaluator disable checks and durable dispatch marking.
+  - [x] Implement atomic Decision ledger settlement, pending-liability charges, overrun disable evidence and outbox receipts.
+  - [x] Compose both remote adapters, explicit profiles, environment auth and protocol-bound authoritative pricing ports.
+  - [x] Add bounded HTTP parsing and trusted workspace/tenant resolution with authorization repeated before dispatch.
+  - [x] Keep production refusing; expose experimental qualification only to application admins.
+  - [x] API unit tests: api/tests/unit/decision-host.test.ts; api/tests/unit/decision-route.test.ts (16 passed).
+  - [x] Add no-spend host tests for both backends, production refusal, missing credentials, authorization, price and input limits.
+  - [x] Host fixture gate: 9 tests passed; align the typed PostgreSQL hold projection with Drizzle's row contract.
+  - [x] Add HTTP controls for authentication, qualification admin restrictions, workspace refusal, outages and bounded bodies.
+  - [x] API integration tests: api/tests/api/decision-metering.test.ts (17 passed); api/tests/api/decision-api.test.ts (7 passed).
+  - [x] Actual product composition refuses anonymous ingress, discovers both unqualified evaluators and persists production refusal without a hold or fetch.
+  - [x] Recreate the disposable database and verify the exact consolidated migration hash plus tenant/workspace revocations in api/tests/api/decision-api.test.ts (7 passed).
+- [x] **H2 — Authoritative pricing**
+  - [x] Verify and cite the published JEV tariff at its primary source.
+  - [x] Add both immutable control.model_pricing rows using the existing control migration lane.
+  - [x] Move JEV price authority from its synthetic fixture to control.model_pricing and bump llm-mesh to 0.31.1 (npm view: 0.31.0).
+  - [x] After merging main's 0.32.0, advance the patch tuple to 0.32.1; Docker-hosted npm view still reports 0.31.0 before the bump.
+  - [x] Add PostgreSQL tests for exact revision/protocol prices, missing prices and one metadata-only settlement per backend.
+  - [x] Extend the existing ledger operation CHECK to decision; real-PG regression reproduced the prior constraint refusal.
+  - [x] Add all-bucket cap, pending-liability and durable overrun-disable regression controls; bind dispatch to the held evaluator.
+  - [x] Readiness checks credentials, the tenant's strategy/bucket and each evaluator's durable disable state.
+  - [x] Reaper reconciliation restores Decision attribution and corrects conservative spend once without provider replay.
+  - [x] Align the existing public-surface release assertion with the required 0.31.1 patch bump.
+  - [x] Keep the cluster-mesh receipt fixture's synthetic price protocol explicit after JEV moves to control pricing.
+  - [x] Serialize pricing with its existing writer, pin the exact hold revision and recheck tariff validity before dispatch marking.
+  - [x] Preserve pending admission liability when a hold commits but its acknowledgement is lost; never report a proved absence of a hold on a store exception.
+  - [x] Scope pricing windows by protocol so OpenAI Decisions never replaces the existing GPT-6 Luna generation tariff.
+  - [x] Verify native and generation prices coexist at one timestamp in api/tests/api/decision-metering.test.ts (17 passed); schema upgrade/restore and expanded Decision operation (20 passed).
+  - [x] Run api/tests/api/llm-budget-ledger.test.ts (38 passed) and api/tests/unit/llm-budget-admission-native.test.ts (26 passed) after the protocol-specific pricing change.
+- [x] **Docs consolidation**
+  - [x] Document route, profiles, readiness limits, tariff sources and provisioned environment names in spec/decision/api-host.md.
+- [ ] **Final validation**
+  - [x] After merging main, 146 scoped API tests passed in one run, including tests/unit/gateway-package-version.test.ts; API typecheck/lint passed.
+  - [x] llm-mesh public package/consumer surface: 4 tests passed with the final 0.32.1 tuple.
+  - [x] llm-mesh: 1,566 tests passed after merging main; cluster-mesh Decision composition/receipts: 9 tests passed with the corrected runner filter.
+  - [x] API unit host/HTTP: 16 tests passed; actual API/migration/revocation: 7 tests passed.
+  - [ ] Review with two independent complementary peers and reconcile findings.
+  - [x] Inspect every diff hunk; pass make scope-check before each atomic commit.
+  - [x] Open draft PR #822 to main using this plan as its body and add the implementation plan comment.
+  - [ ] Verify completed/success CI on the exact final head.
+  - [x] Add and run the explicit manual Decision fixture workflow mode; distinguish it from ordinary live-suite acceptance.
+  - [x] Local Docker stack torn down after validation; runtime health logs contain no errors.
+  - [x] Retain CI selection/publication safeguards: 135 wiring tests, 23 expected-result tests and ci-capacity-policy passed.
+  - [ ] Run make down and report PR, exact head, environment variable names only.
