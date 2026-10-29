@@ -10,7 +10,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { get } from 'svelte/store';
 
-import type { LocalToolsAdapter } from '../src/hosts/types.js';
+import type { LocalToolsAdapter } from '../../src/runtime/hosts/types.js';
 import {
   BUILTIN_LOCAL_TOOL_NAMES,
   LocalToolPermissionRequiredError,
@@ -29,7 +29,7 @@ import {
   setLocalToolsAdapter,
   unregisterLocalTool,
   upsertLocalToolPermissionPolicy,
-} from '../src/stores/localTools.js';
+} from '../../src/runtime/stores/localTools.js';
 
 const RENDER_MERMAID = {
   name: 'render_mermaid',

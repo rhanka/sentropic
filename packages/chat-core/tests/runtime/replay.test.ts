@@ -10,8 +10,8 @@ import {
   createReplayClient,
   type ReplayClient,
   type ReplayCursor,
-} from '../src/client/replay.js';
-import type { ChatCoreTransport } from '../src/client/transport.js';
+} from '../../src/runtime/client/replay.js';
+import type { ChatCoreTransport } from '../../src/runtime/client/transport.js';
 
 class FakeEventSource {
   onmessage: ((event: MessageEvent) => void) | null = null;

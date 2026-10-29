@@ -2,10 +2,10 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { createRendererRegistry } from '@sentropic/chat-ui/renderers/registry';
-import type { ChatCoreTransport } from '../src/client/transport';
-import type { StreamHubClient } from '../src/client/streamTypes';
-import type { LocalToolsAdapter } from '@sentropic/chat-runtime/hosts/types';
-import { createWebHost } from '../src/hosts/createWebHost';
+import type { ChatCoreTransport } from '../../src/runtime/client/transport';
+import type { StreamHubClient } from '../../src/runtime/client/streamTypes';
+import type { LocalToolsAdapter } from '../../src/runtime/hosts/types.js';
+import { createWebHost } from '../../src/runtime/hosts/createWebHost';
 
 const hostPath = resolve(process.cwd(), 'src/hosts/createWebHost.ts');
 
