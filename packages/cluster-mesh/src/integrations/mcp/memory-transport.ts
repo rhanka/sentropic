@@ -7,6 +7,7 @@ import type { CompiledMcpRegistry } from '@sentropic/mcp-platform/registry';
 import type { ClusterMeshModules } from '../../modules/contracts.js';
 import { loadMcpPlatformBridge } from '../../loaders/mcp/bridge.js';
 import { loadMcpPlatformToolSchemas } from '../../loaders/mcp/tool-schemas.js';
+import { loadMcpPlatformResultCodec } from '../../loaders/mcp/result-codec.js';
 import type { EngramMemoryBuiltin } from './memory.js';
 
 export interface EngramMemoryTransportDefinition {
@@ -34,6 +35,7 @@ export async function registerEngramMemoryTools(server: Server, options: {
   }
   const bridge = await loadMcpPlatformBridge(options.modules);
   const schemas = await loadMcpPlatformToolSchemas(options.modules);
+  const codec = await loadMcpPlatformResultCodec(options.modules);
   const { McpError } = await import('@modelcontextprotocol/sdk/types.js');
   bridge.registerMcpWireTools(server, tools, {
     run: async (tool, args, { signal }) => {
@@ -41,10 +43,11 @@ export async function registerEngramMemoryTools(server: Server, options: {
       try { ctx = requireTrustedInvocationContext(await options.definition.resolveContext(tool, args, signal)); }
       catch { throw new McpError(-32603, 'Trusted invocation context unavailable'); }
       try {
-        return await runtime.server.callTool(tool, args, ctx, {
+        const result = await runtime.server.callTool(tool, args, ctx, {
           idempotencyKey: ctx.memory?.binding.idempotency_key,
           elicitationRef: ctx.memory?.binding.elicitation_ref,
         }, signal);
+        return codec.validateMcpWireResult(result, options.definition.limits);
       } catch (error) {
         if (typeof error === 'object' && error !== null && 'code' in error && error.code === -32603) {
           throw new McpError(-32603, 'Trusted invocation context unavailable');
