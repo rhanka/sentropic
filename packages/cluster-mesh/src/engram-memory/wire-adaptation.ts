@@ -4,7 +4,8 @@
 // helpers translate both ways at the neutral-handle boundary; validation,
 // allocation, durability and authority remain in the real kernel.
 
-import { isCanonicalU64, MemoryCanonicalJsonError, memoryJcs, type MemoryEncodedValue } from './codec.js';
+import { createHash } from 'node:crypto';
+import { isCanonicalU64, isMemoryLexicalTombstone, MemoryCanonicalJsonError, memoryJcs, type MemoryEncodedValue } from './codec.js';
 import { isMemoryAdmissionOutcome, isMemoryCaptureProof } from './validation.js';
 import { StorageInvalidCommandError } from '../storage/errors.js';
 import type { U64AtomicUnit } from '../storage/atomic.js';
@@ -148,11 +149,16 @@ export const neutralUnitToPg = (unit: NeutralAtomicUnit): U64AtomicUnit => {
       const translated = translateMemoryUpdateWrite(row);
       return { key: translated.key, version: translated.version, value: translated.value };
     }),
-    indexWrites: unit.indexWrites.map((row) => ({
-      key: row.key,
-      digest: parseStored(row.value.data)['record_digest'] as string ?? row.value.data,
-      resultIds: [], resultHash: null,
-    })),
+    indexWrites: unit.indexWrites.map((row) => {
+      const lexical = row.index === 'memory-accepted-lexical';
+      const value = lexical && isMemoryLexicalTombstone(row.value) ? null : parseStored(row.value.data);
+      return { key: row.key,
+        // Lexical rows are mutable projections. Bind the index identity to its
+        // key and retain current bytes in the replaceable result, including null.
+        digest: lexical ? `sha256:${createHash('sha256').update('sentropic.memory.lexical-index/v1\0').update(row.key).digest('hex')}`
+          : value!['record_digest'] as string ?? row.value.data,
+        resultIds: [], resultHash: lexical ? row.value.data : null };
+    }),
     relationships: [], barriers: [], purgeIntents: [], moduleResult: unit.moduleResult,
   };
 };

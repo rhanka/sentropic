@@ -41,6 +41,9 @@ describe('memory MCP over real PostgreSQL', () => {
       record_id, idempotency_key: 'forget-roundtrip-0001', reason_ref: 'reason-memory',
     }));
     expect(forgotten.receipt.to_state).toBe('tombstoned');
+    expect(value(await host.call('engram_memory_forget', {
+      record_id, idempotency_key: 'forget-roundtrip-0001', reason_ref: 'reason-memory',
+    })).receipt).toEqual(forgotten.receipt);
     expect(value(await host.call('engram_memory_search', { query: 'memory', purpose_ref: 'purpose-memory' })).records).toEqual([]);
   });
 
