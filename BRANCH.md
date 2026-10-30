@@ -53,7 +53,7 @@ Refuse a warm Trivy report whose finding inventory diverges from the cold report
   - [x] Lot gate:
     - [x] `make scope-check ENV=test-sec5a-agreement`
     - [x] Focused `trivy.test.mjs` green in Docker (6/6).
-  - [ ] Wire one agreement call into `scripts/security/daily/qualify-current.mjs` cold/warm join.
+  - [x] Wire one agreement call into `scripts/security/daily/qualify-current.mjs` cold/warm join.
   - [ ] Lot gate:
     - [ ] `make test-security-daily ENV=test-sec5a-agreement`
 - [ ] **Lot 2 — Review and PR**
