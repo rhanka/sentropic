@@ -24,6 +24,7 @@
   - `packages/cluster-mesh/tests/storage/pack-only-dev-gate.mjs` (the contract's bare-probe mirror, same move)
   - `packages/cluster-mesh/tests/storage/pack-only-dev-gate.spec.ts` (the mirror's table and refusal cases, same move)
   - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts` (the contract's packaging-side `isPackOnlyDevBump` table, same move)
+  - `scripts/ci/consumer-locks.json` (SQL-L1-EX6: the frozen consumer closure for the newly published `0.24.0` pin; the installed CI lane resolves the published pin through this committed closure, and #855 adds the same profile line for its tuple move)
   - `package-lock.json` (only the `packages/cluster-mesh` workspace version entry; the CI `changes` train lock-sync gate requires the root lockfile to mirror the package bump, refreshed through `make chat-migration-lockfiles`)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -36,7 +37,7 @@
   - `api/**`
   - `ui/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `scripts/ci/consumer-locks.json` (SQL-L1-EX6: the frozen consumer closure for the newly published `0.24.0` pin; the installed CI lane resolves the published pin through this committed closure, and #855 adds the same profile for its tuple move)
+  - none planned
 - **Exception process**:
   - Declare exception ID `SQL-L1-EXn` in `## Feedback Loop` before touching any conditional/forbidden path, with reason, impact and rollback.
 
