@@ -875,6 +875,11 @@ jobs:
           done
           exit "$result"
       - name: Qualify candidate memory MCP tools on PostgreSQL, stdio and HTTP
+        # Fresh published-peer install: this lane runs in the digest-pinned Compose
+        # qualification image, whose node/npm tuple can never match the floating-tag
+        # seal produced by ci-package-candidate; it must not consume prepared bytes.
+        env:
+          CI_PACKAGE_CANDIDATES: ''
         run: make memory-mcp-qualify E2_LOCK=/tmp/sentropic-docker.lock ENV=test-memory-mcp
       - name: Remove installed comments qualification Postgres service and volume
         if: always()
