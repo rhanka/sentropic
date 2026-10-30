@@ -83,6 +83,7 @@
   - [x] Preserve main's precise image-filter contract and require a review date on the pending finding.
   - [x] Exact-head CI reproduced cowork-desktop's forbidden file dependencies after its packaging script became selected; repair only its manifest and root lock; pre-bump registry read: desktop 0.2.0, bridge 0.1.1, chat-ui 0.34.1.
   - [x] Cowork-desktop 0.2.1 packed-manifest guard passes; root lock retains only the generated workspace metadata delta; immutable L5 verifier and IdP selftest pass unchanged.
+  - [x] Existing gateway auth-subpath consumer tests reproduce the cold-workspace absolute-path failure; derive the locked runner from sourceRoot so isolated and normal workspaces use the same consumer.
   - [x] R5: admit only explicitly named candidate archives and manifest file specs; sibling-admission regression observed red then green.
   - [x] R6: assign exception owners, UTC review dates, removal triggers and accurate scope; expiry regression observed red then green.
   - [x] R7: track isolated catalog SCA coverage separately with owner, scanner and review date; contract observed red then green.
