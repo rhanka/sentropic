@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AccountNotActiveError,
   AccountTransitionError,
   AdminUserProtectedError,
   IdentityConflictError,
@@ -8,6 +9,7 @@ import {
   LoginSessionError,
   ProofVerificationError,
   SelfActionForbiddenError,
+  createDeviceEnrolment,
   createIdentityProofs,
   createInMemoryIdentityStores,
   createInvitations,
@@ -31,6 +33,12 @@ function setup() {
       tokens: createStubTokenPort(),
       audit: stores.audit,
       clock: CLOCK,
+    }),
+    deviceEnrolment: createDeviceEnrolment({
+      deviceCodes: stores.deviceCodes,
+      accounts: stores.accounts,
+      tokens: createStubTokenPort(),
+      audit: stores.audit,
     }),
     sessions: createLoginSessions({ sessions: stores.sessions, clock: CLOCK }),
   };
@@ -194,6 +202,61 @@ describe('invitations', () => {
     await expect(invitations.consumeInvitation('sit_unknown', NOW)).rejects.toMatchObject({
       reason: 'not_found',
     });
+  });
+});
+
+describe('device enrolment entry', () => {
+  it('should run the issue, poll, approve triplet from pending to approved', async () => {
+    const { accounts, deviceEnrolment } = setup();
+    await accounts.register({ userId: 'user-1', email: 'a@example.com' }, { firstAdmin: true });
+    const issuance = await deviceEnrolment.issueDeviceCode(
+      { deviceName: 'workstation' },
+      { now: NOW, ttlSeconds: 600 },
+    );
+    expect(issuance.intervalSec).toBe(5);
+    expect(await deviceEnrolment.pollDeviceCode(issuance.deviceCode, NOW)).toEqual({
+      status: 'authorization_pending',
+    });
+    const approved = await deviceEnrolment.approveDeviceCode(issuance.userCode, { userId: 'user-1' }, NOW);
+    expect(approved).toMatchObject({ status: 'approved', approvedUserId: 'user-1', deviceName: 'workstation' });
+    expect(await deviceEnrolment.pollDeviceCode(issuance.deviceCode, NOW)).toEqual({
+      status: 'approved',
+      userId: 'user-1',
+      deviceName: 'workstation',
+    });
+  });
+
+  it('should refuse unknown, expired and already-resolved codes with distinct reasons', async () => {
+    const { accounts, deviceEnrolment } = setup();
+    await accounts.register({ userId: 'user-1', email: 'a@example.com' }, { firstAdmin: true });
+    const issuance = await deviceEnrolment.issueDeviceCode({}, { now: NOW, ttlSeconds: 600 });
+    await expect(deviceEnrolment.pollDeviceCode('unknown', NOW)).rejects.toMatchObject({
+      code: 'device_code_invalid',
+      reason: 'not_found',
+    });
+    await expect(
+      deviceEnrolment.approveDeviceCode('unknown', { userId: 'user-1' }, NOW),
+    ).rejects.toMatchObject({ reason: 'not_found' });
+    await deviceEnrolment.approveDeviceCode(issuance.userCode, { userId: 'user-1' }, NOW);
+    await expect(
+      deviceEnrolment.approveDeviceCode(issuance.userCode, { userId: 'user-1' }, NOW),
+    ).rejects.toMatchObject({ reason: 'already_resolved' });
+    const expired = await deviceEnrolment.issueDeviceCode({}, { now: NOW, ttlSeconds: 600 });
+    expect(await deviceEnrolment.pollDeviceCode(expired.deviceCode, '2026-10-31T12:00:00.000Z')).toEqual({
+      status: 'expired',
+    });
+    await expect(
+      deviceEnrolment.approveDeviceCode(expired.userCode, { userId: 'user-1' }, '2026-10-31T12:00:00.000Z'),
+    ).rejects.toMatchObject({ reason: 'expired' });
+  });
+
+  it('should refuse approval from an inactive account', async () => {
+    const { accounts, deviceEnrolment } = setup();
+    await accounts.register({ userId: 'user-1', email: 'a@example.com' });
+    const issuance = await deviceEnrolment.issueDeviceCode({}, { now: NOW, ttlSeconds: 600 });
+    await expect(
+      deviceEnrolment.approveDeviceCode(issuance.userCode, { userId: 'user-1' }, NOW),
+    ).rejects.toBeInstanceOf(AccountNotActiveError);
   });
 });
 
