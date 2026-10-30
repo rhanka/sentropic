@@ -13,7 +13,7 @@ is required. #817 is superseded.
 | P1a, `feat/chat-convergence-p1` | Introduce runtime package; relocate transport/replay/stream assembly, loop/session/draft/attachment/projection state, local-tool store, checkpoints and persistence with existing tests; migrate active imports. | Optional-module split and injected conversation are completed by P1b. |
 | P1b, `feat/chat-convergence-p1b` | Split comments/documents/context and mixed helpers; inject ChatConversation snapshots/commands; complete permission, attachment, checkpoint and optional-module bindings. | Final review, exact-head CI and retained final candidate qualification. |
 
-Successors retain P1a ancestry; integration uses merges only. Drafts target main and remain unmerged.
+P1b rebased onto current main after #836; #817 is superseded and closes explicitly at integration (no auto-close). Drafts target main and remain unmerged.
 P1a is a migration foundation, not a claim that the transferable UI is runtime-free yet.
 P1b completes the transferable package boundary and fixture parity. The production AppChatPanel still
 consumes the extracted controller through runtime imports; P2 owns its single cutover to ChatConversation.
