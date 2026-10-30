@@ -1,46 +1,14 @@
-import { describe, expect, it, vi } from 'vitest';
-import { AdmissionAuthority } from '../../src/services/canvas-live/admission';
-import { SessionRegistry } from '../../src/services/canvas-live/session-registry';
-import { HocuspocusHost } from '../../src/services/canvas-live/hocuspocus';
-import { classifyStateless } from '../../src/services/canvas-live/ingress';
-
-function admissionRecord() {
-  return {
-    tenantId: 't', workspaceId: 'w', documentId: 'canvas:a', sessionId: 's',
-    sessionEpoch: 'epoch-1', profileId: 'full@1', schemaEpoch: '2',
-    fields: ['description', 'notes'], operations: ['read', 'edit'], closed: false,
-    actor: { actorId: 'human-a', kind: 'human' as const, displayLabel: 'A', color: '#123456' },
-  };
-}
-
-function registryFixture() {
-  const record = admissionRecord();
-  const factory = {
-    create: () => {
-      const types = new Map<string, unknown>();
-      return {
-        document: {
-          getText: (name: string) => {
-            if (!types.has(name)) types.set(name, { value: '' });
-            return types.get(name);
-          },
-          getMap: (name: string) => {
-            if (!types.has(name)) types.set(name, new Map());
-            return types.get(name) as Map<string, unknown>;
-          },
-        },
-        awareness: { remove: vi.fn() },
-        connect: () => () => {},
-      };
-    },
-    clientId: (() => { let id = 0; return () => ++id; })(),
-  };
-  return { record, registry: new SessionRegistry(factory) };
-}
+import { describe, expect, it } from 'vitest';
+import * as Y from 'yjs';
+import { AdmissionError } from '../../src/services/canvas-live/contracts';
+import {
+  admissionRecord, contextFor, docOf, deltaFrom, framesOf, hostFixture, registryFixture,
+} from '../helpers/canvas-live-h3';
 
 describe('canvas live hocuspocus provider witness', () => {
   it('should resolve by full handle.identity and pass R-BIND-3 two-fields', async () => {
-    const { record, registry } = registryFixture();
+    const record = admissionRecord();
+    const { registry } = registryFixture();
     const first = registry.open(record, 'description');
     const second = registry.open(record, 'notes');
     expect(registry.resolveBinding(record, first.identity).identity).toBe(first.identity);
@@ -51,7 +19,8 @@ describe('canvas live hocuspocus provider witness', () => {
   });
 
   it('should fail closed on missing coordinates and wrong field/document/session', async () => {
-    const { record, registry } = registryFixture();
+    const record = admissionRecord();
+    const { registry } = registryFixture();
     registry.open(record, 'notes');
     for (const identity of [
       { documentId: record.documentId, sessionId: record.sessionId, fieldKey: '' },
@@ -63,41 +32,105 @@ describe('canvas live hocuspocus provider witness', () => {
     }
   });
 
-  it('should validate updates through the pre-apply path before application', async () => {
-    const { record, registry } = registryFixture();
+  it('should apply a validated update through the real pre-apply path and checkpoint it via onStoreDocument', async () => {
+    const record = admissionRecord(['notes']);
+    const { registry } = registryFixture();
     const handle = registry.open(record, 'notes');
-    const refusals: { refusal: string }[] = [];
-    const host = new HocuspocusHost({
-      authenticate: async () => ({ principal: { tenantId: 't', workspaceId: 'w', actorId: 'human-a', actorKind: 'human' }, admission: record }),
+    const checkpoints: { encodedState: string; stateVector: string; journalWatermark: number }[] = [];
+    const store = {
+      loadDocument: async () => null,
+      storeCheckpoint: async (_id: object, checkpoint: { encodedState: string; stateVector: string; journalWatermark: number }) => {
+        checkpoints.push(checkpoint);
+      },
+    };
+    const { host, applied } = hostFixture({
+      record, registry, store,
       authorizeUpdate: async () => {},
-      classifyUpdate: (bytes) => classifyStateless(['field:notes'], ['description', 'notes']),
-      applyValidated: async () => {},
-      refusals: (entry) => { refusals.push(entry); },
-      hostileThreshold: 3,
     });
-    const ok = await host.handleUpdate(
-      { principal: { tenantId: 't', workspaceId: 'w', actorId: 'human-a', actorKind: 'human' }, admission: record },
-      handle.identity,
-      [new Uint8Array([1, 2, 3])],
-      registry,
-    );
-    expect(ok).toEqual({ applied: true, closed: false });
-    const hostile = new HocuspocusHost({
-      authenticate: async () => ({ principal: { tenantId: 't', workspaceId: 'w', actorId: 'human-a', actorKind: 'human' }, admission: record }),
-      authorizeUpdate: async () => {},
-      classifyUpdate: () => classifyStateless(['meta'], ['description', 'notes'], { metaWrites: ['schemaEpoch'] }),
-      applyValidated: async () => { throw new Error('must not apply refused input'); },
-      refusals: (entry) => { refusals.push(entry); },
-      hostileThreshold: 1,
+    const authoritative = docOf(registry, record, 'notes');
+    const bytes = deltaFrom(authoritative, (client) => client.getText('field:notes').insert(0, 'hello'));
+    const result = await host.handleUpdate(contextFor(record), handle.identity, framesOf(bytes));
+    expect(result.applied).toBe(true);
+    expect(applied).toHaveLength(1);
+    expect(authoritative.getText('field:notes').toString()).toBe('hello');
+    expect(checkpoints).toHaveLength(1);
+    expect(checkpoints[0].journalWatermark).toBe(1);
+    expect(Buffer.from(checkpoints[0].encodedState, 'base64').byteLength).toBeGreaterThan(0);
+    await handle.dispose();
+  });
+
+  it('should refuse a hostile real update whole without journal entry or broadcast', async () => {
+    const record = admissionRecord(['notes']);
+    const { registry } = registryFixture();
+    const handle = registry.open(record, 'notes');
+    const { host, applied, refusals } = hostFixture({ record, registry });
+    const authoritative = docOf(registry, record, 'notes');
+    const hostile = deltaFrom(authoritative, (client) => client.getMap('meta').set('schemaEpoch', '3'));
+    const result = await host.handleUpdate(contextFor(record), handle.identity, framesOf(hostile));
+    expect(result.applied).toBe(false);
+    expect(applied).toHaveLength(0);
+    expect(authoritative.getText('field:notes').toString()).toBe('');
+    expect(Y.encodeStateVector(authoritative).byteLength).toBeGreaterThan(0);
+    expect(refusals.at(-1)?.refusal).toBe('reserved-meta');
+    await handle.dispose();
+  });
+
+  it('should close on a revoked actor without applying queued input', async () => {
+    const record = admissionRecord(['notes']);
+    const { registry } = registryFixture();
+    const handle = registry.open(record, 'notes');
+    const revoked = { current: false };
+    const { host, applied } = hostFixture({
+      record, registry,
+      authorizeUpdate: async () => {
+        if (revoked.current) throw new AdmissionError('revoked');
+      },
     });
-    const refused = await hostile.handleUpdate(
-      { principal: { tenantId: 't', workspaceId: 'w', actorId: 'human-a', actorKind: 'human' }, admission: record },
-      handle.identity,
-      [new Uint8Array([9])],
-      registry,
-    );
+    const authoritative = docOf(registry, record, 'notes');
+    const bytes = deltaFrom(authoritative, (client) => client.getText('field:notes').insert(0, 'first'));
+    expect((await host.handleUpdate(contextFor(record), handle.identity, framesOf(bytes))).applied).toBe(true);
+    revoked.current = true;
+    const queued = deltaFrom(authoritative, (client) => client.getText('field:notes').insert(0, 'queued'));
+    const refused = await host.handleUpdate(contextFor(record), handle.identity, framesOf(queued));
     expect(refused).toEqual({ applied: false, closed: true });
-    expect(refusals.length).toBeGreaterThan(0);
+    const afterClose = await host.handleUpdate(contextFor(record), handle.identity, framesOf(queued));
+    expect(afterClose).toEqual({ applied: false, closed: true });
+    expect(applied).toHaveLength(1);
+    expect(authoritative.getText('field:notes').toString()).toBe('first');
+    await handle.dispose();
+  });
+
+  it('should close on a submission for a different document', async () => {
+    const record = admissionRecord(['notes']);
+    const { registry } = registryFixture();
+    const handle = registry.open(record, 'notes');
+    const { host, applied } = hostFixture({ record, registry });
+    const authoritative = docOf(registry, record, 'notes');
+    const bytes = deltaFrom(authoritative, (client) => client.getText('field:notes').insert(0, 'x'));
+    const result = await host.handleUpdate(
+      contextFor(record),
+      { documentId: 'canvas:other', sessionId: record.sessionId, fieldKey: 'notes' },
+      framesOf(bytes),
+    );
+    expect(result).toEqual({ applied: false, closed: true });
+    expect(applied).toHaveLength(0);
+    await handle.dispose();
+  });
+
+  it('should refuse a viewer edit without closing on a single denial', async () => {
+    const record = admissionRecord(['notes']);
+    const { registry } = registryFixture();
+    const handle = registry.open(record, 'notes');
+    const { host, applied, refusals } = hostFixture({
+      record, registry,
+      authorizeUpdate: async () => { throw new AdmissionError('scope-denied'); },
+    });
+    const authoritative = docOf(registry, record, 'notes');
+    const bytes = deltaFrom(authoritative, (client) => client.getText('field:notes').insert(0, 'viewer'));
+    const result = await host.handleUpdate(contextFor(record), handle.identity, framesOf(bytes));
+    expect(result).toEqual({ applied: false, closed: false });
+    expect(applied).toHaveLength(0);
+    expect(refusals.at(-1)?.refusal).toBe('scope-denied');
     await handle.dispose();
   });
 });
