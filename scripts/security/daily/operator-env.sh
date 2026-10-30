@@ -20,6 +20,9 @@ read_operator_env() {
   done < "$1"
   [[ ${#fields[@]} == 3 ]] || { echo 'coverage-blocked: missing operator field' >&2; return 1; }
   REGISTRY=${fields[REGISTRY]}
+  [[ "$REGISTRY" =~ ^[[:alnum:]][[:alnum:].:/_-]*$ ]] || {
+    echo 'coverage-blocked: invalid registry authority' >&2; return 1
+  }
   DOCKER_USERNAME=${fields[DOCKER_USERNAME]}
   DOCKER_PASSWORD=${fields[DOCKER_PASSWORD]}
 }

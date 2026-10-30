@@ -249,11 +249,25 @@ test('should read only named operator fields as data without evaluating hostile 
   assert.equal(result.stdout, `registry.invalid\nfixture-user\n${hostile}\n`);
   assert.throws(() => readFileSync(marker), /ENOENT/);
   for (const bad of [bytes + 'REGISTRY=duplicate\n', 'REGISTRY=x\nDOCKER_USERNAME=y\n',
+    'REGISTRY=--password-stdin\nDOCKER_USERNAME=y\nDOCKER_PASSWORD=z\n',
     'REGISTRY=x\nDOCKER_USERNAME=y\nDOCKER_PASSWORD="unterminated\n']) {
     const rejected = run(bad);
     assert.notEqual(rejected.status, 0);
     assert.match(rejected.stderr, /coverage-blocked/);
     assert.equal(rejected.stdout, '');
+  }
+});
+
+test('should stop qualification trials after the scope exception expires in UTC', (t) => {
+  const root = fixture(t);
+  writeFileSync(join(root, 'date'), '#!/bin/sh\nprintf "%s" "$FIXTURE_TODAY"\n', { mode: 0o755 });
+  const recipe = readFileSync('scripts/security/daily/qualify.mk', 'utf8')
+    .match(/^security-qualify-window:[^\n]*\n((?:\t[^\n]*\n?)+)/m)[1]
+    .replace(/^\t@/, '').replaceAll('$$', '$');
+  for (const [today, expected] of [['2026-11-11', 0], ['2026-11-12', 0], ['2026-11-13', 1]]) {
+    const result = spawnSync('/bin/sh', ['-ec', recipe], { encoding: 'utf8',
+      env: { PATH: root, FIXTURE_TODAY: today } });
+    assert.equal(result.status, expected, result.stderr);
   }
 });
 
@@ -269,7 +283,7 @@ test('should remove only its own detached scanner when a qualification trial fai
   const cleanup = join(root, 'cleanup');
   writeFileSync(join(bin, 'docker'), `#!/bin/sh
 case "$1" in
-  run) exit "$FIXTURE_RUN_EXIT" ;;
+  run) if [ "$FIXTURE_RUN_EXIT" = 0 ]; then printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'; fi; exit "$FIXTURE_RUN_EXIT" ;;
   inspect) exit 17 ;;
   rm) printf '%s\\n' "$*" >> "$FIXTURE_CLEANUP" ;;
   *) exit 91 ;;
@@ -281,7 +295,7 @@ esac
   assert.throws(() => readFileSync(cleanup), /ENOENT/, 'failed creation cannot delete another container');
   const failed = run(0);
   assert.equal(failed.status, 17, failed.stderr);
-  assert.match(readFileSync(cleanup, 'utf8'), /^rm -f test-sec-qualify-\d+-api-cold\n$/);
+  assert.equal(readFileSync(cleanup, 'utf8'), `rm -f ${'a'.repeat(64)}\n`);
 });
 
 test('should refuse tracked or untracked changes and Git errors before starting the scan', (t) => {
