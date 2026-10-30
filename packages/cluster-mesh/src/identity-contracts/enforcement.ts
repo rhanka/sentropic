@@ -16,12 +16,23 @@ import type {
 } from './ports.js';
 import {
   systemIdentityClock,
+  type DecisionInputKind,
   type FreshDecision,
+  type FreshDecisionInput,
   type IdentityClock,
   type PersonRevocationReceipt,
   type RevocationMode,
   type RevocationStepReceipt,
+  type SessionAuthorityKind,
 } from './types.js';
+
+/** §2.7: one session authority per input kind; the mapping is total. */
+const SESSION_AUTHORITY_BY_INPUT_KIND: Record<DecisionInputKind, SessionAuthorityKind> = {
+  first_party_http: 'login_session',
+  conversation_turn: 'conversation_session',
+  agent_plane: 'agent_session',
+  runtime_pty: 'runtime_registration',
+};
 
 export interface PersonCascade {
   revokePerson(
@@ -108,10 +119,7 @@ export function createPersonCascade(input: {
 }
 
 export interface FreshDecisionProducer {
-  decide(
-    input: { readonly userId: string; readonly workspaceId: string; readonly sessionId: string },
-    now: string,
-  ): Promise<FreshDecision>;
+  decide(input: FreshDecisionInput, now: string): Promise<FreshDecision>;
 }
 
 export function createFreshDecision(input: {
@@ -124,22 +132,35 @@ export function createFreshDecision(input: {
 }): FreshDecisionProducer {
   return {
     async decide(lookup, now) {
+      const sessionAuthority = SESSION_AUTHORITY_BY_INPUT_KIND[lookup.inputKind];
       const account = await input.accounts.findAccount(lookup.userId);
-      if (!account || account.accountStatus !== 'active') return { allow: false, reason: 'account_not_active' };
+      if (!account || account.accountStatus !== 'active') {
+        return { allow: false, sessionAuthority, reason: 'account_not_active' };
+      }
+      if (lookup.inputKind !== 'first_party_http') {
+        // The conversation, agent and runtime authority stores land with their
+        // planes (A2.3, M4); until they are bound these kinds fail closed.
+        return { allow: false, sessionAuthority, reason: 'session_authority_unavailable' };
+      }
       const session = await input.sessions.findSession(lookup.sessionId);
       if (!session || session.userId !== lookup.userId || session.status !== 'active' || session.expiresAt <= now) {
-        return { allow: false, reason: 'session_invalid' };
+        return { allow: false, sessionAuthority, reason: 'session_invalid' };
       }
       const workspace = await input.workspaces.findWorkspace(lookup.workspaceId);
-      if (!workspace) return { allow: false, reason: 'workspace_membership_missing' };
+      if (!workspace) return { allow: false, sessionAuthority, reason: 'workspace_membership_missing' };
       const membership = await input.memberships.findApprovedMembership(lookup.userId, workspace.tenantId);
-      if (!membership || membership.status !== 'approved') return { allow: false, reason: 'membership_not_approved' };
+      if (!membership || membership.status !== 'approved') {
+        return { allow: false, sessionAuthority, reason: 'membership_not_approved' };
+      }
       const tenant = await input.tenants.findTenant(workspace.tenantId);
-      if (!tenant || tenant.status !== 'active') return { allow: false, reason: 'tenant_not_active' };
+      if (!tenant || tenant.status !== 'active') {
+        return { allow: false, sessionAuthority, reason: 'tenant_not_active' };
+      }
       const workspaceMember = await input.workspaceMembers.findWorkspaceMember(lookup.workspaceId, lookup.userId);
-      if (!workspaceMember) return { allow: false, reason: 'workspace_membership_missing' };
+      if (!workspaceMember) return { allow: false, sessionAuthority, reason: 'workspace_membership_missing' };
       return {
         allow: true,
+        sessionAuthority,
         tenantId: tenant.tenantId,
         tid: tenant.slug,
         tenantRole: membership.tenantRole,
