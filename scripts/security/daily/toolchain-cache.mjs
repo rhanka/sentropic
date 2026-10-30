@@ -79,6 +79,15 @@ async function acquire(client, kind, root, now) {
 
 export async function restoreSnapshot({ path, receiptHash, manifestDigest }, now = Date.now()) {
   requireEvidence(isDigest(receiptHash) && isDigest(manifestDigest), 'trusted cache receipt identity');
+  try {
+    return await restoreFiles({ path, receiptHash, manifestDigest }, now);
+  } catch (error) {
+    requireEvidence(!['ENOENT', 'ENOTDIR'].includes(error.code), 'required cache files unavailable');
+    throw error;
+  }
+}
+
+async function restoreFiles({ path, receiptHash, manifestDigest }, now) {
   const receiptStat = await lstat(join(path, 'receipt.json'));
   requireEvidence(receiptStat.isFile() && receiptStat.size <= 65536, 'cache receipt type/size');
   const bytes = await readFile(join(path, 'receipt.json'));
