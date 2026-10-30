@@ -3,12 +3,18 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { digest, policy, requireEvidence } from './toolchain-contract.mjs';
 
-// TUF metadata freshness and rollback gate. Every role document must declare its
-// own type with a positive integer version and must not be expired at
+// TUF metadata freshness and intra-set parent-pin gate. Every role document must
+// declare its own type with a positive integer version and must not be expired at
 // verification time; each parent role must pin the exact current child version,
-// and the pinned digest when the parent carries one. An expired root or a
-// version/digest rollback refuses receipt creation; it never refreshes, warns,
-// or falls back. Independent content/verifier admission remains pending.
+// and the pinned digest when the parent carries one. An expired role or an
+// intra-set parent-pin version/digest mismatch refuses receipt creation; it never
+// refreshes, warns, or falls back. This is a fail-closed strengthening over the
+// prior inline checks (strict integer and positive versions, null and array
+// guards, finite verification time, coverage-blocked errors, validate-after-read
+// ordering), not identical behavior. The validator holds no prior trusted state,
+// so a fully self-consistent older, unexpired set passes it; prior-trusted-state
+// rollback history and items 2 and 11 stay open. Independent content/verifier
+// admission remains pending.
 export function validateTufMetadata(documents, digests, verifiedAt) {
   requireEvidence(Number.isFinite(verifiedAt), 'verification time is not finite');
   for (const role of ['root', 'timestamp', 'snapshot', 'targets']) {
