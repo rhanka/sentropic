@@ -54,8 +54,8 @@ Refuse a warm Trivy report whose finding inventory diverges from the cold report
     - [x] `make scope-check ENV=test-sec5a-agreement`
     - [x] Focused `trivy.test.mjs` green in Docker (6/6).
   - [x] Wire one agreement call into `scripts/security/daily/qualify-current.mjs` cold/warm join.
-  - [ ] Lot gate:
-    - [ ] `make test-security-daily ENV=test-sec5a-agreement`
+  - [x] Lot gate:
+    - [x] `make test-security-daily ENV=test-sec5a-agreement` (140/140 on final head).
 - [ ] **Lot 2 — Review and PR**
   - [ ] Two blind Muse Wonder full xhigh review legs (correctness, risk), receipts in `.h2a/reviews/`.
   - [ ] Open PR with `BRANCH.md` as body; record head; leave merge to owner.
