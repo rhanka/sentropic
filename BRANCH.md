@@ -4,7 +4,7 @@
 - [ ] Reacquire exact Trivy signature material and Cosign 3.1.4; initialize fresh TUF custody and verify offline without prior host evidence.
 
 ## Scope / Guardrails
-- [x] Branch `fix/sec5a-trust-custody`; worktree `tmp/sec5a-trust-custody`; base `401cffae1`.
+- [x] Branch `fix/sec5a-trust-custody`; worktree `tmp/sec5a-trust-custody`; initial base `401cffae1`, rebased onto `d08517ed1`.
 - [x] Make-only, Docker-first, zero Python; ENV=test-sec5a-trust last; no application stack or host ports.
 - [x] Docker flock: `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; down after trials.
 - [x] Existing service and auto-merge stay off; no scanner admission, severity reduction or vulnerability exception.
@@ -43,9 +43,10 @@
 - [x] Lot 1: remove host-specific evidence dependency in `qualify-signature.sh`; acquire index/platform/config/bundle with verified hashes.
 - [x] Lot 2: freshly hash-check Cosign 3.1.4 and initialize Sigstore TUF with its embedded release root in an empty isolated home.
 - [x] Lot 3: exact-index offline verification passed; changed index/root/bundle refused; public hash-bound custody receipt retained.
-- [x] Lot 4 checks: live positive verification and three refusal controls passed; daily regressions 125/125; shell syntax passed; scope check PASS C2.
+- [x] Lot 4 checks: live positive verification and three refusal controls passed; daily regressions 126/126; shell syntax passed; scope check PASS C2.
 - [ ] Lot 4 delivery: <=150-line commits, independent exact-head review and CI; PR body from this file.
 - [x] No package source changes; package publication version gate not applicable.
 - [x] Review hardening: raw TUF/root bytes retained, deterministic allowlisted publication, well-formed cryptographic substitutions and native error-class assertions; narrow verifier mounts.
 - [x] Review regression: `toolchain-contract.test.mjs` verifies public raw metadata hashes, parsed documents and deterministic bytes; scoped 11/11 passed.
+- [x] Final review: mutated index retained separately from stdout and exact hash asserted; positive plus three cryptographic refusals rerun; daily 126/126; archived public bytes match under a 2030 JavaScript clock replay.
 - [x] No merge or auto-merge; keep PR open for review.
