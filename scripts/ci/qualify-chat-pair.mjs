@@ -4,15 +4,18 @@ import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-// The Make target mounts only this probe, the candidate archives and an output directory.
+// The Make target mounts this probe, the candidate archives, the committed lock
+// universe (scripts/ci + root lockfile) and an output directory. Candidate archives
+// resolve locally; registry specs resolve against the frozen lock universe only.
 const root = mkdtempSync(join(tmpdir(), 'chat-pair-'));
 function run(command, args) {
   const result = spawnSync(command, args, { cwd: root, stdio: 'inherit', env: { ...process.env, NODE_PATH: '', NODE_OPTIONS: '' } });
   if (result.status !== 0) throw new Error(`${command} failed (${result.status})`);
 }
 writeFileSync(join(root, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
-run('npm', ['install', '--no-audit', '--no-fund', '/input/ui.tgz', '/input/core.tgz',
-  'svelte@5.55.7', 'svelte-check@4.7.6', 'typescript@5.9.3', 'vite@7.3.5', '@sveltejs/vite-plugin-svelte@6.2.4']);
+run('node', ['/workspace/scripts/ci/locked-consumer.mjs', '/input/ui.tgz', '/input/core.tgz',
+  'svelte@5.55.7', 'svelte-check@4.7.6', 'typescript@5.9.3', 'vite@7.3.7', '@sveltejs/vite-plugin-svelte@6.2.4',
+  '--no-audit', '--no-fund']);
 writeFileSync(join(root, 'App.svelte'), `<script lang="ts">
   import ChatConversation from '@sentropic/chat-ui/components/ChatConversation.svelte';
   import { createConversationRuntime } from '@sentropic/chat-core/runtime/state/conversationRuntime';
