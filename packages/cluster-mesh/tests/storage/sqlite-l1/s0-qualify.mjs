@@ -6,7 +6,7 @@
 // registerHooks loader maps the package's .js specifiers onto .ts sources.
 
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRequire, registerHooks } from 'node:module';
@@ -30,6 +30,12 @@ const vecExtensionPath = sqliteVec.getLoadablePath();
 assert.ok(typeof vecExtensionPath === 'string' && vecExtensionPath.length > 0, 'sqlite-vec loadable path is required');
 assert.ok(existsSync(vecExtensionPath), `sqlite-vec loadable must exist: ${vecExtensionPath}`);
 
+// The loadable that ran must be the committed tool graph's pinned version,
+// proving the qualification lane exercised the frozen dependency closure.
+const committedVecLock = JSON.parse(readFileSync(new URL('./vec-tool/package-lock.json', import.meta.url), 'utf8'));
+const committedVecVersion = committedVecLock.packages['node_modules/sqlite-vec'].version;
+assert.ok(/^\d+\.\d+\.\d+$/.test(committedVecVersion), `committed sqlite-vec pin is required: ${committedVecVersion}`);
+
 const engineAtLeast = (version, floor) => {
   const [a, b, c] = version.split('.').map(Number);
   const [x, y, z] = floor.split('.').map(Number);
@@ -48,6 +54,7 @@ try {
     assert.equal(receipt.trustedSchema, 0);
     assert.equal(receipt.extensionLoading, 'disabled');
     assert.match(receipt.vecVersion ?? '', /^v\d+\.\d+\.\d+$/, 'verified sqlite-vec version is required');
+    assert.equal(receipt.vecVersion, `v${committedVecVersion}`, 'loaded sqlite-vec must match the committed tool pin');
 
     // Extension loading stays disabled after the verified load: the only
     // observable DBCONFIG state is the refused load below.
