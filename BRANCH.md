@@ -1,3 +1,56 @@
+# Fix: Make qualification failure trials reproducible and isolated
+
+## Objective
+- [ ] Close qualification safety gaps with real failure trials and behavioral regressions; preserve blocked admission.
+
+## Scope / Guardrails
+- [x] Branch `fix/sec5a-qualification-safety`, worktree `tmp/sec5a-qualification-safety`, base `401cffae1`.
+- [x] Make-only, Docker-first, zero Python; ENV=test-sec5a-safety last; no application stack or host ports.
+- [x] Docker flock: `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; down after campaigns.
+- [x] No daily activation, scheduling, auto-merge, vulnerability exceptions, policy admission or package changes.
+
+## Branch Scope Boundaries (MANDATORY)
+- **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
+  - `scripts/security/daily/**`
+  - `docs/security/**`
+- **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `.github/workflows/**`
+  - `.security/**`
+  - `packages/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - None.
+
+## Feedback Loop
+- [x] SECQUAL-EX1 inherited include remains opt-in only; removal trigger: qualification completes or is abandoned; expiry 2026-11-12, after which qualification trials must stop until renewed. No runtime admission exception.
+- [x] Scanner HIGH/CRITICAL, independent trust custody, canonical targets, SAST/IaC, builder and performance remain separate admissions.
+
+## AI Flaky tests
+- [x] None accepted.
+
+## Orchestration Mode (AI-selected)
+- [x] Multi-branch; independent from `fix/sec5a-ci-guards` (#848); later qualification groups depend only on main.
+
+## UAT Management (in orchestration context)
+- [x] No application changes; live scanner trials and shell failure controls replace UI UAT.
+
+## Plan / Todo (lot-based)
+- [x] Lot 0: rules, owner answers and #840 review read; mechanical branch check PASS C1.
+- [ ] Lot 1: `toolchain-cache.mjs` classifies absent cache; `toolchain-contract.test.mjs` verifies failure without network or fallback.
+- [ ] Lot 2: `qualify-targets.sh` reads only named `.env` fields as data; `scan.test.mjs` exercises hostile values and parser rejection.
+- [ ] Lot 3: `qualify-scans.sh` cleans its container after failures; `scan.test.mjs` simulates Docker mid-trial failure.
+- [ ] Lot 4: live hostile configuration control with pinned Log4j, frozen DB and scanner; retain hash-bound public receipt and documentation.
+- [ ] Lot 5: `make test-security-daily test-security-parser ENV=test-sec5a-safety`, scope check, exact-head independent review and CI; PR from this file.
+- [x] No `packages/*/src/**` changes; package publication version gate not applicable.
+- [x] Keep PR open; never merge or enable auto-merge.
+
+## Integrated Main Plan (retained context)
+
+- [x] Retain BR-80 and Decision Q1 context below; only the active qualification scope above authorizes this branch.
+
 # Feature: BR-80 — One package candidate and independent qualifications
 
 ## Objective
@@ -12,7 +65,7 @@
 - [x] No migrations, timeout inflation, removed assertions or attribution trailers; root dev preserved. Correction commits use `make commit` and scope checks at ≤150 lines; the sole historical docs exception is recorded below.
 
 ## Branch Scope Boundaries (MANDATORY)
-- [ ] **Allowed Paths (implementation scope)**:
+- [ ] Allowed Paths (implementation scope):
   - [ ] `BRANCH.md`; `plan/66-BRANCH_perf-ci-package-candidates.md`; `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`.
   - [ ] `packages/cluster-mesh/tests/storage/cold-workspace.sh`
   - [ ] `packages/cluster-mesh/tests/storage/postgres.mk`
@@ -26,10 +79,10 @@
   - [ ] `scripts/ci/package-candidate.mjs`
   - [ ] `scripts/ci/package-candidate.test.mjs`
   - [ ] `scripts/ci/package-qualification-dag.test.mjs`
-- [ ] **Forbidden Paths (must not change in this branch)**:
+- [ ] Forbidden Paths (must not change in this branch):
   - [ ] `docker-compose*.yml`; `.cursor/rules/**`; `api/drizzle/*.sql`.
   - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
-- [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+- [ ] Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths):
   - [ ] `.github/workflows/ci.yml` under BR80-EX1; `Makefile` under BR80-EX2.
   - [ ] `scripts/ci/ci-expected-results.mjs`; `scripts/ci/ci-expected-results.test.mjs` under BR80-EX6.
   - [ ] `tools/memory-mcp-l5/tests/ci-contract.test.mjs` under BR80-EX7.
@@ -164,7 +217,7 @@
 > - [x] Serialize Docker with `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; run `make down` afterward.
 > 
 > ## Branch Scope Boundaries (MANDATORY)
-> - **Allowed Paths (implementation scope)**:
+> - Allowed Paths (implementation scope):
 >   - `BRANCH.md`
 >   - `spec/decision/**`
 >   - `packages/llm-mesh/src/decision/descriptor.ts`
@@ -181,12 +234,12 @@
 >   - `packages/cluster-mesh/tests/fixtures/train.ts`
 >   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
 >   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-> - **Forbidden Paths (must not change in this branch)**:
+> - Forbidden Paths (must not change in this branch):
 >   - `Makefile`
 >   - `docker-compose*.yml`
 >   - `.cursor/rules/**`
 >   - `api/**`
-> - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+> - Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths):
 >   - `.github/workflows/**`
 > 
 > ## Feedback Loop
