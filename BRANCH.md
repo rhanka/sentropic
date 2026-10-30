@@ -55,7 +55,7 @@
   - [x] `harness check branch --current-branch feat/sql-l1 --profile sentropic` → PASS C1.
   - [x] Confirm command style `make ... ENV=test-memory-sqlite` with ENV last; scope boundaries above.
 - [ ] **Lot 1 — Tests first (SQL-L1 harness)**
-  - [ ] `packages/cluster-mesh/tests/storage/sqlite-l1/connection.spec.ts`: PRAGMA enforcement with read-back, FK enforcement, reopen, refusal vocabulary (`:memory:`, empty path, missing vec extension), hard-closed extension gate without a vec path.
+  - [x] `packages/cluster-mesh/tests/storage/sqlite-l1/connection.spec.ts`: PRAGMA enforcement with read-back, FK enforcement, reopen, refusal vocabulary (`:memory:`, empty path, missing vec extension), hard-closed extension gate without a vec path.
   - [ ] `packages/cluster-mesh/tests/storage/sqlite-l1/s0-qualify.mjs`: Stage-0 runner proving the verified `sqlite-vec` load through the gate on the qualified container image (engine floor, vec0 virtual table roundtrip, gate closed after open).
   - [ ] `packages/cluster-mesh/tests/storage/sqlite.mk`: add `cluster-mesh-sqlite-s0-qualify` (self-contained pinned `sqlite-vec@0.1.9` tool install), keep `cluster-mesh-sqlite-test`/`cluster-mesh-sqlite-run`, serialize Docker lanes under the common flock.
   - [ ] Lot gate: suite observed red against the unimplemented `openSqliteDatabase`.
