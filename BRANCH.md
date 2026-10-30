@@ -48,6 +48,7 @@
 - [x] No `packages/*/src/**` changes; package publication version gate not applicable.
 - [x] Review hardening: reject registry option injection and enforce SECQUAL-EX1 expiry mechanically with UTC boundary regressions.
 - [x] Review hardening: bind config-control receipts to observed container inspection, exact scanner pins and ingestion-selected DB mounts; real control rerun passed; daily suite 128/128.
+- [x] Re-review: embedded DB receipts must equal verified disk receipts; scanner version, exact package and zero default findings are required; scoped 20/20 and daily 130/130; real trial rerun passed.
 - [x] Keep PR open; never merge or enable auto-merge.
 
 ## Integrated Main Plan (retained context)
