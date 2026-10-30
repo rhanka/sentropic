@@ -11,7 +11,10 @@ export { registerEngramMemoryTools, type EngramMemoryTransportDefinition } from 
 export { createEngramMemoryWireManifest } from './memory-manifest.js';
 
 export interface EngramMemoryBuiltin extends McpRegistryBuiltin {
-  /** Available after selected materialization. The host closes it before closing its pool. */
+  /** Available after selected materialization. `runtime()?.close()` belongs to the host-pool
+      teardown, never to per-attachment teardown: the host calls it while closing its own pool.
+      Close shuts the canonical store and releases kernel ownership; the host stops serving the
+      runtime MCP server around the same teardown. */
   runtime(): EngramMemoryRuntime | undefined;
 }
 
