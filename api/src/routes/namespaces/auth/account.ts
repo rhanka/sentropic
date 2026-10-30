@@ -17,6 +17,10 @@ import {
   workspaces,
 } from '../../../db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
+import { revokeAllSessions } from '../../../services/session-manager';
+import { tombstoneRemoteSessions } from '../../../services/auth/remote-revocation';
+import { queueRemoteRevocation } from '../../../services/auth/remote-revocation-outbox';
+import { remoteRevocationError } from '../../../services/auth/remote-revocation-error';
 import {
   captureConnectorGrantsForTeardown,
   recordConnectorGrantTombstones,
@@ -24,6 +28,7 @@ import {
 } from '../../../services/connector-grant-teardown';
 
 export const accountRouter = new Hono();
+accountRouter.onError((error, c) => remoteRevocationError(error, c, true));
 
 accountRouter.get('/', async (c) => {
   const { userId, workspaceId, role } = c.get('user');
@@ -83,7 +88,7 @@ accountRouter.post('/deactivate', async (c) => {
     .where(eq(users.id, userId));
 
   // Revoke sessions immediately
-  await db.delete(userSessions).where(eq(userSessions.userId, userId));
+  await revokeAllSessions(userId);
 
   return c.json({ success: true });
 });
@@ -101,7 +106,7 @@ accountRouter.delete('/', async (c) => {
   // nothing can ever revoke. See services/connector-grant-teardown.ts for the full ordering.
   const capturedGrants = await captureConnectorGrantsForTeardown({ userId, workspaceId });
 
-  await db.transaction(async (tx) => {
+  const deletedSessions = await db.transaction(async (tx) => {
     // Tombstone inside the same transaction, so the record and the destruction are atomic.
     await recordConnectorGrantTombstones(tx, capturedGrants);
 
@@ -160,7 +165,7 @@ accountRouter.delete('/', async (c) => {
     await tx.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
 
     // Auth artifacts
-    await tx.delete(userSessions).where(eq(userSessions.userId, userId));
+    const sessions = await tx.delete(userSessions).where(eq(userSessions.userId, userId)).returning({ id: userSessions.id });
     await tx.delete(webauthnCredentials).where(eq(webauthnCredentials.userId, userId));
     await tx.delete(webauthnChallenges).where(eq(webauthnChallenges.userId, userId));
 
@@ -186,11 +191,17 @@ accountRouter.delete('/', async (c) => {
 
     // Finally delete user
     await tx.delete(users).where(eq(users.id, userId));
+    const input = { sessionIds: sessions.map(row => row.id), userId };
+    return { input, key: await queueRemoteRevocation(input, tx) };
   });
 
   // Only after a successful commit. Revoking earlier would kill the grant of an account that a
   // rolled-back transaction leaves alive.
-  await revokeCapturedConnectorGrants(capturedGrants);
+  try {
+    await revokeCapturedConnectorGrants(capturedGrants);
+  } finally {
+    await tombstoneRemoteSessions(deletedSessions.input, deletedSessions.key);
+  }
 
   return c.json({ success: true });
 });

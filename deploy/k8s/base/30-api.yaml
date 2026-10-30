@@ -109,6 +109,8 @@ spec:
                   name: sentropic-api
                   key: DECISION_EXECUTION_PROFILE
                   optional: true
+            - name: REMOTE_ACTION_ROLE
+              value: product
           envFrom:
             - configMapRef:
                 name: api
