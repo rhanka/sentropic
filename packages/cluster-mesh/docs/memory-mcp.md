@@ -6,12 +6,10 @@ path: static catalog, explicit selection, qualified optional peer acquisition,
 then an in-process producer. Cataloging never opens a store. A missing,
 partial or incompatible engram peer refuses compilation before storage opens.
 
-This draft qualifies the engram 0.22.0 candidate with SHA-256
-`0e740e5c8fd9d8bc167d6efcdd0e2bf86a2af5c6accfc2bc1c464e4477b14f08`.
-The test archive is a development fixture, outside the published file set.
-Release versioning and the published peer pin await engram L5 qualification.
-The archive shares the private provenance instance across its public entries;
-see [candidate qualification](memory-mcp-candidate.md). A peer that splits
+This draft qualifies the published `@sentropic/engram` 0.22.0 (npm integrity
+`sha512-888akd0XH+ODAEU65QMLvAZLDfdgwiLlx4EiiFFy3Go+cWhLm22z48HKq2NardQ32rJm5bOIhqlwKLTnjcO+1w==`).
+The published peer shares the private provenance instance across its public entries;
+see [published peer qualification](memory-mcp-candidate.md). A peer that splits
 that instance is refused before storage opens.
 
 The host supplies an `EngramMemoryDefinitionOptions` through `definition`.
@@ -43,6 +41,12 @@ invocation binding come from the host attachment, including the authoritative
 tenant, workspace, client, logical session, purpose and envelope references.
 Tool arguments cannot select a tenant or authorize confirmation. The host
 supplies the immutable plan consumed by the producer's compiled dispatch.
+
+`builtin.runtime()?.close()` belongs to the host-pool teardown, never to
+per-attachment teardown: the host calls it while closing its own pool. Close
+shuts the canonical store and releases kernel ownership; the host stops serving
+the runtime MCP server around the same teardown. Attachments never close the
+runtime.
 
 Register native wire tools only after successful registry compilation.
 `registerEngramMemoryTools` checks the compiled tool identities and input

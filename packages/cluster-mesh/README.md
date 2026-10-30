@@ -159,8 +159,8 @@ that leaf is imported. `loadArtifactsMcp` from `./loaders/mcp` acquires the same
 provider through the module registry. The root entry remains usable without it.
 
 The memory builtin and explicit-host stdio command are described in
-[Memory MCP](docs/memory-mcp.md). The pinned candidate currently has a
-[blocking provenance packaging defect](docs/memory-mcp-candidate.md).
+[Memory MCP](docs/memory-mcp.md). The published `@sentropic/engram` 0.22.0 peer
+is qualified in [published peer qualification](docs/memory-mcp-candidate.md).
 
 Static provider re-export leaves use `export *`: same values,
 types, overloads and class identity. Importing a leaf selects that provider; a
