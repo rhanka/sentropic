@@ -257,6 +257,33 @@ test('should read only named operator fields as data without evaluating hostile 
   }
 });
 
+test('should remove only its own detached scanner when a qualification trial fails', (t) => {
+  const root = fixture(t);
+  for (const kind of ['vulnerability', 'java']) {
+    mkdirSync(join(root, 'tmp/security-qualify/cache', `${kind}-fixture`), { recursive: true });
+  }
+  mkdirSync(join(root, 'tmp/security-qualify/main-40832206894/api-image'), { recursive: true });
+  const bin = join(root, 'bin');
+  mkdirSync(bin);
+  writeFileSync(join(bin, 'jq'), '#!/bin/sh\ncat\n', { mode: 0o755 });
+  const cleanup = join(root, 'cleanup');
+  writeFileSync(join(bin, 'docker'), `#!/bin/sh
+case "$1" in
+  run) exit "$FIXTURE_RUN_EXIT" ;;
+  inspect) exit 17 ;;
+  rm) printf '%s\\n' "$*" >> "$FIXTURE_CLEANUP" ;;
+  *) exit 91 ;;
+esac
+`, { mode: 0o755 });
+  const run = (exit) => spawnSync('bash', [resolve('scripts/security/daily/qualify-scans.sh')],
+    { cwd: root, env: { PATH: `${bin}:/usr/bin:/bin`, FIXTURE_RUN_EXIT: String(exit), FIXTURE_CLEANUP: cleanup }, encoding: 'utf8' });
+  assert.equal(run(23).status, 23);
+  assert.throws(() => readFileSync(cleanup), /ENOENT/, 'failed creation cannot delete another container');
+  const failed = run(0);
+  assert.equal(failed.status, 17, failed.stderr);
+  assert.match(readFileSync(cleanup, 'utf8'), /^rm -f test-sec-qualify-\d+-api-cold\n$/);
+});
+
 test('should refuse tracked or untracked changes and Git errors before starting the scan', (t) => {
   const root = fixture(t);
   writeFileSync(join(root, 'git'), `#!/bin/sh

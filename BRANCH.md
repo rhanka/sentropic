@@ -41,7 +41,7 @@
 - [x] Lot 0: rules, owner answers and #840 review read; mechanical branch check PASS C1.
 - [x] Lot 1: `toolchain-cache.mjs` classifies absent cache; `toolchain-contract.test.mjs` verifies failure without network or fallback.
 - [x] Lot 2: `qualify-targets.sh` reads only named `.env` fields as data; `scan.test.mjs` exercises hostile values and parser rejection.
-- [ ] Lot 3: `qualify-scans.sh` cleans its container after failures; `scan.test.mjs` simulates Docker mid-trial failure.
+- [x] Lot 3: `qualify-scans.sh` cleans its container after failures; `scan.test.mjs` simulates Docker mid-trial failure.
 - [ ] Lot 4: live hostile configuration control with pinned Log4j, frozen DB and scanner; retain hash-bound public receipt and documentation.
 - [ ] Lot 5: `make test-security-daily test-security-parser ENV=test-sec5a-safety`, scope check, exact-head independent review and CI; PR from this file.
 - [x] No `packages/*/src/**` changes; package publication version gate not applicable.
