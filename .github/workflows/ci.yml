@@ -403,6 +403,9 @@ jobs:
               - 'packages/chat-ui/**'
               - 'packages/cowork-desktop/**'
               - 'packages/cowork-bridge/**'
+              - 'packages/chat-core/src/runtime/**'
+              - 'packages/chat-core/package.json'
+              - 'packages/chat-core/tsconfig.json'
             llm_mesh:
               - 'Makefile'
               - 'package.json'
