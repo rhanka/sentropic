@@ -54,11 +54,11 @@
   - [x] Worktree `tmp/sql-l1`, branch `feat/sql-l1` from `origin/main`, `.env` copied.
   - [x] `harness check branch --current-branch feat/sql-l1 --profile sentropic` → PASS C1.
   - [x] Confirm command style `make ... ENV=test-memory-sqlite` with ENV last; scope boundaries above.
-- [ ] **Lot 1 — Tests first (SQL-L1 harness)**
+- [x] **Lot 1 — Tests first (SQL-L1 harness)**
   - [x] `packages/cluster-mesh/tests/storage/sqlite-l1/connection.spec.ts`: PRAGMA enforcement with read-back, FK enforcement, reopen, refusal vocabulary (`:memory:`, empty path, missing vec extension), hard-closed extension gate without a vec path.
-  - [ ] `packages/cluster-mesh/tests/storage/sqlite-l1/s0-qualify.mjs`: Stage-0 runner proving the verified `sqlite-vec` load through the gate on the qualified container image (engine floor, vec0 virtual table roundtrip, gate closed after open).
-  - [ ] `packages/cluster-mesh/tests/storage/sqlite.mk`: add `cluster-mesh-sqlite-s0-qualify` (self-contained pinned `sqlite-vec@0.1.9` tool install), keep `cluster-mesh-sqlite-test`/`cluster-mesh-sqlite-run`, serialize Docker lanes under the common flock.
-  - [ ] Lot gate: suite observed red against the unimplemented `openSqliteDatabase`.
+  - [x] `packages/cluster-mesh/tests/storage/sqlite-l1/s0-qualify.mjs`: Stage-0 runner proving the verified `sqlite-vec` load through the gate on the qualified container image (engine floor, vec0 virtual table roundtrip, gate closed after open).
+  - [x] `packages/cluster-mesh/tests/storage/sqlite.mk`: add `cluster-mesh-sqlite-s0-qualify` (self-contained pinned `sqlite-vec@0.1.9` tool install), keep `cluster-mesh-sqlite-test`/`cluster-mesh-sqlite-run`, serialize Docker lanes under the common flock.
+  - [x] Lot gate: suite observed red against the unimplemented `openSqliteDatabase`.
 - [ ] **Lot 2 — Implementation**
   - [ ] `openSqliteDatabase()` in `packages/cluster-mesh/src/storage/sqlite/connection.ts`: durable path validation, PRAGMA application with read-back refusal, extension gate enabled only around the verified `sqlite-vec` load then disabled, verified-closed proof, close-on-failure.
   - [ ] `packages/cluster-mesh/package.json` version bump to `0.26.0-dev.1`.
