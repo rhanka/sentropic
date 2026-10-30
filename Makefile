@@ -980,7 +980,7 @@ ci-dag-receipt: ## Emit identified runtime readiness from a completed capture
 typecheck: prepare-node-workspace typecheck-ui typecheck-api ## Run all type checks
 
 .PHONY: typecheck-ui
-typecheck-ui: up-ui ## Run UI type checks
+typecheck-ui: build-chat-core up-ui ## Run UI type checks
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run check
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/ui/node_modules/.vite 2>/dev/null || true'
 
@@ -2477,7 +2477,7 @@ publish-flow-token: build-flow ## Publish @sentropic/flow using NPM_TOKEN_FILE (
 lint: prepare-node-workspace lint-ui lint-api ## Run all linters
 
 .PHONY: lint-ui
-lint-ui: up-ui ## Run UI linter
+lint-ui: build-chat-core up-ui ## Run UI linter
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui npm run lint
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T ui sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/ui/node_modules/.vite 2>/dev/null || true'
 
@@ -2616,7 +2616,7 @@ test-skills: ## Run @sentropic/skills tests
 		@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/skills $(SKILLS_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node gray-matter@4.0.3 zod@4.6.7 isolated-vm@6.1.2 docx@9.5.1 pptxgenjs@4.0.1 >/dev/null; ln -s "$$tool_dir/node_modules" node_modules; trap "rm -f node_modules" EXIT; NODE_PATH="$$tool_dir/node_modules" "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
 
 .PHONY: test-ui
-test-ui: up-ui ## Run UI tests (usage: make test-ui, SCOPE=tests/stores/session.test.ts make test-ui)
+test-ui: build-chat-core up-ui ## Run UI tests (usage: make test-ui, SCOPE=tests/stores/session.test.ts make test-ui)
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T -e SCOPE="$(SCOPE)" ui sh -lc ' \
 	  if [ -n "$$SCOPE" ]; then \
 	    echo "▶ Running scoped UI tests: $$SCOPE"; \

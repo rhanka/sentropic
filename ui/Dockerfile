@@ -24,6 +24,12 @@ RUN node .security/audit-gate.mjs --omit=dev --workspace sentropic-ui
 # API/browser sources do not participate in either UI profile.
 COPY --exclude=**/cowork-desktop --exclude=**/cowork-desktop/** ui ./ui
 COPY packages ./packages
+# The UI consumes @sentropic/chat-core through a file: link whose dist-form
+# exports require built dists. Build them in dependency order (contracts, then
+# events, then chat-core) so typecheck, tests and the production bundle resolve.
+RUN rm -rf packages/contracts/dist && npm run build --workspace=@sentropic/contracts
+RUN rm -rf packages/events/dist && npm run build --workspace=@sentropic/events
+RUN rm -rf packages/chat-core/dist && npm run build --workspace=@sentropic/chat-core
 
 FROM base AS development
 WORKDIR /workspace/ui
