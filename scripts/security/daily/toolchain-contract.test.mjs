@@ -27,6 +27,26 @@ test('should keep daily qualification blocked despite valid version and frozen p
   assert.throws(() => assertQualified(), /S2b qualification pending/);
 });
 
+test('should retain self-verifiable raw trust metadata and deterministic public custody bytes', async () => {
+  const bytes = await readFile('docs/security/sec5a-trust-custody.json', 'utf8');
+  const receipt = JSON.parse(bytes);
+  assert.equal(bytes, `${JSON.stringify(receipt)}\n`);
+  assert.equal(receipt.qualified, false);
+  for (const [role, entry] of Object.entries(receipt.metadata)) {
+    const raw = Buffer.from(entry.rawBase64, 'base64');
+    assert.equal(digest(raw), entry.digest, role);
+    assert.deepEqual(JSON.parse(raw), entry.document);
+    assert.ok(Date.parse(entry.document.signed.expires) > Date.parse(receipt.observedAt), role);
+  }
+  const roots = Buffer.from(receipt.trustedRootRawBase64, 'base64');
+  assert.equal(digest(roots), receipt.verification.artifacts['trusted_root.json']);
+  assert.deepEqual(JSON.parse(roots), receipt.trustedRoot);
+  assert.equal(receipt.metadata.targets.document.signed.targets['trusted_root.json'].hashes.sha256,
+    digest(roots).slice(7));
+  assert.equal(receipt.verification.artifacts.cosign, `sha256:${policy.signature.verifierCandidate.sha256}`);
+  assert.equal(receipt.verification.digest, policy.indexDigest);
+});
+
 test('should require reviewed content pins, exact publisher and index/platform linkage', () => {
   const p = structuredClone(policy);
   const configBytes = JSON.stringify({ os: 'linux', architecture: 'amd64', config: { Labels: {
