@@ -59,7 +59,7 @@ export WEBAUTHN_RP_ID ?= localhost
 export CORS_ALLOWED_ORIGINS ?= http://localhost:$(UI_PORT),http://127.0.0.1:$(UI_PORT),http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*
 
 export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/artifacts packages/auth-client packages/auth-hono packages/auth-ui packages/chat-core packages/chat-server packages/cluster-mesh packages/comments packages/connector-host packages/contracts packages/events packages/flow packages/llm-gateway packages/llm-mesh packages/mcp-auth packages/mcp-connector-google packages/mcp-platform packages/oauth-verify packages/skills packages/ubo-contracts api apps/auth-idp apps/llm-gateway e2e/package.json e2e/package-lock.json e2e/tests/fixtures ui/package.json scripts/ci/locked-tools.mjs scripts/ci/tool-locks.json .security/audit-gate.mjs .security/audit-allowlist.json .dockerignore" | tr ' ' '\n' | xargs -I '{}' find {} -type f ! -path '*/node_modules/*' ! -path '*/dist/*' ! -path '*/build/*' ! -name 'data.db' | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
-export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs packages/cowork-desktop/bin packages/cowork-desktop/src packages/cowork-desktop/packaging packages/cowork-desktop/package.json packages/cowork-desktop/tsconfig.json packages/cowork-bridge/src packages/cowork-bridge/package.json packages/cowork-bridge/tsconfig.json packages/chat-ui/src packages/chat-ui/package.json packages/chat-ui/tsconfig.json packages/chat-runtime/src packages/chat-runtime/package.json packages/chat-runtime/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs packages/cowork-desktop/bin packages/cowork-desktop/src packages/cowork-desktop/packaging packages/cowork-desktop/package.json packages/cowork-desktop/tsconfig.json packages/cowork-bridge/src packages/cowork-bridge/package.json packages/cowork-bridge/tsconfig.json packages/chat-ui/src packages/chat-ui/package.json packages/chat-ui/tsconfig.json packages/chat-core/src/runtime packages/chat-core/package.json packages/chat-core/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export E2E_VERSION    ?= $(shell echo "e2e/tests e2e/helpers e2e/global.setup.ts e2e/package.json e2e/package-lock.json e2e/npm-toolchain e2e/Dockerfile e2e/playwright.config.ts" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_IMAGE_NAME ?= sentropic-api
 API_IMAGE_RECEIPT ?= .tmp/ci-prod-image/api-image-id
@@ -1405,22 +1405,15 @@ publish-llm-mesh-token: verify-llm-mesh-cloud-code-oauth ## Publish @sentropic/l
 		-w /workspace/packages/llm-mesh \
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,llm-mesh,--access public --provenance=false)'
 
-.PHONY: typecheck-chat-runtime build-chat-runtime test-chat-runtime pack-chat-runtime chat-migration-registry
-typecheck-chat-runtime build-chat-runtime test-chat-runtime:
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e SCOPE="$(SCOPE)" -v "$(CURDIR):/workspace" -w /workspace/packages/chat-runtime $(LLM_MESH_NODE_IMAGE) sh scripts/run.sh $(patsubst %-chat-runtime,%,$@)
-pack-chat-runtime: build-chat-runtime
-	$(call manifest_guard_pack,chat-runtime,$(MANIFEST_DIST_FORM))
 .PHONY: qualify-chat-pair
 qualify-chat-pair:
-	@test -f "$(UI_ARCHIVE)" && test -f "$(RUNTIME_ARCHIVE)" || { echo "ERROR: UI_ARCHIVE and RUNTIME_ARCHIVE must name the guarded candidates"; exit 1; }
+	@test -f "$(UI_ARCHIVE)" && test -f "$(CORE_ARCHIVE)" || { echo "ERROR: UI_ARCHIVE and CORE_ARCHIVE must name the guarded candidates"; exit 1; }
 	@mkdir -p "$(REPORT_DIR)"
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e QUALIFY_HEAD_SHA="$(QUALIFY_HEAD_SHA)" \
 		-v "$(CURDIR)/scripts/ci/qualify-chat-pair.mjs:/probe.mjs:ro" \
 		-v "$(CURDIR)/scripts/ci/chat-pair-runtime-probe.mjs:/runtime-probe.mjs:ro" \
-		-v "$(abspath $(UI_ARCHIVE)):/input/ui.tgz:ro" -v "$(abspath $(RUNTIME_ARCHIVE)):/input/runtime.tgz:ro" \
+		-v "$(abspath $(UI_ARCHIVE)):/input/ui.tgz:ro" -v "$(abspath $(CORE_ARCHIVE)):/input/core.tgz:ro" \
 		-v "$(abspath $(REPORT_DIR)):/reports" $(LLM_MESH_NODE_IMAGE) node /probe.mjs
-chat-migration-registry:
-	@docker run --rm $(LLM_MESH_NODE_IMAGE) sh -lc 'npm view @sentropic/chat-ui version; npm view @sentropic/cowork-desktop version; npm view @sentropic/cowork-bridge version; npm view @sentropic/chat-runtime version || test "$$?" = 1'
 
 .PHONY: chat-migration-lockfiles
 chat-migration-lockfiles:
@@ -1428,7 +1421,7 @@ chat-migration-lockfiles:
 
 .PHONY: typecheck-chat-ui
 typecheck-chat-ui: ## Run @sentropic/chat-ui type checks
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; mkdir -p node_modules/@sentropic; ln -sfn /workspace/packages/chat-runtime node_modules/@sentropic/chat-runtime; mkdir -p "$$tool_dir/node_modules/@sentropic"; ln -sfn /workspace/packages/chat-ui "$$tool_dir/node_modules/@sentropic/chat-ui"; ln -sfn "$$tool_dir/node_modules" /workspace/packages/chat-runtime/node_modules; trap "rm -rf node_modules /workspace/packages/chat-runtime/node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 "@sentropic/chat-core@0.3.0" >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; mkdir -p node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@sentropic/chat-core" node_modules/@sentropic/chat-core; mkdir -p "$$tool_dir/node_modules/@sentropic"; ln -sfn /workspace/packages/chat-ui "$$tool_dir/node_modules/@sentropic/chat-ui"; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 
 # BR-PKG-EX1: build-chat-ui now runs svelte-package (preprocessed dist) instead of bare tsc.
 # Rationale: produce a consumable npm artifact — external consumers get .svelte with TS stripped +
@@ -1437,7 +1430,7 @@ typecheck-chat-ui: ## Run @sentropic/chat-ui type checks
 .PHONY: build-chat-ui
 build-chat-ui: ## Build @sentropic/chat-ui preprocessed dist via svelte-package (BR-PKG-EX1)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund "@sveltejs/package@2.3.9" "svelte-preprocess@6.0.3" svelte@5.55.7 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@sveltejs; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; ln -sfn "$$tool_dir/node_modules/@sveltejs/package" node_modules/@sveltejs/package; ln -sfn "$$tool_dir/node_modules/svelte-preprocess" node_modules/svelte-preprocess; mkdir -p node_modules/@sentropic; ln -sfn /workspace/packages/chat-runtime node_modules/@sentropic/chat-runtime; mkdir -p "$$tool_dir/node_modules/@sentropic"; ln -sfn /workspace/packages/chat-ui "$$tool_dir/node_modules/@sentropic/chat-ui"; ln -sfn "$$tool_dir/node_modules" /workspace/packages/chat-runtime/node_modules; trap "cp /tmp/svelte.config.orig.js svelte.config.js; rm -rf node_modules /workspace/packages/chat-runtime/node_modules" EXIT; cp svelte.config.js /tmp/svelte.config.orig.js; printf "import sveltePreprocess from '\''svelte-preprocess'\'';\nexport default { preprocess: sveltePreprocess({ typescript: true }) };\n" > svelte.config.js; "$$tool_dir/node_modules/.bin/svelte-package" -i src -o dist; find dist -name "*.svelte" -exec sed -i "s/<script lang=\"ts\">/<script>/g; s/<script lang=.ts.>/<script>/g" {} +'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund "@sveltejs/package@2.3.9" "svelte-preprocess@6.0.3" svelte@5.55.7 typescript@5.4.5 @types/node >/dev/null; mkdir -p node_modules/@sveltejs; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; ln -sfn "$$tool_dir/node_modules/@sveltejs/package" node_modules/@sveltejs/package; ln -sfn "$$tool_dir/node_modules/svelte-preprocess" node_modules/svelte-preprocess; mkdir -p node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@sentropic/chat-core" node_modules/@sentropic/chat-core; mkdir -p "$$tool_dir/node_modules/@sentropic"; ln -sfn /workspace/packages/chat-ui "$$tool_dir/node_modules/@sentropic/chat-ui"; trap "cp /tmp/svelte.config.orig.js svelte.config.js; rm -rf node_modules" EXIT; cp svelte.config.js /tmp/svelte.config.orig.js; printf "import sveltePreprocess from '\''svelte-preprocess'\'';\nexport default { preprocess: sveltePreprocess({ typescript: true }) };\n" > svelte.config.js; "$$tool_dir/node_modules/.bin/svelte-package" -i src -o dist; find dist -name "*.svelte" -exec sed -i "s/<script lang=\"ts\">/<script>/g; s/<script lang=.ts.>/<script>/g" {} +'
 
 # BR-PKG-EX1 (Makefile exception): pack-chat-ui transiently rewrites package.json to dist-form,
 # runs the guarded real pack (BRCI-EX1), then restores the src-form package.json.
@@ -1898,42 +1891,6 @@ publish-auth-ui-token: build-auth-ui ## Publish @sentropic/auth-ui using NPM_TOK
 # BR-PKG-EX1 (Makefile exception): publish-chat-ui transiently rewrites package.json to dist-form,
 # runs the guarded tarball publication (BRCI-EX1), then restores the src-form package.json.
 # The committed repo package.json always stays src-form (exports -> ./src/...).
-.PHONY: publish-chat-runtime
-publish-chat-runtime: build-chat-runtime ## Publish @sentropic/chat-runtime from CI OIDC trusted publishing (dist-form tarball via transient package.json rewrite — BR-PKG-EX1)
-	@docker run --rm \
-		-u "$$(id -u):$$(id -g)" \
-		-e HOME=/tmp \
-		-e npm_config_cache=/tmp/npm-cache \
-		-e GITHUB_ACTIONS \
-		-e GITHUB_REPOSITORY \
-		-e GITHUB_REF \
-		-e GITHUB_SHA \
-		-e GITHUB_EVENT_NAME \
-		-e GITHUB_RUN_ID \
-		-e GITHUB_RUN_ATTEMPT \
-		-e GITHUB_SERVER_URL \
-		-e GITHUB_REPOSITORY_ID \
-		-e GITHUB_REPOSITORY_OWNER_ID \
-		-e GITHUB_WORKFLOW \
-		-e GITHUB_WORKFLOW_REF \
-		-e GITHUB_WORKFLOW_SHA \
-		-e ACTIONS_ID_TOKEN_REQUEST_URL \
-		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
-		-v "$(CURDIR):/workspace" \
-		-w /workspace/packages/chat-runtime \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/tmp/pkg-src-backup.json; $(call manifest_guard_publish,chat-runtime,--access public)'
-
-.PHONY: publish-chat-runtime-token
-publish-chat-runtime-token: build-chat-runtime ## Publish @sentropic/chat-runtime using a token read from NPM_TOKEN_FILE (bootstrap only; prefer OIDC publish-chat-runtime in CI)
-	@test -s "$(NPM_TOKEN_FILE)" || { echo "ERROR: $(NPM_TOKEN_FILE) is missing or empty"; exit 1; }
-	@docker run --rm \
-		-u "$$(id -u):$$(id -g)" \
-		-e HOME=/tmp \
-		-e npm_config_cache=/tmp/npm-cache \
-		-v "$(CURDIR):/workspace" \
-		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
-		-w /workspace/packages/chat-runtime \
-		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; cp package.json /tmp/pkg-src-backup.json; trap "cp /tmp/pkg-src-backup.json package.json" EXIT; node scripts/make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/tmp/pkg-src-backup.json; $(call manifest_guard_publish,chat-runtime,--access public --provenance=false)'
 
 .PHONY: publish-chat-ui
 publish-chat-ui: build-chat-ui ## Publish @sentropic/chat-ui from CI OIDC trusted publishing (dist-form tarball via transient package.json rewrite — BR-PKG-EX1)
@@ -2134,17 +2091,17 @@ endif
 .PHONY: typecheck-cowork-desktop
 typecheck-cowork-desktop: ## Run @sentropic/cowork-desktop type checks
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn ../../../cowork-bridge node_modules/@sentropic/cowork-bridge; ln -sfn ../../../chat-runtime node_modules/@sentropic/chat-runtime; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types;ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 "@sentropic/chat-core@0.3.0" >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn ../../../cowork-bridge node_modules/@sentropic/cowork-bridge; ln -sfn "$$tool_dir/node_modules/@sentropic/chat-core" node_modules/@sentropic/chat-core; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types;ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" --noEmit -p tsconfig.json'
 
 .PHONY: test-cowork-desktop
 test-cowork-desktop: ## Run @sentropic/cowork-desktop tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn ../../../cowork-bridge node_modules/@sentropic/cowork-bridge; ln -sfn ../../../chat-runtime node_modules/@sentropic/chat-runtime; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types;ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 "@sentropic/chat-core@0.3.0" >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn ../../../cowork-bridge node_modules/@sentropic/cowork-bridge; ln -sfn "$$tool_dir/node_modules/@sentropic/chat-core" node_modules/@sentropic/chat-core; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types;ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node'
 
 .PHONY: build-cowork-desktop
 build-cowork-desktop: ## Build @sentropic/cowork-desktop dist package
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf dist node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn ../../../cowork-bridge node_modules/@sentropic/cowork-bridge; ln -sfn ../../../chat-runtime node_modules/@sentropic/chat-runtime; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types;ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/cowork-desktop $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund typescript@5.4.5 @types/node svelte@5.55.7 "@sentropic/chat-core@0.3.0" >/dev/null; mkdir -p node_modules/@sentropic; ln -sfn ../../../cowork-bridge node_modules/@sentropic/cowork-bridge; ln -sfn "$$tool_dir/node_modules/@sentropic/chat-core" node_modules/@sentropic/chat-core; ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types;ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/tsc" -p tsconfig.json'
 
 .PHONY: pack-cowork-desktop
 pack-cowork-desktop: build-cowork-desktop ## Validate @sentropic/cowork-desktop npm package contents without publishing
@@ -2204,10 +2161,10 @@ package-desktop-windows: ## Build the signable single Windows .exe for @sentropi
 			export DEBIAN_FRONTEND=noninteractive; \
 			apt-get update -qq >/dev/null && apt-get install -y -qq --no-install-recommends osslsigncode zip ca-certificates >/dev/null; \
 			tool_dir="$$(mktemp -d)"; \
-			node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund esbuild@0.25.10 @yao-pkg/pkg@6.9.0 typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; \
+			node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund esbuild@0.25.10 @yao-pkg/pkg@6.9.0 typescript@5.4.5 @types/node svelte@5.55.7 "@sentropic/chat-core@0.3.0" >/dev/null; \
 			mkdir -p node_modules/@sentropic node_modules/.bin; \
 			ln -sfn ../../../cowork-bridge node_modules/@sentropic/cowork-bridge; \
-			ln -sfn ../../../chat-runtime node_modules/@sentropic/chat-runtime; \
+			ln -sfn "$$tool_dir/node_modules/@sentropic/chat-core" node_modules/@sentropic/chat-core; \
 			ln -sfn "$$tool_dir/node_modules/@types" node_modules/@types; \
 			ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; \
 			ln -sfn "$$tool_dir/node_modules/esbuild" node_modules/esbuild; \
@@ -2588,7 +2545,7 @@ test-llm-gateway-process: prepare-node-workspace ## Test the standalone LLM gate
 .PHONY: test-chat-ui
 test-chat-ui: ## Run @sentropic/chat-ui tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; mkdir -p node_modules/@sentropic; ln -sfn /workspace/packages/chat-runtime node_modules/@sentropic/chat-runtime; mkdir -p "$$tool_dir/node_modules/@sentropic"; ln -sfn /workspace/packages/chat-ui "$$tool_dir/node_modules/@sentropic/chat-ui"; ln -sfn "$$tool_dir/node_modules" /workspace/packages/chat-runtime/node_modules; trap "rm -rf node_modules /workspace/packages/chat-runtime/node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node --exclude "tests/**/*.dom.spec.ts"'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node svelte@5.55.7 "@sentropic/chat-core@0.3.0" >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; mkdir -p node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@sentropic/chat-core" node_modules/@sentropic/chat-core; mkdir -p "$$tool_dir/node_modules/@sentropic"; ln -sfn /workspace/packages/chat-ui "$$tool_dir/node_modules/@sentropic/chat-ui"; trap "rm -rf node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run tests --environment node --exclude "tests/**/*.dom.spec.ts"'
 
 # BR-A0b-EX1 — additive jsdom DOM/ARIA test target for @sentropic/chat-ui Svelte 5 components.
 # Rationale: DOM/ARIA harness requires @sveltejs/vite-plugin-svelte + vite + jsdom +
@@ -2611,7 +2568,7 @@ test-chat-ui: ## Run @sentropic/chat-ui tests
 .PHONY: test-chat-ui-dom
 test-chat-ui-dom: ## Run @sentropic/chat-ui DOM/ARIA tests (jsdom, Svelte 5, BR-A0b-EX1 + BR-CONV-EX1)
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 hono@4.10.7 @types/node svelte@5.55.7 vite@8.0.16 @sveltejs/vite-plugin-svelte@7.1.2 @testing-library/svelte@5.3.1 jsdom@29.1.1 "@lucide/svelte@0.562.0" "svelte-streamdown@3.0.1" "svelte-preprocess@6.0.3" "@sentropic/design-system-svelte@^0.34.0" >/dev/null; mkdir -p node_modules/@sveltejs node_modules/@testing-library node_modules/@lucide node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@sentropic/design-system-svelte" node_modules/@sentropic/design-system-svelte; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; ln -sfn "$$tool_dir/node_modules/vite" node_modules/vite; ln -sfn "$$tool_dir/node_modules/jsdom" node_modules/jsdom; ln -sfn "$$tool_dir/node_modules/@sveltejs/vite-plugin-svelte" node_modules/@sveltejs/vite-plugin-svelte; ln -sfn "$$tool_dir/node_modules/@sveltejs/acorn-typescript" node_modules/@sveltejs/acorn-typescript; ln -sfn "$$tool_dir/node_modules/@testing-library/svelte" node_modules/@testing-library/svelte; ln -sfn "$$tool_dir/node_modules/@testing-library/dom" node_modules/@testing-library/dom; ln -sfn "$$tool_dir/node_modules/@testing-library/svelte-core" node_modules/@testing-library/svelte-core; ln -sfn "$$tool_dir/node_modules/@lucide/svelte" node_modules/@lucide/svelte; ln -sfn "$$tool_dir/node_modules/svelte-streamdown" node_modules/svelte-streamdown; ln -sfn "$$tool_dir/node_modules/svelte-preprocess" node_modules/svelte-preprocess; mkdir -p node_modules/@sentropic; ln -sfn /workspace/packages/chat-runtime node_modules/@sentropic/chat-runtime; mkdir -p "$$tool_dir/node_modules/@sentropic"; ln -sfn /workspace/packages/chat-ui "$$tool_dir/node_modules/@sentropic/chat-ui"; ln -sfn "$$tool_dir/node_modules" /workspace/packages/chat-runtime/node_modules; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn /workspace/packages/chat-ui/node_modules /workspace/packages/chat-server/node_modules; trap "rm -rf node_modules /workspace/packages/chat-runtime/node_modules /workspace/packages/chat-server/node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run --config vitest.dom.config.ts $(SCOPE)'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/chat-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 hono@4.10.7 @types/node svelte@5.55.7 vite@8.0.16 @sveltejs/vite-plugin-svelte@7.1.2 @testing-library/svelte@5.3.1 jsdom@29.1.1 "@lucide/svelte@0.562.0" "svelte-streamdown@3.0.1" "svelte-preprocess@6.0.3" "@sentropic/design-system-svelte@^0.34.0" "@sentropic/chat-core@0.3.0" >/dev/null; mkdir -p node_modules/@sveltejs node_modules/@testing-library node_modules/@lucide node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@sentropic/design-system-svelte" node_modules/@sentropic/design-system-svelte; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; ln -sfn "$$tool_dir/node_modules/svelte" node_modules/svelte; ln -sfn "$$tool_dir/node_modules/vite" node_modules/vite; ln -sfn "$$tool_dir/node_modules/jsdom" node_modules/jsdom; ln -sfn "$$tool_dir/node_modules/@sveltejs/vite-plugin-svelte" node_modules/@sveltejs/vite-plugin-svelte; ln -sfn "$$tool_dir/node_modules/@sveltejs/acorn-typescript" node_modules/@sveltejs/acorn-typescript; ln -sfn "$$tool_dir/node_modules/@testing-library/svelte" node_modules/@testing-library/svelte; ln -sfn "$$tool_dir/node_modules/@testing-library/dom" node_modules/@testing-library/dom; ln -sfn "$$tool_dir/node_modules/@testing-library/svelte-core" node_modules/@testing-library/svelte-core; ln -sfn "$$tool_dir/node_modules/@lucide/svelte" node_modules/@lucide/svelte; ln -sfn "$$tool_dir/node_modules/svelte-streamdown" node_modules/svelte-streamdown; ln -sfn "$$tool_dir/node_modules/svelte-preprocess" node_modules/svelte-preprocess; mkdir -p node_modules/@sentropic; ln -sfn "$$tool_dir/node_modules/@sentropic/chat-core" node_modules/@sentropic/chat-core; mkdir -p "$$tool_dir/node_modules/@sentropic"; ln -sfn /workspace/packages/chat-ui "$$tool_dir/node_modules/@sentropic/chat-ui"; ln -sfn "$$tool_dir/node_modules/hono" node_modules/hono; ln -sfn /workspace/packages/chat-ui/node_modules /workspace/packages/chat-server/node_modules; trap "rm -rf node_modules /workspace/packages/chat-server/node_modules" EXIT; "$$tool_dir/node_modules/.bin/vitest" run --config vitest.dom.config.ts $(SCOPE)'
 
 .PHONY: test-chat-server
 test-chat-server: ## Run @sentropic/chat-server tests
