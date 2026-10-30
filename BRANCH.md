@@ -8,6 +8,7 @@
 - [x] Environment `ENV=test-memory-sqlite` (plan r2 §1.2/§4.2), always the LAST make argument; never `ENV=dev`; `make down ENV=test-memory-sqlite` after Docker steps.
 - [x] Serialize Docker work under the flock at `.tmp/packets/DOCKER-LOCK.md`.
 - [x] Make targets only; no Python, no direct npm/docker publication, no `clean-all`, no merge, no native addon builds.
+- [x] CI lockfile-lane policy acknowledged (review_by=2026-11-30T00:00:00Z); installs resolve committed tool profiles or frozen consumer closures.
 - [x] CI budget: local targeted tests green before any push; single push of the final head; draft PR; one CI run on the final head.
 - [x] Selective staging plus `make commit`; every commit at most 150 changed lines except the disclosed `SQL-L1-EX1` record-only replacement of this file.
 - [x] Bump `@sentropic/cluster-mesh` `0.24.0` → `0.26.0-dev.1` (src change requires a bump; `0.25.0` is reserved by #844 and `0.25.0-dev.1` by #855; final train minor is resolved at `CM-TRAIN-REL` per plan r2 §0.3).
@@ -19,6 +20,9 @@
   - `packages/cluster-mesh/src/storage/sqlite/connection.ts`
   - `packages/cluster-mesh/tests/storage/sqlite.mk`
   - `packages/cluster-mesh/tests/storage/sqlite-l1/**`
+  - `packages/cluster-mesh/tests/fixtures/reserved-versions.ts` (pack-only reserved-next/published-pin contract; the mandated dev bump moves the reserved line to `0.26.0`)
+  - `packages/cluster-mesh/tests/storage/pack-only-dev-gate.mjs` (the contract's bare-probe mirror, same move)
+  - `packages/cluster-mesh/tests/storage/pack-only-dev-gate.spec.ts` (the mirror's table and refusal cases, same move)
   - `package-lock.json` (only the `packages/cluster-mesh` workspace version entry; the CI `changes` train lock-sync gate requires the root lockfile to mirror the package bump, refreshed through `make chat-migration-lockfiles`)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -40,6 +44,8 @@
 - [x] SQL-L1-tests: unit suite written before the implementation and observed red (6/6 failed with `openSqliteDatabase is not a function` in the workspace container), then green after `openSqliteDatabase()` landed.
 - [x] SQL-L1-acceptance: local acceptance commands from plan r2 §1.2 executed green in `tmp/sql-l1` before any push.
 - [x] SQL-L1-EX2: the first push failed the CI `changes` train lock-sync gate (`packages/cluster-mesh` manifest `0.26.0-dev.1` vs root lockfile `0.24.0`); the gate-mandated refresh ran through `make chat-migration-lockfiles` and the branch keeps only the `packages/cluster-mesh` lockfile entry; the refresh's collateral chat-core root/ui hunks (pre-existing main staleness: chat-core manifest `0.3.1` vs lockfile `0.3.0`, unchecked by the train gate) were reverted as out of scope for this lot; impact is one lockfile line plus this record; rollback is `git revert` of the lockfile commit.
+- [x] SQL-L1-EX3: the first Stage-0 recipe installed the pinned tool with a direct registry resolution and the CI lock scan (`scripts/ci/ci-lockfile-installs.mjs`) rejected it as `unlocked npm resolution`; the recipe now resolves the committed frozen tool graph `tests/storage/sqlite-l1/vec-tool/` (manifest plus npm-authored lock, `sqlite-vec@0.1.9`) with `npm ci`, and the runner asserts the loaded vec version equals the committed pin; the record-only replacement of this file had also dropped the CI lockfile-lane acknowledgment line required by `scripts/ci/ci-lockfile-installs.test.mjs` (`review_by=2026-11-30T00:00:00Z`), restored here; impact is the vec-tool graph, the s0 recipe and this record; rollback is `git revert` of the remediation commit.
+- [x] SQL-L1-EX4: the mandated dev bump `0.26.0-dev.1` moves the pack-only reserved-next/published-pin contract (`tests/fixtures/reserved-versions.ts` and its `tests/storage/pack-only-dev-gate.*` mirror) from the `0.24.0` line to `RESERVED_NEXT='0.26.0'` with `LATEST_PUBLISHED_CLUSTER_MESH='0.24.0'`, exactly as #855 moved the same contract for `0.25.0-dev.1`; impact is the constants, their mirrors and test tables; rollback is `git revert` of the tuple commit.
 
 ## AI Flaky tests
 - Acceptance rule: accept only non-systematic provider/network/model nondeterminism as `flaky accepted`; never amend tests with additive timeouts; if flaky, analyze impact vs `main` and record command, failing file and signature here before any merge.
