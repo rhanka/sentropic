@@ -34,7 +34,7 @@ describe('Decision route through the actual product cluster-mesh composition', (
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
   it('should apply the exact consolidated Decision migration through the control migration mechanism', async () => {
-    const hash = createHash('sha256').update(readFileSync('drizzle/control/0012_decision_host.sql')).digest('hex');
+    const hash = createHash('sha256').update(readFileSync('drizzle/control/0011_decision_host.sql')).digest('hex');
     expect((await db.execute(sql`SELECT hash FROM public.__drizzle_control_migrations WHERE hash = ${hash}`)).rows).toHaveLength(1);
   });
   it.each(['tenant', 'workspace'])('should refuse revoked %s authority before service admission', async (authority) => {
