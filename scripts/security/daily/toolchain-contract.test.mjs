@@ -342,6 +342,15 @@ test('should refuse expired TUF roots and version or digest rollbacks', () => {
   const unpinned = { ...documents,
     timestamp: { signed: { _type: 'timestamp', version: 3, expires: '2026-11-06T00:00:00Z', meta: {} } } };
   assert.throws(() => validateTufMetadata(unpinned, digests, verifiedAt), /no longer pins current snapshot/);
+  const rolledTargets = { ...documents,
+    targets: { signed: { ...documents.targets.signed, version: 6 } } };
+  assert.throws(() => validateTufMetadata(rolledTargets, digests, verifiedAt), /no longer pins current targets/);
+  const zeroVersion = { ...documents,
+    snapshot: { signed: { ...documents.snapshot.signed, version: 0 } } };
+  assert.throws(() => validateTufMetadata(zeroVersion, digests, verifiedAt), /snapshot metadata is incomplete/);
+  const badExpiry = { ...documents,
+    timestamp: { signed: { ...documents.timestamp.signed, expires: 'not-a-date' } } };
+  assert.throws(() => validateTufMetadata(badExpiry, digests, verifiedAt), /timestamp metadata is incomplete/);
   assert.throws(() => validateTufMetadata(documents, digests, NaN), /coverage-blocked/);
   assert.throws(() => validateTufMetadata({ ...documents, targets: null }, digests, verifiedAt), /coverage-blocked/);
 });
