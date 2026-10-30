@@ -194,8 +194,11 @@ test('should bind every scanned installer call to a committed profile or consume
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'binding-typo-'));
   try {
     fs.writeFileSync(path.join(dir, 'Makefile'), 'build:\n\tnode /workspace/scripts/ci/locked-tools.mjs --prefix /tmp/t semver@999.0.0\n\tnode /workspace/scripts/ci/locked-consumer.mjs @sentropic/llm-mesh@999.0.0');
+    fs.mkdirSync(path.join(dir, 'scripts'));
+    fs.writeFileSync(path.join(dir, 'scripts/new.mjs'), "execFileSync(process.execPath, ['/workspace/scripts/ci/locked-tools.mjs', '--prefix', '/tmp/t', 'semver@999.0.1']);");
     const errors = checkBindings(dir, tools, consumers);
     assert.ok(errors.some(s => s.includes('semver@999.0.0')));
     assert.ok(errors.some(s => s.includes('@sentropic/llm-mesh@999.0.0')));
+    assert.ok(errors.some(s => s.includes('semver@999.0.1')));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
