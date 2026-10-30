@@ -8,8 +8,30 @@ import { createRequire } from 'node:module';
 import { npmRunner, planScan, scanRepository } from './scan.mjs';
 import { loadContract } from './schema.mjs';
 import { normalizeRegister } from './inventory.mjs';
+import { bindRecordedSnapshot, summarizeControlReport } from './qualify-config-contract.mjs';
 
 const sourceSha = 'a'.repeat(40);
+test('should refuse mismatched embedded DB provenance before publishing a control receipt', () => {
+  const restored = { kind: 'java', files: { 'trivy-java.db': 'verified-by-restore' } };
+  const snapshot = { receiptHash: 'trusted-hash', receipt: structuredClone(restored) };
+  assert.deepEqual(bindRecordedSnapshot(snapshot, restored).receipt, restored);
+  snapshot.receipt.files['trivy-java.db'] = 'forged';
+  assert.throws(() => bindRecordedSnapshot(snapshot, restored), /embedded snapshot/);
+});
+
+test('should bind hostile-config controls to scanner version, exact package and zero default findings', () => {
+  const report = { SchemaVersion: 2, ArtifactName: '/payload', ArtifactType: 'filesystem',
+    Trivy: { Version: '0.76.1' }, Results: [] };
+  assert.deepEqual(summarizeControlReport(report, 'repository-default', '0.76.1'), []);
+  const finding = { VulnerabilityID: 'CVE-2021-44228', PkgName: 'org.apache.logging.log4j:log4j-core',
+    InstalledVersion: '2.14.1', Severity: 'CRITICAL' };
+  report.Results = [{ Vulnerabilities: [finding] }];
+  assert.equal(summarizeControlReport(report, 'hardened', '0.76.1').length, 1);
+  assert.throws(() => summarizeControlReport(report, 'repository-default', '0.76.1'));
+  assert.throws(() => summarizeControlReport(report, 'hardened', '0.76.2'));
+  finding.PkgName = 'unrelated-package';
+  assert.throws(() => summarizeControlReport(report, 'hardened', '0.76.1'));
+});
 const clean = () => ({ auditReportVersion: 2, vulnerabilities: {}, metadata: {
   vulnerabilities: { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 },
 } });
