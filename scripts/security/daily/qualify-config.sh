@@ -32,7 +32,7 @@ for control in repository-default hardened; do
     rootfs "${flags[@]}" --cache-dir /cache --cache-backend memory --scanners vuln --format json \
     --severity UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL --exit-code 0 --parallel 1 \
     --skip-db-update --skip-java-db-update --offline-scan --skip-version-check --disable-telemetry /payload)
-  docker inspect "$container" | jq '.[0] | {Image,Path,Args,Mounts,HostConfig:{ReadonlyRootfs:.HostConfig.ReadonlyRootfs,CapDrop:.HostConfig.CapDrop,SecurityOpt:.HostConfig.SecurityOpt,NetworkMode:.HostConfig.NetworkMode,Memory:.HostConfig.Memory,NanoCpus:.HostConfig.NanoCpus,PidsLimit:.HostConfig.PidsLimit},Config:{Image:.Config.Image,User:.Config.User,environmentNames:[.Config.Env[]|split("=")[0]]}}' > "$fixture/$control-isolation.json"
+  docker inspect "$container" | jq '.[0] | {Image,Path,Args,Mounts,HostConfig:{ReadonlyRootfs:.HostConfig.ReadonlyRootfs,Privileged:.HostConfig.Privileged,CapAdd:.HostConfig.CapAdd,CapDrop:.HostConfig.CapDrop,SecurityOpt:.HostConfig.SecurityOpt,NetworkMode:.HostConfig.NetworkMode,Memory:.HostConfig.Memory,NanoCpus:.HostConfig.NanoCpus,PidsLimit:.HostConfig.PidsLimit},Config:{Image:.Config.Image,User:.Config.User,environmentNames:[.Config.Env[]|split("=")[0]]}}' > "$fixture/$control-isolation.json"
   docker start --attach "$container" \
     > "$fixture/$control.json" 2> "$fixture/$control.log"
   docker rm "$container" >/dev/null
