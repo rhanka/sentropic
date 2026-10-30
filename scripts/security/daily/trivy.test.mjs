@@ -140,6 +140,13 @@ test('should refuse a warm report whose finding inventory diverges from cold', (
   assert.throws(() => validateReportAgreement(cold, { ...cold, Results: [] }), /diverged/);
   const reclassed = { ...cold, Results: [{ ...cold.Results[0], Class: 'lang-pkgs' }] };
   assert.throws(() => validateReportAgreement(cold, reclassed), /diverged/);
+  const emptyReclassed = { ...report([]), Results: [{ ...report([]).Results[0], Class: 'lang-pkgs' }] };
+  assert.throws(() => validateReportAgreement(report([]), emptyReclassed), /diverged/);
+  const second = { Target: 'debian', Class: 'os-pkgs', Type: 'debian',
+    Vulnerabilities: [finding({ VulnerabilityID: 'CVE-2026-9999', PkgName: 'other' })] };
+  const multi = { ...cold, Results: [...cold.Results, second] };
+  const multiReordered = { ...cold, Results: [second, ...cold.Results] };
+  assert.equal(validateReportAgreement(multi, multiReordered), true);
   assert.throws(() => validateReportAgreement(cold, report([{ VulnerabilityID: 'CVE-2026-1234',
     InstalledVersion: '1.0', Severity: 'LOW' }])), /incomplete/);
   assert.throws(() => validateReportAgreement(cold, { ...cold, Results: 'alpine' }), /incomplete/);
