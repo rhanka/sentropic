@@ -8,8 +8,7 @@ import { createRequire } from 'node:module';
 import { npmRunner, planScan, scanRepository } from './scan.mjs';
 import { loadContract } from './schema.mjs';
 import { normalizeRegister } from './inventory.mjs';
-import { bindRecordedSnapshot, summarizeControlReport } from './qualify-config-contract.mjs';
-import * as configContract from './qualify-config-contract.mjs';
+import { bindRecordedSnapshot, summarizeControlReport, validateControlIsolation } from './qualify-config-contract.mjs';
 import { policy } from './toolchain-contract.mjs';
 
 test('should reject forged isolation evidence before constructing the hostile-config receipt', () => {
@@ -26,7 +25,7 @@ test('should reject forged isolation evidence before constructing the hostile-co
         .map(name => ({ Type: 'bind', RW: false, Destination: `/cache/${kind === 'java' ? 'java-db' : 'db'}/${name}`,
           Source: `/runner/tmp/security-qualify${snapshots[kind].path.slice('/evidence'.length)}/${name}` })))],
   };
-  const validate = value => configContract.validateControlIsolation(value, 'hardened', snapshots);
+  const validate = value => validateControlIsolation(value, 'hardened', snapshots);
   assert.deepEqual(validate(observed).CapAdd, null);
   assert.equal(validate(observed).Privileged, false);
   const forgeries = [
@@ -74,13 +73,55 @@ test('should refuse a verified snapshot of the wrong kind for the selected contr
     /bindRecordedSnapshot\(snapshot, await restoreSnapshot\(snapshot\), kind\)/);
 });
 
+test('should execute the shell controls with policy-pinned scanner flags and retained privilege evidence', (t) => {
+  const root = fixture(t);
+  const bin = join(root, 'bin');
+  mkdirSync(bin);
+  for (const binary of ['curl', 'sha256sum', 'jq', 'docker']) {
+    writeFileSync(join(bin, binary), `#!${process.execPath}
+const fs = require('node:fs');
+const name = require('node:path').basename(process.argv[1]);
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.FIXTURE_ROOT + '/calls', JSON.stringify({ name, args }) + '\\n');
+if (name === 'jq') {
+  if (args[0] === '-er') process.stdout.write('/evidence/cache/' + (args[1].includes('java') ? 'java' : 'vulnerability'));
+  else { fs.readFileSync(0); process.stdout.write('{}'); }
+}
+if (name === 'sha256sum' && args[0] === '--check') fs.readFileSync(0);
+if (name === 'docker' && args[0] === 'create') process.stdout.write('fixture-container');
+if (name === 'docker' && ['inspect', 'start'].includes(args[0])) process.stdout.write('{}');
+`, { mode: 0o755 });
+  }
+  const result = spawnSync('bash', [resolve('scripts/security/daily/qualify-config.sh')], {
+    cwd: root, encoding: 'utf8', env: { PATH: `${bin}:/usr/bin:/bin`, FIXTURE_ROOT: root },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = readFileSync(join(root, 'calls'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  const creates = calls.filter(call => call.name === 'docker' && call.args[0] === 'create');
+  assert.equal(creates.length, 2);
+  const scanner = `${policy.repository}@${policy.manifestDigest}`;
+  for (const [index, { args }] of creates.entries()) {
+    assert.ok(args.includes(scanner), 'shell scanner digest must equal trusted policy');
+    assert.deepEqual(args.slice(args.indexOf(scanner) + 1), ['rootfs',
+      ...(index === 1 ? ['--config', '/dev/null', '--ignorefile', '/dev/null'] : []),
+      '--cache-dir', '/cache', '--cache-backend', 'memory', '--scanners', 'vuln', '--format', 'json',
+      '--severity', 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL', '--exit-code', '0', '--parallel', '1',
+      '--skip-db-update', '--skip-java-db-update', '--offline-scan', '--skip-version-check', '--disable-telemetry', '/payload']);
+  }
+  const projections = calls.filter(call => call.name === 'jq' && call.args[0].startsWith('.[0]'));
+  assert.equal(projections.length, 2);
+  for (const { args } of projections) {
+    for (const field of ['Privileged', 'CapAdd']) assert.match(args[0], new RegExp(`${field}:\\s*\\.HostConfig\\.${field}\\b`));
+  }
+});
+
 const sourceSha = 'a'.repeat(40);
 test('should refuse mismatched embedded DB provenance before publishing a control receipt', () => {
   const restored = { kind: 'java', files: { 'trivy-java.db': 'verified-by-restore' } };
   const snapshot = { receiptHash: 'trusted-hash', receipt: structuredClone(restored) };
-  assert.deepEqual(bindRecordedSnapshot(snapshot, restored).receipt, restored);
+  assert.deepEqual(bindRecordedSnapshot(snapshot, restored, 'java').receipt, restored);
   snapshot.receipt.files['trivy-java.db'] = 'forged';
-  assert.throws(() => bindRecordedSnapshot(snapshot, restored), /embedded snapshot/);
+  assert.throws(() => bindRecordedSnapshot(snapshot, restored, 'java'), /embedded snapshot/);
 });
 
 test('should bind hostile-config controls to scanner version, exact package and zero default findings', () => {

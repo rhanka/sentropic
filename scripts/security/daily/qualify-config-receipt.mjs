@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import { digest, policy } from './toolchain-contract.mjs';
 import { restoreSnapshot } from './toolchain-cache.mjs';
-import { bindRecordedSnapshot, summarizeControlReport } from './qualify-config-contract.mjs';
+import { bindRecordedSnapshot, summarizeControlReport, validateControlIsolation } from './qualify-config-contract.mjs';
 
 const ingestion = JSON.parse(await readFile('/evidence/ingestion.json'));
 assert.deepEqual(Object.keys(ingestion.snapshots).sort(), ['java', 'vulnerability']);
@@ -10,7 +10,7 @@ const snapshots = {};
 for (const kind of ['vulnerability', 'java']) {
   const snapshot = ingestion.snapshots[kind];
   assert.match(snapshot.path, /^\/evidence\/cache\/(vulnerability|java)-[12]-[a-f0-9]{64}-[0-9]+\.[0-9]+\.[0-9]+$/);
-  snapshots[kind] = bindRecordedSnapshot(snapshot, await restoreSnapshot(snapshot));
+  snapshots[kind] = bindRecordedSnapshot(snapshot, await restoreSnapshot(snapshot), kind);
 }
 if (process.argv[2] === 'check') process.exit(0);
 const root = '/evidence/hostile-config';
@@ -25,33 +25,7 @@ const reports = {};
 const execution = {};
 for (const control of ['repository-default', 'hardened']) {
   const observed = JSON.parse(await readFile(`${root}/${control}-isolation.json`));
-  assert.equal(observed.Config.Image, `${policy.repository}@${policy.manifestDigest}`);
-  assert.equal(observed.Image, policy.manifestDigest);
-  assert.equal(observed.Config.User, '65532:65532');
-  assert.equal(observed.HostConfig.NetworkMode, 'none');
-  assert.equal(observed.HostConfig.ReadonlyRootfs, true);
-  assert.equal(observed.HostConfig.Memory, 4 * 1024 ** 3);
-  assert.equal(observed.HostConfig.NanoCpus, 1000000000);
-  assert.equal(observed.HostConfig.PidsLimit, 128);
-  assert.deepEqual(observed.HostConfig.CapDrop, ['ALL']);
-  assert.deepEqual([...observed.Config.environmentNames].sort(), ['HOME', 'PATH']);
-  assert.ok(observed.HostConfig.SecurityOpt.includes('no-new-privileges'));
-  assert.equal(observed.Mounts.length, 5);
-  assert.ok(observed.Mounts.every(mount => mount.Type === 'bind' && mount.RW === false));
-  assert.ok(observed.Mounts.some(mount => mount.Destination === '/payload' &&
-    mount.Source.endsWith('/tmp/security-qualify/hostile-config')));
-  if (control === 'hardened') {
-    for (const flag of ['--config', '--ignorefile']) assert.equal(observed.Args[observed.Args.indexOf(flag) + 1], '/dev/null');
-  }
-  for (const [kind, file, destination] of [['vulnerability', 'trivy.db', '/cache/db'], ['java', 'trivy-java.db', '/cache/java-db']]) {
-    for (const name of [file, 'metadata.json']) {
-      assert.ok(observed.Mounts.some(mount => mount.Destination === `${destination}/${name}` &&
-        mount.Source.endsWith(`${ingestion.snapshots[kind].path.slice('/evidence'.length)}/${name}`)));
-    }
-  }
-  execution[control] = { scanner: observed.Config.Image, imageStoreIdentity: observed.Image, ...observed.HostConfig,
-    user: observed.Config.User, environmentNames: observed.Config.environmentNames,
-    mounts: observed.Mounts.map(({ Type, Destination, RW }) => ({ Type, Destination, RW })) };
+  execution[control] = validateControlIsolation(observed, control, ingestion.snapshots);
   const report = JSON.parse(await readFile(`${root}/${control}.json`));
   reports[control] = summarizeControlReport(report, control, policy.version);
 }

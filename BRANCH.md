@@ -51,8 +51,9 @@
 - [x] Re-review: embedded DB receipts must equal verified disk receipts; scanner version, exact package and zero default findings are required; scoped 20/20 and daily 130/130; real trial rerun passed.
 - [x] Keep PR open; never merge or enable auto-merge.
 - [x] Muse r1 items 2–3: execute target authentication with hostile dotenv; pin every qualification target's transitive expiry dependency and require UTC date arguments.
-- [ ] Muse r1 item 4 tests first: isolation-validator and wrong-kind regressions reproduced (22 pass, 2 expected failures); extract validation and retain privilege fields before final gates.
+- [x] Muse r1 item 4: tests first reproduced three failures, then 25/25 scoped pass; extracted validator rejects 25 forged isolation records and wrong-kind snapshots; real control rerun retains Privileged/CapAdd and preserves scanner pins/flags.
 - [x] Muse r1 item 1 rebase: retain main's BR-80/Q1 context below; non-plan diff byte-identical before/after rebase; Post-Rebase Gate has no touched package sources.
+- [x] Muse r1 final local gates: daily 135/135, security parser 17/17, composed publishable fixtures 235/235, real config control/receipt and scope PASS C2; exact-head CI remains the delivery gate.
 
 ## Integrated Main Plan (retained context)
 
