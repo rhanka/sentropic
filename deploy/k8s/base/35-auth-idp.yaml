@@ -90,6 +90,10 @@ spec:
         app.kubernetes.io/component: auth-idp
     spec:
       serviceAccountName: sentropic-app
+      volumes:
+        - name: issuer-session-authority
+          persistentVolumeClaim:
+            claimName: auth-idp-session-authority
       containers:
         - name: auth-idp
           image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:main
@@ -103,6 +107,20 @@ spec:
                 name: auth-idp
             - secretRef:
                 name: sentropic-api
+          # BRRC1-EX1: product workload neither receives this secret nor mounts this volume.
+          env:
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: auth-idp-session-signing
+                  key: JWT_SECRET
+            - name: REMOTE_ACTION_ROLE
+              value: auth-idp
+            - name: REMOTE_ACTION_SESSION_STATE_DIR
+              value: /var/lib/sentropic-idp/sessions
+          volumeMounts:
+            - name: issuer-session-authority
+              mountPath: /var/lib/sentropic-idp/sessions
           ports:
             - name: http
               containerPort: 8787
@@ -138,3 +156,13 @@ spec:
             limits:
               cpu: 300m
               memory: 320Mi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: auth-idp-session-authority
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi

@@ -1,0 +1,53 @@
+import { decodeJwt } from 'jose';
+import { z } from 'zod';
+import { db } from '../../db/client';
+import { oauthDpopProofs } from '../../db/schema';
+import { authHonoSessionService } from './session-adapter';
+import { RemoteAuthorityError, remoteCounter, remoteRawHash, type RemoteEvidenceRequest } from './remote-contract';
+import type { RemoteLogin } from './remote-evidence';
+import { getRemoteSessionAuthority } from './remote-private-session';
+
+const signedLogin = z.object({
+  mfaVerified: z.boolean(), authTime: remoteCounter, sessionVersion: remoteCounter,
+}).strict();
+
+// Invoke only in the standalone issuer workload with its separate session-signing secret.
+export async function resolveRemoteLogin(credential: string): Promise<RemoteLogin | null> {
+  const validated = await authHonoSessionService.validateSessionToken(credential);
+  if (!validated) return null;
+  const payload = decodeJwt(credential); // Signature/current credential hash already verified above.
+  const parsed = signedLogin.safeParse(payload.login);
+  if (!parsed.success) return null;
+  const login = parsed.data;
+  const record = validated.sessionRecord;
+  const privateState = getRemoteSessionAuthority()?.find(record.id);
+  if (!privateState || privateState.revoked || privateState.userId !== record.userId
+    || privateState.sessionTokenHash !== remoteRawHash(credential)
+    || privateState.expiresAt <= Date.now()) return null;
+  if (record.userId !== payload.userId || record.id !== payload.sessionId
+    || record.userId !== validated.session.userId
+    || !privateState.login.mfaVerified || privateState.login.authTime !== login.authTime
+    || privateState.login.sessionVersion !== login.sessionVersion
+    || !login.mfaVerified || !record.mfaVerified || login.sessionVersion !== record.createdAt.getTime()
+    || login.authTime !== Math.floor(record.createdAt.getTime() / 1000)
+    || typeof payload.exp !== 'number') return null;
+  return {
+    sub: record.userId, sid: record.id, sessionVersion: login.sessionVersion, authTime: login.authTime,
+    amr: ['hwk', 'user', 'mfa'], expiresAt: Math.min(record.expiresAt.getTime(), payload.exp * 1000, privateState.expiresAt),
+  };
+}
+
+export async function reserveRemoteEvidence(sid: string, actionId: string, expiresAt: Date): Promise<boolean> {
+  // Reuse the existing unique, expiring proof-fence table under a disjoint namespace.
+  // No credential, proof bytes or nonce bytes are stored here.
+  const jti = `remote-evidence:${remoteRawHash(JSON.stringify([sid, actionId]))}`;
+  const rows = await db.insert(oauthDpopProofs).values({ jti, createdAt: new Date(), expiresAt })
+    .onConflictDoNothing().returning({ jti: oauthDpopProofs.jti });
+  return rows.length === 1;
+}
+
+export function commitRemoteEvidence(login: RemoteLogin, request: RemoteEvidenceRequest, operation: () => string): string {
+  const authority = getRemoteSessionAuthority();
+  if (!authority) throw new RemoteAuthorityError('authority_unavailable');
+  return authority.signCurrent(login.sid, remoteRawHash(request.sessionCredential), login, operation);
+}
