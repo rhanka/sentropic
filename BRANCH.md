@@ -50,7 +50,8 @@
 
 ## Feedback Loop
 - [x] PR #833 Opus r1 findings 1/3: populated tenant/workspace scopes share document/actor/session/transaction/patch/checkpoint identifiers with distinct payloads; assert isolated content, head, journal, receipts and checkpoint history plus unchanged peer scopes after writes. Tenant-filter and workspace-filter mutations both fail on leaked journals; restored adapter passes H2 23/23. Corrected Lot 1 isolation claim and marked DS/Focus host-port mirrors provisional with the H3 published-import replacement gate.
-- [ ] PR #833 Opus r1 finding 2: wait for #830 merge, rebase onto origin/main, preserve H1 draft acknowledgement and H2 checkpoint/suffix recovery suites, then run the post-rebase package-version gate and exact-head CI.
+- [x] PR #833 Opus r1 finding 2: rebased onto origin/main at H1 merge `36e66458a`; resolved the recovery test add/add conflict by retaining all H1 draft acknowledgement/discard cases and adding H2 checkpoint/suffix cases with unified imports. The diff against main removes no H1 tests; combined recovery 7/7 and H2 four-file regression 28/28 pass after rebase.
+- [x] Post-rebase package gate: Docker npm view reports chat-core 0.2.0 and chat-server 0.4.0. Advance chat-core to 0.3.0 for the H2 feature and align chat-server's dependency plus both locks; chat-server remains 0.4.1. Exact-head CI is tracked in Lot 5.
 - [x] BRH2-EX2 — CI job 123301301873 fails full manifest parity because the historical router reads pinned journal 0043 while the product reads H2 journal 0048; session-denial logs belong to passing chat tests. Scope: parity harness and fixture documentation only. Bridge historical journal reads to the current product input, preserve pinned bytes/digests and complete archive equality. Rollback: revert the test bridge and documentation together.
 - [ ] Peer dispatch awaits the owner's reply to the repository-mandated launch approval request; no consensus review is claimed. Dossier: `.tmp/canvas-h2-review/dossier.md` in the main workspace.
 - [x] BRH2-EX1 — Root Docker npm ci dry-run reproduced missing chat-core 0.1.7: chat-server's old dependency excludes 0.2.0. Scope: its manifest and existing locks only. Advance to the new substantive port rather than installing another old stub; no server source changes. Rollback: revert manifest and matching lock entries together.
@@ -100,6 +101,7 @@
   - [x] Map complete captured blocks by manifest identities to pinned Focus `diffParagraphs`; preserve baseline at reconnect.
   - [x] GREEN cumulative diff, undo-empty and invalid capture refusal witnesses.
 - [ ] **Lot 5 — Docs consolidation and final validation**
+  - [x] Post-rebase validation: four H2 files 28/28 including all five inherited H1 recovery cases; full API typecheck and lint pass (warnings only), strict recovery/isolation test typecheck and root npm ci dry-run pass in isolated Docker.
   - [x] CI parity correction: isolated Docker RED reproduces the schema tag/hash mismatch without other tests; GREEN targeted suite 8/8, exact endpoints shard 3/4 480/480, H2 four-file regression 22/22. Shared flock, prescribed ports and ENV=test-canvas-h2; runtime health 200 and make down after validation.
   - [x] Typecheck and lint passed for H2 services, schema, package port and tests; formatter applied to new source only in ≤150-line slices.
   - [x] All four H2 suites GREEN (20 tests); real isolated PostgreSQL crash/rollback/restart witnesses; chat-core regression suite 252/252.

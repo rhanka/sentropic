@@ -33,7 +33,7 @@
     "test": "vitest run tests"
   },
   "dependencies": {
-    "@sentropic/chat-core": "^0.2.0",
+    "@sentropic/chat-core": "^0.3.0",
     "hono": "^4.10.7"
   },
   "devDependencies": {
