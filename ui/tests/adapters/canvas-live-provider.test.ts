@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createCanvasProvider, canvasEditable } from '$lib/adapters/canvas-live/provider';
 import type * as ObjectLocks from '$lib/utils/object-lock';
-import type { StreamHubEvent } from '@sentropic/chat-ui/client/streamTypes';
+import type { StreamHubEvent } from '@sentropic/chat-core/runtime/client/streamTypes';
 
 function fixture() {
   const lock = { id: 'l', workspaceId: 'w', objectType: 'folder' as const, objectId: 'f', lockedAt: '2026-10-28T00:00:00.000Z', expiresAt: '2026-10-28T00:01:00.000Z', lockedBy: { userId: 'a', email: null, displayName: 'Alice' }, unlockRequestedAt: null, unlockRequestedByUserId: null, unlockRequestMessage: null };
