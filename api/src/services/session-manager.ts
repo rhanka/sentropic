@@ -5,6 +5,9 @@ import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { createHash } from 'crypto';
 import { logger } from '../logger';
 import { env } from '../config/env';
+import { getRemoteSessionAuthority } from './auth/remote-private-session';
+import { tombstoneRemoteSessions } from './auth/remote-revocation';
+import { deleteAndQueueRemoteSessions } from './auth/remote-revocation-outbox';
 
 /**
  * Session Manager Service
@@ -42,7 +45,17 @@ type SessionTokenClaims = JWTPayload & {
   userId: string;
   sessionId: string;
   role: string;
+  login: { mfaVerified: boolean; authTime: number; sessionVersion: number };
+  tokenUse?: 'session' | 'refresh';
 };
+
+function readSignedLogin(payload: JWTPayload): SessionTokenClaims['login'] | null {
+  const login = payload.login as Partial<SessionTokenClaims['login']> | undefined;
+  return login && typeof login.mfaVerified === 'boolean'
+    && Number.isSafeInteger(login.authTime) && Number.isSafeInteger(login.sessionVersion)
+    && login.authTime! >= 0 && login.sessionVersion! >= 0
+    ? login as SessionTokenClaims['login'] : null;
+}
 
 // JWT secret key (from environment or generate random for dev)
 const JWT_SECRET = new TextEncoder().encode(
@@ -95,10 +108,12 @@ export async function createSession(
   // const refreshExpiresAt = new Date(now.getTime() + REFRESH_DURATION * 1000);
   
   // Generate JWT session token
-  const sessionToken = await signSessionToken({ userId, sessionId, role }, expiresAt);
+  const login = { mfaVerified: options?.mfaVerified === true,
+    authTime: Math.floor(now.getTime() / 1000), sessionVersion: now.getTime() };
+  const sessionToken = await signSessionToken({ userId, sessionId, role, login, tokenUse: 'session' }, expiresAt);
   
-  // Generate refresh token (random UUID)
-  const refreshToken = crypto.randomUUID();
+  // Signed immutable lineage prevents shared-store writers from elevating MFA during refresh.
+  const refreshToken = await signSessionToken({ userId, sessionId, role, login, tokenUse: 'refresh' }, expiresAt);
   
   // Store session in database (with hashed tokens)
   // B1: passkey login with userVerified=true mints mfaVerified=true; every other
@@ -116,6 +131,8 @@ export async function createSession(
     createdAt: now,
     lastActivityAt: now,
   });
+  getRemoteSessionAuthority()?.create({ sessionId, userId, login, revoked: false,
+    sessionTokenHash: hashToken(sessionToken), refreshTokenHash: hashToken(refreshToken), expiresAt: expiresAt.getTime() });
   
   logger.info({ 
     userId, 
@@ -142,7 +159,8 @@ export async function validateSession(
 ): Promise<SessionPayload | null> {
   try {
     // Verify JWT signature and expiration
-    const { payload } = await jwtVerify(sessionToken, JWT_SECRET);
+    const { payload } = await jwtVerify(sessionToken, JWT_SECRET, { algorithms: ['HS256'] });
+    if (payload.tokenUse === 'refresh') return null;
     
     // Verify payload structure (userId, sessionId, role are required strings)
     if (
@@ -256,6 +274,9 @@ export async function refreshSession(
   refreshToken: string
 ): Promise<SessionTokens | null> {
   try {
+    const { payload } = await jwtVerify(refreshToken, JWT_SECRET, { algorithms: ['HS256'] });
+    const login = readSignedLogin(payload);
+    if (payload.tokenUse !== 'refresh' || !login) return null;
     const refreshHash = hashToken(refreshToken);
     
     // Find session by refresh token
@@ -269,6 +290,10 @@ export async function refreshSession(
       logger.warn('Refresh token not found');
       return null;
     }
+    if (payload.sessionId !== session.id || payload.userId !== session.userId
+      || login.sessionVersion !== session.createdAt.getTime()
+      || login.authTime !== Math.floor(session.createdAt.getTime() / 1000)
+      || login.mfaVerified !== session.mfaVerified) return null;
     
     // Check if session is expired
     if (session.expiresAt < new Date()) {
@@ -306,19 +331,25 @@ export async function refreshSession(
     }
     
     // Generate new tokens
-    const newRefreshToken = crypto.randomUUID();
     const newExpiresAt = new Date(Date.now() + SESSION_DURATION * 1000);
+    const newRefreshToken = await signSessionToken({ userId: session.userId,
+      sessionId: session.id, role, login, tokenUse: 'refresh' }, newExpiresAt);
     const newSessionToken = await signSessionToken(
       {
         userId: session.userId,
         sessionId: session.id,
         role,
+        login,
+        tokenUse: 'session',
       },
       newExpiresAt
     );
     
     // Update session with new tokens
-    await db
+    getRemoteSessionAuthority()?.rotate(refreshHash, { sessionId: session.id, userId: session.userId,
+      login, revoked: false, sessionTokenHash: hashToken(newSessionToken),
+      refreshTokenHash: hashToken(newRefreshToken), expiresAt: newExpiresAt.getTime() });
+    const updated = await db
       .update(userSessions)
       .set({
         sessionTokenHash: hashToken(newSessionToken),
@@ -326,7 +357,9 @@ export async function refreshSession(
         expiresAt: newExpiresAt,
         lastActivityAt: new Date(),
       })
-      .where(eq(userSessions.id, session.id));
+      .where(and(eq(userSessions.id, session.id), eq(userSessions.refreshTokenHash, refreshHash)))
+      .returning({ id: userSessions.id });
+    if (updated.length !== 1) return null;
     
     logger.info({ 
       userId: session.userId, 
@@ -351,9 +384,8 @@ export async function refreshSession(
  * @param sessionId - Session ID to revoke
  */
 export async function revokeSession(sessionId: string): Promise<void> {
-  await db
-    .delete(userSessions)
-    .where(eq(userSessions.id, sessionId));
+  const { input, key } = await deleteAndQueueRemoteSessions({ sessionId });
+  await tombstoneRemoteSessions(input, key);
   
   logger.info({ sessionId }, 'Session revoked');
 }
@@ -392,10 +424,8 @@ export async function listUserSessions(userId: string) {
  * @param userId - User ID
  */
 export async function revokeAllSessions(userId: string): Promise<void> {
-  const deleted = await db
-    .delete(userSessions)
-    .where(eq(userSessions.userId, userId))
-    .returning({ id: userSessions.id });
+  const { rows: deleted, input, key } = await deleteAndQueueRemoteSessions({ userId });
+  await tombstoneRemoteSessions(input, key);
   
   logger.info({ userId, count: deleted.length }, 'All user sessions revoked');
 }

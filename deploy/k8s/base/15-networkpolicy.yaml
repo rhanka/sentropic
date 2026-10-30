@@ -181,3 +181,24 @@ spec:
       ports:
         - protocol: TCP
           port: 8787
+---
+# RC1: authenticated deny-only revocations use the namespace-local ClusterIP service.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-to-auth-idp
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: sentropic
+      app.kubernetes.io/component: auth-idp
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: sentropic
+              app.kubernetes.io/component: api
+      ports:
+        - protocol: TCP
+          port: 8787
