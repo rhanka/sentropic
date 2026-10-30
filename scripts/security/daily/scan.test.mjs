@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
@@ -230,6 +230,31 @@ test('should wire removable pinned Make targets without existing gate, socket or
   assert.match(tests, /test-publishable-manifests/);
   assert.match(tests, /scan.test.mjs/);
   assert.match(tests, /ENV=\$\(ENV\)\s*$/);
+});
+
+test('should read only named operator fields as data without evaluating hostile dotenv', (t) => {
+  const root = fixture(t);
+  const marker = join(root, 'executed');
+  const file = join(root, '.env');
+  const helper = resolve('scripts/security/daily/operator-env.sh');
+  const script = 'source "$1"; read_operator_env "$2" || exit; printf "%s\\n" "$REGISTRY" "$DOCKER_USERNAME" "$DOCKER_PASSWORD"';
+  const run = (bytes) => {
+    writeFileSync(file, bytes);
+    return spawnSync('bash', ['-eu', '-c', script, '--', helper, file], { encoding: 'utf8' });
+  };
+  const hostile = `$(touch ${marker})`;
+  const bytes = `export REGISTRY='registry.invalid'\nDOCKER_USERNAME="fixture-user"\nexport DOCKER_PASSWORD="${hostile}"\nIGNORED=$(touch ${marker})\n`;
+  const result = run(bytes);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `registry.invalid\nfixture-user\n${hostile}\n`);
+  assert.throws(() => readFileSync(marker), /ENOENT/);
+  for (const bad of [bytes + 'REGISTRY=duplicate\n', 'REGISTRY=x\nDOCKER_USERNAME=y\n',
+    'REGISTRY=x\nDOCKER_USERNAME=y\nDOCKER_PASSWORD="unterminated\n']) {
+    const rejected = run(bad);
+    assert.notEqual(rejected.status, 0);
+    assert.match(rejected.stderr, /coverage-blocked/);
+    assert.equal(rejected.stdout, '');
+  }
 });
 
 test('should refuse tracked or untracked changes and Git errors before starting the scan', (t) => {
