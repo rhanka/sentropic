@@ -110,10 +110,10 @@
       - [ ] Scoped run: `make test-e2e E2E_SPEC=tests/canvas-live-provider.spec.ts API_PORT=8802 UI_PORT=5202 MAILDEV_UI_PORT=1102 ENV=test-canvas-h3`
 - [ ] **Lot 4 — Docs consolidation and final validation**
   - [x] Write `docs/canvas-live/h3-validation.md`: dependency closure, witness outputs, harness command for DS witness 8(i), no DS-owned export statement.
-  - [ ] Retest UI: `make test-ui ENV=test-canvas-h3`.
-  - [ ] Retest API: `make test-api ENV=test-canvas-h3`.
-  - [ ] Retest E2E group for provider spec plus `make build-api build-ui-image API_PORT=8802 UI_PORT=5202 MAILDEV_UI_PORT=1102 ENV=test-canvas-h3`.
-  - [ ] `make scope-check ENV=test-canvas-h3` before every commit.
+  - [x] Retest UI: `make test-ui ENV=test-canvas-h3` — 84 files, 497 tests passed.
+  - [x] Retest API: `make test-api-unit` plus `make test-api-endpoints` scoped H3 suites `ENV=test-canvas-h3` — 25 passed; `make typecheck-api` exit 0; `make lint-api` 0 errors.
+  - [ ] Retest E2E group for provider spec: covered by branch CI e2e matrix on the exact head (local e2e stack deferred to avoid test-stack project collision).
+  - [x] `make scope-check ENV=test-canvas-h3` before every commit — PASS C2 on the full branch diff.
   - [ ] Final gate step 1: create draft PR to main using this `BRANCH.md` as body.
   - [ ] Final gate step 2: run and verify branch CI on that PR; resolve blockers; record exact head SHA.
   - [ ] Final gate step 3: `make down ENV=test-canvas-h3` and `make ps` confirm no H3 services.
