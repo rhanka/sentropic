@@ -1,6 +1,6 @@
 import type { Component } from 'svelte';
-import type { ChatUiLabelResolver } from '../hosts/createWebHost.js';
-import type { ChatContextEntry, ChatContextProvider } from '../state/chat-context.js';
+import type { ChatUiLabelResolver } from '@sentropic/chat-core/runtime/hosts/createWebHost';
+import type { ChatContextEntry, ChatContextProvider } from '@sentropic/chat-core/runtime/state/chat-context';
 
 export type ContextChipsProps = {
   /**

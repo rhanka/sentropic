@@ -42,12 +42,12 @@ describe('documents module — export surface registration', () => {
     expect(Object.keys(pkgJson.exports)).toContain('./documents/GeneratedFileCardTray.svelte');
   });
 
-  it('should have version 0.34.1 in package.json', () => {
-    expect(pkgJson.version).toBe('0.34.1');
+  it('should have version 1.0.0 in package.json', () => {
+    expect(pkgJson.version).toBe('1.0.0');
   });
 
-  it('should have _version 0.34.1 in export-manifest.json', () => {
-    expect(manifest._version).toBe('0.34.1');
+  it('should have _version 1.0.0 in export-manifest.json', () => {
+    expect(manifest._version).toBe('1.0.0');
   });
 
   it('should resolve the documents index source file to an existing path', () => {
@@ -90,7 +90,7 @@ describe('documents module — type dedup re-export chain', () => {
   });
 
   it('should load state/chatAttachments without error (re-export chain)', async () => {
-    const mod = await import('../src/state/chatAttachments.js');
+    const mod = await import('@sentropic/chat-core/runtime/state/chatAttachments');
     // Verify the helper functions still exist at the old path
     expect(typeof mod.createImageAttachmentDraft).toBe('function');
     expect(typeof mod.summarizeComposerAttachments).toBe('function');
@@ -108,11 +108,8 @@ describe('documents module — type dedup re-export chain', () => {
 // 3. DocumentHost fake-host harness
 // ---------------------------------------------------------------------------
 
-import type {
-  DocumentHost,
-  ChatComposerAttachmentDraft,
-  ChatGeneratedFileCard,
-} from '../src/documents/index.js';
+import type { DocumentHost } from '@sentropic/chat-core/runtime/documents';
+import type { ChatComposerAttachmentDraft, ChatGeneratedFileCard } from '@sentropic/chat-ui/documents';
 
 /**
  * A minimal in-memory DocumentHost implementation for testing.

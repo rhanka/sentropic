@@ -4,19 +4,6 @@ export type TodoToolTask = {
   status?: string;
 };
 
-export const needsReasoningSectionBreak = (prev: string, delta: string): boolean => {
-  if (!prev) return false;
-  if (!delta || !delta.startsWith('**')) return false;
-  return !/\s$/.test(prev);
-};
-
-export const summarizePreviewText = (value: string): string => {
-  const normalized = value.trim();
-  if (!normalized) return '';
-  if (normalized.length <= 320) return normalized;
-  return normalized.slice(-320);
-};
-
 export const asRecord = (value: unknown): Record<string, unknown> | null => {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
   return value as Record<string, unknown>;
@@ -41,6 +28,24 @@ export const asTaskList = (value: unknown): TodoToolTask[] => {
     })
     .filter((entry): entry is TodoToolTask => entry !== null);
 };
+
+
+
+export const needsReasoningSectionBreak = (prev: string, delta: string): boolean => {
+  if (!prev) return false;
+  if (!delta || !delta.startsWith('**')) return false;
+  return !/\s$/.test(prev);
+};
+
+export const summarizePreviewText = (value: string): string => {
+  const normalized = value.trim();
+  if (!normalized) return '';
+  if (normalized.length <= 320) return normalized;
+  return normalized.slice(-320);
+};
+
+
+
 
 export const escapeMarkdownText = (value: string): string =>
   value.replace(/([\\`*_{}\[\]()#+.!|>~-])/g, '\\$1');

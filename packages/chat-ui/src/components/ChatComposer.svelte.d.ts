@@ -9,6 +9,7 @@ export type ChatComposerProps = {
   surfaceEnabled?: boolean;
   surfaceDisabled?: boolean;
   ariaLabel?: string;
+  surfaceRole?: 'textbox' | 'group';
   tabIndex?: number;
   composerElement?: HTMLDivElement | null;
   onKeyDown?: (event: KeyboardEvent) => void;

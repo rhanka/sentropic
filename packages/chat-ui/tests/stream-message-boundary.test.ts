@@ -26,7 +26,7 @@ describe('StreamMessage package boundary', () => {
     expect(source).not.toContain("from '$lib/stores/streamHub'");
     expect(source).toContain('export let streamClient');
     expect(source).toContain('streamClient.setStream');
-    expect(source).toContain('streamClient.delete');
+    expect(source).toContain('streamClient?.delete');
   });
 
   it('uses injected labels instead of the app i18n singleton', () => {

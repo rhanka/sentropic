@@ -373,9 +373,12 @@ test('every validation pack step receives the CI context and an explicit ENV', (
   for (const [name, job] of Object.entries(jobs)) {
     for (const step of job.steps ?? []) {
       if (!/\bpack-[a-z-]+/.test(step.run ?? '') || !name.startsWith('validate-') || /pack-candidate-siblings/.test(step.run)) continue;
-      count += 1;
       for (const [k, v] of Object.entries(CTX)) assert.equal(step.env?.[k], v, `${name}: ${k}`);
       assert.match(step.run, / ENV=test-ci-[a-z-]+$/);
+      // The installed-pair core pack duplicates validate-chat-core's own pack for the
+      // pair qualification; it still carries the CI context and ENV above.
+      if (/make pack-chat-core PACK_DESTINATION=tmp\/chat-pair\//.test(step.run)) continue;
+      count += 1;
     }
   }
   // Live speech uses the shared inventory's BLOCK pack and a separate deterministic workflow.

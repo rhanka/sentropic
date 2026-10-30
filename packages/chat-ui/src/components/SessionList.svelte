@@ -16,8 +16,8 @@
    *                  If not provided, no delete button is rendered.
    */
 
-  import type { ChatUiLabelResolver } from '../hosts/createWebHost.js';
-  import type { SessionListEntry } from '../state/sessionList.js';
+  import type { ChatUiLabelResolver } from '@sentropic/chat-core/runtime/hosts/createWebHost';
+  import type { SessionListEntry } from '@sentropic/chat-core/runtime/state/sessionList';
 
   // ---------------------------------------------------------------------------
   // Props

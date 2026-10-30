@@ -1,8 +1,10 @@
 import type { Component, Snippet } from 'svelte';
-import type { CommentHost } from './host.js';
+import type { CommentState } from '@sentropic/chat-core/runtime/comments';
+import type { CommentHost } from '@sentropic/chat-core/runtime/comments/host';
 import type { CommentThreadSummary } from './types.js';
 
 export type CommentsPanelProps = {
+  state: CommentState;
   /** Required: the app-side host adapter. */
   host: CommentHost;
   /** Comment context type (e.g. 'organization', 'folder'). */
