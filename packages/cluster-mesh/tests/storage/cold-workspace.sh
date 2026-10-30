@@ -25,10 +25,8 @@ node --input-type=module -e 'import { readFileSync, writeFileSync } from "node:f
   const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
   writeFileSync("/tmp/cm-tools/package.json", JSON.stringify({ private: true,
     overrides: { ai: lock.packages["node_modules/ai"].version } }));'
-echo '0e740e5c8fd9d8bc167d6efcdd0e2bf86a2af5c6accfc2bc1c464e4477b14f08  /source/packages/cluster-mesh/tests/fixtures/sentropic-engram-0.22.0.tgz' | sha256sum -c -
-node --input-type=module -e 'import { readFileSync } from "node:fs"; import { createHash } from "node:crypto";
-  const integrity = "sha512-" + createHash("sha512").update(readFileSync("/source/packages/cluster-mesh/tests/fixtures/sentropic-engram-0.22.0.tgz")).digest("base64");
-  if (integrity !== "sha512-YuHv8eJ/rsijXI4ylv+vare3Bu4gCnh3mS3QmDz36T9aJ9pJgjBwXcuTCATBV9C8RQGfYYuFwjkLazrDDILMNQ==") throw new Error("Memory MCP candidate integrity mismatch");'
+# The memory peer installs from the published registry pin (@sentropic/engram@0.22.0
+# in CLUSTER_MESH_PEER_TOOLS); the committed tool lock carries its integrity.
 # Shallow keeps transitive dependents nested so an installed @sentropic/*
 # package can never shadow a workspace symlink below (a hoisted older
 # llm-mesh required by a peer tool would otherwise break sibling builds).
@@ -124,7 +122,7 @@ case "$CM_ACTION" in
       cd "$consumer"
       printf '%s\n' '{"private":true,"type":"module"}' > package.json
       node /source/scripts/ci/locked-consumer.mjs --ignore-scripts --no-audit --no-fund ./sentropic-cluster-mesh-*.tgz \
-        @sentropic/engram@0.21.3 vitest@4.1.5 pg@8.22.0 >/dev/null
+        @sentropic/engram@0.22.0 vitest@4.1.5 pg@8.22.0 >/dev/null
       # Fixture relative paths target installed declarations/runtime/assets.
       # No checkout sources are copied into this consumer.
       ln -s node_modules/@sentropic/cluster-mesh/dist src

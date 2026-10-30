@@ -1006,7 +1006,7 @@ lint-llm-mesh lint-llm-gateway lint-cluster-mesh: lint-%: ## Lint a root-owned m
 .PHONY: typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh pack-cluster-mesh publish-cluster-mesh publish-cluster-mesh-token
 # BRE-EX1: provider leaves need the optional peers' dists at dev time; link them inside the container and remove the links on
 # exit, interrupt or termination (INT/TERM exit through the EXIT trap; `docker run --init` forwards signals to the shell).
-CLUSTER_MESH_PEER_TOOLS := hono@4.10.7 jose@5.10.0 zod@4.6.7 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 semver@7.7.2 /source/packages/cluster-mesh/tests/fixtures/sentropic-engram-0.22.0.tgz engram-substrate-receipt@npm:@sentropic/engram@0.21.3
+CLUSTER_MESH_PEER_TOOLS := hono@4.10.7 jose@5.10.0 zod@4.6.7 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 semver@7.7.2 @sentropic/engram@0.22.0 engram-substrate-receipt@npm:@sentropic/engram@0.21.3
 typecheck-cluster-mesh: ## Run self-contained cold @sentropic/cluster-mesh type checks
 	@$(MAKE) cluster-mesh-workspace CM_ACTION=typecheck ENV=$(ENV)
 
@@ -1042,7 +1042,7 @@ ci-package-qualification: ci-package-verify
 	    case "$(PACKAGE_LANE)" in \
 	      installed) target=cluster-mesh-comments-installed ;; \
 	      major) target=cluster-mesh-pg-major-upgrade ;; \
-	      install) exec $(MAKE) qualify-published-install TARBALL="$$tarball" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.30.0,@sentropic/llm-gateway@0.21.5,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=$(ENV) ;; \
+	      install) exec $(MAKE) qualify-published-install TARBALL="$$tarball" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.30.0,@sentropic/llm-gateway@0.21.5,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1,@sentropic/engram@0.22.0 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=$(ENV) ;; \
 	    esac; \
 	    $(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk "$$target" CM_COMMENTS_TARBALL="$$tarball" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json CM_COMMENTS_REPORT=tmp/ci-manifest-guard/qualify-cluster-mesh/$(PACKAGE_LANE) ENV=$(ENV) ;; \
 	  *) echo 'Unknown package qualification lane' >&2; exit 1 ;; \
