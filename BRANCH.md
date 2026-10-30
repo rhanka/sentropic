@@ -10,6 +10,7 @@
 - Make-only workflow, no direct Docker commands; Docker steps under the shared flock (`.tmp/packets/DOCKER-LOCK.md`).
 - Branch development in isolated worktree `tmp/worktrees/a2-m0-mig` from `origin/main 1b7f8ab94`.
 - Automated tests on dedicated environment `ENV=test-a2-m0-mig` (never `dev`), `ENV=` last argument; `make down ENV=test-a2-m0-mig` after each Docker step.
+- CI lockfile-lane policy acknowledged (review_by=2026-11-30T00:00:00Z); installs resolve committed tool profiles or frozen consumer closures.
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
