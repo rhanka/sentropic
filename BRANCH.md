@@ -19,6 +19,7 @@
   - `packages/chat-core/src/live-document-port.ts`
   - `packages/chat-core/src/ports.ts`
   - `packages/chat-core/package.json`
+  - `packages/chat-core/tests/runtime/chat-core-host.spec.ts`
   - `packages/chat-server/package.json`
   - `api/src/services/canvas-live/persistence.ts`
   - `api/src/services/canvas-live/pg-store.ts`
@@ -38,6 +39,7 @@
   - `api/package-lock.json`
   - `package-lock.json`
   - `spec/DATA_MODEL.md`
+  - `ui/Dockerfile`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -49,6 +51,8 @@
   - [x] Record BRH2-EXn reason, impact and rollback before any additional conditional change.
 
 ## Feedback Loop
+- [x] BRH2-EX4 — CI chat-core regression suite passes 691/692; the remaining release assertion pins the previous 0.2.0. Scope: update that assertion to the required 0.3.0 H2 release; preserve all export/runtime checks. Rollback: restore the assertion with the package version.
+- [x] BRH2-EX3 — Exact-head CI run 40989777235 reproduces UI npm ETARGET for unpublished chat-core 0.3.0: its install layer omits the local workspace manifest. Scope: ui/Dockerfile manifest COPY only; preserve local workspace resolution before publication. Impact: rebuild UI dependency layer; no runtime or gate change. Rollback: revert the manifest COPY with the H2 version/dependency change.
 - [x] PR #833 Opus r1 findings 1/3: populated tenant/workspace scopes share document/actor/session/transaction/patch/checkpoint identifiers with distinct payloads; assert isolated content, head, journal, receipts and checkpoint history plus unchanged peer scopes after writes. Tenant-filter and workspace-filter mutations both fail on leaked journals; restored adapter passes H2 23/23. Corrected Lot 1 isolation claim and marked DS/Focus host-port mirrors provisional with the H3 published-import replacement gate.
 - [x] PR #833 Opus r1 finding 2: rebased onto origin/main at H1 merge `36e66458a`; resolved the recovery test add/add conflict by retaining all H1 draft acknowledgement/discard cases and adding H2 checkpoint/suffix cases with unified imports. The diff against main removes no H1 tests; combined recovery 7/7 and H2 four-file regression 28/28 pass after rebase.
 - [x] Post-rebase package gate: Docker npm view reports chat-core 0.2.0 and chat-server 0.4.0. Advance chat-core to 0.3.0 for the H2 feature and align chat-server's dependency plus both locks; chat-server remains 0.4.1. Exact-head CI is tracked in Lot 5.
@@ -101,6 +105,7 @@
   - [x] Map complete captured blocks by manifest identities to pinned Focus `diffParagraphs`; preserve baseline at reconnect.
   - [x] GREEN cumulative diff, undo-empty and invalid capture refusal witnesses.
 - [ ] **Lot 5 — Docs consolidation and final validation**
+  - [x] Post-rebase CI corrections: ui production image builds after local chat-core manifest inclusion; focused chat-core host/export suite passes 23/23 with the 0.3.0 release assertion. CI run 40989777235 supplied both RED witnesses.
   - [x] Post-rebase validation: four H2 files 28/28 including all five inherited H1 recovery cases; full API typecheck and lint pass (warnings only), strict recovery/isolation test typecheck and root npm ci dry-run pass in isolated Docker.
   - [x] CI parity correction: isolated Docker RED reproduces the schema tag/hash mismatch without other tests; GREEN targeted suite 8/8, exact endpoints shard 3/4 480/480, H2 four-file regression 22/22. Shared flock, prescribed ports and ENV=test-canvas-h2; runtime health 200 and make down after validation.
   - [x] Typecheck and lint passed for H2 services, schema, package port and tests; formatter applied to new source only in ≤150-line slices.
