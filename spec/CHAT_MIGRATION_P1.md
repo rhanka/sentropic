@@ -2,8 +2,9 @@
 
 Contract: `CHAT_MIGRATION_P0*.md`, merged in #816. P1 implements the approved ownership boundary in Sentropic.
 No Design System repository write, registry publication, owner UAT GO or transfer GO is authorized here.
-The conductor splits release sequencing: merge the runtime-only P1-0 precursor first, bootstrap
-`chat-runtime` on main, then merge main into #819 again before any consumer release. #817 is superseded.
+The runtime lives in `@sentropic/chat-core` under the `./runtime` subpath (folded in #836,
+published as `chat-core@0.2.0` and later); no separate runtime package exists and no bootstrap
+is required. #817 is superseded.
 
 ## Draft sequence
 
@@ -21,45 +22,45 @@ P1 does not claim that the production application already mounts the injected co
 ## Candidate versions and release prerequisites
 
 - `@sentropic/chat-ui@1.0.0`: explicit major break; registry was `0.34.1` at entry.
-- `@sentropic/chat-runtime@0.1.0`: new independently versioned Sentropic package; registry lookup returned E404.
+- `@sentropic/chat-core@0.3.0`: carries the `./runtime` subpath (published; no separate runtime package).
 - `@sentropic/cowork-desktop@0.2.1`: runtime import migration; registry was `0.2.0` before bump.
 - `@sentropic/cowork-bridge@0.1.2`: runtime SSE peer/guidance migration; registry was `0.1.1` before bump.
-- All runtime implementations remain in Sentropic. The new package is never imported into DS custody.
+- All runtime implementations remain in Sentropic. The `./runtime` subpath is never imported into DS custody.
 - Runtime construction/disposal moves to hosts; the final visual view receives normalized data and commands.
 - Source manifests remain workspace source form; guarded packs transform exports to compiled dist form.
 - No runtime export forwarding aliases are retained in the visual root barrel or removed subpaths.
 - P1b removes the remaining runtime-bearing optional-module exports and view-owned controller creation.
 
-Before any publication, the npm administrator must authorize the runtime's one-shot bootstrap through CI,
-then configure its npm OIDC trusted publisher for this repository and `ci.yml`. The final qualified
-UI/runtime pair must precede consumer release. P1 does not trigger bootstrap or publication.
+The runtime ships inside the already-published `@sentropic/chat-core`; no bootstrap and no new
+trusted publisher are required. The final qualified UI/core pair must precede consumer release.
+P1 does not trigger publication.
 
 ## Import migration notice
 
 Web, Chrome, VSCode, cowork, scaffold, DS docs, drawing-skills/graphify and immo maintainers:
 runtime consumers must migrate removed `@sentropic/chat-ui` imports to the corresponding
-`@sentropic/chat-runtime` public subpaths. This committed release notice records the breaking change;
+`@sentropic/chat-core/runtime` public subpaths. This committed release notice records the breaking change;
 it does not claim recipient acknowledgement or external consumer qualification.
 
 | Former import | Runtime import |
 | --- | --- |
-| `@sentropic/chat-ui/client/*` | `@sentropic/chat-runtime/client/*` |
-| `@sentropic/chat-ui/state/chatDraft` | `@sentropic/chat-runtime/state/chatDraft` |
-| `@sentropic/chat-ui/state/chatAttachments` | `@sentropic/chat-runtime/state/chatAttachments` |
-| `@sentropic/chat-ui/state/chatProjection` | `@sentropic/chat-runtime/state/chatProjection` |
-| `@sentropic/chat-ui/state/chatLoopController` | `@sentropic/chat-runtime/state/chatLoopController` |
-| Internal session runtime/hydration modules | `@sentropic/chat-runtime/state/chatSessionRuntime`, `state/chatSessionHydration` |
-| `@sentropic/chat-ui/state/agentsViewMarkers` | `@sentropic/chat-runtime/state/agentsViewMarkers` |
-| `@sentropic/chat-ui/stores/localTools` | `@sentropic/chat-runtime/stores/localTools` |
-| `@sentropic/chat-ui/checkpoints` | `@sentropic/chat-runtime/checkpoints` |
-| Runtime `utils/chat-*`, `utils/localToolStreamSync` | Same suffix under `@sentropic/chat-runtime` |
-| Model selection/hydration policy | `@sentropic/chat-runtime/utils/model-selection` |
+| `@sentropic/chat-ui/client/*` | `@sentropic/chat-core/runtime/client/*` |
+| `@sentropic/chat-ui/state/chatDraft` | `@sentropic/chat-core/runtime/state/chatDraft` |
+| `@sentropic/chat-ui/state/chatAttachments` | `@sentropic/chat-core/runtime/state/chatAttachments` |
+| `@sentropic/chat-ui/state/chatProjection` | `@sentropic/chat-core/runtime/state/chatProjection` |
+| `@sentropic/chat-ui/state/chatLoopController` | `@sentropic/chat-core/runtime/state/chatLoopController` |
+| Internal session runtime/hydration modules | `@sentropic/chat-core/runtime/state/chatSessionRuntime`, `state/chatSessionHydration` |
+| `@sentropic/chat-ui/state/agentsViewMarkers` | `@sentropic/chat-core/runtime/state/agentsViewMarkers` |
+| `@sentropic/chat-ui/stores/localTools` | `@sentropic/chat-core/runtime/stores/localTools` |
+| `@sentropic/chat-ui/checkpoints` | `@sentropic/chat-core/runtime/checkpoints` |
+| Runtime `utils/chat-*`, `utils/localToolStreamSync` | Same suffix under `@sentropic/chat-core/runtime` |
+| Model selection/hydration policy | `@sentropic/chat-core/runtime/utils/model-selection` |
 | Neutral model keys, catalog grouping and display labels | `@sentropic/chat-ui/utils/model-selection` |
-| `LocalToolsAdapter` / `DocumentHost` | `@sentropic/chat-runtime/hosts/types` / `@sentropic/chat-runtime/documents` |
+| `LocalToolsAdapter` / `DocumentHost` | `@sentropic/chat-core/runtime/hosts/types` / `@sentropic/chat-core/runtime/documents` |
 
 Neutral visual contracts remain available through public type exports. Runtime imports neutral model
 utilities, never view implementations. Conversation snapshots/commands are type-only ports exported
-by `@sentropic/chat-runtime/conversation`; visual files have no runtime value imports. The UI's runtime
+by `@sentropic/chat-core/runtime/conversation`; visual files have no runtime value imports. The UI's runtime
 peer is optional. Runtime requires the UI's existing neutral model utility seam as a peer;
 its compatible range covers published UI 0.34.1 and the separated UI 1.0.0. Record/task rendering
 helpers and the empty context fallback belong to chat-ui.
@@ -117,17 +118,17 @@ After review corrections, runtime 440, UI 533 unit and 206 DOM tests pass; both 
 Two complementary r2 source reviews approved the earlier implementation; the current corrections need review.
 These checks are technical evidence; GitHub CI completion and owner U0 remain separately recorded gates.
 
-Final unpublished candidate qualification at source head `2da73456f44a069905d7e2736ffd211b4a1b6e2d`:
+Final candidate qualification, recorded after exact-head CI:
 
 | Candidate | SHA-256 |
 | --- | --- |
-| `@sentropic/chat-ui@1.0.0` | `53b90e3259ee569194aba079090b2663db9f3c5d95ceac9e8973e44e2c29bde4` |
-| `@sentropic/chat-runtime@0.1.0` | `f3d1794b0dd95b781e3c12edf0d37e6b3e3b14583ff63e8c88be4bc10ff83228` |
+| `@sentropic/chat-ui@1.0.0` | `TBD` |
+| `@sentropic/chat-core@0.3.0` | `TBD` |
 
 The clean probe verifies installed public contracts, Svelte typecheck, production bundle, real HTTP
 payload/commands, subscription remount, all four authorization paths and visual archive ownership.
 Its retained local report is `tmp/chat-p1b-final-r2/installed/chat-pair.json`; CI retains the same report shape.
 
-Runtime release preparation includes guarded OIDC/bootstrap targets and one explicit bootstrap choice.
-Only package paths select publication; UI publication waits for a selected runtime publisher. No publish
-target or workflow dispatch is executed by P1. The npm administrator still owns initial registry/OIDC setup.
+The chat UI publishes through the existing OIDC publisher with no runtime bootstrap step.
+Only package paths select publication; the UI candidate is qualified against the published
+chat-core before any consumer release. No publish target or workflow dispatch is executed by P1.
