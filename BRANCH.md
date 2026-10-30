@@ -30,10 +30,10 @@
   - `Makefile`
   - `.github/workflows/ci.yml`
 - **Exception process**:
-  - [x] BRMP-EX1: owner explicitly requested Make targets and CI wiring; additive broker pack/OIDC/bootstrap paths only; rollback by reverting these additions.
+  - [x] BR830-EX1: owner explicitly requested Make targets and CI wiring; additive broker pack/OIDC paths only; rollback by reverting these additions.
 
 ## Feedback Loop
-- [x] BRMP-EX1 acknowledged by the explicit task; no source or frozen evidence edits authorized.
+- [x] BR830-EX1 acknowledged by the explicit task; no source or frozen evidence edits authorized.
 - [ ] Document new-name bootstrap requirements from current npm documentation, including local bootstrap provenance limitation.
 
 ## AI Flaky tests
@@ -51,8 +51,8 @@
   - [x] Create isolated branch and run `harness check branch` (PASS C1).
 - [x] **Lot 1 — Package metadata**
   - [x] Remove private, include MIT LICENSE, distinguish the memory-only P3 bootstrap from subsequent full packages.
-- [ ] **Lot 2 — Make and CI publication**
-  - [ ] Mirror platform guarded pack, OIDC publisher, filters and job; require memory qualification; no repacked token bootstrap.
+- [x] **Lot 2 — Make and CI publication**
+  - [x] Mirror platform guarded pack, OIDC publisher, filters and job; require memory qualification; no repacked token bootstrap; reserve 0.1.0 for P3.
 - [ ] **Lot 3 — Regression tests**
   - [ ] Update guard publisher/pack inventories and classification fixtures; leave bootstrap targets unchanged.
   - [ ] Extend `scripts/ci/publishable-ci-wiring.test.mjs` for broker release contract and main-only publication.
