@@ -1,57 +1,53 @@
-# Fix: Independently acquire frozen Cosign and Sigstore trust material
+# Fix: Require daily security adapter regressions in CI
 
 ## Objective
-- [x] Reacquire exact Trivy signature material and Cosign 3.1.4; initialize fresh TUF custody and verify offline without prior host evidence.
+- [x] Run the daily adapter suite in required CI while all service activation switches stay off.
 
 ## Scope / Guardrails
-- [x] Branch `fix/sec5a-trust-custody`; worktree `tmp/sec5a-trust-custody`; initial base `401cffae1`, rebased onto `028e63d33`.
-- [x] Make-only, Docker-first, zero Python; ENV=test-sec5a-trust last; no application stack or host ports.
-- [x] Docker flock: `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; down after trials.
-- [x] Existing service and auto-merge stay off; no scanner admission, severity reduction or vulnerability exception.
+- [x] Worktree: `tmp/sec5a-ci-guards`; branch: `fix/sec5a-ci-guards`; rebased base: `028e63d33` (BR-80 #829, #841, #840 retained).
+- [x] Make-only, Docker-first, zero Python, digest-pinned Node; no exception to vulnerability admission.
+- [x] ENV=test-sec5a-ci last; no application stack or ports required; down after validation.
+- [x] No daily scheduling, auto-merge, publishing, package source, or admission flag changes.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `scripts/security/daily/**`
-  - `docs/security/**`
+  - `.github/workflows/ci.yml`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
+  - `scripts/security/daily/scan.test.mjs`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.github/workflows/**`
   - `.security/**`
   - `packages/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - None.
 
 ## Feedback Loop
-- [x] Muse R1 final local validation: all 129 daily regressions pass (14 scoped custody/contract tests); production CLI replays retained native evidence with production pins and publishes deterministic bytes; no policy, workflow, package, admission or exception change.
-- [x] Muse R1 items 3 and 4 tests first: observed three failing assertions for missing generator/receipt expiry and unsupported consensus; derive `refreshBy` from the earliest role expiry, document refresh at `2026-11-06T01:22:45Z`, and drop unpublished superseded-review consensus in favor of pending independent review.
-- [x] Muse R1 item 2 generator extraction: all 12 scoped tests pass; six injected regressions (self-consistent substituted root metadata, wrong artifact hash, accepted refusal, missing bundle linkage, missing error class, missing expiry check) each fail tests; original bytes restored after every trial.
-- [x] Muse R1 item 2 tests first: pin every retained artifact and role digest plus exact trials; add generator fixtures for bundle linkage, native error classes and each expired role. Baseline fixture failure precedes the generator extraction.
-- [x] Muse R1 item 1: rebased onto origin/main `028e63d3338cd6c2effa6707642cab3e2b679fd3`; Post-Rebase Gate inspects the full diff against main: no `packages/**` changes, so no publishable package version comparison applies. Exact-head CI remains pending.
-- [x] Rebase preserves BR-80/#829 and #841/#840 behavior from main; BR-80's full plan remains at [main 028e63d33](https://github.com/rhanka/sentropic/blob/028e63d3338cd6c2effa6707642cab3e2b679fd3/BRANCH.md) and `plan/66-BRANCH_perf-ci-package-candidates.md`; its pending acceptance is not claimed here.
-- [x] No author-set admission flags: cryptographic observations and independent review remain distinct from runtime admission.
-- [x] The current upstream scanner still requires a patched candidate; latest upstream release remains 0.76.1.
+- [x] SEC5ACI-EX1: required CI workflow change authorized by part 5a item 12; adds credential-free tests to existing required capacity job; rollback removes the invocation and contract test; expires at this PR's merge or abandonment, no runtime waiver.
 
 ## AI Flaky tests
 - [x] None accepted.
 
 ## Orchestration Mode (AI-selected)
-- [x] Multi-branch; no dependency on CI or safety PRs; only qualification evidence paths overlap.
+- [x] Multi-branch: independent CI, trust-custody, coverage and runtime-qualification PRs; this branch has no dependency on other groups.
 
 ## UAT Management (in orchestration context)
-- [x] No UI changes; positive offline verification and corrupted-material refusal are operator UAT.
+- [x] No application surface changed; workflow contract and CI supply acceptance.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 0: read rules, owner decisions and #840 review; mechanical branch check PASS C1.
-- [x] Lot 1: remove host-specific evidence dependency in `qualify-signature.sh`; acquire index/platform/config/bundle with verified hashes.
-- [x] Lot 2: freshly hash-check Cosign 3.1.4 and initialize Sigstore TUF with its embedded release root in an empty isolated home.
-- [x] Lot 3: exact-index offline verification passed; changed index/root/bundle refused; public hash-bound custody receipt retained.
-- [x] Lot 4 checks: live positive verification and three refusal controls passed; daily regressions 126/126; shell syntax passed; scope check PASS C2.
-- [ ] Lot 4 delivery: <=150-line commits, independent exact-head review and CI; PR body from this file.
-- [x] No package source changes; package publication version gate not applicable.
-- [x] Review hardening: raw TUF/root bytes retained, deterministic allowlisted publication, well-formed cryptographic substitutions and native error-class assertions; narrow verifier mounts.
-- [x] Review regression: `toolchain-contract.test.mjs` verifies public raw metadata hashes, parsed documents and deterministic bytes; scoped 11/11 passed.
-- [x] Final review: mutated index retained separately from stdout and exact hash asserted; positive plus three cryptographic refusals rerun; daily 126/126; archived public bytes match under a 2030 JavaScript clock replay.
-- [x] No merge or auto-merge; keep PR open for review.
+- [x] Lot 0: read rules, owner answers and #840 review; mechanical branch check passed.
+- [x] Lot 1: replace indirect daily-test imports with one explicit required CI invocation; enforce its selection, permissions, suite inventory and ci-gate dependency in `scripts/ci/publishable-ci-wiring.test.mjs`.
+- [x] Review correction: #840 item 12 missed existing indirect CI execution; this PR makes it explicit without duplicating suite execution.
+- [x] Independent CI wiring suite: 31/31 passed; daily suite rerun after removing indirect imports.
+- [x] Lot 2: Muse Wonder r1 reviewed `8cc4c1209`; all three findings reproduced by failing tests before correction.
+- [x] Review item 1: derive daily test inventory from the directory; reject a recipe missing a newly discovered test.
+- [x] Review item 2: blank inherited REGISTRY and ADMIN_EMAIL on the daily step and assert both overrides.
+- [x] Review item 3: require full trimmed-line equality for test-publishable-manifests delegation with the complete SCOPE; reject echo substitution.
+- [x] Local focused wiring suite: 33/33 pass after the three expected regression failures before correction.
+- [x] Rebased full manifest/wiring suite: 103/103 pass; daily adapter suite: 125/125 pass under the shared Docker flock with ENV=test-sec5a-ci.
+- [x] Prior reviewed head `8cc4c1209` completed successful CI (run 40999711242); successor exact-head completion is mandatory before handoff.
+- [x] Lot 3: scope check before each <=150-line commit; PR body from this file; push with force-with-lease only on this branch.
+- [x] Post-Rebase Gate: diff against origin/main touches no package manifest or source; no package version comparison or bump applies.
+- [x] Keep the PR open for review; no merge or auto-merge.
