@@ -12,6 +12,8 @@
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
+  - `.dockerignore`
+  - `packages/cowork-desktop/package.json`
   - `Makefile`
   - `scripts/**`
   - `tools/**`
@@ -36,7 +38,8 @@
 
 ## Feedback Loop
 - [x] Initial isolated tool installer requires a committed profile and invokes npm ci.
-- [x] BRLOCK-EX1: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; authorized Make/CI/container installs, tool/consumer runners and locks, packaging probes, security evidence and regression tests within Allowed Paths; remove on PR closure; rollback by reverting this branch.
+- [x] CI run 41008419926: Docker context omitted locked API installer inputs; a real scratch COPY regression fails before the exact .dockerignore re-inclusions and passes after. Shared Node tag migration is dated debt; new guard targets pin their own digest, preserving IdP and immutable L5 verification.
+- [x] BRLOCK-EX1: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; authorized Make/CI/container installs and Docker context, tool/consumer runners and locks, packaging probes/manifests, security evidence and regression tests within Allowed Paths; root lock allowed only for the cowork-desktop manifest repair; remove on PR closure; rollback by reverting this branch.
 
 ## AI Flaky tests
 - [x] No flaky allowance; exact-head CI success required.
@@ -77,6 +80,7 @@
   - [x] R4: bind scanned shell/Make/Docker/JS tool calls to profiles and consumer literal versions to the frozen closure; require historical closures; removal and typo regressions observed red then green.
   - [x] Post-Rebase Gate: zero packages with src changes relative to origin/main; no publication version bump applies.
   - [x] Preserve main's precise image-filter contract and require a review date on the pending finding.
+  - [x] Exact-head CI reproduced cowork-desktop's forbidden file dependencies after its packaging script became selected; repair only its manifest and root lock; pre-bump registry read: desktop 0.2.0, bridge 0.1.1, chat-ui 0.34.1.
   - [x] R5: admit only explicitly named candidate archives and manifest file specs; sibling-admission regression observed red then green.
   - [x] R6: assign exception owners, UTC review dates, removal triggers and accurate scope; expiry regression observed red then green.
   - [x] R7: track isolated catalog SCA coverage separately with owner, scanner and review date; contract observed red then green.

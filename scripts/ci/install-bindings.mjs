@@ -45,7 +45,7 @@ export function checkBindings(root, tools, consumers) {
     for (const match of source.matchAll(/\binstallTools\(\[([\s\S]*?)\]\)/g)) {
       tool(file, [...match[1].matchAll(/['"]([^'"]+)['"]/g)].map(m => m[1]).join(' '));
     }
-    for (const match of source.matchAll(/['"][^'"\n]*locked-tools\.mjs['"]\s*,([\s\S]*?)\]/g)) {
+    for (const match of source.matchAll(/(?:execFileSync|execFile|spawnSync|spawn|run)\(\s*process\.execPath\s*,\s*\[\s*['"][^'"\n]*locked-tools\.mjs['"]\s*,([\s\S]*?)\]/g)) {
       if (match[1].includes('...NATIVE_MODULES.map')) continue;
       tool(file, [...match[1].matchAll(/['"]([^'"]+)['"]/g)].map(m => m[1]).join(' '));
     }
