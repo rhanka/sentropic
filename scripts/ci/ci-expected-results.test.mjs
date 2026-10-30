@@ -74,12 +74,12 @@ test('should keep validators independent without static capacity mutexes', () =>
 
 test('should reject validator serialization beyond the immutable candidate producer', () => {
   for (const [name, needs] of [
-    ['package-candidates', ['changes', 'validate-chat-runtime']],
+    ['package-candidates', ['changes', 'validate-chat-core']],
     ['validate-cluster-mesh', ['changes']],
     ['validate-llm-mesh', ['changes', 'package-candidates', 'validate-cluster-mesh']],
     ['validate-llm-gateway', ['package-candidates']],
     ['validate-publishable-manifests', ['changes', 'package-candidates', 'validate-llm-mesh']],
-    ['validate-chat-runtime', ['changes', 'package-candidates']],
+    ['validate-chat-core', ['changes', 'package-candidates']],
     ['memory-l5-qualification', ['changes', 'validate-mcp-platform']],
   ]) {
     const changed = structuredClone(workflow);

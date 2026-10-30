@@ -739,8 +739,8 @@ attempt 1, `pull_request`, head `0d4bf1ca42d9e7e3fbd5b0492829efc70d2ee8b9`,
 workflow SHA-256 `f7ee1d0340f78757039636d8319d1aea1943812c87687bee885a412e28d665ef`,
 runner `ubuntu-latest`, package-tool warmth unidentified. Paginated raw jobs/run
 are retained in `.tmp/ci-br80/review-r1-jobs.json` and `review-r1-run.json`.
-These completed job spans are valid measurements; the run remains queued on
-`security-container` 123683980274, so no whole-run success is claimed.
+These completed job spans are valid measurements; the run is terminal
+`cancelled`, so no whole-run success is claimed.
 
 | Completed job | Job ID | Seconds |
 | --- | --- | --- |
@@ -765,10 +765,34 @@ Disposition: **defer by name to BR-84**, without raising either threshold.
 `BR84-BR80-CLUSTER` (owner: CI-train author on BR-84) must optimize and measure
 the complete producer/transfer/grouped-qualification path at <=210s, including
 the admission breakdown. `BR84-BR80-MANIFEST` (same owner) must investigate the
-82s guard and qualify <=75s. Both require identified repeated warm/cold runs,
+guard and qualify <=75s. Both require identified repeated warm/cold runs,
 job/attempt/head/workflow receipts and preserved complete-result assertions.
-The three-job reduction below changes the path; its new timing is unmeasured.
-Rollback, whole-train timing and exact-head terminal CI remain open.
+The grouped design is measured by
+[run 40950429629](https://github.com/rhanka/sentropic/actions/runs/40950429629),
+attempt 1, head `afdf3a3189839ec55d7a590e5b6c270a2a756249`, terminal
+`completed/success`. Runner class is `ubuntu-latest`; package-tool warmth remains
+unidentified. All nine qualifiers passed in the three groups below.
+
+| Grouped-design job | Job ID | Seconds |
+| --- | --- | --- |
+| Changes | 123735120319 | 21 |
+| Candidate producer | 123738780279 | 77 |
+| Source / installed / major | 123742007855 | 199 |
+| PostgreSQL / comments / crash | 123742007765 | 179 |
+| Lazy / stateful / clean install | 123742007773 | 172 |
+| Mesh / gateway | 123742007827 / 123742007745 | 63 / 102 |
+| Common manifest guard | 123742007602 | 101 |
+
+Grouped cluster path: **77 + 199 = 276s**, or **297s with changes**, against
+**<=210s**; manifest guard **101s** against **<=75s**. Both budgets still breach:
+`BR84-BR80-CLUSTER` and `BR84-BR80-MANIFEST` remain deferred to the CI-train
+author on BR-84 at unchanged thresholds, requiring repeated identified warm/cold
+receipts and complete assertions. Admission dominates wall time: `changes`
+started at 21:18:52Z, 43m07s after creation at 20:35:45Z. Successful execution
+does not establish budget or capacity acceptance. `ci-capacity-receipts`,
+`ci-gate` and downstream `delete-transport-artifacts` all passed; the run finished
+at 21:40:32Z and retained only evidence artifacts. Rollback and whole-train timing
+remain open; a rebased head must earn its own terminal CI success.
 
 ### 13.2 Capacity and transport composition
 
