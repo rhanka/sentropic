@@ -76,12 +76,12 @@
   - [x] `git range-diff --no-color d08517ed1..10d289560 1b7f8ab94..<head>`: 190 equal / 1 changed / 1 old-only / 1 new-only.
   - [x] Extend `docs/runbooks/app-cm-integration-review.md` with the replay 7 row and publish the full output from the PR.
   - [ ] Update the PR body N5 record to the exact final head and its completed/success CI run.
-- [ ] **Lot 4 — Local acceptance gates (ENV=test-app-837-rebase)**
-  - [ ] `make typecheck-auth-hono ENV=test-app-837-rebase`
-  - [ ] `make test-auth-hono ENV=test-app-837-rebase`
-  - [ ] `make test-auth-ui ENV=test-app-837-rebase`
-  - [ ] `make scope-check`
-  - [ ] `make down ENV=test-app-837-rebase`
+- [x] **Lot 4 — Local acceptance gates (ENV=test-app-837-rebase)**
+  - [x] `make typecheck-auth-hono ENV=test-app-837-rebase` — exit 0, tsc clean.
+  - [x] `make test-auth-hono ENV=test-app-837-rebase` — 43 test files, 239 tests passed.
+  - [x] `make test-auth-ui ENV=test-app-837-rebase` — 8 test files, 54 tests passed.
+  - [x] `make scope-check` — PASS C2 on every commit and on the clean final tree.
+  - [x] `make down ENV=test-app-837-rebase` — no compose project was started by this lot; the down pass completes the campaign.
 - [ ] **Lot 5 — Single push and CI**
   - [ ] `git push --force-with-lease origin feat/app-cm-integration` exactly once, after Lot 4 is green.
   - [ ] One CI run on the final head, completed/success including the gates named by the review (endpoints shard 2, chat lanes, security-container, validate-artifacts, validate-idp-sync, ci-gate).
