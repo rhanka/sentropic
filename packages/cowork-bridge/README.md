@@ -20,7 +20,7 @@ extension, and the (forthcoming) Cowork desktop binary.
   (tool-name / origin normalization, wildcard matching, specificity scoring). Persistence
   and backend sync stay host-side.
 
-SSE streaming is **not** duplicated here: consume `@sentropic/chat-runtime/client/streamHub`'s `createStreamHub`.
+SSE streaming is **not** duplicated here: consume `@sentropic/chat-core/runtime/client/streamHub`'s `createStreamHub`.
 
 ## Publishing
 

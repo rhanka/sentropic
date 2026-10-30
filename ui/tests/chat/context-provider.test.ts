@@ -8,7 +8,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { detectChatRouteContext } from '$lib/chat/context-adapter';
-import { toChatRouteContextKey, upsertRouteContextEntry, selectActiveChatContexts } from '@sentropic/chat-runtime/context';
+import { toChatRouteContextKey, upsertRouteContextEntry, selectActiveChatContexts } from '@sentropic/chat-core/runtime/context';
 import { type ChatContextEntry } from '@sentropic/chat-ui/context';
 
 describe('chat context provider (migrated)', () => {

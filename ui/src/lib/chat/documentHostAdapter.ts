@@ -9,7 +9,7 @@
  * stay here — NONE of it leaks into the chat-ui package.
  */
 
-import type { DocumentHost } from '@sentropic/chat-runtime/documents';
+import type { DocumentHost } from '@sentropic/chat-core/runtime/documents';
 import type { ChatComposerAttachmentDraft, ChatGeneratedFileCard } from '@sentropic/chat-ui/documents';
 import {
   uploadDocument,
