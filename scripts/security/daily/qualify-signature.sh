@@ -28,7 +28,7 @@ docker run "${common[@]}" --network=none -e HOME=/tmp -v "$evidence/cosign:/evid
   /evidence/cosign verify-blob-attestation --bundle "$3" --trusted-root "$2" \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   --certificate-identity https://github.com/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/v0.76.1 \
-  --type https://sigstore.dev/cosign/sign/v1 "$1" > "$evidence/$4.json" 2> "$evidence/$4.log"
+  --type https://sigstore.dev/cosign/sign/v1 "$1" > "$evidence/$4.stdout.json" 2> "$evidence/$4.log"
 }
 bundle=/evidence/bundle-356b2dc09aa14e36a3a6fb88708f224261c1d8f451e502310308800b8e05bfb6.json
 verify /evidence/index.json /evidence/trusted_root.json "$bundle" offline-verification

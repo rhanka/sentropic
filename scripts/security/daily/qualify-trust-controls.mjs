@@ -10,6 +10,6 @@ await writeFile('/controls/wrong-root.json', JSON.stringify(root));
 const bundle = JSON.parse(await readFile('/evidence/bundle-356b2dc09aa14e36a3a6fb88708f224261c1d8f451e502310308800b8e05bfb6.json'));
 const signature = bundle.dsseEnvelope.signatures[0];
 const bytes = Buffer.from(signature.sig, 'base64');
-bytes[0] ^= 1;
+bytes[bytes.length - 1] ^= 1;
 signature.sig = bytes.toString('base64');
 await writeFile('/controls/wrong-bundle.json', JSON.stringify(bundle));
