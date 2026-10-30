@@ -23,8 +23,8 @@ P1 does not claim that the production application already mounts the injected co
 
 - `@sentropic/chat-ui@1.0.0`: explicit major break; registry was `0.34.1` at entry.
 - `@sentropic/chat-core@0.3.0`: carries the `./runtime` subpath (published; no separate runtime package).
-- `@sentropic/cowork-desktop@0.2.1`: runtime import migration; registry was `0.2.0` before bump.
-- `@sentropic/cowork-bridge@0.1.2`: runtime SSE peer/guidance migration; registry was `0.1.1` before bump.
+- `@sentropic/cowork-desktop@0.2.2`: runtime import migration with cowork-bridge 0.2.0 peer; registry was `0.2.1` before bump.
+- `@sentropic/cowork-bridge@0.2.0`: runtime SSE peer/guidance migration (breaking peer swap from chat-ui to chat-core); registry was `0.1.1` before bump.
 - All runtime implementations remain in Sentropic. The `./runtime` subpath is never imported into DS custody.
 - Runtime construction/disposal moves to hosts; the final visual view receives normalized data and commands.
 - Source manifests remain workspace source form; guarded packs transform exports to compiled dist form.

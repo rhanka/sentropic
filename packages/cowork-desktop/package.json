@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/cowork-desktop",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Sentropic Cowork desktop binary: device-code enrollment client, presence registry registration, and desktop tool executors (screen_capture = eyes, input_action = hands) behind an injectable capability provider with a per-tool consent model. Consumes @sentropic/cowork-bridge.",
   "type": "module",
   "license": "MIT",
@@ -40,7 +40,7 @@
   },
   "dependencies": {
     "@sentropic/chat-core": "^0.3.0",
-    "@sentropic/cowork-bridge": "^0.1.1"
+    "@sentropic/cowork-bridge": "^0.2.0"
   },
   "optionalDependencies": {
     "screenshot-desktop": "^1.15.0",
