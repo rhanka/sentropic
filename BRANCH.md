@@ -28,7 +28,7 @@ Refuse a warm Trivy report whose finding inventory diverges from the cold report
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - None
 - **Exception process**:
-  - No exception declared.
+  - No new exception declared. Inherited unchanged from main: BRLOCK-EX1 review_by=2026-11-30T00:00:00Z (owner CI maintainers, removal on PR 846 closure); this branch changes no lockfile path.
 
 ## Feedback Loop
 - `attention`: item 6 stays OPEN after this slice; only omitted/partial-report detection is added, independent expected inventories remain pending.
