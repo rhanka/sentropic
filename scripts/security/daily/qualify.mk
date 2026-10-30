@@ -29,6 +29,7 @@ security-qualify-image: ## Inventory the frozen scanner and verifier before cand
 .PHONY: security-qualify-signature
 security-qualify-signature: ## Verify retained exact-index Sigstore material with networking disabled
 	@bash scripts/security/daily/qualify-signature.sh
+	@$(SECQUAL_RUN) --network=none $(SECQUAL_NODE) node scripts/security/daily/qualify-trust-receipt.mjs
 
 .PHONY: security-qualify-targets
 security-qualify-targets: ## Join trusted main-CI archives to immutable registry identities
