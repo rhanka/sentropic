@@ -18,6 +18,8 @@
   - `api/drizzle/control/*.sql` (renames only, no content change)
   - `api/drizzle/control/meta/_journal.json`
   - `api/tests/unit/drizzle-journal-integrity.test.ts`
+  - `api/tests/api/session-adoption.test.ts` (fixture tag alignment, see `A2M0-EX2`)
+  - `api/tests/api/decision-api.test.ts` (fixture filename alignment, see `A2M0-EX2`)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -32,6 +34,7 @@
   - `api/drizzle/control/*.sql` (max 1 new file normally; this branch renames 2 existing files — see exception)
 - **Exception process**:
   - `A2M0-EX1`: rename `api/drizzle/control/0011_session_workspace_bindings.sql` to `0009_session_workspace_bindings.sql` and `api/drizzle/control/0012_decision_host.sql` to `0011_decision_host.sql`, and retag `api/drizzle/control/meta/_journal.json` accordingly (idx and `when` values unchanged). Reason: journal integrity repair per plan r2 lot `A2-M0-MIG` — the journal applies tag `0011` before tag `0010` (non-linear) and the numbering gap at `0009` makes the next drizzle-kit generate collide with the existing `0012_decision_host`. Impact: zero — application order, timestamps and file contents are byte-identical, so drizzle's `created_at`-based migrator state on every existing database is unaffected. Rollback: single revert of this branch's commits (pure renames + journal tags).
+  - `A2M0-EX2`: align two pre-existing API test fixtures with the repaired tags — `api/tests/api/session-adoption.test.ts` expects journal tag `0011_session_workspace_bindings` (now `0009_session_workspace_bindings`, plus title/comment number) and `api/tests/api/decision-api.test.ts` reads `drizzle/control/0012_decision_host.sql` (now `0011_decision_host.sql`). Reason: those fixtures pin the pre-repair tag/filename made stale by `A2M0-EX1`; CI `test-api-unit-integration (endpoints)` fails on them. Impact: assertion strings only — the decision-api sha256 check still hashes the same SQL bytes (rename does not change content), so the applied-migration proof is preserved. Rollback: revert this branch's commits.
 
 ## Feedback Loop
 Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
