@@ -21,7 +21,7 @@ export const TRANSIENT_HINT = 're-run, not debt: transient registry or tooling f
 // Steady-state npm publisher jobs in ci.yml (slug -> `<slug_with_underscores>_publish` filter).
 export const STEADY_STATE_PUBLISHERS = [
   'llm-mesh', 'llm-gateway', 'cluster-mesh', 'chat-ui', 'cited-source-viewer', 'cowork-bridge',
-  'cowork-desktop', 'oauth-verify', 'mcp-auth', 'mcp-platform', 'auth-hono', 'auth-client', 'auth-ui',
+  'cowork-desktop', 'oauth-verify', 'mcp-auth', 'mcp-platform', 'mcp-broker', 'auth-hono', 'auth-client', 'auth-ui',
   'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'flow', 'harness', 'artifacts',
 ];
 // bootstrap-publish step order in ci.yml (must equal the Bootstrap publish steps, in order).
@@ -34,7 +34,7 @@ export const BOOTSTRAP_TARGETS = [
 // Explicit full candidate pack lanes (`make pack-<slug>`).
 export const PACK_TARGETS = [
   'cluster-mesh', 'llm-mesh', 'llm-gateway', 'chat-ui', 'cited-source-viewer', 'auth-hono', 'auth-client',
-  'oauth-verify', 'mcp-auth', 'mcp-platform', 'auth-ui', 'cowork-bridge', 'cowork-desktop',
+  'oauth-verify', 'mcp-auth', 'mcp-platform', 'mcp-broker', 'auth-ui', 'cowork-bridge', 'cowork-desktop',
   'harness', 'contracts', 'events', 'chat-core', 'chat-server', 'comments', 'flow', 'artifacts', 'skills', 'live-speech',
 ];
 export const publishFilter = (slug) => `${slug.replace(/-/g, '_')}_publish`;
