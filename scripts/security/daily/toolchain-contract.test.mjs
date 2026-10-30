@@ -32,6 +32,37 @@ test('should retain self-verifiable raw trust metadata and deterministic public 
   const receipt = JSON.parse(bytes);
   assert.equal(bytes, `${JSON.stringify(receipt)}\n`);
   assert.equal(receipt.qualified, false);
+  assert.deepEqual(Object.fromEntries(Object.entries(receipt.metadata).map(([role, entry]) => [role, entry.digest])), {
+    root: 'sha256:27aea7e372aa7864065174f0661784fcf8b0e28b1dbfebeada31a0f1fb19167f',
+    timestamp: 'sha256:a8c999cf4f4c639c178a453eafd8751d795515ec28468cd8de8a36d802caeba2',
+    snapshot: 'sha256:6d61405faa993ba3d07556b79d1e319627cdc06ff879a7b5700967dc25d1d224',
+    targets: 'sha256:6a697f7f8908c8ab26c11786ecb490b54acec97fa8c802e399f065f8a0cc1acd',
+  });
+  assert.deepEqual(receipt.verification.artifacts, {
+    cosign: `sha256:${policy.signature.verifierCandidate.sha256}`,
+    'index.json': policy.indexDigest,
+    'manifest.json': policy.manifestDigest,
+    'config.json': policy.configDigest,
+    'bundle-manifest.json': 'sha256:356b2dc09aa14e36a3a6fb88708f224261c1d8f451e502310308800b8e05bfb6',
+    'bundle-356b2dc09aa14e36a3a6fb88708f224261c1d8f451e502310308800b8e05bfb6.json':
+      'sha256:e32151ef4929d001118616a1448426b6816c02605d3e7dcd956ecea6d5232a98',
+    'wrong-root.json': 'sha256:5dea69365037e4ee92901d219eea0de12ae1b5ebe29f17e8a49161b934c4416e',
+    'wrong-bundle.json': 'sha256:5e1e9b78dc62fca634525e01dd88c04ce12dfa4edc8b0fcebc29985ab85f3ad4',
+    'changed-index.json': 'sha256:119952d007da1aecb65419d674feaa8019cc2df57f72a83be82dee7683cd55fc',
+    'trusted_root.json': 'sha256:6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66',
+    'tls-roots.pem': 'sha256:1f20173c6c5bd4e836fbd5d025ec4eb7464e1521439cde2fea0aca3122c7a1a9',
+    'offline-verification.log': 'sha256:80a53f76c7ed6969dade3b6ee47cdb753162db7c00be625448999d08bae77ed8',
+    'changed-index.log': 'sha256:25a997f2deb6fa634d3152a43719691fdde5d7e5c21c888406419fe4ca8a2fec',
+    'changed-root.log': 'sha256:1de678e305b7e3dc3d752dda507480e813cb0ba0560007009ac53892f1044376',
+    'changed-bundle.log': 'sha256:b1b3cc7533f09ebf3b4a9f3b74afd6eadeca2a2ac1bf86d93054557498bfaced',
+    'trust-trials.jsonl': 'sha256:e572a8b1af6cb6d55fdeb480e47cee740d612550dde9fa2f795f052150ba3dfd',
+  });
+  assert.deepEqual(receipt.verification.trials, [
+    { trial: 'offline exact index', exitCode: 0 },
+    { trial: 'changed-index', exitCode: 1 },
+    { trial: 'changed-root', exitCode: 1 },
+    { trial: 'changed-bundle', exitCode: 1 },
+  ]);
   for (const [role, entry] of Object.entries(receipt.metadata)) {
     const raw = Buffer.from(entry.rawBase64, 'base64');
     assert.equal(digest(raw), entry.digest, role);
@@ -47,6 +78,57 @@ test('should retain self-verifiable raw trust metadata and deterministic public 
   assert.equal(receipt.verification.digest, policy.indexDigest);
   assert.equal(receipt.verification.artifacts['changed-index.json'],
     'sha256:119952d007da1aecb65419d674feaa8019cc2df57f72a83be82dee7683cd55fc');
+});
+
+test('should reject tampered bundle linkage, wrong native error classes and expired verification roles', async () => {
+  const { createTrustReceipt } = await import('./qualify-trust-receipt.mjs');
+  const retained = JSON.parse(await readFile('docs/security/sec5a-trust-custody.json', 'utf8'));
+  const bundleName = 'bundle-356b2dc09aa14e36a3a6fb88708f224261c1d8f451e502310308800b8e05bfb6.json';
+  const original = { dsseEnvelope: { signatures: [{ sig: Buffer.from([0x30, 1, 2]).toString('base64') }] } };
+  const changed = structuredClone(original);
+  changed.dsseEnvelope.signatures[0].sig = Buffer.from([0x30, 1, 3]).toString('base64');
+  const files = {
+    cosign: 'fixture executable', 'index.json': 'fixture index', 'manifest.json': '{}', 'config.json': '{}',
+    [bundleName]: JSON.stringify(original), 'wrong-bundle.json': JSON.stringify(changed),
+    'wrong-root.json': '{}', 'changed-index.json': 'fixture index\n',
+    'trusted_root.json': Buffer.from(retained.trustedRootRawBase64, 'base64'), 'tls-roots.pem': 'fixture CA',
+    'offline-verification.log': 'Verified OK',
+    'changed-index.log': 'provided artifact digests do not match',
+    'changed-root.log': 'leaf certificate verification failed',
+    'changed-bundle.log': 'transparency log signature does not match',
+    'trust-trials.jsonl': retained.verification.trials.map(t => JSON.stringify(t)).join('\n'),
+    'trust-verified-at.txt': retained.observedAt, 'tuf-home.txt': 'tuf-home.fixture',
+  };
+  files['bundle-manifest.json'] = JSON.stringify({ layers: [{ digest: digest(files[bundleName]) }] });
+  const rolePath = role => `tuf-home.fixture/.sigstore/root/tuf-repo-cdn.sigstore.dev/${role}.json`;
+  for (const [role, entry] of Object.entries(retained.metadata)) {
+    files[rolePath(role)] = Buffer.from(entry.rawBase64, 'base64');
+  }
+  const pins = Object.fromEntries(['cosign', 'index.json', 'manifest.json', 'config.json', 'bundle-manifest.json']
+    .map(file => [file, digest(files[file])]));
+  const run = (overrides = {}) => createTrustReceipt(async file => {
+    assert.ok(Object.hasOwn(files, file), `unexpected evidence read: ${file}`);
+    return Buffer.from(overrides[file] ?? files[file]);
+  }, pins);
+  assert.deepEqual((await run()).verification.trials, retained.verification.trials);
+  await assert.rejects(run({ [bundleName]: JSON.stringify({ ...original, tampered: true }) }),
+    { code: 'ERR_ASSERTION', operator: 'strictEqual' });
+  for (const trial of ['changed-index', 'changed-root', 'changed-bundle']) {
+    await assert.rejects(run({ [`${trial}.log`]: 'container startup failed' }),
+      { code: 'ERR_ASSERTION', operator: 'match' });
+  }
+  for (const role of ['root', 'timestamp', 'snapshot', 'targets']) {
+    const document = structuredClone(retained.metadata[role].document);
+    document.signed.expires = retained.observedAt;
+    await assert.rejects(run({ [rolePath(role)]: JSON.stringify(document) }),
+      new RegExp(`${role} expired at verification`));
+  }
+  for (const [index, trial] of retained.verification.trials.entries()) {
+    const trials = structuredClone(retained.verification.trials);
+    trials[index].exitCode = trial.exitCode === 0 ? 1 : 0;
+    await assert.rejects(run({ 'trust-trials.jsonl': trials.map(t => JSON.stringify(t)).join('\n') }),
+      { code: 'ERR_ASSERTION' });
+  }
 });
 
 test('should require reviewed content pins, exact publisher and index/platform linkage', () => {

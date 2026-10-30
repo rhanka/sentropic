@@ -25,6 +25,8 @@
   - None.
 
 ## Feedback Loop
+- [x] Muse R1 item 2 tests first: pin every retained artifact and role digest plus exact trials; add generator fixtures for bundle linkage, native error classes and each expired role. Baseline fixture failure precedes the generator extraction.
+- [x] Muse R1 item 1: rebased onto origin/main `028e63d3338cd6c2effa6707642cab3e2b679fd3`; Post-Rebase Gate inspects the full diff against main: no `packages/**` changes, so no publishable package version comparison applies. Exact-head CI remains pending.
 - [x] Rebase preserves BR-80/#829 and #841/#840 behavior from main; BR-80's full plan remains at [main 028e63d33](https://github.com/rhanka/sentropic/blob/028e63d3338cd6c2effa6707642cab3e2b679fd3/BRANCH.md) and `plan/66-BRANCH_perf-ci-package-candidates.md`; its pending acceptance is not claimed here.
 - [x] No author-set admission flags: cryptographic observations and independent review remain distinct from runtime admission.
 - [x] The current upstream scanner still requires a patched candidate; latest upstream release remains 0.76.1.
