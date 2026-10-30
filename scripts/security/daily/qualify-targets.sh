@@ -5,7 +5,8 @@ evidence="$PWD/tmp/security-qualify"
 cohort=${SECQUAL_COHORT:-main-40832206894}
 [[ "$cohort" = main-40832206894 || "$cohort" = main-40876641000 ]]
 operator_root=$(dirname "$(git rev-parse --path-format=absolute --git-common-dir)")
-source <(rg '^export (REGISTRY|DOCKER_USERNAME|DOCKER_PASSWORD)=' "$operator_root/.env")
+source scripts/security/daily/operator-env.sh
+read_operator_env "$operator_root/.env"
 export DOCKER_CONFIG
 DOCKER_CONFIG=$(mktemp -d "$evidence/auth.XXXXXX")
 chmod 700 "$DOCKER_CONFIG"
