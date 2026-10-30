@@ -37,8 +37,8 @@ export function violations(file, source) {
   return problems;
 }
 
-export function inspect(root) {
-  const problems = [];
+export function scannedSources(root) {
+  const sources = [];
   const visit = file => {
     if (!fs.existsSync(file)) return;
     if (fs.statSync(file).isDirectory()) {
@@ -49,12 +49,16 @@ export function inspect(root) {
     } else if (/Makefile$|Dockerfile[^/]*$|package\.json$|\.(?:sh|mk|mjs|ts|ya?ml)$/.test(file)) {
       const relative = path.relative(root, file);
       if (/^scripts\/ci\/ci-lockfile-installs(?:\.test)?\.mjs$/.test(relative)) return;
-      problems.push(...violations(relative, fs.readFileSync(file, 'utf8')));
+      sources.push([relative, fs.readFileSync(file, 'utf8')]);
     }
   };
   for (const name of ['Makefile', 'scripts', 'tools', 'packages', 'apps', 'api', 'ui', 'e2e', 'deploy', '.github/workflows', '.security/ci-lockfile-installs.mk']) visit(path.join(root, name));
   for (const name of fs.readdirSync(root).filter(name => /^docker-compose.*\.yml$/.test(name))) visit(path.join(root, name));
-  return problems;
+  return sources;
+}
+
+export function inspect(root) {
+  return scannedSources(root).flatMap(([file, source]) => violations(file, source));
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
