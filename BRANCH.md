@@ -39,6 +39,7 @@
   - `Makefile`
   - `.github/workflows/ci.yml`
   - `packages/chat-core/package.json`
+  - `ui/Dockerfile`
 - **Exception process**:
   - [x] Declare rationale, impact and rollback before changing conditional paths.
 
@@ -74,6 +75,7 @@
 - [x] BR1-EX1: allow additive Makefile runtime build/typecheck/test/pack targets and necessary chat dependency wiring; impact is package tooling only; rollback restores existing targets and removes runtime targets.
 - [x] BR1-EX2: allow CI runtime validation and package release wiring; impact is required runtime gates/bootstrap preparation; rollback removes this additive lane, without publication.
 - [x] BR1-EX3: allow one-line chat-core devDependency widening to `^0.34.1 || ^1.0.0` (mirrors its peer range) so the workspace chat-ui 1.0.0 links at root for optional-peer test resolution; impact is install layout only, no src change; rollback restores `^0.34.1`.
+- [x] BR1-EX4: allow UI image and UI targets to build contracts/events/chat-core dists (Dockerfile RUN lines plus build-chat-core prerequisites) since the ui file: link to chat-core has dist-form exports; impact is build-time only, no src change; rollback removes the RUN lines and prerequisites and restores the publishable-manifest wiring.
 - [x] BR1-N1 resolved: harness requires numeric exception IDs; corrected P1-prefixed IDs after the first advisory scope failure.
 - [x] Track is single-writer: maintain this mergeable branch artifact; conductor imports it into Track.
 
