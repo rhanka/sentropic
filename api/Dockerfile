@@ -159,7 +159,22 @@ for (const key of Object.keys(lock.packages)) {
   if (keep.has(key)) packages[key] = lock.packages[key];
 }
 mkdirSync(join(out, 'api'), { recursive: true });
-writeFileSync(join(out, 'package.json'), rootManifest);
+// --legacy-peer-deps (required: with the ui workspace gone, npm would
+// re-resolve chat-core's @sentropic/chat-ui peer from the registry and drag
+// the whole UI dependency stack back in) also drops peer-only lock entries.
+// The shipped workspaces' only such entry is jose (peer of oauth-verify,
+// auth-client, auth-hono, mcp-auth); declare it as a regular dependency of
+// the derived root so the pinned lock version still installs. Range comes
+// from oauth-verify's own peer declaration.
+const rootManifestJson = JSON.parse(rootManifest);
+const joseRange = JSON.parse(readFileSync(join(ws, 'packages/oauth-verify/package.json'))).peerDependencies?.jose;
+if (joseRange) {
+  rootManifestJson.dependencies = { ...(rootManifestJson.dependencies || {}), jose: joseRange };
+}
+writeFileSync(join(out, 'package.json'), `${JSON.stringify(rootManifestJson, null, 2)}\n`);
+if (joseRange && packages['']) {
+  packages[''].dependencies = { ...(packages[''].dependencies || {}), jose: joseRange };
+}
 writeFileSync(join(out, 'package-lock.json'), `${JSON.stringify({ ...lock, packages }, null, 2)}\n`);
 writeFileSync(join(out, 'api/package.json'), readFileSync(join(ws, 'api/package.json')));
 for (const dir of [...workspaceDirs].sort()) {
