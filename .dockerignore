@@ -82,6 +82,12 @@ api/data.db
 *.db
 .github/
 scripts/
+!scripts/
+scripts/*
+!scripts/ci/
+scripts/ci/*
+!scripts/ci/locked-tools.mjs
+!scripts/ci/tool-locks.json
 tools/
 spec/
 plan/

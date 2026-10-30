@@ -26,7 +26,9 @@ for (const path of ['package.json', 'api/package.json', 'packages/artifacts-host
 let status = 'failed';
 try {
   for (const args of [['install', '--package-lock-only'], ['ci']]) {
-    execFileSync('npm', [...args, '--strict-peer-deps', '--ignore-scripts', '--no-audit', '--no-fund'],
+    const command = args[0] === 'install' ? process.execPath : 'npm';
+    const install = args[0] === 'install' ? ['/workspace/scripts/ci/locked-consumer.mjs', ...args.slice(1)] : args;
+    execFileSync(command, [...install, '--strict-peer-deps', '--ignore-scripts', '--no-audit', '--no-fund'],
       { cwd: radar, stdio: 'inherit' });
   }
   status = 'passed';

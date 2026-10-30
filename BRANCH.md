@@ -1,53 +1,90 @@
-# Fix: Require daily security adapter regressions in CI
+# Feature: fix(ci): enforce lockfile-exact installations
 
 ## Objective
-- [x] Run the daily adapter suite in required CI while all service activation switches stay off.
+- [x] Prevent CI and Make installs from selecting registry versions outside committed locks.
 
 ## Scope / Guardrails
-- [x] Worktree: `tmp/sec5a-ci-guards`; branch: `fix/sec5a-ci-guards`; rebased base: `028e63d33` (BR-80 #829, #841, #840 retained).
-- [x] Make-only, Docker-first, zero Python, digest-pinned Node; no exception to vulnerability admission.
-- [x] ENV=test-sec5a-ci last; no application stack or ports required; down after validation.
-- [x] No daily scheduling, auto-merge, publishing, package source, or admission flag changes.
+- [x] Branch `fix/ci-lockfile-installs` from `origin/main`; worktree `tmp/ci-lockfile-installs`.
+- [x] Make only, Docker under the packet flock, no Python; `ENV=test-ci-lockfile` last.
+- [x] API 9060, UI 5260, Maildev 1160; no application services required.
+- [x] Preserve installed-consumer tarball qualification and pin its registry dependencies.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `.github/workflows/ci.yml`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `scripts/security/daily/scan.test.mjs`
-- **Forbidden Paths (must not change in this branch)**:
+  - `.dockerignore`
+  - `packages/cowork-desktop/package.json`
+  - `package-lock.json`
   - `Makefile`
-  - `docker-compose*.yml`
-  - `.cursor/rules/**`
+  - `scripts/**`
+  - `tools/**`
+  - `packages/**/tests/**`
+  - `packages/artifacts/probe/**`
+  - `packages/**/scripts/**`
+  - `packages/live-speech/*.sh`
+  - `packages/live-speech/*.mk`
+  - `packages/cowork-desktop/packaging/**`
   - `.security/**`
-  - `packages/**`
+  - `.github/workflows/**`
+  - `**/Dockerfile*`
+  - `docker-compose*.yml`
+  - `apps/**/Dockerfile*`
+  - `e2e/npm-toolchain/**`
+- **Forbidden Paths (must not change in this branch)**:
+  - `.cursor/rules/**`
+  - `api/src/**`
+  - `ui/src/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - None.
+  - `No additional conditional paths`
 
 ## Feedback Loop
-- [x] SEC5ACI-EX1: required CI workflow change authorized by part 5a item 12; adds credential-free tests to existing required capacity job; rollback removes the invocation and contract test; expires at this PR's merge or abandonment, no runtime waiver.
+- [x] Initial isolated tool installer requires a committed profile and invokes npm ci.
+- [x] CI run 41008419926: Docker context omitted locked API installer inputs; a real scratch COPY regression fails before the exact .dockerignore re-inclusions and passes after. Shared Node tag migration is dated debt; new guard targets pin their own digest, preserving IdP and immutable L5 verification.
+- [x] BRLOCK-EX1: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; authorized Make/CI/container installs and Docker context, tool/consumer runners and locks, packaging probes/manifests, security evidence and regression tests within Allowed Paths; root lock allowed only for the cowork-desktop manifest repair; remove on PR closure; rollback by reverting this branch.
 
 ## AI Flaky tests
-- [x] None accepted.
+- [x] No flaky allowance; exact-head CI success required.
 
 ## Orchestration Mode (AI-selected)
-- [x] Multi-branch: independent CI, trust-custody, coverage and runtime-qualification PRs; this branch has no dependency on other groups.
+- [x] Mono-branch; author codex / gpt-6.1-sol / high.
 
 ## UAT Management (in orchestration context)
-- [x] No application surface changed; workflow contract and CI supply acceptance.
+- [x] Tooling/security change; no UI, Chrome or VSCode UAT surface.
 
 ## Plan / Todo (lot-based)
-- [x] Lot 0: read rules, owner answers and #840 review; mechanical branch check passed.
-- [x] Lot 1: replace indirect daily-test imports with one explicit required CI invocation; enforce its selection, permissions, suite inventory and ci-gate dependency in `scripts/ci/publishable-ci-wiring.test.mjs`.
-- [x] Review correction: #840 item 12 missed existing indirect CI execution; this PR makes it explicit without duplicating suite execution.
-- [x] Independent CI wiring suite: 31/31 passed; daily suite rerun after removing indirect imports.
-- [x] Lot 2: Muse Wonder r1 reviewed `8cc4c1209`; all three findings reproduced by failing tests before correction.
-- [x] Review item 1: derive daily test inventory from the directory; reject a recipe missing a newly discovered test.
-- [x] Review item 2: blank inherited REGISTRY and ADMIN_EMAIL on the daily step and assert both overrides.
-- [x] Review item 3: require full trimmed-line equality for test-publishable-manifests delegation with the complete SCOPE; reject echo substitution.
-- [x] Local focused wiring suite: 33/33 pass after the three expected regression failures before correction.
-- [x] Rebased full manifest/wiring suite: 103/103 pass; daily adapter suite: 125/125 pass under the shared Docker flock with ENV=test-sec5a-ci.
-- [x] Prior reviewed head `8cc4c1209` completed successful CI (run 40999711242); successor exact-head completion is mandatory before handoff.
-- [x] Lot 3: scope check before each <=150-line commit; PR body from this file; push with force-with-lease only on this branch.
-- [x] Post-Rebase Gate: diff against origin/main touches no package manifest or source; no package version comparison or bump applies.
-- [x] Keep the PR open for review; no merge or auto-merge.
+- [x] **Lot 0 — Baseline**
+  - [x] Read rules and lock incident evidence; mechanical branch check passed.
+  - [x] Inventory Make, CI, scripts, Docker and installed-consumer paths.
+- [x] **Lot 1 — Locked tool and workspace installs**
+  - [x] Freeze 53 isolated tool profiles with exact transitive versions and integrity.
+  - [x] Remove container install fallbacks and implicit executable downloads.
+  - [x] Include the new API and E2E tool lock inputs in content-addressed image versions.
+  - [x] Freeze historical consumer closures for auth-hono 0.15.0, mesh 0.19.2/0.21.2, gateway 0.18.0 and cluster-mesh 0.23.2.
+  - [x] Commit installation graphs and replace live tool resolution.
+  - [x] Preserve isolated builds and tarball consumers.
+  - [x] Guard against unlocked npm/npx resolution, including regression fixtures.
+- [x] **Lot 2 — Security evidence**
+  - [x] Record fixed finding and coverage in security notes/register.
+- [x] **Lot 3 — Validation and delivery**
+  - [x] Full cluster-mesh suite: 1,414 pass; installed stateful/artifacts consumer: 16 pass; llm-mesh typecheck/lint and gateway auth consumers: 3 pass.
+  - [x] Cluster-mesh typecheck, 17 packaging preparation regressions and eleven install guard tests pass.
+  - [x] Published-consumer qualification: 18 tests pass; manifest, security and CI wiring contracts: 219 tests pass.
+  - [x] Diff review preserves API runtime npm removal and distinguishes executable checks from npx execution.
+  - [x] Run guard, cluster-mesh tests/typecheck, representative package and consumer checks.
+  - [x] Review changed install paths and run mechanical scope check before each commit.
+  - [x] Stop test environment with `make down`; no application services were started.
+  - [x] Create draft PR to main from this plan; CI completed/success on exact head.
+- [x] **Lot 4 — Muse Wonder review changes**
+  - [x] R1: reproduce the missing API filters; cover API and E2E content-hash inputs.
+  - [x] R2: rebase preserving main and lockfile intent; Post-Rebase Gate; exact-head CI success.
+  - [x] R3: cover npm aliases and flags-before-verb; declare scan boundaries; new bypass fixtures observed red then green.
+  - [x] R4: bind scanned shell/Make/Docker/JS tool calls to profiles and consumer literal versions to the frozen closure; require historical closures; removal and typo regressions observed red then green.
+  - [x] Post-Rebase Gate: zero packages with src changes relative to origin/main; no publication version bump applies.
+  - [x] Preserve main's precise image-filter contract and require a review date on the pending finding.
+  - [x] Exact-head CI reproduced cowork-desktop's forbidden file dependencies after its packaging script became selected; repair only its manifest and root lock; pre-bump registry read: desktop 0.2.0, bridge 0.1.1, chat-ui 0.34.1.
+  - [x] Cowork-desktop 0.2.1 packed-manifest guard passes; root lock retains only the generated workspace metadata delta; immutable L5 verifier and IdP selftest pass unchanged.
+  - [x] Existing gateway auth-subpath consumer tests reproduce the cold-workspace absolute-path failure; derive the locked runner from sourceRoot so isolated and normal workspaces use the same consumer.
+  - [x] R5: admit only explicitly named candidate archives and manifest file specs; sibling-admission regression observed red then green.
+  - [x] R6: assign exception owners, UTC review dates, removal triggers and accurate scope; expiry regression observed red then green.
+  - [x] R7: track isolated catalog SCA coverage separately with owner, scanner and review date; contract observed red then green.
+  - [x] R8: digest-pin touched runtime images; pinning regression observed red then green.

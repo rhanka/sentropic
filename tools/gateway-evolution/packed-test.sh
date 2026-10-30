@@ -8,4 +8,4 @@ bash tools/gateway-evolution/runner.sh "$test_env" "$image" node tools/gateway-e
   --manifest "$manifest" --scope "$scope" --output "tmp/$(basename "$stage")"
 # Only the verified disposable consumer is mounted for install and execution.
 GW_EVOL_WORKSPACE="$stage" bash tools/gateway-evolution/runner.sh "$test_env" "$image" sh -ec \
-  'npm install --no-audit --no-fund --cache /tmp/npm-cache; node execute.mjs'
+  'node scripts/ci/locked-consumer.mjs --no-audit --no-fund; node execute.mjs'

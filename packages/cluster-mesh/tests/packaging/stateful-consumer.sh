@@ -24,9 +24,9 @@ export npm_config_registry="$(cat "$pack_dir/registry-url")"
 cd "$consumer"
 npm init -y >/dev/null
 npm pkg set type=module >/dev/null
-npm install --ignore-scripts --no-audit --no-fund "$pack_dir"/sentropic-cluster-mesh-*.tgz >/dev/null
+node "$source_root/scripts/ci/locked-consumer.mjs" --ignore-scripts --no-audit --no-fund "$pack_dir"/sentropic-cluster-mesh-*.tgz >/dev/null
 # Authentication belongs to the test host; these are harness-only dev dependencies.
-npm install --save-dev --ignore-scripts --no-audit --no-fund \
+node "$source_root/scripts/ci/locked-consumer.mjs" --save-dev --ignore-scripts --no-audit --no-fund \
   "$pack_dir"/sentropic-mcp-auth-*.tgz "$pack_dir"/sentropic-oauth-verify-*.tgz jose@5.10.0 >/dev/null
 test ! -L node_modules/@sentropic/cluster-mesh
 test ! -L node_modules/@sentropic/mcp-platform
@@ -116,7 +116,7 @@ node --input-type=module -e '
 # Qualify the optional variant after the explicit twelve-tool core consumer.
 pack_candidate artifacts
 sha256sum "$pack_dir"/sentropic-artifacts-*.tgz
-npm install --ignore-scripts --no-audit --no-fund "$pack_dir"/sentropic-artifacts-*.tgz >/dev/null
+node "$source_root/scripts/ci/locked-consumer.mjs" --ignore-scripts --no-audit --no-fund "$pack_dir"/sentropic-artifacts-*.tgz >/dev/null
 test ! -L node_modules/@sentropic/artifacts
 node --input-type=module -e '
   import assert from "node:assert/strict";

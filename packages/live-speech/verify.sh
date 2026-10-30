@@ -7,8 +7,9 @@ trap 'rm -rf "$scratch"' EXIT
 mkdir -p "$scratch/live-speech"
 cp -R /workspace/packages/live-speech/. "$scratch/live-speech/"
 cd "$scratch/live-speech"
-npm_config_cache=/tmp/npm-cache npm install --no-package-lock --no-audit --no-fund --ignore-scripts --save-dev \
+npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$scratch/tools" --no-audit --no-fund --ignore-scripts \
   typescript@5.4.5 vitest@4.0.18 @types/node@22 eslint@9.39.1 typescript-eslint@8.48.1 >/dev/null
+ln -s "$scratch/tools/node_modules" node_modules
 case "$task" in
   typecheck-live-speech|build-live-speech)
     # Retain L4's type-only L1 contract without compiling mesh sources into this package.

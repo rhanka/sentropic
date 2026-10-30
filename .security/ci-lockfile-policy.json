@@ -1,0 +1,38 @@
+{
+  "shared-node-tag": {
+    "owner": "CI maintainers", "review_by": "2026-11-30T00:00:00Z",
+    "scope": "Pre-existing shared LLM_MESH_NODE_IMAGE tag default outside the new digest-pinned CI_LOCKFILE_NODE_IMAGE targets; IdP appends its own digest and L5 fingerprints the shared default",
+    "removal_trigger": "Coordinate shared digest migration with a new immutable L5 qualification identity and remove IdP digest concatenation; never change or bypass the retained L5 fingerprint"
+  },
+  "BRLOCK-EX1": {
+    "owner": "CI maintainers", "review_by": "2026-11-30T00:00:00Z",
+    "scope": "Makefile, CI workflows, Docker build context and container installs, tool/consumer runners and locks, packaging probes, security evidence and their regression tests within BRANCH.md Allowed Paths",
+    "removal_trigger": "Remove branch scope exception when PR 846 closes; rollback by reverting PR 846"
+  },
+  "candidate-archives": {
+    "owner": "Package qualification maintainers", "review_by": "2026-11-30T00:00:00Z",
+    "scope": "Only archives named in install arguments or manifest file specs; post-publication primary bytes verified against registry integrity",
+    "removal_trigger": "Replace when npm can qualify unpublished candidate archives with a fully committed consumer lock"
+  },
+  "maintenance-targets": {
+    "owner": "CI maintainers", "review_by": "2026-11-30T00:00:00Z",
+    "scope": "Makefile install-ui/install-ui-dev/install-api/install-api-dev and lock-api/lock-root/lock-e2e/lock-idp-web targets; workflow invocation forbidden",
+    "removal_trigger": "Remove when explicit dependency authoring moves to a dedicated guarded command"
+  },
+  "l5-snapshot": {
+    "owner": "Memory qualification maintainers", "review_by": "2026-11-30T00:00:00Z",
+    "scope": "tools/memory-mcp-l5/pack.mjs refreshToolchainSnapshot only; workflow invocation forbidden",
+    "removal_trigger": "Remove when L5 snapshot authoring uses the shared lock authoring command"
+  },
+  "lock-authoring": {
+    "owner": "CI maintainers", "review_by": "2026-11-30T00:00:00Z",
+    "scope": "scripts/ci/update-tool-locks.mjs explicit --write-locks outside CI; install is package-lock-only",
+    "removal_trigger": "Remove when catalog renewal is replaced; runtime must never invoke it"
+  },
+  "catalog-sca": {
+    "owner": "Security maintainers", "review_by": "2026-11-30T00:00:00Z", "status": "open",
+    "target_scanner": "npm audit --package-lock-only --audit-level=high",
+    "scope": "Every profile in scripts/ci/tool-locks.json and consumer-locks.json; separate from the CI-LOCK-2026-10-29 resolution finding",
+    "removal_trigger": "Close only after each profile is audited in CI and a seeded vulnerable fixture proves the gate blocks; this entry grants no suppression"
+  }
+}

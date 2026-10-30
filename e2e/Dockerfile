@@ -5,7 +5,10 @@ WORKDIR /app
 ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
 
 # Keep the runner's npm CLI, with the same patched tooling as the API toolbox.
-RUN npm install -g npm@11.16.0 && \
+COPY npm-toolchain/package.json npm-toolchain/package-lock.json /tmp/locked-npm/
+RUN npm ci --prefix /tmp/locked-npm --ignore-scripts --no-audit --no-fund && \
+    rm -rf /usr/local/lib/node_modules/npm && \
+    cp -a /tmp/locked-npm/node_modules/npm /usr/local/lib/node_modules/npm && rm -rf /tmp/locked-npm && \
     mkdir -p /tmp/npm-patches && \
     for dependency in brace-expansion@5.0.12 undici@6.29.1 http-cache-semantics@4.3.0 \
       glob@11.1.0 tar@7.5.22 minimatch@10.2.4 ip-address@10.3.1 pacote@21.5.1 picomatch@4.0.4; do \

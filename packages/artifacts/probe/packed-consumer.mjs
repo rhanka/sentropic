@@ -50,7 +50,7 @@ for (const driver of ["@aws-sdk/client-s3", "pg"]) {
 if (!coreOnly) {
   const consumer = mkdtempSync(join(tmpdir(), "artifacts-core-"));
   try {
-    execFileSync("npm", ["install", `/pack/sentropic-artifacts-${manifest.version}.tgz`,
+    execFileSync(process.execPath, ['/workspace/scripts/ci/locked-consumer.mjs', `/pack/sentropic-artifacts-${manifest.version}.tgz`,
       "--omit=optional", "--ignore-scripts", "--no-audit", "--no-fund"], { cwd: consumer, stdio: "pipe" });
     writeFileSync(join(consumer, "probe.mjs"), readFileSync(new URL(import.meta.url)));
     writeFileSync(join(consumer, "host.mjs"), readFileSync(new URL("./host.mjs", import.meta.url)));

@@ -24,7 +24,7 @@ services:
       - workspace_node_modules:/workspace/node_modules
     # IDP_PORT pins the in-container listener to 8787 regardless of the published
     # host port (API_PORT), so the port mapping below is always valid.
-    command: sh -c "npx tsx watch apps/auth-idp/index.ts"
+    command: sh -c "npx --no-install tsx watch apps/auth-idp/index.ts"
     environment:
       - NODE_ENV=development
       - IDP_PORT=8787

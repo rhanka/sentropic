@@ -69,7 +69,7 @@ installed-memory-locked:
 	        tar -tzf $(INSTALLED_DIR)/artifacts/sentropic-cluster-mesh-$(INSTALLED_MESH_VERSION).tgz | LC_ALL=C sort | sha256sum | cut -d" " -f1 > $(INSTALLED_DIR)/artifacts/mesh-file-list.sha256; \
         cp packages/cluster-mesh/tests/engram-memory/installed-memory.mjs packages/cluster-mesh/tests/engram-memory/installed-hydration.mjs packages/cluster-mesh/tests/engram-memory/installed-memory-types.ts $(INSTALLED_DIR)/consumer/; \
 	        printf "%s\n" "{\"name\":\"engram-e10-installed-consumer\",\"version\":\"1.0.0\",\"private\":true,\"type\":\"module\",\"dependencies\":{\"@sentropic/engram\":\"file:../artifacts/sentropic-engram-0.21.3.tgz\",\"@sentropic/cluster-mesh\":\"file:../artifacts/sentropic-cluster-mesh-$(INSTALLED_MESH_VERSION).tgz\",\"pg\":\"8.22.0\"},\"devDependencies\":{\"typescript\":\"5.4.5\",\"@types/node\":\"22.20.1\"}}" > $(INSTALLED_DIR)/consumer/package.json; \
-	        cd $(INSTALLED_DIR)/consumer && npm install --package-lock-only --ignore-scripts --no-audit --no-fund \
+	        cd $(INSTALLED_DIR)/consumer && node /workspace/scripts/ci/locked-consumer.mjs --package-lock-only --ignore-scripts --no-audit --no-fund \
 	          && npm ci --ignore-scripts --no-audit --no-fund'; \
 	    pg_image="$$($(ARTIFACTS_COMPOSE) ps -q postgres | xargs -r docker inspect --format '{{.Image}}' 2>/dev/null)"; \
 	    test -n "$$pg_image" || { echo 'postgres image identity is required'; exit 1; }; \

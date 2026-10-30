@@ -273,7 +273,7 @@ export function createRegistry({ registry = REGISTRY, fetchImpl = globalThis.fet
     if (createHash('sha512').update(bytes).digest('base64') !== match[1]) {
       throw new GuardError(`integrity mismatch for published ${name}@${version}`);
     }
-    return { manifest: readPackedManifest(bytes), sha256: createHash('sha256').update(bytes).digest('hex'), integrity };
+    return { manifest: readPackedManifest(bytes), sha256: createHash('sha256').update(bytes).digest('hex'), integrity, bytes };
   }
   // Sigstore attestation bundles of a published version (null while absent), always read fresh.
   async function attestations(name, version) {

@@ -23,7 +23,7 @@ mkdir /tmp/cm-tools
 # Shallow keeps transitive dependents nested so an installed @sentropic/*
 # package can never shadow a workspace symlink below (a hoisted older
 # llm-mesh required by a peer tool would otherwise break sibling builds).
-npm_config_cache=/tmp/npm-cache npm install --prefix /tmp/cm-tools --no-save \
+npm_config_cache=/tmp/npm-cache node /source/scripts/ci/locked-tools.mjs --prefix /tmp/cm-tools --no-save \
   --ignore-scripts --no-audit --no-fund --install-strategy=shallow typescript@5.4.5 @types/node \
   vitest@4.1.5 pg@8.16.3 @stablelib/sha256@2.0.1 \
   @modelcontextprotocol/sdk@1.31.0 @aws-sdk/client-s3@3.1095.0 @types/pg@8.20.0 \
@@ -88,7 +88,7 @@ case "$CM_ACTION" in
       cp -R tests "$consumer/tests"
       cd "$consumer"
       printf '%s\n' '{"private":true,"type":"module"}' > package.json
-      npm install --ignore-scripts --no-audit --no-fund ./sentropic-cluster-mesh-*.tgz \
+      node /source/scripts/ci/locked-consumer.mjs --ignore-scripts --no-audit --no-fund ./sentropic-cluster-mesh-*.tgz \
         @sentropic/engram@0.21.3 vitest@4.1.5 pg@8.22.0 >/dev/null
       # Fixture relative paths target installed declarations/runtime/assets.
       # No checkout sources are copied into this consumer.
