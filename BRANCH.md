@@ -54,6 +54,7 @@
 
 ## Feedback Loop
 - [ ] `attention`: H3 dependency closure pin (`yjs`, `@hocuspocus/server`, `@hocuspocus/provider`, `y-protocols`) recorded in `docs/canvas-live/h3-validation.md` before claiming conformance.
+- [x] BRLOCK-EX1 carried verbatim from `origin/main` for gate continuity; H3 exercises none of the exempted paths (no `Makefile`, CI, lock, or container changes): owner=CI maintainers; review_by=2026-11-30T00:00:00Z; authorized Make/CI/container installs and Docker context, tool/consumer runners and locks, packaging probes/manifests, security evidence and regression tests within Allowed Paths; remove on PR closure; rollback by reverting this branch.
 
 ## AI Flaky tests
 - [ ] No AI calls in H3 acceptance; no flaky exceptions requested.
