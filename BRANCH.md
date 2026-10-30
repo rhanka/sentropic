@@ -41,9 +41,11 @@
   - `deploy/ci/artifact-content/**`
   - `deploy/ci/idp-identity-sync/workflow.selftest.mjs`
   - `docs/runbooks/app-artifact-content-infrastructure.md`
+  - `packages/cluster-mesh/tests/packaging/activation-environment.ts`
+  - `packages/cluster-mesh/tests/packaging/activation-vectors.spec.ts`
 - [x] **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
-  - `packages/**`
+  - `packages/**` except the two activation test paths allowed by BR143-EX3
   - `plan/**`
   - `ui/**`
   - `e2e/**`
@@ -55,6 +57,9 @@
 - [x] **Exception process**: BR143-EX1 covers the completed inherited merge only; BR143-EX2 covers topic workflow retirement and equivalent CI gates.
 
 ## Feedback Loop
+- [x] CI repair local qualification: build-artifact-budget passes 14 tests, 2496 figure/route equivalence cases and 1758 geometry scenes; typical JS/portable 249234/291943 bytes, no violations. test-lazy-package-activation passes 9/9 tests with no pending tests or type errors; C1/C2 and whitespace checks pass. Exact pushed-head CI remains required.
+- [x] BR143-EX3 / CI repair request: job 123738620065 passes dossier budgets (typical JS 249234 bytes); the displayed 3691474-byte failure is the intentional baseline negative fixture. The real failure is nested Vitest startup exceeding 5000ms for a missing ACTIVATION_DISPOSABLE refusal. Extract the identical startup guard and probe it directly with Node; retain all nine conformance tests and timeouts. Impact: two test-only files, no package source/manifest change or release bump; rollback restores the nested runner probe.
+- [x] Rebase onto origin/main c1e592636 for this CI repair; only the initial BRANCH.md conflicts, resolved with the integration plan. Post-Rebase Gate: package source and manifests match main, so no publication bump applies.
 - [x] PR837-R1-9 render evidence: 54/54 test-artifact-content-manifests checks pass on the correction tree; both prod/preprod API/content renders explicitly keep host/content/reader flags 0, override secret values, and reject tagged images if any flag opens. Recheck final-head CI validate-idp-sync before merge.
 - [x] PR837-R1-2/5: `docs/runbooks/app-cm-integration-review.md` records the reproducible range-diff, all main/replay overlaps, post-rebase workspace dependency correction and read-only legacy-key quarantine disposition; no ancestry or legacy-serving fallback is claimed.
 - [x] PR837-R1-6 schema rollback: all three flags remain 0; revert qualified images/config while retaining additive schema, journals, receipts and blobs; see baseline restore runbook. Actual baseline migration rehearsal remains open below.
