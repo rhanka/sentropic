@@ -39,6 +39,7 @@
   - `Makefile`
   - `.github/workflows/ci.yml`
   - `packages/chat-core/package.json`
+  - `packages/chat-core/tests/runtime/chat-core-host.spec.ts`
   - `ui/Dockerfile`
 - **Exception process**:
   - [x] Declare rationale, impact and rollback before changing conditional paths.
@@ -78,6 +79,7 @@
 - [x] BR1-EX4: allow UI image and UI targets to build contracts/events/chat-core dists (Dockerfile RUN lines plus build-chat-core prerequisites) since the ui file: link to chat-core has dist-form exports; impact is build-time only, no src change; rollback removes the RUN lines and prerequisites and restores the publishable-manifest wiring.
 - [x] BR1-EX5: allow two duplicate-deletion commits above 150 changed lines (delete duplicated chat-runtime sources 10066 deletions, delete duplicated tests 8022 deletions); the deleted trees are proven byte-equivalent to `packages/chat-core/src/runtime` modulo specifiers, and single-file deletions exceed the cap by construction so no slice can comply; impact is history only, tree unchanged; rollback not applicable (record-only).
 - [x] BR1-N1 resolved: harness requires numeric exception IDs; corrected P1-prefixed IDs after the first advisory scope failure.
+- [x] BR1-EX6: allow post-rebase release-pin repair — the rebase landed main's published chat-core 0.3.0 and the Post-Rebase Gate bumped the guarded candidate to 0.3.1, so the inbound `packages/chat-core/tests/runtime/chat-core-host.spec.ts` release-pin and the BR1-EX2 `qualify-chat-pair` CORE_ARCHIVE filename are updated to 0.3.1; impact is assertion data and archive naming only, no behaviour change; rollback restores the 0.3.0 pins.
 - [x] Track is single-writer: maintain this mergeable branch artifact; conductor imports it into Track.
 
 ## AI Flaky tests
