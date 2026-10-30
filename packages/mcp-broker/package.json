@@ -1,7 +1,6 @@
 {
   "name": "@sentropic/mcp-broker",
   "version": "0.1.0",
-  "private": true,
   "description": "Plan-bound MCP provider broker with the frozen memory contract entry: McpProviderBroker dispatches against the immutable compiled registry plan with a verified host invocation context per call (MCP-L5 Lot 1). Memory contracts under ./memory. No in-memory identity manufacturing.",
   "type": "module",
   "license": "MIT",
@@ -31,7 +30,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "publishConfig": {
     "provenance": true,

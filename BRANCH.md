@@ -7,6 +7,7 @@
 - [x] Branch `feat/mcp-broker-publish` starts at `origin/main`; worktree `tmp/feat-mcp-broker-publish`.
 - [x] Make-only, Docker-first; `ENV=test-mcp-broker-publish` last; no service ports used.
 - [x] Preserve all source, compiler, P3 manifest, catalog and freeze bytes; retain version 0.1.0.
+- [x] Verify exact P3 broker archive SHA-256 5fede653683acc8d803f7e735526f09a1d79b062ae4a37b0b9933bfd289444fa; packed manifest has no private flag.
 - [x] Owner dossier and registry evidence live outside the tracked branch in `.tmp/npm-bootstrap/`.
 - [x] No merge or publication requested in this author lane; create a draft PR to main.
 
