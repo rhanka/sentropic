@@ -957,7 +957,7 @@ jobs:
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make pack-chat-core PACK_DESTINATION=tmp/chat-pair/core ENV=test-ci-chat-ui
       - name: Qualify installed Chat pair
-        run: make qualify-chat-pair UI_ARCHIVE=tmp/chat-pair/ui/sentropic-chat-ui-1.0.0.tgz CORE_ARCHIVE=tmp/chat-pair/core/sentropic-chat-core-0.3.0.tgz REPORT_DIR=tmp/chat-pair/report ENV=test-ci-chat-ui
+        run: make qualify-chat-pair UI_ARCHIVE=tmp/chat-pair/ui/sentropic-chat-ui-1.0.0.tgz CORE_ARCHIVE=tmp/chat-pair/core/sentropic-chat-core-0.3.1.tgz REPORT_DIR=tmp/chat-pair/report ENV=test-ci-chat-ui
       - name: Retain installed Chat pair evidence
         uses: actions/upload-artifact@v7
         with:
