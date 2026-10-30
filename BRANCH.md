@@ -1,7 +1,7 @@
 # Fix: Require daily security adapter regressions in CI
 
 ## Objective
-- [ ] Run the daily adapter suite in required CI while all service activation switches stay off.
+- [x] Run the daily adapter suite in required CI while all service activation switches stay off.
 
 ## Scope / Guardrails
 - [x] Worktree: `tmp/sec5a-ci-guards`; branch: `fix/sec5a-ci-guards`; rebased base: `028e63d33` (BR-80 #829, #841, #840 retained).
@@ -46,6 +46,7 @@
 - [x] Review item 2: blank inherited REGISTRY and ADMIN_EMAIL on the daily step and assert both overrides.
 - [x] Review item 3: require full trimmed-line equality for test-publishable-manifests delegation with the complete SCOPE; reject echo substitution.
 - [x] Local focused wiring suite: 33/33 pass after the three expected regression failures before correction.
+- [x] Rebased full manifest/wiring suite: 103/103 pass; daily adapter suite: 125/125 pass under the shared Docker flock with ENV=test-sec5a-ci.
 - [x] Prior reviewed head `8cc4c1209` completed successful CI (run 40999711242); successor exact-head completion is mandatory before handoff.
 - [x] Lot 3: scope check before each <=150-line commit; PR body from this file; push with force-with-lease only on this branch.
 - [x] Post-Rebase Gate: diff against origin/main touches no package manifest or source; no package version comparison or bump applies.
