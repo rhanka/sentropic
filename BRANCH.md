@@ -7,15 +7,14 @@
 - [x] Branch `feat/chat-convergence-p1b`, based on P1a `d9a849e5d`; worktree `tmp/worktrees/chat-p1b`; draft predecessor #817 targets main.
 - [x] Environment `test-chat-p1`; API_PORT=8796 UI_PORT=5196 MAILDEV_UI_PORT=1096; ENV always last.
 - [x] Serialize Docker work with `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; run `make down` after each step.
-- [x] Make targets only; no Python, dev tests, clean-all, rebase, force-push, publication or merge.
-- [x] Selective staging and `make commit`; each commit at most 150 changed lines, excluding unchanged renames.
+- [x] Make targets only; no Python, dev tests, clean-all, publication or merge; main updates via rebase + force-push-with-lease on this branch only.
+- [x] Selective staging and `make commit`; each commit at most 150 changed lines, excluding unchanged renames, except the BR1-EX5 duplicate-deletion commits.
 - [x] Keep the explicit `() => false` as the default authorization predicate; missing approval must deny execution.
 - [x] Draft sequence to main: P1a runtime foundation/import migration; P1b injected conversation/optional-module boundary and parity.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/chat-runtime/**`
   - `packages/chat-ui/**`
   - `packages/chat-server/tests/wire-contract.spec.ts`
   - `packages/cowork-bridge/**`
@@ -76,6 +75,7 @@
 - [x] BR1-EX2: allow CI runtime validation and package release wiring; impact is required runtime gates/bootstrap preparation; rollback removes this additive lane, without publication.
 - [x] BR1-EX3: allow one-line chat-core devDependency widening to `^0.34.1 || ^1.0.0` (mirrors its peer range) so the workspace chat-ui 1.0.0 links at root for optional-peer test resolution; impact is install layout only, no src change; rollback restores `^0.34.1`.
 - [x] BR1-EX4: allow UI image and UI targets to build contracts/events/chat-core dists (Dockerfile RUN lines plus build-chat-core prerequisites) since the ui file: link to chat-core has dist-form exports; impact is build-time only, no src change; rollback removes the RUN lines and prerequisites and restores the publishable-manifest wiring.
+- [x] BR1-EX5: allow two duplicate-deletion commits above 150 changed lines (delete duplicated chat-runtime sources 10066 deletions, delete duplicated tests 8022 deletions); the deleted trees are proven byte-equivalent to `packages/chat-core/src/runtime` modulo specifiers, and single-file deletions exceed the cap by construction so no slice can comply; impact is history only, tree unchanged; rollback not applicable (record-only).
 - [x] BR1-N1 resolved: harness requires numeric exception IDs; corrected P1-prefixed IDs after the first advisory scope failure.
 - [x] Track is single-writer: maintain this mergeable branch artifact; conductor imports it into Track.
 
@@ -97,7 +97,7 @@
   - [x] Migrate cowork-bridge's public SSE dependency/guidance to runtime; registry 0.1.1 verified before reserving 0.1.2.
   - [x] Remove optional-module and tool-normalization runtime symbols from the visual export snapshot; document the injected conversation/comment and composer role props.
   - [x] Inject pure comment presentation helpers through the host composition; runtime comments have no value imports from visual code.
-  - [x] Create `packages/chat-runtime/package.json`, `tsconfig.json` and public entrypoints.
+  - [x] Runtime package folded into `@sentropic/chat-core/runtime` (#836 line); no separate package remains.
   - [x] Move client transport/replay/history/stream hub and their tests without behavior changes.
   - [x] Migrate client consumers to public runtime subpaths; reserve chat-ui 1.0.0 above registry 0.34.1; runtime registry returns 404.
   - [x] Remove client entries from the visual export snapshot; retarget moved host export assertions to explicit runtime entries.
@@ -213,4 +213,4 @@
 - [ ] **Lot 5 — Draft handoff**
   - [x] Open draft sequence #817 (P1a) and #819 (P1b), both targeting main; post each execution plan.
   - [x] Run `make down ENV=test-chat-p1`; `make ps` shows no services.
-  - [x] Previous #819 head `55d903bb7` completed/success in CI run `40698362118`; current correction head requires its own completed/success run before conductor integration.
+  - [ ] Post-rebase head `aa8bb9ffb` pushed; CI run pending — requires completed/success before conductor integration. Prior head `e18d0b21d` was green in run `41030204586` on the old base.
