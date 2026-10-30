@@ -1,18 +1,24 @@
-// Identity core contracts: invitations and login sessions (F04, F05).
-// Invitation tokens carry the `sit_` prefix; entropy comes from an injected
-// port so tests stay deterministic. Login sessions are distinct from agent
-// and runtime sessions; revoking one class never touches another directly.
+// Identity core contracts: invitations, device enrolment entry and login
+// sessions (F04, F05). Invitation tokens carry the `sit_` prefix; entropy comes
+// from an injected port so tests stay deterministic. Login sessions are
+// distinct from agent and runtime sessions; revoking one class never touches
+// another directly.
 
-import { IdentityNotFoundError, InvitationError, LoginSessionError } from './errors.js';
+import { AccountNotActiveError, DeviceCodeError, IdentityNotFoundError, InvitationError, LoginSessionError } from './errors.js';
 import type {
+  DeviceCodeStore,
   IdentityAuditPort,
   InvitationStore,
   InvitationTokenPort,
   LoginSessionStore,
+  UserAccountStore,
 } from './ports.js';
 import {
   systemIdentityClock,
   type ConsumeInvitationResult,
+  type DeviceCodeIssuance,
+  type DeviceCodeRecord,
+  type DeviceCodePollOutcome,
   type IdentityClock,
   type InvitationInput,
   type InvitationRecord,
@@ -73,6 +79,72 @@ export function createInvitations(input: {
         subjectId: invitationId,
       });
       return revoked;
+    },
+  };
+}
+
+/** F04 device-code triplet: the device polls with the device code; the user
+    approves with the user code. Approval binds the enrolment to an active
+    account; the codes are opaque values from the injected token port. */
+export interface DeviceEnrolmentDomain {
+  issueDeviceCode(
+    device: { readonly deviceName?: string | null },
+    options: { readonly now: string; readonly ttlSeconds: number; readonly intervalSec?: number },
+  ): Promise<DeviceCodeIssuance>;
+  pollDeviceCode(deviceCode: string, now: string): Promise<DeviceCodePollOutcome>;
+  approveDeviceCode(
+    userCode: string,
+    approval: { readonly userId: string },
+    now: string,
+  ): Promise<DeviceCodeRecord>;
+}
+
+export function createDeviceEnrolment(input: {
+  readonly deviceCodes: DeviceCodeStore;
+  readonly accounts: UserAccountStore;
+  readonly tokens: InvitationTokenPort;
+  readonly audit: IdentityAuditPort;
+}): DeviceEnrolmentDomain {
+  return {
+    async issueDeviceCode(device, options) {
+      const now = options.now;
+      const record: DeviceCodeRecord = {
+        deviceCode: input.tokens.issue(),
+        userCode: input.tokens.issue(),
+        deviceName: device.deviceName ?? null,
+        status: 'pending',
+        issuedAt: now,
+        expiresAt: addSeconds(now, options.ttlSeconds),
+      };
+      await input.deviceCodes.saveDeviceCode(record);
+      const issuance: DeviceCodeIssuance = {
+        deviceCode: record.deviceCode,
+        userCode: record.userCode,
+        intervalSec: options.intervalSec ?? 5,
+        expiresAt: record.expiresAt,
+      };
+      await input.audit.append({ at: now, kind: 'device_code.issued', subjectId: record.deviceCode });
+      return issuance;
+    },
+    async pollDeviceCode(deviceCode, now) {
+      const record = await input.deviceCodes.findDeviceCode(deviceCode);
+      if (!record) throw new DeviceCodeError('not_found');
+      if (record.status === 'approved') {
+        return { status: 'approved' as const, userId: record.approvedUserId!, deviceName: record.deviceName };
+      }
+      if (record.expiresAt <= now) return { status: 'expired' as const };
+      return { status: 'authorization_pending' as const };
+    },
+    async approveDeviceCode(userCode, approval, now) {
+      const account = await input.accounts.findAccount(approval.userId);
+      if (!account || account.accountStatus !== 'active') throw new AccountNotActiveError(approval.userId);
+      const record = await input.deviceCodes.findDeviceCodeByUser(userCode);
+      if (!record) throw new DeviceCodeError('not_found');
+      if (record.expiresAt <= now) throw new DeviceCodeError('expired');
+      const approved = await input.deviceCodes.approveDeviceCode(userCode, approval.userId, now);
+      if (!approved) throw new DeviceCodeError('already_resolved');
+      await input.audit.append({ at: now, kind: 'device_code.approved', actorId: approval.userId, subjectId: userCode });
+      return { ...record, status: 'approved', approvedUserId: approval.userId, approvedAt: now };
     },
   };
 }
