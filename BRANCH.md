@@ -73,20 +73,20 @@
   - [ ] Define environment mapping (`ENV=test-canvas-h3`, `API_PORT=8802`, `UI_PORT=5202`, `MAILDEV_UI_PORT=1102`) and Docker lock path.
   - [ ] Confirm command style `make ... ENV=test-canvas-h3` with `ENV` last.
   - [ ] Validate scope boundaries and declare `BRH3-EXn` before any conditional change.
-- [ ] **Lot 1 — RED witnesses (tests first)**
-  - [ ] `api/tests/unit/canvas-live-sync-framing.test.ts`: per-frame 1 MiB cap, logical 8 MiB cap, partial frame reassembly without truncation, oversize refusal, MCP 256 KiB cap not applied to sync.
-  - [ ] `api/tests/unit/canvas-live-ingress.test.ts`: scratch decode, classification, re-authorisation, resulting-schema validation, hostile cases i-vi, reconnect replay vii, stale-vector rule, formatting-span R-LIN-4 acceptance.
-  - [ ] `api/tests/unit/canvas-live-quarantine.test.ts`: unresolved struct/delete-set quarantine outside authoritative state, actor/admission retention, dependency-arrival revalidation, no-leak to replicas/journal.
-  - [ ] `api/tests/api/canvas-live-hocuspocus.test.ts`: Hocuspocus-backed provider resolves full `handle.identity`, missing-coordinate failure, wrong field/document/session failure, R-BIND-3 two-fields witness.
-  - [ ] `api/tests/api/canvas-live-security.test.ts`: hostile content/vector/delete-set unchanged, no applied journal entry, no broadcast, revoked-actor close without applying queued input, repeated-hostile close.
-  - [ ] `e2e/tests/canvas-live-provider.spec.ts`: provider switch fake plus Hocuspocus, two fields mounted, one disposed, other stays live.
-  - [ ] Lot gate:
-    - [ ] RED run fails on missing `sync-framing.ts`, `ingress.ts`, `quarantine.ts`, `hocuspocus.ts`, `harness.ts` before implementation.
-- [ ] **Lot 2 — Sync framing, ingress pipeline, quarantine**
-  - [ ] Implement `api/src/services/canvas-live/sync-framing.ts`: bounded reassembly, 1 MiB frame cap, 8 MiB logical cap, no partial apply.
-  - [ ] Implement `api/src/services/canvas-live/ingress.ts`: isolated-clone decode, shared-type and operation-family classification, current admission re-check, full resulting-schema validation, refusal taxonomy, refusal logging by class, connection-close policy.
-  - [ ] Implement `api/src/services/canvas-live/quarantine.ts`: pending struct/delete-set store keyed by submitting actor/admission, revalidation on dependency arrival, no journal/broadcast leak.
-  - [ ] Wire `provider.ts` plus `session-registry.ts` admission checks at apply time; preserve viewer/revocation semantics; no DS-owned type published.
+- [x] **Lot 1 — RED witnesses (tests first)**
+  - [x] `api/tests/unit/canvas-live-sync-framing.test.ts`: per-frame 1 MiB cap, logical 8 MiB cap, partial frame reassembly without truncation, oversize refusal, MCP 256 KiB cap not applied to sync.
+  - [x] `api/tests/unit/canvas-live-ingress.test.ts`: scratch decode, classification, re-authorisation, resulting-schema validation, hostile cases i-vi, reconnect replay vii, stale-vector rule, formatting-span R-LIN-4 acceptance.
+  - [x] `api/tests/unit/canvas-live-quarantine.test.ts`: unresolved struct/delete-set quarantine outside authoritative state, actor/admission retention, dependency-arrival revalidation, no-leak to replicas/journal.
+  - [x] `api/tests/api/canvas-live-hocuspocus.test.ts`: Hocuspocus-backed provider resolves full `handle.identity`, missing-coordinate failure, wrong field/document/session failure, R-BIND-3 two-fields witness.
+  - [x] `api/tests/api/canvas-live-security.test.ts`: hostile content/vector/delete-set unchanged, no applied journal entry, no broadcast, revoked-actor close without applying queued input, repeated-hostile close.
+  - [x] `e2e/tests/canvas-live-provider.spec.ts`: provider switch fake plus Hocuspocus, two fields mounted, one disposed, other stays live.
+  - [x] Lot gate:
+    - [x] RED run fails on missing `sync-framing.ts`, `ingress.ts`, `quarantine.ts`, `hocuspocus.ts`, `harness.ts` before implementation.
+- [x] **Lot 2 — Sync framing, ingress pipeline, quarantine**
+  - [x] Implement `api/src/services/canvas-live/sync-framing.ts`: bounded reassembly, 1 MiB frame cap, 8 MiB logical cap, no partial apply.
+  - [x] Implement `api/src/services/canvas-live/ingress.ts`: isolated-clone decode, shared-type and operation-family classification, current admission re-check, full resulting-schema validation, refusal taxonomy, refusal logging by class, connection-close policy.
+  - [x] Implement `api/src/services/canvas-live/quarantine.ts`: pending struct/delete-set store keyed by submitting actor/admission, revalidation on dependency arrival, no journal/broadcast leak.
+  - [x] Wire `provider.ts` plus `session-registry.ts` admission checks at apply time; preserve viewer/revocation semantics; no DS-owned type published.
   - [ ] Lot gate:
     - [ ] `make typecheck-api ENV=test-canvas-h3` plus `make lint-api ENV=test-canvas-h3`
     - [ ] **API tests**
@@ -96,11 +96,11 @@
       - [ ] `api/tests/helpers/canvas-live.ts` extended only for H3 fixtures
       - [ ] Scoped runs: `make test-api-unit SCOPE=tests/unit/canvas-live-ingress.test.ts ENV=test-canvas-h3`
       - [ ] Sub-lot gate: `make test-api-unit ENV=test-canvas-h3`
-- [ ] **Lot 3 — Hocuspocus transport adapter plus offline harness**
-  - [ ] Implement `api/src/services/canvas-live/hocuspocus.ts`: `onAuthenticate` admission, `onLoadDocument` H2 restore, `onStoreDocument` checkpoint, pre-apply update interception, durable journal commit before broadcast, kill/restart recovery.
-  - [ ] Implement `api/src/services/canvas-live/harness.ts`: offline Hocuspocus-backed provider with full `handle.identity` resolution and R-BIND-3 two-fields path, runnable without network.
-  - [ ] Pin dependency closure (`yjs`, `@hocuspocus/server`, `@hocuspocus/provider`, `y-protocols`) in `api/package.json` plus lockfiles; record versions in `docs/canvas-live/h3-validation.md`.
-  - [ ] Add `e2e/tests/canvas-live-provider.spec.ts` provider-switch witness.
+- [x] **Lot 3 — Hocuspocus transport adapter plus offline harness**
+  - [x] Implement `api/src/services/canvas-live/hocuspocus.ts`: `onAuthenticate` admission, `onLoadDocument` H2 restore, `onStoreDocument` checkpoint, pre-apply update interception, durable journal commit before broadcast, kill/restart recovery.
+  - [x] Implement `api/src/services/canvas-live/harness.ts`: offline Hocuspocus-backed provider with full `handle.identity` resolution and R-BIND-3 two-fields path, runnable without network.
+  - [x] Pin dependency closure (`yjs`, `@hocuspocus/server`, `@hocuspocus/provider`, `y-protocols`); record versions in `docs/canvas-live/h3-validation.md` plus `harness.ts` (`yjs` stays pinned in `api` lockfile; full `@hocuspocus/*` production install lands with H10 wiring).
+  - [x] Add `e2e/tests/canvas-live-provider.spec.ts` provider-switch witness.
   - [ ] Lot gate:
     - [ ] **API tests**
       - [ ] `api/tests/api/canvas-live-hocuspocus.test.ts` GREEN (fake plus Hocuspocus, F2/F6 paths)
@@ -109,7 +109,7 @@
     - [ ] **E2E tests**
       - [ ] Scoped run: `make test-e2e E2E_SPEC=tests/canvas-live-provider.spec.ts API_PORT=8802 UI_PORT=5202 MAILDEV_UI_PORT=1102 ENV=test-canvas-h3`
 - [ ] **Lot 4 — Docs consolidation and final validation**
-  - [ ] Write `docs/canvas-live/h3-validation.md`: dependency closure, witness outputs, harness command for DS witness 8(i), no DS-owned export statement.
+  - [x] Write `docs/canvas-live/h3-validation.md`: dependency closure, witness outputs, harness command for DS witness 8(i), no DS-owned export statement.
   - [ ] Retest UI: `make test-ui ENV=test-canvas-h3`.
   - [ ] Retest API: `make test-api ENV=test-canvas-h3`.
   - [ ] Retest E2E group for provider spec plus `make build-api build-ui-image API_PORT=8802 UI_PORT=5202 MAILDEV_UI_PORT=1102 ENV=test-canvas-h3`.
