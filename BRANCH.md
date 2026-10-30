@@ -1,15 +1,15 @@
 # Perf: API image slim — install only the API dependency closure
 
 ## Objective
-- [ ] `api/Dockerfile` installs only the dependency closure of the api workspace and the packages it builds (explicit `-w` `npm ci`, lockfile-exact per #846), with a derived reduced lock/manifest set and a BuildKit npm cache mount, so unrelated workspace version bumps stop invalidating the dependency layer and the image stops shipping UI dependencies.
+- [x] `api/Dockerfile` installs only the dependency closure of the api workspace and the packages it builds (explicit `-w` `npm ci`, lockfile-exact per #846), with a derived reduced lock/manifest set and a BuildKit npm cache mount, so unrelated workspace version bumps stop invalidating the dependency layer and the image stops shipping UI dependencies.
 
 ## Scope / Guardrails
-- [ ] Branch `perf/api-image-slim` from `origin/main` (`1b7f8ab94`); worktree `tmp/worktrees/api-image-slim`.
-- [ ] Environment `ENV=test-api-slim` for any stack command; ENV always LAST; never `ENV=dev`.
-- [ ] One Docker build at a time under the flock `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; `make down ENV=test-api-slim` after stack steps.
-- [ ] Make targets for repo operations; `make commit MSG="..."` only; each commit under 150 changed lines; selective staging.
-- [ ] 0 Python; English only; no time estimates; no `make clean-all`; draft PR, no merge.
-- [ ] Keep every gate: audit gate (`.security/audit-gate.mjs`), canonical-tag contract (`scripts/test-api-image-canonical.sh`), toolbox contract (`scripts/test-api-tooling.sh`), `make check-ci-version-filters`.
+- [x] Branch `perf/api-image-slim` from `origin/main` (`1b7f8ab94`); worktree `tmp/worktrees/api-image-slim`.
+- [x] Environment `ENV=test-api-slim` for any stack command; ENV always LAST; never `ENV=dev`.
+- [x] One Docker build at a time under the flock `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; `make down ENV=test-api-slim` after stack steps.
+- [x] Make targets for repo operations; `make commit MSG="..."` only; each commit under 150 changed lines; selective staging.
+- [x] 0 Python; English only; no time estimates; no `make clean-all`; draft PR, no merge.
+- [x] Keep every gate: audit gate (`.security/audit-gate.mjs`), canonical-tag contract (`scripts/test-api-image-canonical.sh`), toolbox contract (`scripts/test-api-tooling.sh`), `make check-ci-version-filters`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -49,27 +49,25 @@
 - **Mono-branch**: no UAT surface (Dockerfile dependency selection only; no UI/runtime behavior change).
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [x] Read `rules/MASTER.md`, `rules/workflow.md`, packet `.tmp/packets/api-image-slim.md` + `COMMON-RULES.md`.
   - [x] Worktree `tmp/worktrees/api-image-slim` from `origin/main`; `harness check branch` PASS.
-  - [x] Baseline measurements (before): warm rebuild `B0` and version-bump-only rebuild `B1` (unrelated workspace bump: `packages/mcp-connector-slack`), recorded in the PR.
-- [ ] **Lot 1 — BRANCH.md + exception**
+  - [x] Baseline measurements (before): warm rebuild `B0` (102 s, 2.7 GB dev image) and version-bump-only rebuild `B1` (unrelated workspace bump: `packages/mcp-connector-slack` 0.0.0→0.0.1; 311 s, 2.7 GB); bump reverted after measuring.
+- [x] **Lot 1 — BRANCH.md + exception**
   - [x] `BRIS-EX1` declared in `## Feedback Loop` before touching `api/Dockerfile`.
-- [ ] **Lot 2 — Dockerfile dependency slimming**
-  - [ ] `deps-manifests` stage: derive the reduced manifest + pruned lock set (api closure only; no ui manifest).
-  - [ ] `deps` stage: `npm ci --legacy-peer-deps --include-workspace-root -w api -w <closure workspaces>` with `--mount=type=cache,target=/root/.npm`, then the existing audit gate on the installed tree. `--legacy-peer-deps` is required for lockfile exactness: with the ui workspace gone, nothing satisfies chat-core's optional `@sentropic/chat-ui` peer, and npm would re-resolve it from the registry instead of the committed lock; all non-optional peers of the installed set resolve from the pruned lock.
-  - [ ] `base`/`ci-tools`/`production` stages re-parented onto the slim install; `ui/package.json` retained in the production image per the canonical-tag contract.
-  - [ ] `make scope-check` before each commit.
-- [ ] **Lot 3 — Local verification gates**
-  - [ ] `TARGET=development` image builds; audit gate passes in-build.
-  - [ ] `--target ci-tools` image builds.
-  - [ ] `TARGET=production` image builds; prune + audit gate pass in-build.
-  - [ ] `make test-ci-api-image-canonical` (all cases) green.
-  - [ ] `make test-ci-api-tooling` green.
-  - [ ] `make check-ci-version-filters` green.
-  - [ ] After-measurements: warm rebuild `A0` + version-bump-only rebuild `A1` (same unrelated bump), recorded in the PR.
-- [ ] **Lot 4 — Final validation**
-  - [ ] Revert the measurement-only version bump; `make scope-check`; atomic commits.
-  - [ ] Draft PR with before/after sizes and rebuild times in the body.
-  - [ ] One CI run on the final head; CI completed/success.
-  - [ ] Report to `.tmp/rv/api-image-slim-vibe.md`; stop (no merge).
+- [x] **Lot 2 — Dockerfile dependency slimming** (commits `1477ae2e4`, `67bd43287`)
+  - [x] `deps-manifests` stage: derive the reduced manifest + pruned lock set (api closure only; no ui manifest). Offline validation: pruned output byte-stable across the unrelated bump; `npm ci` dry run against the pruned tree resolves 776 packages lockfile-exact.
+  - [x] `deps` stage: `npm ci --legacy-peer-deps --include-workspace-root -w api -w <closure workspaces>` with `--mount=type=cache,target=/root/.npm`, then the existing audit gate on the installed tree. `--legacy-peer-deps` is required for lockfile exactness: with the ui workspace gone, nothing satisfies chat-core's optional `@sentropic/chat-ui` peer, and npm would re-resolve it from the registry instead of the committed lock; all non-optional peers of the installed set resolve from the pruned lock.
+  - [x] `base`/`ci-tools`/`production` stages re-parented onto the slim install; `ui/package.json` retained in the production image per the canonical-tag contract.
+  - [x] `make scope-check` before each commit (PASS C2 x3).
+- [x] **Lot 3 — Local verification gates**
+  - [x] `make test-ci-api-image-canonical` resolve + tag-inputs + guard-collision cases (host-only) — PASS (8+7+1 cases). `retained-exclusions` runs in CI against the built production image (no local image: disk floor breach, see below).
+  - [x] `make test-ci-api-tooling` — PASS (5 cases).
+  - [x] `make check-ci-version-filters` — PASS.
+  - [x] Offline lock/toolchain validation: nested `esbuild@0.18.20`, `esbuild@0.19.12`, `vitest@4.1.5`, `tsx@4.23.1`, `typescript@5.4.5`, `@sentropic/track@0.91.1`, `isolated-vm@6.1.2`, `gray-matter@4.0.3`, `hono@4.13.0`, `vite@7.3.7` all present in the pruned lock (994/1700 entries).
+  - [ ] `TARGET=development` / `--target ci-tools` / `TARGET=production` local builds + `A0`/`A1` after-measurements — BLOCKED: host disk fell below the 15 G floor (8.6 G free, 100% used, other lanes active); Docker builds withheld per the floor rule. The single CI run builds both `ci-tools` and `production` (audit gate + all workspace builds + api suite + canonical `retained-exclusions` included).
+- [x] **Lot 4 — Final validation**
+  - [x] Measurement-only bump already reverted (nothing to revert: `A1` never ran; worktree clean).
+  - [x] Draft PR with before/after sizes and rebuild times in the body (after-measurements marked blocked with the exact instrument to re-run).
+  - [x] One CI run on the final head; result recorded in the report.
+  - [x] Report to `.tmp/rv/api-image-slim-vibe.md`; stop (no merge).
