@@ -1,6 +1,6 @@
 import type { Component } from 'svelte';
-import type { ChatUiLabelResolver } from '../hosts/createWebHost.js';
-import type { SessionListEntry } from '../state/sessionList.js';
+import type { ChatUiLabelResolver } from '@sentropic/chat-core/runtime/hosts/createWebHost';
+import type { SessionListEntry } from '@sentropic/chat-core/runtime/state/sessionList';
 
 export type SessionListProps = {
   /** Sorted session list (use projectSessionList() to derive from HTTP response). */

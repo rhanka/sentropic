@@ -5,7 +5,6 @@
  *   - ChatComposerAttachmentDraft (deduped from state/chatAttachments + hosts/types)
  *   - GeneratedFileCard / ChatGeneratedFileCard (moved from ui document-adapter)
  *   - UnifiedAttachmentItem (moved from ui documents utils)
- *   - DocumentHost interface (new published seam for app-side document adapters)
  *
  * ZERO sentropic domain strings. ZERO google-drive code.
  * App-side concerns (Drive, REST, workspace scoping) belong in the host adapter.
@@ -85,79 +84,3 @@ export type UnifiedAttachmentItem = {
   previewUrl?: string;
 };
 
-// ---------------------------------------------------------------------------
-// DocumentHost interface — published seam for app-side document adapters
-//
-// This is the IRREVERSIBLE shape — review carefully before changing.
-// The host implements all domain-specific logic (Drive, REST, workspace scope).
-// The package only calls these methods generically.
-// ---------------------------------------------------------------------------
-
-/**
- * App-side document host adapter.
- *
- * The app implements this interface to wire drive/REST/docx download into
- * the generic AttachmentBand and GeneratedFileCardTray components.
- *
- * All methods are framework-neutral (no Svelte imports, no DOM references
- * in the contract itself — implementations may use the DOM internally).
- *
- * uploadFile: upload a file for the draft id, returns the updated draft
- *   (state 'ready' on success, 'failed' on error).
- * deleteUploadedFile: delete a previously uploaded file by documentId.
- *   The host should swallow errors gracefully if the file no longer exists.
- * pickExternalFiles: optional — open an external file picker (e.g. Drive).
- *   Returns an array of new drafts to add to the composer. Omit if the host
- *   does not support external pickers.
- * resolveAttachmentSrc: return a URL string for a given attachment so the
- *   band can render an image preview. May be synchronous or async.
- * downloadGeneratedFile: trigger a download for a generated file card.
- * getExternalPickerState: optional — return the current state of the external
- *   picker integration (connected, loading, account label). Used for UI feedback.
- */
-export interface DocumentHost {
-  /**
-   * Upload a file for the given draft. Returns the updated draft.
-   * On success: draft.state = 'ready', draft.documentId is set.
-   * On failure: draft.state = 'failed', draft.error is set.
-   */
-  uploadFile(
-    draft: ChatComposerAttachmentDraft,
-    file: File,
-  ): Promise<ChatComposerAttachmentDraft>;
-
-  /**
-   * Delete an uploaded file by its documentId.
-   * Should swallow 404 / already-deleted errors.
-   */
-  deleteUploadedFile(documentId: string): Promise<void>;
-
-  /**
-   * Optional: open an external file picker.
-   * Returns new drafts to add to the composer.
-   */
-  pickExternalFiles?(): Promise<ChatComposerAttachmentDraft[]>;
-
-  /**
-   * Resolve a display URL for an attachment.
-   * Used by AttachmentBand to render image previews.
-   */
-  resolveAttachmentSrc(
-    attachment: Pick<ChatComposerAttachmentDraft, 'previewUrl' | 'documentId'>,
-  ): string | Promise<string>;
-
-  /**
-   * Download a generated file card.
-   */
-  downloadGeneratedFile(card: ChatGeneratedFileCard): Promise<void>;
-
-  /**
-   * Optional: return external picker connection state for UI feedback.
-   */
-  getExternalPickerState?(): {
-    ready: boolean;
-    connected: boolean;
-    busy: boolean;
-    accountLabel?: string;
-  };
-}

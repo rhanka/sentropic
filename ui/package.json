@@ -69,6 +69,7 @@
     "@lucide/svelte": "^0.562.0",
     "@sentropic/auth-ui": "file:../packages/auth-ui",
     "@sentropic/chat-ui": "file:../packages/chat-ui",
+    "@sentropic/chat-core": "file:../packages/chat-core",
     "@sentropic/cowork-bridge": "file:../packages/cowork-bridge",
     "@sentropic/design-system-svelte": "^0.34.40",
     "@sentropic/design-system-themes": "^0.11.0",

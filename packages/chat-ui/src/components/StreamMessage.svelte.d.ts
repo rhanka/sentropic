@@ -2,7 +2,7 @@ import type { Component } from 'svelte';
 import type {
   GeneratedFileCard,
   StreamHubClient,
-} from '../client/streamTypes.js';
+} from '@sentropic/chat-core/runtime/client/streamTypes';
 
 type StreamMessageClient = Pick<StreamHubClient, 'setStream' | 'delete'>;
 type LabelOptions = { values?: Record<string, unknown> };
@@ -37,7 +37,7 @@ export type StreamMessageTodoRuntimeUpdate = {
 };
 
 export type StreamMessageProps = {
-  streamClient: StreamMessageClient;
+  streamClient?: StreamMessageClient;
   labels?: StreamMessageLabelResolver;
   streamId: string;
   status: string | undefined;

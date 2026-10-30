@@ -13,8 +13,8 @@
    * Wave 2 canonical picker (replaces the orphan ContextChips for this surface).
    */
 
-  import type { ChatContextEntry } from '../state/chat-context.js';
-  import type { ChatUiLabelResolver } from '../hosts/createWebHost.js';
+  import type { ChatContextEntry } from '@sentropic/chat-core/runtime/state/chat-context';
+  import type { ChatUiLabelResolver } from '@sentropic/chat-core/runtime/hosts/createWebHost';
 
   // ---------------------------------------------------------------------------
   // Props

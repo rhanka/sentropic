@@ -1,5 +1,5 @@
 /**
- * Migrated from checkpointDelta.ts to @sentropic/chat-ui/checkpoints + sentropic adapter opts.
+ * Migrated from checkpointDelta.ts to @sentropic/chat-core/runtime/checkpoints + sentropic adapter opts.
  * The generic module provides the core classifier; sentropic-specific opts (isMutatingTool,
  * isLocalToolName, humanizeMutation) come from the adapter hooks.
  */
@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import {
   getCheckpointMutationPreviewItems,
   hasCheckpointMutationDelta,
-} from '@sentropic/chat-ui/checkpoints';
+} from '@sentropic/chat-core/runtime/checkpoints';
 
 // Sentropic domain opts (mirrors checkpointHostAdapter.ts hooks, without network calls).
 const MUTATING_TOOL_NAME_SUFFIXES = ['_create', '_update', '_delete'];
@@ -41,7 +41,7 @@ const humanizeMutation = (toolName: string, argsText: string): string | null => 
 
 const sentropicOpts = { isMutatingTool, humanizeMutation };
 
-describe('checkpointDelta (migrated to @sentropic/chat-ui/checkpoints)', () => {
+describe('checkpointDelta (migrated to @sentropic/chat-core/runtime/checkpoints)', () => {
   it('does not expose checkpoint restore for read-only assistant turns', () => {
     const result = hasCheckpointMutationDelta(
       { anchorSequence: 1 },

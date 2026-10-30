@@ -1,11 +1,11 @@
 import type { Component, Snippet } from 'svelte';
-import type { ChatCoreTransport } from '../client/transport.js';
-import type { StreamHubClient } from '../client/streamTypes.js';
+import type { ChatCoreTransport } from '@sentropic/chat-core/runtime/client/transport';
+import type { StreamHubClient } from '@sentropic/chat-core/runtime/client/streamTypes';
 import type { RendererRegistry } from '../renderers/registry.js';
 import type {
   ChatUiLabelResolver,
   ChatUiWebHost,
-} from '../hosts/createWebHost.js';
+} from '@sentropic/chat-core/runtime/hosts/createWebHost';
 
 export type ChatPanelProps = {
   host?: ChatUiWebHost;
