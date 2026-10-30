@@ -135,6 +135,69 @@ The validated working bundle is `/home/antoinefa/src/sentropic/.tmp/focus-ci-eff
 
 The [pinned workflow](https://github.com/rhanka/sentropic/blob/441453966a4dfac12c220f154508d7ab1ee3c237/.github/workflows/ci.yml) and [Makefile](https://github.com/rhanka/sentropic/blob/441453966a4dfac12c220f154508d7ab1ee3c237/Makefile) govern historical interpretation. Every implementation branch rechecks the then-current files before changing them. The current-main 138-second UI example replaces the earlier 129-second label; the 495-second UI and 199-second scan examples belong to the broad PR. Historical publisher runs remain historical. No unmeasured cold branch, skipped test, or already-published version receives an invented duration or success credit.
 
+## Artifact storage — transport lifetime correction (2026-10-29)
+
+The account audit measured sentropic at 97–99.7% of Actions storage:
+7,717 active artifacts / **4,017 GB**, including 3,566 Docker-image artifacts
+/ **4,008 GB** and 36 desktop-download artifacts / **2.5 GB**. After BR-78,
+the observed partial-day rate projects to roughly **130 GB/day**. These are
+audit observations/projections, not measurements of this retention change.
+During authoring on 2026-10-29, a fresh paginated read of
+`GET repos/rhanka/sentropic/actions/artifacts?per_page=100` found 6,876
+artifacts / **2,714,981,013,935 bytes** (2,714.98 decimal GB), including
+2,711 allowlisted transport artifacts / **2,708,424,252,935 bytes**. The
+branch's first CI run was still queued: this stock decrease cannot be
+attributed to this branch. Pagination is a live snapshot, not an atomic
+inventory. The repository artifact/log-retention GET still reports 90 days.
+Source: `artifacts-audit.md`, 2026-10-29, retained with paginated API and daily
+billing data in the supplied `ci-study` audit bundle; the audit's original
+local path is `/home/antoinefa/.cache-tmp/claude-1000/-home-antoinefa-src-poc-k8s/fc703350-bfba-4a32-97bf-ce7041335aba/scratchpad/ci-study/artifacts-audit.md`.
+
+`fix/ci-artifact-retention` changes only the five transport uploads to
+`retention-days: 1`, replacing their inherited 90-day lifetime. The final
+`ci-gate` also waits for `delete-transport-artifacts`, which waits for every
+consumer through `ci-capacity-receipts`, including image publication and
+preproduction deployment, plus independent validators and train verification.
+Its sole step paginates the current attempt's jobs
+and preserves artifacts if any job failed or was cancelled, allowing selective
+reruns within the one-day retention window. Otherwise, it paginates **this run's**
+artifacts and deletes only the five exact names below. Only the deletion job receives
+`actions: write`; workflow defaults and `ci-gate` stay read-only. Fork
+PRs retain one-day expiry because their token is read-only. Cancellation
+before cleanup also falls back to expiry. API failures fail the cleanup step;
+the existing required-result verdict and all gates remain enforced.
+
+| Transport artifact | Consumers completed before cleanup |
+| --- | --- |
+| api-image | API test matrix, browser E2E, VSCode E2E, IdP screen smoke, restore smoke, API scan, API image publisher |
+| api-tool-image | API test matrix, IdP screen smoke, restore smoke, toolbox scan |
+| ui-image | Browser E2E, VSCode E2E, UI scan, UI image publisher |
+| e2e-image | Browser E2E, VSCode E2E, IdP screen smoke, browser-image scan |
+| desktop-download | Container UI build and static UI build (including Pages upload) |
+
+Every download uses the default current run; no cross-run consumer requires
+keeping these five artifacts. `deploy-preprod` checks immutable registry
+tags and deploys from the registry; it does not fetch an earlier run's Actions
+artifacts. Package publishers use their source/registry flow. Package-candidate,
+qualification, security, capacity and Pages artifacts are outside the delete
+allowlist. Failed, cancelled and fork runs keep transport artifacts for at most
+one day; successful runs delete them after consumers finish.
+
+Stock after deployment is **not yet measured**: changing upload retention does
+not shorten existing artifacts' expiry. This branch does not delete historical
+stock or change repository-level artifact/log retention. At the observed rate,
+one-day fallback bounds new transport stock to about 130 GB; successful cleanup
+removes it after consumers finish. Neither figure is a measured account-stock
+reduction. Retain exact-head CI and run-artifact API results with the PR before
+claiming the cleanup works in GitHub Actions.
+
+Coordination: open PR #829 (BR-80) changes package-candidate wiring in the same
+workflow. Preserve its jobs, needs and candidate artifacts; the retention diff
+is confined to the five upload inputs, deletion job and final gate. This section is
+separate from BR-80's appended implementation receipts to reduce rebase overlap.
+Rollback: revert the deletion job, its gate dependency, and the five
+retention inputs together; restore no other workflow policy.
+
 ## 9. BR-76 implementation receipts
 
 BR-76 added `scripts/ci/ci-run-metrics.mjs` (durations from identified
