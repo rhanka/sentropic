@@ -141,6 +141,8 @@ test('dedicated manifest_guard filter: only exact image guards also select globa
   const filters = YAML.parse(jobs.changes.steps.find((s) => s.id === 'filter').with.filters);
   assert.deepEqual(filters.manifest_guard, ['scripts/ci/**']);
   const imageGuards = ['scripts/ci/image-receipt.mjs', 'scripts/ci/image-receipt.test.mjs'];
+  const apiLockInputs = ['scripts/ci/locked-tools.mjs', 'scripts/ci/tool-locks.json'];
+  assert.deepEqual(filters.api.filter(g => g.startsWith('scripts/ci')), apiLockInputs);
   assert.deepEqual(filters.global.filter(g => g.startsWith('scripts/ci')), imageGuards);
   const candidateGuards = ['package-candidate.mjs', 'package-candidate.test.mjs', 'package-qualification-dag.test.mjs',
     'publishable-manifests.mjs', 'publishable-manifests.test.mjs', 'publishable-pack.test.mjs',
@@ -150,6 +152,7 @@ test('dedicated manifest_guard filter: only exact image guards also select globa
     if (name === 'manifest_guard') continue;
     for (const glob of globs.filter(g => g.startsWith('scripts/ci'))) {
       assert.ok(name === 'global' && imageGuards.includes(glob)
+        || name === 'api' && apiLockInputs.includes(glob)
         || name === 'package_candidates' && candidateGuards.includes(glob), `${name} must not include ${glob}`);
     }
   }

@@ -104,8 +104,8 @@ const fetchNativePrebuilds = () => {
         ),
     );
     run(
-        'npm',
-        ['install', '--os=win32', '--cpu=x64', '--no-audit', '--no-fund', '--no-save', '--ignore-scripts'],
+        process.execPath,
+        ['/workspace/scripts/ci/locked-tools.mjs', '--prefix', nativeStageDir, '--os=win32', '--cpu=x64', '--no-audit', '--no-fund', '--no-save', '--ignore-scripts', ...NATIVE_MODULES.map(m => `${m.name}@${m.version}`)],
         { cwd: nativeStageDir, env: { ...process.env, npm_config_cache: '/tmp/npm-cache' } },
     );
     const installedRoot = path.join(nativeStageDir, 'node_modules');
