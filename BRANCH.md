@@ -53,9 +53,9 @@
   - [x] Remove private, include MIT LICENSE, distinguish the memory-only P3 bootstrap from subsequent full packages.
 - [x] **Lot 2 — Make and CI publication**
   - [x] Mirror platform guarded pack, OIDC publisher, filters and job; require memory qualification; no repacked token bootstrap; reserve 0.1.0 for P3.
-- [ ] **Lot 3 — Regression tests**
-  - [ ] Update guard publisher/pack inventories and classification fixtures; leave bootstrap targets unchanged.
-  - [ ] Extend `scripts/ci/publishable-ci-wiring.test.mjs` for broker release contract and main-only publication.
+- [x] **Lot 3 — Regression tests**
+  - [x] Update guard publisher/pack inventories and classification fixtures; leave bootstrap targets unchanged.
+  - [x] Extend `scripts/ci/publishable-ci-wiring.test.mjs` for broker release contract and main-only publication; 173 scoped fixtures pass, including executable 0.1.0 exclusion.
 - [ ] **Lot 4 — Artifacts and owner handoff**
   - [ ] Run `make test-publishable-manifests` and `make test-mcp-broker` in the isolated environment.
   - [ ] Pack exact candidate, compare every broker dist member against the P3 archive, and verify clean installed root/memory imports.
