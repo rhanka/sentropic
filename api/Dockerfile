@@ -249,29 +249,39 @@ RUN mkdir -p /tmp/picomatch-update && \
     fi && \
     rm -rf /tmp/picomatch-update
 WORKDIR /workspace
-COPY package.json package-lock.json* ./
-COPY api/package.json ./api/package.json
-COPY ui/package.json ./ui/package.json
-COPY packages/auth-hono/package.json ./packages/auth-hono/package.json
-COPY packages/contracts/package.json ./packages/contracts/package.json
-COPY packages/events/package.json ./packages/events/package.json
-COPY packages/comments/package.json ./packages/comments/package.json
-COPY packages/auth-client/package.json ./packages/auth-client/package.json
-COPY packages/chat-core/package.json ./packages/chat-core/package.json
-COPY packages/chat-server/package.json ./packages/chat-server/package.json
-COPY packages/cluster-mesh/package.json ./packages/cluster-mesh/package.json
-COPY packages/llm-mesh/package.json ./packages/llm-mesh/package.json
-COPY packages/llm-gateway/package.json ./packages/llm-gateway/package.json
-COPY packages/flow/package.json ./packages/flow/package.json
-COPY packages/skills/package.json ./packages/skills/package.json
-COPY packages/oauth-verify/package.json ./packages/oauth-verify/package.json
-COPY packages/mcp-auth/package.json ./packages/mcp-auth/package.json
-COPY packages/mcp-platform/package.json ./packages/mcp-platform/package.json
-COPY packages/connector-host/package.json ./packages/connector-host/package.json
-COPY packages/mcp-connector-google/package.json ./packages/mcp-connector-google/package.json
-COPY packages/ubo-contracts/package.json ./packages/ubo-contracts/package.json
-COPY packages/artifacts/package.json ./packages/artifacts/package.json
-RUN npm ci --workspaces --include-workspace-root
+# Install only the api dependency closure (20 workspaces), lockfile-exact from
+# the pruned lock derived above: no ui, no chat-ui, no unrelated workspace deps.
+# --legacy-peer-deps keeps the install lockfile-exact: with the ui workspace
+# gone, nothing satisfies chat-core's optional @sentropic/chat-ui peer and npm
+# would re-resolve it from the registry (EUSAGE) instead of trusting the
+# committed lock; every non-optional peer of the installed set still resolves
+# from the lock. The cache mount keeps the npm download cache out of the layer
+# stack so re-installs after unrelated workspace bumps hit the warm cache.
+COPY --from=deps-manifests /out/package.json /out/package-lock.json ./
+COPY --from=deps-manifests /out/api/package.json ./api/package.json
+COPY --from=deps-manifests /out/packages ./packages
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --legacy-peer-deps --include-workspace-root \
+      -w api \
+      -w @sentropic/artifacts \
+      -w @sentropic/auth-client \
+      -w @sentropic/auth-hono \
+      -w @sentropic/chat-core \
+      -w @sentropic/chat-server \
+      -w @sentropic/cluster-mesh \
+      -w @sentropic/comments \
+      -w @sentropic/connector-host \
+      -w @sentropic/contracts \
+      -w @sentropic/events \
+      -w @sentropic/flow \
+      -w @sentropic/llm-gateway \
+      -w @sentropic/llm-mesh \
+      -w @sentropic/mcp-auth \
+      -w @sentropic/mcp-connector-google \
+      -w @sentropic/mcp-platform \
+      -w @sentropic/oauth-verify \
+      -w @sentropic/skills \
+      -w @sentropic/ubo-contracts
 # Security: audit production deps for HIGH/CRITICAL. Exception-aware gate
 # (GHSA allowlist + expiry) — see .security/audit-gate.mjs + vulnerability-register.yaml.
 COPY .security/audit-gate.mjs .security/audit-allowlist.json ./.security/
@@ -380,7 +390,6 @@ RUN rm -rf /usr/local/lib/node_modules/npm
 COPY --from=ci-tool-base /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
 COPY --from=ci-tool-base /workspace/node_modules /workspace/node_modules
 COPY --from=ci-tool-base /workspace/package.json /workspace/package-lock.json /workspace/
-COPY --from=ci-tool-base /workspace/ui /workspace/ui
 COPY --from=ci-tool-base /workspace/.security /workspace/.security
 COPY --from=base /workspace/api /workspace/api
 COPY --from=base /workspace/packages /workspace/packages
@@ -441,6 +450,10 @@ COPY --from=production-dependencies /workspace /workspace
 # Runtime entrypoints and boot migrations use Node directly, never npm/npx.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /root/.npm && \
     ! command -v npm && ! command -v npx && test ! -e /root/.npm
+# Retained input (canonical contract): /workspace/ui/package.json ships in the
+# production image because it is hashed into API_VERSION; the runtime never
+# imports the ui workspace, whose dependencies are no longer installed here.
+COPY ui/package.json ./ui/package.json
 COPY --from=build /workspace/api/dist /workspace/api/dist
 # BR-39 deploy (D4-a) — bundle the standalone IdP entrypoint + its login/consent
 # screens into the SAME image. The api runtime is untouched (default CMD below);
