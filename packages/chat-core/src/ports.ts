@@ -63,13 +63,22 @@ export type {
  * full method surface lands progressively as chat-service migrates onto these ports.
  */
 
-/**
- * Per SPEC §10.3 — canvas bidirectional editing.
- * LiveDocumentStore carries the diff round-trip abstraction beyond the message log.
- */
-export interface LiveDocumentStore {
-  readonly _kind: 'LiveDocumentStore';
-}
+export type {
+  LiveDocumentStore,
+  LiveDocumentIdentity,
+  LiveBaseline,
+  LiveParagraph,
+  LivePatchKey,
+  LiveReceipt,
+  LiveAffectedItems,
+  LiveFormattingIntent,
+  LiveAdmission,
+  LiveSessionRecord,
+  LiveCommit,
+  LiveJournalEntry,
+  LiveCheckpoint,
+  LiveDocumentState,
+} from './live-document-port.js';
 
 /**
  * Per SPEC §5 — federated ToolRegistry.

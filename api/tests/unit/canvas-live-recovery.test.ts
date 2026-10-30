@@ -1,5 +1,50 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DraftRecovery, type PreservedDraft } from '../../src/services/canvas-live/recovery';
+import * as Y from 'yjs';
+import { restoreDocument, sealCheckpoint } from '../../src/services/canvas-live/persistence';
+import { admission, baseline, codec, commit, identity, MemoryStore, update } from '../helpers/canvas-live';
+
+describe('canvas live restart recovery', () => {
+  it('should restore encoded state plus only the journal suffix including deletes and epoch', async () => {
+    const store = new MemoryStore();
+    await store.open(identity, baseline, admission.schemaEpoch);
+    const doc = codec.create();
+    await store.commit(identity, 0, commit(update(doc, t => t.insert(0, 'abc'))));
+    const checkpoint = sealCheckpoint({ checkpointId: 'cp-a', documentId: identity.documentId,
+      encodedState: codec.encode(doc), stateVector: codec.vector(doc), journalWatermark: 1,
+      schemaEpoch: '1', createdAt: '2026-10-29T00:00:00Z', createdBy: 'host' });
+    await store.checkpoint(identity, 1, checkpoint);
+    await store.commit(identity, 1, commit(update(doc, t => t.delete(1, 1)), 'delete'));
+    const restored = restoreDocument(await store.load(identity), codec);
+    expect(restored.getText('field:body').toString()).toBe('ac');
+    expect(codec.encode(restored)).toBe(codec.encode(doc));
+    expect(codec.vector(restored)).toBe(codec.vector(doc));
+    expect(Y.decodeUpdate(Buffer.from(codec.encode(restored), 'base64')).ds)
+      .toEqual(Y.decodeUpdate(Buffer.from(codec.encode(doc), 'base64')).ds);
+    expect(store.state.schemaEpoch).toBe('1');
+    codec.apply(restored, store.state.journal[1].encodedUpdate!);
+    expect(codec.encode(restored)).toBe(codec.encode(doc));
+  });
+
+  it('should refuse a changed watermark rather than silently omit an update', async () => {
+    const store = new MemoryStore();
+    await store.open(identity, baseline, '1');
+    const doc = codec.create();
+    await store.commit(identity, 0, commit(update(doc, t => t.insert(0, 'a'))));
+    store.state.checkpoint = sealCheckpoint({ checkpointId: 'cp', documentId: identity.documentId,
+      encodedState: codec.encode(doc), stateVector: codec.vector(doc), journalWatermark: 1,
+      schemaEpoch: '1', createdAt: 'now', createdBy: 'host' });
+    await store.commit(identity, 1, commit(update(doc, t => t.insert(1, 'b')), 'next'));
+    store.state.checkpoint.journalWatermark = 2;
+    expect(() => restoreDocument(store.state, codec)).toThrow('checkpoint-integrity');
+    const { digest: _digest, ...forged } = store.state.checkpoint;
+    store.state.checkpoint = sealCheckpoint(forged);
+    expect(() => restoreDocument(store.state, codec)).toThrow('checkpoint-coverage');
+    store.state.checkpoint = null;
+    store.state.journal.shift();
+    expect(() => restoreDocument(store.state, codec)).toThrow('journal-gap');
+  });
+});
 
 function fixture() {
   const principal = { tenantId: 't', workspaceId: 'w', actor: { actorId: 'b', kind: 'human' as const, displayLabel: 'B', color: '#123456' } };

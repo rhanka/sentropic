@@ -1,5 +1,6 @@
 import { boolean, customType, foreignKey, index, integer, jsonb, pgTable, primaryKey, text, timestamp, unique, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
+import type { LiveBaseline, LiveCheckpoint, LiveJournalEntry } from '../../../packages/chat-core/src/live-document-port';
 
 // Workspace constants (keep stable IDs for migrations/backfills)
 export const ADMIN_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001';
@@ -1516,3 +1517,29 @@ export type ExecutionRunRow = typeof executionRuns.$inferSelect;
 export type ExecutionEventRow = typeof executionEvents.$inferSelect;
 export type WorkflowRunStateRow = typeof workflowRunState.$inferSelect;
 export type WorkflowTaskResultRow = typeof workflowTaskResults.$inferSelect;
+
+// H2 host-only storage. Artifact lifecycle remains with the artifacts provider.
+export const canvasLiveDocuments = pgTable('canvas_live_documents', {
+  tenantId: text('tenant_id').notNull(), workspaceId: text('workspace_id').notNull(),
+  documentId: text('document_id').notNull(), baseline: jsonb('baseline').$type<LiveBaseline>().notNull(),
+  schemaEpoch: text('schema_epoch').notNull(), head: integer('head').notNull().default(0),
+  checkpoint: jsonb('checkpoint').$type<LiveCheckpoint>(),
+}, t => ({ pk: primaryKey({ columns: [t.tenantId, t.workspaceId, t.documentId] }) }));
+
+export const canvasLiveJournal = pgTable('canvas_live_journal', {
+  tenantId: text('tenant_id').notNull(), workspaceId: text('workspace_id').notNull(),
+  documentId: text('document_id').notNull(), seq: integer('seq').notNull(),
+  body: jsonb('body').$type<LiveJournalEntry>().notNull(),
+}, t => ({ pk: primaryKey({ columns: [t.tenantId, t.workspaceId, t.documentId, t.seq] }),
+  document: foreignKey({ columns: [t.tenantId, t.workspaceId, t.documentId],
+    foreignColumns: [canvasLiveDocuments.tenantId, canvasLiveDocuments.workspaceId, canvasLiveDocuments.documentId] }),
+}));
+
+export const canvasLiveCheckpoints = pgTable('canvas_live_checkpoints', {
+  tenantId: text('tenant_id').notNull(), workspaceId: text('workspace_id').notNull(),
+  documentId: text('document_id').notNull(), checkpointId: text('checkpoint_id').notNull(),
+  body: jsonb('body').$type<LiveCheckpoint>().notNull(),
+}, t => ({ pk: primaryKey({ columns: [t.tenantId, t.workspaceId, t.documentId, t.checkpointId] }),
+  document: foreignKey({ columns: [t.tenantId, t.workspaceId, t.documentId],
+    foreignColumns: [canvasLiveDocuments.tenantId, canvasLiveDocuments.workspaceId, canvasLiveDocuments.documentId] }),
+}));

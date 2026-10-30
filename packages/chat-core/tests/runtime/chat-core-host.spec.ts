@@ -229,8 +229,8 @@ describe('ChatCoreHost — export surface registration', () => {
     expect(Object.keys(pkgJson.exports)).toContain(SUBPATH);
   });
 
-  it('should identify the chat-core minor runtime release', () => {
-    expect(pkgJson.version).toBe('0.2.0');
+  it('should identify the chat-core minor durable port release', () => {
+    expect(pkgJson.version).toBe('0.3.0');
   });
 
   it('should resolve the compiled chat-core-host entry to an existing path', () => {
