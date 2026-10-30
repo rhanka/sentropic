@@ -57,7 +57,7 @@
   - [ ] Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- [ ] `attention`: H3 dependency closure pin (`yjs`, `@hocuspocus/server`, `@hocuspocus/provider`, `y-protocols`) recorded in `docs/canvas-live/h3-validation.md` before claiming conformance.
+- [x] `attention`: H3 dependency closure pin (`yjs`, `@hocuspocus/server`, `@hocuspocus/provider`, `y-protocols`) recorded in `docs/canvas-live/h3-validation.md` before claiming conformance — installed, recorded and verified.
 - [x] BRLOCK-EX1 carried verbatim from `origin/main` for gate continuity; review r1 CHANGES make H3 exercise lock and Makefile paths: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; authorized Make/CI/container installs and Docker context, tool/consumer runners and locks, packaging probes/manifests, security evidence and regression tests within Allowed Paths; remove on PR closure; rollback by reverting this branch.
 - [x] BRH3-EX1 (review r1 item 3): add one `test-canvas-live-harness` target to the forbidden `Makefile` plus a `test:canvas-live-harness` script in `api/package.json`.
   - Reason: the DS witness-8 offline harness must be runnable from a plain checkout; the review requires a committed package entrypoint plus a repo make target, and the harness suite runs through the same `docker compose exec` test infra as every other api suite.
@@ -89,14 +89,13 @@
   - [x] `api/tests/unit/canvas-live-quarantine.test.ts`: unresolved struct/delete-set quarantine outside authoritative state, actor/admission retention, dependency-arrival revalidation, no-leak to replicas/journal.
   - [x] `api/tests/api/canvas-live-hocuspocus.test.ts`: Hocuspocus-backed provider resolves full `handle.identity`, missing-coordinate failure, wrong field/document/session failure, R-BIND-3 two-fields witness.
   - [x] `api/tests/api/canvas-live-security.test.ts`: hostile content/vector/delete-set unchanged, no applied journal entry, no broadcast, revoked-actor close without applying queued input, repeated-hostile close.
-  - [x] `e2e/tests/canvas-live-provider.spec.ts`: provider switch fake plus Hocuspocus, two fields mounted, one disposed, other stays live.
   - [x] Lot gate:
     - [x] RED run fails on missing `sync-framing.ts`, `ingress.ts`, `quarantine.ts`, `hocuspocus.ts`, `harness.ts` before implementation.
 - [x] **Lot 2 — Sync framing, ingress pipeline, quarantine**
   - [x] Implement `api/src/services/canvas-live/sync-framing.ts`: bounded reassembly, 1 MiB frame cap, 8 MiB logical cap, no partial apply.
   - [x] Implement `api/src/services/canvas-live/ingress.ts`: isolated-clone decode, shared-type and operation-family classification, current admission re-check, full resulting-schema validation, refusal taxonomy, refusal logging by class, connection-close policy.
   - [x] Implement `api/src/services/canvas-live/quarantine.ts`: pending struct/delete-set store keyed by submitting actor/admission, revalidation on dependency arrival, no journal/broadcast leak.
-  - [x] Wire `provider.ts` plus `session-registry.ts` admission checks at apply time; preserve viewer/revocation semantics; no DS-owned type published.
+  - [x] Enforce admission checks at apply time in the validated bridge (`hocuspocus.ts` re-authorises per update through `authorizeUpdate`, registry binding resolution and the classifier admission re-check); preserve viewer/revocation semantics; no DS-owned type published. `provider.ts` and `session-registry.ts` stay unchanged from `origin/main` (review r1 §4).
   - [ ] Lot gate:
     - [ ] `make typecheck-api ENV=test-canvas-h3` plus `make lint-api ENV=test-canvas-h3`
     - [ ] **API tests**
@@ -108,21 +107,20 @@
       - [ ] Sub-lot gate: `make test-api-unit ENV=test-canvas-h3`
 - [x] **Lot 3 — Hocuspocus transport adapter plus offline harness**
   - [x] Implement `api/src/services/canvas-live/hocuspocus.ts`: `onAuthenticate` admission, `onLoadDocument` H2 restore, `onStoreDocument` checkpoint, pre-apply update interception, durable journal commit before broadcast, kill/restart recovery.
-  - [x] Implement `api/src/services/canvas-live/harness.ts`: offline Hocuspocus-backed provider with full `handle.identity` resolution and R-BIND-3 two-fields path, runnable without network.
-  - [x] Pin dependency closure (`yjs`, `@hocuspocus/server`, `@hocuspocus/provider`, `y-protocols`); record versions in `docs/canvas-live/h3-validation.md` plus `harness.ts` (`yjs` stays pinned in `api` lockfile; full `@hocuspocus/*` production install lands with H10 wiring).
-  - [x] Add `e2e/tests/canvas-live-provider.spec.ts` provider-switch witness.
+  - [x] Implement `api/src/services/canvas-live/harness.ts`: offline harness with an explicit `provider` option (`in-memory-double` or `hocuspocus`) echoed in the result, full `handle.identity` resolution and R-BIND-3 two-fields path; the `hocuspocus` path runs a real in-process `@hocuspocus/server` and needs no external network service.
+  - [x] Pin and install the dependency closure (`yjs`, `@hocuspocus/server`, `@hocuspocus/provider`, `y-protocols` exact versions in `api` devDependencies and both lockfiles); verify installed versions against the workspace install through `api/tests/api/canvas-live-harness.test.ts`; record versions in `docs/canvas-live/h3-validation.md` plus `harness.ts` (production transport wiring lands with H10).
+  - [x] Replace the planned e2e provider-switch witness with `api/tests/api/canvas-live-harness.test.ts` (review r1 item 5): DS witness 8 against the in-memory double and the real in-process Hocuspocus server — two fields mounted, one disposed, survivor stays live — plus kill/restart checkpoint replay; delete `e2e/tests/canvas-live-provider.spec.ts`.
   - [ ] Lot gate:
     - [ ] **API tests**
       - [ ] `api/tests/api/canvas-live-hocuspocus.test.ts` GREEN (fake plus Hocuspocus, F2/F6 paths)
-      - [ ] `api/tests/api/canvas-live-security.test.ts` GREEN (cases i-vii, reconnect replay, legitimate catch-up above 256 KiB)
-      - [ ] Scoped runs: `make test-api-endpoints SCOPE=tests/api/canvas-live-hocuspocus.test.ts ENV=test-canvas-h3`
-    - [ ] **E2E tests**
-      - [ ] Scoped run: `make test-e2e E2E_SPEC=tests/canvas-live-provider.spec.ts API_PORT=8802 UI_PORT=5202 MAILDEV_UI_PORT=1102 ENV=test-canvas-h3`
+      - [ ] `api/tests/api/canvas-live-security.test.ts` GREEN (cases i-vii, real-bytes catch-up replay, legitimate catch-up above 256 KiB)
+      - [ ] `api/tests/api/canvas-live-harness.test.ts` GREEN (DS witness 8 against both providers, kill/restart)
+      - [ ] Scoped runs: `make test-api-endpoints SCOPE=tests/api/canvas-live-hocuspocus.test.ts ENV=test-canvas-h3`; `make test-canvas-live-harness ENV=test-canvas-h3`
 - [ ] **Lot 4 — Docs consolidation and final validation**
   - [x] Write `docs/canvas-live/h3-validation.md`: dependency closure, witness outputs, harness command for DS witness 8(i), no DS-owned export statement.
   - [x] Retest UI: `make test-ui ENV=test-canvas-h3` — 84 files, 497 tests passed.
-  - [x] Retest API: `make test-api-unit` plus `make test-api-endpoints` scoped H3 suites `ENV=test-canvas-h3` — 25 passed; `make typecheck-api` exit 0; `make lint-api` 0 errors.
-  - [ ] Retest E2E group for provider spec: covered by branch CI e2e matrix on the exact head (local e2e stack deferred to avoid test-stack project collision).
+  - [x] Retest API: `make test-api-unit ENV=test-canvas-h3` (147 files, 1526 passed, 2 skipped) plus scoped H3 api suites `ENV=test-canvas-h3` (47 passed: framing 5, ingress 11, quarantine 4, wiring 3, hocuspocus 7, security 9, composition 4, harness 4; persistence 9); `make typecheck-api` exit 0; `make lint-api` 0 errors.
+  - [x] Retest provider-switch witness via `make test-canvas-live-harness ENV=test-canvas-h3` (4 passed; the e2e shell smoke is deleted per review r1 item 5); branch CI e2e groups still run on the exact head for unrelated regressions.
   - [x] `make scope-check ENV=test-canvas-h3` before every commit — PASS C2 on the full branch diff.
   - [ ] Final gate step 1: create draft PR to main using this `BRANCH.md` as body.
   - [ ] Final gate step 2: run and verify branch CI on that PR; resolve blockers; record exact head SHA.
