@@ -4,7 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const maintenanceTargets = new Set(['install-ui', 'install-ui-dev', 'install-api', 'install-api-dev',
-  'lock-api', 'lock-root', 'lock-e2e', 'lock-idp-web']);
+  'lock-api', 'lock-root', 'lock-e2e', 'lock-idp-web', 'chat-migration-lockfiles']);
 export function violations(file, source) {
   source = source.replace(/\\\r?\n/g, ' ');
   const lines = source.split('\n');
