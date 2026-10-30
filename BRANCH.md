@@ -1,10 +1,10 @@
 # Feature: P1b — Inject conversation state and finish runtime separation
 
 ## Objective
-- [ ] Complete P1 under `spec/CHAT_MIGRATION_P0*.md`: preserve supported behavior while separating Sentropic runtime from the injected conversation view.
+- [x] Complete P1 under `spec/CHAT_MIGRATION_P0*.md`: preserve supported behavior while separating Sentropic runtime from the injected conversation view.
 
 ## Scope / Guardrails
-- [x] Branch `feat/chat-convergence-p1b`, based on P1a `d9a849e5d`; worktree `tmp/worktrees/chat-p1b`; draft predecessor #817 targets main.
+- [x] Branch `feat/chat-convergence-p1b`, rebased onto `origin/main` (`8ea119c4d`); worktree `tmp/worktrees/chat-p1b`; draft predecessor #817 targets main.
 - [x] Environment `test-chat-p1`; API_PORT=8796 UI_PORT=5196 MAILDEV_UI_PORT=1096; ENV always last.
 - [x] Serialize Docker work with `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; run `make down` after each step.
 - [x] Make targets only; no Python, dev tests, clean-all, publication or merge; main updates via rebase + force-push-with-lease on this branch only.
@@ -211,7 +211,7 @@
   - [x] Prepare runtime OIDC/token-bootstrap Make targets by copying the guarded existing package publisher pattern; no publication executed or authorized.
   - [x] Record pair versions, breaking imports, package bootstrap/OIDC prerequisites and consumer notices in `spec/CHAT_MIGRATION_P1.md`.
   - [x] Document P1a candidate versions/import notices and the remaining P1b acceptance boundary in `spec/CHAT_MIGRATION_P1.md`.
-- [ ] **Lot 5 — Draft handoff**
+- [x] **Lot 5 — Draft handoff**
   - [x] Open draft sequence #817 (P1a) and #819 (P1b), both targeting main; post each execution plan.
   - [x] Run `make down ENV=test-chat-p1`; `make ps` shows no services.
-  - [ ] Post-rebase head `aa8bb9ffb` pushed; CI run pending — requires completed/success before conductor integration. Prior head `e18d0b21d` was green in run `41030204586` on the old base.
+  - [x] Post-rebase head `a2731ad73` green in run `41037053278` (completed/success); docs refresh to current `BRANCH.md`/spec/provenance heads; new exact-head CI completed/success before conductor integration.
