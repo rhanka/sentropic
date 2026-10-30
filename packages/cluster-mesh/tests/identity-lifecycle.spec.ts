@@ -107,6 +107,18 @@ describe('user accounts and lifecycle', () => {
     await accounts.disableAccount('user-1', 'admin');
     expect(await accounts.listUsers()).toHaveLength(2);
   });
+
+  it('should expose the self-service get, disable and delete path for the own account', async () => {
+    const { accounts } = setup();
+    await accounts.register({ userId: 'user-1', email: 'a@example.com' }, { firstAdmin: true });
+    expect((await accounts.getSelf('user-1')).accountStatus).toBe('active');
+    await expect(accounts.deleteSelf('user-1')).rejects.toBeInstanceOf(AccountTransitionError);
+    const disabled = await accounts.disableSelf('user-1');
+    expect(disabled.accountStatus).toBe('disabled');
+    await expect(accounts.disableSelf('user-1')).rejects.toBeInstanceOf(AccountTransitionError);
+    await accounts.deleteSelf('user-1');
+    await expect(accounts.getSelf('user-1')).rejects.toBeInstanceOf(IdentityNotFoundError);
+  });
 });
 
 describe('identity proofs', () => {
