@@ -55,7 +55,7 @@ content_filters() {
 
 content_build() {
   grep -Fxq 'COPY apps/artifact-content ./apps/artifact-content' api/Dockerfile || fail 'content sources are not copied for compilation'
-  grep -Fq 'npx esbuild ../apps/artifact-content/src/index.ts' api/Dockerfile || fail 'real content entrypoint is not compiled'
+  grep -Fq 'npx --no-install esbuild ../apps/artifact-content/src/index.ts' api/Dockerfile || fail 'real content entrypoint is not compiled'
   grep -Fq -- '--outfile=../apps/artifact-content/dist/index.js' api/Dockerfile || fail 'compiled content entrypoint has no runtime output'
   grep -Fxq 'COPY --from=build /workspace/apps/artifact-content/dist /workspace/apps/artifact-content/dist' api/Dockerfile || fail 'production stage does not retain content bundle'
   echo 'PASS: canonical Dockerfile compiles and retains the content entrypoint'
