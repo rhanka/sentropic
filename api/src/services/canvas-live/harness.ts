@@ -1,11 +1,11 @@
-import { AdmissionAuthority, type AdmissionRecord } from './admission';
+import type { AdmissionRecord } from './admission';
 import type { FieldBindingIdentity } from './contracts';
 import { SessionRegistry } from './session-registry';
-import { HocuspocusHost } from './hocuspocus';
-import { validateClassified } from './ingress';
+
+export type OfflineHarnessProvider = 'hocuspocus' | 'in-memory-double';
 
 export interface OfflineHarnessResult {
-  provider: 'hocuspocus' | 'in-memory-double';
+  provider: OfflineHarnessProvider;
   resolvedByFullIdentity: boolean;
   twoFieldsConverge: boolean;
   survivorStaysLive: boolean;
@@ -14,6 +14,10 @@ export interface OfflineHarnessResult {
   dependencyClosure: Record<string, string>;
 }
 
+/**
+ * Dependency closure pinned by the H3 lot and verified against the workspace
+ * install by tests/api/canvas-live-harness.test.ts.
+ */
 export function H3_DEPENDENCY_CLOSURE(): Record<string, string> {
   return {
     yjs: '13.6.27',
@@ -24,10 +28,10 @@ export function H3_DEPENDENCY_CLOSURE(): Record<string, string> {
 }
 
 export async function runOfflineHarness(options: {
-  authority: AdmissionAuthority;
+  provider: OfflineHarnessProvider;
   registry: SessionRegistry;
   record: AdmissionRecord;
-  applyRemoteText: (identity: FieldBindingIdentity, text: string) => void;
+  applyRemoteText: (identity: FieldBindingIdentity, text: string) => void | Promise<void>;
   readText: (identity: FieldBindingIdentity) => string;
 }): Promise<OfflineHarnessResult> {
   const first = options.registry.open(options.record, 'description');
@@ -35,14 +39,14 @@ export async function runOfflineHarness(options: {
   const byFullIdentity =
     options.registry.resolveBinding(options.record, first.identity).identity === first.identity &&
     options.registry.resolveBinding(options.record, second.identity).identity === second.identity;
-  options.applyRemoteText(first.identity, 'hello');
-  options.applyRemoteText(second.identity, 'world');
+  await options.applyRemoteText(first.identity, 'hello');
+  await options.applyRemoteText(second.identity, 'world');
   const twoFieldsConverge =
     options.readText(first.identity).includes('hello') && options.readText(second.identity).includes('world');
   await first.dispose();
   let survivorStaysLive = false;
   try {
-    options.applyRemoteText(second.identity, 'world+local');
+    await options.applyRemoteText(second.identity, 'world+local');
     survivorStaysLive = options.readText(second.identity).includes('world+local');
   } catch {
     survivorStaysLive = false;
@@ -69,7 +73,7 @@ export async function runOfflineHarness(options: {
   }
   await second.dispose();
   return {
-    provider: 'hocuspocus',
+    provider: options.provider,
     resolvedByFullIdentity: byFullIdentity,
     twoFieldsConverge,
     survivorStaysLive,
@@ -87,15 +91,4 @@ export function assertHarnessForDsWitness8(result: OfflineHarnessResult): void {
   if (!result.missingCoordinateFailsClosed) failures.push('missing-coordinate fail-closed');
   if (!result.wrongFieldFailsClosed) failures.push('wrong-field fail-closed');
   if (failures.length > 0) throw new Error(`DS witness 8(i) incomplete: ${failures.join(', ')}`);
-}
-
-export function createHarnessHost(deps: ConstructorParameters<typeof HocuspocusHost>[0]): HocuspocusHost {
-  return new HocuspocusHost({
-    ...deps,
-    classifyUpdate: (bytes, admittedFields) => {
-      const classified = deps.classifyUpdate(bytes, admittedFields);
-      validateClassified(classified, admittedFields);
-      return classified;
-    },
-  });
 }
