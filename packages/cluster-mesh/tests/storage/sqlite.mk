@@ -3,7 +3,6 @@
 # Makefile's disposable workspace; no pg container is required. Docker lanes
 # serialize under the common packet flock.
 SQLITE_DOCKER_LOCK ?= /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md
-SQLITE_VEC_VERSION ?= 0.1.9
 
 .PHONY: cluster-mesh-sqlite-test
 cluster-mesh-sqlite-test:
@@ -15,14 +14,16 @@ cluster-mesh-sqlite-run:
 	@flock "$(SQLITE_DOCKER_LOCK)" $(MAKE) cluster-mesh-workspace CM_ACTION=test SCOPE="$(SCOPE)" ENV=$(ENV)
 
 # SQL-L1 Stage-0 gate: the verified sqlite-vec load runs through the
-# extension gate on the qualified container image. The pinned tool installs
-# with lifecycle scripts disabled; the runner refuses loudly when any
-# capability is missing, so the receipt has zero skipped cases.
+# extension gate on the qualified container image. The pinned tool graph is
+# committed under sqlite-l1/vec-tool and resolved with `npm ci`, so the lane
+# never performs unlocked registry resolution; the runner refuses loudly when
+# any capability is missing, so the receipt has zero skipped cases.
 .PHONY: cluster-mesh-sqlite-s0-qualify
 cluster-mesh-sqlite-s0-qualify:
 	@case "$(ENV)" in test-*|e2e-*) ;; *) echo 'SQLite S0 qualification requires test-* or e2e-*'; exit 1;; esac
 	@flock "$(SQLITE_DOCKER_LOCK)" docker run --rm -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
 	  -v "$(CURDIR):/workspace:ro" -w /workspace/packages/cluster-mesh \
 	  $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; \
-	  npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund --ignore-scripts sqlite-vec@$(SQLITE_VEC_VERSION) >/dev/null; \
+	  cp tests/storage/sqlite-l1/vec-tool/package.json tests/storage/sqlite-l1/vec-tool/package-lock.json "$$tool_dir/"; \
+	  npm ci --prefix "$$tool_dir" --ignore-scripts --no-audit --no-fund >/dev/null; \
 	  NODE_PATH="$$tool_dir/node_modules" node tests/storage/sqlite-l1/s0-qualify.mjs'
