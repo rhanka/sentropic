@@ -4,7 +4,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { spawnSync } from 'node:child_process';
 import { digest, policy } from './toolchain-contract.mjs';
 import { hashFile } from './toolchain-cache.mjs';
-import { prepareImageScan, validateComparison, validateImageReport } from './trivy.mjs';
+import { prepareImageScan, validateComparison, validateImageReport, validateReportAgreement } from './trivy.mjs';
 const sourceSha = '2ea238790fe992cdbb8e0202b1a73a937b6a1793';
 const base = '/evidence/main-40876641000';
 const snapshots = JSON.parse(await readFile('/evidence/ingestion.json')).snapshots;
@@ -54,6 +54,7 @@ for (const [kind, key, jobName] of [['api', 'api-production', 'build-api-image']
     assert.equal(scans[temperature].isolation[0].HostConfig.ReadonlyRootfs, true);
   }
   assert.deepEqual(scans.cold.isolation[0].Args, scans.warm.isolation[0].Args);
+  validateReportAgreement(scans.cold.report, scans.warm.report);
   const before = { ...plan, status: 0, rawHash: scans.cold.rawHash,
     parametersHash: digest(JSON.stringify(scans.cold.isolation[0].Args)) };
   await validateComparison(before, { ...before, rawHash: scans.warm.rawHash });
