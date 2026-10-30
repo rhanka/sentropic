@@ -9,12 +9,6 @@ import test from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { BOOTSTRAP_TARGETS, PACK_TARGETS, STEADY_STATE_PUBLISHERS, dependencyFloor, publishFilter, waitForVersion } from './publishable-manifests.mjs';
 import { evaluateSelection } from './ci-expected-results.mjs';
-// Register the S1 contracts in the existing required, credential-free Node validation lane.
-import '../security/daily/schema.test.mjs';
-import '../security/daily/inventory.test.mjs';
-import '../security/daily/scan.test.mjs';
-import '../security/daily/toolchain-contract.test.mjs';
-import '../security/daily/trivy.test.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const YAML = createRequire(path.join(process.env.MANIFEST_GUARD_TOOL_DIR, 'package.json'))('yaml');
@@ -33,6 +27,39 @@ const recipe = (target) => {
   return m ? m[1] : null;
 };
 const needsOf = (job) => [jobs[job].needs ?? []].flat();
+
+const dailyTestFiles = fs.readdirSync(path.join(root, 'scripts/security/daily'))
+  .filter((file) => file.endsWith('.test.mjs')).map((file) => `scripts/security/daily/${file}`);
+const assertDailyRecipe = (line, files = dailyTestFiles) => {
+  const scope = line.match(/\bSCOPE="([^"]*)"/)?.[1] ?? '';
+  assert.deepEqual(scope.split(' ').sort(), [...files].sort(), 'every on-disk daily test must run exactly once');
+  assert.equal(line.trim(), `@$(MAKE) test-publishable-manifests MANIFEST_GUARD_IMAGE="$(MEMORY_L5_NODE_IMAGE)" SCOPE="${scope}" ENV=$(ENV)`);
+};
+
+test('should reject a daily recipe that omits a newly discovered test file', () => {
+  assert.throws(() => assertDailyRecipe(recipe('test-security-daily'),
+    [...dailyTestFiles, 'scripts/security/daily/future.test.mjs']));
+});
+
+test('should reject a daily recipe that only echoes the complete inventory', () => {
+  assert.throws(() => assertDailyRecipe(recipe('test-security-daily')
+    .replace('@$(MAKE) test-publishable-manifests', '@echo')));
+});
+
+test('should require the complete daily security suite in one explicit credential-free CI step', () => {
+  const job = jobs['validate-ci-capacity-metrics'];
+  assert.equal(job.if, 'always() && !cancelled() && inputs.decision_fixtures_only != true');
+  assert.deepEqual(job.permissions, { contents: 'read' });
+  assert.deepEqual(needsOf('validate-ci-capacity-metrics'), ['changes']);
+  assert.ok(!job['continue-on-error'] && !JSON.stringify(job).includes('secrets.'));
+  const steps = job.steps.filter((step) => /\bmake test-security-daily\b/.test(step.run ?? ''));
+  assert.equal(steps.length, 1);
+  assert.equal(steps[0].run, 'make test-security-daily ENV=test-ci-capacity');
+  assert.deepEqual(steps[0].env, { REGISTRY: '', ADMIN_EMAIL: '' });
+  assert.ok(!steps[0].if && !steps[0]['continue-on-error']);
+  assert.ok(needsOf('ci-gate').includes('validate-ci-capacity-metrics'));
+  assertDailyRecipe(recipe('test-security-daily'));
+});
 
 const assertActionsPermissions = (workflow) => {
   assert.deepEqual(workflow.permissions, { contents: 'read', actions: 'read' });
