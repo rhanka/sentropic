@@ -56,6 +56,6 @@ Refuse a warm Trivy report whose finding inventory diverges from the cold report
   - [x] Wire one agreement call into `scripts/security/daily/qualify-current.mjs` cold/warm join.
   - [x] Lot gate:
     - [x] `make test-security-daily ENV=test-sec5a-agreement` (140/140 on final head).
-- [ ] **Lot 2 — Review and PR**
-  - [ ] Two blind Muse Wonder full xhigh review legs (correctness, risk), receipts in `.h2a/reviews/`.
+- [x] **Lot 2 — Review and PR**
+  - [x] Muse Wonder full xhigh legs (correctness r1/r1b/r1c, risk r2), receipts `.h2a/reviews/sec5a-agreement_muse_{r1,r1b,r1c,r2}.md`; final: APPROVE + APPROVE.
   - [ ] Open PR with `BRANCH.md` as body; record head; leave merge to owner.
