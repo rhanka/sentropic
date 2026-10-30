@@ -110,7 +110,13 @@ test('should reject tampered bundle linkage, wrong native error classes and expi
     assert.ok(Object.hasOwn(files, file), `unexpected evidence read: ${file}`);
     return Buffer.from(overrides[file] ?? files[file]);
   }, pins);
-  assert.deepEqual((await run()).verification.trials, retained.verification.trials);
+  const positive = await run();
+  assert.deepEqual(positive.verification.trials, retained.verification.trials);
+  assert.equal(positive.refreshBy, retained.metadata.timestamp.document.signed.expires);
+  const earlierRoot = structuredClone(retained.metadata.root.document);
+  earlierRoot.signed.expires = '2026-10-31T00:00:00Z';
+  assert.equal((await run({ [rolePath('root')]: JSON.stringify(earlierRoot) })).refreshBy,
+    earlierRoot.signed.expires);
   await assert.rejects(run({ [bundleName]: JSON.stringify({ ...original, tampered: true }) }),
     { code: 'ERR_ASSERTION', operator: 'strictEqual' });
   for (const trial of ['changed-index', 'changed-root', 'changed-bundle']) {
@@ -129,6 +135,25 @@ test('should reject tampered bundle linkage, wrong native error classes and expi
     await assert.rejects(run({ 'trust-trials.jsonl': trials.map(t => JSON.stringify(t)).join('\n') }),
       { code: 'ERR_ASSERTION' });
   }
+});
+
+test('should bound retained custody freshness by its earliest role expiry', async () => {
+  const receipt = JSON.parse(await readFile('docs/security/sec5a-trust-custody.json', 'utf8'));
+  assert.equal(receipt.refreshBy, '2026-11-06T01:22:45Z');
+  assert.ok(Date.parse(receipt.refreshBy) > Date.parse(receipt.observedAt));
+  for (const entry of Object.values(receipt.metadata)) {
+    assert.ok(Date.parse(receipt.refreshBy) <= Date.parse(entry.document.signed.expires));
+  }
+  const doc = await readFile('docs/security/sec5a-trust-custody.md', 'utf8');
+  assert.match(doc, /Refresh by `2026-11-06T01:22:45Z`/);
+  assert.match(doc, /After that deadline, this snapshot is historical evidence only/);
+});
+
+test('should leave consensus pending without published exact-target reviews', async () => {
+  const review = await readFile('docs/security/sec-s2b-qualify-review.md', 'utf8');
+  assert.match(review, /^status: pending-independent-review$/m);
+  assert.match(review, /^runtime-admission: denied$/m);
+  assert.doesNotMatch(review, /consensus-evidence-approved|^review-[12]:|Both independent reviewers|review gap is closed/m);
 });
 
 test('should require reviewed content pins, exact publisher and index/platform linkage', () => {

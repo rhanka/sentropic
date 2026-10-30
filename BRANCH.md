@@ -1,10 +1,10 @@
 # Fix: Independently acquire frozen Cosign and Sigstore trust material
 
 ## Objective
-- [ ] Reacquire exact Trivy signature material and Cosign 3.1.4; initialize fresh TUF custody and verify offline without prior host evidence.
+- [x] Reacquire exact Trivy signature material and Cosign 3.1.4; initialize fresh TUF custody and verify offline without prior host evidence.
 
 ## Scope / Guardrails
-- [x] Branch `fix/sec5a-trust-custody`; worktree `tmp/sec5a-trust-custody`; initial base `401cffae1`, rebased onto `d08517ed1`.
+- [x] Branch `fix/sec5a-trust-custody`; worktree `tmp/sec5a-trust-custody`; initial base `401cffae1`, rebased onto `028e63d33`.
 - [x] Make-only, Docker-first, zero Python; ENV=test-sec5a-trust last; no application stack or host ports.
 - [x] Docker flock: `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; down after trials.
 - [x] Existing service and auto-merge stay off; no scanner admission, severity reduction or vulnerability exception.
@@ -25,6 +25,8 @@
   - None.
 
 ## Feedback Loop
+- [x] Muse R1 final local validation: all 129 daily regressions pass (14 scoped custody/contract tests); production CLI replays retained native evidence with production pins and publishes deterministic bytes; no policy, workflow, package, admission or exception change.
+- [x] Muse R1 items 3 and 4 tests first: observed three failing assertions for missing generator/receipt expiry and unsupported consensus; derive `refreshBy` from the earliest role expiry, document refresh at `2026-11-06T01:22:45Z`, and drop unpublished superseded-review consensus in favor of pending independent review.
 - [x] Muse R1 item 2 generator extraction: all 12 scoped tests pass; six injected regressions (self-consistent substituted root metadata, wrong artifact hash, accepted refusal, missing bundle linkage, missing error class, missing expiry check) each fail tests; original bytes restored after every trial.
 - [x] Muse R1 item 2 tests first: pin every retained artifact and role digest plus exact trials; add generator fixtures for bundle linkage, native error classes and each expired role. Baseline fixture failure precedes the generator extraction.
 - [x] Muse R1 item 1: rebased onto origin/main `028e63d3338cd6c2effa6707642cab3e2b679fd3`; Post-Rebase Gate inspects the full diff against main: no `packages/**` changes, so no publishable package version comparison applies. Exact-head CI remains pending.
