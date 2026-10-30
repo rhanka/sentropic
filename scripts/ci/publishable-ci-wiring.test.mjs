@@ -34,6 +34,62 @@ const recipe = (target) => {
 };
 const needsOf = (job) => [jobs[job].needs ?? []].flat();
 
+test('MCP broker publishes only validated main releases after the exact P3 bootstrap', () => {
+  const publisher = jobs['publish-mcp-broker'];
+  assert.deepEqual(needsOf('publish-mcp-broker'), ['changes', 'validate-mcp-broker', 'memory-l5-qualification', 'publish-mcp-platform']);
+  assert.deepEqual(publisher.permissions, { contents: 'read', 'id-token': 'write' });
+  assert.equal(publisher.environment, undefined, 'npm environment field must stay empty');
+  assert.ok(!JSON.stringify(publisher).includes('secrets.'), 'OIDC only');
+  for (const ref of ['refs/heads/main', 'refs/heads/feat/mcp-broker-publish', 'refs/pull/1/merge']) {
+    for (const selected of ['true', 'false']) {
+      for (const gate of ['changes', 'validate-mcp-broker', 'memory-l5-qualification']) {
+        for (const result of ['success', 'failure', 'skipped']) {
+          const lookup = (key) => key === 'github.ref' ? ref
+            : key === 'needs.changes.outputs.mcp_broker_publish' ? selected
+            : key === `needs.${gate}.result` ? result
+            : key.endsWith('.result') ? 'success' : '';
+          assert.equal(evaluateSelection(publisher.if, lookup),
+            ref === 'refs/heads/main' && selected === 'true' && result === 'success');
+        }
+      }
+    }
+  }
+  for (const selected of ['true', 'false']) {
+    for (const result of ['success', 'failure', 'skipped']) {
+      const lookup = (key) => key === 'github.ref' ? 'refs/heads/main'
+        : key === 'needs.changes.outputs.mcp_broker_publish' ? 'true'
+        : key === 'needs.changes.outputs.mcp_platform_publish' ? selected
+        : key === 'needs.publish-mcp-platform.result' ? result
+        : key.endsWith('.result') ? 'success' : '';
+      assert.equal(evaluateSelection(publisher.if, lookup),
+        result === 'success' || (result === 'skipped' && selected !== 'true'));
+    }
+  }
+  const publish = recipe('publish-mcp-broker');
+  assert.match(publish, /ACTIONS_ID_TOKEN_REQUEST_URL/);
+  assert.match(publish, /ACTIONS_ID_TOKEN_REQUEST_TOKEN/);
+  assert.ok(publish.includes('$(call manifest_guard_publish,mcp-broker,--access public)'));
+  const guard = publish.slice(publish.indexOf('if ['), publish.indexOf('$(call manifest_guard_publish')).replaceAll('$$', '$');
+  const work = fs.mkdtempSync(path.join(os.tmpdir(), 'broker-publish-'));
+  try {
+    for (const version of ['0.1.0', '0.1.1', '0.2.0']) {
+      fs.writeFileSync(path.join(work, 'package.json'), JSON.stringify({ version }));
+      const result = spawnSync('/bin/sh', ['-c', `${guard} exit 42`], { cwd: work, encoding: 'utf8' });
+      assert.ifError(result.error);
+      assert.equal(result.status, version === '0.1.0' ? 0 : 42, result.stderr);
+    }
+  } finally { fs.rmSync(work, { recursive: true, force: true }); }
+  assert.ok(!BOOTSTRAP_TARGETS.includes('mcp-broker'), 'no bootstrap repack of P3');
+  assert.ok(recipe('pack-mcp-broker').includes('$(call manifest_guard_pack,mcp-broker)'));
+  const manifest = JSON.parse(fs.readFileSync(path.join(root, 'packages/mcp-broker/package.json'), 'utf8'));
+  assert.equal(manifest.private, undefined);
+  assert.deepEqual(manifest.publishConfig, { provenance: true, access: 'public' });
+  assert.ok(manifest.files.includes('LICENSE'));
+  assert.deepEqual(manifest.exports['./memory'], {
+    types: './dist/memory/index.d.ts', import: './dist/memory/index.js',
+  });
+});
+
 test('isolated MCP platform build guard admits test environments and refuses other projects', () => {
   const guard = recipe('immo-861-build-mcp-platform').split('\n')[0].replace(/^\t@/, '');
   for (const env of ['test-861-int', 'test-861-gaps', 'test-artifacts-021', 'test-artifacts-022',
@@ -446,7 +502,7 @@ test('Makefile: every pack lane is a real guarded pack; no dry-run or raw publis
   assert.match(recipe('pack-chat-ui'), /manifest_guard_pack,chat-ui,\$\(MANIFEST_DIST_FORM\)/);
   assert.match(recipe('pack-cited-source-viewer'), /manifest_guard_pack,cited-source-viewer,\$\(MANIFEST_DIST_FORM\)/);
   const publishRecipes = [...makefile.matchAll(/^(publish-[a-z-]+):[^\n]*\n((?:\t[^\n]*\n?)+)/gm)].filter(([, n]) => !/-image$/.test(n));
-  assert.equal(publishRecipes.length, STEADY_STATE_PUBLISHERS.length * 2, 'OIDC + token recipe per package');
+  assert.equal(publishRecipes.length, STEADY_STATE_PUBLISHERS.length * 2 - 1, 'broker uses the exact P3 bootstrap; other packages have OIDC + token recipes');
   for (const [, name, body] of publishRecipes) {
     const slug = name.replace(/^publish-/, '').replace(/-token$/, '');
     assert.match(body, new RegExp(`\\$\\(call manifest_guard_publish,${slug},--access public`), name);
@@ -455,7 +511,8 @@ test('Makefile: every pack lane is a real guarded pack; no dry-run or raw publis
     else assert.match(body, /-e ACTIONS_ID_TOKEN_REQUEST_TOKEN/);
   }
   for (const slug of STEADY_STATE_PUBLISHERS) {
-    assert.match(recipe(`publish-${slug}-token`) ?? '', new RegExp(`\\$\\(call manifest_guard_publish,${slug},--access public --provenance=false\\)`), `publish-${slug}-token disables provenance on the token path`);
+    if (slug === 'mcp-broker') assert.equal(recipe('publish-mcp-broker-token'), null, 'never repack the P3 bootstrap');
+    else assert.match(recipe(`publish-${slug}-token`) ?? '', new RegExp(`\\$\\(call manifest_guard_publish,${slug},--access public --provenance=false\\)`), `publish-${slug}-token disables provenance on the token path`);
     assert.doesNotMatch(recipe(`publish-${slug}`) ?? '', /provenance/, `publish-${slug} keeps provenance for OIDC publishes`);
   }
   assert.match(recipe('publish-chat-ui'), /make-publish-pkgjson.mjs --write; export MANIFEST_ORIGINAL_SOURCE=/);

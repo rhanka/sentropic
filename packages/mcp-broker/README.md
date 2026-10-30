@@ -62,6 +62,18 @@ the frozen public error codes; missing trusted audit remains protocol `-32603`.
 - `make pack-mcp-broker`
 - `make smoke-mcp-broker-github` — REAL network, not hermetic, never wired into CI
 
+## Publication
+
+The package exports the broker at `@sentropic/mcp-broker` and the frozen
+memory contracts at `@sentropic/mcp-broker/memory`. Releases use
+`make publish-mcp-broker` in the main branch CI with npm trusted publishing
+and provenance, following the MCP platform publication contract.
+
+The first `0.1.0` publication uses the exact qualified P3 archive, whose
+SHA-256 is `5fede653683acc8d803f7e735526f09a1d79b062ae4a37b0b9933bfd289444fa`.
+That archive exports only `./memory`. The full package pack target is for
+subsequent releases; it must not replace the qualified bootstrap archive.
+
 ## Non-goals (this lot)
 
 - No durable reference store — `./memory-reference` arrives in Lot 2.

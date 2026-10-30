@@ -914,7 +914,7 @@ ci-capacity-status: ## Inspect CI_RUN_ID without cancelling or retrying any job
 	@gh run view $(CI_RUN_ID) --repo rhanka/sentropic --json databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,jobs --jq '{databaseId,event,headSha,status,conclusion,createdAt,updatedAt,url,pendingOrFailed: [.jobs[] | select(.conclusion != "success" and .conclusion != "skipped") | {databaseId,name,status,conclusion,startedAt,completedAt}]}'
 .PHONY: ci-capacity-publish-dry-run
 ci-capacity-publish-dry-run: ## Exercise a publisher's real guarded pack without registry writes
-	@case '$(PACKAGE)' in llm-mesh|llm-gateway|cluster-mesh|chat-ui|cited-source-viewer|cowork-bridge|cowork-desktop|oauth-verify|mcp-auth|mcp-platform|artifacts|auth-hono|auth-client|auth-ui|contracts|events|chat-core|chat-server|comments|flow|harness) ;; *) echo 'Invalid dry-run package'; exit 1;; esac
+	@case '$(PACKAGE)' in llm-mesh|llm-gateway|cluster-mesh|chat-ui|cited-source-viewer|cowork-bridge|cowork-desktop|oauth-verify|mcp-auth|mcp-platform|mcp-broker|artifacts|auth-hono|auth-client|auth-ui|contracts|events|chat-core|chat-server|comments|flow|harness) ;; *) echo 'Invalid dry-run package'; exit 1;; esac
 	@$(MAKE) --no-print-directory pack-$(PACKAGE) MANIFEST_REPORT_DIR=tmp/ci-capacity/publish-$(PACKAGE) ENV=$(ENV)
 	@jq -n --arg package '$(PACKAGE)' --arg run "$$GITHUB_RUN_ID" --arg sha "$$GITHUB_SHA" '{package: $$package, runId: $$run, headSha: $$sha, mode: "guarded-pack-no-publication", completed: true}' | tee tmp/ci-capacity/publish-$(PACKAGE)/dry-run.json
 CI_EXPECTED_ATTEMPT ?= $(CI_RUN_ATTEMPT)
@@ -1774,6 +1774,35 @@ publish-mcp-platform-token: build-mcp-platform ## Publish @sentropic/mcp-platfor
 		-v "$(NPM_TOKEN_FILE):/run/npm-token:ro" \
 		-w /workspace/packages/mcp-platform \
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,mcp-platform,--access public --provenance=false)'
+
+.PHONY: pack-mcp-broker
+pack-mcp-broker: build-mcp-broker ## Validate @sentropic/mcp-broker npm package contents without publishing
+	$(call manifest_guard_pack,mcp-broker)
+
+.PHONY: publish-mcp-broker
+publish-mcp-broker: build-mcp-broker ## Publish later @sentropic/mcp-broker versions from CI OIDC trusted publishing
+	@docker run --rm \
+		-u "$$(id -u):$$(id -g)" \
+		-e HOME=/tmp \
+		-e npm_config_cache=/tmp/npm-cache \
+		-e GITHUB_ACTIONS \
+		-e GITHUB_REPOSITORY \
+		-e GITHUB_REF \
+		-e GITHUB_SHA \
+		-e GITHUB_EVENT_NAME \
+		-e GITHUB_RUN_ID \
+		-e GITHUB_RUN_ATTEMPT \
+		-e GITHUB_SERVER_URL \
+		-e GITHUB_REPOSITORY_ID \
+		-e GITHUB_REPOSITORY_OWNER_ID \
+		-e GITHUB_WORKFLOW \
+		-e GITHUB_WORKFLOW_REF \
+		-e GITHUB_WORKFLOW_SHA \
+		-e ACTIONS_ID_TOKEN_REQUEST_URL \
+		-e ACTIONS_ID_TOKEN_REQUEST_TOKEN \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace/packages/mcp-broker \
+		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; if [ "$$(node -p "require(\"./package.json\").version")" = 0.1.0 ]; then echo "0.1.0 is reserved for the exact P3 owner bootstrap archive; skipping CI publication"; exit 0; fi; $(call manifest_guard_publish,mcp-broker,--access public)'
 
 .PHONY: typecheck-auth-ui
 typecheck-auth-ui: ## Run @sentropic/auth-ui type checks

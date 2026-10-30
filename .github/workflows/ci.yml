@@ -262,6 +262,7 @@ jobs:
       oauth_verify: ${{ steps.filter.outputs.oauth_verify }}
       mcp_auth: ${{ steps.filter.outputs.mcp_auth }}
       mcp_platform: ${{ steps.filter.outputs.mcp_platform }}
+      mcp_broker: ${{ steps.filter.outputs.mcp_broker }}
       memory_l5: ${{ steps.filter.outputs.memory_l5 }}
       auth_hono: ${{ steps.filter.outputs.auth_hono }}
       auth_client: ${{ steps.filter.outputs.auth_client }}
@@ -281,6 +282,7 @@ jobs:
       oauth_verify_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.oauth_verify_publish }}
       mcp_auth_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.mcp_auth_publish }}
       mcp_platform_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.mcp_platform_publish }}
+      mcp_broker_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.mcp_broker_publish }}
       auth_hono_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.auth_hono_publish }}
       auth_client_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.auth_client_publish }}
       auth_ui_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.auth_ui_publish }}
@@ -480,6 +482,15 @@ jobs:
               - '.github/workflows/ci.yml'
             mcp_platform_publish:
               - 'packages/mcp-platform/**'
+            mcp_broker:
+              - 'Makefile'
+              - 'package.json'
+              - 'package-lock.json'
+              - 'packages/mcp-platform/**'
+              - 'packages/mcp-broker/**'
+              - '.github/workflows/ci.yml'
+            mcp_broker_publish:
+              - 'packages/mcp-broker/**'
             memory_l5:
               - 'Makefile'
               - 'package.json'
@@ -1045,6 +1056,25 @@ jobs:
         run: make pack-mcp-platform ENV=test-ci-mcp-platform
       - name: API Extract MCP Platform
         run: make api-extract-mcp-platform
+
+  validate-mcp-broker:
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: always() && !cancelled() && (needs.changes.outputs.mcp_broker == 'true' || needs.changes.outputs.global == 'true')
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Typecheck MCP Broker
+        run: make typecheck-mcp-broker ENV=test-ci-mcp-broker
+      - name: Test MCP Broker
+        run: make test-mcp-broker ENV=test-ci-mcp-broker
+      - name: Pack MCP Broker
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-mcp-broker ENV=test-ci-mcp-broker
 
   memory-l5-qualification:
     runs-on: ubuntu-latest
@@ -2438,6 +2468,29 @@ jobs:
         if: inputs.capacity_publish_dry_run != true
         run: make publish-mcp-platform
 
+  publish-mcp-broker:
+    runs-on: ubuntu-latest
+    needs: [changes, validate-mcp-broker, memory-l5-qualification, publish-mcp-platform]
+    if: >-
+      !cancelled() && needs.changes.result == 'success' && needs.validate-mcp-broker.result == 'success' && needs.memory-l5-qualification.result == 'success' && needs.changes.outputs.mcp_broker_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true) && (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true'))
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup Docker
+        uses: docker/setup-buildx-action@v4
+      - name: Dry-run package publication
+        if: inputs.capacity_publish_dry_run == true
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make ci-capacity-publish-dry-run PACKAGE=mcp-broker ENV=test-ci-capacity
+      - name: Publish MCP Broker
+        if: inputs.capacity_publish_dry_run != true
+        run: make publish-mcp-broker ENV=test-ci-mcp-broker
+
   publish-artifacts:
     runs-on: ubuntu-latest
     needs: [changes, validate-artifacts]
@@ -3021,6 +3074,7 @@ jobs:
       - validate-oauth-verify
       - validate-mcp-auth
       - validate-mcp-platform
+      - validate-mcp-broker
       - memory-l5-qualification
       - validate-auth-hono
       - validate-auth-client
@@ -3100,7 +3154,7 @@ jobs:
     needs: [changes, enforce-package-bump, build-e2e, typecheck-lint-ui, typecheck-lint-api,
       validate-idp-sync, validate-llm-mesh, validate-cluster-mesh, validate-llm-gateway,
       validate-chat-ui, validate-cited-source-viewer, validate-cowork-bridge, validate-oauth-verify,
-      validate-mcp-auth, validate-mcp-platform, validate-auth-hono, validate-auth-client,
+      validate-mcp-auth, validate-mcp-platform, validate-mcp-broker, validate-auth-hono, validate-auth-client,
       validate-auth-ui, validate-cowork-desktop, validate-contracts, validate-events,
       validate-chat-core, validate-chat-server, validate-comments, validate-live-speech, validate-skills, validate-flow,
       validate-artifacts, validate-harness, build-api-image, build-api-tool-image,
@@ -3108,7 +3162,7 @@ jobs:
       security-sast-sca, security-code-api, security-code-ui, security-iac, security-container, security-container-e2e, security-container-ui, security-container-api-tool, security-container-api, test-smoke-restore, validate-ci-capacity-metrics,
       publish-api-image, publish-ui-image, deploy-preprod, publish-cluster-mesh,
       publish-llm-mesh, publish-llm-gateway, publish-chat-ui, publish-cited-source-viewer,
-      publish-cowork-bridge, publish-oauth-verify, publish-mcp-auth, publish-mcp-platform,
+      publish-cowork-bridge, publish-oauth-verify, publish-mcp-auth, publish-mcp-platform, publish-mcp-broker,
       publish-artifacts, publish-auth-hono, publish-auth-client, publish-auth-ui,
       publish-cowork-desktop, publish-contracts, publish-events, publish-chat-core,
       publish-chat-server, publish-comments, publish-flow, publish-harness,
