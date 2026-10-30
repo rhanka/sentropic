@@ -79,7 +79,7 @@ describe('module registry', () => {
   });
 
   it('should refuse the next unqualified comments leaf minor before evaluation', async () => {
-    tree.install('app', { name: '@sentropic/cluster-mesh', version: '0.25.0', exports: {
+    tree.install('app', { name: '@sentropic/cluster-mesh', version: '0.26.0', exports: {
       './comments': { source: moduleSource('comments', ['createCommentsModule', 'createCommentsPostgresStorage']) },
     } });
     await expect(registry().load('comments')).rejects.toMatchObject({
