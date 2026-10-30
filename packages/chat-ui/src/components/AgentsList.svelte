@@ -11,7 +11,7 @@
     type OverflowMenuItem,
   } from '@sentropic/design-system-svelte';
 
-  import type { ChatUiLabelResolver } from '@sentropic/chat-runtime/hosts/createWebHost';
+  import type { ChatUiLabelResolver } from '@sentropic/chat-core/runtime/hosts/createWebHost';
   import type { AgentsEntryKind, AgentsEntryStatus } from '../state/agentsEntry.js';
   import type { AgentsListRow } from '../state/agentsSort.js';
 

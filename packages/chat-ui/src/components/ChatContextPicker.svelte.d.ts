@@ -1,6 +1,6 @@
 import type { SvelteComponent } from 'svelte';
-import type { ChatUiLabelResolver } from '@sentropic/chat-runtime/hosts/createWebHost';
-import type { ChatContextEntry } from '@sentropic/chat-runtime/state/chat-context';
+import type { ChatUiLabelResolver } from '@sentropic/chat-core/runtime/hosts/createWebHost';
+import type { ChatContextEntry } from '@sentropic/chat-core/runtime/state/chat-context';
 
 export type ChatContextPickerProps = {
   /** List of context entries to render. */

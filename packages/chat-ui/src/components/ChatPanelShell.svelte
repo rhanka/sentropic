@@ -18,8 +18,8 @@
   import { Streamdown } from 'svelte-streamdown';
 
   import CommentsPanel from '../comments/CommentsPanel.svelte';
-  import type { CommentHost } from '@sentropic/chat-runtime/comments/host';
-  import type { CommentState } from '@sentropic/chat-runtime/comments';
+  import type { CommentHost } from '@sentropic/chat-core/runtime/comments/host';
+  import type { CommentState } from '@sentropic/chat-core/runtime/comments';
   import type { CommentThreadSummary } from '../comments/types.js';
   import ChatComposer from './ChatComposer.svelte';
   import ChatTimeline from './ChatTimeline.svelte';
@@ -31,7 +31,7 @@
   import ImageLightbox from '../documents/ImageLightbox.svelte';
   import MessageAttachments from '../documents/MessageAttachments.svelte';
   import type { ChatGeneratedFileCard } from '../documents/generated-file-cards.js';
-  import type { ChatProjectedTimelineItem } from '@sentropic/chat-runtime/state/chatProjection';
+  import type { ChatProjectedTimelineItem } from '@sentropic/chat-core/runtime/state/chatProjection';
 
   type TimelineItem = ChatProjectedTimelineItem<any, any>;
 

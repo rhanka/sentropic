@@ -76,7 +76,7 @@ describe('export-surface (c): store-shape — subscribe/set/update', () => {
   });
 
   it('localToolsStore store exposes subscribe, set, update', async () => {
-    const mod = await import('@sentropic/chat-runtime/stores/localTools');
+    const mod = await import('@sentropic/chat-core/runtime/stores/localTools');
     const store = mod.localToolsStore as Record<string, unknown>;
     expect(typeof store['subscribe']).toBe('function');
     expect(typeof store['set']).toBe('function');

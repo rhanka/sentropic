@@ -12,7 +12,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import SessionList from '../src/components/SessionList.svelte';
-import type { SessionListEntry } from '@sentropic/chat-runtime/state/sessionList';
+import type { SessionListEntry } from '@sentropic/chat-core/runtime/state/sessionList';
 
 afterEach(() => cleanup());
 

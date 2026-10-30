@@ -1,7 +1,7 @@
 {
   "name": "@sentropic/chat-ui",
   "version": "1.0.0",
-  "description": "Svelte chat views, normalized snapshot/command ports, renderer registry and presentation helpers. Client execution lives in @sentropic/chat-runtime.",
+  "description": "Svelte chat views, normalized snapshot/command ports, renderer registry and presentation helpers. Client execution lives in @sentropic/chat-core/runtime.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -260,7 +260,7 @@
     "prepack": "node scripts/verify-publish-artifacts.mjs"
   },
   "peerDependencies": {
-    "@sentropic/chat-runtime": "^0.1.0",
+    "@sentropic/chat-core": "^0.3.0",
     "@sentropic/design-system-svelte": "^0.34.0",
     "@lucide/svelte": "^0.562.0",
     "svelte": "^5.0.0",
@@ -270,7 +270,7 @@
     "typescript": "5.4.5"
   },
   "peerDependenciesMeta": {
-    "@sentropic/chat-runtime": {
+    "@sentropic/chat-core": {
       "optional": true
     },
     "@sentropic/design-system-svelte": {

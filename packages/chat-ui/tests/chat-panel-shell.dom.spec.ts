@@ -9,7 +9,7 @@
 import { cleanup, fireEvent, render } from '@testing-library/svelte';
 import { afterEach, describe, expect, it } from 'vitest';
 import ChatPanelShell from '../src/components/ChatPanelShell.svelte';
-import { createCommentRuntime } from '@sentropic/chat-runtime/comments';
+import { createCommentRuntime } from '@sentropic/chat-core/runtime/comments';
 import { getCommentAuthorLabel, getMentionLabel } from '../src/comments/index.js';
 
 const commentRuntimes: ReturnType<typeof createCommentRuntime>[] = [];

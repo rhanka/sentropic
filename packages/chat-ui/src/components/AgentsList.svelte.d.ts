@@ -1,5 +1,5 @@
 import type { Component } from 'svelte';
-import type { ChatUiLabelResolver } from '@sentropic/chat-runtime/hosts/createWebHost';
+import type { ChatUiLabelResolver } from '@sentropic/chat-core/runtime/hosts/createWebHost';
 import type { AgentsListRow } from '../state/agentsSort.js';
 
 export type AgentsListProps = {

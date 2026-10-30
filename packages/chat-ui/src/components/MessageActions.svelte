@@ -31,7 +31,7 @@
   import ThumbsDown from '@lucide/svelte/icons/thumbs-down';
   import ThumbsUp from '@lucide/svelte/icons/thumbs-up';
 
-  import type { ChatUiLabelResolver } from '@sentropic/chat-runtime/hosts/createWebHost';
+  import type { ChatUiLabelResolver } from '@sentropic/chat-core/runtime/hosts/createWebHost';
   import {
     buildFeedbackNextVote,
     resolveAvailableActions,

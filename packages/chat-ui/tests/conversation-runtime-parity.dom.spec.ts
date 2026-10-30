@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, expect, it } from 'vitest';
-import { createConversationFixture } from '../../chat-runtime/tests/fixtures/conversationHost.js';
+import { createConversationFixture } from '../fixtures/conversationHost.js';
 import ConversationView from './fixtures/ConversationViewHarness.svelte';
 
 const fixtures: Awaited<ReturnType<typeof createConversationFixture>>[] = [];

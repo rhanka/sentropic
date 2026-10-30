@@ -20,7 +20,7 @@
    */
 
   import { createNoopChatContextProvider, type ChatContextEntry, type ChatContextProvider } from '../context/index.js';
-  import type { ChatUiLabelResolver } from '@sentropic/chat-runtime/hosts/createWebHost';
+  import type { ChatUiLabelResolver } from '@sentropic/chat-core/runtime/hosts/createWebHost';
 
   // ---------------------------------------------------------------------------
   // Props

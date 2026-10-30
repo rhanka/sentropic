@@ -1,14 +1,14 @@
 # @sentropic/chat-ui
 
 Svelte chat views, normalized data/command ports and presentation helpers.
-Sentropic client execution lives in `@sentropic/chat-runtime`. Views receive state and callbacks;
+Sentropic client execution lives in `@sentropic/chat-core/runtime`. Views receive state and callbacks;
 hosts own authentication, platform capabilities and runtime lifetime.
 
 ## 1.0.0 migration
 
 This major release removes runtime implementations and their forwarding exports. Import transport,
 replay, session/controller/projection state, checkpoints, local tools, model selection and optional
-module state from the corresponding `@sentropic/chat-runtime` subpaths. The visual root barrel no
+module state from the corresponding `@sentropic/chat-core/runtime` subpaths. The visual root barrel no
 longer exports them. See `spec/CHAT_MIGRATION_P1.md` in the repository for the release notice.
 
 `ChatConversation` requires `snapshots` and `commands`. Create the runtime above placement/tab/view

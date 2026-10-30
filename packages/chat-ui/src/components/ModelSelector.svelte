@@ -15,7 +15,7 @@
    * - onChange fires after a valid selection change with the new parsed pair.
    */
 
-  import type { ChatUiLabelResolver } from '@sentropic/chat-runtime/hosts/createWebHost';
+  import type { ChatUiLabelResolver } from '@sentropic/chat-core/runtime/hosts/createWebHost';
   import type {
     ModelCatalogGroup,
     ModelCatalogModel,

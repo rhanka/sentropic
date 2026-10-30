@@ -1,5 +1,5 @@
 import type { Component } from 'svelte';
-import type { ChatUiLabelResolver } from '@sentropic/chat-runtime/hosts/createWebHost';
+import type { ChatUiLabelResolver } from '@sentropic/chat-core/runtime/hosts/createWebHost';
 import type { ModelCatalogGroup, ModelCatalogModel, ModelProviderId } from '@sentropic/chat-ui/utils/model-selection';
 
 export type ModelSelectorProps = {
