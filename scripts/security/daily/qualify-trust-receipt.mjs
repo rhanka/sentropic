@@ -61,7 +61,9 @@ export async function createTrustReceipt(read, pins = {
     ['changed-bundle', /transparency log signature does not match/]]) {
     assert.match((await read(`${name}.log`)).toString(), reason);
   }
-  return { schema: 1, observedAt, qualified: false,
+  const refreshBy = Object.values(metadata).map(({ document }) => document.signed.expires)
+    .sort((a, b) => Date.parse(a) - Date.parse(b))[0];
+  return { schema: 1, observedAt, refreshBy, qualified: false,
     acquisition: 'public Docker Hub/GitHub; empty isolated TUF home; no prior operator roots',
     trust: 'Cosign 3.1.4 embedded release root authenticates Sigstore TUF; TLS uses pinned Node Mozilla roots',
     verification: { network: 'none', issuer: policy.signature.issuer, identity: policy.signature.identity,
