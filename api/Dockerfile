@@ -147,7 +147,7 @@ RUN npm --workspace @sentropic/events run build
 RUN set -eu; \
     peer_dir="$(mktemp -d)"; \
     trap 'rm -rf "$peer_dir" packages/chat-core/node_modules/@sentropic/chat-ui' EXIT; \
-    npm install --prefix "$peer_dir" --ignore-scripts --no-audit --no-fund @sentropic/chat-ui@0.34.1 svelte@5.55.7; \
+    node /opt/ci-tools/locked-tools.mjs --prefix "$peer_dir" --ignore-scripts --no-audit --no-fund @sentropic/chat-ui@0.34.1 svelte@5.55.7; \
     mkdir -p packages/chat-core/node_modules/@sentropic; \
     rm -rf packages/chat-core/node_modules/@sentropic/chat-ui; \
     ln -s "$peer_dir/node_modules/@sentropic/chat-ui" packages/chat-core/node_modules/@sentropic/chat-ui; \

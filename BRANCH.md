@@ -73,9 +73,9 @@
 - [ ] **Lot 4 — Muse Wonder review changes**
   - [x] R1: reproduce the missing API filters; cover API and E2E content-hash inputs.
   - [ ] R2: rebase preserving main and lockfile intent; Post-Rebase Gate; exact-head CI success.
-  - [ ] R3: cover npm aliases and flags-before-verb; declare scan boundaries.
+  - [x] R3: cover npm aliases and flags-before-verb; declare scan boundaries; new bypass fixtures observed red then green.
   - [ ] R4: bind scanned tool and consumer invocations to committed catalogs and historical closures.
-  - [ ] R5: admit only explicitly named candidate archives and manifest file specs.
+  - [x] R5: admit only explicitly named candidate archives and manifest file specs; sibling-admission regression observed red then green.
   - [ ] R6: assign exception owners, review dates and accurate scope.
   - [ ] R7: track isolated catalog SCA coverage with owner, scanner and review date.
   - [ ] R8: digest-pin touched runtime images with regression coverage.
