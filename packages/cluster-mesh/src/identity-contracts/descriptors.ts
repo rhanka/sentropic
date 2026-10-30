@@ -9,6 +9,7 @@ export type IdentityDomainName =
   | 'accounts'
   | 'proofs'
   | 'invitations'
+  | 'device_enrolment'
   | 'login_sessions'
   | 'tenant_memberships'
   | 'workspaces'
@@ -30,6 +31,12 @@ export const IDENTITY_DOMAIN_DESCRIPTORS: readonly IdentityDomainDescriptor[] = 
   { domain: 'accounts', version: IDENTITY_CONTRACT_VERSION, status: 'contract-only', records: ['UserAccount'] },
   { domain: 'proofs', version: IDENTITY_CONTRACT_VERSION, status: 'contract-only', records: ['IdentityProof'] },
   { domain: 'invitations', version: IDENTITY_CONTRACT_VERSION, status: 'contract-only', records: ['InvitationRecord'] },
+  {
+    domain: 'device_enrolment',
+    version: IDENTITY_CONTRACT_VERSION,
+    status: 'contract-only',
+    records: ['DeviceCodeRecord'],
+  },
   { domain: 'login_sessions', version: IDENTITY_CONTRACT_VERSION, status: 'contract-only', records: ['LoginSession'] },
   {
     domain: 'tenant_memberships',

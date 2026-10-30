@@ -60,6 +60,34 @@ export interface ConsumeInvitationResult {
   readonly emailVerified: true;
 }
 
+/** F04 device enrolment entry: the device-code issue/poll/approve triplet. */
+export interface DeviceCodeIssuance {
+  readonly deviceCode: string;
+  readonly userCode: string;
+  readonly intervalSec: number;
+  readonly expiresAt: string;
+}
+
+export type DeviceCodeStatus = 'pending' | 'approved';
+
+export interface DeviceCodeRecord {
+  readonly deviceCode: string;
+  readonly userCode: string;
+  readonly deviceName: string | null;
+  readonly status: DeviceCodeStatus;
+  readonly approvedUserId?: string;
+  readonly approvedAt?: string;
+  readonly issuedAt: string;
+  readonly expiresAt: string;
+}
+
+/** Poll outcome mirrors the CURRENT device port (`src/device.ts`); `slow_down`
+    is emitted by rate-aware backends, never fabricated by a pending store. */
+export type DeviceCodePollOutcome =
+  | { readonly status: 'authorization_pending' | 'slow_down' }
+  | { readonly status: 'expired' }
+  | { readonly status: 'approved'; readonly userId: string; readonly deviceName: string | null };
+
 export interface LoginSessionInput {
   readonly sessionId: string;
   readonly userId: string;
