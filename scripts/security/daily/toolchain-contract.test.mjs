@@ -130,6 +130,11 @@ test('should reject tampered bundle linkage, wrong native error classes and expi
     await assert.rejects(run({ [rolePath(role)]: JSON.stringify(document) }),
       new RegExp(`${role} expired at verification`));
   }
+  const hashedSnapshot = structuredClone(retained.metadata.snapshot.document);
+  hashedSnapshot.signed.meta['targets.json'] = { ...hashedSnapshot.signed.meta['targets.json'],
+    hashes: { sha256: 'superseded-targets-digest' } };
+  await assert.rejects(run({ [rolePath('snapshot')]: JSON.stringify(hashedSnapshot) }),
+    /snapshot pins a superseded targets digest/);
   for (const [index, trial] of retained.verification.trials.entries()) {
     const trials = structuredClone(retained.verification.trials);
     trials[index].exitCode = trial.exitCode === 0 ? 1 : 0;
@@ -348,6 +353,11 @@ test('should refuse expired TUF roots and version or digest rollbacks', () => {
   const zeroVersion = { ...documents,
     snapshot: { signed: { ...documents.snapshot.signed, version: 0 } } };
   assert.throws(() => validateTufMetadata(zeroVersion, digests, verifiedAt), /snapshot metadata is incomplete/);
+  const fractional = { ...documents,
+    snapshot: { signed: { ...documents.snapshot.signed, version: 5.5 } },
+    timestamp: { signed: { ...documents.timestamp.signed,
+      meta: { 'snapshot.json': { version: 5.5, hashes: { sha256: 'aaa' } } } } } };
+  assert.throws(() => validateTufMetadata(fractional, digests, verifiedAt), /snapshot metadata is incomplete/);
   const badExpiry = { ...documents,
     timestamp: { signed: { ...documents.timestamp.signed, expires: 'not-a-date' } } };
   assert.throws(() => validateTufMetadata(badExpiry, digests, verifiedAt), /timestamp metadata is incomplete/);
