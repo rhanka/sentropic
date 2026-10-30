@@ -56,6 +56,6 @@ Extract the inline Sigstore TUF freshness and version-link checks into an export
     - [x] Focused `toolchain-contract.test.mjs` green in Docker (15/15, retained-evidence replay passes).
   - [x] Lot gate:
     - [x] `make test-security-daily ENV=test-sec5a-expiry` (140/140).
-- [ ] **Lot 2 — Review and PR**
-  - [ ] Two blind Muse Wonder full xhigh review legs (correctness, risk), receipts in `.h2a/reviews/`.
+- [x] **Lot 2 — Review and PR**
+  - [x] Muse Wonder full xhigh legs (correctness r1, risk r2), receipts `.h2a/reviews/sec5a-expiry_muse_{r1,r2}.md`; final: APPROVE + APPROVE.
   - [ ] Open PR with `BRANCH.md` as body; record head; leave merge to owner.
