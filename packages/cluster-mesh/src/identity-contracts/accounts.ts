@@ -30,6 +30,10 @@ export interface UserAccountDomain {
   deleteAccount(userId: string, actorId: string): Promise<void>;
   getAccount(userId: string): Promise<UserAccount>;
   listUsers(): Promise<readonly UserAccount[]>;
+  /** Self-service surface (F02): the caller acts on its own account only. */
+  getSelf(userId: string): Promise<UserAccount>;
+  disableSelf(userId: string): Promise<UserAccount>;
+  deleteSelf(userId: string): Promise<void>;
 }
 
 function isProtectedAdmin(role: GlobalRole): boolean {
@@ -112,6 +116,26 @@ export function createUserAccounts(input: {
     },
     async listUsers() {
       return input.accounts.listAccounts();
+    },
+    async getSelf(userId) {
+      const account = await requireAccount(userId);
+      if (account.accountStatus === 'deleted') throw new AccountNotActiveError(userId);
+      return account;
+    },
+    async disableSelf(userId) {
+      const account = await requireAccount(userId);
+      if (account.accountStatus !== 'active') throw new AccountTransitionError();
+      const now = clock();
+      const updated = await input.accounts.setAccountStatus(userId, 'disabled', now);
+      await input.audit.append({ at: now, kind: 'account.self_disabled', subjectId: userId });
+      return updated;
+    },
+    async deleteSelf(userId) {
+      const account = await requireAccount(userId);
+      if (account.accountStatus !== 'disabled') throw new AccountTransitionError('User must be disabled before deletion');
+      const now = clock();
+      await input.accounts.deleteAccount(userId, now);
+      await input.audit.append({ at: now, kind: 'account.self_deleted', subjectId: userId });
     },
   };
 }
