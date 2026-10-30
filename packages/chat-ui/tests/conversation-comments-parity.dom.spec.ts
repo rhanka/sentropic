@@ -1,7 +1,7 @@
 import { cleanup, fireEvent, render, waitFor } from '@testing-library/svelte';
 import { afterEach, expect, it } from 'vitest';
-import { createConversationFixture } from '../fixtures/conversationHost.js';
-import { createCommentFixture } from '../fixtures/commentHost.js';
+import { createConversationFixture } from './fixtures/conversationHost.js';
+import { createCommentFixture } from './fixtures/commentHost.js';
 import ConversationView from './fixtures/ConversationViewHarness.svelte';
 
 const disposables: Array<{ dispose(): void }> = [];
