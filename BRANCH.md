@@ -1,37 +1,37 @@
-# Fix: Detect partial warm reports in cold/warm comparison
+# Fix: Refuse expired TUF roots and metadata rollbacks
 
 ## Objective
-Refuse a warm Trivy report whose finding inventory diverges from the cold report for the same target and DB snapshots (#840 item 6 slice).
+Extract the inline Sigstore TUF freshness and version-link checks into an exported pure validator with unit-tested expiry and rollback refusal (items 2 and 11 slice).
 
 ## Scope / Guardrails
-- Scope limited to cold/warm agreement gate, its unit tests, and one wiring call.
+- Scope limited to validator extraction, its unit tests, and identical-behavior wiring.
 - Make-only workflow, no direct Docker commands.
-- Branch development in isolated worktree `tmp/sec5a-report-agreement`.
-- Automated test campaigns on dedicated environment (`ENV=test-sec5a-agreement`), never on root `dev`.
+- Branch development in isolated worktree `tmp/sec5a-trust-expiry`.
+- Automated test campaigns on dedicated environment (`ENV=test-sec5a-expiry`), never on root `dev`.
 - In every `make` command, `ENV=<env>` passed as the last argument.
 - All new text in English.
 - No daily scheduling, auto-merge, publishing, package source, or admission flag changes.
-- No secret, no registry credential, no network in the gate; pure local comparison.
+- No secret, no registry credential, no network; pure local validation.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `scripts/security/daily/trivy.mjs`
-  - `scripts/security/daily/trivy.test.mjs`
-  - `scripts/security/daily/qualify-current.mjs`
+  - `scripts/security/daily/qualify-trust-receipt.mjs`
+  - `scripts/security/daily/toolchain-contract.test.mjs`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.github/workflows/**`
   - `.security/**`
+  - `docs/security/sec5a-trust-custody.json`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - None
 - **Exception process**:
-  - No new exception declared. Inherited unchanged from main: BRLOCK-EX1 review_by=2026-11-30T00:00:00Z (owner CI maintainers, removal on PR 846 closure); this branch changes no lockfile path.
+  - No exception declared.
 
 ## Feedback Loop
-- `attention`: item 6 stays OPEN after this slice; only omitted/partial-report detection is added, independent expected inventories remain pending.
+- `attention`: items 2 and 11 stay OPEN after this slice; only expiry and rollback refusal at receipt validation are added, independent content/verifier admission remains required.
 
 ## AI Flaky tests
 - Acceptance rule: none apply; no AI/provider-dependent tests in scope.
@@ -43,19 +43,19 @@ Refuse a warm Trivy report whose finding inventory diverges from the cold report
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read COMMON-RULES, packet, PR #850 comment 6514874779, and `trivy.mjs` comparison path.
-  - [x] Confirm isolated worktree `tmp/sec5a-report-agreement` on branch `fix/sec5a-report-agreement`.
-  - [x] Capture make target: `make test-security-daily ENV=test-sec5a-agreement`.
+  - [x] Read COMMON-RULES, packet, PR #850 comment 6514874779, and `qualify-trust-receipt.mjs` metadata checks.
+  - [x] Confirm isolated worktree `tmp/sec5a-trust-expiry` on branch `fix/sec5a-trust-expiry`.
+  - [x] Capture make target: `make test-security-daily ENV=test-sec5a-expiry`.
   - [x] Confirm scope boundaries, no EXn.
-- [x] **Lot 1 — Cold/warm finding-inventory agreement gate**
-  - [x] Add exported `validateReportAgreement(coldReport, warmReport)` to `scripts/security/daily/trivy.mjs`.
-  - [x] Add unit tests in `scripts/security/daily/trivy.test.mjs` (agree, reordered agree, dropped/added CVE, same-count PkgName/ID/version/severity drift, extra/missing result, reclassed result, nested malformed finding).
+- [x] **Lot 1 — TUF expiry and rollback refusal**
+  - [x] Add exported `validateTufMetadata(documents, digests, verifiedAt)` to `scripts/security/daily/qualify-trust-receipt.mjs`.
+  - [x] Call it from `createTrustReceipt` with identical behavior.
+  - [x] Add unit tests in `scripts/security/daily/toolchain-contract.test.mjs` (fresh pass, expired root, wrong type, version rollback, digest rollback, malformed).
   - [x] Lot gate:
-    - [x] `make scope-check ENV=test-sec5a-agreement`
-    - [x] Focused `trivy.test.mjs` green in Docker (6/6).
-  - [x] Wire one agreement call into `scripts/security/daily/qualify-current.mjs` cold/warm join.
-  - [x] Lot gate:
-    - [x] `make test-security-daily ENV=test-sec5a-agreement` (140/140 on final head).
-- [x] **Lot 2 — Review and PR**
-  - [x] Muse Wonder full xhigh legs (correctness r1/r1b/r1c, risk r2), receipts `.h2a/reviews/sec5a-agreement_muse_{r1,r1b,r1c,r2}.md`; final: APPROVE + APPROVE.
+    - [x] `make scope-check ENV=test-sec5a-expiry`
+    - [x] Focused `toolchain-contract.test.mjs` green in Docker (15/15, retained-evidence replay passes).
+  - [ ] Lot gate:
+    - [ ] `make test-security-daily ENV=test-sec5a-expiry`
+- [ ] **Lot 2 — Review and PR**
+  - [ ] Two blind Muse Wonder full xhigh review legs (correctness, risk), receipts in `.h2a/reviews/`.
   - [ ] Open PR with `BRANCH.md` as body; record head; leave merge to owner.
