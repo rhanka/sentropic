@@ -74,7 +74,7 @@
   - [x] Drizzle delta is exactly the reserved `0020` slot plus its journal entry (see PR837-R7-2).
 - [ ] **Lot 3 — Replay 7 patch-equivalence evidence**
   - [x] `git range-diff --no-color d08517ed1..10d289560 1b7f8ab94..<head>`: 190 equal / 1 changed / 1 old-only / 1 new-only.
-  - [ ] Extend `docs/runbooks/app-cm-integration-review.md` with the replay 7 row and publish the full output from the PR.
+  - [x] Extend `docs/runbooks/app-cm-integration-review.md` with the replay 7 row and publish the full output from the PR.
   - [ ] Update the PR body N5 record to the exact final head and its completed/success CI run.
 - [ ] **Lot 4 — Local acceptance gates (ENV=test-app-837-rebase)**
   - [ ] `make typecheck-auth-hono ENV=test-app-837-rebase`
