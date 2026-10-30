@@ -155,8 +155,9 @@ describe('canvas live ingress classification', () => {
   });
 
   it('should refuse candidate results that regress the authoritative state vector and accept older valid concurrent updates', () => {
-    const before = Y.encodeStateVector(authoritativeDoc());
-    const after = Y.encodeStateVector(authoritativeDoc());
+    const authoritativeForVectors = authoritativeDoc();
+    const before = Y.encodeStateVector(authoritativeForVectors);
+    const after = Y.encodeStateVector(authoritativeForVectors);
     expect(isVectorRegressive(before, after)).toBe(false);
     const docLowClock = new Y.Doc({ gc: false });
     docLowClock.getText('field:body').insert(0, 'x');
