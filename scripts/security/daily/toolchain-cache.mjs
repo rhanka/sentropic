@@ -13,7 +13,7 @@ export async function hashFile(path) {
   for await (const bytes of createReadStream(path)) hash.update(bytes);
   return `sha256:${hash.digest('hex')}`;
 }
-function extract(archive, directory, filename) {
+function extract(archive, directory, filename, maxExpandedBytes) {
   const run = (args) => {
     const result = spawnSync('tar', args, { env: { PATH: '/usr/bin:/bin', LANG: 'C' },
       encoding: 'utf8', timeout: 30000, maxBuffer: 1024 * 1024 });
@@ -27,7 +27,7 @@ function extract(archive, directory, filename) {
   requireEvidence(entries.length === 2 && entries.every((entry) => entry.startsWith('-')), 'DB archive links/type');
   const sizes = entries.map((entry) => Number(entry.split(/\s+/)[2]));
   requireEvidence(sizes.every((size) => Number.isSafeInteger(size) && size >= 0) &&
-    sizes.reduce((total, size) => total + size, 0) <= 4 * 1024 ** 3, 'DB expanded byte bound');
+    sizes.reduce((total, size) => total + size, 0) <= maxExpandedBytes, 'DB expanded byte bound');
   run(['-xzf', archive, '--directory', directory, '--no-same-owner', '--no-same-permissions', '--', ...names]);
 }
 
@@ -54,7 +54,7 @@ async function acquire(client, kind, root, now) {
     const archive = join(scratch, 'layer.tgz');
     await source.download(archive);
     requireEvidence(await hashFile(archive) === source.layer.digest, 'downloaded layer hash');
-    extract(archive, scratch, filename);
+    extract(archive, scratch, filename, policy.data[kind].maxExpandedBytes);
     const metadataBytes = await readFile(join(scratch, 'metadata.json'));
     const observedAt = new Date(now).toISOString();
     const metadata = { ...JSON.parse(metadataBytes), DownloadedAt: observedAt };

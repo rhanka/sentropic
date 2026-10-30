@@ -4,14 +4,19 @@ import { assertQualified, digest, isDigest, policy, requireEvidence, validateSca
 import { hashFile, restoreSnapshot } from './toolchain-cache.mjs';
 import { failClosedReport } from './inventory.mjs';
 
-export function validateTarget(target, sourceSha, key) {
+// Only the trusted preparation path can establish archive identity; JSON cannot mint this proof.
+const verifiedArchives = new WeakMap();
+
+export function validateTarget(target, sourceSha, key, archive) {
   requireEvidence(/^[a-f0-9]{40}$/.test(sourceSha || '') &&
     ['api-production', 'api-toolbox', 'ui-production'].includes(key), 'target source/surface');
   requireEvidence(target?.key === key && target.sourceSha === sourceSha && target.platform === policy.platform &&
     target.provenance?.verified === true && target.provenance.sourceSha === sourceSha &&
     target.provenance.imageRef === target.ref && target.provenance.platform === policy.platform &&
     isDigest(target.provenance.receiptHash) && isDigest(target.configDigest), 'target provenance/platform');
-  requireEvidence(/^[a-z0-9.-]+(?::\d+)?\/[a-z0-9/_.-]+@sha256:[a-f0-9]{64}$/.test(target.ref || ''), 'immutable remote image');
+  const remote = /^[a-z0-9.-]+(?::\d+)?\/[a-z0-9/_.-]+@sha256:[a-f0-9]{64}$/.test(target.ref || '');
+  const archived = archive && isDigest(archive.digest) && target.ref === `urn:oci-archive:${archive.digest}`;
+  requireEvidence(remote || archived, 'immutable image/archive identity');
   requireEvidence(Array.isArray(target.expectedResults) && target.expectedResults.length > 0 &&
     target.expectedResults.every((value) => typeof value === 'string' && value.length > 0) &&
     new Set(target.expectedResults).size === target.expectedResults.length, 'target coverage inventory');
@@ -23,7 +28,7 @@ const safePath = (path) => {
 };
 
 export async function prepareImageScan({ target, sourceSha, key, snapshots, archive, now = Date.now() }) {
-  validateTarget(target, sourceSha, key);
+  validateTarget(target, sourceSha, key, archive);
   // Java cannot be silently skipped; applicability/inventory qualification is still pending.
   requireEvidence(snapshots?.vulnerability && snapshots?.java, 'required vulnerability/Java DB snapshots');
   const receipts = {};
@@ -47,6 +52,8 @@ export async function prepareImageScan({ target, sourceSha, key, snapshots, arch
       'target archive integrity');
     mounts.push('--mount', `type=bind,src=${safePath(archive.path)},dst=/target/image.tar,readonly`);
     args.push('--input', '/target/image.tar');
+    target = { ...target };
+    verifiedArchives.set(target, { path: archive.path, digest: archive.digest });
   } else args.push('--image-src', 'remote', target.ref);
   return { command: 'docker', args: ['run', '--rm', '--pull=never', '--read-only', '--cap-drop=ALL',
     '--security-opt=no-new-privileges', '--user', '65532:65532', '--pids-limit', '128', '--memory', '4g', '--cpus', '1',
@@ -74,8 +81,11 @@ export function validateImageReport(stdout, target, execution = { status: 0 }) {
     requireEvidence(execution.status === 0 && !execution.error && !execution.signal, 'Trivy command failed');
     requireEvidence(typeof stdout === 'string' && Buffer.byteLength(stdout) <= reportLimit, 'report byte/type bound');
     const parsed = failClosedReport(stdout);
+    const archive = verifiedArchives.get(target);
+    const identityMatches = archive ? parsed.ArtifactName === '/target/image.tar' && parsed.ArtifactType === 'container_image'
+      : parsed.Metadata?.RepoDigests?.includes(target.ref);
     requireEvidence(parsed.SchemaVersion === 2 && parsed.Metadata?.ImageID === target.configDigest &&
-      parsed.Metadata?.RepoDigests?.includes(target.ref), 'report target identity');
+      identityMatches, 'report target identity');
     const actual = parsed.Results.map((result) => `${result.Target}|${result.Class}|${result.Type}`).sort();
     requireEvidence(JSON.stringify(actual) === JSON.stringify([...target.expectedResults].sort()), 'partial image coverage');
     for (const result of parsed.Results) for (const finding of result.Vulnerabilities || []) {
@@ -98,6 +108,8 @@ export async function executeImageScan(options, scannerEvidence, execute) {
     shell: false, timeout: 300000, maxBuffer: 16 * 1024 * 1024 });
   try {
     validateImageReport(result.stdout, plan.target, result);
+    const archive = verifiedArchives.get(plan.target);
+    if (archive) requireEvidence(await hashFile(archive.path) === archive.digest, 'target archive changed during scanning');
     // A DB that expired during scanning cannot support absence/reconciliation/merge.
     for (const snapshot of Object.values(plan.snapshots)) await restoreSnapshot(snapshot);
   } catch (error) {

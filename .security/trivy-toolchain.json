@@ -15,11 +15,15 @@
     "identity": "https://github.com/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/v0.76.1",
     "requirePlatformSignature": false,
     "verifierAdmitted": false,
+    "verifierCandidate": { "repository": "sigstore/cosign", "version": "3.1.4",
+      "sha256": "424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa", "releaseImmutable": true },
     "contentAdmitted": false
   },
   "data": {
-    "vulnerability": { "repository": "ghcr.io/aquasecurity/trivy-db", "tag": "2", "schema": 2 },
-    "java": { "repository": "ghcr.io/aquasecurity/trivy-java-db", "tag": "1", "schema": 1 },
+    "vulnerability": { "repository": "ghcr.io/aquasecurity/trivy-db", "tag": "2", "schema": 2, "maxLayerBytes": 536870912, "maxExpandedBytes": 4294967296 },
+    "java": { "repository": "ghcr.io/aquasecurity/trivy-java-db", "tag": "1", "schema": 1,
+      "maxLayerBytes": 1342177280, "maxExpandedBytes": 2147483648,
+      "acquisition": { "requestTimeoutMs": 120000, "budgetMs": 180000 } },
     "checks": { "repository": "ghcr.io/aquasecurity/trivy-checks", "tag": "1", "qualified": false },
     "maxAgeSeconds": 86400,
     "trust": "TLS origin plus OCI integrity and trusted ingestion receipt; DB publisher signature not established",
@@ -27,11 +31,11 @@
   },
   "acquisition": { "attempts": 3, "requestTimeoutMs": 30000, "budgetMs": 120000, "maxRetryAfterMs": 30000 },
   "blockers": [
-    "Admit verifier and retain exact-index signature bundle, trust roots and offline verification receipt",
-    "Review image content, runtime dependencies and zero-Python inventory beyond publisher signature",
-    "Qualify fresh immutable DB, Java DB and IaC rules snapshots and restoration integrity",
-    "Qualify three target images with source-SHA/platform provenance and complete raw reports",
-    "Exercise offline, rate-limit, corruption, expiry-before-merge and rollback scenarios on real artifacts",
-    "Measure cold/warm remote/rebuild cost and full CI critical path; S2c/S3 remain separate gates"
+    "Independent admission of a patched scanner, the frozen Cosign 3.1.4 candidate and retained roots: scanner still contains HIGH/CRITICAL findings (docs/security/trivy-s2b-qualify.md)",
+    "Frozen IaC rules load offline but detect zero Compose configurations; complete declared IaC coverage and report adaptation are missing",
+    "Current-main archive identities are verified; canonical remote API/toolbox tags are absent and UI registry config differs from its main-CI archive; independent completeness admission remains pending",
+    "Successful remote scan needs narrowly scoped pull authorization; broad operator credentials must stay outside scanner tools",
+    "Isolated rebuild requires an admitted builder without shared daemon or secrets; approved Node sandbox has no builder",
+    "Successful remote/rebuild measurements and CI critical path at most 600 seconds remain missing; S2c/S3 are separate gates"
   ]
 }
