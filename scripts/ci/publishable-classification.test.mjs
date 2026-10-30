@@ -13,7 +13,7 @@ const ctx = (over = {}) => normalizeContext({
   bootstrap: over.bootstrap,
   changesResult: 'success',
 });
-const PUBLIC = ['cluster-mesh', 'cowork-desktop', 'oauth-verify', 'mcp-auth', 'focus', 'skills', 'events'];
+const PUBLIC = ['cluster-mesh', 'cowork-desktop', 'oauth-verify', 'mcp-auth', 'mcp-broker', 'focus', 'skills', 'events'];
 const classify = async (context, absentSet = new Set()) => {
   const { classification, removed } = await classifyPackages({ publicSlugs: PUBLIC, context, absent: async (s) => absentSet.has(s) });
   return { block: PUBLIC.filter((s) => classification.get(s).severity === 'block'), removed, classification };
@@ -44,6 +44,12 @@ test('root lock changes: existing packed versions WARN, absent packed versions B
 
 test('focus_publish has no steady-state publisher: an absent focus version is not selected by it alone', async () => {
   assert.deepEqual((await classify(ctx({ filters: ['focus_publish'] }), new Set(['focus']))).block, []);
+});
+
+test('broker public transition and absent release select the guarded pack lane', async () => {
+  assert.deepEqual((await classify(ctx({ files: ['packages/mcp-broker/package.json'] }))).block, ['mcp-broker']);
+  assert.deepEqual((await classify(ctx({ filters: ['mcp_broker_publish'], event: 'push' }), new Set(['mcp-broker']))).block, ['mcp-broker']);
+  assert.deepEqual((await classify(ctx({ filters: ['mcp_broker_publish'], event: 'push' }))).block, []);
 });
 
 test('bootstrap: explicit target BLOCK even if published; all keeps existing WARN; none is empty', async () => {
