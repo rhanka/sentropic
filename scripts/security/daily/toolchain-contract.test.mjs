@@ -45,6 +45,8 @@ test('should retain self-verifiable raw trust metadata and deterministic public 
     digest(roots).slice(7));
   assert.equal(receipt.verification.artifacts.cosign, `sha256:${policy.signature.verifierCandidate.sha256}`);
   assert.equal(receipt.verification.digest, policy.indexDigest);
+  assert.equal(receipt.verification.artifacts['changed-index.json'],
+    'sha256:119952d007da1aecb65419d674feaa8019cc2df57f72a83be82dee7683cd55fc');
 });
 
 test('should require reviewed content pins, exact publisher and index/platform linkage', () => {

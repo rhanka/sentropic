@@ -3,6 +3,9 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { digest, policy } from './toolchain-contract.mjs';
 
 const read = (file) => readFile(`/evidence/${file}`);
+const observedAt = (await read('trust-verified-at.txt')).toString().trim();
+const verifiedAt = Date.parse(observedAt);
+assert.ok(Number.isFinite(verifiedAt));
 const artifacts = {};
 for (const file of ['cosign', 'index.json', 'manifest.json', 'config.json', 'bundle-manifest.json',
   'bundle-356b2dc09aa14e36a3a6fb88708f224261c1d8f451e502310308800b8e05bfb6.json',
@@ -10,6 +13,7 @@ for (const file of ['cosign', 'index.json', 'manifest.json', 'config.json', 'bun
   'trusted_root.json', 'tls-roots.pem', 'offline-verification.log', 'changed-index.log',
   'changed-root.log', 'changed-bundle.log', 'trust-trials.jsonl']) artifacts[file] = digest(await read(file));
 assert.equal(artifacts.cosign, `sha256:${policy.signature.verifierCandidate.sha256}`);
+assert.equal(artifacts['changed-index.json'], digest(Buffer.concat([await read('index.json'), Buffer.from('\n')])));
 for (const [file, expected] of [['index.json', policy.indexDigest], ['manifest.json', policy.manifestDigest],
   ['config.json', policy.configDigest]]) assert.equal(artifacts[file], expected);
 assert.equal(artifacts['bundle-manifest.json'], 'sha256:356b2dc09aa14e36a3a6fb88708f224261c1d8f451e502310308800b8e05bfb6');
@@ -17,6 +21,16 @@ const bundleManifest = JSON.parse(await read('bundle-manifest.json'));
 assert.equal(bundleManifest.layers.length, 1);
 assert.equal(bundleManifest.layers[0].digest,
   artifacts['bundle-356b2dc09aa14e36a3a6fb88708f224261c1d8f451e502310308800b8e05bfb6.json']);
+const originalBundle = JSON.parse(await read('bundle-356b2dc09aa14e36a3a6fb88708f224261c1d8f451e502310308800b8e05bfb6.json'));
+const changedBundle = JSON.parse(await read('wrong-bundle.json'));
+const originalSig = Buffer.from(originalBundle.dsseEnvelope.signatures[0].sig, 'base64');
+const changedSig = Buffer.from(changedBundle.dsseEnvelope.signatures[0].sig, 'base64');
+const expectedSig = Buffer.from(originalSig);
+expectedSig[expectedSig.length - 1] ^= 1;
+assert.equal(originalSig[0], 0x30);
+assert.deepEqual(changedSig, expectedSig);
+changedBundle.dsseEnvelope.signatures[0].sig = originalBundle.dsseEnvelope.signatures[0].sig;
+assert.deepEqual(changedBundle, originalBundle);
 const fresh = (await read('tuf-home.txt')).toString().trim();
 assert.match(fresh, /^tuf-home\.[A-Za-z0-9]+$/);
 const metadata = {};
@@ -24,7 +38,7 @@ for (const role of ['root', 'timestamp', 'snapshot', 'targets']) {
   const bytes = await read(`${fresh}/.sigstore/root/tuf-repo-cdn.sigstore.dev/${role}.json`);
   const document = JSON.parse(bytes);
   assert.equal(document.signed._type, role);
-  assert.ok(Date.parse(document.signed.expires) > Date.now(), `${role} expired`);
+  assert.ok(Date.parse(document.signed.expires) > verifiedAt, `${role} expired at verification`);
   metadata[role] = { digest: digest(bytes), rawBase64: bytes.toString('base64'), document };
 }
 for (const [parent, child] of [['timestamp', 'snapshot'], ['snapshot', 'targets']]) {
@@ -45,7 +59,7 @@ for (const [name, reason] of [['changed-index', /provided artifact digests do no
   ['changed-bundle', /transparency log signature does not match/]]) {
   assert.match((await read(`${name}.log`)).toString(), reason);
 }
-const receipt = { schema: 1, observedAt: (await read('trust-verified-at.txt')).toString().trim(), qualified: false,
+const receipt = { schema: 1, observedAt, qualified: false,
   acquisition: 'public Docker Hub/GitHub; empty isolated TUF home; no prior operator roots',
   trust: 'Cosign 3.1.4 embedded release root authenticates Sigstore TUF; TLS uses pinned Node Mozilla roots',
   verification: { network: 'none', issuer: policy.signature.issuer, identity: policy.signature.identity,
