@@ -46,6 +46,8 @@
 - [x] Lot 5 tests: daily suite 127/127 and parser suite 17/17 passed; scope check PASS C2.
 - [ ] Lot 5 delivery: exact-head independent review and CI; PR from this file.
 - [x] No `packages/*/src/**` changes; package publication version gate not applicable.
+- [x] Review hardening: reject registry option injection and enforce SECQUAL-EX1 expiry mechanically with UTC boundary regressions.
+- [x] Review hardening: bind config-control receipts to observed container inspection, exact scanner pins and ingestion-selected DB mounts; real control rerun passed; daily suite 128/128.
 - [x] Keep PR open; never merge or enable auto-merge.
 
 ## Integrated Main Plan (retained context)

@@ -5,6 +5,12 @@ SECQUAL_SCANNER := aquasec/trivy@sha256:2e6c00d711ab4ae41d8a30c2c1fd3bd3b62704c1
 export SECQUAL_COHORT ?= main-40832206894
 SECQUAL_RUN = docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-privileges --pids-limit=128 --memory=512m --cpus=1 --tmpfs /tmp:rw,nosuid,nodev,noexec,size=128m -u "$$(id -u):$$(id -g)" -v "$(CURDIR):/workspace:ro" -v "$(SECQUAL_DIR):/evidence" -w /workspace
 
+.PHONY: security-qualify-window
+security-qualify-window:
+	@test "$$(date -u +%F)" \< '2026-11-13' || { echo 'coverage-blocked: SECQUAL-EX1 expired' >&2; exit 1; }
+
+security-qualify-measure security-qualify-acquire security-qualify-image security-qualify-signature security-qualify-targets security-qualify-failures security-qualify-receipts security-qualify-current-receipts security-qualify-cosign-help security-qualify-scanner: security-qualify-window
+
 .PHONY: security-qualify-measure
 security-qualify-measure: ## Measure actual OCI data bytes without admitting the toolchain
 	@mkdir -p "$(SECQUAL_DIR)" && chmod 700 "$(SECQUAL_DIR)"
@@ -49,6 +55,10 @@ security-qualify-config: security-qualify-scanner
 	@$(SECQUAL_RUN) --network=none $(SECQUAL_NODE) node scripts/security/daily/qualify-config-receipt.mjs check
 	@bash scripts/security/daily/qualify-config.sh
 	@$(SECQUAL_RUN) --network=none $(SECQUAL_NODE) node scripts/security/daily/qualify-config-receipt.mjs
+
+.PHONY: security-qualify-config-receipts
+security-qualify-config-receipts: security-qualify-window
+	@$(SECQUAL_RUN) --network=none -v "$(CURDIR)/docs/security:/receipts" $(SECQUAL_NODE) node scripts/security/daily/qualify-config-receipt.mjs publish
 
 .PHONY: security-qualify-scanner
 security-qualify-scanner:

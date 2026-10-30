@@ -26,12 +26,11 @@ trap cleanup EXIT
 for kind in api api-tool ui; do
   folder="$evidence/$cohort/$kind-image"
   for temperature in cold warm; do
-    name="test-sec-qualify-$$-$kind-$temperature"
     start=$(date +%s%N)
-    docker run -d --name "$name" "${common[@]}" \
+    active_container=$(docker run -d "${common[@]}" \
       --mount "type=bind,src=$folder/image.tar,dst=/target/image.tar,readonly" \
-      "$scanner" image "${flags[@]}" --platform linux/amd64 --input /target/image.tar >/dev/null
-    active_container=$name
+      "$scanner" image "${flags[@]}" --platform linux/amd64 --input /target/image.tar)
+    name=$active_container
     docker inspect "$name" | jq '[.[] | {Path,Args,Mounts,HostConfig:{ReadonlyRootfs:.HostConfig.ReadonlyRootfs,CapDrop:.HostConfig.CapDrop,SecurityOpt:.HostConfig.SecurityOpt,NetworkMode:.HostConfig.NetworkMode,Memory:.HostConfig.Memory,NanoCpus:.HostConfig.NanoCpus,PidsLimit:.HostConfig.PidsLimit},user:.Config.User,environmentNames:[.Config.Env[]|split("=")[0]]}]' > "$folder/$temperature-isolation.json"
     docker top "$name" -eo pid,ppid,comm,args > "$folder/$temperature-processes.txt" || true
     docker stats --no-stream --format '{{json .}}' "$name" > "$folder/$temperature-stats.json" || true
