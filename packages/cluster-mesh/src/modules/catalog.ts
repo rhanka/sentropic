@@ -116,7 +116,7 @@ export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, Prov
     subpath: './memory-substrate', range: ENGRAM_MEMORY_RANGE, meshCoherence: false, authPeers: [],
     requiredMembers: ['openModuleStorageCanonicalMemoryStoreV1', 'createMemoryPortV2'],
   },
-  comments: { id: 'comments', owner: 'comments', packageName: '@sentropic/cluster-mesh', subpath: './comments', range: '>=0.21.0 <0.25.0',
+  comments: { id: 'comments', owner: 'comments', packageName: '@sentropic/cluster-mesh', subpath: './comments', range: '>=0.21.0 <0.26.0',
     requiredMembers: ['createCommentsModule', 'createCommentsPostgresStorage'], namespace: '/comments', meshCoherence: false,
     authPeers: [{ packageName: '@sentropic/comments', subpath: '.', range: COMMENTS_RANGE, requiredMembers: ['createAnnotationRevision', 'validateCapacityDescriptor', 'hashRecord'] }] },
 };
