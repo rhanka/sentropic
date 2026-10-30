@@ -1,5 +1,5 @@
 import type { Component } from 'svelte';
-import type { ChatMessageAttachment } from '@sentropic/chat-runtime/state/chatProjection';
+import type { ChatMessageAttachment } from '@sentropic/chat-core/runtime/state/chatProjection';
 
 export type MessageAttachmentsProps = {
   /** The sent message's attachments to render. */

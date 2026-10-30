@@ -16,9 +16,9 @@
    */
   import { tick } from 'svelte';
   import type { Snippet } from 'svelte';
-  import type { CommentHost } from '@sentropic/chat-runtime/comments/host';
+  import type { CommentHost } from '@sentropic/chat-core/runtime/comments/host';
   import type { CommentItem, CommentThreadSummary, MentionMember } from './types.js';
-  import type { CommentState } from '@sentropic/chat-runtime/comments';
+  import type { CommentState } from '@sentropic/chat-core/runtime/comments';
   import { getMentionLabel } from './presentation.js';
 
   // ---------------------------------------------------------------------------
