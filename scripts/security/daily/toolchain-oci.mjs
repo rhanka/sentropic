@@ -7,15 +7,26 @@ const repositories = Object.freeze({ vulnerability: 'aquasecurity/trivy-db',
   java: 'aquasecurity/trivy-java-db', checks: 'aquasecurity/trivy-checks' });
 // Only fixed Aqua GHCR repositories and GHCR's blob delivery host; no mirror or caller URL.
 export function createOciClient({ fetcher = fetch, now = Date.now, sleep = setTimeout } = {}) {
+  return {
+    async resolve(kind) {
+      return createKindClient(kind, { fetcher, now, sleep }).resolve();
+    },
+  };
+}
+// Each kind owns its transfer budget; concurrently acquired kinds cannot reset another's clock.
+function createKindClient(kind, { fetcher, now, sleep }) {
+  const repo = repositories[kind];
+  requireEvidence(repo && policy.data[kind].repository === `ghcr.io/${repo}`, 'untrusted OCI repository');
+  const limits = { ...policy.acquisition, ...policy.data[kind].acquisition };
   const start = now();
-  const remaining = () => policy.acquisition.budgetMs - (now() - start);
+  const remaining = () => limits.budgetMs - (now() - start);
   async function request(url, headers = {}) {
     let response;
     for (let attempt = 0; attempt < policy.acquisition.attempts; attempt++) {
       requireEvidence(remaining() > 0, 'OCI acquisition budget exhausted');
       try {
         response = await fetcher(url, { headers, redirect: 'manual',
-          signal: AbortSignal.timeout(Math.max(1, Math.min(remaining(), policy.acquisition.requestTimeoutMs))) });
+          signal: AbortSignal.timeout(Math.max(1, Math.min(remaining(), limits.requestTimeoutMs))) });
       } catch { throw new Error('coverage-blocked: OCI transport unavailable'); }
       if (response.status !== 429 && response.status < 500) return response;
       const retry = response.headers.get('retry-after');
@@ -47,9 +58,7 @@ export function createOciClient({ fetcher = fetch, now = Date.now, sleep = setTi
     return { bytes, value: JSON.parse(bytes), ...identity };
   }
   return {
-    async resolve(kind) {
-      const repo = repositories[kind];
-      requireEvidence(repo && policy.data[kind].repository === `ghcr.io/${repo}`, 'untrusted OCI repository');
+    async resolve() {
       const tokenResponse = await json(await request(`https://ghcr.io/token?service=ghcr.io&scope=repository:${repo}:pull`), 16384);
       const token = tokenResponse.value.token;
       requireEvidence(typeof token === 'string' && token.length > 0 && token.length < 12000, 'anonymous GHCR token');
@@ -59,7 +68,7 @@ export function createOciClient({ fetcher = fetch, now = Date.now, sleep = setTi
       requireEvidence(manifest.value.schemaVersion === 2 && manifest.value.layers?.length === 1, 'OCI artifact manifest');
       const layer = manifest.value.layers[0];
       requireEvidence(isDigest(layer.digest) && Number.isSafeInteger(layer.size) && layer.size > 0 &&
-        layer.size <= 512 * 1024 * 1024, 'OCI layer descriptor');
+        layer.size <= (policy.data[kind].maxLayerBytes || 512 * 1024 * 1024), 'OCI layer descriptor');
       return { kind, repository: `ghcr.io/${repo}`, manifestDigest: manifest.digest,
         manifestBytes: manifest.bytes, layer,
         async download(path) {
