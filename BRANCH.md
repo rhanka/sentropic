@@ -1,10 +1,10 @@
-# Fix: Refuse expired TUF roots and metadata rollbacks
+# Fix: Refuse expired TUF roots and intra-set metadata parent-pin mismatches
 
 ## Objective
-Extract the inline Sigstore TUF freshness and version-link checks into an exported pure validator with unit-tested expiry and rollback refusal (items 2 and 11 slice).
+Extract the inline Sigstore TUF freshness and version-link checks into an exported pure validator with unit-tested expiry and intra-set parent-pin mismatch refusal (items 2 and 11 slice; prior-trusted-state rollback history stays open).
 
 ## Scope / Guardrails
-- Scope limited to validator extraction, its unit tests, and identical-behavior wiring.
+- Scope limited to validator extraction, its unit tests, and fail-closed-strengthening wiring (strict integer and positive versions, null and array guards, finite verification time, coverage-blocked errors, validate-after-read ordering; not identical behavior).
 - Make-only workflow, no direct Docker commands.
 - Branch development in isolated worktree `tmp/sec5a-trust-expiry`.
 - Automated test campaigns on dedicated environment (`ENV=test-sec5a-expiry`), never on root `dev`.
@@ -28,10 +28,10 @@ Extract the inline Sigstore TUF freshness and version-link checks into an export
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - None
 - **Exception process**:
-  - No exception declared.
+  - No new exception declared. Inherited unchanged from main: BRLOCK-EX1 review_by=2026-11-30T00:00:00Z (owner CI maintainers, removal on PR 846 closure); this branch changes no lockfile path.
 
 ## Feedback Loop
-- `attention`: items 2 and 11 stay OPEN after this slice; only expiry and rollback refusal at receipt validation are added, independent content/verifier admission remains required.
+- `attention`: items 2 and 11 stay OPEN after this slice; only expiry and intra-set parent-pin mismatch refusal at receipt validation are added, independent content/verifier admission remains required; a fully self-consistent older, unexpired set still passes (no prior trusted state).
 
 ## AI Flaky tests
 - Acceptance rule: none apply; no AI/provider-dependent tests in scope.
@@ -47,10 +47,10 @@ Extract the inline Sigstore TUF freshness and version-link checks into an export
   - [x] Confirm isolated worktree `tmp/sec5a-trust-expiry` on branch `fix/sec5a-trust-expiry`.
   - [x] Capture make target: `make test-security-daily ENV=test-sec5a-expiry`.
   - [x] Confirm scope boundaries, no EXn.
-- [x] **Lot 1 — TUF expiry and rollback refusal**
+- [x] **Lot 1 — TUF expiry and intra-set parent-pin refusal**
   - [x] Add exported `validateTufMetadata(documents, digests, verifiedAt)` to `scripts/security/daily/qualify-trust-receipt.mjs`.
-  - [x] Call it from `createTrustReceipt` with identical behavior.
-  - [x] Add unit tests in `scripts/security/daily/toolchain-contract.test.mjs` (fresh pass, expired root, wrong type, version rollback, digest rollback, malformed).
+  - [x] Call it from `createTrustReceipt` as a fail-closed strengthening (see Scope).
+  - [x] Add unit tests in `scripts/security/daily/toolchain-contract.test.mjs` (fresh pass, expired root, wrong type, parent-pin version mismatch, parent-pin digest mismatch, malformed, non-integer version, snapshot-targets digest replay refusal).
   - [x] Lot gate:
     - [x] `make scope-check ENV=test-sec5a-expiry`
     - [x] Focused `toolchain-contract.test.mjs` green in Docker (15/15, retained-evidence replay passes).
