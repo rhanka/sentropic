@@ -328,7 +328,7 @@ describe('RC1 product to issuer revocation', () => {
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
   });
   it.each([{ scope: 'remote.evidence.issue' }, { aud: 'other' }, { client_id: 'other' },
-    { sub: 'user' }, { cnf: { jkt: 'bound-token' } }, { exp: 1 }, {}])
+    { sub: 'user' }, { cnf: { jkt: 'bound-token' } }, { exp: 1 }, { exp: undefined }, {}])
   ('should enforce revocation token claims with an authenticated body %j', async change => {
     const tokens = await createSession(userId, 'editor', undefined, { mfaVerified: true });
     const authorization = `Bearer ${await bearer(change)}`;

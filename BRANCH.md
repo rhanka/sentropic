@@ -4,11 +4,11 @@
 - [x] Implement the app-side RC1 boundary from plan v1.1 revision 2: repeated explicit actions and switching under one valid 2FA login; refuse invalidated authority. Native/real-session acceptance remains open below.
 
 ## Scope / Guardrails
-- [x] Base: origin/main 5e986a0b6cd2dfecfbde6a588d30055271124696; branch feat/remote-ctl-rc1; worktree tmp/worktrees/rc1.
-- [x] Integrated origin/main 8d37455df7f019cb42699257d343abbcc7ac2f68 by merge 6d603530d; only BRANCH.md conflicted; Track contains all 370 original event IDs; narrow implementation scope restored.
+- [x] Base: origin/main 76c90aef0a4ed9ffdd3a073cd49f640fb97b3b0a; branch feat/remote-ctl-rc1; worktree tmp/worktrees/rc1.
+- [x] Muse r4: rebased 72 commits onto origin/main 76c90aef0; only BRANCH.md conflicted. Earlier merge/commit references below describe historical receipts before history rewriting, not the current ancestry.
 - [x] Frozen interface SHA-256: 104e64761f957c12291ad86bc8553359d63bf15135660d7f53ddbdccded17032; plan: 31d6257d70fc87877e4a2076e4cbf0e58ffc33adc24b9d288590e6059f8d4256.
 - [x] ENV=test-rc1 last; API_PORT=8799 UI_PORT=5199 MAILDEV_UI_PORT=1099; shared Docker locks; make down after execution.
-- [x] Make-only; no live production operation; no frozen-directory writes; merge only; atomic commits at most 150 lines; no trailers.
+- [x] Make-only; no live production operation; no frozen-directory writes; update from main by rebase; atomic commits at most 150 lines; no trailers.
 - [x] RC2 transport/provider/capsule and K-app journal/claim/effects remain separate; native contribution requested through conductor with test fake behind the port.
 - [x] D2 central signer/login-credential trust and bounded offline revocation remain as frozen; no claim of a trusted display or fresh human click.
 - [x] BRRC0-EX1 preserves mechanism-only release dependencies and single-writer leases; artifact gates remain closed.
@@ -70,8 +70,10 @@
   - [x] Declare BRRC1-EXn with rationale, impact and rollback before any conditional edit.
 
 ## Feedback Loop
+- [x] Muse r4 missing-exp coverage: a signed token omits exp via the undefined override, with a valid MAC/body and real issuer session; it returns 401 and leaves the record unrevoked. All 46 revocation tests pass. Removing only the exp presence guard produces 204 in this row while the other seven claim rows pass (RC1-r4-evidence/green.log and exp-presence-red.log).
+- [x] Muse r4 Post-Rebase Gate: git diff --name-only origin/main...HEAD -- packages is empty; no package source/version changes require a published-version comparison.
 - [x] Opus r3 C3: exact revocation POST uses 120/minute per verified S2S client after token/MAC/body checks; anonymous auth/session budgets remain active elsewhere. Tokens are reused until 30 seconds before exp, bound to issuer/client/secret/resource, with shared in-flight issuance. Enabled-limiter socket tests acknowledge 61 deliveries despite an exhausted anonymous budget, reject the 121st authenticated delivery, and preserve the budget under 121 missing-MAC requests. All 45 revocation regressions pass; API/IdP typechecks and API lint pass (RC1-r3-green.log / RC1-r3-quality.log).
-- [x] Opus r3 C1: all six claim-check removals independently produce 204 instead of 401 in the corresponding signed-body row; the valid control returns 204 and invalid-token rows preserve unrevoked issuer records (RC1-r3-claims-mutations.log).
+- [x] Opus r3 C1: signed-body rows cover scope, audience, client_id, subject, cnf and expiry; the valid control returns 204 and invalid-token rows preserve unrevoked issuer records. Muse r4 adds missing exp to pin its explicit presence guard; the expired-token row also exercises JWT expiry validation.
 - [x] Opus r3 C2: pending 503 clears session/refresh cookies only for logout, logout-all, self-deactivate and self-delete; admin and generic handlers return the same pending body without Set-Cookie. All six own/admin cookie cases pass in the full regression run.
 - [x] BRRC1-EX10: C3 requires excluding only the exact revocation POST from anonymous auth/session budgets in api/src/middleware/auth-rate-limiters.ts. Impact: the route applies a separate authenticated-client budget after token and MAC verification; all other auth limits remain active. Rollback: revert the C3 limiter and token-reuse correction together. No provisioning or deployment.
 - [x] Opus r3 tests first: C1 now signs valid real-session bodies and includes a 204 control; C2 asserts both self-cookie clearing and absent admin Set-Cookie; C3 uses real enabled limiter bindings, real S2S token issuance and a plain HTTP socket. RED: 5 expected failures, 40 passing cases (RC1-r3-red.log).
@@ -116,7 +118,7 @@
 - [x] No AI-dependent tests; no timeout increases or accepted skips.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch, single author; no cherry-pick or rebase.
+- [x] Mono-branch, single author; update from main by rebase; no cherry-pick.
 - [x] Independent consensus review before handoff.
 
 ## UAT Management (in orchestration context)
