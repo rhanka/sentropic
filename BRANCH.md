@@ -59,10 +59,10 @@
   - [x] `packages/cluster-mesh/tests/storage/sqlite-l1/s0-qualify.mjs`: Stage-0 runner proving the verified `sqlite-vec` load through the gate on the qualified container image (engine floor, vec0 virtual table roundtrip, gate closed after open).
   - [x] `packages/cluster-mesh/tests/storage/sqlite.mk`: add `cluster-mesh-sqlite-s0-qualify` (self-contained pinned `sqlite-vec@0.1.9` tool install), keep `cluster-mesh-sqlite-test`/`cluster-mesh-sqlite-run`, serialize Docker lanes under the common flock.
   - [x] Lot gate: suite observed red against the unimplemented `openSqliteDatabase`.
-- [ ] **Lot 2 — Implementation**
-  - [ ] `openSqliteDatabase()` in `packages/cluster-mesh/src/storage/sqlite/connection.ts`: durable path validation, PRAGMA application with read-back refusal, extension gate enabled only around the verified `sqlite-vec` load then disabled, verified-closed proof, close-on-failure.
-  - [ ] `packages/cluster-mesh/package.json` version bump to `0.26.0-dev.1`.
-  - [ ] Lot gate: `make typecheck-cluster-mesh ENV=test-memory-sqlite`.
+- [x] **Lot 2 — Implementation**
+  - [x] `openSqliteDatabase()` in `packages/cluster-mesh/src/storage/sqlite/connection.ts`: durable path validation, PRAGMA application with read-back refusal, extension gate enabled only around the verified `sqlite-vec` load then disabled, verified-closed proof, close-on-failure.
+  - [x] `packages/cluster-mesh/package.json` version bump to `0.26.0-dev.1`.
+  - [x] Lot gate: `make typecheck-cluster-mesh ENV=test-memory-sqlite`.
 - [ ] **Lot 3 — Local acceptance (plan r2 §1.2)**
   - [ ] `make -f Makefile -f packages/cluster-mesh/tests/storage/sqlite.mk cluster-mesh-sqlite-s0-qualify ENV=test-memory-sqlite`
   - [ ] `make -f Makefile -f packages/cluster-mesh/tests/storage/sqlite.mk cluster-mesh-sqlite-test SCOPE=tests/storage/sqlite-l1 ENV=test-memory-sqlite`
