@@ -39,7 +39,7 @@
     "test": "vitest run tests"
   },
   "dependencies": {
-    "@sentropic/chat-runtime": "^0.1.0",
+    "@sentropic/chat-core": "^0.3.0",
     "@sentropic/cowork-bridge": "^0.1.1"
   },
   "optionalDependencies": {

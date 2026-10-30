@@ -12,7 +12,7 @@
  * Call-site references match AppChatPanel.svelte line numbers at commit HEAD.
  */
 
-import type { ChatCoreHost } from '@sentropic/chat-runtime/client/chat-core-host';
+import type { ChatCoreHost } from '@sentropic/chat-core/runtime/client/chat-core-host';
 import { apiFetch, apiGet, apiPost, apiPatch, apiDelete } from '$lib/utils/api';
 import { streamHub } from '$lib/stores/streamHub';
 import {

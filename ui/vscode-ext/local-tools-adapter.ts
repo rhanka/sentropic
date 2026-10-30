@@ -13,7 +13,7 @@
  * called through the bridge command `runtime.local_tools.*`. This file
  * is only the webview-facing transport contract.
  */
-import type { LocalToolsAdapter } from '@sentropic/chat-runtime/hosts/types';
+import type { LocalToolsAdapter } from '@sentropic/chat-core/runtime/hosts/types';
 
 import type { VsCodeBridge } from './vscode-bridge';
 

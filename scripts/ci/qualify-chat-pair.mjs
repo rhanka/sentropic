@@ -15,9 +15,9 @@ run('npm', ['install', '--no-audit', '--no-fund', '/input/ui.tgz', '/input/runti
   'svelte@5.55.7', 'svelte-check@4.7.6', 'typescript@5.9.3', 'vite@7.3.5', '@sveltejs/vite-plugin-svelte@6.2.4']);
 writeFileSync(join(root, 'App.svelte'), `<script lang="ts">
   import ChatConversation from '@sentropic/chat-ui/components/ChatConversation.svelte';
-  import { createConversationRuntime } from '@sentropic/chat-runtime/state/conversationRuntime';
-  import { createDefaultTransport } from '@sentropic/chat-runtime/client/transport';
-  import { createStreamHub } from '@sentropic/chat-runtime/client/streamHub';
+  import { createConversationRuntime } from '@sentropic/chat-core/runtime/state/conversationRuntime';
+  import { createDefaultTransport } from '@sentropic/chat-core/runtime/client/transport';
+  import { createStreamHub } from '@sentropic/chat-core/runtime/client/streamHub';
   const streamClient = createStreamHub({ getBaseUrl: () => 'http://example.test', getAuthState: () => true });
   const runtime = createConversationRuntime('session', { host: { ...createDefaultTransport('http://example.test'), streamClient } });
 </script>

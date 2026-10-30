@@ -5,7 +5,7 @@ import {
   listLocalToolPermissionPolicies,
   setLocalToolsAdapter,
   upsertLocalToolPermissionPolicy,
-} from '@sentropic/chat-runtime/stores/localTools';
+} from '@sentropic/chat-core/runtime/stores/localTools';
 
 describe('vscode extension tool permissions bridge', () => {
   beforeEach(() => {

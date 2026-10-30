@@ -9,7 +9,7 @@
  * Zero domain strings in the package.
  */
 
-import type { CommentHost } from '@sentropic/chat-runtime/comments';
+import type { CommentHost } from '@sentropic/chat-core/runtime/comments';
 import {
   listComments,
   createComment,

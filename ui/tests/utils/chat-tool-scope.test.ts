@@ -5,7 +5,7 @@ import {
   computeVisibleToolToggleIds,
   isExtensionRestrictedToolsetMode,
   type ChatToolScopeToggle,
-} from '@sentropic/chat-runtime/utils/chat-tool-scope';
+} from '@sentropic/chat-core/runtime/utils/chat-tool-scope';
 import {
   EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
   VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
