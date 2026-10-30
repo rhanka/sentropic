@@ -170,6 +170,7 @@ Concatenate the fenced diff contents in comment/part order, retaining LF:
 | 1 | `c37662a20..e86402083` vs `b7e86f5ea..74e2b7a2c` | 111 / 69 / 5 / 6 | [parts 1–6, starting here](https://github.com/rhanka/sentropic/pull/837#issuecomment-6513317846); subsequent parts: 6513318154, 6513318480, 6513318913, 6513319232, 6513319503 |
 | 2 | `b7e86f5ea..c6048eb29` vs `c1e592636..b65ba7250` | 187 / 1 / 0 / 0 | [complete output](https://github.com/rhanka/sentropic/pull/837#issuecomment-6513319836) |
 | 3 | `c1e592636..7fd1a87cc` vs `82a7be05b..42875f874` | 187 / 2 / 0 / 0 | [complete output](https://github.com/rhanka/sentropic/pull/837#issuecomment-6513320095) |
+| 7 | `d08517ed1..10d289560` vs `1b7f8ab94..efd092a3f` | 190 / 1 / 1 / 1 | [complete output](https://github.com/rhanka/sentropic/pull/837#issuecomment-6528191719) |
 
 SHA-256 for replay 1 is recorded in section 2. Replay 2:
 `a24125857c2a9a6e42f1d673de3ddaa288c298b3f47f12a024811352d511bf8d`.
@@ -177,3 +178,20 @@ Replay 3: `14df1aad9d0b02e49e355968199d70b9beeb2d5d6f09f38f8c78d85658193ff2`.
 Replay 2's only changed pairing is the initial plan's replaced main context.
 Replay 3 changes that same pairing plus the API env conflict described above;
 all other patches pair equally, including both correction lanes.
+Replay 7 (lot APP-837-REBASE, main advanced with #819 and the locked-tools
+hardening): `f8a20717474396a6000ca67e88ab7500f441b72128c72d440eb4928f55e456e8`.
+Its changed pairing is the canonical-image patch `702185813` -> `68e87b55b`:
+the Makefile version-input block unions main's `scripts/ci/locked-tools.mjs` /
+`scripts/ci/tool-locks.json` and `e2e/npm-toolchain` inputs with
+`apps/artifact-content`; `ci.yml` unions main's `scripts/ci/tool-locks.json`
+path filter with `apps/artifact-content/**`; `api/Dockerfile` retains main's
+`npx --no-install` and locked-npm lines plus the artifact-content
+COPY/esbuild/dist lines; `.dockerignore` unions both sides. The unpaired
+split is the initial plan patch (`3d205fde4` -> `812218f8f`, replaced main
+plan context). Both lockfiles merge additively: main's pins are retained and
+the `file:../packages/artifacts` workspace link is kept, with no registry
+fallback. The drizzle delta vs main remains exactly the reserved `0020`
+control slot plus its journal entry, so the schema dump regenerates cleanly
+after the `0007`–`0011` migration repair. Rebase-lot documentation commits
+(lot `BRANCH.md` scope contract and this row) follow on top of `efd092a3f`;
+the PR body records the exact pushed head and its CI run.
