@@ -76,6 +76,7 @@
   - [x] R3: cover npm aliases and flags-before-verb; declare scan boundaries; new bypass fixtures observed red then green.
   - [x] R4: bind scanned shell/Make/Docker/JS tool calls to profiles and consumer literal versions to the frozen closure; require historical closures; removal and typo regressions observed red then green.
   - [x] Post-Rebase Gate: zero packages with src changes relative to origin/main; no publication version bump applies.
+  - [x] Preserve main's precise image-filter contract and require a review date on the pending finding.
   - [x] R5: admit only explicitly named candidate archives and manifest file specs; sibling-admission regression observed red then green.
   - [x] R6: assign exception owners, UTC review dates, removal triggers and accurate scope; expiry regression observed red then green.
   - [x] R7: track isolated catalog SCA coverage separately with owner, scanner and review date; contract observed red then green.
