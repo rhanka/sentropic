@@ -26,9 +26,10 @@ export function violations(file, source) {
     // This explicit authoring mode writes a new snapshot; CI uses the checked-in snapshot.
     if (file === 'tools/memory-mcp-l5/pack.mjs' && i >= snapshotStart && i < snapshotEnd) return;
     const span = lines.slice(i, i + 8).join('\n');
-    const call = /['"]npm['"]\s*,\s*\[\s*['"](?:install|i|exec)['"]/.exec(span);
+    const verb = '(?:install|i|add|exec|x)';
+    const call = new RegExp(`['"]npm['"]\\s*,\\s*\\[\\s*(?:['"]--[^'"]+['"]\\s*,\\s*(?:['"][^'"]+['"]\\s*,\\s*)?)*['"]${verb}['"]`).exec(span);
     const npxCall = /['"]npx['"]\s*,\s*\[\s*(?=['"])(?!['"]--no-install['"])/.exec(span);
-    if (/\bnpm\s+(?:install|i|exec)\b/.test(line)
+    if (new RegExp(`(?:\\bnpm|\\$\\(NPM\\))\\s+(?:--[^\\s]+\\s+(?:[^\\s-]+\\s+)?)*${verb}\\b`).test(line)
       || (call && call.index < line.length)
       || (npxCall && npxCall.index < line.length)
       || /(?:^|[;&|"'\s])npx\s+(?!--no-install\b)/.test(line.replace(/command\s+-v\s+npx\b/g, ''))) problems.push(`${file}:${i + 1}: unlocked npm resolution`);

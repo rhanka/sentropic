@@ -8,12 +8,17 @@ import http from 'node:http';
 import { createHash } from 'node:crypto';
 import { violations, inspect } from './ci-lockfile-installs.mjs';
 import { installTools } from './locked-tools.mjs';
-import { addLock, frozenRegistry, lockedVersions } from './frozen-registry.mjs';
+import { addLock, candidateArchives, frozenRegistry, lockedVersions } from './frozen-registry.mjs';
 
 test('should reject range resolution in CI, container, Make and script install paths', () => {
   for (const [file, source] of [
     ['Makefile', 'ci-tools:\n\tnpm install --prefix /tmp/tools typescript@5.4.5'],
     ['scripts/new.sh', 'npm i package@^1.0.0'],
+    ['scripts/new.sh', 'npm x tool@^1'],
+    ['scripts/new.sh', 'npm add tool@^1'],
+    ['scripts/new.sh', 'npm --prefix /tmp/t install tool@^1'],
+    ['scripts/tool.mjs', "execFileSync('npm', ['--prefix', '/tmp/t', 'install', 'tool@^1']);"],
+    ['Makefile', 'build:\n\t$(NPM) install tool@^1'],
     ['.github/workflows/new.yml', 'run: npx --yes tool@^1'],
     ['api/Dockerfile', 'RUN if test -f package-lock.json; then npm ci; else npm install; fi'],
     ['scripts/tool.mjs', "execFileSync('npm', ['install', 'tool@1.0.0']);"],
@@ -82,17 +87,27 @@ test('should install real candidate tarballs and replay their lock after closing
     fs.mkdirSync(cwd);
     fs.writeFileSync(path.join(cwd, 'package.json'), '{"private":true}');
     execFileSync(process.execPath, [new URL('./locked-consumer.mjs', import.meta.url).pathname,
-      path.join(archives, 'locked-parent.tgz'), '--ignore-scripts'], { cwd, stdio: 'pipe' });
+      path.join(archives, 'locked-parent.tgz'), path.join(archives, 'locked-child.tgz'), '--ignore-scripts'], { cwd, stdio: 'pipe' });
     const lock = JSON.parse(fs.readFileSync(path.join(cwd, 'package-lock.json')));
-    assert.equal(lock.packages['node_modules/locked-child'].resolved, `file:${archives}/locked-child.tgz`);
+    assert.equal(path.resolve(cwd, lock.packages['node_modules/locked-child'].resolved.slice(5)), `${archives}/locked-child.tgz`);
     assert.equal(fs.lstatSync(path.join(cwd, 'node_modules/locked-parent')).isSymbolicLink(), false);
     execFileSync('npm', ['ci', '--offline', '--ignore-scripts', '--no-audit', '--no-fund'], { cwd, stdio: 'pipe' });
     assert.equal(JSON.parse(fs.readFileSync(path.join(cwd, 'node_modules/locked-child/package.json'))).version, '1.0.0');
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('should prevent unlocked installation paths across the repository', () => {
+test('should prevent unlocked installation paths in the declared scan trees and file types', () => {
   assert.deepEqual(inspect(new URL('../../', import.meta.url).pathname), []);
+});
+
+test('should admit only named candidates and manifest file specs, never stray siblings', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'candidate-shadow-'));
+  try {
+    fs.mkdirSync(path.join(dir, 'src'));
+    for (const name of ['primary', 'explicit', 'stray', 'src/stray']) fs.writeFileSync(path.join(dir, `${name}.tgz`), 'stray');
+    fs.writeFileSync(path.join(dir, 'package.json'), JSON.stringify({ dependencies: { explicit: 'file:explicit.tgz' } }));
+    assert.deepEqual(candidateArchives(['primary.tgz'], dir).sort(), ['explicit.tgz', 'primary.tgz'].map(name => path.join(dir, name)));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
 
 test('should install the locked transitive version even when upstream publishes a newer match', async () => {

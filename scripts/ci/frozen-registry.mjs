@@ -43,9 +43,8 @@ export function candidateArchives(args, cwd) {
       if (fs.existsSync(file)) { archives.add(file); directories.add(path.dirname(file)); }
     }
   }
-  // Candidate dependencies may be supplied by the sibling archives beside the primary archive.
+  // Only install arguments and manifest file specs authorize candidate bytes.
   for (const dir of [...directories]) {
-    if (fs.existsSync(path.join(dir, 'src'))) directories.add(path.join(dir, 'src'));
     const manifest = path.join(dir, 'package.json');
     if (fs.existsSync(manifest)) {
       const doc = JSON.parse(fs.readFileSync(manifest));
@@ -58,9 +57,6 @@ export function candidateArchives(args, cwd) {
         }
       }
     }
-  }
-  for (const dir of directories) for (const entry of fs.readdirSync(dir)) {
-    if (entry.endsWith('.tgz')) archives.add(path.join(dir, entry));
   }
   return [...archives];
 }
