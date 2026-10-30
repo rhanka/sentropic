@@ -11,7 +11,7 @@ function run(command, args) {
   if (result.status !== 0) throw new Error(`${command} failed (${result.status})`);
 }
 writeFileSync(join(root, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
-run('npm', ['install', '--no-audit', '--no-fund', '/input/ui.tgz', '/input/runtime.tgz',
+run('npm', ['install', '--no-audit', '--no-fund', '/input/ui.tgz', '/input/core.tgz',
   'svelte@5.55.7', 'svelte-check@4.7.6', 'typescript@5.9.3', 'vite@7.3.5', '@sveltejs/vite-plugin-svelte@6.2.4']);
 writeFileSync(join(root, 'App.svelte'), `<script lang="ts">
   import ChatConversation from '@sentropic/chat-ui/components/ChatConversation.svelte';
@@ -42,11 +42,11 @@ if (files.status !== 0 || /package\/(src|dist\/(client|checkpoints|stores\/local
 for (const file of files.stdout.split('\n').filter((name) => /\.(?:[cm]?js|svelte)$/.test(name))) {
   const content = spawnSync('tar', ['-xOf', '/input/ui.tgz', file], { encoding: 'utf8' });
   if (content.status !== 0) throw new Error(`Cannot inspect visual artifact ${file}`);
-  if (/(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)['"]@sentropic\/chat-runtime(?:\/[^'"]*)?['"]/.test(content.stdout)) {
+  if (/(?:\bfrom\s*|\bimport\s*(?:\(\s*)?)['"]@sentropic\/chat-core\/runtime(?:\/[^'"]*)?['"]/.test(content.stdout)) {
     throw new Error(`Visual artifact loads runtime execution code: ${file}`);
   }
 }
-const hashes = Object.fromEntries(['ui', 'runtime'].map((name) => [name,
+const hashes = Object.fromEntries(['ui', 'core'].map((name) => [name,
   createHash('sha256').update(readFileSync(`/input/${name}.tgz`)).digest('hex')]));
 writeFileSync('/reports/chat-pair.json', JSON.stringify({ status: 'passed', head: process.env.QUALIFY_HEAD_SHA, hashes, checks: ['installed public contracts', 'Svelte typecheck', 'Vite production build', 'installed payload/commands/remount/permissions', 'visual archive ownership'] }, null, 2));
 console.log(`PASS installed chat pair ${JSON.stringify(hashes)}`);

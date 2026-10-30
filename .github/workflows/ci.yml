@@ -33,7 +33,6 @@ on:
           - chat-core
           - chat-server
           - comments
-          - chat-runtime
           - chat-ui
           - oauth-verify
           - mcp-auth
@@ -281,7 +280,6 @@ jobs:
       artifacts: ${{ steps.filter.outputs.artifacts }}
       llm_mesh_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.llm_mesh_publish }}
       llm_gateway_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.llm_gateway_publish }}
-      chat_runtime_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.chat_runtime_publish }}
       chat_ui_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.chat_ui_publish }}
       cited_source_viewer_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.cited_source_viewer_publish }}
       oauth_verify_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.oauth_verify_publish }}
@@ -402,7 +400,6 @@ jobs:
               - 'packages/ubo-contracts/**'
             ui:
               - 'ui/**'
-              - 'packages/chat-runtime/**'
               - 'packages/chat-ui/**'
               - 'packages/cowork-desktop/**'
               - 'packages/cowork-bridge/**'
@@ -435,11 +432,8 @@ jobs:
               - 'Makefile'
               - 'package.json'
               - 'package-lock.json'
-              - 'packages/chat-runtime/**'
               - 'packages/chat-ui/**'
               - '.github/workflows/ci.yml'
-            chat_runtime_publish:
-              - 'packages/chat-runtime/**'
             chat_ui_publish:
               - 'packages/chat-ui/**'
             cited_source_viewer:
@@ -464,7 +458,6 @@ jobs:
               - 'package-lock.json'
               - 'packages/cowork-desktop/**'
               - 'packages/cowork-bridge/**'
-              - 'packages/chat-runtime/**'
               - 'packages/chat-ui/**'
               - '.github/workflows/ci.yml'
             cowork_desktop_publish:
@@ -932,16 +925,6 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-  validate-chat-runtime:
-    runs-on: ubuntu-latest
-    needs: [changes]
-    if: needs.changes.outputs.chat_ui == 'true' || needs.changes.outputs.global == 'true'
-    steps:
-      - uses: actions/checkout@v6
-      - name: Setup Docker
-        uses: docker/setup-buildx-action@v4
-      - name: Typecheck and test Chat Runtime
-        run: make typecheck-chat-runtime test-chat-runtime ENV=test-ci-chat-runtime
   validate-chat-ui:
     runs-on: ubuntu-latest
     needs: [changes]
@@ -964,14 +947,14 @@ jobs:
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make pack-chat-ui PACK_DESTINATION=tmp/chat-pair/ui ENV=test-ci-chat-ui
-      - name: Pack Chat Runtime
+      - name: Pack Chat Core
         env:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-chat-runtime PACK_DESTINATION=tmp/chat-pair/runtime ENV=test-ci-chat-ui
+        run: make pack-chat-core PACK_DESTINATION=tmp/chat-pair/core ENV=test-ci-chat-ui
       - name: Qualify installed Chat pair
-        run: make qualify-chat-pair UI_ARCHIVE=tmp/chat-pair/ui/sentropic-chat-ui-1.0.0.tgz RUNTIME_ARCHIVE=tmp/chat-pair/runtime/sentropic-chat-runtime-0.1.0.tgz REPORT_DIR=tmp/chat-pair/report ENV=test-ci-chat-ui
+        run: make qualify-chat-pair UI_ARCHIVE=tmp/chat-pair/ui/sentropic-chat-ui-1.0.0.tgz CORE_ARCHIVE=tmp/chat-pair/core/sentropic-chat-core-0.3.0.tgz REPORT_DIR=tmp/chat-pair/report ENV=test-ci-chat-ui
       - name: Retain installed Chat pair evidence
         uses: actions/upload-artifact@v7
         with:
@@ -2325,34 +2308,11 @@ jobs:
         if: inputs.capacity_publish_dry_run != true
         run: make publish-llm-gateway
 
-  publish-chat-runtime:
-    runs-on: ubuntu-latest
-    needs: [changes, validate-chat-runtime, validate-chat-ui]
-    if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-runtime.result == 'success' && needs.validate-chat-ui.result == 'success' && (needs.changes.outputs.chat_runtime_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v6
-      - name: Setup Docker
-        uses: docker/setup-buildx-action@v4
-      - name: Dry-run package publication
-        if: inputs.capacity_publish_dry_run == true
-        env:
-          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
-          CI_MANIFEST_EVENT: ${{ github.event_name }}
-          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make ci-capacity-publish-dry-run PACKAGE=chat-runtime ENV=test-ci-capacity
-      - name: Publish Chat Runtime
-        if: inputs.capacity_publish_dry_run != true
-        run: make publish-chat-runtime
-
   publish-chat-ui:
     runs-on: ubuntu-latest
-    needs: [changes, validate-chat-ui, validate-chat-runtime, publish-chat-runtime]
+    needs: [changes, validate-chat-ui]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-ui.result == 'success' && needs.validate-chat-runtime.result == 'success' && (needs.publish-chat-runtime.result == 'success' || needs.publish-chat-runtime.result == 'skipped') && (needs.changes.outputs.chat_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && needs.validate-chat-ui.result == 'success' && (needs.changes.outputs.chat_ui_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
@@ -2922,7 +2882,7 @@ jobs:
         run: |
           set -eu
           case "$BOOTSTRAP_TARGET" in
-            contracts|events|chat-core|chat-server|comments|chat-runtime|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|harness|llm-gateway|cluster-mesh|cited-source-viewer|artifacts) ;;
+            contracts|events|chat-core|chat-server|comments|chat-ui|oauth-verify|mcp-auth|mcp-platform|auth-client|auth-ui|flow|cowork-bridge|cowork-desktop|harness|llm-gateway|cluster-mesh|cited-source-viewer|artifacts) ;;
             *) echo "::error title=Bootstrap publish::target '${BOOTSTRAP_TARGET}' is not one explicit declared package (no 'all' bootstrap)"; exit 1 ;;
           esac
       - uses: actions/checkout@v6
@@ -2950,9 +2910,6 @@ jobs:
       - name: Bootstrap publish comments
         if: inputs.bootstrap_publish_target == 'comments'
         run: make publish-comments-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
-      - name: Bootstrap publish chat-runtime
-        if: inputs.bootstrap_publish_target == 'chat-runtime'
-        run: make publish-chat-runtime-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
       - name: Bootstrap publish chat-ui
         if: inputs.bootstrap_publish_target == 'chat-ui'
         run: make publish-chat-ui-token NPM_TOKEN_FILE=/tmp/sentropic-secrets/npm-token
@@ -3108,7 +3065,6 @@ jobs:
       - validate-llm-mesh
       - validate-cluster-mesh
       - validate-llm-gateway
-      - validate-chat-runtime
       - validate-chat-ui
       - validate-cited-source-viewer
       - validate-cowork-bridge
@@ -3224,7 +3180,7 @@ jobs:
       actions: read
     needs: [changes, package-candidates, enforce-package-bump, build-e2e, typecheck-lint-ui, typecheck-lint-api,
       validate-idp-sync, validate-llm-mesh, validate-cluster-mesh, validate-llm-gateway,
-      validate-chat-runtime, validate-chat-ui, validate-cited-source-viewer, validate-cowork-bridge, validate-oauth-verify,
+      validate-chat-ui, validate-cited-source-viewer, validate-cowork-bridge, validate-oauth-verify,
       validate-mcp-auth, validate-mcp-platform, validate-auth-hono, validate-auth-client,
       validate-auth-ui, validate-cowork-desktop, validate-contracts, validate-events,
       validate-chat-core, validate-chat-server, validate-comments, validate-live-speech, validate-skills, validate-flow,
