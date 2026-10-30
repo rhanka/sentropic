@@ -31,6 +31,10 @@ security-qualify-signature: ## Verify retained exact-index Sigstore material wit
 	@bash scripts/security/daily/qualify-signature.sh
 	@$(SECQUAL_RUN) --network=none $(SECQUAL_NODE) node scripts/security/daily/qualify-trust-receipt.mjs
 
+.PHONY: security-qualify-trust-receipts
+security-qualify-trust-receipts:
+	@$(SECQUAL_RUN) --network=none -v "$(CURDIR)/docs/security:/receipts" $(SECQUAL_NODE) node scripts/security/daily/qualify-trust-receipt.mjs publish
+
 .PHONY: security-qualify-targets
 security-qualify-targets: ## Join trusted main-CI archives to immutable registry identities
 	@bash scripts/security/daily/qualify-targets.sh

@@ -1,20 +1,27 @@
-# Independent review selection receipt
+# Independent qualification review receipt
 
 ```yaml
-status: selection-failed
+status: consensus-evidence-approved
 review-author:
   host: codex
   model: gpt-6.1-sol
   effort: high
-target-ref: bde825e8f916f53c11f76215a66c3d70947e1477
+target-ref: 2b0f151b8ccbf30f06a2b385fa433c749c3d8dc6
+target-base: 8965dda87eb212490c3b1491d52292bdd56120a7
+merge-ref: 401cffae116372b8fa008764f4952142bd3fc1ef
 target-paths: Makefile, .security/trivy-toolchain.json, scripts/security/daily, docs/security
-observed-failure: No pair of reachable eligible Claude-hosted model IDs could be resolved from an exposed live catalog or gateway endpoint. No peer was dispatched; no consensus verdict exists.
+review-request: two blind Muse muse-wonder-full-1.0 xhigh invocations, owner route dated 2026-10-29
+review-1: .h2a/reviews/sec5a-trust-r1.md
+review-1-sha256: ffd2f94bc3841ff9aec5b8d950675232bd6902fb2175d434f82f5fef7d42b288
+review-1-lens: cryptographic trust, content, offline verifier isolation
+review-2: .h2a/reviews/sec5a-trust-risk-r1.md
+review-2-sha256: f1d68f8e832af70d18370d4b168979126d604db069c48d8cbad3e1acaea625fd
+review-2-lens: evidence custody, reproducibility, failure controls, performance
+runtime-admission: denied
 ```
 
-Author metadata is the owner's declared launch identity, not an attestation of effective model routing. The target commit includes the complete code change, current-main archive identity validation and public evidence bundles, rebased onto main `2ea238790`. Review this immutable target; this selection receipt does not certify its content.
+Both independent reviewers inspected the full merged #840 lot and recalculated its retained evidence. Both approve it as qualification in progress with its NOT QUALIFIED verdict; neither admits scanner, verifier content, runtime or service. They corroborated the scanner's 1 CRITICAL / 2 HIGH findings, the Cosign 3.1.4 candidate's zero HIGH/CRITICAL report, the 83-entry evidence index, bounded Java ingestion, archive identity proof and incomplete remote/IaC/builder/performance admissions.
 
-The applied `/home/antoinefa/.codex/skills/harness/review/SKILL.md` requires “≥2 independent peers”, distinct `(profile, model)` pairs, and `candidate.profile != author.host && candidate.model != author.model`. Its launch path is the `h2a_run` MCP tool. That launch tool is available; no live model catalog tool or `ANTHROPIC_BASE_URL` endpoint was exposed in this author session. An available launcher does not establish eligible model identities. No guessed alias, duplicate reviewer or author's self-review was substituted.
+The earlier `selection-failed` receipt remains in git history. This receipt binds the actual merged head rather than the obsolete pre-rebase twin. The owner's current Muse-first route supersedes the earlier Claude-host selection route for this act. These are requested model/effort identities; no effective post-routing identity is attested. The two reviews used separate blind invocations and distinct lenses.
 
-Exact missing review input: two reachable, distinct Claude-hosted model IDs resolved through the live mesh catalog (or supplied as exact launch IDs under the h2a-run contract), followed by two blind review artifacts with separate content/security and custody/performance lenses. Their declared model identities still would not attest post-routing effective identities.
-
-Independent admission also remains substantively denied by scanner HIGH/CRITICAL findings, incomplete IaC coverage, mismatched/missing remote targets and unavailable isolated rebuild evidence. Subsequent evidence supplies a frozen Cosign 3.1.4 replacement candidate without HIGH/CRITICAL findings; it still needs independent content/root-custody admission. Live h2a session discovery exposed hosts but no eligible model-ID pair. A review cannot waive the remaining gates. See [the qualification verdict](trivy-s2b-qualify.md). This draft lot requests no activation or merge.
+Reconciliation: the original lot's review gap is closed for evidence publication only. Independent expected inventories, canonical remote targets, narrow pull authorization, isolated rebuild, root expiry/rollback trials and CI critical path at most 600 seconds remain open. Follow-up safety and fresh-custody PRs are reviewed separately. No review waives HIGH/CRITICAL or activates the daily service. See [qualification verdict](trivy-s2b-qualify.md) and [fresh custody](sec5a-trust-custody.md).

@@ -46,4 +46,6 @@
 - [x] Lot 4 checks: live positive verification and three refusal controls passed; daily regressions 125/125; shell syntax passed; scope check PASS C2.
 - [ ] Lot 4 delivery: <=150-line commits, independent exact-head review and CI; PR body from this file.
 - [x] No package source changes; package publication version gate not applicable.
+- [x] Review hardening: raw TUF/root bytes retained, deterministic allowlisted publication, well-formed cryptographic substitutions and native error-class assertions; narrow verifier mounts.
+- [x] Review regression: `toolchain-contract.test.mjs` verifies public raw metadata hashes, parsed documents and deterministic bytes; scoped 11/11 passed.
 - [x] No merge or auto-merge; keep PR open for review.
