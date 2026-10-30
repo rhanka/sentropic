@@ -141,6 +141,38 @@ export async function validateComparison(before, after, now = Date.now()) {
   return true;
 }
 
+const findingIdentity = (result, finding) =>
+  `${result.Target}|${result.Class}|${result.Type}|${finding.VulnerabilityID}|${finding.PkgName}|` +
+  `${finding.InstalledVersion}|${finding.Severity}`;
+
+// Cold and warm reports for one target and DB snapshot set must carry the same
+// finding inventory. Either direction of drift (a dropped CVE in the warm report
+// or an added finding) refuses the comparison; absence of findings agrees only
+// with absence. This detects omitted components and partial reports at the
+// cold/warm join. Independent expected-result admission remains pending.
+export function validateReportAgreement(coldReport, warmReport) {
+  for (const [name, report] of [['cold', coldReport], ['warm', warmReport]]) {
+    requireEvidence(report && typeof report === 'object' && !Array.isArray(report) &&
+      Array.isArray(report.Results) && report.Results.every((result) =>
+        result && typeof result.Target === 'string' && typeof result.Class === 'string' &&
+        typeof result.Type === 'string' && (result.Vulnerabilities === undefined ||
+          (Array.isArray(result.Vulnerabilities) && result.Vulnerabilities.every((finding) =>
+            finding && typeof finding.VulnerabilityID === 'string' && typeof finding.PkgName === 'string' &&
+            typeof finding.InstalledVersion === 'string' &&
+            ['UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].includes(finding.Severity))))),
+      `${name} report inventory is incomplete`);
+  }
+  const resultSet = (report) => report.Results.map((result) =>
+    `${result.Target}|${result.Class}|${result.Type}`).sort();
+  requireEvidence(JSON.stringify(resultSet(coldReport)) === JSON.stringify(resultSet(warmReport)),
+    'cold/warm result set diverged; rescan both inputs');
+  const inventory = (report) => report.Results.flatMap((result) =>
+    (result.Vulnerabilities || []).map((finding) => findingIdentity(result, finding))).sort();
+  requireEvidence(JSON.stringify(inventory(coldReport)) === JSON.stringify(inventory(warmReport)),
+    'cold/warm finding inventory diverged; rescan both inputs');
+  return true;
+}
+
 export function requireIacQualification() {
   throw new Error('coverage-blocked: IaC rules snapshot and complete multi-document adaptation require qualification');
 }
