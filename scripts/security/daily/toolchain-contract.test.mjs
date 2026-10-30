@@ -167,3 +167,32 @@ test('should reject archive traversal and links before extraction and retain fai
     assert.equal(calls, 1);
   }
 });
+
+test('should bound Java independently without increasing vulnerability layer limits', async () => {
+  const measured = 991026356;
+  const resolveSize = (kind, size) => createOciClient({ fetcher: async (url) => url.includes('/token?')
+    ? Response.json({ token: 'anonymous' }) : Response.json({ schemaVersion: 2,
+      layers: [{ digest: digest('bounded-layer'), size }] }) }).resolve(kind);
+  assert.equal((await resolveSize('java', measured)).layer.size, measured);
+  for (const kind of ['java', 'vulnerability']) {
+    await assert.rejects(resolveSize(kind, policy.data[kind].maxLayerBytes + 1), /layer descriptor/);
+    await assert.rejects(resolveSize(kind, 0), /layer descriptor/);
+  }
+  await assert.rejects(resolveSize('vulnerability', measured), /layer descriptor/);
+  assert.equal(policy.data.java.maxExpandedBytes, 2 * 1024 ** 3);
+  assert.equal(policy.data.vulnerability.maxExpandedBytes, 4 * 1024 ** 3);
+});
+
+test('should give each data kind its own bounded transfer clock', async () => {
+  let time = 0;
+  const signals = [];
+  const client = createOciClient({ now: () => time, fetcher: async (url, options) => {
+    signals.push(options.signal);
+    return url.includes('/token?') ? Response.json({ token: 'anonymous' }) : Response.json({ schemaVersion: 2,
+      layers: [{ digest: digest('db'), size: 2 }] });
+  } });
+  await client.resolve('vulnerability');
+  time = 120001;
+  assert.equal((await client.resolve('java')).kind, 'java');
+  assert.ok(signals.every(signal => !signal.aborted));
+});

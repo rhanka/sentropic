@@ -1,44 +1,82 @@
-# Feature: Cut CI transport artifact retention
+# Feature: qualify the frozen Trivy S2b toolchain
 
 ## Objective
-- [ ] Retain five transport artifacts for one day, delete after all consumers, deliver draft PR with successful exact-head CI.
+- [ ] Produce real S2b qualification receipts and an evidence-backed verdict for every blocker; deliver one draft PR to main.
 
 ## Scope / Guardrails
-- [x] `fix/ci-artifact-retention` from `origin/main` 2ea238790 in `tmp/ci-artifact-retention`; Make only, shared Docker flock, commits ≤150 lines.
-- [x] `ENV=test-ci-artifact-retention` last; ports 9490/5690/1590 if services needed; root dev reserved; no log setting or historical deletion changes.
-- [x] Keep every gate and PR #829 package-candidate wiring; author codex / gpt-6.1-sol / high.
+- [x] Initial base `c37662a20`; rebased onto `2ea238790`; branch `feat/sec-s2b-qualify`; worktree `tmp/worktrees/sec-s2b-qualify`.
+- [x] Existing activation switch stays OFF; S2c and S3 remain separate prerequisites.
+- [x] No scanner removal, severity reduction, toolbox change, secrets or Python.
+- [x] Docker under `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; `ENV=test-sec-qualify` last; `make down` after campaigns.
+- [x] No application services or listening host ports; no root dev changes.
+- [x] English source/docs; atomic commits below 150 changed lines using `make commit`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `.github/workflows/ci.yml`
-  - `scripts/ci/ci-expected-results.test.mjs`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`
-- **Forbidden Paths (must not change in this branch)**:
+  - `scripts/security/daily/**`
+  - `docs/security/**`
+  - `.security/trivy-toolchain.json`
   - `Makefile`
+- **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.track/**`
+  - `api/Dockerfile*`
+  - `.github/workflows/**`
+  - `plan/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - [x] Other workflow/script paths require a bounded exception with rationale, impact and rollback.
+  - None.
+- **Exception process**:
+  - [x] SECQUAL-EX1: Makefile may include a qualification-only adapter; purpose: reproducible Docker-first live trials; impact: opt-in targets only; rollback: remove the include and adapter.
 
-## Plan / Todo (lot-based)
-- [x] **Lot 0** — Read rules/project/plans/study/audit; isolated worktree and mechanical branch check; inspect consumers and #829.
-- [x] **Lot 1** — Five retention values; final-gate publication/deploy join; current-run allowlist cleanup with job-only write permission; retain cancellation/fork fallback.
-- [x] **Lot 2** — Extended `scripts/ci/ci-expected-results.test.mjs`; `make ci-capacity-policy test-ci-expected-results test-ci-dag ENV=test-ci-artifact-retention` passes (25 + 8 tests); recorded storage/consumer evidence in CI study.
-- [ ] **Lot 3** — Scope check before each commit, review, draft PR and execution-plan comment, completed successful exact-head CI, owned `make down` and `make ps`.
+## Feedback Loop
+- [x] No previously admitted runtime exists: rollback must restore the explicitly blocked S2a state.
+- [ ] Independent scanner/verifier admission requires reviewed evidence, not an author-set boolean.
+- [x] All missing inputs are named in the final verdict; fixture passes do not close live gates.
+- [x] Qualification verdict: NOT QUALIFIED; exact missing artifacts/access/analyzer/builder inputs and all receipts in `docs/security/trivy-s2b-qualify.md`.
 
 ## AI Flaky tests
-- [x] No timeout inflation or accepted flaky failures.
+- [x] No AI inference or timeout increases in this lot.
+
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch, one author.
+- [x] Single implementation branch; independent peer review at the final evidence gate.
+
 ## UAT Management (in orchestration context)
-- [x] No web, Chrome or VSCode behavior change; workflow qualification supplies acceptance.
-## Feedback Loop
-- [x] C1 conductor decision: preserve selective reruns by skipping deletion when any current-attempt job failed or was cancelled; keep one-day expiry. Reversible guard; regression covers success/skipped and every consumer's failure/cancellation.
-- [x] Fresh paginated stock read: 2,714.98 GB before this branch ran, versus audit 4,017 GB; no attribution to this change; repository log-retention GET remains 90 days.
-- [x] BR841-EX1: owner-requested least-privilege regression coverage in `scripts/ci/publishable-ci-wiring.test.mjs`; impact limited to credential-free fixtures; rollback reverts that test hunk.
-- [x] Rebased on origin/main; no package manifests or package sources changed, so the post-rebase package-version gate has no affected package.
-- [x] Restore read-only workflow and ci-gate permissions; isolate Actions write in the single-step deletion job, with a negative mutation for every other job.
-- [x] Full manifest suite passes (220 tests), expected-results fixtures (25), DAG fixtures (8), capacity-policy shape and mechanical scope check pass on the rebased branch.
+- [x] No UI change; operator UAT consists of live artifact, failure, isolation and rollback trials.
+
+## Plan / Todo (lot-based)
+- [x] **Lot 0 — Baseline**
+  - [x] Read common/master/workflow rules, owner SEC-Q1..Q5, approved plan and S2b dossier.
+  - [x] Fetch origin/main, create isolated worktree, run `harness check branch` (PASS C1).
+  - [x] Declare paths, environment, Makefile exception and immutable scanner identities.
+- [ ] **Lot 1 — Acquisition and admission evidence**
+  - [x] Add a reproducible bounded OCI sizing experiment; keep production ingestion unchanged until measurements complete.
+  - [ ] Independently retrieve scanner/verifier bytes, bundles and roots; verify offline.
+  - [x] Verify retained index bytes with Cosign DSSE attestation, exact issuer/identity and retained roots under `--network=none` (Verified OK).
+  - [x] Supply immutable Cosign 3.1.4 replacement pin, 253-dependency native inventory, all-severity report (no HIGH/CRITICAL) and successful offline verification; independent admission remains pending.
+  - [ ] Inventory image filesystem, native executable dependencies and actual runtime commands without Python.
+  - [x] Pull exact platform image, export without execution, inventory APK/filesystem and decode 375 Trivy / 281 Cosign Go dependencies; no Python filesystem matches.
+  - [x] Measure Java: 991026356 compressed / 1565823119 expanded bytes, 86364 KiB Node RSS, 86.4 s transfer; propose bounded per-kind limits.
+  - [x] Verify the Java limit fix with regressions and real ingestion (161.2 s cold, 5.0 s hash-checked restore).
+  - [x] Acquire fresh vulnerability/Java receipts and freeze IaC bytes; preserve exact hashes.
+  - [x] Deny current scanner/verifier admission: all-severity self-scans expose HIGH/CRITICAL dependencies; frozen IaC bundle yields zero Compose configs.
+- [ ] **Lot 2 — Targets and real trials**
+  - [ ] Resolve all three main targets with source-SHA/platform provenance and retain complete reports.
+  - [x] Scan all three authenticated main-CI archives cold/warm with immutable archive/config hashes; remote provenance blocked by API/UI config mismatch and absent toolbox tag.
+  - [x] Requalify newly available current-main `2ea238790` archives from run `40876641000`; validate real reports and same-snapshot pairs with hash-bound archive identities; current remote API/toolbox absent and UI mismatched.
+  - [ ] Exercise network/rate-limit, missing/corrupt/stale/incompatible cache, malicious config, expiry and changed snapshot pairs.
+  - [x] Twelve recorded trials reject network/TCP faults, damaged/incompatible/expired data, unknown sources and changed snapshots; previous main policy restores blocked S2a.
+  - [ ] Inspect process/mount/credential isolation and exercise rollback to blocked S2a.
+  - [x] Capture scanner process/mount/environment-name inventories; no network, credentials, daemon socket or writable target/DB mounts.
+  - [ ] Measure cold/warm, refresh, remote/rebuild and CI critical path with queue separate.
+  - [x] Measure archive cold/warm and DB acquisition/restoration; observe actual remote authorization refusal and absence of isolated builder.
+- [ ] **Lot 3 — Verification and delivery**
+  - [x] Scoped tests: `scripts/security/daily/toolchain-contract.test.mjs`, `scripts/security/daily/trivy.test.mjs` and qualification regressions.
+  - [x] Fix archive report identity using a process-local proof issued only after preparation verifies archive bytes; cloned JSON cannot grant that proof.
+  - [x] Final `make test-security-daily` (125 passing) and `make test-security-parser` (17 passing); scoped `make down` completed.
+  - [x] Record CLOSED / STILL BLOCKED with exact missing inputs under `docs/security/`; independent review selection failed explicitly, with no consensus claimed.
+  - [x] Bind the independent review receipt to `bde825e8f`, including all current-main archive trials and the immutable archive identity fix.
+  - [ ] Mechanical scope check before every commit; no publishable package source changes.
+  - [x] Draft PR #840 to main with this plan as body and a five-step plan comment.
+  - [x] Rebase onto current main; preserve this plan; split inherited plan replacement into commits below 150 lines; package bump gate N/A (no package source/manifest changes).
+  - [ ] CI completed/success on exact head; publish the immutable SHA/run receipt in the PR.

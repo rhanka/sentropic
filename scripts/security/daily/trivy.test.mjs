@@ -57,6 +57,20 @@ test('should prepare immutable remote and disconnected archive scans with isolat
   assert.ok(offline.args.includes('none'));
   assert.ok(offline.args.includes('--input'));
   assert.ok(!offline.args.includes('--image-src'));
+  const report = JSON.stringify({ SchemaVersion: 2, ArtifactName: '/target/image.tar', ArtifactType: 'container_image',
+    Metadata: { ImageID: target().configDigest }, Results: [{ Target: 'alpine', Class: 'os-pkgs', Type: 'alpine' }] });
+  assert.equal(validateImageReport(report, offline.target).Metadata.ImageID, target().configDigest);
+  assert.throws(() => validateImageReport(report, remote.target), /target identity/);
+  assert.throws(() => validateImageReport(report, { ...offline.target }), /target identity/);
+  assert.throws(() => validateImageReport(report.replace('container_image', 'filesystem'), offline.target), /target identity/);
+  assert.throws(() => validateImageReport(report.replace(target().configDigest, digest('wrong')), offline.target), /target identity/);
+  const ref = `urn:oci-archive:${digest('archive')}`;
+  const archivedTarget = { ...target(), ref, provenance: { ...target().provenance, imageRef: ref } };
+  const archived = await prepareImageScan({ ...options, target: archivedTarget, archive: { path, digest: digest('archive') } });
+  assert.equal(validateImageReport(report, archived.target).Metadata.ImageID, target().configDigest);
+  assert.throws(() => validateTarget(archivedTarget, sourceSha, 'api-toolbox'), /immutable image\/archive/);
+  await assert.rejects(prepareImageScan({ ...options, target: archivedTarget,
+    archive: { path, digest: digest('different') } }), /immutable image\/archive/);
   await assert.rejects(prepareImageScan({ ...options, archive: { path, digest: digest('bad') } }), /archive integrity/);
   await assert.rejects(prepareImageScan({ ...options, snapshots: { vulnerability: snapshots.vulnerability } }), /Java/);
   await assert.rejects(prepareImageScan({ ...options, now: now + 86400000 }), /freshness/);
