@@ -20,6 +20,7 @@
   - `scripts/ci/publishable-manifests.mjs`
   - `scripts/ci/publishable-ci-wiring.test.mjs`
   - `scripts/ci/publishable-classification.test.mjs`
+  - `scripts/ci/ci-expected-results.test.mjs`
 - **Forbidden Paths (must not change in this branch)**:
   - `packages/*/src/**`
   - `tools/memory-mcp-l5/**`
@@ -34,7 +35,9 @@
 
 ## Feedback Loop
 - [x] BR830-EX1 acknowledged by the explicit task; no source or frozen evidence edits authorized.
-- [ ] Document new-name bootstrap requirements from current npm documentation, including local bootstrap provenance limitation.
+- [x] Document new-name bootstrap requirements from current npm documentation, including local bootstrap provenance limitation.
+- [x] Release review: update capacity validator count/DAG fixtures and wait strictly for selected platform publication; exercise all failed/skipped prerequisite gates.
+- [x] Correctness review: mirror platform capacity dry-run selection/steps and allowlist; dry-run mode never enters the registry writer.
 
 ## AI Flaky tests
 - [x] No AI tests changed or accepted as flaky.
@@ -56,11 +59,11 @@
 - [x] **Lot 3 — Regression tests**
   - [x] Update guard publisher/pack inventories and classification fixtures; leave bootstrap targets unchanged.
   - [x] Extend `scripts/ci/publishable-ci-wiring.test.mjs` for broker release contract and main-only publication; 173 scoped fixtures pass, including executable 0.1.0 exclusion.
-- [ ] **Lot 4 — Artifacts and owner handoff**
-  - [ ] Run `make test-publishable-manifests` and `make test-mcp-broker` in the isolated environment.
-  - [ ] Pack exact candidate, compare every broker dist member against the P3 archive, and verify clean installed root/memory imports.
-  - [ ] Query npm directly with curl for engram 0.22.0 and cluster-mesh builtin dependencies; record missing names/versions.
-  - [ ] Write short French owner steps with exact tarball path, SHA-256 and trusted-publisher fields.
+- [x] **Lot 4 — Artifacts and owner handoff**
+  - [x] Run `make test-publishable-manifests` (221 pass) and `make test-mcp-broker` (66 pass), typecheck and guarded pack in the isolated environment.
+  - [x] Compare all seven qualified broker dist members against the P3 archive (no changes); clean installed P3 memory runtime/types and full-candidate root/memory imports pass.
+  - [x] Query npm directly with curl: 62 runtime/peer requirements from engram 0.22.0 and the builtin branch; only broker name absent; producer engram 0.22.0 pending; agent-stats-core 0.3.0 optional/non-blocking.
+  - [x] Write `.tmp/npm-bootstrap/OWNER-STEPS.fr.md` with exact P3 archive, SHA-256 and trusted-publisher fields; no repack is published.
 - [ ] **Lot 5 — Final validation**
   - [ ] Obtain independent review and reconcile findings.
   - [ ] Run scope check before each atomic commit; no source bump required because no src changes.
