@@ -1,4 +1,4 @@
-import { parsePendingLocalToolCallsFromStatusPayload } from '@sentropic/chat-runtime/utils/localToolStreamSync';
+import { parsePendingLocalToolCallsFromStatusPayload } from '@sentropic/chat-core/runtime/utils/localToolStreamSync';
 import type { ToolCall, ToolResult } from '@sentropic/cowork-bridge/tools';
 import type { ConsentManager } from '../consent/index.js';
 import { runDesktopToolCall, type DesktopToolContext } from '../tools/index.js';

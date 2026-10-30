@@ -16,7 +16,7 @@
   import {
     createChatLoopController,
     type ControllerLocalToolPermissionPrompt,
-  } from '@sentropic/chat-runtime/state/chatLoopController';
+  } from '@sentropic/chat-core/runtime/state/chatLoopController';
 
   // ChatCoreHost instance — wraps the existing API utils (auth-aware) with the
   // ChatCoreHost contract. Zero behavior change: same requests, same error shapes.
@@ -27,7 +27,7 @@
   import { session } from '$lib/stores/session';
   import type { CommentContextType } from '$lib/utils/comments';
   import CommentsPanel from '@sentropic/chat-ui/comments/CommentsPanel.svelte';
-  import { createCommentRuntime } from '@sentropic/chat-runtime/comments';
+  import { createCommentRuntime } from '@sentropic/chat-core/runtime/comments';
   import { getCommentAuthorLabel, getMentionLabel } from '@sentropic/chat-ui/comments';
   import type { CommentThreadSummary } from '@sentropic/chat-ui/comments';
   import { createSentropicCommentHost } from '$lib/chat/comment-host-adapter';
@@ -49,7 +49,7 @@
     uploadDocument,
     type ContextDocumentItem,
   } from '$lib/utils/documents';
-  import { createComposerAttachmentId, buildAttachmentBandItems, buildSentAttachments, handleComposerPasteImages, composerAttachmentListReducer } from '@sentropic/chat-runtime/documents';
+  import { createComposerAttachmentId, buildAttachmentBandItems, buildSentAttachments, handleComposerPasteImages, composerAttachmentListReducer } from '@sentropic/chat-core/runtime/documents';
   import type { UnifiedAttachmentItem, ChatGeneratedFileCard } from '@sentropic/chat-ui/documents';
   import { createDocumentHostAdapter } from '$lib/chat/documentHostAdapter';
   import {
@@ -61,8 +61,8 @@
   } from '$lib/utils/google-drive';
   import { openGoogleDrivePicker as openGoogleDrivePickerDialog } from '$lib/utils/google-drive-picker';
   import { streamHub, type StreamHubEvent } from '$lib/stores/streamHub';
-  import { createContextModule, type ContextModule } from '@sentropic/chat-runtime/context';
-  import type { ChatContextEntry } from '@sentropic/chat-runtime/state/chat-context';
+  import { createContextModule, type ContextModule } from '@sentropic/chat-core/runtime/context';
+  import type { ChatContextEntry } from '@sentropic/chat-core/runtime/state/chat-context';
   import {
     createContextHost,
     buildStoreLookup,
@@ -91,7 +91,7 @@
     LocalToolPermissionRequiredError,
     type LocalToolPermissionDecision,
     type LocalToolName,
-  } from '@sentropic/chat-runtime/stores/localTools';
+  } from '@sentropic/chat-core/runtime/stores/localTools';
   import ChatContextPicker from '@sentropic/chat-ui/components/ChatContextPicker.svelte';
   // ChatContextEntry from @sentropic/chat-ui/state/chat-context imported above via context-adapter chain.
   import {
@@ -144,7 +144,7 @@
     computeToolToggleDefaults,
     computeVisibleToolToggleIds,
     isExtensionRestrictedToolsetMode as computeIsExtensionRestrictedToolsetMode,
-  } from '@sentropic/chat-runtime/utils/chat-tool-scope';
+  } from '@sentropic/chat-core/runtime/utils/chat-tool-scope';
   import {
     EXTENSION_NEW_SESSION_ALLOWED_TOOL_IDS,
     VSCODE_NEW_SESSION_ALLOWED_TOOL_IDS,
@@ -158,29 +158,29 @@
     getCheckpointMutationPreviewItems,
     applySessionCheckpoints as applySessionCheckpointsFromModule,
     getCheckpointForUserMessage as getCheckpointForUserMessageFromModule,
-  } from '@sentropic/chat-runtime/checkpoints';
+  } from '@sentropic/chat-core/runtime/checkpoints';
   import { createCheckpointHost } from '$lib/adapters/checkpointHostAdapter';
   import {
     mergeProjectionHistoryEvents,
     type ProjectedRunSegment,
-  } from '@sentropic/chat-runtime/utils/chat-run-projection';
+  } from '@sentropic/chat-core/runtime/utils/chat-run-projection';
   import type {
     ChatMessageAttachment,
     ChatProjectedTimelineItem,
-  } from '@sentropic/chat-runtime/state/chatProjection';
+  } from '@sentropic/chat-core/runtime/state/chatProjection';
   import {
     createImageAttachmentDraft,
     isSupportedImageAttachmentMimeType,
     summarizeComposerAttachments,
     type ChatComposerAttachmentDraft,
-  } from '@sentropic/chat-runtime/state/chatAttachments';
+  } from '@sentropic/chat-core/runtime/state/chatAttachments';
   import {
     resolveComposerHeightState,
     resolveComposerPrimaryAction,
     shouldShowSteerAction,
     syncDraftFromInput as syncChatDraftFromInput,
     type ComposerPrimaryActionState,
-  } from '@sentropic/chat-runtime/state/chatDraft';
+  } from '@sentropic/chat-core/runtime/state/chatDraft';
 
   type ChatSession = {
     id: string;

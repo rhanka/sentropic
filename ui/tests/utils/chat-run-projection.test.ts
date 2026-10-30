@@ -6,7 +6,7 @@ import {
   mergeProjectionHistoryEvents,
   projectAssistantRunSegments,
   type ProjectionStreamEvent,
-} from '@sentropic/chat-runtime/utils/chat-run-projection';
+} from '@sentropic/chat-core/runtime/utils/chat-run-projection';
 
 describe('chat run projection', () => {
   it('splits one run into alternating runtime and assistant segments', () => {

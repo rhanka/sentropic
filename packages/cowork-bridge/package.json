@@ -1,7 +1,7 @@
 {
   "name": "@sentropic/cowork-bridge",
   "version": "0.1.2",
-  "description": "Portable client bridge for Sentropic Cowork: client core, transport-agnostic auth and local-tool protocol/permission contracts. Reuses @sentropic/chat-runtime for SSE.",
+  "description": "Portable client bridge for Sentropic Cowork: client core, transport-agnostic auth and local-tool protocol/permission contracts. Reuses @sentropic/chat-core/runtime for SSE.",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -55,7 +55,7 @@
     "test": "vitest run tests"
   },
   "peerDependencies": {
-    "@sentropic/chat-runtime": "^0.1.0",
+    "@sentropic/chat-core": "^0.3.0",
     "svelte": "^5.0.0"
   },
   "devDependencies": {

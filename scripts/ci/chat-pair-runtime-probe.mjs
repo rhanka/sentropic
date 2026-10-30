@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
-import { createConversationRuntime } from '@sentropic/chat-runtime/state/conversationRuntime';
-import { createDefaultTransport } from '@sentropic/chat-runtime/client/transport';
-import { createStreamHub } from '@sentropic/chat-runtime/client/streamHub';
+import { createConversationRuntime } from '@sentropic/chat-core/runtime/state/conversationRuntime';
+import { createDefaultTransport } from '@sentropic/chat-core/runtime/client/transport';
+import { createStreamHub } from '@sentropic/chat-core/runtime/client/streamHub';
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 async function until(predicate) {
