@@ -48,6 +48,14 @@ Register native wire tools only after successful registry compilation.
 `registerEngramMemoryTools` checks the compiled tool identities and input
 schemas, uses qualified platform bridge/schema loaders, and preserves the
 producer's schemas, annotations, metadata, text and structured receipts.
+The builtin manifest advertises SDK-compatible object roots for input and
+output schemas, retaining every producer constraint (including `oneOf`).
+The adapter keeps the original producer manifest and validation. Hosts
+compute their reviewed compatibility digest with
+`computeManifestDigest(createEngramMemoryWireManifest(MEMORY_PROVIDER_MANIFEST))`;
+`createEngramMemoryWireManifest` is a pure export of the memory entry point
+and does not load Engram or open storage. Generic registry consumers can
+serve the builtin manifest directly without replacing its schemas.
 Attach the resulting SDK server to the host's stdio or HTTP transport.
 The host resolver must verify HTTP authentication or establish stdio identity
 out of band. An h2a host must merge the runtime's descriptors and adapter
@@ -58,7 +66,7 @@ h2a installation or opt-ins.
 The shipped stdio example loads a trusted host module exporting
 `async createHost({modules})`. It returns `{definition, transport,
 compatibility, close}`. `transport` is an `EngramMemoryTransportDefinition`;
-`compatibility` contains the reviewed producer manifest digest keyed by
+`compatibility` contains the reviewed wire manifest digest keyed by
 `sentropic.engram.memory`. `close` closes host-owned resources after the
 builtin store and MCP server have closed.
 

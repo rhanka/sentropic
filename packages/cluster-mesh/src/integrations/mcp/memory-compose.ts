@@ -7,6 +7,7 @@ import { MEMORY_TOOL_NAMES } from '@sentropic/mcp-platform/memory';
 import { createMemoryNeutralHandle } from '../../engram-memory/neutral-handle.js';
 import { verifyHostBinding } from '../../engram-memory/binding.js';
 import type { EngramMemoryDefinitionOptions, EngramMemoryRuntime } from './memory-definition.js';
+import { createEngramMemoryWireManifest } from './memory-manifest.js';
 
 /** The producer owns all memory semantics; this module supplies the PostgreSQL handle. */
 export async function composeEngramMemoryDefinition(
@@ -58,6 +59,8 @@ export async function composeEngramMemoryDefinition(
           engineId: host.engineId, canonicalStoreId: scopeBinding.store_id, fenceProvenanceId: fence.fenceId } },
     });
     const server = await mcp.createEngramMemoryMcpServerV1(adapter);
+    // Discovery uses SDK object roots; the adapter retains its strict producer manifest.
+    const manifest = createEngramMemoryWireManifest(adapter.manifest);
     const handlers: Record<string, { handlerId: string; capabilityRef: string; configSchema: unknown }> = {};
     const toolValues: Record<string, { handlerId: string; values: Record<string, unknown> }> = {};
     for (const tool of adapter.manifest.tools) {
@@ -67,8 +70,8 @@ export async function composeEngramMemoryDefinition(
       toolValues[tool.name] = { handlerId, values: {} };
     }
     return { runtime: { server, adapter, close }, definition: {
-      manifest: adapter.manifest, adapter, parameterSchema, handlers, toolValues, requiredPorts: [],
-      provenance: { ...host.provenance, manifestDigest: computeManifestDigest(adapter.manifest) },
+      manifest, adapter, parameterSchema, handlers, toolValues, requiredPorts: [],
+      provenance: { ...host.provenance, manifestDigest: computeManifestDigest(manifest) },
     } };
   } catch (error) {
     await close();

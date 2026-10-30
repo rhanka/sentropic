@@ -29,6 +29,10 @@
   - [x] Declare rationale, impact and rollback before changing conditional paths.
 
 ## Feedback Loop
+- [x] Rebased onto origin/main; retain the memory branch plan when resolving its conflict with the unrelated plan on main.
+- [x] Reproduced SDK tools/list rejection for all six raw outputSchema roots; advertise object roots without changing producer validation or the unpublished release version.
+- [x] Qualify `tests/engram-memory/mcp-memory-sdk.spec.ts`: real SDK discovery, all six calls, malformed input and confirmation refusal through a generic builtin consumer.
+- [x] After rebase: source/test typechecks, build, lint, 1425 general tests and 13 required MCP tests pass; the separate-process launcher passes all six tools; isolated containers stopped.
 - [x] BR01-EX1: allow Makefile changes for the dedicated PostgreSQL test environment and hash-pinned candidate test provisioning; additive test tooling only; rollback removes those additions.
 - [x] BR01-EX2: allow `.github/workflows/ci.yml` to require the isolated memory MCP PostgreSQL campaign when validating cluster-mesh; rollback removes the added step; no publication or release-gate exemption.
 - [x] BR01-EX3: update root workspace optional peer metadata only; retain the frozen 0.21.3 substrate development lock. The Docker qualification explicitly installs the hash-pinned 0.22.0 peer; no runtime fallback. Rollback restores those metadata entries.
@@ -40,7 +44,7 @@
 - [x] Initial expanded run timed out in `tests/storage/instance-ownership.spec.ts`; unchanged focused rerun passes all 13 cases, then the complete expanded lane passes. No timeout increase or exemption.
 - [x] Positive qualification: six required PostgreSQL/stdio/HTTP tests and six static/lazy/refusal tests pass; no required case is skipped. Forget replay preserves its receipt.
 - [x] Fix the directly exposed consumer lexical-index adapter: preserve the canonical null tombstone and mutable projection bytes under the existing admitted index identity; commit proofs and provenance remain enforced.
-- [ ] Consensus review pending: Muse startup failed on its read-only session directory; automatic approval review rejected the Gemini Argon fallback's external source-code payload. No consensus verdict is claimed.
+- [x] Owner-required Muse Wonder full xhigh review completed with two independent lenses, validation/security and discovery/integration; both approve with no blocker. Initial sandbox session-lock failures retained in `.h2a/reviews/memory-sdk-dossier.md`; successful reruns used the required runtime permission. No distinct-model harness consensus is claimed.
 
 ## AI Flaky tests
 - [x] No accepted flaky tests; no timeout increases.
@@ -72,7 +76,7 @@
   - [x] Pass a separate-process round trip through `examples/memory-mcp-stdio.mjs` with the explicit PostgreSQL fixture host.
   - [x] Typecheck the launcher host, context and dependency fixtures with the emitted library; require compiler success before launching.
   - [x] Run mechanical scope checks; final full branch diff passes C2.
-  - [ ] Complete consensus review and reconcile findings.
+  - [x] Complete the owner-required two-lens Muse review and reconcile findings.
   - [x] Document the exact host launch line and required definition bindings in `packages/cluster-mesh/docs/memory-mcp.md`.
   - [x] Open draft PR to main: https://github.com/rhanka/sentropic/pull/844.
   - [ ] Wait for CI completed/success on exact head; producer closure and release prerequisites remain blocking.
