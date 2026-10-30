@@ -1,0 +1,11 @@
+# Fresh Sigstore custody qualification
+
+The acquisition no longer reads any operator-specific evidence directory or existing Sigstore home. `make security-qualify-signature ENV=test-sec5a-trust`, under the shared Docker flock, downloads the frozen Trivy index, platform manifest, config and attestation bundle from public Docker Hub, plus Cosign 3.1.4 from its immutable GitHub release. Every downloaded executable or OCI object is hash-checked before use. The Node execution image remains pinned by digest.
+
+Cosign initializes fresh Sigstore TUF metadata in a newly created empty home. Its embedded release root is the bootstrap trust anchor; root rotation, role signatures, target hashes and expiration are enforced by the native client. The approved slim Node image lacks system CA certificates, so a disconnected Node process exports its embedded Mozilla TLS roots for this network acquisition. TLS server authentication and TUF artifact authentication remain separate. No operator CA bundle, prior roots, registry credential or daemon socket enters the container.
+
+The newly authenticated `trusted_root.json` and frozen attestation then verify the exact Trivy index with networking disabled and exact upstream issuer/identity. Three real negative controls refuse a changed index, invalid roots and an invalid bundle. The [public receipt](sec5a-trust-custody.json) retains the native exit codes, log/artifact hashes, fresh signed TUF documents and public root material. The receipt generator rechecks artifact pins, TUF target linkage and expiration. Full raw logs remain in `tmp/security-qualify/` and contain no credentials.
+
+These observations close the missing independent reacquisition/root-custody proof in #840 item 2. They do not admit the verifier's content or the scanner: an independent reviewer must assess the frozen verifier and roots, and the Trivy image still requires a patched candidate. No admission boolean, daily schedule, service switch, auto-merge or vulnerability exception changes.
+
+The historical review selection receipt refers to a pre-rebase commit. The merged immutable target for independent review is `2b0f151b8ccbf30f06a2b385fa433c749c3d8dc6`, merged by `401cffae116372b8fa008764f4952142bd3fc1ef`. Current qualification review must cover that original lot as well as this custody change; a review cannot waive remaining runtime gates.

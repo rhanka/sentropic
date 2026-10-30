@@ -43,6 +43,7 @@
 - [x] Lot 1: remove host-specific evidence dependency in `qualify-signature.sh`; acquire index/platform/config/bundle with verified hashes.
 - [x] Lot 2: freshly hash-check Cosign 3.1.4 and initialize Sigstore TUF with its embedded release root in an empty isolated home.
 - [x] Lot 3: exact-index offline verification passed; changed index/root/bundle refused; public hash-bound custody receipt retained.
-- [ ] Lot 4: regressions, shell syntax, scope check, <=150-line commits, independent exact-head review and CI; PR body from this file.
+- [x] Lot 4 checks: live positive verification and three refusal controls passed; daily regressions 125/125; shell syntax passed; scope check PASS C2.
+- [ ] Lot 4 delivery: <=150-line commits, independent exact-head review and CI; PR body from this file.
 - [x] No package source changes; package publication version gate not applicable.
 - [x] No merge or auto-merge; keep PR open for review.
