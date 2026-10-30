@@ -299,11 +299,12 @@ jobs:
       live_speech: ${{ steps.filter.outputs.live_speech }}
       harness_publish: ${{ inputs.capacity_publish_dry_run && 'true' || steps.filter.outputs.harness_publish }}
       manifest_guard: ${{ steps.filter.outputs.manifest_guard }}
+      package_candidates: ${{ steps.filter.outputs.package_candidates }}
       # Publishable manifest guard context (spec section 6): JSON lists, never booleans.
       package_files: ${{ steps.publishable_files.outputs.publishable_package_files_files }}
       matched_filters: ${{ steps.filter.outputs.changes }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       # Enforces the "Keep `api` and `ui` in sync with API_VERSION / UI_VERSION"
       # note below. That invariant was a comment, so nothing caught a drift: a
       # path feeding the content-sha but missing from the filter skips publish
@@ -327,7 +328,7 @@ jobs:
             fi
             echo "lock-sync ok: ${slug}@${manifest}"
           done
-      - uses: dorny/paths-filter@v4
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: filter
         with:
           filters: |
@@ -599,8 +600,17 @@ jobs:
             # Dedicated guard filter: never part of global, api/ui/e2e or _publish fanout.
             manifest_guard:
               - 'scripts/ci/**'
+            package_candidates:
+              - 'scripts/ci/package-candidate.mjs'
+              - 'scripts/ci/package-candidate.test.mjs'
+              - 'scripts/ci/package-qualification-dag.test.mjs'
+              - 'scripts/ci/publishable-manifests.mjs'
+              - 'scripts/ci/publishable-manifests.test.mjs'
+              - 'scripts/ci/publishable-pack.test.mjs'
+              - 'scripts/ci/qualify-published-install.mjs'
+              - 'scripts/ci/qualify-published-install.test.mjs'
       # Separate step so only this single filter emits a file list (job-output size limit).
-      - uses: dorny/paths-filter@v4
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4
         id: publishable_files
         with:
           list-files: json
@@ -624,7 +634,7 @@ jobs:
         run: |
           export CI_SELECTION_CONTEXT="$(node -e 'const context = JSON.parse(process.env.CI_SELECTION_CONTEXT); context.changes.engram_e2 = process.env.ENGRAM_E2_SELECTED; if (context.inputs.capacity_publish_dry_run) for (const key of Object.keys(context.changes)) if (key.endsWith("_publish")) context.changes[key] = "true"; process.stdout.write(JSON.stringify(context));')"
           make ci-expected-manifest ENV=test-ci-62
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: ci-expected-${{ github.run_id }}-${{ github.run_attempt }}
           path: tmp/ci-capacity/expected.json
@@ -645,11 +655,12 @@ jobs:
   # skipped `changes` cannot silently skip this required check; never a publisher dependency.
   validate-publishable-manifests:
     runs-on: ubuntu-latest
-    needs: [changes]
+    needs: [changes, package-candidates]
     if: always() && !cancelled() && inputs.decision_fixtures_only != true
     permissions:
       contents: read
     env:
+      CI_PACKAGE_CANDIDATES: ${{ needs.package-candidates.result == 'success' && 'tmp/ci-package-candidates' || '' }}
       CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
       CI_MANIFEST_CHANGES_RESULT: ${{ needs.changes.result }}
       CI_MANIFEST_EVENT: ${{ github.event_name }}
@@ -657,18 +668,28 @@ jobs:
       CI_MANIFEST_BEFORE_SHA: ${{ github.event.before }}
       CI_MANIFEST_BASE_SHA: ${{ github.event.pull_request.base.sha }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Setup Docker
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - name: Require every selected candidate producer
+        if: needs.package-candidates.result != 'skipped'
+        run: test '${{ needs.package-candidates.result }}' = success
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        if: needs.package-candidates.result == 'success'
+        with:
+          name: package-candidates
+          path: tmp/ci-package-candidates
       - name: Check eradicated packages (CLI and focus are owned by h2a)
         run: make check-eradicated-packages ENV=test-ci-manifests
       - name: Test publishable manifest guard and consumer qualification
         run: make test-publishable-manifests test-qualify-published-install ENV=test-ci-manifests
+      - name: Test candidate identity and qualification DAG
+        run: make test-ci-package-candidate test-ci-package-qualification-dag ENV=test-ci-manifests
       - name: Check publishable manifests
         run: make check-publishable-manifests ENV=test-ci-manifests
       - name: Upload publishable manifest reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: publishable-manifests
           path: tmp/ci-manifest-guard/manifests/**
@@ -755,111 +776,109 @@ jobs:
       - name: Gate transactional SQL on a disposable database
         run: make test-idp-sync-sql ENV=test-idp-sync
 
-  validate-llm-mesh:
+  # BR80-EX1: immutable archives and preparation, never a shared mutable workspace.
+  package-candidates:
     runs-on: ubuntu-latest
     needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.llm_mesh == 'true' || needs.changes.outputs.global == 'true')
+    if: always() && !cancelled() && (needs.changes.outputs.cluster_mesh == 'true' || needs.changes.outputs.llm_mesh == 'true' || needs.changes.outputs.llm_gateway == 'true' || needs.changes.outputs.package_candidates == 'true' || needs.changes.outputs.global == 'true')
+    permissions:
+      contents: read
+    env:
+      CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+      CI_MANIFEST_EVENT: ${{ github.event_name }}
+      CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Build and guard the complete candidate closure once
+        run: make ci-package-candidate ENV=test-ci-br80
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: package-candidates
+          path: tmp/ci-package-candidates/
+          compression-level: 0
+          retention-days: 1
+          if-no-files-found: error
+
+  validate-llm-mesh:
+    runs-on: ubuntu-latest
+    needs: [changes, package-candidates]
+    if: always() && !cancelled() && (needs.changes.outputs.llm_mesh == 'true' || needs.changes.outputs.package_candidates == 'true' || needs.changes.outputs.global == 'true')
+    permissions:
+      contents: read
+    env:
+      CI_PACKAGE_CANDIDATES: tmp/ci-package-candidates
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Setup Docker
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: package-candidates
+          path: tmp/ci-package-candidates
       - name: Lint LLM Mesh
         run: make lint-llm-mesh ENV=test-ci-llm-mesh
       - name: Check model-equivalence council freshness
-        run: make check-llm-model-equivalences
-      - name: Typecheck LLM Mesh
-        run: make typecheck-llm-mesh
-      - name: Test LLM Mesh
-        run: make test-llm-mesh
-      - name: Build LLM Mesh
-        run: make build-llm-mesh
+        run: make check-llm-model-equivalences ENV=test-ci-llm-mesh
+      - name: Typecheck and test LLM Mesh from isolated preparation
+        run: make cluster-mesh-workspace CM_ACTION=mesh-check ENV=test-ci-llm-mesh
       - name: Pack LLM Mesh
         env:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-llm-mesh ENV=test-ci-llm-mesh
+        run: make pack-publishable-manifest PACKAGE=llm-mesh ENV=test-ci-llm-mesh
 
   # The first package release uses bootstrap-publish. Enable steady-state OIDC
   # publication only after the npm trusted publisher has been attached.
   validate-cluster-mesh:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.cluster_mesh == 'true' || needs.changes.outputs.global == 'true')
+    needs: [changes, package-candidates]
+    if: always() && !cancelled() && (needs.changes.outputs.cluster_mesh == 'true' || needs.changes.outputs.package_candidates == 'true' || needs.changes.outputs.global == 'true')
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        include:
+          - lane: source installed major
+          - lane: postgres comments crash
+          - lane: lazy stateful install
+    env:
+      CI_PACKAGE_CANDIDATES: tmp/ci-package-candidates
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Setup Docker
-        uses: docker/setup-buildx-action@v4
-      - name: Prepare and audit Cluster Mesh storage dependencies
-        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-storage-deps-audit ENV=test-ci-cluster-mesh
-      - name: Prepare and audit the optional frozen comments peer
-        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-comments-deps-audit ENV=test-ci-cluster-mesh
-      - name: Qualify Cluster Mesh Postgres storage and server recovery
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: package-candidates
+          path: tmp/ci-package-candidates
+      - name: Verify the complete candidate closure
+        run: make ci-package-verify ENV=test-ci-br80
+      - name: Export verified sibling archives without packing
+        run: make pack-candidate-siblings PACKAGE=cluster-mesh SIBLING_DIR=tmp/ci-manifest-guard/siblings/cluster-mesh ENV=test-ci-br80
+      - name: Qualify the isolated package lane
         run: |
-          make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test ENV=test-ci-cluster-mesh-pg
-          make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-comments-test ENV=test-ci-cluster-mesh-pg
-          make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-crash-test ENV=test-ci-cluster-mesh-pg
-      - name: Remove isolated Cluster Mesh Postgres service and volume
-        if: always()
-        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-down ENV=test-ci-cluster-mesh-pg
-      - name: Lint Cluster Mesh
-        run: make lint-cluster-mesh ENV=test-ci-cluster-mesh
-      - name: Typecheck Cluster Mesh
-        run: make typecheck-cluster-mesh ENV=test-ci-cluster-mesh
-      - name: Test Cluster Mesh
-        run: make test-cluster-mesh ENV=test-ci-cluster-mesh
-      - name: Qualify installed stateful MCP contracts
-        run: make cluster-mesh-workspace CM_ACTION=stateful-consumer ENV=test-cm-wrap
-      - name: Build Cluster Mesh
-        run: make build-cluster-mesh ENV=test-ci-cluster-mesh
-      # Release train (BRDP-EX10): pack the candidate and its same-PR siblings first so the packed lazy
-      # qualification resolves unpublished train siblings from their verified archives.
-      - name: Pack Cluster Mesh
-        id: pack
-        env:
-          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
-          CI_MANIFEST_EVENT: ${{ github.event_name }}
-          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-cluster-mesh PACK_DESTINATION=tmp/ci-manifest-guard/candidate/cluster-mesh PACK_OUTPUT_FILE="$GITHUB_OUTPUT" ENV=test-ci-cluster-mesh
-      - name: Pack Cluster Mesh same-PR BLOCK siblings
-        # Prepare embedded dependencies before any installed candidate qualification.
-        env:
-          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
-          CI_MANIFEST_EVENT: ${{ github.event_name }}
-          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-candidate-siblings PACKAGE=cluster-mesh SIBLING_DIR=tmp/ci-manifest-guard/siblings/cluster-mesh ENV=test-ci-cluster-mesh
-      - name: Qualify installed comments on an injected single-session Postgres host
-        env:
-          CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
-        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-comments-installed CM_COMMENTS_TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json CM_COMMENTS_REPORT=tmp/ci-manifest-guard/qualify-cluster-mesh/comments-installed ENV=test-ci-cluster-mesh-pg
-      - name: Qualify PostgreSQL major upgrade re-attestation and retained cursor
-        env:
-          CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
-        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-major-upgrade CM_COMMENTS_TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json CM_COMMENTS_REPORT=tmp/ci-manifest-guard/qualify-cluster-mesh/major-upgrade ENV=test-ci-cluster-mesh-pg
+          result=0
+          for lane in ${{ matrix.lane }}; do
+            make ci-package-qualification PACKAGE_LANE="$lane" ENV=test-ci-br80-$lane || result=1
+            make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-down ENV=test-ci-br80-$lane || result=1
+            make down ENV=test-ci-br80-$lane || result=1
+          done
+          exit "$result"
       - name: Remove installed comments qualification Postgres service and volume
         if: always()
-        run: make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-down ENV=test-ci-cluster-mesh-pg
-      - name: Qualify packed Cluster Mesh (lazy surface release gate)
         run: |
-          set -eu
-          receipts=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json
-          if [ -f "$receipts" ]; then
-            make -f packages/cluster-mesh/packaging.mk test-lazy-package SIBLING_ARCHIVES_FILE="$receipts" ENV=test
-          else
-            make -f packages/cluster-mesh/packaging.mk test-lazy-package ENV=test
-          fi
-      # Release train (BRDP-EX10): every leaf needs its optional peers (release-matrix tuple); a peer matching a
-      # sibling receipt installs from that archive, the others from the registry (hono is a runtime dependency).
-      - name: Qualify Cluster Mesh candidate install
-        if: steps.pack.outputs.manifest_mode == 'block'
-        env:
-          CANDIDATE_TARBALL: ${{ steps.pack.outputs.tarball }}
-        run: make qualify-published-install TARBALL="$CANDIDATE_TARBALL" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.30.0,@sentropic/llm-gateway@0.21.5,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=test-ci-cluster-mesh
+          for lane in ${{ matrix.lane }}; do
+            make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-down ENV=test-ci-br80-$lane
+            make down ENV=test-ci-br80-$lane
+          done
       - name: Upload Cluster Mesh candidate qualification report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
-          name: qualify-cluster-mesh-candidate
+          name: qualify-cluster-mesh-candidate-${{ strategy.job-index }}
           path: tmp/ci-manifest-guard/qualify-cluster-mesh/**
           retention-days: 7
           if-no-files-found: ignore
@@ -870,28 +889,32 @@ jobs:
   # first publish is a manual bootstrap (see BRANCH.md), not steady-state OIDC.
   validate-llm-gateway:
     runs-on: ubuntu-latest
-    needs: [changes]
-    if: always() && !cancelled() && (needs.changes.outputs.llm_gateway == 'true' || needs.changes.outputs.global == 'true')
+    needs: [changes, package-candidates]
+    if: always() && !cancelled() && (needs.changes.outputs.llm_gateway == 'true' || needs.changes.outputs.package_candidates == 'true' || needs.changes.outputs.global == 'true')
+    permissions:
+      contents: read
+    env:
+      CI_PACKAGE_CANDIDATES: tmp/ci-package-candidates
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - name: Setup Docker
-        uses: docker/setup-buildx-action@v4
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
+      - uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7
+        with:
+          name: package-candidates
+          path: tmp/ci-package-candidates
       - name: Lint LLM Gateway
         run: make lint-llm-gateway ENV=test-ci-llm-gateway
-      - name: Typecheck LLM Gateway
-        run: make typecheck-llm-gateway
-      - name: Test LLM Gateway
-        run: make test-llm-gateway
-      - name: Build LLM Gateway
-        run: make build-llm-gateway
+      - name: Typecheck and test LLM Gateway from isolated preparation
+        run: make cluster-mesh-workspace CM_ACTION=gateway-check ENV=test-ci-llm-gateway
       - name: Pack LLM Gateway
         env:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-llm-gateway PACK_DESTINATION=tmp/ci-manifest-guard/candidate/llm-gateway ENV=test-ci-llm-gateway
+        run: make pack-publishable-manifest PACKAGE=llm-gateway PACK_DESTINATION=tmp/ci-manifest-guard/candidate/llm-gateway ENV=test-ci-llm-gateway
       - name: Upload verified LLM Gateway candidate
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: llm-gateway-candidate
           path: tmp/ci-manifest-guard/candidate/llm-gateway/*.tgz
@@ -3016,6 +3039,7 @@ jobs:
       - qualify-engram-e2
       - changes
       - validate-publishable-manifests
+      - package-candidates
       - build-e2e
       - typecheck-lint-ui
       - typecheck-lint-api
@@ -3065,7 +3089,6 @@ jobs:
       - security-container-api
       - test-smoke-restore
       - ci-capacity-receipts
-      - delete-transport-artifacts
       - validate-ci-capacity-metrics
     steps:
       - name: Reject fixture-only merge evidence
@@ -3097,12 +3120,12 @@ jobs:
           CI_GATE_NEEDS: ${{ toJSON(needs) }}
         run: make ci-expected-results EXPECTED_FILE=tmp/ci-capacity/expected.json EXECUTED_FILE=tmp/ci-capacity/capture.json ENV=test-ci-62
 
-  # Only this job can delete artifacts; every consumer precedes capacity receipts.
+  # Only this job can delete artifacts, after the final verdict and every consumer.
   delete-transport-artifacts:
     runs-on: ubuntu-latest
-    needs: [ci-capacity-receipts, validate-publishable-manifests,
+    needs: [ci-gate, ci-capacity-receipts, validate-publishable-manifests,
       qualify-engram-e2, memory-l5-qualification, verify-train-lock-integrity]
-    if: always() && !cancelled() && inputs.decision_fixtures_only != true
+    if: always() && !cancelled() && inputs.decision_fixtures_only != true && needs.ci-gate.result == 'success'
     permissions:
       actions: write
     steps:
@@ -3115,11 +3138,12 @@ jobs:
             const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRunAttempt,
               { ...context.repo, run_id: context.runId,
                 attempt_number: Number(process.env.GITHUB_RUN_ATTEMPT), per_page: 100 });
-            if (jobs.some(job => ['failure', 'cancelled'].includes(job.conclusion))) {
+            if (jobs.filter(job => job.name !== 'delete-transport-artifacts')
+              .some(job => job.status !== 'completed' || !['success', 'skipped'].includes(job.conclusion))) {
               core.info('Preserving transport artifacts for selective reruns after failure or cancellation.');
               return;
             }
-            const names = new Set(['api-tool-image', 'api-image', 'ui-image', 'e2e-image', 'desktop-download']);
+            const names = new Set(['api-tool-image', 'api-image', 'ui-image', 'e2e-image', 'desktop-download', 'package-candidates']);
             const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts,
               { ...context.repo, run_id: context.runId, per_page: 100 });
             for (const artifact of artifacts.filter(item => names.has(item.name))) {
@@ -3136,7 +3160,7 @@ jobs:
     permissions:
       contents: read
       actions: read
-    needs: [changes, enforce-package-bump, build-e2e, typecheck-lint-ui, typecheck-lint-api,
+    needs: [changes, package-candidates, enforce-package-bump, build-e2e, typecheck-lint-ui, typecheck-lint-api,
       validate-idp-sync, validate-llm-mesh, validate-cluster-mesh, validate-llm-gateway,
       validate-chat-ui, validate-cited-source-viewer, validate-cowork-bridge, validate-oauth-verify,
       validate-mcp-auth, validate-mcp-platform, validate-auth-hono, validate-auth-client,

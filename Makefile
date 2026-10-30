@@ -792,9 +792,10 @@ manifest_guard_publish = $(MANIFEST_GUARD_TOOLS); node /workspace/scripts/ci/pub
 define manifest_guard_pack
 	@mkdir -p "$(MANIFEST_REPORT_DIR)" $(if $(PACK_DESTINATION),"$(PACK_DESTINATION)")
 	@$(MANIFEST_PACK_RUN) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
+		-e CI_PACKAGE_CANDIDATES="$(if $(CI_PACKAGE_CANDIDATES),/workspace/$(CI_PACKAGE_CANDIDATES))" -e CANDIDATE_NODE_IMAGE="$(LLM_MESH_NODE_IMAGE)" \
 		$(if $(PACK_DESTINATION),-v "$(abspath $(PACK_DESTINATION)):/pack-out" -e PACK_DESTINATION_HOST="$(abspath $(PACK_DESTINATION))") \
 		-v "$(CURDIR):/workspace" -v "$(abspath $(MANIFEST_REPORT_DIR)):/reports" -w /workspace/packages/$(1) $(MANIFEST_PACK_IMAGE) \
-		sh -lc 'set -eu; $(MANIFEST_GUARD_TOOLS); $(2) node /workspace/scripts/ci/publishable-manifests.mjs pack --slug $(1) --report-dir /reports $(if $(PACK_DESTINATION),--destination /pack-out)'
+		sh -lc 'set -eu; export CANDIDATE_NPM_VERSION="$$(npm --version)"; $(MANIFEST_GUARD_TOOLS); $(2) node /workspace/scripts/ci/publishable-manifests.mjs pack --slug $(1) --report-dir /reports $(if $(PACK_DESTINATION),--destination /pack-out)'
 	@if [ -n "$(PACK_OUTPUT_FILE)" ]; then cat "$(MANIFEST_REPORT_DIR)/$(1).github-output" >> "$(PACK_OUTPUT_FILE)"; fi
 endef
 
@@ -842,18 +843,27 @@ qualify-published-install: ## Install+import PKG=<name>@<exact-version> or TARBA
 	@mkdir -p "$(REPORT_DIR)"
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e QUALIFY_IMAGE="$(MANIFEST_GUARD_IMAGE)" -e GITHUB_JOB \
 		-v "$(CURDIR)/scripts/ci/qualify-published-install.mjs:/probe/qualify.mjs:ro" \
+		-v "$(CURDIR)/scripts/ci/package-candidate.mjs:/probe/package-candidate.mjs:ro" \
 		-v "$(CURDIR)/scripts/ci/publishable-manifests.mjs:/probe/publishable-manifests.mjs:ro" \
 		$(if $(TARBALL),-v "$(abspath $(TARBALL)):/input/package.tgz:ro") \
 		$(if $(SIBLING_ARCHIVES_FILE),-v "$(abspath $(dir $(SIBLING_ARCHIVES_FILE))):/input/siblings:ro") \
+		$(if $(CI_PACKAGE_CANDIDATES),-v "$(abspath $(CI_PACKAGE_CANDIDATES)):/input/candidates:ro") \
 		-v "$(abspath $(REPORT_DIR)):/reports" -w /tmp $(MANIFEST_GUARD_IMAGE) \
 		sh -lc 'set -eu; unset NODE_PATH NODE_OPTIONS; tool_dir="$$(mktemp -d)"; npm_config_cache="$$(mktemp -d)" npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; \
 			node /probe/qualify.mjs --report-dir /reports --registry $(QUALIFY_REGISTRY) --head-sha "$(QUALIFY_HEAD_SHA)" --attempts "$(QUALIFY_WAIT_ATTEMPTS)" --delay "$(QUALIFY_WAIT_SECONDS)" \
 			$(if $(PKG),--pkg "$(PKG)",--tarball /input/package.tgz) $(if $(SIBLING_ARCHIVES_FILE),--siblings-dir /input/siblings) \
+			$(if $(CI_PACKAGE_CANDIDATES),--candidate-dir /input/candidates) \
 			$(if $(PEERS),--peers "$(PEERS)") $(if $(QUALIFY_MODE),--mode "$(QUALIFY_MODE)") $(if $(QUALIFY_PROVENANCE_SHA),--provenance-commit "$(QUALIFY_PROVENANCE_SHA)") $(if $(QUALIFY_PROVENANCE_RUN),--provenance-run "$(QUALIFY_PROVENANCE_RUN)")'
 
 test-qualify-published-install: ## Run clean-consumer qualification fixture tests (local fixture tarballs, no publish)
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
 		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; npm install --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node --test scripts/ci/qualify-published-install.test.mjs'
+
+.PHONY: test-ci-package-candidate test-ci-package-qualification-dag
+test-ci-package-candidate:
+	@$(MAKE) test-publishable-manifests SCOPE=scripts/ci/package-candidate.test.mjs ENV=$(ENV)
+test-ci-package-qualification-dag:
+	@$(MAKE) test-publishable-manifests SCOPE=scripts/ci/package-qualification-dag.test.mjs ENV=$(ENV)
 
 # Make-level gate (no shell expansion of the values): PACKAGE is one word without a quote and SIBLING_DIR
 # is exactly tmp/ci-manifest-guard/siblings/$(PACKAGE); the slug charset is then checked in single quotes.
@@ -862,7 +872,13 @@ SIBLING_ARGS_GATE = $(if $(and $(filter 1,$(words $(PACKAGE))),$(if $(findstring
 .PHONY: pack-candidate-siblings publishable-sibling-plan publishable-sibling-collect
 pack-candidate-siblings: ## Full-pack same-PR BLOCK siblings of PACKAGE=<slug> into SIBLING_DIR=tmp/ci-manifest-guard/siblings/<slug> (writes receipts.json)
 	$(SIBLING_ARGS_GATE)
+ifneq ($(CI_PACKAGE_CANDIDATES),)
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(MANIFEST_GUARD_ENV) \
+		-e CANDIDATE_NODE_IMAGE="$(LLM_MESH_NODE_IMAGE)" -v "$(CURDIR):/workspace" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		sh -ec 'export CANDIDATE_NPM_VERSION="$$(npm --version)"; $(MANIFEST_GUARD_TOOLS); node scripts/ci/package-candidate.mjs siblings "$(CI_PACKAGE_CANDIDATES)" "$(PACKAGE)" "$(SIBLING_DIR)"'
+else
 	@./scripts/ci/check-publishable-manifests.sh "$(ENV)" siblings '$(PACKAGE)' '$(SIBLING_DIR)'
+endif
 
 publishable-sibling-plan: ## Internal: list BLOCK packages in the dependency closure of PACKAGE into SIBLING_DIR/plan.txt
 	$(SIBLING_ARGS_GATE)
@@ -882,8 +898,9 @@ publishable-sibling-collect: ## Internal: verify sibling pack receipts and write
 publishable-manifests-inventory: ## Internal step of check-publishable-manifests: classify packages, audit WARN snapshots
 	@mkdir -p "$(MANIFEST_REPORT_DIR)"
 	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(MANIFEST_GUARD_ENV) \
+		-e CI_PACKAGE_CANDIDATES="$(if $(CI_PACKAGE_CANDIDATES),/workspace/$(CI_PACKAGE_CANDIDATES))" -e CANDIDATE_NODE_IMAGE="$(LLM_MESH_NODE_IMAGE)" \
 		-v "$(CURDIR):/workspace" -v "$(abspath $(MANIFEST_REPORT_DIR)):/reports" -w /workspace $(MANIFEST_GUARD_IMAGE) \
-		sh -lc 'set -eu; $(MANIFEST_GUARD_TOOLS); node scripts/ci/publishable-manifests.mjs inventory --report-dir /reports'
+		sh -lc 'set -eu; export CANDIDATE_NPM_VERSION="$$(npm --version)"; $(MANIFEST_GUARD_TOOLS); node scripts/ci/publishable-manifests.mjs inventory --report-dir /reports'
 
 test-publishable-manifests: ## Run publishable manifest guard fixture tests in Docker
 	@$(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-llm-judge,$(ENV)),$(CM_RUN),docker run --rm) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-llm-judge,$(ENV)),$(CM_RUN_IMAGE),$(MANIFEST_GUARD_IMAGE)) \
@@ -1001,11 +1018,43 @@ build-cluster-mesh: ## Build @sentropic/cluster-mesh without persistent dependen
 	@$(MAKE) cluster-mesh-workspace CM_ACTION=build ENV=$(ENV)
 
 .PHONY: cluster-mesh-workspace
+# BR80-EX2: one immutable preparation, copied into fresh container storage per lane.
+CI_PACKAGE_CANDIDATES ?=
+.PHONY: ci-package-candidate
+ci-package-candidate:
+	@$(MAKE) cluster-mesh-workspace CM_ACTION=candidate CI_PACKAGE_CANDIDATES=tmp/ci-package-candidates ENV=$(ENV)
+.PHONY: ci-package-verify
+ci-package-verify:
+	@test -n "$(CI_PACKAGE_CANDIDATES)"
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp $(MANIFEST_GUARD_ENV) \
+		-e CANDIDATE_NODE_IMAGE="$(LLM_MESH_NODE_IMAGE)" -v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		sh -ec 'export CANDIDATE_NPM_VERSION="$$(npm --version)"; $(MANIFEST_GUARD_TOOLS); node scripts/ci/package-candidate.mjs verify "$(CI_PACKAGE_CANDIDATES)" cluster-mesh; $(if $(TARBALL),node scripts/ci/package-candidate.mjs verify-primary "$(CI_PACKAGE_CANDIDATES)" "$(TARBALL)",true)'
+.PHONY: ci-package-qualification
+ci-package-qualification: ci-package-verify
+	@case "$(PACKAGE_LANE)" in \
+	  source) $(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-storage-deps-audit cluster-mesh-comments-deps-audit lint-cluster-mesh typecheck-cluster-mesh test-cluster-mesh ENV=$(ENV) ;; \
+	  postgres) $(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test ENV=$(ENV) ;; \
+	  comments) $(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-comments-test ENV=$(ENV) ;; \
+	  crash) $(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-crash-test ENV=$(ENV) ;; \
+	  stateful) $(MAKE) cluster-mesh-workspace CM_ACTION=stateful-consumer ENV=$(ENV) ;; \
+	  lazy) $(MAKE) -f packages/cluster-mesh/packaging.mk test-lazy-package SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json ENV=$(ENV) ;; \
+	  installed|major|install) \
+	    tarball="$$(find "$(CI_PACKAGE_CANDIDATES)/cluster-mesh" -name '*.tgz')"; \
+	    case "$(PACKAGE_LANE)" in \
+	      installed) target=cluster-mesh-comments-installed ;; \
+	      major) target=cluster-mesh-pg-major-upgrade ;; \
+	      install) exec $(MAKE) qualify-published-install TARBALL="$$tarball" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.30.0,@sentropic/llm-gateway@0.21.5,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=$(ENV) ;; \
+	    esac; \
+	    $(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk "$$target" CM_COMMENTS_TARBALL="$$tarball" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json CM_COMMENTS_REPORT=tmp/ci-manifest-guard/qualify-cluster-mesh/$(PACKAGE_LANE) ENV=$(ENV) ;; \
+	  *) echo 'Unknown package qualification lane' >&2; exit 1 ;; \
+	esac
 cluster-mesh-workspace:
 	@$(CM_RUN) -u "$$(id -u):$$(id -g)" \
 		-e HOME=/tmp -e CM_ACTION="$(CM_ACTION)" -e CM_PEER_TOOLS="$(CLUSTER_MESH_PEER_TOOLS)" \
 		-e CM_SCOPE="$(patsubst packages/cluster-mesh/%,%,$(SCOPE))" \
 		-e CM_PG_URL="$(CM_PG_URL)" -e CM_PG_CRASH_PHASE="$(CM_PG_CRASH_PHASE)" \
+		-e CI_PACKAGE_CANDIDATES="$(if $(CI_PACKAGE_CANDIDATES),/source/$(CI_PACKAGE_CANDIDATES))" \
+		-e CANDIDATE_NODE_IMAGE="$(LLM_MESH_NODE_IMAGE)" $(MANIFEST_GUARD_ENV) \
 		-v "$(CURDIR):/source" $(CM_RUN_IMAGE) \
 		sh /source/packages/cluster-mesh/tests/storage/cold-workspace.sh
 
@@ -1075,7 +1124,7 @@ engram-e2-job-receipt:
 	@gh api "repos/$$GITHUB_REPOSITORY/actions/runs/$$GITHUB_RUN_ID/jobs?per_page=100" > "$(E2_RECEIPTS)/jobs.json"
 	@sha256sum "$(E2_RECEIPTS)/context.txt" "$(E2_RECEIPTS)/jobs.json" > "$(E2_RECEIPTS)/context.sha256"
 
-pack-cluster-mesh: build-cluster-mesh ## Validate @sentropic/cluster-mesh package contents
+pack-cluster-mesh: $(if $(CI_PACKAGE_CANDIDATES),,build-cluster-mesh) ## Validate @sentropic/cluster-mesh package contents
 	$(call manifest_guard_pack,cluster-mesh)
 
 publish-cluster-mesh: engram-e2-stable-publish-guard build-cluster-mesh ## Publish @sentropic/cluster-mesh from CI OIDC trusted publishing
