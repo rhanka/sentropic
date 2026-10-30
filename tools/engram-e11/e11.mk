@@ -14,7 +14,7 @@ memory-e11-reviewed-prepare:
 	@git worktree add --detach "$(E11_REVIEW_WT)" $(E11_REVIEW_HEAD)
 	@flock "$(E2_LOCK)" $(MAKE) -C "$(E11_REVIEW_WT)" engram-e2-lane E2_LANE=stage-b ENV=$(ENV)
 
-E11_RUN = docker run --rm --network none -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -v "$(E11_INPUT):/evidence" -w /workspace $(E11_IMAGE)
+E11_RUN = docker run --rm $(LOCKED_INSTALL_MOUNTS) --network none -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace:ro" -v "$(E11_INPUT):/evidence" -w /workspace $(E11_IMAGE)
 .PHONY: memory-e11-prepare memory-e11-generate memory-e11-check memory-e11-test
 memory-e11-prepare:
 	@test -n "$(filter test-mem-e11 test-mem-e11b test-e2-int,$(ENV))"
@@ -61,8 +61,8 @@ memory-e11-stage:
 
 memory-e11-lock: memory-e11-stage
 	@test -n "$(filter test-mem-e11 test-mem-e11b test-e2-int,$(ENV))"
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(E11_INPUT):/evidence" -w /evidence/consumer $(E11_IMAGE) \
-	  sh -ec 'test ! -e package-lock.json; npm install --package-lock-only --ignore-scripts --no-audit --no-fund'
+	@docker run --rm $(LOCKED_INSTALL_MOUNTS) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(E11_INPUT):/evidence" -w /evidence/consumer $(E11_IMAGE) \
+	  sh -ec 'test ! -e package-lock.json; node /workspace/scripts/ci/locked-consumer.mjs --package-lock-only --ignore-scripts --no-audit --no-fund'
 
 memory-e11-installed:
 	@test -n "$(filter test-mem-e11 test-mem-e11b test-e2-int,$(ENV))"
