@@ -56,7 +56,7 @@
   - [x] Read rules and lock incident evidence; mechanical branch check passed.
   - [x] Inventory Make, CI, scripts, Docker and installed-consumer paths.
 - [x] **Lot 1 — Locked tool and workspace installs**
-  - [x] Freeze 50 isolated tool profiles with exact transitive versions and integrity.
+  - [x] Freeze 53 isolated tool profiles with exact transitive versions and integrity.
   - [x] Remove container install fallbacks and implicit executable downloads.
   - [x] Include the new API and E2E tool lock inputs in content-addressed image versions.
   - [x] Freeze historical consumer closures for auth-hono 0.15.0, mesh 0.19.2/0.21.2, gateway 0.18.0 and cluster-mesh 0.23.2.
@@ -67,11 +67,11 @@
   - [x] Record fixed finding and coverage in security notes/register.
 - [ ] **Lot 3 — Validation and delivery**
   - [x] Full cluster-mesh suite: 1,414 pass; installed stateful/artifacts consumer: 16 pass; llm-mesh typecheck/lint and gateway auth consumers: 3 pass.
-  - [x] Cluster-mesh typecheck, 17 packaging preparation regressions and seven install guard tests pass.
+  - [x] Cluster-mesh typecheck, 17 packaging preparation regressions and eleven install guard tests pass.
   - [x] Published-consumer qualification: 18 tests pass; manifest, security and CI wiring contracts: 219 tests pass.
   - [x] Diff review preserves API runtime npm removal and distinguishes executable checks from npx execution.
   - [x] Run guard, cluster-mesh tests/typecheck, representative package and consumer checks.
-  - [ ] Review changed install paths and run mechanical scope check before each commit.
+  - [x] Review changed install paths and run mechanical scope check before each commit.
   - [x] Stop test environment with `make down`; no application services were started.
   - [ ] Create draft PR to main from this plan; CI completed/success on exact head.
 - [ ] **Lot 4 — Muse Wonder review changes**
