@@ -2049,7 +2049,7 @@ include deploy/ci/artifact-content/tests.mk
 .PHONY: test-artifact-content
 test-artifact-content: ## Qualify content process behavior, types and lint on the API test executor
 	@$(MAKE) test-api-endpoints SCOPE=apps/artifact-content/tests API_TEST_ARGS="--config ../apps/artifact-content/vitest.config.ts --no-file-parallelism" API_TEST_WORKERS=1 ENV=$(ENV)
-	@$(API_TEST_RUN) api sh -lc 'npm exec -- tsc --project ../apps/artifact-content/tsconfig.json && cd /workspace/apps/artifact-content && npm exec -- eslint src tests'
+	@$(API_TEST_RUN) api sh -lc 'npx --no-install tsc --project ../apps/artifact-content/tsconfig.json && cd /workspace/apps/artifact-content && npx --no-install eslint src tests'
 
 .PHONY: test-app-cluster-mesh
 test-app-cluster-mesh: test-artifact-content ## Retain the app topic host, reader and catalogue receiving gates
