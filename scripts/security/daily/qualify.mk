@@ -9,7 +9,7 @@ SECQUAL_RUN = docker run --rm --read-only --cap-drop=ALL --security-opt=no-new-p
 security-qualify-window:
 	@test "$$(date -u +%F)" \< '2026-11-13' || { echo 'coverage-blocked: SECQUAL-EX1 expired' >&2; exit 1; }
 
-security-qualify-measure security-qualify-acquire security-qualify-image security-qualify-signature security-qualify-targets security-qualify-failures security-qualify-receipts security-qualify-current-receipts security-qualify-cosign-help security-qualify-scanner: security-qualify-window
+security-qualify-measure security-qualify-acquire security-qualify-image security-qualify-signature security-qualify-targets security-qualify-failures security-qualify-receipts security-qualify-current-receipts security-qualify-cosign-help security-qualify-scanner security-qualify-trust-receipts: security-qualify-window
 
 .PHONY: security-qualify-measure
 security-qualify-measure: ## Measure actual OCI data bytes without admitting the toolchain
