@@ -1,6 +1,6 @@
 // Pack-only dev tolerance for the installed-comments bare probe.
 //
-// The E2 integration reserves `RESERVED_NEXT` (today `0.25.0`) for its release
+// The release train reserves `RESERVED_NEXT` (today `0.26.0`) for its release
 // line: lot workspaces carry `<reservedNext>-dev.N` by plan. The frozen
 // published compatibility pin (`LATEST_PUBLISHED_CLUSTER_MESH`, `0.24.0`)
 // stays separate from the selected local candidate. This mirrors the contract
@@ -9,7 +9,7 @@
 // and there; moving the reservation does not move the frozen published pin.
 // The pin is the latest published release whose dependency and peer metadata
 // equals the candidate's (0.24.0 published; candidate metadata unchanged).
-export const RESERVED_NEXT = '0.25.0';
+export const RESERVED_NEXT = '0.26.0';
 export const LATEST_PUBLISHED_CLUSTER_MESH = '0.24.0';
 export const PACK_ONLY_PACKAGE = '@sentropic/cluster-mesh';
 
