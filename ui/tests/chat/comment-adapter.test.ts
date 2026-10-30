@@ -1,17 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import {
-  buildCommentThreads,
-  findAssignedMentionFromText,
-  formatCommentTimestamp,
-  getCommentAuthorLabel,
-  getInitials,
-  getMentionCandidate,
-  getMentionLabel,
-  getMentionMatches,
-  isCommentByUser,
-  type CommentItem,
-} from '@sentropic/chat-ui/comments';
+import { buildCommentThreads, findAssignedMentionFromText, getMentionCandidate, getMentionMatches, isCommentByUser } from '@sentropic/chat-core/runtime/comments';
+import { formatCommentTimestamp, getCommentAuthorLabel, getInitials, getMentionLabel, type CommentItem } from '@sentropic/chat-ui/comments';
 import { getCommentSectionLabel } from '$lib/chat/comment-adapter';
+
+const presentation = { getCommentAuthorLabel, getMentionLabel };
 
 const members = [
   { userId: 'u_ada', email: 'ada@example.com', displayName: 'Ada Lovelace' },
@@ -59,9 +51,9 @@ describe('chat comment adapter', () => {
       query: 'Ad',
     });
     expect(getMentionCandidate('please ask @Ad ')).toBeNull();
-    expect(getMentionMatches(members, 'bo')).toEqual([members[1]]);
-    expect(getMentionMatches(members, '')).toHaveLength(3);
-    expect(findAssignedMentionFromText('cc @Ada Lovelace then @Bob Stone', members)).toEqual(
+    expect(getMentionMatches(members, 'bo', presentation)).toEqual([members[1]]);
+    expect(getMentionMatches(members, '', presentation)).toHaveLength(3);
+    expect(findAssignedMentionFromText('cc @Ada Lovelace then @Bob Stone', members, presentation)).toEqual(
       members[1],
     );
   });
@@ -96,7 +88,7 @@ describe('chat comment adapter', () => {
         created_by: 'u_cam',
         created_at: '2024-01-01T11:00:00Z',
       }),
-    ]);
+    ], presentation);
 
     expect(threads.map((thread) => thread.id)).toEqual(['t_2', 't_1']);
     expect(threads[1]).toMatchObject({

@@ -6,12 +6,11 @@
     GeneratedFileCard,
     StreamHubClient,
     StreamHubEvent,
-  } from '../client/streamTypes.js';
+  } from '@sentropic/chat-core/runtime/client/streamTypes';
+  import { asRecord, normalizeTaskStatus } from '../state/streamMessageProjection.js';
   import {
-    asRecord,
     buildTodoRuntimeChecklist,
     needsReasoningSectionBreak,
-    normalizeTaskStatus,
     summarizePreviewText,
   } from '../state/streamMessageProjection.js';
   import {
@@ -28,7 +27,7 @@
 
   const defaultLabelResolver: StreamMessageLabelResolver = (key) => key;
 
-  export let streamClient: StreamMessageClient;
+  export let streamClient: StreamMessageClient | undefined = undefined;
   export let labels: StreamMessageLabelResolver = defaultLabelResolver;
   export let streamId: string;
   export let status: string | undefined;
@@ -713,7 +712,7 @@
   };
 
   const subscribe = async (id: string) => {
-    if (!id) return;
+    if (!id || !streamClient) return;
     subKey = makeKey();
     subscribedTo = id;
     streamClient.setStream(subKey, id, handle);
@@ -723,7 +722,7 @@
 
   const unsubscribe = () => {
     if (!subscribedTo) return;
-    streamClient.delete(subKey);
+    streamClient?.delete(subKey);
     subscribedTo = null;
   };
 

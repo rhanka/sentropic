@@ -2,11 +2,11 @@ import { API_BASE_URL } from '$lib/config';
 import { getApiBaseUrl } from '@sentropic/cowork-bridge/core';
 import { isAuthenticated } from '$lib/stores/session';
 import { getScopedWorkspaceIdForUser } from '$lib/stores/workspaceScope';
-import { createStreamHub } from '@sentropic/chat-ui/client/streamHub';
+import { createStreamHub } from '@sentropic/chat-core/runtime/client/streamHub';
 import type {
   RuntimePortLike,
   StreamHubEvent,
-} from '@sentropic/chat-ui/client/streamTypes';
+} from '@sentropic/chat-core/runtime/client/streamTypes';
 
 export type { StreamHubEvent };
 

@@ -8,7 +8,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   type ChatToolScopeToggle,
-} from '@sentropic/chat-ui/utils/chat-tool-scope';
+} from '@sentropic/chat-core/runtime/utils/chat-tool-scope';
 import {
   type WorkspaceType,
   getWorkspaceTypeToolIds,

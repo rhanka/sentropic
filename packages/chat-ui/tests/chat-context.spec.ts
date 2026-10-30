@@ -4,7 +4,7 @@ import {
   type ChatContextEntry,
   type ChatContextProvider,
   type ReadableStore,
-} from '../src/state/chat-context.js';
+} from '../src/context/index.js';
 
 // ---------------------------------------------------------------------------
 // createNoopChatContextProvider

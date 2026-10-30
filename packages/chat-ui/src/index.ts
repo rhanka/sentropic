@@ -9,25 +9,11 @@
  * `.svelte` handling.
  */
 
-export * from './client/transport.js';
-export * from './client/replay.js';
-export * from './client/streamTypes.js';
-export * from './client/streamHistory.js';
-export * from './client/streamHub.js';
-export * from './state/chatDraft.js';
-export * from './state/chatProjection.js';
 export * from './state/chatWidgetShell.js';
 export * from './state/agentsEntry.js';
 export * from './state/agentsSort.js';
-export * from './state/agentsViewMarkers.js';
 export * from './state/streamMessageProjection.js';
 export * from './state/streamMessageSmoothing.js';
 export * from './renderers/registry.js';
 export * from './hosts/types.js';
-export * from './hosts/createWebHost.js';
 export * from './stores/chatWidgetLayout.js';
-export * from './stores/localTools.js';
-export * from './utils/chat-run-projection.js';
-export * from './utils/chat-steer.js';
-export * from './utils/chat-tool-scope.js';
-export * from './utils/localToolStreamSync.js';

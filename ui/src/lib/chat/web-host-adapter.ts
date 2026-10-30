@@ -7,10 +7,10 @@ import {
   type ChatUiLabelResolver,
   type ChatUiWebHost,
   type CreateWebHostInput,
-} from '@sentropic/chat-ui/hosts/createWebHost';
-import type { ChatCoreTransport } from '@sentropic/chat-ui/client/transport';
+} from '@sentropic/chat-core/runtime/hosts/createWebHost';
+import type { ChatCoreTransport } from '@sentropic/chat-core/runtime/client/transport';
 import { createRendererRegistry } from '@sentropic/chat-ui/renderers/registry';
-import type { LocalToolsAdapter } from '@sentropic/chat-ui/hosts/types';
+import type { LocalToolsAdapter } from '@sentropic/chat-core/runtime/hosts/types';
 import type { ContextProvider } from '@sentropic/cowork-bridge/core';
 import { API_BASE_URL } from '$lib/config';
 import { getApiBaseUrl } from '@sentropic/cowork-bridge/core';

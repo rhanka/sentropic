@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { isLocalToolName } from '@sentropic/chat-ui/stores/localTools';
+import { isLocalToolName } from '@sentropic/chat-core/runtime/stores/localTools';
 import {
   filterPermissionPromptsForPendingStream,
   parsePendingLocalToolCallsFromStatusPayload,
   shouldResetLocalToolStateForFreshRound,
-} from '@sentropic/chat-ui/utils/localToolStreamSync';
+} from '@sentropic/chat-core/runtime/utils/localToolStreamSync';
 
 describe('localToolStreamSync', () => {
   it('parses pending local tool calls from awaiting status payload', () => {

@@ -403,6 +403,9 @@ jobs:
               - 'packages/chat-ui/**'
               - 'packages/cowork-desktop/**'
               - 'packages/cowork-bridge/**'
+              - 'packages/chat-core/src/runtime/**'
+              - 'packages/chat-core/package.json'
+              - 'packages/chat-core/tsconfig.json'
             llm_mesh:
               - 'Makefile'
               - 'package.json'
@@ -934,19 +937,33 @@ jobs:
       - name: Setup Docker
         uses: docker/setup-buildx-action@v4
       - name: Typecheck Chat UI
-        run: make typecheck-chat-ui
+        run: make typecheck-chat-ui ENV=test-ci-chat-ui
       - name: Test Chat UI
-        run: make test-chat-ui
+        run: make test-chat-ui ENV=test-ci-chat-ui
       - name: Test Chat UI DOM
-        run: make test-chat-ui-dom
+        run: make test-chat-ui-dom ENV=test-ci-chat-ui
       - name: Build Chat UI
-        run: make build-chat-ui
+        run: make build-chat-ui ENV=test-ci-chat-ui
       - name: Pack Chat UI
         env:
           CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
-        run: make pack-chat-ui ENV=test-ci-chat-ui
+        run: make pack-chat-ui PACK_DESTINATION=tmp/chat-pair/ui ENV=test-ci-chat-ui
+      - name: Pack Chat Core
+        env:
+          CI_MANIFEST_CONTEXT: ${{ toJSON(needs.changes.outputs) }}
+          CI_MANIFEST_EVENT: ${{ github.event_name }}
+          CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
+        run: make pack-chat-core PACK_DESTINATION=tmp/chat-pair/core ENV=test-ci-chat-ui
+      - name: Qualify installed Chat pair
+        run: make qualify-chat-pair UI_ARCHIVE=tmp/chat-pair/ui/sentropic-chat-ui-1.0.0.tgz CORE_ARCHIVE=tmp/chat-pair/core/sentropic-chat-core-0.3.1.tgz REPORT_DIR=tmp/chat-pair/report ENV=test-ci-chat-ui
+      - name: Retain installed Chat pair evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: chat-pair-qualification
+          path: tmp/chat-pair/report
+          if-no-files-found: error
 
   validate-cited-source-viewer:
     runs-on: ubuntu-latest

@@ -1,15 +1,15 @@
 /**
  * checkpointHostAdapter.ts — Sentropic implementation of CheckpointHost.
  *
- * Binds the generic @sentropic/chat-ui/checkpoints module to the sentropic API
+ * Binds the generic @sentropic/chat-core/runtime/checkpoints module to the sentropic API
  * using session-adapter URL helpers. Keeps all sentropic domain strings here
  * (folderId, useCaseId, organizationId, workspaceId, _create/_update/_delete suffixes)
  * so the package module stays domain-neutral.
  */
 
-import type { CheckpointHost } from '@sentropic/chat-ui/checkpoints';
+import type { CheckpointHost } from '@sentropic/chat-core/runtime/checkpoints';
 import { apiGet, apiPost } from '$lib/utils/api';
-import { isLocalToolName } from '@sentropic/chat-ui/stores/localTools';
+import { isLocalToolName } from '@sentropic/chat-core/runtime/stores/localTools';
 import {
   chatSessionCheckpointsUrl,
   chatSessionCheckpointCreateUrl,

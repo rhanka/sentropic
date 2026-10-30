@@ -1,5 +1,5 @@
 import type { Component } from 'svelte';
-import type { ChatUiLabelResolver } from '../hosts/createWebHost.js';
+import type { ChatUiLabelResolver } from '@sentropic/chat-core/runtime/hosts/createWebHost';
 import type {
   MessageActionRole,
   MessageActionStreamStatus,

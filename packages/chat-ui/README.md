@@ -1,180 +1,70 @@
 # @sentropic/chat-ui
 
-Svelte reference UI package for `@sentropic/*` chat sessions: stream rendering, optimistic client state, local-tool handoff, renderer registry, and host adapter contracts. It consumes `@sentropic/chat-core` wire contracts through HTTP/SSE only and never reaches into `@sentropic/llm-mesh`, API internals, or persistence adapters.
+Svelte chat views, normalized data/command ports and presentation helpers.
+Sentropic client execution lives in `@sentropic/chat-core/runtime`. Views receive state and callbacks;
+hosts own authentication, platform capabilities and runtime lifetime.
 
-## Public Surface
+## 1.0.0 migration
 
-Re-exports the TypeScript surface; Svelte components are package-exported separately under `./components/*` so bundlers keep the `.svelte` handling.
+This major release removes runtime implementations and their forwarding exports. Import transport,
+replay, session/controller/projection state, checkpoints, local tools, model selection and optional
+module state from the corresponding `@sentropic/chat-core/runtime` subpaths. The visual root barrel no
+longer exports them. See `spec/CHAT_MIGRATION_P1.md` in the repository for the release notice.
 
-- `@sentropic/chat-ui` — TS surface barrel: transport, replay, renderer registry, host adapter types, layout/local-tools stores, and chat utilities.
-- `@sentropic/chat-ui/client/transport` — `ChatCoreTransport`, `ChatCoreTransportFactory`, `createDefaultTransport`.
-- `@sentropic/chat-ui/client/replay` — `ReplayCursor`, `ReplayClient`, `createReplayClient`.
-- `@sentropic/chat-ui/renderers/registry` — `ToolRenderer`, `RendererRegistry`, `createRendererRegistry`.
-- `@sentropic/chat-ui/hosts/types` — `HostAdapter`, `WebHostAdapter`, `ChromeHostAdapter`, `VsCodeHostAdapter`, `LocalToolsAdapter`, `AnyHostAdapter`.
-- `@sentropic/chat-ui/stores/chatWidgetLayout` — readable/writable layout stores for floating, docked, side-panel surfaces.
-- `@sentropic/chat-ui/stores/localTools` — local tool registry + permission state stores wired to a `LocalToolsAdapter`.
-- `@sentropic/chat-ui/utils/chat-run-projection` — pure stream-projection helpers (deltas to message segments).
-- `@sentropic/chat-ui/utils/chat-steer` — pure steering primitives (interrupt, retry, rollback intents).
-- `@sentropic/chat-ui/utils/chat-tool-scope` — pure tool-scope guards.
-- `@sentropic/chat-ui/utils/localToolStreamSync` — pure local-tool stream synchronization helpers.
-- `@sentropic/chat-ui/components/ChatPanel.svelte` — package-owned session/timeline shell.
-- `@sentropic/chat-ui/components/ChatWidget.svelte` — package-owned header, tabs, content gate, routing and pager.
-- `@sentropic/chat-ui/components/ChatWidgetPager.svelte` — conditional agents list with a persistently mounted conversation.
-- `@sentropic/chat-ui/components/StreamMessage.svelte` — package-owned stream renderer.
+`ChatConversation` requires `snapshots` and `commands`. Create the runtime above placement/tab/view
+mounts and dispose it when the host releases the session, rather than when the view unmounts.
 
-### 0.34.0 shell migration (breaking change in 0.x)
+```svelte
+<script lang="ts">
+  import ChatConversation from '@sentropic/chat-ui/components/ChatConversation.svelte';
+  import type { ChatConversationCommands, ChatConversationSnapshots } from '@sentropic/chat-ui/conversation';
+  export let snapshots: ChatConversationSnapshots;
+  export let commands: ChatConversationCommands;
+</script>
 
-ChatWidget no longer accepts `renderShell`. Inject `renderHeaderLeading`,
-`renderHeaderActions`, `renderJobsPanel`, `renderCommentsPanel`, `renderChatPanel`,
-`renderAgentsListHeader` and `renderConversationHeader` instead. The optional
-typed `renderContentGate` receives a ready snippet: render it exactly once after
-auth/onboarding succeeds. Header actions and tabs remain outside that gate.
-The conversation remains mounted across tab and list transitions; closing the
-gate may unmount it. Pass agents data/callbacks through `agentsList`, and host
-view state through `agentsView` and `canAgentsListBeDefaultView`.
-The separate ChatPanel `renderShell` contract is unchanged.
-For non-app consumers, 0.34.0 also removes the default white background (`bg-white text-slate-900`) and content `overflow-hidden`, keeps chat mounted across tabs, and removes `renderShell` (breaking in 0.x).
-
-## Non-Goals
-
-- No direct import from `@sentropic/llm-mesh`.
-- No provider, model, credential, retry, quota, or model catalog abstraction.
-- No server persistence, Drizzle schema, or stream storage.
-- No chat reasoning loop, tool loop, checkpoint runtime, queue runtime, or workflow orchestration.
-- No Hono routes, Chrome service worker, or VSCode extension activation/secret storage.
-
-## Host Adapter Contract
-
-Hosts supply runtime capabilities (HTTP base URL, local tool execution, navigation, storage). The package consumes them through narrow interfaces and never reaches the runtime directly.
-
-Web host (browser app):
-
-```ts
-import type { WebHostAdapter } from '@sentropic/chat-ui/hosts/types';
-import { createDefaultTransport } from '@sentropic/chat-ui/client/transport';
-
-const transport = createDefaultTransport('https://api.example.com/api/v1');
-const host: WebHostAdapter = { kind: 'web' };
+<ChatConversation {snapshots} {commands} features={{ attachments: true, documents: true }} />
 ```
 
-Chrome host adapter (extension content/service worker context). The host owns the runtime-specific factory; the package only defines the `LocalToolsAdapter` contract.
+The snapshot contains normalized timeline items, catalog/context choices, attachments and permission
+states. Commands bind sending, model/context selection, edit/retry/stop/feedback/steer, upload/removal,
+generated-file download and permission decisions. The view never creates or disposes the runtime.
+Missing host permission approval denies local execution in the runtime.
 
-```ts
-// Host-owned factory (e.g. ui/src/lib/upstream/chrome-host-adapter.ts):
-import type { LocalToolsAdapter } from '@sentropic/chat-ui/hosts/types';
+## Public surface
 
-export const createChromeLocalToolsAdapter = (
-  runtime: typeof chrome.runtime,
-): LocalToolsAdapter => ({ /* runtime-specific implementation */ });
+- `components/ChatConversation.svelte`: injected conversation assembly, optional module snippets.
+- `conversation`: data-only snapshot and command types.
+- `components/ChatWidget.svelte`, `ChatWidgetPager.svelte`, `ChatDock.svelte`: shell, routing and placement.
+- `components/ChatPanel.svelte`, `ChatTimeline.svelte`, `ChatComposer.svelte`: visual composition primitives.
+- `components/StreamMessage.svelte`: markdown/reasoning/tool rendering; passive injected events need no transport.
+- `renderers/registry`: pure host-configured tool-result renderers.
+- `comments`: normalized comment types and pure formatting; `comments/CommentsPanel.svelte` receives host-owned state/actions.
+- `documents`: attachment/card types and format labels; attachment trays, generated cards and lightbox are views.
+- `context`: normalized chip/picker data types. Context selection/retrieval lives in the runtime.
+- `stores/chatWidgetLayout` and `state/chatPlacement*`: visual layout and placement intent.
+- `theme.css`: opt-in compiled theme stylesheet; see `THEMING.md`.
 
-// Host bootstrap:
-import { setLocalToolsAdapter } from '@sentropic/chat-ui/stores/localTools';
-setLocalToolsAdapter(createChromeLocalToolsAdapter(chrome.runtime));
-```
+The package export map and `export-manifest.json` are the exact public inventory.
+Host-specific renderers, OAuth, workspace resolution and platform execution remain host concerns.
 
-VSCode host adapter (webview). Same pattern: the host owns the factory, the package owns the contract.
+## Shell snippets
 
-```ts
-// Host-owned factory (e.g. ui/vscode-ext/local-tools-adapter.ts):
-import type { LocalToolsAdapter } from '@sentropic/chat-ui/hosts/types';
+ChatWidget accepts typed header/content/pager snippets. Render `renderContentGate`'s ready body once
+after host onboarding succeeds. Header actions and tabs remain outside that gate. Pass agent rows and
+callbacks through `agentsList`; pass host navigation state through `agentsView`.
+The separate ChatPanel `renderShell` contract remains available.
 
-export const createVsCodeLocalToolsAdapter = (
-  deps: { bridge: VsCodeBridge },
-): LocalToolsAdapter => ({ /* bridge-routed implementation */ });
+## Development and artifacts
 
-// Webview bootstrap:
-import { setLocalToolsAdapter } from '@sentropic/chat-ui/stores/localTools';
-setLocalToolsAdapter(createVsCodeLocalToolsAdapter({ bridge }));
-```
-
-### Registering a host-owned local tool
-
-External hosts (Diag, OpenERP, a mermaid editor, …) can register their OWN
-local tool — a name + definition — without editing the package's built-in tool
-set. The 16 sentropic built-ins (`tab_*`, `bash`, `ls`, `rg`, `file_*`, `git*`)
-keep working identically; host registration is purely additive.
-
-```ts
-import {
-  registerLocalTool,
-  setLocalToolsAdapter,
-} from '@sentropic/chat-ui/stores/localTools';
-
-// 1. Register the tool name + JSON-schema definition advertised to the model.
-registerLocalTool({
-  name: 'render_mermaid',
-  description: 'Render a Mermaid diagram in the host app.',
-  parameters: {
-    type: 'object',
-    properties: { source: { type: 'string' } },
-    required: ['source'],
-  },
-});
-
-// 2. Wire the host executor (the transport that actually runs the tool).
-setLocalToolsAdapter(createMyHostLocalToolsAdapter({ /* ... */ }));
-```
-
-Once registered:
-
-- `isLocalToolName('render_mermaid')` returns `true`, so the controller (via the
-  `attachLocalToolMachine` `isLocalToolName` hook) recognizes the model's
-  `tool_call` as local and routes it through permission → host executor →
-  tool-result, exactly like the built-ins.
-- `getLocalToolDefinitions()` advertises the registered definition alongside the
-  active runtime built-ins (deduplicated by name; a registered definition for a
-  built-in name overrides that built-in's advertised entry).
-
-API: `registerLocalTool(def)`, `registerLocalTools(defs)`,
-`unregisterLocalTool(name)`, `clearRegisteredLocalTools()`,
-`listRegisteredLocalTools()`, plus the `BUILTIN_LOCAL_TOOL_NAMES` const.
-
-Notes:
-
-- The registry is **module/process scoped** (consistent with `setLocalToolsAdapter`
-  and `localToolsStore`). Multiple chat instances on one page share it. Under SSR
-  or in tests, call `clearRegisteredLocalTools()` to reset between
-  requests/cases.
-- Registration affects **recognition and advertised definitions only**, never
-  transport — executing a registered tool still requires the host-injected
-  executor to handle that name.
-- `LocalToolName` is now `(typeof BUILTIN_LOCAL_TOOL_NAMES)[number] | (string & {})`
-  (mirrors `StreamHubEventType`): additive at runtime, type-widening at compile
-  time.
-
-## Stream Replay Behavior
-
-`createReplayClient(transport)` opens an `EventSource` from the chat-core endpoint at the supplied `{ sessionId, fromSeq }` cursor and yields each raw `MessageEvent.data` payload through an `AsyncIterable`. Consumers parse the JSON envelope and route it to the projection pipeline.
-
-- The replay cursor (`fromSeq`) lets consumers resync after navigation, refresh, or transient SSE drops without re-fetching the full bootstrap.
-- The transport returns an async iterable that closes cleanly on `EventSource` error and yields a final `done` sentinel through the underlying stream contract.
-- Wire event types (per `spec/SPEC_STUDY_CHAT_UI_SDK_SCOPE.md`): `reasoning_delta`, `content_delta`, `tool_call_start`, `tool_call_delta`, `tool_call_result`, `status`, `error`, `done`.
-
-## Renderer Registry Behavior
-
-`createRendererRegistry()` returns a `Map`-backed registry consumers can configure per surface:
-
-- `registry.register(toolName, renderer)` registers a typed renderer for a tool name.
-- `registry.get(toolName)` resolves the renderer; unknown tool names fall through to `registry.default`.
-- The default fallback is `JSON.stringify`, suitable for development and unknown tools; product surfaces are expected to register concrete renderers.
-- Renderers are pure functions over the tool result payload; they MUST NOT reach into app-specific stores. App-specific renderers (initiatives, folders, comments, document cards, Chrome tab actions, VSCode local tools) are registered by hosts and never imported by the package.
-
-## Dependency Rules
-
-- Consumes only `@sentropic/chat-core` wire contracts via HTTP/SSE.
-- No runtime dependency on `@sentropic/llm-mesh`, API source, or app-owned stores.
-- Peer dependency: `svelte ^5.0.0`.
-- TypeScript exports compile to `dist/` via `tsc -p tsconfig.json`; published tarball includes both `dist/` and `src/` so SvelteKit consumers can resolve `.svelte` source through the workspace `"svelte"` export condition while Node consumers resolve `.js`/`.d.ts` from `dist/`.
-
-## Local Development
-
-This package is consumed as a workspace dependency by `ui/` (per BR-14a Lot 3). Validation targets (run from repository root):
+Run the repository Make targets with an isolated test environment:
 
 ```sh
-make typecheck-chat-ui ENV=<branch-env>
-make test-chat-ui ENV=<branch-env>
-make build-chat-ui ENV=<branch-env>
-make pack-chat-ui ENV=<branch-env>
+make typecheck-chat-ui ENV=test-chat
+make test-chat-ui ENV=test-chat
+make test-chat-ui-dom ENV=test-chat
+make pack-chat-ui ENV=test-chat
 ```
 
-Publication is wired to GitHub Actions via the `validate-chat-ui` and main-only `publish-chat-ui` jobs (OIDC trusted publishing with skip-if-version-exists safety).
+Guarded packing preprocesses Svelte components and produces public `dist` entrypoints. Clean-consumer
+qualification installs the exact UI/runtime archives together. Publication requires Sentropic CI and
+the package release owner's grant; this migration does not transfer custody to the Design System.

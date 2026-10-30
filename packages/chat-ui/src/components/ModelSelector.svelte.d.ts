@@ -1,6 +1,6 @@
 import type { Component } from 'svelte';
-import type { ChatUiLabelResolver } from '../hosts/createWebHost.js';
-import type { ModelCatalogGroup, ModelCatalogModel, ModelProviderId } from '../utils/model-selection.js';
+import type { ChatUiLabelResolver } from '@sentropic/chat-core/runtime/hosts/createWebHost';
+import type { ModelCatalogGroup, ModelCatalogModel, ModelProviderId } from '@sentropic/chat-ui/utils/model-selection';
 
 export type ModelSelectorProps = {
   /** The currently-selected 'provider::model' composite key (two-way bindable). */

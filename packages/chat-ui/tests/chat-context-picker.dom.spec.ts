@@ -17,7 +17,7 @@ import { cleanup, render } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import ChatContextPicker from '../src/components/ChatContextPicker.svelte';
-import type { ChatContextEntry } from '../src/state/chat-context.js';
+import type { ChatContextEntry } from '@sentropic/chat-core/runtime/state/chat-context';
 
 afterEach(() => cleanup());
 

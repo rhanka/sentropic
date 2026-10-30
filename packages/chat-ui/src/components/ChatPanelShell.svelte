@@ -18,7 +18,8 @@
   import { Streamdown } from 'svelte-streamdown';
 
   import CommentsPanel from '../comments/CommentsPanel.svelte';
-  import type { CommentHost } from '../comments/host.js';
+  import type { CommentHost } from '@sentropic/chat-core/runtime/comments/host';
+  import type { CommentState } from '@sentropic/chat-core/runtime/comments';
   import type { CommentThreadSummary } from '../comments/types.js';
   import ChatComposer from './ChatComposer.svelte';
   import ChatTimeline from './ChatTimeline.svelte';
@@ -30,7 +31,7 @@
   import ImageLightbox from '../documents/ImageLightbox.svelte';
   import MessageAttachments from '../documents/MessageAttachments.svelte';
   import type { ChatGeneratedFileCard } from '../documents/generated-file-cards.js';
-  import type { ChatProjectedTimelineItem } from '../state/chatProjection.js';
+  import type { ChatProjectedTimelineItem } from '@sentropic/chat-core/runtime/state/chatProjection';
 
   type TimelineItem = ChatProjectedTimelineItem<any, any>;
 
@@ -41,6 +42,7 @@
 
   // --- comments mode (forwarded to CommentsPanel, same contract) ---
   export let commentHost: CommentHost | null = null;
+  export let commentState: CommentState | null = null;
   export let commentContextType: string | null = null;
   export let commentContextId: string | null = null;
   export let commentSectionKey: string | null = null;
@@ -286,8 +288,9 @@
 
 <div class="topai-chat-panel-shell flex flex-col h-full" bind:this={panelEl}>
   {#if mode === 'comments'}
-    {#if commentHost}
+    {#if commentHost && commentState}
       <CommentsPanel
+        state={commentState}
         host={commentHost}
         contextType={commentContextType}
         contextId={commentContextId}

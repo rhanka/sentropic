@@ -11,7 +11,7 @@
  * D7 split: Sentropic tool IDs and workspace-type mapping stay app-side.
  */
 
-import type { ChatToolScopeToggle } from '@sentropic/chat-ui/utils/chat-tool-scope';
+import type { ChatToolScopeToggle } from '@sentropic/chat-core/runtime/utils/chat-tool-scope';
 
 // ---------------------------------------------------------------------------
 // WorkspaceType (Sentropic domain — stays app-side after D7)
