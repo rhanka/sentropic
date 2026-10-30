@@ -453,7 +453,7 @@ RUN npx --no-install esbuild ../apps/auth-idp/index.ts \
 
 # The content role shares the canonical artifact and pruned workspace dependencies.
 # Keep artifacts external: its SQL assets resolve relative to the installed package.
-RUN npx esbuild ../apps/artifact-content/src/index.ts \
+RUN npx --no-install esbuild ../apps/artifact-content/src/index.ts \
     --bundle --platform=node --target=node20 --format=esm \
     --outfile=../apps/artifact-content/dist/index.js \
     --external:@sentropic/artifacts --external:pg --external:@aws-sdk/* --external:@smithy/* --sourcemap
