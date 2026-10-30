@@ -13,6 +13,19 @@ import { captureRecords, executionSeconds, durationSeconds } from './ci-run-metr
 
 const policyDigest = workflow => createHash('sha256').update(JSON.stringify(workflow)).digest('hex');
 
+export function independentValidators(workflow) {
+  const consumers = new Set(['validate-cluster-mesh', 'validate-llm-mesh',
+    'validate-llm-gateway', 'validate-publishable-manifests']);
+  const validators = Object.entries(workflow.jobs).filter(([name]) =>
+    /^validate-/.test(name) && !['validate-ci-capacity-metrics', 'validate-idp-sync'].includes(name)
+    || ['memory-l5-qualification', 'package-candidates'].includes(name));
+  // Only immutable candidate preparation may precede these four consumers.
+  // The producer itself must remain independent of every qualification lane.
+  return ['package-candidates', ...consumers].every(name => workflow.jobs[name])
+    && validators.every(([name, job]) => JSON.stringify(job.needs)
+      === JSON.stringify(consumers.has(name) ? ['changes', 'package-candidates'] : ['changes']));
+}
+
 export function wallClockProof(captures, digest) {
   const runs = captures.map(capture => {
     const run = capture.run ?? {};
@@ -237,9 +250,10 @@ export function workflowExpected(workflow, context = {}) {
       if (members && new Set(members).size !== members.length) {
         throw new Error(`Ambiguous truncated matrix names: ${name}`);
       }
-      // Existing train policy keeps this observer independent of promotion.
+      // Cleanup follows the final verdict; requiring it inside that verdict would cycle.
+      // Its failure still fails the complete Actions run required for handoff.
       return expandExpected([{ job: name, members, selected: selection(name),
-        required: name !== 'verify-train-lock-integrity' }]);
+        required: !['verify-train-lock-integrity', 'delete-transport-artifacts'].includes(name) }]);
     });
 }
 
@@ -361,10 +375,7 @@ if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split('/').pop()
         return [event, capacityDemand(workflow, selectedJobs)];
       }));
       const demand = Math.max(...Object.values(scenarios));
-      const validators = Object.entries(workflow.jobs).filter(([name]) =>
-        /^validate-/.test(name) && !['validate-publishable-manifests', 'validate-ci-capacity-metrics', 'validate-idp-sync'].includes(name)
-        || name === 'memory-l5-qualification');
-      const independent = validators.every(([, job]) => JSON.stringify(job.needs) === '["changes"]');
+      const independent = independentValidators(workflow);
       const noCapacityMutexes = Object.values(workflow.jobs).every(job => !job.concurrency?.group.startsWith('ci-capacity-'));
       const matrixWidths = { api: workflow.jobs['test-api-unit-integration'].strategy['max-parallel'],
         e2e: workflow.jobs['test-e2e'].strategy['max-parallel'] };

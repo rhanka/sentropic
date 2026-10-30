@@ -7,7 +7,7 @@ import os from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
-import { evaluateExpected, evaluateSelection, workflowExpected, reconcileRun, capacityDemand, capacityCapture, wallClockProof } from './ci-expected-results.mjs';
+import { evaluateExpected, evaluateSelection, workflowExpected, reconcileRun, capacityDemand, capacityCapture, wallClockProof, independentValidators } from './ci-expected-results.mjs';
 
 const selected = (job) => ({ job, required: true, selected: true });
 const ran = (job, conclusion) => ({ job, conclusion });
@@ -22,7 +22,9 @@ test('should select API and E2E gates for global changes on every pull request',
     assert.ok(members.length > 0 && members.every((row) => row.selected === true));
   }
   assert.equal(expected.find((row) => row.job === 'validate-llm-mesh').selected, true);
-  assert.equal(expected.find((row) => row.job === 'validate-cluster-mesh').selected, true);
+  for (const { lane } of workflow.jobs['validate-cluster-mesh'].strategy.matrix.include) {
+    assert.equal(expected.find(row => row.job === `validate-cluster-mesh (${lane})`)?.selected, true, lane);
+  }
 });
 
 test('should require completed PR and main receipts of the same policy within the baseline', () => {
@@ -57,8 +59,10 @@ test('should keep validators independent without static capacity mutexes', () =>
     /^validate-/.test(name) && !['validate-publishable-manifests', 'validate-ci-capacity-metrics', 'validate-idp-sync'].includes(name)
     || name === 'memory-l5-qualification');
   assert.equal(validators.length, 24);
+  assert.equal(independentValidators(workflow), true);
   for (const [name, job] of validators) {
-    assert.deepEqual(job.needs, ['changes'], name);
+    const consumers = ['validate-cluster-mesh', 'validate-llm-mesh', 'validate-llm-gateway'];
+    assert.deepEqual(job.needs, consumers.includes(name) ? ['changes', 'package-candidates'] : ['changes'], name);
     assert.equal(job.concurrency, undefined, name);
   }
   for (const [name, job] of Object.entries(workflow.jobs)) {
@@ -66,6 +70,28 @@ test('should keep validators independent without static capacity mutexes', () =>
   }
   assert.equal(workflow.jobs['test-api-unit-integration'].strategy['max-parallel'], 15);
   assert.equal(workflow.jobs['test-e2e'].strategy['max-parallel'], 5);
+});
+
+test('should reject validator serialization beyond the immutable candidate producer', () => {
+  for (const [name, needs] of [
+    ['package-candidates', ['changes', 'validate-chat-core']],
+    ['validate-cluster-mesh', ['changes']],
+    ['validate-llm-mesh', ['changes', 'package-candidates', 'validate-cluster-mesh']],
+    ['validate-llm-gateway', ['package-candidates']],
+    ['validate-publishable-manifests', ['changes', 'package-candidates', 'validate-llm-mesh']],
+    ['validate-chat-core', ['changes', 'package-candidates']],
+    ['memory-l5-qualification', ['changes', 'validate-mcp-platform']],
+  ]) {
+    const changed = structuredClone(workflow);
+    changed.jobs[name].needs = needs;
+    assert.equal(independentValidators(changed), false, name);
+  }
+  for (const name of ['package-candidates', 'validate-cluster-mesh', 'validate-llm-mesh',
+    'validate-llm-gateway', 'validate-publishable-manifests']) {
+    const changed = structuredClone(workflow);
+    delete changed.jobs[name];
+    assert.equal(independentValidators(changed), false, `missing ${name}`);
+  }
 });
 
 test('should run E2E beside API quality checks while retaining promotion barriers', () => {
@@ -209,13 +235,13 @@ test('should authenticate current-attempt receipts and fail closed on API errors
 });
 
 test('should delete only current-run transport artifacts after success and retain them after any failure or cancellation', async () => {
-  const names = ['api-tool-image', 'api-image', 'ui-image', 'e2e-image', 'desktop-download'];
+  const names = ['api-tool-image', 'api-image', 'ui-image', 'e2e-image', 'desktop-download', 'package-candidates'];
   const job = workflow.jobs['delete-transport-artifacts'];
-  assert.equal(job.if, 'always() && !cancelled() && inputs.decision_fixtures_only != true');
+  assert.equal(job.if, "always() && !cancelled() && inputs.decision_fixtures_only != true && needs.ci-gate.result == 'success'");
   assert.deepEqual(job.permissions, { actions: 'write' });
-  assert.deepEqual(job.needs, ['ci-capacity-receipts', 'validate-publishable-manifests',
+  assert.deepEqual(job.needs, ['ci-gate', 'ci-capacity-receipts', 'validate-publishable-manifests',
     'qualify-engram-e2', 'memory-l5-qualification', 'verify-train-lock-integrity']);
-  assert.ok(workflow.jobs['ci-gate'].needs.includes('delete-transport-artifacts'));
+  assert.ok(!workflow.jobs['ci-gate'].needs.includes('delete-transport-artifacts'));
   assert.equal(job.steps.length, 1);
   const cleanup = job.steps[0];
   assert.equal(cleanup.name, 'Delete consumed transport artifacts');
@@ -231,7 +257,7 @@ test('should delete only current-run transport artifacts after success and retai
   for (const [name, job] of Object.entries(workflow.jobs)) {
     if (name === 'decision-offline') {
       assert.match(job.if, /inputs.decision_fixtures_only == true/);
-    } else if (!['ci-gate', 'delete-transport-artifacts'].includes(name)) {
+    } else if (name !== 'delete-transport-artifacts') {
       assert.ok(ancestors.has(name), `${name} must finish before the success-only cleanup decision`);
     }
     for (const step of job.steps ?? []) {
@@ -249,9 +275,10 @@ test('should delete only current-run transport artifacts after success and retai
   const context = { repo: { owner: 'rhanka', repo: 'sentropic' }, runId: 7 };
   const process = { env: { GITHUB_RUN_ATTEMPT: '3' } };
   const list = Symbol('list run artifacts'), jobsList = Symbol('list current-attempt jobs'), deleted = [];
-  const jobs = [...consumers].map(name => ({ name, conclusion: 'success' }));
-  jobs.push({ name: 'publish-cluster-mesh', conclusion: 'skipped' },
-    { name: 'validate-publishable-manifests', conclusion: 'success' });
+  const jobs = [...consumers].map(name => ({ name, status: 'completed', conclusion: 'success' }));
+  jobs.push({ name: 'ci-gate', status: 'completed', conclusion: 'success' });
+  jobs.push({ name: 'publish-cluster-mesh', status: 'completed', conclusion: 'skipped' },
+    { name: 'validate-publishable-manifests', status: 'completed', conclusion: 'success' });
   let artifactReads = 0, jobReads = 0;
   const github = { rest: { actions: { listWorkflowRunArtifacts: list, listJobsForWorkflowRunAttempt: jobsList,
     deleteArtifact: async input => deleted.push(input) } }, paginate: async (endpoint, input) => {
@@ -263,13 +290,13 @@ test('should delete only current-run transport artifacts after success and retai
       assert.equal(endpoint, list);
       assert.deepEqual(input, { ...context.repo, run_id: 7, per_page: 100 });
       artifactReads++;
-      return [...names, 'security-container-api-results', 'ci-expected-7-1', 'package-candidates', 'api-image-other']
+      return [...names, 'security-container-api-results', 'ci-expected-7-1', 'qualify-cluster-mesh-candidate-0', 'api-image-other']
         .map((name, id) => ({ id, name, size_in_bytes: 10 }));
     } };
   await execute(context, github, { info() {} }, process);
   assert.equal(jobReads, 1);
   assert.deepEqual(deleted, names.map((_, artifact_id) => ({ ...context.repo, artifact_id })));
-  for (const job of jobs) for (const conclusion of ['failure', 'cancelled']) {
+  for (const job of jobs) for (const conclusion of ['failure', 'cancelled', 'timed_out', 'neutral', 'action_required', null]) {
     const original = job.conclusion;
     job.conclusion = conclusion;
     deleted.length = 0;
@@ -279,6 +306,13 @@ test('should delete only current-run transport artifacts after success and retai
     assert.equal(artifactReads, 0);
     job.conclusion = original;
   }
+  for (const job of jobs) for (const status of ['queued', 'in_progress', undefined]) {
+    job.status = status;
+    deleted.length = 0;
+    await execute(context, github, { info() {} }, process);
+    assert.deepEqual(deleted, [], `${job.name}: ${status} must preserve artifacts`);
+    job.status = 'completed';
+  }
   for (const operation of ['jobs', 'list', 'delete']) {
     const reject = async () => { throw Error('HTTP 403'); };
     const client = operation !== 'delete' ? { ...github, paginate: (endpoint, input) =>
@@ -286,6 +320,20 @@ test('should delete only current-run transport artifacts after success and retai
       : { ...github, rest: { actions: { ...github.rest.actions, deleteArtifact: reject } } };
     await assert.rejects(execute(context, client, { info() {} }, process), /HTTP 403/);
   }
+});
+
+test('should await a successful final verdict before deletion without cycling its required set', () => {
+  const expected = workflowExpected(workflow, { event: 'pull_request', changes: { global: 'true' } });
+  assert.equal(expected.find(row => row.job === 'delete-transport-artifacts').required, false);
+  const executed = expected.filter(row => row.selected && row.job !== 'delete-transport-artifacts')
+    .map(row => ({ job: row.job, conclusion: 'success' }));
+  assert.equal(evaluateExpected({ expected, executed }).ok, true);
+  for (const result of ['failure', 'cancelled', 'skipped', 'neutral', '']) {
+    assert.equal(evaluateSelection(workflow.jobs['delete-transport-artifacts'].if,
+      key => key === 'needs.ci-gate.result' ? result : false), false, result);
+  }
+  assert.equal(evaluateSelection(workflow.jobs['delete-transport-artifacts'].if,
+    key => key === 'needs.ci-gate.result' ? 'success' : false), true);
 });
 
 test('should reject incomplete real gate contexts and missing expanded receipts through its exact script', () => {

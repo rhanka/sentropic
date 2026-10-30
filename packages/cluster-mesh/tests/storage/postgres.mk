@@ -118,7 +118,9 @@ if [ -n "$${CM_COMMENTS_SIBLINGS:-}" ]; then \
 fi;
 endef
 .PHONY: cluster-mesh-comments-installed
-cluster-mesh-comments-installed: cluster-mesh-pg-up
+# Candidate-aware direct calls retain the same primary-byte check as CI dispatch.
+cluster-mesh-comments-installed cluster-mesh-pg-major-upgrade: TARBALL = $(CM_COMMENTS_TARBALL)
+cluster-mesh-comments-installed: $(if $(CI_PACKAGE_CANDIDATES),ci-package-verify) cluster-mesh-pg-up
 	@test -f "$(CM_COMMENTS_TARBALL)"
 	@mkdir -p "$(CM_COMMENTS_REPORT)"
 	@docker run --rm --init --network "$(CM_PG_NAME)" $(CM_COMMENTS_SIBLING_FLAGS) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/comments-npm-cache \
@@ -164,7 +166,7 @@ cluster-mesh-pg-major-phase:
 		npm_config_cache=/tmp/npm-cache npm install --omit=optional --ignore-scripts --no-audit --no-fund /candidate.tgz pg@8.16.3 >/dev/null; \
 		node installed-major-upgrade.mjs'
 
-cluster-mesh-pg-major-upgrade: cluster-mesh-pg-up
+cluster-mesh-pg-major-upgrade: $(if $(CI_PACKAGE_CANDIDATES),ci-package-verify) cluster-mesh-pg-up
 	@test -f "$(CM_COMMENTS_TARBALL)"
 	@mkdir -p "$(CM_COMMENTS_REPORT)"
 	@set -eu; next="$(CM_PG_NAME)-next"; \

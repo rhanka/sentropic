@@ -22,6 +22,8 @@ CLUSTER_MESH_HEAD_SHA ?= $(shell git rev-parse HEAD 2>/dev/null)
 LAZY_SIBLING_ENV = $(if $(SIBLING_ARCHIVES_FILE),$(if $(and $(filter 1,$(words $(SIBLING_ARCHIVES_FILE))),$(filter $(CLUSTER_MESH_SIBLING_RECEIPTS),$(SIBLING_ARCHIVES_FILE))),-e CLUSTER_MESH_SIBLING_RECEIPTS=/workspace/$(CLUSTER_MESH_SIBLING_RECEIPTS) -e CLUSTER_MESH_HEAD_SHA="$(CLUSTER_MESH_HEAD_SHA)",$(error SIBLING_ARCHIVES_FILE must be exactly $(CLUSTER_MESH_SIBLING_RECEIPTS))))
 LAZY_SIBLING_CHECK = $(if $(SIBLING_ARCHIVES_FILE),@test -f "$(CLUSTER_MESH_SIBLING_RECEIPTS)" || { echo "ERROR: $(CLUSTER_MESH_SIBLING_RECEIPTS) is not a file"; exit 1; })
 LAZY_PACKAGE_RUN = docker run --rm --init -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache $(LAZY_SIBLING_ENV) \
+	-e CLUSTER_MESH_CANDIDATES="$(if $(CI_PACKAGE_CANDIDATES),/workspace/$(CI_PACKAGE_CANDIDATES))" \
+	-e MANIFEST_HEAD_SHA="$$(git rev-parse HEAD)" -e CANDIDATE_NODE_IMAGE="$(LLM_MESH_NODE_IMAGE)" \
 	-v "$(CURDIR):/workspace" -w /workspace/packages/cluster-mesh $(LLM_MESH_NODE_IMAGE)
 ifneq ($(filter $(ENV),test-861-int test-llm-judge),)
 LAZY_PACKAGE_RUN = docker compose -p $(ENV) -f docker-compose.immo-861.yml run --rm --no-deps \
@@ -53,13 +55,16 @@ test-lazy-package-activation:
 # Activation vectors require the dedicated mandatory PostgreSQL target used by validate-artifacts.
 test-lazy-package:
 	$(LAZY_SIBLING_CHECK)
+ifeq ($(CI_PACKAGE_CANDIDATES),)
 	@$(MAKE) --no-print-directory -f Makefile build-cluster-mesh ENV=$(ENV)
 	@$(MAKE) --no-print-directory -f Makefile $(if $(filter test-861-int,$(ENV)),immo-861-build-mcp-platform,build-mcp-platform) ENV=$(ENV)
 	@$(MAKE) --no-print-directory -f Makefile build-artifacts ENV=$(ENV)
 	@$(MAKE) --no-print-directory -f Makefile build-llm-mesh ENV=$(ENV)
 	@$(MAKE) --no-print-directory -f Makefile build-llm-gateway ENV=$(ENV)
 	@$(MAKE) --no-print-directory -f Makefile build-comments ENV=$(ENV)
+endif
 	@$(LAZY_PACKAGE_RUN) sh -lc 'set -eu; work=/tmp/lazy-package; sh tests/packaging/prepare.sh "$$work"; \
+		unset CLUSTER_MESH_CANDIDATES; \
 		cp vitest.config.ts "$$work/tools/vitest.config.ts"; \
 		CLUSTER_MESH_PACKAGING_DIR="$$work" NODE_PATH="$$work/tools/node_modules" \
 		"$$work/tools/node_modules/.bin/vitest" run tests/packaging --exclude tests/packaging/activation-vectors.spec.ts --config "$$work/tools/vitest.config.ts" --environment node --maxWorkers=1'
