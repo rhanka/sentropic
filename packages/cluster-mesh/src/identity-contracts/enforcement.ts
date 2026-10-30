@@ -61,6 +61,16 @@ export function createPersonCascade(input: {
       } catch (error) {
         steps.push({ step: 'login_sessions', outcome: 'queued', detail: String(error) });
       }
+      steps.push({
+        step: 'remote_reader_sessions',
+        outcome: 'not_applicable',
+        detail: 'remote/reader session plane not bound in this contract stage',
+      });
+      steps.push({
+        step: 'connector_grants',
+        outcome: 'not_applicable',
+        detail: 'connector grant plane not bound in this contract stage',
+      });
       try {
         const memberships = await input.memberships.listMembershipsForUser(userId);
         let suspended = 0;
@@ -93,6 +103,16 @@ export function createPersonCascade(input: {
       } else {
         steps.push({ step: 'agent_plane', outcome: 'queued', detail: 'agent-plane hook not bound; M4 fills this step' });
       }
+      steps.push({
+        step: 'purpose_grants',
+        outcome: 'not_applicable',
+        detail: 'purpose grants are agent-plane records; M4 fills this step',
+      });
+      steps.push({
+        step: 'catalogue',
+        outcome: 'not_applicable',
+        detail: 'tool catalogue surface not bound in this contract stage; §2.7 invalidation applies from the first landed catalogue',
+      });
       try {
         const account = await input.accounts.findAccount(userId);
         if (!account) throw new IdentityNotFoundError('user', userId);

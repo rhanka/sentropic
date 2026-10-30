@@ -179,7 +179,20 @@ export interface ServiceClientBinding {
 
 export type RevocationMode = 'disable' | 'delete';
 
-export type RevocationStepKind = 'account' | 'login_sessions' | 'tenant_memberships' | 'agent_plane';
+/** F14 cascade steps (r2 §5 F14 enumeration): login sessions, remote/reader
+    sessions, connector grants, level-2 agent sessions, purpose grants and the
+    tool catalogue, plus the tenant-membership suspension and the terminal
+    account step. Steps whose plane has not landed yet are receipted
+    `not_applicable`; the union is closed so later lots never amend it. */
+export type RevocationStepKind =
+  | 'login_sessions'
+  | 'remote_reader_sessions'
+  | 'connector_grants'
+  | 'tenant_memberships'
+  | 'agent_plane'
+  | 'purpose_grants'
+  | 'catalogue'
+  | 'account';
 
 export type RevocationStepOutcome = 'applied' | 'queued' | 'not_applicable';
 

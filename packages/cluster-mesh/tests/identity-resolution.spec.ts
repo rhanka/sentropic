@@ -149,8 +149,12 @@ describe('cascading revocation of a person', () => {
     expect(receipt).toMatchObject({ userId: 'user-1', mode: 'disable' });
     expect(receipt.steps.map((step) => [step.step, step.outcome])).toEqual([
       ['login_sessions', 'applied'],
+      ['remote_reader_sessions', 'not_applicable'],
+      ['connector_grants', 'not_applicable'],
       ['tenant_memberships', 'applied'],
       ['agent_plane', 'queued'],
+      ['purpose_grants', 'not_applicable'],
+      ['catalogue', 'not_applicable'],
       ['account', 'applied'],
     ]);
     expect((await stores.accounts.findAccount('user-1'))?.accountStatus).toBe('disabled');
