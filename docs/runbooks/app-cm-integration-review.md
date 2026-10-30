@@ -124,3 +124,56 @@ Seven replayed commits violate the 150-line rule: `8dab28051` (208),
 content and does not exempt these replay commits. The contrary blanket claim
 in BRANCH.md is amended. No retrospective approval or splitting rewrite is
 claimed. New corrections stay within the limit.
+
+## Muse r2 reconciliation (29 October 2026)
+
+The four verdict items below retain the review's exact wording. The author
+does not infer product acceptance, reconstruct deleted baseline bytes, or
+submit an approval of their own PR. Serving remains closed.
+
+1. **The head `7fd1a87cc` is conflicting with current main `36e66458a` (30 commits behind) and the PR body is stale for it. The required rebase creates a new head that needs updated patch-equivalence evidence, an updated N5 body record, and its own completed/success CI.**
+   Rebased onto newer main `82a7be05b`, producing `42875f874` before these
+   documentation/branch-close corrections. Conflicts: the initial BRANCH.md
+   keeps the integration plan; the API environment reconciliation retains
+   main's `REMOTE_ACTION_ROLE=product` and the three artifact flags at `0`
+   in one env list. All 54 closed-overlay render/mutation checks pass.
+   No package source or manifest differs from main: the Post-Rebase Gate
+   has no touched public package requiring a registry/version comparison.
+   The PR body supplies the final pushed SHA and completed CI run.
+2. **W4.a's shadow-mode prerequisite is recorded with a named owner and the chat lanes are green, but Antoine's explicit product acceptance is still pending.**
+   OPEN: Antoine's explicit acceptance has been requested; it has not been
+   supplied. The behavior and affected tools remain stated in section 4.
+   Passing final-head chat tests cannot substitute for that decision.
+3. **The migration `0020` rehearsal against the restored W0 baseline remains open. The exact dump was deleted, and no first-run or idempotent second-run receipt exists.**
+   OPEN: local backup, worktree, temporary and cache searches found no copy
+   of the exact dump. The original restore receipt confirms both hardlinked
+   paths and the restore volume were removed. Recovery source requested;
+   no older dump, empty fixture or new production dump is substituted.
+   Acceptance requires the SHA in section 6, isolated restore, real API
+   migration execution twice, and both results. Code author owns execution
+   once those bytes are available; schema rollback remains documented.
+4. **Final-head consensus review, native approval, undrafting, and branch-close removal of `BRANCH.md` with C1/C2 on the resulting head are all still outstanding.**
+   Final-head review and approval are recorded in the PR body with their
+   actual status. Branch-close removes BRANCH.md in bounded commits; its
+   scope contract is retained as a local verification input, and the full
+   original plan remains readable at `42875f874:BRANCH.md`. C1/C2 must run
+   again against the resulting complete main-to-head path set. Product and
+   migration gates remain OPEN regardless of branch-plan removal.
+
+### Public replay evidence
+
+Full outputs are now accessible from the PR, replacing the local-only record.
+Concatenate the fenced diff contents in comment/part order, retaining LF:
+
+| Replay | Exact comparison | Equal / changed / old-only / new-only | Full output |
+| --- | --- | --- | --- |
+| 1 | `c37662a20..e86402083` vs `b7e86f5ea..74e2b7a2c` | 111 / 69 / 5 / 6 | [parts 1–6, starting here](https://github.com/rhanka/sentropic/pull/837#issuecomment-6513317846); subsequent parts: 6513318154, 6513318480, 6513318913, 6513319232, 6513319503 |
+| 2 | `b7e86f5ea..c6048eb29` vs `c1e592636..b65ba7250` | 187 / 1 / 0 / 0 | [complete output](https://github.com/rhanka/sentropic/pull/837#issuecomment-6513319836) |
+| 3 | `c1e592636..7fd1a87cc` vs `82a7be05b..42875f874` | 187 / 2 / 0 / 0 | [complete output](https://github.com/rhanka/sentropic/pull/837#issuecomment-6513320095) |
+
+SHA-256 for replay 1 is recorded in section 2. Replay 2:
+`a24125857c2a9a6e42f1d673de3ddaa288c298b3f47f12a024811352d511bf8d`.
+Replay 3: `14df1aad9d0b02e49e355968199d70b9beeb2d5d6f09f38f8c78d85658193ff2`.
+Replay 2's only changed pairing is the initial plan's replaced main context.
+Replay 3 changes that same pairing plus the API env conflict described above;
+all other patches pair equally, including both correction lanes.
