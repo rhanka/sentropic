@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { readFileSync } from 'node:fs';
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -153,6 +154,30 @@ test('should refuse a warm report whose finding inventory diverges from cold', (
     InstalledVersion: '1.0', Severity: 'LOW' }])), /incomplete/);
   assert.throws(() => validateReportAgreement(cold, { ...cold, Results: 'alpine' }), /incomplete/);
   assert.throws(() => validateReportAgreement(null, same), /incomplete/);
+  const duplicated = report([{ ...finding() }, { ...finding() }]);
+  assert.equal(validateReportAgreement(duplicated, report([{ ...finding() }, { ...finding() }])), true);
+  assert.throws(() => validateReportAgreement(duplicated, report([finding()])), /diverged/);
+  const firstResult = { Target: 'alpine', Class: 'os-pkgs', Type: 'alpine', Vulnerabilities: [finding()] };
+  const secondResult = { Target: 'debian', Class: 'os-pkgs', Type: 'debian', Vulnerabilities: [] };
+  const settled = { SchemaVersion: 2, ArtifactName: '/target/image.tar',
+    Results: [firstResult, secondResult] };
+  const relocated = { SchemaVersion: 2, ArtifactName: '/target/image.tar',
+    Results: [{ ...firstResult, Vulnerabilities: [] }, { ...secondResult, Vulnerabilities: [finding()] }] };
+  assert.throws(() => validateReportAgreement(settled, relocated), /diverged/);
+  assert.throws(() => validateReportAgreement(cold, report([finding({ Severity: 'SUPERCRITICAL' })])), /incomplete/);
+  assert.throws(() => validateReportAgreement(cold, { ...cold,
+    Results: [{ Target: 42, Class: 'os-pkgs', Type: 'alpine', Vulnerabilities: [finding()] }] }), /incomplete/);
+  assert.throws(() => validateReportAgreement(cold, { ...cold,
+    Results: [{ Class: 'os-pkgs', Type: 'alpine', Vulnerabilities: [finding()] }] }), /incomplete/);
+});
+
+test('should wire cold/warm agreement into qualify-current before comparison', () => {
+  const source = readFileSync(new URL('./qualify-current.mjs', import.meta.url), 'utf8');
+  assert.match(source, /import\s*\{[^}]*validateReportAgreement[^}]*\}\s*from\s*['"]\.\/trivy\.mjs['"]/);
+  const agreementCall = 'validateReportAgreement(scans.cold.report, scans.warm.report)';
+  assert.ok(source.includes(agreementCall), 'qualify-current must call validateReportAgreement on both reports');
+  assert.ok(source.indexOf(agreementCall) < source.indexOf('validateComparison(before'),
+    'agreement must precede comparison');
 });
 
 test('should retain bounded raw diagnostics when process or report validation fails', () => {
