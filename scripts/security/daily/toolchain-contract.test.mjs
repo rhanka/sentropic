@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { assertQualified, digest, policy, validateFreshness, validateScanner } from './toolchain-contract.mjs';
+import { validateTufMetadata } from './qualify-trust-receipt.mjs';
 import { createOciClient } from './toolchain-oci.mjs';
 import { campaignAcquirer, restoreSnapshot } from './toolchain-cache.mjs';
 
@@ -315,6 +316,34 @@ test('should bound Java independently without increasing vulnerability layer lim
   await assert.rejects(resolveSize('vulnerability', measured), /layer descriptor/);
   assert.equal(policy.data.java.maxExpandedBytes, 2 * 1024 ** 3);
   assert.equal(policy.data.vulnerability.maxExpandedBytes, 4 * 1024 ** 3);
+});
+
+test('should refuse expired TUF roots and version or digest rollbacks', () => {
+  const verifiedAt = Date.parse('2026-10-30T00:00:00Z');
+  const documents = {
+    root: { signed: { _type: 'root', version: 1, expires: '2027-01-01T00:00:00Z' } },
+    timestamp: { signed: { _type: 'timestamp', version: 3, expires: '2026-11-06T00:00:00Z',
+      meta: { 'snapshot.json': { version: 5, hashes: { sha256: 'aaa' } } } } },
+    snapshot: { signed: { _type: 'snapshot', version: 5, expires: '2026-11-06T00:00:00Z',
+      meta: { 'targets.json': { version: 7 } } } },
+    targets: { signed: { _type: 'targets', version: 7, expires: '2026-11-06T00:00:00Z' } },
+  };
+  const digests = { root: 'sha256:r', timestamp: 'sha256:t', snapshot: 'sha256:aaa', targets: 'sha256:g' };
+  assert.equal(validateTufMetadata(documents, digests, verifiedAt), true);
+  const expired = { ...documents, root: { signed: { ...documents.root.signed, expires: '2026-10-29T23:59:59Z' } } };
+  assert.throws(() => validateTufMetadata(expired, digests, verifiedAt), /root expired at verification/);
+  const mistyped = { ...documents, snapshot: { signed: { ...documents.snapshot.signed, _type: 'timestamp' } } };
+  assert.throws(() => validateTufMetadata(mistyped, digests, verifiedAt), /snapshot metadata is incomplete/);
+  const rolledVersion = { ...documents,
+    snapshot: { signed: { ...documents.snapshot.signed, version: 4 } } };
+  assert.throws(() => validateTufMetadata(rolledVersion, digests, verifiedAt), /no longer pins current snapshot/);
+  const rolledDigest = { ...digests, snapshot: 'sha256:bbb' };
+  assert.throws(() => validateTufMetadata(documents, rolledDigest, verifiedAt), /superseded snapshot digest/);
+  const unpinned = { ...documents,
+    timestamp: { signed: { _type: 'timestamp', version: 3, expires: '2026-11-06T00:00:00Z', meta: {} } } };
+  assert.throws(() => validateTufMetadata(unpinned, digests, verifiedAt), /no longer pins current snapshot/);
+  assert.throws(() => validateTufMetadata(documents, digests, NaN), /coverage-blocked/);
+  assert.throws(() => validateTufMetadata({ ...documents, targets: null }, digests, verifiedAt), /coverage-blocked/);
 });
 
 test('should give each data kind its own bounded transfer clock', async () => {
