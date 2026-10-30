@@ -36,20 +36,33 @@ const needsOf = (job) => [jobs[job].needs ?? []].flat();
 
 test('MCP broker publishes only validated main releases after the exact P3 bootstrap', () => {
   const publisher = jobs['publish-mcp-broker'];
-  assert.deepEqual(needsOf('publish-mcp-broker'), ['changes', 'validate-mcp-broker', 'memory-l5-qualification']);
+  assert.deepEqual(needsOf('publish-mcp-broker'), ['changes', 'validate-mcp-broker', 'memory-l5-qualification', 'publish-mcp-platform']);
   assert.deepEqual(publisher.permissions, { contents: 'read', 'id-token': 'write' });
   assert.equal(publisher.environment, undefined, 'npm environment field must stay empty');
   assert.ok(!JSON.stringify(publisher).includes('secrets.'), 'OIDC only');
   for (const ref of ['refs/heads/main', 'refs/heads/feat/mcp-broker-publish', 'refs/pull/1/merge']) {
     for (const selected of ['true', 'false']) {
-      for (const qualified of ['success', 'failure', 'skipped']) {
-        const lookup = (key) => key === 'github.ref' ? ref
-          : key === 'needs.changes.outputs.mcp_broker_publish' ? selected
-          : key === 'needs.memory-l5-qualification.result' ? qualified
-          : key.endsWith('.result') ? 'success' : '';
-        assert.equal(evaluateSelection(publisher.if, lookup),
-          ref === 'refs/heads/main' && selected === 'true' && qualified === 'success');
+      for (const gate of ['changes', 'validate-mcp-broker', 'memory-l5-qualification']) {
+        for (const result of ['success', 'failure', 'skipped']) {
+          const lookup = (key) => key === 'github.ref' ? ref
+            : key === 'needs.changes.outputs.mcp_broker_publish' ? selected
+            : key === `needs.${gate}.result` ? result
+            : key.endsWith('.result') ? 'success' : '';
+          assert.equal(evaluateSelection(publisher.if, lookup),
+            ref === 'refs/heads/main' && selected === 'true' && result === 'success');
+        }
       }
+    }
+  }
+  for (const selected of ['true', 'false']) {
+    for (const result of ['success', 'failure', 'skipped']) {
+      const lookup = (key) => key === 'github.ref' ? 'refs/heads/main'
+        : key === 'needs.changes.outputs.mcp_broker_publish' ? 'true'
+        : key === 'needs.changes.outputs.mcp_platform_publish' ? selected
+        : key === 'needs.publish-mcp-platform.result' ? result
+        : key.endsWith('.result') ? 'success' : '';
+      assert.equal(evaluateSelection(publisher.if, lookup),
+        result === 'success' || (result === 'skipped' && selected !== 'true'));
     }
   }
   const publish = recipe('publish-mcp-broker');
