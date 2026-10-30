@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
 import { spawnSync } from 'node:child_process';
@@ -8,8 +8,135 @@ import { createRequire } from 'node:module';
 import { npmRunner, planScan, scanRepository } from './scan.mjs';
 import { loadContract } from './schema.mjs';
 import { normalizeRegister } from './inventory.mjs';
+import { bindRecordedSnapshot, summarizeControlReport, validateControlIsolation } from './qualify-config-contract.mjs';
+import { policy } from './toolchain-contract.mjs';
+
+test('should reject forged isolation evidence before constructing the hostile-config receipt', () => {
+  const snapshots = Object.fromEntries(['vulnerability', 'java'].map(kind => [kind,
+    { path: `/evidence/cache/${kind}-1-${'a'.repeat(64)}-0.76.1` }]));
+  const observed = {
+    Config: { Image: `${policy.repository}@${policy.manifestDigest}`, User: '65532:65532', environmentNames: ['PATH', 'HOME'] },
+    Image: policy.manifestDigest, Args: ['rootfs', '--config', '/dev/null', '--ignorefile', '/dev/null'],
+    HostConfig: { NetworkMode: 'none', ReadonlyRootfs: true, Memory: 4 * 1024 ** 3,
+      NanoCpus: 1000000000, PidsLimit: 128, CapDrop: ['ALL'], CapAdd: null, Privileged: false,
+      SecurityOpt: ['no-new-privileges'] },
+    Mounts: [{ Type: 'bind', RW: false, Destination: '/payload', Source: '/runner/tmp/security-qualify/hostile-config' },
+      ...['vulnerability', 'java'].flatMap(kind => [kind === 'java' ? 'trivy-java.db' : 'trivy.db', 'metadata.json']
+        .map(name => ({ Type: 'bind', RW: false, Destination: `/cache/${kind === 'java' ? 'java-db' : 'db'}/${name}`,
+          Source: `/runner/tmp/security-qualify${snapshots[kind].path.slice('/evidence'.length)}/${name}` })))],
+  };
+  const validate = value => validateControlIsolation(value, 'hardened', snapshots);
+  assert.deepEqual(validate(observed).CapAdd, null);
+  assert.equal(validate(observed).Privileged, false);
+  const forgeries = [
+    value => { value.Config.Image = `${policy.repository}:latest`; },
+    value => { value.Image = `sha256:${'f'.repeat(64)}`; },
+    value => { value.Config.User = '0:0'; },
+    value => { value.Config.environmentNames.push('DOCKER_PASSWORD'); },
+    value => { value.HostConfig.NetworkMode = 'host'; },
+    value => { value.HostConfig.ReadonlyRootfs = false; },
+    value => { value.HostConfig.Memory = 0; },
+    value => { value.HostConfig.NanoCpus = 0; },
+    value => { value.HostConfig.PidsLimit = 0; },
+    value => { value.HostConfig.CapDrop = []; },
+    value => { value.HostConfig.SecurityOpt = []; },
+    value => { value.HostConfig.Privileged = true; },
+    value => { delete value.HostConfig.Privileged; },
+    value => { value.HostConfig.CapAdd = ['SYS_ADMIN']; },
+    value => { delete value.HostConfig.CapAdd; },
+    value => { value.Mounts[0].RW = true; },
+    value => { value.Mounts[0].Type = 'volume'; },
+    value => { value.Mounts[0].Source = '/unrelated'; },
+    value => { value.Mounts[1].Source = '/forged/trivy.db'; },
+    value => { value.Mounts[2].Destination = '/wrong/metadata.json'; },
+    value => { value.Mounts[3].Source = '/forged/trivy-java.db'; },
+    value => { value.Mounts[4].Source = '/forged/metadata.json'; },
+    value => { value.Mounts.push({ Type: 'bind', RW: false, Destination: '/extra' }); },
+    value => { value.Args[2] = '/payload/trivy.yaml'; },
+    value => { value.Args[4] = '/payload/.trivyignore'; },
+  ];
+  for (const forge of forgeries) {
+    const forged = structuredClone(observed);
+    forge(forged);
+    assert.throws(() => validate(forged), forge.toString());
+  }
+  const entrypoint = readFileSync('scripts/security/daily/qualify-config-receipt.mjs', 'utf8');
+  assert.match(entrypoint, /execution\[control\] = validateControlIsolation\(observed, control, ingestion\.snapshots\)/);
+});
+
+test('should refuse a verified snapshot of the wrong kind for the selected control mount', () => {
+  const restored = { kind: 'java', files: { 'trivy-java.db': 'verified' } };
+  const snapshot = { receiptHash: 'trusted', receipt: structuredClone(restored) };
+  assert.throws(() => bindRecordedSnapshot(snapshot, restored, 'vulnerability'), /snapshot kind/);
+  assert.deepEqual(bindRecordedSnapshot(snapshot, restored, 'java').receipt, restored);
+  assert.match(readFileSync('scripts/security/daily/qualify-config-receipt.mjs', 'utf8'),
+    /bindRecordedSnapshot\(snapshot, await restoreSnapshot\(snapshot\), kind\)/);
+});
+
+test('should execute the shell controls with policy-pinned scanner flags and retained privilege evidence', (t) => {
+  const root = fixture(t);
+  const bin = join(root, 'bin');
+  mkdirSync(bin);
+  for (const binary of ['curl', 'sha256sum', 'jq', 'docker']) {
+    writeFileSync(join(bin, binary), `#!${process.execPath}
+const fs = require('node:fs');
+const name = require('node:path').basename(process.argv[1]);
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.FIXTURE_ROOT + '/calls', JSON.stringify({ name, args }) + '\\n');
+if (name === 'jq') {
+  if (args[0] === '-er') process.stdout.write('/evidence/cache/' + (args[1].includes('java') ? 'java' : 'vulnerability'));
+  else { fs.readFileSync(0); process.stdout.write('{}'); }
+}
+if (name === 'sha256sum' && args[0] === '--check') fs.readFileSync(0);
+if (name === 'docker' && args[0] === 'create') process.stdout.write('fixture-container');
+if (name === 'docker' && ['inspect', 'start'].includes(args[0])) process.stdout.write('{}');
+`, { mode: 0o755 });
+  }
+  const result = spawnSync('bash', [resolve('scripts/security/daily/qualify-config.sh')], {
+    cwd: root, encoding: 'utf8', env: { PATH: `${bin}:/usr/bin:/bin`, FIXTURE_ROOT: root },
+  });
+  assert.equal(result.status, 0, result.stderr);
+  const calls = readFileSync(join(root, 'calls'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
+  const creates = calls.filter(call => call.name === 'docker' && call.args[0] === 'create');
+  assert.equal(creates.length, 2);
+  const scanner = `${policy.repository}@${policy.manifestDigest}`;
+  for (const [index, { args }] of creates.entries()) {
+    assert.ok(args.includes(scanner), 'shell scanner digest must equal trusted policy');
+    assert.deepEqual(args.slice(args.indexOf(scanner) + 1), ['rootfs',
+      ...(index === 1 ? ['--config', '/dev/null', '--ignorefile', '/dev/null'] : []),
+      '--cache-dir', '/cache', '--cache-backend', 'memory', '--scanners', 'vuln', '--format', 'json',
+      '--severity', 'UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL', '--exit-code', '0', '--parallel', '1',
+      '--skip-db-update', '--skip-java-db-update', '--offline-scan', '--skip-version-check', '--disable-telemetry', '/payload']);
+  }
+  const projections = calls.filter(call => call.name === 'jq' && call.args[0].startsWith('.[0]'));
+  assert.equal(projections.length, 2);
+  for (const { args } of projections) {
+    for (const field of ['Privileged', 'CapAdd']) assert.match(args[0], new RegExp(`${field}:\\s*\\.HostConfig\\.${field}\\b`));
+  }
+});
 
 const sourceSha = 'a'.repeat(40);
+test('should refuse mismatched embedded DB provenance before publishing a control receipt', () => {
+  const restored = { kind: 'java', files: { 'trivy-java.db': 'verified-by-restore' } };
+  const snapshot = { receiptHash: 'trusted-hash', receipt: structuredClone(restored) };
+  assert.deepEqual(bindRecordedSnapshot(snapshot, restored, 'java').receipt, restored);
+  snapshot.receipt.files['trivy-java.db'] = 'forged';
+  assert.throws(() => bindRecordedSnapshot(snapshot, restored, 'java'), /embedded snapshot/);
+});
+
+test('should bind hostile-config controls to scanner version, exact package and zero default findings', () => {
+  const report = { SchemaVersion: 2, ArtifactName: '/payload', ArtifactType: 'filesystem',
+    Trivy: { Version: '0.76.1' }, Results: [] };
+  assert.deepEqual(summarizeControlReport(report, 'repository-default', '0.76.1'), []);
+  const finding = { VulnerabilityID: 'CVE-2021-44228', PkgName: 'org.apache.logging.log4j:log4j-core',
+    InstalledVersion: '2.14.1', Severity: 'CRITICAL' };
+  report.Results = [{ Vulnerabilities: [finding] }];
+  assert.equal(summarizeControlReport(report, 'hardened', '0.76.1').length, 1);
+  assert.throws(() => summarizeControlReport(report, 'repository-default', '0.76.1'));
+  assert.throws(() => summarizeControlReport(report, 'hardened', '0.76.2'));
+  finding.PkgName = 'unrelated-package';
+  assert.throws(() => summarizeControlReport(report, 'hardened', '0.76.1'));
+});
 const clean = () => ({ auditReportVersion: 2, vulnerabilities: {}, metadata: {
   vulnerabilities: { info: 0, low: 0, moderate: 0, high: 0, critical: 0, total: 0 },
 } });
@@ -230,6 +357,147 @@ test('should wire removable pinned Make targets without existing gate, socket or
   assert.match(tests, /test-publishable-manifests/);
   assert.match(tests, /scan.test.mjs/);
   assert.match(tests, /ENV=\$\(ENV\)\s*$/);
+});
+
+test('should read only named operator fields as data without evaluating hostile dotenv', (t) => {
+  const root = fixture(t);
+  const marker = join(root, 'executed');
+  const file = join(root, '.env');
+  const helper = resolve('scripts/security/daily/operator-env.sh');
+  const script = 'source "$1"; read_operator_env "$2" || exit; printf "%s\\n" "$REGISTRY" "$DOCKER_USERNAME" "$DOCKER_PASSWORD"';
+  const run = (bytes) => {
+    writeFileSync(file, bytes);
+    return spawnSync('bash', ['-eu', '-c', script, '--', helper, file], { encoding: 'utf8' });
+  };
+  const hostile = `$(touch ${marker})`;
+  const bytes = `export REGISTRY='registry.invalid'\nDOCKER_USERNAME="fixture-user"\nexport DOCKER_PASSWORD="${hostile}"\nIGNORED=$(touch ${marker})\n`;
+  const result = run(bytes);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(result.stdout, `registry.invalid\nfixture-user\n${hostile}\n`);
+  assert.throws(() => readFileSync(marker), /ENOENT/);
+  for (const bad of [bytes + 'REGISTRY=duplicate\n', 'REGISTRY=x\nDOCKER_USERNAME=y\n',
+    'REGISTRY=--password-stdin\nDOCKER_USERNAME=y\nDOCKER_PASSWORD=z\n',
+    'REGISTRY=x\nDOCKER_USERNAME=y\nDOCKER_PASSWORD="unterminated\n']) {
+    const rejected = run(bad);
+    assert.notEqual(rejected.status, 0);
+    assert.match(rejected.stderr, /coverage-blocked/);
+    assert.equal(rejected.stdout, '');
+  }
+});
+
+test('should stop qualification trials after the scope exception expires in UTC', (t) => {
+  const root = fixture(t);
+  writeFileSync(join(root, 'date'), '#!/bin/sh\n[ "$*" = "-u +%F" ] || exit 9\nprintf "%s" "$FIXTURE_TODAY"\n', { mode: 0o755 });
+  const recipe = readFileSync('scripts/security/daily/qualify.mk', 'utf8')
+    .match(/^security-qualify-window:[^\n]*\n((?:\t[^\n]*\n?)+)/m)[1]
+    .replace(/^\t@/, '').replaceAll('$$', '$');
+  for (const [today, expected] of [['2026-11-11', 0], ['2026-11-12', 0], ['2026-11-13', 1]]) {
+    const result = spawnSync('/bin/sh', ['-ec', recipe], { encoding: 'utf8',
+      env: { PATH: root, FIXTURE_TODAY: today } });
+    assert.equal(result.status, expected, result.stderr);
+  }
+});
+
+test('should gate every qualification trial through the expiry window in the Make graph', () => {
+  const source = readFileSync('scripts/security/daily/qualify.mk', 'utf8');
+  const verify = (bytes) => {
+    const graph = new Map();
+    for (const line of bytes.split('\n')) {
+      const rule = /^([^\s#][^:=]*):([^=].*)?$/.exec(line);
+      if (!rule || rule[1].startsWith('.')) continue;
+      const dependencies = (rule[2] ?? '').split('#')[0].trim().split(/\s+/).filter(Boolean);
+      for (const name of rule[1].trim().split(/\s+/)) {
+        graph.set(name, [...(graph.get(name) ?? []), ...dependencies]);
+      }
+    }
+    const reachesWindow = (name, visited = new Set()) => {
+      if (name === 'security-qualify-window') return true;
+      if (visited.has(name)) return false;
+      visited.add(name);
+      return (graph.get(name) ?? []).some(next => reachesWindow(next, visited));
+    };
+    const trials = [...graph.keys()].filter(name => name.startsWith('security-qualify-') && name !== 'security-qualify-window');
+    assert.ok(trials.length >= 17);
+    for (const name of trials) assert.ok(reachesWindow(name), `${name} must reach security-qualify-window`);
+  };
+  verify(source);
+  assert.throws(() => verify(source.replaceAll(': security-qualify-window', ':')), /must reach/);
+  assert.throws(() => verify(`${source}\nsecurity-qualify-ungated:\n`), /ungated must reach/);
+});
+
+test('should parse hostile operator dotenv before authentication in the actual target trial', (t) => {
+  const root = fixture(t);
+  const bin = join(root, 'bin');
+  mkdirSync(bin);
+  mkdirSync(join(root, 'tmp/security-qualify'), { recursive: true });
+  mkdirSync(join(root, 'scripts/security/daily'), { recursive: true });
+  writeFileSync(join(root, 'scripts/security/daily/operator-env.sh'), readFileSync('scripts/security/daily/operator-env.sh'));
+  writeFileSync(join(bin, 'git'), '#!/bin/sh\nprintf "%s/.git\\n" "$FIXTURE_ROOT"\n', { mode: 0o755 });
+  writeFileSync(join(bin, 'docker'), `#!/bin/sh
+printf '%s\\n' "$*" > "$FIXTURE_ROOT/auth"
+cat >> "$FIXTURE_ROOT/auth"
+exit 79
+`, { mode: 0o755 });
+  const original = readFileSync('scripts/security/daily/qualify-targets.sh', 'utf8');
+  const marker = join(root, 'executed');
+  const hostile = `$(touch ${marker})`;
+  const bytes = `REGISTRY=registry.invalid\nDOCKER_USERNAME=fixture-user\nDOCKER_PASSWORD='${hostile}'\nIGNORED=$(touch ${marker})\n`;
+  const verify = (source) => {
+    const script = join(root, 'targets.sh');
+    writeFileSync(script, source);
+    for (const valid of [true, false]) {
+      rmSync(marker, { force: true });
+      rmSync(join(root, 'auth'), { force: true });
+      writeFileSync(join(root, '.env'), valid ? bytes : bytes + 'REGISTRY=duplicate\n');
+      const result = spawnSync('bash', [script], { cwd: root, encoding: 'utf8', env: {
+        PATH: `${bin}:/usr/bin:/bin`, FIXTURE_ROOT: root,
+        REGISTRY: 'inherited.invalid', DOCKER_USERNAME: 'inherited-user', DOCKER_PASSWORD: 'inherited-password',
+      } });
+      assert.throws(() => readFileSync(marker), /ENOENT/, 'dotenv must remain inert data');
+      if (valid) {
+        assert.equal(result.status, 79, result.stderr);
+        assert.equal(readFileSync(join(root, 'auth'), 'utf8'),
+          `login registry.invalid --username fixture-user --password-stdin\n${hostile}`);
+      } else {
+        assert.notEqual(result.status, 0);
+        assert.match(result.stderr, /duplicate operator field/);
+        assert.throws(() => readFileSync(join(root, 'auth')), /ENOENT/, 'invalid dotenv must fail before authentication');
+      }
+    }
+  };
+  verify(original);
+  const call = 'read_operator_env "$operator_root/.env"';
+  assert.throws(() => verify(original.replace(call, ':')), /inherited/);
+  assert.throws(() => verify(original.replace(call, 'source "$operator_root/.env"')), /inert data/);
+  const late = original.replace(call, ':').replace('unset DOCKER_PASSWORD', `${call}\nunset DOCKER_PASSWORD`);
+  assert.throws(() => verify(late), /inherited/);
+});
+
+test('should remove only its own detached scanner when a qualification trial fails', (t) => {
+  const root = fixture(t);
+  for (const kind of ['vulnerability', 'java']) {
+    mkdirSync(join(root, 'tmp/security-qualify/cache', `${kind}-fixture`), { recursive: true });
+  }
+  mkdirSync(join(root, 'tmp/security-qualify/main-40832206894/api-image'), { recursive: true });
+  const bin = join(root, 'bin');
+  mkdirSync(bin);
+  writeFileSync(join(bin, 'jq'), '#!/bin/sh\ncat\n', { mode: 0o755 });
+  const cleanup = join(root, 'cleanup');
+  writeFileSync(join(bin, 'docker'), `#!/bin/sh
+case "$1" in
+  run) if [ "$FIXTURE_RUN_EXIT" = 0 ]; then printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'; fi; exit "$FIXTURE_RUN_EXIT" ;;
+  inspect) exit 17 ;;
+  rm) printf '%s\\n' "$*" >> "$FIXTURE_CLEANUP" ;;
+  *) exit 91 ;;
+esac
+`, { mode: 0o755 });
+  const run = (exit) => spawnSync('bash', [resolve('scripts/security/daily/qualify-scans.sh')],
+    { cwd: root, env: { PATH: `${bin}:/usr/bin:/bin`, FIXTURE_RUN_EXIT: String(exit), FIXTURE_CLEANUP: cleanup }, encoding: 'utf8' });
+  assert.equal(run(23).status, 23);
+  assert.throws(() => readFileSync(cleanup), /ENOENT/, 'failed creation cannot delete another container');
+  const failed = run(0);
+  assert.equal(failed.status, 17, failed.stderr);
+  assert.equal(readFileSync(cleanup, 'utf8'), `rm -f ${'a'.repeat(64)}\n`);
 });
 
 test('should refuse tracked or untracked changes and Git errors before starting the scan', (t) => {

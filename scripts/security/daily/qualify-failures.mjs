@@ -34,7 +34,7 @@ try {
 } finally { await new Promise(resolve => server.close(resolve)); }
 await rejects('untrusted source before any request', () => createOciClient({ fetcher: () => assert.fail('network forbidden') })
   .resolve('evil'), /untrusted OCI repository/);
-await rejects('absent cache', () => restoreSnapshot({ ...snapshots.java, path: '/evidence/absent-cache' }), /ENOENT/);
+await rejects('absent cache', () => restoreSnapshot({ ...snapshots.java, path: '/evidence/absent-cache' }), /coverage-blocked: required cache files unavailable/);
 await rejects('wrong trusted receipt hash', () => restoreSnapshot({ ...snapshots.java, receiptHash: digest('changed') }), /receipt integrity/);
 const expiredBytes = await readFile('/expired-metadata.json');
 const expiredMetadata = JSON.parse(expiredBytes);
