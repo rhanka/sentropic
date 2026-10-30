@@ -300,6 +300,8 @@ export async function dispatchWorkflowTransitions<TJobType = string>(
       if (!isReady) {
         continue;
       }
+      const runtimeState = await deps.getRunStateSnapshot(params.workflowRunId);
+      if (!runtimeState) continue;
       dispatched.push(
         ...(await deps.dispatchTask({
           workspaceId: params.workspaceId,
@@ -307,7 +309,7 @@ export async function dispatchWorkflowTransitions<TJobType = string>(
           workflowDefinitionId: params.workflowDefinitionId,
           runtimeDefinition: params.runtimeDefinition,
           runContext: params.runContext,
-          state: params.state,
+          state: runtimeState.state,
           taskKey: transition.toTaskKey,
           taskInstanceKey: 'main',
         })),
@@ -369,6 +371,8 @@ export async function dispatchReadyWorkflowJoins<TJobType = string>(
     if (!isReady) {
       continue;
     }
+    const runtimeState = await deps.getRunStateSnapshot(params.workflowRunId);
+    if (!runtimeState) continue;
     dispatched.push(
       ...(await deps.dispatchTask({
         workspaceId: params.workspaceId,
@@ -376,7 +380,7 @@ export async function dispatchReadyWorkflowJoins<TJobType = string>(
         workflowDefinitionId: params.workflowDefinitionId,
         runtimeDefinition: params.runtimeDefinition,
         runContext: params.runContext,
-        state: params.state,
+        state: runtimeState.state,
         taskKey: transition.toTaskKey,
         taskInstanceKey: 'main',
       })),
@@ -591,8 +595,8 @@ export async function markWorkflowTaskStarted<TJobType extends string = string>(
 }
 
 /**
- * Complete a workflow task: upsert result with the output + state
- * patch, merge into run state, then either finalize the run (when
+ * Complete a workflow task: merge its state patch before publishing
+ * the completed result, then either finalize the run (when
  * `completion.runStatus === 'completed'`) or fan out to downstream
  * transitions + ready joins.
  *
@@ -606,6 +610,14 @@ export async function completeWorkflowTask<TJobType extends string = string>(
   const completedAt = new Date();
   const output = params.completion?.output ?? {};
   const statePatch = params.completion?.statePatch ?? {};
+  // Join readers must never observe completion before its state is committed.
+  await deps.mergeRunState({
+    runId: params.workflow.workflowRunId,
+    status: params.completion?.runStatus ?? 'in_progress',
+    statePatch,
+    currentTaskKey: params.completion?.currentTaskKey,
+    currentTaskInstanceKey: params.completion?.currentTaskInstanceKey,
+  });
   await deps.upsertTaskResult({
     workflow: params.workflow,
     workspaceId: params.workspaceId,
@@ -618,13 +630,6 @@ export async function completeWorkflowTask<TJobType extends string = string>(
     lastError: null,
     startedAt: undefined,
     completedAt,
-  });
-  await deps.mergeRunState({
-    runId: params.workflow.workflowRunId,
-    status: params.completion?.runStatus ?? 'in_progress',
-    statePatch,
-    currentTaskKey: params.completion?.currentTaskKey,
-    currentTaskInstanceKey: params.completion?.currentTaskInstanceKey,
   });
   const nextRunStatus = params.completion?.runStatus ?? 'in_progress';
   if (nextRunStatus === 'completed') {

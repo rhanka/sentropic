@@ -683,3 +683,137 @@ or scheduling ceilings. Measure admission after that split and resolve capacity
 with the owner if waits persist. BR-81 supplies deterministic runtime journeys;
 BR-84 owns repeated warm/cold whole-train proof and every breach. Exact-head
 green CI is still required after review fixes; these carried budgets stay open.
+
+## 13. BR-80 package candidates — implementation and baseline
+
+BR-80 starts at merge `ecca3a0d50526a25e0b76e5955f26f2557c8e0b0` in
+`tmp/worktrees/ci-package-candidates`, branch `perf/ci-package-candidates`.
+Local qualification uses `ENV=test-ci-br80`, slot 0 ports 9400/5600/1500,
+and the machine-wide Docker flock. Main push run `40790421598` remains queued
+at the initial capture; an unstarted run supplies no execution measurement.
+
+The completed predecessor receipt is PR run
+[40748328717](https://github.com/rhanka/sentropic/actions/runs/40748328717),
+attempt 1, head `949d47c8ced0426a010da639ac910229d5699874`, success.
+Its workflow SHA-256 is
+`f268d4ea1b4d64137ab93741a26ee78063c5d385b471bb9e88e0807d6e9e8b0a`.
+Raw attempt/job/step JSON and per-job TSV are retained under
+`.tmp/ci-br80/receipts/40748328717/`. Runner class is `ubuntu-latest`;
+package-tool cache warmth is unidentified. These are complete job spans,
+excluding admission, and are distinct from the older 664/125s study anchors.
+
+| Baseline job | Job ID | Seconds |
+| --- | --- | --- |
+| Cluster qualification | 123051431364 | 991 |
+| Common manifest guard | 123051430739 | 65 |
+| LLM mesh | 123051431590 | 71 |
+| LLM gateway | 123051431190 | 199 |
+
+Cluster steps include storage/recovery 262s, typecheck 51s, source tests 104s,
+stateful installed contracts 89s, build 49s, guarded pack 53s, installed
+comments 28s, major upgrade 25s, and lazy qualification 294s. Candidate install
+was legitimately skipped in that predecessor's WARN classification; BR-80
+requires its selected candidate lane. No skipped duration counts as a pass.
+
+The inherited IdP 233s receipt has checkout/setup 31/11s; API download/load
+3/22s, toolbox 16/34s, browser 14/16s; startup 45s, actual screen smoke 5s,
+teardown 31s. These identified spans guide a future bounded optimization;
+BR-80 does not change IdP code, image profiles, extensions or security policy.
+UI 255s/180s, IdP 233s/150s and runner-admission breaches remain open.
+
+The package design builds the topological closure into immutable archives and
+an independently hashed preparation archive. Every source lane extracts into
+fresh container storage; installed consumers receive only archives. Nine
+qualifiers in three bounded jobs preserve source/audits, PostgreSQL, comments, crash ordering,
+installed comments, major upgrade, stateful contracts, lazy tuples and clean
+entry-point qualification. Actual matrix members and the producer join the
+existing fail-closed final verdict. Stateful and gateway auth-subpaths now copy
+verified receipt bytes when a bundle is selected; their assertions are unchanged.
+Prepared source integrity trusts same-run immutable artifact transport plus tuple
+lock/workflow hashes; the preparation has no independent source-tree digest.
+
+### 13.1 First measured result and failed budgets
+
+[Run 40928684313](https://github.com/rhanka/sentropic/actions/runs/40928684313),
+attempt 1, `pull_request`, head `0d4bf1ca42d9e7e3fbd5b0492829efc70d2ee8b9`,
+workflow SHA-256 `f7ee1d0340f78757039636d8319d1aea1943812c87687bee885a412e28d665ef`,
+runner `ubuntu-latest`, package-tool warmth unidentified. Paginated raw jobs/run
+are retained in `.tmp/ci-br80/review-r1-jobs.json` and `review-r1-run.json`.
+These completed job spans are valid measurements; the run is terminal
+`cancelled`, so no whole-run success is claimed.
+
+| Completed job | Job ID | Seconds |
+| --- | --- | --- |
+| Changes | 123640990850 | 19 |
+| Candidate producer | 123651400522 | 97 |
+| Source | 123663293264 | 149 |
+| PostgreSQL / comments / crash | 123663293179 / 123663293239 / 123663293163 | 91 / 81 / 65 |
+| Installed / major | 123663293052 / 123663293223 | 59 / 51 |
+| Stateful / lazy / clean install | 123663293192 / 123663293268 / 123663293148 | 59 / 121 / 53 |
+| Mesh / gateway | 123663292634 / 123663292644 | 71 / 107 |
+| Common manifest guard | 123663292699 | 82 |
+
+Execution path: producer 97 + longest qualifier 149 = **246s**, or **265s**
+including classification, exceeding **<=210s** by 36–55s. Common guard **82s**
+exceeds **<=75s** by 7s and the measured 65s predecessor by 17s. Package-family
+runner execution totals 1,186s versus predecessor 1,326s; this is not wall time.
+Producer admission is 1,216s; source consumer admission is 1,342s. Changes-end
+18:31:48Z to last cluster completion 19:18:32Z is 2,804s including admission.
+No queue span, skipped result or partial run is credited toward acceptance.
+
+Disposition: **defer by name to BR-84**, without raising either threshold.
+`BR84-BR80-CLUSTER` (owner: CI-train author on BR-84) must optimize and measure
+the complete producer/transfer/grouped-qualification path at <=210s, including
+the admission breakdown. `BR84-BR80-MANIFEST` (same owner) must investigate the
+guard and qualify <=75s. Both require identified repeated warm/cold runs,
+job/attempt/head/workflow receipts and preserved complete-result assertions.
+The grouped design is measured by
+[run 40950429629](https://github.com/rhanka/sentropic/actions/runs/40950429629),
+attempt 1, head `afdf3a3189839ec55d7a590e5b6c270a2a756249`, terminal
+`completed/success`. Runner class is `ubuntu-latest`; package-tool warmth remains
+unidentified. All nine qualifiers passed in the three groups below.
+
+| Grouped-design job | Job ID | Seconds |
+| --- | --- | --- |
+| Changes | 123735120319 | 21 |
+| Candidate producer | 123738780279 | 77 |
+| Source / installed / major | 123742007855 | 199 |
+| PostgreSQL / comments / crash | 123742007765 | 179 |
+| Lazy / stateful / clean install | 123742007773 | 172 |
+| Mesh / gateway | 123742007827 / 123742007745 | 63 / 102 |
+| Common manifest guard | 123742007602 | 101 |
+
+Grouped cluster path: **77 + 199 = 276s**, or **297s with changes**, against
+**<=210s**; manifest guard **101s** against **<=75s**. Both budgets still breach:
+`BR84-BR80-CLUSTER` and `BR84-BR80-MANIFEST` remain deferred to the CI-train
+author on BR-84 at unchanged thresholds, requiring repeated identified warm/cold
+receipts and complete assertions. Admission dominates wall time: `changes`
+started at 21:18:52Z, 43m07s after creation at 20:35:45Z. Successful execution
+does not establish budget or capacity acceptance. `ci-capacity-receipts`,
+`ci-gate` and downstream `delete-transport-artifacts` all passed; the run finished
+at 21:40:32Z and retained only evidence artifacts. Rollback and whole-train timing
+remain open; a rebased head must earn its own terminal CI success.
+
+### 13.2 Capacity and transport composition
+
+Against main `b7e86f5ea0`, reviewed head adds **+9 jobs / +8 concurrent slots**:
+PR jobs 73→82, push 98→107, PR/push demand 65/64→73/72; cluster-only PR 11→20,
+guard-scripts-only PR 10→22. The earlier “unchanged 73/72” compared only the
+policy repair, not main. Corrected CI groups all nine qualifiers into three
+jobs capped at three, removes six jobs/slots and preserves isolated namespaces,
+every assertion, per-qualifier cleanup and failure aggregation. The #841 cleanup
+adds one sequential job: net **+4 jobs / +2 concurrent slots** versus main,
+PR/push 77/102 selected jobs and 67/66 slot demand. Against the **40-slot account
+cap**, this bounds BR-80's added pressure but does not qualify account admission;
+BR-84 owns the remaining measured admission/whole-train budget disposition.
+
+Compose #841's cleanup with the union exemptions `ci-gate`, `ci-capacity-receipts`,
+`delete-transport-artifacts`; keep the producer in capacity needs. All six
+transport artifacts use one-day retention, including `package-candidates`
+(artifact 12923722892, 167,402,696 bytes measured). Delete current-run allowlisted
+transport only after successful completed consumers **and a successful final
+`ci-gate`**. Cleanup is downstream of the verdict, excluded only from that gate's
+required set to avoid a cycle, and still part of whole-run success. Retain unsuccessful or
+incomplete attempts and fork/cancellation/API-error fallback. Evidence reports
+are excluded. Wiring/expected-results/DAG contracts qualify this composed tree;
+the second PR to land must preserve these resolutions and repeat the suites.

@@ -682,7 +682,18 @@ export async function commandPack(opts, { env = process.env, cwd = process.cwd()
   const explicit = typeof opts.destination === 'string';
   const dest = explicit ? opts.destination : fs.mkdtempSync(path.join(os.tmpdir(), 'manifest-pack-'));
   try {
-    const { archive } = runNpmPack(cwd, dest);
+    let archive;
+    if (env.CI_PACKAGE_CANDIDATES) {
+      const { candidateTuple, verifyCandidates } = await import('./package-candidate.mjs');
+      const root = path.resolve(cwd, '../..');
+      const index = verifyCandidates(env.CI_PACKAGE_CANDIDATES, candidateTuple(root, env), ['cluster-mesh'], { root });
+      const receipt = index.receipts.find(row => row.slug === opts.slug);
+      if (receipt) {
+        fs.mkdirSync(dest, { recursive: true });
+        archive = path.join(dest, path.basename(receipt.file));
+        fs.copyFileSync(path.join(env.CI_PACKAGE_CANDIDATES, receipt.file), archive);
+      } else ({ archive } = runNpmPack(cwd, dest));
+    } else ({ archive } = runNpmPack(cwd, dest));
     const result = inspectArchive({ archive, sources, semver });
     for (const s of result.structural) reporter.error(opts.slug, s);
     if (snapshot && (snapshot.name !== result.name || snapshot.version !== result.version)) {
@@ -748,11 +759,19 @@ export async function commandInventory(opts, { env = process.env, root = process
   if (!context) throw new GuardError('inventory requires a validated CI context (MANIFEST_CONTEXT_FILE or CI_MANIFEST_CONTEXT); refusing to guess');
   const semver = loadSemver();
   const packages = enumeratePackages(root, reporter);
+  let candidates = null;
+  if (env.CI_PACKAGE_CANDIDATES) {
+    const { candidateTuple, verifyCandidates } = await import('./package-candidate.mjs');
+    candidates = verifyCandidates(env.CI_PACKAGE_CANDIDATES, candidateTuple(root, env), ['cluster-mesh'], { root });
+  }
   const snapshots = new Map();
   const takeSnapshot = (slug) => {
     if (!snapshots.has(slug)) {
       try {
-        snapshots.set(slug, { ok: true, ...withManifestTransform(packages.get(slug).dir, () => snapshot(packages.get(slug).dir)) });
+        const receipt = candidates?.receipts.find(row => row.slug === slug);
+        const shared = receipt && { name: receipt.name, version: receipt.version, sha256: receipt.sha256,
+          packed: readPackedManifest(fs.readFileSync(path.join(env.CI_PACKAGE_CANDIDATES, receipt.file))), evidence: 'release-candidate' };
+        snapshots.set(slug, { ok: true, ...(shared ?? withManifestTransform(packages.get(slug).dir, () => snapshot(packages.get(slug).dir))) });
       } catch (error) {
         snapshots.set(slug, { ok: false, error: error.message, transient: isTransientError(error) });
       }
@@ -788,7 +807,7 @@ export async function commandInventory(opts, { env = process.env, root = process
     if (severity === 'block') {
       blockList.push(slug);
       if (!PACK_TARGETS.includes(slug)) reporter.error(slug, `missing pack lane: ${slug} is selected (BLOCK) but has no make pack-${slug} target`);
-      entry.candidate = 'full pack via make pack-' + slug;
+      entry.candidate = candidates?.order.includes(slug) ? 'verified shared release-candidate' : 'full pack via make pack-' + slug;
     } else {
       const snap = takeSnapshot(slug);
       if (!snap.ok) {
@@ -796,17 +815,17 @@ export async function commandInventory(opts, { env = process.env, root = process
         entry.snapshot = { status: 'audit-incomplete', error: snap.error };
       } else {
         const packedCheck = checkManifest(snap.packed, semver);
-        const where = `inventory-snapshot package/package.json (sha256 ${snap.sha256})`;
+        const where = `${snap.evidence ?? 'inventory-snapshot'} package/package.json (sha256 ${snap.sha256})`;
         for (const s of packedCheck.structural) reporter.warn(slug, `${where}: ${s}`);
         for (const v of packedCheck.violations) reporter.warn(slug, describeFinding(where, v));
-        entry.snapshot = { status: 'inventory-snapshot', name: snap.name, version: snap.version, sha256: snap.sha256 };
+        entry.snapshot = { status: snap.evidence ?? 'inventory-snapshot', name: snap.name, version: snap.version, sha256: snap.sha256 };
       }
     }
     report.packages[slug] = entry;
   }
   report.summary = { errors: reporter.errors, warnings: reporter.warnings, block: blockList };
   reporter.write('classification.json', report);
-  reporter.write('block-packages.txt', blockList.map((s) => `${s}\n`).join(''));
+  reporter.write('block-packages.txt', blockList.filter(slug => !candidates?.order.includes(slug)).map((s) => `${s}\n`).join(''));
   (out ?? process.stdout).write(`inventory: ${packages.size} public packages, BLOCK=[${blockList.join(' ')}], errors=${reporter.errors}, warnings=${reporter.warnings}\n`);
   return reporter.errors === 0 ? 0 : 1;
 }
