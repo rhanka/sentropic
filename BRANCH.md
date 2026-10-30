@@ -36,7 +36,7 @@
 
 ## Feedback Loop
 - [x] Initial isolated tool installer requires a committed profile and invokes npm ci.
-- [x] BRLOCK-EX1: owner explicitly requests Make/CI install fixes; change Makefile, workflow and container install commands only; rollback by reverting this branch.
+- [x] BRLOCK-EX1: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; authorized Make/CI/container installs, tool/consumer runners and locks, packaging probes, security evidence and regression tests within Allowed Paths; remove on PR closure; rollback by reverting this branch.
 
 ## AI Flaky tests
 - [x] No flaky allowance; exact-head CI success required.
@@ -76,6 +76,6 @@
   - [x] R3: cover npm aliases and flags-before-verb; declare scan boundaries; new bypass fixtures observed red then green.
   - [ ] R4: bind scanned tool and consumer invocations to committed catalogs and historical closures.
   - [x] R5: admit only explicitly named candidate archives and manifest file specs; sibling-admission regression observed red then green.
-  - [ ] R6: assign exception owners, review dates and accurate scope.
-  - [ ] R7: track isolated catalog SCA coverage with owner, scanner and review date.
-  - [ ] R8: digest-pin touched runtime images with regression coverage.
+  - [x] R6: assign exception owners, UTC review dates, removal triggers and accurate scope; expiry regression observed red then green.
+  - [x] R7: track isolated catalog SCA coverage separately with owner, scanner and review date; contract observed red then green.
+  - [x] R8: digest-pin touched runtime images; pinning regression observed red then green.

@@ -74,7 +74,7 @@ export API_TOOL_VERSION
 API_TOOL_IMAGE = $(if $(REGISTRY),$(REGISTRY)/)$(API_TOOL_IMAGE_NAME):$(API_TOOL_VERSION)
 export UI_IMAGE_NAME  ?= sentropic-ui
 export E2E_IMAGE_NAME ?= sentropic-e2e
-export LLM_MESH_NODE_IMAGE ?= node:24-bookworm-slim
+export LLM_MESH_NODE_IMAGE ?= node:24-bookworm-slim@sha256:c86ecead9e55a5210ac1727de38a4ca840bf03dcaf34dc9749addbf383b1920c
 export FLOW_NODE_IMAGE ?= node:24-bookworm-slim
 # Skills package needs build tools for isolated-vm (native addon).
 # The full bookworm image ships python3 + build-essential by default.
