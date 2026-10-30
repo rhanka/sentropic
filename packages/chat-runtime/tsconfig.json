@@ -1,6 +1,0 @@
-{
-  "extends": "../chat-ui/tsconfig.json",
-  "compilerOptions": { "rootDir": "src", "outDir": "dist" },
-  "include": ["src/**/*.ts"],
-  "exclude": ["tests/**", "dist/**"]
-}
