@@ -8,6 +8,7 @@
 - [x] Environment `test-chat-p1`; API_PORT=8796 UI_PORT=5196 MAILDEV_UI_PORT=1096; ENV always last.
 - [x] Serialize Docker work with `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; run `make down` after each step.
 - [x] Make targets only; no Python, dev tests, clean-all, publication or merge; main updates via rebase + force-push-with-lease on this branch only.
+- [x] CI lockfile-lane policy acknowledged (review_by=2026-11-30T00:00:00Z); installs resolve committed tool profiles or frozen consumer closures.
 - [x] Selective staging and `make commit`; each commit at most 150 changed lines, excluding unchanged renames, except the BR1-EX5 duplicate-deletion commits.
 - [x] Keep the explicit `() => false` as the default authorization predicate; missing approval must deny execution.
 - [x] Draft sequence to main: P1a runtime foundation/import migration; P1b injected conversation/optional-module boundary and parity.
