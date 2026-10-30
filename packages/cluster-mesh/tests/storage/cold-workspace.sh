@@ -46,6 +46,11 @@ tsc=/tmp/cm-tools/node_modules/.bin/tsc
 if [ "$CM_ACTION" = candidate ]; then
   export MANIFEST_GUARD_TOOL_DIR=/tmp/cm-tools
   node scripts/ci/package-candidate.mjs produce "$CI_PACKAGE_CANDIDATES" cluster-mesh
+  # The published engram memory dist imports @sentropic/mcp-broker/memory at module
+  # scope, and prepared consumers resolve @sentropic/* through the workspace links.
+  # The broker sits outside the cluster-mesh closure (mcp-platform comes with it),
+  # so seal its dist for prepared lanes; fresh lanes build it in the loop below.
+  "$tsc" --typeRoots /tmp/cm-tools/node_modules/@types -p packages/mcp-broker/tsconfig.json
   tar -czf "$CI_PACKAGE_CANDIDATES/prepared.tgz" -C /tmp cm-workspace cm-tools
   node scripts/ci/package-candidate.mjs seal "$CI_PACKAGE_CANDIDATES" cluster-mesh
   exit 0
