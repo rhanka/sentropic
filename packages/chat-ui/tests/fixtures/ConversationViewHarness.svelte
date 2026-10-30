@@ -1,9 +1,9 @@
 <script lang="ts">
-  import type { createConversationRuntime } from '@sentropic/chat-runtime/state/conversationRuntime';
+  import type { createConversationRuntime } from '@sentropic/chat-core/runtime/state/conversationRuntime';
   import ChatConversation from '../../src/components/ChatConversation.svelte';
   import type { ChatConversationFeatures } from '../../src/components/ChatConversation.svelte';
   import CommentsPanel from '../../src/comments/CommentsPanel.svelte';
-  import type { CommentHost, CommentState } from '@sentropic/chat-runtime/comments';
+  import type { CommentHost, CommentState } from '@sentropic/chat-core/runtime/comments';
   export let runtime: ReturnType<typeof createConversationRuntime>;
   export let appShaped = false;
   export let features: ChatConversationFeatures = {};

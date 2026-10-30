@@ -12,7 +12,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/svelte';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import MessageAttachments from '../src/documents/MessageAttachments.svelte';
-import type { ChatMessageAttachment } from '@sentropic/chat-runtime/state/chatProjection';
+import type { ChatMessageAttachment } from '@sentropic/chat-core/runtime/state/chatProjection';
 
 afterEach(() => cleanup());
 

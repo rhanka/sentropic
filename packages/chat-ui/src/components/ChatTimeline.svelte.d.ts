@@ -1,5 +1,5 @@
 import type { Component, Snippet } from 'svelte';
-import type { ChatProjectedTimelineItem } from '@sentropic/chat-runtime/state/chatProjection';
+import type { ChatProjectedTimelineItem } from '@sentropic/chat-core/runtime/state/chatProjection';
 
 export type ChatTimelineItem = ChatProjectedTimelineItem<any, any>;
 

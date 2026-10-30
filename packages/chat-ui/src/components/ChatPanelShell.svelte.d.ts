@@ -1,9 +1,9 @@
-import type { CommentState } from '@sentropic/chat-runtime/comments';
+import type { CommentState } from '@sentropic/chat-core/runtime/comments';
 import type { Component, Snippet } from 'svelte';
-import type { CommentHost } from '@sentropic/chat-runtime/comments/host';
+import type { CommentHost } from '@sentropic/chat-core/runtime/comments/host';
 import type { CommentThreadSummary } from '../comments/types.js';
 import type { ChatGeneratedFileCard } from '../documents/generated-file-cards.js';
-import type { ChatProjectedTimelineItem } from '@sentropic/chat-runtime/state/chatProjection';
+import type { ChatProjectedTimelineItem } from '@sentropic/chat-core/runtime/state/chatProjection';
 
 export type ChatPanelShellTimelineItem = ChatProjectedTimelineItem<any, any>;
 

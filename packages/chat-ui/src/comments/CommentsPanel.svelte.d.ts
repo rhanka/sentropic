@@ -1,6 +1,6 @@
 import type { Component, Snippet } from 'svelte';
-import type { CommentState } from '@sentropic/chat-runtime/comments';
-import type { CommentHost } from '@sentropic/chat-runtime/comments/host';
+import type { CommentState } from '@sentropic/chat-core/runtime/comments';
+import type { CommentHost } from '@sentropic/chat-core/runtime/comments/host';
 import type { CommentThreadSummary } from './types.js';
 
 export type CommentsPanelProps = {

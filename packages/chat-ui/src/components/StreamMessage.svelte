@@ -6,7 +6,7 @@
     GeneratedFileCard,
     StreamHubClient,
     StreamHubEvent,
-  } from '@sentropic/chat-runtime/client/streamTypes';
+  } from '@sentropic/chat-core/runtime/client/streamTypes';
   import { asRecord, normalizeTaskStatus } from '../state/streamMessageProjection.js';
   import {
     buildTodoRuntimeChecklist,
