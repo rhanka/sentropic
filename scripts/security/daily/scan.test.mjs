@@ -9,6 +9,70 @@ import { npmRunner, planScan, scanRepository } from './scan.mjs';
 import { loadContract } from './schema.mjs';
 import { normalizeRegister } from './inventory.mjs';
 import { bindRecordedSnapshot, summarizeControlReport } from './qualify-config-contract.mjs';
+import * as configContract from './qualify-config-contract.mjs';
+import { policy } from './toolchain-contract.mjs';
+
+test('should reject forged isolation evidence before constructing the hostile-config receipt', () => {
+  const snapshots = Object.fromEntries(['vulnerability', 'java'].map(kind => [kind,
+    { path: `/evidence/cache/${kind}-1-${'a'.repeat(64)}-0.76.1` }]));
+  const observed = {
+    Config: { Image: `${policy.repository}@${policy.manifestDigest}`, User: '65532:65532', environmentNames: ['PATH', 'HOME'] },
+    Image: policy.manifestDigest, Args: ['rootfs', '--config', '/dev/null', '--ignorefile', '/dev/null'],
+    HostConfig: { NetworkMode: 'none', ReadonlyRootfs: true, Memory: 4 * 1024 ** 3,
+      NanoCpus: 1000000000, PidsLimit: 128, CapDrop: ['ALL'], CapAdd: null, Privileged: false,
+      SecurityOpt: ['no-new-privileges'] },
+    Mounts: [{ Type: 'bind', RW: false, Destination: '/payload', Source: '/runner/tmp/security-qualify/hostile-config' },
+      ...['vulnerability', 'java'].flatMap(kind => [kind === 'java' ? 'trivy-java.db' : 'trivy.db', 'metadata.json']
+        .map(name => ({ Type: 'bind', RW: false, Destination: `/cache/${kind === 'java' ? 'java-db' : 'db'}/${name}`,
+          Source: `/runner/tmp/security-qualify${snapshots[kind].path.slice('/evidence'.length)}/${name}` })))],
+  };
+  const validate = value => configContract.validateControlIsolation(value, 'hardened', snapshots);
+  assert.deepEqual(validate(observed).CapAdd, null);
+  assert.equal(validate(observed).Privileged, false);
+  const forgeries = [
+    value => { value.Config.Image = `${policy.repository}:latest`; },
+    value => { value.Image = `sha256:${'f'.repeat(64)}`; },
+    value => { value.Config.User = '0:0'; },
+    value => { value.Config.environmentNames.push('DOCKER_PASSWORD'); },
+    value => { value.HostConfig.NetworkMode = 'host'; },
+    value => { value.HostConfig.ReadonlyRootfs = false; },
+    value => { value.HostConfig.Memory = 0; },
+    value => { value.HostConfig.NanoCpus = 0; },
+    value => { value.HostConfig.PidsLimit = 0; },
+    value => { value.HostConfig.CapDrop = []; },
+    value => { value.HostConfig.SecurityOpt = []; },
+    value => { value.HostConfig.Privileged = true; },
+    value => { delete value.HostConfig.Privileged; },
+    value => { value.HostConfig.CapAdd = ['SYS_ADMIN']; },
+    value => { delete value.HostConfig.CapAdd; },
+    value => { value.Mounts[0].RW = true; },
+    value => { value.Mounts[0].Type = 'volume'; },
+    value => { value.Mounts[0].Source = '/unrelated'; },
+    value => { value.Mounts[1].Source = '/forged/trivy.db'; },
+    value => { value.Mounts[2].Destination = '/wrong/metadata.json'; },
+    value => { value.Mounts[3].Source = '/forged/trivy-java.db'; },
+    value => { value.Mounts[4].Source = '/forged/metadata.json'; },
+    value => { value.Mounts.push({ Type: 'bind', RW: false, Destination: '/extra' }); },
+    value => { value.Args[2] = '/payload/trivy.yaml'; },
+    value => { value.Args[4] = '/payload/.trivyignore'; },
+  ];
+  for (const forge of forgeries) {
+    const forged = structuredClone(observed);
+    forge(forged);
+    assert.throws(() => validate(forged), forge.toString());
+  }
+  const entrypoint = readFileSync('scripts/security/daily/qualify-config-receipt.mjs', 'utf8');
+  assert.match(entrypoint, /execution\[control\] = validateControlIsolation\(observed, control, ingestion\.snapshots\)/);
+});
+
+test('should refuse a verified snapshot of the wrong kind for the selected control mount', () => {
+  const restored = { kind: 'java', files: { 'trivy-java.db': 'verified' } };
+  const snapshot = { receiptHash: 'trusted', receipt: structuredClone(restored) };
+  assert.throws(() => bindRecordedSnapshot(snapshot, restored, 'vulnerability'), /snapshot kind/);
+  assert.deepEqual(bindRecordedSnapshot(snapshot, restored, 'java').receipt, restored);
+  assert.match(readFileSync('scripts/security/daily/qualify-config-receipt.mjs', 'utf8'),
+    /bindRecordedSnapshot\(snapshot, await restoreSnapshot\(snapshot\), kind\)/);
+});
 
 const sourceSha = 'a'.repeat(40);
 test('should refuse mismatched embedded DB provenance before publishing a control receipt', () => {
@@ -282,7 +346,7 @@ test('should read only named operator fields as data without evaluating hostile 
 
 test('should stop qualification trials after the scope exception expires in UTC', (t) => {
   const root = fixture(t);
-  writeFileSync(join(root, 'date'), '#!/bin/sh\nprintf "%s" "$FIXTURE_TODAY"\n', { mode: 0o755 });
+  writeFileSync(join(root, 'date'), '#!/bin/sh\n[ "$*" = "-u +%F" ] || exit 9\nprintf "%s" "$FIXTURE_TODAY"\n', { mode: 0o755 });
   const recipe = readFileSync('scripts/security/daily/qualify.mk', 'utf8')
     .match(/^security-qualify-window:[^\n]*\n((?:\t[^\n]*\n?)+)/m)[1]
     .replace(/^\t@/, '').replaceAll('$$', '$');
@@ -291,6 +355,81 @@ test('should stop qualification trials after the scope exception expires in UTC'
       env: { PATH: root, FIXTURE_TODAY: today } });
     assert.equal(result.status, expected, result.stderr);
   }
+});
+
+test('should gate every qualification trial through the expiry window in the Make graph', () => {
+  const source = readFileSync('scripts/security/daily/qualify.mk', 'utf8');
+  const verify = (bytes) => {
+    const graph = new Map();
+    for (const line of bytes.split('\n')) {
+      const rule = /^([^\s#][^:=]*):([^=].*)?$/.exec(line);
+      if (!rule || rule[1].startsWith('.')) continue;
+      const dependencies = (rule[2] ?? '').split('#')[0].trim().split(/\s+/).filter(Boolean);
+      for (const name of rule[1].trim().split(/\s+/)) {
+        graph.set(name, [...(graph.get(name) ?? []), ...dependencies]);
+      }
+    }
+    const reachesWindow = (name, visited = new Set()) => {
+      if (name === 'security-qualify-window') return true;
+      if (visited.has(name)) return false;
+      visited.add(name);
+      return (graph.get(name) ?? []).some(next => reachesWindow(next, visited));
+    };
+    const trials = [...graph.keys()].filter(name => name.startsWith('security-qualify-') && name !== 'security-qualify-window');
+    assert.ok(trials.length >= 17);
+    for (const name of trials) assert.ok(reachesWindow(name), `${name} must reach security-qualify-window`);
+  };
+  verify(source);
+  assert.throws(() => verify(source.replaceAll(': security-qualify-window', ':')), /must reach/);
+  assert.throws(() => verify(`${source}\nsecurity-qualify-ungated:\n`), /ungated must reach/);
+});
+
+test('should parse hostile operator dotenv before authentication in the actual target trial', (t) => {
+  const root = fixture(t);
+  const bin = join(root, 'bin');
+  mkdirSync(bin);
+  mkdirSync(join(root, 'tmp/security-qualify'), { recursive: true });
+  mkdirSync(join(root, 'scripts/security/daily'), { recursive: true });
+  writeFileSync(join(root, 'scripts/security/daily/operator-env.sh'), readFileSync('scripts/security/daily/operator-env.sh'));
+  writeFileSync(join(bin, 'git'), '#!/bin/sh\nprintf "%s/.git\\n" "$FIXTURE_ROOT"\n', { mode: 0o755 });
+  writeFileSync(join(bin, 'docker'), `#!/bin/sh
+printf '%s\\n' "$*" > "$FIXTURE_ROOT/auth"
+cat >> "$FIXTURE_ROOT/auth"
+exit 79
+`, { mode: 0o755 });
+  const original = readFileSync('scripts/security/daily/qualify-targets.sh', 'utf8');
+  const marker = join(root, 'executed');
+  const hostile = `$(touch ${marker})`;
+  const bytes = `REGISTRY=registry.invalid\nDOCKER_USERNAME=fixture-user\nDOCKER_PASSWORD='${hostile}'\nIGNORED=$(touch ${marker})\n`;
+  const verify = (source) => {
+    const script = join(root, 'targets.sh');
+    writeFileSync(script, source);
+    for (const valid of [true, false]) {
+      rmSync(marker, { force: true });
+      rmSync(join(root, 'auth'), { force: true });
+      writeFileSync(join(root, '.env'), valid ? bytes : bytes + 'REGISTRY=duplicate\n');
+      const result = spawnSync('bash', [script], { cwd: root, encoding: 'utf8', env: {
+        PATH: `${bin}:/usr/bin:/bin`, FIXTURE_ROOT: root,
+        REGISTRY: 'inherited.invalid', DOCKER_USERNAME: 'inherited-user', DOCKER_PASSWORD: 'inherited-password',
+      } });
+      assert.throws(() => readFileSync(marker), /ENOENT/, 'dotenv must remain inert data');
+      if (valid) {
+        assert.equal(result.status, 79, result.stderr);
+        assert.equal(readFileSync(join(root, 'auth'), 'utf8'),
+          `login registry.invalid --username fixture-user --password-stdin\n${hostile}`);
+      } else {
+        assert.notEqual(result.status, 0);
+        assert.match(result.stderr, /duplicate operator field/);
+        assert.throws(() => readFileSync(join(root, 'auth')), /ENOENT/, 'invalid dotenv must fail before authentication');
+      }
+    }
+  };
+  verify(original);
+  const call = 'read_operator_env "$operator_root/.env"';
+  assert.throws(() => verify(original.replace(call, ':')), /inherited/);
+  assert.throws(() => verify(original.replace(call, 'source "$operator_root/.env"')), /inert data/);
+  const late = original.replace(call, ':').replace('unset DOCKER_PASSWORD', `${call}\nunset DOCKER_PASSWORD`);
+  assert.throws(() => verify(late), /inherited/);
 });
 
 test('should remove only its own detached scanner when a qualification trial fails', (t) => {
