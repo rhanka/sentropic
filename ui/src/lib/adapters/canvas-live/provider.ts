@@ -1,5 +1,5 @@
 import type * as ObjectLocks from '$lib/utils/object-lock';
-import type { StreamHubClient } from '@sentropic/chat-ui/client/streamTypes';
+import type { StreamHubClient } from '@sentropic/chat-core/runtime/client/streamTypes';
 import * as objectLocks from '$lib/utils/object-lock';
 import { streamHub } from '$lib/stores/streamHub';
 
