@@ -49,7 +49,7 @@ Refuse a warm Trivy report whose finding inventory diverges from the cold report
   - [x] Confirm scope boundaries, no EXn.
 - [x] **Lot 1 — Cold/warm finding-inventory agreement gate**
   - [x] Add exported `validateReportAgreement(coldReport, warmReport)` to `scripts/security/daily/trivy.mjs`.
-  - [x] Add unit tests in `scripts/security/daily/trivy.test.mjs` (agree, dropped CVE, added finding, version/severity drift, target-set drift).
+  - [x] Add unit tests in `scripts/security/daily/trivy.test.mjs` (agree, reordered agree, dropped/added CVE, same-count PkgName/ID/version/severity drift, extra/missing result, reclassed result, nested malformed finding).
   - [x] Lot gate:
     - [x] `make scope-check ENV=test-sec5a-agreement`
     - [x] Focused `trivy.test.mjs` green in Docker (6/6).
