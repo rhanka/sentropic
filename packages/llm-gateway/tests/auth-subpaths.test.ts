@@ -75,7 +75,7 @@ afterAll(() => rmSync(temp, { recursive: true, force: true }));
 const install = (mode: string, peers: string[] = []) => {
   const dir = mkdtempSync(join(temp, `${mode}-`));
   writeFileSync(join(dir, 'package.json'), JSON.stringify({ private: true, type: 'module' }));
-  run(process.execPath, ['/workspace/scripts/ci/locked-consumer.mjs', '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund',
+  run(process.execPath, [join(sourceRoot, 'scripts/ci/locked-consumer.mjs'), '--ignore-scripts', '--omit=optional', '--no-audit', '--no-fund',
     tarball, '@types/node@22.20.1', 'typescript@5.9.3', 'hono@4.10.7', meshSpec, ...peers], dir);
   cpSync(join(dir, 'package-lock.json'), join(qualification, `${mode}-package-lock.json`));
   return dir;
