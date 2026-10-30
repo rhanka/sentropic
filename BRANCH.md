@@ -10,6 +10,7 @@
 - [x] Make-only; Docker serialized under `.tmp/packets/DOCKER-LOCK.md` (plus the legacy `/home/antoinefa/.cache-tmp/sentropic-docker.lock`); `ENV=test-app-837-rebase` always last; `make down` after campaigns.
 - [x] Local acceptance gates pass before the single push; zero WIP pushes; Post-Rebase Gate re-verified (no package source or manifest difference from main).
 - [x] Atomic commits below 150 changed lines via `make commit`; selective staging; English only.
+- [x] CI lockfile-lane policy acknowledged (review_by=2026-11-30T00:00:00Z); installs resolve committed tool profiles or frozen consumer closures.
 - [x] No production activation, Python, AI trailers or destructive cleanup; no draft-state change; this author does not merge.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -44,6 +45,7 @@
 ## Feedback Loop
 - [x] PR837-R7-1: rebase onto `origin/main 1b7f8ab94`. Conflicts at the initial plan patch (branch plan intent kept) and at `702185813` (canonical API image). The Makefile version-input block union retains main's `scripts/ci/locked-tools.mjs` and `scripts/ci/tool-locks.json` inputs, main's `chat-core` and `e2e/npm-toolchain` UI/E2E inputs, and adds `apps/artifact-content`; `ci.yml` keeps main's `scripts/ci/tool-locks.json` path filter plus `apps/artifact-content/**`; `api/Dockerfile` retains main's `npx --no-install` and locked-npm lines plus the artifact-content COPY/esbuild/dist lines; `.dockerignore` unions both sides. Lockfiles merge additively: main's pins retained, `file:../packages/artifacts` workspace link retained, no registry fallback. `BRANCH.md` ends deleted as at the pre-rebase head; this file re-adds the lot scope contract, and APP-837-MERGE branch-close removes it again on the final head.
 - [x] PR837-R7-2: drizzle delta vs main verified exactly `A api/drizzle/control/0020_app_artifact_host.sql` plus one `_journal.json` entry (`0020_app_artifact_host`, idx 11, when 1791860000001; `0012_decision_host` bumped to idx 12). No stale schema dump hunks; APP-837-DUMP regenerates the restore smoke dump with zero drift after A2-M0-MIG.
+- [x] PR837-R7-3: first final-head CI run `41093224667` failed the `validate-publishable-manifests` gate inherited from main's lock lane (run 41004444100 on `10d289560` predates it): four branch sites used unlocked npm resolution and `BRANCH.md` lacked the policy acknowledgment. Fixes mirror main's own patterns: `npx --no-install` for the `api/Dockerfile` content compile (same build stage as main's auth-idp `npx --no-install esbuild`) and for the in-container tsc/eslint, `scripts/ci/locked-tools.mjs` with the committed `yaml@2.8.1` tool profile (mounted `scripts/ci` read-only) for the bundle selftest, the matching `scripts/test-artifact-content-image.sh` grep assertion, and the acknowledgment line above. Second push and one CI run on the new final head, per the per-head CI budget. Local re-verification before the second push: `test-ci-lockfile-installs` 11/11, `check-eradicated-packages` PASS, `test-publishable-manifests` 103/103, `test-qualify-published-install` 9/9, candidate + qualification-DAG suites PASS, `check-publishable-manifests` with the real change classification (`cluster-mesh` BLOCK, packed, guard PASS sha256 a984b2fe), `test-artifact-content-manifests` 54/54, `test-artifact-content-image` static + identity PASS, `scope-check` C2 PASS.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -82,6 +84,7 @@
   - [x] `make test-auth-ui ENV=test-app-837-rebase` — 8 test files, 54 tests passed.
   - [x] `make scope-check` — PASS C2 on every commit and on the clean final tree.
   - [x] `make down ENV=test-app-837-rebase` — no compose project was started by this lot; the down pass completes the campaign.
-- [ ] **Lot 5 — Single push and CI**
-  - [ ] `git push --force-with-lease origin feat/app-cm-integration` exactly once, after Lot 4 is green.
-  - [ ] One CI run on the final head, completed/success including the gates named by the review (endpoints shard 2, chat lanes, security-container, validate-artifacts, validate-idp-sync, ci-gate).
+- [ ] **Lot 5 — Pushes and CI (per-head budget)**
+  - [x] First `git push --force-with-lease origin feat/app-cm-integration` after Lot 4 green; head `98689e369`, CI run `41093224667` failed the inherited `validate-publishable-manifests` gate (see PR837-R7-3); failed head not re-run.
+  - [x] Lock-compliance local battery green before the second push: `test-ci-lockfile-installs` 11/11, `check-eradicated-packages` PASS, `test-publishable-manifests` 103/103, `test-qualify-published-install` 9/9, candidate + qualification-DAG suites PASS, `check-publishable-manifests` with the real change classification (`cluster-mesh` BLOCK, packed, guard PASS), `test-artifact-content-manifests` 54/54, `test-artifact-content-image` static + identity PASS, `scope-check` C2 PASS.
+  - [ ] Second `git push --force-with-lease` with the lock-compliance commit; one CI run on the new final head, completed/success including the gates named by the review (endpoints shard 2, chat lanes, security-container, validate-artifacts, validate-idp-sync, validate-publishable-manifests, ci-gate).

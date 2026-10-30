@@ -13,6 +13,6 @@ test-artifact-content-manifests: ## Render and qualify closed content infrastruc
 	done; \
 	docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp \
 		-v "$(CURDIR)/deploy/ci/artifact-content:/tests:ro" -v "$$rendered:/rendered:ro" \
-		-v "$(CURDIR)/packages/artifacts/src:/routing:ro" \
+		-v "$(CURDIR)/packages/artifacts/src:/routing:ro" -v "$(CURDIR)/scripts/ci:/ci:ro" \
 		$(LLM_MESH_NODE_IMAGE)@sha256:0e0ff40c39bc087845bfb27465a0df4ea419520094bc35842ff83dd8cbe6f9b6 \
-		sh -ec 'npm install --prefix /tmp/content-tools --ignore-scripts --no-audit --no-fund yaml@2.8.1 >/dev/null; node /tests/bundle.selftest.mjs'
+		sh -ec 'node /ci/locked-tools.mjs --prefix /tmp/content-tools --ignore-scripts --no-audit --no-fund yaml@2.8.1 >/dev/null; node /tests/bundle.selftest.mjs'
