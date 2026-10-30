@@ -28,7 +28,11 @@
   - `api/tests/unit/canvas-live-quarantine.test.ts`
   - `api/tests/api/canvas-live-hocuspocus.test.ts`
   - `api/tests/api/canvas-live-security.test.ts`
+  - `api/tests/api/canvas-live-quarantine-wiring.test.ts`
+  - `api/tests/api/canvas-live-composition.test.ts`
+  - `api/tests/api/canvas-live-harness.test.ts`
   - `api/tests/helpers/canvas-live.ts`
+  - `api/tests/helpers/canvas-live-h3.ts`
   - `api/package.json`
   - `api/package-lock.json`
   - `package-lock.json`
@@ -54,7 +58,12 @@
 
 ## Feedback Loop
 - [ ] `attention`: H3 dependency closure pin (`yjs`, `@hocuspocus/server`, `@hocuspocus/provider`, `y-protocols`) recorded in `docs/canvas-live/h3-validation.md` before claiming conformance.
-- [x] BRLOCK-EX1 carried verbatim from `origin/main` for gate continuity; H3 exercises none of the exempted paths (no `Makefile`, CI, lock, or container changes): owner=CI maintainers; review_by=2026-11-30T00:00:00Z; authorized Make/CI/container installs and Docker context, tool/consumer runners and locks, packaging probes/manifests, security evidence and regression tests within Allowed Paths; remove on PR closure; rollback by reverting this branch.
+- [x] BRLOCK-EX1 carried verbatim from `origin/main` for gate continuity; review r1 CHANGES make H3 exercise lock and Makefile paths: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; authorized Make/CI/container installs and Docker context, tool/consumer runners and locks, packaging probes/manifests, security evidence and regression tests within Allowed Paths; remove on PR closure; rollback by reverting this branch.
+- [x] BRH3-EX1 (review r1 item 3): add one `test-canvas-live-harness` target to the forbidden `Makefile` plus a `test:canvas-live-harness` script in `api/package.json`.
+  - Reason: the DS witness-8 offline harness must be runnable from a plain checkout; the review requires a committed package entrypoint plus a repo make target, and the harness suite runs through the same `docker compose exec` test infra as every other api suite.
+  - Impact: one new make target reusing the existing API_TEST_RUN infra and one package.json script; no existing target, variable or CI stage changes.
+  - Rollback: delete the target block and the script line; no other file references them.
+- [x] BRH3-COMMIT-SIZE: three RED-witness commits and the review r1 rewrites exceed the 150-line atomic rule (`tests/unit/canvas-live-ingress.test.ts` 206, `tests/api/canvas-live-hocuspocus.test.ts` 175, `tests/api/canvas-live-security.test.ts` 164 changed lines). Reason: each is one cohesive review-driven test file rewrite; splitting a single test file across commits would publish half-written witness suites. Impact: review reads one complete file per commit. Rollback: revert the commit.
 
 ## AI Flaky tests
 - [ ] No AI calls in H3 acceptance; no flaky exceptions requested.
