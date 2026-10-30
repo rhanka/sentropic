@@ -2,11 +2,15 @@ import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import { digest, policy } from './toolchain-contract.mjs';
 import { restoreSnapshot } from './toolchain-cache.mjs';
+import { bindRecordedSnapshot, summarizeControlReport } from './qualify-config-contract.mjs';
 
 const ingestion = JSON.parse(await readFile('/evidence/ingestion.json'));
-for (const snapshot of Object.values(ingestion.snapshots)) {
+assert.deepEqual(Object.keys(ingestion.snapshots).sort(), ['java', 'vulnerability']);
+const snapshots = {};
+for (const kind of ['vulnerability', 'java']) {
+  const snapshot = ingestion.snapshots[kind];
   assert.match(snapshot.path, /^\/evidence\/cache\/(vulnerability|java)-[12]-[a-f0-9]{64}-[0-9]+\.[0-9]+\.[0-9]+$/);
-  await restoreSnapshot(snapshot);
+  snapshots[kind] = bindRecordedSnapshot(snapshot, await restoreSnapshot(snapshot));
 }
 if (process.argv[2] === 'check') process.exit(0);
 const root = '/evidence/hostile-config';
@@ -49,19 +53,12 @@ for (const control of ['repository-default', 'hardened']) {
     user: observed.Config.User, environmentNames: observed.Config.environmentNames,
     mounts: observed.Mounts.map(({ Type, Destination, RW }) => ({ Type, Destination, RW })) };
   const report = JSON.parse(await readFile(`${root}/${control}.json`));
-  assert.equal(report.SchemaVersion, 2);
-  assert.equal(report.ArtifactName, '/payload');
-  assert.equal(report.ArtifactType, 'filesystem');
-  reports[control] = (report.Results ?? []).flatMap(result => result.Vulnerabilities ?? [])
-    .map(({ VulnerabilityID: id, PkgName: pkg, InstalledVersion: version, Severity: severity }) =>
-      ({ id, pkg, version, severity }));
+  reports[control] = summarizeControlReport(report, control, policy.version);
 }
-assert.ok(!reports['repository-default'].some(f => f.id === 'CVE-2021-44228'));
-assert.ok(reports.hardened.some(f => f.id === 'CVE-2021-44228' && f.version === '2.14.1' && f.severity === 'CRITICAL'));
 const receipt = { schema: 1, observedAt: new Date().toISOString(), qualified: false,
   scanner: `${policy.repository}@${policy.manifestDigest}`, artifacts,
   execution,
-  snapshots: ingestion.snapshots, controls: reports,
+  snapshots, controls: reports,
   verdict: 'hostile repository config suppresses Log4Shell with defaults; explicit null config and ignorefile preserve detection' };
 await writeFile(process.argv[2] === 'publish' ? '/receipts/sec5a-config-control.json' : `${root}/receipt.json`,
   `${JSON.stringify(receipt, null, process.argv[2] === 'publish' ? 0 : 2)}\n`);
