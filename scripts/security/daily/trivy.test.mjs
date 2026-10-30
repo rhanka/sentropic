@@ -4,7 +4,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { digest, policy } from './toolchain-contract.mjs';
-import { executeImageScan, prepareImageScan, requireIacQualification, validateComparison, validateImageReport, validateTarget } from './trivy.mjs';
+import { executeImageScan, prepareImageScan, requireIacQualification, validateComparison, validateImageReport, validateReportAgreement, validateTarget } from './trivy.mjs';
 import { preflight } from './toolchain-preflight.mjs';
 
 const sourceSha = 'a'.repeat(40);
@@ -109,6 +109,29 @@ test('should never execute unqualified scanners or silently substitute IaC rules
   assert.equal(report.status, 'coverage-blocked');
   assert.deepEqual(report.snapshots, {});
   await assert.rejects(preflight('--db-repository=evil'), /unknown preparation operation/);
+});
+
+test('should refuse a warm report whose finding inventory diverges from cold', () => {
+  const finding = (overrides = {}) => ({ VulnerabilityID: 'CVE-2026-1234', PkgName: 'demo',
+    InstalledVersion: '1.0', Severity: 'LOW', ...overrides });
+  const report = (vulns) => ({ SchemaVersion: 2, ArtifactName: '/target/image.tar',
+    Results: [{ Target: 'alpine', Class: 'os-pkgs', Type: 'alpine', Vulnerabilities: vulns }] });
+  const cold = report([finding(), finding({ VulnerabilityID: 'CVE-2026-5678', Severity: 'HIGH' })]);
+  const same = report(cold.Results[0].Vulnerabilities.map((value) => ({ ...value })));
+  assert.equal(validateReportAgreement(cold, same), true);
+  assert.equal(validateReportAgreement(report([]), report([])), true);
+  const dropped = report([finding()]);
+  assert.throws(() => validateReportAgreement(cold, dropped), /diverged/);
+  const added = report([...cold.Results[0].Vulnerabilities, finding({ VulnerabilityID: 'CVE-2026-9999' })]);
+  assert.throws(() => validateReportAgreement(cold, added), /diverged/);
+  const drifted = report([finding({ InstalledVersion: '1.1' }), finding({ VulnerabilityID: 'CVE-2026-5678', Severity: 'HIGH' })]);
+  assert.throws(() => validateReportAgreement(cold, drifted), /diverged/);
+  const severityChanged = report([finding({ VulnerabilityID: 'CVE-2026-5678', Severity: 'CRITICAL' }), finding()]);
+  assert.throws(() => validateReportAgreement(cold, severityChanged), /diverged/);
+  const otherTarget = { ...cold, Results: [...cold.Results, { Target: 'extra', Class: 'os-pkgs', Type: 'alpine' }] };
+  assert.throws(() => validateReportAgreement(cold, otherTarget), /diverged/);
+  assert.throws(() => validateReportAgreement(cold, { ...cold, Results: 'alpine' }), /incomplete/);
+  assert.throws(() => validateReportAgreement(null, same), /incomplete/);
 });
 
 test('should retain bounded raw diagnostics when process or report validation fails', () => {
