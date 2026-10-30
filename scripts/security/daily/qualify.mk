@@ -44,6 +44,12 @@ security-qualify-ancillary: ## Scan scanner/verifier dependencies and exercise f
 security-qualify-java: ## Detect a real vulnerable Java archive using the frozen offline data
 	@bash scripts/security/daily/qualify-java.sh
 
+.PHONY: security-qualify-config
+security-qualify-config: security-qualify-scanner
+	@$(SECQUAL_RUN) --network=none $(SECQUAL_NODE) node scripts/security/daily/qualify-config-receipt.mjs check
+	@bash scripts/security/daily/qualify-config.sh
+	@$(SECQUAL_RUN) --network=none $(SECQUAL_NODE) node scripts/security/daily/qualify-config-receipt.mjs
+
 .PHONY: security-qualify-scanner
 security-qualify-scanner:
 	@docker image inspect "$(SECQUAL_SCANNER)" >/dev/null 2>&1 || docker pull --platform linux/amd64 "$(SECQUAL_SCANNER)"
