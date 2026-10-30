@@ -1,7 +1,7 @@
 # Feature: fix(ci): enforce lockfile-exact installations
 
 ## Objective
-- [ ] Prevent CI and Make installs from selecting registry versions outside committed locks.
+- [x] Prevent CI and Make installs from selecting registry versions outside committed locks.
 
 ## Scope / Guardrails
 - [x] Branch `fix/ci-lockfile-installs` from `origin/main`; worktree `tmp/ci-lockfile-installs`.
@@ -65,7 +65,7 @@
   - [x] Guard against unlocked npm/npx resolution, including regression fixtures.
 - [x] **Lot 2 — Security evidence**
   - [x] Record fixed finding and coverage in security notes/register.
-- [ ] **Lot 3 — Validation and delivery**
+- [x] **Lot 3 — Validation and delivery**
   - [x] Full cluster-mesh suite: 1,414 pass; installed stateful/artifacts consumer: 16 pass; llm-mesh typecheck/lint and gateway auth consumers: 3 pass.
   - [x] Cluster-mesh typecheck, 17 packaging preparation regressions and eleven install guard tests pass.
   - [x] Published-consumer qualification: 18 tests pass; manifest, security and CI wiring contracts: 219 tests pass.
@@ -73,10 +73,10 @@
   - [x] Run guard, cluster-mesh tests/typecheck, representative package and consumer checks.
   - [x] Review changed install paths and run mechanical scope check before each commit.
   - [x] Stop test environment with `make down`; no application services were started.
-  - [ ] Create draft PR to main from this plan; CI completed/success on exact head.
-- [ ] **Lot 4 — Muse Wonder review changes**
+  - [x] Create draft PR to main from this plan; CI completed/success on exact head.
+- [x] **Lot 4 — Muse Wonder review changes**
   - [x] R1: reproduce the missing API filters; cover API and E2E content-hash inputs.
-  - [ ] R2: rebase preserving main and lockfile intent; Post-Rebase Gate; exact-head CI success.
+  - [x] R2: rebase preserving main and lockfile intent; Post-Rebase Gate; exact-head CI success.
   - [x] R3: cover npm aliases and flags-before-verb; declare scan boundaries; new bypass fixtures observed red then green.
   - [x] R4: bind scanned shell/Make/Docker/JS tool calls to profiles and consumer literal versions to the frozen closure; require historical closures; removal and typo regressions observed red then green.
   - [x] Post-Rebase Gate: zero packages with src changes relative to origin/main; no publication version bump applies.
