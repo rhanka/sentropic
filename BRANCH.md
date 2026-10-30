@@ -54,8 +54,8 @@ Extract the inline Sigstore TUF freshness and version-link checks into an export
   - [x] Lot gate:
     - [x] `make scope-check ENV=test-sec5a-expiry`
     - [x] Focused `toolchain-contract.test.mjs` green in Docker (15/15, retained-evidence replay passes).
-  - [ ] Lot gate:
-    - [ ] `make test-security-daily ENV=test-sec5a-expiry`
+  - [x] Lot gate:
+    - [x] `make test-security-daily ENV=test-sec5a-expiry` (140/140).
 - [ ] **Lot 2 — Review and PR**
   - [ ] Two blind Muse Wonder full xhigh review legs (correctness, risk), receipts in `.h2a/reviews/`.
   - [ ] Open PR with `BRANCH.md` as body; record head; leave merge to owner.
