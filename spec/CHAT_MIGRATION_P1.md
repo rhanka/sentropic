@@ -118,12 +118,12 @@ After review corrections, runtime 440, UI 533 unit and 206 DOM tests pass; both 
 Two complementary r2 source reviews approved the earlier implementation; the current corrections need review.
 These checks are technical evidence; GitHub CI completion and owner U0 remain separately recorded gates.
 
-Final candidate qualification, recorded after exact-head CI:
+Final candidate qualification at source head `960a3a8e0998c1d26ee41e37376aa17e07823240`:
 
 | Candidate | SHA-256 |
 | --- | --- |
-| `@sentropic/chat-ui@1.0.0` | `TBD` |
-| `@sentropic/chat-core@0.3.0` | `TBD` |
+| `@sentropic/chat-ui@1.0.0` | `e9afe73cfcd307228bbf3e19f69453bdbf4d11e6b3a2595b3f22e73b96198089` |
+| `@sentropic/chat-core@0.3.0` | `8aff27ef910ebed79d544144a9b6f6f32680fb5faa947b5450f18d68ac27080c` |
 
 The clean probe verifies installed public contracts, Svelte typecheck, production bundle, real HTTP
 payload/commands, subscription remount, all four authorization paths and visual archive ownership.
