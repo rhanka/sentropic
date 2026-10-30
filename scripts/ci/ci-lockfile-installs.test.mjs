@@ -154,3 +154,48 @@ test('should install the locked transitive version even when upstream publishes 
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('should keep reviewed exemptions and the catalog SCA gap owned and unexpired', () => {
+  const root = new URL('../../', import.meta.url);
+  const policy = JSON.parse(fs.readFileSync(new URL('.security/ci-lockfile-policy.json', root)));
+  for (const id of ['BRLOCK-EX1', 'candidate-archives', 'maintenance-targets', 'l5-snapshot', 'lock-authoring', 'catalog-sca']) {
+    const entry = policy[id];
+    assert.ok(entry?.owner, `${id} owner`);
+    assert.match(entry.review_by, /^\d{4}-\d{2}-\d{2}T00:00:00Z$/, `${id} UTC expiry`);
+    assert.ok(Date.parse(entry.review_by) > Date.now(), `${id} review expired`);
+    assert.ok(entry.scope && entry.removal_trigger, `${id} bounded scope and removal trigger`);
+  }
+  assert.equal(policy['catalog-sca'].status, 'open');
+  assert.equal(policy['catalog-sca'].target_scanner, 'npm audit --package-lock-only --audit-level=high');
+  const plan = fs.readFileSync(new URL('BRANCH.md', root), 'utf8');
+  assert.ok(plan.includes(`review_by=${policy['BRLOCK-EX1'].review_by}`));
+});
+
+test('should digest-pin the lock guard runtime and mock container base', () => {
+  const root = new URL('../../', import.meta.url);
+  const make = fs.readFileSync(new URL('Makefile', root), 'utf8');
+  assert.match(make, /^export LLM_MESH_NODE_IMAGE \?= \S+@sha256:[a-f0-9]{64}$/m);
+  const dockerfile = fs.readFileSync(new URL('tools/scw-tem-mock/Dockerfile', root), 'utf8');
+  assert.match(dockerfile, /^FROM \S+@sha256:[a-f0-9]{64}$/m);
+});
+
+test('should bind every scanned installer call to a committed profile or consumer closure', async () => {
+  const { checkBindings } = await import('./install-bindings.mjs');
+  const root = new URL('../../', import.meta.url).pathname;
+  const tools = JSON.parse(fs.readFileSync(path.join(root, 'scripts/ci/tool-locks.json')));
+  const consumers = JSON.parse(fs.readFileSync(path.join(root, 'scripts/ci/consumer-locks.json')));
+  assert.deepEqual(checkBindings(root, tools, consumers), []);
+  const missingTool = structuredClone(tools);
+  delete missingTool['semver@7.7.2'];
+  assert.ok(checkBindings(root, missingTool, consumers).some(s => s.includes('semver@7.7.2')));
+  const missingClosure = structuredClone(consumers);
+  delete missingClosure['@sentropic/llm-mesh@0.19.2'];
+  assert.ok(checkBindings(root, tools, missingClosure).some(s => s.includes('@sentropic/llm-mesh@0.19.2')));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'binding-typo-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'Makefile'), 'build:\n\tnode /workspace/scripts/ci/locked-tools.mjs --prefix /tmp/t semver@999.0.0\n\tnode /workspace/scripts/ci/locked-consumer.mjs @sentropic/llm-mesh@999.0.0');
+    const errors = checkBindings(dir, tools, consumers);
+    assert.ok(errors.some(s => s.includes('semver@999.0.0')));
+    assert.ok(errors.some(s => s.includes('@sentropic/llm-mesh@999.0.0')));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});
