@@ -1,16 +1,16 @@
 # Feature: SQL-L1 — SQLite connection factory, PRAGMAs & Stage-0 extension gate
 
 ## Objective
-- [ ] Deliver fast-track plan r2 lot `SQL-L1`: `openSqliteDatabase()` in `packages/cluster-mesh/src/storage/sqlite/connection.ts` enforcing `WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000`, `trusted_schema=OFF`, and `SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION=1` only around a verified `sqlite-vec` load then `0`, plus the `packages/cluster-mesh/tests/storage/sqlite.mk` targets `cluster-mesh-sqlite-s0-qualify` and `cluster-mesh-sqlite-test`.
+- [x] Deliver fast-track plan r2 lot `SQL-L1`: `openSqliteDatabase()` in `packages/cluster-mesh/src/storage/sqlite/connection.ts` enforcing `WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000`, `trusted_schema=OFF`, and `SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION=1` only around a verified `sqlite-vec` load then `0`, plus the `packages/cluster-mesh/tests/storage/sqlite.mk` targets `cluster-mesh-sqlite-s0-qualify` and `cluster-mesh-sqlite-test`.
 
 ## Scope / Guardrails
-- [ ] Branch `feat/sql-l1` from `origin/main` (`1b7f8ab94`); worktree `tmp/sql-l1`; draft PR targets main.
-- [ ] Environment `ENV=test-memory-sqlite` (plan r2 §1.2/§4.2), always the LAST make argument; never `ENV=dev`; `make down ENV=test-memory-sqlite` after Docker steps.
-- [ ] Serialize Docker work under the flock at `.tmp/packets/DOCKER-LOCK.md`.
-- [ ] Make targets only; no Python, no direct npm/docker publication, no `clean-all`, no merge, no native addon builds.
-- [ ] CI budget: local targeted tests green before any push; single push of the final head; draft PR; one CI run on the final head.
-- [ ] Selective staging plus `make commit`; every commit at most 150 changed lines except the disclosed `SQL-L1-EX1` record-only replacement of this file.
-- [ ] Bump `@sentropic/cluster-mesh` `0.24.0` → `0.26.0-dev.1` (src change requires a bump; `0.25.0` is reserved by #844 and `0.25.0-dev.1` by #855; final train minor is resolved at `CM-TRAIN-REL` per plan r2 §0.3).
+- [x] Branch `feat/sql-l1` from `origin/main` (`1b7f8ab94`); worktree `tmp/sql-l1`; draft PR targets main.
+- [x] Environment `ENV=test-memory-sqlite` (plan r2 §1.2/§4.2), always the LAST make argument; never `ENV=dev`; `make down ENV=test-memory-sqlite` after Docker steps.
+- [x] Serialize Docker work under the flock at `.tmp/packets/DOCKER-LOCK.md`.
+- [x] Make targets only; no Python, no direct npm/docker publication, no `clean-all`, no merge, no native addon builds.
+- [x] CI budget: local targeted tests green before any push; single push of the final head; draft PR; one CI run on the final head.
+- [x] Selective staging plus `make commit`; every commit at most 150 changed lines except the disclosed `SQL-L1-EX1` record-only replacement of this file.
+- [x] Bump `@sentropic/cluster-mesh` `0.24.0` → `0.26.0-dev.1` (src change requires a bump; `0.25.0` is reserved by #844 and `0.25.0-dev.1` by #855; final train minor is resolved at `CM-TRAIN-REL` per plan r2 §0.3).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -37,7 +37,7 @@
 ## Feedback Loop
 - [x] SQL-L1-EX1: commit 1 replaces `BRANCH.md` (previous branch's merged plan, 238 lines) with this lot's plan; a full-file replacement exceeds the 150-line cap by construction (238 deletions); impact is record-only, tree state is the new plan; rollback is not applicable (record-only).
 - [x] SQL-L1-tests: unit suite written before the implementation and observed red (6/6 failed with `openSqliteDatabase is not a function` in the workspace container), then green after `openSqliteDatabase()` landed.
-- [ ] SQL-L1-acceptance: local acceptance commands from plan r2 §1.2 executed green in `tmp/sql-l1` before any push.
+- [x] SQL-L1-acceptance: local acceptance commands from plan r2 §1.2 executed green in `tmp/sql-l1` before any push.
 
 ## AI Flaky tests
 - Acceptance rule: accept only non-systematic provider/network/model nondeterminism as `flaky accepted`; never amend tests with additive timeouts; if flaky, analyze impact vs `main` and record command, failing file and signature here before any merge.
@@ -63,10 +63,10 @@
   - [x] `openSqliteDatabase()` in `packages/cluster-mesh/src/storage/sqlite/connection.ts`: durable path validation, PRAGMA application with read-back refusal, extension gate enabled only around the verified `sqlite-vec` load then disabled, verified-closed proof, close-on-failure.
   - [x] `packages/cluster-mesh/package.json` version bump to `0.26.0-dev.1`.
   - [x] Lot gate: `make typecheck-cluster-mesh ENV=test-memory-sqlite`.
-- [ ] **Lot 3 — Local acceptance (plan r2 §1.2)**
-  - [ ] `make -f Makefile -f packages/cluster-mesh/tests/storage/sqlite.mk cluster-mesh-sqlite-s0-qualify ENV=test-memory-sqlite`
-  - [ ] `make -f Makefile -f packages/cluster-mesh/tests/storage/sqlite.mk cluster-mesh-sqlite-test SCOPE=tests/storage/sqlite-l1 ENV=test-memory-sqlite`
-  - [ ] `make scope-check`
-  - [ ] `make down ENV=test-memory-sqlite`
+- [x] **Lot 3 — Local acceptance (plan r2 §1.2)**
+  - [x] `make -f Makefile -f packages/cluster-mesh/tests/storage/sqlite.mk cluster-mesh-sqlite-s0-qualify ENV=test-memory-sqlite`
+  - [x] `make -f Makefile -f packages/cluster-mesh/tests/storage/sqlite.mk cluster-mesh-sqlite-test SCOPE=tests/storage/sqlite-l1 ENV=test-memory-sqlite`
+  - [x] `make scope-check`
+  - [x] `make down ENV=test-memory-sqlite`
 - [ ] **Lot 4 — Review-ready head**
   - [ ] Single push of the final head; draft PR from this file; one CI run on the final head; report to `.tmp/rv/lot-SQL-L1.md`.
