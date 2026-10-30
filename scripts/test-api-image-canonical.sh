@@ -118,6 +118,24 @@ guard_collision() {
   echo "PASS: same tag with different identity is still refused and never pushed"
 }
 
+receipt_identity() {
+  mkdir -p "$scratch/receipt"
+  printf '%s\n' "$PULLED_DIGEST" > "$scratch/receipt/api-image-id"
+  : > "$scratch/calls"
+  for local_digest in "$PULLED_DIGEST" "$OTHER_DIGEST"; do
+    if PATH="$PWD/$scratch:$PATH" DOCKER_CALL_LOG="$PWD/$scratch/calls" \
+      MOCK_LOCAL_DIGEST="$local_digest" \
+      make --no-print-directory verify-api-image REGISTRY="$TEST_REGISTRY" API_VERSION="$TEST_TAG" \
+      API_IMAGE_RECEIPT="$PWD/$scratch/receipt/api-image-id" ENV="${ENV:?}" > "$scratch/output" 2>&1; then
+      test "$local_digest" = "$PULLED_DIGEST" || { echo 'FAIL: transported image identity mismatch was accepted' >&2; return 1; }
+    else
+      test "$local_digest" = "$OTHER_DIGEST" || { cat "$scratch/output" >&2; return 1; }
+      grep -Fq 'Production artifact identity mismatch' "$scratch/output" || return 1
+    fi
+  done
+  echo 'PASS: transported canonical image matches the tested receipt; a substituted artifact is refused'
+}
+
 hash_inputs() {
   sed -n 's/^export API_VERSION[[:space:]]*?=.*echo "\([^"]*\)".*/\1/p' Makefile | tr ' ' '\n' | sed '/^$/d'
 }
@@ -139,7 +157,7 @@ tag_inputs_cover_builds() {
     esac
   done < <(grep -o 'npm --workspace @sentropic/[a-z0-9-]* run build' api/Dockerfile)
   test "$missing" -eq 0 || return 1
-  for required in api apps/auth-idp apps/llm-gateway e2e/tests/fixtures ui/package.json packages/auth-ui packages/skills packages/mcp-platform packages/llm-gateway .security/audit-gate.mjs .security/audit-allowlist.json .dockerignore package.json package-lock.json; do
+  for required in api apps/auth-idp apps/artifact-content apps/llm-gateway e2e/tests/fixtures ui/package.json packages/auth-ui packages/skills packages/mcp-platform packages/llm-gateway .security/audit-gate.mjs .security/audit-allowlist.json .dockerignore package.json package-lock.json; do
     grep -Fxq "$required" <<< "$inputs" || { echo "FAIL: shipped build input '$required' missing from API_VERSION" >&2; return 1; }
   done
   echo "PASS: every shipped build input is hashed into the canonical tag (runtime change -> new tag)"
@@ -255,7 +273,7 @@ ci_filter_block() {
 
 trigger_coverage() {
   local script
-  for script in scripts/resolve-api-image.sh scripts/test-api-image-canonical.sh; do
+  for script in scripts/resolve-api-image.sh scripts/test-api-image-canonical.sh scripts/test-artifact-content-image.sh; do
     if ! ci_filter_block global | grep -Fxq "$script"; then
       if ! ci_filter_block api | grep -Fxq "$script"; then
         echo "FAIL: '$script' matches no filter running the canonical-image tests" >&2
@@ -274,7 +292,7 @@ retained_exclusions() {
   fi
   local image="${registry}/${API_IMAGE_NAME:-sentropic-api}:${version}"
   local missing=0 path
-  for path in api/package.json e2e/package.json e2e/tests/fixtures apps/llm-gateway apps/auth-idp ui/package.json .security/audit-gate.mjs; do
+  for path in api/package.json e2e/package.json e2e/tests/fixtures apps/llm-gateway apps/auth-idp apps/artifact-content/dist/index.js ui/package.json .security/audit-gate.mjs; do
     if ! docker run --rm "$image" sh -ec "test -e '/workspace/$path'" >/dev/null 2>&1; then
       echo "FAIL: retained input '$path' missing from the canonical image" >&2
       missing=1
@@ -324,6 +342,7 @@ case "${1:-all}" in
   resolve-network-error) resolve_fail_closed network-error ;;
   resolve-stdout-unknown) resolve_fail_closed stdout-unknown ;;
   guard-collision) guard_collision ;;
+  receipt-identity) receipt_identity ;;
   tag-inputs-cover-builds) tag_inputs_cover_builds ;;
   tag-inputs-exclude-global) tag_inputs_exclude_global ;;
   copy-sources-hashed) copy_sources_hashed ;;
@@ -362,6 +381,7 @@ case "${1:-all}" in
     resolve_fail_closed network-error
     resolve_fail_closed stdout-unknown
     guard_collision
+    receipt_identity
     tag_inputs_cover_builds
     tag_inputs_exclude_global
     copy_sources_hashed
@@ -372,5 +392,5 @@ case "${1:-all}" in
     version_filters_cover
     retained_exclusions
     ;;
-  *) echo "Expected resolve-reuse, resolve-absent, resolve-local, resolve-auth-error, resolve-network-error, resolve-stdout-unknown, guard-collision, tag-inputs-cover-builds, tag-inputs-exclude-global, copy-sources-hashed, no-blind-copy, trigger-coverage, retained-exclusions, hash-pipeline-sensitive, toolchain-pinned, version-filters-cover, resolve, tag-inputs, retained, or all" >&2; exit 1 ;;
+  *) echo "Expected resolve-reuse, resolve-absent, resolve-local, resolve-auth-error, resolve-network-error, resolve-stdout-unknown, guard-collision, receipt-identity, tag-inputs-cover-builds, tag-inputs-exclude-global, copy-sources-hashed, no-blind-copy, trigger-coverage, retained-exclusions, hash-pipeline-sensitive, toolchain-pinned, version-filters-cover, resolve, tag-inputs, retained, or all" >&2; exit 1 ;;
 esac

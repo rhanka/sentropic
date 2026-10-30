@@ -120,11 +120,13 @@ registry). BR-27..BR-30: RESERVED (OpenERP impl follow-ups of BR-26).
 (ARCH-01/BR-42b lineage; accountable=architect). The MCP work belongs to the
 catalog lineage (BR-19 → BR-19b → BR-42b), NOT the Resource Plane (BR-70).
 Items: BR-42b (unified catalog, MCP TOOLS — DONE #247); **BR-42i**
-(mcp-resources-mapping: extend `McpCatalogSource` with `resources/list`+`read`,
+(mcp-resources-mapping: add registry-backed `resources/list`+`read`,
 URI-preserving, allowlist+MIME/size/secret); **BR-42j** (catalog→ResourceProvider
 adapter so the catalog mounts under the Resource Plane port); BR-33
 (managed-marketplace). Scope: `api/services/catalog`, `packages/skills`. BR-70
 (Resource Plane) DEPENDS on BR-42i + BR-42j and PROJECTS the catalog.
+
+W4.b supersession (PR #807): `McpCatalogSource` is retired. The sole MCP catalogue source is `HostRegistryCatalogSource` (`host-registry`), projecting authorized compiled exact names through the existing artifact transport. BR-42i must reuse that registry rather than extend the deleted source; historical BR-42b delivery and Resource Plane ownership remain unchanged.
 
 **Owner DECIDED 2026-06-09 (Q2=A): SPLIT both.** BR-70 → BR-70core
 (ResourceProvider + verb dispatch + async resume; gated BR-44) + BR-70viz

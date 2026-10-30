@@ -25,6 +25,7 @@ node_modules/
 
 # Build outputs and caches
 api/dist/
+apps/artifact-content/dist/
 api/.tsbuildinfo
 packages/*/dist/
 packages/cowork-desktop/build/

@@ -359,6 +359,7 @@ jobs:
               - 'scripts/test-api-tag-guard.sh'
               - 'scripts/resolve-api-image.sh'
               - 'scripts/test-api-image-canonical.sh'
+              - 'scripts/test-artifact-content-image.sh'
               - 'scripts/test-pgbackup-restore-isolation.sh'
               - '.github/workflows/ci.yml'
               - 'e2e/**'
@@ -371,6 +372,7 @@ jobs:
               - 'scripts/ci/tool-locks.json'
               - 'api/**'
               - 'apps/auth-idp/**'
+              - 'apps/artifact-content/**'
               - 'apps/llm-gateway/**'
               - 'package.json'
               - 'package-lock.json'
@@ -780,6 +782,8 @@ jobs:
       - uses: actions/checkout@v6
       - name: Gate rendered bundles and run controls
         run: make test-idp-sync-selftest ENV=test-idp-sync
+      - name: Gate default-closed artifact content overlays
+        run: make test-artifact-content-manifests ENV=test-app-w3d
       - name: Gate transactional SQL on a disposable database
         run: make test-idp-sync-sql ENV=test-idp-sync
 
@@ -1450,6 +1454,9 @@ jobs:
       - name: Test canonical API image artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make test-ci-api-image-canonical ENV=test-ci-api
+      - name: Verify the production artifact content entrypoint
+        if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
+        run: make test-artifact-content-image ENV=test-ci-api
       - name: Save API image as artifact
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make save-api
@@ -1575,6 +1582,9 @@ jobs:
       - name: Test API gateway package version evidence
         if: matrix.suite == 'unit'
         run: make test-api-unit SCOPE=tests/unit/gateway-package-version.test.ts ENV=test-ci-api
+      - name: Qualify app cluster-mesh host, reader, catalog and content
+        if: matrix.suite == 'unit'
+        run: make test-app-cluster-mesh ENV=test-ci-api
       - name: Test API (${{ matrix.suite }})
         run: |
           if [ "${{ matrix.suite }}" = "endpoints" ]; then

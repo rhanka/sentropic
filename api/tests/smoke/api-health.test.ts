@@ -287,15 +287,14 @@ describe('API Health', () => {
     });
 
     it('emits the live catalog cutover and control-loss status map', async () => {
-      const catalogUser = await createAuthenticatedUser('editor');
       const read = () => authenticatedHttpRequest(
-        'GET', '/api/v1/catalog/entries', catalogUser.sessionToken!,
+        'GET', '/api/v1/catalog/entries', user.sessionToken!,
       );
       const [health, anonymous, duplicate, active] = await Promise.all([
         httpRequest('/api/v1/health'),
         httpRequest('/api/v1/catalog/entries'),
         authenticatedHttpRequest(
-          'GET', '/api/v1/catalog/catalog/entries', catalogUser.sessionToken!,
+          'GET', '/api/v1/catalog/catalog/entries', user.sessionToken!,
         ),
         read(),
       ]);
