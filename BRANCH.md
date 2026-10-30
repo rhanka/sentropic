@@ -19,6 +19,7 @@
   - `packages/cluster-mesh/src/storage/sqlite/connection.ts`
   - `packages/cluster-mesh/tests/storage/sqlite.mk`
   - `packages/cluster-mesh/tests/storage/sqlite-l1/**`
+  - `package-lock.json` (only the `packages/cluster-mesh` workspace version entry; the CI `changes` train lock-sync gate requires the root lockfile to mirror the package bump, refreshed through `make chat-migration-lockfiles`)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -38,6 +39,7 @@
 - [x] SQL-L1-EX1: commit 1 replaces `BRANCH.md` (previous branch's merged plan, 238 lines) with this lot's plan; a full-file replacement exceeds the 150-line cap by construction (238 deletions); impact is record-only, tree state is the new plan; rollback is not applicable (record-only).
 - [x] SQL-L1-tests: unit suite written before the implementation and observed red (6/6 failed with `openSqliteDatabase is not a function` in the workspace container), then green after `openSqliteDatabase()` landed.
 - [x] SQL-L1-acceptance: local acceptance commands from plan r2 §1.2 executed green in `tmp/sql-l1` before any push.
+- [x] SQL-L1-EX2: the first push failed the CI `changes` train lock-sync gate (`packages/cluster-mesh` manifest `0.26.0-dev.1` vs root lockfile `0.24.0`); the gate-mandated refresh ran through `make chat-migration-lockfiles` and the branch keeps only the `packages/cluster-mesh` lockfile entry; the refresh's collateral chat-core root/ui hunks (pre-existing main staleness: chat-core manifest `0.3.1` vs lockfile `0.3.0`, unchecked by the train gate) were reverted as out of scope for this lot; impact is one lockfile line plus this record; rollback is `git revert` of the lockfile commit.
 
 ## AI Flaky tests
 - Acceptance rule: accept only non-systematic provider/network/model nondeterminism as `flaky accepted`; never amend tests with additive timeouts; if flaky, analyze impact vs `main` and record command, failing file and signature here before any merge.
