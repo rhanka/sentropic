@@ -1,7 +1,33 @@
 import assert from 'node:assert/strict';
 import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
-import { digest, policy } from './toolchain-contract.mjs';
+import { digest, policy, requireEvidence } from './toolchain-contract.mjs';
+
+// TUF metadata freshness and rollback gate. Every role document must declare its
+// own type with a positive integer version and must not be expired at
+// verification time; each parent role must pin the exact current child version,
+// and the pinned digest when the parent carries one. An expired root or a
+// version/digest rollback refuses receipt creation; it never refreshes, warns,
+// or falls back. Independent content/verifier admission remains pending.
+export function validateTufMetadata(documents, digests, verifiedAt) {
+  requireEvidence(Number.isFinite(verifiedAt), 'verification time is not finite');
+  for (const role of ['root', 'timestamp', 'snapshot', 'targets']) {
+    const document = documents?.[role];
+    requireEvidence(document && typeof document === 'object' && !Array.isArray(document) &&
+      document.signed?._type === role && Number.isInteger(document.signed?.version) &&
+      document.signed.version > 0 && Number.isFinite(Date.parse(document.signed?.expires)),
+      `${role} metadata is incomplete`);
+    requireEvidence(Date.parse(document.signed.expires) > verifiedAt, `${role} expired at verification`);
+  }
+  for (const [parent, child] of [['timestamp', 'snapshot'], ['snapshot', 'targets']]) {
+    const link = documents[parent].signed.meta?.[`${child}.json`];
+    requireEvidence(link && link.version === documents[child].signed.version,
+      `${parent} no longer pins current ${child}`);
+    if (link.hashes?.sha256) requireEvidence(`sha256:${link.hashes.sha256}` === digests?.[child],
+      `${parent} pins a superseded ${child} digest`);
+  }
+  return true;
+}
 
 export async function createTrustReceipt(read, pins = {
   cosign: `sha256:${policy.signature.verifierCandidate.sha256}`, 'index.json': policy.indexDigest,
@@ -38,16 +64,10 @@ export async function createTrustReceipt(read, pins = {
   const metadata = {};
   for (const role of ['root', 'timestamp', 'snapshot', 'targets']) {
     const bytes = await read(`${fresh}/.sigstore/root/tuf-repo-cdn.sigstore.dev/${role}.json`);
-    const document = JSON.parse(bytes);
-    assert.equal(document.signed._type, role);
-    assert.ok(Date.parse(document.signed.expires) > verifiedAt, `${role} expired at verification`);
-    metadata[role] = { digest: digest(bytes), rawBase64: bytes.toString('base64'), document };
+    metadata[role] = { digest: digest(bytes), rawBase64: bytes.toString('base64'), document: JSON.parse(bytes) };
   }
-  for (const [parent, child] of [['timestamp', 'snapshot'], ['snapshot', 'targets']]) {
-    const link = metadata[parent].document.signed.meta[`${child}.json`];
-    assert.equal(link.version, metadata[child].document.signed.version);
-    if (link.hashes?.sha256) assert.equal(`sha256:${link.hashes.sha256}`, metadata[child].digest);
-  }
+  validateTufMetadata(Object.fromEntries(Object.entries(metadata).map(([role, entry]) => [role, entry.document])),
+    Object.fromEntries(Object.entries(metadata).map(([role, entry]) => [role, entry.digest])), verifiedAt);
   const target = metadata.targets.document.signed.targets['trusted_root.json'];
   const roots = await read('trusted_root.json');
   assert.equal(target.hashes.sha256, artifacts['trusted_root.json'].slice(7));
