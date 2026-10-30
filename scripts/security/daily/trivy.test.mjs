@@ -128,8 +128,20 @@ test('should refuse a warm report whose finding inventory diverges from cold', (
   assert.throws(() => validateReportAgreement(cold, drifted), /diverged/);
   const severityChanged = report([finding({ VulnerabilityID: 'CVE-2026-5678', Severity: 'CRITICAL' }), finding()]);
   assert.throws(() => validateReportAgreement(cold, severityChanged), /diverged/);
+  const renamed = report([finding({ PkgName: 'renamed' }), finding({ VulnerabilityID: 'CVE-2026-5678', Severity: 'HIGH' })]);
+  assert.throws(() => validateReportAgreement(cold, renamed), /diverged/);
+  const reidentified = report([finding({ VulnerabilityID: 'CVE-2026-0001' }),
+    finding({ VulnerabilityID: 'CVE-2026-5678', Severity: 'HIGH' })]);
+  assert.throws(() => validateReportAgreement(cold, reidentified), /diverged/);
+  const reordered = report([...cold.Results[0].Vulnerabilities].reverse());
+  assert.equal(validateReportAgreement(cold, reordered), true);
   const otherTarget = { ...cold, Results: [...cold.Results, { Target: 'extra', Class: 'os-pkgs', Type: 'alpine' }] };
   assert.throws(() => validateReportAgreement(cold, otherTarget), /diverged/);
+  assert.throws(() => validateReportAgreement(cold, { ...cold, Results: [] }), /diverged/);
+  const reclassed = { ...cold, Results: [{ ...cold.Results[0], Class: 'lang-pkgs' }] };
+  assert.throws(() => validateReportAgreement(cold, reclassed), /diverged/);
+  assert.throws(() => validateReportAgreement(cold, report([{ VulnerabilityID: 'CVE-2026-1234',
+    InstalledVersion: '1.0', Severity: 'LOW' }])), /incomplete/);
   assert.throws(() => validateReportAgreement(cold, { ...cold, Results: 'alpine' }), /incomplete/);
   assert.throws(() => validateReportAgreement(null, same), /incomplete/);
 });
