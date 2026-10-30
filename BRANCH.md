@@ -6,8 +6,8 @@
 ## Scope / Guardrails
 - [x] Worktree: `tmp/worktrees/memory-mcp-builtin`; branch: `feat/cluster-mesh-memory-mcp`; base: `origin/main`.
 - [x] Make-only, Docker-first; shared Docker flock; `ENV=test-memory-mcp` last; shutdown after qualification.
-- [x] Candidate: engram 0.22.0, SHA-256 `0e740e5c8fd9d8bc167d6efcdd0e2bf86a2af5c6accfc2bc1c464e4477b14f08`; source `2bd7da41779305831b16c94f1272ab3b9d38128e`.
-- [x] No publication or release version depending on unpublished engram; this builtin is PostgreSQL-only for milestone 1; SQLite is milestone 2.
+- [x] Published peer: `@sentropic/engram` 0.22.0 from npm, integrity `sha512-888akd0XH+ODAEU65QMLvAZLDfdgwiLlx4EiiFFy3Go+cWhLm22z48HKq2NardQ32rJm5bOIhqlwKLTnjcO+1w==`; source `2bd7da41779305831b16c94f1272ab3b9d38128e`. The local candidate tarball pin is replaced; the 14 MB fixture file is removed.
+- [x] Release version 0.25.0 on the published peer per owner release instruction; this builtin is PostgreSQL-only for milestone 1; SQLite is milestone 2.
 - [x] All host customization arrives through `definition`; no stub or fallback.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -18,7 +18,10 @@
   - `packages/mcp-platform/tests/transport/**`
   - `packages/mcp-platform/package.json`
   - `Makefile`
+  - `package.json`
   - `package-lock.json`
+  - `scripts/ci/publishable-ci-wiring.test.mjs`
+  - `scripts/ci/tool-locks.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -35,11 +38,14 @@
 - [x] After rebase: source/test typechecks, build, lint, 1425 general tests and 13 required MCP tests pass; the separate-process launcher passes all six tools; isolated containers stopped.
 - [x] BR01-EX1: allow Makefile changes for the dedicated PostgreSQL test environment and hash-pinned candidate test provisioning; additive test tooling only; rollback removes those additions.
 - [x] BR01-EX2: allow `.github/workflows/ci.yml` to require the isolated memory MCP PostgreSQL campaign when validating cluster-mesh; rollback removes the added step; no publication or release-gate exemption.
-- [x] BR01-EX3: update root workspace optional peer metadata only; retain the frozen 0.21.3 substrate development lock. The Docker qualification explicitly installs the hash-pinned 0.22.0 peer; no runtime fallback. Rollback restores those metadata entries.
-- [x] Keep the supplied candidate as a hash-checked test-only fixture so CI can qualify identical unpublished peer bytes.
+- [x] BR01-EX3 (superseded by EX4): update root workspace optional peer metadata only; retain the frozen 0.21.3 substrate development lock. The Docker qualification explicitly installs the hash-pinned 0.22.0 peer; no runtime fallback. Rollback restores those metadata entries.
+- [x] BR01-EX4: release on the published engram 0.22.0. Rationale: owner packet orders the npm pin, the minor bump and the CI tuple fix; engram 0.22.0 is published with verified integrity. Impact: `packages/cluster-mesh/package.json` 0.24.0→0.25.0 and devDep 0.22.0; root `package.json` override re-keyed to `@sentropic/engram@0.22.0`; root `package-lock.json` surgical swap (links intact); `Makefile` peer-tools tarball→npm and install-lane PEERS; `.github/workflows/ci.yml` two PEERS tuples plus re-added memory campaign step (new lane structure); `scripts/ci/publishable-ci-wiring.test.mjs` tuple constant and new `tool-locks.json` shallow profile for the published peer set. Conditional-path-adjacent files (`scripts/ci/*`, root `package.json`) change only for this packet-mandated tuple/pin. Rollback: revert this lane's packets to 0.24.0/0.21.3 pin set and restore the fixture tarball from git history.
+- [x] Keep the supplied candidate as a hash-checked test-only fixture so CI can qualify identical unpublished peer bytes. SUPERSEDED: peer published; fixture pin replaced by the npm 0.22.0 pin with committed lock integrity; tarball file removed.
 - [x] Record unanswered producer questions in root `.tmp/memory-mcp-builtin/questions.md`; choose the narrowest compatible composition.
 - [x] Repin the shared-chunk candidate from Engram source `2bd7da41779305831b16c94f1272ab3b9d38128e`; preserve the atomic split-engine/provenance refusal test and private gate.
-- [ ] BLOCKED — Published engram is still 0.21.3; retain cluster-mesh 0.24.0 per owner instruction. The release bump gate cannot pass for this draft without a changed publication prerequisite.
+- [x] UNBLOCKED — Engram 0.22.0 published (integrity verified against the owner packet). cluster-mesh bumped 0.24.0→0.25.0; enforce-package-bump, manifest-guard tuple, pack-cluster-mesh, API typecheck and toolbox build failures from run 40986944389 are addressed at the root cause (published peer pin + tuple + bump).
+- [x] Rebased onto origin/main `8ea119c4d` (31 commits replayed). ci.yml had been rewritten to the package-candidates lane structure: the memory MCP campaign step is re-added after the isolated package lane (BR01-EX2 preserved); BRANCH.md conflicts kept the memory plan; Makefile/cold-workspace conflicts merged by union (locked-tools installs, mesh-check lane, memory-mcp/memory-mcp-static/memory-mcp-launcher cases kept).
+- [x] npm 11 arborist drops the mcp-broker/mcp-platform workspace links when engram 0.22.0 (exact optional peers on those workspaces) joins the ideal tree alongside regular dependents. Root lock repaired by surgical transplant (main lock + engram 0.22.0 subtree + 0.25.0 mesh entry); links verified intact; full-regen drift avoided. Minimal repro retained in /tmp (wsrepro2).
 - [x] Static validation: lint, source/test typechecks, build and launcher syntax pass; expanded PostgreSQL regression lane: 215 files, 1612 tests pass; 58 existing conditional cases remain outside this lane.
 - [x] Initial expanded run timed out in `tests/storage/instance-ownership.spec.ts`; unchanged focused rerun passes all 13 cases, then the complete expanded lane passes. No timeout increase or exemption.
 - [x] Positive qualification: six required PostgreSQL/stdio/HTTP tests and six static/lazy/refusal tests pass; no required case is skipped. Forget replay preserves its receipt.
@@ -59,7 +65,7 @@
 - [x] **Lot 0 — Baseline and contracts**
   - [x] Read common rules, binding specification, handoff, launch contract and host bindings.
   - [x] Create isolated worktree and pass mechanical harness branch check.
-  - [x] Verify candidate tarball hash.
+  - [x] Verify published engram 0.22.0 integrity against the owner packet (`sha512-888a…`); tarball pin replaced.
 - [x] **Lot 1 — Contract tests first**
   - [x] Add `tests/mcp-memory.spec.ts`: static catalog, lazy selection and atomic peer refusal; red: missing builtin entry.
   - [x] Add `tests/engram-memory/mcp-memory-pg.spec.ts`: all six tools, confirmation guard and two-tenant isolation on real PostgreSQL.
@@ -79,15 +85,15 @@
   - [x] Complete the owner-required two-lens Muse review and reconcile findings.
   - [x] Document the exact host launch line and required definition bindings in `packages/cluster-mesh/docs/memory-mcp.md`.
   - [x] Open draft PR to main: https://github.com/rhanka/sentropic/pull/844.
-  - [ ] Wait for CI completed/success on exact head; producer closure and release prerequisites remain blocking.
+  - [ ] Wait for CI completed/success on exact head (new run after the release packet; run 40986944389 failure causes fixed).
   - [x] Run `make down ENV=test-memory-mcp`; isolated project has no remaining containers.
 
 ## Deferred to BR-XX
-- [x] Publication and release pinning await L5 qualification and published engram 0.22.0.
+- [x] Publication and release pinning awaited L5 qualification and published engram 0.22.0 — both met; pinning done in this lane.
 
 ## Risks / Mitigations
 - [x] Missing or incompatible peer refuses selected compilation atomically.
-- [x] Candidate-only qualification never silently substitutes a published older peer.
+- [x] Published-peer qualification installs the registry 0.22.0 pin with committed integrity; no older or unpublished peer is substituted.
 
 ## Rollback Plan
 - [x] Remove the optional builtin and its catalog/export entries; retain existing durable storage APIs.
