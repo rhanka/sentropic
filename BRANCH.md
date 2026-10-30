@@ -14,6 +14,7 @@
   - `BRANCH.md`
   - `.dockerignore`
   - `packages/cowork-desktop/package.json`
+  - `package-lock.json`
   - `Makefile`
   - `scripts/**`
   - `tools/**`
@@ -34,7 +35,7 @@
   - `api/src/**`
   - `ui/src/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `package-lock.json`
+  - `No additional conditional paths`
 
 ## Feedback Loop
 - [x] Initial isolated tool installer requires a committed profile and invokes npm ci.
@@ -81,6 +82,7 @@
   - [x] Post-Rebase Gate: zero packages with src changes relative to origin/main; no publication version bump applies.
   - [x] Preserve main's precise image-filter contract and require a review date on the pending finding.
   - [x] Exact-head CI reproduced cowork-desktop's forbidden file dependencies after its packaging script became selected; repair only its manifest and root lock; pre-bump registry read: desktop 0.2.0, bridge 0.1.1, chat-ui 0.34.1.
+  - [x] Cowork-desktop 0.2.1 packed-manifest guard passes; root lock retains only the generated workspace metadata delta; immutable L5 verifier and IdP selftest pass unchanged.
   - [x] R5: admit only explicitly named candidate archives and manifest file specs; sibling-admission regression observed red then green.
   - [x] R6: assign exception owners, UTC review dates, removal triggers and accurate scope; expiry regression observed red then green.
   - [x] R7: track isolated catalog SCA coverage separately with owner, scanner and review date; contract observed red then green.
