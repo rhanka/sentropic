@@ -6,6 +6,21 @@ This receipt distinguishes source-lot reviews from review of the integration.
 
 ## 1. Exact-head CI
 
+Run `40951325681` at `c6048eb29` passed the dossier size gate. Its
+`3691474`-byte JS failure is the deliberately oversized baseline fixture;
+the typical fixture has `249234` JS bytes and `291943` portable bytes, with
+no violations. Module attribution identifies the baseline's intentionally
+reimported `governance-routes.json`, not a server or Node dependency.
+The actual failing step in job `123738620065` is installed activation
+conformance: the missing `ACTIVATION_DISPOSABLE` refusal starts a nested
+Vitest runner and exceeds the unchanged 5000ms test limit. The correction
+extracts the same suite startup guard and executes it directly with Node.
+All three missing-variable refusals and all nine installed conformance tests
+remain required; no budget, timeout, production code or skip is changed.
+Local Docker verification passes the full `build-artifact-budget` target
+(14 tests, 2496 equivalence cases, 1758 geometry scenes) and the dedicated
+`test-lazy-package-activation` target (9/9, no pending tests or type errors).
+
 Job `123666763408` in run `40929658189` failed the resources fence inventory:
 W3.a added `POST /resources/artifacts/reader-activation`, but W2.b's independent
 immutable route inventory omitted it. The production route and fences already
@@ -54,6 +69,11 @@ Both lockfiles agree. No package source or package manifest differs from main,
 so this correction requires no package publication/version bump.
 Changes after `74e2b7a2c` are the fence inventory and review records only;
 final-head review must cover them and every integration-only commit.
+
+The CI repair rebases `c6048eb29` onto main `c1e592636`. Only the first
+BRANCH.md patch conflicts; the integration plan wins. The activation test
+correction is authorized by BR143-EX3. Package source and manifests remain
+identical to main, so the Post-Rebase Gate requires no publication bump.
 
 ## 3. Review coverage
 
