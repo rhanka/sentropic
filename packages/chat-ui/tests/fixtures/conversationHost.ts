@@ -1,11 +1,11 @@
 import { createChatServer, createInMemoryChatServerDeps } from '../../../chat-server/src/index.js';
-import { createDefaultTransport } from '../../src/client/transport.js';
-import { createStreamHub } from '../../src/client/streamHub.js';
-import { createConversationRuntime, type ConversationRuntimeOptions } from '../../src/state/conversationRuntime.js';
-import type { DocumentHost } from '@sentropic/chat-runtime/documents';
-import { registerLocalTool, unregisterLocalTool, LocalToolPermissionRequiredError } from '../../src/stores/localTools.js';
+import { createDefaultTransport } from '@sentropic/chat-core/runtime/client/transport';
+import { createStreamHub } from '@sentropic/chat-core/runtime/client/streamHub';
+import { createConversationRuntime, type ConversationRuntimeOptions } from '@sentropic/chat-core/runtime/state/conversationRuntime';
+import type { DocumentHost } from '@sentropic/chat-core/runtime/documents';
+import { registerLocalTool, unregisterLocalTool, LocalToolPermissionRequiredError } from '@sentropic/chat-core/runtime/stores/localTools';
 import { buildChatHistoryTimeline, type ChatHistoryMessage } from '../../../chat-core/src/history.js';
-import type { CheckpointHost } from '../../src/checkpoints/index.js';
+import type { CheckpointHost } from '@sentropic/chat-core/runtime/checkpoints/index';
 
 class FixtureEventSource extends EventTarget {
   closed = false;
