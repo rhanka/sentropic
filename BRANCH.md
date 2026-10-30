@@ -32,6 +32,7 @@
   - `package-lock.json`
 
 ## Feedback Loop
+- [x] Initial isolated tool installer requires a committed profile and invokes npm ci.
 - [x] BRLOCK-EX1: owner explicitly requests Make/CI install fixes; change Makefile, workflow and container install commands only; rollback by reverting this branch.
 
 ## AI Flaky tests
