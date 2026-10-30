@@ -118,7 +118,7 @@ After review corrections, runtime 440, UI 533 unit and 206 DOM tests pass; both 
 Two complementary r2 source reviews approved the earlier implementation; the current corrections need review.
 These checks are technical evidence; GitHub CI completion and owner U0 remain separately recorded gates.
 
-Final candidate qualification at source head `960a3a8e0998c1d26ee41e37376aa17e07823240`:
+Final candidate qualification at source head `a2731ad73d516636f53592af81d9a935bccc60c6`:
 
 | Candidate | SHA-256 |
 | --- | --- |
