@@ -185,12 +185,50 @@ describe('fresh authorisation decision per request', () => {
       workspaces: stores.workspaces,
       workspaceMembers: stores.workspaceMembers,
     });
-    const verdict = await decide.decide({ userId: 'user-1', workspaceId: 'ws-1', sessionId: 's1' }, NOW);
+    const verdict = await decide.decide(
+      { inputKind: 'first_party_http', userId: 'user-1', workspaceId: 'ws-1', sessionId: 's1' },
+      NOW,
+    );
     expect(verdict).toMatchObject({
       allow: true,
+      sessionAuthority: 'login_session',
       tid: 'acme',
       tenantRole: 'member',
       workspaceRole: 'admin',
+    });
+  });
+
+  it('should name the session authority per input kind and fail closed on unbound planes', async () => {
+    const { stores } = await approvedSetup();
+    const decide = createFreshDecision({
+      accounts: stores.accounts,
+      sessions: stores.sessions,
+      tenants: stores.tenants,
+      memberships: stores.memberships,
+      workspaces: stores.workspaces,
+      workspaceMembers: stores.workspaceMembers,
+    });
+    expect(
+      await decide.decide(
+        { inputKind: 'conversation_turn', userId: 'user-1', workspaceId: 'ws-1', conversationSessionId: 'chat-1' },
+        NOW,
+      ),
+    ).toEqual({ allow: false, sessionAuthority: 'conversation_session', reason: 'session_authority_unavailable' });
+    expect(
+      await decide.decide(
+        { inputKind: 'agent_plane', userId: 'user-1', workspaceId: 'ws-1', agentSessionId: 'agent-session-1' },
+        NOW,
+      ),
+    ).toEqual({ allow: false, sessionAuthority: 'agent_session', reason: 'session_authority_unavailable' });
+    expect(
+      await decide.decide(
+        { inputKind: 'runtime_pty', userId: 'user-1', workspaceId: 'ws-1', runtimeRegistrationId: 'reg-1' },
+        NOW,
+      ),
+    ).toEqual({
+      allow: false,
+      sessionAuthority: 'runtime_registration',
+      reason: 'session_authority_unavailable',
     });
   });
 
@@ -210,14 +248,18 @@ describe('fresh authorisation decision per request', () => {
       decision: 'suspend',
       actorId: 'admin',
     });
-    expect(await decide.decide({ userId: 'user-1', workspaceId: 'ws-1', sessionId: 's1' }, NOW)).toEqual({
-      allow: false,
-      reason: 'membership_not_approved',
-    });
-    expect(await decide.decide({ userId: 'user-1', workspaceId: 'ws-1', sessionId: 'unknown' }, NOW)).toEqual({
-      allow: false,
-      reason: 'session_invalid',
-    });
+    expect(
+      await decide.decide(
+        { inputKind: 'first_party_http', userId: 'user-1', workspaceId: 'ws-1', sessionId: 's1' },
+        NOW,
+      ),
+    ).toEqual({ allow: false, sessionAuthority: 'login_session', reason: 'membership_not_approved' });
+    expect(
+      await decide.decide(
+        { inputKind: 'first_party_http', userId: 'user-1', workspaceId: 'ws-1', sessionId: 'unknown' },
+        NOW,
+      ),
+    ).toEqual({ allow: false, sessionAuthority: 'login_session', reason: 'session_invalid' });
   });
 });
 

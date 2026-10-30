@@ -65,7 +65,7 @@ export const IDENTITY_DOMAIN_DESCRIPTORS: readonly IdentityDomainDescriptor[] = 
     domain: 'decision',
     version: IDENTITY_CONTRACT_VERSION,
     status: 'contract-only',
-    records: ['FreshDecision'],
+    records: ['FreshDecisionInput', 'FreshDecision'],
   },
 ];
 
