@@ -158,7 +158,7 @@ test('should install the locked transitive version even when upstream publishes 
 test('should keep reviewed exemptions and the catalog SCA gap owned and unexpired', () => {
   const root = new URL('../../', import.meta.url);
   const policy = JSON.parse(fs.readFileSync(new URL('.security/ci-lockfile-policy.json', root)));
-  for (const id of ['BRLOCK-EX1', 'candidate-archives', 'maintenance-targets', 'l5-snapshot', 'lock-authoring', 'catalog-sca']) {
+  for (const id of ['BRLOCK-EX1', 'candidate-archives', 'maintenance-targets', 'l5-snapshot', 'lock-authoring', 'catalog-sca', 'shared-node-tag']) {
     const entry = policy[id];
     assert.ok(entry?.owner, `${id} owner`);
     assert.match(entry.review_by, /^\d{4}-\d{2}-\d{2}T00:00:00Z$/, `${id} UTC expiry`);
@@ -174,7 +174,10 @@ test('should keep reviewed exemptions and the catalog SCA gap owned and unexpire
 test('should digest-pin the lock guard runtime and mock container base', () => {
   const root = new URL('../../', import.meta.url);
   const make = fs.readFileSync(new URL('Makefile', root), 'utf8');
-  assert.match(make, /^export LLM_MESH_NODE_IMAGE \?= \S+@sha256:[a-f0-9]{64}$/m);
+  const guardMake = fs.readFileSync(new URL('.security/ci-lockfile-installs.mk', root), 'utf8');
+  assert.match(guardMake, /^CI_LOCKFILE_NODE_IMAGE := \S+@sha256:[a-f0-9]{64}$/m);
+  assert.equal((guardMake.match(/\$\(CI_LOCKFILE_NODE_IMAGE\) node/g) ?? []).length, 2);
+  assert.ok(!guardMake.includes('$(LLM_MESH_NODE_IMAGE)'));
   const dockerfile = fs.readFileSync(new URL('tools/scw-tem-mock/Dockerfile', root), 'utf8');
   assert.match(dockerfile, /^FROM \S+@sha256:[a-f0-9]{64}$/m);
 });

@@ -1,7 +1,12 @@
 {
+  "shared-node-tag": {
+    "owner": "CI maintainers", "review_by": "2026-11-30T00:00:00Z",
+    "scope": "Pre-existing shared LLM_MESH_NODE_IMAGE tag default outside the new digest-pinned CI_LOCKFILE_NODE_IMAGE targets; IdP appends its own digest and L5 fingerprints the shared default",
+    "removal_trigger": "Coordinate shared digest migration with a new immutable L5 qualification identity and remove IdP digest concatenation; never change or bypass the retained L5 fingerprint"
+  },
   "BRLOCK-EX1": {
     "owner": "CI maintainers", "review_by": "2026-11-30T00:00:00Z",
-    "scope": "Makefile, CI workflows, container installs, tool/consumer runners and locks, packaging probes, security evidence and their regression tests within BRANCH.md Allowed Paths",
+    "scope": "Makefile, CI workflows, Docker build context and container installs, tool/consumer runners and locks, packaging probes, security evidence and their regression tests within BRANCH.md Allowed Paths",
     "removal_trigger": "Remove branch scope exception when PR 846 closes; rollback by reverting PR 846"
   },
   "candidate-archives": {
