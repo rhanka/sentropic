@@ -37,6 +37,7 @@
     "test:queue": "vitest run tests/queue",
     "test:security": "vitest run tests/security",
     "test:unit": "vitest run tests/unit",
+    "test:canvas-live-harness": "vitest run tests/api/canvas-live-harness.test.ts",
     "test:artifact-store": "vitest run tests/artifact-store",
     "test:object-registry": "vitest run tests/object-registry",
     "test:outbox": "vitest run tests/outbox",
