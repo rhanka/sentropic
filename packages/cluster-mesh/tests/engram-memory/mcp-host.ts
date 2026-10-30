@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { MEMORY_PROVIDER_MANIFEST, type McpMemoryProviderOptions } from '@sentropic/engram/mcp-memory';
 import { computeManifestDigest } from '@sentropic/mcp-platform/tool-configuration';
-import { createEngramMemoryBuiltin, type EngramMemoryDefinitionOptions } from '../../src/integrations/mcp/memory.js';
+import { createEngramMemoryBuiltin, createEngramMemoryWireManifest, type EngramMemoryDefinitionOptions } from '../../src/integrations/mcp/memory.js';
 import { createModuleRegistry } from '../../src/modules/registry.js';
 import { createMcpRegistry } from '../../src/mcp/registry.js';
 import { createPostgresKernel } from '../../src/storage/postgres/index.js';
@@ -74,7 +74,7 @@ export async function memoryMcpHost(tenant = 'tenant-a') {
   registry.select(['sentropic.engram.memory']);
   registry.configure('sentropic.engram.memory', { mode: 'embedded-local', hostBindingRef: 'host-memory' });
   const result = await registry.compile({ bindings: {}, compatibility: {
-    'sentropic.engram.memory': { manifestDigest: computeManifestDigest(MEMORY_PROVIDER_MANIFEST) } } });
+    'sentropic.engram.memory': { manifestDigest: computeManifestDigest(createEngramMemoryWireManifest(MEMORY_PROVIDER_MANIFEST)) } } });
   if (!result.ok) { await builtin.runtime()?.close(); await definition.storage.kernel.ownership?.release(); await host.close();
     throw new Error(JSON.stringify(result.diagnostics)); }
   const runtime = builtin.runtime()!;

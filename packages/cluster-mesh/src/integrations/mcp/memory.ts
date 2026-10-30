@@ -8,6 +8,7 @@ import { composeEngramMemoryDefinition } from './memory-compose.js';
 import type { EngramMemoryDefinitionOptions, EngramMemoryRuntime } from './memory-definition.js';
 export type { EngramMemoryDefinitionOptions, EngramMemoryRuntime } from './memory-definition.js';
 export { registerEngramMemoryTools, type EngramMemoryTransportDefinition } from './memory-transport.js';
+export { createEngramMemoryWireManifest } from './memory-manifest.js';
 
 export interface EngramMemoryBuiltin extends McpRegistryBuiltin {
   /** Available after selected materialization. The host closes it before closing its pool. */
