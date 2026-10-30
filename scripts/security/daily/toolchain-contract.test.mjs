@@ -116,12 +116,17 @@ test('should freeze one DB per campaign and reject corrupted or expired restored
   assert.equal(acquire('vulnerability', root, now + 1), pending);
   const snapshot = await pending;
   assert.equal(acquisitions, 1);
+  await assert.rejects(restoreSnapshot({ ...snapshot, path: join(root, 'absent') }, now),
+    /coverage-blocked: required cache files unavailable/);
   assert.equal((await restoreSnapshot(snapshot, now)).kind, 'vulnerability');
   await assert.rejects(restoreSnapshot(snapshot, Date.parse('2026-10-30T06:00:01Z')), /freshness/);
   await assert.rejects(restoreSnapshot({ ...snapshot, receiptHash: digest('wrong') }, now), /receipt integrity/);
   await chmod(join(snapshot.path, 'trivy.db'), 0o600);
   await writeFile(join(snapshot.path, 'trivy.db'), 'corrupt');
   await assert.rejects(restoreSnapshot(snapshot, now), /cache integrity/);
+  await rm(join(snapshot.path, 'trivy.db'));
+  await assert.rejects(restoreSnapshot(snapshot, now), /coverage-blocked: required cache files unavailable/);
+  assert.equal(acquisitions, 1, 'restoration must never acquire replacement bytes');
 });
 
 test('should reject mismatched OCI bytes and stop when the shared acquisition budget expires', async (t) => {

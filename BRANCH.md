@@ -39,7 +39,7 @@
 
 ## Plan / Todo (lot-based)
 - [x] Lot 0: rules, owner answers and #840 review read; mechanical branch check PASS C1.
-- [ ] Lot 1: `toolchain-cache.mjs` classifies absent cache; `toolchain-contract.test.mjs` verifies failure without network or fallback.
+- [x] Lot 1: `toolchain-cache.mjs` classifies absent cache; `toolchain-contract.test.mjs` verifies failure without network or fallback.
 - [ ] Lot 2: `qualify-targets.sh` reads only named `.env` fields as data; `scan.test.mjs` exercises hostile values and parser rejection.
 - [ ] Lot 3: `qualify-scans.sh` cleans its container after failures; `scan.test.mjs` simulates Docker mid-trial failure.
 - [ ] Lot 4: live hostile configuration control with pinned Log4j, frozen DB and scanner; retain hash-bound public receipt and documentation.
