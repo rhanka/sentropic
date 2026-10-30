@@ -91,6 +91,15 @@ export class LoginSessionError extends Error {
   }
 }
 
+export class DeviceCodeError extends Error {
+  readonly code = 'device_code_invalid' as const;
+
+  constructor(readonly reason: 'not_found' | 'expired' | 'already_resolved') {
+    super(`Device code is invalid: ${reason}`);
+    this.name = 'DeviceCodeError';
+  }
+}
+
 export class WorkspaceAlreadyEnrolledError extends Error {
   readonly code = 'workspace_already_enrolled' as const;
 

@@ -3,6 +3,7 @@
 // in later lots, and the contract tests run unmodified against them.
 
 import type {
+  DeviceCodeStore,
   DivergenceMetricsPort,
   IdentityAuditPort,
   IdentityProofStore,
@@ -18,6 +19,7 @@ import type {
   IdentityStores,
 } from './ports.js';
 import type {
+  DeviceCodeRecord,
   DivergenceSample,
   DivergenceSummary,
   IdentityAuditEvent,
@@ -181,6 +183,38 @@ export class InMemoryInvitationStore implements InvitationStore {
     const updated: InvitationRecord = { ...existing, status: 'revoked' };
     this.byId.set(invitationId, updated);
     return updated;
+  }
+}
+
+export class InMemoryDeviceCodeStore implements DeviceCodeStore {
+  private readonly byDeviceCode = new Map<string, DeviceCodeRecord>();
+  private readonly byUserCode = new Map<string, DeviceCodeRecord>();
+
+  async saveDeviceCode(record: DeviceCodeRecord): Promise<void> {
+    this.byDeviceCode.set(record.deviceCode, record);
+    this.byUserCode.set(record.userCode, record);
+  }
+
+  async findDeviceCode(deviceCode: string): Promise<DeviceCodeRecord | null> {
+    return this.byDeviceCode.get(deviceCode) ?? null;
+  }
+
+  async findDeviceCodeByUser(userCode: string): Promise<DeviceCodeRecord | null> {
+    return this.byUserCode.get(userCode) ?? null;
+  }
+
+  async approveDeviceCode(userCode: string, approvedUserId: string, at: string): Promise<boolean> {
+    const existing = this.byUserCode.get(userCode);
+    if (!existing || existing.status !== 'pending') return false;
+    const updated: DeviceCodeRecord = {
+      ...existing,
+      status: 'approved',
+      approvedUserId,
+      approvedAt: at,
+    };
+    this.byDeviceCode.set(updated.deviceCode, updated);
+    this.byUserCode.set(updated.userCode, updated);
+    return true;
   }
 }
 
@@ -401,6 +435,7 @@ export function createInMemoryIdentityStores(): IdentityStores {
     accounts: new InMemoryUserAccountStore(),
     proofs: new InMemoryIdentityProofStore(),
     invitations: new InMemoryInvitationStore(),
+    deviceCodes: new InMemoryDeviceCodeStore(),
     sessions: new InMemoryLoginSessionStore(),
     memberships: new InMemoryTenantMembershipStore(),
     workspaces: new InMemoryWorkspaceDirectoryStore(),

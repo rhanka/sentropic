@@ -3,6 +3,7 @@
 // later lots. Domains orchestrate through ports only, never through a driver.
 
 import type {
+  DeviceCodeRecord,
   DivergenceSample,
   DivergenceSummary,
   IdentityAuditEvent,
@@ -58,6 +59,14 @@ export interface InvitationStore {
   /** Atomically consumes a pending invitation; false when already consumed. */
   markInvitationConsumed(token: string, at: string): Promise<boolean>;
   revokeInvitation(invitationId: string): Promise<InvitationRecord>;
+}
+
+export interface DeviceCodeStore {
+  saveDeviceCode(record: DeviceCodeRecord): Promise<void>;
+  findDeviceCode(deviceCode: string): Promise<DeviceCodeRecord | null>;
+  findDeviceCodeByUser(userCode: string): Promise<DeviceCodeRecord | null>;
+  /** Atomically approves a pending device code; false when already resolved. */
+  approveDeviceCode(userCode: string, approvedUserId: string, at: string): Promise<boolean>;
 }
 
 export interface LoginSessionStore {
@@ -134,6 +143,7 @@ export interface IdentityStores {
   readonly accounts: UserAccountStore;
   readonly proofs: IdentityProofStore;
   readonly invitations: InvitationStore;
+  readonly deviceCodes: DeviceCodeStore;
   readonly sessions: LoginSessionStore;
   readonly memberships: TenantMembershipStore;
   readonly workspaces: WorkspaceDirectoryStore;
