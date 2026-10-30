@@ -3232,6 +3232,11 @@ jobs:
         run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity
       - name: Qualify artifact dispatch and fail-closed scan joins
         run: make test-ci-dag test-security-parser ENV=test-ci-capacity
+      - name: Qualify daily security adapters without activating the service
+        env:
+          REGISTRY: ''
+          ADMIN_EMAIL: ''
+        run: make test-security-daily ENV=test-ci-capacity
       - name: Prove selection-aware negative cases through the Make entry point
         run: |
           set -euo pipefail
