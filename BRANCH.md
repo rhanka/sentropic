@@ -24,7 +24,7 @@
   - `packages/cluster-mesh/tests/storage/pack-only-dev-gate.mjs` (the contract's bare-probe mirror, same move)
   - `packages/cluster-mesh/tests/storage/pack-only-dev-gate.spec.ts` (the mirror's table and refusal cases, same move)
   - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts` (the contract's packaging-side `isPackOnlyDevBump` table, same move)
-  - `scripts/ci/consumer-locks.json` (SQL-L1-EX6: the frozen consumer closure for the newly published `0.24.0` pin; the installed CI lane resolves the published pin through this committed closure, and #855 adds the same profile line for its tuple move)
+  - `scripts/ci/consumer-locks.json` (SQL-L1-EX6/EX7: frozen consumer closures for the published pins the installed CI lane resolves through this committed universe — `0.24.0` and, after the `0.25.0` release, `0.25.0`; #855 adds the same `0.24.0` profile line for its tuple move)
   - `package-lock.json` (only the `packages/cluster-mesh` workspace version entry; the CI `changes` train lock-sync gate requires the root lockfile to mirror the package bump, refreshed through `make chat-migration-lockfiles`)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
