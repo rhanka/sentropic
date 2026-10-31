@@ -40,10 +40,11 @@ Corrected after round-2 falsification against `origin/main`.
   `canvas`) with `search_catalog` beside stable `search_skills`. Reality check:
   it is a per-process, synchronous-snapshot in-memory registry with first-wins
   collision and no persistent DB-backed or admin-mutated control-plane
-  registration — dynamic in-memory registration does exist for standalone
-  tools and MCP sources (`api/src/services/catalog/composite-registry.ts`,
-  `sources/standalone-tool-source.ts`, `sources/mcp-source.ts`,
-  `SPEC_EVOL_CATALOG.md` §1.3/§1.4). It is a discovery surface for per-turn
+  registration. Standalone tools retain in-memory registration; W4.b uses
+  `sources/host-registry-source.ts` as the sole MCP catalogue source over the
+  authorized compiled app registry, preserving exact tool names. The former
+  `McpCatalogSource` and runtime MCP registration API are retired (PR #807).
+  It is a discovery surface for per-turn
   LLM tool resolution, not a control plane.
 - The reusable package base is wider than chat: `@sentropic/chat-core`,
   `chat-server`, `chat-ui`, `llm-mesh`, `flow`, `skills`, `comments`,

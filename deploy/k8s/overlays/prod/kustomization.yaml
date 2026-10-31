@@ -4,6 +4,7 @@ namespace: sentropic
 resources:
   - ../../base
   - ingress.yaml
+  - artifact-content-ingress.yaml
   - idp-identity-sync
 # Images use the base default (:main) today, matching the live cluster. The release
 # pipeline pins immutable per-release tags/digests here (BR-55c/d), e.g.:
@@ -13,4 +14,5 @@ resources:
 # Pins the live OVH storage class on the postgres StatefulSet, mirroring
 # overlays/preprod (#474). Without it the prod overlay cannot converge at all.
 patches:
+  - path: patch-artifact-content-config.yaml
   - path: patch-postgres-storageclass.yaml

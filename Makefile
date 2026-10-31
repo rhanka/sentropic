@@ -58,7 +58,7 @@ export WEBAUTHN_ORIGIN ?= http://localhost:$(UI_PORT)
 export WEBAUTHN_RP_ID ?= localhost
 export CORS_ALLOWED_ORIGINS ?= http://localhost:$(UI_PORT),http://127.0.0.1:$(UI_PORT),http://ui:5173,https://*.sent-tech.ca,chrome-extension://*,vscode-webview://*
 
-export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/artifacts packages/auth-client packages/auth-hono packages/auth-ui packages/chat-core packages/chat-server packages/cluster-mesh packages/comments packages/connector-host packages/contracts packages/events packages/flow packages/llm-gateway packages/llm-mesh packages/mcp-auth packages/mcp-connector-google packages/mcp-platform packages/oauth-verify packages/skills packages/ubo-contracts api apps/auth-idp apps/llm-gateway e2e/package.json e2e/package-lock.json e2e/tests/fixtures ui/package.json scripts/ci/locked-tools.mjs scripts/ci/tool-locks.json .security/audit-gate.mjs .security/audit-allowlist.json .dockerignore" | tr ' ' '\n' | xargs -I '{}' find {} -type f ! -path '*/node_modules/*' ! -path '*/dist/*' ! -path '*/build/*' ! -name 'data.db' | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
+export API_VERSION    ?= $(shell echo "package.json package-lock.json packages/artifacts packages/auth-client packages/auth-hono packages/auth-ui packages/chat-core packages/chat-server packages/cluster-mesh packages/comments packages/connector-host packages/contracts packages/events packages/flow packages/llm-gateway packages/llm-mesh packages/mcp-auth packages/mcp-connector-google packages/mcp-platform packages/oauth-verify packages/skills packages/ubo-contracts api apps/auth-idp apps/artifact-content apps/llm-gateway e2e/package.json e2e/package-lock.json e2e/tests/fixtures ui/package.json scripts/ci/locked-tools.mjs scripts/ci/tool-locks.json .security/audit-gate.mjs .security/audit-allowlist.json .dockerignore" | tr ' ' '\n' | xargs -I '{}' find {} -type f ! -path '*/node_modules/*' ! -path '*/dist/*' ! -path '*/build/*' ! -name 'data.db' | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export UI_VERSION     ?= $(shell echo "ui/src ui/package.json ui/package-lock.json ui/Dockerfile ui/tsconfig.json ui/vite.config.ts ui/svelte.config.js ui/postcss.config.cjs packages/cowork-desktop/bin packages/cowork-desktop/src packages/cowork-desktop/packaging packages/cowork-desktop/package.json packages/cowork-desktop/tsconfig.json packages/cowork-bridge/src packages/cowork-bridge/package.json packages/cowork-bridge/tsconfig.json packages/chat-ui/src packages/chat-ui/package.json packages/chat-ui/tsconfig.json packages/chat-core/src/runtime packages/chat-core/package.json packages/chat-core/tsconfig.json" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export E2E_VERSION    ?= $(shell echo "e2e/tests e2e/helpers e2e/global.setup.ts e2e/package.json e2e/package-lock.json e2e/npm-toolchain e2e/Dockerfile e2e/playwright.config.ts" | tr ' ' '\n' | xargs -I '{}' find {} -type f | LC_ALL=C sort | xargs cat | sha1sum - | sed 's/\(......\).*/\1/')
 export API_IMAGE_NAME ?= sentropic-api
@@ -601,6 +601,10 @@ test-ci-api-tag-guard: ci-test-env ## Regress publish-api-image tag collision gu
 .PHONY: test-ci-api-image-canonical
 test-ci-api-image-canonical: ci-test-env ## Regress canonical artifact resolution (reuse/absent/fail-closed) and tag inputs
 	@bash scripts/test-api-image-canonical.sh $(or $(CI_CANONICAL_CASE),all)
+
+.PHONY: test-artifact-content-image
+test-artifact-content-image: ci-test-env ## Qualify the content role in the recorded canonical production artifact
+	@bash scripts/test-artifact-content-image.sh $(or $(CONTENT_IMAGE_CASE),all)
 
 .PHONY: api-tool-version build-api-tool-image check-api-tool-image pull-api-tool-image save-api-tool load-api-tool publish-api-tool-image
 api-tool-version: ## Print the content-addressed CI toolbox tag
@@ -2049,6 +2053,16 @@ publish-harness-token: build-harness ## Publish @sentropic/harness using NPM_TOK
 		$(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; token="$$(cat /run/npm-token)"; printf "//registry.npmjs.org/:_authToken=%s\n" "$$token" > /tmp/.npmrc; export NPM_CONFIG_USERCONFIG=/tmp/.npmrc; npm whoami --registry=https://registry.npmjs.org; $(call manifest_guard_publish,harness,--access public --provenance=false)'
 
 IDP_SYNC_KUBECTL_IMAGE := registry.k8s.io/kubectl:v1.35.0@sha256:0bb95b2a450875fc8ceaea2f9987a99fe27c228846e2e00b93b65ebb0d59034e
+include deploy/ci/artifact-content/tests.mk
+
+.PHONY: test-artifact-content
+test-artifact-content: ## Qualify content process behavior, types and lint on the API test executor
+	@$(MAKE) test-api-endpoints SCOPE=apps/artifact-content/tests API_TEST_ARGS="--config ../apps/artifact-content/vitest.config.ts --no-file-parallelism" API_TEST_WORKERS=1 ENV=$(ENV)
+	@$(API_TEST_RUN) api sh -lc 'npx --no-install tsc --project ../apps/artifact-content/tsconfig.json && cd /workspace/apps/artifact-content && npx --no-install eslint src tests'
+
+.PHONY: test-app-cluster-mesh
+test-app-cluster-mesh: test-artifact-content ## Retain the app topic host, reader and catalogue receiving gates
+	@$(MAKE) test-api-endpoints SCOPE="tests/services/catalog tests/services/catalog-characterization.spec.ts tests/api/cluster-mesh-catalog.test.ts tests/api/catalog-auth-context.test.ts tests/api/artifacts-host-credentials.test.ts tests/api/app-mcp-registry.test.ts tests/api/app-mcp-installed.test.ts tests/api/app-artifacts-transport.test.ts tests/api/artifacts-reader-activation.test.ts tests/api/artifacts-host-activation-store.test.ts tests/api/artifacts-host-publication.test.ts tests/api/artifacts-host-migrations.test.ts tests/api/artifacts-host-recovery.test.ts tests/api/cluster-mesh-resources.test.ts tests/api/cluster-mesh-namespace-inventory.test.ts tests/api/cluster-mesh-session.test.ts tests/unit/auth/session-manager.test.ts" API_TEST_WORKERS=1 API_TEST_ARGS="--no-file-parallelism" ENV=$(ENV)
 .PHONY: test-idp-sync-selftest
 test-idp-sync-selftest: ## Build and check the IdP sync bundles locally without cluster access (BR45-EX1)
 	@case "$(ENV)" in test-*) ;; *) echo "ERROR: use ENV=test-*"; exit 1 ;; esac
@@ -2798,7 +2812,7 @@ clean-node-modules: ## Remove workspace node_modules (root-owned cruft from cont
 # -----------------------------------------------------------------------------
 .PHONY: prepare-node-workspace
 .NOTPARALLEL: prepare-node-workspace
-prepare-node-workspace: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-llm-gateway build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-connector-host build-mcp-connector-google ## Prepare mounted workspace node_modules and package dist for dev/test runtime
+prepare-node-workspace: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-llm-gateway build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-artifacts build-connector-host build-mcp-connector-google ## Prepare mounted workspace node_modules and package dist for dev/test runtime
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml build api
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'

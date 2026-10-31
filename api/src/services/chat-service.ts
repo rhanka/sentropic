@@ -46,9 +46,10 @@ import {
 } from './tools';
 import {
   resolveFoundationChatTools,
+  prepareHostRegistryCatalog,
 } from './skills/catalog';
-import { reconcileTenantId } from './tenancy/resolve-tenant';
 import { executeFoundationSkillTool } from './skills/foundation-executor';
+import { resolveTurnCatalogContext } from './catalog/request-authority';
 import { toolService } from './tool-service';
 import { listTabs as listRegisteredTabs, isBrowserSource } from './tab-registry';
 import type { TabEntry } from './tab-registry';
@@ -2769,25 +2770,31 @@ export class ChatService {
         toolSet.set(name, t);
       }
     };
-    // ARCH-11 G1b (§4.2.2): resolve the tenant UPSTREAM and thread it into the sync builder —
-    // legacy workspaceId under alias/shadow (zero behavior change), resolved tenant under strict.
-    const foundationTenantId = await reconcileTenantId({
-      workspaceId: sessionWorkspaceId,
-      userId: options.userId,
-      path: 'catalog:chat-tools',
-    });
-    addResolvedTools(
-      resolveFoundationChatTools({
-        userId: options.userId,
-        workspaceId: sessionWorkspaceId,
-        tenantId: foundationTenantId,
-        workspaceType: wsType,
-        currentUserRole,
-        allowedTools: allowedSkillToolNames,
-      }),
-    );
-    if (allowedSkillToolNames.has('batch_create_organizations')) {
-      addResolvedTools([batchCreateOrganizationsTool]);
+    let catalogAvailable = false;
+    try {
+      const hostRegistry = await prepareHostRegistryCatalog();
+      const catalogContext = await resolveTurnCatalogContext({ userId: options.userId,
+        sessionId: options.sessionId, workspaceId: sessionWorkspaceId, readOnly,
+        allowedTools: ['search_skills', 'search_catalog', ...allowedSkillToolNames,
+          ...(hostRegistry?.tools.keys() ?? [])] });
+      addResolvedTools(
+        resolveFoundationChatTools({
+          userId: options.userId,
+          workspaceId: sessionWorkspaceId,
+          tenantId: catalogContext.tenantId,
+          context: catalogContext,
+          workspaceType: wsType,
+          currentUserRole,
+          allowedTools: allowedSkillToolNames,
+        }),
+      );
+      if (allowedSkillToolNames.has('batch_create_organizations')) {
+        addResolvedTools([batchCreateOrganizationsTool]);
+      }
+      catalogAvailable = true;
+    } catch {
+      toolSet.clear();
+      console.warn('[chat] catalog: unavailable');
     }
     addResolvedTools(localTools);
     tools = toolSet.size > 0 ? Array.from(toolSet.values()) : undefined;
@@ -2961,6 +2968,8 @@ Tools disponibles :
 Règles :
 - Ne tente pas d'accéder à un autre dossier que celui du contexte.`;
     }
+
+    if (!catalogAvailable) contextBlock += '\n\ncatalog: unavailable';
 
     const historyContexts = contextsOverride.filter(
       (c) => !(c.contextType === primaryContextType && c.contextId === primaryContextId)
