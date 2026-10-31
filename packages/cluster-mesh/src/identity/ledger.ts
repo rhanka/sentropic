@@ -283,6 +283,44 @@ export function createEscalationCollection(input: {
   };
 }
 
+/** Verifies every chain over entries in append order; shared by the in-memory
+    double and the durable profiles so tamper detection is one algorithm. */
+export const verifyEscalationChainsOf = (
+  entries: readonly EscalationLedgerEntry[],
+): readonly EscalationChainVerification[] => {
+  const byId = new Map<string, EscalationLedgerEntry[]>();
+  for (const entry of entries) {
+    const chain = byId.get(entry.escalationId) ?? [];
+    chain.push(entry);
+    byId.set(entry.escalationId, chain);
+  }
+  const results: EscalationChainVerification[] = [];
+  for (const [escalationId, chain] of byId) {
+    let verified = true;
+    let reason: EscalationChainVerification['reason'];
+    let prev: string | null = null;
+    for (const entry of chain) {
+      if (entry.prevEntryHash !== prev) {
+        verified = false;
+        reason = 'unknown_predecessor';
+        break;
+      }
+      if (entry.entryHash !== escalationEntryDigest(escalationEntryDraftOf(entry), entry.prevEntryHash)) {
+        verified = false;
+        reason = 'hash_mismatch';
+        break;
+      }
+      prev = entry.entryHash;
+    }
+    results.push(
+      verified
+        ? { escalationId, verified: true }
+        : { escalationId, verified: false, reason: reason ?? 'hash_mismatch' },
+    );
+  }
+  return results;
+};
+
 export class InMemoryIdentityLedger implements IdentityLedgerStore {
   readonly events: IdentityAuditEvent[] = [];
   readonly escalations: EscalationLedgerEntry[] = [];
@@ -323,36 +361,6 @@ export class InMemoryIdentityLedger implements IdentityLedgerStore {
   }
 
   async verifyEscalationChains(): Promise<readonly EscalationChainVerification[]> {
-    const byId = new Map<string, EscalationLedgerEntry[]>();
-    for (const entry of this.escalations) {
-      const chain = byId.get(entry.escalationId) ?? [];
-      chain.push(entry);
-      byId.set(entry.escalationId, chain);
-    }
-    const results: EscalationChainVerification[] = [];
-    for (const [escalationId, chain] of byId) {
-      let verified = true;
-      let reason: EscalationChainVerification['reason'];
-      let prev: string | null = null;
-      for (const entry of chain) {
-        if (entry.prevEntryHash !== prev) {
-          verified = false;
-          reason = 'unknown_predecessor';
-          break;
-        }
-        if (entry.entryHash !== escalationEntryDigest(escalationEntryDraftOf(entry), entry.prevEntryHash)) {
-          verified = false;
-          reason = 'hash_mismatch';
-          break;
-        }
-        prev = entry.entryHash;
-      }
-      results.push(
-        verified
-          ? { escalationId, verified: true }
-          : { escalationId, verified: false, reason: reason ?? 'hash_mismatch' },
-      );
-    }
-    return results;
+    return verifyEscalationChainsOf(this.escalations);
   }
 }
