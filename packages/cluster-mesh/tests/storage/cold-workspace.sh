@@ -20,6 +20,13 @@ tar --exclude=.git --exclude=node_modules --exclude=dist --exclude=tmp \
 cd "$workspace"
 test ! -d node_modules
 mkdir /tmp/cm-tools
+# Keep unrelated AI resolution on the repository's existing locked selection.
+node --input-type=module -e 'import { readFileSync, writeFileSync } from "node:fs";
+  const lock = JSON.parse(readFileSync("package-lock.json", "utf8"));
+  writeFileSync("/tmp/cm-tools/package.json", JSON.stringify({ private: true,
+    overrides: { ai: lock.packages["node_modules/ai"].version } }));'
+# The memory peer installs from the published registry pin (@sentropic/engram@0.22.0
+# in CLUSTER_MESH_PEER_TOOLS); the committed tool lock carries its integrity.
 # Shallow keeps transitive dependents nested so an installed @sentropic/*
 # package can never shadow a workspace symlink below (a hoisted older
 # llm-mesh required by a peer tool would otherwise break sibling builds).
@@ -39,11 +46,16 @@ tsc=/tmp/cm-tools/node_modules/.bin/tsc
 if [ "$CM_ACTION" = candidate ]; then
   export MANIFEST_GUARD_TOOL_DIR=/tmp/cm-tools
   node scripts/ci/package-candidate.mjs produce "$CI_PACKAGE_CANDIDATES" cluster-mesh
+  # The published engram memory dist imports @sentropic/mcp-broker/memory at module
+  # scope, and prepared consumers resolve @sentropic/* through the workspace links.
+  # The broker sits outside the cluster-mesh closure (mcp-platform comes with it),
+  # so seal its dist for prepared lanes; fresh lanes build it in the loop below.
+  "$tsc" --typeRoots /tmp/cm-tools/node_modules/@types -p packages/mcp-broker/tsconfig.json
   tar -czf "$CI_PACKAGE_CANDIDATES/prepared.tgz" -C /tmp cm-workspace cm-tools
   node scripts/ci/package-candidate.mjs seal "$CI_PACKAGE_CANDIDATES" cluster-mesh
   exit 0
 fi
-for package in contracts events llm-mesh oauth-verify mcp-auth auth-hono llm-gateway mcp-platform artifacts comments; do
+for package in contracts events llm-mesh oauth-verify mcp-auth auth-hono llm-gateway mcp-platform mcp-broker artifacts comments; do
   "$tsc" --typeRoots /tmp/cm-tools/node_modules/@types -p "packages/$package/tsconfig.json"
 done
 fi
@@ -56,6 +68,13 @@ mkdir -p ../../.h2a
 if [ -f /source/.h2a/pg-crash-witness.json ]; then
   cp /source/.h2a/pg-crash-witness.json ../../.h2a/
 fi
+memory_mcp_launcher() {
+  printf '%s\n' '{"extends":"./tsconfig.json","compilerOptions":{"rootDir":".","outDir":".memory-launcher","declaration":false,"declarationMap":false},"include":["src/**/*.ts","tests/engram-memory/mcp-launcher-host.ts"],"exclude":["dist","node_modules"]}' > tsconfig.memory-launcher.json
+  "$tsc" -p tsconfig.memory-launcher.json || return
+  ln -s ../assets .memory-launcher/assets || return
+  ln -s .memory-launcher/src dist || return
+  node tests/engram-memory/mcp-launcher-roundtrip.mjs
+}
 case "$CM_ACTION" in
   mesh-check|gateway-check)
     if [ "$CM_ACTION" = mesh-check ]; then cd ../llm-mesh; else cd ../llm-gateway; fi
@@ -63,6 +82,25 @@ case "$CM_ACTION" in
     "$tsc" --noEmit -p tsconfig.json
     if [ "$CM_ACTION" = gateway-check ]; then "$tsc" --noEmit -p tsconfig.test.json; fi
     /tmp/cm-tools/node_modules/.bin/vitest run tests --environment node --maxWorkers=1 ;;
+  memory-mcp-launcher)
+    memory_mcp_launcher ;;
+  memory-mcp-static)
+    "$tsc" --noEmit -p tsconfig.json
+    "$tsc" --noEmit -p tsconfig.test.json
+    "$tsc" -p tsconfig.json
+    node tests/engram-memory/package-contract.mjs
+    node --check examples/memory-mcp-stdio.mjs
+    /tmp/cm-tools/node_modules/.bin/vitest run tests --environment node --maxWorkers=1 \
+      --exclude tests/engram-memory/durable-memory.spec.ts \
+      --exclude 'tests/engram-memory/mcp-memory-*.spec.ts' ;;
+  memory-mcp)
+    # Keep diagnostics from independent static and behavioral checks in one receipt.
+    status=0
+    "$tsc" --noEmit -p tsconfig.json || status=1
+    "$tsc" --noEmit -p tsconfig.test.json || status=1
+    /tmp/cm-tools/node_modules/.bin/vitest run mcp-memory --environment node --maxWorkers=1 || status=1
+    if [ "$status" = 0 ]; then memory_mcp_launcher || status=1; fi
+    exit "$status" ;;
   platform-test)
     cd ../mcp-platform
     /tmp/cm-tools/node_modules/.bin/vitest run "${CM_SCOPE:-tests}" --environment node --maxWorkers=1 ;;
@@ -89,7 +127,7 @@ case "$CM_ACTION" in
       cd "$consumer"
       printf '%s\n' '{"private":true,"type":"module"}' > package.json
       node /source/scripts/ci/locked-consumer.mjs --ignore-scripts --no-audit --no-fund ./sentropic-cluster-mesh-*.tgz \
-        @sentropic/engram@0.21.3 vitest@4.1.5 pg@8.22.0 >/dev/null
+        @sentropic/engram@0.22.0 vitest@4.1.5 pg@8.22.0 >/dev/null
       # Fixture relative paths target installed declarations/runtime/assets.
       # No checkout sources are copied into this consumer.
       ln -s node_modules/@sentropic/cluster-mesh/dist src
@@ -106,7 +144,13 @@ case "$CM_ACTION" in
       sha256sum ./sentropic-cluster-mesh-*.tgz > "$receipt/mesh.sha256"
       exit "$result"
     fi
-    /tmp/cm-tools/node_modules/.bin/vitest run "${CM_SCOPE:-tests}" \
+    # The default unit lane excludes the required PostgreSQL MCP campaign.
+    # Its dedicated CI make target provisions PostgreSQL and runs it without skips.
+    set --
+    if [ -z "$CM_PG_URL" ] && [ -z "${CM_SCOPE:-}" ]; then
+      set -- --exclude 'tests/engram-memory/mcp-memory-*.spec.ts'
+    fi
+    /tmp/cm-tools/node_modules/.bin/vitest run "${CM_SCOPE:-tests}" "$@" \
       --exclude tests/engram-memory/durable-memory.spec.ts --environment node --maxWorkers=1
     if [ "$CM_PG_CRASH_PHASE" = seed ]; then
       mkdir -p /source/.h2a

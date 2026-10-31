@@ -23,6 +23,8 @@ export const CLUSTER_MESH_PROVIDER_MODULE_IDS = [
   'mcp-platform/hono',
   'mcp-platform/stdio',
   'mcp/artifacts',
+  'mcp/memory',
+  'engram-memory/substrate',
   'comments',
 ] as const;
 

@@ -203,7 +203,9 @@ describe('C6 additive asset freeze', () => {
 
   it('should bind the reconciliation to the exact installed declaration bytes', async () => {
     const receipt = await asset('neutral-equivalence');
-    const entry = import.meta.resolve('@sentropic/engram/memory-substrate');
+    // This immutable receipt names 0.21.3. Inspect its explicit archived peer,
+    // independently of the 0.22.0 candidate used by the MCP qualification.
+    const entry = import.meta.resolve('engram-substrate-receipt/memory-substrate');
     const metadata = JSON.parse(await readFile(new URL('../package.json', entry), 'utf8'));
     const declaration = await readFile(new URL('memory-substrate.d.ts', entry));
     expect(metadata.version).toBe(receipt.installedTarget.version);

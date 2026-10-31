@@ -10,7 +10,7 @@ describe('installed Engram producer intent carriage', () => {
   it('should persist producer bytes and let Engram accept replay and refuse a tampered digest', async () => {
     const installed = JSON.parse(readFileSync(new URL('../package.json',
       import.meta.resolve('@sentropic/engram/memory-substrate')), 'utf8'));
-    expect(installed.version).toBe('0.21.3');
+    expect(installed.version).toBe('0.22.0');
     const h = receiptHydrationHost();
     const store = valueOf(await openModuleStorageCanonicalMemoryStoreV1({
       handle: h.handle, grant: h.grant, scope_binding: h.scopeBinding,
