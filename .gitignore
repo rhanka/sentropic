@@ -45,7 +45,7 @@ pnpm-debug.log*
 .h2a/
 .h2a-schema.json
 .playwright-mcp/
-identity/
+/identity/
 keys/
 registry/
 
