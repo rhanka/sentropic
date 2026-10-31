@@ -6,7 +6,7 @@ No staffed windows or temporal slot reservations are required for W0 acceptance 
 
 ## Migration and storage boundaries
 
-- **W1 sole host migration: `api/drizzle/control/0020_app_artifact_host.sql`**, plus generator-required control metadata and bounded schema/runner integration. The previous `0017_app_artifact_host.sql` reservation is **withdrawn**, not renamed on disk: W0 has authored no migration. No product migration is reserved. Consume package SQL unchanged through W1's single executor/journal; do not renumber upstream assets into host migrations.
+- **W1 sole host migration: `api/drizzle/control/0012_app_artifact_host.sql`** (renumbered from the W0-reserved `0020` slot on 31 October: main's A2-M0-MIG linearized the control chain through `0011`, freeing `0012`; the SQL bytes are unchanged), plus generator-required control metadata and bounded schema/runner integration. The previous `0017_app_artifact_host.sql` reservation is **withdrawn**, not renamed on disk: W0 has authored no migration. No product migration is reserved. Consume package SQL unchanged through W1's single executor/journal; do not renumber upstream assets into host migrations.
 - D2/#677 owns **0012–0019**, including the newer `0017_session_content_safety.sql`, `0018_session_content_denial_floor.sql`, `0019_session_content_capture_floor.sql` at remote head `ac020db2c3382fe42356114631c3729ee9d39833`. This supersedes the older 0012–0016-only scan. Cowork's 0009 is retained; Radar's separate ≥0024 prefix does not allocate an app control number.
 - Product source maximum `0043`, control source maximum `0011` are not applied production frontiers. B02 supplies live checksums and both migration journals (`drizzle.__drizzle_migrations`, `public.__drizzle_control_migrations`); W5 compares them before any approved additive migration.
 - API remains the sole migration authority. IdP/content start neither migrations nor other listeners. Additive host tables and private artifact blobs stay separate from legacy document/chat/comments stores and D2 buckets/credentials.
@@ -47,7 +47,7 @@ At approximately 23:34 UTC, `ss -H -ltn`, read-only Docker port inventory and si
 
 | Slot / sole integration owner | Bounded concern / shared ownership transfer |
 |---|---|
-| T1 / C-W1, SC serializes | W1 host services, `api/src/db/run-migrations.ts`, reserved `0020`/metadata; no independent package/lock write. Release storage composition to T2 |
+| T1 / C-W1, SC serializes | W1 host services, `api/src/db/run-migrations.ts`, reserved `0012`/metadata; no independent package/lock write. Release storage composition to T2 |
 | T2 / C-W2 | W2 registry, `api/src/app.ts`, MCP module/adapter/resources seam; sole API manifest/root/API-lock reconciliation turn. Release locks/resources seam to T3 after qualification |
 | T3 / C-W3 | W3 activation/content entrypoint, API Dockerfile, **Makefile/CI**, all I app manifests/base+overlays; KO provisions external DNS/IAM/TLS/bucket resources and supplies receipts |
 | T4 / C-W4 | W4 context/source/callers, catalogue composition and UI. No parallel writer to catalogue/executor; integrate W3 at exit |
