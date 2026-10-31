@@ -26,7 +26,7 @@ Use the existing Make targets with the shared Docker lock, ports `API_PORT=8803 
 
 - `make up-api-test ... ENV=test-app-w3b`
 - `make test-api-endpoints SCOPE=apps/artifact-content/tests API_TEST_ARGS="--config ../apps/artifact-content/vitest.config.ts --no-file-parallelism" ... ENV=test-app-w3b`
-- `make exec-api CMD="npm exec -- tsc --project ../apps/artifact-content/tsconfig.json" ... ENV=test-app-w3b`
+- `make exec-api CMD="npx --no-install tsc --project ../apps/artifact-content/tsconfig.json" ... ENV=test-app-w3b`
 - `make down ENV=test-app-w3b`
 
 The runtime suite creates and drops its own random PostgreSQL database. It imports the unchanged W3.a activation service and real package PG ports. These local checks do not qualify a production image, live ingress or browser bridge.
