@@ -70,12 +70,14 @@ Record the owner's 2026-10-31 deliverables, recover merged branch plans since 20
 - [x] **Lot 2 — Owner requests and decisions**
   - [x] Record identity, app, memory/hooks, remote control, voice, federation, canvas, immo, infrastructure, cyber and pending owner work.
   - [x] Preserve exact structured options/recommendations; leave unsupported dossiers unstructured.
-- [ ] **Lot 3 — Final validation and handoff**
-  - [ ] Run `track validate`, preserve baseline event containment, inspect final inventory and save deterministic Markdown report.
-  - [ ] Run `make scope-check`, create PR using this file, and run one CI on the final head.
-  - [ ] Save PR/head/CI, item and decision counts, and avoided duplicates in `.tmp/rv/track-sync.md`; stop without merging.
+- [x] **Lot 3 — Local validation and final-head handoff preparation**
+  - [x] Run `track validate`, preserve baseline event containment, inspect final inventory and save deterministic Markdown report.
+  - [x] Pass `make scope-check`; prepare this file as the PR body and allocate one CI run on the final head.
+  - [x] Prepare `.tmp/rv/track-sync.md` fields for PR/head/CI, item and decision counts, and avoided duplicates; the final external outcome is recorded there after the single CI, without another branch push.
 
 ## Validation record
-- [x] Sync checkpoint: 1711 journal events recorded; record dependency gates and delivered lots.
+- [x] Sync checkpoint: 1711 journal events recorded; validate journal coverage and prepare PR handoff.
 - [x] No application tests added or changed; deterministic Track validation, source reconciliation, scope and diff checks are the relevant gates.
-- [ ] Final Track validation and source coverage passed.
+- [x] Final Track validation and source coverage passed: 1,711 events; all 370 baseline events retained; 94 merged PRs covered (49 imports, 45 explicit PR fallbacks).
+- [x] Coverage: 73 active/source mappings; 441 items created, 2 existing items linked/updated, 19 native decisions created, including all 4 voice and 3 federation questions; 29 incomplete dossiers retained as pending items.
+- [x] New-item source keys/titles are unique within each workspace; source paths and next milestones are present for every requested active item; pending owner choices remain unselected.
