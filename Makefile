@@ -3618,6 +3618,10 @@ test-api-%: ## Run API tests (usage: make test-api-unit, make test-api-queue, SC
 test-api-smoke-restore: ## Run smoke tests in production mode (for restore validation)
 	@$(API_TEST_RUN) $(if $(filter 1,$(API_TEST_CI)),-e API_BASE_URL=$(API_TEST_URL)) api sh -lc 'npm run test:smoke:restore'
 
+.PHONY: test-canvas-live-harness
+test-canvas-live-harness: ## Run the canvas-live H3 offline harness suite (DS witness 8)
+	@$(API_TEST_RUN) api sh -lc 'npm run test:canvas-live-harness'
+
 # -----------------------------------------------------------------------------
 # Queue Management
 # -----------------------------------------------------------------------------
