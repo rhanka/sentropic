@@ -1,219 +1,78 @@
-# Feature: P1b — Inject conversation state and finish runtime separation
+# Perf: API image slim — install only the API dependency closure
 
 ## Objective
-- [x] Complete P1 under `spec/CHAT_MIGRATION_P0*.md`: preserve supported behavior while separating Sentropic runtime from the injected conversation view.
+- [x] `api/Dockerfile` installs only the dependency closure of the api workspace and the packages it builds (explicit `-w` `npm ci`, lockfile-exact per #846), with a derived reduced lock/manifest set and a BuildKit npm cache mount, so unrelated workspace version bumps stop invalidating the dependency layer and the image stops shipping UI dependencies.
 
 ## Scope / Guardrails
-- [x] Branch `feat/chat-convergence-p1b`, rebased onto `origin/main` (`8ea119c4d`); worktree `tmp/worktrees/chat-p1b`; draft predecessor #817 targets main.
-- [x] Environment `test-chat-p1`; API_PORT=8796 UI_PORT=5196 MAILDEV_UI_PORT=1096; ENV always last.
-- [x] Serialize Docker work with `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; run `make down` after each step.
-- [x] Make targets only; no Python, dev tests, clean-all, publication or merge; main updates via rebase + force-push-with-lease on this branch only.
-- [x] CI lockfile-lane policy acknowledged (review_by=2026-11-30T00:00:00Z); installs resolve committed tool profiles or frozen consumer closures.
-- [x] Selective staging and `make commit`; each commit at most 150 changed lines, excluding unchanged renames, except the BR1-EX5 duplicate-deletion commits.
-- [x] Keep the explicit `() => false` as the default authorization predicate; missing approval must deny execution.
-- [x] Draft sequence to main: P1a runtime foundation/import migration; P1b injected conversation/optional-module boundary and parity.
+- [x] Branch `perf/api-image-slim` from `origin/main` (`1b7f8ab94`); worktree `tmp/worktrees/api-image-slim`.
+- [x] Environment `ENV=test-api-slim` for any stack command; ENV always LAST; never `ENV=dev`.
+- [x] One Docker build at a time under the flock `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; `make down ENV=test-api-slim` after stack steps.
+- [x] Make targets for repo operations; `make commit MSG="..."` only; each commit under 150 changed lines; selective staging.
+- [x] CI lockfile-lane policy acknowledged (review_by=2026-11-30T00:00:00Z); installs resolve committed tool profiles, frozen consumer closures, or the api image's derived pruned lock (`npm ci`; every entry verbatim from the committed root lock).
+- [x] 0 Python; English only; no time estimates; no `make clean-all`; draft PR, no merge.
+- [x] Keep every gate: audit gate (`.security/audit-gate.mjs`), canonical-tag contract (`scripts/test-api-image-canonical.sh`), toolbox contract (`scripts/test-api-tooling.sh`), `make check-ci-version-filters`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `packages/chat-ui/**`
-  - `packages/chat-server/tests/wire-contract.spec.ts`
-  - `packages/cowork-bridge/**`
-  - `packages/cowork-desktop/**`
-  - `ui/src/**`
-  - `ui/tests/**`
-  - `ui/vscode-ext/**`
-  - `ui/package.json`
-  - `ui/package-lock.json`
-  - `package-lock.json`
-  - `scripts/ci/**`
-  - `spec/CHAT_MIGRATION_P1.md`
+  - `api/Dockerfile` (only under `BRIS-EX1`)
 - **Forbidden Paths (must not change in this branch)**:
-  - `.track/**`
-  - `.cursor/rules/**`
-  - `api/src/**`
-  - `api/drizzle/**`
-  - `spec/CHAT_MIGRATION_P0*.md`
-  - `docker-compose*.yml`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `Makefile`
-  - `.github/workflows/ci.yml`
-  - `packages/chat-core/package.json`
-  - `packages/chat-core/tests/runtime/chat-core-host.spec.ts`
-  - `ui/Dockerfile`
-- **Exception process**:
-  - [x] Declare rationale, impact and rollback before changing conditional paths.
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `.github/workflows/**`
+  - `scripts/**`
+  - `packages/**`
+  - `api/**` except `api/Dockerfile`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `api/drizzle/*.sql` (max 1 file; none expected)
 
 ## Feedback Loop
-- [x] BR1-R3-runtime-peer: neutral model helpers are runtime value dependencies, so runtime requires its compatible UI peer; the visual package keeps its runtime peer type-only/optional. Main UI 0.34.1 plus corrected runtime typecheck and 440 tests pass in the precursor worktree.
-- [x] BR1-R3-checks: runtime 440, visual 533 unit/206 DOM tests and both typechecks pass after ownership changes; refresh locks for optional runtime/type-peer metadata.
-- [x] BR1-R3-scope: main integration's make scope-check reports only inbound main paths; mechanical harness scope against origin/main passes without widening the authored scope.
-- [x] BR1-R3-main: merge origin/main without rebase; keep this PR plan on conflict; Track event bytes are identical on both parents.
-- [x] BR1-R3-packed-boundary: scan every executable JS/Svelte file in the exact visual archive for runtime imports, and synchronize the model/context export snapshot.
-- [x] BR1-R3-model-presentation: visual model key/catalog/label helpers have one neutral UI implementation; runtime retains selection/hydration policy and consumes that existing public utility seam. Runtime is an optional type peer of UI.
-- [x] BR1-R3-context-fallback: move the empty visual context provider and its behavior suite into chat-ui; runtime context owns selection/loading only.
-- [x] BR1-R3-stream-presentation: move record/task normalization beside its only consumers in visual stream presentation; remove the orphan runtime module and exports.
-- [x] BR1-R3-documents-host: runtime owns DocumentHost upload/delete/download I/O; the visual package retains only normalized attachment/card declarations.
-- [x] BR1-R3-conversation-port: runtime owns the injected conversation port; views import only its types. The optional neutral UI type peer accepts main 0.34.1 and the separated 1.0.0 contract.
-- [x] BR1-R3-local-host: move the canonical LocalToolsAdapter contract to runtime and retarget Chrome, VSCode, app and runtime consumers; no visual re-export remains.
-- [x] BR1-R3-replay: assert the resolved permission row survives native/domain replay, with no pending prompt, extra execution or duplicate result.
-- [x] BR1-CI-review-F1: accept the review's transitive UI publication gap; explicitly require runtime validation success for UI publication too, including when its runtime publisher was skipped. Extend the fixture dependency-failure matrix.
-- [x] BR1-CI-capacity: reproduce the independent-validator policy failure and stale publication-DAG fixtures; dispatch runtime/UI validators independently, require both before runtime publication, retain installed-pair qualification and runtime-before-UI release ordering.
-- [x] BR1-R2-consensus: two eligible complementary peers approve exact runtime/visual source 54df2098; subsequent consumer manifest repair is separately qualified. Runtime 451/451 and UI DOM 206/206 pass after corrections; final installed pair passes its public HTTP/permission matrix.
-- [x] BR1-checks: package gates pass (201 manifest/CI tests, runtime 451, UI 524 unit/206 DOM, cowork-bridge 27); app typecheck/lint, all 489 app tests and production web/Chrome/VSCode build pass. Post-correction full runtime/DOM regression and final installed hash report pass.
-- [x] BR1-R2-scope: clarify P1 fixture/package completion versus the frozen P2 production cutover; the app continues to consume the extracted controller until P2.
-- [x] BR1-R2-package: export the comment runtime factory at the root, remove orphaned formatting docs and restrict the necessary chat-server test dependency link to test tasks; cleanup removes only that owned link.
-- [x] BR1-R2-types: document the supported high-level TypeScript UI/runtime pair and independent wire subpaths; optional peer does not introduce visual value imports. A new contracts-package redesign is outside the frozen P1 pair.
-- [x] BR1-R2-packed: strengthen clean qualification with installed public runtime behavior: real HTTP payload/commands, subscription remount, default denial/denial/timeout and approved exactly-once result posting; no command stubs.
-- [x] BR1-R2-native-timeout: bound native permission waits too; expiry denies through the real controller and disposal cancels expiry. Add native timeout/disposal proofs with zero execution or successful result.
-- [x] BR1-R2-native: accept the native permission review finding; settle approved only after execution, preserve preflight grants for native continuation, record native denial and guard stale native callbacks after disposal. Keep only the latest resolved status plus pending prompts.
-- [x] BR1-M1: merge P1a review corrections from `8525b730d`; resolve the runtime export map by keeping explicit optional-module/high-level entrypoints and removing the wildcard; Track log remains unchanged.
-- [x] BR1-cowork-check: regenerate the workspace lock for the semver dependency; cowork-desktop typecheck, all 52 tests and strict packed/source manifest guard pass after the correction.
-- [x] BR1-cowork-pack: strict packed/source manifest guard reproduced a forbidden cowork-bridge file dependency in the changed desktop consumer; replace it with published-compatible ^0.1.1, retaining the already reserved desktop 0.2.1 release.
-- [x] BR1-M2: merge P1a's strict consumer manifest/lock correction; preserve both plans' feedback and all 370 Track event IDs without modifying Track.
-- [x] BR1-R1: boundary review APPROVE; packaging findings accepted: include LICENSE, make the temporary UI type peer optional and explicitly enumerate runtime subpaths; align the host export test and handle string-valued export entries.
-- [x] BR1-R1-check: corrected runtime export test 23/23 and guarded pack pass; regenerate optional-peer metadata; P1a UI/runtime source behavior remains unchanged.
-- [x] BR1-EX1: allow additive Makefile runtime build/typecheck/test/pack targets and necessary chat dependency wiring; impact is package tooling only; rollback restores existing targets and removes runtime targets.
-- [x] BR1-EX2: allow CI runtime validation and package release wiring; impact is required runtime gates/bootstrap preparation; rollback removes this additive lane, without publication.
-- [x] BR1-EX3: allow one-line chat-core devDependency widening to `^0.34.1 || ^1.0.0` (mirrors its peer range) so the workspace chat-ui 1.0.0 links at root for optional-peer test resolution; impact is install layout only, no src change; rollback restores `^0.34.1`.
-- [x] BR1-EX4: allow UI image and UI targets to build contracts/events/chat-core dists (Dockerfile RUN lines plus build-chat-core prerequisites) since the ui file: link to chat-core has dist-form exports; impact is build-time only, no src change; rollback removes the RUN lines and prerequisites and restores the publishable-manifest wiring.
-- [x] BR1-EX5: allow two duplicate-deletion commits above 150 changed lines (delete duplicated chat-runtime sources 10066 deletions, delete duplicated tests 8022 deletions); the deleted trees are proven byte-equivalent to `packages/chat-core/src/runtime` modulo specifiers, and single-file deletions exceed the cap by construction so no slice can comply; impact is history only, tree unchanged; rollback not applicable (record-only).
-- [x] BR1-N1 resolved: harness requires numeric exception IDs; corrected P1-prefixed IDs after the first advisory scope failure.
-- [x] BR1-EX6: allow post-rebase release-pin repair — the rebase landed main's published chat-core 0.3.0 and the Post-Rebase Gate bumped the guarded candidate to 0.3.1, so the inbound `packages/chat-core/tests/runtime/chat-core-host.spec.ts` release-pin and the BR1-EX2 `qualify-chat-pair` CORE_ARCHIVE filename are updated to 0.3.1; impact is assertion data and archive naming only, no behaviour change; rollback restores the 0.3.0 pins.
-- [x] Track is single-writer: maintain this mergeable branch artifact; conductor imports it into Track.
+- `BRIS-EX1` (`attention`): scope exception to touch `api/Dockerfile` (declared before any edit).
+  - Reason: the `dependencies` stage runs `npm ci --workspaces --include-workspace-root` over every copied workspace manifest (ui included), installing the whole monorepo (~2.7 G dev image); any workspace version bump or lockfile change invalidates that layer, so every lane rebuilds a private 2.7 G dependency layer and nothing is shared beyond the node base. The stage must install only the api closure (explicit `-w`, lockfile-exact per the #846 lockfile rule) from a derived reduced lock/manifest set with a BuildKit npm cache mount, so unrelated workspace bumps do not invalidate the dependency layer.
+  - Impact: `api/Dockerfile` is an `API_VERSION` and `API_TOOL_VERSION` content-hash input, so the api image and CI toolbox tags change once on merge; CI `build-api-image`/`ci-build-api-tool` and local lanes rebuild on the new tags. Dev (`development`), test (`ci-tools`) and prod (`production`) targets keep their current runtime contract: same sources, same builds, same audit gates; only the installed dependency set shrinks (ui deps and their lock entries leave the image; `ui/package.json` stays a shipped, hashed input via the production stage per the canonical-tag contract). No migration, no data, no API surface change.
+  - Rollback: single-file revert of `api/Dockerfile` to `origin/main`; the full-workspace install and the previous tags return with the next build; no coordinated changes elsewhere.
 
 ## AI Flaky tests
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] Multi-branch draft sequence when necessary; author owns implementation and integration; merge only.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- Rationale: single-file build change, no sub-workstreams.
 
 ## UAT Management (in orchestration context)
-- [x] Automated qualification uses the isolated test environment; personal owner UAT/transfer GO remains U0.
+- **Mono-branch**: no UAT surface (Dockerfile dependency selection only; no UI/runtime behavior change).
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read master/workflow/testing rules, P0 ownership/closure and P1 row.
-  - [x] Create requested worktree and pass `harness check branch`.
-  - [x] Fix environment, Docker lock, scope and atomic commit policy.
-- [x] **Lot 1 — Runtime package and physical ownership**
-  - [x] Refresh root/UI lockfiles for cowork-bridge 0.1.2 and its runtime peer after registry verification.
-  - [x] Migrate cowork-bridge's public SSE dependency/guidance to runtime; registry 0.1.1 verified before reserving 0.1.2.
-  - [x] Remove optional-module and tool-normalization runtime symbols from the visual export snapshot; document the injected conversation/comment and composer role props.
-  - [x] Inject pure comment presentation helpers through the host composition; runtime comments have no value imports from visual code.
-  - [x] Runtime package folded into `@sentropic/chat-core/runtime` (#836 line); no separate package remains.
-  - [x] Move client transport/replay/history/stream hub and their tests without behavior changes.
-  - [x] Migrate client consumers to public runtime subpaths; reserve chat-ui 1.0.0 above registry 0.34.1; runtime registry returns 404.
-  - [x] Remove client entries from the visual export snapshot; retarget moved host export assertions to explicit runtime entries.
-  - [x] Move draft/attachment/projection/controller/session/checkpoint/local-tool implementation and tests; delete original implementations.
-  - [x] Relocate the existing draft/attachment/projection/controller/session implementation and core parity tests unchanged.
-  - [x] Relocate local-tool store, checkpoints, steer/scope helpers and principal-scoped view-marker persistence with existing tests.
-  - [x] Reference neutral visual contracts through public type exports; the runtime imports no visual implementation.
-  - [x] Redirect visual timeline/composer model consumers to relocated public runtime contracts.
-  - [x] Migrate app and cowork execution consumers and corresponding import-boundary assertions to runtime.
-  - [x] Move raw stream fixtures and the checkpoint barrel with runtime parity tests; preserve fixture bytes.
-  - [x] Remove session/controller/projection exports from the visual manifest snapshot.
-  - [x] Remove local-tool/persistence exports from the visual snapshot; runtime typecheck and 301 tests pass.
-  - [x] Migrate VSCode and package test imports to runtime tool/projection modules.
-  - [x] Resolve visual export failures: remove relocated checkpoint export, migrate consumers and align major-version assertions; keep consumer scan strict.
-  - [x] Gate runtime typecheck/tests/pack in the existing chat CI lane; register the guarded runtime pack target without publishing.
-  - [x] Reserve cowork-desktop 0.2.1 above registry 0.2.0 for its runtime import migration; visual unit tests 676/676 and DOM tests 219/219 pass.
-  - [x] Migrate inventoried web/Chrome/VSCode/cowork imports and active tooling links.
-  - [x] Split neutral contracts and optional module state from views; runtime never imports a view implementation.
-  - [x] Relocate context selection, comment retrieval/state and document assembly with their existing behavioral tests.
-  - [x] Split comment formatting into the visual package; remove comment runtime forwarding exports.
-  - [x] Keep file-format labels in the visual package; document attachment/generated-event assembly lives in runtime.
-  - [x] Expose runtime optional-module entrypoints; visual context barrel exports only normalized types.
-  - [x] Qualify breaking chat-ui version and initial runtime version against registry; update lockfiles.
-- [x] **Lot 2 — Injected conversation and complete command binding**
-  - [x] Render injected checkpoint restore/preserve choices and mutation preview; disable duplicate checkpoint actions in runtime state.
-  - [x] Route send checkpoint creation and edit/retry/restore choices through the same runtime commands; reload history after an authorized restore.
-  - [x] Add runtime-owned checkpoint mutation choices and create/fetch/restore I/O through the existing CheckpointHost contract; no view-owned checkpoint lifecycle.
-  - [x] Bind attachment retry/paste, preview/lightbox and generated-file download controls to injected data/commands; visual state contains no upload or extraction implementation.
-  - [x] Retain upload inputs/previews with the runtime; expose pending/failure/retry/removal, paste source and generated-file extraction/download commands through the injected port.
-  - [x] Define a data-only conversation snapshot/command port; allow StreamMessage to render injected segment events without a transport.
-  - [x] Add runtime-owned authorization before platform execution, explicit default `() => false`, bounded permission wait and per-call execution/result deduplication.
-  - [x] Expose session-owned history-event hydration and steer commands without exposing controller construction to views.
-  - [x] Implement runtime conversation commands for full payload/model/context/attachments and retry/stop/edit/feedback/steer through the real session runtime.
-  - [x] Add host-owned conversation snapshots, incremental history hydration and explicit lifetime independent of view subscriptions.
-  - [x] Move comment-state construction and update-subscription lifetime to a host-owned comment runtime.
-  - [x] Migrate mixed optional-module imports in app adapters and existing tests to the correct visual/runtime public entrypoints.
-  - [x] Split the mixed comment tests: visual export/manifest assertions stay in UI; runtime tests retain state behavior and explicit runtime export registration.
-  - [x] Add a shared parity fixture using the real Hono chat server, default transport, stream hub, session runtime and platform I/O adapters.
-  - [x] Add standalone/app-shaped visual fixtures that receive the same host-created runtime and real command implementation.
-  - [x] Add `packages/chat-ui/tests/conversation-runtime-parity.dom.spec.ts`: complete payload/markdown, remount state, command HTTP parity and visible default denial.
-  - [x] Resolve parity evidence: supply the composer's required floating snippet, register the fixture's custom local tool and ignore execution callbacks after machine disposal.
-  - [x] Fix the evidenced send-completion race: clear only the submitted draft/attachments, preserving edits and uploads made while the send finishes; await the send's settled state in payload assertions.
-  - [x] Add real-runtime permission parity tests for missing adapter/executor, denial, timeout, late approval, disposal and exactly-once approved execution/result posting.
-  - [x] Wire pending permission decisions through the host authorization adapter and native continuation; view commands cannot grant permission without that adapter.
-  - [x] Relocate the web-host factory and session-history assembly with their existing tests; keep view implementations in chat-ui.
-  - [x] Inject the visual renderer into the runtime web-host factory; fix the parity SSE adapter's delayed connection with synchronous test-adapter reconnect.
-  - [x] Retarget visual label/panel/context contracts to the relocated public runtime host factory.
-  - [x] Retarget model/session-list views, host composition and existing DOM fixture types to runtime public contracts.
-  - [x] Remove host-factory/history/context-runtime entries from the visual export snapshot.
-  - [x] Split tool-result normalization into runtime; retain markdown/text formatting and smoothing in the visual package.
-  - [x] Resolve typecheck evidence: import canonical comment formatting, normalize wire attachment source/IDs and keep ES2022-compatible lookup.
-  - [x] Replace component runtime creation/disposal with normalized snapshot and command props/declarations.
-  - [x] Bind full send/model/context/tools/attachments, history, retry/stop/edit/feedback/steer and active modules.
-  - [x] Enforce visible permission pending/denied state; approval executes/posts once; no adapter, denial and timeout execute zero times.
-  - [x] Preserve host lifetime across remounts; retain explicit default `() => false` authorization.
-  - [x] Conversation view source slice 1 committed within the atomic limit.
-  - [x] Conversation view source slice 2 committed within the atomic limit.
-  - [x] Conversation view source slice 3 committed within the atomic limit.
-  - [x] Conversation view source slice 4 committed within the atomic limit.
-  - [x] Conversation view source slice 5 committed within the atomic limit.
-  - [x] Conversation view source slice 6 committed within the atomic limit.
-  - [x] Conversation view source slice 7 committed within the atomic limit.
-  - [x] Conversation view source slice 8 committed within the atomic limit.
-  - [x] Conversation view source slice 9 committed within the atomic limit.
-  - [x] Conversation view source slice 10 committed within the atomic limit.
-  - [x] Conversation view source slice 11 committed within the atomic limit.
-  - [x] Conversation view source slice 12 committed within the atomic limit.
-  - [x] Conversation view source slice 13 committed within the atomic limit.
-  - [x] Conversation view source slice 14 committed within the atomic limit.
-  - [x] Conversation view source slice 15 committed within the atomic limit.
-  - [x] Conversation view source slice 16 committed within the atomic limit.
-  - [x] Conversation view source slice 17 committed within the atomic limit.
-  - [x] Conversation view source slice 18 committed within the atomic limit.
-  - [x] Conversation view source slice 19 committed within the atomic limit.
-- [x] **Lot 3 — Parity and packed boundary qualification**
-  - [x] Limit the probe's short domain permission deadline to the explicit timeout case; approval uses the production policy deadline, with unchanged assertion wait bounds.
-  - [x] Add native-platform permission parity through the real session/controller/HTTP fixture: pending visibility, native allow/deny, zero denied execution and exactly-once replay/result posting.
-  - [x] Clean installed pair passes Svelte typecheck with 0 errors/warnings and Vite production build; wire the exact-archive probe and retained head/hash report into CI.
-  - [x] Add standalone/app-shaped live plan-result rendering and IME Enter parity through the real runtime; composing text cannot accidentally submit.
-  - [x] Add a clean installed-pair probe that mounts only exact archives: public-contract Svelte typecheck, production bundle and visual archive ownership scan, with retained SHA-256 evidence.
-  - [x] Enrich the in-memory checkpoint data adapter with persisted anchor metadata, matching the production checkpoint contract rather than bypassing the mutation classifier.
-  - [x] Compose the real comment runtime/panel in both conversation fixtures; verify draft retention, send persistence and one host update subscription across remounts.
-  - [x] Exercise checkpoint create/fetch/restore through the real chat-server HTTP routes; standalone/app-shaped fixtures retain the choice across remount and prove restore-before-retry versus preserve-and-retry ordering.
-  - [x] Use chat-core's real history projection in the fixture session data adapter, matching the production timeline contract; assert lightbox through its existing public test surface.
-  - [x] Respect JSON-safe session state in upload transitions: omit absent optional fields instead of inserting undefined; preserve the failed attachment for retry.
-  - [x] Add real-runtime document/history parity: failed upload retained across remount, retry/preview/remove, full server history restart and generated-file download through host I/O.
-  - [x] Runtime 447/447 and visual unit 524/524 pass; migrate the remaining shell comment fixture to injected host-owned state and forward feedback votes for clear/toggle parity.
-  - [x] Align StreamMessage's boundary assertion with optional transport access and keep public docs explicit about host-owned comment/conversation state.
-  - [x] Resolve visual typecheck's missing public UI type peer in ephemeral runtime dependency links; extend registry preflight to the inventoried cowork-bridge consumer.
-  - [x] Move initials/day-format tests to the visual suite and assert those functions are absent from runtime barrels; full runtime run exposed only the stale visual export assertions (450 other tests passed).
-  - [x] Migrate comment state/mention/thread tests to the same explicitly injected visual presentation helpers used by app composition.
-  - [x] Resolve duplicate textbox roles found by layout tests; the editable input owns textbox semantics and the composer wrapper is a group.
-  - [x] Migrate layout, accessibility, feature defaults, optional slots and label assertions to a host-created real runtime fixture.
-  - [x] Bind the contenteditable text property so a remounted view renders the retained runtime draft; assert both stored and displayed content.
-  - [x] Runtime tests: relocated `transport.test.ts`, `replay.test.ts`, `streamHub.test.ts`, `stream-history-bounds.test.ts`, `stream-throughput.test.ts`, `chat-core-host.spec.ts`.
-  - [x] Runtime tests: relocated `chat-loop-controller.spec.ts`, `chat-session-runtime.test.ts`, `chat-session-hydration.test.ts`, `chat-projection.test.ts`, `projection.golden.spec.ts`.
-  - [x] Runtime tests: relocated `chat-draft.test.ts`, `chat-attachments.test.ts`, `local-tools-store.test.ts`, `checkpoints.spec.ts`, `model-selection.spec.ts`, `agents-view-markers.test.ts`.
-  - [x] Optional module tests: `comments-module.spec.ts`, `documents-attachment-state.test.ts`, `documents-generated-file-cards.test.ts`, `context.spec.ts`, `chat-context.spec.ts`, `web-host.test.ts`. Visual contract metadata: `documents-module.spec.ts`, `host-adapter-types.test.ts` remain in UI.
-  - [x] UI tests: `chat-conversation-functional.dom.spec.ts`, `chat-conversation.dom.spec.ts`, `chat-conversation.spec.ts`; injected standalone and app-shaped fixtures use the same runtime.
-  - [x] Add runtime permission/continuation and remount parity tests with real controller/projection; no command stubs in parity fixtures.
-  - [x] Run package typecheck, unit/DOM tests, app typecheck/lint and affected app tests.
-  - [x] Pack both candidates and prove runtime-free UI and standalone installed consumption.
-- [x] **Lot 4 — Docs consolidation and review**
-  - [x] Consolidate implemented boundaries, real parity fixtures, observed package/app gates and release prerequisites in the P1 specification; CI/owner acceptance remain separate.
-  - [x] Resolve CI graph/pack gates: include runtime validation in final receipts/gate, pack each candidate once with an explicit context/environment, then qualify those exact archives.
-  - [x] Pass explicit test environments to every command in the chat CI validation lane.
-  - [x] Resolve the publisher wiring gate: give runtime its own real validation job and require that job before its publisher, while retaining UI/runtime pair validation ordering.
-  - [x] Document runtime composition, permission adapter semantics, public module ownership and guarded release/bootstrap prerequisites.
-  - [x] Declare runtime-only CI publication filters, guarded publisher ordering and an explicit single-package bootstrap target/allowlist; draft validation cannot publish.
-  - [x] Prepare runtime OIDC/token-bootstrap Make targets by copying the guarded existing package publisher pattern; no publication executed or authorized.
-  - [x] Record pair versions, breaking imports, package bootstrap/OIDC prerequisites and consumer notices in `spec/CHAT_MIGRATION_P1.md`.
-  - [x] Document P1a candidate versions/import notices and the remaining P1b acceptance boundary in `spec/CHAT_MIGRATION_P1.md`.
-- [x] **Lot 5 — Draft handoff**
-  - [x] Open draft sequence #817 (P1a) and #819 (P1b), both targeting main; post each execution plan.
-  - [x] Run `make down ENV=test-chat-p1`; `make ps` shows no services.
-  - [x] Post-rebase head `a2731ad73` green in run `41037053278` (completed/success); docs refresh to current `BRANCH.md`/spec/provenance heads; new exact-head CI completed/success before conductor integration.
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, packet `.tmp/packets/api-image-slim.md` + `COMMON-RULES.md`.
+  - [x] Worktree `tmp/worktrees/api-image-slim` from `origin/main`; `harness check branch` PASS.
+  - [x] Baseline measurements (before): warm rebuild `B0` (102 s, 2.7 GB dev image) and version-bump-only rebuild `B1` (unrelated workspace bump: `packages/mcp-connector-slack` 0.0.0→0.0.1; 311 s, 2.7 GB); bump reverted after measuring.
+- [x] **Lot 1 — BRANCH.md + exception**
+  - [x] `BRIS-EX1` declared in `## Feedback Loop` before touching `api/Dockerfile`.
+- [x] **Lot 2 — Dockerfile dependency slimming** (commits `1477ae2e4`, `67bd43287`)
+  - [x] `deps-manifests` stage: derive the reduced manifest + pruned lock set (api closure only; no ui manifest). Offline validation: pruned output byte-stable across the unrelated bump; `npm ci` dry run against the pruned tree resolves 776 packages lockfile-exact.
+  - [x] `deps` stage: `npm ci --legacy-peer-deps --include-workspace-root -w api -w <closure workspaces>` with `--mount=type=cache,target=/root/.npm`, then the existing audit gate on the installed tree. `--legacy-peer-deps` is required for lockfile exactness: with the ui workspace gone, nothing satisfies chat-core's optional `@sentropic/chat-ui` peer, and npm would re-resolve it from the registry instead of the committed lock. `--legacy-peer-deps` also drops peer-only lock entries at install time; the installed set's only such entry is `jose` (peer of `oauth-verify`, `auth-client`, `auth-hono`, `mcp-auth`), so the prune stage re-declares it as a regular dependency of the derived root manifest and mirrors it in the pruned lock's root entry — the lock-pinned version installs in dev and survives the production prune (offline validation: `JOSE_DEV=present`, `JOSE_PROD=present`, both audit gates OK).
+  - [x] `base`/`ci-tools`/`production` stages re-parented onto the slim install; `ui/package.json` retained in the production image per the canonical-tag contract.
+  - [x] `make scope-check` before each commit (PASS C2 x3).
+- [x] **Lot 3 — Local verification gates**
+  - [x] `make test-ci-api-image-canonical` resolve + tag-inputs + guard-collision cases (host-only) — PASS (8+7+1 cases). `retained-exclusions` runs in CI against the built production image (no local image: disk floor breach, see below).
+  - [x] `make test-ci-api-tooling` — PASS (5 cases).
+  - [x] `make check-ci-version-filters` — PASS.
+  - [x] Offline lock/toolchain validation: nested `esbuild@0.18.20`, `esbuild@0.19.12`, `vitest@4.1.5`, `tsx@4.23.1`, `typescript@5.4.5`, `@sentropic/track@0.91.1`, `isolated-vm@6.1.2`, `gray-matter@4.0.3`, `hono@4.13.0`, `vite@7.3.7` all present in the pruned lock (994/1700 entries).
+  - [x] `TARGET=development` local build + `A0` after-measurements — cold build 186.8 s (compose-reported), dev image 1.78 GB; warm rebuild 4 s (compose 3.7 s), all layers cache hits.
+  - [x] `A1` bump-only rebuild — `packages/mcp-connector-slack` 0.0.0→0.0.1 (manifest + lock `packages["packages/mcp-connector-slack"].version`), build, revert: 8 s (compose 8.2 s); `deps-manifests` re-derived and the `npm ci` layer was CACHED (content-addressed proof the re-derived prune output is bit-identical); image unchanged at 1.78 GB.
+  - [x] `TARGET=production` local build (`make build-api-image`, no-cache canonical flow) — 284 s wall (compose 262.1 s); canonical tag `498618`, image 829 MB, artifact receipt recorded.
+  - [ ] `--target ci-tools` local build — still deferred: CI-verified on the exact head (run 2 `build-api-tool-image` green; the toolbox ran the whole 26/26 api-test-matrix), locally withheld again at 9.9 G free (below the 15 G floor, other lanes building, image removal forbidden).
+  - Instrument disclosure: every build under the lane flock, timing after lock acquisition, `ENV=test-api-slim`/`COMPOSE_PROJECT_NAME=test-api-slim`; the first `A0` cold invocation escaped the flock through a quoting bug in the flock wrapper (no concurrent image build; another lane's container-run workspace builds overlapped) and its wall clocking was broken, so `A0` cold is compose-reported; the warm, `A1` and production runs were correctly flocked (the warm run visibly queued behind another lane's lock). `make down ENV=test-api-slim` done after the builds.
+- [x] **Lot 4 — Final validation**
+  - [x] Measurement-only bump already reverted (nothing to revert: `A1` never ran; worktree clean).
+  - [x] Draft PR with before/after sizes and rebuild times in the body (after-measurements marked blocked with the exact instrument to re-run).
+  - [ ] One CI run on the final head; result recorded in the report. Run 1 (`41103381243`, head `b2a030bb8`) failed: the pruned install lost `jose` — `--legacy-peer-deps` drops peer-only lock entries, so `oauth-verify`'s tsc hit `TS2307: Cannot find module 'jose'`. Fixed by the prune-stage jose re-declaration (root regular dep, mirrored in the pruned lock root entry; offline validation E7/E8: all 18 workspace builds + api build + idp bundle + both audit gates green, jose kept through the production prune). Run 2 (`41108398571`, head `ed3307793`): every job green except `validate-publishable-manifests` — the lockfile guard regression fails on `assert.ok(plan.includes('review_by=<BRLOCK-EX1 review_by>'))` because this branch's `BRANCH.md` replaced the root `BRANCH.md` and dropped the lockfile-lane policy acknowledgment the guard requires on branches whose scope touches container installs (`BRLOCK-EX1` scope). All policy `review_by` dates are unexpired: the run-1 note calling this a pre-existing calendar expiry was wrong, and the slim install itself is already lockfile-exact (the guard's scan-tree regression passes against this tree). Fix: carry the acknowledgment (`review_by=2026-11-30T00:00:00Z`) in `## Scope / Guardrails`; the guard is untouched and not weakened. The next push is the definitive run on the new head; its result goes in the report.
+  - [x] Report to `.tmp/rv/api-image-slim-vibe.md`; stop (no merge).
