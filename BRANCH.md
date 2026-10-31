@@ -30,6 +30,7 @@
   - `packages/cluster-mesh/tests/storage/pack-only-dev-gate.spec.ts` (A23-EX1)
   - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts` (A23-EX1)
   - `package-lock.json` (A23-EX2, version-sync line only)
+  - `.gitignore` (A23-EX4, one-line anchor `identity/` → `/identity/`)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -54,6 +55,7 @@
 - A23-EX1: owner=A2.3 lane author; review_by=PR merge; the `src/` change requires a package version bump (workflow gate), main carries the reserved line `0.25.0` while npm latest stays `0.24.0`, so this branch carries `0.26.0-dev.1` (next free dev version) and moves the reserved-next train one line forward exactly per A2.0 precedent BRA2-EX2: `RESERVED_NEXT` `0.25.0`→`0.26.0` in `tests/fixtures/reserved-versions.ts` + `tests/storage/pack-only-dev-gate.mjs`, one-line vector roll in `tests/storage/pack-only-dev-gate.spec.ts` + `tests/packaging/prepare-artifacts.spec.ts`; frozen published pin stays `0.24.0` (0.25.0 is not on npm). Impact limited to version-train test support, no frozen range widened; rollback by reverting the branch. If another A2 lot lands its dev bump first, rebase and take the next free `-dev.N`.
 - A23-EX2: owner=A2.3 lane author; review_by=PR merge; single-line root `package-lock.json` version sync for `packages/cluster-mesh` (CI train lock-sync assertion; precedent A2.0 BRA2-EX3 `db534d4b9`); full lock regeneration output is reverted except that line; rollback by reverting the commit.
 - A23-EX3: owner=A2.3 lane author; review_by=PR merge; whole-module commits above the 150-line advisory for new files (`src/identity/*.ts`, new specs) so every commit holds complete compilable modules instead of half-file hunks (precedent A2.0 BRA2-EX1); impact limited to this branch history; rollback by reverting the branch.
+- A23-EX4: owner=A2.3 lane author; review_by=PR merge; one-line root `.gitignore` anchor `identity/` → `/identity/` (line 48, "Local agent/tooling state" block added by BR-39c `f3a3d4210`). The unanchored pattern matches ANY directory named `identity` at any depth, so it silently swallows this lot's Allowed Path `packages/cluster-mesh/src/identity/**` (and every future file the identity core lands there, e.g. the M4 agent plane). Anchoring preserves BR-39c's root-local intent (root `identity/` stays ignored) and unblocks tracking the package module; impact: one line of shared repo state, no behavior change for existing tracked files; rollback: revert the commit.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -81,14 +83,14 @@
   - [x] Environment mapping: `ENV=test-cm-a2-3`, port slot convention API `8833` / UI `5233` / Maildev `1133` (no compose service needed for this package-only lot; the PostgreSQL qualification container runs on its own network `cm-storage-test-cm-a2-3`).
   - [x] Confirm scope and guardrails; declare A23-EX1/EX2/EX3.
 
-- [ ] **Lot 1 — A2.3 logic slice over the frozen ports (test first)**
-  - [ ] `src/identity/conversation.ts`: `ConversationSessionRecord`, `ConversationAuthorityStore` port, `createConversationAuthority` domain (open/verify/revoke, fail-closed expiry), in-memory double.
-  - [ ] `src/identity/ledger.ts`: `IdentityLedgerStore` port (audit events + §7.3 escalation entries), hash-linked append-only chain, collection-only regime (`collected` → `approved_unexecutable` | `denied` | `expired`), chain verification, in-memory double.
-  - [ ] `src/identity/decision.ts`: `createFreshDecisionProducer` binding the §2.7 matrix — `first_party_http` delegates to the frozen `createFreshDecision`; `conversation_turn` binds the conversation authority store; `agent_plane`/`runtime_pty` keep refusing `session_authority_unavailable`; injected tool catalog; refusal ⇒ empty tool set, never partial.
-  - [ ] `src/identity/cascade.ts`: F14 composition helper binding the frozen `createPersonCascade` over the store ports + the durable ledger audit port (+ `AgentPlaneRevocationPort` slot, unbound until M4).
-  - [ ] Specs: `tests/identity-decision.spec.ts` (HTTP expiry vs logout-during-turn vs conversation revocation as separate cases; mid-session suspension empties the tool set on the next call; unbound kinds), `tests/identity-cascade.spec.ts` (receipts enumerate every step; one injected step failure left queued and visible), `tests/identity-ledger.spec.ts` (collection regime, chain integrity, tamper refusal).
-  - [ ] Export the A2.3 surface from `packages/cluster-mesh/src/index.ts`.
-  - [ ] Lot gate: `make typecheck-cluster-mesh ENV=test-cm-a2-3`; frozen suite + new specs green via `make test-cluster-mesh SCOPE=tests/identity- ENV=test-cm-a2-3`.
+- [x] **Lot 1 — A2.3 logic slice over the frozen ports (test first)**
+  - [x] `src/identity/conversation.ts`: `ConversationSessionRecord`, `ConversationAuthorityStore` port, `createConversationAuthority` domain (open/verify/revoke, fail-closed expiry), in-memory double.
+  - [x] `src/identity/ledger.ts`: `IdentityLedgerStore` port (audit events + §7.3 escalation entries), hash-linked append-only chain, collection-only regime (`collected` → `approved_unexecutable` | `denied` | `expired`), chain verification, in-memory double.
+  - [x] `src/identity/decision.ts`: `createFreshDecisionProducer` binding the §2.7 matrix — `first_party_http` delegates to the frozen `createFreshDecision`; `conversation_turn` binds the conversation authority store; `agent_plane`/`runtime_pty` keep refusing `session_authority_unavailable`; injected tool catalog; refusal ⇒ empty tool set, never partial.
+  - [x] `src/identity/cascade.ts`: F14 composition helper binding the frozen `createPersonCascade` over the store ports + the durable ledger audit port (+ `AgentPlaneRevocationPort` slot, unbound until M4).
+  - [x] Specs: `tests/identity-decision.spec.ts` (HTTP expiry vs logout-during-turn vs conversation revocation as separate cases; mid-session suspension empties the tool set on the next call; unbound kinds), `tests/identity-cascade.spec.ts` (receipts enumerate every step; one injected step failure left queued and visible), `tests/identity-ledger.spec.ts` (collection regime, chain integrity, tamper refusal).
+  - [x] Export the A2.3 surface from `packages/cluster-mesh/src/index.ts`.
+  - [x] Lot gate: `make typecheck-cluster-mesh ENV=test-cm-a2-3`; frozen suite + new specs green via `make test-cluster-mesh SCOPE=tests/identity- ENV=test-cm-a2-3`.
 
 - [ ] **Lot 2 — Durable store slice on both profiles**
   - [ ] `src/identity/postgres.ts`: `ConversationAuthorityStore` + `IdentityLedgerStore` over the kernel's published `InjectedPgDriver` protocol, parameterized schema, package-owned DDL (`identityEnforcementPgSchema()`).
