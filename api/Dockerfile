@@ -1,4 +1,190 @@
 # syntax=docker/dockerfile:1.4
+# Derive the reduced manifest and lock set for the image's dependency closure
+# BEFORE installing: the derived tree (/out) depends only on the api closure's
+# inputs, so a version bump in an unrelated workspace invalidates at most this
+# cheap stage — never the install layer below. The pruned lock keeps entries
+# verbatim from the committed lock (lockfile-exact, no re-resolution).
+FROM node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2 AS deps-manifests
+WORKDIR /workspace
+COPY package.json package-lock.json* ./
+COPY api/package.json ./api/package.json
+COPY packages/artifacts/package.json ./packages/artifacts/package.json
+COPY packages/auth-client/package.json ./packages/auth-client/package.json
+COPY packages/auth-hono/package.json ./packages/auth-hono/package.json
+COPY packages/chat-core/package.json ./packages/chat-core/package.json
+COPY packages/chat-server/package.json ./packages/chat-server/package.json
+COPY packages/cluster-mesh/package.json ./packages/cluster-mesh/package.json
+COPY packages/comments/package.json ./packages/comments/package.json
+COPY packages/connector-host/package.json ./packages/connector-host/package.json
+COPY packages/contracts/package.json ./packages/contracts/package.json
+COPY packages/events/package.json ./packages/events/package.json
+COPY packages/flow/package.json ./packages/flow/package.json
+COPY packages/llm-gateway/package.json ./packages/llm-gateway/package.json
+COPY packages/llm-mesh/package.json ./packages/llm-mesh/package.json
+COPY packages/mcp-auth/package.json ./packages/mcp-auth/package.json
+COPY packages/mcp-connector-google/package.json ./packages/mcp-connector-google/package.json
+COPY packages/mcp-platform/package.json ./packages/mcp-platform/package.json
+COPY packages/oauth-verify/package.json ./packages/oauth-verify/package.json
+COPY packages/skills/package.json ./packages/skills/package.json
+COPY packages/ubo-contracts/package.json ./packages/ubo-contracts/package.json
+RUN <<'PRUNE'
+cat > /tmp/prune-lock.mjs <<'EOF'
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+
+const ws = '/workspace';
+const out = '/out';
+const closureSections = ['dependencies', 'optionalDependencies'];
+const walkSections = ['dependencies', 'devDependencies', 'optionalDependencies'];
+const readJson = (path) => JSON.parse(readFileSync(path, 'utf8'));
+
+const rootManifest = readFileSync(join(ws, 'package.json'));
+const lock = readJson(join(ws, 'package-lock.json'));
+const api = readJson(join(ws, 'api/package.json'));
+
+// Candidate workspaces: exactly the manifests copied into this stage.
+const candidates = new Map(); // package name -> { dir, manifest }
+for (const dir of readdirSync(join(ws, 'packages'))) {
+  const manifest = readJson(join(ws, 'packages', dir, 'package.json'));
+  candidates.set(manifest.name, { dir: `packages/${dir}`, manifest });
+}
+
+// Runtime dependency closure of the api workspace over the present candidates:
+// a workspace ships in this image only when something that ships depends on it
+// at runtime. Workspace references in devDependencies and peerDependencies do
+// not extend the closure: build-time needs are covered by each workspace's own
+// registry devDependencies (kept in the lock walk below), and today's image
+// already runs chat-core with its optional chat-ui peer unsatisfied.
+const closure = new Map(); // package name -> workspace dir
+const queue = [api];
+while (queue.length > 0) {
+  const manifest = queue.pop();
+  for (const section of closureSections) {
+    for (const name of Object.keys(manifest[section] || {})) {
+      const candidate = candidates.get(name);
+      if (candidate && !closure.has(name)) {
+        closure.set(name, candidate.dir);
+        queue.push(candidate.manifest);
+      }
+    }
+  }
+}
+// packages/skills source is bundled into the api build via relative imports and
+// exercised by the api test suites; isolated-vm and gray-matter resolve only
+// through its manifest, so it stays an installed workspace of this image.
+// The remaining members are the workspaces this image compiles: each
+// `npm --workspace X run build` in the base stage needs X's manifest present
+// and X's registry devDependencies installed (e.g. @sentropic/artifacts, which
+// nothing requires at runtime — cluster-mesh only peers on it).
+const buildWorkspaces = [
+  '@sentropic/artifacts', '@sentropic/auth-client', '@sentropic/auth-hono',
+  '@sentropic/chat-core', '@sentropic/chat-server', '@sentropic/cluster-mesh',
+  '@sentropic/comments', '@sentropic/connector-host', '@sentropic/contracts',
+  '@sentropic/events', '@sentropic/flow', '@sentropic/llm-gateway',
+  '@sentropic/llm-mesh', '@sentropic/mcp-auth', '@sentropic/mcp-connector-google',
+  '@sentropic/mcp-platform', '@sentropic/oauth-verify', '@sentropic/ubo-contracts',
+  '@sentropic/skills',
+];
+for (const name of buildWorkspaces) {
+  const candidate = candidates.get(name);
+  if (candidate) closure.set(name, candidate.dir);
+}
+const workspaceDirs = new Set(closure.values());
+const rootName = JSON.parse(rootManifest).name;
+
+// Prune the committed lock to the closure's dependency set. Entries are copied
+// verbatim: resolved versions stay exactly what the committed lock pinned.
+const keep = new Set(['', 'api', ...workspaceDirs]);
+const pending = [...keep];
+// npm links every installed workspace into the root node_modules; keep those
+// link entries so the pruned lock matches the ideal tree of the -w selection.
+for (const [name, dir] of [...closure, [api.name, 'api'], [rootName, '']]) {
+  const key = `node_modules/${name}`;
+  const entry = lock.packages[key];
+  if (entry && entry.link && entry.resolved === dir) keep.add(key);
+}
+const resolve = (from, name, required) => {
+  let dir = from;
+  for (;;) {
+    const key = (dir ? `${dir}/` : '') + `node_modules/${name}`;
+    const entry = lock.packages[key];
+    if (entry) {
+      if (entry.link && entry.resolved) {
+        // Workspace link: resolve only shipped workspaces; a build-time or peer
+        // reference to a workspace this image does not ship stays unsatisfied,
+        // exactly as in the full build (e.g. chat-core's optional chat-ui peer).
+        if (workspaceDirs.has(entry.resolved)) {
+          if (!keep.has(key)) { keep.add(key); pending.push(key); }
+          if (!keep.has(entry.resolved)) { keep.add(entry.resolved); pending.push(entry.resolved); }
+          return;
+        }
+        if (!required) {
+          // Keep the lock's link and target entries so npm ci resolves the slot
+          // from the committed lock (e.g. chat-core's devDependency on chat-ui):
+          // the link ends up dangling — the target manifest is not shipped —
+          // which is exactly how the full build satisfies that slot today.
+          keep.add(key);
+          if (lock.packages[entry.resolved]) keep.add(entry.resolved);
+          return;
+        }
+        break;
+      }
+      if (!keep.has(key)) { keep.add(key); pending.push(key); }
+      return;
+    }
+    if (dir === '') break;
+    dir = dir.lastIndexOf('/') === -1 ? '' : dir.slice(0, dir.lastIndexOf('/'));
+  }
+  if (required) {
+    console.error(`prune-lock: ${name} (required by ${from || '(root)'}) has no lock entry in the shipped closure`);
+    process.exit(1);
+  }
+};
+while (pending.length > 0) {
+  const from = pending.pop();
+  const entry = lock.packages[from];
+  for (const section of walkSections) {
+    for (const name of Object.keys(entry[section] || {})) {
+      resolve(from, name, section !== 'devDependencies');
+    }
+  }
+  for (const name of Object.keys(entry.peerDependencies || {})) {
+    resolve(from, name, false);
+  }
+}
+
+// Rebuild the lock in the original key order for byte-stable output.
+const packages = {};
+for (const key of Object.keys(lock.packages)) {
+  if (keep.has(key)) packages[key] = lock.packages[key];
+}
+mkdirSync(join(out, 'api'), { recursive: true });
+// --legacy-peer-deps (required: with the ui workspace gone, npm would
+// re-resolve chat-core's @sentropic/chat-ui peer from the registry and drag
+// the whole UI dependency stack back in) also drops peer-only lock entries.
+// The shipped workspaces' only such entry is jose (peer of oauth-verify,
+// auth-client, auth-hono, mcp-auth); declare it as a regular dependency of
+// the derived root so the pinned lock version still installs. Range comes
+// from oauth-verify's own peer declaration.
+const rootManifestJson = JSON.parse(rootManifest);
+const joseRange = JSON.parse(readFileSync(join(ws, 'packages/oauth-verify/package.json'))).peerDependencies?.jose;
+if (joseRange) {
+  rootManifestJson.dependencies = { ...(rootManifestJson.dependencies || {}), jose: joseRange };
+}
+writeFileSync(join(out, 'package.json'), `${JSON.stringify(rootManifestJson, null, 2)}\n`);
+if (joseRange && packages['']) {
+  packages[''].dependencies = { ...(packages[''].dependencies || {}), jose: joseRange };
+}
+writeFileSync(join(out, 'package-lock.json'), `${JSON.stringify({ ...lock, packages }, null, 2)}\n`);
+writeFileSync(join(out, 'api/package.json'), readFileSync(join(ws, 'api/package.json')));
+for (const dir of [...workspaceDirs].sort()) {
+  mkdirSync(join(out, dir), { recursive: true });
+  writeFileSync(join(out, dir, 'package.json'), readFileSync(join(ws, dir, 'package.json')));
+}
+console.log(`prune-lock: kept ${Object.keys(packages).length} of ${Object.keys(lock.packages).length} lock entries; workspaces: api, ${[...workspaceDirs].sort().join(', ')}`);
+EOF
+node /tmp/prune-lock.mjs
+PRUNE
 FROM node:24-alpine3.23@sha256:0468540aa58203ff9e40c2aab3907c52644ab818af6176b1c70a026137dc92a2 AS dependencies
 # Security: Pin npm to a known-good version (reproducible build) to fix glob vulnerabilities in npm dependencies
 COPY scripts/ci/locked-tools.mjs scripts/ci/tool-locks.json /opt/ci-tools/
@@ -78,29 +264,39 @@ RUN mkdir -p /tmp/picomatch-update && \
     fi && \
     rm -rf /tmp/picomatch-update
 WORKDIR /workspace
-COPY package.json package-lock.json* ./
-COPY api/package.json ./api/package.json
-COPY ui/package.json ./ui/package.json
-COPY packages/auth-hono/package.json ./packages/auth-hono/package.json
-COPY packages/contracts/package.json ./packages/contracts/package.json
-COPY packages/events/package.json ./packages/events/package.json
-COPY packages/comments/package.json ./packages/comments/package.json
-COPY packages/auth-client/package.json ./packages/auth-client/package.json
-COPY packages/chat-core/package.json ./packages/chat-core/package.json
-COPY packages/chat-server/package.json ./packages/chat-server/package.json
-COPY packages/cluster-mesh/package.json ./packages/cluster-mesh/package.json
-COPY packages/llm-mesh/package.json ./packages/llm-mesh/package.json
-COPY packages/llm-gateway/package.json ./packages/llm-gateway/package.json
-COPY packages/flow/package.json ./packages/flow/package.json
-COPY packages/skills/package.json ./packages/skills/package.json
-COPY packages/oauth-verify/package.json ./packages/oauth-verify/package.json
-COPY packages/mcp-auth/package.json ./packages/mcp-auth/package.json
-COPY packages/mcp-platform/package.json ./packages/mcp-platform/package.json
-COPY packages/connector-host/package.json ./packages/connector-host/package.json
-COPY packages/mcp-connector-google/package.json ./packages/mcp-connector-google/package.json
-COPY packages/ubo-contracts/package.json ./packages/ubo-contracts/package.json
-COPY packages/artifacts/package.json ./packages/artifacts/package.json
-RUN npm ci --workspaces --include-workspace-root
+# Install only the api dependency closure (20 workspaces), lockfile-exact from
+# the pruned lock derived above: no ui, no chat-ui, no unrelated workspace deps.
+# --legacy-peer-deps keeps the install lockfile-exact: with the ui workspace
+# gone, nothing satisfies chat-core's optional @sentropic/chat-ui peer and npm
+# would re-resolve it from the registry (EUSAGE) instead of trusting the
+# committed lock; every non-optional peer of the installed set still resolves
+# from the lock. The cache mount keeps the npm download cache out of the layer
+# stack so re-installs after unrelated workspace bumps hit the warm cache.
+COPY --from=deps-manifests /out/package.json /out/package-lock.json ./
+COPY --from=deps-manifests /out/api/package.json ./api/package.json
+COPY --from=deps-manifests /out/packages ./packages
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --legacy-peer-deps --include-workspace-root \
+      -w api \
+      -w @sentropic/artifacts \
+      -w @sentropic/auth-client \
+      -w @sentropic/auth-hono \
+      -w @sentropic/chat-core \
+      -w @sentropic/chat-server \
+      -w @sentropic/cluster-mesh \
+      -w @sentropic/comments \
+      -w @sentropic/connector-host \
+      -w @sentropic/contracts \
+      -w @sentropic/events \
+      -w @sentropic/flow \
+      -w @sentropic/llm-gateway \
+      -w @sentropic/llm-mesh \
+      -w @sentropic/mcp-auth \
+      -w @sentropic/mcp-connector-google \
+      -w @sentropic/mcp-platform \
+      -w @sentropic/oauth-verify \
+      -w @sentropic/skills \
+      -w @sentropic/ubo-contracts
 # Security: audit production deps for HIGH/CRITICAL. Exception-aware gate
 # (GHSA allowlist + expiry) — see .security/audit-gate.mjs + vulnerability-register.yaml.
 COPY .security/audit-gate.mjs .security/audit-allowlist.json ./.security/
@@ -209,7 +405,6 @@ RUN rm -rf /usr/local/lib/node_modules/npm
 COPY --from=ci-tool-base /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/npm
 COPY --from=ci-tool-base /workspace/node_modules /workspace/node_modules
 COPY --from=ci-tool-base /workspace/package.json /workspace/package-lock.json /workspace/
-COPY --from=ci-tool-base /workspace/ui /workspace/ui
 COPY --from=ci-tool-base /workspace/.security /workspace/.security
 COPY --from=base /workspace/api /workspace/api
 COPY --from=base /workspace/packages /workspace/packages
@@ -270,6 +465,10 @@ COPY --from=production-dependencies /workspace /workspace
 # Runtime entrypoints and boot migrations use Node directly, never npm/npx.
 RUN rm -rf /usr/local/lib/node_modules/npm /usr/local/bin/npm /usr/local/bin/npx /root/.npm && \
     ! command -v npm && ! command -v npx && test ! -e /root/.npm
+# Retained input (canonical contract): /workspace/ui/package.json ships in the
+# production image because it is hashed into API_VERSION; the runtime never
+# imports the ui workspace, whose dependencies are no longer installed here.
+COPY ui/package.json ./ui/package.json
 COPY --from=build /workspace/api/dist /workspace/api/dist
 # BR-39 deploy (D4-a) — bundle the standalone IdP entrypoint + its login/consent
 # screens into the SAME image. The api runtime is untouched (default CMD below);
