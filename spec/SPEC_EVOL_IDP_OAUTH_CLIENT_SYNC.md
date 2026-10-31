@@ -102,7 +102,9 @@ withdrawal/reapproval without resurrection, and sync racing renewal/creation.
 Fixtures export public immo-mcp with scopes immo:read, immo:search,
 immo:documents:read, none/null/S256, the unchanged Claude callback, and prod
 resource https://immo.sent-tech.ca/mcp. Import with ALLOWED_CLIENTS=immo-mcp must
-produce https://preprod.immo.sent-tech.ca/mcp and rollback completely in dry-run.
+produce https://preprod.immo.sent-tech.ca/mcp, append the preprod-only
+immo:artifacts:read and immo:artifacts:write scopes to the desired immo-mcp row
+(the prod row keeps its three immo scopes), and rollback completely in dry-run.
 The SQL fixture gate exports the committed synthetic row to a temporary artifact;
 a Node selftest invokes the real authorize handler with that row and verifies
 302 to preprod login. Negative checks prove the missing-client 400 and prod
