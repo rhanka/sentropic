@@ -9,7 +9,9 @@ export const RESOURCE_ROUTES = [
   ['POST', '/resources/edit'],
   ['POST', '/resources/invoke'],
 ] as const;
-export const RESOURCE_PATHS = RESOURCE_ROUTES.map(([, path]) => path);
+export const RESOURCE_PATHS: readonly string[] = [...RESOURCE_ROUTES.map(([, path]) => path),
+  '/resources/artifacts/*', '/resources/artifacts/ensure', '/resources/artifacts/publish',
+  '/resources/artifacts/list', '/resources/artifacts/meta/:artifactId', '/resources/artifacts/reader-activation'];
 export type ResourceHttpVerb = (typeof RESOURCE_ROUTES)[number][1] extends `/resources/${infer V}` ? V : never;
 
 const ref = z.object({

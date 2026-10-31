@@ -7,6 +7,7 @@ import {
   users, 
   workspaces,
   workspaceMemberships,
+  tenantMemberships,
   objectLocks,
   contextDocuments,
   webauthnCredentials, 
@@ -212,6 +213,12 @@ export async function seedTestData() {
       { workspaceId: E2E_WS_B, userId: E2E_USER_B_ID, role: 'admin', createdAt: now },
       { workspaceId: E2E_WS_VICTIM, userId: E2E_USER_VICTIM_ID, role: 'admin', createdAt: now },
     ]);
+    // Active fixture accounts need tenant approval for catalog discovery and chat tools.
+    await db.insert(tenantMemberships).values(
+      [E2E_ADMIN_ID, E2E_USER_A_ID, E2E_USER_B_ID, E2E_USER_VICTIM_ID].map(userId => ({
+        tenantId: 'sentropic', userId, status: 'approved', role: 'member',
+      })),
+    );
 
     // 1. Organisations de test (profil dans organizations.data JSONB)
     const testOrganizationsData = [

@@ -1,25 +1,18 @@
-import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { enabled, fixtureDir, nodeJson, tsc, TSC_CASES } from './helpers.js';
-
-const required = process.env.ACTIVATION_CONFORMANCE_REQUIRED === '1';
-if (required || enabled) {
-  assert.ok(enabled, 'CLUSTER_MESH_PACKAGING_DIR is required');
-  assert.ok(process.env.DATABASE_URL, 'DATABASE_URL is required');
-  assert.equal(process.env.ACTIVATION_DISPOSABLE, '1', 'ACTIVATION_DISPOSABLE=1 is required');
-  assert.match(new URL(process.env.DATABASE_URL).pathname, /^\/test[_-][a-z0-9_-]+$/i, 'A test database name is required');
-}
+import { required } from './activation-environment.js';
 
 // Ordinary cluster-mesh unit runs have no packed consumer; the dedicated target always requires this suite.
 describe.skipIf(!required && !enabled)('installed activation conformance vectors', () => {
   it.each(['CLUSTER_MESH_PACKAGING_DIR', 'DATABASE_URL', 'ACTIVATION_DISPOSABLE'])
     ('should fail the required suite when %s is missing', key => {
-      const result = spawnSync(fixtureDir('tools/node_modules/.bin/vitest'), [
-        'run', 'tests/packaging/activation-vectors.spec.ts', '--config', fixtureDir('tools/vitest.config.ts'),
-        '--environment', 'node', '--maxWorkers=1',
+      // Execute the suite's actual startup guard without booting a nested test runner.
+      const result = spawnSync(process.execPath, [
+        fileURLToPath(new URL('./activation-environment.ts', import.meta.url)),
       ], { encoding: 'utf8', env: { ...process.env, ACTIVATION_CONFORMANCE_REQUIRED: '1', [key]: undefined } });
-      expect(result.status).not.toBe(0);
+      expect(result.status, result.stderr).toBe(1);
       expect(result.stdout + result.stderr).toContain(key);
     });
 

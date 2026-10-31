@@ -307,7 +307,7 @@ describe('0-regression — workflow entries absent from resolveFoundationChatToo
     const tools = resolveFoundationChatTools({
       userId: 'u-lot4-test',
       workspaceId: 'ws-lot4-test',
-      workspaceType: 'ai-ideas',
+      workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
       allowedTools: ALL_FOUNDATION_TOOL_NAMES,
     });
@@ -329,7 +329,7 @@ describe('0-regression — workflow entries absent from resolveFoundationChatToo
     const tools = resolveFoundationChatTools({
       userId: 'u-lot4-test',
       workspaceId: 'ws-lot4-test',
-      workspaceType: 'ai-ideas',
+      workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
       allowedTools: ALL_FOUNDATION_TOOL_NAMES,
     });
@@ -343,7 +343,7 @@ describe('0-regression — workflow entries absent from resolveFoundationChatToo
     const tools = resolveFoundationChatTools({
       userId: 'u-lot4-test',
       workspaceId: 'ws-lot4-test',
-      workspaceType: 'ai-ideas',
+      workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
       allowedTools: ALL_FOUNDATION_TOOL_NAMES,
     });
@@ -356,7 +356,7 @@ describe('0-regression — workflow entries absent from resolveFoundationChatToo
     const tools = resolveFoundationChatTools({
       userId: 'u-lot4-test',
       workspaceId: 'ws-lot4-test',
-      workspaceType: 'ai-ideas',
+      workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
       allowedTools: ALL_FOUNDATION_TOOL_NAMES,
     });

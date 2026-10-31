@@ -9,6 +9,7 @@ import {
   folders,
   jobQueue,
   initiatives,
+  tenantMemberships,
   users,
   workspaces,
   workspaceMemberships
@@ -52,6 +53,7 @@ describe('AI - comment_assistant tool exposure', () => {
     });
 
     user = await createAuthenticatedUser('editor');
+    await db.insert(tenantMemberships).values({ userId: user.id, tenantId: 'sentropic', status: 'approved' });
     const folderResponse = await authenticatedRequest(app, 'POST', '/api/v1/folders', user.sessionToken!, {
       name: `Test Folder ${createTestId()}`,
       description: 'Test folder for comment assistant',
