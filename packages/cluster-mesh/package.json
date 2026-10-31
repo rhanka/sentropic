@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/cluster-mesh",
-  "version": "0.25.0-dev.1",
+  "version": "0.25.0",
   "description": "Injectable Cluster Mesh control-plane contracts, namespace modules, and single-instance runtime.",
   "type": "module",
   "license": "MIT",
@@ -172,6 +172,10 @@
       "types": "./dist/integrations/mcp/artifacts.d.ts",
       "import": "./dist/integrations/mcp/artifacts.js"
     },
+    "./mcp/memory": {
+      "types": "./dist/integrations/mcp/memory.d.ts",
+      "import": "./dist/integrations/mcp/memory.js"
+    },
     "./loaders/mcp": {
       "types": "./dist/loaders/mcp/index.d.ts",
       "import": "./dist/loaders/mcp/index.js"
@@ -179,6 +183,9 @@
   },
   "files": [
     "dist",
+    "examples/memory-mcp-stdio.mjs",
+    "docs/memory-mcp.md",
+    "docs/memory-mcp-candidate.md",
     "contracts",
     "assets/storage",
     "README.md",
@@ -210,6 +217,7 @@
     "hono": "^4.10.7"
   },
   "peerDependencies": {
+    "@sentropic/engram": ">=0.22.0 <0.23.0",
     "@sentropic/comments": "^0.3.0",
     "@sentropic/llm-mesh": "0.19.2 || >=0.22.0 <0.33.0",
     "@sentropic/llm-gateway": ">=0.19.0 <0.23.0",
@@ -220,6 +228,7 @@
     "jose": "^5.10.0"
   },
   "peerDependenciesMeta": {
+    "@sentropic/engram": { "optional": true },
     "@sentropic/comments": { "optional": true },
     "@sentropic/llm-mesh": { "optional": true },
     "@sentropic/llm-gateway": { "optional": true },
@@ -230,7 +239,7 @@
     "jose": { "optional": true }
   },
   "devDependencies": {
-    "@sentropic/engram": "0.21.3",
+    "@sentropic/engram": "0.22.0",
     "@types/node": "^22.10.10",
     "typescript": "5.4.5"
   }

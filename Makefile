@@ -16,7 +16,7 @@ MANIFEST_PACK_IMAGE = $(MANIFEST_GUARD_IMAGE)
 CM_RUN = docker run --rm --init $(CM_DOCKER_NETWORK)
 CM_RUN_IMAGE = $(LLM_MESH_NODE_IMAGE)
 LOCKED_INSTALL_MOUNTS = -v "$(CURDIR)/scripts/ci:/workspace/scripts/ci:ro" -v "$(CURDIR)/package-lock.json:/workspace/package-lock.json:ro"
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-mem-release test-artifacts-021 test-artifacts-022 test-llm-judge),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-mem-release test-memory-mcp test-artifacts-021 test-artifacts-022 test-llm-judge),)
 ARTIFACTS_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.immo-861.yml
 ARTIFACTS_RUN = $(ARTIFACTS_COMPOSE) run --rm --no-deps
 ARTIFACTS_RUN_IMAGE = qualification
@@ -994,8 +994,8 @@ typecheck-llm-mesh: ## Run @sentropic/llm-mesh type checks
 
 .PHONY: lint-llm-mesh lint-llm-gateway lint-cluster-mesh
 lint-llm-mesh lint-llm-gateway lint-cluster-mesh: lint-%: ## Lint a root-owned mesh/gateway package
-	@$(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b test-mem-release,$(ENV)),$(CM_RUN),docker run --rm) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" \
-		-w /workspace/packages/$* $(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b test-mem-release,$(ENV)),$(CM_RUN_IMAGE),$(LLM_MESH_NODE_IMAGE)) sh -lc 'set -eu; \
+	@$(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b test-mem-release test-memory-mcp,$(ENV)),$(CM_RUN),docker run --rm) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" \
+		-w /workspace/packages/$* $(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-mem-e11b test-mem-release test-memory-mcp,$(ENV)),$(CM_RUN_IMAGE),$(LLM_MESH_NODE_IMAGE)) sh -lc 'set -eu; \
 		tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" \
 			--no-save --no-audit --no-fund eslint@10.0.2 typescript-eslint@8.56.1 >/dev/null; \
 		printf "%s\n" "import tseslint from '\''typescript-eslint'\'';" \
@@ -1006,7 +1006,7 @@ lint-llm-mesh lint-llm-gateway lint-cluster-mesh: lint-%: ## Lint a root-owned m
 .PHONY: typecheck-cluster-mesh test-cluster-mesh build-cluster-mesh pack-cluster-mesh publish-cluster-mesh publish-cluster-mesh-token
 # BRE-EX1: provider leaves need the optional peers' dists at dev time; link them inside the container and remove the links on
 # exit, interrupt or termination (INT/TERM exit through the EXIT trap; `docker run --init` forwards signals to the shell).
-CLUSTER_MESH_PEER_TOOLS := hono@4.10.7 jose@5.10.0 zod@4.6.7 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 semver@7.7.2 @sentropic/engram@0.21.3
+CLUSTER_MESH_PEER_TOOLS := hono@4.10.7 jose@5.10.0 zod@4.6.7 @hono/zod-validator@0.7.5 @simplewebauthn/server@13.2.2 semver@7.7.2 @sentropic/engram@0.22.0 engram-substrate-receipt@npm:@sentropic/engram@0.21.3
 typecheck-cluster-mesh: ## Run self-contained cold @sentropic/cluster-mesh type checks
 	@$(MAKE) cluster-mesh-workspace CM_ACTION=typecheck ENV=$(ENV)
 
@@ -1042,7 +1042,7 @@ ci-package-qualification: ci-package-verify
 	    case "$(PACKAGE_LANE)" in \
 	      installed) target=cluster-mesh-comments-installed ;; \
 	      major) target=cluster-mesh-pg-major-upgrade ;; \
-	      install) exec $(MAKE) qualify-published-install TARBALL="$$tarball" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.30.0,@sentropic/llm-gateway@0.21.5,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=$(ENV) ;; \
+	      install) exec $(MAKE) qualify-published-install TARBALL="$$tarball" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json PEERS=@sentropic/llm-mesh@0.30.0,@sentropic/llm-gateway@0.21.5,@sentropic/mcp-auth@0.2.1,@sentropic/auth-hono@0.17.0,@sentropic/artifacts@0.2.0,jose@5.10.0,@sentropic/comments@0.3.1,@sentropic/engram@0.22.0 REPORT_DIR=tmp/ci-manifest-guard/qualify-cluster-mesh ENV=$(ENV) ;; \
 	    esac; \
 	    $(MAKE) -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk "$$target" CM_COMMENTS_TARBALL="$$tarball" SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json CM_COMMENTS_REPORT=tmp/ci-manifest-guard/qualify-cluster-mesh/$(PACKAGE_LANE) ENV=$(ENV) ;; \
 	  *) echo 'Unknown package qualification lane' >&2; exit 1 ;; \
@@ -1110,8 +1110,17 @@ engram-e2-mechanical:
 
 .PHONY: engram-e2-postgres-up
 engram-e2-postgres-up:
-	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-mem-release,$(ENV))"
+	@test -n "$(filter test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-mem-release test-memory-mcp,$(ENV))"
 	@$(ARTIFACTS_COMPOSE) up -d --wait postgres
+
+.PHONY: memory-mcp-qualify
+memory-mcp-qualify: ## Require the candidate memory MCP tools on real isolated PostgreSQL
+	@test "$(ENV)" = test-memory-mcp
+	@set -eu; mkdir -p tmp/memory-mcp-receipts "$$(dirname "$(E2_LOCK)")"; \
+		trap 'flock "$(E2_LOCK)" $(MAKE) down ENV=$(ENV)' EXIT; \
+		flock "$(E2_LOCK)" $(MAKE) engram-e2-postgres-up ENV=$(ENV); \
+		set -o pipefail; flock "$(E2_LOCK)" $(MAKE) cluster-mesh-workspace CM_ACTION=memory-mcp \
+		CM_PG_URL=postgresql://app:app@postgres:5432/app ENV=$(ENV) 2>&1 | tee tmp/memory-mcp-receipts/tools.log
 
 engram-e2-stable-publish-guard:
 	@version="$$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' packages/cluster-mesh/package.json | head -1)"; \
@@ -2078,7 +2087,7 @@ test-idp-sync-sql: ## Test isolated IdP SQL and imported-client authorize accept
 .PHONY: scope-check
 include docs/governance/kit/artifact-weight.mk
 
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-sec-zod4 test-artifacts-021 test-artifacts-022 test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-resync-752 test-llm-judge test-mem-e11 test-mem-e11b test-mem-release test-artifact-weight),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-sec-zod4 test-artifacts-021 test-artifacts-022 test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-resync-752 test-llm-judge test-mem-e11 test-mem-e11b test-mem-release test-artifact-weight test-memory-mcp),)
 scope-check: ## Advisory C2 scope-check via the installed host harness (BR861-EX1, BR01-EX2)
 	@files="$$( { git diff --cached --name-only $(SCOPE_BASE); git diff --name-only $(SCOPE_BASE); } | sort -u | paste -sd, - )"; \
 	harness check scope --branch-md "$(CURDIR)/BRANCH.md" --staged-files "$$files"
@@ -2910,7 +2919,7 @@ up-ui: ## Start the ui stack in detached mode
 
 .PHONY: down
 down: ## Stop and remove containers, networks, volumes
-ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-mem-release test-artifacts-021 test-artifacts-022 test-llm-judge),)
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-mem-release test-artifacts-021 test-artifacts-022 test-llm-judge test-memory-mcp),)
 	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans
 else
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down

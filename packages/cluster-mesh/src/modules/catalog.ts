@@ -14,6 +14,8 @@ export const MCP_PLATFORM_RANGE = '>=0.4.0 <0.5.0';
 export const ARTIFACTS_PACKAGE = '@sentropic/artifacts';
 /** Artifacts 0.1.3 admits the platform 0.4 family used by native wrapping. */
 export const ARTIFACTS_RANGE = '>=0.2.0 <0.3.0';
+export const ENGRAM_MEMORY_PACKAGE = '@sentropic/engram';
+export const ENGRAM_MEMORY_RANGE = '>=0.22.0 <0.23.0';
 export const LLM_MESH_RANGE = '0.19.2 || >=0.22.0 <0.33.0';
 export const LLM_MESH_SPEECH_RANGE = '>=0.28.0 <0.33.0';
 export const LLM_GATEWAY_RANGE = '>=0.19.0 <0.23.0';
@@ -102,7 +104,19 @@ export const PROVIDER_CATALOG: Readonly<Record<ClusterMeshProviderModuleId, Prov
     'createArtifactsRegistryDefinition', 'createArtifactsToolExecutor',
     'ARTIFACTS_PROVIDER_ID', 'ARTIFACTS_TOOL_NAMES',
   ]),
-  comments: { id: 'comments', owner: 'comments', packageName: '@sentropic/cluster-mesh', subpath: './comments', range: '>=0.21.0 <0.25.0',
+  'mcp/memory': {
+    id: 'mcp/memory', owner: 'engram', packageName: ENGRAM_MEMORY_PACKAGE,
+    subpath: './mcp-memory', range: ENGRAM_MEMORY_RANGE, meshCoherence: false, authPeers: [],
+    requiredMembers: ['createEngramMemoryProviderV1', 'createEngramMemoryMcpServerV1',
+      'createMemoryPortV2', 'createMemoryReadFacetsV1', 'MEMORY_PROVIDER_MANIFEST',
+      'MEMORY_TOOL_NAMES', 'MEMORY_FROZEN_PROFILE_BINDINGS_V1'],
+  },
+  'engram-memory/substrate': {
+    id: 'engram-memory/substrate', owner: 'engram', packageName: ENGRAM_MEMORY_PACKAGE,
+    subpath: './memory-substrate', range: ENGRAM_MEMORY_RANGE, meshCoherence: false, authPeers: [],
+    requiredMembers: ['openModuleStorageCanonicalMemoryStoreV1', 'createMemoryPortV2'],
+  },
+  comments: { id: 'comments', owner: 'comments', packageName: '@sentropic/cluster-mesh', subpath: './comments', range: '>=0.21.0 <0.26.0',
     requiredMembers: ['createCommentsModule', 'createCommentsPostgresStorage'], namespace: '/comments', meshCoherence: false,
     authPeers: [{ packageName: '@sentropic/comments', subpath: '.', range: COMMENTS_RANGE, requiredMembers: ['createAnnotationRevision', 'validateCapacityDescriptor', 'hashRecord'] }] },
 };

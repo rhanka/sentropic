@@ -125,6 +125,27 @@ describe('memory K7/K8 wire adaptation', () => {
       { kind: 'capture', key: captureKey, value: { format: 'utf8', data: 'not-json' }, version: '1' }))
       .toThrow(expect.objectContaining({ code: 'invalid-command' }));
   });
+  it('should accept the canonical lexical tombstone when a record leaves accepted-current', () => {
+    const key = JSON.stringify(['memory-lexical-v1', 'scope-memory', 'record-memory']);
+    const accepted = neutralUnitToPg(unit({ indexWrites: [
+      { index: 'memory-accepted-lexical', key, value: memoryJcs({ record_digest: 'sha256:record' }) },
+    ] }));
+    const removal = unit({ indexWrites: [{ index: 'memory-accepted-lexical', key, value: memoryJcs(null) }] });
+    const pg = neutralUnitToPg(removal, new Map([[key, accepted.indexWrites[0]!.digest]]));
+    expect(pg.indexWrites).toEqual([{ key, digest: 'sha256:record',
+      resultIds: [], resultHash: 'null' }]);
+    expect(pg.indexWrites[0]!.digest).toBe(accepted.indexWrites[0]!.digest);
+    expect(accepted.indexWrites[0]!.resultHash).toBe(memoryJcs({ record_digest: 'sha256:record' }).data);
+    expect(() => neutralUnitToPg(removal)).toThrow('lexical removal requires the existing index identity');
+  });
+  it.each([
+    ['memory-accepted-lexical', '[]'], ['memory-accepted-lexical', 'false'],
+    ['memory-accepted-lexical', '"null"'], ['another-index', 'null'],
+  ])('should refuse non-object index bytes outside the lexical tombstone (%s, %s)', (index, data) => {
+    expect(() => neutralUnitToPg(unit({ indexWrites: [
+      { index, key: 'key', value: { format: 'utf8', data } },
+    ] }))).toThrow(expect.objectContaining({ code: 'invalid-command' }));
+  });
   it('maps guards and shapes named query results', () => {
     const pg = neutralUnitToPg(unit({ guards: [
       { kind: 'aggregate-version', aggregateKey: 'k', version: '3' },
