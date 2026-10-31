@@ -171,6 +171,7 @@ Concatenate the fenced diff contents in comment/part order, retaining LF:
 | 2 | `b7e86f5ea..c6048eb29` vs `c1e592636..b65ba7250` | 187 / 1 / 0 / 0 | [complete output](https://github.com/rhanka/sentropic/pull/837#issuecomment-6513319836) |
 | 3 | `c1e592636..7fd1a87cc` vs `82a7be05b..42875f874` | 187 / 2 / 0 / 0 | [complete output](https://github.com/rhanka/sentropic/pull/837#issuecomment-6513320095) |
 | 7 | `d08517ed1..10d289560` vs `1b7f8ab94..efd092a3f` | 190 / 1 / 1 / 1 | [complete output](https://github.com/rhanka/sentropic/pull/837#issuecomment-6528191719) |
+| 8 | `1b7f8ab94..e99bd29fa` vs `fb454cb4c..8fad5cd53` | 192 / 3 / 1 / 1 | local record `.tmp/rv/pr837-replay8-full.txt` (SHA-256 below) |
 
 SHA-256 for replay 1 is recorded in section 2. Replay 2:
 `a24125857c2a9a6e42f1d673de3ddaa288c298b3f47f12a024811352d511bf8d`.
@@ -195,3 +196,17 @@ control slot plus its journal entry, so the schema dump regenerates cleanly
 after the `0007`–`0011` migration repair. Rebase-lot documentation commits
 (lot `BRANCH.md` scope contract and this row) follow on top of `efd092a3f`;
 the PR body records the exact pushed head and its CI run.
+
+Replay 8 (31 October, main advanced with #855, #858, #844 and #857):
+`15fc6df44ad6bc5983210c6c11463969f066194f80a850854b762af5ec7b3ef1`.
+Its three changed pairings are exactly the control-journal context repairs
+(`6ac259182`/`717908b8e`/`f67f20a69` replayed against main's A2-M0-MIG
+renumbered tags); the unpaired split is again the initial plan patch
+(`812218f8f` -> `22cb65b13`, replaced main plan context). Main's
+`drizzle-journal-integrity` test (added by #858) requires strictly increasing
+journal prefixes and timestamps, so the W1 host migration no longer keeps the
+reserved `0020` slot: it is renumbered to `0012_app_artifact_host.sql`
+(journal idx 12, `when` 1793145600001, after `0011_decision_host`) with
+unchanged SQL bytes, and the migration-rehearsal receipt is renamed with a
+dated renumbering addendum. The replay-8 row above measures the pure rebase
+head `8fad5cd53`; the renumbering and review-fix commits follow on top.
