@@ -31,6 +31,7 @@
   - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts` (A23-EX1)
   - `package-lock.json` (A23-EX2, version-sync line only)
   - `.gitignore` (A23-EX4, one-line anchor `identity/` → `/identity/`)
+  - `scripts/ci/consumer-locks.json` (A23-EX5, one npm-authored closure line; Allowed per the merged BRA2-EX4 precedent `258aa6a49`)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -46,16 +47,18 @@
   - `packages/cluster-mesh/assets/**` (kernel PG assets; A2.3 ships its own schema DDL in `src/identity/`)
   - `.github/workflows/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - none
+  - (none; the consumer catalog path is declared Allowed per the merged BRA2-EX4 precedent `258aa6a49`)
 - **Exception process**:
   - Declare exception ID `A23-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- A23-EX1: owner=A2.3 lane author; review_by=PR merge; the `src/` change requires a package version bump (workflow gate), main carries the reserved line `0.25.0` while npm latest stays `0.24.0`, so this branch carries `0.26.0-dev.1` (next free dev version) and moves the reserved-next train one line forward exactly per A2.0 precedent BRA2-EX2: `RESERVED_NEXT` `0.25.0`→`0.26.0` in `tests/fixtures/reserved-versions.ts` + `tests/storage/pack-only-dev-gate.mjs`, one-line vector roll in `tests/storage/pack-only-dev-gate.spec.ts` + `tests/packaging/prepare-artifacts.spec.ts`; frozen published pin stays `0.24.0` (0.25.0 is not on npm). Impact limited to version-train test support, no frozen range widened; rollback by reverting the branch. If another A2 lot lands its dev bump first, rebase and take the next free `-dev.N`.
+- A23-EX1: owner=A2.3 lane author; review_by=PR merge; the `src/` change requires a package version bump (workflow gate). Pre-bump check (2026-10-31): `npm view @sentropic/cluster-mesh` returns `0.25.0` — the reserved line `0.25.0` was released on main (`a50c18f91`), so the stale premise "npm latest stays 0.24.0" no longer holds. This branch carries `0.26.0-dev.1` (next free dev version, strictly greater than the published `0.25.0`) and moves the train one line forward exactly per the A2.0 precedent BRA2-EX2 and the same-day SQL-L1 precedent (`1eae223e9`/`ceb940a9b` on `feat/sql-l1`, unmerged): `RESERVED_NEXT` `0.25.0`→`0.26.0` in `tests/fixtures/reserved-versions.ts` + `tests/storage/pack-only-dev-gate.mjs`, vector roll in `tests/storage/pack-only-dev-gate.spec.ts` + `tests/packaging/prepare-artifacts.spec.ts`; the published pin `LATEST_PUBLISHED_CLUSTER_MESH` moves `0.24.0`→`0.25.0` because the frozen `selected` fixture on main already pins `sentropic-cluster-mesh-0.25.0.tgz` (both the dependency spec and the lock entry), so keeping the pin at `0.24.0` would fail the candidate-alignment checks. Impact limited to version-train test support, no frozen range widened; rollback by reverting the branch. If another lot lands its dev bump first, rebase and take the next free `-dev.N`.
 - A23-EX2: owner=A2.3 lane author; review_by=PR merge; single-line root `package-lock.json` version sync for `packages/cluster-mesh` (CI train lock-sync assertion; precedent A2.0 BRA2-EX3 `db534d4b9`); full lock regeneration output is reverted except that line; rollback by reverting the commit.
 - A23-EX3: owner=A2.3 lane author; review_by=PR merge; whole-module commits above the 150-line advisory for new files (`src/identity/*.ts`, new specs) so every commit holds complete compilable modules instead of half-file hunks (precedent A2.0 BRA2-EX1); impact limited to this branch history; rollback by reverting the branch.
 - A23-EX4: owner=A2.3 lane author; review_by=PR merge; one-line root `.gitignore` anchor `identity/` → `/identity/` (line 48, "Local agent/tooling state" block added by BR-39c `f3a3d4210`). The unanchored pattern matches ANY directory named `identity` at any depth, so it silently swallows this lot's Allowed Path `packages/cluster-mesh/src/identity/**` (and every future file the identity core lands there, e.g. the M4 agent plane). Anchoring preserves BR-39c's root-local intent (root `identity/` stays ignored) and unblocks tracking the package module; impact: one line of shared repo state, no behavior change for existing tracked files; rollback: revert the commit.
+- A23-EX5: owner=A2.3 lane author; review_by=PR merge; add the `@sentropic/cluster-mesh@0.25.0` consumer closure profile to `scripts/ci/consumer-locks.json` (manifest + lock authored by the reviewed `make lock-ci-tools` target; all other regenerated entries reverted to main's bytes): A23-EX1 rolls the frozen published pin to `0.25.0`, and the installed-consumer CI lane resolves that pin through the committed frozen universe (`frozen-registry.mjs`), which has no `0.25.0` records, so the lane would fail with npm ETARGET exactly as #855 did for `0.24.0` before BRA2-EX4 (`258aa6a49`); the `0.23.2`/`0.24.0` historical closures stay; local parity before the commit: the lane's exact consumer install resolves `0.25.0` through `locked-consumer.mjs` and `make test-ci-lockfile-installs` stays green; impact limited to the isolated consumer catalog, no frozen range widened, no gate weakened; rollback by reverting the commit.
+- Inherited unchanged from main: BRLOCK-EX1 review_by=2026-11-30T00:00:00Z (owner CI maintainers, removal on PR 846 closure); this branch touches the catalog authoring path only through the reviewed `make lock-ci-tools` target (A23-EX5) and makes no other lockfile-path change.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -98,10 +101,10 @@
   - [x] `tests/identity-profiles.spec.ts`: the same scenario corpus against the in-memory double (reference oracle), the PostgreSQL profile (disposable schema, gated on `CM_PG_URL`), and the SQLite profile (temp-file store), plus a per-profile decision replay through `createFreshDecisionProducer`.
   - [x] Lot gate: `make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test SCOPE=tests/identity-profiles.spec.ts ENV=test-cm-a2-3`, then `cluster-mesh-pg-down ENV=test-cm-a2-3`.
 
-- [ ] **Lot 3 — Version train**
-  - [ ] A23-EX1: bump `packages/cluster-mesh/package.json` to `0.26.0-dev.1`, move `RESERVED_NEXT` to `0.26.0`, roll the dev-gate vectors one line forward.
-  - [ ] A23-EX2: single-line `package-lock.json` version sync.
-  - [ ] Lot gate: `make typecheck-cluster-mesh ENV=test-cm-a2-3`; dev-gate specs green.
+- [x] **Lot 3 — Version train**
+  - [x] A23-EX1: bump `packages/cluster-mesh/package.json` to `0.26.0-dev.1`, move `RESERVED_NEXT` to `0.26.0`, roll the dev-gate vectors one line forward.
+  - [x] A23-EX2: single-line `package-lock.json` version sync.
+  - [x] Lot gate: `make typecheck-cluster-mesh ENV=test-cm-a2-3`; dev-gate specs green.
 
 - [ ] **Lot 4 — Acceptance & train**
   - [ ] Frozen contract suite unmodified, full run: `make test-cluster-mesh SCOPE=tests/identity- ENV=test-cm-a2-3` (frozen three + A2.3 specs).
