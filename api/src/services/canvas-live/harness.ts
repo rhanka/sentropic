@@ -20,7 +20,7 @@ export interface OfflineHarnessResult {
  */
 export function H3_DEPENDENCY_CLOSURE(): Record<string, string> {
   return {
-    yjs: '13.6.27',
+    yjs: '13.6.33',
     'y-protocols': '1.0.7',
     '@hocuspocus/server': '4.7.1',
     '@hocuspocus/provider': '4.7.1',
