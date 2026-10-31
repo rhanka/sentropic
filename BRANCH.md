@@ -1,93 +1,74 @@
-# Feature: cluster-mesh identity core contracts
+# Feature: A2-M0-MIG — repair drizzle control migration chain 0007–0011 & journal integrity
 
 ## Objective
-Publish the public identity contracts of `@sentropic/cluster-mesh` (types, ports, error codes, versioned descriptors, contract tests over in-memory doubles) so three parallel implementation lots can build on top.
+- [x] Deliver fast-track plan r2 Wave 0 lot `A2-M0-MIG`: a linearized, deterministic drizzle migration chain `0007`–`0011` in `api/drizzle/control/` and its `_journal.json`, with zero duplicate tags and zero broken foreign-key ordering (plan r2 §2.2 `A2-M0-MIG`; identity spec r2 `§9 M0`, `§9.3` condition 1).
+- [x] Keep migration application order, `when` timestamps and SQL contents byte-identical so every already-migrated database (prod, preprod, test, CI) observes zero behavioral change; the repair only realigns file names, journal tags and journal integrity.
 
 ## Scope / Guardrails
-- Scope limited to `packages/cluster-mesh` contracts for F01-F10 and F12-F15 (no screens).
-- No app change, no legacy fallback, no backend implementation beyond in-memory doubles.
-- Make-only workflow, no direct Docker commands.
-- Branch development happens in isolated worktree `tmp/cm-identity-core-contracts`.
-- Automated test campaigns run with `ENV=test-cm-identity` passed last, never on root `dev`.
-- Docker builds run one at a time under the flock in `.tmp/packets/DOCKER-LOCK.md`.
-- `make down ENV=test-cm-identity` after test campaigns.
+- Scope limited to the drizzle control migration stream (`api/drizzle/control/**`) and a locking unit test; no application code, no schema change, no new migration statement.
+- No new schema migration added (renames only); the public stream `api/drizzle/*.sql` and its journal are untouched.
+- Make-only workflow, no direct Docker commands; Docker steps under the shared flock (`.tmp/packets/DOCKER-LOCK.md`).
+- Branch development in isolated worktree `tmp/worktrees/a2-m0-mig` from `origin/main 1b7f8ab94`.
+- Automated tests on dedicated environment `ENV=test-a2-m0-mig` (never `dev`), `ENV=` last argument; `make down ENV=test-a2-m0-mig` after each Docker step.
+- CI lockfile-lane policy acknowledged (review_by=2026-11-30T00:00:00Z); installs resolve committed tool profiles or frozen consumer closures.
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/cluster-mesh/src/identity-contracts/**`
-  - `packages/cluster-mesh/src/index.ts`
-  - `packages/cluster-mesh/tests/identity-*.spec.ts`
-  - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/tests/fixtures/reserved-versions.ts` (BRA2-EX2)
-  - `packages/cluster-mesh/tests/storage/pack-only-dev-gate.mjs` (BRA2-EX2)
-  - `packages/cluster-mesh/tests/storage/pack-only-dev-gate.spec.ts` (BRA2-EX2)
-  - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts` (BRA2-EX2)
-  - `package-lock.json` (BRA2-EX3, version-sync line only)
-  - `scripts/ci/consumer-locks.json` (BRA2-EX4)
+  - `api/drizzle/control/*.sql` (renames only, no content change)
+  - `api/drizzle/control/meta/_journal.json`
+  - `api/tests/unit/drizzle-journal-integrity.test.ts`
+  - `api/tests/api/session-adoption.test.ts` (fixture tag alignment, see `A2M0-EX2`)
+  - `api/tests/api/decision-api.test.ts` (fixture filename alignment, see `A2M0-EX2`)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `api/**`
-  - `ui/**`
-  - `packages/cluster-mesh/src/storage/**`
-  - `packages/cluster-mesh/src/modules/**`
+  - `api/src/**`
+  - `packages/**`
+  - `api/drizzle/meta/_journal.json` (public stream journal)
+  - `api/drizzle/0*.sql` (public stream migrations)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/**`
+  - `api/drizzle/control/*.sql` (max 1 new file normally; this branch renames 2 existing files — see exception)
 - **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+  - `A2M0-EX1`: rename `api/drizzle/control/0011_session_workspace_bindings.sql` to `0009_session_workspace_bindings.sql` and `api/drizzle/control/0012_decision_host.sql` to `0011_decision_host.sql`, and retag `api/drizzle/control/meta/_journal.json` accordingly (idx and `when` values unchanged). Reason: journal integrity repair per plan r2 lot `A2-M0-MIG` — the journal applies tag `0011` before tag `0010` (non-linear) and the numbering gap at `0009` makes the next drizzle-kit generate collide with the existing `0012_decision_host`. Impact: zero — application order, timestamps and file contents are byte-identical, so drizzle's `created_at`-based migrator state on every existing database is unaffected. Rollback: single revert of this branch's commits (pure renames + journal tags).
+  - `A2M0-EX2`: align two pre-existing API test fixtures with the repaired tags — `api/tests/api/session-adoption.test.ts` expects journal tag `0011_session_workspace_bindings` (now `0009_session_workspace_bindings`, plus title/comment number) and `api/tests/api/decision-api.test.ts` reads `drizzle/control/0012_decision_host.sql` (now `0011_decision_host.sql`). Reason: those fixtures pin the pre-repair tag/filename made stale by `A2M0-EX1`; CI `test-api-unit-integration (endpoints)` fails on them. Impact: assertion strings only — the decision-api sha256 check still hashes the same SQL bytes (rename does not change content), so the applied-migration proof is preserved. Rollback: revert this branch's commits.
 
 ## Feedback Loop
-- [x] BRA2-EX1: owner=lane author; review_by=PR merge; whole-module commits above the 150-line advisory for new files (`types.ts` 229, `tenancy.ts` 228, `doubles.ts` 415, specs 219-264) so every commit holds complete compilable modules instead of half-file hunks; impact limited to this branch history; rollback by reverting the branch. Small files stay grouped under 150 lines where natural.
-- [x] BRA2-EX2: owner=lane author; review_by=PR merge; any `src/` bump must keep the reserved-next dev-train green: carry `0.25.0-dev.1`, advance `RESERVED_NEXT` to `0.25.0` and the frozen pin to published `0.24.0` in `tests/fixtures/reserved-versions.ts` + `tests/storage/pack-only-dev-gate.mjs`, roll the dev-gate vectors in `tests/storage/pack-only-dev-gate.spec.ts` + `tests/packaging/prepare-artifacts.spec.ts` one line forward (precedent `05cecaa6f`); impact limited to version-train test support, no frozen range widened (`catalog.ts` untouched); rollback by reverting the branch.
-- [x] BRA2-EX3: owner=lane author; review_by=PR merge; single-line root `package-lock.json` version sync for `packages/cluster-mesh` (CI train lock-sync assertion; precedent `db534d4b9`); full `make lock-root` output reverted except that line (yjs positional moves + chat-server nested chat-core removal are unrelated pre-existing staleness, left for their owners); rollback by reverting the branch.
-- [x] BRA2-EX4: owner=lane author; review_by=PR merge; add the `@sentropic/cluster-mesh@0.24.0` consumer closure profile to `scripts/ci/consumer-locks.json` (manifest + lock generated by `make lock-ci-tools`): BRA2-EX2 rolled the frozen published pin to `0.24.0`, and the installed-consumer lane resolves that pin through the committed frozen universe (`frozen-registry.mjs`), which had no `0.24.0` records, so CI failed with npm ETARGET; the `0.23.2` historical closure stays (guard `install-bindings.mjs` requires it); impact limited to the isolated consumer catalog, no frozen range widened, no gate weakened; rollback by reverting the commit.
-- Inherited unchanged from main: BRLOCK-EX1 review_by=2026-11-30T00:00:00Z (owner CI maintainers, removal on PR 846 closure); this branch touches the catalog authoring path only through the reviewed `make lock-ci-tools` target (BRA2-EX4) and makes no other lockfile-path change.
+Actions with the following status should be included around tasks only if really required (cf. Task 1 feedback loop):
+- `blocked` / `deferred` / `cancelled` / `attention`: message (requires clarification about ...)
+- `clarification` / `acknowledge` / `refuse`: explanation
 
 ## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
+- Acceptance rule: accept only non-systematic provider/network/model nondeterminism as `flaky accepted` (at least one success on the same commit and same command); never amend tests with additive timeouts; if flaky, analyze impact vs `main` — this branch adds a deterministic filesystem-only test, no flaky lane applies.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single contracts-only change, one test cycle, no orthogonal sub-workstreams.
+- Rationale: single atomic repair lot with one test cycle; no sub-workstreams.
 
-## UAT Management (in orchestration context)
+## UAT Management (orchestration context)
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI changes in this branch, no UAT required.
+- No UAT checkpoint in this branch: no UI change, no user-facing behavior.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read packet, COMMON-RULES, owner answers, gap document, identity spec draft.
-  - [x] Create isolated worktree `tmp/cm-identity-core-contracts` on `feat/cm-identity-core-contracts` from `origin/main`.
-  - [x] Capture Makefile targets (`test-cluster-mesh`, `typecheck-cluster-mesh`, `build-cluster-mesh`, `down`, `scope-check`, `commit`).
-  - [x] Define environment mapping (`ENV=test-cm-identity` last for test campaigns).
-  - [x] Confirm scope and guardrails.
-- [ ] **Lot 1 — Identity contracts + doubles + contract tests**
-  - [x] Add `packages/cluster-mesh/src/identity-contracts/` (types, errors, ports, descriptors, domains, in-memory doubles).
-  - [x] Export the identity surface from `packages/cluster-mesh/src/index.ts`.
-  - [x] Add `packages/cluster-mesh/tests/identity-*.spec.ts` contract tests over the doubles.
-  - [x] Bump `packages/cluster-mesh/package.json` version (minor).
-  - [x] Lot gate:
-    - [x] `make typecheck-cluster-mesh ENV=test-cm-identity`
-    - [x] `make test-cluster-mesh ENV=test-cm-identity`
-    - [x] `make build-cluster-mesh ENV=test-cm-identity`
-    - [x] `make down ENV=test-cm-identity`
-- [ ] **Lot N — Final validation**
-  - [x] Typecheck & Lint
-  - [x] Retest cluster-mesh package suite
-  - [x] Bumped `packages/cluster-mesh/package.json` version (minor) — enforced by CI `enforce-package-bump`.
-  - [x] Final gate step 1: create draft PR using `BRANCH.md` text as PR body (source of truth).
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-  - [x] Write `.tmp/cm-identity-agents/A2-lots.md` (3 parallel lots + A4 order).
-  - [ ] Write report `.tmp/rv/a2-contracts-muse.md` (PR, head, A2-lots.md sha256), then stop.
+  - [x] Create/confirm isolated worktree `tmp/worktrees/a2-m0-mig` on `feat/a2-m0-mig` from `origin/main 1b7f8ab94`; branch verified with `git branch --show-current`.
+  - [x] Capture Makefile targets: `up-api-test`, `db-migrate`, `test-api-smoke-restore`, `test-api-unit` (SCOPE), `typecheck-api`, `scope-check`, `commit`, `down`.
+  - [x] Environment mapping: `ENV=test-a2-m0-mig`, ports `API_PORT=8831`, `UI_PORT=5231`, `MAILDEV_UI_PORT=1131`; `ENV=` last in every command.
+  - [x] Confirm scope and guardrails; declare `A2M0-EX1`.
+
+- [x] **Lot 1 — Journal integrity repair (test first)**
+  - [x] Add `api/tests/unit/drizzle-journal-integrity.test.ts` asserting, for both drizzle streams (public `api/drizzle` and control `api/drizzle/control`): contiguous `idx` sequence, unique and strictly tag-ordered entries, strictly increasing `when`, journal tag ↔ `.sql` file bijection, unique numeric prefixes and a free next-generate number.
+  - [x] Prove RED on the unmodified chain (control journal out-of-order tags).
+  - [x] Apply `A2M0-EX1`: rename control `0011_session_workspace_bindings.sql` → `0009_session_workspace_bindings.sql`, `0012_decision_host.sql` → `0011_decision_host.sql`; retag `control/meta/_journal.json` (idx, `when`, application order, SQL bytes unchanged).
+  - [x] Prove GREEN: `make test-api-unit SCOPE=tests/unit/drizzle-journal-integrity.test.ts ENV=test-a2-m0-mig`.
+  - [x] Lot gate: `make typecheck-api ENV=test-a2-m0-mig`.
+
+- [ ] **Lot 2 — Acceptance & train**
+  - [x] Fresh-database chain proof: `make up-api-test ENV=test-a2-m0-mig` (under flock), `make db-migrate ENV=test-a2-m0-mig`, `make test-api-smoke-restore ENV=test-a2-m0-mig`, `make down ENV=test-a2-m0-mig`.
+  - [x] `make scope-check` clean.
+  - [x] Atomic commits ≤150 lines via `make commit`.
+  - [ ] Push only after local tests pass; draft PR; single CI run on the final head; record PR, head, CI run and acceptance evidence in `.tmp/rv/lot-A2-M0-MIG.md`.
