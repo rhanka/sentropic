@@ -1,12 +1,16 @@
 import { migrate } from 'drizzle-orm/node-postgres/migrator';
+import { readMigrationFiles } from 'drizzle-orm/migrator';
+import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
-import { db } from './client';
+import type { Pool } from 'pg';
+import { pool } from './client';
+import { installArtifactPackageAssets } from '../services/artifacts/host-storage';
 
 /**
  * Heal drifted databases where migration metadata is ahead of the actual settings schema.
  * This keeps user-scoped settings queries stable even when legacy snapshots are restored.
  */
-async function reconcileSettingsUserScopeSchema(): Promise<void> {
+async function reconcileSettingsUserScopeSchema(db: NodePgDatabase): Promise<void> {
   await db.execute(sql.raw('ALTER TABLE "settings" DROP CONSTRAINT IF EXISTS "settings_pkey";'));
   await db.execute(sql.raw('ALTER TABLE "settings" ADD COLUMN IF NOT EXISTS "user_id" text;'));
   await db.execute(sql.raw(`
@@ -47,13 +51,27 @@ async function reconcileSettingsUserScopeSchema(): Promise<void> {
  * Applied AFTER the public migration stream to respect boot ordering.
  * The `CREATE SCHEMA IF NOT EXISTS control` is the very first control migration.
  */
-async function runControlMigrations(): Promise<void> {
-  // Drizzle's migrator tracks applied migrations in its own _drizzle table.
-  // For the control stream we use a dedicated table name to avoid collisions.
-  await migrate(db, {
-    migrationsFolder: './drizzle/control',
-    migrationsTable: '__drizzle_control_migrations',
-    migrationsSchema: 'public',
+export async function runControlMigrations(db: NodePgDatabase, migrationsFolder = './drizzle/control'): Promise<void> {
+  const migrations = readMigrationFiles({ migrationsFolder });
+  // Reserved branches can arrive in either order. A timestamp frontier alone loses earlier slots.
+  await db.transaction(async (tx) => {
+    const journal = await tx.execute(sql`SELECT to_regclass('public.__drizzle_control_migrations') AS relation`);
+    if (journal.rows[0].relation === null) {
+      await tx.execute(sql`CREATE TABLE public.__drizzle_control_migrations (
+        id serial PRIMARY KEY, hash text NOT NULL, created_at bigint)`);
+    }
+    const { rows } = await tx.execute(sql`SELECT hash, created_at FROM public.__drizzle_control_migrations WHERE created_at >= 0`);
+    const applied = new Map(rows.map((row) => [Number(row.created_at), String(row.hash)]));
+    for (const migration of migrations) {
+      const hash = applied.get(migration.folderMillis);
+      if (hash !== undefined) {
+        if (hash !== migration.hash) throw new Error(`Control migration journal hash mismatch: ${migration.folderMillis}`);
+        continue;
+      }
+      for (const statement of migration.sql) await tx.execute(sql.raw(statement));
+      await tx.execute(sql`INSERT INTO public.__drizzle_control_migrations (hash, created_at)
+        VALUES (${migration.hash}, ${migration.folderMillis})`);
+    }
   });
 }
 
@@ -65,8 +83,29 @@ async function runControlMigrations(): Promise<void> {
  *
  * @throws Error if migrations fail
  */
-export async function runMigrations(): Promise<void> {
-  await migrate(db, { migrationsFolder: './drizzle' });
-  await reconcileSettingsUserScopeSchema();
-  await runControlMigrations();
+export async function runMigrations(migrationPool: Pool = pool): Promise<void> {
+  const client = await migrationPool.connect();
+  let migrationFailure: Error | undefined;
+  try {
+    // Retain the lock-owning connection across Drizzle's stream transactions.
+    await client.query(`SELECT pg_advisory_lock(hashtext('sentropic:api-migrations'))`);
+    const db = drizzle(client);
+    await migrate(db, { migrationsFolder: './drizzle' });
+    await reconcileSettingsUserScopeSchema(db);
+    await runControlMigrations(db);
+    await installArtifactPackageAssets(client);
+  } catch (error) {
+    migrationFailure = error instanceof Error ? error : new Error(String(error));
+    throw error;
+  } finally {
+    let unlockFailure: Error | undefined;
+    try {
+      await client.query(`SELECT pg_advisory_unlock(hashtext('sentropic:api-migrations'))`);
+    } catch (error) {
+      unlockFailure = error instanceof Error ? error : new Error(String(error));
+    }
+    // Failed migration/cleanup sessions are destroyed, never recycled.
+    client.release(unlockFailure ?? migrationFailure);
+    if (unlockFailure && !migrationFailure) throw unlockFailure;
+  }
 }

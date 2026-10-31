@@ -14,6 +14,7 @@
  */
 
 import type { CatalogEntry } from './types.js';
+import type { CatalogRequestContext } from './request-context.js';
 
 // ---------------------------------------------------------------------------
 // Source kind discriminant
@@ -40,6 +41,8 @@ export type CatalogSourceKind = 'static' | 'mcp' | 'marketplace';
  *     not needed.
  */
 export interface CatalogSource {
+  /** Private sources must also return no entries from an unscoped snapshot. */
+  readonly requiresContext?: boolean;
   /** Unique provider identifier. Examples: `'foundation'`, `'mcp:my-server'`. */
   readonly id: string;
   /** Source classification used for routing and policy decisions. */
@@ -48,7 +51,7 @@ export interface CatalogSource {
    * SYNC snapshot consumed on every per-turn tool resolve.
    * MUST return the current in-memory state; MUST NOT perform I/O.
    */
-  snapshot(): ReadonlyArray<CatalogEntry>;
+  snapshot(context?: CatalogRequestContext): ReadonlyArray<CatalogEntry>;
   /**
    * ASYNC refresh — repopulates the in-memory snapshot from a remote source.
    * Called out-of-band (on connect / schedule); never on the per-turn resolve.

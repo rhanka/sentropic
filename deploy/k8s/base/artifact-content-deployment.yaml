@@ -1,0 +1,99 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: artifact-content
+automountServiceAccountToken: false
+imagePullSecrets:
+  - name: sentropic-registry
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: artifact-content
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: sentropic
+      app.kubernetes.io/component: artifact-content
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: sentropic
+        app.kubernetes.io/component: artifact-content
+    spec:
+      enableServiceLinks: false
+      serviceAccountName: artifact-content
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: artifact-content
+          image: rg.fr-par.scw.cloud/nc-reg/sentropic-api:main
+          imagePullPolicy: Always
+          workingDir: /workspace
+          command: [node, apps/artifact-content/dist/index.js]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+          envFrom:
+            - configMapRef:
+                name: artifact-content
+            - secretRef:
+                name: artifact-content-runtime
+                optional: true
+          # Explicit values outrank envFrom, including accidentally enabled secrets.
+          # FIRST-IMMO + W3.e/W5 receipts precede any reviewed opening change.
+          env:
+            - name: APP_ARTIFACT_HOST_ENABLED
+              value: "0"
+            - name: APP_ARTIFACT_CONTENT_ENABLED
+              value: "0"
+            - name: APP_ARTIFACT_READER_ENABLED
+              value: "0"
+          ports:
+            - name: http
+              containerPort: 8791
+          startupProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 5
+            failureThreshold: 12
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 15
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: signing-key
+              mountPath: /var/run/artifact-content
+              readOnly: true
+      volumes:
+        - name: signing-key
+          secret:
+            secretName: artifact-content-signing
+            optional: true
+            defaultMode: 0440
+            items:
+              - key: key
+                path: key

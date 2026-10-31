@@ -1,0 +1,36 @@
+{
+  "historicalObservation": true,
+  "currentEvidence": "published-tuple-2026-10-26.json",
+  "observedAt": "2026-10-18T23:26:00Z",
+  "sourceSha": "9ed96eb83cd77da710f1adeb83a19e425d6c4910",
+  "status": "published-selected-not-deployed",
+  "packages": [
+    {"name":"@sentropic/artifacts","version":"0.1.1","dist":{"tarball":"https://registry.npmjs.org/@sentropic/artifacts/-/artifacts-0.1.1.tgz","integrity":"sha512-YK6Tz2rzvU2bT+zAaDskyjxZtnrScVQI72++0X6THGIm1xzTaYadutMc8n3u3SuVacRXa2ErFyIrnvOxG3jjEQ=="},"peerDependencies":{"@sentropic/mcp-platform":">=0.3.0 <0.4.0"},"peerDependenciesMeta":{"@sentropic/mcp-platform":{"optional":true}}},
+    {"name":"@sentropic/auth-hono","version":"0.16.0","dist":{"tarball":"https://registry.npmjs.org/@sentropic/auth-hono/-/auth-hono-0.16.0.tgz","integrity":"sha512-Zd68xAQRYxhMy9LC+BivDq7jFnmzEP0Ta/ItuhW1fi+ZDm+St9KokQ8w7Y2SeME+M1jU1sdL3lhVXRsS8T9Jlw=="},"peerDependencies":{"zod":"^3.25.76","hono":"^4.10.7","jose":"^5.10.0","@hono/zod-validator":"^0.7.5","@simplewebauthn/server":"^13.2.2"},"peerDependenciesMeta":null},
+    {"name":"@sentropic/cluster-mesh","version":"0.19.1","dist":{"tarball":"https://registry.npmjs.org/@sentropic/cluster-mesh/-/cluster-mesh-0.19.1.tgz","integrity":"sha512-qFxVik9XVCOLM0v7KzlqAIW8iZM8ZYZhkh43YvqFnd5iboaXHM56O1QvGC6s9i/Y6qt4gG1sA4COZVLnSUNEPg=="},"peerDependencies":{"jose":"^5.10.0","@sentropic/comments":"^0.3.0","@sentropic/llm-mesh":">=0.22.0 <0.28.0","@sentropic/mcp-auth":">=0.2.1 <0.3.0","@sentropic/artifacts":">=0.1.0 <0.2.0","@sentropic/auth-hono":"^0.15.0 || ^0.16.0","@sentropic/llm-gateway":">=0.19.0 <0.22.0","@sentropic/mcp-platform":">=0.3.0 <0.4.0","@modelcontextprotocol/sdk":"^1.31.0"},"peerDependenciesMeta":{"jose":{"optional":true},"@sentropic/comments":{"optional":true},"@sentropic/llm-mesh":{"optional":true},"@sentropic/mcp-auth":{"optional":true},"@sentropic/artifacts":{"optional":true},"@sentropic/auth-hono":{"optional":true},"@sentropic/llm-gateway":{"optional":true},"@sentropic/mcp-platform":{"optional":true},"@modelcontextprotocol/sdk":{"optional":true}}},
+    {"name":"@sentropic/comments","version":"0.3.0","dist":{"tarball":"https://registry.npmjs.org/@sentropic/comments/-/comments-0.3.0.tgz","integrity":"sha512-D/QMnw/MAVF9PnPTZG0VM3ecuFN21US2soyoC6pvw58dXpKu/c64Xdq8lZgTmdl8v9UbY5vIGhLmo5W2NicztQ=="},"peerDependencies":null,"peerDependenciesMeta":null},
+    {"name":"@sentropic/llm-gateway","version":"0.21.0","dist":{"tarball":"https://registry.npmjs.org/@sentropic/llm-gateway/-/llm-gateway-0.21.0.tgz","integrity":"sha512-ONXwRrT4fbSG9a8wGvJoloJrW0BZnjLSAxD9lO/GTueLjMRVfTfd6DGQNxMxX23Nb1jxGswYJ2sD6IC74X9kpA=="},"peerDependencies":{"jose":"^5.10.0 || ^6.0.0","@sentropic/mcp-auth":"^0.2.1","@sentropic/auth-hono":"^0.15.0 || ^0.16.0"},"peerDependenciesMeta":{"jose":{"optional":true},"@sentropic/mcp-auth":{"optional":true},"@sentropic/auth-hono":{"optional":true}}},
+    {"name":"@sentropic/llm-mesh","version":"0.27.0","dist":{"tarball":"https://registry.npmjs.org/@sentropic/llm-mesh/-/llm-mesh-0.27.0.tgz","integrity":"sha512-ARJ4xdEmSMXuFTilemKwQzb34i8qKW1W3I+T9ebDS0GOFduHheTsCFzqgcbzWOi8+e7KrJgKv/IS6NIQk5C1ng=="},"peerDependencies":null,"peerDependenciesMeta":null},
+    {"name":"@sentropic/mcp-auth","version":"0.2.2","dist":{"tarball":"https://registry.npmjs.org/@sentropic/mcp-auth/-/mcp-auth-0.2.2.tgz","integrity":"sha512-tXH1Q5R79hgW2qeqNPqFQclHOjUSO5EPHxrV6D7kecqwSPUYNWOkEsUfuOclSmn4rud1tw+SbNn4gq2UfnPW8w=="},"peerDependencies":{"hono":"^4.10.7","jose":"^5.10.0"},"peerDependenciesMeta":{"hono":{"optional":true}}},
+    {"name":"@sentropic/mcp-platform","version":"0.3.0","dist":{"tarball":"https://registry.npmjs.org/@sentropic/mcp-platform/-/mcp-platform-0.3.0.tgz","integrity":"sha512-c5TlF6yzFkj9Yny/R7xlF3rFM1os4qQxXwc8Jj4XDHL33JmwROqvp2fDx+Ni7mdzWAHZC7k7opWvBA/bbEPXmA=="},"peerDependencies":{"hono":"^4.10.7"},"peerDependenciesMeta":{"hono":{"optional":true}}},
+    {"name":"@sentropic/oauth-verify","version":"0.1.0","dist":{"tarball":"https://registry.npmjs.org/@sentropic/oauth-verify/-/oauth-verify-0.1.0.tgz","integrity":"sha512-wtm/5KwnZka0PbDgCkGGk4RGQ6VqcIJwMbzMog/XgA1tBWNG/Y9lWmLZQyl1CUKCzl+Xm1OJCD/ESSsQYnYRPg=="},"peerDependencies":{"jose":"^5.10.0"},"peerDependenciesMeta":null}
+  ],
+  "selectedClusterPeers": ["@sentropic/artifacts@0.1.1","@sentropic/mcp-platform@0.3.0","@sentropic/mcp-auth@0.2.2","@sentropic/auth-hono@0.16.0","@sentropic/llm-gateway@0.21.0","@sentropic/llm-mesh@0.27.0","@sentropic/comments@0.3.0","@modelcontextprotocol/sdk@1.32.1","jose@5.10.0"],
+  "transportPeer": "hono@4.13.0",
+  "externalPeerInstallEvidence": [{"path":"node_modules/@modelcontextprotocol/sdk","version":"1.32.1","integrity":"sha512-2DdE+SJDtzLEEWzY1ZjY7Q+VcPhcV1KisD3zI4u0XZyktsjHum1mwbMI+JaulUBi2OZk+KJAi2uPXzxichPkdw=="},{"path":"node_modules/hono","version":"4.13.0","integrity":"sha512-jhunvfHWxd7J5EFfSgH4xsYJzSe/lfqbUCxiyyeaQasUsXeEHXtzVid+7EOGByc5JnFa23SSFL3Y2RV/z1T+eQ=="},{"path":"node_modules/jose","version":"5.10.0","integrity":"sha512-s+3Al/p9g32Iq+oqXxkW//7jk2Vig6FF1CFqzVXoTUXt2qz89YWbL+OwS17NFYEvxC35n0FKeGO2LGYSxeM2Gg=="}],
+  "existingWorkspaceConnector": "@sentropic/mcp-connector-google@0.0.0 at sourceSha (not a published selector)",
+  "verifier": {"name":"@sentropic/h2a","version":"0.98.6","dist":{"tarball":"https://registry.npmjs.org/@sentropic/h2a/-/h2a-0.98.6.tgz","integrity":"sha512-3e56L3hp1tMH0Cuu/WWFcaLYmWCJ8ffuutuEbNxWL2s7q0CJ4NNncqrXllJ+TmqFvkWur//5TKQND1YXdR2pRg=="}},
+  "sha256": {
+    "package-lock.json": "5fed7bf417aecc0aa504ef1b44226793a447f4ce8c7f71e136356a9ab43de9c8",
+    "api/package-lock.json": "65752f5fbe13c46f21eff29340d9654e667da40b2daaa69eac2a8db1fd96616f",
+    "api/package.json": "897eadf02206d2411d0271d471ff8ac51fc351eb867c15de4991084bc0f820a0",
+    "deploy/k8s/base/30-api.yaml": "91d245cbc3117857d18bc0cec379cb8959c838364f6c408e28c49d6e27700d5c",
+    "deploy/k8s/base/35-auth-idp.yaml": "0e4a615fe1aca8c19d74338a7a9d4b755cbb6efbe52d4b440836457038ec64f7",
+    "deploy/k8s/base/40-ui.yaml": "0524ec679f6e3b52ef91b1dd07dfe9c7d79ac17777a05637fe92f16e1075a23f",
+    "deploy/k8s/overlays/prod/kustomization.yaml": "941c3e495a4f160b7246be13395a5ca88d796601da26c0c676479d062a965a66",
+    "deploy/k8s/overlays/preprod/kustomization.yaml": "9bc8e228f60a4bfbb5bdfcbbd45d75742846562e5383bf628aed175d56553fd0",
+    "probe-package-lock.json": "78cd2563025b1d9bae752aea67cb3069436e5e96b0660c6affa7e4036ab0ca02"
+  },
+  "liveRoleDigests": {"api":null,"ui":null,"idp":null,"content":null},
+  "liveEvidenceGate": "B01 in authorization.md"
+}

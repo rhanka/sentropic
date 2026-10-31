@@ -32,16 +32,19 @@
  *   guard below.
  *
  * Authz note:
- *   The execution seam trusts that the tool name arrived in the per-turn tool
- *   call — meaning it already passed the `resolveTools` authz filter in the
- *   `SkillsToolRegistry` adapter. No additional authz check is performed here.
- *   Fine-grained authz (e.g. MCP-server-level allow/deny) is the responsibility
- *   of the individual handler registered via `StandaloneToolSource.register()`.
+ *   Discovery grants no execution authority. The seam revalidates server-owned
+ *   context immediately before dispatch; provider handlers guard final effects.
  */
 
 import type { CompositeCatalogRegistry } from './composite-registry.js';
-import type { StandaloneToolSource } from './sources/standalone-tool-source.js';
-import type { ToolHandlerSource } from './sources/mcp-source.js';
+import type { StandaloneToolHandler } from './sources/standalone-tool-source.js';
+import { revalidateCatalogInvocation, type CatalogRequestContext } from './request-context.js';
+
+/** Minimal handler lookup shared by standalone and compiled host-registry sources. */
+export interface ToolHandlerSource {
+  readonly id: string;
+  getHandler(name: string): StandaloneToolHandler | undefined;
+}
 
 // ---------------------------------------------------------------------------
 // Result shape — mirrors ExecuteFoundationSkillToolResult
@@ -74,38 +77,19 @@ export interface ExecutionSeamResult {
  */
 export class CatalogExecutionSeam {
   private readonly registry: CompositeCatalogRegistry;
-  /**
-   * Sources that expose a `getHandler()` lookup.
-   * Accepts `StandaloneToolSource` (Lot 2) and `McpCatalogSource` (Lot 5);
-   * both implement the `ToolHandlerSource` interface.
-   * The `StandaloneToolSource` type is a subtype of `ToolHandlerSource`, so
-   * existing `[standaloneToolSource]` wiring continues to compile unchanged.
-   *
-   * Mutable (not readonly): additional handler sources (e.g. MCP sources) can
-   * be added after construction via `addHandlerSource()` without rebuilding
-   * the seam instance.
-   */
-  private readonly handlerSources: ToolHandlerSource[];
+  /** Handler sources are fixed at construction; host-registry is the sole MCP source. */
+  private readonly handlerSources: readonly ToolHandlerSource[];
 
   constructor(
     registry: CompositeCatalogRegistry,
-    handlerSources: (StandaloneToolSource | ToolHandlerSource)[],
+    handlerSources: readonly ToolHandlerSource[],
   ) {
     this.registry = registry;
     this.handlerSources = [...handlerSources];
   }
 
-  /**
-   * Add a handler source that will be consulted on every `execute()` call.
-   * Used by `catalog.ts` when a new MCP source is registered at runtime
-   * (Lot 5 default-off wiring).
-   *
-   * Idempotent with respect to the same instance: adding the same source
-   * twice will result in redundant lookups (handlers are returned on the first
-   * match, so correctness is preserved).
-   */
-  addHandlerSource(source: ToolHandlerSource): void {
-    this.handlerSources.push(source);
+  hasTool(name: string): boolean {
+    return this.handlerSources.some(source => source.getHandler(name) !== undefined);
   }
 
   /**
@@ -128,12 +112,17 @@ export class CatalogExecutionSeam {
   async execute(
     name: string,
     args: Record<string, unknown>,
+    context?: CatalogRequestContext,
   ): Promise<ExecutionSeamResult> {
-    const entry = this.registry.get(name);
+    const denied = { handled: true, result: { status: 'denied', error: 'catalog_access_denied' } };
+    // Unknown non-catalog tools retain their existing dispatcher. A known denied
+    // handler never falls through, including private entries absent from a view.
+    if (!this.hasTool(name)) return { handled: false };
+    const entry = this.registry.get(name, context);
 
     // No catalog entry for this name.
     if (entry === null) {
-      return { handled: false };
+      return denied;
     }
 
     // D-TOOL-RECONCILE: skip skill-kind entries — their dispatch lives in
@@ -142,11 +131,16 @@ export class CatalogExecutionSeam {
       return { handled: false };
     }
 
+    let invocation: CatalogRequestContext;
+    try { invocation = await revalidateCatalogInvocation(context, name, args, entry.tool.sideEffect !== false); }
+    catch { return denied; }
+
     // Find the handler for this tool entry across all registered sources.
     for (const source of this.handlerSources) {
+      if (source.id !== entry.sourceId) continue;
       const handler = source.getHandler(name);
       if (handler !== undefined) {
-        const result = await Promise.resolve(handler(args));
+        const result = await Promise.resolve(handler(args, invocation));
         return { handled: true, result };
       }
     }

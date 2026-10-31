@@ -7,8 +7,10 @@ import {
   RESOURCE_ROUTES,
   type ResourcesNamespacePorts,
 } from './resources';
-import { applyResourcesAuthorFence, type ResourcesCutoverControl } from './resources-cutover';
+import { applyResourcesAuthorFence, createResourcesAuthorFence, resourcesAuthorFence, type ResourcesCutoverControl } from './resources-cutover';
 import { productResourcesPorts } from './resources-product-ports';
+import { createArtifactHttpRouter } from './artifacts';
+import { artifactHostEnabled, productArtifactTransport, productArtifactReaderPort, resolveArtifactSession } from '../../services/artifacts/instance';
 
 export { RESOURCE_PATHS, RESOURCE_ROUTES, createResourcesTransportRouter } from './resources';
 export { RESOURCES_AUTHOR, RESOURCES_PREDECESSOR } from './resources-cutover';
@@ -32,6 +34,12 @@ export const createResourcesNamespaceModule = (
     for (const [method, path] of RESOURCE_ROUTES) router.on(method, path, ports.authenticate);
     applyResourcesAuthorFence(router, RESOURCE_ROUTES, options.cutoverControl);
     router.route('/', createResourcesTransportRouter(ports));
+    router.use('/resources/artifacts/*', ports.authenticate,
+      options.cutoverControl ? createResourcesAuthorFence(options.cutoverControl) : resourcesAuthorFence);
+    router.route('/resources/artifacts', createArtifactHttpRouter({
+      transport: async () => productArtifactTransport, identity: resolveArtifactSession, enabled: artifactHostEnabled,
+      reader: productArtifactReaderPort,
+    }));
     return router;
   },
 });

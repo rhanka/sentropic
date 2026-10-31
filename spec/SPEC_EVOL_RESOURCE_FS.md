@@ -44,6 +44,8 @@ filesystem is presentation, not contract.
 
 Verified against `origin/main` (post PR #273); corrected by the double review.
 
+> W4.b supersession (PR #807): this baseline and the RF7 decision table retain historical BR-42b evidence. `McpCatalogSource` is retired; `HostRegistryCatalogSource` (`sources/host-registry-source.ts`, id `host-registry`) is the sole MCP catalogue source, projecting authorized compiled exact names without sanitization or collision suffixes. Resource mapping work must consume the existing registry; it must not extend or restore the deleted source. Resource Plane/catalog ownership below is unchanged.
+
 - **Capability catalog** (BR-42b): `CatalogSource` is a pluggable provider
   (`static`/`mcp`/`standalone-tool`/`agent-template`/`canvas-template`/
   `workflow-seed`, `api/src/services/catalog/sources/`). Reality check
@@ -51,9 +53,9 @@ Verified against `origin/main` (post PR #273); corrected by the double review.
   refresh/health — it has NO `stat/read/write/invoke/watch`, no path tree, no
   per-principal materialization (`api/src/services/catalog/source.ts`). It is
   a provider seed, not yet a mount provider.
-- **MCP source**: `McpCatalogSource` connects → `listTools()` → maps tools →
-  closes; `callTool()` opens a fresh connection per call
-  (`sources/mcp-source.ts`). It maps TOOLS only — NO `resources/list` /
+- **Historical MCP source (retired by W4.b)**: `McpCatalogSource` connected → `listTools()` → mapped tools →
+  closed; `callTool()` opened a fresh connection per call
+  (deleted `sources/mcp-source.ts`). It mapped TOOLS only — NO `resources/list` /
   `resources/read`. The connect-list-close lifecycle is incompatible with
   `resources/subscribe` (watch needs a persistent connection). MCP tool ids
   are RE-DERIVED each refresh with order-dependent collision suffixing
@@ -378,9 +380,10 @@ v1 undersold the scope. Honest split:
   Resource Plane CONSUMES the catalog (it does NOT own the catalog sources).
   The `CatalogSource → ResourceProvider` ADAPTER (so the catalog mounts under
   the plane) is a CATALOG-lineage deliverable (BR-42j, WP-CATALOG), not BR-70;
-- `/mcp/<server>/tools` mount (tools already mapped by `McpCatalogSource`,
-  BR-42b). MCP `/mcp/<server>/resources` requires extending `McpCatalogSource`
-  to map `resources/list`+`read` (URI-preserving) — this MAPPING is a
+- `/mcp/<server>/tools` mount consumes the existing compiled registry through
+  `HostRegistryCatalogSource` (W4.b, superseding BR-42b's deleted source).
+  MCP `/mcp/<server>/resources` needs registry-backed, URI-preserving
+  `resources/list`+`read` mapping — this MAPPING is a
   CATALOG-lineage deliverable (BR-42i, the BR-19b/BR-42b continuation), NOT a
   BR-70 deliverable; the Resource Plane only PROJECTS what the catalog source
   exposes. BR-70 depends on BR-42i (resources) + BR-42j (adapter);

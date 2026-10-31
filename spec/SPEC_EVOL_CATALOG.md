@@ -1,5 +1,7 @@
 # SPEC_EVOL_CATALOG — Unified Capability Catalog Evolution (BR-42b)
 
+> W4.b supersession (PR #807): the BR-42b design below is historical where it describes MCP naming, refresh or registration. `HostRegistryCatalogSource` (`sources/host-registry-source.ts`, id `host-registry`) is now the sole MCP catalogue source. It projects the authorized compiled app registry with exact names and dispatches through the existing artifact transport. `McpCatalogSource`, its sanitizer and runtime registration API are retired; §3.3/§3.6 and Lot 5 do not authorize restoring that path.
+
 Branch: `feat/catalog-evolution-42b` · Family: BR-42 scale / build-app foundry · Extends: BR-19 (skills package) + BR-26 (flow façade) + BR-33 (marketplace intention). Absorbs and retires the dormant `feat/mcp-tool-catalog-br19b` "19-mcp" stub.
 
 Status: SCOPING gate (read-only analysis + this spec). No src/test/schema changes in this branch. This document is the input to double-review (Codex + Opus) and to the subsequent BRANCH.md / lot plan.
@@ -166,7 +168,7 @@ interface CatalogSource {
 - The **static foundation bundle** wraps as `StaticCatalogSource` (id `'foundation'`) over `FOUNDATION_SKILLS`, emitting `skill`-kind entries — **zero behaviour change**, pure refactor (characterization-first, §5).
 - `CompositeCatalogRegistry` fans `list/get/search` across sources' snapshots; name collisions resolve by source precedence (foundation wins / explicit policy). Preserves `InMemorySkillRegistry`'s O(1) get / O(n) search per source and the **search-first** discovery contract (§1.4) and the no-cache-invalidation property.
 
-### 3.3 Naming — provider-safe public ids, raw name mapping (Codex MF3)
+### 3.3 Historical naming — superseded for MCP by W4.b
 
 Today's parser enforces kebab-ish names (`packages/skills/src/format/parser.ts:20,52,87`) and the OpenAI conversion does no sanitization (`catalog.ts:44`). MCP tool names (`mcp:<server>/<tool>` with `:`/`/`) are **invalid** as public tool ids. Rule: each entry carries a **provider-safe public `metadata.name`** (sanitized to the kebab/underscore charset accepted by the parser and OpenAI) plus, for `tool` entries, a `rawName` that maps back to the source's real tool name for the execution call. The catalog owns the public-id↔raw-name map; the model never sees raw names.
 
@@ -178,9 +180,9 @@ Today `SkillsToolRegistry` executes **only** `search_skills` (`adapter.ts:76-89`
 
 `search_skills` is named + typed skill-only (`search-skills-tool.ts:11`, returns `SkillSearchHit[]` metadata). It **cannot silently** become unified catalog search. Rule: **keep `search_skills` exactly as-is** (skill discovery, stable contract — chat-core dispatcher keys on the literal `'search_skills'` and sentinel `'__skills__'`). For cross-kind discovery, **add a sibling `search_catalog`** meta-tool returning `CatalogEntry` hits across all kinds (kind in each hit). The `search_skills`-first contract for skills is preserved verbatim; `search_catalog` is additive. Renaming `search_skills` is explicitly rejected (breaks the dispatcher contract).
 
-### 3.6 MCP source
+### 3.6 MCP source — W4.b replacement
 
-`McpCatalogSource` (`kind: 'mcp'`) connects to a configured MCP server (stdio or HTTP/SSE, via the official `@modelcontextprotocol/sdk`, added through `make install-api`), calls MCP `tools/list`, and **maps each MCP tool → one `tool`-kind `CatalogEntry`** (MCP `inputSchema` → `SkillTool.inputSchema`; sanitized public name + `rawName`, §3.3). MCP `call` is wired through the §3.4 execution seam, so discovery + dispatch keep working. Per-source config (server URL/command, auth token/headers, allow/deny filter) is carried out-of-band (env / workspace config), NOT in the entry — exactly where study §15 `MarketplacePolicy.allowedSources` (`:424-431`) would later gate exposure (marketplace gating stays deferred, §15 admin UI out of scope). MCP refreshes via the async `refresh()` (§3.2), never on the per-turn resolve. **Absorbs and retires `feat/mcp-tool-catalog-br19b`** (no code/PR on origin).
+`HostRegistryCatalogSource` (`id: 'host-registry'`, `kind: 'mcp'`) is the sole MCP source in the composite catalogue. It projects the existing compiled app registry as `tool` entries with exact compiled names and schemas, filtering with trusted request authority before discovery, ranking or serialization. Its handlers delegate to the existing artifact transport after authority revalidation. It keeps no private identity-bound view and performs no name sanitization or raw-name remapping. The old `McpCatalogSource` connection/refresh implementation and runtime MCP registration API are deleted; the execution seam's handler sources are fixed at construction.
 
 ### 3.7 Google marketplace source (deferred v2)
 
