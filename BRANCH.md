@@ -100,6 +100,6 @@ Grant the preprod `immo-mcp` PKCE client the explicit scopes `immo:artifacts:rea
   - [x] `make scope-check`-equivalent mechanical scope check before each commit (host `harness check scope`).
   - [x] Targeted gates re-run clean on the final head.
   - [x] Bumped `packages/auth-ui/package.json` version for `src/**` change — enforced by CI `enforce-package-bump`.
-  - [ ] Final gate step 1: create PR using `BRANCH.md` text as PR body.
+  - [x] Final gate step 1: create PR using `BRANCH.md` text as PR body.
   - [ ] Final gate step 2: one CI run on the final head; resolve remaining blockers.
   - [ ] Final gate step 3 (owner-side, after merge): dispatch the `IdP identity sync` workflow per the apply step in the lane report; merge decision belongs to the owner.
