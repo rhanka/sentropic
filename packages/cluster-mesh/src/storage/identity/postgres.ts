@@ -36,7 +36,7 @@ export interface PostgresIdentityOptions {
 }
 
 /** Applies the idempotent identity DDL; safe to call concurrently. */
-export const applyPostgresIdentitySchema = async (options: PostgresIdentityOptions): Promise<void> => {
+export const applyPostgresIdentityCoreSchema = async (options: PostgresIdentityOptions): Promise<void> => {
   const { driver, schema, deadlineMs = IDENTITY_TX_DEADLINE_MS } = options;
   await driver.transaction({ isolation: 'serializable', readOnly: false, deadlineMs }, async (session) => {
     await session.execute({ text: `CREATE SCHEMA IF NOT EXISTS "${schema}"`, values: [] });
@@ -77,7 +77,7 @@ class PostgresSlice {
     }
     let ready = bySchema.get(schema);
     if (!ready) {
-      ready = applyPostgresIdentitySchema(this.options).catch((error) => {
+      ready = applyPostgresIdentityCoreSchema(this.options).catch((error) => {
         bySchema.delete(schema);
         throw error;
       });
@@ -423,7 +423,7 @@ class PostgresIdentityAudit extends PostgresSlice implements IdentityAuditPort {
 }
 
 /** Durable A2.1 stores over one PostgreSQL control schema. */
-export const createPostgresIdentityStores = (options: PostgresIdentityOptions): IdentityAccountStores => {
+export const createPostgresIdentityCoreStores = (options: PostgresIdentityOptions): IdentityAccountStores => {
   const accounts = new PostgresUserAccountStore(options);
   return {
     accounts,

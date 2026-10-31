@@ -76,8 +76,8 @@ Implement the durable storage backends for the frozen identity contracts of lot 
 - [x] **Lot 1 — Durable identity store slice (A2.1)**
   - [x] `src/storage/identity/schema.ts`: one logical schema, two dialects (PostgreSQL control schema, SQLite local profile) for the five record tables plus the identity audit events table.
   - [x] `src/storage/identity/records.ts`: row codecs shared by both backends.
-  - [x] `src/storage/identity/postgres.ts`: schema apply + `createPostgresIdentityStores` over `InjectedPgDriver` (SERIALIZABLE transactions, atomic conditional updates for single-use consumption, bounded serialization retry).
-  - [x] `src/storage/identity/sqlite.ts`: schema apply + `createSqliteIdentityStores` over the existing `node:sqlite` storage engine (process-isolated owner, WAL).
+  - [x] `src/storage/identity/postgres.ts`: schema apply + `createPostgresIdentityCoreStores` over `InjectedPgDriver` (SERIALIZABLE transactions, atomic conditional updates for single-use consumption, bounded serialization retry). Factory names carry the `IdentityCore` infix after the A2.2 merge exported identically named `createPostgresIdentityStores`/`applyPostgresIdentitySchema` from `src/identity-stores/`; the frozen contracts never reference the factory names.
+  - [x] `src/storage/identity/sqlite.ts`: schema apply + `createSqliteIdentityCoreStores` over the existing `node:sqlite` storage engine (process-isolated owner, WAL); same `IdentityCore` infix for the same reason.
   - [x] `src/storage/identity/wiring.ts`: `wireIdentityDomains` binding the frozen factories to the durable slice + `createCryptoTokenPort` (token entropy from `node:crypto`).
   - [x] Export the slice from `src/index.ts`.
   - [x] Lot gate:

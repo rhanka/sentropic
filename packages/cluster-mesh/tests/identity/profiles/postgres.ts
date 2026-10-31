@@ -9,7 +9,7 @@ import { testPgDriver } from '../../storage/pg-driver.js';
 import type { InjectedPgDriver } from '../../../src/storage/postgres/protocol.js';
 import {
   createInMemoryIdentityStores as createInMemoryStores,
-  createPostgresIdentityStores,
+  createPostgresIdentityCoreStores,
   type IdentityStores,
 } from '../../../src/index.js';
 import { registerCleanup } from './cleanup-registry.js';
@@ -32,7 +32,7 @@ export const createInMemoryIdentityStores = (): IdentityStores => {
   if (!process.env.CM_PG_URL) return base;
   const pg = sharedDriver();
   const schema = `identity_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
-  const durable = createPostgresIdentityStores({ driver: pg, schema });
+  const durable = createPostgresIdentityCoreStores({ driver: pg, schema });
   registerCleanup(() =>
     pg
       .transaction({ isolation: 'serializable', readOnly: false, deadlineMs: 5000 }, async (session) => {
