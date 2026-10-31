@@ -62,8 +62,8 @@ Record the owner's 2026-10-31 deliverables, recover merged branch plans since 20
 - [x] **Lot 0 — Baseline and identity map**
   - [x] Read common rules, Track contract, repository rules and branch template; harness branch check passes.
   - [x] Capture baseline report, snapshot, query, existing workpackages, items and decisions before writes.
-- [ ] **Lot 1 — Recover merged deliverables**
-  - [ ] Recover eligible merged BRANCH files, import compatible shapes, and link completed PR evidence without duplicates.
+- [x] **Lot 1 — Recover merged deliverables**
+  - [x] Recover eligible merged BRANCH files, import compatible shapes, and link completed PR evidence without duplicates.
 - [ ] **Lot 2 — Owner requests and decisions**
   - [ ] Record identity, app, memory/hooks, remote control, voice, federation, canvas, immo, infrastructure, cyber and pending owner work.
   - [ ] Preserve exact structured options/recommendations; leave unsupported dossiers unstructured.
@@ -73,6 +73,6 @@ Record the owner's 2026-10-31 deliverables, recover merged branch plans since 20
   - [ ] Save PR/head/CI, item and decision counts, and avoided duplicates in `.tmp/rv/track-sync.md`; stop without merging.
 
 ## Validation record
-- [x] Sync checkpoint: 1420 journal events recorded; archive merged branch plans.
+- [x] Sync checkpoint: 1456 journal events recorded; complete merged deliverable archive.
 - [x] No application tests added or changed; deterministic Track validation, source reconciliation, scope and diff checks are the relevant gates.
 - [ ] Final Track validation and source coverage passed.
