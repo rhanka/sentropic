@@ -57,10 +57,12 @@ describe.skipIf(!enabled)('packed declarations and bundlers', () => {
   it('should emit provider leaves as the guard import plus export-star only', () => {
     const leaves = files(join(packageDir('bare'), 'dist/integrations'));
     // 12 re-export leaves, including local comments and the three decision leaves, plus the mcp/artifacts builtin-factory leaf
-    // (asserted separately below: it carries mesh code, so it is no export-star).
-    expect(leaves.filter((file) => file.endsWith('.d.ts'))).toHaveLength(13);
+    // (asserted separately below: it carries mesh code, so it is no export-star), plus the five mcp/memory
+    // builtin leaves (asserted in the memory leaf test below: factories and manifests carry mesh code).
+    expect(leaves.filter((file) => file.endsWith('.d.ts'))).toHaveLength(18);
     for (const file of leaves.filter((path) => /\.(d\.ts|js)$/u.test(path))) {
       if (file.includes('integrations/mcp/artifacts.')) continue;
+      if (file.includes('integrations/mcp/memory')) continue;
       const lines = read(file).split('\n').map((line) => line.trim())
         .filter((line) => line && !line.startsWith('//') && !line.startsWith('/*'));
       const exports = lines.filter((line) => line.startsWith('export'));
@@ -84,6 +86,33 @@ describe.skipIf(!enabled)('packed declarations and bundlers', () => {
       expect([...new Set(externals)].sort(), leaf).toEqual(expected.sort());
     }
     expect(read(join(packageDir('bare'), 'dist/integrations/mcp/artifacts.js'))).toMatch(/export function createArtifactsBuiltin/u);
+  });
+
+  it('should keep the memory builtin leaves free of embedded provider code', () => {
+    // The mcp/memory leaves carry mesh code (the sentropic.engram.memory builtin
+    // factory, composer, transport, wire manifest and definition), so they are not
+    // export-star leaves — but like every leaf they must not embed provider code:
+    // engram remains an external optional peer acquired through the qualified loader.
+    const stems = ['memory', 'memory-compose', 'memory-definition', 'memory-manifest', 'memory-transport'];
+    for (const stem of stems) {
+      for (const leaf of [`dist/integrations/mcp/${stem}.js`, `dist/integrations/mcp/${stem}.d.ts`]) {
+        const source = read(join(packageDir('bare'), leaf));
+        expect(source, `${leaf} inlines provider code`).not.toContain('node_modules/@sentropic/engram/');
+      }
+    }
+    const externalsOf = (stem: string): string[] => {
+      const source = read(join(packageDir('bare'), `dist/integrations/mcp/${stem}.js`));
+      return [...new Set([...source.matchAll(/from\s+["'](@sentropic\/[^"']+)["']/gu)].map((match) => match[1]))].sort();
+    };
+    expect(externalsOf('memory'), 'memory leaf externals').toEqual(['@sentropic/mcp-platform/memory']);
+    expect(externalsOf('memory-transport'), 'memory-transport leaf externals').toEqual(['@sentropic/mcp-platform/memory']);
+    expect(externalsOf('memory-compose'), 'memory-compose leaf externals').toEqual(
+      ['@sentropic/mcp-platform/memory', '@sentropic/mcp-platform/tool-configuration']);
+    expect(externalsOf('memory-manifest'), 'memory-manifest leaf is pure').toEqual([]);
+    expect(read(join(packageDir('bare'), 'dist/integrations/mcp/memory.js')), 'memory leaf exports')
+      .toMatch(/export (function createEngramMemoryBuiltin|\{[^}]*createEngramMemoryWireManifest[^}]*\})/u);
+    expect(read(join(packageDir('bare'), 'dist/integrations/mcp/memory-manifest.js')), 'wire manifest export')
+      .toMatch(/export function createEngramMemoryWireManifest/u);
   });
 
   it('should keep the emitted root declaration graph free of optional peers', () => {
