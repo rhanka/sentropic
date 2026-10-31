@@ -107,8 +107,8 @@
   - [x] Lot gate: `make typecheck-cluster-mesh ENV=test-cm-a2-3`; dev-gate specs green.
 
 - [ ] **Lot 4 — Acceptance & train**
-  - [ ] Frozen contract suite unmodified, full run: `make test-cluster-mesh SCOPE=tests/identity- ENV=test-cm-a2-3` (frozen three + A2.3 specs).
-  - [ ] `make scope-check` clean before every commit; atomic commits via `make commit`.
-  - [ ] `make down ENV=test-cm-a2-3` after Docker steps; report image growth if any.
+  - [x] Frozen contract suite unmodified, full run: `make test-cluster-mesh SCOPE=tests/identity- ENV=test-cm-a2-3` (frozen three + A2.3 specs).
+  - [x] `make scope-check` clean before every commit; atomic commits via `make commit`.
+  - [x] `make down ENV=test-cm-a2-3` after Docker steps; report image growth if any.
   - [ ] Draft PR to main (BRANCH.md text as body); push `--force-with-lease` on `feat/cm-identity-a2-3` only; ONE CI run on the final head; wait completed/success.
   - [ ] Write report `.tmp/rv/lot-A2.3.md` (PR, head, CI run id + conclusion, acceptance item by item); stop. Do not merge.
