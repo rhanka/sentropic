@@ -46,9 +46,10 @@ Implement the durable storage backends for the frozen identity contracts of lot 
 ## Feedback Loop
 - [x] BRLOCK-EX1 carried verbatim from `origin/main` for gate continuity (owner=CI maintainers; review_by=2026-11-30T00:00:00Z; this branch exercises the lock scope via the one-line root lockfile workspace version sync under BRA21-EX3; remove on PR closure; rollback by reverting this branch).
 - [x] BRA21-EX1: owner=lane author; review_by=PR review; new-file commits above the 150-line advisory where a file must land whole (schema/codec/postgres/sqlite modules and profile harness, mirroring the A2.0 BRA2-EX1 whole-module precedent for compilable units); impact limited to branch history; rollback by reverting the branch.
-- [x] BRA21-EX2: owner=lane author; review_by=PR review; reserved-next dev-train roll one step forward per BRA2-EX2 precedent: carry `0.26.0-dev.1` in `package.json`, advance `RESERVED_NEXT` to `0.26.0` in `tests/fixtures/reserved-versions.ts` + mirror in `tests/storage/pack-only-dev-gate.mjs`, roll the dev-gate vectors in `pack-only-dev-gate.spec.ts` + `prepare-artifacts.spec.ts` one line forward; published pin advanced to `0.25.0` (latest published release whose dependency/peer metadata equals the candidate's; registry probed after the `0.25.0` release landed, metadata identical — required by `prepare-artifacts.spec.ts`, whose selected fixture already pins `sentropic-cluster-mesh-0.25.0.tgz` on main); impact limited to version-train test support, no frozen range widened; rollback by reverting the branch.
+- [x] BRA21-EX2: owner=lane author; review_by=PR review; carry `0.26.0-dev.2` after rebasing over #860/#861 (`main` at `0.26.0-dev.1`); preserve main's `RESERVED_NEXT=0.26.0` and published pin `0.25.0` in `tests/fixtures/reserved-versions.ts` and `tests/storage/pack-only-dev-gate.mjs`; union both sides' negative vectors in `pack-only-dev-gate.spec.ts` and `prepare-artifacts.spec.ts`; registry rechecked at `0.25.0`, dependency/peer metadata unchanged; impact limited to version-train test support, no gate logic or frozen range widened; rollback by reverting the branch.
 - [x] BRA21-EX3: owner=lane author; review_by=PR review; single-line root `package-lock.json` version sync for `packages/cluster-mesh` (CI train lock-sync assertion; precedent `db534d4b9`); no other lockfile change; rollback by reverting the branch.
 - [x] BRA21-EX4: owner=lane author; review_by=PR review; anchor the local agent-state ignore rule `identity/` to the repo root as `/identity/` so the tracked campaign harness `packages/cluster-mesh/tests/identity/**` is not swallowed; root-level h2a agent state stays ignored (verified: `identity/aliases.jsonl` and `.h2a/identity/` both remain ignored); impact limited to ignore resolution for nested `identity/` directories, none of which exist outside the new test harness; rollback by reverting the branch.
+- [x] BRA21-OBS1: owner=lane author; status=local retry passed, no waiver; rebase validation first hit unchanged 5000ms guards in SQLite `identity-lifecycle.spec.ts:48` (5226ms) and `prepare-artifacts.spec.ts:137` (5050ms); identical commands and tree then passed (registration 2653ms; artifact fixture 1875ms); no spec, timeout or gate changed; initial and successful logs retained in worktree `.tmp/a21-*.log`.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -93,7 +94,7 @@ Implement the durable storage backends for the frozen identity contracts of lot 
   - [x] `tests/storage/sqlite-identity.spec.ts`: same corpus on SQLite plus engine close/reopen persistence and the single-writer engine fence.
   - [x] Mechanical no-outside-writer check: `grep -rn "identity_" packages/cluster-mesh/src --include="*.ts" -l` lists only `src/storage/identity/**`.
 - [x] **Lot 4 — Version train and lock sync**
-  - [x] `package.json` → `0.26.0-dev.1` (next free dev on the next train; `0.25.0` is already the released stable on main).
+  - [x] `package.json` → `0.26.0-dev.2` (next dev after main's `0.26.0-dev.1` from #861; published stable remains `0.25.0`).
   - [x] `RESERVED_NEXT` → `0.26.0` (published pin advanced to `0.25.0`); dev-gate vectors rolled one line forward (BRA21-EX2).
   - [x] `package-lock.json` single-line version sync (BRA21-EX3).
   - [x] Lot gate: packaging dev-gate specs pass.
@@ -106,3 +107,10 @@ Implement the durable storage backends for the frozen identity contracts of lot 
   - [x] Bumped `packages/cluster-mesh/package.json` version (enforced by CI `enforce-package-bump`).
   - [ ] Draft PR to main, push `--force-with-lease` on `feat/cm-identity-a2-1` only, ONE CI run on the final head, wait for completed/success.
   - [ ] Report to `.tmp/rv/lot-A2.1.md` (PR, head, CI run id + conclusion, acceptance item by item). Do not merge.
+- [ ] **Lot 6 — Owner-requested rebase after #860 and #861**
+  - [x] Rebase onto `origin/main` `329cc11d0`; retain this branch's plan and all three lots' exports, including #861's disambiguated enforcement factory names.
+  - [x] Preserve main's reserved-next `0.26.0` / published pin `0.25.0` and union both sides' negative gate vectors without changing gate logic.
+  - [x] Regenerate the `0.26.0-dev.2` root lock entry through `make chat-migration-lockfiles`; verify strict consumer-lock union (all 8 profiles preserved; result identical to main); discard only the unrelated UI lock regeneration hunk.
+  - [x] Run scope C2 and type checks; unmodified identity campaigns: PostgreSQL 89/89, SQLite 82 passed + 7 PG-only skips; A2.1 round trips 6/6 each; A2.2/A2.3 specs included; pack-only and artifact gates 20/20 each; publication bump fixtures 30/30; lockfile gate 11/11; all under the flock, PostgreSQL teardown and `make down` after.
+  - [ ] Commit through `make commit`, push this branch only with `--force-with-lease`, wait for one CI run on the final head, append head/run/conflict/version evidence to `.tmp/rv/lot-A2.1.md`; do not merge.
+  - [ ] Track handoff: designated main writer imports this source artifact and final report for the rebase request, deliverables and owner-selected `0.26.0-dev.2`; this lane does not write the shared `.track` log.
