@@ -56,6 +56,7 @@ Implement the durable storage backends for the frozen identity contracts of lot 
   - Never amend tests with additive timeouts.
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
+- Record (BRA21-FLAKE1): `make test-cluster-mesh ENV=test-cm-a2-1` at head `7ef805dbf` failed 13 tests, every one with signature `Error: Test timed out in 5000ms` (`tests/engram-memory/sqlite-roundtrip.spec.ts`, `tests/storage/instance-ownership.spec.ts`, `tests/storage/sqlite-capabilities.spec.ts`, `tests/storage/sqlite-corpus.spec.ts`, `tests/storage/sqlite-lanes.spec.ts`, `tests/storage/sqlite-s0-identity.spec.ts`, `tests/storage/sqlite-s0.spec.ts`) while parallel lanes held the shared machine at load average ~25; unrelated to this branch (no kernel or frozen-spec change; the same command at the same head passed 1471/1471 once the machine quieted); no test amended, no timeout raised.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -80,27 +81,27 @@ Implement the durable storage backends for the frozen identity contracts of lot 
   - [x] Export the slice from `src/index.ts`.
   - [x] Lot gate:
     - [x] `make typecheck-cluster-mesh ENV=test-cm-a2-1` + `make lint-cluster-mesh ENV=test-cm-a2-1`
-- [ ] **Lot 2 — Contract suite unmodified on both profiles**
+- [x] **Lot 2 — Contract suite unmodified on both profiles**
   - [x] `tests/identity/profiles/postgres.ts` + `tests/identity/vitest.postgres.config.ts`: alias the frozen contract suite onto the PostgreSQL-backed slice (five A2.1 stores durable; unlanded slices keep the reference doubles).
   - [x] `tests/identity/profiles/sqlite.ts` + `tests/identity/vitest.sqlite.config.ts`: same for the SQLite profile.
-  - [ ] Campaign: `cluster-mesh-pg-test` with `SCOPE=--config=tests/identity/vitest.postgres.config.ts` (disposable PostgreSQL, CM_PG_URL inside the workspace container).
+  - [x] Campaign: `cluster-mesh-pg-test` with `SCOPE=--config=tests/identity/vitest.postgres.config.ts` (disposable PostgreSQL, CM_PG_URL inside the workspace container).
   - [x] Campaign: `test-cluster-mesh` with `SCOPE=--config=tests/identity/vitest.sqlite.config.ts`.
   - [x] The three `tests/identity-*.spec.ts` files remain byte-identical (verified with `git diff origin/main -- tests/identity-`).
-- [ ] **Lot 3 — Round-trip and concurrency specs**
-  - [ ] `tests/storage/postgres-identity.spec.ts`: registration → pending → approval → login on PostgreSQL; invitation consumed exactly once under concurrent consumers; revoke-all effective on the next call; driver-level restart persistence.
-  - [ ] `tests/storage/sqlite-identity.spec.ts`: same corpus on SQLite plus engine close/reopen persistence and the single-writer engine fence.
+- [x] **Lot 3 — Round-trip and concurrency specs**
+  - [x] `tests/storage/postgres-identity.spec.ts`: registration → pending → approval → login on PostgreSQL; invitation consumed exactly once under concurrent consumers; revoke-all effective on the next call; driver-level restart persistence.
+  - [x] `tests/storage/sqlite-identity.spec.ts`: same corpus on SQLite plus engine close/reopen persistence and the single-writer engine fence.
   - [x] Mechanical no-outside-writer check: `grep -rn "identity_" packages/cluster-mesh/src --include="*.ts" -l` lists only `src/storage/identity/**`.
-- [ ] **Lot 4 — Version train and lock sync**
+- [x] **Lot 4 — Version train and lock sync**
   - [x] `package.json` → `0.26.0-dev.1` (next free dev on the next train; `0.25.0` is already the released stable on main).
   - [x] `RESERVED_NEXT` → `0.26.0` (published pin advanced to `0.25.0`); dev-gate vectors rolled one line forward (BRA21-EX2).
   - [x] `package-lock.json` single-line version sync (BRA21-EX3).
-  - [ ] Lot gate: packaging dev-gate specs pass.
-- [ ] **Lot 5 — Final validation**
-  - [ ] `make typecheck-cluster-mesh ENV=test-cm-a2-1`, `make lint-cluster-mesh ENV=test-cm-a2-1`
-  - [ ] Full default unit lane: `make test-cluster-mesh ENV=test-cm-a2-1`
-  - [ ] PostgreSQL lane: `make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test SCOPE=tests/storage/postgres-identity.spec.ts ENV=test-cm-a2-1` then `cluster-mesh-pg-down`
-  - [ ] Contract-on-profiles campaigns (Lot 2) re-run on the final head.
-  - [ ] `make down ENV=test-cm-a2-1` after each campaign.
-  - [ ] Bumped `packages/cluster-mesh/package.json` version (enforced by CI `enforce-package-bump`).
+  - [x] Lot gate: packaging dev-gate specs pass.
+- [x] **Lot 5 — Final validation**
+  - [x] `make typecheck-cluster-mesh ENV=test-cm-a2-1`, `make lint-cluster-mesh ENV=test-cm-a2-1`
+  - [x] Full default unit lane: `make test-cluster-mesh ENV=test-cm-a2-1`
+  - [x] PostgreSQL lane: `make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test SCOPE=tests/storage/postgres-identity.spec.ts ENV=test-cm-a2-1` then `cluster-mesh-pg-down`
+  - [x] Contract-on-profiles campaigns (Lot 2) re-run on the final head.
+  - [x] `make down ENV=test-cm-a2-1` after each campaign.
+  - [x] Bumped `packages/cluster-mesh/package.json` version (enforced by CI `enforce-package-bump`).
   - [ ] Draft PR to main, push `--force-with-lease` on `feat/cm-identity-a2-1` only, ONE CI run on the final head, wait for completed/success.
   - [ ] Report to `.tmp/rv/lot-A2.1.md` (PR, head, CI run id + conclusion, acceptance item by item). Do not merge.
