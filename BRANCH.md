@@ -37,6 +37,7 @@ Implement durable PostgreSQL and SQLite backends for the lot A2.2 identity store
   - `packages/cluster-mesh/tests/fixtures/reserved-versions.ts` (release-train constants only, under BR22-EX2)
   - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts` (train-state unit rows only, under BR22-EX2)
   - `packages/cluster-mesh/tests/storage/pack-only-dev-gate.spec.ts` (train-state unit rows only, under BR22-EX2)
+  - `scripts/ci/consumer-locks.json` (one frozen consumer profile only, under BR22-EX3)
 - **Exception process**:
   - Declare exception ID `BR22-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
@@ -44,6 +45,7 @@ Implement durable PostgreSQL and SQLite backends for the lot A2.2 identity store
 - [x] BRLOCK-EX1 carried verbatim from `origin/main` for gate continuity (owner=CI maintainers; review_by=2026-11-30T00:00:00Z; this branch exercises the lock scope via the one-line root lockfile workspace version sync under BR22-EX1; remove on PR closure; rollback by reverting this branch).
 - [x] BR22-EX1: allow the one-line root `package-lock.json` workspace version sync (`packages/cluster-mesh` entry only) for the CI train lock-sync gate, because the bump gate requires a manifest version change for `src/` changes and the lock-sync gate requires the lockfile entry to match. Rationale: `packages/cluster-mesh/src/identity-stores/` is new source, so `packages/cluster-mesh/package.json` moves `0.25.0` → `0.26.0-dev.0` (next free `-dev.N`; nothing published, sibling lots still at `0.25.0`). Impact: two version strings, no dependency change. Rollback: revert both version strings to `0.25.0`.
 - [x] BR22-EX2: allow the release-train constant rollover in `packages/cluster-mesh/tests/fixtures/reserved-versions.ts` and `packages/cluster-mesh/tests/storage/pack-only-dev-gate.mjs` (`RESERVED_NEXT` `0.25.0` → `0.26.0`, `LATEST_PUBLISHED_CLUSTER_MESH` `0.24.0` → `0.25.0`), plus the train-state unit-table rows in `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts` and `packages/cluster-mesh/tests/storage/pack-only-dev-gate.spec.ts` (same value rollover, row intent preserved; untouched rows still evaluate as before), required by the `0.26.0-dev.0` bump so the pack-only dev tolerance keeps matching the frozen `0.25.0` fixture tuple (precedent `eea2cf0a6`). Impact: constants plus eight unit rows; no predicate change. Rollback: revert the constants and the eight rows.
+- [x] BR22-EX3: allow one frozen consumer closure line in `scripts/ci/consumer-locks.json` (`@sentropic/cluster-mesh@0.25.0` profile: manifest plus `npm install --package-lock-only` lock, same shape as the `0.24.0` profile), required because the `0.26.0-dev.0` candidate makes the installed/major lanes install the `0.25.0` pin from the frozen registry universe, which only knew `0.23.2`/`0.24.0` (precedent `258aa6a49`). Impact: one catalog line; other profiles byte-identical. Rollback: delete the added line.
 
 ## AI Flaky tests
 - No accepted flaky tests; no timeout increases.
