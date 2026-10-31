@@ -18,8 +18,8 @@ import {
   createEscalationCollection,
   createFreshDecisionProducer,
   createInMemoryIdentityStores,
-  createPostgresIdentityStores,
-  createSqliteIdentityStores,
+  createIdentityEnforcementPostgresStores,
+  createIdentityEnforcementSqliteStores,
   escalationEntryDigest,
   identityEnforcementPgSchema,
   type ConversationAuthorityStore,
@@ -118,7 +118,7 @@ const postgresProfile = async (): Promise<Profile> => {
       await session.execute({ text: ddl, values: [] });
     }
   });
-  const stores = createPostgresIdentityStores({ driver, schema });
+  const stores = createIdentityEnforcementPostgresStores({ driver, schema });
   return {
     name: 'PostgreSQL (disposable schema)',
     conversations: stores.conversations,
@@ -145,7 +145,7 @@ const postgresProfile = async (): Promise<Profile> => {
 const sqliteProfile = (): Profile => {
   const dir = mkdtempSync(join(tmpdir(), 'cm-identity-'));
   const engine = openSqliteEngine({ path: join(dir, 'identity.db'), moduleId: 'identity' });
-  const stores = createSqliteIdentityStores({ db: engine.db });
+  const stores = createIdentityEnforcementSqliteStores({ db: engine.db });
   return {
     name: 'SQLite (temp file)',
     conversations: stores.conversations,
