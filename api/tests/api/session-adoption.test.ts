@@ -136,9 +136,9 @@ describe('session adoption workspace binding', () => {
     expect(second.bindingId).toBe(first.bindingId);
   });
 
-  it('keeps the control journal structurally ordered and carrying 0011', () => {
+  it('keeps the control journal structurally ordered and carrying 0009', () => {
     // Recalage rule (see BRANCH.md): contiguous idx, strictly increasing
-    // `when`, no future timestamps. 0011 must be present but is NOT pinned
+    // `when`, no future timestamps. 0009 must be present but is NOT pinned
     // as last: later migrations may follow it without breaking this test.
     const journal = JSON.parse(readFileSync(join(process.cwd(), 'drizzle/control/meta/_journal.json'), 'utf8')) as {
       entries: Array<{ idx: number; when: number; tag: string }>;
@@ -150,7 +150,7 @@ describe('session adoption workspace binding', () => {
       if (index > 0) expect(entry.when).toBeGreaterThan(entries[index - 1]!.when);
       expect(entry.when).toBeLessThanOrEqual(Date.now());
     });
-    expect(entries.map((entry) => entry.tag)).toContain('0011_session_workspace_bindings');
+    expect(entries.map((entry) => entry.tag)).toContain('0009_session_workspace_bindings');
   });
 
   it('should keep the project and history after detach and end', async () => {
