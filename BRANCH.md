@@ -13,6 +13,7 @@ Grant the preprod `immo-mcp` PKCE client the explicit scopes `immo:artifacts:rea
 - Automated test campaigns run on dedicated environments (`ENV=test-*`), never on root `dev`.
 - In every `make` command, `ENV=<env>` is passed as the last argument.
 - No Docker compose stack in this lane (machine-load rule); the targeted gates are one-off `docker run` containers. `make down ENV=<env>` after any stack use.
+- CI lockfile-lane policy acknowledged (review_by=2026-11-30T00:00:00Z); installs resolve committed tool profiles or frozen consumer closures.
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
