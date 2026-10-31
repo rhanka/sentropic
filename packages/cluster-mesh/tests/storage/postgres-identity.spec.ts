@@ -8,7 +8,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { pgEnabled, testPgDriver } from './pg-driver.js';
 import type { InjectedPgDriver } from '../../src/storage/postgres/protocol.js';
 import {
-  createPostgresIdentityStores,
+  createPostgresIdentityCoreStores,
   InvitationError,
   LoginSessionError,
   wireIdentityDomains,
@@ -37,7 +37,7 @@ const freshDriver = (): Resources => {
 const freshStores = (driver: InjectedPgDriver) => {
   const schema = `identity_${randomUUID().replaceAll('-', '').slice(0, 12)}`;
   schemas.push(schema);
-  return { schema, stores: createPostgresIdentityStores({ driver, schema }) };
+  return { schema, stores: createPostgresIdentityCoreStores({ driver, schema }) };
 };
 
 const domains = (driver: InjectedPgDriver): IdentityDomainSlice => {
@@ -134,7 +134,7 @@ describe.skipIf(!pgEnabled)('PostgreSQL identity storage (A2.1)', () => {
     await firstSlice.invitations.consumeInvitation(invitation.token, NOW);
 
     const restart = freshDriver();
-    const reopened = createPostgresIdentityStores({ driver: restart.driver, schema: first.schema });
+    const reopened = createPostgresIdentityCoreStores({ driver: restart.driver, schema: first.schema });
     const secondSlice = wireIdentityDomains({ stores: reopened, clock: CLOCK });
     expect(await secondSlice.loginSessions.validateSession('session-1', SOON)).toMatchObject({ status: 'active' });
     const account = await secondSlice.accounts.getAccount('user-1');
