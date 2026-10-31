@@ -186,6 +186,11 @@ This pass accepts the registered authorization_code/code shape; unsupported
 grant/response configurations fail for review rather than broadening access.
 
 Configuration, scopes, tenant and timestamps converge on changed rows only.
+One preprod-only divergence is explicit and asserted: `immo-mcp` additionally
+carries `immo:artifacts:read` and `immo:artifacts:write` (owner decision, immo
+artifacts; preprod only). The scopes are appended to the desired state after the
+prod convergence in `client-policy.sql`, so the exact client postcondition asserts
+them and an unchanged rerun stays a no-op; the prod row keeps its three immo scopes.
 Null tenants become `sentropic`; unknown tenants fail closed. Owners bind to
 existing synced preprod users, or null if absent. Existing IDs/hashes, whole
 unselected client rows and signing keys are verified unchanged. Desired client
@@ -193,7 +198,8 @@ configuration is checked exactly; tampering emits `client_postcondition_failed`
 or `dv5_invariant_changed`, rolling back identities, clients and consents together.
 
 The synthetic `immo-mcp` acceptance uses public PKCE, the external Claude callback,
-scopes `immo:read`, `immo:search`, `immo:documents:read`, and rewritten resource
+scopes `immo:read`, `immo:search`, `immo:documents:read` plus the preprod-only
+`immo:artifacts:read` and `immo:artifacts:write`, and rewritten resource
 `https://preprod.immo.sent-tech.ca/mcp`. The SQL gate passes its committed row
 to the real authorize handler and proves 302 to preprod login, missing-client
 400 and rejection of the prod resource. Live acceptance follows owner-approved CD;
