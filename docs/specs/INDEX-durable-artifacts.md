@@ -1,0 +1,21 @@
+# Durable conductor design artifacts
+
+These seven artifacts are verbatim copies of the conductor's local sources. SHA-256 identifies the complete file bytes. Source and review paths are relative to the original Sentropic repository root; review files remain local evidence and are not included in this copy set. Relative references inside the copied documents retain their original meaning at their source location.
+
+| Path | Source .tmp path | SHA-256 | Status (with reviewer file) | Track item ID |
+| --- | --- | --- | --- | --- |
+| `docs/specs/geo-fcm/assessment.md` | `.tmp/geo-fcm/assessment.md` | `70876567889abf4f96b41966e2f08396b6ac52bd2048807cc54ebcd72926c757` | draft — no completed independent reviewer file found; owner ratification of ADR-0035 remains a prerequisite | — (no matching item found) |
+| `docs/specs/cm-identity-agents/r2.md` | `.tmp/cm-identity-agents/r2.md` | `f24480ee9e39396c2ecfb71be790e2a5a247976be15980a18b185101542cd518` | approved — `.h2a/reviews/cm-identity-agents_spark_r2.md`, `VERDICT: APPROVE`, matching r2 hash | `01M6A2VP8KZ361SENN8H6KFM9Z` (identity contracts); `01M6A2WWJ9NQ599ZAZYWX2BWY2` (A2.1); `01M6A2WVGWMHZBEB78B1YFW0KC` (A2.3) |
+| `docs/specs/cm-identity-agents/A2-lots.md` | `.tmp/cm-identity-agents/A2-lots.md` | `015d821d066a6bcc368113adf3fa45dd73a32abebc2f37cedb3f4eb1ced8c0c2` | draft — derived from approved r2; no independent reviewer file found for these lot-plan bytes | `01M6A2VP8KZ361SENN8H6KFM9Z` (A2.0); `01M6A2WWJ9NQ599ZAZYWX2BWY2` (A2.1); `01M6A2W682BR52QQVN3139S9Q5` (A2.2); `01M6A2WVGWMHZBEB78B1YFW0KC` (A2.3); `01M6A2WXGB7V3DFTATBW80M02W` (A4.1); `01M6A2WXRSY8S751W0ZWV3KM0J` (A4.2); `01M6A2WYQTPQJME2KRW8DBD3PJ` (A4.3) |
+| `docs/specs/cm-identity-agents/owner-answers-20261030.md` | `.tmp/cm-identity-agents/owner-answers-20261030.md` | `d74021ded3c0cd8381269751967f520855d743b241831e0e307966d1608efd0f` | draft — owner-answer record preserved; `.h2a/reviews/cm-identity-agents_spark_r2.md` cites an older owner-answer hash, so it does not independently approve these current bytes | `01M6A2VP8KZ361SENN8H6KFM9Z` (related identity contracts; no standalone owner-answer item found) |
+| `docs/specs/voice-s2s/study-r2.md` | `.tmp/voice-s2s-study/study.md` | `92afad2f44741c728ed42dd6a3ed62aa30031c4f58df768237764c87380b6d16` | approved — `.h2a/reviews/voice_s2s_study_opus_r2.md`, `VERDICT: APPROVE`, matching complete study hash | `01M6A2XSVXP73DCXYJ274FMSJZ` (study); `01M6A2XTSJ6APAE4W7AGHRJMAE` (post-M1 C1 choices) |
+| `docs/specs/daily-cyber/activation-plan.md` | `.tmp/daily-cyber/activation-plan.md` | `0ba76b36d83d82a14db02f0a708b013bdf4706f0edd3039720803200b4df14f7` | draft — no completed independent reviewer file found for this activation plan; the daily service remains OFF | `01M6A2Y4BPGYHSYH10RPEW2RA3` (5a qualification); `01M6A2Y7KES99BXS4DYNVKZY9T` (5b activation) |
+| `docs/specs/remote-control/plan-v1.1.md` | `.tmp/remote-ctl/plan-remote-ctl-v1.1.md` | `31d6257d70fc87877e4a2076e4cbf0e58ffc33adc24b9d288590e6059f8d4256` | draft — no completed independent reviewer file found for v1.1; `.tmp/remote-ctl/review-sol-r1.md` requests changes to the earlier v1, not these bytes | `01M6A2XEHD9P5XF9XAS12KE5XJ` (RC0 framing/interface freeze); `01M6A2XKWTY78EE5EEDW9NSNZT` (v1.2 amendment) |
+
+Track IDs were obtained with `track query --format json` from `tmp/worktrees/docs-durable`, based on `origin/main` commit `329cc11d0` (merged Track sync PR #865). They identify existing related work, not acceptance of the copied document or completion of its runtime gates. No geo assessment item was present in that query.
+
+The preservation request and its three lots are recorded by this branch's Track import under `01M6A5GSX5S6ES8DJ3MZHXEXVM`.
+
+All seven sources passed a credential-value pattern scan before copying. Each destination then passed byte comparison and a separate SHA-256 comparison against its source. The geo assessment is exactly 35,450 bytes. The expected hash prefixes `70876567`, `f24480ee` and `92afad2f` match.
+
+The identity review's owner-answer pin begins `b53b6e18`; the preserved current file begins `d74021de`. This provenance difference does not change the exact r2 spec approval, and the owner-answer copy has not been rewritten to match an older review.
