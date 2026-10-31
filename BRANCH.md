@@ -11,7 +11,7 @@
 - Refusals yield an empty tool set, never a partial catalogue; every verdict names its §2.7 session authority.
 - No `TENANT_RESOLUTION_MODE`-style permanent mode machinery is introduced (F12 transition tooling is A2.2's; A4.3 deletes it at cutover).
 - Make-only workflow, no direct Docker commands; Docker steps one at a time under the repo flock (`/home/antoinefa/.cache-tmp/sentropic-docker.lock`).
-- Branch development in isolated worktree `tmp/worktrees/cm-identity-a2-3` on `feat/cm-identity-a2-3` from `origin/main fb454cb4c`.
+- Branch development in isolated worktree `tmp/worktrees/cm-identity-a2-3` on `feat/cm-identity-a2-3`; opened from `origin/main fb454cb4c`, rebased onto `origin/main 0cdbf146a` (no `packages/cluster-mesh` delta between the two bases).
 - Automated tests on dedicated environment `ENV=test-cm-a2-3` (never `dev`), `ENV=` last argument; `make down ENV=test-cm-a2-3` after Docker steps; the PostgreSQL qualification container is removed via `cluster-mesh-pg-down`.
 - All new text in English.
 
@@ -92,11 +92,11 @@
   - [x] Export the A2.3 surface from `packages/cluster-mesh/src/index.ts`.
   - [x] Lot gate: `make typecheck-cluster-mesh ENV=test-cm-a2-3`; frozen suite + new specs green via `make test-cluster-mesh SCOPE=tests/identity- ENV=test-cm-a2-3`.
 
-- [ ] **Lot 2 — Durable store slice on both profiles**
-  - [ ] `src/identity/postgres.ts`: `ConversationAuthorityStore` + `IdentityLedgerStore` over the kernel's published `InjectedPgDriver` protocol, parameterized schema, package-owned DDL (`identityEnforcementPgSchema()`).
-  - [ ] `src/identity/sqlite.ts`: same ports over the kernel's SQLite engine/connection (`openSqliteEngine` module identity), idempotent `cm_identity_*` schema set.
-  - [ ] `tests/identity-profiles.spec.ts`: the same scenario corpus against the in-memory double (reference oracle), the PostgreSQL profile (disposable schema, gated on `CM_PG_URL`), and the SQLite profile (temp-file store), plus a per-profile decision replay through `createFreshDecisionProducer`.
-  - [ ] Lot gate: `make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test SCOPE=tests/identity-profiles.spec.ts ENV=test-cm-a2-3`, then `cluster-mesh-pg-down ENV=test-cm-a2-3`.
+- [x] **Lot 2 — Durable store slice on both profiles**
+  - [x] `src/identity/postgres.ts`: `ConversationAuthorityStore` + `IdentityLedgerStore` over the kernel's published `InjectedPgDriver` protocol, parameterized schema, package-owned DDL (`identityEnforcementPgSchema()`).
+  - [x] `src/identity/sqlite.ts`: same ports over the kernel's SQLite engine/connection (`openSqliteEngine` module identity), idempotent `cm_identity_*` schema set.
+  - [x] `tests/identity-profiles.spec.ts`: the same scenario corpus against the in-memory double (reference oracle), the PostgreSQL profile (disposable schema, gated on `CM_PG_URL`), and the SQLite profile (temp-file store), plus a per-profile decision replay through `createFreshDecisionProducer`.
+  - [x] Lot gate: `make -f Makefile -f packages/cluster-mesh/tests/storage/postgres.mk cluster-mesh-pg-test SCOPE=tests/identity-profiles.spec.ts ENV=test-cm-a2-3`, then `cluster-mesh-pg-down ENV=test-cm-a2-3`.
 
 - [ ] **Lot 3 — Version train**
   - [ ] A23-EX1: bump `packages/cluster-mesh/package.json` to `0.26.0-dev.1`, move `RESERVED_NEXT` to `0.26.0`, roll the dev-gate vectors one line forward.
