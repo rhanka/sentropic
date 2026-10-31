@@ -11,7 +11,7 @@ a real cluster is W0-close.c, performed by the tenant — not by this lot.
 Keep `APP_ARTIFACT_HOST_ENABLED`, `APP_ARTIFACT_CONTENT_ENABLED` and
 `APP_ARTIFACT_READER_ENABLED` explicitly at `0`, then revert API/content images
 and configuration to the previously qualified closed release. Migration
-`0020_app_artifact_host.sql` is additive: retain `control.artifact_host_kv`,
+`0012_app_artifact_host.sql` is additive: retain `control.artifact_host_kv`,
 the nullable unique control-journal `asset_id` column and migration receipts.
 There is no down migration; do not drop those objects, delete receipts or
 rewind either journal to roll back an image. Retain artifact tables and private

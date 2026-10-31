@@ -131,3 +131,19 @@ role grants, live revoked-reader enforcement, serving activation or promotion.
 Schema rollback remains additive: keep flags `0`, revert images/config, retain
 the new tables, nullable unique column, journals, receipts and blobs; no down
 migration or journal rewind. Other review/product/activation gates stay separate.
+
+## Renumbering addendum — 31 October 2026
+
+After this rehearsal, main's A2-M0-MIG linearized the control chain through
+`0011_decision_host`, and the migration was renumbered to
+`0012_app_artifact_host.sql` (journal idx 12, `when` 1793145600001); the
+`0020` slot reservation was withdrawn with it. The SQL bytes are unchanged, so
+the migration file SHA-256 above (`510c8b93…`) still matches the renamed file,
+and the content-level proof (clean first run, unchanged second run, exact hash
+receipt against this baseline) transfers to the renumbered migration. The
+journal-row identity measured here does not: the renumbered head writes the
+host receipt at `created_at` 1793145600001 and applies it after
+`0011_decision_host` (independent additive DDL; the final state is identical).
+The exact dump was deleted at cleanup and no copy exists, so this receipt
+cannot be re-run on the same bytes; a fresh-dump rehearsal would be a new
+receipt under the runbook's make target.
