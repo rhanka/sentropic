@@ -53,18 +53,18 @@ const checkCandidateAlignment = (
 
 describe('isPackOnlyDevBump', () => {
   it.each([
-    ['0.26.0-dev.1', '0.24.0', '0.26.0', true],
-    ['0.26.0-dev.2', '0.24.0', '0.26.0', true],
-    ['0.26.0-dev.99', '0.24.0', '0.26.0', true],
-    ['0.22.1', '0.24.0', '0.26.0', false],
-    ['0.24.0', '0.24.0', '0.26.0', false],
-    ['0.25.0-dev.1', '0.24.0', '0.26.0', false],
-    ['0.23.0-dev.14', '0.24.0', '0.26.0', false],
-    ['0.26.0-dev.1', '0.24.0', '0.25.0', false],
+    ['0.26.0-dev.1', '0.25.0', '0.26.0', true],
+    ['0.26.0-dev.2', '0.25.0', '0.26.0', true],
+    ['0.26.0-dev.99', '0.25.0', '0.26.0', true],
+    ['0.22.1', '0.25.0', '0.26.0', false],
+    ['0.25.0', '0.25.0', '0.26.0', false],
+    ['0.25.0-dev.1', '0.25.0', '0.26.0', false],
+    ['0.23.0-dev.14', '0.25.0', '0.26.0', false],
+    ['0.26.0-dev.1', '0.25.0', '0.25.0', false],
     ['0.26.0-dev.1', '0.22.1', '0.26.0', false],
     ['0.26.0-dev.2', '0.22.4', '0.26.0', false],
     ['0.26.0-dev.1', '0.26.0', '0.26.0', false],
-    ['0.26.0-rc.1', '0.24.0', '0.26.0', false],
+    ['0.26.0-rc.1', '0.25.0', '0.26.0', false],
   ])('isPackOnlyDevBump(%s, %s, %s) === %s', (workspaceVersion, publishedPin, reservedNext, expected) => {
     expect(isPackOnlyDevBump(workspaceVersion, publishedPin, reservedNext)).toBe(expected);
   });
