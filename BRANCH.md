@@ -1,38 +1,53 @@
-# Perf: API image slim — install only the API dependency closure
+# Feature: cluster-mesh identity core contracts
 
 ## Objective
-- [x] `api/Dockerfile` installs only the dependency closure of the api workspace and the packages it builds (explicit `-w` `npm ci`, lockfile-exact per #846), with a derived reduced lock/manifest set and a BuildKit npm cache mount, so unrelated workspace version bumps stop invalidating the dependency layer and the image stops shipping UI dependencies.
+Publish the public identity contracts of `@sentropic/cluster-mesh` (types, ports, error codes, versioned descriptors, contract tests over in-memory doubles) so three parallel implementation lots can build on top.
 
 ## Scope / Guardrails
-- [x] Branch `perf/api-image-slim` from `origin/main` (`1b7f8ab94`); worktree `tmp/worktrees/api-image-slim`.
-- [x] Environment `ENV=test-api-slim` for any stack command; ENV always LAST; never `ENV=dev`.
-- [x] One Docker build at a time under the flock `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`; `make down ENV=test-api-slim` after stack steps.
-- [x] Make targets for repo operations; `make commit MSG="..."` only; each commit under 150 changed lines; selective staging.
-- [x] CI lockfile-lane policy acknowledged (review_by=2026-11-30T00:00:00Z); installs resolve committed tool profiles, frozen consumer closures, or the api image's derived pruned lock (`npm ci`; every entry verbatim from the committed root lock).
-- [x] 0 Python; English only; no time estimates; no `make clean-all`; draft PR, no merge.
-- [x] Keep every gate: audit gate (`.security/audit-gate.mjs`), canonical-tag contract (`scripts/test-api-image-canonical.sh`), toolbox contract (`scripts/test-api-tooling.sh`), `make check-ci-version-filters`.
+- Scope limited to `packages/cluster-mesh` contracts for F01-F10 and F12-F15 (no screens).
+- No app change, no legacy fallback, no backend implementation beyond in-memory doubles.
+- Make-only workflow, no direct Docker commands.
+- Branch development happens in isolated worktree `tmp/cm-identity-core-contracts`.
+- Automated test campaigns run with `ENV=test-cm-identity` passed last, never on root `dev`.
+- Docker builds run one at a time under the flock in `.tmp/packets/DOCKER-LOCK.md`.
+- `make down ENV=test-cm-identity` after test campaigns.
+- All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `packages/cluster-mesh/src/identity-contracts/**`
+  - `packages/cluster-mesh/src/index.ts`
+  - `packages/cluster-mesh/tests/identity-*.spec.ts`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/tests/fixtures/reserved-versions.ts` (BRA2-EX2)
+  - `packages/cluster-mesh/tests/storage/pack-only-dev-gate.mjs` (BRA2-EX2)
+  - `packages/cluster-mesh/tests/storage/pack-only-dev-gate.spec.ts` (BRA2-EX2)
+  - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts` (BRA2-EX2)
+  - `package-lock.json` (BRA2-EX3, version-sync line only)
+  - `scripts/ci/consumer-locks.json` (BRA2-EX4)
   - `BRANCH.md`
-  - `api/Dockerfile` (only under `BRIS-EX1`)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `.github/workflows/**`
-  - `scripts/**`
-  - `packages/**`
-  - `api/**` except `api/Dockerfile`
+  - `api/**`
+  - `ui/**`
+  - `packages/cluster-mesh/src/storage/**`
+  - `packages/cluster-mesh/src/modules/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file; none expected)
+  - `.github/workflows/**`
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- `BRIS-EX1` (`attention`): scope exception to touch `api/Dockerfile` (declared before any edit).
-  - Reason: the `dependencies` stage runs `npm ci --workspaces --include-workspace-root` over every copied workspace manifest (ui included), installing the whole monorepo (~2.7 G dev image); any workspace version bump or lockfile change invalidates that layer, so every lane rebuilds a private 2.7 G dependency layer and nothing is shared beyond the node base. The stage must install only the api closure (explicit `-w`, lockfile-exact per the #846 lockfile rule) from a derived reduced lock/manifest set with a BuildKit npm cache mount, so unrelated workspace bumps do not invalidate the dependency layer.
-  - Impact: `api/Dockerfile` is an `API_VERSION` and `API_TOOL_VERSION` content-hash input, so the api image and CI toolbox tags change once on merge; CI `build-api-image`/`ci-build-api-tool` and local lanes rebuild on the new tags. Dev (`development`), test (`ci-tools`) and prod (`production`) targets keep their current runtime contract: same sources, same builds, same audit gates; only the installed dependency set shrinks (ui deps and their lock entries leave the image; `ui/package.json` stays a shipped, hashed input via the production stage per the canonical-tag contract). No migration, no data, no API surface change.
-  - Rollback: single-file revert of `api/Dockerfile` to `origin/main`; the full-workspace install and the previous tags return with the next build; no coordinated changes elsewhere.
+- [x] BRA2-EX1: owner=lane author; review_by=PR merge; whole-module commits above the 150-line advisory for new files (`types.ts` 229, `tenancy.ts` 228, `doubles.ts` 415, specs 219-264) so every commit holds complete compilable modules instead of half-file hunks; impact limited to this branch history; rollback by reverting the branch. Small files stay grouped under 150 lines where natural.
+- [x] BRA2-EX2: owner=lane author; review_by=PR merge; any `src/` bump must keep the reserved-next dev-train green: carry `0.25.0-dev.1`, advance `RESERVED_NEXT` to `0.25.0` and the frozen pin to published `0.24.0` in `tests/fixtures/reserved-versions.ts` + `tests/storage/pack-only-dev-gate.mjs`, roll the dev-gate vectors in `tests/storage/pack-only-dev-gate.spec.ts` + `tests/packaging/prepare-artifacts.spec.ts` one line forward (precedent `05cecaa6f`); impact limited to version-train test support, no frozen range widened (`catalog.ts` untouched); rollback by reverting the branch.
+- [x] BRA2-EX3: owner=lane author; review_by=PR merge; single-line root `package-lock.json` version sync for `packages/cluster-mesh` (CI train lock-sync assertion; precedent `db534d4b9`); full `make lock-root` output reverted except that line (yjs positional moves + chat-server nested chat-core removal are unrelated pre-existing staleness, left for their owners); rollback by reverting the branch.
+- [x] BRA2-EX4: owner=lane author; review_by=PR merge; add the `@sentropic/cluster-mesh@0.24.0` consumer closure profile to `scripts/ci/consumer-locks.json` (manifest + lock generated by `make lock-ci-tools`): BRA2-EX2 rolled the frozen published pin to `0.24.0`, and the installed-consumer lane resolves that pin through the committed frozen universe (`frozen-registry.mjs`), which had no `0.24.0` records, so CI failed with npm ETARGET; the `0.23.2` historical closure stays (guard `install-bindings.mjs` requires it); impact limited to the isolated consumer catalog, no frozen range widened, no gate weakened; rollback by reverting the commit.
+- Inherited unchanged from main: BRLOCK-EX1 review_by=2026-11-30T00:00:00Z (owner CI maintainers, removal on PR 846 closure); this branch touches the catalog authoring path only through the reviewed `make lock-ci-tools` target (BRA2-EX4) and makes no other lockfile-path change.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -44,35 +59,35 @@
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- Rationale: single-file build change, no sub-workstreams.
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: single contracts-only change, one test cycle, no orthogonal sub-workstreams.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: no UAT surface (Dockerfile dependency selection only; no UI/runtime behavior change).
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- No UI changes in this branch, no UAT required.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, packet `.tmp/packets/api-image-slim.md` + `COMMON-RULES.md`.
-  - [x] Worktree `tmp/worktrees/api-image-slim` from `origin/main`; `harness check branch` PASS.
-  - [x] Baseline measurements (before): warm rebuild `B0` (102 s, 2.7 GB dev image) and version-bump-only rebuild `B1` (unrelated workspace bump: `packages/mcp-connector-slack` 0.0.0→0.0.1; 311 s, 2.7 GB); bump reverted after measuring.
-- [x] **Lot 1 — BRANCH.md + exception**
-  - [x] `BRIS-EX1` declared in `## Feedback Loop` before touching `api/Dockerfile`.
-- [x] **Lot 2 — Dockerfile dependency slimming** (commits `1477ae2e4`, `67bd43287`)
-  - [x] `deps-manifests` stage: derive the reduced manifest + pruned lock set (api closure only; no ui manifest). Offline validation: pruned output byte-stable across the unrelated bump; `npm ci` dry run against the pruned tree resolves 776 packages lockfile-exact.
-  - [x] `deps` stage: `npm ci --legacy-peer-deps --include-workspace-root -w api -w <closure workspaces>` with `--mount=type=cache,target=/root/.npm`, then the existing audit gate on the installed tree. `--legacy-peer-deps` is required for lockfile exactness: with the ui workspace gone, nothing satisfies chat-core's optional `@sentropic/chat-ui` peer, and npm would re-resolve it from the registry instead of the committed lock. `--legacy-peer-deps` also drops peer-only lock entries at install time; the installed set's only such entry is `jose` (peer of `oauth-verify`, `auth-client`, `auth-hono`, `mcp-auth`), so the prune stage re-declares it as a regular dependency of the derived root manifest and mirrors it in the pruned lock's root entry — the lock-pinned version installs in dev and survives the production prune (offline validation: `JOSE_DEV=present`, `JOSE_PROD=present`, both audit gates OK).
-  - [x] `base`/`ci-tools`/`production` stages re-parented onto the slim install; `ui/package.json` retained in the production image per the canonical-tag contract.
-  - [x] `make scope-check` before each commit (PASS C2 x3).
-- [x] **Lot 3 — Local verification gates**
-  - [x] `make test-ci-api-image-canonical` resolve + tag-inputs + guard-collision cases (host-only) — PASS (8+7+1 cases). `retained-exclusions` runs in CI against the built production image (no local image: disk floor breach, see below).
-  - [x] `make test-ci-api-tooling` — PASS (5 cases).
-  - [x] `make check-ci-version-filters` — PASS.
-  - [x] Offline lock/toolchain validation: nested `esbuild@0.18.20`, `esbuild@0.19.12`, `vitest@4.1.5`, `tsx@4.23.1`, `typescript@5.4.5`, `@sentropic/track@0.91.1`, `isolated-vm@6.1.2`, `gray-matter@4.0.3`, `hono@4.13.0`, `vite@7.3.7` all present in the pruned lock (994/1700 entries).
-  - [x] `TARGET=development` local build + `A0` after-measurements — cold build 186.8 s (compose-reported), dev image 1.78 GB; warm rebuild 4 s (compose 3.7 s), all layers cache hits.
-  - [x] `A1` bump-only rebuild — `packages/mcp-connector-slack` 0.0.0→0.0.1 (manifest + lock `packages["packages/mcp-connector-slack"].version`), build, revert: 8 s (compose 8.2 s); `deps-manifests` re-derived and the `npm ci` layer was CACHED (content-addressed proof the re-derived prune output is bit-identical); image unchanged at 1.78 GB.
-  - [x] `TARGET=production` local build (`make build-api-image`, no-cache canonical flow) — 284 s wall (compose 262.1 s); canonical tag `498618`, image 829 MB, artifact receipt recorded.
-  - [ ] `--target ci-tools` local build — still deferred: CI-verified on the exact head (run 2 `build-api-tool-image` green; the toolbox ran the whole 26/26 api-test-matrix), locally withheld again at 9.9 G free (below the 15 G floor, other lanes building, image removal forbidden).
-  - Instrument disclosure: every build under the lane flock, timing after lock acquisition, `ENV=test-api-slim`/`COMPOSE_PROJECT_NAME=test-api-slim`; the first `A0` cold invocation escaped the flock through a quoting bug in the flock wrapper (no concurrent image build; another lane's container-run workspace builds overlapped) and its wall clocking was broken, so `A0` cold is compose-reported; the warm, `A1` and production runs were correctly flocked (the warm run visibly queued behind another lane's lock). `make down ENV=test-api-slim` done after the builds.
-- [x] **Lot 4 — Final validation**
-  - [x] Measurement-only bump already reverted (nothing to revert: `A1` never ran; worktree clean).
-  - [x] Draft PR with before/after sizes and rebuild times in the body (after-measurements marked blocked with the exact instrument to re-run).
-  - [ ] One CI run on the final head; result recorded in the report. Run 1 (`41103381243`, head `b2a030bb8`) failed: the pruned install lost `jose` — `--legacy-peer-deps` drops peer-only lock entries, so `oauth-verify`'s tsc hit `TS2307: Cannot find module 'jose'`. Fixed by the prune-stage jose re-declaration (root regular dep, mirrored in the pruned lock root entry; offline validation E7/E8: all 18 workspace builds + api build + idp bundle + both audit gates green, jose kept through the production prune). Run 2 (`41108398571`, head `ed3307793`): every job green except `validate-publishable-manifests` — the lockfile guard regression fails on `assert.ok(plan.includes('review_by=<BRLOCK-EX1 review_by>'))` because this branch's `BRANCH.md` replaced the root `BRANCH.md` and dropped the lockfile-lane policy acknowledgment the guard requires on branches whose scope touches container installs (`BRLOCK-EX1` scope). All policy `review_by` dates are unexpired: the run-1 note calling this a pre-existing calendar expiry was wrong, and the slim install itself is already lockfile-exact (the guard's scan-tree regression passes against this tree). Fix: carry the acknowledgment (`review_by=2026-11-30T00:00:00Z`) in `## Scope / Guardrails`; the guard is untouched and not weakened. The next push is the definitive run on the new head; its result goes in the report.
-  - [x] Report to `.tmp/rv/api-image-slim-vibe.md`; stop (no merge).
+  - [x] Read packet, COMMON-RULES, owner answers, gap document, identity spec draft.
+  - [x] Create isolated worktree `tmp/cm-identity-core-contracts` on `feat/cm-identity-core-contracts` from `origin/main`.
+  - [x] Capture Makefile targets (`test-cluster-mesh`, `typecheck-cluster-mesh`, `build-cluster-mesh`, `down`, `scope-check`, `commit`).
+  - [x] Define environment mapping (`ENV=test-cm-identity` last for test campaigns).
+  - [x] Confirm scope and guardrails.
+- [ ] **Lot 1 — Identity contracts + doubles + contract tests**
+  - [x] Add `packages/cluster-mesh/src/identity-contracts/` (types, errors, ports, descriptors, domains, in-memory doubles).
+  - [x] Export the identity surface from `packages/cluster-mesh/src/index.ts`.
+  - [x] Add `packages/cluster-mesh/tests/identity-*.spec.ts` contract tests over the doubles.
+  - [x] Bump `packages/cluster-mesh/package.json` version (minor).
+  - [x] Lot gate:
+    - [x] `make typecheck-cluster-mesh ENV=test-cm-identity`
+    - [x] `make test-cluster-mesh ENV=test-cm-identity`
+    - [x] `make build-cluster-mesh ENV=test-cm-identity`
+    - [x] `make down ENV=test-cm-identity`
+- [ ] **Lot N — Final validation**
+  - [x] Typecheck & Lint
+  - [x] Retest cluster-mesh package suite
+  - [x] Bumped `packages/cluster-mesh/package.json` version (minor) — enforced by CI `enforce-package-bump`.
+  - [x] Final gate step 1: create draft PR using `BRANCH.md` text as PR body (source of truth).
+  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
+  - [x] Write `.tmp/cm-identity-agents/A2-lots.md` (3 parallel lots + A4 order).
+  - [ ] Write report `.tmp/rv/a2-contracts-muse.md` (PR, head, A2-lots.md sha256), then stop.

@@ -46,3 +46,4 @@ export {
   type TopologyPackage,
   type VerifyClusterMeshTopologyOptions,
 } from './modules/topology.js';
+export * from './identity-contracts/index.js';
