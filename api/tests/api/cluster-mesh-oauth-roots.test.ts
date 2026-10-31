@@ -63,7 +63,13 @@ describe('cluster mesh OAuth roots', () => {
         'client_credentials',
         'urn:ietf:params:oauth:grant-type:token-exchange',
       ]),
-      scopes_supported: expect.arrayContaining(['immo:read', 'immo:search', 'immo:documents:read']),
+      scopes_supported: expect.arrayContaining([
+        'immo:read',
+        'immo:search',
+        'immo:documents:read',
+        'immo:artifacts:read',
+        'immo:artifacts:write',
+      ]),
     });
     expect((await app.request(`${oauthPath}/end_session`)).status).toBe(200);
 
