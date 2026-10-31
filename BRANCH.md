@@ -73,6 +73,6 @@ Record the owner's 2026-10-31 deliverables, recover merged branch plans since 20
   - [ ] Save PR/head/CI, item and decision counts, and avoided duplicates in `.tmp/rv/track-sync.md`; stop without merging.
 
 ## Validation record
-- [x] Sync checkpoint: 1575 journal events recorded; record owner deliverables.
+- [x] Sync checkpoint: 1581 journal events recorded; record current owner requests.
 - [x] No application tests added or changed; deterministic Track validation, source reconciliation, scope and diff checks are the relevant gates.
 - [ ] Final Track validation and source coverage passed.
