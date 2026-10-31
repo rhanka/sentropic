@@ -81,5 +81,15 @@
   - [x] `make -f Makefile -f packages/cluster-mesh/tests/storage/sqlite.mk cluster-mesh-sqlite-test SCOPE=tests/storage/sqlite-l1 ENV=test-memory-sqlite`
   - [x] `make scope-check`
   - [x] `make down ENV=test-memory-sqlite`
+- [x] **Lot 3-R — Post-rebase acceptance re-run (SQL-L1-EX7, `ENV=test-sql-l1`)**
+  - [x] `make chat-migration-lockfiles` — root lock idempotent at `0.26.0-dev.1`; the ui chat-core `0.3.0 → 0.3.1` collateral hunk is pre-existing main drift outside this branch's paths and stays reverted.
+  - [x] Post-Rebase Gate `npm view @sentropic/cluster-mesh version` → published `0.25.0` < head `0.26.0-dev.1`; bump gate at merge-base `0cdbf146a` (`0.25.0` → `0.26.0-dev.1`); train lock-sync `cluster-mesh@0.26.0-dev.1` (llm-mesh `0.32.2`, llm-gateway `0.22.2` from main).
+  - [x] `make scope-check ENV=test-sql-l1` and the harness scope check on the full `origin/main..HEAD` file list — PASS C2.
+  - [x] `make -f Makefile -f packages/cluster-mesh/tests/storage/sqlite.mk cluster-mesh-sqlite-s0-qualify ENV=test-sql-l1` — 10 cases, 0 skipped (engine `3.53.4`, vec `v0.1.9`).
+  - [x] `make -f Makefile -f packages/cluster-mesh/tests/storage/sqlite.mk cluster-mesh-sqlite-test SCOPE=tests/storage/sqlite-l1 ENV=test-sql-l1` — 6/6, Type Errors none.
+  - [x] `make test-cluster-mesh ENV=test-sql-l1` — 163 files passed | 65 skipped, 1471 tests passed | 246 skipped, Type Errors none (pack-only gates `pack-only-dev-gate.spec.ts` 17/17, `prepare-artifacts.spec.ts` 17/17).
+  - [x] `make lint-cluster-mesh ENV=test-sql-l1` and `make typecheck-cluster-mesh ENV=test-sql-l1` — green.
+  - [x] `make test-ci-lockfile-installs ENV=test-sql-l1` — 11/11; installed-lane consumer parity `@sentropic/cluster-mesh@0.25.0 @sentropic/comments@0.3.0` through the frozen universe — exit 0, 105 packages.
+  - [x] `make down ENV=test-sql-l1`.
 - [ ] **Lot 4 — Review-ready head**
   - [ ] Single push of the final head; draft PR from this file; one CI run on the final head; report to `.tmp/rv/lot-SQL-L1.md`.
