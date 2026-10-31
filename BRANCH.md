@@ -63,7 +63,15 @@
   - Reason: the DS witness-8 offline harness must be runnable from a plain checkout; the review requires a committed package entrypoint plus a repo make target, and the harness suite runs through the same `docker compose exec` test infra as every other api suite.
   - Impact: one new make target reusing the existing API_TEST_RUN infra and one package.json script; no existing target, variable or CI stage changes.
   - Rollback: delete the target block and the script line; no other file references them.
-- [x] BRH3-COMMIT-SIZE: three RED-witness test rewrites and the two review r1 implementation rewires exceed the 150-line atomic rule (tests: `tests/unit/canvas-live-ingress.test.ts` 206, `tests/api/canvas-live-hocuspocus.test.ts` 175, `tests/api/canvas-live-security.test.ts` 164; implementations: `src/services/canvas-live/ingress.ts` 225, `src/services/canvas-live/hocuspocus.ts` 201 changed lines). Reason: each commit is one cohesive review-driven unit — a complete witness file or a classifier/host rewire that only compiles, passes and reviews as a whole; splitting would publish half-written witness suites or a host wired against a classifier API it does not yet exercise. Impact: review reads one complete unit per commit. Rollback: revert the commit.
+- [x] BRH3-COMMIT-SIZE: every commit above 150 changed lines is declared here with its count and rationale (review r2 finding 2; SHAs are post-rebase, counts are insertions+deletions vs parent, pre-rebase SHA from the review in parentheses):
+  - `18706953c` (`2cb10a172`) 206 — `api/tests/unit/canvas-live-ingress.test.ts` rewrite (167+/39-): one complete real-Yjs scratch-classification and vector-freshness witness file; splitting publishes a half-written witness suite.
+  - `32d397080` (`b921bb3e7`) 175 — `api/tests/api/canvas-live-hocuspocus.test.ts` rewrite (104+/71-): one validated-bridge application and durable-checkpoint witness file; same reason.
+  - `857446386` (`0da4f9980`) 164 — `api/tests/api/canvas-live-security.test.ts` rewrite (89+/75-): one hostile-real-bytes refusal and catch-up-replay witness file; same reason.
+  - `d88254ac1` (`0b3589d36`) 232 — `api/src/services/canvas-live/ingress.ts` classifier rewire (186+/39-) with its witness vectors (3+/2-) and one `BRANCH.md` line: one cohesive review r1 unit that only compiles, passes and reviews as a whole; splitting publishes a classifier without its validated refusal taxonomy.
+  - `f0390d893` (`55dbf09ce`) 201 — `api/src/services/canvas-live/hocuspocus.ts` host rewire (180+/21-): validated bridge, quarantine wiring and admission enforcement form one cohesive unit; splitting publishes a host wired against a classifier API it does not yet exercise.
+  - `0d5370f04` (`d99764981`) 167 — `api/src/services/canvas-live/harness.ts` (14+/21-) plus `api/tests/api/canvas-live-harness.test.ts` (132+/0-), the review r1 item 5 replacement: the harness and its DS witness-8 suite are one review-driven unit; splitting publishes an entrypoint without its witness.
+  - Init commit `4f1dd96df` (pre-rebase `9fd66cff7`) — 287 changed lines against the old base `1b7f8ab94` (91+/196-), above the rule when review r2 was written; after the rebase onto `2c43d8322` it replaces the 78-line main `BRANCH.md` and stands at 144 changed lines (90+/54-), below the threshold — recorded here to close the review item, no exception needed on this head.
+  Reason: each commit is one cohesive review-driven unit — a complete witness file or a classifier/host rewire that only compiles, passes and reviews as a whole; splitting would publish half-written witness suites or a host wired against a classifier API it does not yet exercise. Impact: review reads one complete unit per commit. Rollback: revert the commit.
 
 ## AI Flaky tests
 - [ ] No AI calls in H3 acceptance; no flaky exceptions requested.
@@ -78,7 +86,7 @@
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline and constraints**
   - [ ] Read `rules/MASTER.md`, `rules/workflow.md`, `plan/BRANCH_TEMPLATE.md`, approved host plan r3 H3 section, DS frozen spec `161c5dac` sections 4.11/5.7/8/13.
-  - [ ] Confirm worktree `tmp/worktrees/canvas-h3` on `feat/canvas-live-h3` from `origin/main` (`8ea119c4d`).
+  - [ ] Confirm worktree `tmp/worktrees/canvas-h3` on `feat/canvas-live-h3` from `origin/main` (`2c43d8322`).
   - [ ] Confirm H1/H2 files (`admission.ts`, `provider.ts`, `session-registry.ts`, `persistence.ts`, `pg-store.ts`, `journal.ts`, `live-document-port.ts`) unchanged from `origin/main`.
   - [ ] Define environment mapping (`ENV=test-canvas-h3`, `API_PORT=8802`, `UI_PORT=5202`, `MAILDEV_UI_PORT=1102`) and Docker lock path.
   - [ ] Confirm command style `make ... ENV=test-canvas-h3` with `ENV` last.

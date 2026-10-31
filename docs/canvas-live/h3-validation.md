@@ -3,7 +3,7 @@
 Scope: approved host plan r3 H3 only (lines 116-135, lot table line 49).
 Plan SHA-256: `a48f54be6ce82b05e697f1c3f7dbc433ed60b69f5c2e377b6fb71faad9ababe7`.
 Frozen DS specification SHA-256: `161c5dac35d1cfe6b4a1937fe2f38f900e3f73d24cbae1cbb802b4036ee36834`.
-Base: `origin/main` at `8ea119c4d`; H0 #823, H1 #830, H2 #833 merged.
+Base: `origin/main` at `2c43d8322`; H0 #823, H1 #830, H2 #833 merged.
 
 No application consumer is switched. No second `CanvasTemplateDescriptor`,
 collaboration vocabulary, schema generator, or editor code is published (DS-owned).
