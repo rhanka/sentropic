@@ -8,6 +8,7 @@ Record the owner's 2026-10-31 deliverables, recover merged branch plans since 20
 - [x] Track writes use `/home/antoinefa/.npm-global/bin/track` 0.98.0 from this worktree root only; never edit journal events manually.
 - [x] Root checkout and its uncommitted Track events remain untouched.
 - [x] Sources: `.tmp/owner-deliverables/OWNER-DELIVERABLES-2026-10-23.md` and the owner's sync packet; every active item records its source and next milestone.
+- [x] Retain CI lockfile-lane policy acknowledgment `review_by=2026-11-30T00:00:00Z` required by the existing manifest regression gate; this branch changes no install surface.
 - [x] Reuse existing items and workpackages; options come from source dossiers, otherwise decisions remain `à structurer`.
 - [x] No runtime, secrets, package changes, Docker campaign or publication; validation uses the installed Track and harness CLIs.
 - [x] Make commands use `ENV=test-memory-mcp` last; no services or ports are allocated.
@@ -45,6 +46,8 @@ Record the owner's 2026-10-31 deliverables, recover merged branch plans since 20
   - [x] Declare any exception with reason, impact and rollback in Feedback Loop before changing a conditional path; none needed.
 
 ## Feedback Loop
+- [x] Track 0.98.0 requires options and a recommendation for new native decisions; incomplete dossiers are preserved as `Decision à structurer` items, with full source text and no invented options.
+- [x] Imports retain their native workspace because Track forbids cross-workspace reparenting; existing workpackages are reused for direct owner requests.
 - [x] Root journal is intentionally excluded from this sync by the owner's packet; preserve all events already on `origin/main`.
 - [x] A4.2 conductor choice is recorded from the 2026-10-31T22:37Z source; pending owner decisions are never selected automatically.
 
@@ -64,15 +67,15 @@ Record the owner's 2026-10-31 deliverables, recover merged branch plans since 20
   - [x] Capture baseline report, snapshot, query, existing workpackages, items and decisions before writes.
 - [x] **Lot 1 — Recover merged deliverables**
   - [x] Recover eligible merged BRANCH files, import compatible shapes, and link completed PR evidence without duplicates.
-- [ ] **Lot 2 — Owner requests and decisions**
-  - [ ] Record identity, app, memory/hooks, remote control, voice, federation, canvas, immo, infrastructure, cyber and pending owner work.
-  - [ ] Preserve exact structured options/recommendations; leave unsupported dossiers unstructured.
+- [x] **Lot 2 — Owner requests and decisions**
+  - [x] Record identity, app, memory/hooks, remote control, voice, federation, canvas, immo, infrastructure, cyber and pending owner work.
+  - [x] Preserve exact structured options/recommendations; leave unsupported dossiers unstructured.
 - [ ] **Lot 3 — Final validation and handoff**
   - [ ] Run `track validate`, preserve baseline event containment, inspect final inventory and save deterministic Markdown report.
   - [ ] Run `make scope-check`, create PR using this file, and run one CI on the final head.
   - [ ] Save PR/head/CI, item and decision counts, and avoided duplicates in `.tmp/rv/track-sync.md`; stop without merging.
 
 ## Validation record
-- [x] Sync checkpoint: 1648 journal events recorded; record decision dossiers and pending structure.
+- [x] Sync checkpoint: 1711 journal events recorded; record dependency gates and delivered lots.
 - [x] No application tests added or changed; deterministic Track validation, source reconciliation, scope and diff checks are the relevant gates.
 - [ ] Final Track validation and source coverage passed.
