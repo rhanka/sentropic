@@ -1,69 +1,76 @@
-# Feature: Synchronize owner deliverables and decisions into Track
+# Feature: Durable conductor design artifacts
 
 ## Objective
-Record the owner's 2026-10-31 deliverables, recover merged branch plans since 2026-10-26, and preserve existing Track identities without duplicates.
+- [x] Preserve the seven owner-selected design artifacts byte-for-byte under `docs/specs/`, with source paths, SHA-256 hashes, review status and existing Track references.
+- [ ] Open a documentation-only PR to `main`, observe exactly one CI run, and report its PR/head/result/index to `.tmp/rv/docs-durable.md`; stop without merging.
 
 ## Scope / Guardrails
-- [x] Designated single writer: `chore/track-sync-20261031`, worktree `tmp/worktrees/track-sync`, based on `origin/main`.
-- [x] Track writes use `/home/antoinefa/.npm-global/bin/track` 0.98.0 from this worktree root only; never edit journal events manually.
-- [x] Root checkout and its uncommitted Track events remain untouched.
-- [x] Sources: `.tmp/owner-deliverables/OWNER-DELIVERABLES-2026-10-23.md` and the owner's sync packet; every active item records its source and next milestone.
-- [x] Retain CI lockfile-lane policy acknowledgment `review_by=2026-11-30T00:00:00Z` required by the existing manifest regression gate; this branch changes no install surface.
-- [x] Reuse existing items and workpackages; options come from source dossiers, otherwise decisions remain `à structurer`.
-- [x] No runtime, secrets, package changes, Docker campaign or publication; validation uses the installed Track and harness CLIs.
-- [x] Make commands use `ENV=test-memory-mcp` last; no services or ports are allocated.
-- [x] Selective staging, `make scope-check` and `make commit`, at most 150 changed lines per commit; one CI on the final head; no merge.
+- [x] Owner request: `.tmp/packets/docs-durable.md`; author: Codex `gpt-6.1-sol`, xhigh.
+- [x] Branch: `docs/durable-design-artifacts-20261101`, based on `origin/main` at `329cc11d0` (Track sync PR #865 merged).
+- [x] Worktree: `tmp/worktrees/docs-durable`; orchestration: one author and one Track writer in this worktree.
+- [x] Make-only commands; `ENV=test-docs-durable` last whenever an environment is supplied.
+- [x] Documentation checks only: secret-value scans, source/destination byte and hash checks, Track validation, scope checks and one PR CI run.
+- [x] Retain the inherited CI lockfile-lane policy acknowledgment `review_by=2026-11-30T00:00:00Z`; this branch changes no install surface.
+- [x] No application/API/UI/E2E behavior changes; no application test or UAT campaign is applicable.
+- [x] New metadata is English; verbatim sources retain their original language and wording under the owner's copy instruction.
+- [x] No services or ports required; root development remains untouched.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `docs/specs/**`
   - `.track/**`
-  - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/**`
-  - `api/**`
-  - `ui/**`
-  - `packages/**`
+  - `plan/NN-BRANCH_*.md`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `BRANCH.md`
   - `.github/workflows/**`
 - **Exception process**:
-  - [x] Declare any exception with reason, impact and rollback in Feedback Loop before changing a conditional path; none needed.
+  - [x] Declare `BRxx-EXn` with reason, impact and rollback before touching an exceptional path.
 
 ## Feedback Loop
-- [x] Track 0.98.0 requires options and a recommendation for new native decisions; incomplete dossiers are preserved as `Decision à structurer` items, with full source text and no invented options.
-- [x] Imports retain their native workspace because Track forbids cross-workspace reparenting; existing workpackages are reused for direct owner requests.
-- [x] Root journal is intentionally excluded from this sync by the owner's packet; preserve all events already on `origin/main`.
-- [x] A4.2 conductor choice is recorded from the 2026-10-31T22:37Z source; pending owner decisions are never selected automatically.
+- [x] BR20261101-EX1 — `BRANCH.md`: required branch metadata explicitly requested by the owner; impact limited to planning/PR/Track import; rollback by reverting this branch's metadata.
+- [x] BR20261101-EX2 — owner-authorized exemption from the 150-line limit only for the following verbatim copies; rationale: keep the peer-referenced bytes and hashes; impact: documentation additions only; rollback: revert the copy commit.
+  - [x] `docs/specs/geo-fcm/assessment.md`
+  - [x] `docs/specs/cm-identity-agents/r2.md`
+  - [x] `docs/specs/cm-identity-agents/A2-lots.md`
+  - [x] `docs/specs/cm-identity-agents/owner-answers-20261030.md`
+  - [x] `docs/specs/voice-s2s/study-r2.md`
+  - [x] `docs/specs/daily-cyber/activation-plan.md`
+  - [x] `docs/specs/remote-control/plan-v1.1.md`
+- [x] BR20261101-EX2 also preserves inherited prose, dates, estimates and relative references without editing; the index explains provenance and review limits.
+- [x] The earlier designated Track sync writer finished in merged PR #865; this worktree is the single writer for this request's branch import.
+- [x] The Spark r2 review approves the exact identity r2 hash but cites older owner-answer bytes; the current owner-answer file has no matching independent approval.
+- [x] Verbatim geo and remote-control sources contain trailing blank lines; preserve them for hash identity; whitespace checks pass for all newly authored metadata.
+- [x] New peer-review selection is unavailable: the required `h2a_run` MCP tool is absent; `.tmp/rv/docs-durable-review.md` records selection failure; no new consensus claimed, conductor review remains pending before merge.
 
 ## AI Flaky tests
-- [x] Not applicable: journal synchronization uses deterministic validation and no model inference.
+- [x] Not applicable: no AI test campaign or accepted flaky result.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch: one designated Track writer; no delegated writes or branch integration.
-- [ ] Multi-branch (not used).
+- [x] **Mono-branch** — preserve the supplied sources and import only this branch's request/lots into Track.
+- [ ] **Multi-branch** — not required.
 
 ## UAT Management (in orchestration context)
-- [x] Data-only review checks statuses, source paths, milestones and exact decision options; no application UAT required.
+- [x] Documentation acceptance: seven exact copies, complete index, no secret-value matches, valid Track, mechanically checked branch/scope, one completed CI.
+- [x] No web, Chrome or VSCode UAT applies to documentation-only preservation.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and identity map**
-  - [x] Read common rules, Track contract, repository rules and branch template; harness branch check passes.
-  - [x] Capture baseline report, snapshot, query, existing workpackages, items and decisions before writes.
-- [x] **Lot 1 — Recover merged deliverables**
-  - [x] Recover eligible merged BRANCH files, import compatible shapes, and link completed PR evidence without duplicates.
-- [x] **Lot 2 — Owner requests and decisions**
-  - [x] Record identity, app, memory/hooks, remote control, voice, federation, canvas, immo, infrastructure, cyber and pending owner work.
-  - [x] Preserve exact structured options/recommendations; leave unsupported dossiers unstructured.
-- [x] **Lot 3 — Local validation and final-head handoff preparation**
-  - [x] Run `track validate`, preserve baseline event containment, inspect final inventory and save deterministic Markdown report.
-  - [x] Pass `make scope-check`; prepare this file as the PR body and allocate one CI run on the final head.
-  - [x] Prepare `.tmp/rv/track-sync.md` fields for PR/head/CI, item and decision counts, and avoided duplicates; the final external outcome is recorded there after the single CI, without another branch push.
-
-## Validation record
-- [x] Sync checkpoint: 1711 journal events recorded; validate journal coverage and prepare PR handoff.
-- [x] No application tests added or changed; deterministic Track validation, source reconciliation, scope and diff checks are the relevant gates.
-- [x] Final Track validation and source coverage passed: 1,711 events; all 370 baseline events retained; 94 merged PRs covered (49 imports, 45 explicit PR fallbacks).
-- [x] Coverage: 73 active/source mappings; 441 items created, 2 existing items linked/updated, 19 native decisions created, including all 4 voice and 3 federation questions; 29 incomplete dossiers retained as pending items.
-- [x] New-item source keys/titles are unique within each workspace; source paths and next milestones are present for every requested active item; pending owner choices remain unselected.
+- [x] **Lot 0 — Baseline and safe inputs**
+  - [x] Read common rules, repository workflow, harness and Track contracts.
+  - [x] Create the requested worktree from fresh `origin/main`; mechanically check the branch.
+  - [x] Query Track from this worktree root; find existing source-related items without duplicating them.
+  - [x] Scan each source for credential/token values; refuse a matched source before copying.
+- [x] **Lot 1 — Preserve and index**
+  - [x] Copy all seven named artifacts without transforming bytes.
+  - [x] Compare every destination to its source with `cmp` and SHA-256; enforce the three expected prefixes and geo byte count.
+  - [x] Write `docs/specs/INDEX-durable-artifacts.md` with review evidence and existing Track IDs.
+  - [x] Import this branch's request and lots through `track branch import BRANCH.md`; run `track validate`.
+  - [x] Run `make scope-check` before each selective-stage `make commit`; retain fewer than 150 non-exempt changed lines per commit.
+- [ ] **Lot 2 — PR, CI and handoff**
+  - [ ] Push only the locally verified final head and open a PR using this file as its body.
+  - [ ] Observe exactly one CI run for that head through completion; do not rerun or dispatch an extra workflow.
+  - [ ] Save PR, head, CI result and complete index to `.tmp/rv/docs-durable.md`.
+  - [ ] Stop with the PR open; do not merge or remove this branch plan.
