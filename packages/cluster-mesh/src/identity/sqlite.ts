@@ -92,7 +92,7 @@ const withTransaction = <T>(db: SqliteConnection, operation: () => T): T => {
   }
 };
 
-export function createSqliteIdentityStores(input: {
+export function createIdentityEnforcementSqliteStores(input: {
   readonly db: SqliteConnection;
 }): {
   readonly conversations: ConversationAuthorityStore;

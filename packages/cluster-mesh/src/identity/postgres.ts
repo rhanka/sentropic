@@ -85,7 +85,7 @@ const rowToAuditEvent = (row: Record<string, unknown>): IdentityAuditEvent => ({
   detail: (row.detail as string | null) ?? undefined,
 });
 
-export function createPostgresIdentityStores(input: {
+export function createIdentityEnforcementPostgresStores(input: {
   readonly driver: InjectedPgDriver;
   readonly schema: string;
 }): {
