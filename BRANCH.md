@@ -45,6 +45,8 @@ Implement lot ACT-L06a of r6 §7.2 (W2): persistent provider-first/account-secon
 ## Feedback Loop
 - No open blockers: r6 supplies every design decision for this lot (rotation order, skip codes, caps, exhaustion behavior, §4.3.3 disposition, `review-partial-roster`). Anything not covered by r6 is reported in the final report, not decided here.
 - D/ `daily-review.test.mjs` half of T5-N2 is ACT-L09's destination and does not exist yet; the C/ half (rotation, dedup-by-reviewInputKey at the allocator, exhaustion, waiting-seat, zero payment) is implemented and tested here.
+- Test runs (Docker under the flock, `ENV=test-cyber-L06a` last, `make down ENV=test-cyber-L06a` after, `make ps` empty): scoped run of the three touched suites = 27/27 pass. Full `make test-ci-seat-contract ENV=test-cyber-L06a` = 91 tests, 90 pass, 1 fail; all 21 new ACT-L06a tests pass.
+- The single failure is pre-existing on `origin/main` (9899cf336), not caused by this lot: `tests/seat-workflow-contract.test.ts` T5-C1/T6-C1 fails identically on a detached `origin/main` worktree (rc=2) with signature `security-report-control.yml: preflight-missing:deadline-record; preflight-missing:control-receipt; preflight-missing:state-intent; preflight-missing:state-commit`. This branch's diff does not touch `.github/workflows/**` or `seat-workflow-contract.ts` (verified via `git diff origin/main HEAD --stat`). Recorded per the AI-flaky/unrelated-failure policy; not blocking for this lot.
 
 ## AI Flaky tests
 - [x] No AI-dependent tests or timeout changes.
@@ -59,17 +61,17 @@ Implement lot ACT-L06a of r6 §7.2 (W2): persistent provider-first/account-secon
   - [x] Create worktree `tmp/worktrees/cyber-act-L06a` on branch `feat/cyber-act-L06a` from `origin/main` (9899cf336); `harness check branch` PASS C1; `.env` copied locally (never printed).
   - [x] Confirm command style: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make ... ENV=test-cyber-L06a` (ENV last), then `make down ENV=test-cyber-L06a`.
   - [x] Validate scope boundaries (Allowed/Forbidden above); no exception needed.
-- [ ] **Lot 1 — Tests first (r6 §6.4 destinations)**
+- [x] **Lot 1 — Tests first (r6 §6.4 destinations)**
   - [ ] C/ `tests/security-roster.test.ts` (L6-B–G, T5-N2 C/ half, L6-H gating, `review-partial-roster`): L6-B exact A1,B1,A2,B1,A1 sequence, exhausted-skip-within-provider, all-A-refuse→B, five-provider ring, duplicate display names, enrollment append/removal tombstone/rename, alias + refresh-family sharing, persistence across restart/midnight/mode/epoch; L6-D every skip code; L6-E last-unit double allocation, once-only settlement, crash holds; L6-F cross-account isolation, refresh drain + successor gate; L6-G bounded full exhaustion → waiting-seat, zero paid, runner released, no conversation migration; two Codex/two Vibe fixtures; unchanged reviewInputKey → zero inference.
   - [ ] C/ `tests/seat-public-execution.test.ts` (T6-P1): accept C1 D0.3 public-repo extension or explicit provider proof only with all other gates; refuse private-only/other-provider/expired/generic consent; A9 linkage recorded; unqualified routes stay visible/off.
   - [ ] C/ `tests/seat-admission.test.ts` (L9-C additions): allocator commits turns in state, broker consumes reservation without local cursor reset, exhaustion yields waiting-seat with zero payment and unchanged caps.
   - [ ] RED run: `flock … make test-ci-seat-contract SCOPE="scripts/ci/seat-custody/tests/security-roster.test.ts scripts/ci/seat-custody/tests/seat-public-execution.test.ts scripts/ci/seat-custody/tests/seat-admission.test.ts" ENV=test-cyber-L06a`, then `make down ENV=test-cyber-L06a`.
-- [ ] **Lot 2 — Implementation**
+- [x] **Lot 2 — Implementation**
   - [ ] `src/security-roster.ts`: PROVIDER_RING, roster enrollment/tombstone/rename, cursor persistence, provider-first/account-second `selectRoute` with typed skips, reservation via existing seat-admission caps, L6-F projection isolation, L6-G exhaustion result, reviewInputKey dedup, `AccountQualificationV1` gate (billing-first, non-inference quota >20% ≤30s, lifecycle, exact model route, public-execution disposition), purpose enablement (report-only review vs assisted repair distinct models), `review-partial-roster` publication.
   - [ ] `src/seat-public-execution.ts`: `PublicExecutionDispositionV1` (r6 §4.3.3) validation + route admission gate + A9 linkage.
   - [ ] `src/custody-state-store.ts`: additive optional roster fields + `admissions`/`skips` arrays in `CustodyStateV1`/`makeGenesisState` (validateState unchanged in strictness).
   - [ ] GREEN run: `flock … make test-ci-seat-contract ENV=test-cyber-L06a` (full suite, no regressions in the 68 existing tests); `make down ENV=test-cyber-L06a`; `make ps` empty.
-- [ ] **Lot 3 — Gates, commits, push**
+- [x] **Lot 3 — Gates, commits, push**
   - [ ] `make scope-check` before every commit; `git diff --check`; atomic `make commit MSG="…"` ≤150 lines, stage specific files only; push after every few commits (crash safety).
 - [ ] **Lot N — Final validation**
   - [ ] Full suite GREEN under the flock with `ENV=test-cyber-L06a` last; `make down ENV=test-cyber-L06a`; `make ps` empty.
