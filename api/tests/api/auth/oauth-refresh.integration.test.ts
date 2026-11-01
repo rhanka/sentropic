@@ -88,6 +88,15 @@ describe('host OAuth refresh HTTP integration', () => {
     expect((await post('token', { grant_type: 'refresh_token', refresh_token: initial.refresh_token })).status).toBe(400);
   });
 
+  it('should preserve consented offline authority after a local browser logout', async () => {
+    const initial = await issue();
+    const { userSessions } = await import('../../../src/db/schema');
+    const [{ id: sessionId }] = await db.select({ id: userSessions.id }).from(userSessions).where(eq(userSessions.userId, userId));
+    const { deleteAndQueueRemoteSessions } = await import('../../../src/services/auth/remote-revocation-outbox');
+    await deleteAndQueueRemoteSessions({ sessionId });
+    expect((await post('token', { grant_type: 'refresh_token', refresh_token: initial.refresh_token })).status).toBe(200);
+  });
+
   it.each(['consent', 'security'].flatMap((kind) => ['mint-first', 'revoke-first'].map((order) => ({ kind, order }))))
   ('should serialize initial family creation with $kind: $order', async ({ kind, order }) => {
     const code = await obtainCode();

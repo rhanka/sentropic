@@ -1,9 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import { authorizePath, createOauthClient, createOauthPorts, createOauthRouterForTest } from '../__fixtures__/oauth-fixtures.js';
 import { refreshFixture } from './refresh-fixtures.js';
-import { createWellKnownRouter } from '../../src/index.js';
+import { createWellKnownRouter, hasOfflineCoverage } from '../../src/index.js';
 
 describe('offline authorization consent', () => {
+  it('should require exact issuer, epoch, scope set and resource or explicit default approval', () => {
+    const grant = { scopes: ['read', 'offline_access'], offlineScopes: ['read', 'offline_access'],
+      offlineGrantId: 'epoch', offlineIssuer: 'https://idp.test', offlineConsentedAt: new Date(),
+      approvedResources: ['https://a.test'], defaultAudienceApproved: false };
+    const request = { issuer: 'https://idp.test', offlineGrantId: 'epoch', scope: 'read offline_access', resource: 'https://a.test' };
+    expect(hasOfflineCoverage(grant, request)).toBe(true);
+    expect(hasOfflineCoverage({ scopes: grant.scopes }, request)).toBe(false);
+    for (const patch of [{ issuer: 'https://other.test' }, { offlineGrantId: 'old' },
+      { scope: 'write offline_access' }, { resource: 'https://b.test' }, { resource: null }]) {
+      expect(hasOfflineCoverage(grant, { ...request, ...patch })).toBe(false);
+    }
+    expect(hasOfflineCoverage({ ...grant, defaultAudienceApproved: true }, { ...request, resource: null })).toBe(true);
+  });
   it('should advertise refresh only for a live opted-in client on both discovery endpoints', async () => {
     const f = await refreshFixture();
     const discovery = createWellKnownRouter({ issuer: 'http://localhost:9197', ports: f.ports });
