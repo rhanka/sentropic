@@ -636,11 +636,12 @@ export const createSqliteIdentityUnitOfWorkV1 = (input: {
 export const createSqliteIdentityHostV1 = (options: {
   readonly connection: SqliteConnection;
   readonly applySchema?: boolean;
-}): SqliteIdentityHostV1<SqliteCustodyHandle> => ({
+}): SqliteIdentityHostV1<SqliteCustodyHandle> => {
+  if (options.applySchema !== false) {
+    for (const ddl of identitySchemaStatements('sqlite', '')) options.connection.exec(ddl);
+  }
+  return {
   runExclusiveTransaction: async (runOptions, operation) => {
-    if (options.applySchema !== false) {
-      for (const ddl of identitySchemaStatements('sqlite', '')) options.connection.exec(ddl);
-    }
     if (!runOptions.readOnly) options.connection.exec('BEGIN IMMEDIATE');
     try {
       const result = await operation({
@@ -662,7 +663,8 @@ export const createSqliteIdentityHostV1 = (options: {
       throw error;
     }
   },
-});
+  };
+};
 
 /** Standalone per-method custody stores for direct store tests. */
 export const createSqliteCustodyStores = (options: { readonly connection: SqliteConnection }): IdentityCustodyStoresV1 => {
