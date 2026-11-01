@@ -1,37 +1,38 @@
-# Feature: Verifier and tool-content qualification (A04)
+# Feature: cm-identity-a2-0b
 
 ## Objective
-- [x] Implement admission-plan-r1 section 5 row A04 (R3 tool-content qualification) under approved amendment r6 sections 3.3/3.4: independently inventory the selected Cosign verifier, the Sigstore TUF root bootstrap and the required acquisition/SBOM/uploader tools in `scripts/security/scanner/`, with exact-binary provenance, fresh independent self-SCA, dependency/zero-Python binding and candidate-bound tool admission before trusted signing/verification use. Contract-only; no live run, admission, promotion or workflow change.
+Implement the approved A2.0b additive amendment (Astra MAX author, Muse Wonder max APPROVE) for the identity core in packages/cluster-mesh: verification custody, lossless import, atomic person deletion.
 
 ## Scope / Guardrails
-- [x] Binding r6 SHA-256: `4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f`.
-- [x] Binding plan SHA-256: `528dd39308a6e2cf8bdf31307c82da373cf3ceb666cb865a0417abfa7ece49d2`, section 5 row A04.
-- [x] Worktree: `tmp/worktrees/cyber-admission-a04`; branch: `feat/cyber-admission-a04`; base: origin/main `a2776b2e0` (A01 = PR #883, A02 = PR #884, A03 = PR #885 merged).
-- [x] Make-only Docker-first; single shared Docker lock `.tmp/packets/DOCKER-LOCK.md` taken per command (`flock <lock> make ...`); reuse the pinned Node image `node:24-bookworm-slim@sha256:0e0ff40c...`; no new image build.
-- [x] `ENV=test-cyber-adm` last; no listening services or ports; no registry login, OIDC, secrets, live promotion or merge; `make down ENV=test-cyber-adm` after.
-- [x] Keep the downstream verifier adapter (A05), trust state (A06), artifact transport (A07), publisher workflow (A08), production admission, policy changes (`.security/**`) and Track writes out of scope; the conductor remains the sole Track writer.
-- [x] Tests first; selective staging; `make commit` under 150 changed lines; push after every commit; never suppress CI; never `[skip ci]`.
-- [x] Stop on an unresolved design decision. The uploader is native ORAS per r4 (incorporated by r6); its exact digest is an A08 reviewed-workflow input, never a floating download, so the inventory records it as an explicit pending pin and admission refuses while pending. No digest is invented.
+- Scope limited to packages/cluster-mesh identity custody, storage, import, deletion, tests, version manifest.
+- One migration max in api/drizzle/*.sql (not used; CM schema assets only).
+- Make-only workflow, no direct Docker commands.
+- Branch development in isolated worktree tmp/worktrees/cm-identity-a2-0b.
+- Automated test campaigns on dedicated environments (ENV=test-cm-a2-0b), never root dev.
+- In every make command, ENV=<env> passed as the last argument.
+- All new text in English.
+- Pins: amendment A2.0b-r6 sha256 5bde078cd12a35fb752eadb48496f0373dc8940883c701b920878a165; review a2-0b_wonder_r6 APPROVE sha256 0734a46e930b8fc456a431005d392203a347c1e19262305ac3c2a7e109206433; lot-A4 sha256 3826e88cad5f6fd368ce12c392d72634f78b411946e0354776e14cd984d6f8ed; lot-A4-prerequisites.patch sha256 11476ebd89c6aec73dcf7b20984323926310a331bff9d421a73c1fa6ec475ff5; baseline origin/main 455813bf923e9a58f701b17d2adbef01b2df0e71.
+- Version: 0.26.0-dev.4 (next free cluster-mesh dev version after main 0.26.0-dev.3).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/llm-mesh/src/node/keyring/encrypted-file-keyring.ts`
-  - `packages/llm-mesh/src/node/index.ts`
-  - `packages/llm-mesh/src/global.d.ts` (ambient `node:fs/promises` shim: add `stat`/`Stats`, the package compiles with `types: []`)
-  - `packages/llm-mesh/tests/node/encrypted-file-keyring.test.ts`
-  - `packages/llm-mesh/tests/decision-public-surface.test.ts`
-  - `packages/llm-mesh/package.json`
-  - `packages/llm-mesh/CHANGELOG.md`
-  - `package-lock.json`
-  - `packages/cluster-mesh/tests/fixtures/train.ts` (train pin rebind, required by the cluster-mesh validate lanes)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (selected tuple pin rebind)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (regenerated via `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock`)
-  - `BRANCH.md`
+  - `packages/cluster-mesh/src/identity-contracts/**`
+  - `packages/cluster-mesh/src/storage/identity/**`
+  - `packages/cluster-mesh/src/identity-stores/**`
+  - `packages/cluster-mesh/src/identity/**`
+  - `packages/cluster-mesh/tests/identity/**`
+  - `packages/cluster-mesh/tests/identity-*.spec.ts`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/CHANGELOG.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `api/**`
+  - `ui/**`
+  - `e2e/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
   - `scripts/ci/**`
   - `docs/**` (dated evidence inputs are read and digest-bound, never edited)
@@ -42,40 +43,50 @@
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- [x] Retain inherited BRLOCK-EX1 under `.security/ci-lockfile-policy.json`: owner=CI maintainers, review_by=2026-11-30T00:00:00Z; bounded scope and removal trigger remain unchanged, and catalog SCA debt stays open.
-- [x] A01 merged as PR #883 (`e3fa8fab7`), A02 as PR #884 (`d1f45c625`), A03 as PR #885 (`a2776b2e0`); this branch is cut from origin/main `a2776b2e0`.
-- [x] Dated public evidence is input only: `docs/security/sec-s2b-qualify/verifier-candidate.json` (Cosign 3.1.4 candidate, 253 Go deps, go1.27.3, zero HIGH/CRITICAL self-SCA), `docs/security/sec5a-trust-custody.json` (TUF root bootstrap, refreshBy 2026-11-06T01:22:45Z), `docs/security/sec-s2b-qualify/self-scans.json` (old Cosign 3.0.2 vulnerable report: 2 CRITICAL, 60 HIGH). Their October DB snapshots are stale for admission; freshness is enforced by the contract, not assumed.
-- [x] Real scanner/tool outputs remain candidate data: admission receipts return `productionAdmitted: false` and never write a policy pin, receipt file or admission flag.
+- None.
 
 ## AI Flaky tests
 - [x] Deterministic contract tests; no AI flaky exception.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch**: single A04 lane with one ready PR against main; no merge.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: Single additive contract lot with one test cycle; no parallel sub-branches.
 
 ## UAT Management (in orchestration context)
-- [x] No UI surface; the pinned Node test lane provides the applicable gate.
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- No UI changes in this lot; no UAT.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read rules, approved r6/plan (both digests verified), A01-A03 contracts and the dated tool evidence.
-  - [x] Create isolated worktree `tmp/worktrees/cyber-admission-a04` from origin/main `a2776b2e0`; harness branch check PASS C1.
-  - [x] Locate the existing pinned Node test lane (`make test-security-daily`) and the shared Docker lock; production admission stays off.
-- [x] **Lot 1 — Tests before implementation (RED)**
-  - [x] `tool-inventory.test.mjs` + `tool-admission.test.mjs` (collected by `scanner-provenance.test.mjs`): real `tool-inventory.json` validates and cross-binds to the policy verifierCandidate, the material-manifest acquisition/sbom tool pins and the trust-custody TUF role digests; evidence digests bind actual docs bytes. RED gate: 289 pass / 1 fail (missing module), log `.tmp/rv/cyber-admission-a04-red.log`.
-  - [x] Inventory mutation negatives: prose/non-hex pins, changed size/version, missing/extra role, origin outside the allowlists, verifier pin != policy, cacert/syft pin != manifest, uploader destination change, pending uploader blocks admission.
-  - [x] Self-SCA negatives: wrong-binary report, vulnerable tool (HIGH/CRITICAL), stale/future DB freshness, dropped severity class, self-scan (scanner == tool), scan predating DB download; real old Cosign 3.0.2 report refused.
-  - [x] Dependency-inventory negatives: omitted embedded module, extra module, version change, count mismatch; zero-Python negatives: python present, missing/mismatched evidence.
-  - [x] Candidate-bound admission: complete synthetic tuple produces `ToolAdmissionReceiptV1` with `productionAdmitted: false`; pending pin/missing/rejected review, expired root bootstrap and rehashed inputs refuse.
-- [x] **Lot 2 — Implementation**
-  - [x] `tool-inventory.json`: five roles (verifier Cosign 3.1.4, root-bootstrap Sigstore TUF, acquisition cacert.pem, sbom syft 1.55.0, uploader ORAS pending the A08 reviewed pin) with exact digests/sizes/origins and digest-bound evidence references.
-  - [x] `tool-qualification.mjs`: `validateToolInventory`, `validateToolSelfSca`, `validateToolDependencies`, `validateZeroPython`; `tool-admission.mjs`: `admitToolCandidate`, `validateAdmissionReceipt`.
-  - [x] `tool-fixture.mjs`: synthetic complete tuple for contract tests.
-  - [x] Wired `import '../scanner/tool-inventory.test.mjs'` and `import '../scanner/tool-admission.test.mjs'` into `scripts/security/daily/scanner-provenance.test.mjs`.
-- [x] **Lot 3 — Gates, ready PR and report**
-  - [x] `flock .tmp/packets/DOCKER-LOCK.md make test-security-daily ENV=test-cyber-adm`: GREEN, 333 tests / 333 pass / 0 fail, EXIT=0; log `.tmp/rv/cyber-admission-a04-green.log`.
-  - [x] `flock ... make down ENV=test-cyber-adm` after the gate (DOWN_EXIT=0, log `.tmp/rv/cyber-admission-a04-down.log`); no new image built; `make scope-check` PASS C2 (logs `.tmp/rv/cyber-admission-a04-scope-check.log`, `-final.log`); `harness check branch` PASS C1.
-  - [x] Atomic `make commit` under 150 lines each (7 commits `b44c43bdd`..`99aecb19b`); pushed after every commit; no `[skip ci]`.
-  - [x] Ready (non-draft) PR **#889** opened against main; origin/main merged back (`ee1d3d819`, BRANCH.md conflict resolved keeping the A04 lane copy) so the PR is mergeable; pull_request CI run **41494863686** on head `ee1d3d8194` = **success** (74 jobs, 0 failures).
-  - [x] Recorded exact heads, PR, CI and every test gate in `.tmp/rv/cyber-admission-a04.md` for conductor Track import.
-  - [x] Stop after A04; leave A05+ and all live admission/activation work fenced. Do not merge.
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read COMMON-RULES, MASTER.md, amendment r6, review r6 APPROVE, lot-A4, patch.
+  - [x] Create isolated worktree tmp/worktrees/cm-identity-a2-0b on feat/cm-identity-a2-0b from origin/main.
+  - [x] Pin sha256 values in BRANCH.md.
+  - [x] Set version 0.26.0-dev.4.
+- [ ] **Lot 1 — Custody contracts (additive, 1.0 frozen)**
+  - [ ] New V1 record/port/error/descriptor exports; IDENTITY_CUSTODY_CONTRACT_VERSION 1.1.0, IDENTITY_ATOMIC_DELETION_CONTRACT_VERSION 2.0.0.
+  - [ ] IdentityCustodyErrorV1 with exact code union; fixed messages; buffer-ownership rules.
+  - [ ] IDENTITY_A20B_DESCRIPTORS exact rows.
+  - [ ] Lot gate: make typecheck-cluster-mesh ENV=test-cm-a2-0b
+- [ ] **Lot 2 — Durable custody on both profiles**
+  - [ ] New tables: account_profiles, webauthn_credentials, single_use_proofs, email_tickets, invitation_digests, login_token_bindings, social_links, subject_fences, deletion ops/attempts, revocation outbox, import receipts, schema versions.
+  - [ ] Postgres + SQLite stores with CAS, uniqueness, expiry strictness.
+  - [ ] Lot gate: custody storage tests on both profiles.
+- [ ] **Lot 3 — Import contract (id-preserving, material-preserving)**
+  - [ ] createIdentityCustodyImporterV1: validate/importBatch/importBatchInTransaction, exclusive-writer fence, identical-receipt replay, whole-batch rollback.
+  - [ ] Field-preserving mapping incl. WebAuthn bytes/counter, unbound proofs, digest invitations, session hashes, social subjects.
+  - [ ] Lot gate: custody-import tests on both profiles.
+- [ ] **Lot 4 — Atomic person deletion (V2)**
+  - [ ] createAtomicPersonDeletionV2 with business participants, orphan assertions, rolled_back receipts, operation journal.
+  - [ ] P4/P5 probes green on both profiles; existing cascade suite unmodified.
+  - [ ] Lot gate: atomic-person-deletion tests on both profiles.
+- [ ] **Lot 5 — Security evidence**
+  - [ ] Secret at rest, SHA-256 exact preimages, zeroization of owned buffers, log redaction canaries.
+  - [ ] Lot gate: security tests on both profiles.
+- [ ] **Lot N — Final validation**
+  - [ ] Typecheck & Lint
+  - [ ] Retest cluster-mesh identity suites (both profiles, no skips)
+  - [ ] Bumped packages/cluster-mesh/package.json version 0.26.0-dev.4
+  - [ ] Final gate step 1: create draft PR using BRANCH.md text as PR body (source of truth).
+  - [ ] Final gate step 2: run/verify branch CI once and resolve remaining blockers.
+  - [ ] Do NOT merge; report to .tmp/rv/lot-A2.0b.md and stop.
