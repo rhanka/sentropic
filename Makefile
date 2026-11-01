@@ -3279,6 +3279,7 @@ db-restore: clean ## Restore backup to local database [BACKUP_FILE=filename.dump
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres sh -c " \
 		pg_restore -d postgres://app:app@localhost:5432/app --clean --if-exists --no-owner --no-privileges -v /tmp/restore.dump && rm /tmp/restore.dump"
 	@echo "📊 Inspecting database after restore (before migrations)..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U app -d app -c 'SELECT public.oauth_refresh_invalidate_restore();'
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
 		SELECT 'initiatives' as table_name, COUNT(*) as count FROM initiatives \
 		UNION ALL \
@@ -3757,6 +3758,8 @@ k8s-db-restore-preprod: ## Seed the preprod DB from a prod dump [BACKUP_FILE=pro
 	PGPASSWORD=$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) get secret sentropic-postgres -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d); \
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) exec -i "$$POD" -- env PGPASSWORD="$$PGPASSWORD" \
 		pg_restore -h 127.0.0.1 -U app -d app --clean --if-exists --no-owner --no-privileges < "data/backup/$(BACKUP_FILE)"; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) exec "$$POD" -- env PGPASSWORD="$$PGPASSWORD" \
+		psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U app -d app -c 'SELECT public.oauth_refresh_invalidate_restore();'; \
 	echo "✅ Preprod database restored from data/backup/$(BACKUP_FILE)"
 
 k8s-undeploy: ## Delete the tenant workload (namespace + quotas owned by poc-k8s stay)
