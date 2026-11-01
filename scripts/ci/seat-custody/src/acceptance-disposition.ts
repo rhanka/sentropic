@@ -1,0 +1,1113 @@
+// r6 §6.3/§6.4/T6-M1 acceptance disposition: enumerated inherited IDs, source paths,
+// destination rows, L03a test IDs and §4.5 credential/copy/loader receipts.
+// Embedded literals: the .tmp preservation inventories are not part of the shipped tree.
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+
+export const C_PREFIX = "scripts/ci/seat-custody/tests/";
+export const D_PREFIX = "scripts/security/daily/";
+export const resolveDestination = (d: string): string => d.startsWith('C/') ? C_PREFIX + d.slice(2) : D_PREFIX + d.slice(2);
+
+export type AcceptanceIdRow = { id: string; owner: string };
+export const ACCEPTANCE_IDS: AcceptanceIdRow[] = [
+ {
+  "id": "L2-A",
+  "owner": "L02"
+ },
+ {
+  "id": "L2-B",
+  "owner": "L02"
+ },
+ {
+  "id": "L2-C",
+  "owner": "L02"
+ },
+ {
+  "id": "L2-D",
+  "owner": "L02"
+ },
+ {
+  "id": "L2-E",
+  "owner": "L02"
+ },
+ {
+  "id": "L3-A",
+  "owner": "L03a/L03b"
+ },
+ {
+  "id": "L3-B",
+  "owner": "L03a/L03b"
+ },
+ {
+  "id": "L3-C",
+  "owner": "L03a/L03b"
+ },
+ {
+  "id": "L3-D",
+  "owner": "L03a/L03b"
+ },
+ {
+  "id": "L3-E",
+  "owner": "L03a/L03b"
+ },
+ {
+  "id": "L3-F",
+  "owner": "L03a/L03b"
+ },
+ {
+  "id": "L3-G",
+  "owner": "L03a/L03b"
+ },
+ {
+  "id": "L3-H",
+  "owner": "L03a/L03b"
+ },
+ {
+  "id": "L3-I",
+  "owner": "L03a/L03b"
+ },
+ {
+  "id": "L3-J",
+  "owner": "L03a/L03b"
+ },
+ {
+  "id": "L3-K",
+  "owner": "L03a/L03b"
+ },
+ {
+  "id": "L3-L",
+  "owner": "L03a/L03b"
+ },
+ {
+  "id": "L3-M",
+  "owner": "L03a/L03b"
+ },
+ {
+  "id": "L4-A",
+  "owner": "L04"
+ },
+ {
+  "id": "L4-B",
+  "owner": "L04"
+ },
+ {
+  "id": "L4-C",
+  "owner": "L04"
+ },
+ {
+  "id": "L4-D",
+  "owner": "L04"
+ },
+ {
+  "id": "L4-E",
+  "owner": "L04"
+ },
+ {
+  "id": "L5-A",
+  "owner": "L05"
+ },
+ {
+  "id": "L5-B",
+  "owner": "L05"
+ },
+ {
+  "id": "L5-C",
+  "owner": "L05"
+ },
+ {
+  "id": "L5-D",
+  "owner": "L05"
+ },
+ {
+  "id": "L5-E",
+  "owner": "L05"
+ },
+ {
+  "id": "L6-A",
+  "owner": "L06a/L06b"
+ },
+ {
+  "id": "L6-B",
+  "owner": "L06a/L06b"
+ },
+ {
+  "id": "L6-C",
+  "owner": "L06a/L06b"
+ },
+ {
+  "id": "L6-D",
+  "owner": "L06a/L06b"
+ },
+ {
+  "id": "L6-E",
+  "owner": "L06a/L06b"
+ },
+ {
+  "id": "L6-F",
+  "owner": "L06a/L06b"
+ },
+ {
+  "id": "L6-G",
+  "owner": "L06a/L06b"
+ },
+ {
+  "id": "L6-H",
+  "owner": "L06a/L06b"
+ },
+ {
+  "id": "L7-A",
+  "owner": "L07"
+ },
+ {
+  "id": "L7-B",
+  "owner": "L07"
+ },
+ {
+  "id": "L7-C",
+  "owner": "L07"
+ },
+ {
+  "id": "L7-D",
+  "owner": "L07"
+ },
+ {
+  "id": "L7-E",
+  "owner": "L07"
+ },
+ {
+  "id": "L8-A",
+  "owner": "L08a/L08b"
+ },
+ {
+  "id": "L8-B",
+  "owner": "L08a/L08b"
+ },
+ {
+  "id": "L8-C",
+  "owner": "L08a/L08b"
+ },
+ {
+  "id": "L8-D",
+  "owner": "L08a/L08b"
+ },
+ {
+  "id": "L8-E",
+  "owner": "L08a/L08b"
+ },
+ {
+  "id": "L8-F",
+  "owner": "L08a/L08b"
+ },
+ {
+  "id": "L8-G",
+  "owner": "L08a/L08b"
+ },
+ {
+  "id": "L8-H",
+  "owner": "L08a/L08b"
+ },
+ {
+  "id": "L8-I",
+  "owner": "L08a/L08b"
+ },
+ {
+  "id": "L8-J",
+  "owner": "L08a/L08b"
+ },
+ {
+  "id": "L8-K",
+  "owner": "L08a/L08b"
+ },
+ {
+  "id": "L9-A",
+  "owner": "L09"
+ },
+ {
+  "id": "L9-B",
+  "owner": "L09"
+ },
+ {
+  "id": "L9-C",
+  "owner": "L09"
+ },
+ {
+  "id": "L9-D",
+  "owner": "L09"
+ },
+ {
+  "id": "L9-E",
+  "owner": "L09"
+ },
+ {
+  "id": "L9-F",
+  "owner": "L09"
+ },
+ {
+  "id": "L9-G",
+  "owner": "L09"
+ },
+ {
+  "id": "L10-A",
+  "owner": "L10a/L10b/L10c"
+ },
+ {
+  "id": "L10-B",
+  "owner": "L10a/L10b/L10c"
+ },
+ {
+  "id": "L10-C",
+  "owner": "L10a/L10b/L10c"
+ },
+ {
+  "id": "L10-D",
+  "owner": "L10a/L10b/L10c"
+ },
+ {
+  "id": "L10-E",
+  "owner": "L10a/L10b/L10c"
+ },
+ {
+  "id": "L10-F",
+  "owner": "L10a/L10b/L10c"
+ },
+ {
+  "id": "L10-G",
+  "owner": "L10a/L10b/L10c"
+ },
+ {
+  "id": "L10-H",
+  "owner": "L10a/L10b/L10c"
+ },
+ {
+  "id": "L10-I",
+  "owner": "L10a/L10b/L10c"
+ },
+ {
+  "id": "L10-J",
+  "owner": "L10a/L10b/L10c"
+ }
+];
+
+export type RequiredPathRow = { path: string; status: string; suite: string };
+export const REQUIRED_PATHS: RequiredPathRow[] = [
+ {
+  "path": "packages/llm-mesh/tests/enrollment/seat-bundle.test.ts",
+  "status": "present",
+  "suite": "make test-llm-mesh"
+ },
+ {
+  "path": "packages/llm-mesh/tests/enrollment/cli-seat-import.test.ts",
+  "status": "present",
+  "suite": "make test-llm-mesh"
+ },
+ {
+  "path": "packages/llm-mesh/tests/service/external-seat-authority.test.ts",
+  "status": "present",
+  "suite": "make test-llm-mesh"
+ },
+ {
+  "path": "packages/llm-mesh/tests/service/seat-projection-delivery.test.ts",
+  "status": "present",
+  "suite": "make test-llm-mesh"
+ },
+ {
+  "path": "packages/llm-mesh/tests/service/local-account-transport-service.test.ts",
+  "status": "present",
+  "suite": "make test-llm-mesh"
+ },
+ {
+  "path": "packages/llm-mesh/tests/node/cli-seat-store-reader.test.ts",
+  "status": "present",
+  "suite": "make test-llm-mesh"
+ },
+ {
+  "path": "packages/llm-mesh/tests/node/codex-seat-store-backend.test.ts",
+  "status": "missing",
+  "suite": "make test-llm-mesh"
+ },
+ {
+  "path": "packages/llm-mesh/tests/node/mesh-release-invariants.test.ts",
+  "status": "present",
+  "suite": "make test-llm-mesh"
+ },
+ {
+  "path": "packages/llm-mesh/tests/transport/codex-runtime-client.test.ts",
+  "status": "present",
+  "suite": "make test-llm-mesh"
+ },
+ {
+  "path": "packages/llm-mesh/tests/transport/codex-runtime-wire.test.ts",
+  "status": "present",
+  "suite": "make test-llm-mesh"
+ },
+ {
+  "path": "packages/llm-mesh/tests/transport/codex-usage-reader.test.ts",
+  "status": "missing",
+  "suite": "make test-llm-mesh"
+ },
+ {
+  "path": "api/tests/unit/provider-credentials.test.ts",
+  "status": "present",
+  "suite": "make test-api-unit"
+ },
+ {
+  "path": "api/tests/unit/llm-runtime-stream.test.ts",
+  "status": "present",
+  "suite": "make test-api-unit"
+ },
+ {
+  "path": "api/tests/unit/llm-account-transports.test.ts",
+  "status": "present",
+  "suite": "make test-api-unit"
+ },
+ {
+  "path": "api/tests/unit/llm-seat-projection-import.test.ts",
+  "status": "present",
+  "suite": "make test-api-unit"
+ },
+ {
+  "path": "api/tests/unit/llm-seat-delivery-auth.test.ts",
+  "status": "present",
+  "suite": "make test-api-unit"
+ },
+ {
+  "path": "api/tests/unit/ci-seat-runtime.test.ts",
+  "status": "missing",
+  "suite": "make test-api-unit"
+ },
+ {
+  "path": "api/tests/unit/ci-seat-admission.test.ts",
+  "status": "missing",
+  "suite": "make test-api-unit"
+ },
+ {
+  "path": "api/tests/unit/ci-deterministic-provider.test.ts",
+  "status": "missing",
+  "suite": "make test-api-unit"
+ },
+ {
+  "path": "api/tests/api/llm-seat-delivery.test.ts",
+  "status": "present",
+  "suite": "make test-api-endpoints"
+ },
+ {
+  "path": "api/tests/api/ci-seat-runtime.test.ts",
+  "status": "missing",
+  "suite": "make test-api-endpoints"
+ },
+ {
+  "path": "api/tests/api/ci-incidental-inference.test.ts",
+  "status": "missing",
+  "suite": "make test-api-endpoints"
+ },
+ {
+  "path": "api/tests/smoke/restore-validation.test.ts",
+  "status": "present",
+  "suite": "make test-api-smoke"
+ },
+ {
+  "path": "api/tests/ai/chat-sync.test.ts",
+  "status": "present",
+  "suite": "make test-api-ai"
+ },
+ {
+  "path": "api/tests/ai/chat-tools.test.ts",
+  "status": "present",
+  "suite": "make test-api-ai"
+ },
+ {
+  "path": "api/tests/ai/executive-summary-auto.test.ts",
+  "status": "present",
+  "suite": "make test-api-ai"
+ },
+ {
+  "path": "api/tests/ai/executive-summary-sync.test.ts",
+  "status": "present",
+  "suite": "make test-api-ai"
+ },
+ {
+  "path": "api/tests/ai/company-enrichment-sync.test.ts",
+  "status": "present",
+  "suite": "make test-api-ai"
+ },
+ {
+  "path": "api/tests/ai/initiative-generation-sync.test.ts",
+  "status": "present",
+  "suite": "make test-api-ai"
+ },
+ {
+  "path": "api/tests/ai/initiative-generation-async.test.ts",
+  "status": "present",
+  "suite": "make test-api-ai"
+ },
+ {
+  "path": "api/tests/ai/document-summary-live.test.ts",
+  "status": "missing",
+  "suite": "make test-api-ai"
+ },
+ {
+  "path": "api/tests/ai/comment-assistant.test.ts",
+  "status": "present",
+  "suite": "make test-api-ai"
+ },
+ {
+  "path": "api/tests/ai/documents-tool.test.ts",
+  "status": "present",
+  "suite": "make test-api-ai"
+ },
+ {
+  "path": "api/tests/ai/gw-native-qualification.test.ts",
+  "status": "present",
+  "suite": "make test-api-ai"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/github-seat-store.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/seat-writer-isolation.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/seat-enrollment.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/seat-reenroll.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/seat-refresh.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/seat-quota-probe.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/seat-admission.test.ts",
+  "status": "present",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/seat-workflow-contract.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/seat-secret-hygiene.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/seat-degraded-binding.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/seat-crash-recovery.test.ts",
+  "status": "present",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/seat-ci-plan.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/seat-ci-artifacts.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/seat-ci-receipts.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/ci-credit-broker.test.ts",
+  "status": "present",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/ci-credit-budget.test.ts",
+  "status": "present",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/ci-seat-broker.test.ts",
+  "status": "present",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/ci-seat-promote-control.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/ci-seat-topology.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/ci-seat-set-mode.test.ts",
+  "status": "present",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/ci-seat-audit-secret-names.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/ci-search-relay.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/e2e/github-seat-roundtrip.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "scripts/ci/seat-custody/tests/e2e/seat-ci-bootstrap.test.ts",
+  "status": "missing",
+  "suite": "make test-ci-seat-contract"
+ },
+ {
+  "path": "e2e/tests/00-ci-seat-mode.spec.ts",
+  "status": "missing",
+  "suite": "make test-e2e"
+ },
+ {
+  "path": "e2e/tests/03-chat.spec.ts",
+  "status": "present",
+  "suite": "make test-e2e"
+ },
+ {
+  "path": "e2e/tests/09-chat-multitool-demo.spec.ts",
+  "status": "present",
+  "suite": "make test-e2e"
+ },
+ {
+  "path": "packages/cluster-mesh/tests/integrations/llm-surface.spec.ts",
+  "status": "present",
+  "suite": "make test-cluster-mesh"
+ },
+ {
+  "path": "packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts",
+  "status": "present",
+  "suite": "make test-cluster-mesh"
+ }
+];
+
+export type Section64Row = { id: string; owner: string; destinations: string[]; tests: string[] };
+export const SECTION_64_ROWS: Section64Row[] = [
+ {
+  "id": "L8-A",
+  "owner": "L08b",
+  "destinations": [
+   "D/workflow-contract.test.mjs"
+  ],
+  "tests": [
+   "T5-N1"
+  ]
+ },
+ {
+  "id": "L8-B",
+  "owner": "L08a",
+  "destinations": [
+   "D/report-branch-integrity.test.mjs",
+   "D/workflow-contract.test.mjs"
+  ],
+  "tests": [
+   "T5-C1"
+  ]
+ },
+ {
+  "id": "L8-C",
+  "owner": "L08a/b",
+  "destinations": [
+   "D/report-format.test.mjs",
+   "D/report-transfer.test.mjs"
+  ],
+  "tests": [
+   "T5-C3"
+  ]
+ },
+ {
+  "id": "L8-D",
+  "owner": "L08a",
+  "destinations": [
+   "D/state.test.mjs",
+   "D/report-branch-integrity.test.mjs"
+  ],
+  "tests": [
+   "T5-C4",
+   "T6-C2"
+  ]
+ },
+ {
+  "id": "L8-E",
+  "owner": "L08b",
+  "destinations": [
+   "D/findings.test.mjs",
+   "D/state.test.mjs"
+  ],
+  "tests": [
+   "T5-N1"
+  ]
+ },
+ {
+  "id": "L8-F",
+  "owner": "L08a/b",
+  "destinations": [
+   "D/scan-admission.test.mjs",
+   "D/state.test.mjs"
+  ],
+  "tests": [
+   "T5-C4"
+  ]
+ },
+ {
+  "id": "L8-G",
+  "owner": "L08a",
+  "destinations": [
+   "D/enable.test.mjs",
+   "D/control-permit.test.mjs",
+   "D/control-permit-channel.test.mjs",
+   "D/control-clock.test.mjs",
+   "D/cancellation.test.mjs"
+  ],
+  "tests": [
+   "T5-C6",
+   "T6-C1"
+  ]
+ },
+ {
+  "id": "L8-H",
+  "owner": "L08a/b",
+  "destinations": [
+   "D/resource-envelope.test.mjs",
+   "D/workflow-contract.test.mjs"
+  ],
+  "tests": [
+   "T6-B1"
+  ]
+ },
+ {
+  "id": "L8-I",
+  "owner": "L08a",
+  "destinations": [
+   "D/deadline-report.test.mjs",
+   "D/report-format.test.mjs"
+  ],
+  "tests": [
+   "T5-C1"
+  ]
+ },
+ {
+  "id": "L8-J",
+  "owner": "L08a",
+  "destinations": [
+   "D/control-provisioning.test.mjs",
+   "D/control-permit-channel.test.mjs",
+   "D/control-clock.test.mjs"
+  ],
+  "tests": [
+   "T5-C1",
+   "T6-C1"
+  ]
+ },
+ {
+  "id": "L8-K",
+  "owner": "L08a",
+  "destinations": [
+   "D/collector-provenance.test.mjs",
+   "D/control-image-publish.test.mjs",
+   "D/workflow-contract.test.mjs"
+  ],
+  "tests": [
+   "T5-C1"
+  ]
+ },
+ {
+  "id": "L9-A",
+  "owner": "L09",
+  "destinations": [
+   "D/daily-review.test.mjs",
+   "D/workflow-contract.test.mjs"
+  ],
+  "tests": [
+   "T5-N1",
+   "T6-C1"
+  ]
+ },
+ {
+  "id": "L9-B",
+  "owner": "L09",
+  "destinations": [
+   "D/daily-review.test.mjs",
+   "C/custody-state-store.test.ts"
+  ],
+  "tests": [
+   "T5-N2",
+   "T6-C2"
+  ]
+ },
+ {
+  "id": "L9-C",
+  "owner": "L09 + L06a",
+  "destinations": [
+   "C/security-roster.test.ts",
+   "C/seat-admission.test.ts"
+  ],
+  "tests": [
+   "T5-N2",
+   "T6-C2"
+  ]
+ },
+ {
+  "id": "L9-D",
+  "owner": "L09",
+  "destinations": [
+   "D/daily-review.test.mjs",
+   "C/ci-seat-broker.test.ts",
+   "C/seat-secret-hygiene.test.ts"
+  ],
+  "tests": [
+   "T5-C3"
+  ]
+ },
+ {
+  "id": "L9-E",
+  "owner": "L09",
+  "destinations": [
+   "D/daily-review.test.mjs",
+   "D/report-format.test.mjs"
+  ],
+  "tests": [
+   "T5-C3"
+  ]
+ },
+ {
+  "id": "L9-F",
+  "owner": "L09 + L06a/b",
+  "destinations": [
+   "D/daily-review.test.mjs",
+   "C/seat-public-execution.test.ts"
+  ],
+  "tests": [
+   "T5-N2",
+   "T6-P1"
+  ]
+ },
+ {
+  "id": "L9-G",
+  "owner": "L09",
+  "destinations": [
+   "C/seat-admission.test.ts",
+   "C/custody-state-store.test.ts",
+   "D/cancellation.test.mjs"
+  ],
+  "tests": [
+   "T5-C2",
+   "T6-C2"
+  ]
+ },
+ {
+  "id": "L10-A",
+  "owner": "L10a/b",
+  "destinations": [
+   "D/repair-policy.test.mjs",
+   "D/publish.test.mjs"
+  ],
+  "tests": [
+   "T5-N3"
+  ]
+ },
+ {
+  "id": "L10-B",
+  "owner": "L10a/b",
+  "destinations": [
+   "D/repair-policy.test.mjs",
+   "D/isolation.test.mjs"
+  ],
+  "tests": [
+   "T5-C1"
+  ]
+ },
+ {
+  "id": "L10-C",
+  "owner": "L10a/b",
+  "destinations": [
+   "D/readiness.test.mjs",
+   "D/state.test.mjs"
+  ],
+  "tests": [
+   "T5-N1"
+  ]
+ },
+ {
+  "id": "L10-D",
+  "owner": "L10a/b",
+  "destinations": [
+   "D/review.test.mjs",
+   "D/isolation.test.mjs"
+  ],
+  "tests": [
+   "T5-C5"
+  ]
+ },
+ {
+  "id": "L10-E",
+  "owner": "L10a/b",
+  "destinations": [
+   "D/publish.test.mjs",
+   "D/ci-trigger-bridge.test.mjs",
+   "C/seat-ci-receipts.test.ts"
+  ],
+  "tests": [
+   "T5-C5",
+   "T6-R1"
+  ]
+ },
+ {
+  "id": "L10-F",
+  "owner": "L10a/b",
+  "destinations": [
+   "D/merge.test.mjs",
+   "D/review.test.mjs",
+   "D/readiness.test.mjs"
+  ],
+  "tests": [
+   "T5-C5",
+   "T6-R1"
+  ]
+ },
+ {
+  "id": "L10-G",
+  "owner": "L10a/b",
+  "destinations": [
+   "D/limits.test.mjs",
+   "C/custody-state-store.test.ts"
+  ],
+  "tests": [
+   "T5-N2",
+   "T6-C2"
+  ]
+ },
+ {
+  "id": "L10-H",
+  "owner": "L10a/b",
+  "destinations": [
+   "D/post-merge-effects.test.mjs",
+   "D/merge.test.mjs"
+  ],
+  "tests": [
+   "T5-N4",
+   "T6-R1"
+  ]
+ },
+ {
+  "id": "L10-I",
+  "owner": "L10c",
+  "destinations": [
+   "D/workflow-contract.test.mjs",
+   "D/resource-envelope.test.mjs",
+   "D/post-merge-effects.test.mjs"
+  ],
+  "tests": [
+   "T5-C1",
+   "T6-B1"
+  ]
+ },
+ {
+  "id": "L10-J",
+  "owner": "L10a",
+  "destinations": [
+   "D/control-provisioning.test.mjs",
+   "D/publish.test.mjs",
+   "D/review.test.mjs",
+   "D/merge.test.mjs",
+   "D/cancellation.test.mjs"
+  ],
+  "tests": [
+   "T5-C5",
+   "T6-C1"
+  ]
+ }
+];
+
+export const L03A_TEST_IDS: Record<string, string[]> = {
+ "T5-C1": [
+  "C/seat-environment-custody.test.ts",
+  "C/seat-workflow-contract.test.ts"
+ ],
+ "T5-C2": [
+  "C/seat-environment-custody.test.ts",
+  "C/seat-workflow-contract.test.ts",
+  "C/e2e/github-seat-roundtrip.test.ts"
+ ],
+ "T5-C3": [
+  "C/ci-seat-broker.test.ts",
+  "C/seat-ci-artifacts.test.ts",
+  "C/seat-secret-hygiene.test.ts"
+ ],
+ "T5-C6": [
+  "D/control-provisioning.test.mjs",
+  "D/control-permit-channel.test.mjs",
+  "D/control-clock.test.mjs",
+  "C/ci-seat-topology.test.ts"
+ ],
+ "T6-C1": [
+  "C/seat-environment-custody.test.ts",
+  "C/seat-workflow-contract.test.ts"
+ ],
+ "T6-C2": [
+  "C/custody-state-store.test.ts",
+  "C/e2e/github-seat-roundtrip.test.ts"
+ ],
+ "T6-C3": [
+  "D/control-provisioning.test.mjs",
+  "D/control-permit-channel.test.mjs",
+  "D/control-clock.test.mjs",
+  "C/ci-seat-topology.test.ts"
+ ],
+ "T6-M1": [
+  "C/acceptance-disposition.test.ts",
+  "D/control-provisioning.test.mjs"
+ ],
+ "T6-D1": [
+  "C/owner-procedure-contract.test.ts"
+ ]
+};
+
+export type CredentialRow = { credential: string; owner: string; expiry: string; copies: string[]; loaderKind: string };
+export const CREDENTIAL_ROWS: CredentialRow[] = [
+ {
+  "credential": "SEAT_ENVIRONMENT_WRITER_TOKEN",
+  "owner": "ACT-L03a",
+  "expiry": "<=90d",
+  "copies": [
+   "security-seat-writer/SEAT_ENVIRONMENT_WRITER_TOKEN"
+  ],
+  "loaderKind": "seat-environment-writer"
+ },
+ {
+  "credential": "SECURITY_CONTROL_READER_TOKEN",
+  "owner": "ACT-L08a",
+  "expiry": "one-rotation-epoch-all-copies",
+  "copies": [
+   "twelve §4.1 environments"
+  ],
+  "loaderKind": "control-reader"
+ },
+ {
+  "credential": "SECURITY_REPORT_DEPLOY_KEY",
+  "owner": "ACT-L08a",
+  "expiry": "<=90d",
+  "copies": [
+   "security-report-publish/SECURITY_REPORT_DEPLOY_KEY"
+  ],
+  "loaderKind": "report-deploy-key"
+ },
+ {
+  "credential": "SECURITY_REVIEW_ATTESTOR_TOKEN",
+  "owner": "ACT-L10a",
+  "expiry": "<=90d",
+  "copies": [
+   "security-review-attest/SECURITY_REVIEW_ATTESTOR_TOKEN"
+  ],
+  "loaderKind": "review-attestor"
+ },
+ {
+  "credential": "SECURITY_CONTROL_PERMIT_SIGNING_KEY_PUBLIC",
+  "owner": "ACT-L08a",
+  "expiry": "<=90d-or-compromise",
+  "copies": [
+   "security-daily-control/SECURITY_CONTROL_PERMIT_SIGNING_KEY_PUBLIC"
+  ],
+  "loaderKind": "scan-permit-signer"
+ },
+ {
+  "credential": "SECURITY_CONTROL_PERMIT_SIGNING_KEY_CUSTODY",
+  "owner": "ACT-L03a",
+  "expiry": "<=90d-or-compromise",
+  "copies": [
+   "security-nightly/SECURITY_CONTROL_PERMIT_SIGNING_KEY_CUSTODY"
+  ],
+  "loaderKind": "seat-permit-signer"
+ },
+ {
+  "credential": "SEAT_SETTLEMENT_DECRYPTION_KEY",
+  "owner": "ACT-L03a",
+  "expiry": "<=90d-or-compromise",
+  "copies": [
+   "security-seat-writer/SEAT_SETTLEMENT_DECRYPTION_KEY"
+  ],
+  "loaderKind": "seat-settlement-recipient"
+ },
+ {
+  "credential": "SEAT_SUCCESSOR_RECOVERY_KEY",
+  "owner": "ACT-L03a",
+  "expiry": "<=90d-or-compromise",
+  "copies": [
+   "security-seat-writer/SEAT_SUCCESSOR_RECOVERY_KEY"
+  ],
+  "loaderKind": "seat-successor-recipient"
+ },
+ {
+  "credential": "SEAT_*/SEAT_CANDIDATE_*/SEAT_USE_* slot manifest",
+  "owner": "enrollment owner + ACT-L03a",
+  "expiry": "provider-lifecycle",
+  "copies": [
+   "security-seat-maintenance canonical/candidate; security-nightly projections"
+  ],
+  "loaderKind": "five-CLI enrollment/refresh loader"
+ },
+ {
+  "credential": "per-job GITHUB_TOKEN / scanner OIDC",
+  "owner": "respective workflow maintainer",
+  "expiry": "end-of-job",
+  "copies": [
+   "no stored copy"
+  ],
+  "loaderKind": "none-platform-delivery"
+ }
+];
+
+export const LOADER_KINDS = ['seat-environment-writer', 'control-reader', 'report-deploy-key', 'review-attestor',
+  'scan-permit-signer', 'seat-permit-signer', 'seat-settlement-recipient', 'seat-successor-recipient',
+  'five-CLI enrollment/refresh loader', 'none-platform-delivery'];
+
+export function validateAcceptanceDisposition(repoRoot: string): { ids: number; paths: number; rows: number } {
+  if (ACCEPTANCE_IDS.length !== 69) throw new Error('acceptance-id-count');
+  if (new Set(ACCEPTANCE_IDS.map(a => a.id)).size !== 69) throw new Error('acceptance-id-duplicate');
+  for (const a of ACCEPTANCE_IDS) if (!a.owner) throw new Error('acceptance-owner-missing:' + a.id);
+  if (REQUIRED_PATHS.length !== 63) throw new Error('required-path-count');
+  for (const p of REQUIRED_PATHS) {
+    if (!p.path || !p.suite) throw new Error('path-disposition-missing:' + p.path);
+    if (p.status === 'present' && !existsSync(join(repoRoot, p.path))) throw new Error('present-path-absent:' + p.path);
+  }
+  if (SECTION_64_ROWS.length !== 28) throw new Error('section64-row-count');
+  for (const row of SECTION_64_ROWS) {
+    if (!row.owner || row.destinations.length === 0) throw new Error('section64-row-incomplete:' + row.id);
+  }
+  for (const [id, dests] of Object.entries(L03A_TEST_IDS)) {
+    for (const d of dests) {
+      if (!existsSync(join(repoRoot, resolveDestination(d)))) throw new Error('l03a-destination-missing:' + id + ':' + d);
+    }
+  }
+  for (const row of CREDENTIAL_ROWS) {
+    if (!row.owner || !row.expiry || row.copies.length === 0 || !row.loaderKind) throw new Error('credential-row-incomplete:' + row.credential);
+    if (!LOADER_KINDS.includes(row.loaderKind)) throw new Error('loader-kind-unknown:' + row.loaderKind);
+  }
+  return { ids: ACCEPTANCE_IDS.length, paths: REQUIRED_PATHS.length, rows: SECTION_64_ROWS.length };
+}

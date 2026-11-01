@@ -300,4 +300,16 @@ describe('seat-bundle envelope', () => {
       productAccountSource: 'antigravity',
     });
   });
+
+  it('accepts the full L1 consumer seat shape with required provider expiry', () => {
+    const bundle = consumer('claude');
+    const result = validateSeatBundle(
+      {
+        ...bundle,
+        lifecycle: { ...bundle.lifecycle, providerExpiry: '2099-01-01T00:00:00Z' },
+      },
+      { ownerScope: 'owner-synth-01', trustedAuthority: 'consumer' },
+    );
+    expect(result.ok).toBe(true);
+  });
 });
