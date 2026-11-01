@@ -5,10 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq, inArray } from 'drizzle-orm';
 
 import { app } from '../../../src/app';
-import { env } from '../../../src/config/env';
 import { db } from '../../../src/db/client';
 import { connectorTenantEnrollments } from '../../../src/db/control-schema';
-import { serviceClients, tenants } from '../../../src/db/schema';
+import { serviceClients } from '../../../src/db/schema';
+import { createCmTenant } from '../../../src/services/identity/cm-tenancy';
+import { cmDeleteTenants } from '../../utils/cm-identity-test-store';
 import { createJwksAdapter } from '../../../src/services/auth/jwks-adapter';
 
 // ARCH-11 G1c — S2S OBO mint end-to-end via the real token endpoint (spec §2.2). Proves the
@@ -32,7 +33,6 @@ const ORG_C = 'arch11g1c-obo-org-c';
 const TEST_ORGS = [ORG_A, ORG_B, ORG_C];
 const CONNECTOR = 'arch11g1c-obo-connector';
 
-const originalMode = env.TENANT_RESOLUTION_MODE;
 
 const seedServiceClient = async (clientId: string, secret: string, tenantId: string): Promise<void> => {
   const now = new Date();
@@ -89,7 +89,7 @@ describe('ARCH-11 G1c — S2S OBO mint (token endpoint)', () => {
   beforeEach(async () => {
     await ensureActiveSigningKey();
     for (const org of TEST_ORGS) {
-      await db.insert(tenants).values({ id: org, name: org, status: 'active' }).onConflictDoNothing();
+      await createCmTenant({ tenantId: org, slug: org, status: 'active' }).catch(() => {});
     }
     await seedServiceClient(SINGLE_CLIENT_ID, SINGLE_SECRET, ORG_A);
     await seedServiceClient(MULTI_CLIENT_ID, MULTI_SECRET, ORG_A);
@@ -100,36 +100,32 @@ describe('ARCH-11 G1c — S2S OBO mint (token endpoint)', () => {
   });
 
   afterEach(async () => {
-    env.TENANT_RESOLUTION_MODE = originalMode;
     await db.delete(connectorTenantEnrollments).where(inArray(connectorTenantEnrollments.principalSub, TEST_CLIENTS));
     await db.delete(serviceClients).where(inArray(serviceClients.clientId, TEST_CLIENTS));
-    await db.delete(tenants).where(inArray(tenants.id, TEST_ORGS));
+    await cmDeleteTenants(TEST_ORGS);
   });
 
-  it('DEFAULT (shadow): mint carries NO tid even with a `tenant=` param (byte-identical)', async () => {
-    env.TENANT_RESOLUTION_MODE = 'shadow';
+  // Lot A4: TENANT_RESOLUTION_MODE is gone — resolution is always strict via the
+  // CM registry, so a supplied authorized tenant always binds tid = tenant slug.
+  it('single-org with a `tenant=` param binds the fixed tenant → tid = fixed', async () => {
     const response = await mint(SINGLE_CLIENT_ID, SINGLE_SECRET, { tenant: ORG_A });
     expect(response.status).toBe(200);
-    expect(await tidOf(response)).toBeUndefined();
+    expect(await tidOf(response)).toBe(ORG_A);
   });
 
-  it('strict single-org: an omitted tenant binds the fixed tenant → tid = fixed', async () => {
-    env.TENANT_RESOLUTION_MODE = 'strict';
+  it('single-org: an omitted tenant binds the fixed tenant → tid = fixed', async () => {
     const response = await mint(SINGLE_CLIENT_ID, SINGLE_SECRET);
     expect(response.status).toBe(200);
     expect(await tidOf(response)).toBe(ORG_A);
   });
 
-  it('strict single-org: a wrong supplied tenant is rejected invalid_target', async () => {
-    env.TENANT_RESOLUTION_MODE = 'strict';
+  it('single-org: a wrong supplied tenant is rejected invalid_target', async () => {
     const response = await mint(SINGLE_CLIENT_ID, SINGLE_SECRET, { tenant: ORG_B });
     expect(response.status).toBe(400);
     expect(((await response.json()) as { error: string }).error).toBe('invalid_target');
   });
 
-  it('strict multi-org (NON-VACUOUS ≥2-org): tenant selects the authorized org; out-of-set + absent fail closed', async () => {
-    env.TENANT_RESOLUTION_MODE = 'strict';
-
+  it('multi-org (NON-VACUOUS ≥2-org): tenant selects the authorized org; out-of-set + absent fail closed', async () => {
     // fixed org-A → authorized.
     expect(await tidOf(await mint(MULTI_CLIENT_ID, MULTI_SECRET, { tenant: ORG_A }))).toBe(ORG_A);
     // enrolled org-B → authorized.
