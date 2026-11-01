@@ -7,6 +7,14 @@ const request = (f: Awaited<ReturnType<typeof refreshFixture>>, endpoint: string
     headers: { 'content-type': 'application/x-www-form-urlencoded', authorization: basicAuth('example-rp', 'client-secret') } });
 
 describe('opaque refresh revoke and introspection', () => {
+  it('should prevent caching revoke errors', async () => {
+    const f = await refreshFixture();
+    const response = await f.router.request('/oauth/revoke', { method: 'POST', body: new URLSearchParams() });
+    expect(response.status).toBe(400);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(await response.json()).toMatchObject({ error: 'invalid_request', error_description: expect.any(String) });
+  });
+
   it('should introspect only the active leaf and revoke via any spent generation', async () => {
     const f = await refreshFixture();
     const first = await (await f.issue()).json();
