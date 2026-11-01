@@ -61,6 +61,7 @@ RETURNS void LANGUAGE plpgsql AS $$
 DECLARE f text;
 BEGIN
   PERFORM 1 FROM public.users WHERE id = p_user FOR UPDATE;
+  DELETE FROM public.authorization_codes WHERE user_id = p_user AND 'offline_access' = ANY(string_to_array(scope, ' '));
   FOR f IN SELECT id FROM public.oauth_refresh_tokens
     WHERE user_id = p_user AND generation = 0 ORDER BY id FOR UPDATE LOOP
     PERFORM public.oauth_refresh_revoke_family(f, p_reason, clock_timestamp()::timestamp);
@@ -92,10 +93,11 @@ BEGIN
       AND NEW.token_endpoint_auth_method IS NOT DISTINCT FROM OLD.token_endpoint_auth_method
       THEN RETURN NEW; END IF;
   END IF;
-  FOR u IN SELECT DISTINCT user_id FROM public.oauth_refresh_tokens
-    WHERE client_id = OLD.client_id ORDER BY user_id LOOP
+  FOR u IN SELECT user_id FROM public.oauth_refresh_tokens WHERE client_id = OLD.client_id
+    UNION SELECT user_id FROM public.authorization_codes WHERE client_id = OLD.client_id ORDER BY user_id LOOP
     PERFORM 1 FROM public.users WHERE id = u FOR UPDATE;
   END LOOP;
+  DELETE FROM public.authorization_codes WHERE client_id = OLD.client_id AND 'offline_access' = ANY(string_to_array(scope, ' '));
   PERFORM public.oauth_refresh_revoke_family(id, 'policy_denied', clock_timestamp()::timestamp)
     FROM public.oauth_refresh_tokens WHERE client_id = OLD.client_id AND generation = 0 ORDER BY id;
   IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
@@ -103,6 +105,59 @@ BEGIN
 END $$;
 CREATE TRIGGER oauth_refresh_client_invalidate BEFORE UPDATE OR DELETE ON public.oauth_clients
   FOR EACH ROW EXECUTE FUNCTION public.oauth_refresh_client_invalidate();
+--> statement-breakpoint
+CREATE FUNCTION public.oauth_refresh_user_invalidate()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    PERFORM public.oauth_refresh_revoke_user(OLD.id, 'security_event');
+    RETURN OLD;
+  END IF;
+  IF NEW.account_status IS DISTINCT FROM OLD.account_status
+    OR (OLD.email_verified AND NOT NEW.email_verified)
+    OR to_jsonb(NEW)->'security_generation' IS DISTINCT FROM to_jsonb(OLD)->'security_generation'
+    OR to_jsonb(NEW)->'auth_security_generation' IS DISTINCT FROM to_jsonb(OLD)->'auth_security_generation'
+    THEN PERFORM public.oauth_refresh_revoke_user(OLD.id, 'security_event'); END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER oauth_refresh_user_invalidate BEFORE UPDATE OR DELETE ON public.users
+  FOR EACH ROW EXECUTE FUNCTION public.oauth_refresh_user_invalidate();
+--> statement-breakpoint
+CREATE FUNCTION public.oauth_refresh_membership_invalidate()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    PERFORM public.oauth_refresh_revoke_user(OLD.user_id, 'policy_denied');
+    RETURN OLD;
+  END IF;
+  IF OLD.status = 'approved' AND (NEW.status <> 'approved' OR NEW.tenant_id <> OLD.tenant_id OR NEW.user_id <> OLD.user_id)
+    THEN PERFORM public.oauth_refresh_revoke_user(OLD.user_id, 'policy_denied'); END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER oauth_refresh_membership_invalidate BEFORE UPDATE OR DELETE ON public.tenant_memberships
+  FOR EACH ROW EXECUTE FUNCTION public.oauth_refresh_membership_invalidate();
+--> statement-breakpoint
+CREATE FUNCTION public.oauth_refresh_consent_invalidate()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.scopes @> OLD.scopes AND NEW.offline_scopes @> OLD.offline_scopes
+      AND NEW.approved_resources @> OLD.approved_resources
+      AND NEW.offline_grant_id IS NOT DISTINCT FROM OLD.offline_grant_id
+      AND NEW.offline_issuer IS NOT DISTINCT FROM OLD.offline_issuer
+      AND NEW.offline_consented_at IS NOT DISTINCT FROM OLD.offline_consented_at
+      AND (NEW.default_audience_approved OR NOT OLD.default_audience_approved)
+      THEN RETURN NEW; END IF;
+  END IF;
+  PERFORM 1 FROM public.users WHERE id = OLD.user_id FOR UPDATE;
+  PERFORM public.oauth_refresh_revoke_family(id, 'consent_revoked', clock_timestamp()::timestamp)
+    FROM public.oauth_refresh_tokens WHERE user_id = OLD.user_id AND client_id = OLD.client_id
+      AND coalesce(tenant_id, 'sentropic') = OLD.tenant_id AND generation = 0 ORDER BY id;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER oauth_refresh_consent_invalidate BEFORE UPDATE OR DELETE ON public.oauth_consents
+  FOR EACH ROW EXECUTE FUNCTION public.oauth_refresh_consent_invalidate();
 --> statement-breakpoint
 CREATE FUNCTION public.oauth_refresh_revoke_family(p_family text, p_reason text, p_now timestamp)
 RETURNS void LANGUAGE plpgsql AS $$
