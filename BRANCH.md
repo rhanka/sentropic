@@ -45,7 +45,7 @@
   - [ ] packages/artifacts/tests/parity-control.test.ts: targeted grants, confirmation, replay and terminal guards.
   - [ ] packages/artifacts/tests/parity-transport.test.ts: selected HTTP/MCP operations and enriched summaries.
 - [ ] **Lot 2 — Common implementation**
-  - [ ] D1 verified manifest and author file reads with separate provenance.
+  - [x] D1 verified manifest and author file reads with separate provenance (transport qualification pending).
   - [ ] D2 coordinator-bound named read grants and confirmed terminal deletion.
   - [ ] D4 get/list binding, dates, digest, URLs and optional metadata.
 - [ ] **Lot 3 — Final validation**
