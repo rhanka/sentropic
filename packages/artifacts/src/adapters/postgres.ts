@@ -106,7 +106,7 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
       const where = `WHERE storage_scope_id = $1 AND owner_id = $2 AND binding_name = $3`;
       const args = [input.storageScopeId, input.ownerId, input.bindingName];
       const found = await pool.query<{ id: string; terminal: boolean }>(
-        `SELECT id, (to_jsonb(artifacts.artifacts)->>'terminal_deleted_at') IS NOT NULL AS terminal FROM artifacts.artifacts ${where}`,
+        `SELECT id, (to_jsonb(a)->>'terminal_deleted_at') IS NOT NULL AS terminal FROM artifacts.artifacts a ${where}`,
         args,
       );
       if (found.rowCount !== 0 && found.rows[0] !== undefined) {
@@ -123,7 +123,7 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
         return { artifactId: inserted.rows[0].id, created: true };
       }
       const raced = await pool.query<{ id: string; terminal: boolean }>(
-        `SELECT id, (to_jsonb(artifacts.artifacts)->>'terminal_deleted_at') IS NOT NULL AS terminal FROM artifacts.artifacts ${where}`,
+        `SELECT id, (to_jsonb(a)->>'terminal_deleted_at') IS NOT NULL AS terminal FROM artifacts.artifacts a ${where}`,
         args,
       );
       const row = raced.rows[0];
