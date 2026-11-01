@@ -2,7 +2,10 @@ import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 import { db, pool } from '../../../src/db/client';
-import { oauthClients, oauthConsents, tenantMemberships, users } from '../../../src/db/schema';
+import { oauthClients, oauthConsents } from '../../../src/db/schema';
+import { createCmUser, updateCmUser } from '../../../src/services/identity/cm-users';
+import { createCmTenant, setCmMembershipState } from '../../../src/services/identity/cm-tenancy';
+import { cmDeleteForUsers, cmDeleteTenants, cmTable } from '../../utils/cm-identity-test-store';
 import { createOAuthRefreshAdapter } from '../../../src/services/auth/oauth-refresh-adapter';
 import { createConsentStoreAdapter } from '../../../src/services/auth/consent-store-adapter';
 import { createOauthStateStoreAdapter } from '../../../src/services/auth/oauth-state-adapter';
@@ -26,8 +29,9 @@ const lock = { clientId, userId, familyId: 'family' };
 describe('PostgreSQL refresh storage', () => {
   beforeEach(async () => {
     await db.delete(oauthClients).where(eq(oauthClients.clientId, clientId));
-    await db.delete(users).where(eq(users.id, userId));
-    await db.insert(users).values({ id: userId, email: 'refresh-pg@example.test', emailVerified: true });
+    await cmDeleteForUsers([userId]);
+    await cmDeleteTenants(['refresh-pg-tenant']);
+    await createCmUser({ userId, email: 'refresh-pg@example.test', role: 'editor', emailVerified: true, accountStatus: 'active' });
     await db.insert(oauthClients).values({
       id: clientId, clientId, name: 'Refresh PG', redirectUris: ['https://client.test/cb'],
       allowedScopes: ['immo:search', 'offline_access'], grantTypes: ['authorization_code', 'refresh_token'],
@@ -36,7 +40,7 @@ describe('PostgreSQL refresh storage', () => {
   });
   afterEach(async () => {
     await db.delete(oauthClients).where(eq(oauthClients.clientId, clientId));
-    await db.delete(users).where(eq(users.id, userId));
+    await cmDeleteForUsers([userId]);
   });
 
   it('should persist only a digest and enforce a single active leaf', async () => {
@@ -142,8 +146,8 @@ describe('PostgreSQL refresh storage', () => {
 
   it.each(['account', 'policy', 'consent'])('should invalidate %s removal without resurrection', async (kind) => {
     if (kind === 'account') {
-      await db.update(users).set({ accountStatus: 'disabled_by_admin' }).where(eq(users.id, userId));
-      await db.update(users).set({ accountStatus: 'active' }).where(eq(users.id, userId));
+      await updateCmUser(userId, { accountStatus: 'disabled_by_admin' });
+      await updateCmUser(userId, { accountStatus: 'active' });
     } else if (kind === 'policy') {
       await db.update(oauthClients).set({ grantTypes: ['authorization_code'] }).where(eq(oauthClients.clientId, clientId));
       await db.update(oauthClients).set({ grantTypes: ['authorization_code', 'refresh_token'] }).where(eq(oauthClients.clientId, clientId));
@@ -158,12 +162,15 @@ describe('PostgreSQL refresh storage', () => {
     ['rotation-first', 'revoke-first'].map((order) => ({ kind, order }))))
   ('should serialize PostgreSQL $kind revocation: $order', async ({ kind, order }) => {
     if (kind === 'consent') await db.insert(oauthConsents).values({ userId, clientId, scopes: ['offline_access'] });
-    if (kind === 'membership') await db.insert(tenantMemberships).values({ userId, tenantId: 'sentropic', status: 'approved' });
+    if (kind === 'membership') {
+      await createCmTenant({ tenantId: 'refresh-pg-tenant', slug: 'refresh-pg-tenant' });
+      await setCmMembershipState(userId, 'refresh-pg-tenant', { status: 'approved', decidedBy: userId });
+    }
     const mutation = {
-      account: "UPDATE users SET account_status='disabled_by_admin' WHERE id=$1",
+      account: `UPDATE ${cmTable('identity_user_accounts')} SET account_status='disabled' WHERE user_id=$1`,
       policy: "UPDATE oauth_clients SET grant_types=ARRAY['authorization_code'] WHERE client_id=$1",
       consent: 'DELETE FROM oauth_consents WHERE user_id=$1',
-      membership: "UPDATE tenant_memberships SET status='suspended' WHERE user_id=$1",
+      membership: `UPDATE ${cmTable('cm_tenant_memberships')} SET status='suspended' WHERE user_id=$1`,
       security: "SELECT oauth_refresh_revoke_user($1, 'security_event')",
       explicit: "SELECT oauth_refresh_revoke_user($1, 'explicit_revoke')",
     }[kind]!;
