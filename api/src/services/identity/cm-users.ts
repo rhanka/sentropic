@@ -33,6 +33,8 @@ export interface CmCreateUserInput {
   readonly emailVerified?: boolean;
   readonly accountStatus?: string;
   readonly approvalDueAt?: Date | null;
+  /** Caller-chosen id (registration binds the challenge to a temp id). */
+  readonly userId?: string;
 }
 
 export interface CmUpdateUserInput {
@@ -149,7 +151,7 @@ export const countCmUsersWithRole = async (role: string): Promise<number> => {
 export const createCmUser = async (input: CmCreateUserInput): Promise<CmUserRecord> => {
   const { core, custody } = getCmIdentity();
   const now = new Date().toISOString();
-  const userId = randomUUID();
+  const userId = input.userId ?? randomUUID();
   const appStatus = input.accountStatus ?? 'active';
   await core.accounts.createAccount({
     userId,
