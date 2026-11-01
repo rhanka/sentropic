@@ -21,6 +21,7 @@ import {
 interface CreateOauthStateStoreAdapterOptions {
   database?: typeof db;
   now?: () => Date;
+  transactionBound?: boolean;
 }
 
 export const createOauthStateStoreAdapter = (
@@ -102,7 +103,7 @@ export const createOauthStateStoreAdapter = (
         database.delete(revokedTokens).where(lt(revokedTokens.expiresAt, expiredAt)).returning(),
       ]);
 
-      const refresh = await purgeExpiredRefreshFamilies(database, expiredAt);
+      const refresh = await purgeExpiredRefreshFamilies(database, expiredAt, options.transactionBound);
       return codes.length + tokens.length + proofs.length + revoked.length + refresh;
     },
 
