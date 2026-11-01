@@ -3179,6 +3179,12 @@ jobs:
               return;
             }
             const names = new Set(['api-tool-image', 'api-image', 'ui-image', 'e2e-image', 'desktop-download', 'package-candidates']);
+            // The daily live job consumes the exact main application images.
+            // Their existing one-day retention remains the expiry boundary.
+            if (context.eventName === 'push' && context.ref === 'refs/heads/main') {
+              names.delete('api-image');
+              names.delete('ui-image');
+            }
             const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts,
               { ...context.repo, run_id: context.runId, per_page: 100 });
             for (const artifact of artifacts.filter(item => names.has(item.name))) {
