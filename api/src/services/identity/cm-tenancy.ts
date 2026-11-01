@@ -1,0 +1,229 @@
+// Lot A4: tenancy facade over the A2.2 CM stores. Replaces the legacy
+// `tenants` / `tenant_memberships` / `workspace_memberships` tables and the
+// app-side `resolve-tenant.ts` seam: resolution goes through the CM
+// `TenantResolver` (workspace -> tenant -> approved membership), and the `tid`
+// claim through the CM `TidIssuer`. No TENANT_RESOLUTION_MODE, no legacy alias.
+
+import { getCmIdentity } from './cm-identity';
+
+export interface CmTenantRecord {
+  readonly tenantId: string;
+  readonly slug: string;
+  readonly status: string;
+  readonly createdAt: Date;
+}
+
+export interface CmMembershipRecord {
+  readonly userId: string;
+  readonly tenantId: string;
+  readonly status: string;
+  readonly role: string;
+  readonly decidedBy: string | null;
+  readonly decidedAt: Date | null;
+  readonly updatedAt: Date;
+}
+
+export interface CmWorkspaceRecord {
+  readonly workspaceId: string;
+  readonly tenantId: string;
+  readonly repoIdentity: string | null;
+  readonly aliases: readonly string[];
+  readonly enrolledAt: Date;
+}
+
+export const listCmTenants = async (): Promise<CmTenantRecord[]> => {
+  const { tenancy } = getCmIdentity();
+  const rows = await tenancy.tenants.listTenants();
+  return rows.map((row) => ({
+    tenantId: row.tenantId,
+    slug: row.slug,
+    status: row.status,
+    createdAt: new Date(row.createdAt),
+  }));
+};
+
+export const findCmTenant = async (tenantId: string): Promise<CmTenantRecord | null> => {
+  const { tenancy } = getCmIdentity();
+  const row = await tenancy.tenants.findTenant(tenantId);
+  return row
+    ? { tenantId: row.tenantId, slug: row.slug, status: row.status, createdAt: new Date(row.createdAt) }
+    : null;
+};
+
+export const listCmMembershipsForUser = async (userId: string): Promise<CmMembershipRecord[]> => {
+  const { tenancy } = getCmIdentity();
+  const rows = await tenancy.memberships.listMembershipsForUser(userId);
+  return rows.map((row) => ({
+    userId: row.userId,
+    tenantId: row.tenantId,
+    status: row.status,
+    role: row.tenantRole,
+    decidedBy: row.decidedBy ?? null,
+    decidedAt: row.decidedAt ? new Date(row.decidedAt) : null,
+    updatedAt: new Date(row.updatedAt),
+  }));
+};
+
+export const listCmMembershipsForTenant = async (tenantId: string): Promise<CmMembershipRecord[]> => {
+  const { tenancy } = getCmIdentity();
+  const rows = await tenancy.memberships.listMembershipsForTenant(tenantId);
+  return rows.map((row) => ({
+    userId: row.userId,
+    tenantId: row.tenantId,
+    status: row.status,
+    role: row.tenantRole,
+    decidedBy: row.decidedBy ?? null,
+    decidedAt: row.decidedAt ? new Date(row.decidedAt) : null,
+    updatedAt: new Date(row.updatedAt),
+  }));
+};
+
+/** AuthHonoTenantPort.listApprovedTenantIds over the CM membership store. */
+export const listCmApprovedTenantIds = async (userId: string): Promise<string[]> => {
+  const memberships = await listCmMembershipsForUser(userId);
+  return memberships.filter((m) => m.status === 'approved').map((m) => m.tenantId);
+};
+
+/** AuthHonoTenantPort.isApprovedMember over the CM membership store. */
+export const isCmApprovedMember = async (userId: string, tenantId: string): Promise<boolean> => {
+  const { tenancy } = getCmIdentity();
+  return Boolean(await tenancy.memberships.findApprovedMembership(userId, tenantId));
+};
+
+export const findCmApprovedMembership = async (userId: string, tenantId: string): Promise<CmMembershipRecord | null> => {
+  const { tenancy } = getCmIdentity();
+  const row = await tenancy.memberships.findApprovedMembership(userId, tenantId);
+  return row
+    ? {
+        userId: row.userId,
+        tenantId: row.tenantId,
+        status: row.status,
+        role: row.tenantRole,
+        decidedBy: row.decidedBy ?? null,
+        decidedAt: row.decidedAt ? new Date(row.decidedAt) : null,
+        updatedAt: new Date(row.updatedAt),
+      }
+    : null;
+};
+
+export const setCmMembershipState = async (
+  userId: string,
+  tenantId: string,
+  state: { status: 'invited' | 'requested' | 'approved' | 'rejected' | 'suspended'; role?: 'member' | 'admin'; decidedBy: string },
+): Promise<CmMembershipRecord> => {
+  const { tenancy } = getCmIdentity();
+  const now = new Date().toISOString();
+  const existing = await tenancy.memberships.findMembership(userId, tenantId);
+  const row = await tenancy.memberships.setMembershipState(userId, tenantId, {
+    status: state.status,
+    tenantRole: state.role ?? existing?.tenantRole ?? 'member',
+    decidedBy: state.decidedBy,
+    decidedAt: now,
+    updatedAt: now,
+  });
+  return {
+    userId: row.userId,
+    tenantId: row.tenantId,
+    status: row.status,
+    role: row.tenantRole,
+    decidedBy: row.decidedBy ?? null,
+    decidedAt: row.decidedAt ? new Date(row.decidedAt) : null,
+    updatedAt: new Date(row.updatedAt),
+  };
+};
+
+export const upsertCmMembershipRequest = async (
+  userId: string,
+  tenantId: string,
+  role: 'member' | 'admin' = 'member',
+): Promise<CmMembershipRecord> => {
+  const { tenancy } = getCmIdentity();
+  const row = await tenancy.memberships.upsertMembershipRequest({
+    userId,
+    tenantId,
+    status: 'requested',
+    tenantRole: role,
+    updatedAt: new Date().toISOString(),
+  });
+  return {
+    userId: row.userId,
+    tenantId: row.tenantId,
+    status: row.status,
+    role: row.tenantRole,
+    decidedBy: row.decidedBy ?? null,
+    decidedAt: row.decidedAt ? new Date(row.decidedAt) : null,
+    updatedAt: new Date(row.updatedAt),
+  };
+};
+
+export const findCmWorkspace = async (workspaceId: string): Promise<CmWorkspaceRecord | null> => {
+  const { tenancy } = getCmIdentity();
+  const row = await tenancy.workspaces.findWorkspace(workspaceId);
+  return row
+    ? {
+        workspaceId: row.workspaceId,
+        tenantId: row.tenantId,
+        repoIdentity: row.repoIdentity,
+        aliases: row.aliases,
+        enrolledAt: new Date(row.enrolledAt),
+      }
+    : null;
+};
+
+export const listCmWorkspacesForTenant = async (tenantId: string): Promise<CmWorkspaceRecord[]> => {
+  const { tenancy } = getCmIdentity();
+  const rows = await tenancy.workspaces.listWorkspacesForTenant(tenantId);
+  return rows.map((row) => ({
+    workspaceId: row.workspaceId,
+    tenantId: row.tenantId,
+    repoIdentity: row.repoIdentity,
+    aliases: row.aliases,
+    enrolledAt: new Date(row.enrolledAt),
+  }));
+};
+
+export const listCmWorkspaceMembers = async (workspaceId: string) => {
+  const { tenancy } = getCmIdentity();
+  return tenancy.workspaceMembers.listWorkspaceMembers(workspaceId);
+};
+
+export const findCmWorkspaceMember = async (workspaceId: string, userId: string) => {
+  const { tenancy } = getCmIdentity();
+  return tenancy.workspaceMembers.findWorkspaceMember(workspaceId, userId);
+};
+
+export interface CmWorkspaceMembershipRecord {
+  readonly workspaceId: string;
+  readonly userId: string;
+  readonly role: 'viewer' | 'commenter' | 'editor' | 'admin';
+}
+
+/** Workspace memberships are keyed by workspace in the CM store; the per-user
+ *  enumeration is a raw read over `cm_workspace_members`. */
+export const listCmWorkspaceMembershipsForUser = async (userId: string): Promise<CmWorkspaceMembershipRecord[]> => {
+  const { pool } = await import('../../db/client');
+  const result = await pool.query(
+    `SELECT "workspace_id", "user_id", "role" FROM "cm_identity"."cm_workspace_members" WHERE "user_id" = $1`,
+    [userId],
+  );
+  return result.rows.map((row) => ({
+    workspaceId: String(row.workspace_id),
+    userId: String(row.user_id),
+    role: String(row.role) as CmWorkspaceMembershipRecord['role'],
+  }));
+};
+
+/** Authoritative workspace -> tenant resolution (replaces resolve-tenant.ts). */
+export const resolveCmTenantAuthoritatively = async (input: {
+  workspaceId: string;
+  userId: string;
+}) => {
+  const { resolver } = getCmIdentity();
+  return resolver.resolveAuthoritatively(input);
+};
+
+/** `tid` claim issuance from an approved membership (replaces the OAuth tid legs). */
+export const issueCmTid = async (input: { userId: string; tenantId: string }, now = new Date()) => {
+  const { tid } = getCmIdentity();
+  return tid.issueTid(input, now.toISOString());
+};
