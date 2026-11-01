@@ -23,7 +23,7 @@ export const MCP_AUTH_RANGE = '>=0.2.1 <0.3.0';
 export const JOSE_RANGE = '^5.10.0';
 /** Follows llm-gateway's declared optional peer range, including the Zod 4 auth-hono release.
  * Spelled as a bounded interval: the minimal release-range parser has no `||`. */
-export const AUTH_HONO_RANGE = '>=0.15.0 <0.18.0';
+export const AUTH_HONO_RANGE = '>=0.15.0 <0.19.0';
 export const COMMENTS_RANGE = '^0.3.0';
 
 export interface PeerRequirement {

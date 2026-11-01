@@ -30,6 +30,8 @@ Opted-in MCP clients can renew a one-hour access token within a rotating 15-day 
   - `packages/auth-hono/**`
   - `packages/auth-ui/**`
   - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/src/modules/catalog.ts`
+  - `packages/cluster-mesh/tests/fixtures/train.ts`
   - `packages/llm-gateway/package.json`
   - `deploy/ci/idp-identity-sync/**`
   - `deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql`
@@ -57,6 +59,9 @@ Opted-in MCP clients can renew a one-hour access token within a rotating 15-day 
 - [x] BRIR-EX2: add mandatory refresh invalidation after supported database restore targets, before reopening token traffic; impact is fail-closed restore completion; rollback restores prior target recipes.
 - [x] BRIR-EX3: retire PR #868's temporary preprod 15-day access TTL when deploying these lots, as that override requires; restore the binding 1-hour access TTL and leave prod unchanged.
 - [x] BRIR-EX4: admit auth-hono 0.18 in the two existing optional consumer peer ranges and synchronize auth package lock metadata; required by the reproduced CI frozen-install failure; no consumer source behavior changes; rollback restores the preceding peer metadata.
+- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- [x] BRIR-EX5: align the cluster-mesh catalog's bounded auth-hono range and its source-test tuple with 0.18; directly required by the installed-package CI failure; no token-exchange behavior changes; rollback restores the previous range and fixture tuple.
+- [ ] Final CI run 41278374635 failed. Remaining packaging handoff: Package qualification maintainers must refresh the selected consumer's committed sibling tuple/sha512 with auth-hono 0.18 and the gateway metadata release, then pass `test-lazy-package`; a further PR push/CI requires owner authorization under the one-run budget.
 - [x] Track source ready for designated-writer import under owner item `01M588EA0X3RQPCATVR987CFB4`; concurrent `.track` writes are reserved to the conductor.
 - [x] A4 identity cutover may land in parallel; no identity-table redesign or new account/session references.
 - [x] Final review: preserve client_id through the host discovery ingress; both well-known endpoints have an HTTP regression, including default-deny unknown/absent clients.
@@ -101,5 +106,6 @@ Opted-in MCP clients can renew a one-hour access token within a rotating 15-day 
 - Reboot qualification: 263 auth-hono tests, 56 auth-ui tests (including rendered consent), and 58 API/PostgreSQL tests pass; both sync selftests pass.
 - API and auth-hono type checks, auth-ui type checks and scoped API lint pass; the lint result has zero errors.
 - Independent GLM r4 and Mistral r6 code reviews have no blocking findings; the final Mistral delta review also has no blocking findings. The interrupted final GLM attempt produced no verdict.
+- Post-CI local corrections: frozen UI dependency resolution passes, installation guard 11/11 passes, and gateway installed-surface compatibility 7/7 passes. Registry checks pass for auth-hono 0.18.0, auth-ui 0.9.0, llm-gateway 0.22.3 and cluster-mesh 0.26.0-dev.3; the latter preserves main's unpublished prerelease policy.
 - Local validation reused existing images; `make down ENV=test-idp-refresh` completed after the campaign.
 - D-R1, D-R2 and D-R3 remain **pending owner ratification**. Lots 0/4/5 and production activation are outside this PR.
