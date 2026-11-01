@@ -4,7 +4,6 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import { app } from '../../../src/app';
-import { env } from '../../../src/config/env';
 import { db } from '../../../src/db/client';
 import {
   authorizationCodes,
@@ -12,15 +11,15 @@ import {
   oauthConsents,
   oauthTokens,
   revokedTokens,
-  tenantMemberships,
-  tenants,
 } from '../../../src/db/schema';
+import { createCmTenant, setCmMembershipState } from '../../../src/services/identity/cm-tenancy';
+import { cmDeleteTenants } from '../../utils/cm-identity-test-store';
 import { cleanupAuthData, createTestUser } from '../../utils/auth-helper';
 
-// ARCH-11 G1c (spec §4.2.5 / §1.5) — consent tenant enforcement end-to-end. DEFAULT (shadow) is
-// byte-identical (the tenant leg is ignored; a single 'sentropic' row; org-B reuses the grant like
-// pre-G1c). STRICT enforces the tenant leg: the SAME user's org-A grant NEVER skips consent in
-// org-B (NON-VACUOUS §1.5), and approving each org writes a DISTINCT row.
+// ARCH-11 G1c (spec §4.2.5 / §1.5) — consent tenant enforcement end-to-end. Lot A4 removes
+// TENANT_RESOLUTION_MODE: the tenant leg is ALWAYS enforced — the SAME user's org-A grant
+// NEVER skips consent in org-B (NON-VACUOUS §1.5), and approving each org writes a
+// DISTINCT row.
 
 const CLIENT_ID = 'arch11g1c-consent-rp';
 const REDIRECT_URI = 'http://localhost:5397/auth/oauth/callback';
@@ -29,18 +28,16 @@ const ORG_A = 'arch11g1c-consent-org-a';
 const ORG_B = 'arch11g1c-consent-org-b';
 const TEST_ORGS = [ORG_A, ORG_B];
 
-const originalMode = env.TENANT_RESOLUTION_MODE;
 
 describe('ARCH-11 G1c — OAuth consent tenant enforcement', () => {
   beforeEach(async () => {
     for (const org of TEST_ORGS) {
-      await db.insert(tenants).values({ id: org, name: org, status: 'active' }).onConflictDoNothing();
+      await createCmTenant({ tenantId: org, slug: org, status: 'active' }).catch(() => {});
     }
     await seedOauthClient();
   });
 
   afterEach(async () => {
-    env.TENANT_RESOLUTION_MODE = originalMode;
     await db.delete(oauthConsents).where(eq(oauthConsents.clientId, CLIENT_ID));
     await db.delete(authorizationCodes).where(eq(authorizationCodes.clientId, CLIENT_ID));
     await db.delete(oauthTokens).where(eq(oauthTokens.clientId, CLIENT_ID));
@@ -50,29 +47,10 @@ describe('ARCH-11 G1c — OAuth consent tenant enforcement', () => {
     // `delete ... where tenant_id='sentropic'`, which would nuke OTHER parallel tests' memberships
     // and break the G1a orphan invariant). ORG_A/ORG_B rows cascade-delete their memberships too.
     await cleanupAuthData();
-    await db.delete(tenants).where(inArray(tenants.id, TEST_ORGS));
+    await cmDeleteTenants(TEST_ORGS);
   });
 
-  it('DEFAULT (shadow): byte-identical — a single sentropic row; org-B reuses the org-A grant', async () => {
-    env.TENANT_RESOLUTION_MODE = 'shadow';
-    const { cookie, userId } = await seedMultiOrgUser();
-
-    // Approve under ?tenant=org-a.
-    await approve(cookie, ORG_A);
-    // Under shadow the tenant leg is ignored → exactly ONE row, keyed to the DEFAULT 'sentropic'.
-    const rows = await allRows(userId);
-    expect(rows).toHaveLength(1);
-    expect(rows[0]!.tenantId).toBe('sentropic');
-
-    // org-B authorize SKIPS consent (reuses by (user, client) — the pre-G1c behavior).
-    const orgB = await authorize(cookie, 'openid profile email', ORG_B);
-    const loc = new URL(orgB.headers.get('location') ?? '');
-    expect(`${loc.origin}${loc.pathname}`).toBe(REDIRECT_URI);
-    expect(loc.searchParams.get('code')).toBeTruthy();
-  });
-
-  it('STRICT (NON-VACUOUS §1.5): the org-A grant NEVER skips consent in org-B; distinct rows', async () => {
-    env.TENANT_RESOLUTION_MODE = 'strict';
+  it('tenant leg enforced (NON-VACUOUS §1.5): the org-A grant NEVER skips consent in org-B; distinct rows', async () => {
     const { cookie, userId } = await seedMultiOrgUser();
 
     // Approve under ?tenant=org-a → a row keyed to org-A.
@@ -95,8 +73,7 @@ describe('ARCH-11 G1c — OAuth consent tenant enforcement', () => {
     expect(rows.map((r) => r.tenantId).sort()).toEqual([ORG_A, ORG_B].sort());
   });
 
-  it('SHADOW: refresh-enabled clients retain distinct local offline consent for each tenant', async () => {
-    env.TENANT_RESOLUTION_MODE = 'shadow';
+  it('refresh-enabled clients retain distinct local offline consent for each tenant', async () => {
     await db.update(oauthClients).set({ grantTypes: ['authorization_code', 'refresh_token'],
       allowedScopes: ['openid', 'profile', 'email', 'offline_access'] })
       .where(eq(oauthClients.clientId, CLIENT_ID));
@@ -124,11 +101,10 @@ const seedMultiOrgUser = async (): Promise<{ cookie: string; userId: string }> =
   });
   // Approved in BOTH orgs; a suspended 'sentropic' membership satisfies the G1a orphan invariant
   // without affecting approved-only derivation.
-  await db.insert(tenantMemberships).values([
-    { tenantId: ORG_A, userId: user.id, status: 'approved', role: 'member' },
-    { tenantId: ORG_B, userId: user.id, status: 'approved', role: 'member' },
-    { tenantId: 'sentropic', userId: user.id, status: 'suspended', role: 'member' },
-  ]).onConflictDoNothing();
+  for (const org of [ORG_A, ORG_B]) {
+    await setCmMembershipState(user.id, org, { status: 'approved', role: 'member', decidedBy: 'test' });
+  }
+  await setCmMembershipState(user.id, 'sentropic', { status: 'suspended', role: 'member', decidedBy: 'test' });
   return { cookie: `session=${user.sessionToken}`, userId: user.id };
 };
 
