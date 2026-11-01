@@ -267,7 +267,7 @@ describe('RC1 product to issuer revocation', () => {
     const workspaceId = crypto.randomUUID();
     await db.insert(workspaces).values({ id: workspaceId, name: 'RC1 failed delivery' });
     await enrolCmWorkspace({ workspaceId, tenantId: PLATFORM_TENANT_ID });
-    await putCmWorkspaceMember(workspaceId, userId, 'admin' });
+    await putCmWorkspaceMember(workspaceId, userId, 'admin');
     await createSession(userId, 'editor', undefined, { mfaVerified: true });
     if (operation === 'admin-delete') await updateCmUser(userId, { accountStatus: 'disabled_by_admin' });
     vi.stubEnv('REMOTE_ACTION_ROLE', 'product');
