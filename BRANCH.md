@@ -1,51 +1,60 @@
-# Feature: ACT-L03a — same-repo seat/control core on the preserved #681 lineage (daily cyber activation, amendment r6)
+# Feature: ACT-L04 — native ast-grep SAST, full Trivy IaC adaptation and independent expected inventories (daily cyber activation, amendment r6)
 
 ## Objective
-Implement lot ACT-L03a of r6 §7.2 (W1): preserve the #681 lineage rebased onto current origin/main and deliver the bounded same-repository seat/control core with qualified bootstrap placement — r6 §6 L3-A/B/C/D/F/H/I/L core, the required core suite, and tests T5-C1/C2/C3/C6, T6-C1/C2/C3/M1 (plus T6-D1 via L3-D) at the exact §6.4 destinations. Synthetic fixtures only; no live call, no payment, no custody repository or App.
+Implement lot ACT-L04 of r6 §7.2 (W2): qualify native Rust ast-grep with frozen local rules under `.security/ast-grep/**`, complete the Trivy IaC multi-document adaptation with expected document identities, and extend `inventory.mjs` with independent expected inventories and completeness proofs — observable acceptance L4-A–E (r4 Lot 4). No other lot is started.
 
 ## Scope / Guardrails
-- Scope limited to `scripts/ci/seat-custody/**`, the three new `scripts/security/daily/control-*.mjs` modules and their tests, `docs/security/activation/owner-procedure-r6.md`, and the two gate files listed under Conditional Paths.
-- Binding design: `.tmp/daily-cyber/activation-amendment-r6.md` (sha256 4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f). No design decision outside r6; anything else is reported, not decided.
-- Make-only workflow, Docker under the flock `/home/antoinefa/.cache-tmp/sentropic-docker.lock`, `ENV=test-cyber-L03a` always LAST, `make down ENV=test-cyber-L03a` after. Never `ENV=dev`, never `make clean-all`.
-- Zero Python. Zero payment on quota exhaustion. No secrets read, printed, logged or committed.
-- The preserved #681 work is rebased (never merged/cherry-picked) from `preserve/cyber-lot3-reconciled` onto `origin/main`; preserve refs stay untouched; the unadmitted broker blob `refs/preserve/cyber-lot3-broker` stays out of the tree.
-- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required verbatim by `scripts/ci/ci-lockfile-installs.test.mjs`, run by the required `validate-publishable-manifests` CI job).
-- Branch development happens in worktree `tmp/worktrees/cyber-act-L03a` on branch `feat/cyber-act-L03a`.
+- Scope limited to `.security/ast-grep/**`, the new `scripts/security/daily/{sast,iac}.mjs` + `sast-contract.test.mjs` + `iac-contract.test.mjs` + fixtures, the evolved `scripts/security/daily/{inventory,scan,trivy,acceptance-disposition}.mjs` and their tests, `api/Dockerfile` (SECDAILY-EX6 pin reference only), `Makefile` (BR04-EX1 SCOPE only) and `BRANCH.md`.
+- Binding design: `.tmp/daily-cyber/activation-amendment-r6.md` (sha256 4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f) and r4 (sha256 a4cc7449ad3b204dd8cef5bf57015c4b7ddaeaf29e031d3811dded6b6ef7d80d). No design decision outside r6/r4; anything else is reported, not decided.
+- Make-only workflow, Docker under the flock `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`, `ENV=test-cyber-L04` always LAST, `make down ENV=test-cyber-L04` after. Never `ENV=dev`, never `make clean-all`.
+- Zero Python anywhere (Node/TS and native binaries only). Zero payment on quota exhaustion. No secrets read, printed, logged or committed.
+- ast-grep pin: official GitHub release 0.51.0 asset `app-x86_64-unknown-linux-gnu.zip`, sha256 a7eead5552d3a8daad70f5d50d935da44bd0c138e946b5b0a96b1d38169fa639, native glibc ELF binaries `sg`/`ast-grep`; no musl asset exists, so execution runs on the glibc pinned Node lane while the alpine toolbox carries the pinned bytes for Trivy embedded-binary inventory. No runtime rule downloads; rules are frozen local files only.
+- SAST execution stays fenced on L02 scanner admission; this lot delivers the qualified contract, rules, fixtures and completeness proofs, not live scanner execution.
+- Branch development happens in worktree `tmp/worktrees/cyber-act-L04` on branch `feat/cyber-act-L04`.
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `scripts/ci/seat-custody/**`
-  - `scripts/security/daily/control-provisioning.mjs`
-  - `scripts/security/daily/control-provisioning.test.mjs`
-  - `scripts/security/daily/control-permit-channel.mjs`
-  - `scripts/security/daily/control-permit-channel.test.mjs`
-  - `scripts/security/daily/control-clock.mjs`
-  - `scripts/security/daily/control-clock.test.mjs`
-  - `docs/security/activation/owner-procedure-r6.md`
+  - `.security/ast-grep/**`
+  - `scripts/security/daily/sast.mjs`
+  - `scripts/security/daily/sast-contract.test.mjs`
+  - `scripts/security/daily/iac.mjs`
+  - `scripts/security/daily/iac-contract.test.mjs`
+  - `scripts/security/daily/fixtures/**`
+  - `scripts/security/daily/inventory.mjs`
+  - `scripts/security/daily/inventory.test.mjs`
+  - `scripts/security/daily/scan.mjs`
+  - `scripts/security/daily/scan.test.mjs`
+  - `scripts/security/daily/trivy.mjs`
+  - `scripts/security/daily/trivy.test.mjs`
+  - `scripts/security/daily/acceptance-disposition.mjs`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `.github/workflows/**`
+  - `Makefile` (except BR04-EX1 below)
   - `docker-compose*.yml`
   - `.cursor/rules/**`
+  - `.github/workflows/**`
+  - `.tmp/**`
   - `.track/**`
-  - `api/**`
-  - `packages/**` (except the Conditional files below)
+  - `api/**` (except `api/Dockerfile` under BR04-EX2 below)
+  - `packages/**`
+  - `apps/**`
+  - `ui/**`
+  - `tools/**`
+  - `docs/**`
+  - `scripts/ci/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `Makefile` (BR03a-EX1: only the `test-security-daily` SCOPE list gains the three new `control-*.test.mjs` files so the r6 §7.3 cases run in the required suite that CI already executes)
-  - `packages/llm-mesh/package.json` + `package-lock.json` (BR03a-EX2: post-rebase gate — branch touches `packages/llm-mesh/src/**`, so the version must be strictly greater than the published `0.32.2`; bump to `0.32.3`)
-  - `packages/cluster-mesh/tests/fixtures/train.ts`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR03a-EX3: version-gate consequence — the EX2 candidate `0.32.3` must be reflected in the cluster-mesh train literal and the frozen selected tuple, so the exact gateway/mesh artifact/range/one-copy proofs required by r6 §6.1 hold at the gated version)
+  - `Makefile` (BR04-EX1: only the `test-security-daily` SCOPE list gains `scripts/security/daily/sast-contract.test.mjs` and `scripts/security/daily/iac-contract.test.mjs` so the L4-A/L4-B/L4-C cases run in the required suite that CI already executes)
+  - `api/Dockerfile` (BR04-EX2: SECDAILY-EX6 permits only local rules and pin references in the exact approved toolbox path — add the pinned ast-grep release fetch with sha256 verification to `ci-tool-base`, COPY it and `.security/ast-grep` into `ci-tools`; no other Docker instruction changes)
 - **Exception process**:
-  - BR03a-EX1 declared here before touching `Makefile`: reason = r6 §7.3 requires every §6.4 destination wired into its owning required Make suite (`test-security-daily`, already run by required CI job `validate-ci-capacity-metrics`); impact = additive SCOPE entries only, no existing entry removed; rollback = revert the single SCOPE line.
-  - BR03a-EX2 declared here before touching the version files: reason = rules/workflow.md Post-Rebase Gate + `enforce-package-bump` CI job after the #681 rebase; impact = version string only in `packages/llm-mesh/package.json` and its workspace entry in `package-lock.json`; rollback = revert to `0.32.2`.
-  - BR03a-EX3 declared here before touching the cluster-mesh fixtures: reason = r6 §6.1 post-rebase package-version gate (EX2) makes `packages/llm-mesh` the unpublished candidate `0.32.3`, and the cluster-mesh train/selected fixtures pin the workspace tuple exactly (main precedent: commit d1e9d31fd rebound them to `0.32.2`); impact = version literals plus the single `@sentropic/llm-mesh` lock entry (version/resolved/sibling sha512) only, no spec logic changed; rollback = revert the three files to the `0.32.2` pins.
+  - BR04-EX1 declared here before touching `Makefile`: reason = r6 §7.3/§6.4 require every destination wired into its owning required Make suite (`test-security-daily`, already run by required CI job `validate-ci-capacity-metrics`); impact = two additive SCOPE entries only, no existing entry removed; rollback = revert the single SCOPE line.
+  - BR04-EX2 declared here before touching `api/Dockerfile`: reason = r6/r4 Lot 4 and SECDAILY-EX6 require the native ast-grep pin reference in the approved toolbox image so its reviewed digest binds the binary; impact = one verified pin fetch RUN in `ci-tool-base` plus two COPY lines in `ci-tools`, no other instruction; rollback = revert those lines.
 
 ## Feedback Loop
-- BR03a-EX1: `acknowledge` — Makefile SCOPE addition for `test-security-daily` (see Conditional Paths).
-- BR03a-EX2: `acknowledge` — llm-mesh `0.32.2` → `0.32.3` post-rebase package gate (see Conditional Paths).
-- BR03a-EX3: `acknowledge` — cluster-mesh train/selected fixture literals rebound to the gated llm-mesh `0.32.3` (see Conditional Paths).
-- No open blockers: r6 supplies every design decision for this lot; anything not covered by r6 is reported in the final report, not decided here.
+- BR04-EX1: `acknowledge` — Makefile SCOPE addition for `test-security-daily` (see Conditional Paths).
+- BR04-EX2: `acknowledge` — `api/Dockerfile` SECDAILY-EX6 pin reference for ast-grep (see Conditional Paths).
+- No open blockers: r6/r4 supply every design decision for this lot; anything not covered is reported in the final report, not decided here.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -57,43 +66,44 @@ Implement lot ACT-L03a of r6 §7.2 (W1): preserve the #681 lineage rebased onto 
 - This lot runs only synthetic, network-free suites; no AI flaky lane applies.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single branch `feat/cyber-act-L03a`; the preserved #681 lineage is rebased, not cherry-picked; one final CI on the review-ready head)
-- Rationale: one lot, one branch; no orthogonal sub-workstreams.
+- [x] **Mono-branch + cherry-pick** (single branch `feat/cyber-act-L04`; one final CI on the review-ready head)
+- Rationale: single self-contained lot with one test suite; no sub-workstreams needing independent CI.
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: no UI/API behavior change; no UAT applies. Local validation is `make test-security-daily ENV=test-cyber-L04` under the Docker flock.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, COMMON-RULES, r6 amendment, Lot 3 STOP report.
-  - [x] Create worktree `tmp/worktrees/cyber-act-L03a` on branch `feat/cyber-act-L03a` from `origin/main`.
-  - [x] Rebase `preserve/cyber-lot3-reconciled` (62 commits over `e6d17327`) onto `origin/main`; BRANCH.md conflicts keep the #681 copy, version/lockfile conflicts keep current-main pins.
-  - [x] Post-rebase gate: bump `packages/llm-mesh` to `0.32.3` (> published `0.32.2`).
-  - [x] Confirm command style: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make ... ENV=test-cyber-L03a` (ENV last), then `make down ENV=test-cyber-L03a`.
-- [ ] **Lot 1 — Tests first (r6 §6.4 destinations)**
-  - [ ] C/ `scripts/ci/seat-custody/tests/seat-environment-custody.test.ts` (T5-C1/C2, T6-C1): one environment per job, literal secret names, twelve reader copies, synthetic canonical→projection→N+1 roundtrip, same-run/stale-rerun/ambiguous-PUT/interrupted-write refusals.
-  - [ ] C/ `scripts/ci/seat-custody/tests/seat-workflow-contract.test.ts` (T5-C1, T6-C1): emitted-workflow scan — no `secrets: inherit`, ≤1 environment per job, allowlisted literal secret refs only, hostile PR/fork/tag/unprotected-ref/indirection refusals.
-  - [ ] C/ `scripts/ci/seat-custody/tests/custody-state-store.test.ts` (T6-C2): eight-job transaction, bank/HEAD fencing, full interruption matrix, limits at/above ceilings, mixed-generation/stale-pointer refusal.
-  - [ ] C/ `scripts/ci/seat-custody/tests/e2e/github-seat-roundtrip.test.ts` (T5-C2 real later-run probes): synthetic payloads against the environment-secret API surface in a separate process/run.
-  - [ ] C/ `scripts/ci/seat-custody/tests/ci-seat-broker.test.ts` (extend, T5-C3), `seat-ci-artifacts.test.ts`, `seat-secret-hygiene.test.ts` (T5-C3): positive wire + candidate file/env/process/socket/egress negatives, ciphertext-only artifacts, names-only hygiene.
-  - [ ] C/ `scripts/ci/seat-custody/tests/ci-seat-topology.test.ts` (T6-C3): translated SO_PEERCRED triples, fixed elevation entry, guardian receipt fields.
-  - [ ] C/ `scripts/ci/seat-custody/tests/acceptance-disposition.test.ts` (T6-M1): all 69 acceptance IDs, 63 paths, §6.4 rows, T5/T6 IDs, credential/copy/loader receipts.
-  - [ ] C/ `scripts/ci/seat-custody/tests/owner-procedure-contract.test.ts` (T6-D1): §5.1/§5.2 equivalence against one fixture, both V6 5/8i withdrawals, retired IDs/cutoff, six steps, two owner quotes byte-for-byte.
-  - [ ] D/ `scripts/security/daily/control-provisioning.test.mjs` (T5-C6, T6-M1), `control-permit-channel.test.mjs` (T5-C6, T6-C3), `control-clock.test.mjs` (T5-C6, T6-C3).
-  - [ ] RED run: `flock … make test-ci-seat-contract ENV=test-cyber-L03a` and `flock … make test-security-daily ENV=test-cyber-L03a`.
-- [ ] **Lot 2 — Same-repo seat/control core implementation**
-  - [ ] `src/seat-environment-custody.ts` (L3-B store binding: sentropic protected environments, sealed PUT, N+1, canonical→projection ordering).
-  - [ ] `src/custody-state-store.ts` (L3-B/§4.3.1: CustodyStateV1, two banks ×16 segments, HEAD, fence CAS, eight-job transaction).
-  - [ ] `src/seat-workflow-contract.ts` (L3-C/L3-F: job→environment contract, bootstrap placement on protected main only, permanent closure after #681 merge).
-  - [ ] `src/ci-seat-broker.ts` (L3-C: reservation-bound wire, journal fsync-before-send, FD-only loading, permits).
-  - [ ] `src/acceptance-disposition.ts`, `src/owner-procedure.ts` (T6-M1, T6-D1 data).
-  - [ ] D/ `control-provisioning.mjs`, `control-permit-channel.mjs`, `control-clock.mjs` (L3-I/L3-L, T5-C6/T6-C3).
-  - [ ] `docs/security/activation/owner-procedure-r6.md` (synchronized §5.1/§5.2 copy).
-  - [ ] Wire D/ tests into `test-security-daily` SCOPE (BR03a-EX1).
-  - [ ] GREEN run of both suites; `make down ENV=test-cyber-L03a`.
-- [ ] **Lot 3 — Preservation receipts & gates**
-  - [ ] `spec/evidence/ci-seats/activation-lot3-preservation.json` re-read and extended with the rebase-onto-current-main record (L3-H).
-  - [ ] `make scope-check` before every commit; `git diff --check`; atomic `make commit` ≤150 lines, push after every few commits (crash safety).
-  - [ ] `make test-llm-mesh` + `make typecheck-llm-mesh` regression on the rebased lineage.
-- [ ] **Lot N — Final validation**
-  - [ ] Both suites GREEN under the flock with `ENV=test-cyber-L03a` last; `make down ENV=test-cyber-L03a`; `make ps` empty.
-  - [ ] Push review-ready head; open draft PR with this BRANCH.md as body.
-  - [ ] Run ONE CI on the final head; wait for completion; record result.
-  - [ ] Report to `.tmp/rv/cyber-act-L03a.md`; do not merge.
+- [ ] **Lot 0 — Baseline & constraints**
+  - [x] Read r6/r4 binding documents and COMMON-RULES packet (CI budget, machine load, crash safety, secrets).
+  - [x] Create/confirm isolated worktree `tmp/worktrees/cyber-act-L04` on `feat/cyber-act-L04` from `origin/main` and run `harness check branch`.
+  - [x] Capture Makefile targets needed: `test-security-daily`, `security-daily-scan`, `down`, `commit`, `scope-check`.
+  - [x] Confirm command style: `make ... <vars> ENV=test-cyber-L04` with `ENV` last; Docker under the packet flock.
+  - [x] Confirm scope boundaries and declare BR04-EX1/BR04-EX2 above.
+  - [x] Validate ast-grep 0.51.0 pin (sha256 a7eead55...69fa639) and rule syntax against fixtures with the pinned native binary.
+- [ ] **Lot 1 — Frozen ast-grep rules and manifest (L4-A/L4-B inputs)**
+  - [ ] `.security/ast-grep/sgconfig.yml` (local ruleDirs only, languageGlobs covering all inventoried source extensions).
+  - [ ] `.security/ast-grep/rules/*.yml` (11 baseline rules, each with positive/negative fixtures).
+  - [ ] `.security/ast-grep/rules-manifest.json` (per-rule sha256, severity mapping, toolbox pin, zero-Python statement, validation receipt).
+  - [ ] `scripts/security/daily/fixtures/sast/**` positive/negative fixtures.
+- [ ] **Lot 2 — SAST contract module and tests (L4-A/L4-B)**
+  - [ ] `scripts/security/daily/sast.mjs` (loadSastContract, planSastTasks, validateSastReport, runner contract).
+  - [ ] `scripts/security/daily/sast-contract.test.mjs` (rule/root coverage, hashes, runtime-download block, zero-Python toolbox proof).
+  - [ ] Wire SAST tasks into `scan.mjs` / `inventory.mjs` (contract qualified, execution still fenced on L02).
+- [ ] **Lot 3 — IaC adaptation and tests (L4-C)**
+  - [ ] `scripts/security/daily/iac.mjs` (expected document identities, planIacScan, validateIacReport).
+  - [ ] `scripts/security/daily/fixtures/iac/**` (multi-doc compose, k8s, Makefile with positive controls).
+  - [ ] `scripts/security/daily/iac-contract.test.mjs` (positive control per surface, drop-one-doc, zero-config, malformed).
+  - [ ] Rewire `trivy.mjs` `requireIacQualification` to the qualified contract.
+- [ ] **Lot 4 — Independent expected inventories and completeness (L4-D/L4-E)**
+  - [ ] Extend `inventory.mjs` (expected lock components, embedded binaries, tool catalog, consumers; validateCompleteness; exact blockers).
+  - [ ] Evolve `inventory.test.mjs` (two agreeing outputs both omitting an item still fail; N/A needs positive proof).
+- [ ] **Lot 5 — Wiring and toolbox pin**
+  - [ ] `acceptance-disposition.mjs` L4-A..E rows (owner ACT-L04, suite test-security-daily).
+  - [ ] `Makefile` SCOPE += 2 test files (BR04-EX1); evolve `scan.test.mjs`/`trivy.test.mjs` assertions.
+  - [ ] `api/Dockerfile` ast-grep pin (BR04-EX2).
+  - [ ] `make scope-check` + `harness check scope` clean.
+- [ ] **Lot 6 — Validation, commits, PR, CI, report**
+  - [ ] `flock .tmp/packets/DOCKER-LOCK.md make test-security-daily ENV=test-cyber-L04`, then `make down ENV=test-cyber-L04`.
+  - [ ] Atomic commits via `make commit MSG=` (≤150 lines each), push branch after each lot (crash safety).
+  - [ ] Draft PR with BRANCH.md body; ONE CI run on the final head; wait for completion.
+  - [ ] Report to `.tmp/rv/cyber-act-L04.md` (PR, head, CI result, each acceptance item L4-A–E); stop; do not merge.
