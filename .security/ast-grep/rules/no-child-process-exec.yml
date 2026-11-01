@@ -1,0 +1,10 @@
+id: no-child-process-exec
+message: Do not run shell commands with exec/execSync; use argument arrays without a shell.
+severity: error
+language: TypeScript
+rule:
+  any:
+    - pattern: exec($$$ARGS)
+    - pattern: execSync($$$ARGS)
+    - pattern: execFile($$$ARGS)
+    - pattern: execFileSync($$$ARGS)
