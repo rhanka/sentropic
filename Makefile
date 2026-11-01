@@ -2741,12 +2741,15 @@ ci-live-provider-select: ## Select a complete main application qualification bef
 ci-live-provider-health: ## Monitor the daily provider schedule without making provider calls
 	node scripts/ci/live-provider-receipt.mjs health
 
-ci-live-provider-prepare: ci-test-env ## Reuse the qualified production tags; tooling is built from the same source
+ci-live-provider-prepare: ci-test-env ## Load the exact qualified main artifacts; build tooling from the same source
 	@test "$(CI_PROVIDER_MODE)" = live
 	@$(if $(strip $(MISTRAL_API_KEY)),true,false) || { echo 'Daily MISTRAL_API_KEY is missing'; exit 1; }
 	@$(if $(strip $(TAVILY_API_KEY)),true,false) || { echo 'Daily TAVILY_API_KEY is missing'; exit 1; }
 	@mkdir -p .tmp/live-provider
-	@$(MAKE) pull-api-image pull-ui-image record-api-image build-api-tool-image build-e2e ENV=$(ENV)
+	@run="$$(node -p 'JSON.parse(require("fs").readFileSync(".tmp/live-provider/selection.json")).run')"; \
+	gh run download "$$run" --name api-image --dir . && gh run download "$$run" --name ui-image --dir . && \
+	$(MAKE) load-api load-ui GITHUB_RUN_ID="$$run" ENV=$(ENV)
+	@$(MAKE) build-api-tool-image build-e2e ENV=$(ENV)
 	docker image inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) > .tmp/live-provider/api.json
 	docker image inspect $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) > .tmp/live-provider/ui.json
 	@docker run --rm --entrypoint node $(API_IMAGE_REF) -e 'const fs=require("fs"), dir="/workspace/packages", out={}; for(const name of fs.readdirSync(dir)) { try { const p=JSON.parse(fs.readFileSync(dir+"/"+name+"/package.json","utf8")); out[p.name]=p.version; } catch {} } console.log(JSON.stringify(out));' > .tmp/live-provider/installed-packages.json
