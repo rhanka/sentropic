@@ -1,10 +1,10 @@
 import { relayError } from './registry-types.js';
 import type {
   ListingGrantRecord,
+  ListingRow,
   PublishResult,
   RevisionRef,
   SessionRef,
-  SessionState,
   Visibility,
 } from './registry-types.js';
 import {
@@ -17,7 +17,6 @@ import {
   sessionKey,
   snapshotOf,
 } from './registry-store.js';
-import type { CoarseProjection } from './registry-types.js';
 import type { RegistryState } from './registry-store.js';
 
 function parseSessionRef(state: RegistryState, ref: SessionRef): SessionRef | null {
@@ -81,12 +80,6 @@ export function snapshotSession(state: RegistryState, ref: SessionRef): PublishR
     outboxRef: outboxRefFor(key, row.originRevision),
     snapshot: snapshotOf(parsed, row),
   };
-}
-
-export interface ListingRow {
-  readonly visibility: Visibility;
-  readonly projection: CoarseProjection;
-  readonly state: SessionState;
 }
 
 export function getListingRow(state: RegistryState, ref: SessionRef): ListingRow | null {
