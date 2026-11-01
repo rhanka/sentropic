@@ -428,6 +428,14 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
       );
       return rows[0]?.lifecycle_state ?? 'active';
     },
+    async isTerminal(artifactId: string): Promise<boolean> {
+      const { rows } = await pool.query<{ terminal: boolean }>(
+        'SELECT terminal_deleted_at IS NOT NULL AS terminal FROM artifacts.artifacts WHERE id = $1', [artifactId]);
+      return rows[0]?.terminal === true;
+    },
+    async markTerminal(artifactId: string): Promise<void> {
+      await pool.query("UPDATE artifacts.artifacts SET terminal_deleted_at = now(), lifecycle_state = 'deleted' WHERE id = $1", [artifactId]);
+    },
     async setArtifactState(artifactId: string, state: ArtifactState): Promise<void> {
       const updated = await pool.query(
         `UPDATE artifacts.artifacts SET lifecycle_state = $2 WHERE id = $1`,
