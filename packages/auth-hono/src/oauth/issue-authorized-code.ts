@@ -6,6 +6,7 @@ import { hasOfflineCoverage } from './offline-policy.js';
 import type { OAuthContinuationState } from './state-codec.js';
 
 export interface IssueAuthorizedCodeOptions {
+  offlineTransaction?: boolean;
   authorizationCodeTtlSeconds?: number;
   /** RFC 9207 authorization-server issuer identifier, echoed as `iss` on the success response. */
   issuer: string;
@@ -23,6 +24,13 @@ export const issueAuthorizedCode = async (
   options: IssueAuthorizedCodeOptions,
   payload: OAuthContinuationState
 ): Promise<Response> => {
+  if (payload.scope.split(/\s+/).includes('offline_access') && !options.offlineTransaction) {
+    if (!options.ports.oauthRefresh || !payload.userId) {
+      return oauthJsonError(c, 400, 'invalid_grant', 'Transactional offline authorization is required.');
+    }
+    return options.ports.oauthRefresh.transaction({ clientId: payload.clientId, userId: payload.userId },
+      async (ports) => issueAuthorizedCode(c, { ...options, ports, offlineTransaction: true }, payload));
+  }
   const code = options.ports.random.token(32);
   const now = options.ports.clock.now();
   const offline = payload.scope.split(/\s+/).includes('offline_access');
@@ -37,6 +45,7 @@ export const issueAuthorizedCode = async (
     code,
     {
       acr: payload.acr ?? 'urn:sentropic:loa:bearer',
+      sessionId: payload.sessionId,
       ...(offline ? { offlineGrantId: grant!.offlineGrantId!, issuer: options.issuer,
         audience: payload.resource ?? `${options.issuer}${userinfoPath}` } : {}),
       amr: payload.amr ?? (payload.acr === 'urn:sentropic:loa:passkey-fresh' ? ['hwk', 'user', 'mfa'] : ['pwd']),
