@@ -41,9 +41,5 @@ data:
   CORS_ALLOWED_ORIGINS: "https://preprod.auth.sent-tech.ca,https://preprod.sentropic.sent-tech.ca"
   WEBAUTHN_RP_ID: "sent-tech.ca"
   WEBAUTHN_ORIGIN: "https://preprod.auth.sent-tech.ca"
-  # Palliative (PREPROD ONLY) for the hourly MCP relogin: 15-day access tokens.
-  # Owner decision 2026-11-01 (option (a)); risks explicitly accepted: global to
-  # all preprod clients, and a leaked token cannot be revoked by resource servers
-  # validating via JWKS. Revert to 3600 when IdP refresh lots 1-3 are deployed in
-  # preprod (spec/SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md).
-  OAUTH_ACCESS_TOKEN_TTL_SEC: "1296000"
+  # Refresh families carry the 15-day continuation; access tokens stay valid for one hour.
+  OAUTH_ACCESS_TOKEN_TTL_SEC: "3600"
