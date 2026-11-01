@@ -98,6 +98,31 @@ describe('PostgreSQL refresh storage', () => {
     expect(await adapter().findAnchor('family')).toBeNull();
   });
 
+  it('should roll back the whole rotation when PostgreSQL fails at commit', async () => {
+    let workCompleted = false;
+    await expect(adapter().withLock(lock, async (tx, connection) => {
+      await connection.execute(sql`CREATE FUNCTION public.refresh_test_commit_failure() RETURNS trigger
+        LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'deferred metadata failure'; END $$`);
+      await connection.execute(sql`CREATE CONSTRAINT TRIGGER refresh_test_commit_failure
+        AFTER INSERT ON public.oauth_refresh_tokens DEFERRABLE INITIALLY DEFERRED
+        FOR EACH ROW EXECUTE FUNCTION public.refresh_test_commit_failure()`);
+      await tx.consume('family', 'child', now);
+      await tx.save({ ...row('child'), familyId: 'family', parentId: 'family', generation: 1 });
+      workCompleted = true;
+    })).rejects.toThrow();
+    expect(workCompleted).toBe(true);
+    expect((await adapter().findAnchor('family'))?.consumedAt).toBeNull();
+    expect(await adapter().findByHash(hash('child'))).toBeNull();
+  });
+
+  it('should roll back consumption when PostgreSQL rejects the successor insert', async () => {
+    await expect(adapter().withLock(lock, async (tx) => {
+      await tx.consume('family', 'child', now);
+      await tx.save({ ...row('child'), tokenHash: hash('family'), familyId: 'family', parentId: 'family', generation: 1 });
+    })).rejects.toThrow();
+    expect((await adapter().findAnchor('family'))?.consumedAt).toBeNull();
+  });
+
   it('should invalidate restored families and invalidate pending offline codes', async () => {
     await db.execute(sql`SELECT public.oauth_refresh_invalidate_restore()`);
     expect((await adapter().findAnchor('family'))?.revokedReason).toBe('db_restore_invalidation');
