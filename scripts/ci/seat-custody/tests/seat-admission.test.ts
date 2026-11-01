@@ -1,6 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { admitSeatCases, initialSeatState, reserveSeatClass } from '../src/seat-admission.ts';
+import { admitSeatCases, initialSeatState, reserveSeatClass, seatCaps } from '../src/seat-admission.ts';
+import { makeGenesisState } from '../src/custody-state-store.ts';
+import { checkEligibility, enrollAccount, projectForAccount, selectRoute } from '../src/security-roster.ts';
 
 const cases = [
   { id: 'conversation-a', attempts: 4, durationMs: 1000 },
@@ -38,4 +40,40 @@ test('duplicate campaign admission cannot reserve another allowance', () => {
 
 test('missing complete-case bounds refuse admission', () => {
   assert.throws(() => admitSeatCases(initialSeatState(), [{ id: 'bad', attempts: 0, durationMs: 1 }], admission), /case-bound/);
+});
+
+// L9-C (r6 §6.4): the one writer allocator commits provider/account turns in the shared
+// custody state; the broker consumes the committed reservation without any local cursor
+// reset; all-exhausted yields waiting-seat with zero payment and unchanged caps.
+test('L9-C: allocator-committed turns, broker consumption without cursor reset, waiting-seat with zero payment', () => {
+  const state = makeGenesisState();
+  enrollAccount(state, { account: 'A1', cli: 'CODEX', slot: 'CODEX_00' });
+  enrollAccount(state, { account: 'B1', cli: 'MUSE', slot: 'MUSE_00' });
+  const ok = (t: never) => checkEligibility(t, { quota: { readable: true, observedAt: 0, now: 1, remaining: [80] } });
+  const first = selectRoute(state, { reviewInputKey: 'rk-1', units: 1, day: '2026-11-02', campaign: 'c', generation: 1, purpose: 'report-review' }, ok);
+  assert.equal(first.kind, 'selected');
+  const cursorsAfterFirst = JSON.stringify(state.cursors);
+  // Broker side: consume the reservation and the account projection; no cursor reset.
+  const proj = projectForAccount(state, 'A1');
+  assert.equal(proj.projectionName, 'SEAT_USE_CODEX_00');
+  assert.equal(JSON.stringify(state.cursors), cursorsAfterFirst);
+  const second = selectRoute(state, { reviewInputKey: 'rk-2', units: 1, day: '2026-11-02', campaign: 'c', generation: 1, purpose: 'report-review' }, ok);
+  assert.equal(second.kind, 'selected');
+  if (second.kind === 'selected') assert.equal(second.entry.account, 'B1');
+  const cursorsAfterSecond = JSON.stringify(state.cursors);
+  const exhausted = selectRoute(state, { reviewInputKey: 'rk-3', units: 1, day: '2026-11-02', campaign: 'c', generation: 1, purpose: 'report-review' }, () => ({ ok: false, code: 'quota-exhausted' }));
+  assert.equal(exhausted.kind, 'waiting-seat');
+  if (exhausted.kind === 'waiting-seat') {
+    assert.equal(exhausted.paidAttempts, 0);
+    assert.equal(exhausted.runnerReleased, true);
+  }
+  // Exhaustion is a waiting-seat: the committed cursors are left untouched.
+  assert.equal(JSON.stringify(state.cursors), cursorsAfterSecond);
+  assert.notEqual(cursorsAfterSecond, cursorsAfterFirst);
+  // Adding a third account never enlarges the CLI/fleet caps.
+  enrollAccount(state, { account: 'A2', cli: 'CODEX', slot: 'CODEX_01' });
+  assert.equal(seatCaps(initialSeatState(), '2026-11-02').ci, 6);
+  const campaign = initialSeatState();
+  campaign.modes['2026-11-02'] = { mode: 'native-campaign', campaign: 'c', validUntil: '2026-11-03' };
+  assert.deepEqual(seatCaps(campaign, '2026-11-02'), { ci: 0, enrollment: 2, native: 8 });
 });
