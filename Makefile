@@ -907,7 +907,7 @@ publishable-manifests-inventory: ## Internal step of check-publishable-manifests
 
 test-publishable-manifests: ## Run publishable manifest guard fixture tests in Docker
 	@$(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-llm-judge,$(ENV)),$(CM_RUN),docker run --rm) -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache -v "$(CURDIR):/workspace:ro" -w /workspace $(if $(filter test-e2-int test-mem-batch1 test-mem-e11 test-llm-judge,$(ENV)),$(CM_RUN_IMAGE),$(MANIFEST_GUARD_IMAGE)) \
-		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir" CI_EXPECTED_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),scripts/ci/publishable-manifests.test.mjs scripts/ci/publishable-classification.test.mjs scripts/ci/publishable-pack.test.mjs scripts/ci/publishable-ci-wiring.test.mjs scripts/ci/eradicated-packages.test.mjs)'
+		sh -lc 'set -eu; tool_dir="$$(mktemp -d)"; node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund semver@7.7.2 yaml@2.8.1 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir" CI_EXPECTED_TOOL_DIR="$$tool_dir"; node --test $(or $(SCOPE),scripts/ci/publishable-manifests.test.mjs scripts/ci/publishable-classification.test.mjs scripts/ci/publishable-pack.test.mjs scripts/ci/publishable-ci-wiring.test.mjs scripts/ci/cluster-mesh-publish-decision.test.mjs scripts/ci/eradicated-packages.test.mjs)'
 
 .PHONY: check-eradicated-packages
 check-eradicated-packages: ## Fail if cli, build-cli or focus return as sentropic workspace packages (owned by h2a)
@@ -1129,6 +1129,20 @@ memory-mcp-qualify: ## Require the candidate memory MCP tools on real isolated P
 engram-e2-stable-publish-guard:
 	@version="$$(sed -n 's/.*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' packages/cluster-mesh/package.json | head -1)"; \
 		[[ "$$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$$ ]] || { echo 'Only stable Cluster Mesh versions may be published'; exit 1; }
+
+# BR866-EX1: a prerelease Cluster Mesh version is the planned between-releases state on main.
+# The publish decision is typed and logged: CI skips publication with success instead of turning
+# main red, and never publishes a dev version. The stable guard above stays unchanged and still
+# fails red if a prerelease ever reaches a publish target.
+.PHONY: cluster-mesh-publish-decision
+cluster-mesh-publish-decision: ## Emit the typed Cluster Mesh publish decision (prerelease => logged skip, success)
+	@set -u; decision="$$(docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache \
+		-v "$(CURDIR):/workspace:ro" -w /workspace $(MANIFEST_GUARD_IMAGE) \
+		sh -lc 'set -eu; $(MANIFEST_GUARD_TOOLS); node scripts/ci/cluster-mesh-publish-decision.mjs' 2>&1)"; \
+	status="$$?"; printf '%s\n' "$$decision"; \
+	if [ "$$status" -ne 0 ]; then exit "$$status"; fi; \
+	if [ -n "$${GITHUB_OUTPUT:-}" ]; then printf '%s\n' "$$decision" | grep -E '^(decision|reason|version)=' >> "$$GITHUB_OUTPUT"; fi; \
+	if [ -n "$${GITHUB_STEP_SUMMARY:-}" ]; then printf '%s\n' "$$decision" | sed -n 's/^summary=//p' >> "$$GITHUB_STEP_SUMMARY"; fi
 
 .PHONY: engram-e2-job-receipt
 engram-e2-job-receipt:
