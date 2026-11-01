@@ -54,7 +54,10 @@ export const handleRefreshToken = async (c: Context, form: URLSearchParams,
       return oauthJsonError(c, 400, 'invalid_scope', 'Requested scopes exceed the original grant.');
     }
     const resources = form.getAll('resource');
-    if (resources.length > 1 || (resources.length === 1 && resources[0] !== current.resource)) {
+    if (resources.length > 1) {
+      return oauthJsonError(c, 400, 'invalid_target', 'Only one resource is supported.');
+    }
+    if (resources.length === 1 && resources[0] !== current.resource) {
       return oauthJsonError(c, 400, 'invalid_grant', 'Resource does not match the original grant.');
     }
     const childId = ports.random.uuid();
