@@ -81,8 +81,15 @@ describe('OAuth well-known routes', () => {
     // No duplicates: the union is deduplicated, so a repeated value would signal the merge broke.
     expect(new Set(payload.scopes_supported).size).toBe(payload.scopes_supported.length);
     // 2-IdP: the host union also advertises the grantable Immo scopes (descriptive only).
+    // The artifact scopes are granted by the preprod immo-mcp client only.
     expect(payload.scopes_supported).toEqual(
-      expect.arrayContaining(['immo:read', 'immo:search', 'immo:documents:read']),
+      expect.arrayContaining([
+        'immo:read',
+        'immo:search',
+        'immo:documents:read',
+        'immo:artifacts:read',
+        'immo:artifacts:write',
+      ]),
     );
   });
 

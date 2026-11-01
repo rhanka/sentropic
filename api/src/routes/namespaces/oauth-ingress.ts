@@ -45,9 +45,17 @@ export const createSentropicWellKnownIngress = (oauthPublicPath: string): Hono =
       // projection only advertises the MCP scopes its allowlisted clients may receive.
       // 2-IdP: the host side of Lot 3's scope correction — the union of generic MCP
       // scopes and the grantable Immo scopes. Metadata is descriptive and never
-      // replaces client `allowedScopes`.
+      // replaces client `allowedScopes`. The artifact scopes are granted by the
+      // preprod immo-mcp client only (idp-identity-sync preprod divergence).
       additionalGrantTypesSupported: [TOKEN_EXCHANGE_GRANT_TYPE],
-      additionalScopesSupported: [...ALL_MCP_SCOPES, 'immo:read', 'immo:search', 'immo:documents:read'],
+      additionalScopesSupported: [
+        ...ALL_MCP_SCOPES,
+        'immo:read',
+        'immo:search',
+        'immo:documents:read',
+        'immo:artifacts:read',
+        'immo:artifacts:write',
+      ],
     }).fetch(new Request(url, { headers: c.req.raw.headers, method: 'GET' }));
   };
 
