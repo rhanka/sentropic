@@ -135,3 +135,39 @@ describe('RC2.registry REGISTRY-LISTING', () => {
     expect(registry.getListingRow({ ...sessionRef })).toBeNull();
   });
 });
+
+describe('RC2.registry REGISTRY-PARTITION', () => {
+  it('should keep disjoint record classes independent across concurrent route and lifecycle updates', () => {
+    const { registry } = registryWithSession();
+    registry.ingestLifecycle(binding, startedFact(1_793_520_000_000));
+    const before = registry.snapshot({ ...sessionRef });
+    registry.recordRouteState({ ...sessionRef }, { routeId: 'route-1', generation: 1, state: 'open' });
+    const after = registry.snapshot({ ...sessionRef });
+    expect(before.status).toBe('remote-unknown');
+    expect(after.status).toBe('remote-unknown');
+    if (after.status !== 'remote-unknown' || before.status !== 'remote-unknown') return;
+    expect(after.snapshot.descriptor.originRevision).toBe(before.snapshot.descriptor.originRevision);
+  });
+
+  it('should never promote a replica to origin writer during a partition', () => {
+    const { registry } = registryWithSession();
+    const takeover = registry.ingestLifecycle(
+      { id: 'foreign-process', revision: 1, digest: 'f'.repeat(64) },
+      startedFact(1_793_520_000_000),
+    );
+    expect(takeover).toMatchObject({ status: 'refused', error: { code: 'relay_origin_refused' } });
+  });
+
+  it('should dedupe exact duplicates and quarantine same coordinates with a different hash', () => {
+    const { registry } = registryWithSession();
+    const fact = startedFact(1_793_520_000_000);
+    expect(registry.ingestLifecycle(binding, fact).status).toBe('local-committed');
+    expect(registry.ingestLifecycle(binding, fact).status).toBe('local-committed');
+    const conflict = registry.ingestLifecycle(binding, {
+      ...fact,
+      factRef: { id: 'fact-1', revision: 1, digest: '9'.repeat(64) },
+    });
+    expect(conflict).toMatchObject({ status: 'refused', error: { code: 'relay_origin_refused' } });
+    expect(registry.isQuarantined({ ...sessionRef })).toBe(true);
+  });
+});
