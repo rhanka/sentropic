@@ -1,115 +1,72 @@
-# Feature: ACT-L04 — native ast-grep SAST, full Trivy IaC adaptation and independent expected inventories (daily cyber activation, amendment r6)
+# Feature: artifacts parity P0 (list_versions, revert, conflict detection, metadata, edits, get_source)
 
 ## Objective
-Implement lot ACT-L04 of r6 §7.2 (W2): qualify native Rust ast-grep with frozen local rules under `.security/ast-grep/**`, complete the Trivy IaC multi-document adaptation with expected document identities, and extend `inventory.mjs` with independent expected inventories and completeness proofs — observable acceptance L4-A–E (r4 Lot 4). No other lot is started.
+Close the generic P0 gaps of @sentropic/artifacts so the artifact MCP reaches Claude-artifacts parity for the modification lifecycle: version history, revert, optimistic-concurrency conflict detection, title/description/icon metadata, small old/new edits on publish, and source read-back for editing.
 
 ## Scope / Guardrails
-- Scope limited to `.security/ast-grep/**`, the new `scripts/security/daily/{sast,iac}.mjs` + `sast-contract.test.mjs` + `iac-contract.test.mjs` + fixtures, the evolved `scripts/security/daily/{inventory,scan,trivy,acceptance-disposition}.mjs` and their tests, `api/Dockerfile` (SECDAILY-EX6 pin reference only), `Makefile` (BR04-EX1 SCOPE only) and `BRANCH.md`.
-- Binding design: `.tmp/daily-cyber/activation-amendment-r6.md` (sha256 4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f) and r4 (sha256 a4cc7449ad3b204dd8cef5bf57015c4b7ddaeaf29e031d3811dded6b6ef7d80d). No design decision outside r6/r4; anything else is reported, not decided.
-- Make-only workflow, Docker under the flock `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`, `ENV=test-cyber-L04` always LAST, `make down ENV=test-cyber-L04` after. Never `ENV=dev`, never `make clean-all`.
-- Zero Python anywhere (Node/TS and native binaries only). Zero payment on quota exhaustion. No secrets read, printed, logged or committed.
-- ast-grep pin: official GitHub release 0.51.0 asset `app-x86_64-unknown-linux-gnu.zip`, sha256 a7eead5552d3a8daad70f5d50d935da44bd0c138e946b5b0a96b1d38169fa639, native glibc ELF binaries `sg`/`ast-grep`; no musl asset exists, so execution runs on the glibc pinned Node lane while the alpine toolbox carries the pinned bytes for Trivy embedded-binary inventory. No runtime rule downloads; rules are frozen local files only.
-- SAST execution stays fenced on L02 scanner admission; this lot delivers the qualified contract, rules, fixtures and completeness proofs, not live scanner execution.
-- Branch development happens in worktree `tmp/worktrees/cyber-act-L04` on branch `feat/cyber-act-L04`.
+- Scope limited to `packages/artifacts/**` plus the artifacts-host wiring in `api/src/services/artifacts/composition.ts` (only if the dep shape forces it).
+- Reuse the existing commit/release/current-pointer model; no redesign.
+- Make-only workflow, Docker under the single flock `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`, `ENV=test-artifacts-parity` always LAST, `make down ENV=test-artifacts-parity` after; never `ENV=dev`; never `make clean-all`.
+- Tests first: new unit suite `packages/artifacts/tests/parity-p0.test.ts`; run via `make test-artifacts SCOPE=packages/artifacts/tests/parity-p0.test.ts ENV=test-artifacts-parity` plus the full package unit suite, `make typecheck-artifacts`, `make build-artifacts`.
+- Commits: `make commit MSG="..."` only, <=150 lines each, selective `git add`, push after each commit.
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `.security/ast-grep/**`
-  - `scripts/security/daily/sast.mjs`
-  - `scripts/security/daily/sast-contract.test.mjs`
-  - `scripts/security/daily/iac.mjs`
-  - `scripts/security/daily/iac-contract.test.mjs`
-  - `scripts/security/daily/fixtures/**`
-  - `scripts/security/daily/inventory.mjs`
-  - `scripts/security/daily/inventory.test.mjs`
-  - `scripts/security/daily/scan.mjs`
-  - `scripts/security/daily/scan.test.mjs`
-  - `scripts/security/daily/trivy.mjs`
-  - `scripts/security/daily/trivy.test.mjs`
-  - `scripts/security/daily/acceptance-disposition.mjs`
-  - `api/Dockerfile` (BR04-EX2 granted subtree under the forbidden `api/**`; see Conditional Paths and Feedback Loop)
+  - `packages/artifacts/**`
+  - `api/src/services/artifacts/composition.ts` (host store wiring only)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.github/workflows/**`
-  - `.tmp/**`
-  - `.track/**`
-  - `api/**`
-  - `packages/**`
-  - `apps/**`
-  - `ui/**`
-  - `tools/**`
-  - `docs/**`
-  - `scripts/ci/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `packages/artifacts/l0-freeze/**` (frozen L0 contract vectors)
+  - `packages/artifacts/probe/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `Makefile` (BR04-EX1: only the `test-security-daily` SCOPE list gains `scripts/security/daily/sast-contract.test.mjs` and `scripts/security/daily/iac-contract.test.mjs` so the L4-A/L4-B/L4-C cases run in the required suite that CI already executes)
-  - `api/Dockerfile` (BR04-EX2: SECDAILY-EX6 permits only local rules and pin references in the exact approved toolbox path — add the pinned ast-grep release fetch with sha256 verification to `ci-tool-base` and COPY the pinned binary into `ci-tools`; the frozen rules stay in the repo checkout, not in the image; no other Docker instruction changes)
+  - `api/drizzle/*.sql` (max 1 file) — not needed; the artifacts schema migration lives in `packages/artifacts/migrations/`
+  - `.github/workflows/**`
 - **Exception process**:
-  - BR04-EX1 declared here before touching `Makefile`: reason = r6 §7.3/§6.4 require every destination wired into its owning required Make suite (`test-security-daily`, already run by required CI job `validate-ci-capacity-metrics`); impact = two additive SCOPE entries only, no existing entry removed; rollback = revert the single SCOPE line.
-  - BR04-EX2 declared here before touching `api/Dockerfile`: reason = r6/r4 Lot 4 and SECDAILY-EX6 require the native ast-grep pin reference in the approved toolbox image so its reviewed digest binds the binary; impact = one verified pin fetch RUN in `ci-tool-base` plus one COPY line in `ci-tools`, no other instruction; rollback = revert those lines.
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- BR04-EX1: `acknowledge` — Makefile SCOPE addition for `test-security-daily` (see Conditional Paths).
-- BR04-EX2: `acknowledge` — `api/Dockerfile` SECDAILY-EX6 pin reference for ast-grep (see Conditional Paths).
-- `BRLOCK-EX1` acknowledgement: review_by=2026-11-30T00:00:00Z (CI lockfile lane policy, owner CI maintainers).
-- No open blockers: r6/r4 supply every design decision for this lot; anything not covered is reported in the final report, not decided here.
+- (none open)
 
 ## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
-- This lot's own suites are synthetic and network-free; no AI flaky lane applies to them.
-- Observed in CI (run 41379815044, head `aa170c0ab`), job `test-e2e (group-a, 00 02 06 10)`:
-  - command: `make test-e2e` (CI job `test-e2e`, group-a specs `00 02 06 10`, ENV=e2e lane)
-  - failing file: `e2e/tests/00-ai-generation.spec.ts:102` — "Génération IA › devrait générer une organisation via IA (enrichissement) et l'enregistrer"
-  - failure signature: `TimeoutError: page.waitForResponse: Timeout 60000ms exceeded` waiting for `POST /api/v1/organizations/[^/]+/enrich`, with console error `Failed to create and enrich organization: Error: Impossible de créer l'organisation brouillon` — provider/model nondeterminism on the AI enrich route.
-  - The file is on the AI flaky allowlist (`rules/testing.md`); the lot diff touches only `scripts/security/daily/**`, `.security/ast-grep/**`, `api/Dockerfile` (pin) and `BRANCH.md`, so this is unrelated to the lot and non-blocking. User sign-off still required before any merge (this lot does not merge).
+- Acceptance rule: only non-systematic provider/network/model nondeterminism as `flaky accepted`; never additive timeouts. None expected here (pure unit tests, no AI calls).
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single branch `feat/cyber-act-L04`; one final CI on the review-ready head)
-- Rationale: single self-contained lot with one test suite; no sub-workstreams needing independent CI.
-
-## UAT Management (in orchestration context)
-- **Mono-branch**: no UI/API behavior change; no UAT applies. Local validation is `make test-security-daily ENV=test-cyber-L04` under the Docker flock.
+- [x] **Mono-branch + cherry-pick** (single branch `feat/artifacts-parity-p0`, one final test cycle)
+- [ ] **Multi-branch**
+- Rationale: one package, one concern; no orthogonal sub-workstreams.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [x] Read r6/r4 binding documents and COMMON-RULES packet (CI budget, machine load, crash safety, secrets).
-  - [x] Create/confirm isolated worktree `tmp/worktrees/cyber-act-L04` on `feat/cyber-act-L04` from `origin/main` and run `harness check branch`.
-  - [x] Capture Makefile targets needed: `test-security-daily`, `security-daily-scan`, `down`, `commit`, `scope-check`.
-  - [x] Confirm command style: `make ... <vars> ENV=test-cyber-L04` with `ENV` last; Docker under the packet flock.
-  - [x] Confirm scope boundaries and declare BR04-EX1/BR04-EX2 above.
-  - [x] Validate ast-grep 0.51.0 pin (sha256 a7eead55...69fa639) and rule syntax against fixtures with the pinned native binary.
-- [x] **Lot 1 — Frozen ast-grep rules and manifest (L4-A/L4-B inputs)**
-  - [x] `.security/ast-grep/sgconfig.yml` (local ruleDirs only, languageGlobs covering all inventoried source extensions).
-  - [x] `.security/ast-grep/rules/*.yml` (11 baseline rules, each with positive/negative fixtures).
-  - [x] `.security/ast-grep/rules-manifest.json` (per-rule sha256, severity mapping, toolbox pin, zero-Python statement, validation receipt).
-  - [x] `scripts/security/daily/fixtures/sast/**` positive/negative fixtures.
-- [x] **Lot 2 — SAST contract module and tests (L4-A/L4-B)**
-  - [x] `scripts/security/daily/sast.mjs` (loadSastContract, planSastTasks, validateSastReport, runner contract).
-  - [x] `scripts/security/daily/sast-contract.test.mjs` (rule/root coverage, hashes, runtime-download block, zero-Python toolbox proof).
-  - [x] Wire SAST tasks into `scan.mjs` / `inventory.mjs` (contract qualified, execution still fenced on L02).
-- [x] **Lot 3 — IaC adaptation and tests (L4-C)**
-  - [x] `scripts/security/daily/iac.mjs` (expected document identities, planIacScan, validateIacReport).
-  - [x] `scripts/security/daily/fixtures/iac/**` (multi-doc compose, k8s, Makefile with positive controls).
-  - [x] `scripts/security/daily/iac-contract.test.mjs` (positive control per surface, drop-one-doc, zero-config, malformed).
-  - [x] Rewire `trivy.mjs` `requireIacQualification` to the qualified contract.
-- [x] **Lot 4 — Independent expected inventories and completeness (L4-D/L4-E)**
-  - [x] Extend `inventory.mjs` (expected lock components, embedded binaries, tool catalog, consumers; validateCompleteness; exact blockers).
-  - [x] Evolve `inventory.test.mjs` (two agreeing outputs both omitting an item still fail; N/A needs positive proof).
-- [x] **Lot 5 — Wiring and toolbox pin**
-  - [x] `acceptance-disposition.mjs` L4-A..E rows (owner ACT-L04, suite test-security-daily).
-  - [x] `Makefile` SCOPE += 2 test files (BR04-EX1); evolve `scan.test.mjs`/`trivy.test.mjs` assertions.
-  - [x] `api/Dockerfile` ast-grep pin (BR04-EX2).
-  - [ ] `make scope-check` + `harness check scope` clean.
-- [ ] **Lot 6 — Validation, commits, PR, CI, report**
-  - [ ] `flock .tmp/packets/DOCKER-LOCK.md make test-security-daily ENV=test-cyber-L04`, then `make down ENV=test-cyber-L04`.
-  - [ ] Atomic commits via `make commit MSG=` (≤150 lines each), push branch after each lot (crash safety).
-  - [ ] Draft PR with BRANCH.md body; ONE CI run on the final head; wait for completion.
-  - [ ] Report to `.tmp/rv/cyber-act-L04.md` (PR, head, CI result, each acceptance item L4-A–E); stop; do not merge.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read rules/MASTER.md, rules/workflow.md, COMMON-RULES packet, conductor brief.
+  - [x] Worktree `tmp/worktrees/artifacts-parity-p0` on `feat/artifacts-parity-p0` from origin/main; `harness check branch` PASS.
+  - [x] Make targets: `make test-artifacts SCOPE=... ENV=test-artifacts-parity`, `make typecheck-artifacts`, `make build-artifacts`, `make commit`, `make scope-check`, `make down`.
+  - [x] Docker under flock `.tmp/packets/DOCKER-LOCK.md`, ENV last.
+- [x] **Lot 1 — Tests first (tests/parity-p0-*.test.ts + fixtures/parity-world.ts)**
+  - [x]  `artifacts_list_versions`: history of one artifact (id, createdAt, author, state, isCurrent, digest); read scope; foreign scope/not found hidden.
+  - [ ] `artifacts_revert`: new release copying earlier content (stable URL, history grows); purged release refused with typed error; write scope + idempotency.
+  - [x]  conflict: `expectedCurrentReleaseId` on publish and revert; mismatch returns typed `conflict` carrying current release id + digest; absent field keeps today's behaviour.
+  - [x]  metadata: title/description/icon accepted on ensure and publish, returned by get and list.
+  - [x]  edits: `edits:[{path,oldStr,newStr}]` on publish applied to current release text files; oldStr != exactly once -> typed `edit_mismatch`, nothing changed; result goes through the same commit path.
+  - [x]  get_source: returns current content files (text decoded) for editing.
+  - [x]  MCP executor routes the three new tools; manifest exposes them when selected.
+- [x] **Lot 2 — Implementation**
+  - [ ] profile/contracts.ts: add `artifacts_list_versions`, `artifacts_revert` to capability names.
+  - [ ] profile/schemas.ts + validation.ts + index.ts: schemas for new ops; publish gains optional `expectedCurrentReleaseId`, `edits`, metadata; ensure gains metadata; files becomes conditionally required (files XOR edits); revert schema; routes in capabilityForRoute; idempotency for revert.
+  - [ ] server/failures.ts: typed `edit_mismatch` (422) and conflict details carrier on `pointer_conflict`.
+  - [ ] server/edits.ts: pure edit application with exactly-once rule.
+  - [ ] server/publication.ts: `listReleases` on state store + service; memory double.
+  - [ ] server/access.ts: optional `metadata` on ArtifactAcl; postgres adapter + migration 0004 for the metadata column.
+  - [ ] server/command-identity.ts: allow `revert` operation in command/derivation.
+  - [ ] http.ts: routes + handlers for /versions/:id, /source/:id, /revert; conflict pre-check; edits application; metadata read/write on ensure/publish; metadata in get/list; get_source content.
+  - [ ] mcp-core.ts: route new tools; read-only mutability for list_versions; provider version bump.
+  - [ ] server/outcome-projection.ts: carry conflict details in HTTP body and MCP error.
+  - [ ] api host composition.ts: supply getRelease/listReleases if the dep shape requires.
+  - [ ] templates.ts API guide text; CHANGELOG.md; package.json version bump (minor 0.3.0, must be > published 0.2.4).
+- [~] **Lot 3 — Verify & ship**
+  - [x] `make test-artifacts ENV=test-artifacts-parity` (full unit suite 472/472) green under flock; typecheck + build green; `make typecheck-artifacts`, `make build-artifacts` green; `make down ENV=test-artifacts-parity`.
+  - [ ] `make scope-check` before each commit; commits <=150 lines; push after each commit.
+  - [ ] Draft PR from BRANCH.md; ONE CI run on the final head; report to `.tmp/rv/artifacts-parity-p0.md`; do not merge.
