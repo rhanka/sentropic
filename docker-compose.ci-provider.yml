@@ -1,0 +1,41 @@
+# Test-only transport injection; the application image is used without rebuilding.
+services:
+  api:
+    environment:
+      CI_PROVIDER_FIXTURE: "1"
+      CI_PROVIDER_ENV: ${COMPOSE_PROJECT_NAME}
+      NODE_OPTIONS: --import=/run/ci-provider/provider-server.mjs
+      OPENAI_API_KEY: ci-provider-fixture-no-live-credential
+      MISTRAL_API_KEY: ci-provider-fixture-no-live-credential
+      TAVILY_API_KEY: ci-provider-fixture-no-live-credential
+      GEMINI_API_KEY: ""
+      ANTHROPIC_API_KEY: ""
+      COHERE_API_KEY: ""
+      MUSE_API_KEY: ""
+      JEV_API_KEY: ""
+      GOOGLE_APPLICATION_CREDENTIALS: ""
+      GOOGLE_CLOUD_PROJECT: ""
+    volumes:
+      - ./e2e/fixtures/provider-server.mjs:/run/ci-provider/provider-server.mjs:ro
+    configs:
+      - source: ci-provider-marker
+        target: /run/ci-provider/marker
+    depends_on:
+      provider-fixture:
+        condition: service_healthy
+  provider-fixture:
+    image: ${LLM_MESH_NODE_IMAGE:-node:24-bookworm-slim}
+    command: [node, /fixture/provider-server.mjs]
+    volumes:
+      - ./e2e/fixtures/provider-server.mjs:/fixture/provider-server.mjs:ro
+    healthcheck:
+      test: [CMD, node, -e, "fetch('http://localhost:7777/health').then(r => {if (!r.ok) process.exit(1)})"]
+      interval: 1s
+      timeout: 2s
+      retries: 10
+configs:
+  ci-provider-marker:
+    content: sentropic-ci-provider-v1
+networks:
+  default:
+    internal: true

@@ -8,6 +8,18 @@ import {
   type ReasoningTier as MeshReasoningTier,
 } from '@sentropic/llm-mesh';
 
+// The test overlay owns the transport. Environment configuration alone cannot
+// redirect a shipped application to an arbitrary provider endpoint.
+export const ciProviderFixtureEnabled = (): boolean => {
+  if (process.env.CI_PROVIDER_FIXTURE !== '1') return false;
+  const boundary = (globalThis as unknown as Record<symbol, unknown>)[Symbol.for('sentropic.ci.provider-boundary')];
+  if (!/^(test|e2e)-/.test(process.env.CI_PROVIDER_ENV ?? '') || boundary !== true) {
+    throw new Error('Provider fixture requires the isolated test overlay');
+  }
+  return true;
+};
+ciProviderFixtureEnabled();
+
 export type ProviderId = MeshProviderId;
 
 export type ProviderStatus = 'ready' | 'planned';

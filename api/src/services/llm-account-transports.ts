@@ -10,6 +10,7 @@ import { decryptSecretOrNull, encryptSecret } from './secret-crypto';
 import { refreshClaudeCodeAccessToken } from './claude-code-provider-auth';
 import { refreshCodexAccessToken } from './codex-provider-auth';
 import { refreshAntigravityAccessToken } from './antigravity-provider-auth';
+import { ciProviderFixtureEnabled } from './provider-runtime';
 
 export type LlmAccountTransportStatus =
   | 'active'
@@ -2178,7 +2179,10 @@ export const refreshMuseTokenIfNeeded = async (
     externalAccountId: string | null;
     token: MuseTokenSecretPayload;
   },
-  readAuthFile: (path: string) => Promise<string> = (path) => readFile(path, 'utf8'),
+  readAuthFile: (path: string) => Promise<string> = (path) => {
+    if (ciProviderFixtureEnabled()) throw new Error('Host account credentials are forbidden in deterministic qualification');
+    return readFile(path, 'utf8');
+  },
 ): Promise<MuseTokenSecretPayload | null> => {
   // L1 backstop: externally custodied seats never re-read the CLI store here.
   if (input.token.externalSeatPolicy) return null;
