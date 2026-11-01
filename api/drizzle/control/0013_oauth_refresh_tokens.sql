@@ -159,6 +159,35 @@ END $$;
 CREATE TRIGGER oauth_refresh_consent_invalidate BEFORE UPDATE OR DELETE ON public.oauth_consents
   FOR EACH ROW EXECUTE FUNCTION public.oauth_refresh_consent_invalidate();
 --> statement-breakpoint
+-- Removing/replacing an enrolled credential is an authorized security event.
+-- Signature counters and last-used telemetry do not change offline authority.
+CREATE FUNCTION public.oauth_refresh_credential_invalidate()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    PERFORM public.oauth_refresh_revoke_user(OLD.user_id, 'security_event');
+    RETURN OLD;
+  END IF;
+  IF NEW.public_key_cose IS DISTINCT FROM OLD.public_key_cose OR NEW.user_id <> OLD.user_id
+    THEN PERFORM public.oauth_refresh_revoke_user(OLD.user_id, 'security_event'); END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER oauth_refresh_credential_invalidate BEFORE UPDATE OR DELETE ON public.webauthn_credentials
+  FOR EACH ROW EXECUTE FUNCTION public.oauth_refresh_credential_invalidate();
+--> statement-breakpoint
+CREATE FUNCTION public.oauth_refresh_invalidate_restore()
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE c text; u text;
+BEGIN
+  FOR c IN SELECT client_id FROM public.oauth_clients ORDER BY client_id LOOP
+    PERFORM public.oauth_refresh_client_guard(c, true);
+  END LOOP;
+  FOR u IN SELECT id FROM public.users ORDER BY id FOR UPDATE LOOP
+    PERFORM public.oauth_refresh_revoke_user(u, 'db_restore_invalidation');
+  END LOOP;
+  DELETE FROM public.oauth_tokens;
+END $$;
+--> statement-breakpoint
 CREATE FUNCTION public.oauth_refresh_revoke_family(p_family text, p_reason text, p_now timestamp)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN

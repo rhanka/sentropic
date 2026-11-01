@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { eq, like } from 'drizzle-orm';
+import { eq, like, sql } from 'drizzle-orm';
 import { db } from '../../db/client';
 import { settings, userSessions } from '../../db/schema';
 import type { RemoteSessionRevocation } from './remote-revocation';
@@ -15,6 +15,9 @@ export async function queueRemoteRevocation(input: RemoteSessionRevocation, tx: 
 }
 export async function deleteAndQueueRemoteSessions(scope: { sessionId: string } | { userId: string }) {
   return db.transaction(async tx => {
+    if ('userId' in scope) {
+      await tx.execute(sql`SELECT public.oauth_refresh_revoke_user(${scope.userId}, 'security_event')`);
+    }
     const rows = await tx.delete(userSessions).where('sessionId' in scope
       ? eq(userSessions.id, scope.sessionId) : eq(userSessions.userId, scope.userId)).returning({ id: userSessions.id });
     const input = 'sessionId' in scope ? { sessionIds: [scope.sessionId] }
