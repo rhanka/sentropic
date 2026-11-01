@@ -73,6 +73,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] Docker stack under flock, `make down ENV=test-app-a4` after.
 - [ ] **Lot 1 — CM identity composition + one data migration**
   - [ ] App-side CM identity composition (core stores, tenancy stores, custody host/UOW, F15 producer, atomic deletion V2, importer) over the app Postgres.
+  - [x] Bind the r6 combined UOW to one app PostgreSQL connection, including indeterminate-commit refusal.
   - [ ] Control migration 0014: CM identity schema + id-preserving copy of users/proofs/invitations/login sessions/tenants/memberships/workspaces + rollback checkpoint row; journal integrity test passes.
   - [ ] Migration tests (both directions of the copy, id preservation, counts).
   - [x] Add isolated PostgreSQL cutover tests for checkpoint retention, rollback and OAuth invalidation.
