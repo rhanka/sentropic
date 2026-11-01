@@ -7,7 +7,9 @@ import {
 } from '@sentropic/cluster-mesh';
 import { db } from '../../db/client';
 import { sessionWorkspaceBindings } from '../../db/control-schema';
-import { tenantMemberships, users, workspaces } from '../../db/schema';
+import { workspaces } from '../../db/schema';
+import { findCmUserById } from '../identity/cm-users';
+import { findCmMembership, findCmWorkspace } from '../identity/cm-tenancy';
 import { hasRole } from '../../middleware/rbac';
 import { hasWorkspaceRole, type WorkspaceType } from '../workspace-access';
 import { notifyWorkspaceCreated, provisionWorkspace, seedWorkspaceTypeResources } from '../workspace-provisioning';
@@ -127,8 +129,8 @@ export class SessionWorkspaceService {
   }
 
   private async checkTenantMember(tenantId: string, principalId: string): Promise<void> {
-    const [membership] = await db.select({ status: tenantMemberships.status }).from(tenantMemberships)
-      .where(and(eq(tenantMemberships.tenantId, tenantId), eq(tenantMemberships.userId, principalId))).limit(1);
+    // Lot A4: tenant membership lives in the CM store.
+    const membership = await findCmMembership(principalId, tenantId);
     if (membership?.status !== 'approved') {
       throw new SessionWorkspaceError('workspace_rights_refused', 'principal is not an approved member of the tenant');
     }
@@ -137,8 +139,7 @@ export class SessionWorkspaceService {
   private async checkIsAdmin(
     tenantId: string, principalId: string, workspaceId: string, client: BindingDbClient = db,
   ): Promise<boolean> {
-    const [tMember] = await client.select({ role: tenantMemberships.role, status: tenantMemberships.status }).from(tenantMemberships)
-      .where(and(eq(tenantMemberships.tenantId, tenantId), eq(tenantMemberships.userId, principalId))).limit(1);
+    const tMember = await findCmMembership(principalId, tenantId);
     if (tMember?.status === 'approved' && tMember.role === 'admin') return true;
     if (workspaceId) return await hasWorkspaceRole(principalId, workspaceId, 'admin', client);
     return false;
@@ -150,8 +151,7 @@ export class SessionWorkspaceService {
    * Returns the caller's global role for seeding.
    */
   private async requireGlobalEditor(principalId: string): Promise<string> {
-    const [row] = await db.select({ role: users.role }).from(users)
-      .where(eq(users.id, principalId)).limit(1);
+    const row = await findCmUserById(principalId);
     const role = row?.role ?? 'guest';
     if (!hasRole(role, 'editor')) {
       throw new SessionWorkspaceError('workspace_rights_refused', 'global editor role required to create a workspace');
@@ -195,7 +195,9 @@ export class SessionWorkspaceService {
       let workspaceId: string;
       if (input.workspaceId) {
         const [ws] = await tx.select().from(workspaces).where(eq(workspaces.id, input.workspaceId)).limit(1);
-        if (!ws || ws.tenantId !== tenantId) {
+        // Lot A4: the workspace -> tenant binding lives in the CM workspace directory.
+        const cmWorkspace = await findCmWorkspace(input.workspaceId);
+        if (!ws || cmWorkspace?.tenantId !== tenantId) {
           throw new SessionWorkspaceError('workspace_not_found', 'workspace does not exist');
         }
         if (!(await hasWorkspaceRole(principalId, ws.id, 'editor', tx))) {
