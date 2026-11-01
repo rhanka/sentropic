@@ -12,9 +12,9 @@ import { applyAuthAuthorFence, type AuthCompositionRoot } from './auth-cutover';
 import { accountRouter, registerHandlers } from './auth/cm-auth-hono';
 import { cmLoginHandlers as loginHandlers } from './auth/cm-authentication';
 import { credentialHandlers } from './auth/credentials';
-import { emailHandlers } from './auth/email';
+import { cmEmailHandlers as emailHandlers } from './auth/cm-email';
 import { createFederationRouter } from './auth/federation';
-import { magicLinkHandlers } from './auth/magic-link';
+import { cmMagicLinkHandlers as magicLinkHandlers } from './auth/cm-magic-link';
 
 
 export interface AuthPathProjection {
