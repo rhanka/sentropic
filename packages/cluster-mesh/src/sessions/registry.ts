@@ -1,14 +1,16 @@
 import type {
-  CapabilitiesRecord,
   CommitResult,
   EmitResult,
-  LifecycleFact,
   ListingGrantRecord,
   ObservationRecord,
-  ProcessBindingRef,
   PublishResult,
+  RegistryCallOptions,
   RegistryInput,
-  RevisionRef,
+  SessionOriginIngestCapabilitiesParametersV1,
+  SessionOriginIngestLifecycleParametersV1,
+  SessionOriginPublishListingParametersV1,
+  SessionOriginRenewFreshnessParametersV1,
+  SessionOriginSnapshotParametersV1,
   SessionRef,
   Visibility,
 } from './registry-types.js';
@@ -42,6 +44,26 @@ import type { ListingRow } from './registry-types.js';
 
 export * from './registry-types.js';
 
+// r2 runtimeComposition: only invalid JavaScript API use (non-object
+// parameters/options or a non-AbortSignal signal) throws/rejects TypeError;
+// every authority/validation failure stays a typed refusal result.
+function assertParameters(parameters: unknown): asserts parameters is Record<string, unknown> {
+  if (typeof parameters !== 'object' || parameters === null || Array.isArray(parameters)) {
+    throw new TypeError('SessionOriginRegistryPortV1: parameters must be a single named object');
+  }
+}
+
+function assertOptions(options: unknown): asserts options is RegistryCallOptions | undefined {
+  if (options === undefined) return;
+  if (typeof options !== 'object' || options === null || Array.isArray(options)) {
+    throw new TypeError('SessionOriginRegistryPortV1: options must be an object');
+  }
+  const signal = (options as { readonly signal?: unknown }).signal;
+  if (signal !== undefined && !(signal instanceof AbortSignal)) {
+    throw new TypeError('SessionOriginRegistryPortV1: options.signal must be an AbortSignal');
+  }
+}
+
 export function createSessionOriginRegistry(input: RegistryInput) {
   const state: RegistryState = createRegistryState(input);
   return {
@@ -49,15 +71,50 @@ export function createSessionOriginRegistry(input: RegistryInput) {
     withdrawGrant: (grantId: string): void => withdrawGrant(state, grantId),
     commitSourceAck: (ref: SessionRef, grantId: string, ackDigest: string): void =>
       commitSourceAck(state, ref, grantId, ackDigest),
-    ingestLifecycle: (binding: ProcessBindingRef, fact: LifecycleFact): CommitResult =>
-      ingestLifecycle(state, binding, fact),
-    ingestCapabilities: (binding: ProcessBindingRef, capabilities: CapabilitiesRecord): CommitResult =>
-      ingestCapabilities(state, binding, capabilities),
-    publishListing: (ref: SessionRef, grantRef: RevisionRef): PublishResult =>
-      publishListing(state, ref, grantRef),
-    renewFreshness: (ref: SessionRef, visibility: Visibility): PublishResult =>
-      renewFreshness(state, ref, visibility),
-    snapshot: (ref: SessionRef): PublishResult => snapshotSession(state, ref),
+    ingestLifecycle: async (
+      parameters: SessionOriginIngestLifecycleParametersV1,
+      options?: RegistryCallOptions,
+    ): Promise<CommitResult> => {
+      assertParameters(parameters);
+      assertOptions(options);
+      return Promise.resolve(
+        ingestLifecycle(state, parameters.processBindingRef, parameters.fact),
+      );
+    },
+    ingestCapabilities: async (
+      parameters: SessionOriginIngestCapabilitiesParametersV1,
+      options?: RegistryCallOptions,
+    ): Promise<CommitResult> => {
+      assertParameters(parameters);
+      assertOptions(options);
+      return Promise.resolve(
+        ingestCapabilities(state, parameters.processBindingRef, parameters.capabilities),
+      );
+    },
+    publishListing: async (
+      parameters: SessionOriginPublishListingParametersV1,
+      options?: RegistryCallOptions,
+    ): Promise<PublishResult> => {
+      assertParameters(parameters);
+      assertOptions(options);
+      return Promise.resolve(publishListing(state, parameters.sessionRef, parameters.grantRef));
+    },
+    renewFreshness: async (
+      parameters: SessionOriginRenewFreshnessParametersV1,
+      options?: RegistryCallOptions,
+    ): Promise<PublishResult> => {
+      assertParameters(parameters);
+      assertOptions(options);
+      return Promise.resolve(renewFreshness(state, parameters.sessionRef, parameters.visibility));
+    },
+    snapshot: async (
+      parameters: SessionOriginSnapshotParametersV1,
+      options?: RegistryCallOptions,
+    ): Promise<PublishResult> => {
+      assertParameters(parameters);
+      assertOptions(options);
+      return Promise.resolve(snapshotSession(state, parameters.sessionRef));
+    },
     getListingRow: (ref: SessionRef): ListingRow | null => getListingRow(state, ref),
     grantActivatedRead: (ref: SessionRef): boolean => setActivatedRead(state, ref, true),
     loseActivatedRead: (ref: SessionRef): void => { setActivatedRead(state, ref, false); },
@@ -78,8 +135,10 @@ export function createSessionOriginRegistry(input: RegistryInput) {
       assertListingStageRoute(state, method, path),
     signFreshness: (ref: SessionRef, visibility: Visibility): never =>
       signFreshness(state, ref, visibility),
-    emitObservation: (observation: ObservationRecord): EmitResult =>
-      emitObservation(state, observation),
+    emit: (observation: ObservationRecord): EmitResult => {
+      assertParameters(observation);
+      return emitObservation(state, observation);
+    },
     restart: (): void => restartRegistry(state),
   };
 }
