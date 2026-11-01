@@ -6,6 +6,10 @@ ALTER TABLE artifacts.artifacts ALTER COLUMN updated_at SET DEFAULT now();
 
 CREATE OR REPLACE FUNCTION artifacts.reject_terminal_restore() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.terminal_deleted_at IS NOT NULL THEN RAISE EXCEPTION 'terminal artifact' USING ERRCODE = '23514'; END IF;
+    RETURN OLD;
+  END IF;
   IF OLD.terminal_deleted_at IS NOT NULL AND
     (NEW.terminal_deleted_at IS DISTINCT FROM OLD.terminal_deleted_at OR NEW.lifecycle_state NOT IN ('deleted', 'purged')
       OR NEW.renewed_at IS DISTINCT FROM OLD.renewed_at) THEN
@@ -15,6 +19,9 @@ BEGIN
 END $$;
 DROP TRIGGER IF EXISTS terminal_restore_guard ON artifacts.artifacts;
 CREATE TRIGGER terminal_restore_guard BEFORE UPDATE ON artifacts.artifacts
+FOR EACH ROW EXECUTE FUNCTION artifacts.reject_terminal_restore();
+DROP TRIGGER IF EXISTS terminal_identity_guard ON artifacts.artifacts;
+CREATE TRIGGER terminal_identity_guard BEFORE DELETE ON artifacts.artifacts
 FOR EACH ROW EXECUTE FUNCTION artifacts.reject_terminal_restore();
 
 CREATE OR REPLACE FUNCTION artifacts.reject_terminal_publication() RETURNS trigger LANGUAGE plpgsql AS $$
