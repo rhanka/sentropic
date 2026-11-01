@@ -114,6 +114,10 @@ export const authenticateClient = async (
   form: URLSearchParams,
   ports: AuthHonoPorts
 ): Promise<ClientAuthentication | Response> => {
+  const basic = c.req.header('authorization')?.startsWith('Basic ') === true;
+  if (basic && form.has('client_secret')) {
+    return oauthJsonError(c, 401, 'invalid_client', 'Multiple client authentication methods are forbidden.');
+  }
   const credentials = parseClientCredentials(c.req.header('authorization'), form);
   if (!credentials.clientId) {
     return oauthJsonError(c, 401, 'invalid_client', 'Client authentication is required.');
@@ -123,7 +127,14 @@ export const authenticateClient = async (
   if (!client) return oauthJsonError(c, 401, 'invalid_client', 'Client authentication failed.');
 
   if (client.tokenEndpointAuthMethod === 'none') {
+    if (basic || form.has('client_secret')) {
+      return oauthJsonError(c, 401, 'invalid_client', 'Public clients must not send client credentials.');
+    }
     return { client };
+  }
+
+  if (client.tokenEndpointAuthMethod !== 'client_secret_basic' || !basic) {
+    return oauthJsonError(c, 401, 'invalid_client', 'Registered client authentication method is required.');
   }
 
   if (!credentials.secret || !client.clientSecretHash) {
