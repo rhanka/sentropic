@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, appendFileSync, readdirSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, appendFileSync, readdirSync, mkdirSync, existsSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
@@ -99,6 +99,17 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       invoke(['down']);
     }
     if (results.api || results.browser || results.vscode) process.exitCode = 1;
+  } else if (command === 'fixture') {
+    const traffic = json(`${dir}/traffic.json`);
+    const networkInternal = readFileSync(`${dir}/network-internal.txt`, 'utf8').trim() === 'true';
+    const file = '.tmp/live-provider/unexpected-egress.jsonl';
+    const unexpectedEgress = existsSync(file) ? readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse) : [];
+    const qualified = networkInternal && traffic.failedRequests === 0 && unexpectedEgress.length === 0;
+    const receipt = { qualified, networkInternal, unexpectedEgress, traffic,
+      liveProviderCalls: networkInternal ? 0 : null, proof: 'API test network has no external route; provider fetches are redirected locally' };
+    writeFileSync(`${dir}/receipt.json`, JSON.stringify(receipt, null, 2));
+    console.log(JSON.stringify(receipt, null, 2));
+    if (!qualified) process.exitCode = 1;
   } else if (command === 'health') {
     const runs = api('repos/rhanka/sentropic/actions/workflows/llm-live-daily.yml/runs?event=schedule&per_page=100').workflow_runs;
     const health = scheduleHealth(runs);
