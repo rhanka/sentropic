@@ -1,5 +1,10 @@
 import { createHash } from 'node:crypto';
-import { computePolicyDigest, POLICY_FORMAT } from '@sentropic/cluster-mesh';
+import {
+  computePolicyDigest,
+  ContentPolicyError,
+  POLICY_FORMAT,
+  validateChannelRetention,
+} from '@sentropic/cluster-mesh';
 
 export { POLICY_FORMAT };
 
@@ -151,6 +156,23 @@ export const createPolicyStore = (gates: PolicyStoreGates) => {
     const sourceBinding = policy['sourceBinding'];
     if (sourceBinding === undefined) {
       throw new PolicyStoreError('invalid_request', 'policy sourceBinding is required');
+    }
+    const channels = policy['channels'];
+    if (channels !== undefined && typeof channels === 'object' && channels !== null) {
+      try {
+        const retentionMap: Record<string, unknown> = {};
+        for (const [name, entry] of Object.entries(channels as Record<string, unknown>)) {
+          if (entry !== null && typeof entry === 'object' && 'retention' in entry) {
+            retentionMap[name] = (entry as Record<string, unknown>)['retention'];
+          }
+        }
+        validateChannelRetention(retentionMap);
+      } catch (error) {
+        if (error instanceof ContentPolicyError) {
+          throw new PolicyStoreError('invalid_request', `retention: ${error.message}`);
+        }
+        throw error;
+      }
     }
     const existing = admissions.get(policyId);
     if (input.purpose === 'share') {

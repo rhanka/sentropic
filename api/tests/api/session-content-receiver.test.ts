@@ -55,6 +55,12 @@ describe('STORE session-content policy receiver', () => {
     expect(() => store.admitPolicy(share())).toMatchObject({ code: 'r15_unaccepted' });
     expect(store.isCaptureEligible('policy-share-1')).toBe(false);
   });
+  it('should refuse admission with unsigned channel retention', () => {
+    const store = createPolicyStore(gates());
+    const channels = { ...CHANNELS, 'terminal.cache': undefined } as typeof CHANNELS;
+    expect(() => store.admitPolicy(share({ policy: policy({ channels }) })))
+      .toMatchObject({ code: 'invalid_request' });
+  });
   it('should refuse activation without identity or durable writer', () => {
     expect(() => createPolicyStore(gates({ identityAvailable: false })).admitPolicy(share()))
       .toMatchObject({ code: 'authority_unavailable' });
@@ -65,13 +71,15 @@ describe('STORE session-content policy receiver', () => {
     const store = createPolicyStore(gates());
     const first = store.admitPolicy(share({ retentionExpiresAt: 1_793_606_400_000 }));
     expect(first.firstAdmissionExpiresAt).toBe(1_793_606_400_000);
-    const badAmend = { ...share(), purpose: 'amend' as const, policyRevision: 2,
-      priorRevision: 1, priorDigest: '0'.repeat(64) };
+    const amendBody = (rev: number) => policy({ policyRevision: rev });
+    const badAmend = { ...share(), policy: amendBody(2), purpose: 'amend' as const,
+      policyRevision: 2, priorRevision: 1, priorDigest: '0'.repeat(64) };
     expect(() => store.admitPolicy(badAmend)).toMatchObject({ code: 'revision_conflict' });
     const amended = store.admitPolicy({ ...badAmend, priorDigest: first.policyDigest });
     expect(amended.firstAdmissionExpiresAt).toBe(1_793_606_400_000);
-    const extended = { ...badAmend, policyRevision: 3, priorRevision: 2,
-      priorDigest: amended.policyDigest, retentionExpiresAt: 1_799_999_999_999 };
+    const extended = { ...share(), policy: amendBody(3), purpose: 'amend' as const,
+      policyRevision: 3, priorRevision: 2, priorDigest: amended.policyDigest,
+      retentionExpiresAt: 1_799_999_999_999 };
     expect(() => store.admitPolicy(extended)).toMatchObject({ code: 'invalid_request' });
   });
   it('should let denial dominate and dedupe identical operations', () => {
