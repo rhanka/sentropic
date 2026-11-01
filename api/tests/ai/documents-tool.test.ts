@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { db } from '../../src/db/client';
-import { contextDocuments, documentConnectorAccounts, users, workspaces, ADMIN_WORKSPACE_ID } from '../../src/db/schema';
+import { contextDocuments, documentConnectorAccounts, workspaces, ADMIN_WORKSPACE_ID } from '../../src/db/schema';
+import { createCmUser } from '../../src/services/identity/cm-users';
+import { cmDeleteForUsers } from '../utils/cm-identity-test-store';
 import { toolService } from '../../src/services/tool-service';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
@@ -71,18 +73,17 @@ describe('AI (deterministic) - documents.get_content / documents.analyze (mocked
       docId = '';
     }
     await db.delete(documentConnectorAccounts).where(eq(documentConnectorAccounts.userId, googleUserId));
-    await db.delete(users).where(eq(users.id, googleUserId));
+    await cmDeleteForUsers([googleUserId]);
   });
 
   async function connectGoogleDriveUser() {
-    await db.insert(users).values({
-      id: googleUserId,
+    await createCmUser({
+      userId: googleUserId,
       email: `${googleUserId}@example.com`,
       displayName: 'Google Drive Test User',
       role: 'admin_app',
       emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+      accountStatus: 'active',
     });
     await storeGoogleDriveTokenMaterial({
       userId: googleUserId,
