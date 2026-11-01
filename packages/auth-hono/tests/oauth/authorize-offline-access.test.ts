@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { authorizePath, createOauthClient, createOauthPorts, createOauthRouterForTest } from '../__fixtures__/oauth-fixtures.js';
 import { refreshFixture } from './refresh-fixtures.js';
-import { createWellKnownRouter, hasOfflineCoverage } from '../../src/index.js';
+import { createWellKnownRouter, hasOfflineCoverage, isRefreshEligibleClient } from '../../src/index.js';
 
 describe('offline authorization consent', () => {
+  it('should require both grants even when a registration bypasses the registration script', () => {
+    const client = createOauthClient({ allowedScopes: ['offline_access'], grantTypes: ['refresh_token'] });
+    expect(isRefreshEligibleClient(client)).toBe(false);
+    client.grantTypes.push('authorization_code');
+    expect(isRefreshEligibleClient(client)).toBe(true);
+  });
+
   it('should require exact issuer, epoch, scope set and resource or explicit default approval', () => {
     const grant = { scopes: ['read', 'offline_access'], offlineScopes: ['read', 'offline_access'],
       offlineGrantId: 'epoch', offlineIssuer: 'https://idp.test', offlineConsentedAt: new Date(),
