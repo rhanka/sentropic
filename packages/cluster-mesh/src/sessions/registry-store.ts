@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { LISTING_LEASE_MS } from './registry-types.js';
+import { LISTING_DIGEST_DOMAIN, LISTING_LEASE_MS, SNAPSHOT_DIGEST_DOMAIN } from './registry-types.js';
 import type {
   CapabilitiesRecord,
   CoarseProjection,
@@ -66,6 +66,40 @@ export function sessionKey(ref: SessionRef): string {
 
 export function sha256Hex(input: string): string {
   return createHash('sha256').update(input, 'utf8').digest('hex');
+}
+
+// RFC8785 (JCS) serialization for the closed registry payloads: recursively
+// key-sorted objects, JSON primitive serialization, no insignificant whitespace.
+export function canonicalizeJson(value: unknown): string {
+  if (value === null) return 'null';
+  if (Array.isArray(value)) return `[${value.map(canonicalizeJson).join(',')}]`;
+  switch (typeof value) {
+    case 'number':
+      if (!Number.isSafeInteger(value)) throw new TypeError('JCS: non-safe-integer number');
+      return String(value);
+    case 'boolean':
+      return String(value);
+    case 'string':
+      return JSON.stringify(value);
+    case 'object': {
+      const entries = Object.entries(value as Record<string, unknown>)
+        .filter(([, v]) => v !== undefined)
+        .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+      return `{${entries.map(([k, v]) => `${JSON.stringify(k)}:${canonicalizeJson(v)}`).join(',')}}`;
+    }
+    default:
+      throw new TypeError('JCS: unsupported value');
+  }
+}
+
+// r2 revisionRules.registry digest domains: listing hashes only the closed
+// coarse payload; activated hashes the complete signed snapshot body.
+export function projectionDigestOf(projection: CoarseProjection): string {
+  return sha256Hex(LISTING_DIGEST_DOMAIN + canonicalizeJson(projection));
+}
+
+export function snapshotDigestOf(snapshotBody: unknown): string {
+  return sha256Hex(SNAPSHOT_DIGEST_DOMAIN + canonicalizeJson(snapshotBody));
 }
 
 export function outboxRefFor(key: string, revision: number): RevisionRef {
