@@ -193,6 +193,7 @@
     "docs/migration-l6.md",
     "examples/radar-commit-setup.ts",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "publishConfig": {

@@ -420,6 +420,8 @@ publication, use the current package version and this bootstrap sequence
 
 ## Source and management capabilities
 
+Version 0.3.0 introduces D1, D2 and D4; see [CHANGELOG.md](./CHANGELOG.md).
+
 Hosts may explicitly select `artifacts_get_source`, `artifacts_set_access`, and
 `artifacts_delete` in their compiled profile. Configure `get_source` with empty
 limits/defaults, and `set_access`/`delete` with `idempotencyKeyMaxUnits: 256` and
@@ -441,8 +443,9 @@ port. Its `request` method issues a challenge for the host management UI;
 on the supplied transaction. A caller boolean is never confirmation. Repeated
 successful deletes return the stored receipt without consuming proof again.
 
-Apply `migrations/0005_terminal_controls.sql` after the existing migrations before
-activation. The default management writer uses the coordinator's PostgreSQL
+Apply `migrations/0004_terminal_controls.sql` after `0001_artifacts.sql`,
+`0002_lifecycle.sql` and `0003_coordinator.sql` before activation.
+The default management writer uses the coordinator's PostgreSQL
 transaction; alternative stores implement `management.createUnit` with the same
 parent/ACL/current lock order and transactional effects. Terminal markers and
 SQL guards prevent restoration and later publication. Deletion reports

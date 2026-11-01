@@ -28,6 +28,8 @@
 - [x] Review r1 RED: ungranted mutation probes returned 403 instead of 404; real publication readers accepted purged releases and mismatched record digests.
 - [x] Review r1 visibility GREEN: all 6 parity transport tests pass, including ungranted/missing/withdrawn 404, visible non-owner 403 and terminal delete replay.
 - [x] Review r1 source GREEN: all 6 parity source tests pass; real publication readers reject purged/mismatched selected and current releases with zero blob reads.
+- [x] Review r1 package gate: typecheck, lint and all 466 unit tests pass (40 files).
+- [x] Review r1 SQL RED: standalone integration rejected to_jsonb(artifacts.artifacts); use an explicit row alias in both binding lookup queries.
 - [x] D4 metadata reads preserve optional fields; metadata writes belong to feat/artifacts-parity-p0.
 - [x] Source RED found a foreign release-record acceptance; added record/manifest identity checks and regression coverage.
 - [x] Targeted source/control/transport run: 11 tests pass; broad SCOPE also selected the integration file, correctly refusing absent DATABASE_URL. The dedicated integration target is queued.
@@ -67,6 +69,6 @@
   - [ ] make down ENV=test-artifacts-p0b; write .tmp/rv/artifacts-parity-p0b.md and stop.
 - [ ] **Lot 4 — Fix review r1 (owner request, PR 878)**
   - [x] Mask invisible set_access/delete targets through visible(); qualify HTTP/MCP ungranted and visible non-owner outcomes while preserving delete replay.
-  - [ ] Keep p0b as first artifacts 0.3.0 release; ship a D1/D2/D4 CHANGELOG without touching the sibling branch.
-  - [ ] Rename terminal controls migration to 0004; update README and integration fixture.
+  - [x] Keep p0b as first artifacts 0.3.0 release; ship a D1/D2/D4 CHANGELOG without touching the sibling branch.
+  - [x] Rename terminal controls migration to 0004; update README and integration fixture.
   - [x] Preserve release state and manifestDigest through publication readers; reject purged/mismatched selected and current source releases before blob reads.
