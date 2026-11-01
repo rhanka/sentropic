@@ -52,7 +52,7 @@ export const createConsentStoreAdapter = (
     async saveGrant(userId, clientId, scopes, tenantId, offline): Promise<void> {
       await database.transaction(async (tx) => {
       // Serialize concurrent approvals on the CM account row (public.users is dropped).
-      await tx.execute(sql`SELECT "id" FROM ${sql.raw(CM_IDENTITY_SCHEMA)}.identity_user_accounts WHERE "id" = ${userId} FOR UPDATE`);
+      await tx.execute(sql`SELECT "user_id" FROM ${sql.raw(CM_IDENTITY_SCHEMA)}.identity_user_accounts WHERE "user_id" = ${userId} FOR UPDATE`);
       const tenant = await grantTenant(tx, clientId, tenantId, !!offline);
       const timestamp = now();
       // Concurrent approvals serialize on the user row before reading the generic scope union.
