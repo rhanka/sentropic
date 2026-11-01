@@ -75,6 +75,7 @@
   - [ ] Capture a real baseline with run/attempt/job IDs, source SHA, workflow SHA, cache state, runner class, spans, selected endpoints, and executed test identities.
   - [ ] Declare exceptions above; names marked new below are deliverables to create, not existing commands or evidence.
 - [ ] **Lot 1 — Provider-boundary protocol fixtures**
+  - [x] Initial offline protocol gate: 8/8 HTTP/SSE, tools, errors/retries, cancellation/reconnection and egress tests pass; application qualification remains pending.
   - [ ] Add the named HTTP/SSE fixture and tests; cover streaming, tool requests/results, malformed output, errors/rate limits, cancellation, reconnection, model routing, and retries; assert outbound request shape and forbid unexpected real egress.
   - [ ] Adapt only the two named runtime composition seams and ten named API AI test files; preserve application HTTP/auth/database/queue/tool behavior. Runtime fixture configuration is test-only and cannot become a production bypass.
   - [ ] Lot gate: new `make test-ci-provider-fixtures ENV=test-ci-deterministic-journeys`; run every changed API AI file through `make test-api-ai` scoped by file on the assigned isolated environment; failures must block.
