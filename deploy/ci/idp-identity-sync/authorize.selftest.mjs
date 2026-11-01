@@ -36,7 +36,7 @@ const request = resource => {
 stored = null;
 let response = await handler(request(client.resourceIndicators[0]));
 assert.equal(response.status, 400);
-assert.equal((await response.json()).error.message, 'Unknown OAuth client.');
+assert.equal((await response.json()).error_description, 'Unknown OAuth client.');
 stored = client;
 response = await handler(request(client.resourceIndicators[0]));
 assert.equal(response.status, 302);
