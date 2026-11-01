@@ -12,7 +12,7 @@ import {
 } from '../../db/schema';
 import type { AuthUser } from '../../middleware/auth';
 import { commentEventSink, commentStore } from '../../services/comments/instance';
-import { reconcileTenantId } from '../../services/tenancy/resolve-tenant';
+import { reconcileCmTenantId } from '../../services/identity/cm-tenancy';
 import {
   requireWorkspaceAccess,
   requireWorkspaceAdmin,
@@ -75,7 +75,7 @@ export const createProductCommentsRouterOptions = (): CreateCommentsRouterOption
   },
   tenant: {
     async resolve(principal): Promise<TenantContext> {
-      const tenantId = await reconcileTenantId({
+      const tenantId = await reconcileCmTenantId({
         workspaceId: principal.workspaceId,
         userId: principal.userId,
         path: 'comments',
