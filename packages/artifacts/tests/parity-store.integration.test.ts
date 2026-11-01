@@ -36,6 +36,9 @@ describe('transactional management store', () => {
       expect((await store.getArtifactAcl(artifactId))?.grants).toEqual([
         { principalId: 'bob', grant: 'read' }, { principalId: 'carol', grant: 'read' }]);
       expect((await store.getArtifactAcl(artifactId))?.bindingName).toBe('shares');
+      const before = (await store.getArtifactAcl(artifactId))?.updatedAt;
+      await a.setAccess(artifactId, 'bob', 'grant', '2026-11-02T00:00:00Z');
+      expect((await store.getArtifactAcl(artifactId))?.updatedAt).toBe(before);
     } finally { first.release(); second.release(); }
   });
   it('should retain terminal identity and reject legacy restore, renew and publication', async () => {

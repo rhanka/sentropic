@@ -117,7 +117,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
             const grants = action === 'revoke' ? acl.grants.filter((g) => g.principalId !== principalId)
               : acl.grants.some((g) => g.principalId === principalId) ? acl.grants : [...acl.grants, { principalId, grant: 'read' as const }];
             writes.get(client)!.push(() => acls.putArtifactAcl(id, { ...acl, isPublic: false, grants, updatedAt }));
-            return grants;
+            return { grants, updatedAt };
           },
           async delete(id) { writes.get(client)!.push(() => lifecycleStore.markTerminal(id)); },
         };

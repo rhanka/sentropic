@@ -12,7 +12,7 @@ export interface ManagementTarget {
 export interface ManagementUnit {
   lock(artifactId: string): Promise<void>;
   read(artifactId: string): Promise<ManagementTarget | undefined>;
-  setAccess(artifactId: string, principalId: string, action: 'grant' | 'revoke', updatedAt: string): Promise<unknown>;
+  setAccess(artifactId: string, principalId: string, action: 'grant' | 'revoke', updatedAt: string): Promise<{ grants: unknown; updatedAt: string | null }>;
   delete(artifactId: string, deletedAt: string): Promise<void>;
 }
 export interface DeleteConfirmationContext {
@@ -89,7 +89,7 @@ export async function manageArtifact(deps: {
         const principalId = command.payload.principalId as string;
         if (command.payload.action === 'grant' && !await deps.isApprovedPrincipal(principalId)) throw refused('access_denied');
         const output = await unit.setAccess(artifactId, principalId, command.payload.action as 'grant' | 'revoke', now);
-        Object.assign(receipt, { artifactId, isPublic: false, grants: output, updatedAt: now });
+        Object.assign(receipt, { artifactId, isPublic: false, ...output });
       }
     },
     guard: async (ctx, tx) => {

@@ -54,6 +54,7 @@
 - [ ] **Lot 2 — Common implementation**
   - [x] D1 verified manifest and author file reads with separate provenance (transport qualification pending).
   - [ ] D2 coordinator-bound named read grants and confirmed terminal deletion.
+  - [x] Identical named grants preserve the stored modification date without replacing grants.
   - [x] D4 get/list binding, dates, digest, URLs and optional metadata.
 - [ ] **Lot 3 — Final validation**
   - [ ] Scoped tests, artifacts unit suite, typecheck and lint through make.
