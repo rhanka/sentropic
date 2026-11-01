@@ -2,6 +2,7 @@
 // envelope validation, keyring reader ordering, disposal and table round-trip.
 
 import { describe, expect, it } from 'vitest';
+import { IdentityCustodyErrorV1 } from '../../src/identity-contracts/custody-errors.js';
 import {
   CONNECTOR_CUSTODY_KEY_REF_V1,
   createNodeConnectorCustody,
@@ -13,12 +14,24 @@ import { asOpHost, NOW, openPostgresEnv, openSqliteEnv, pgEnabled } from './a20b
 
 const WRITE = { mode: 'write' as const, deadlineMs: 5000 };
 
+/** Fixed custody messages never embed the code; assert the typed code. */
+const expectCustodyInvalid = (fn: () => unknown): void => {
+  try {
+    fn();
+  } catch (error) {
+    expect(error).toBeInstanceOf(IdentityCustodyErrorV1);
+    expect((error as IdentityCustodyErrorV1).code).toBe('identity_revocation_custody_invalid');
+    return;
+  }
+  throw new Error('expected IdentityCustodyErrorV1');
+};
+
 describe('A2.0b connector revocation custody', () => {
   it('derives a stable 32-byte key and refuses malformed master keys', () => {
     const master = new Uint8Array(32).fill(9);
     expect(deriveConnectorCustodyKeyV1(master)).toHaveLength(32);
     expect(deriveConnectorCustodyKeyV1(master)).toEqual(deriveConnectorCustodyKeyV1(new Uint8Array(32).fill(9)));
-    expect(() => deriveConnectorCustodyKeyV1(new Uint8Array(16))).toThrow(/revocation_custody_invalid/);
+    expectCustodyInvalid(() => deriveConnectorCustodyKeyV1(new Uint8Array(16)));
     expect(CONNECTOR_CUSTODY_KEY_REF_V1).toBe('secret-crypto:v1');
   });
 
@@ -32,17 +45,17 @@ describe('A2.0b connector revocation custody', () => {
     const opened = openConnectorCapabilityV1({ key, keyRef: 'secret-crypto:v1', custodyRef: 'cc-1', deliveryId: 'd-1', connectorAccountId: 'conn-1', provider: 'drive', nonce: sealed.nonce, ciphertext: sealed.ciphertext, authTag: sealed.authTag });
     expect(opened).toEqual({ tokenKind: 'access', token: 'access-secret' });
     // Cross-row AAD: same bytes under another delivery refuse.
-    expect(() => openConnectorCapabilityV1({ key, keyRef: 'secret-crypto:v1', custodyRef: 'cc-1', deliveryId: 'd-2', connectorAccountId: 'conn-1', provider: 'drive', nonce: sealed.nonce, ciphertext: sealed.ciphertext, authTag: sealed.authTag })).toThrow(/revocation_custody_invalid/);
+    expectCustodyInvalid(() => openConnectorCapabilityV1({ key, keyRef: 'secret-crypto:v1', custodyRef: 'cc-1', deliveryId: 'd-2', connectorAccountId: 'conn-1', provider: 'drive', nonce: sealed.nonce, ciphertext: sealed.ciphertext, authTag: sealed.authTag }));
     // Wrong key refuses.
-    expect(() => openConnectorCapabilityV1({ key: deriveConnectorCustodyKeyV1(new Uint8Array(32).fill(8)), keyRef: 'secret-crypto:v1', custodyRef: 'cc-1', deliveryId: 'd-1', connectorAccountId: 'conn-1', provider: 'drive', nonce: sealed.nonce, ciphertext: sealed.ciphertext, authTag: sealed.authTag })).toThrow(/revocation_custody_invalid/);
+    expectCustodyInvalid(() => openConnectorCapabilityV1({ key: deriveConnectorCustodyKeyV1(new Uint8Array(32).fill(8)), keyRef: 'secret-crypto:v1', custodyRef: 'cc-1', deliveryId: 'd-1', connectorAccountId: 'conn-1', provider: 'drive', nonce: sealed.nonce, ciphertext: sealed.ciphertext, authTag: sealed.authTag }));
     // Malformed envelope refuses.
-    expect(() => openConnectorCapabilityV1({ key, keyRef: 'secret-crypto:v1', custodyRef: 'cc-1', deliveryId: 'd-1', connectorAccountId: 'conn-1', provider: 'drive', nonce: '!!!', ciphertext: sealed.ciphertext, authTag: sealed.authTag })).toThrow(/revocation_custody_invalid/);
+    expectCustodyInvalid(() => openConnectorCapabilityV1({ key, keyRef: 'secret-crypto:v1', custodyRef: 'cc-1', deliveryId: 'd-1', connectorAccountId: 'conn-1', provider: 'drive', nonce: '!!!', ciphertext: sealed.ciphertext, authTag: sealed.authTag }));
     key.fill(0);
   });
 
   it('keeps ciphertext opaque and refuses empty or oversized capabilities', () => {
     const key = deriveConnectorCustodyKeyV1(new Uint8Array(32).fill(9));
-    expect(() => sealConnectorCapabilityV1({ key, keyRef: 'secret-crypto:v1', custodyRef: 'cc', deliveryId: 'd', connectorAccountId: 'c', provider: 'p', capability: { tokenKind: 'access', token: '' } })).toThrow(/revocation_custody_invalid/);
+    expectCustodyInvalid(() => sealConnectorCapabilityV1({ key, keyRef: 'secret-crypto:v1', custodyRef: 'cc', deliveryId: 'd', connectorAccountId: 'c', provider: 'p', capability: { tokenKind: 'access', token: '' } }));
     const sealed = sealConnectorCapabilityV1({ key, keyRef: 'secret-crypto:v1', custodyRef: 'cc', deliveryId: 'd', connectorAccountId: 'c', provider: 'p', capability: { tokenKind: 'refresh', token: 'r' } });
     expect(sealed.ciphertext).not.toContain('r');
     key.fill(0);

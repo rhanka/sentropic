@@ -21,7 +21,7 @@ const READ = { mode: 'read' as const, deadlineMs: 5000 };
 
 const KNOWN_SHA256_ABC = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
 // RFC 4231 test case 1: key 20x0x0b, data "Hi There".
-const RFC4231_TC1 = 'b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9bda251e';
+const RFC4231_TC1 = 'b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9376c2e32cff7';
 
 const PROFILES = (pgEnabled ? ['postgres', 'sqlite'] : ['sqlite']) as const;
 
