@@ -76,7 +76,7 @@ export async function cmPurgeAllIdentity(): Promise<void> {
     'cm_service_clients',
     'cm_tenants',
     'cm_identity_conversation_sessions',
-    'cm_identity_escalation_chain',
+    'cm_identity_escalation_entries',
     'cm_identity_audit_events',
   ];
   const seen = new Set<string>();

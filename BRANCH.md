@@ -82,7 +82,9 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
   - [ ] Account deletion through the A2.3/A2.0b atomic cascade (V2), self + admin handlers.
   - [ ] Rollback checkpoint recorded BEFORE any legacy table deletion; one author per namespace via cutover records.
+  - [x] Preserve the pre-deletion checkpoint row and retain account-driven OAuth invalidation after cutover.
   - [ ] All residual readers of legacy identity tables switched to CM stores (46-file inventory).
+  - [x] Replace omitted artifact authorization and login-credential SQL readers with CM identity sources.
 - [ ] **Lot 3 — Deletions**
   - [ ] Drop legacy identity tables in migration; delete identity part of api/src/db/schema.ts and the named files; no dual writer, no legacy fallback.
 - [ ] **Lot 4 — F11 screens + e2e**
