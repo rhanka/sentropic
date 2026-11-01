@@ -50,6 +50,32 @@ export const findCmTenant = async (tenantId: string): Promise<CmTenantRecord | n
     : null;
 };
 
+/** Create a tenant in the CM registry (fixtures/admin flows). */
+export const createCmTenant = async (input: {
+  tenantId: string;
+  slug?: string;
+  status?: 'active' | 'suspended' | 'offboarded';
+  createdAt?: Date;
+}): Promise<void> => {
+  const { tenancy } = getCmIdentity();
+  await tenancy.tenants.createTenant({
+    tenantId: input.tenantId,
+    slug: input.slug ?? input.tenantId,
+    status: input.status ?? 'active',
+    createdAt: (input.createdAt ?? new Date()).toISOString(),
+  });
+};
+
+/** Transition a tenant status in the CM registry. */
+export const setCmTenantStatus = async (
+  tenantId: string,
+  status: 'active' | 'suspended' | 'offboarded',
+): Promise<CmTenantRecord> => {
+  const { tenancy } = getCmIdentity();
+  const row = await tenancy.tenants.setTenantStatus(tenantId, status, new Date().toISOString());
+  return { tenantId: row.tenantId, slug: row.slug, status: row.status, createdAt: new Date(row.createdAt) };
+};
+
 export const listCmMembershipsForUser = async (userId: string): Promise<CmMembershipRecord[]> => {
   const { tenancy } = getCmIdentity();
   const rows = await tenancy.memberships.listMembershipsForUser(userId);

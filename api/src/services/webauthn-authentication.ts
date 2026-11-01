@@ -10,12 +10,15 @@ import type {
   PublicKeyCredentialRequestOptionsJSON,
   AuthenticationResponseJSON,
 } from '@simplewebauthn/server';
-import { db } from '../db/client';
-import { webauthnCredentials, users } from '../db/schema';
-import { eq } from 'drizzle-orm';
 import { logger } from '../logger';
 import { getWebAuthnConfig, getUserVerificationRequirement } from './webauthn-config';
 import { generateChallenge, markChallengeUsed } from './challenge-manager';
+import { findCmUserById } from './identity/cm-users';
+import {
+  compareAndSwapCmCredentialCounter,
+  findCmCredentialByCredentialId,
+  listCmCredentialsForUser,
+} from './identity/cm-proofs';
 
 /**
  * WebAuthn Authentication Service
@@ -53,26 +56,16 @@ export async function generateWebAuthnAuthenticationOptions(
   
   // If user ID provided, get their credentials and role
   if (userId) {
-    const credentials = await db
-      .select({
-        id: webauthnCredentials.credentialId,
-        transportsJson: webauthnCredentials.transportsJson,
-      })
-      .from(webauthnCredentials)
-      .where(eq(webauthnCredentials.userId, userId));
-    
+    const credentials = await listCmCredentialsForUser(userId);
+
     allowCredentials = credentials.map((cred) => ({
-      id: cred.id,
-      transports: cred.transportsJson ? (JSON.parse(cred.transportsJson) as AuthenticatorTransportFuture[]) : undefined,
+      id: cred.credentialId,
+      transports: cred.transports ? [...cred.transports] as AuthenticatorTransportFuture[] : undefined,
     }));
-    
+
     // Get user role for verification requirement
-    const [user] = await db
-      .select({ role: users.role })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
-    
+    const user = await findCmUserById(userId);
+
     if (user) {
       userVerification = getUserVerificationRequirement(user.role as 'admin_app' | 'admin_org' | 'editor' | 'guest');
     }
@@ -129,26 +122,8 @@ export async function verifyWebAuthnAuthentication(
     // Same as RegistrationResponseJSON.id - see @simplewebauthn/server types
     const credentialIdBase64 = credential.id;
     
-    const [storedCredential] = await db
-      .select({
-        id: webauthnCredentials.id,
-        credentialId: webauthnCredentials.credentialId,
-        publicKeyCose: webauthnCredentials.publicKeyCose,
-        counter: webauthnCredentials.counter,
-        userId: webauthnCredentials.userId,
-        uv: webauthnCredentials.uv,
-        transportsJson: webauthnCredentials.transportsJson,
-      })
-      .from(webauthnCredentials)
-      .where(eq(webauthnCredentials.credentialId, credentialIdBase64))
-      .limit(1);
-    
-    // Debug: check what credentials exist in database
-    const allCredentials = await db
-      .select({ credentialId: webauthnCredentials.credentialId })
-      .from(webauthnCredentials)
-      .limit(5);
-    
+    const storedCredential = await findCmCredentialByCredentialId(credentialIdBase64);
+
     logger.debug({
       searchedCredentialId: credentialIdBase64.substring(0, 10) + '...',
       storedCredential: storedCredential ? 'found' : 'not found',
@@ -157,9 +132,7 @@ export async function verifyWebAuthnAuthentication(
         credentialId: storedCredential.credentialId.substring(0, 10) + '...',
         counter: storedCredential.counter,
         userId: storedCredential.userId,
-        uv: storedCredential.uv
       } : null,
-      allCredentials: allCredentials.map(c => c.credentialId.substring(0, 10) + '...')
     }, 'Credential lookup');
     
     if (!storedCredential) {
@@ -168,16 +141,15 @@ export async function verifyWebAuthnAuthentication(
     }
     
     // Convert base64url back to Uint8Array
-    const credentialPublicKey = Buffer.from(storedCredential.publicKeyCose, 'base64url');
-    
+    const credentialPublicKey = Buffer.from(storedCredential.publicKey, 'base64url');
+
     // F3/B4: IdP passkeys are 2FA credentials — UV is required for every login,
     // regardless of role. No per-role lookup: fail closed by construction.
     const requireUV = true;
-    
+
     // Create WebAuthnCredential object (v11.0.0+ API change)
-    // transportsJson est maintenant inclus dans le select, plus besoin de cast
-    const transports = storedCredential.transportsJson
-      ? (JSON.parse(storedCredential.transportsJson) as AuthenticatorTransportFuture[])
+    const transports = storedCredential.transports
+      ? [...storedCredential.transports] as AuthenticatorTransportFuture[]
       : [];
     // WebAuthnCredential attend id comme Base64URLString (string) et publicKey comme Uint8Array
     // storedCredential.credentialId est déjà un string base64url, pas besoin de conversion
@@ -222,14 +194,18 @@ export async function verifyWebAuthnAuthentication(
     const { authenticationInfo } = verification;
     const { newCounter } = authenticationInfo;
     
-    // Update credential counter and last used timestamp
-    await db
-      .update(webauthnCredentials)
-      .set({
-        counter: newCounter,
-        lastUsedAt: new Date(),
-      })
-      .where(eq(webauthnCredentials.id, storedCredential.id));
+    // Update credential counter and last used timestamp (CAS on counter+revision)
+    const counterUpdated = await compareAndSwapCmCredentialCounter({
+      credentialId: storedCredential.credentialId,
+      userId: storedCredential.userId,
+      expectedCounter: storedCredential.counter,
+      newCounter,
+      now: new Date(),
+    });
+    if (!counterUpdated) {
+      logger.warn({ userId: storedCredential.userId }, 'WebAuthn counter update lost a race');
+      return { verified: false };
+    }
     
     // Mark challenge as used
     await markChallengeUsed(expectedChallenge);

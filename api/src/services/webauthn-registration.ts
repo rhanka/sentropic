@@ -6,13 +6,13 @@ import {
 import type {
   PublicKeyCredentialCreationOptionsJSON,
   RegistrationResponseJSON,
+  AuthenticatorTransportFuture,
 } from '@simplewebauthn/server';
-import { db } from '../db/client';
-import { users, webauthnCredentials } from '../db/schema';
-import { eq } from 'drizzle-orm';
 import { logger } from '../logger';
 import { getWebAuthnConfig, getUserVerificationRequirement } from './webauthn-config';
 import { generateChallenge, markChallengeUsed } from './challenge-manager';
+import { findCmUserById } from './identity/cm-users';
+import { createCmCredential, listCmCredentialsForUser } from './identity/cm-proofs';
 
 /**
  * WebAuthn Registration Service
@@ -56,22 +56,11 @@ export async function generateWebAuthnRegistrationOptions(
   
   // Check if user already has credentials (for excludeCredentials)
   // Only check if userId is provided (existing user)
-  const existingCredentials = userId ? await db
-    .select({
-      id: webauthnCredentials.credentialId,
-      transports: webauthnCredentials.transportsJson,
-    })
-    .from(webauthnCredentials)
-    .where(eq(webauthnCredentials.userId, userId)) : [];
-  
+  const existingCredentials = userId ? await listCmCredentialsForUser(userId) : [];
+
   // Get user role to determine user verification requirement
   // Only check if userId is provided (existing user)
-  const user = userId ? await db
-    .select({ role: users.role })
-    .from(users)
-    .where(eq(users.id, userId))
-    .limit(1)
-    .then(rows => rows[0]) : null;
+  const user = userId ? await findCmUserById(userId) : null;
   
   const userVerification = user
     ? getUserVerificationRequirement(user.role as 'admin_app' | 'admin_org' | 'editor' | 'guest')
@@ -101,8 +90,8 @@ export async function generateWebAuthnRegistrationOptions(
           timeout: config.timeout.registration,
           attestationType,
           excludeCredentials: existingCredentials.map((cred) => ({
-            id: cred.id,
-            transports: cred.transports ? JSON.parse(cred.transports) : [],
+            id: cred.credentialId,
+            transports: (cred.transports ?? []) as AuthenticatorTransportFuture[],
           })),
           authenticatorSelection: {
             residentKey: 'preferred', // Support passkeys
@@ -204,18 +193,19 @@ export async function verifyWebAuthnRegistration(
       await beforePersist({ userId });
     }
 
-    // Store credential in database
-    await db.insert(webauthnCredentials).values({
-      id: crypto.randomUUID(),
-      credentialId: credentialIdBase64,
-      publicKeyCose: publicKeyBase64,
-      counter,
+    // Store credential in the CM custody store (cm_identity.identity_webauthn_credentials)
+    await createCmCredential({
       userId,
-      deviceName: deviceName || credentialDeviceType || 'Unknown Device',
-      transportsJson: JSON.stringify(credential.response.transports || []),
-      uv: userVerified,
-      createdAt: new Date(),
-      lastUsedAt: null,
+      credentialId: credentialIdBase64,
+      publicKey: publicKeyBase64,
+      counter,
+      transports: credential.response.transports ?? [],
+      name: deviceName || credentialDeviceType || 'Unknown Device',
+      deviceType: credentialDeviceType,
+      backedUp: registrationInfo.credentialBackedUp ?? null,
+      uv: userVerified === true,
+      rpId: config.rpID,
+      now: new Date(),
     });
     
     // Mark challenge as used

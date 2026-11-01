@@ -1,7 +1,6 @@
 import type { LockObjectType } from './lock-service';
-import { db, pool } from '../db/client';
-import { users } from '../db/schema';
-import { eq } from 'drizzle-orm';
+import { pool } from '../db/client';
+import { findCmUserById } from './identity/cm-users';
 
 type PresenceUser = {
   userId: string;
@@ -72,11 +71,7 @@ export async function recordPresence(options: {
   let email = options.user.email ?? null;
   let displayName = options.user.displayName ?? null;
   if (!email && !displayName) {
-    const [row] = await db
-      .select({ email: users.email, displayName: users.displayName })
-      .from(users)
-      .where(eq(users.id, options.user.userId))
-      .limit(1);
+    const row = await findCmUserById(options.user.userId);
     email = row?.email ?? null;
     displayName = row?.displayName ?? null;
   }
