@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { db } from '../../../src/db/client';
-import { chatMessages, chatSessions, tenantMemberships, workspaces, workspaceMemberships } from '../../../src/db/schema';
+import { chatMessages, chatSessions, workspaces } from '../../../src/db/schema';
+import { setCmMembershipState } from '../../../src/services/identity/cm-tenancy';
+import { PLATFORM_TENANT_ID } from '../../../src/services/workspace-service';
+import { cmDeleteTenantMembershipsForUser, cmDeleteWorkspaceMembersForUser } from '../../utils/cm-identity-test-store';
 import { cleanupAuthData, createAuthenticatedUser, type TestUser } from '../../utils/auth-helper';
 
 vi.mock('../../../src/services/llm-runtime', () => ({ callLLMStream: vi.fn() }));
@@ -20,7 +23,7 @@ describe('chat turn catalog capability', () => {
     CHAT_COMMON_PROMPTS.reasoning_effort_eval = '';
     vi.stubEnv('APP_ARTIFACT_HOST_ENABLED', '0');
     user = await createAuthenticatedUser('editor');
-    await db.insert(tenantMemberships).values({ userId: user.id, tenantId: 'sentropic', status: 'approved' });
+    await setCmMembershipState(user.id, PLATFORM_TENANT_ID, { status: 'approved', role: 'member', decidedBy: 'test' });
     vi.mocked(callLLMStream).mockImplementation(async function* () {
       yield { type: 'content_delta', data: { delta: 'Chat continues.' } };
       yield { type: 'done', data: {} };
@@ -36,7 +39,7 @@ describe('chat turn catalog capability', () => {
 
   it('should isolate model tools for overlapping real-store turns in two workspaces', async () => {
     const other = await createAuthenticatedUser('guest');
-    await db.insert(tenantMemberships).values({ userId: other.id, tenantId: 'sentropic', status: 'approved' });
+    await setCmMembershipState(other.id, PLATFORM_TENANT_ID, { status: 'approved', role: 'member', decidedBy: 'test' });
     await db.update(workspaces).set({ type: 'ai-priorities' }).where(eq(workspaces.id, user.workspaceId!));
     await db.update(workspaces).set({ type: 'neutral' }).where(eq(workspaces.id, other.workspaceId!));
     const createTurn = async (actor: TestUser) => {
@@ -62,7 +65,7 @@ describe('chat turn catalog capability', () => {
     expect(seen.get(other.id)).toContain('workspace_list');
     expect(seen.get(other.id)).not.toContain('products_list');
     for (const names of seen.values()) expect(names).toContain('search_catalog');
-    await db.delete(tenantMemberships).where(eq(tenantMemberships.userId, other.id));
+    await cmDeleteTenantMembershipsForUser(other.id);
     seen.clear();
     const next = await Promise.all([createTurn(other), createTurn(user)]);
     await Promise.all(next.map(turn => chatService.runAssistantGeneration(turn)));
@@ -79,11 +82,11 @@ describe('chat turn catalog capability', () => {
     const turn = await chatService.createUserMessageWithAssistantPlaceholder({ userId: user.id,
       workspaceId: user.workspaceId!, content: 'Hello', model: 'gpt-4.1-nano' });
     await db.update(chatSessions).set({ title: 'Capability test' }).where(eq(chatSessions.id, turn.sessionId));
-    if (denial === 'missing tenant membership') await db.delete(tenantMemberships).where(eq(tenantMemberships.userId, user.id));
-    if (denial === 'requested tenant membership') await db.update(tenantMemberships).set({ status: 'requested' }).where(eq(tenantMemberships.userId, user.id));
+    if (denial === 'missing tenant membership') await cmDeleteTenantMembershipsForUser(user.id);
+    if (denial === 'requested tenant membership') await setCmMembershipState(user.id, PLATFORM_TENANT_ID, { status: 'requested', role: 'member', decidedBy: 'test' });
     if (denial === 'null session workspace') await db.update(chatSessions).set({ workspaceId: null }).where(eq(chatSessions.id, turn.sessionId));
     if (denial === 'hidden workspace') await db.update(workspaces).set({ hiddenAt: new Date() }).where(eq(workspaces.id, user.workspaceId!));
-    if (denial === 'non-member') await db.delete(workspaceMemberships).where(eq(workspaceMemberships.userId, user.id));
+    if (denial === 'non-member') await cmDeleteWorkspaceMembersForUser(user.id);
     if (denial === 'transport failure') vi.stubEnv('APP_ARTIFACT_HOST_ENABLED', '1');
     const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await chatService.runAssistantGeneration({ userId: user.id, ...turn });
