@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0
+## 0.2.5
 
 - Add `artifacts_list_versions`: release history of one artifact — per release
   the id, created at, author principal, state, whether it is current, and a

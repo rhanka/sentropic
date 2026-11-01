@@ -10,6 +10,7 @@ Close the generic P0 gaps of @sentropic/artifacts so the artifact MCP reaches Cl
 - Tests first: new unit suite `packages/artifacts/tests/parity-p0.test.ts`; run via `make test-artifacts SCOPE=packages/artifacts/tests/parity-p0.test.ts ENV=test-artifacts-parity` plus the full package unit suite, `make typecheck-artifacts`, `make build-artifacts`.
 - Commits: `make commit MSG="..."` only, <=150 lines each, selective `git add`, push after each commit.
 - All new text in English.
+- Retain the BRLOCK-EX1 policy reference verbatim in this BRANCH.md (required by `scripts/ci/ci-lockfile-installs.test.mjs`, run by required CI job `validate-publishable-manifests`): owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -22,7 +23,6 @@ Close the generic P0 gaps of @sentropic/artifacts so the artifact MCP reaches Cl
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
   - `packages/artifacts/l0-freeze/**` (frozen L0 contract vectors)
-  - `packages/artifacts/probe/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (max 1 file) — not needed; the artifacts schema migration lives in `packages/artifacts/migrations/`
   - `.github/workflows/**`
