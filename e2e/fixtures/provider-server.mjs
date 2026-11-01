@@ -68,7 +68,7 @@ export function createProviderServer({ respond = journeyResponse } = {}) {
       }
       if (req.url !== '/v1/chat/completions') throw new Error('Unexpected provider endpoint');
       if (!body.model || !Array.isArray(body.messages) || body.messages.length === 0) throw new Error('Expected model and messages');
-      if (!['mistral-small-2603', 'gpt-5.4-nano'].includes(body.model)) throw new Error('Unexpected model route');
+      if (!['mistral-small-2603', 'mistral-medium-3.5', 'gpt-5.4-nano'].includes(body.model)) throw new Error('Unexpected model route');
       const outcome = await respond(body);
       receipt.calls++;
       receipt.models[body.model] = (receipt.models[body.model] ?? 0) + 1;
@@ -116,10 +116,22 @@ export function createProviderServer({ respond = journeyResponse } = {}) {
 
 export function journeyResponse(body) {
   const messages = body.messages;
-  const text = messages.map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).join('\n');
-  const user = String(messages.findLast(m => m.role === 'user')?.content ?? '');
+  const messageText = content => Array.isArray(content) ? content.map(part => part.text ?? '').join('\n') : String(content ?? '');
+  const text = messages.map(m => messageText(m.content)).join('\n');
+  const user = messageText(messages.findLast(m => m.role === 'user')?.content);
   const json = value => ({ content: JSON.stringify(value) });
   const references = [{ title: 'Provider protocol reference', url: 'https://example.com/reference', excerpt: 'Local qualification evidence.' }];
+  if (user.includes('Produire une contraction (résumé détaillé)')) {
+    const source = user.match(/<source>([\s\S]*?)<\/source>/)?.[1] ?? '';
+    return { content: source.trim().split(/\s+/).slice(0, 4500).join(' ') };
+  }
+  if (user.includes('Texte du document:\n---')) return { content: `## Summary\n${user.split('Texte du document:\n---')[1].trim().split(/\s+/).slice(0, 500).join(' ')}` };
+  if (/dominant color of the attached image/i.test(user)) {
+    if (!messages.some(m => Array.isArray(m.content) && m.content.some(part => part.type === 'image_url' && part.image_url))) {
+      throw new Error('Vision journey must include the image on the provider request');
+    }
+    return { content: 'red' };
+  }
   if (/"dossier"/.test(user) && /"initiatives"/.test(user)) {
     const count = Number(text.match(/(?:exactement|à générer:|a generer:)\s*(\d+)/i)?.[1] ?? 3);
     if (count < 1 || count > 50) throw new Error('Unexpected initiative count');
@@ -154,7 +166,8 @@ export function journeyResponse(body) {
   const tools = (body.tools ?? []).map(t => t.function?.name);
   const lastUser = messages.findLastIndex(m => m.role === 'user');
   const results = messages.slice(lastUser + 1).filter(m => m.role === 'tool');
-  const used = new Set(results.map(m => m.name));
+  const callsById = new Map(messages.flatMap(m => m.tool_calls ?? []).map(call => [call.id, call.function]));
+  const used = new Set(results.map(m => callsById.get(m.tool_call_id)?.name ?? m.name));
   const id = kind => String(user).match(new RegExp(`${kind}Id[=\\s:\\"']+([\\w-]+)`, 'i'))?.[1]
     ?? text.match(new RegExp(`(?:${kind}Id|${kind}_id)[=\\s:\\"']+([\\w-]+)`, 'i'))?.[1]
     ?? text.match(new RegExp(`${kind} (?:with id )?([a-z0-9_-]{10,})`, 'i'))?.[1]
@@ -167,6 +180,13 @@ export function journeyResponse(body) {
     return { tool_calls: [{ id: `ci_tool_${results.length}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] };
   };
   if (results.length === 0) {
+    if (/document_generate/.test(user) && /pptx/.test(user)) return call('document_generate', {
+      action: 'generate', format: 'pptx', title: user.match(/titled "([^"]+)"/)?.[1] ?? 'Organization summary',
+      entityType: 'organization', entityId: id('organization'),
+    });
+    if (/Liste les documents de la session/.test(user)) return call('documents', {
+      action: 'list', contextType: 'chat_session', contextId: text.match(/Session de chat \(([^)]+)\)/)?.[1],
+    });
     if (/matrix_get/.test(user)) return call('matrix_get', { folderId: id('folder') });
     if (/web_extract/.test(user)) return call('web_extract', { urls: [...new Set(String(user).match(/https?:\/\/[^\s"\],]+/g) ?? [])] });
     if (/update_initiative|update the description|Ajoute.*Test E2E/i.test(user)) return call('update_initiative', {
@@ -179,6 +199,13 @@ export function journeyResponse(body) {
   }
   if (/organization_update|technologies.*exactly/i.test(user) && !used.has('organization_update')) return call('organization_update', {
     organizationId: id('organization'), updates: [{ field: 'technologies', value: 'Kubernetes, containers, CI/CD and infrastructure-as-code' }] });
+  if (/Liste les documents de la session/.test(user) && used.has('documents')) {
+    const names = results.flatMap(result => JSON.parse(result.content).items ?? []).map(item => item.filename);
+    if (!names.length) throw new Error('Document journey returned no files');
+    return { content: names.join(', ') };
+  }
+  const requestedWord = user.match(/Réponds uniquement(?: avec(?: le mot)?)?\s*["']?([A-Z][A-Z0-9_]+)/)?.[1];
+  if (requestedWord) return { content: requestedWord };
   return { content: text.includes('Bob') ? 'Bonjour Bob, voici la réponse.' : 'CI provider response: opération terminée.' };
 }
 
