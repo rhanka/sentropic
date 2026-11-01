@@ -7,7 +7,7 @@
 
 import type { BoundLoginSessionV1, IdentityTransactionV1, PostgresCustodyHandle } from '@sentropic/cluster-mesh';
 
-import { CM_IDENTITY_SCHEMA, getCmIdentity } from './cm-identity';
+import { CM_IDENTITY_SCHEMA, cmStoreClient, getCmIdentity } from './cm-identity';
 
 export interface CmSessionRecord {
   readonly id: string;
@@ -130,6 +130,15 @@ export const listCmSessionsForUser = async (userId: string): Promise<CmSessionRe
   const records: CmSessionRecord[] = [];
   for (const row of bound) records.push(toRecord(row, await lifecycleOf(row.sessionId)));
   return records;
+};
+
+export const countCmSessions = async (): Promise<number> => {
+  const result = await cmStoreClient.query(
+    `SELECT COUNT(*)::int AS n FROM ${CM_IDENTITY_SCHEMA}.identity_login_token_bindings WHERE "revoked_at" IS NULL`,
+    [],
+  );
+  const row = result.rows[0] as { n: number } | undefined;
+  return row?.n ?? 0;
 };
 
 export const touchCmSession = async (sessionId: string, now: Date): Promise<void> => {

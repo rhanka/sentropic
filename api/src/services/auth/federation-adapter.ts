@@ -6,41 +6,51 @@ import type {
   AuthHonoLinkIdentityInput,
 } from '@sentropic/auth-hono';
 import { AuthHonoIdentityConflictError } from '@sentropic/auth-hono';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
 import { and, eq, gt } from 'drizzle-orm';
 
 import { db } from '../../db/client';
-import { federationFlowStates, identities, magicLinks, webauthnCredentials } from '../../db/schema';
+import { federationFlowStates } from '../../db/schema';
+import {
+  createCmSocialLink,
+  findCmSocialBySubject,
+  hasConsumedCmMagicLinkForUser,
+  listCmCredentialsForUser,
+  listCmSocialForUser,
+  touchCmSocialLogin,
+  unlinkCmSocial,
+  type CmSocialRecord,
+} from '../identity/cm-proofs';
 
 /**
- * BR-39e Lot 0 — Drizzle/Postgres adapter for the auth-hono `federation` port.
+ * BR-39e Lot 0 — adapter for the auth-hono `federation` port.
  *
- * Owns ONLY the `identities` link table + the one-time `federation_flow_states` store. The SAFE
- * linking algorithm (subject-first, no-silent-merge) lives in `resolveOrCreateFederatedUser`; this
- * adapter just provides the data-access primitives it composes.
+ * Lot A4: the `identities` link table moved to the cluster-mesh custody store
+ * (`cm_identity.identity_social_links`), magic links to
+ * `cm_identity.identity_single_use_proofs` (kind 'magic_link') and WebAuthn
+ * credentials to `cm_identity.identity_webauthn_credentials`. Only the one-time
+ * `federation_flow_states` store stays app-owned (business data).
+ *
+ * The SAFE linking algorithm (subject-first, no-silent-merge) lives in
+ * `resolveOrCreateFederatedUser`; this adapter just provides the data-access
+ * primitives it composes.
  *
  * Two security-critical primitives:
- *  - `linkIdentity` maps the Postgres UNIQUE(provider, provider_subject) violation (SQLSTATE 23505)
- *    to `AuthHonoIdentityConflictError` so the resolver can re-read + log the existing user in
- *    idempotently under a concurrent-callback race (K-UNIQUE).
- *  - `consumeFlowState` is a SINGLE atomic `DELETE ... WHERE id=$id AND expires_at>$now RETURNING *`,
- *    giving verify-and-DELETE single-use + TTL in one statement (K-FLOW / K-STATE): a replay,
- *    an expired state, or a second consume all return `null`.
+ *  - `linkIdentity` maps the custody `social_subject_conflict` error (the
+ *    UNIQUE(provider, provider_subject) index, SQLSTATE 23505 underneath) to
+ *    `AuthHonoIdentityConflictError` so the resolver can re-read + log the existing
+ *    user in idempotently under a concurrent-callback race (K-UNIQUE).
+ *  - `consumeFlowState` is a SINGLE atomic `DELETE ... WHERE id=$id AND expires_at>$now
+ *    RETURNING *`, giving verify-and-DELETE single-use + TTL in one statement
+ *    (K-FLOW / K-STATE): a replay, an expired state, or a second consume all return `null`.
  */
 
-const PG_UNIQUE_VIOLATION = '23505';
-
-// drizzle wraps the driver error ("Failed query: ..."), so the Postgres SQLSTATE may live on the
-// error itself OR anywhere along its `cause` chain. Walk it to detect the unique-violation code.
-const isUniqueViolation = (error: unknown): boolean => {
+const isSocialSubjectConflict = (error: unknown): boolean => {
   let current: unknown = error;
   for (let depth = 0; depth < 5 && current != null; depth += 1) {
-    if (
-      typeof current === 'object' &&
-      'code' in current &&
-      (current as { code?: unknown }).code === PG_UNIQUE_VIOLATION
-    ) {
-      return true;
+    if (typeof current === 'object' && current !== null) {
+      const code = (current as { code?: unknown }).code;
+      if (code === 'social_subject_conflict' || code === '23505') return true;
     }
     current =
       typeof current === 'object' && current !== null && 'cause' in current
@@ -50,7 +60,7 @@ const isUniqueViolation = (error: unknown): boolean => {
   return false;
 };
 
-const toIdentityRecord = (row: typeof identities.$inferSelect): AuthHonoIdentityRecord => ({
+const toIdentityRecord = (row: CmSocialRecord): AuthHonoIdentityRecord => ({
   emailAtLink: row.emailAtLink,
   emailVerifiedByProvider: row.emailVerifiedByProvider,
   id: row.id,
@@ -86,39 +96,30 @@ export const createFederationAdapter = (
 
   return {
     async findIdentityBySubject(provider, providerSubject) {
-      const [row] = await database
-        .select()
-        .from(identities)
-        .where(and(eq(identities.provider, provider), eq(identities.providerSubject, providerSubject)))
-        .limit(1);
-      return row ? toIdentityRecord(row) : null;
+      const row = await findCmSocialBySubject(provider, providerSubject);
+      return row && !row.revokedAt ? toIdentityRecord(row) : null;
     },
 
     async findIdentitiesForUser(userId) {
-      const rows = await database.select().from(identities).where(eq(identities.userId, userId));
-      return rows.map(toIdentityRecord);
+      const rows = await listCmSocialForUser(userId);
+      return rows.filter(row => !row.revokedAt).map(toIdentityRecord);
     },
 
     async linkIdentity(input: AuthHonoLinkIdentityInput) {
       try {
-        const [row] = await database
-          .insert(identities)
-          .values({
-            emailAtLink: input.emailAtLink,
-            emailVerifiedByProvider: input.emailVerifiedByProvider,
-            id: randomUUID(),
-            lastLoginAt: input.now,
-            linkedAt: input.now,
-            provider: input.provider,
-            providerSubject: input.providerSubject,
-            providerTenant: input.providerTenant ?? null,
-            userId: input.userId,
-          })
-          .returning();
+        const row = await createCmSocialLink({
+          userId: input.userId,
+          provider: input.provider,
+          providerSubject: input.providerSubject,
+          providerTenant: input.providerTenant ?? null,
+          emailAtLink: input.emailAtLink ?? null,
+          emailVerifiedByProvider: input.emailVerifiedByProvider ?? false,
+          now: input.now,
+        });
         return toIdentityRecord(row);
       } catch (error) {
         // The UNIQUE(provider, provider_subject) index rejected a concurrent duplicate link.
-        if (isUniqueViolation(error)) {
+        if (isSocialSubjectConflict(error)) {
           throw new AuthHonoIdentityConflictError(input.provider, input.providerSubject);
         }
         throw error;
@@ -126,46 +127,23 @@ export const createFederationAdapter = (
     },
 
     async unlinkIdentity(userId, provider, providerSubject) {
-      const deleted = await database
-        .delete(identities)
-        .where(
-          and(
-            eq(identities.userId, userId),
-            eq(identities.provider, provider),
-            eq(identities.providerSubject, providerSubject),
-          ),
-        )
-        .returning({ id: identities.id });
-      return deleted.length > 0;
+      return unlinkCmSocial(userId, provider, providerSubject);
     },
 
     async touchLogin(identityId, now) {
-      await database.update(identities).set({ lastLoginAt: now }).where(eq(identities.id, identityId));
+      await touchCmSocialLogin(identityId, now);
     },
 
     async isUserCredentialed(userId) {
       // A completed sign-in factor = a webauthn credential, an existing federated identity, or a
       // used magic link. Any one marks the account as NOT a non-credentialed shell (D7).
-      const [credential] = await database
-        .select({ id: webauthnCredentials.id })
-        .from(webauthnCredentials)
-        .where(eq(webauthnCredentials.userId, userId))
-        .limit(1);
-      if (credential) return true;
+      const credentials = await listCmCredentialsForUser(userId);
+      if (credentials.length > 0) return true;
 
-      const [identity] = await database
-        .select({ id: identities.id })
-        .from(identities)
-        .where(eq(identities.userId, userId))
-        .limit(1);
-      if (identity) return true;
+      const identities = await listCmSocialForUser(userId);
+      if (identities.some(row => !row.revokedAt)) return true;
 
-      const [usedLink] = await database
-        .select({ id: magicLinks.id })
-        .from(magicLinks)
-        .where(and(eq(magicLinks.userId, userId), eq(magicLinks.used, true)))
-        .limit(1);
-      return Boolean(usedLink);
+      return hasConsumedCmMagicLinkForUser(userId);
     },
 
     async createFlowState(input: AuthHonoCreateFederationFlowStateInput) {
