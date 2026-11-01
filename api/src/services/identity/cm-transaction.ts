@@ -1,9 +1,11 @@
 import { randomUUID } from 'node:crypto';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { PoolClient } from 'pg';
+import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
+import type { SQL } from 'drizzle-orm';
 import { createPostgresIdentityUnitOfWorkV1, IdentityCustodyErrorV1,
   type IdentityTransactionV1, type PostgresIdentityHostV1 } from '@sentropic/cluster-mesh';
-import { pool } from '../../db/client';
+import { pool, type db } from '../../db/client';
 
 export type CmIdentityTransaction = IdentityTransactionV1<PoolClient>;
 export const cmRequestWriteOptions = {
@@ -68,3 +70,12 @@ export const runCmIdentityRead = <T>(operation: (tx: CmIdentityTransaction) => P
   return bound ? operation(bound)
     : cmIdentityUnitOfWork.run(cmRequestReadOptions, tx => current.run(tx, () => operation(tx)));
 };
+
+/** Existing app adapters also use all/run/get; each method stays on this executor. */
+export const withAppDatabaseMethods = (database: NodePgDatabase): typeof db => Object.assign(database, {
+  all: async (query: SQL): Promise<unknown[]> => (await database.execute(query)).rows,
+  run: async (query: SQL): Promise<unknown> => database.execute(query),
+  get: async (query: SQL): Promise<unknown> => (await database.execute(query)).rows[0],
+});
+export const bindCmAppDatabase = (tx: CmIdentityTransaction): typeof db =>
+  withAppDatabaseMethods(drizzle(tx.hostTransaction));
