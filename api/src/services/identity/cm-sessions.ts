@@ -18,6 +18,8 @@ export interface CmSessionRecord {
   readonly ipAddress: string | null;
   readonly userAgent: string | null;
   readonly mfaVerified: boolean;
+  readonly authTime: number; // epoch seconds, matches JWT login.authTime
+  readonly sessionVersion: number; // epoch ms, matches JWT login.sessionVersion
   readonly expiresAt: Date;
   readonly createdAt: Date;
   readonly lastActivityAt: Date;
@@ -56,10 +58,12 @@ const toRecord = (bound: BoundLoginSessionV1, lifecycle: { status: string; revok
   ipAddress: bound.ipAddress,
   userAgent: bound.userAgent,
   mfaVerified: bound.login.mfaVerified,
+  authTime: bound.login.authTime,
+  sessionVersion: bound.login.sessionVersion,
   expiresAt: new Date(bound.expiresAt),
   createdAt: new Date(bound.createdAt),
   lastActivityAt: date(bound.lastActivityAt) ?? new Date(bound.createdAt),
-  revokedAt: lifecycle?.status === 'revoked' ? date(lifecycle.revokedAt) : null,
+  revokedAt: date(bound.revokedAt) ?? (lifecycle?.status === 'revoked' ? date(lifecycle.revokedAt) : null),
 });
 
 const lifecycleOf = async (sessionId: string) => {
@@ -77,8 +81,8 @@ export const createCmSession = async (input: CmCreateSessionInput): Promise<CmSe
     refreshTokenHash: input.refreshTokenHash ?? null,
     login: {
       mfaVerified: input.mfaVerified ?? false,
-      authTime: Math.floor(input.now.getTime()),
-      sessionVersion: 1,
+      authTime: Math.floor(input.now.getTime() / 1000),
+      sessionVersion: input.now.getTime(),
     },
     rotationVersion: 1,
     createdAt: now,
@@ -157,7 +161,9 @@ export const rotateCmSession = async (input: CmRotateSessionInput): Promise<CmSe
       userId: input.userId,
       expectedRefreshTokenHash: input.expectedRefreshTokenHash,
       expectedRotationVersion: current ? Number((await custodyRotationVersion(current.id))) : 1,
-      verifiedLogin: { mfaVerified: current.mfaVerified, authTime: Math.floor(current.createdAt.getTime()), sessionVersion: 1 },
+      // The signed login lineage is immutable across rotation: keep the original
+      // authTime/sessionVersion so the refreshed JWT still matches the binding.
+      verifiedLogin: { mfaVerified: current.mfaVerified, authTime: current.authTime, sessionVersion: current.sessionVersion },
       nextSessionTokenHash: input.sessionTokenHash,
       nextRefreshTokenHash: input.refreshTokenHash,
       nextExpiresAt: input.expiresAt.toISOString(),
