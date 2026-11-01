@@ -1,53 +1,46 @@
-# Feature: cyber-act-L02 downstream patched scanner
+# Feature: cm-identity-a2-0b
 
 ## Objective
-Produce and admit the sentropic downstream patched Trivy image contract per r6 section 3.
+Implement the approved A2.0b additive amendment (Astra MAX author, Muse Wonder max APPROVE) for the identity core in packages/cluster-mesh: verification custody, lossless import, atomic person deletion.
 
 ## Scope / Guardrails
-- Scope limited to scanner policy profile, offline verifier, recipe, promotion workflow, receipts.
-- One migration max in `api/drizzle/*.sql` (if applicable).
+- Scope limited to packages/cluster-mesh identity custody, storage, import, deletion, tests, version manifest.
+- One migration max in api/drizzle/*.sql (not used; CM schema assets only).
 - Make-only workflow, no direct Docker commands.
-- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development must happen in isolated worktree `tmp/feat-<slug>` (even for one active branch).
-- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
-- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- Branch development in isolated worktree tmp/worktrees/cm-identity-a2-0b.
+- Automated test campaigns on dedicated environments (ENV=test-cm-a2-0b), never root dev.
+- In every make command, ENV=<env> passed as the last argument.
 - All new text in English.
+- Pins: amendment A2.0b-r6 sha256 5bde078cd12a35fb752eadb48496f0373dc8940883c701b920878a165; review a2-0b_wonder_r6 APPROVE sha256 0734a46e930b8fc456a431005d392203a347c1e19262305ac3c2a7e109206433; lot-A4 sha256 3826e88cad5f6fd368ce12c392d72634f78b411946e0354776e14cd984d6f8ed; lot-A4-prerequisites.patch sha256 11476ebd89c6aec73dcf7b20984323926310a331bff9d421a73c1fa6ec475ff5; baseline origin/main 455813bf923e9a58f701b17d2adbef01b2df0e71.
+- Version: 0.26.0-dev.4 (next free cluster-mesh dev version after main 0.26.0-dev.3).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `BRANCH.md`
-  - `.security/trivy-toolchain.json`
-  - `scripts/security/daily/toolchain-contract.mjs`
-  - `scripts/security/daily/toolchain-contract.test.mjs`
-  - `scripts/security/daily/scanner-provenance.test.mjs`
-  - `scripts/security/daily/scanner-image-publish.test.mjs`
-  - `scripts/security/scanner/**`
-  - `docs/security/scanner-images/**`
+  - `packages/cluster-mesh/src/identity-contracts/**`
+  - `packages/cluster-mesh/src/storage/identity/**`
+  - `packages/cluster-mesh/src/identity-stores/**`
+  - `packages/cluster-mesh/src/identity/**`
+  - `packages/cluster-mesh/tests/identity/**`
+  - `packages/cluster-mesh/tests/identity-*.spec.ts`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/CHANGELOG.md`
 - **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `api/**`
+  - `ui/**`
+  - `e2e/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
-  - `docs/security/sec-s2b-qualify/**`
-  - `Makefile`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- `BRLOCK-EX1` acknowledgement: review_by=2026-11-30T00:00:00Z (CI lockfile lane policy, owner CI maintainers).
-- `BR02-EX1`: touch `.github/workflows/security-scanner-image.yml` only (new file, r6 section 3.2/3.3.1 required destination).
-  - Reason: r6 mandates this exact workflow path for builder, validator, publisher jobs.
-  - Impact: new workflow with workflow_dispatch only, no push/schedule/PR trigger, least-privilege per-job permissions.
-  - Rollback: delete the file, policy stays upstream-only and qualified false.
-- `BR02-EX2`: extend `Makefile` `test-security-daily` SCOPE with the two r6 section 6.4 required destinations.
-  - Reason: r6 section 6.4 wires T5-S1/S2/S3/S5/S6 and T6-S1 into `scanner-provenance` and `scanner-image-publish` suites owned by `test-security-daily`.
-  - Impact: one SCOPE line gains two files, existing five files unchanged.
-  - Rollback: revert the SCOPE line, new suites run standalone only.
+- None.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -60,46 +53,42 @@ Produce and admit the sentropic downstream patched Trivy image contract per r6 s
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: Single lot ACT-L02, one review-ready head, one CI run.
+- Rationale: Single additive contract lot with one test cycle; no parallel sub-branches.
 
 ## UAT Management (in orchestration context)
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
-- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
-- Execution flow (mandatory):
-  - Develop and run tests in `tmp/feat-<slug>`.
-  - Push branch before UAT.
-  - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
-  - Switch back to `tmp/feat-<slug>` after UAT.
+- No UI changes in this lot; no UAT.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and constraints**
-  - [x] Read r6 sections 3, 7.2 ACT-L02, 7.3 T5-S1-S6, T6-S1, retained L2-A-E.
-  - [x] Confirm worktree `tmp/worktrees/cyber-act-L02` on branch `feat/cyber-act-L02` from `origin/main`.
-  - [x] Confirm ENV `test-cyber-L02` with ports API_PORT=8811 UI_PORT=5211 MAILDEV_UI_PORT=1111.
-  - [x] Confirm scope boundaries and BR02-EX1 before touching conditional paths.
-  - [x] Record base HEAD `1239f291f` in this file.
-- [x] **Lot 1 — RED tests first**
-  - [x] Cover dual publisher profile in `scanner-provenance.test.mjs`, existing contract suite unchanged.
-  - [x] Add `scripts/security/daily/scanner-provenance.test.mjs` for T5-S1/S2/S3/S5/S6 and T6-S1 offline/content cases.
-  - [x] Add `scripts/security/daily/scanner-image-publish.test.mjs` for T5-S4 and T6-S1 job/artifact/publication cases.
-  - [x] Prove RED locally before implementation.
-  - [x] Lot gate:
-    - [x] Targeted node test run under flock ENV=test-cyber-L02
-- [x] **Lot 2 — Policy, verifier, recipe, promotion workflow**
-  - [x] Extend `.security/trivy-toolchain.json` with upstream/sentropic-patched publisher profile, qualified false.
-  - [x] Extend `scripts/security/daily/toolchain-contract.mjs` with strict profile validation.
-  - [x] Add `scripts/security/scanner/recipe.json` and material manifest with pinned inputs.
-  - [x] Add `.github/workflows/security-scanner-image.yml` with builder, validator, publisher jobs per r6.
-  - [x] Add `docs/security/scanner-images/` qualification evidence placeholders with blocked admission.
-  - [x] No schedule enablement, no live digest invented, no seat operation.
-  - [x] Lot gate:
-    - [x] Targeted node test run under flock ENV=test-cyber-L02
-    - [x] `make scope-check ENV=test-cyber-L02`
+  - [x] Read COMMON-RULES, MASTER.md, amendment r6, review r6 APPROVE, lot-A4, patch.
+  - [x] Create isolated worktree tmp/worktrees/cm-identity-a2-0b on feat/cm-identity-a2-0b from origin/main.
+  - [x] Pin sha256 values in BRANCH.md.
+  - [x] Set version 0.26.0-dev.4.
+- [ ] **Lot 1 — Custody contracts (additive, 1.0 frozen)**
+  - [ ] New V1 record/port/error/descriptor exports; IDENTITY_CUSTODY_CONTRACT_VERSION 1.1.0, IDENTITY_ATOMIC_DELETION_CONTRACT_VERSION 2.0.0.
+  - [ ] IdentityCustodyErrorV1 with exact code union; fixed messages; buffer-ownership rules.
+  - [ ] IDENTITY_A20B_DESCRIPTORS exact rows.
+  - [ ] Lot gate: make typecheck-cluster-mesh ENV=test-cm-a2-0b
+- [ ] **Lot 2 — Durable custody on both profiles**
+  - [ ] New tables: account_profiles, webauthn_credentials, single_use_proofs, email_tickets, invitation_digests, login_token_bindings, social_links, subject_fences, deletion ops/attempts, revocation outbox, import receipts, schema versions.
+  - [ ] Postgres + SQLite stores with CAS, uniqueness, expiry strictness.
+  - [ ] Lot gate: custody storage tests on both profiles.
+- [ ] **Lot 3 — Import contract (id-preserving, material-preserving)**
+  - [ ] createIdentityCustodyImporterV1: validate/importBatch/importBatchInTransaction, exclusive-writer fence, identical-receipt replay, whole-batch rollback.
+  - [ ] Field-preserving mapping incl. WebAuthn bytes/counter, unbound proofs, digest invitations, session hashes, social subjects.
+  - [ ] Lot gate: custody-import tests on both profiles.
+- [ ] **Lot 4 — Atomic person deletion (V2)**
+  - [ ] createAtomicPersonDeletionV2 with business participants, orphan assertions, rolled_back receipts, operation journal.
+  - [ ] P4/P5 probes green on both profiles; existing cascade suite unmodified.
+  - [ ] Lot gate: atomic-person-deletion tests on both profiles.
+- [ ] **Lot 5 — Security evidence**
+  - [ ] Secret at rest, SHA-256 exact preimages, zeroization of owned buffers, log redaction canaries.
+  - [ ] Lot gate: security tests on both profiles.
 - [ ] **Lot N — Final validation**
-  - [x] Typecheck and lint impacted scopes.
-  - [x] Retest targeted suites ENV=test-cyber-L02.
-  - [x] `make scope-check ENV=test-cyber-L02`.
-  - [ ] Final gate step 1: create draft PR with BRANCH.md text as PR body.
-  - [ ] Final gate step 2: run ONE CI on final head and resolve blockers.
-  - [ ] Final gate step 3: report only, no merge, remove nothing.
+  - [ ] Typecheck & Lint
+  - [ ] Retest cluster-mesh identity suites (both profiles, no skips)
+  - [ ] Bumped packages/cluster-mesh/package.json version 0.26.0-dev.4
+  - [ ] Final gate step 1: create draft PR using BRANCH.md text as PR body (source of truth).
+  - [ ] Final gate step 2: run/verify branch CI once and resolve remaining blockers.
+  - [ ] Do NOT merge; report to .tmp/rv/lot-A2.0b.md and stop.
