@@ -137,8 +137,13 @@ test('should exercise the real publication DAG on a branch without running regis
     }, name);
     assert.equal(dry.run, `make ci-capacity-publish-dry-run PACKAGE=${name.slice(8)} ENV=test-ci-capacity`);
     assert.ok(dryRunPackages.includes(name.slice(8)), `${name}: accepted dry-run package`);
+    // BR866-EX2: only the cluster-mesh publisher additionally requires a typed publish decision;
+    // a prerelease skip never reaches the npm publish or post-publication qualification steps.
+    const decided = name === 'publish-cluster-mesh'
+      ? "inputs.capacity_publish_dry_run != true && steps.cluster_mesh_publish_decision.outputs.decision == 'publish'"
+      : 'inputs.capacity_publish_dry_run != true';
     for (const step of steps.filter(step => /^Publish |^Qualify published /.test(step.name ?? ''))) {
-      assert.equal(step.if, 'inputs.capacity_publish_dry_run != true', `${name}/${step.name}`);
+      assert.equal(step.if, decided, `${name}/${step.name}`);
     }
   }
   const normal = workflowExpected(workflow, { ...context, inputs: { capacity_publish_dry_run: false } });
