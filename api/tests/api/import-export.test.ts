@@ -4,7 +4,9 @@ import { createHash } from 'crypto';
 import { app } from '../../src/app';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { comments, folders, organizations, initiatives, workspaceMemberships, workspaces } from '../../src/db/schema';
+import { comments, folders, organizations, initiatives, workspaces } from '../../src/db/schema';
+import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
+import { cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
 import { eq } from 'drizzle-orm';
 import { createTestId } from '../utils/test-helpers';
 
@@ -189,10 +191,8 @@ describe('Import/Export API', () => {
     if (editor.workspaceId) createdWorkspaceIds.push(editor.workspaceId);
     if (viewer.workspaceId) createdWorkspaceIds.push(viewer.workspaceId);
 
-    await db.insert(workspaceMemberships).values([
-      { workspaceId: admin.workspaceId!, userId: editor.id, role: 'editor', createdAt: new Date() },
-      { workspaceId: admin.workspaceId!, userId: viewer.id, role: 'viewer', createdAt: new Date() },
-    ]);
+    await putCmWorkspaceMember(admin.workspaceId!, editor.id, 'editor');
+    await putCmWorkspaceMember(admin.workspaceId!, viewer.id, 'viewer');
 
     const orgId = `org_${createTestId()}`;
     const folderId = `folder_${createTestId()}`;
@@ -248,7 +248,7 @@ describe('Import/Export API', () => {
       await db.delete(initiatives).where(eq(initiatives.workspaceId, wsId));
       await db.delete(folders).where(eq(folders.workspaceId, wsId));
       await db.delete(organizations).where(eq(organizations.workspaceId, wsId));
-      await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, wsId));
+      await cmDeleteWorkspaceMembers(wsId);
       await db.delete(workspaces).where(eq(workspaces.id, wsId));
     }
     createdWorkspaceIds.length = 0;
