@@ -2,6 +2,8 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { canonicalManifest, manifestDigest } from '../src/codecs.js';
 import { readArtifactSource } from '../src/server/source-read.js';
+import { createMemoryBlobStore, createMemoryStateStore, createPublicationService } from '../src/server/publication.js';
+import { createMemoryIntentStore } from '../src/server/object-intents.js';
 import { encodeToolResult } from '@sentropic/mcp-platform/transport/result-codec';
 
 const artifactId = '00000000-0000-4000-8000-000000000001';
@@ -24,6 +26,24 @@ function world() {
   return { deps, release, deny: () => { allowed = false; } };
 }
 describe('verified author source', () => {
+  it.each([
+    { label: 'purged release', change: { state: 'purged' as const }, error: 'release_unavailable', details: { reason: 'purged' } },
+    { label: 'record digest mismatch', change: { manifestDigest: '0'.repeat(64) }, error: 'verification_failed', details: undefined },
+  ])('should reject $label through the publication service before reading blobs', async ({ change, error, details }) => {
+    const { deps, release } = world();
+    const state = createMemoryStateStore();
+    const publication = createPublicationService({ state, blobs: createMemoryBlobStore(), intents: createMemoryIntentStore() });
+    await state.putRelease({ ...release, ...change });
+    await state.compareAndSwapCurrent(artifactId, null, releaseId);
+    let blobReads = 0;
+    const ports = { ...deps, getCurrent: publication.getCurrent, getRelease: publication.getRelease,
+      getBlob: async () => { blobReads += 1; return bytes; } };
+    for (const input of [{ artifactId, releaseId }, { artifactId }]) {
+      await expect(readArtifactSource(ports, input)).rejects.toMatchObject({ kind: error,
+        details: details === undefined ? {} : { publicDetails: details } });
+    }
+    expect(blobReads).toBe(0);
+  });
   it('should return exact bytes and separate provenance for a selected release', async () => {
     const { deps } = world();
     const result = await readArtifactSource(deps, { artifactId, releaseId, paths: ['index.html'] });

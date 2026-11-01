@@ -2,12 +2,13 @@ import { createHash } from 'node:crypto';
 import { parseManifest } from '../codecs.js';
 import { ArtifactOperationError } from './failures.js';
 import type { SourceRef } from './sources.js';
+import type { PublicationService } from './publication.js';
 
 export interface SourceReadPorts {
   storageScopeId?: string;
   authorize(): Promise<void>;
-  getCurrent(artifactId: string): Promise<{ releaseId: string; manifest: string } | undefined>;
-  getRelease(releaseId: string): Promise<{ releaseId: string; manifest: string; state?: string } | undefined>;
+  getCurrent: PublicationService['getCurrent'];
+  getRelease: PublicationService['getRelease'];
   getSource(artifactId: string): Promise<SourceRef | undefined>;
   getBlob(key: string): Promise<Uint8Array | undefined>;
   urls?: (artifactId: string, releaseId: string) => { stableUrl: string; pinnedUrl: string };
@@ -25,14 +26,14 @@ export async function readArtifactSource(ports: SourceReadPorts, input: SourceRe
   if (!release) throw input.releaseId ? new ArtifactOperationError('not_found')
     : new ArtifactOperationError('release_unavailable', { publicDetails: { reason: 'unpublished' } });
   if ((input.releaseId !== undefined && release.releaseId !== input.releaseId) ||
-    ('artifactId' in release && release.artifactId !== input.artifactId)) throw new ArtifactOperationError('not_found');
+    release.artifactId !== input.artifactId) throw new ArtifactOperationError('not_found');
   let manifest;
   try { manifest = parseManifest(release.manifest); }
   catch (cause) { throw new ArtifactOperationError('verification_failed', { cause }); }
   if (manifest.artifactId !== input.artifactId) throw new ArtifactOperationError('not_found');
   if (ports.storageScopeId !== undefined && manifest.storageScopeId !== ports.storageScopeId) throw new ArtifactOperationError('verification_failed');
-  if ('manifestDigest' in release && release.manifestDigest !== manifest.digest) throw new ArtifactOperationError('verification_failed');
-  if ('state' in release && release.state === 'purged') throw new ArtifactOperationError('release_unavailable', { publicDetails: { reason: 'purged' } });
+  if (release.manifestDigest !== manifest.digest) throw new ArtifactOperationError('verification_failed');
+  if (release.state === 'purged') throw new ArtifactOperationError('release_unavailable', { publicDetails: { reason: 'purged' } });
   if (!manifest.digest || !Array.isArray(manifest.files) || manifest.files.length > ports.maxFiles) {
     throw new ArtifactOperationError('verification_failed');
   }

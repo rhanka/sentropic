@@ -84,7 +84,7 @@ interface ReleaseRow {
   artifact_id: string;
   manifest_digest: string;
   manifest: string;
-  state: 'ready';
+  state: ReleaseState;
   created_at: Date;
 }
 
