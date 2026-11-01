@@ -372,6 +372,86 @@ END $$;
 CREATE TRIGGER oauth_refresh_profile_invalidate BEFORE UPDATE ON cm_identity.identity_account_profiles
   FOR EACH ROW EXECUTE FUNCTION public.oauth_refresh_profile_invalidate();
 --> statement-breakpoint
+CREATE OR REPLACE FUNCTION public.oauth_refresh_client_invalidate()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE u text;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.allowed_scopes @> OLD.allowed_scopes AND NEW.resource_indicators @> OLD.resource_indicators
+      AND NEW.grant_types @> OLD.grant_types AND NEW.required_acr IS NOT DISTINCT FROM OLD.required_acr
+      AND NEW.allowed_user_ids IS NOT DISTINCT FROM OLD.allowed_user_ids
+      AND NEW.dpop_bound_access_tokens IS NOT DISTINCT FROM OLD.dpop_bound_access_tokens
+      AND NEW.token_endpoint_auth_method IS NOT DISTINCT FROM OLD.token_endpoint_auth_method
+      THEN RETURN NEW; END IF;
+  END IF;
+  FOR u IN SELECT user_id FROM public.oauth_refresh_tokens WHERE client_id = OLD.client_id
+    UNION SELECT user_id FROM public.authorization_codes WHERE client_id = OLD.client_id ORDER BY user_id LOOP
+    PERFORM 1 FROM cm_identity.identity_user_accounts WHERE user_id = u FOR UPDATE;
+  END LOOP;
+  DELETE FROM public.authorization_codes WHERE client_id = OLD.client_id AND 'offline_access' = ANY(string_to_array(scope, ' '));
+  PERFORM public.oauth_refresh_revoke_family(id, 'policy_denied', clock_timestamp() AT TIME ZONE 'UTC')
+    FROM public.oauth_refresh_tokens WHERE client_id = OLD.client_id AND generation = 0 ORDER BY id;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END $$;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION public.oauth_refresh_consent_invalidate()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.oauth_clients WHERE client_id = OLD.client_id)
+    OR NOT EXISTS (SELECT 1 FROM cm_identity.identity_user_accounts WHERE user_id = OLD.user_id) THEN
+    IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+  END IF;
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.scopes @> OLD.scopes AND NEW.offline_scopes @> OLD.offline_scopes
+      AND NEW.approved_resources @> OLD.approved_resources
+      AND NEW.offline_grant_id IS NOT DISTINCT FROM OLD.offline_grant_id
+      AND NEW.offline_issuer IS NOT DISTINCT FROM OLD.offline_issuer
+      AND NEW.offline_consented_at IS NOT DISTINCT FROM OLD.offline_consented_at
+      AND (NEW.default_audience_approved OR NOT OLD.default_audience_approved)
+      THEN RETURN NEW; END IF;
+  END IF;
+  PERFORM 1 FROM cm_identity.identity_user_accounts WHERE user_id = OLD.user_id FOR UPDATE;
+  PERFORM public.oauth_refresh_revoke_family(id, 'consent_revoked', clock_timestamp() AT TIME ZONE 'UTC')
+    FROM public.oauth_refresh_tokens WHERE user_id = OLD.user_id AND client_id = OLD.client_id
+      AND coalesce(tenant_id, 'sentropic') = OLD.tenant_id AND generation = 0 ORDER BY id;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END $$;
+--> statement-breakpoint
+CREATE TRIGGER oauth_refresh_membership_invalidate BEFORE UPDATE OR DELETE ON cm_identity.cm_tenant_memberships
+  FOR EACH ROW EXECUTE FUNCTION public.oauth_refresh_membership_invalidate();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION public.oauth_refresh_credential_invalidate()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    PERFORM public.oauth_refresh_revoke_user(OLD.user_id, 'security_event');
+    RETURN OLD;
+  END IF;
+  IF NEW.public_key_cose IS DISTINCT FROM OLD.public_key_cose OR NEW.user_id <> OLD.user_id
+    OR NEW.revoked_at IS DISTINCT FROM OLD.revoked_at THEN
+    PERFORM public.oauth_refresh_revoke_user(OLD.user_id, 'security_event');
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER oauth_refresh_credential_invalidate BEFORE UPDATE OR DELETE ON cm_identity.identity_webauthn_credentials
+  FOR EACH ROW EXECUTE FUNCTION public.oauth_refresh_credential_invalidate();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION public.oauth_refresh_invalidate_restore()
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE c text; u text;
+BEGIN
+  FOR c IN SELECT client_id FROM public.oauth_clients ORDER BY client_id LOOP
+    PERFORM public.oauth_refresh_client_guard(c, true);
+  END LOOP;
+  FOR u IN SELECT user_id FROM cm_identity.identity_user_accounts ORDER BY user_id FOR UPDATE LOOP
+    PERFORM public.oauth_refresh_revoke_user(u, 'db_restore_invalidation');
+  END LOOP;
+  DELETE FROM public.oauth_tokens;
+END $$;
+--> statement-breakpoint
 -- Legacy identity tables leave the app schema in this same lot (replacement gate).
 --> statement-breakpoint
 DROP TABLE IF EXISTS public.workspace_memberships;
