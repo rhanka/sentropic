@@ -98,6 +98,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Replace the app session adapter implementation with the CM session-service facade.
   - [x] Remove the app refresh signer and rotation algorithm in favor of CM signed refresh completion.
   - [x] Remove the app session creation writer; require verified CM assertion completion for MFA lineage.
+  - [x] Remove the app session validation algorithm; middleware and host consumers use CM validation.
   - [x] Remove app SQL session writes and duplicate base-row inserts; refresh projects remotely only after CM CAS commits.
   - [ ] /workspaces (absorbs /tenants) over A2.2 stores; delete tenant-membership.ts, membership seam in cluster-mesh-adapter.ts, product tenant/workspace identity routes.
   - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
