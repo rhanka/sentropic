@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { app } from '../../../src/app';
-import { db } from '../../../src/db/client';
+import { db, pool } from '../../../src/db/client';
+import { getSentropicOAuthPorts } from '../../../src/routes/auth/oauth';
 import { oauthClients, oauthConsents, users } from '../../../src/db/schema';
 import { createJwksAdapter } from '../../../src/services/auth/jwks-adapter';
 import { cleanupAuthData, createTestUser } from '../../utils/auth-helper';
@@ -21,7 +22,7 @@ const authorize = () => app.request(`${base}/authorize?${new URLSearchParams({
   code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256',
   scope: 'openid offline_access', resource: 'https://immo.test/mcp',
 })}`, { headers: { Cookie: cookie } });
-const issue = async () => {
+const obtainCode = async () => {
   const auth = await authorize();
   const location = new URL(auth.headers.get('location')!);
   let code = location.searchParams.get('code');
@@ -30,8 +31,12 @@ const issue = async () => {
     expect(approval.status).toBe(302);
     code = new URL(approval.headers.get('location')!).searchParams.get('code');
   }
-  const response = await post('token', { grant_type: 'authorization_code', code: code!,
-    code_verifier: verifier, redirect_uri: 'https://client.test/callback' });
+  return code!;
+};
+const exchangeCode = (code: string) => post('token', { grant_type: 'authorization_code', code,
+  code_verifier: verifier, redirect_uri: 'https://client.test/callback' });
+const issue = async () => {
+  const response = await exchangeCode(await obtainCode());
   expect(response.status).toBe(200);
   return response.json();
 };
@@ -78,4 +83,59 @@ describe('host OAuth refresh HTTP integration', () => {
     }
     expect((await post('token', { grant_type: 'refresh_token', refresh_token: initial.refresh_token })).status).toBe(400);
   });
+
+  it.each(['consent', 'security'].flatMap((kind) => ['mint-first', 'revoke-first'].map((order) => ({ kind, order }))))
+  ('should serialize initial family creation with $kind: $order', async ({ kind, order }) => {
+    const code = await obtainCode();
+    const writer = await pool.connect();
+    const ports = getSentropicOAuthPorts();
+    const original = ports.oauthRefresh!.transaction;
+    let release = () => {};
+    try {
+      await writer.query('BEGIN');
+      const { rows: [{ pid: writerPid }] } = await writer.query('SELECT pg_backend_pid() AS pid');
+      const mutation = kind === 'consent' ? 'DELETE FROM oauth_consents WHERE user_id=$1'
+        : "SELECT oauth_refresh_revoke_user($1, 'security_event')";
+      if (order === 'revoke-first') {
+        await writer.query(mutation, [userId]);
+        const pending = exchangeCode(code);
+        await waitForBlocker(writerPid);
+        await writer.query('COMMIT');
+        expect((await pending).status).toBe(400);
+      } else {
+        let entered!: () => void;
+        const locked = new Promise<void>((resolve) => { entered = resolve; });
+        const barrier = new Promise<void>((resolve) => { release = resolve; });
+        ports.oauthRefresh!.transaction = (lock, work) => original(lock, async (bound) => {
+          entered(); await barrier; return work(bound);
+        });
+        const pending = exchangeCode(code);
+        await locked;
+        const revocation = writer.query(mutation, [userId]);
+        // The owning transaction's user lock is visible as the writer's blocker.
+        for (let attempt = 0; attempt < 500; attempt++) {
+          const { rows } = await pool.query('SELECT 1 FROM pg_stat_activity WHERE pid=$1 AND cardinality(pg_blocking_pids(pid)) > 0', [writerPid]);
+          if (rows.length) break;
+          if (attempt === 499) throw new Error('Initial issuance lock barrier not reached.');
+          await new Promise<void>((resolve) => setImmediate(resolve));
+        }
+        release(); expect((await pending).status).toBe(200);
+        await revocation; await writer.query('COMMIT');
+      }
+      const { rows } = await pool.query('SELECT count(*)::int AS count FROM oauth_refresh_tokens WHERE user_id=$1 AND revoked_at IS NULL', [userId]);
+      expect(rows[0].count).toBe(0);
+    } finally {
+      release(); ports.oauthRefresh!.transaction = original;
+      await writer.query('ROLLBACK'); writer.release();
+    }
+  });
 });
+
+async function waitForBlocker(pid: number) {
+  for (let attempt = 0; attempt < 500; attempt++) {
+    const { rows } = await pool.query('SELECT 1 FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))', [pid]);
+    if (rows.length) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error('Initial issuance did not wait for revocation.');
+}
