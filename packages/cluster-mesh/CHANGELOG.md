@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.26.0-dev.4
+
+- Add the A2.0b identity custody extension bundle (contract 1.1.0, atomic
+  deletion 2.0.0): WebAuthn custody, unbound single-use proofs, digest-only
+  invitations, bound login sessions with hash rotation, stable social
+  subjects, id-preserving verification-material-preserving import and
+  all-or-rollback atomic person deletion on both durable profiles.
+
 ## 0.23.0
 
 - Allow STT-only dictation, TTS-only synthesis and independent stages alongside
