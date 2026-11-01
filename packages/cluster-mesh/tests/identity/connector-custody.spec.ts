@@ -9,7 +9,7 @@ import {
   openConnectorCapabilityV1,
   sealConnectorCapabilityV1,
 } from '../../src/index.js';
-import { asOpHost, NOW, openPostgresEnv, openSqliteEnv } from './a20b-helpers.js';
+import { asOpHost, NOW, openPostgresEnv, openSqliteEnv, pgEnabled } from './a20b-helpers.js';
 
 const WRITE = { mode: 'write' as const, deadlineMs: 5000 };
 
@@ -54,33 +54,40 @@ describe('A2.0b connector revocation custody', () => {
     expect(custody.keyRef).toBe('secret-crypto:v1');
   });
 
-  it.each([{ profile: 'postgres' }, { profile: 'sqlite' }])('round-trips sealed rows on $profile', async ({ profile }) => {
-    const pg = profile === 'postgres' ? await openPostgresEnv() : null;
+  it('round-trips sealed rows on every enabled profile', async () => {
+    const rowProfiles = (pgEnabled ? ['postgres', 'sqlite'] : ['sqlite']) as const;
+    for (const profile of rowProfiles) {
+      await roundTripProfile(profile);
+    }
+
+    async function roundTripProfile(current: 'postgres' | 'sqlite'): Promise<void> {
+      const pg = current === 'postgres' ? await openPostgresEnv() : null;
     const unitOfWork = pg ? asOpHost(pg.unitOfWork) : asOpHost(openSqliteEnv().unitOfWork);
     const schema = pg?.schema ?? '';
     const custody = createNodeConnectorCustody({ masterKey: new Uint8Array(32).fill(5) });
     const record = { deliveryId: 'd-row', operationId: 'op-row', step: 'connector_grants', subjectId: 'marie', targetKind: 'connector_grant', targetRef: 'conn-row', state: 'pending' as const, createdAt: NOW, nextAttemptAt: NOW };
-    await unitOfWork.runWrite(WRITE, async (tx) => {
-      const raw = {
-        profile, schema,
-        session: profile === 'postgres' ? (tx.hostTransaction as unknown as { session: unknown }).session : null,
-        connection: profile === 'sqlite' ? (tx.hostTransaction as unknown as { connection: unknown }).connection : null,
-      } as never;
-      const first = await custody.capture({ deliveryId: 'd-row', connectorAccountId: 'conn-row', provider: 'drive', at: NOW }, raw, { tokenKind: 'access', token: 'row-secret' });
-      expect(first.kind).toBe('captured');
-      // Identical replay returns the same reference without duplicating.
-      const replay = await custody.capture({ deliveryId: 'd-row', connectorAccountId: 'conn-row', provider: 'drive', at: NOW }, raw, { tokenKind: 'access', token: 'row-secret' });
-      expect(replay).toEqual(first);
-      // Conflicting capability under an identical delivery refuses.
-      await expect(custody.capture({ deliveryId: 'd-row', connectorAccountId: 'conn-row', provider: 'drive', at: NOW }, raw, { tokenKind: 'access', token: 'other-secret' })).rejects.toMatchObject({ code: 'identity_operation_conflict' });
-      await custody.assertCaptured(record, raw);
-      await custody.eraseAcknowledged(record, raw);
-      await expect(custody.assertCaptured(record, raw)).rejects.toMatchObject({ code: 'identity_revocation_custody_missing' });
-      // Erase is idempotent.
-      await custody.eraseAcknowledged(record, raw);
-      const none = await custody.capture({ deliveryId: 'd-absent', connectorAccountId: 'conn-x', provider: 'drive', at: NOW }, raw, null);
-      expect(none).toEqual({ kind: 'no_capability' });
-    });
-    custody.dispose();
+      await unitOfWork.runWrite(WRITE, async (tx) => {
+        const raw = {
+          profile: current, schema,
+          session: current === 'postgres' ? (tx.hostTransaction as unknown as { session: unknown }).session : null,
+          connection: current === 'sqlite' ? (tx.hostTransaction as unknown as { connection: unknown }).connection : null,
+        } as never;
+        const first = await custody.capture({ deliveryId: 'd-row', connectorAccountId: 'conn-row', provider: 'drive', at: NOW }, raw, { tokenKind: 'access', token: 'row-secret' });
+        expect(first.kind).toBe('captured');
+        // Identical replay returns the same reference without duplicating.
+        const replay = await custody.capture({ deliveryId: 'd-row', connectorAccountId: 'conn-row', provider: 'drive', at: NOW }, raw, { tokenKind: 'access', token: 'row-secret' });
+        expect(replay).toEqual(first);
+        // Conflicting capability under an identical delivery refuses.
+        await expect(custody.capture({ deliveryId: 'd-row', connectorAccountId: 'conn-row', provider: 'drive', at: NOW }, raw, { tokenKind: 'access', token: 'other-secret' })).rejects.toMatchObject({ code: 'identity_operation_conflict' });
+        await custody.assertCaptured(record, raw);
+        await custody.eraseAcknowledged(record, raw);
+        await expect(custody.assertCaptured(record, raw)).rejects.toMatchObject({ code: 'identity_revocation_custody_missing' });
+        // Erase is idempotent.
+        await custody.eraseAcknowledged(record, raw);
+        const none = await custody.capture({ deliveryId: 'd-absent', connectorAccountId: 'conn-x', provider: 'drive', at: NOW }, raw, null);
+        expect(none).toEqual({ kind: 'no_capability' });
+      });
+      custody.dispose();
+    }
   });
 });

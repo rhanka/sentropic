@@ -13,7 +13,7 @@ import {
   emailCodePreimageV1,
   zeroizeV1,
 } from '../../src/index.js';
-import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, sha256Hex } from './a20b-helpers.js';
+import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, sha256Hex } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 
 const WRITE = { mode: 'write' as const, deadlineMs: 5000 };
@@ -23,7 +23,9 @@ interface ProfileEnv {
   readonly unitOfWork: IdentityUnitOfWorkV1<CustodyOpHost>;
 }
 
-describe.each([{ profile: 'postgres' }, { profile: 'sqlite' }])('A2.0b auth binding on $profile', ({ profile }) => {
+const PROFILES = (pgEnabled ? ['postgres', 'sqlite'] : ['sqlite']) as const;
+
+describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b auth binding on $profile', ({ profile }) => {
   const openEnv = async (): Promise<ProfileEnv> => {
     if (profile === 'postgres') return { unitOfWork: asOpHost((await openPostgresEnv()).unitOfWork) };
     return { unitOfWork: asOpHost(openSqliteEnv().unitOfWork) };
