@@ -93,6 +93,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Bind registration to verified email/invitation context and stage a fresh private HTTP context per attempt.
   - [x] Remove the replaced registration finalizer and its old route factory mount.
   - [x] Remove the replaced app registration account/proof writers.
+  - [x] Remove the replaced app registration challenge preparation.
   - [x] Remove app SQL session writes and duplicate base-row inserts; refresh projects remotely only after CM CAS commits.
   - [ ] /workspaces (absorbs /tenants) over A2.2 stores; delete tenant-membership.ts, membership seam in cluster-mesh-adapter.ts, product tenant/workspace identity routes.
   - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
