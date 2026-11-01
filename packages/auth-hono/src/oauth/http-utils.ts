@@ -20,6 +20,8 @@ export const oauthJsonError = (
   code: string,
   message: string
 ): Response => {
+  c.header('Cache-Control', 'no-store');
+  c.header('Pragma', 'no-cache');
   if (status === 401 && c.req.header('authorization')?.startsWith('Basic ')) {
     c.header('WWW-Authenticate', 'Basic realm="oauth"');
   }
