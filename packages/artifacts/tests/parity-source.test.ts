@@ -40,4 +40,18 @@ describe('verified author source', () => {
     const { deps, deny } = world();
     await expect(readArtifactSource({ ...deps, getBlob: async () => { deny(); return bytes; } }, { artifactId })).rejects.toThrow('source denied');
   });
+  it('should return the full 32-file 256 KiB snapshot within the serialized budget', async () => {
+    const { deps, release } = world();
+    const content = Buffer.alloc(8192, 255);
+    const fileDigest = `sha256:${createHash('sha256').update(content).digest('hex')}`;
+    const body = { schemaVersion: 'artifacts/v1', artifactId, files: Array.from({ length: 32 }, (_, index) => ({
+      path: `${index}.js`, mimeType: 'text/javascript', size: content.length, digest: fileDigest })) };
+    const snapshot = { ...release, manifestDigest: manifestDigest(body),
+      manifest: canonicalManifest({ ...body, digest: manifestDigest(body) }) };
+    const output = await readArtifactSource({ ...deps, getCurrent: async () => snapshot, getBlob: async () => content }, { artifactId });
+    expect(output.files).toHaveLength(32);
+    expect(output.files.reduce((total, file) => total + file.bytes.length, 0)).toBe(262144);
+    expect(Buffer.byteLength(JSON.stringify(output))).toBeLessThan(2097152);
+    await expect(readArtifactSource(deps, { artifactId, paths: [] })).rejects.toThrow('invalid_request');
+  });
 });

@@ -40,7 +40,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   const lifecycleStore = createMemoryLifecycleStore();
   const lifecycle = createLifecycleService(lifecycleStore, () => '2026-01-01T00:00:00Z', state);
   const sources = createMemorySourceStore();
-  const confirmations = new Map<string, { context: DeleteConfirmationContext; approved: boolean }>();
+  const confirmations = new Map<string, { context: DeleteConfirmationContext; approved: boolean; expired?: boolean }>();
   let allowed = true;
   let approved = true;
   let guardCalls = 0;
@@ -98,6 +98,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
         },
         async consume(client, context, ref) {
           const proof = confirmations.get(ref);
+          if (proof?.expired) return 'expired';
           if (!proof?.approved || JSON.stringify(context) !== JSON.stringify(proof.context)) return 'invalid';
           writes.get(client)!.push(async () => { confirmations.delete(ref); });
           return 'valid';
@@ -159,6 +160,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   }, context);
   return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, blobs, legacyRecords, quotaReservations,
     approveConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.approved = true; },
+    expireConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.expired = true; },
     executor, suspend: () => { approved = false; },
     deny: () => { allowed = false; }, allow: () => { allowed = true; }, guardCalls: () => guardCalls };
 }
