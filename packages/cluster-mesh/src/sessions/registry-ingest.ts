@@ -76,6 +76,9 @@ export function ingestLifecycle(
       outboxRef: outboxRefFor(key, row.originRevision),
     };
   }
+  if (!Number.isSafeInteger(row.originRevision) || row.originRevision >= Number.MAX_SAFE_INTEGER) {
+    return { status: 'refused', error: relayError('relay_protocol_refused') };
+  }
   row.seenFacts.set(factKey, factDigest);
   row.originRevision += 1;
   row.nativeBinding = { ...fact.sourceRef };
@@ -115,6 +118,9 @@ export function ingestCapabilities(
   const row = state.sessions.get(key);
   if (row === undefined || row.quarantined || row.tombstoned) {
     return { status: 'refused', error: relayError('relay_origin_refused') };
+  }
+  if (!Number.isSafeInteger(row.originRevision) || row.originRevision >= Number.MAX_SAFE_INTEGER) {
+    return { status: 'refused', error: relayError('relay_protocol_refused') };
   }
   const hostKind = typeof capabilities.hostKind === 'string' ? capabilities.hostKind : 'claude';
   const known: ProviderClass[] = ['claude', 'codex', 'agy', 'vibe', 'muse', 'app-native'];
