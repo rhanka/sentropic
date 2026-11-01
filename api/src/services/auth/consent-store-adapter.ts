@@ -1,9 +1,9 @@
 import type { AuthHonoConsentGrant, AuthHonoConsentStorePort } from '@sentropic/auth-hono';
+import { randomUUID } from 'node:crypto';
 import { and, eq, type SQL } from 'drizzle-orm';
 
-import { env } from '../../config/env';
 import { db } from '../../db/client';
-import { oauthConsents } from '../../db/schema';
+import { oauthConsents, users } from '../../db/schema';
 
 interface CreateConsentStoreAdapterOptions {
   database?: typeof db;
@@ -30,27 +30,25 @@ export const createConsentStoreAdapter = (
   const database = options.database ?? db;
   const now = options.now ?? (() => new Date());
 
-  // Under strict with a supplied tenant, add the tenant leg to the lookup; otherwise legacy key.
-  const enforceTenant = (tenantId: string | undefined): tenantId is string =>
-    env.TENANT_RESOLUTION_MODE === 'strict' && typeof tenantId === 'string' && tenantId.length > 0;
-
   const grantFilter = (userId: string, clientId: string, tenantId: string | undefined): SQL => {
     const conditions = [eq(oauthConsents.userId, userId), eq(oauthConsents.clientId, clientId)];
-    if (enforceTenant(tenantId)) conditions.push(eq(oauthConsents.tenantId, tenantId));
+    conditions.push(eq(oauthConsents.tenantId, tenantId ?? 'sentropic'));
     return and(...conditions) as SQL;
   };
 
   return {
     async getGrant(userId, clientId, tenantId): Promise<AuthHonoConsentGrant | null> {
       const [row] = await database
-        .select({ scopes: oauthConsents.scopes })
+        .select()
         .from(oauthConsents)
         .where(grantFilter(userId, clientId, tenantId))
         .limit(1);
-      return row ? { scopes: row.scopes } : null;
+      return row ?? null;
     },
 
-    async saveGrant(userId, clientId, scopes, tenantId): Promise<void> {
+    async saveGrant(userId, clientId, scopes, tenantId, offline): Promise<void> {
+      await database.transaction(async (tx) => {
+      await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('update');
       const timestamp = now();
       // Union with any prior grant so a narrower re-approval never shrinks it. The merge is done
       // in JS (read-then-upsert), NOT a raw-SQL array union: drizzle expands a JS array embedded in
@@ -58,13 +56,19 @@ export const createConsentStoreAdapter = (
       // type record to text[]". Setting the column with a plain JS array lets drizzle bind it as a
       // proper text[]. Concurrent approvals for the same (user,client[,tenant]) are not a real
       // scenario (single user, single consent screen), so last-write-wins is safe here.
-      const [existing] = await database
+      const [existing] = await tx
         .select({ scopes: oauthConsents.scopes })
         .from(oauthConsents)
         .where(grantFilter(userId, clientId, tenantId))
         .limit(1);
       const merged = Array.from(new Set([...(existing?.scopes ?? []), ...scopes]));
-      await database
+      // A new approval replaces the offline set and epoch; online unions confer no offline authority.
+      const evidence = offline ? {
+        offlineGrantId: randomUUID(), offlineIssuer: offline.issuer, offlineScopes: scopes,
+        approvedResources: offline.resource ? [offline.resource] : [],
+        defaultAudienceApproved: offline.resource === null, offlineConsentedAt: timestamp,
+      } : {};
+      await tx
         .insert(oauthConsents)
         .values({
           clientId,
@@ -72,16 +76,18 @@ export const createConsentStoreAdapter = (
           scopes: merged,
           updatedAt: timestamp,
           userId,
+          ...evidence,
           // ARCH-11 G1c: under strict, write the real tenant leg; otherwise omit so it takes the
           // DEFAULT ('sentropic'), byte-identical to the pre-G1c single-org behavior.
-          ...(enforceTenant(tenantId) ? { tenantId } : {}),
+          tenantId: tenantId ?? 'sentropic',
         })
         .onConflictDoUpdate({
-          set: { scopes: merged, updatedAt: timestamp },
+          set: { scopes: merged, updatedAt: timestamp, ...evidence },
           // The unique key is (user_id, client_id, tenant_id) (ARCH-11 G1a). When tenant_id is
           // omitted it takes the DEFAULT, so the ON CONFLICT target still matches the composite index.
           target: [oauthConsents.userId, oauthConsents.clientId, oauthConsents.tenantId],
         });
+      });
     },
   };
 };
