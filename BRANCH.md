@@ -65,7 +65,7 @@ A prerelease Cluster Mesh version on main (the planned bump-gate dev series betw
   - [x] Register the new test in the default `test-publishable-manifests` scope.
 - [ ] **Lot 4 — Local validation, commit, PR, CI, report**
   - [x] Local targeted runs: new test, `check-ci-version-filters`, publishable-ci-wiring tests, `test-ci-expected-results`.
-  - [ ] `make scope-check` + `make commit` (atomic, ≤150 lines, selective staging).
+  - [x] `make scope-check` + `make commit` (atomic, ≤150 lines, selective staging).
   - [ ] Draft PR with `BRANCH.md` as body; ONE CI run on the final head; wait for completion.
   - [ ] Report to `.tmp/rv/cm-publish-skip.md`; no merge.
 
