@@ -3,7 +3,7 @@ import {
   createPolicyStore,
   POLICY_FORMAT,
   type PolicyStoreGates,
-} from '../../../src/services/cluster-mesh/session-content-policy-store';
+} from '../../src/services/cluster-mesh/session-content-policy-store';
 
 const BINDING = {
   appMeshId: 'mesh-a', sourceMeshId: 'mesh-b', nativeAudience: 'native-policy-audience',
@@ -34,7 +34,7 @@ const share = (extra = {}) => ({
 });
 const activate = (store: ReturnType<typeof createPolicyStore>, digest: string, op = 'operation-1') =>
   store.commitActivation({ policyId: 'policy-share-1', operationId: op, proposalId: 'proposal-1',
-    nonceId: 'nonce-1', policyDigest: digest, targetDigest: 't'.repeat(64), denialFloor: 3 });
+    nonceId: 'nonce-1', policyDigest: digest, targetDigest: 'a'.repeat(64), denialFloor: 3 });
 
 describe('STORE session-content policy receiver', () => {
   it('should admit share and commit activation with a separate authority revision', () => {
@@ -52,20 +52,20 @@ describe('STORE session-content policy receiver', () => {
   });
   it('should refuse every activation while R15 is unaccepted', () => {
     const store = createPolicyStore(gates({ r15Accepted: false }));
-    expect(() => store.admitPolicy(share())).toMatchObject({ code: 'r15_unaccepted' });
+    expect(() => store.admitPolicy(share())).toThrowError(expect.objectContaining({ code: 'r15_unaccepted' }));
     expect(store.isCaptureEligible('policy-share-1')).toBe(false);
   });
   it('should refuse admission with unsigned channel retention', () => {
     const store = createPolicyStore(gates());
     const channels = { ...CHANNELS, 'terminal.cache': undefined } as typeof CHANNELS;
     expect(() => store.admitPolicy(share({ policy: policy({ channels }) })))
-      .toMatchObject({ code: 'invalid_request' });
+      .toThrowError(expect.objectContaining({ code: 'invalid_request' }));
   });
   it('should refuse activation without identity or durable writer', () => {
     expect(() => createPolicyStore(gates({ identityAvailable: false })).admitPolicy(share()))
-      .toMatchObject({ code: 'authority_unavailable' });
+      .toThrowError(expect.objectContaining({ code: 'authority_unavailable' }));
     expect(() => createPolicyStore(gates({ durableWriterAvailable: false })).admitPolicy(share()))
-      .toMatchObject({ code: 'storage_unavailable' });
+      .toThrowError(expect.objectContaining({ code: 'storage_unavailable' }));
   });
   it('should bind amend to the exact prior digest and freeze the first deadline', () => {
     const store = createPolicyStore(gates());
@@ -74,36 +74,39 @@ describe('STORE session-content policy receiver', () => {
     const amendBody = (rev: number) => policy({ policyRevision: rev });
     const badAmend = { ...share(), policy: amendBody(2), purpose: 'amend' as const,
       policyRevision: 2, priorRevision: 1, priorDigest: '0'.repeat(64) };
-    expect(() => store.admitPolicy(badAmend)).toMatchObject({ code: 'revision_conflict' });
-    const amended = store.admitPolicy({ ...badAmend, priorDigest: first.policyDigest });
+    expect(() => store.admitPolicy(badAmend)).toThrowError(expect.objectContaining({ code: 'revision_conflict' }));
+    const amended = store.admitPolicy({ ...badAmend, priorDigest: first.policyDigest,
+      retentionExpiresAt: 1_793_606_400_000 });
     expect(amended.firstAdmissionExpiresAt).toBe(1_793_606_400_000);
     const extended = { ...share(), policy: amendBody(3), purpose: 'amend' as const,
       policyRevision: 3, priorRevision: 2, priorDigest: amended.policyDigest,
       retentionExpiresAt: 1_799_999_999_999 };
-    expect(() => store.admitPolicy(extended)).toMatchObject({ code: 'invalid_request' });
+    expect(() => store.admitPolicy(extended)).toThrowError(expect.objectContaining({ code: 'invalid_request' }));
   });
   it('should let denial dominate and dedupe identical operations', () => {
     const store = createPolicyStore(gates());
     const admitted = store.admitPolicy(share());
     store.raiseDenial('policy-share-1', 4);
-    expect(() => activate(store, admitted.policyDigest)).toMatchObject({ code: 'denial_active' });
+    expect(() => activate(store, admitted.policyDigest)).toThrowError(expect.objectContaining({ code: 'denial_active' }));
     store.clearDenial('policy-share-1');
     const first = activate(store, admitted.policyDigest);
     expect(activate(store, admitted.policyDigest).ackDigest).toBe(first.ackDigest);
     expect(() => activate(store, admitted.policyDigest, 'operation-2'))
-      .toMatchObject({ code: 'revision_conflict' });
+      .toThrowError(expect.objectContaining({ code: 'revision_conflict' }));
   });
   it('should refresh capture on reconnect without extending retained expiry', () => {
     const store = createPolicyStore(gates());
     const admitted = store.admitPolicy(share({ retentionExpiresAt: 1_793_606_400_000 }));
-    activate(store, admitted.policyDigest);
+    const ack = activate(store, admitted.policyDigest);
+    store.commitReceipt({ policyId: 'policy-share-1', operationId: 'operation-1',
+      ackDigest: ack.ackDigest, policyDigest: admitted.policyDigest });
     const grant = store.refreshCapture({ policyId: 'policy-share-1',
       newTarget: { connectionId: 'connection-2', connectionGeneration: 2 }, stableSourceBinding: BINDING });
     expect(grant.retainedExpiresAt).toBe(1_793_606_400_000);
     expect(() => store.refreshCapture({ policyId: 'policy-share-1',
       newTarget: { connectionId: 'connection-3', connectionGeneration: 3 },
       stableSourceBinding: { ...BINDING, sourceSessionId: 'other-session' } }))
-      .toMatchObject({ code: 'source_reauthorization_required' });
+      .toThrowError(expect.objectContaining({ code: 'source_reauthorization_required' }));
   });
   it('should refuse retained reads past the immutable deadline', () => {
     let now = 1_793_520_003_000;
@@ -112,7 +115,7 @@ describe('STORE session-content policy receiver', () => {
     expect(store.readRetained({ policyId: 'policy-share-1' }).expiresAt).toBe(1_793_520_004_000);
     now = 1_793_520_005_000;
     expect(() => store.readRetained({ policyId: 'policy-share-1' }))
-      .toMatchObject({ code: 'object_expired' });
+      .toThrowError(expect.objectContaining({ code: 'object_expired' }));
   });
   it('should keep purge pending until the admitted writer settles it', () => {
     const store = createPolicyStore(gates());
@@ -120,7 +123,7 @@ describe('STORE session-content policy receiver', () => {
     expect(store.initiatePurge({ policyId: 'policy-share-1', scope: 'terminal.cache' }).status)
       .toBe('purge_pending');
     expect(() => store.settlePurge({ policyId: 'policy-share-1', writerReceipt: null }))
-      .toMatchObject({ code: 'purge_pending' });
+      .toThrowError(expect.objectContaining({ code: 'purge_pending' }));
     expect(store.settlePurge({ policyId: 'policy-share-1',
       writerReceipt: { writerId: 'writer-1', settledAt: 1_793_520_003_000 } }).status).toBe('purged');
   });
