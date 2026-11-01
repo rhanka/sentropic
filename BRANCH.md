@@ -40,6 +40,7 @@
   - `Makefile`
   - `deploy/k8s/overlays/preprod/idp-identity-sync/client-policy.sql`
   - `deploy/k8s/overlays/preprod/idp-identity-sync/client-postcondition.sql`
+  - `deploy/k8s/overlays/preprod/patch-auth-idp-config.yaml`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -50,6 +51,7 @@
 ## Feedback Loop
 - [x] BRIR-EX1: extend only test-auth-ui tool dependencies to render the mandated real Svelte consent component; impact limited to that test target; rollback restores the prior isolated tool list.
 - [x] BRIR-EX2: add mandatory refresh invalidation after supported database restore targets, before reopening token traffic; impact is fail-closed restore completion; rollback restores prior target recipes.
+- [x] BRIR-EX3: retire PR #868's temporary preprod 15-day access TTL when deploying these lots, as that override requires; restore the binding 1-hour access TTL and leave prod unchanged.
 - [ ] Track ingestion belongs to the designated conductor writer; this mergeable plan records the owner request and lots for import.
 - [x] A4 identity cutover may land in parallel; no identity-table redesign or new account/session references.
 - [x] D-R1: require a new authorize flow at day 15; D-R2: browser logout preserves consented offline MCP families; D-R3: non-null required_acr remains ineligible — **pending owner ratification**.
