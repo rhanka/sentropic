@@ -62,4 +62,17 @@ describe('P0 source, control and summary transports', () => {
     expect(source).toMatchObject({ status: 200, body: { releaseId, sourceRef: { kind: 'inline-original' },
       files: [{ path: 'index.html', bytes: [...Buffer.from('<h1>Author</h1>')] }] } });
   });
+  it('should refuse expired and stale proofs without effects or receipts', async () => {
+    const { world, releaseId, call } = await published();
+    const args = { expectedCurrentReleaseId: releaseId, idempotencyKey: 'delete-expired' };
+    const challenge = await call('artifacts_delete', args);
+    const ref = (challenge.body as { details: { confirmationRef: string } }).details.confirmationRef;
+    world.approveConfirmation(ref); world.expireConfirmation(ref);
+    expect(await call('artifacts_delete', { ...args, confirmationRef: ref })).toMatchObject({
+      status: 409, body: { error: 'confirmation_expired' } });
+    expect(await call('artifacts_delete', { ...args, expectedCurrentReleaseId: null, confirmationRef: ref }))
+      .toMatchObject({ status: 409, body: { error: 'confirmation_stale' } });
+    expect((await call('artifacts_get_source', {})).status).toBe(200);
+    expect(world.receipts.size).toBe(2);
+  });
 });
