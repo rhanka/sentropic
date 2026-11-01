@@ -91,8 +91,8 @@ export function createProviderServer({ respond = journeyResponse } = {}) {
       let ended = false;
       res.on('close', () => { if (!ended) receipt.cancelled++; });
       const event = (delta, finish_reason = null) => res.write(`data: ${JSON.stringify({ ...envelope,
-        ...(finish_reason ? { usage } : {}), object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason }] })}\r\n\r\n`);
-      if (outcome.malformed) return res.end('data: {invalid}\n\n');
+        ...(finish_reason ? { usage } : {}), object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason }] })}\n\n`);
+      if (outcome.malformed) { ended = true; return res.end('data: {invalid}\n\n'); }
       if (message.tool_calls) event({ tool_calls: message.tool_calls.map((tool, index) => ({ index, ...tool })) });
       else {
         const parts = String(message.content ?? '').match(/.{1,80}/gs) ?? [''];
@@ -104,7 +104,7 @@ export function createProviderServer({ respond = journeyResponse } = {}) {
       }
       event({}, finish);
       ended = true;
-      res.end('data: [DONE]\r\n\r\n');
+      res.end('data: [DONE]\n\n');
     } catch (error) {
       receipt.failedRequests++;
       res.writeHead(400, { 'content-type': 'application/json' });

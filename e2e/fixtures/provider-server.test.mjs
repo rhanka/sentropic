@@ -24,6 +24,9 @@ test('should preserve streaming chunks, usage and model routing over HTTP', asyn
   assert.match(wire, /gpt-5.4-nano/);
   assert.match(wire, /completion_tokens/);
   assert.match(wire, /\[DONE\]/);
+  const packets = wire.split('\n\n').filter(Boolean).map(packet => packet.slice('data: '.length));
+  assert.equal(packets.at(-1), '[DONE]');
+  assert.ok(packets.slice(0, -1).map(packet => JSON.parse(packet)).some(chunk => chunk.choices[0].delta.content));
   assert.equal(receipt.calls, 1);
 });
 
@@ -104,6 +107,12 @@ test('should preserve requested initiative count and structured fields over HTTP
   assert.equal(content.initiatives.length, 2);
   assert.ok(content.dossier);
   assert.ok(content.initiatives.every(item => content.domains.some(domain => domain.id === item.domainId)));
+});
+
+test('should return nonempty executive summary sections in the application schema', () => {
+  const content = JSON.parse(journeyResponse({ messages: [{ role: 'user', content:
+    'Return {"introduction":"", "analyse":"", "recommandation":"", "synthese_executive":""}' }] }).content);
+  for (const field of ['introduction', 'analyse', 'recommandation', 'synthese_executive']) assert.ok(content[field].length > 0);
 });
 
 test('should request real application tools with exact context IDs and consume their results', () => {
