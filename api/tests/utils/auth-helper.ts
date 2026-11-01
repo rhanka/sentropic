@@ -13,8 +13,8 @@ import { cmDeleteForEmails, cmDeleteForUsers } from './cm-identity-test-store';
  * Test helpers for authentication integration tests.
  *
  * Lot A4: identity fixtures live in the cluster-mesh cm_identity stores; the
- * legacy public.users/userSessions/webauthn*/magicLinks/emailVerificationCodes/
- * workspaceMemberships tables no longer exist.
+ * legacy public identity tables (users, userSessions, webauthn, magicLinks,
+ * emailVerificationCodes, workspaceMemberships) no longer exist.
  */
 
 export type UserRole = 'guest' | 'editor' | 'admin_org' | 'admin_app';
