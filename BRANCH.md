@@ -88,8 +88,8 @@
     - [ ] **E2E tests**
       - [ ] No E2E changes in this lot; no E2E updates.
 - [ ] **Lot 2 — Store implementation (green)**
-  - [ ] Add `packages/cluster-mesh/src/sessions/content-policy.ts` (channels, retention, policy digest domain, fail-closed gates)
-  - [ ] Add `api/src/services/cluster-mesh/session-content-policy-store.ts` (admission CAS, activation ACK/receipt, capture reconnect grant, cursor/outbox, writer-settled purge)
+  - [x] Add `packages/cluster-mesh/src/sessions/content-policy.ts` (channels, retention, policy digest domain, fail-closed gates)
+  - [x] Add `api/src/services/cluster-mesh/session-content-policy-store.ts` (admission CAS, activation ACK/receipt, capture reconnect grant, cursor/outbox, writer-settled purge)
   - [x] Extend `api/src/db/control-schema.ts` (policy admission/cursor/outbox/purge tables)
   - [x] Add `api/drizzle/control/0014_*.sql` + journal entry (`BR01-EX1`)
   - [x] Bump `packages/cluster-mesh/package.json` patch (`BR01-EX2`)
