@@ -10,7 +10,7 @@ import {
   SelfActionForbiddenError,
 } from '../../src/index.js';
 import { createAtomicPersonDeletionV2 } from '../../src/index.js';
-import { asOpHost, createFixtureBusiness, LATER, NOW, openPostgresEnv, openSqliteEnv, sha256Hex, type FixtureBusinessState } from './a20b-helpers.js';
+import { asOpHost, createFixtureBusiness, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, sha256Hex, type FixtureBusinessState } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 
 const WRITE = { mode: 'write' as const, deadlineMs: 5000 };
@@ -35,7 +35,9 @@ const seedWorkspace = async (host: CustodyOpHost, workspaceId: string, members: 
   }
 };
 
-describe.each([{ profile: 'postgres' }, { profile: 'sqlite' }])('A2.0b atomic person deletion on $profile', ({ profile }) => {
+const PROFILES = (pgEnabled ? ['postgres', 'sqlite'] : ['sqlite']) as const;
+
+describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b atomic person deletion on $profile', ({ profile }) => {
   const openEnv = async (): Promise<ProfileEnv> => {
     if (profile === 'postgres') return { unitOfWork: asOpHost((await openPostgresEnv()).unitOfWork), concurrent: true };
     return { unitOfWork: asOpHost(openSqliteEnv().unitOfWork), concurrent: false };

@@ -4,7 +4,7 @@
 import { describe, expect, it } from 'vitest';
 import type { IdentityImportBatchV1, IdentityUnitOfWorkV1 } from '../../src/index.js';
 import { createIdentityCustodyImporterV1 } from '../../src/index.js';
-import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, randomBase64Url, sha256Hex, syntheticCoseKey } from './a20b-helpers.js';
+import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, randomBase64Url, sha256Hex, syntheticCoseKey } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 
 const WRITE = { mode: 'write' as const, deadlineMs: 5000 };
@@ -74,7 +74,9 @@ const fullBatch = (migrationId: string): IdentityImportBatchV1 => {
   };
 };
 
-describe.each([{ profile: 'postgres' }, { profile: 'sqlite' }])('A2.0b custody import on $profile', ({ profile }) => {
+const PROFILES = (pgEnabled ? ['postgres', 'sqlite'] : ['sqlite']) as const;
+
+describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody import on $profile', ({ profile }) => {
   const openEnv = async (): Promise<ProfileEnv> => {
     if (profile === 'postgres') return { unitOfWork: asOpHost((await openPostgresEnv()).unitOfWork) };
     return { unitOfWork: asOpHost(openSqliteEnv().unitOfWork) };
