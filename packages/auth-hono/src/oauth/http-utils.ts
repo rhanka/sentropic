@@ -16,16 +16,14 @@ export const appendParams = (
 
 export const oauthJsonError = (
   c: Context,
-  status: 400 | 401 | 403,
+  status: 400 | 401 | 403 | 503,
   code: string,
   message: string
 ): Response =>
   c.json(
     {
-      error: {
-        code,
-        message,
-      },
+      error: code,
+      error_description: message,
     },
     status
   );

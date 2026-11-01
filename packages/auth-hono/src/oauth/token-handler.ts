@@ -10,10 +10,12 @@ import type { AuthCodePayload, OauthClientRecord, ServiceClientRecord, TokenMeta
 import { TOKEN_EXCHANGE_GRANT_TYPE } from './state-store-types.js';
 import { handleTokenExchange } from './token-exchange-handler.js';
 import { handleRefreshToken } from './refresh-handler.js';
+import { handleInitialRefresh } from './initial-refresh-handler.js';
 
 const DEFAULT_SERVICE_ACCESS_TOKEN_TTL_SECONDS = 900;
 
 export interface OAuthTokenHandlerOptions {
+  accessTokenDeadline?: Date;
   refreshTokenTtlSeconds?: number;
   accessTokenTtlSeconds?: number;
   dpopIatSkewSeconds?: number;
@@ -65,9 +67,17 @@ export const createOAuthTokenHandler =
     const auth = await authenticateClient(c, form, options.ports);
     if (auth instanceof Response) return auth;
 
+    const peek = await options.ports.oauthStateStore.findAuthCode?.(form.get('code') ?? '');
+    if (peek?.scope.split(/\s+/).includes('offline_access')) {
+      return await handleInitialRefresh(c, form, options, peek);
+    }
+
     const codePayload = await options.ports.oauthStateStore.consumeAuthCode(form.get('code') ?? '');
     if (!codePayload || codePayload.clientId !== auth.client.clientId) {
       return oauthJsonError(c, 400, 'invalid_grant', 'Authorization code is invalid or already used.');
+    }
+    if (codePayload.scope.split(/\s+/).includes('offline_access')) {
+      return oauthJsonError(c, 400, 'invalid_grant', 'Transactional offline issuance is required.');
     }
     if (form.get('redirect_uri') !== codePayload.redirectUri) {
       return oauthJsonError(c, 400, 'invalid_grant', 'redirect_uri does not match the authorization request.');
@@ -165,7 +175,7 @@ const parseClientCredentials = (
  *   (audience downgrade/upgrade rejection). The `aud` is derived ONLY from the sealed value.
  * No `resource` on the token leg is accepted (the sealed value still governs `aud`).
  */
-const validateTokenResource = (
+export const validateTokenResource = (
   c: Context,
   form: URLSearchParams,
   codePayload: AuthCodePayload
@@ -414,9 +424,12 @@ export const issueTokens = async (
   refreshFamilyId?: string,
   includeIdToken = true,
 ) => {
-  const accessTokenTtlSeconds = options.accessTokenTtlSeconds ?? 3600;
+  const requestedTtl = options.accessTokenTtlSeconds ?? 3600;
   const idTokenTtlSeconds = options.idTokenTtlSeconds ?? 3600;
   const now = options.ports.clock.now();
+  const accessTokenTtlSeconds = options.accessTokenDeadline
+    ? Math.min(requestedTtl, Math.floor((+options.accessTokenDeadline - +now) / 1000)) : requestedTtl;
+  if (accessTokenTtlSeconds <= 0) throw new Error('Access issuance deadline elapsed.');
   const accessExpiresAt = options.ports.clock.addSeconds(now, accessTokenTtlSeconds);
   const idExpiresAt = options.ports.clock.addSeconds(now, idTokenTtlSeconds);
   const scopes = codePayload.scope.split(/\s+/).filter(Boolean);
