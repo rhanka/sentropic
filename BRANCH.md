@@ -13,7 +13,7 @@
 - UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
 - In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
-- Contract pins: plan v1.6 `6168b73ba9b236530bde6bb4998929de1ede0c92d61aa0fc07fcd4f9983b7b18`, MANIFEST.sha256 seal `dfb2589969f78cf040e8b3f0857cd933722aff5ad5445553ac42b7ba583abbed`, RC2-CONTRACT.md `3d827eaa4322cd980509679f91b65d3740568c5faaf6dd29339ad99b4a46015d`, manifest JSON `5e86b2a114052eae27aebef913af9dd7c208c3c675609060009c542774ea568d`, RC0 draft.6 rev b `87908afecb9d389cebd324a87717313e2f86f885200322cd55d52930962aee48`.
+- Contract pins (r2 freeze, verified 2026-11-01): plan v1.6 `6168b73ba9b236530bde6bb4998929de1ede0c92d61aa0fc07fcd4f9983b7b18`, MANIFEST.sha256 `133e23f54d7268c104fe45be753d2ea28b402b8621beefab95ed35062d84318e`, RC2-CONTRACT.md `cc8965c9affad415c35261d1909489ab12a4db15b33296a9e1dba8b6952544d0`, manifest JSON `f7e4a148aef4db2732d770b723751e9f8f9fb6a2dffcfdaac12913498915a23a`, RC0 draft.6 rev b `87908afecb9d389cebd324a87717313e2f86f885200322cd55d52930962aee48` (manifest `rc0Sha256`/`planSha256` match; r1 seal `dfb2589969f78cf040e8b3f0857cd933722aff5ad5445553ac42b7ba583abbed` preserved as `priorAcceptance`, not r2 acceptance).
 - Re-verify manifest seal hash before each push; mismatch blocks the push.
 - Source-gaps (R15 unaccepted, real identity tuple, durable store writer) stay fail-closed: refuse, never invent.
 - No FED input required for this lot.
@@ -45,6 +45,7 @@
 ## Feedback Loop
 - `BR01-EX1`: touch `api/drizzle/control/0014_*.sql` + `api/drizzle/control/meta/_journal.json` (one migration for policy admission/cursor/outbox/purge tables; reason: durable store needs new tables; impact: control schema +1 migration; rollback: drop tables, revert journal entry).
 - `BR01-EX2`: touch `packages/cluster-mesh/package.json` (version bump only; reason: CI enforce-package-bump requires bump when `packages/<pkg>/src/**` changes; impact: version field only; rollback: revert version line).
+- 2026-11-01 resume: rebased onto `origin/main` (`a67778379`); re-pinned r2 contract hashes (§Scope); fixed never-green test bugs with evidence (wrong `../../../src` depth, vacuous `toMatchObject` on throwing fns, non-hex `'t'.repeat(64)`, missing receipt before `refreshCapture`, amend missing repeated deadline). Implementation unchanged — it already enforced the contract.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -93,13 +94,13 @@
   - [x] Extend `api/src/db/control-schema.ts` (policy admission/cursor/outbox/purge tables)
   - [x] Add `api/drizzle/control/0014_*.sql` + journal entry (`BR01-EX1`)
   - [x] Bump `packages/cluster-mesh/package.json` patch (`BR01-EX2`)
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api` + `make lint-api` API_PORT=8802 UI_PORT=5188 MAILDEV_UI_PORT=1095 ENV=test-rc2-store
-    - [ ] **API tests**
-      - [ ] Updated `api/tests/api/session-content-receiver.test.ts` (STORE green)
-      - [ ] Updated `api/tests/unit/remote-action-audit.test.ts` (STORE-ERASURE green)
-      - [ ] Scoped runs while evolving (same commands as Lot 1)
-      - [ ] Sub-lot gate: full `make test-api-unit API_PORT=8802 UI_PORT=5188 MAILDEV_UI_PORT=1095 ENV=test-rc2-store`
+  - [x] Lot gate (2026-11-01, all green on rebased head):
+    - [x] `make typecheck-api` + `make lint-api` API_PORT=8802 UI_PORT=5188 MAILDEV_UI_PORT=1095 ENV=test-rc2-store (tsc clean; eslint 0 errors, no warnings in branch files)
+    - [x] **API tests**
+      - [x] Updated `api/tests/api/session-content-receiver.test.ts` (STORE green 9/9)
+      - [x] Updated `api/tests/unit/remote-action-audit.test.ts` (STORE-ERASURE green 4/4)
+      - [x] Scoped runs while evolving (same commands as Lot 1)
+      - [x] Sub-lot gate: full `make test-api-unit API_PORT=8802 UI_PORT=5188 MAILDEV_UI_PORT=1095 ENV=test-rc2-store` (150 files, 1558 passed, 2 skipped)
     - [ ] **UI tests (TypeScript only)**
       - [ ] No UI changes; no updates.
     - [ ] **E2E tests**
@@ -107,12 +108,12 @@
 - [ ] **Lot N-1 — Docs consolidation**
   - [ ] No `spec/BRANCH_SPEC_EVOL.md` created (single-slice branch, no spec evolution file).
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest UI (not applicable, no UI scope)
-  - [ ] Retest API (scoped STORE + STORE-ERASURE + unit suite)
-  - [ ] Retest e2e (not applicable, no e2e scope)
-  - [ ] Retest AI flaky tests (not applicable, no AI scope)
-  - [ ] Bumped `packages/cluster-mesh/package.json` version (semver) — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
+  - [x] Typecheck & Lint
+  - [x] Retest UI (not applicable, no UI scope)
+  - [x] Retest API (scoped STORE + STORE-ERASURE + unit suite)
+  - [x] Retest e2e (not applicable, no e2e scope)
+  - [x] Retest AI flaky tests (not applicable, no AI scope)
+  - [x] Bumped `packages/cluster-mesh/package.json` version (semver) — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
   - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
   - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
   - [ ] Delivery stops at draft PR + one green CI + `.tmp/rv/rc2-store.md` report; no merge (per packet).
