@@ -11,7 +11,7 @@ import type {
   IdentityImportReceiptV1,
   PersonDeletionReceiptV2,
 } from '../../identity-contracts/custody.js';
-import type { RevocationStepKind, UserAccount } from '../../identity-contracts/types.js';
+import type { OAuthConsentRecord, RevocationStepKind, UserAccount, WorkspaceRecord } from '../../identity-contracts/types.js';
 import { IdentityCustodyErrorV1 } from '../../identity-contracts/custody-errors.js';
 import type { PgSession, SqlValue } from '../postgres/protocol.js';
 import { identityTable, type IdentityTableName } from './schema.js';
@@ -307,9 +307,15 @@ export class PostgresCustodyJournal {
       [tenantId],
     );
 
-  findWorkspaceCore = (workspaceId: string): Promise<{ readonly workspaceId: string; readonly tenantId: string } | null> =>
+  findWorkspaceCore = (workspaceId: string): Promise<WorkspaceRecord | null> =>
     this.one(
-      (row) => ({ workspaceId: String(row['workspace_id']), tenantId: String(row['tenant_id']) }),
+      (row) => ({
+        workspaceId: String(row['workspace_id']),
+        tenantId: String(row['tenant_id']),
+        repoIdentity: (row['repo_identity'] as string | null) ?? null,
+        aliases: JSON.parse(String(row['aliases'] ?? '[]')) as string[],
+        enrolledAt: String(row['enrolled_at']),
+      }),
       `SELECT * FROM ${this.cm('cm_workspaces')} WHERE "workspace_id" = $1`,
       [workspaceId],
     );
@@ -322,20 +328,42 @@ export class PostgresCustodyJournal {
     if ((result.rowCount ?? 0) === 0) throw new IdentityCustodyErrorV1('identity_material_missing');
   }
 
-  async insertConsentCore(consent: { readonly consentId: string; readonly tenantId: string; readonly userId: string; readonly clientId: string; readonly grantedAt: string }): Promise<void> {
+  async insertConsentCore(consent: { readonly consentId: string; readonly tenantId: string; readonly userId: string; readonly clientId: string; readonly grantedAt: string; readonly revokedAt?: string }): Promise<void> {
     await this.session.execute({
-      text: `INSERT INTO ${this.cm('cm_oauth_consents')} ("consent_id","tenant_id","user_id","client_id","granted_at","revoked_at") VALUES ($1,$2,$3,$4,$5,NULL) ON CONFLICT ("consent_id") DO NOTHING`,
-      values: [consent.consentId, consent.tenantId, consent.userId, consent.clientId, consent.grantedAt],
+      text: `INSERT INTO ${this.cm('cm_oauth_consents')} ("consent_id","tenant_id","user_id","client_id","granted_at","revoked_at") VALUES ($1,$2,$3,$4,$5,$6) ON CONFLICT ("consent_id") DO NOTHING`,
+      values: [consent.consentId, consent.tenantId, consent.userId, consent.clientId, consent.grantedAt, consent.revokedAt ?? null],
     });
   }
 
+  findConsentCore = (consentId: string): Promise<OAuthConsentRecord | null> =>
+    this.one(
+      (row) => ({
+        consentId: String(row['consent_id']),
+        tenantId: String(row['tenant_id']),
+        userId: String(row['user_id']),
+        clientId: String(row['client_id']),
+        grantedAt: String(row['granted_at']),
+        ...(row['revoked_at'] === null || row['revoked_at'] === undefined ? {} : { revokedAt: String(row['revoked_at']) }),
+      }),
+      `SELECT * FROM ${this.cm('cm_oauth_consents')} WHERE "consent_id" = $1`,
+      [consentId],
+    );
+
   // -- Subject cleanup (CM-owned, both handlers) ------------------------------
 
-  listMembershipsForUser = async (userId: string): Promise<readonly { readonly tenantId: string; readonly status: string; readonly tenantRole: string }[]> => {
+  listMembershipsForUser = async (userId: string): Promise<readonly { readonly userId: string; readonly tenantId: string; readonly status: string; readonly tenantRole: string; readonly decidedBy?: string; readonly decidedAt?: string; readonly updatedAt: string }[]> => {
     const rows = (
-      await this.session.execute({ text: `SELECT "tenant_id","status","tenant_role" FROM ${this.cm('cm_tenant_memberships')} WHERE "user_id" = $1`, values: [userId] })
+      await this.session.execute({ text: `SELECT "user_id","tenant_id","status","tenant_role","decided_by","decided_at","updated_at" FROM ${this.cm('cm_tenant_memberships')} WHERE "user_id" = $1`, values: [userId] })
     ).rows;
-    return rows.map((row) => ({ tenantId: String(row['tenant_id']), status: String(row['status']), tenantRole: String(row['tenant_role']) }));
+    return rows.map((row) => ({
+      userId: String(row['user_id']),
+      tenantId: String(row['tenant_id']),
+      status: String(row['status']),
+      tenantRole: String(row['tenant_role']),
+      ...(row['decided_by'] === null || row['decided_by'] === undefined ? {} : { decidedBy: String(row['decided_by']) }),
+      ...(row['decided_at'] === null || row['decided_at'] === undefined ? {} : { decidedAt: String(row['decided_at']) }),
+      updatedAt: String(row['updated_at']),
+    }));
   };
 
   listWorkspaceIdsForUser = async (userId: string): Promise<readonly string[]> => {
