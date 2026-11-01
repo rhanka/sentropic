@@ -2821,11 +2821,18 @@ jobs:
           CI_MANIFEST_EVENT: ${{ github.event_name }}
           CI_MANIFEST_BOOTSTRAP_TARGET: ${{ inputs.bootstrap_publish_target || 'none' }}
         run: make ci-capacity-publish-dry-run PACKAGE=cluster-mesh ENV=test-ci-capacity
-      - name: Publish Cluster Mesh
+      # BR866-EX2: a prerelease version is the planned between-releases state on main. The typed
+      # decision skips publication with success (step summary + job outputs) instead of turning
+      # main red; only a stable version may run the publish and qualification steps.
+      - name: Decide Cluster Mesh publication
+        id: cluster_mesh_publish_decision
         if: inputs.capacity_publish_dry_run != true
+        run: make cluster-mesh-publish-decision
+      - name: Publish Cluster Mesh
+        if: "inputs.capacity_publish_dry_run != true && steps.cluster_mesh_publish_decision.outputs.decision == 'publish'"
         run: make publish-cluster-mesh
       - name: Qualify published Cluster Mesh from the registry
-        if: inputs.capacity_publish_dry_run != true
+        if: "inputs.capacity_publish_dry_run != true && steps.cluster_mesh_publish_decision.outputs.decision == 'publish'"
         run: |
           set -eu
           receipt=tmp/ci-manifest-guard/publish/cluster-mesh.publish-output
