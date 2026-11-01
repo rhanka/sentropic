@@ -15,14 +15,14 @@ export type { ArtifactKeyDerivationBinding } from './server/command-identity.js'
 
 export const ARTIFACTS_PROVIDER_ID = 'sentropic.artifacts';
 export const ARTIFACTS_APP_ID = 'sentropic-artifacts';
-export const ARTIFACTS_PROVIDER_VERSION = '0.2.4';
+export const ARTIFACTS_PROVIDER_VERSION = '0.3.0';
 export const ARTIFACTS_TOOL_NAMES = ARTIFACT_CAPABILITY_NAMES;
 export type ArtifactsToolName = (typeof ARTIFACTS_TOOL_NAMES)[number];
 
 export const ARTIFACTS_TOOL_SPECS = ARTIFACTS_TOOL_NAMES.map((name) => ({ name,
   description: `Artifacts ${name.slice('artifacts_'.length).replaceAll('_', ' ')}.`,
   mutability: (['artifacts_list', 'artifacts_get', 'artifacts_get_template', 'artifacts_get_api_guide',
-    'artifacts_get_source'].includes(name) ? 'read-only' : name === 'artifacts_publish' ? 'append' : 'state-transition') as CapabilityTool['mutability'],
+    'artifacts_get_source', 'artifacts_list_versions'].includes(name) ? 'read-only' : name === 'artifacts_publish' ? 'append' : 'state-transition') as CapabilityTool['mutability'],
 }));
 export const ARTIFACTS_PARAMETER_SCHEMA: ProviderParameterSchema = { properties: {}, required: [] };
 export interface ArtifactsManifestOptions {
@@ -88,6 +88,9 @@ export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: 
         case 'artifacts_publish': request = { method: 'POST', path: '/publish', body: args }; break;
         case 'artifacts_list': request = { method: 'POST', path: '/list', body: args }; break;
         case 'artifacts_get': request = { method: 'GET', path: `/meta/${args.artifactId}`, body: undefined }; break;
+        case 'artifacts_list_versions': request = { method: 'GET', path: `/versions/${args.artifactId}`, body: undefined }; break;
+        case 'artifacts_get_source': request = { method: 'GET', path: `/source/${args.artifactId}`, body: undefined }; break;
+        case 'artifacts_revert': request = { method: 'POST', path: '/revert', body: args }; break;
         default: throw new ArtifactProfileInputError(true);
       }
       return await deps.app.execute({ ...request, actorId: input.invocation.actorId,
