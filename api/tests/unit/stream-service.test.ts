@@ -7,7 +7,9 @@ import {
   writeStreamEventWithSequenceRetry,
 } from '../../src/services/stream-service';
 import { db } from '../../src/db/client';
-import { chatStreamEvents, chatMessages, chatSessions, users } from '../../src/db/schema';
+import { chatStreamEvents, chatMessages, chatSessions } from '../../src/db/schema';
+import { createCmUser } from '../../src/services/identity/cm-users';
+import { cmDeleteForUsers } from '../utils/cm-identity-test-store';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
 import { productStreamsOutboxPort } from '../../src/routes/namespaces/streams-product-events';
@@ -24,15 +26,7 @@ describe('Stream Service', () => {
     
     // Créer un user, une session pour les tests qui nécessitent messageId
     testUserId = createId();
-    await db.insert(users).values({
-      id: testUserId,
-      email: `test-${testUserId}@example.com`,
-      displayName: 'Test User',
-      role: 'editor',
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
+    await createCmUser({ userId: testUserId, email: `test-${testUserId}@example.com`, displayName: 'Test User', role: 'editor', emailVerified: true, accountStatus: 'active' });
     
     testSessionId = createId();
     await db.insert(chatSessions).values({
@@ -53,7 +47,7 @@ describe('Stream Service', () => {
       await db.delete(chatMessages).where(eq(chatMessages.id, testMessageId));
     }
     await db.delete(chatSessions).where(eq(chatSessions.id, testSessionId));
-    await db.delete(users).where(eq(users.id, testUserId));
+    await cmDeleteForUsers([testUserId]);
   });
 
   describe('generateStreamId', () => {
