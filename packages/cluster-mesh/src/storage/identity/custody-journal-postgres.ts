@@ -483,7 +483,6 @@ export class PostgresCustodyJournal {
     await count('identity_login_sessions', `SELECT COUNT(*) AS "count" FROM ${this.t('identity_login_sessions')} WHERE "user_id" = $1`, [input.userId]);
     await count('identity_login_token_bindings', `SELECT COUNT(*) AS "count" FROM ${this.t('identity_login_token_bindings')} WHERE "session_id" IN (SELECT "session_id" FROM ${this.t('identity_login_sessions')} WHERE "user_id" = $1)`, [input.userId]);
     await count('identity_account_profiles', `SELECT COUNT(*) AS "count" FROM ${this.t('identity_account_profiles')} WHERE "user_id" = $1`, [input.userId]);
-    await count('identity_user_accounts', `SELECT COUNT(*) AS "count" FROM ${this.t('identity_user_accounts')} WHERE "user_id" = $1`, [input.userId]);
     await count('cm_tenant_memberships', `SELECT COUNT(*) AS "count" FROM ${this.cm('cm_tenant_memberships')} WHERE "user_id" = $1`, [input.userId]);
     await count('cm_workspace_members', `SELECT COUNT(*) AS "count" FROM ${this.cm('cm_workspace_members')} WHERE "user_id" = $1`, [input.userId]);
     await count('cm_oauth_consents', `SELECT COUNT(*) AS "count" FROM ${this.cm('cm_oauth_consents')} WHERE "user_id" = $1`, [input.userId]);
