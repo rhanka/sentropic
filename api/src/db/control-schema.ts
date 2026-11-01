@@ -1018,5 +1018,115 @@ export const liveGitDeclarations = controlSchema.table(
 export type SessionWorkspaceBindingRow = typeof sessionWorkspaceBindings.$inferSelect;
 export type SessionWorkspaceBindingInsert = typeof sessionWorkspaceBindings.$inferInsert;
 
+/**
+ * control.session_content_policy_admissions — RC2.store durable policy
+ * admission (contract §10). One row per admitted policyId; amend advances
+ * the revision only with the exact prior digest. first_admission_expires_at
+ * is immutable: amend repeats it, never extends it. Capture eligibility is
+ * a separate flag set only by a committed activation receipt.
+ */
+export const sessionContentPolicyAdmissions = controlSchema.table(
+  'session_content_policy_admissions',
+  {
+    policyId: text('policy_id').primaryKey(),
+    policyRevision: integer('policy_revision').notNull(),
+    policyDigest: text('policy_digest').notNull(),
+    purpose: text('purpose').notNull(),
+    sourceBindingDigest: text('source_binding_digest').notNull(),
+    firstAdmissionExpiresAt: timestamp('first_admission_expires_at', { withTimezone: true }),
+    denialFloor: integer('denial_floor').notNull().default(0),
+    captureEligible: boolean('capture_eligible').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    revisionCheck: check(
+      'session_content_policy_admissions_revision_check',
+      sql`${table.policyRevision} >= 1`,
+    ),
+    digestCheck: check(
+      'session_content_policy_admissions_digest_check',
+      sql`${table.policyDigest} ~ '^[0-9a-f]{64}$'`,
+    ),
+    purposeCheck: check(
+      'session_content_policy_admissions_purpose_check',
+      sql`${table.purpose} IN ('share', 'amend')`,
+    ),
+    sourceBindingDigestCheck: check(
+      'session_content_policy_admissions_binding_digest_check',
+      sql`${table.sourceBindingDigest} ~ '^[0-9a-f]{64}$'`,
+    ),
+  }),
+);
+
+export type SessionContentPolicyAdmissionRow = typeof sessionContentPolicyAdmissions.$inferSelect;
+export type SessionContentPolicyAdmissionInsert = typeof sessionContentPolicyAdmissions.$inferInsert;
+
+/**
+ * control.session_content_policy_activations — committed activation ACKs.
+ * authority_revision is the separate durable A activation transaction
+ * coordinate, never the policyRevision.
+ */
+export const sessionContentPolicyActivations = controlSchema.table(
+  'session_content_policy_activations',
+  {
+    policyId: text('policy_id')
+      .notNull()
+      .references(() => sessionContentPolicyAdmissions.policyId, { onDelete: 'cascade' }),
+    operationId: text('operation_id').notNull(),
+    policyDigest: text('policy_digest').notNull(),
+    ackDigest: text('ack_digest').notNull(),
+    authorityRevision: integer('authority_revision').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.policyId, table.operationId] }),
+    policyIdx: index('session_content_policy_activations_policy_idx').on(table.policyId),
+    policyDigestCheck: check(
+      'session_content_policy_activations_digest_check',
+      sql`${table.policyDigest} ~ '^[0-9a-f]{64}$' AND ${table.ackDigest} ~ '^[0-9a-f]{64}$'`,
+    ),
+  }),
+);
+
+export type SessionContentPolicyActivationRow = typeof sessionContentPolicyActivations.$inferSelect;
+export type SessionContentPolicyActivationInsert = typeof sessionContentPolicyActivations.$inferInsert;
+
+/**
+ * control.session_content_policy_purges — writer-settled purge jobs.
+ * Initiation never needs the source; completion needs the admitted writer
+ * receipt. A disconnected source cannot veto initiation.
+ */
+export const sessionContentPolicyPurges = controlSchema.table(
+  'session_content_policy_purges',
+  {
+    policyId: text('policy_id')
+      .notNull()
+      .references(() => sessionContentPolicyAdmissions.policyId, { onDelete: 'cascade' }),
+    scope: text('scope').notNull(),
+    status: text('status').notNull().default('purge_pending'),
+    initiatedWhileDisconnected: boolean('initiated_while_disconnected').notNull().default(false),
+    settledBy: text('settled_by'),
+    settledAt: timestamp('settled_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().default(sql`now()`),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
+  },
+  (table) => ({
+    pk: primaryKey({ columns: [table.policyId, table.scope] }),
+    statusIdx: index('session_content_policy_purges_status_idx').on(table.status),
+    statusCheck: check(
+      'session_content_policy_purges_status_check',
+      sql`${table.status} IN ('purge_pending', 'purged')`,
+    ),
+    settlementCoherenceCheck: check(
+      'session_content_policy_purges_settlement_check',
+      sql`(${table.status} = 'purged') = (${table.settledBy} IS NOT NULL)`,
+    ),
+  }),
+);
+
+export type SessionContentPolicyPurgeRow = typeof sessionContentPolicyPurges.$inferSelect;
+export type SessionContentPolicyPurgeInsert = typeof sessionContentPolicyPurges.$inferInsert;
+
 export type LiveGitDeclarationRow = typeof liveGitDeclarations.$inferSelect;
 export type LiveGitDeclarationInsert = typeof liveGitDeclarations.$inferInsert;
