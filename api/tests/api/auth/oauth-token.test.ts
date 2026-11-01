@@ -73,7 +73,7 @@ describe('OAuth token API route', () => {
 
     expect(reuse.status).toBe(400);
     await expect(reuse.json()).resolves.toMatchObject({
-      error: { code: 'invalid_grant' },
+      error: 'invalid_grant',
     });
   });
 });

@@ -38,7 +38,7 @@ describe('OAuth token exchange security', () => {
       subjectType: 'urn:ietf:params:oauth:token-type:id_token',
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_request' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_request' });
   });
 
   it('rejects an unsupported requested_token_type', async () => {
@@ -50,7 +50,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_request' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_request' });
   });
 
   it('rejects actor_token delegation forms', async () => {
@@ -60,7 +60,7 @@ describe('OAuth token exchange security', () => {
     form.set('actor_token_type', TOKEN_EXCHANGE_SUBJECT_TOKEN_TYPE);
     const response = await postForm(router, form);
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_request' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_request' });
   });
 
   it('rejects DPoP-bound exchange attempts', async () => {
@@ -75,7 +75,7 @@ describe('OAuth token exchange security', () => {
       method: 'POST',
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_request' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_request' });
   });
 
   it('rejects conflicting target audiences', async () => {
@@ -84,7 +84,7 @@ describe('OAuth token exchange security', () => {
     form.append('audience', 'https://other.example/audience');
     const response = await postForm(router, form);
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_target' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_target' });
   });
 
   it('rejects a missing target audience', async () => {
@@ -93,7 +93,7 @@ describe('OAuth token exchange security', () => {
     form.delete('audience');
     const response = await postForm(router, form);
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_target' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_target' });
   });
 
   it('rejects a target audience outside the policy', async () => {
@@ -104,7 +104,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_target' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_target' });
   });
 
   it('rejects an empty scope', async () => {
@@ -113,7 +113,7 @@ describe('OAuth token exchange security', () => {
     form.delete('scope');
     const response = await postForm(router, form);
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_scope' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_scope' });
   });
 
   it('rejects a scope outside the workload policy', async () => {
@@ -124,7 +124,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_scope' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_scope' });
   });
 
   it('rejects a scope the subject was never granted', async () => {
@@ -141,7 +141,7 @@ describe('OAuth token exchange security', () => {
     form.set('scope', 'immo:search');
     const response = await postForm(router, form);
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_scope' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_scope' });
   });
 
   it('rejects the public client as the requesting client', async () => {
@@ -155,7 +155,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_client' });
   });
 
   it('rejects a wrong workload secret', async () => {
@@ -167,7 +167,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_client' });
   });
 
   it('rejects an unrelated service client without exchange policy', async () => {
@@ -180,7 +180,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'unauthorized_client' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'unauthorized_client' });
   });
 
   it('rejects a disabled exchange policy', async () => {
@@ -191,7 +191,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'unauthorized_client' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'unauthorized_client' });
   });
 
   it('rejects a subject with the wrong audience', async () => {
@@ -207,7 +207,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   it('rejects a subject from a non-allowed originating client', async () => {
@@ -223,7 +223,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   it('rejects an already-exchanged subject carrying act', async () => {
@@ -239,7 +239,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   it('rejects a proof-bound subject carrying cnf', async () => {
@@ -255,7 +255,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   it('rejects a revoked subject token', async () => {
@@ -269,7 +269,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   it('rejects an unknown subject with no stored metadata', async () => {
@@ -297,7 +297,7 @@ describe('OAuth token exchange security', () => {
       subject: orphan,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   it('rejects a subject without a token id', async () => {
@@ -324,7 +324,7 @@ describe('OAuth token exchange security', () => {
       subject: noJti,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   it('rejects duplicate identical target parameters', async () => {
@@ -333,7 +333,7 @@ describe('OAuth token exchange security', () => {
     form.append('audience', RADAR_AUDIENCE);
     const response = await postForm(router, form);
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_target' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_target' });
   });
 
   it('rejects form-only client authentication', async () => {
@@ -347,7 +347,7 @@ describe('OAuth token exchange security', () => {
       method: 'POST',
     });
     expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_client' });
   });
 
   it('rejects dual Basic plus form credentials', async () => {
@@ -357,7 +357,7 @@ describe('OAuth token exchange security', () => {
     form.set('client_secret', 'workload-secret');
     const response = await postForm(router, form);
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_request' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_request' });
   });
 
   it('rejects a malformed Basic header without a 500', async () => {
@@ -371,7 +371,7 @@ describe('OAuth token exchange security', () => {
       method: 'POST',
     });
     expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_client' });
   });
 
   it('rejects a policy actor that does not match the client', async () => {
@@ -383,7 +383,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   it('rejects an environment the host does not supply', async () => {
@@ -399,7 +399,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   it('rejects a revoked workload client', async () => {
@@ -412,7 +412,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(401);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_client' });
   });
 
   it('caps an oversized policy TTL at 300 seconds', async () => {
@@ -445,7 +445,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   it('rejects a subject from an untrusted issuer', async () => {
@@ -473,7 +473,7 @@ describe('OAuth token exchange security', () => {
       subject: forged,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   it('rejects a multi-audience subject token', async () => {
@@ -501,7 +501,7 @@ describe('OAuth token exchange security', () => {
       subject: multi,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   it('rejects an unknown subject identity', async () => {
@@ -518,7 +518,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   it('rejects a disabled subject account', async () => {
@@ -535,7 +535,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   it('rejects an unapproved tenant membership', async () => {
@@ -577,7 +577,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   it('m4 refuses a tenant-claimed subject when no tenant port is configured', async () => {
@@ -594,7 +594,7 @@ describe('OAuth token exchange security', () => {
       subject,
     });
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   it('m4 honors a tenant claim when the tenant port approves the membership', async () => {
