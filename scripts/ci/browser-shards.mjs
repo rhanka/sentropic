@@ -1,0 +1,72 @@
+import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+
+// Sum of observed successful test durations, main run 41277623779, attempt 1.
+// Missing files retain null measured duration; balancing weight is not a receipt.
+export const baselineDurations = {};
+export const baselineJobs = [124763781719, 124763781722, 124763781735, 124763781744, 124763781873];
+export function browserFiles() {
+  const dir = existsSync('e2e/tests') ? 'e2e/tests' : 'tests';
+  return readdirSync(dir).filter(f => /^\d\d[-_].*\.spec\.ts$/.test(f)).map(f => `tests/${f}`).sort();
+}
+
+export function buildManifest(files = browserFiles(), durations = baselineDurations, count = 6) {
+  if (!Number.isInteger(count) || count < 1 || new Set(files).size !== files.length || !files.length) throw new Error('Invalid shard inventory');
+  const shards = Array.from({ length: count }, (_, i) => ({ id: i + 1, project: 'chromium', files: [],
+    measuredTestSeconds: 0, unmeasured: [], balancingWeight: 0 }));
+  const weight = file => durations[file] ?? 1;
+  for (const file of [...files].sort((a, b) => weight(b) - weight(a) || a.localeCompare(b))) {
+    const shard = [...shards].sort((a, b) => a.balancingWeight - b.balancingWeight || a.id - b.id)[0];
+    shard.files.push(file);
+    shard.balancingWeight += weight(file);
+    if (durations[file] == null) shard.unmeasured.push(file);
+    else shard.measuredTestSeconds += durations[file];
+  }
+  return { version: 1, baseline: { run: 41277623779, attempt: 1, jobs: baselineJobs },
+    expectedFiles: [...files].sort(), shards };
+}
+
+export function testIdentities(report) {
+  const identities = [];
+  const visit = suite => {
+    for (const spec of suite.specs ?? []) for (const test of spec.tests ?? []) {
+      identities.push({ id: `${test.projectName}:${spec.file}:${spec.line}:${spec.column}:${spec.title}`,
+        expectedStatus: test.expectedStatus, results: test.results ?? [] });
+    }
+    for (const child of suite.suites ?? []) visit(child);
+  };
+  for (const suite of report.suites ?? []) visit(suite);
+  return identities;
+}
+
+export function reconcileReports(expected, actual) {
+  const before = testIdentities(expected), after = testIdentities(actual);
+  const unique = rows => new Set(rows.map(row => row.id));
+  if (!before.length || unique(before).size !== before.length || unique(after).size !== after.length
+    || before.length !== after.length || before.some(row => !unique(after).has(row.id))) throw new Error('Incomplete or duplicate browser membership');
+  const failures = after.filter(row => !row.results.length || row.results.some(r =>
+    r.status !== (row.expectedStatus === 'skipped' ? 'skipped' : row.expectedStatus)));
+  if (failures.length || actual.errors?.length) throw new Error('Browser failures, cancellations or retries remain visible');
+  return { expected: before.length, executed: after.filter(row => row.expectedStatus !== 'skipped').length,
+    declaredSkipped: after.filter(row => row.expectedStatus === 'skipped').length,
+    retries: after.reduce((sum, row) => sum + Math.max(0, row.results.length - 1), 0) };
+}
+
+export function validateMatrix(workflow, manifest = buildManifest()) {
+  const section = workflow.match(/^  test-e2e:\n([\s\S]*?)(?=^  [\w-]+:)/m)?.[1] ?? '';
+  const selected = [...section.matchAll(/^\s+shard: (\d+)\s*$/gm)].map(m => Number(m[1]));
+  if (selected.length !== manifest.shards.length || new Set(selected).size !== selected.length
+    || manifest.shards.some(shard => !selected.includes(shard.id))) throw new Error('CI shard matrix differs from complete inventory');
+  return manifest.expectedFiles.length;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const [command, ...args] = process.argv.slice(2);
+  if (command === 'files') {
+    const shard = buildManifest().shards.find(row => row.id === Number(args[0]));
+    if (!shard?.files.length) throw new Error('Unknown or empty browser shard');
+    console.log(shard.files.join(' '));
+  } else if (command === 'reconcile') console.log(JSON.stringify(reconcileReports(...args.map(file => JSON.parse(readFileSync(file, 'utf8'))))));
+  else if (command === 'inventory') console.log(`Complete browser inventory: ${validateMatrix(readFileSync('.github/workflows/ci.yml', 'utf8'))} files`);
+  else console.log(JSON.stringify(buildManifest(), null, 2));
+}
