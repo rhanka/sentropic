@@ -1,31 +1,32 @@
-# Feature: ACT-L03a — same-repo seat/control core on the preserved #681 lineage (daily cyber activation, amendment r6)
+# Feature: RC2.store content-policy store and purge
 
 ## Objective
-Implement lot ACT-L03a of r6 §7.2 (W1): preserve the #681 lineage rebased onto current origin/main and deliver the bounded same-repository seat/control core with qualified bootstrap placement — r6 §6 L3-A/B/C/D/F/H/I/L core, the required core suite, and tests T5-C1/C2/C3/C6, T6-C1/C2/C3/M1 (plus T6-D1 via L3-D) at the exact §6.4 destinations. Synthetic fixtures only; no live call, no payment, no custody repository or App.
+- Implement RC2.store scoped on the frozen RC2 contract: identity-backed content-policy admission, retained-read cursor, outbox and writer-settled purge, fail-closed on source-gaps.
 
 ## Scope / Guardrails
-- Scope limited to `scripts/ci/seat-custody/**`, the three new `scripts/security/daily/control-*.mjs` modules and their tests, `docs/security/activation/owner-procedure-r6.md`, and the two gate files listed under Conditional Paths.
-- Binding design: `.tmp/daily-cyber/activation-amendment-r6.md` (sha256 4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f). No design decision outside r6; anything else is reported, not decided.
-- Make-only workflow, Docker under the flock `/home/antoinefa/.cache-tmp/sentropic-docker.lock`, `ENV=test-cyber-L03a` always LAST, `make down ENV=test-cyber-L03a` after. Never `ENV=dev`, never `make clean-all`.
-- Zero Python. Zero payment on quota exhaustion. No secrets read, printed, logged or committed.
-- The preserved #681 work is rebased (never merged/cherry-picked) from `preserve/cyber-lot3-reconciled` onto `origin/main`; preserve refs stay untouched; the unadmitted broker blob `refs/preserve/cyber-lot3-broker` stays out of the tree.
-- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required verbatim by `scripts/ci/ci-lockfile-installs.test.mjs`, run by the required `validate-publishable-manifests` CI job).
-- Branch development happens in worktree `tmp/worktrees/cyber-act-L03a` on branch `feat/cyber-act-L03a`.
+- Scope limited to content-policy domain, store service, one control migration, two acceptance specs.
+- One migration max in `api/drizzle/control/*.sql`.
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development must happen in isolated worktree `tmp/worktrees/rc2-store` (even for one active branch).
+- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
 - All new text in English.
+- Contract pins (r2 freeze, verified 2026-11-01): plan v1.6 `6168b73ba9b236530bde6bb4998929de1ede0c92d61aa0fc07fcd4f9983b7b18`, MANIFEST.sha256 `133e23f54d7268c104fe45be753d2ea28b402b8621beefab95ed35062d84318e`, RC2-CONTRACT.md `cc8965c9affad415c35261d1909489ab12a4db15b33296a9e1dba8b6952544d0`, manifest JSON `f7e4a148aef4db2732d770b723751e9f8f9fb6a2dffcfdaac12913498915a23a`, RC0 draft.6 rev b `87908afecb9d389cebd324a87717313e2f86f885200322cd55d52930962aee48` (manifest `rc0Sha256`/`planSha256` match; r1 seal `dfb2589969f78cf040e8b3f0857cd933722aff5ad5445553ac42b7ba583abbed` preserved as `priorAcceptance`, not r2 acceptance).
+- Re-verify manifest seal hash before each push; mismatch blocks the push.
+- Source-gaps (R15 unaccepted, real identity tuple, durable store writer) stay fail-closed: refuse, never invent.
+- No FED input required for this lot.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `scripts/ci/seat-custody/**`
-  - `scripts/security/daily/control-provisioning.mjs`
-  - `scripts/security/daily/control-provisioning.test.mjs`
-  - `scripts/security/daily/control-permit-channel.mjs`
-  - `scripts/security/daily/control-permit-channel.test.mjs`
-  - `scripts/security/daily/control-clock.mjs`
-  - `scripts/security/daily/control-clock.test.mjs`
-  - `docs/security/activation/owner-procedure-r6.md`
-  - `BRANCH.md`
+  - `packages/cluster-mesh/src/sessions/content-policy.ts`
+  - `api/src/services/cluster-mesh/session-content-policy-store.ts`
+  - `api/src/db/control-schema.ts`
+  - `api/tests/api/session-content-receiver.test.ts`
+  - `api/tests/unit/remote-action-audit.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
-  - `.github/workflows/**`
+  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.track/**`
@@ -33,67 +34,96 @@ Implement lot ACT-L03a of r6 §7.2 (W1): preserve the #681 lineage rebased onto 
   - `packages/**` (except the Conditional files below)
   - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `Makefile` (BR03a-EX1: only the `test-security-daily` SCOPE list gains the three new `control-*.test.mjs` files so the r6 §7.3 cases run in the required suite that CI already executes)
-  - `packages/llm-mesh/package.json` + `package-lock.json` (BR03a-EX2: post-rebase gate — branch touches `packages/llm-mesh/src/**`, so the version must be strictly greater than the published `0.32.2`; bump to `0.32.3`)
-  - `packages/cluster-mesh/tests/fixtures/train.ts`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR03a-EX3: version-gate consequence — the EX2 candidate `0.32.3` must be reflected in the cluster-mesh train literal and the frozen selected tuple, so the exact gateway/mesh artifact/range/one-copy proofs required by r6 §6.1 hold at the gated version)
+  - `api/drizzle/control/0014_*.sql` (max 1 file)
+  - `api/drizzle/control/meta/_journal.json`
+  - `packages/cluster-mesh/package.json`
+  - `BRANCH.md` (this branch file)
+  - `package-lock.json` (BR01-EX3)
+  - `api/package-lock.json` (BR01-EX3)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR01-EX4)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR01-EX4)
 - **Exception process**:
   - BR03a-EX1 declared here before touching `Makefile`: reason = r6 §7.3 requires every §6.4 destination wired into its owning required Make suite (`test-security-daily`, already run by required CI job `validate-ci-capacity-metrics`); impact = additive SCOPE entries only, no existing entry removed; rollback = revert the single SCOPE line.
   - BR03a-EX2 declared here before touching the version files: reason = rules/workflow.md Post-Rebase Gate + `enforce-package-bump` CI job after the #681 rebase; impact = version string only in `packages/llm-mesh/package.json` and its workspace entry in `package-lock.json`; rollback = revert to `0.32.2`.
   - BR03a-EX3 declared here before touching the cluster-mesh fixtures: reason = r6 §6.1 post-rebase package-version gate (EX2) makes `packages/llm-mesh` the unpublished candidate `0.32.3`, and the cluster-mesh train/selected fixtures pin the workspace tuple exactly (main precedent: commit d1e9d31fd rebound them to `0.32.2`); impact = version literals plus the single `@sentropic/llm-mesh` lock entry (version/resolved/sibling sha512) only, no spec logic changed; rollback = revert the three files to the `0.32.2` pins.
 
 ## Feedback Loop
-- BR03a-EX1: `acknowledge` — Makefile SCOPE addition for `test-security-daily` (see Conditional Paths).
-- BR03a-EX2: `acknowledge` — llm-mesh `0.32.2` → `0.32.3` post-rebase package gate (see Conditional Paths).
-- BR03a-EX3: `acknowledge` — cluster-mesh train/selected fixture literals rebound to the gated llm-mesh `0.32.3` (see Conditional Paths).
-- No open blockers: r6 supplies every design decision for this lot; anything not covered by r6 is reported in the final report, not decided here.
-
-## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
-- This lot runs only synthetic, network-free suites; no AI flaky lane applies.
+- `BR01-EX1`: touch `api/drizzle/control/0014_*.sql` + `api/drizzle/control/meta/_journal.json` (one migration for policy admission/cursor/outbox/purge tables; reason: durable store needs new tables; impact: control schema +1 migration; rollback: drop tables, revert journal entry).
+- `BR01-EX2`: touch `packages/cluster-mesh/package.json` (version bump only; reason: CI enforce-package-bump requires bump when `packages/<pkg>/src/**` changes; impact: version field only; rollback: revert version line).
+- 2026-11-01 resume: rebased onto `origin/main` (`a67778379`); re-pinned r2 contract hashes (§Scope); fixed never-green test bugs with evidence (wrong `../../../src` depth, vacuous `toMatchObject` on throwing fns, non-hex `'t'.repeat(64)`, missing receipt before `refreshCapture`, amend missing repeated deadline). Implementation unchanged — it already enforced the contract.
+- 2026-11-01 r2 re-pin adjustment (only the r2 deltas that touch RC2.store, per CHANGES-r2.md): W-P3-3/annex E — retention now uses the frozen ContentPolicyV1 shape `{kind:'finite',durationMs}` with the 315576000000 ms ten-Julian-year product cap (`TEN_JULIAN_YEAR_MS`), `{kind:'none'}` = no expiry (not disabled storage), and `computeRetentionDeadline` implements vectors/r2-semantics.json `retentionDeadline` exactly (none→null, finite→firstAdmissionAt+durationMs, over-cap and unsafe-sum refuse); the store validates the first-admission deadline as null-or-safe-integer and keeps it immutable across amend/refresh/read. W-P2-4/annex E — `ownerConsentRevision` zero is unobserved/invalid, so admission refuses `< 1` (`revision_conflict`). ContentPolicy* schemas/vectors are byte-identical r1→r2 (changes-r2.json), so no other store change was needed; W-P1-3 chat dialect is RC3.chat scope (this store keeps `retainedPayload: null`, no payload bytes). MANIFEST.sha256 `133e23f5…` re-verified (`sha256sum -c` all OK) before push.
+- 2026-11-01 lane note: test ports overridden to `API_PORT=8812 UI_PORT=5198 MAILDEV_UI_PORT=1096` because 8802/1095 were already bound by another lane's compose project; `ENV=test-rc2-store` still last.
+- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- `BR01-EX3`: touch `package-lock.json` + `api/package-lock.json` (1 line each: `packages/cluster-mesh` / `../packages/cluster-mesh` version sync to `0.26.0-dev.4`; reason: CI `changes` gate requires train package versions to match the lockfiles after the `BR01-EX2` bump; impact: single version string per file; rollback: revert the line).
+- `BR01-EX4`: touch `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` + `package-lock.json` (pin `sentropic-cluster-mesh-0.26.0-dev.4.tgz` in the fixture deps and lock entry; reason: CI `validate-cluster-mesh` `prepare-artifacts.spec.ts` requires the selected fixture to track the candidate release tuple after the `BR01-EX2` bump, same pattern as `origin/main` dev.3; impact: 4 pin strings, no test logic; rollback: revert pins to `0.26.0-dev.3`).
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single branch `feat/cyber-act-L03a`; the preserved #681 lineage is rebased, not cherry-picked; one final CI on the review-ready head)
-- Rationale: one lot, one branch; no orthogonal sub-workstreams.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: <Single store slice with one migration and two specs; no orthogonal sub-workstreams>
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
+- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/feat-<slug>`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
+  - Switch back to `tmp/feat-<slug>` after UAT.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, COMMON-RULES, r6 amendment, Lot 3 STOP report.
-  - [x] Create worktree `tmp/worktrees/cyber-act-L03a` on branch `feat/cyber-act-L03a` from `origin/main`.
-  - [x] Rebase `preserve/cyber-lot3-reconciled` (62 commits over `e6d17327`) onto `origin/main`; BRANCH.md conflicts keep the #681 copy, version/lockfile conflicts keep current-main pins.
-  - [x] Post-rebase gate: bump `packages/llm-mesh` to `0.32.3` (> published `0.32.2`).
-  - [x] Confirm command style: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make ... ENV=test-cyber-L03a` (ENV last), then `make down ENV=test-cyber-L03a`.
-- [ ] **Lot 1 — Tests first (r6 §6.4 destinations)**
-  - [ ] C/ `scripts/ci/seat-custody/tests/seat-environment-custody.test.ts` (T5-C1/C2, T6-C1): one environment per job, literal secret names, twelve reader copies, synthetic canonical→projection→N+1 roundtrip, same-run/stale-rerun/ambiguous-PUT/interrupted-write refusals.
-  - [ ] C/ `scripts/ci/seat-custody/tests/seat-workflow-contract.test.ts` (T5-C1, T6-C1): emitted-workflow scan — no `secrets: inherit`, ≤1 environment per job, allowlisted literal secret refs only, hostile PR/fork/tag/unprotected-ref/indirection refusals.
-  - [ ] C/ `scripts/ci/seat-custody/tests/custody-state-store.test.ts` (T6-C2): eight-job transaction, bank/HEAD fencing, full interruption matrix, limits at/above ceilings, mixed-generation/stale-pointer refusal.
-  - [ ] C/ `scripts/ci/seat-custody/tests/e2e/github-seat-roundtrip.test.ts` (T5-C2 real later-run probes): synthetic payloads against the environment-secret API surface in a separate process/run.
-  - [ ] C/ `scripts/ci/seat-custody/tests/ci-seat-broker.test.ts` (extend, T5-C3), `seat-ci-artifacts.test.ts`, `seat-secret-hygiene.test.ts` (T5-C3): positive wire + candidate file/env/process/socket/egress negatives, ciphertext-only artifacts, names-only hygiene.
-  - [ ] C/ `scripts/ci/seat-custody/tests/ci-seat-topology.test.ts` (T6-C3): translated SO_PEERCRED triples, fixed elevation entry, guardian receipt fields.
-  - [ ] C/ `scripts/ci/seat-custody/tests/acceptance-disposition.test.ts` (T6-M1): all 69 acceptance IDs, 63 paths, §6.4 rows, T5/T6 IDs, credential/copy/loader receipts.
-  - [ ] C/ `scripts/ci/seat-custody/tests/owner-procedure-contract.test.ts` (T6-D1): §5.1/§5.2 equivalence against one fixture, both V6 5/8i withdrawals, retired IDs/cutoff, six steps, two owner quotes byte-for-byte.
-  - [ ] D/ `scripts/security/daily/control-provisioning.test.mjs` (T5-C6, T6-M1), `control-permit-channel.test.mjs` (T5-C6, T6-C3), `control-clock.test.mjs` (T5-C6, T6-C3).
-  - [ ] RED run: `flock … make test-ci-seat-contract ENV=test-cyber-L03a` and `flock … make test-security-daily ENV=test-cyber-L03a`.
-- [ ] **Lot 2 — Same-repo seat/control core implementation**
-  - [ ] `src/seat-environment-custody.ts` (L3-B store binding: sentropic protected environments, sealed PUT, N+1, canonical→projection ordering).
-  - [ ] `src/custody-state-store.ts` (L3-B/§4.3.1: CustodyStateV1, two banks ×16 segments, HEAD, fence CAS, eight-job transaction).
-  - [ ] `src/seat-workflow-contract.ts` (L3-C/L3-F: job→environment contract, bootstrap placement on protected main only, permanent closure after #681 merge).
-  - [ ] `src/ci-seat-broker.ts` (L3-C: reservation-bound wire, journal fsync-before-send, FD-only loading, permits).
-  - [ ] `src/acceptance-disposition.ts`, `src/owner-procedure.ts` (T6-M1, T6-D1 data).
-  - [ ] D/ `control-provisioning.mjs`, `control-permit-channel.mjs`, `control-clock.mjs` (L3-I/L3-L, T5-C6/T6-C3).
-  - [ ] `docs/security/activation/owner-procedure-r6.md` (synchronized §5.1/§5.2 copy).
-  - [ ] Wire D/ tests into `test-security-daily` SCOPE (BR03a-EX1).
-  - [ ] GREEN run of both suites; `make down ENV=test-cyber-L03a`.
-- [ ] **Lot 3 — Preservation receipts & gates**
-  - [ ] `spec/evidence/ci-seats/activation-lot3-preservation.json` re-read and extended with the rebase-onto-current-main record (L3-H).
-  - [ ] `make scope-check` before every commit; `git diff --check`; atomic `make commit` ≤150 lines, push after every few commits (crash safety).
-  - [ ] `make test-llm-mesh` + `make typecheck-llm-mesh` regression on the rebased lineage.
+  - [x] Read `rules/MASTER.md` and `rules/workflow.md`
+  - [x] Create/confirm isolated worktree `tmp/worktrees/rc2-store` on `origin/main` (`a67778379` after rebase)
+  - [x] Capture Makefile targets needed for debug/testing.
+  - [x] Define environment mapping (`dev`, `test`, `e2e`) and ports for this branch.
+  - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
+  - [x] Confirm scope and guardrails.
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
+  - [x] Ports: `API_PORT=8812 UI_PORT=5198 MAILDEV_UI_PORT=1096 ENV=test-rc2-store` (8802/1095 were bound by another lane; see Feedback Loop)
+- [x] **Lot 1 — Tests first (red)**
+  - [x] Add `api/tests/api/session-content-receiver.test.ts` (STORE: F2-01 proposal/proof/activation, F2-02 post-ACK boundary, F2-05 retention/purge, denial races, immutable deadlines)
+  - [x] Add `api/tests/unit/remote-action-audit.test.ts` (STORE-ERASURE: audit/payload/backup separation, writer-settled purge)
+  - [x] Run red campaign scoped under flock: `flock .tmp/packets/DOCKER-LOCK.md make test-api-endpoints SCOPE=tests/api/session-content-receiver.test.ts API_PORT=8812 UI_PORT=5198 MAILDEV_UI_PORT=1096 ENV=test-rc2-store`
+  - [x] Run red unit scope: `flock .tmp/packets/DOCKER-LOCK.md make test-api-unit SCOPE=tests/unit/remote-action-audit.test.ts API_PORT=8812 UI_PORT=5198 MAILDEV_UI_PORT=1096 ENV=test-rc2-store`
+  - [x] Lot gate (2026-11-01 r2 re-pin head, all green):
+    - [x] `make typecheck-api` + `make lint-api` API_PORT=8812 UI_PORT=5198 MAILDEV_UI_PORT=1096 ENV=test-rc2-store (tsc clean; eslint clean)
+    - [x] **API tests**
+      - [x] `api/tests/api/session-content-receiver.test.ts` (STORE green 11/11 incl. r2 finite-deadline and consent-fence cases)
+      - [x] Scoped run while evolving: `make test-api-endpoints SCOPE=tests/api/session-content-receiver.test.ts ... ENV=test-rc2-store`
+      - [x] Sub-lot gate: `make test-api-unit SCOPE=tests/unit/remote-action-audit.test.ts ... ENV=test-rc2-store` (STORE-ERASURE green 9/9 incl. retentionDeadline vector cases)
+    - [x] **UI tests (TypeScript only)**
+      - [x] No UI changes in this lot; no UI test updates.
+      - [x] Sub-lot gate: not applicable (no UI scope)
+    - [x] **E2E tests**
+      - [x] No E2E changes in this lot; no E2E updates.
+- [ ] **Lot 2 — Store implementation (green)**
+  - [x] Add `packages/cluster-mesh/src/sessions/content-policy.ts` (channels, retention, policy digest domain, fail-closed gates)
+  - [x] Add `api/src/services/cluster-mesh/session-content-policy-store.ts` (admission CAS, activation ACK/receipt, capture reconnect grant, cursor/outbox, writer-settled purge)
+  - [x] Extend `api/src/db/control-schema.ts` (policy admission/cursor/outbox/purge tables)
+  - [x] Add `api/drizzle/control/0014_*.sql` + journal entry (`BR01-EX1`)
+  - [x] Bump `packages/cluster-mesh/package.json` patch (`BR01-EX2`)
+  - [x] Lot gate (2026-11-01 r2 re-pin head, all green):
+    - [x] `make typecheck-api` + `make lint-api` API_PORT=8812 UI_PORT=5198 MAILDEV_UI_PORT=1096 ENV=test-rc2-store (tsc clean; eslint clean)
+    - [x] **API tests**
+      - [x] Updated `api/tests/api/session-content-receiver.test.ts` (STORE green 11/11)
+      - [x] Updated `api/tests/unit/remote-action-audit.test.ts` (STORE-ERASURE green 9/9)
+      - [x] Scoped runs while evolving (same commands as Lot 1)
+      - [x] Sub-lot gate: full `make test-api-unit API_PORT=8812 UI_PORT=5198 MAILDEV_UI_PORT=1096 ENV=test-rc2-store` (150 files, 1563 passed, 2 skipped); `make down ... ENV=test-rc2-store` after
+    - [x] **UI tests (TypeScript only)**
+      - [x] No UI changes; no updates.
+    - [x] **E2E tests**
+      - [x] No E2E changes; no updates.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] No `spec/BRANCH_SPEC_EVOL.md` created (single-slice branch, no spec evolution file).
 - [ ] **Lot N — Final validation**
-  - [ ] Both suites GREEN under the flock with `ENV=test-cyber-L03a` last; `make down ENV=test-cyber-L03a`; `make ps` empty.
-  - [ ] Push review-ready head; open draft PR with this BRANCH.md as body.
-  - [ ] Run ONE CI on the final head; wait for completion; record result.
-  - [ ] Report to `.tmp/rv/cyber-act-L03a.md`; do not merge.
+  - [x] Typecheck & Lint
+  - [x] Retest UI (not applicable, no UI scope)
+  - [x] Retest API (scoped STORE + STORE-ERASURE + unit suite)
+  - [x] Retest e2e (not applicable, no e2e scope)
+  - [x] Retest AI flaky tests (not applicable, no AI scope)
+  - [x] Bumped `packages/cluster-mesh/package.json` version (semver) — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
+  - [x] Final gate step 1: PR #874 (draft) exists; body refreshed from this `BRANCH.md`.
+  - [ ] Final gate step 2: run/verify branch CI on that PR (one run on the final head) and resolve remaining blockers.
+  - [ ] Delivery stops at draft PR + one CI + `.tmp/rv/rc2-store.md` report; no merge (per packet).
