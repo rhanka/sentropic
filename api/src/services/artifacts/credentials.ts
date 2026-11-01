@@ -12,12 +12,13 @@ export function createArtifactCredentialReader(options: {
   return async (client, identity) => {
     if (options.kind === 'session') {
       if (identity.clientId !== ARTIFACT_SESSION_CLIENT) return denied;
-      const result = await client.query(`SELECT id FROM user_sessions
-        WHERE id = $1 AND user_id = $2 AND expires_at > clock_timestamp() FOR SHARE`,
+      const query = `SELECT session_id FROM cm_identity.identity_login_sessions
+        WHERE session_id = $1 AND user_id = $2 AND status = 'active' AND revoked_at IS NULL
+          AND expires_at::timestamptz > clock_timestamp()`;
+      const result = await client.query(`${query} FOR SHARE`,
       [identity.credentialId, identity.subject]);
       if (result.rowCount !== 1) return denied;
-      const active = await client.query(`SELECT id FROM user_sessions
-        WHERE id = $1 AND user_id = $2 AND expires_at > clock_timestamp()`, [identity.credentialId, identity.subject]);
+      const active = await client.query(query, [identity.credentialId, identity.subject]);
       return { readable: active.rowCount === 1, writable: active.rowCount === 1 };
     }
     const result = await client.query<{ scope: string; allowed: string[]; consent: string[] }>(
