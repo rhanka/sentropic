@@ -2752,7 +2752,7 @@ ci-live-provider-prepare: ci-test-env ## Load the exact qualified main artifacts
 	@$(MAKE) build-api-tool-image build-e2e ENV=$(ENV)
 	docker image inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) > .tmp/live-provider/api.json
 	docker image inspect $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) > .tmp/live-provider/ui.json
-	@docker run --rm --entrypoint node $(API_IMAGE_REF) -e 'const fs=require("fs"), dir="/workspace/packages", out={}; for(const name of fs.readdirSync(dir)) { try { const p=JSON.parse(fs.readFileSync(dir+"/"+name+"/package.json","utf8")); out[p.name]=p.version; } catch {} } console.log(JSON.stringify(out));' > .tmp/live-provider/installed-packages.json
+	@docker run --rm --entrypoint node $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) -e 'const fs=require("fs"), dir="/workspace/node_modules/@sentropic", out={}; for(const name of fs.readdirSync(dir)) { const p=JSON.parse(fs.readFileSync(dir+"/"+name+"/package.json","utf8")); out[p.name]=p.version; } console.log(JSON.stringify(out));' > .tmp/live-provider/installed-packages.json
 	node scripts/ci/live-provider-receipt.mjs tuple
 
 ci-live-provider-run: ci-test-env ## Preserve every selected API, browser and VSCode assertion on the live tuple
@@ -2815,16 +2815,22 @@ test-e2e-vscode: up-e2e-vscode wait-ready db-seed-test e2e-set-queue ## Run VSCo
 	  exit 2; \
 	fi
 	@$(E2E_COMPOSE) -f docker-compose.e2e-vscode.yml run --rm --no-deps \
-	  -e E2E_SPEC -e WORKERS -e RETRIES -e MAX_FAILURES -e OPENVSCODE_BASE_URL="http://localhost:$${OPENVSCODE_PORT:-3115}" \
+	  -v "$(CURDIR)/scripts/ci/browser-shards.mjs:/app/browser-shards.mjs:ro" \
+	  -e CI_PROVIDER_MODE -e E2E_SPEC -e WORKERS -e RETRIES -e MAX_FAILURES -e OPENVSCODE_BASE_URL="http://localhost:$${OPENVSCODE_PORT:-3115}" \
 	  e2e-vscode sh -lc ' \
+	    set -eu; mkdir -p test-results; \
 	    workers="$${WORKERS:-2}"; \
-	    retries="$${RETRIES:-1}"; \
+	    retries="$${RETRIES:-0}"; \
 	    max_fail="$${MAX_FAILURES:-}"; \
 	    extra=""; \
 	    if [ -n "$$max_fail" ]; then extra="--max-failures=$$max_fail"; fi; \
 	    spec_path="$${E2E_SPEC#e2e/}"; \
 	    echo "▶ Running VSCode scoped Playwright: $$spec_path (workers=$$workers retries=$$retries $${extra:-})"; \
-	    npx --no-install playwright test "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra'
+	    PLAYWRIGHT_JSON_OUTPUT_FILE=test-results/vscode.expected.json npx --no-install playwright test "$$spec_path" --list --reporter=json; \
+	    status=0; PLAYWRIGHT_JSON_OUTPUT_FILE=test-results/vscode.actual.json npx --no-install playwright test "$$spec_path" \
+	      --workers="$$workers" --retries="$$retries" --reporter=list,json $$extra || status=$$?; \
+	    node /app/browser-shards.mjs reconcile test-results/vscode.expected.json test-results/vscode.actual.json || status=1; \
+	    exit "$$status"'
 	@echo "🛑 Stopping VSCode E2E services..."
 	# @$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml down
 
@@ -2954,6 +2960,7 @@ latest-prod-backup: ## Print the latest production dump basename for the restore
 	@find data/backup -maxdepth 1 -name 'prod-*.dump' -printf '%T@ %f\n' | sort -nr | head -n 1 | cut -d' ' -f2-
 ci-test-env:
 	@case "$(ENV)" in test-*|e2e-*) ;; *) echo 'CI test targets require ENV=test-* or ENV=e2e-*'; exit 1;; esac
+	@mkdir -p .tmp/live-provider && chmod 777 .tmp/live-provider
 
 CI_DATA_SNAPSHOT = SELECT 'organizations', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM organizations UNION ALL SELECT 'folders', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,name) ORDER BY id)::text,'[]')) FROM folders UNION ALL SELECT 'initiatives', count(*), md5(coalesce(jsonb_agg(jsonb_build_array(id,data) ORDER BY id)::text,'[]')) FROM initiatives
 CI_MIGRATION_SNAPSHOT = SELECT count(*) FROM drizzle.__drizzle_migrations UNION ALL SELECT count(*) FROM public.__drizzle_control_migrations
