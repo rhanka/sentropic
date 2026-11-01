@@ -34,6 +34,11 @@ export function confirmationFailure(code: string, details?: Record<string, unkno
     refusal: { allowed: false, reason: 'denied', publicCode: code,
       status: code === 'confirmation_invalid' ? 403 : 409, retriable: false } });
 }
+function refused(code: 'gone' | 'not_found' | 'access_denied'): ArtifactOperationError {
+  return new ArtifactOperationError('unauthorized_at_commit', { refusal: { allowed: false,
+    reason: 'denied', status: code === 'gone' ? 410 : code === 'not_found' ? 404 : 403,
+    publicCode: code, retriable: false } });
+}
 
 /** Targeted writes and proof consumption share the existing coordinator receipt transaction. */
 export async function manageArtifact(deps: {
@@ -52,8 +57,8 @@ export async function manageArtifact(deps: {
     commandHash: command.identity.commandHash, internalKey: command.identity.internalKey };
   const owned = async () => {
     const target = await unit.read(artifactId);
-    if (!target || target.acl.storageScopeId !== invocation.storageScopeId) throw new ArtifactOperationError('not_found');
-    if (target.acl.ownerId !== invocation.actorId) throw new ArtifactOperationError('access_denied');
+    if (!target || target.acl.storageScopeId !== invocation.storageScopeId) throw refused('not_found');
+    if (target.acl.ownerId !== invocation.actorId) throw refused('access_denied');
     return target;
   };
   const result = await deps.coordinator.finalizePrepared({
@@ -67,7 +72,7 @@ export async function manageArtifact(deps: {
     }] },
     provisional: async (client) => {
       const target = await owned();
-      if (target.terminal || target.state === 'deleted' || target.state === 'purged') throw new ArtifactOperationError('gone');
+      if (target.terminal || target.state === 'deleted' || target.state === 'purged') throw refused('gone');
       const now = new Date().toISOString();
       if (deleting) {
         if (target.currentReleaseId !== context.expectedCurrentReleaseId) throw new ArtifactOperationError('pointer_conflict');
@@ -79,14 +84,15 @@ export async function manageArtifact(deps: {
         Object.assign(receipt, { artifactId, state: 'deleted', terminal: true, deletedAt: now, purgeState: 'pending' });
       } else {
         const principalId = command.payload.principalId as string;
-        if (command.payload.action === 'grant' && !await deps.isApprovedPrincipal(principalId)) throw new ArtifactOperationError('access_denied');
+        if (command.payload.action === 'grant' && !await deps.isApprovedPrincipal(principalId)) throw refused('access_denied');
         const output = await unit.setAccess(artifactId, principalId, command.payload.action as 'grant' | 'revoke', now);
         Object.assign(receipt, { artifactId, isPublic: false, grants: output, updatedAt: now });
       }
     },
     guard: async (ctx, tx) => {
       const target = await owned();
-      if (!deleting && (target.terminal || target.state === 'deleted' || target.state === 'purged')) throw new ArtifactOperationError('gone');
+      if (!deleting && (target.terminal || target.state === 'deleted' || target.state === 'purged')) throw refused('gone');
+      if (!deleting && command.payload.action === 'grant' && !await deps.isApprovedPrincipal(command.payload.principalId as string)) throw refused('access_denied');
       return invocation.authorizeCommit(ctx, tx);
     },
     validateReplayReceipt: (stored) => (stored.receipt as Record<string, unknown>)?.artifactId === artifactId,

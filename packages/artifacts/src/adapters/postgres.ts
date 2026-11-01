@@ -322,9 +322,14 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
         storage_scope_id: string;
         is_public: boolean;
         lifecycle_state: ArtifactState;
+        binding_name: string;
+        created_at: Date;
+        updated_at: string | null;
+        metadata: { title?: string; description?: string; icon?: string | null } | null;
       }>(
-        `SELECT owner_id, storage_scope_id, is_public, lifecycle_state
-         FROM artifacts.artifacts WHERE id = $1`,
+        `SELECT owner_id, storage_scope_id, is_public, lifecycle_state, binding_name, created_at,
+          to_jsonb(a)->>'updated_at' AS updated_at, to_jsonb(a)->'metadata' AS metadata
+         FROM artifacts.artifacts a WHERE id = $1`,
         [artifactId],
       );
       const row = rows[0];
@@ -335,6 +340,8 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
         [artifactId],
       );
       return {
+        bindingName: row.binding_name, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at,
+        ...(row.metadata ?? {}),
         ownerId: row.owner_id,
         storageScopeId: row.storage_scope_id,
         isPublic: row.is_public,

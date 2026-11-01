@@ -5,7 +5,8 @@ import type { ArtifactFailure, ArtifactOutcome } from './failures.js';
 
 export function projectArtifactHttpOutcome(outcome: ArtifactOutcome<HttpResponse>): HttpResponse {
   if (outcome.ok) return outcome.result;
-  return { status: outcome.failure.httpStatus, body: { error: outcome.failure.publicCode } };
+  return { status: outcome.failure.httpStatus, body: { error: outcome.failure.publicCode,
+    ...(outcome.failure.details ? { details: outcome.failure.details } : {}) } };
 }
 
 /** Feed this application result to mcp-platform's existing result codec. No second wire protocol. */
@@ -14,7 +15,8 @@ export function projectArtifactMcpOutcome(outcome: ArtifactOutcome<HttpResponse>
   const { publicCode, retriable } = outcome.failure;
   return {
     ok: false, auditId, redactionClass: 'low',
-    error: { code: publicCode, message: publicCode, retriable },
+    error: { code: publicCode, message: publicCode, retriable,
+      ...(outcome.failure.details ? { details: outcome.failure.details } : {}) },
   };
 }
 
