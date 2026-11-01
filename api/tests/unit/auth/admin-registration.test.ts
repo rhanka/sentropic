@@ -1,7 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { db } from '../../../src/db/client';
-import { users } from '../../../src/db/schema';
-import { eq } from 'drizzle-orm';
+import { countCmUsersWithRole, createCmUser } from '../../../src/services/identity/cm-users';
+import { cmPurgeAllIdentity } from '../../utils/cm-identity-test-store';
 import { env } from '../../../src/config/env';
 
 describe('Admin Registration Logic', () => {
@@ -9,33 +8,26 @@ describe('Admin Registration Logic', () => {
   
   beforeEach(async () => {
     // Clean up any existing users
-    await db.delete(users);
+    await cmPurgeAllIdentity();
   });
 
   afterEach(async () => {
     // Clean up after test
-    await db.delete(users);
+    await cmPurgeAllIdentity();
   });
 
   it('should create admin_app user when ADMIN_EMAIL is configured and no admin exists', async () => {
     // Check no admin exists initially
-    const initialAdmins = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.role, 'admin_app'));
-    expect(initialAdmins.length).toBe(0);
+    const initialAdmins = await countCmUsersWithRole('admin_app');
+    expect(initialAdmins).toBe(0);
 
     // Simulate the logic from register.ts
     let userRole: 'admin_app' | 'guest' = 'guest';
     
     if (adminEmail && env.ADMIN_EMAIL && adminEmail === env.ADMIN_EMAIL) {
-      const existingAdmins = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.role, 'admin_app'))
-        .limit(1);
+      const existingAdmins = await countCmUsersWithRole('admin_app');
       
-      if (existingAdmins.length === 0) {
+      if (existingAdmins === 0) {
         userRole = 'admin_app';
       }
     }
@@ -46,27 +38,15 @@ describe('Admin Registration Logic', () => {
   it('should create guest user when ADMIN_EMAIL already has an admin', async () => {
     // Create an existing admin first
     const existingAdminId = crypto.randomUUID();
-    await db.insert(users).values({
-      id: existingAdminId,
-      email: 'existing@admin.com',
-      displayName: 'Existing Admin',
-      role: 'admin_app',
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    await createCmUser({ userId: existingAdminId, email: 'existing@admin.com', displayName: 'Existing Admin', role: 'admin_app', emailVerified: true, accountStatus: 'active' });
 
     // Simulate the logic from register.ts
     let userRole: 'admin_app' | 'guest' = 'guest';
     
     if (adminEmail && env.ADMIN_EMAIL && adminEmail === env.ADMIN_EMAIL) {
-      const existingAdmins = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.role, 'admin_app'))
-        .limit(1);
+      const existingAdmins = await countCmUsersWithRole('admin_app');
       
-      if (existingAdmins.length === 0) {
+      if (existingAdmins === 0) {
         userRole = 'admin_app';
       }
     }
@@ -81,13 +61,9 @@ describe('Admin Registration Logic', () => {
     let userRole: 'admin_app' | 'guest' = 'guest';
     
     if (regularEmail && env.ADMIN_EMAIL && regularEmail === env.ADMIN_EMAIL) {
-      const existingAdmins = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.role, 'admin_app'))
-        .limit(1);
+      const existingAdmins = await countCmUsersWithRole('admin_app');
       
-      if (existingAdmins.length === 0) {
+      if (existingAdmins === 0) {
         userRole = 'admin_app';
       }
     }
