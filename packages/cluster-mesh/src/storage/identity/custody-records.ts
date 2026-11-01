@@ -128,7 +128,15 @@ export const decodeWebAuthnCredential = (row: Row): WebAuthnCredentialV1 => ({
   revision: safeInt('identity_webauthn_credentials', row, 'revision'),
   rpId: text('identity_webauthn_credentials', row, 'rp_id'),
   deviceName: nullableText('identity_webauthn_credentials', row, 'device_name'),
-  transports: nullableText('identity_webauthn_credentials', row, 'transports_json') as readonly string[] | null,
+  transports: (() => {
+    const raw = nullableText('identity_webauthn_credentials', row, 'transports_json');
+    if (raw === null) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed) || parsed.some((item) => typeof item !== 'string')) {
+      throw new IdentityCustodyRowError('identity_webauthn_credentials', 'transports_json is not a string array');
+    }
+    return parsed as readonly string[];
+  })(),
   uv: booleanOf('identity_webauthn_credentials', row, 'uv'),
   deviceType: nullableText('identity_webauthn_credentials', row, 'device_type'),
   backedUp: nullableBooleanOf('identity_webauthn_credentials', row, 'backed_up'),

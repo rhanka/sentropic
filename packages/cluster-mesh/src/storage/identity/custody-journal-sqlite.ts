@@ -107,7 +107,7 @@ export class SqliteCustodyJournal {
 
   async enqueueDelivery(delivery: IdentityExternalRevocationV1): Promise<void> {
     try {
-      this.connection.prepare(`INSERT INTO "identity_revocation_outbox" ("delivery_id","operation_id","step","subject_id","target_kind","target_ref","state","created_at","next_attempt_at","custody_ref","delivered_at","claim_owner","lease_until","claim_version","attempt_count") VALUES (?,?,?,?,?,?,'pending',?,?,NULL,NULL,NULL,NULL,0,0)`).run(delivery.deliveryId, delivery.operationId, delivery.step, delivery.subjectId, delivery.targetKind, delivery.targetRef, delivery.createdAt, delivery.nextAttemptAt, null);
+      this.connection.prepare(`INSERT INTO "identity_revocation_outbox" ("delivery_id","operation_id","step","subject_id","target_kind","target_ref","state","created_at","next_attempt_at","custody_ref","delivered_at","claim_owner","lease_until","claim_version","attempt_count") VALUES (?,?,?,?,?,?,'pending',?,?,?,NULL,NULL,NULL,0,0)`).run(delivery.deliveryId, delivery.operationId, delivery.step, delivery.subjectId, delivery.targetKind, delivery.targetRef, delivery.createdAt, delivery.nextAttemptAt, null);
     } catch (error) {
       if (!(error instanceof Error) || !error.message.includes('UNIQUE constraint failed')) throw error;
       const existing = await this.findDelivery(delivery.deliveryId);
