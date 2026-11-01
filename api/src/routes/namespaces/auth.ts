@@ -10,7 +10,7 @@ import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
 import { getSentropicOAuthPorts } from '../auth/oauth';
 import { applyAuthAuthorFence, type AuthCompositionRoot } from './auth-cutover';
 import { accountRouter, registerHandlers } from './auth/cm-auth-hono';
-import { loginHandlers } from './auth/authentication';
+import { cmLoginHandlers as loginHandlers } from './auth/cm-authentication';
 import { credentialHandlers } from './auth/credentials';
 import { emailHandlers } from './auth/email';
 import { createFederationRouter } from './auth/federation';
