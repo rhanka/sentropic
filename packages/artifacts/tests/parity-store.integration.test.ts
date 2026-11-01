@@ -10,7 +10,7 @@ const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const store = createPostgresArtifactStore(pool);
 beforeAll(async () => {
   await pool.query('DROP SCHEMA IF EXISTS artifacts CASCADE');
-  for (const name of ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql', '0005_terminal_controls.sql']) {
+  for (const name of ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql', '0004_terminal_controls.sql']) {
     await pool.query(readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'));
   }
   await pool.query("INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ('scope', 'org')");
