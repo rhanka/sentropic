@@ -12,6 +12,7 @@ import {
   sessionKey,
 } from './registry-store.js';
 import type { RegistryState } from './registry-store.js';
+import { ensureScheduler } from './registry-freshness.js';
 
 function validBinding(binding: ProcessBindingRef): boolean {
   return (
@@ -80,6 +81,7 @@ export function ingestLifecycle(
   row.nativeBinding = { ...fact.sourceRef };
   row.state = TERMINAL_KINDS.has(fact.kind) ? 'ended' : 'running';
   if (fact.kind === 'tombstoned') row.tombstoned = true;
+  ensureScheduler(state);
   return {
     status: 'local-committed',
     sessionRef: { ...ref },
