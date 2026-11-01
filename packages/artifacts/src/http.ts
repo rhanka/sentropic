@@ -210,9 +210,12 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           throw new ArtifactProfileInputError();
         }
         let args: Record<string, unknown>;
-        if (capability === 'artifacts_get') {
+        const getPrefix = capability === 'artifacts_get' ? '/meta/'
+          : capability === 'artifacts_list_versions' ? '/versions/'
+          : capability === 'artifacts_get_source' ? '/source/' : undefined;
+        if (getPrefix !== undefined) {
           if (request.body !== undefined && Object.keys(object(request.body)).length) throw new ArtifactProfileInputError();
-          args = { artifactId: request.path.slice('/meta/'.length) };
+          args = { artifactId: request.path.slice(getPrefix.length) };
         } else {
           args = { ...object(request.body ?? {}) };
           if (Object.hasOwn(args, 'storageScopeId')) {
@@ -221,7 +224,8 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           }
         }
         const normalized = profile.validate(capability, args, request.idempotencyKey);
-        const command = capability === 'artifacts_ensure' || capability === 'artifacts_publish'
+        const command = capability === 'artifacts_ensure' || capability === 'artifacts_publish' ||
+          capability === 'artifacts_revert'
           ? createArtifactCommand(profile, capability, args, invocation, deps.derivation, request.idempotencyKey) : undefined;
         if (command) {
           phase = 'migration';
