@@ -42,7 +42,7 @@ describe('PostgreSQL refresh storage', () => {
   });
 
   it('should serialize racing rotations and retain replay evidence', async () => {
-    const rotate = (childId: string) => adapter().transaction(lock, async (tx) => {
+    const rotate = (childId: string) => adapter().withLock(lock, async (tx) => {
       const current = await tx.findByHash(hash('family'));
       if (current!.consumedAt) {
         await tx.revokeFamily('family', 'reuse_detected', now);
@@ -60,7 +60,7 @@ describe('PostgreSQL refresh storage', () => {
   });
 
   it('should roll back consumption and successor on signing or insert failure', async () => {
-    await expect(adapter().transaction(lock, async (tx) => {
+    await expect(adapter().withLock(lock, async (tx) => {
       await tx.consume('family', 'child', now);
       await tx.save({ ...row('child'), familyId: 'family', parentId: 'family', generation: 1 });
       throw new Error('signing failed');
