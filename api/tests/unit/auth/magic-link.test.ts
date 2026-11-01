@@ -4,9 +4,9 @@ import {
   sendMagicLinkEmail,
   verifyMagicLink,
 } from '../../../src/services/magic-link';
-import { db } from '../../../src/db/client';
-import { magicLinks, users } from '../../../src/db/schema';
-import { eq } from 'drizzle-orm';
+import { createCmUser, findCmUserById } from '../../../src/services/identity/cm-users';
+import { findCmMagicLinkByTokenHash, sha256Hex } from '../../../src/services/identity/cm-proofs';
+import { cmPurgeAllIdentity } from '../../utils/cm-identity-test-store';
 
 const sendTransactionalEmailMock = vi.hoisted(() => vi.fn());
 
@@ -21,8 +21,7 @@ describe('Magic Link Service', () => {
   });
 
   afterEach(async () => {
-    await db.delete(magicLinks);
-    await db.delete(users);
+    await cmPurgeAllIdentity();
   });
 
   describe('generateMagicLink', () => {
@@ -43,15 +42,12 @@ describe('Magic Link Service', () => {
       const { token } = await generateMagicLink({ email: 'test@example.com' });
       
       // Token should not be stored in plain text
-      const [record] = await db
-        .select()
-        .from(magicLinks)
-        .limit(1);
+      const record = await findCmMagicLinkByTokenHash(sha256Hex(token));
       
       expect(record).toBeDefined();
-      expect(record.tokenHash).not.toBe(token);
-      expect(record.email).toBe('test@example.com');
-      expect(record.used).toBe(false);
+      expect(record?.tokenHash).not.toBe(token);
+      expect(record?.email).toBe('test@example.com');
+      expect(record?.used).toBe(false);
     });
   });
 
@@ -80,33 +76,21 @@ describe('Magic Link Service', () => {
       expect(result.email).toBe('newuser@example.com');
       
       // User should be created
-      const [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.id, result.userId!))
-        .limit(1);
+      const user = await findCmUserById(result.userId!);
       
       expect(user).toBeDefined();
-      expect(user.email).toBe('newuser@example.com');
-      expect(user.emailVerified).toBe(true);
+      expect(user?.email).toBe('newuser@example.com');
+      expect(user?.emailVerified).toBe(true);
       // New users get immediate access (editor) but are pending admin approval
-      expect(user.role).toBe('editor');
-      expect(user.accountStatus).toBe('pending_admin_approval');
-      expect(user.approvalDueAt).toBeInstanceOf(Date);
+      expect(user?.role).toBe('editor');
+      expect(user?.accountStatus).toBe('pending_admin_approval');
+      expect(user?.approvalDueAt).toBeInstanceOf(Date);
     });
 
     it('should verify magic link for existing user', async () => {
       // Create user first
       const userId = crypto.randomUUID();
-      await db.insert(users).values({
-        id: userId,
-        email: 'existing@example.com',
-        displayName: 'Existing User',
-        role: 'editor',
-        emailVerified: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      await createCmUser({ userId, email: 'existing@example.com', displayName: 'Existing User', role: 'editor', emailVerified: true, accountStatus: 'active' });
       
       const { token } = await generateMagicLink({ 
         email: 'existing@example.com',
