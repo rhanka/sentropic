@@ -144,14 +144,30 @@ export const createAtomicPersonDeletionV2 = (input: {
       committedAt: null,
     };
     // Reservation shares a transaction with authorization: refusal persists nothing.
-    await input.unitOfWork.runWrite(deletionOptions, async (tx: IdentityTransactionV1<CustodyOpHost>) => {
+    // A recorded operation is digest-checked first: identical repeats resolve
+    // the committed receipt, divergent repeats refuse.
+    const preResolved = await input.unitOfWork.runWrite(deletionOptions, async (tx: IdentityTransactionV1<CustodyOpHost>) => {
       const journal = tx.hostTransaction.journal;
+      const recorded = await journal.findOperation(command.operationId);
+      if (recorded) {
+        if (recorded.requestDigest !== operation.requestDigest || recorded.userId !== operation.userId || recorded.actorId !== operation.actorId || recorded.handlerId !== operation.handlerId) {
+          throw new IdentityCustodyErrorV1('identity_operation_conflict');
+        }
+        if (recorded.state === 'committed') return journal.latestReceipt(command.operationId);
+        const account = await journal.findAccountCore(command.userId);
+        if (!account) throw new IdentityNotFoundError('user', command.userId);
+        const actor = command.actorId === command.userId ? account : await journal.findAccountCore(command.actorId);
+        await authorize(command, account, actor?.accountStatus ?? null);
+        return null;
+      }
       const account = await journal.findAccountCore(command.userId);
       if (!account) throw new IdentityNotFoundError('user', command.userId);
       const actor = command.actorId === command.userId ? account : await journal.findAccountCore(command.actorId);
       await authorize(command, account, actor?.accountStatus ?? null);
       await journal.reserveOperation(operation);
+      return null;
     });
+    if (preResolved) return preResolved;
 
     let failedStep: RevocationStepKind = 'login_sessions';
     const completed = new Set<RevocationStepKind>();
