@@ -404,7 +404,7 @@ export class SqliteCustodyTx implements IdentityCustodyStoresV1 {
     });
     if (consumed.kind !== 'email_code') throw new IdentityCustodyErrorV1('proof_binding_mismatch');
     try {
-      this.connection.prepare(`INSERT INTO "identity_email_registration_tickets" ("code_kind","code_proof_id","email","token_hash","user_id","state","revision","created_at","expires_at","consumed_at","revoked_at") VALUES ('email_code',?,?,?,?,?,'pending',?,?,?,?,?)`).run(input.ticket.codeProofId, input.ticket.email, input.ticket.tokenHash, input.ticket.userId, input.ticket.revision, input.ticket.createdAt, input.ticket.expiresAt, input.ticket.consumedAt, input.ticket.revokedAt);
+      this.connection.prepare(`INSERT INTO "identity_email_registration_tickets" ("code_kind","code_proof_id","email","token_hash","user_id","state","revision","created_at","expires_at","consumed_at","revoked_at") VALUES ('email_code',?,?,?,?,'pending',?,?,?,?,?)`).run(input.ticket.codeProofId, input.ticket.email, input.ticket.tokenHash, input.ticket.userId, input.ticket.revision, input.ticket.createdAt, input.ticket.expiresAt, input.ticket.consumedAt, input.ticket.revokedAt);
     } catch (error) {
       if (isUniqueViolation(error)) throw new IdentityCustodyErrorV1('identity_record_conflict');
       throw error;
@@ -469,7 +469,7 @@ export class SqliteCustodyTx implements IdentityCustodyStoresV1 {
       throw new IdentityCustodyErrorV1('identity_material_invalid');
     }
     try {
-      this.connection.prepare(`INSERT INTO "identity_login_sessions" (${this.baseSessionColumns}) VALUES (?,?, 'active',?,?,?,?,?,?)`).run(record.sessionId, record.userId, record.login.mfaVerified ? 'step_up' : 'none', record.createdAt, record.expiresAt, null, record.rotationVersion);
+      this.connection.prepare(`INSERT INTO "identity_login_sessions" (${this.baseSessionColumns}) VALUES (?,?, 'active',?,?,?,NULL,?)`).run(record.sessionId, record.userId, record.login.mfaVerified ? 'step_up' : 'none', record.createdAt, record.expiresAt, record.rotationVersion);
     } catch (error) {
       if (isUniqueViolation(error)) throw new IdentityCustodyErrorV1('identity_record_conflict');
       throw error;
