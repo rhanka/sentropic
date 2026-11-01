@@ -5,22 +5,29 @@ import { sql } from 'drizzle-orm';
 import type { Pool } from 'pg';
 import { pool } from './client';
 import { installArtifactPackageAssets } from '../services/artifacts/host-storage';
+import { env } from '../config/env';
 
 /**
  * Heal drifted databases where migration metadata is ahead of the actual settings schema.
  * This keeps user-scoped settings queries stable even when legacy snapshots are restored.
+ *
+ * Lot A4: control migration 0014 drops `public.users`; from then on the settings
+ * user-scope FK references the cluster-mesh account table
+ * `cm_identity.identity_user_accounts` (same ids, migrated by 0014).
  */
 async function reconcileSettingsUserScopeSchema(db: NodePgDatabase): Promise<void> {
   await db.execute(sql.raw('ALTER TABLE "settings" DROP CONSTRAINT IF EXISTS "settings_pkey";'));
   await db.execute(sql.raw('ALTER TABLE "settings" ADD COLUMN IF NOT EXISTS "user_id" text;'));
   await db.execute(sql.raw(`
-    DO $$ BEGIN
-      ALTER TABLE "settings"
-      ADD CONSTRAINT "settings_user_id_users_id_fk"
-      FOREIGN KEY ("user_id")
-      REFERENCES "public"."users"("id")
-      ON DELETE cascade
-      ON UPDATE no action;
+    DO $$ DECLARE fk_target text; BEGIN
+      IF to_regclass('public.users') IS NOT NULL THEN
+        fk_target := '"public"."users"';
+      ELSE
+        fk_target := '"cm_identity"."identity_user_accounts"';
+      END IF;
+      EXECUTE format(
+        'ALTER TABLE "settings" ADD CONSTRAINT "settings_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES %s("id") ON DELETE cascade ON UPDATE no action',
+        fk_target);
     EXCEPTION
       WHEN duplicate_object THEN null;
     END $$;
@@ -92,6 +99,9 @@ export async function runMigrations(migrationPool: Pool = pool): Promise<void> {
     const db = drizzle(client);
     await migrate(db, { migrationsFolder: './drizzle' });
     await reconcileSettingsUserScopeSchema(db);
+    // Lot A4: control migration 0014 reads the WebAuthn RP ID from this GUC when
+    // copying legacy webauthn_credentials/challenges into cm_identity.
+    await client.query(`SELECT set_config('app.webauthn_rp_id', $1, false)`, [env.WEBAUTHN_RP_ID || 'localhost']);
     await runControlMigrations(db);
     await installArtifactPackageAssets(client);
   } catch (error) {
