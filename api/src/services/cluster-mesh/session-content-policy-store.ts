@@ -174,6 +174,16 @@ export const createPolicyStore = (gates: PolicyStoreGates) => {
         throw error;
       }
     }
+    // r2 annex E (W-P3-3): the immutable deadline is null (kind "none") or a
+    // safe integer; overflow refuses instead of wrapping.
+    if (input.retentionExpiresAt !== null && !Number.isSafeInteger(input.retentionExpiresAt)) {
+      throw new PolicyStoreError('invalid_request', 'first-admission deadline must be null or a safe integer');
+    }
+    // r2 annex E (W-P2-4): sourceConsentRevision zero is unobserved and invalid
+    // in an accepted binding; the first verified committed snapshot is 1.
+    if (!Number.isSafeInteger(input.ownerConsentRevision) || input.ownerConsentRevision < 1) {
+      throw new PolicyStoreError('revision_conflict', 'owner consent revision must be a positive integer');
+    }
     const existing = admissions.get(policyId);
     if (input.purpose === 'share') {
       if (existing) throw new PolicyStoreError('revision_conflict', 'share policy already admitted');
