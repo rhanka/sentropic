@@ -68,6 +68,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Correct CM fixture cleanup for indirect session, operation, invitation and outbox references.
   - [x] Review session-adoption setup and tenant-bound authorization fixtures against CM stores.
   - [x] Review remaining adoption race/role fixtures and LLM identity directory fixtures against CM stores.
+  - [x] Preserve OAuth refresh revocation assertions during CM fixture conversion.
   - [x] Review document, history, stream and lock fixture conversions; preserve original email values.
   - [ ] Docker stack under flock, `make down ENV=test-app-a4` after.
 - [ ] **Lot 1 — CM identity composition + one data migration**
