@@ -9,6 +9,7 @@ import { CM_IDENTITY_SCHEMA } from '../identity/cm-identity';
 interface CreateConsentStoreAdapterOptions {
   database?: typeof db;
   now?: () => Date;
+  transactionBound?: boolean;
 }
 
 /**
@@ -50,7 +51,7 @@ export const createConsentStoreAdapter = (
     },
 
     async saveGrant(userId, clientId, scopes, tenantId, offline): Promise<void> {
-      await database.transaction(async (tx) => {
+      const save = async (tx: Pick<typeof db, 'select' | 'insert' | 'execute'>) => {
       // Serialize concurrent approvals on the CM account row (public.users is dropped).
       await tx.execute(sql`SELECT "user_id" FROM ${sql.raw(CM_IDENTITY_SCHEMA)}.identity_user_accounts WHERE "user_id" = ${userId} FOR UPDATE`);
       const tenant = await grantTenant(tx, clientId, tenantId, !!offline);
@@ -83,7 +84,9 @@ export const createConsentStoreAdapter = (
           set: { scopes: merged, updatedAt: timestamp, ...evidence },
           target: [oauthConsents.userId, oauthConsents.clientId, oauthConsents.tenantId],
         });
-      });
+      };
+      if (options.transactionBound) await save(database);
+      else await database.transaction(save);
     },
   };
 };
