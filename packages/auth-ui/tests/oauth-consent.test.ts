@@ -37,7 +37,11 @@ describe('OAuth consent contracts', () => {
     expect(labels.title).toBe('Authorize application');
     expect(labels.approve).toBe('Allow');
     expect(labels.scopeDescriptions.email).toContain('email');
+    expect(labels.scopeDescriptions['immo:artifacts:read']).toContain('Immo artifacts');
+    expect(labels.scopeDescriptions['immo:artifacts:write']).toContain('Immo artifacts');
     expect(french.deny).toBe('Refuser');
     expect(french.scopeDescriptions.profile).toContain('profil');
+    expect(french.scopeDescriptions['immo:artifacts:read']).toContain('artefacts');
+    expect(french.scopeDescriptions['immo:artifacts:write']).toContain('artefacts');
   });
 });
