@@ -5,7 +5,7 @@ import { pool } from '../../db/client';
 import { env } from '../../config/env';
 import { resolveOAuthIssuer } from '../../routes/auth/oauth';
 import { isOriginAllowed, parseAllowedOrigins } from '../../utils/cors';
-import { resolveTenantAuthoritatively } from '../tenancy/resolve-tenant';
+import { resolveCmTenant } from '../identity/cm-tenancy';
 import { createArtifactHost } from './composition';
 import { createPrivateArtifactStorage } from './lifecycle';
 import { artifactCredential, ARTIFACT_SESSION_CLIENT, createCurrentArtifactIdentity } from './credentials';
@@ -83,7 +83,7 @@ export async function resolveArtifactSession(context: Context) {
       throw new Error('Artifact session origin refused');
     }
   }
-  const tenant = await resolveTenantAuthoritatively({ userId: user.userId, workspaceId: user.workspaceId });
+  const tenant = await resolveCmTenant({ userId: user.userId, workspaceId: user.workspaceId });
   if ('error' in tenant) return null;
   return { workspaceId: user.workspaceId, identity: { subject: user.userId, tenantId: tenant.tenantId,
     clientId: ARTIFACT_SESSION_CLIENT, credentialId: artifactCredential('session', user.sessionId) } };

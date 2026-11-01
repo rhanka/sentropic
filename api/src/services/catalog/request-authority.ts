@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { AuthUser } from '../../middleware/auth';
 import { pool } from '../../db/client';
-import { resolveTenantAuthoritatively } from '../tenancy/resolve-tenant';
+import { resolveCmTenant } from '../identity/cm-tenancy';
 import { compositeCatalogRegistry, prepareHostRegistryCatalog } from '../skills/catalog';
 import { createCatalogContextResolver, type CatalogContextInput } from './request-context';
 
@@ -11,7 +11,7 @@ import { createCatalogContextResolver, type CatalogContextInput } from './reques
  * logout or login expiry does not stop a running turn; conversation/account/membership revocation does.
  */
 const resolve = createCatalogContextResolver(async input => {
-  const tenant = await resolveTenantAuthoritatively({ workspaceId: input.workspaceId, userId: input.userId });
+  const tenant = await resolveCmTenant({ workspaceId: input.workspaceId, userId: input.userId });
   if ('error' in tenant) throw new Error('catalog_access_denied');
   const sessionTable = input.kind === 'http' ? 'user_sessions' : 'chat_sessions';
   const sessionConstraint = input.kind === 'http' ? 's.expires_at > clock_timestamp()' : 's.workspace_id = w.id';
