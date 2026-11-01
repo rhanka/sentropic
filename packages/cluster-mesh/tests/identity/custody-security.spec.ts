@@ -13,7 +13,7 @@ import {
   scrubIdentityErrorForLog,
   zeroizeV1,
 } from '../../src/index.js';
-import { asOpHost, NOW, openPostgresEnv, openSqliteEnv, randomBase64Url, sha256Hex, syntheticCoseKey } from './a20b-helpers.js';
+import { asOpHost, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, randomBase64Url, sha256Hex, syntheticCoseKey } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 
 const WRITE = { mode: 'write' as const, deadlineMs: 5000 };
@@ -23,7 +23,9 @@ const KNOWN_SHA256_ABC = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff
 // RFC 4231 test case 1: key 20x0x0b, data "Hi There".
 const RFC4231_TC1 = 'b0344c61d8db38535ca8afceaf0bf12b881dc200c9833da726e9bda251e';
 
-describe.each([{ profile: 'postgres' }, { profile: 'sqlite' }])('A2.0b custody security on $profile', ({ profile }) => {
+const PROFILES = (pgEnabled ? ['postgres', 'sqlite'] : ['sqlite']) as const;
+
+describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody security on $profile', ({ profile }) => {
   const openEnv = async (): Promise<{ unitOfWork: IdentityUnitOfWorkV1<CustodyOpHost> }> => {
     if (profile === 'postgres') return { unitOfWork: asOpHost((await openPostgresEnv()).unitOfWork) };
     return { unitOfWork: asOpHost(openSqliteEnv().unitOfWork) };

@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { IdentityUnitOfWorkV1 } from '../../src/index.js';
-import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, randomBase64Url, sha256Hex } from './a20b-helpers.js';
+import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, randomBase64Url, sha256Hex } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 
 const WRITE = { mode: 'write' as const, deadlineMs: 8000 };
@@ -18,7 +18,9 @@ const results = async (settled: readonly PromiseSettledResult<unknown>[]): Promi
   codes: settled.filter((entry) => entry.status === 'rejected').map((entry) => (entry.reason as { code?: string }).code ?? 'unknown'),
 });
 
-describe.each([{ profile: 'postgres' }, { profile: 'sqlite' }])('A2.0b custody concurrency on $profile', ({ profile }) => {
+const PROFILES = (pgEnabled ? ['postgres', 'sqlite'] : ['sqlite']) as const;
+
+describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody concurrency on $profile', ({ profile }) => {
   const openEnv = async (): Promise<ProfileEnv> => {
     if (profile === 'postgres') return { unitOfWork: asOpHost((await openPostgresEnv()).unitOfWork), concurrent: true };
     return { unitOfWork: asOpHost(openSqliteEnv().unitOfWork), concurrent: false };
