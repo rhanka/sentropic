@@ -13,16 +13,8 @@ interface CreateConsentStoreAdapterOptions {
 /**
  * Drizzle/Postgres adapter for the auth-hono `consentStore` port (consent persistence).
  *
- * ARCH-11 G1c (spec §4.2.5): grants gain a tenant leg. MODE-GATED on `TENANT_RESOLUTION_MODE`
- * (reused from G1b — no new flag):
- *  - `alias` / `shadow` (DEFAULT): the `tenantId` argument is IGNORED — reads key on
- *    `(user_id, client_id)` and writes OMIT `tenant_id` (so it takes the `'sentropic'` DEFAULT),
- *    exactly as before G1c. ZERO behavior change.
- *  - `strict` + a supplied `tenantId`: reads/writes key on `(user_id, client_id, tenant_id)`, so an
- *    org-A grant never satisfies an org-B authorize (the §1.5 cross-tenant consent bypass fix).
- *
- * `saveGrant` upserts and UNIONs the incoming scopes with any prior grant so a re-approval never
- * drops previously granted scopes.
+ * Grants use the exact user/client/tenant key. Generic scopes union under the user lock;
+ * offline approval replaces its explicit scope/resource set and creates a new local epoch.
  */
 export const createConsentStoreAdapter = (
   options: CreateConsentStoreAdapterOptions = {}
@@ -50,12 +42,7 @@ export const createConsentStoreAdapter = (
       await database.transaction(async (tx) => {
       await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('update');
       const timestamp = now();
-      // Union with any prior grant so a narrower re-approval never shrinks it. The merge is done
-      // in JS (read-then-upsert), NOT a raw-SQL array union: drizzle expands a JS array embedded in
-      // a `sql` template as a record tuple `($1,$2,...)`, which Postgres rejects with "cannot cast
-      // type record to text[]". Setting the column with a plain JS array lets drizzle bind it as a
-      // proper text[]. Concurrent approvals for the same (user,client[,tenant]) are not a real
-      // scenario (single user, single consent screen), so last-write-wins is safe here.
+      // Concurrent approvals serialize on the user row before reading the generic scope union.
       const [existing] = await tx
         .select({ scopes: oauthConsents.scopes })
         .from(oauthConsents)
@@ -77,14 +64,10 @@ export const createConsentStoreAdapter = (
           updatedAt: timestamp,
           userId,
           ...evidence,
-          // ARCH-11 G1c: under strict, write the real tenant leg; otherwise omit so it takes the
-          // DEFAULT ('sentropic'), byte-identical to the pre-G1c single-org behavior.
           tenantId: tenantId ?? 'sentropic',
         })
         .onConflictDoUpdate({
           set: { scopes: merged, updatedAt: timestamp, ...evidence },
-          // The unique key is (user_id, client_id, tenant_id) (ARCH-11 G1a). When tenant_id is
-          // omitted it takes the DEFAULT, so the ON CONFLICT target still matches the composite index.
           target: [oauthConsents.userId, oauthConsents.clientId, oauthConsents.tenantId],
         });
       });
