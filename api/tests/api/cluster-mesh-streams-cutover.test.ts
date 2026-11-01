@@ -12,7 +12,7 @@ import {
   STREAM_PATHS,
 } from '../../src/routes/namespaces/streams';
 import { STREAMS_AUTHOR } from '../../src/routes/namespaces/streams-cutover';
-import type { StreamsNamespacePorts } from '../../src/routes/namespaces/streams-ports';
+import type { StreamNotification, StreamsNamespacePorts } from '../../src/routes/namespaces/streams-ports';
 import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
 import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
 import {
@@ -140,6 +140,80 @@ describe('cluster mesh streams cutover', () => {
     abort.abort();
     expect(wire).toContain('event: content_delta\nid: chat-1:2');
     expect(ports.chat.read).toHaveBeenCalledWith(expect.objectContaining({ sinceSequence: 1 }));
+  });
+
+  it.each(['initiative', 'chat', 'initiative-stream'])('should deliver %s updates emitted during connection startup', async (kind) => {
+    const ports = fakePorts();
+    let finishInitial!: () => void;
+    const initialGate = new Promise<void>((resolve) => { finishInitial = resolve; });
+    ports.jobs.listActive = vi.fn(async () => { if (kind !== 'initiative-stream') await initialGate; return []; });
+    let notify: ((notification: StreamNotification) => void) | undefined;
+    ports.notifications.subscribe = vi.fn(async ({ onNotification }) => {
+      notify = onNotification;
+      return async () => undefined;
+    });
+    ports.business.readInitiative = vi.fn(async () => ({ constraints: 'updated during startup' }));
+    const streamId = kind === 'initiative-stream' ? 'initiative_1' : 'chat-1';
+    const events = (kind === 'initiative-stream' ? [2] : [2, 3]).map((sequence) => ({
+      streamId, eventType: 'content_delta', sequence, data: { delta: `${sequence}` },
+    }));
+    ports.chat.read = vi.fn(async ({ sinceSequence }) => events.filter((event) => event.sequence > sinceSequence));
+    let beginRead!: () => void;
+    const readStarted = new Promise<void>((resolve) => { beginRead = resolve; });
+    ports.business.canRead = vi.fn(async () => true);
+    ports.outbox.read = vi.fn(async ({ sinceSequence }) => {
+      const batch = events.filter((event) => event.sequence > sinceSequence);
+      if (sinceSequence === 1) { beginRead(); await initialGate; }
+      return batch;
+    });
+    ports.outbox.readOne = vi.fn(async ({ sequence }) => events.find((event) => event.sequence === sequence) ?? null);
+    const app = new Hono();
+    app.use('/streams/sse', async (context, next) => {
+      context.set('user', { userId: user.id, workspaceId: user.workspaceId, role: 'editor' });
+      await next();
+    });
+    app.route('/streams', createStreamsTransportRouter(ports));
+    const abort = new AbortController();
+    const cursor = Buffer.from(JSON.stringify({ [streamId]: 1 })).toString('base64url');
+    const response = await app.request(`/streams/sse?streamIds=${streamId}&cursor=${cursor}`, { signal: abort.signal });
+    const reader = response.body!.getReader();
+    const decoder = new TextDecoder();
+    try {
+      expect(response.status).toBe(200);
+      expect(decoder.decode((await reader.read()).value)).toContain(': connected');
+      // Initial snapshots are blocked: the old transport has returned 200 but has not subscribed.
+      if (kind === 'initiative-stream') {
+        await readStarted;
+        events.push(...[3, 4].map((sequence) => ({
+          streamId, eventType: 'content_delta', sequence, data: { delta: `${sequence}` },
+        })));
+      }
+      if (kind === 'initiative') {
+        notify?.({ channel: 'initiative_events', payload: JSON.stringify({ initiative_id: 'initiative-1' }) });
+      } else {
+        for (const sequence of kind === 'initiative-stream' ? [3, 4] : [2, 3]) {
+          notify?.({ channel: 'stream_events', payload: JSON.stringify({ stream_id: streamId, sequence }) });
+        }
+      }
+      finishInitial();
+      let wire = '';
+      while (!wire.includes('event: ping\n')) wire += decoder.decode((await reader.read()).value);
+      if (kind === 'initiative') {
+        expect(ports.business.readInitiative).toHaveBeenCalledWith({ id: 'initiative-1', workspaceId: user.workspaceId });
+        while (!wire.includes('event: usecase_update\n')) wire += decoder.decode((await reader.read()).value);
+        expect(wire).toContain('updated during startup');
+      } else if (kind === 'initiative-stream') {
+        while (!wire.includes('id: initiative_1:4\n')) wire += decoder.decode((await reader.read()).value);
+        expect(wire.match(/id: initiative_1:\d+/g)).toEqual(['id: initiative_1:2', 'id: initiative_1:3', 'id: initiative_1:4']);
+      } else {
+        expect(wire.match(/id: chat-1:\d+/g)).toEqual(['id: chat-1:2', 'id: chat-1:3']);
+        expect(ports.chat.read).toHaveBeenLastCalledWith(expect.objectContaining({ sinceSequence: 3 }));
+      }
+    } finally {
+      finishInitial();
+      abort.abort();
+      await reader.cancel();
+    }
   });
 
   it('should refresh presence after notifications are subscribed on each connection', async () => {
