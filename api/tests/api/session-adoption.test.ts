@@ -342,20 +342,15 @@ describe('session adoption workspace binding', () => {
   it('should enforce editor threshold on attach for workspace members', async () => {
     const service = new SessionWorkspaceService();
     const member = await createAuthenticatedUser('editor');
-    await db.insert(tenantMemberships).values({
-      tenantId: TENANT_A, userId: member.id, status: 'approved', role: 'member',
-    });
-    await db.insert(workspaceMemberships).values({ workspaceId, userId: member.id, role: 'viewer' });
+    await setCmMembershipState(member.id, TENANT_A, { status: 'approved', role: 'member', decidedBy: member.id });
+    await putCmWorkspaceMember(workspaceId, member.id, 'viewer');
     const attempt = {
       sessionId: 'sess-adopt-14', tenantId: TENANT_A, principalId: member.id, workspaceId,
     };
     await expect(service.adopt(attempt)).rejects.toMatchObject({ code: 'workspace_rights_refused' });
-    const scope = and(
-      eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, member.id),
-    );
-    await db.update(workspaceMemberships).set({ role: 'commenter' }).where(scope);
+    await putCmWorkspaceMember(workspaceId, member.id, 'commenter');
     await expect(service.adopt(attempt)).rejects.toMatchObject({ code: 'workspace_rights_refused' });
-    await db.update(workspaceMemberships).set({ role: 'editor' }).where(scope);
+    await putCmWorkspaceMember(workspaceId, member.id, 'editor');
     await expect(service.adopt(attempt)).resolves.toMatchObject({ status: 'attached' });
   });
 
@@ -365,9 +360,7 @@ describe('session adoption workspace binding', () => {
       sessionId: 'sess-adopt-15', tenantId: TENANT_A, principalId: user.id, workspaceId,
     });
     const admin = await createAuthenticatedUser('editor');
-    await db.insert(tenantMemberships).values({
-      tenantId: TENANT_A, userId: admin.id, status: 'approved', role: 'admin',
-    });
+    await setCmMembershipState(admin.id, TENANT_A, { status: 'approved', role: 'admin', decidedBy: admin.id });
     await expect(service.detach('sess-adopt-15', TENANT_A, admin.id))
       .resolves.toMatchObject({ status: 'detached' });
   });
@@ -441,12 +434,8 @@ describe('session adoption workspace binding', () => {
     // Outer loses Postgres CAS, re-authorizes against workspaceB/userB post-CAS,
     // and rejects with workspace_rights_refused.
     const regularUser = await createAuthenticatedUser('editor');
-    await db.insert(tenantMemberships).values({
-      tenantId: TENANT_A, userId: regularUser.id, status: 'approved', role: 'member',
-    });
-    await db.insert(workspaceMemberships).values({
-      workspaceId, userId: regularUser.id, role: 'editor',
-    });
+    await setCmMembershipState(regularUser.id, TENANT_A, { status: 'approved', role: 'member', decidedBy: regularUser.id });
+    await putCmWorkspaceMember(workspaceId, regularUser.id, 'editor');
     const service = new SessionWorkspaceService((tx) => createDrizzleBindingStore(tx, {
       beforeCompareAndSet: async () => {
         const hook = interleaveHook.current;
@@ -460,17 +449,13 @@ describe('session adoption workspace binding', () => {
       sessionId: 'sess-adopt-30', tenantId: TENANT_A, principalId: regularUser.id, workspaceId,
     });
     const userB = await createAuthenticatedUser('editor');
-    await db.insert(tenantMemberships).values({
-      tenantId: TENANT_A, userId: userB.id, status: 'approved', role: 'member',
-    });
+    await setCmMembershipState(userB.id, TENANT_A, { status: 'approved', role: 'member', decidedBy: userB.id });
     const workspaceB = crypto.randomUUID();
     await db.insert(workspaces).values({
-      id: workspaceB, ownerUserId: userB.id, name: 'Workspace B',
-      type: 'code', tenantId: TENANT_A,
+      id: workspaceB, name: 'Workspace B', type: 'code',
     });
-    await db.insert(workspaceMemberships).values({
-      workspaceId: workspaceB, userId: userB.id, role: 'admin',
-    });
+    await enrolCmWorkspace({ workspaceId: workspaceB, tenantId: TENANT_A });
+    await putCmWorkspaceMember(workspaceB, userB.id, 'admin');
 
     interleaveHook.current = async () => {
       const inner = new SessionWorkspaceService();
@@ -492,12 +477,10 @@ describe('session adoption workspace binding', () => {
     const service = new SessionWorkspaceService();
     const secondWorkspaceId = crypto.randomUUID();
     await db.insert(workspaces).values({
-      id: secondWorkspaceId, ownerUserId: user.id, name: 'Second code project',
-      type: 'code', tenantId: TENANT_A,
+      id: secondWorkspaceId, name: 'Second code project', type: 'code',
     });
-    await db.insert(workspaceMemberships).values({
-      workspaceId: secondWorkspaceId, userId: user.id, role: 'admin',
-    });
+    await enrolCmWorkspace({ workspaceId: secondWorkspaceId, tenantId: TENANT_A });
+    await putCmWorkspaceMember(secondWorkspaceId, user.id, 'admin');
     const outcomes = await Promise.allSettled([
       service.adopt({ sessionId: 'sess-adopt-12', tenantId: TENANT_A, principalId: user.id, workspaceId }),
       service.adopt({
@@ -514,9 +497,8 @@ describe('session adoption workspace binding', () => {
 
   it('should leave no orphan workspace when concurrent creates race', async () => {
     const service = new SessionWorkspaceService();
-    const countTenantWorkspaces = async (): Promise<number> => (
-      await db.select({ id: workspaces.id }).from(workspaces).where(eq(workspaces.tenantId, TENANT_A))
-    ).length;
+    const countTenantWorkspaces = async (): Promise<number> =>
+      (await listCmWorkspacesForTenant(TENANT_A)).length;
     const before = await countTenantWorkspaces();
     const outcomes = await Promise.allSettled([
       service.adopt({
@@ -540,9 +522,7 @@ describe('session adoption workspace binding', () => {
     await service.adopt({
       sessionId: 'sess-adopt-9', tenantId: TENANT_A, principalId: user.id, workspaceId,
     });
-    await db.insert(tenantMemberships).values({
-      tenantId: TENANT_B, userId: user.id, status: 'approved', role: 'member',
-    });
+    await setCmMembershipState(user.id, TENANT_B, { status: 'approved', role: 'member', decidedBy: user.id });
     await expect(service.get('sess-adopt-9', TENANT_A, user.id)).resolves.toMatchObject({ workspaceId });
     await expect(service.get('sess-adopt-9', TENANT_B, user.id)).resolves.toBeNull();
   });
@@ -584,17 +564,13 @@ describe('session adoption workspace binding', () => {
     });
 
     const userB = await createAuthenticatedUser('editor');
-    await db.insert(tenantMemberships).values({
-      tenantId: TENANT_A, userId: userB.id, status: 'approved', role: 'member',
-    });
+    await setCmMembershipState(userB.id, TENANT_A, { status: 'approved', role: 'member', decidedBy: userB.id });
     const workspaceB = crypto.randomUUID();
     await db.insert(workspaces).values({
-      id: workspaceB, ownerUserId: userB.id, name: 'Workspace B',
-      type: 'code', tenantId: TENANT_A,
+      id: workspaceB, name: 'Workspace B', type: 'code',
     });
-    await db.insert(workspaceMemberships).values({
-      workspaceId: workspaceB, userId: userB.id, role: 'admin',
-    });
+    await enrolCmWorkspace({ workspaceId: workspaceB, tenantId: TENANT_A });
+    await putCmWorkspaceMember(workspaceB, userB.id, 'admin');
 
     // Interleave detach by user and re-attach by userB
     await service.detach('sess-adopt-18', TENANT_A, user.id);
@@ -624,24 +600,16 @@ describe('session adoption workspace binding', () => {
     });
     // Workspace admin of wsA only (approved tenant member, not tenant admin).
     const workspaceAdmin = await createAuthenticatedUser('editor');
-    await db.insert(tenantMemberships).values({
-      tenantId: TENANT_A, userId: workspaceAdmin.id, status: 'approved', role: 'member',
-    });
-    await db.insert(workspaceMemberships).values({
-      workspaceId, userId: workspaceAdmin.id, role: 'admin',
-    });
+    await setCmMembershipState(workspaceAdmin.id, TENANT_A, { status: 'approved', role: 'member', decidedBy: workspaceAdmin.id });
+    await putCmWorkspaceMember(workspaceId, workspaceAdmin.id, 'admin');
     const userB = await createAuthenticatedUser('editor');
-    await db.insert(tenantMemberships).values({
-      tenantId: TENANT_A, userId: userB.id, status: 'approved', role: 'member',
-    });
+    await setCmMembershipState(userB.id, TENANT_A, { status: 'approved', role: 'member', decidedBy: userB.id });
     const workspaceB = crypto.randomUUID();
     await db.insert(workspaces).values({
-      id: workspaceB, ownerUserId: userB.id, name: 'Workspace B',
-      type: 'code', tenantId: TENANT_A,
+      id: workspaceB, name: 'Workspace B', type: 'code',
     });
-    await db.insert(workspaceMemberships).values({
-      workspaceId: workspaceB, userId: userB.id, role: 'admin',
-    });
+    await enrolCmWorkspace({ workspaceId: workspaceB, tenantId: TENANT_A });
+    await putCmWorkspaceMember(workspaceB, userB.id, 'admin');
 
     // Forced interleave: while the outer detach resolves rights on wsA, the
     // owner detaches wsA and userB re-attaches workspaceB (v3) first.
@@ -670,24 +638,16 @@ describe('session adoption workspace binding', () => {
       sessionId: 'sess-adopt-26', tenantId: TENANT_A, principalId: user.id, workspaceId,
     });
     const workspaceAdmin = await createAuthenticatedUser('editor');
-    await db.insert(tenantMemberships).values({
-      tenantId: TENANT_A, userId: workspaceAdmin.id, status: 'approved', role: 'member',
-    });
-    await db.insert(workspaceMemberships).values({
-      workspaceId, userId: workspaceAdmin.id, role: 'admin',
-    });
+    await setCmMembershipState(workspaceAdmin.id, TENANT_A, { status: 'approved', role: 'member', decidedBy: workspaceAdmin.id });
+    await putCmWorkspaceMember(workspaceId, workspaceAdmin.id, 'admin');
     const userB = await createAuthenticatedUser('editor');
-    await db.insert(tenantMemberships).values({
-      tenantId: TENANT_A, userId: userB.id, status: 'approved', role: 'member',
-    });
+    await setCmMembershipState(userB.id, TENANT_A, { status: 'approved', role: 'member', decidedBy: userB.id });
     const workspaceB = crypto.randomUUID();
     await db.insert(workspaces).values({
-      id: workspaceB, ownerUserId: userB.id, name: 'Workspace B',
-      type: 'code', tenantId: TENANT_A,
+      id: workspaceB, name: 'Workspace B', type: 'code',
     });
-    await db.insert(workspaceMemberships).values({
-      workspaceId: workspaceB, userId: userB.id, role: 'admin',
-    });
+    await enrolCmWorkspace({ workspaceId: workspaceB, tenantId: TENANT_A }).catch(() => {});
+    await putCmWorkspaceMember(workspaceB, userB.id, 'admin');
 
     accessHook.current = async () => {
       const inner = new SessionWorkspaceService();
@@ -817,9 +777,7 @@ describe('session adoption workspace binding', () => {
       sessionId: 'sess-adopt-3', tenantId: TENANT_A, principalId: user.id, workspaceId,
     });
     const member = await createAuthenticatedUser('editor');
-    await db.insert(tenantMemberships).values({
-      tenantId: TENANT_A, userId: member.id, status: 'approved', role: 'member',
-    });
+    await setCmMembershipState(member.id, TENANT_A, { status: 'approved', role: 'member', decidedBy: member.id });
     await expect(service.get('sess-adopt-3', TENANT_A, member.id)).resolves.toBeNull();
   });
 });
