@@ -312,9 +312,6 @@ export async function refreshSession(
       newExpiresAt
     );
 
-    getRemoteSessionAuthority()?.rotate(refreshHash, { sessionId: session.id, userId: session.userId,
-      login, revoked: false, sessionTokenHash: hashToken(newSessionToken),
-      refreshTokenHash: hashToken(newRefreshToken), expiresAt: newExpiresAt.getTime() });
     // Atomic rotation in the CM custody store: CAS on the expected refresh hash.
     const rotated = await rotateCmSession({
       sessionId: session.id,
@@ -323,8 +320,12 @@ export async function refreshSession(
       expiresAt: newExpiresAt,
       sessionTokenHash: hashToken(newSessionToken),
       refreshTokenHash: hashToken(newRefreshToken),
+      verifiedLogin: login,
     });
     if (!rotated) return null;
+    getRemoteSessionAuthority()?.rotate(refreshHash, { sessionId: session.id, userId: session.userId,
+      login, revoked: false, sessionTokenHash: hashToken(newSessionToken),
+      refreshTokenHash: hashToken(newRefreshToken), expiresAt: newExpiresAt.getTime() });
 
     logger.info({
       userId: session.userId,
