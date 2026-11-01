@@ -3,7 +3,9 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '../../../src/db/client';
 import { connectorTenantEnrollments } from '../../../src/db/control-schema';
-import { serviceClients, tenants } from '../../../src/db/schema';
+import { serviceClients } from '../../../src/db/schema';
+import { createCmTenant } from '../../../src/services/identity/cm-tenancy';
+import { cmDeleteTenants } from '../../utils/cm-identity-test-store';
 import {
   activeEnrollmentTenantsForPrincipal,
   authorizedTenants,
@@ -26,7 +28,7 @@ const CONNECTOR_1 = 'arch11g1c-es-connector-1';
 const CONNECTOR_2 = 'arch11g1c-es-connector-2';
 
 async function seedOrg(id: string): Promise<void> {
-  await db.insert(tenants).values({ id, name: id, status: 'active' }).onConflictDoNothing();
+  await createCmTenant({ tenantId: id, slug: id, status: 'active' }).catch(() => {});
 }
 
 async function seedServiceClient(clientId: string, tenantId: string | null): Promise<void> {
@@ -64,7 +66,7 @@ describe('ARCH-11 G1c — enrollment-store authorizedTenants resolver', () => {
       .delete(connectorTenantEnrollments)
       .where(inArray(connectorTenantEnrollments.principalSub, TEST_CLIENTS));
     await db.delete(serviceClients).where(inArray(serviceClients.clientId, TEST_CLIENTS));
-    await db.delete(tenants).where(inArray(tenants.id, TEST_ORGS));
+    await cmDeleteTenants(TEST_ORGS);
   });
 
   it('single-org client resolves its FIXED tenant WITHOUT an enrollment row (§1.6 fix)', async () => {
