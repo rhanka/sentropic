@@ -20,6 +20,17 @@ const baseEnv: NodeJS.ProcessEnv = {
 };
 
 describe('buildOAuthClientRegistration', () => {
+  it('opts in only through explicit supported grant types', () => {
+    expect(buildOAuthClientRegistration({
+      ...baseEnv, OAUTH_CLIENT_GRANT_TYPES: 'authorization_code, refresh_token',
+    }).grantTypes).toEqual(['authorization_code', 'refresh_token']);
+    for (const grants of ['refresh_token', 'client_credentials', '', 'authorization_code,password']) {
+      expect(() => buildOAuthClientRegistration({
+        ...baseEnv, OAUTH_CLIENT_GRANT_TYPES: grants,
+      })).toThrow(/OAUTH_CLIENT_GRANT_TYPES/);
+    }
+  });
+
   it('sets resource_indicators from OAUTH_CLIENT_RESOURCE_INDICATORS and keeps the static-client shape', () => {
     const values = buildOAuthClientRegistration({ ...baseEnv });
 
@@ -124,6 +135,14 @@ describe('buildOAuthClientRegistration', () => {
 
 describe('resolvePolicyUpdate (F5: never wipe policy on rotation)', () => {
   const stored = { allowedUserIds: ['owner-1'], requiredAcr: 'urn:sentropic:loa:passkey-fresh' };
+
+  it('preserves refresh opt-in on secret rotation and allows explicit disablement', () => {
+    const optedIn = { ...stored, grantTypes: ['authorization_code', 'refresh_token'] };
+    const incoming = { allowedUserIds: [], requiredAcr: null };
+    expect(resolvePolicyUpdate(optedIn, incoming).grantTypes).toEqual(optedIn.grantTypes);
+    expect(resolvePolicyUpdate(optedIn, { ...incoming, grantTypes: ['authorization_code'] }))
+      .toEqual({ ...stored, grantTypes: ['authorization_code'] });
+  });
 
   it('takes incoming values as-is for a new client', () => {
     expect(
