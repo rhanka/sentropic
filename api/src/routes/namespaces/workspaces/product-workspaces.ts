@@ -10,8 +10,6 @@ import {
   initiatives,
   folders,
   organizations,
-  users,
-  workspaceMemberships,
   workspaces,
   workflowDefinitionTasks,
   workflowDefinitions,
@@ -23,13 +21,19 @@ import {
   guardrails,
   viewTemplates,
 } from '../../../db/schema';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { requireEditor } from '../../../middleware/rbac';
 import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess, isNeutralWorkspace } from '../../../services/workspace-access';
 import {
   notifyWorkspaceCreated, notifyWorkspaceEvent, notifyWorkspaceMembershipEvent,
   provisionWorkspace, seedWorkspaceTypeResources,
 } from '../../../services/workspace-provisioning';
+import { findCmUserByEmail, findCmUserById } from '../../../services/identity/cm-users';
+import {
+  listCmWorkspaceMembers,
+  putCmWorkspaceMember,
+  removeCmWorkspaceMember,
+} from '../../../services/identity/cm-tenancy';
 import {
   captureConnectorGrantsForTeardown,
   recordConnectorGrantTombstones,
@@ -210,10 +214,7 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
   if (!ws) return c.json({ message: 'Not found' }, 404);
   if (!ws.hiddenAt) return c.json({ message: 'Workspace must be hidden before deletion' }, 400);
 
-  const members = await db
-    .select({ userId: workspaceMemberships.userId })
-    .from(workspaceMemberships)
-    .where(eq(workspaceMemberships.workspaceId, workspaceId));
+  const members = await listCmWorkspaceMembers(workspaceId);
   const memberUserIds = members.map((m) => m.userId);
 
   // Capture external grants BEFORE the deletion. This path deletes a workspace only, but connector
@@ -260,12 +261,14 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
     await tx.delete(folders).where(eq(folders.workspaceId, workspaceId));
     await tx.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
 
-    // Memberships
-    await tx.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
-
     // Finally delete workspace
     await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
   });
+
+  // Lot A4: memberships live in the CM store; remove them after the business commit.
+  for (const memberUserId of memberUserIds) {
+    await removeCmWorkspaceMember(workspaceId, memberUserId);
+  }
 
   // Only after a successful commit.
   await revokeCapturedConnectorGrants(capturedGrants);
@@ -286,18 +289,20 @@ workspacesRouter.get('/:id/members', async (c) => {
     return c.json({ error: 'Insufficient permissions' }, 403);
   }
 
-  const rows = await db
-    .select({
-      userId: users.id,
-      email: users.email,
-      displayName: users.displayName,
-      role: workspaceMemberships.role,
-      createdAt: workspaceMemberships.createdAt,
+  const members = await listCmWorkspaceMembers(workspaceId);
+  const rows = await Promise.all(
+    members.map(async (m) => {
+      const u = await findCmUserById(m.userId);
+      return {
+        userId: m.userId,
+        email: u?.email ?? null,
+        displayName: u?.displayName ?? null,
+        role: m.role,
+        createdAt: null,
+      };
     })
-    .from(workspaceMemberships)
-    .innerJoin(users, eq(workspaceMemberships.userId, users.id))
-    .where(eq(workspaceMemberships.workspaceId, workspaceId))
-    .orderBy(desc(workspaceMemberships.createdAt));
+  );
+  rows.sort((a, b) => a.userId.localeCompare(b.userId));
 
   return c.json({ items: rows });
 });
@@ -313,17 +318,18 @@ workspacesRouter.get('/:id/members/mentions', async (c) => {
     return c.json({ error: 'Insufficient permissions' }, 403);
   }
 
-  const rows = await db
-    .select({
-      userId: users.id,
-      email: users.email,
-      displayName: users.displayName,
-      role: workspaceMemberships.role,
+  const members = await listCmWorkspaceMembers(workspaceId);
+  const rows = await Promise.all(
+    members.map(async (m) => {
+      const u = await findCmUserById(m.userId);
+      return {
+        userId: m.userId,
+        email: u?.email ?? null,
+        displayName: u?.displayName ?? null,
+        role: m.role,
+      };
     })
-    .from(workspaceMemberships)
-    .innerJoin(users, eq(workspaceMemberships.userId, users.id))
-    .where(eq(workspaceMemberships.workspaceId, workspaceId))
-    .orderBy(desc(workspaceMemberships.createdAt));
+  );
 
   return c.json({ items: rows });
 });
@@ -352,22 +358,11 @@ workspacesRouter.post('/:id/members', requireEditor, zValidator('json', addMembe
   const body = c.req.valid('json');
   const normalizedEmail = body.email.trim().toLowerCase();
 
-  const [target] = await db.select({ id: users.id }).from(users).where(eq(users.email, normalizedEmail)).limit(1);
+  const target = await findCmUserByEmail(normalizedEmail);
   if (!target) return c.json({ message: 'User not found' }, 404);
 
-  const now = new Date();
-  await db
-    .insert(workspaceMemberships)
-    .values({
-      workspaceId,
-      userId: target.id,
-      role: body.role,
-      createdAt: now,
-    })
-    .onConflictDoUpdate({
-      target: [workspaceMemberships.workspaceId, workspaceMemberships.userId],
-      set: { role: body.role },
-    });
+  // Lot A4: membership upsert in the CM store (put semantics = insert or update role).
+  await putCmWorkspaceMember(workspaceId, target.id, body.role);
 
   await notifyWorkspaceMembershipEvent(workspaceId, target.id, { action: 'added', role: body.role });
   return c.json({ success: true });
@@ -396,10 +391,7 @@ async function updateMemberRoleHandler(c: Context) {
   const parsed = updateMemberSchema.safeParse(raw);
   if (!parsed.success) return c.json({ message: 'Invalid body' }, 400);
   const { role } = parsed.data;
-  await db
-    .update(workspaceMemberships)
-    .set({ role })
-    .where(and(eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, targetUserId)));
+  await putCmWorkspaceMember(workspaceId, targetUserId, role);
 
   await notifyWorkspaceMembershipEvent(workspaceId, targetUserId, { action: 'role_updated', role });
   return c.json({ success: true });
@@ -422,9 +414,7 @@ workspacesRouter.delete('/:id/members/:userId', requireEditor, async (c) => {
     return c.json({ error: 'Insufficient permissions' }, 403);
   }
 
-  await db
-    .delete(workspaceMemberships)
-    .where(and(eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, targetUserId)));
+  await removeCmWorkspaceMember(workspaceId, targetUserId);
 
   await notifyWorkspaceMembershipEvent(workspaceId, targetUserId, { action: 'removed' });
   return c.body(null, 204);

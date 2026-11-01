@@ -13,10 +13,13 @@ import {
   solutions,
   products,
   bids,
-  workspaces,
-  users,
-  workspaceMemberships
+  workspaces
 } from '../db/schema';
+import { findCmUserById } from './identity/cm-users';
+import {
+  findCmWorkspaceMember,
+  listCmWorkspaceMembershipsForUser,
+} from './identity/cm-tenancy';
 import { createId } from '../utils/id';
 import type { TenantContext } from '@sentropic/contracts';
 import { targetFromLive, type Comment } from '@sentropic/comments';
@@ -1253,11 +1256,7 @@ export class ToolService {
 
   private async ensureWorkspaceMember(userId: string, workspaceId: string): Promise<boolean> {
     if (!userId || !workspaceId) return false;
-    const [row] = await db
-      .select({ userId: workspaceMemberships.userId })
-      .from(workspaceMemberships)
-      .where(and(eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, userId)))
-      .limit(1);
+    const row = await findCmWorkspaceMember(workspaceId, userId);
     return !!row;
   }
 
@@ -1331,10 +1330,7 @@ export class ToolService {
 
     const usersRows =
       userIds.size > 0
-        ? await db
-            .select({ id: users.id, email: users.email, displayName: users.displayName })
-            .from(users)
-            .where(inArray(users.id, Array.from(userIds)))
+        ? (await Promise.all(Array.from(userIds).map((id) => findCmUserById(id)))).filter((u): u is NonNullable<typeof u> => u !== null)
         : [];
 
     return {
@@ -2875,8 +2871,7 @@ export class ToolService {
   // ---------------------------
 
   async listWorkspacesForUser(userId: string) {
-    const memberships = await db.select({ workspaceId: workspaceMemberships.workspaceId, role: workspaceMemberships.role })
-      .from(workspaceMemberships).where(eq(workspaceMemberships.userId, userId));
+    const memberships = await listCmWorkspaceMembershipsForUser(userId);
     if (memberships.length === 0) return { items: [], count: 0 };
     const wsIds = memberships.map((m) => m.workspaceId);
     const wsRows = await db.select().from(workspaces).where(inArray(workspaces.id, wsIds));
@@ -2888,8 +2883,7 @@ export class ToolService {
   }
 
   async searchInitiativesCrossWorkspace(userId: string, opts?: { query?: string; status?: string; maturityStage?: string }) {
-    const memberships = await db.select({ workspaceId: workspaceMemberships.workspaceId })
-      .from(workspaceMemberships).where(eq(workspaceMemberships.userId, userId));
+    const memberships = await listCmWorkspaceMembershipsForUser(userId);
     if (memberships.length === 0) return { items: [], count: 0 };
     const wsIds = memberships.map((m) => m.workspaceId);
     const conditions = [inArray(initiatives.workspaceId, wsIds)];

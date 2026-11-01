@@ -141,7 +141,7 @@ export const findCmLatestValidEmailCode = async (
   now: Date,
 ): Promise<CmEmailCodeRecord | null> => {
   const { custody } = getCmIdentity();
-  const proof = await custody.singleUseProofs.findLatestEmailCode(email, [sha256Digest(codeHash)], now.toISOString());
+  const proof = await custody.singleUseProofs.findLatestEmailCode(email, [{ algorithm: 'sha256', value: codeHash }], now.toISOString());
   if (!proof || proof.kind !== 'email_code') return null;
   return {
     id: proof.proofId,
@@ -169,7 +169,7 @@ export const consumeCmEmailCodeWithTicket = async (
       key: { kind: 'email_code', proofId: codeProofId },
       expectedRevision: proof.revision,
       expectedUserId: null,
-      match: { kind: 'email_code', email, digest: sha256Digest(codeHash) },
+      match: { kind: 'email_code', email, digest: { algorithm: 'sha256', value: codeHash } },
       bindUserId: null,
       at: now.toISOString(),
     });
@@ -440,6 +440,20 @@ export const findCmCredentialByCredentialId = async (credentialId: string): Prom
   return row ? toCredentialRecord(row) : null;
 };
 
+export const findCmCredentialById = async (proofId: string): Promise<CmCredentialRecord | null> => {
+  const { custody } = getCmIdentity();
+  const row = await custody.credentials.findById(proofId);
+  return row ? toCredentialRecord(row) : null;
+};
+
+export const renameCmCredential = async (proofId: string, userId: string, name: string): Promise<boolean> => {
+  const { custody } = getCmIdentity();
+  const row = await custody.credentials.findById(proofId);
+  if (!row || row.userId !== userId || row.revokedAt) return false;
+  await custody.credentials.rename(proofId, userId, name);
+  return true;
+};
+
 export const listCmCredentialsForUser = async (userId: string): Promise<CmCredentialRecord[]> => {
   const { custody } = getCmIdentity();
   const rows = await custody.credentials.listForUser(userId);
@@ -455,6 +469,7 @@ export const createCmCredential = async (input: {
   name?: string | null;
   deviceType?: string | null;
   backedUp?: boolean | null;
+  uv?: boolean;
   rpId: string;
   now: Date;
 }): Promise<CmCredentialRecord> => {
@@ -470,7 +485,7 @@ export const createCmCredential = async (input: {
     rpId: input.rpId,
     deviceName: input.name ?? null,
     transports: input.transports ?? null,
-    uv: false,
+    uv: input.uv ?? false,
     deviceType: input.deviceType ?? null,
     backedUp: input.backedUp ?? null,
     createdAt: input.now.toISOString(),
