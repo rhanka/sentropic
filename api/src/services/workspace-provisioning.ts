@@ -1,11 +1,13 @@
 import { pool } from '../db/client';
 import type { db } from '../db/client';
-import { workspaceMemberships, workspaces } from '../db/schema';
+import { workspaces } from '../db/schema';
 import { createId } from '../utils/id';
 import { getDefaultGateConfig } from './gate-service';
 import { todoOrchestrationService } from './todo-orchestration';
 import { viewTemplateService } from './view-template-service';
 import type { WorkspaceType } from './workspace-access';
+import { enrolCmWorkspace, putCmWorkspaceMember } from './identity/cm-tenancy';
+import { PLATFORM_TENANT_ID } from './workspace-service';
 
 export type ProvisionWorkspaceClient = Pick<typeof db, 'insert'>;
 
@@ -17,9 +19,11 @@ export interface ProvisionWorkspaceInput {
 }
 
 /**
- * Canonical workspace rows: the workspace plus its creator-as-admin
- * membership. Runs inside the caller's transaction so a failed follow-up
- * step rolls the workspace back instead of orphaning it.
+ * Canonical workspace rows: the business row in the caller's transaction, plus
+ * the CM directory enrolment and creator-as-admin membership in the CM store
+ * (cm_identity.cm_workspaces / cm_workspace_members — the legacy
+ * `workspace_memberships` table and `workspaces.owner_user_id` are dropped by
+ * control migration 0014).
  */
 export const provisionWorkspace = async (
   client: ProvisionWorkspaceClient,
@@ -30,20 +34,14 @@ export const provisionWorkspace = async (
   const gateConfig = getDefaultGateConfig(input.type);
   await client.insert(workspaces).values({
     id,
-    ownerUserId: input.ownerUserId,
     name: input.name,
     type: input.type,
     gateConfig: gateConfig ?? undefined,
-    ...(input.tenantId ? { tenantId: input.tenantId } : {}),
     createdAt: now,
     updatedAt: now,
   });
-  await client.insert(workspaceMemberships).values({
-    workspaceId: id,
-    userId: input.ownerUserId,
-    role: 'admin',
-    createdAt: now,
-  });
+  await enrolCmWorkspace({ workspaceId: id, tenantId: input.tenantId ?? PLATFORM_TENANT_ID });
+  await putCmWorkspaceMember(id, input.ownerUserId, 'admin');
   return id;
 };
 
