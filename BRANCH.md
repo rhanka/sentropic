@@ -85,8 +85,8 @@ Deliver ACT-L08a from activation amendment r6: same-repo public control, report 
   - [x] Extend `test-security-daily` `SCOPE` with the L08a files (EX1).
   - [x] Lot gate: full suite green locally under flock with `ENV=test-cyber-L08a` last, then `make down`.
 - [ ] **Lot 3 — Branch hygiene and PR**
-  - [ ] Run `make scope-check`.
-  - [ ] Atomic commits with `make commit` (150 lines max each), push after every few commits.
+  - [x] Run `make scope-check`.
+  - [x] Atomic commits with `make commit` (150 lines max each), push after every few commits.
   - [ ] Open draft PR with `BRANCH.md` as body.
   - [ ] Run ONE CI on the final head and wait for completion.
 - [ ] **Lot 4 — Report and stop**
