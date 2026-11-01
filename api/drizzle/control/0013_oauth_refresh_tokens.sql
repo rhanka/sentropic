@@ -61,6 +61,7 @@ RETURNS void LANGUAGE plpgsql AS $$
 DECLARE f text;
 BEGIN
   PERFORM 1 FROM public.users WHERE id = p_user FOR UPDATE;
+  IF NOT FOUND THEN RETURN; END IF; -- A parent-delete trigger already invalidated cascading rows.
   DELETE FROM public.authorization_codes WHERE user_id = p_user AND 'offline_access' = ANY(string_to_array(scope, ' '));
   FOR f IN SELECT id FROM public.oauth_refresh_tokens
     WHERE user_id = p_user AND generation = 0 ORDER BY id FOR UPDATE LOOP
@@ -140,6 +141,11 @@ CREATE TRIGGER oauth_refresh_membership_invalidate BEFORE UPDATE OR DELETE ON pu
 CREATE FUNCTION public.oauth_refresh_consent_invalidate()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.oauth_clients WHERE client_id = OLD.client_id)
+    OR NOT EXISTS (SELECT 1 FROM public.users WHERE id = OLD.user_id) THEN
+    IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+  END IF;
   IF TG_OP = 'UPDATE' THEN
     IF NEW.scopes @> OLD.scopes AND NEW.offline_scopes @> OLD.offline_scopes
       AND NEW.approved_resources @> OLD.approved_resources
