@@ -8,9 +8,11 @@ import {
   type AuthHonoUserRecord,
 } from '@sentropic/auth-hono';
 import { jwtVerify, SignJWT } from 'jose';
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 
 import { env, requiresOAuthProductionSecrets } from '../../config/env';
 import { db } from '../../db/client';
+import { bindCmAppDatabase, withAppDatabaseMethods, type CmIdentityTransaction } from '../../services/identity/cm-transaction';
 import { logger } from '../../logger';
 import { createConsentStoreAdapter } from '../../services/auth/consent-store-adapter';
 import { createFederationAdapter } from '../../services/auth/federation-adapter';
@@ -129,10 +131,15 @@ export const resolveOAuthServiceResource = (request?: Request): string =>
     : resolveOAuthIssuer(request);
 
 const rootDb = db;
-const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
+export const createSentropicOAuthHostPorts = (tx: CmIdentityTransaction, boundPorts: () => AuthHonoPorts): AuthHonoPorts =>
+  createSentropicOAuthPorts(bindCmAppDatabase(tx), boundPorts);
+const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?: () => AuthHonoPorts): AuthHonoPorts => {
+  const db = withAppDatabaseMethods(source);
+  return ({
   oauthRefresh: createOAuthRefreshAdapter({
     database: db,
-    portsForDatabase: (tx) => createSentropicOAuthPorts(tx as unknown as typeof db),
+    portsForDatabase: (tx) => boundPorts ? boundPorts() : createSentropicOAuthPorts(tx),
+    transactionBound: Boolean(boundPorts),
   }),
   accountPolicy: {
     canAuthenticate(user, now) {
@@ -203,7 +210,7 @@ const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
   },
   // Consent persistence: lets the IdP skip the consent screen when a stored grant for the
   // exact (user, client) covers the requested scopes; re-consents on any uncovered scope.
-  consentStore: createConsentStoreAdapter({ database: db }),
+  consentStore: createConsentStoreAdapter({ database: db, transactionBound: Boolean(boundPorts) }),
   cookies: authHonoCookiePort,
   credentials: {
     create: unsupportedOAuthPort,
@@ -232,7 +239,7 @@ const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
     markUsedWithVerificationToken: unsupportedOAuthPort,
     verifyToken: unsupportedOAuthPort,
   },
-  jwks: createJwksAdapter(),
+  jwks: createJwksAdapter({ database: db }),
   magicLinks: {
     create: unsupportedOAuthPort,
     async findValidByTokenHash(tokenHash, now) {
@@ -243,7 +250,7 @@ const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
     },
     markUsed: unsupportedOAuthPort,
   },
-  oauthStateStore: createOauthStateStoreAdapter({ database: db }),
+  oauthStateStore: createOauthStateStoreAdapter({ database: db, transactionBound: Boolean(boundPorts) }),
   // ARCH-11 G1c: S2S on-behalf-of (OBO) tenant policy for the client_credentials mint.
   // Lot A4: always strict — validates the `tenant` selector against the client's authorized
   // set (fixed cm_service_clients binding ∪ enrollments).
@@ -399,7 +406,8 @@ const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
       return row ? toAuthHonoUserRecord(row) : null;
     },
   },
-});
+  });
+};
 
 const toAuthHonoUserRecord = (row: CmUserRecord): AuthHonoUserRecord => ({
   accountStatus: row.accountStatus as AuthHonoAccountStatus,

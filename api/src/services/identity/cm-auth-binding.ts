@@ -1,5 +1,6 @@
 import type { AuthHonoPorts, AuthHonoRelyingPartyConfig } from '@sentropic/auth-hono';
 import { createIdentityAuthHonoTransactionBindingV1, runIdentityAuthCompletionV1,
+  IdentityCustodyErrorV1,
   type IdentityAuthAccountPolicyV1, type IdentityAuthBusinessHooksV1,
   type IdentityAuthCompletionFlowV1, type IdentityAuthCompletionOutcomeV1,
   type IdentityAuthHonoTransactionBindingV1, type IdentityDeferredMailV1,
@@ -10,7 +11,7 @@ import { cmIdentityUnitOfWork, cmRequestWriteOptions, withCmIdentityTransaction,
 import type { createCmTokenCustodian } from './cm-token-custodian';
 
 export interface CmAuthBindingConfig {
-  readonly hostPortsForTransaction: (tx: CmIdentityTransaction) => AuthHonoPorts;
+  readonly hostPortsForTransaction: (tx: CmIdentityTransaction, boundPorts: () => AuthHonoPorts) => AuthHonoPorts;
   readonly tokens: ReturnType<typeof createCmTokenCustodian>;
   readonly rp: AuthHonoRelyingPartyConfig;
   readonly accountPolicy: IdentityAuthAccountPolicyV1;
@@ -26,18 +27,26 @@ type Registration = { readonly email: string; readonly clientId: string | null }
 export function createCmAuthRequestRunner(config: CmAuthBindingConfig) {
   const attempt = <T>(tx: CmIdentityTransaction, work: Work<T>, trustedRegistration: Registration) =>
     withCmIdentityTransaction(tx, async () => {
+      let currentBinding: IdentityAuthHonoTransactionBindingV1 | undefined;
+      const hostPorts = config.hostPortsForTransaction(tx, () => {
+        if (!currentBinding) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+        return currentBinding.ports;
+      });
       const binding = createIdentityAuthHonoTransactionBindingV1({
-        tx, hostPorts: config.hostPortsForTransaction(tx), digest: config.tokens.digest,
+        tx, hostPorts, digest: config.tokens.digest,
         loginTokens: config.tokens.loginTokens, ticketTokens: config.tokens.ticketTokens,
         rp: config.rp, accountPolicy: config.accountPolicy, emailCodeKeys: config.emailCodeKeys,
         webAuthnPolicy: { registrationUserVerification: 'preferred', authenticationUserVerification: 'required' },
         magicLink: { baseUrl: config.magicLinkBaseUrl, tokenBytes: 32, ttlSeconds: 900 },
         social: { autoLinkProviders: ['google'] }, business: config.business, trustedRegistration,
       });
-      const value = await work(binding, tx);
-      // Drain the callback-owned synchronous audit buffer before any commit/publication.
-      await binding.flushAudit();
-      return { value, mail: binding.deferredMail.map(intent => ({ ...intent })) };
+      currentBinding = binding;
+      try {
+        const value = await work(binding, tx);
+        // Drain the callback-owned synchronous audit buffer before any commit/publication.
+        await binding.flushAudit();
+        return { value, mail: binding.deferredMail.map(intent => ({ ...intent })) };
+      } finally { currentBinding = undefined; }
     });
   const publish = async <T>(result: { value: T; mail: IdentityDeferredMailV1[] }): Promise<T> => {
     try {
