@@ -78,6 +78,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Add isolated PostgreSQL cutover tests for checkpoint retention, rollback and OAuth invalidation.
 - [ ] **Lot 2 — Author switch (r13 D11) + reader/writer cutover**
   - [ ] /auth + /session over CM custody stores (auth-hono ports backed by CM); delete registration.ts, account.ts, session-manager identity paths.
+  - [x] Add real JWT custodian tests for token use, signed MFA lineage, ticket import and key disposal.
   - [ ] /workspaces (absorbs /tenants) over A2.2 stores; delete tenant-membership.ts, membership seam in cluster-mesh-adapter.ts, product tenant/workspace identity routes.
   - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
   - [ ] Account deletion through the A2.3/A2.0b atomic cascade (V2), self + admin handlers.
