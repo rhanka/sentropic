@@ -56,6 +56,7 @@ Deliver ACT-L08a from activation amendment r6: same-repo public control, report 
   - [x] Create worktree `tmp/worktrees/cyber-act-L08a` on branch `feat/cyber-act-L08a` from `origin/main` (`1239f291f`).
   - [x] Confirm command style: `make ... ENV=test-cyber-L08a` with `ENV` last.
   - [x] Confirm scope and guardrails.
+  - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
   - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BR08a-EX1` and `BR08a-EX2`.
   - [x] No ports needed: no compose services, tests run via `docker run` node image only.
   - [x] No live credentials: synthetic fixtures only, fail-closed without live resources.
