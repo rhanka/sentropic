@@ -186,7 +186,10 @@ This pass accepts the registered authorization_code/code shape; unsupported
 grant/response configurations fail for review rather than broadening access.
 
 Configuration, scopes, tenant and timestamps converge on changed rows only.
-One preprod-only divergence is explicit and asserted: `immo-mcp` additionally
+Preprod-only divergences are explicit and asserted: the public PKCE `immo-mcp`
+row adds `refresh_token` and `offline_access` for the refresh rollout; production
+remains authorization-code-only. Offline consent evidence is never imported.
+The same client additionally
 carries `immo:artifacts:read` and `immo:artifacts:write` (owner decision, immo
 artifacts; preprod only). The scopes are appended to the desired state after the
 prod convergence in `client-policy.sql`, so the exact client postcondition asserts

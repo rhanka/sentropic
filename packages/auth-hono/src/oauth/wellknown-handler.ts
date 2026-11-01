@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 
 import type { AuthHonoPorts } from '../ports.js';
 import { createJwksService } from './jwks-service.js';
+import { isRefreshEligibleClient } from './offline-policy.js';
 
 /** The OIDC core scopes every deployment of this authorization server can grant. */
 export const DEFAULT_SCOPES_SUPPORTED: readonly string[] = Object.freeze(['openid', 'profile', 'email']);
@@ -72,8 +73,19 @@ export const createWellKnownRouter = (options: CreateWellKnownRouterOptions): Ho
   );
 
   // OIDC Discovery + the RFC 8414 alias resolve to the identical metadata document.
-  router.get('/openid-configuration', (c) => c.json(metadata));
-  router.get('/oauth-authorization-server', (c) => c.json(metadata));
+  const discover = async (c: import('hono').Context) => {
+    const clientId = c.req.query('client_id');
+    const client = clientId ? await options.ports.oauthStateStore.findClient(clientId) : null;
+    const eligible = Boolean(options.ports.oauthRefresh && client && isRefreshEligibleClient(client));
+    return c.json({ ...metadata,
+      grant_types_supported: [...(metadata.grant_types_supported as string[]).filter((grant) => grant !== 'refresh_token'),
+        ...(eligible ? ['refresh_token'] : [])],
+      scopes_supported: [...(metadata.scopes_supported as string[]).filter((scope) => scope !== 'offline_access'),
+        ...(eligible ? ['offline_access'] : [])],
+    });
+  };
+  router.get('/openid-configuration', discover);
+  router.get('/oauth-authorization-server', discover);
 
   router.get('/jwks.json', async (c) => {
     const jwks = createJwksService({ clock: options.ports.clock, jwksPort: options.ports.jwks });

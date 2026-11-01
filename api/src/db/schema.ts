@@ -361,7 +361,44 @@ export const authorizationCodes = pgTable('authorization_codes', {
   userIdIdx: index('authorization_codes_user_id_idx').on(table.userId),
 }));
 
+export const oauthRefreshTokens = pgTable('oauth_refresh_tokens', {
+  id: text('id').primaryKey(),
+  tokenHash: text('token_hash').notNull().unique(),
+  familyId: text('family_id').notNull(),
+  parentId: text('parent_id'),
+  replacedById: text('replaced_by_id'),
+  generation: integer('generation').notNull().default(0),
+  clientId: text('client_id').notNull().references(() => oauthClients.clientId, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  tenantId: text('tenant_id'),
+  scope: text('scope').notNull(),
+  offlineGrantId: text('offline_grant_id').notNull(),
+  issuer: text('issuer').notNull(),
+  audience: text('audience').notNull(),
+  resource: text('resource'),
+  dpopJkt: text('dpop_jkt'),
+  acr: text('acr').notNull(),
+  amr: text('amr').array().notNull(),
+  authTime: timestamp('auth_time').notNull(),
+  sessionId: text('session_id'),
+  createdAt: timestamp('created_at').notNull().defaultNow(),
+  expiresAt: timestamp('expires_at').notNull(),
+  familyExpiresAt: timestamp('family_expires_at').notNull(),
+  consumedAt: timestamp('consumed_at'),
+  revokedAt: timestamp('revoked_at'),
+  revokedReason: text('revoked_reason'),
+}, (table) => ({
+  familyAnchorFk: foreignKey({ columns: [table.familyId], foreignColumns: [table.id] }).onDelete('cascade'),
+  parentFk: foreignKey({ columns: [table.parentId], foreignColumns: [table.id] }).onDelete('set null'),
+  familyGeneration: unique().on(table.familyId, table.generation),
+  activeLeaf: uniqueIndex('oauth_refresh_tokens_active_leaf').on(table.familyId)
+    .where(sql`${table.consumedAt} IS NULL AND ${table.revokedAt} IS NULL`),
+  userClient: index('oauth_refresh_tokens_user_client').on(table.userId, table.clientId),
+  expires: index('oauth_refresh_tokens_expires').on(table.expiresAt),
+}));
+
 export const oauthTokens = pgTable('oauth_tokens', {
+  refreshFamilyId: text('refresh_family_id'),
   jti: text('jti').primaryKey(),
   tokenType: text('token_type').notNull(),
   clientId: text('client_id')
@@ -378,6 +415,7 @@ export const oauthTokens = pgTable('oauth_tokens', {
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
 }, (table) => ({
   clientIdIdx: index('oauth_tokens_client_id_idx').on(table.clientId),
+  refreshFamilyIdx: index('oauth_tokens_refresh_family').on(table.refreshFamilyId),
   expiresAtIdx: index('oauth_tokens_expires_at_idx').on(table.expiresAt),
   tenantIdIdx: index('oauth_tokens_tenant_id_idx').on(table.tenantId),
   userIdIdx: index('oauth_tokens_user_id_idx').on(table.userId),
@@ -391,6 +429,12 @@ export const oauthTokens = pgTable('oauth_tokens', {
 // ('sentropic') so old-pod inserts during the roll still satisfy NOT NULL; the unique key carries
 // the tenant leg. G1a is DATA-only: the getGrant/saveGrant tenant threading is G1c.
 export const oauthConsents = pgTable('oauth_consents', {
+  offlineGrantId: text('offline_grant_id'),
+  offlineIssuer: text('offline_issuer'),
+  offlineScopes: text('offline_scopes').array().notNull().default(sql`'{}'`),
+  approvedResources: text('approved_resources').array().notNull().default(sql`'{}'`),
+  defaultAudienceApproved: boolean('default_audience_approved').notNull().default(false),
+  offlineConsentedAt: timestamp('offline_consented_at'),
   userId: text('user_id')
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),

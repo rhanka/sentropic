@@ -16,19 +16,23 @@ export const appendParams = (
 
 export const oauthJsonError = (
   c: Context,
-  status: 400 | 401 | 403,
+  status: 400 | 401 | 403 | 503,
   code: string,
   message: string
-): Response =>
-  c.json(
+): Response => {
+  c.header('Cache-Control', 'no-store');
+  c.header('Pragma', 'no-cache');
+  if (status === 401 && c.req.header('authorization')?.startsWith('Basic ')) {
+    c.header('WWW-Authenticate', 'Basic realm="oauth"');
+  }
+  return c.json(
     {
-      error: {
-        code,
-        message,
-      },
+      error: code,
+      error_description: message,
     },
     status
   );
+};
 
 export const redirectWithOAuthError = (
   redirectUri: string,

@@ -12,6 +12,7 @@ import { createOAuthTokenHandler } from './token-handler.js';
 import { createOAuthUserInfoHandler } from './userinfo-handler.js';
 
 export interface CreateOAuthRouterOptions extends OAuthAuthorizeHandlerOptions {
+  refreshTokenTtlSeconds?: number;
   authorizationCodeTtlSeconds?: number;
   routePrefix?: string;
 }
