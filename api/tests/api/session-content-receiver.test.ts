@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { computeRetentionDeadline } from '@sentropic/cluster-mesh';
 import {
   createPolicyStore,
   POLICY_FORMAT,
@@ -116,6 +117,31 @@ describe('STORE session-content policy receiver', () => {
     now = 1_793_520_005_000;
     expect(() => store.readRetained({ policyId: 'policy-share-1' }))
       .toThrowError(expect.objectContaining({ code: 'object_expired' }));
+  });
+  it('should admit a finite retained deadline (r2 annex E) and never extend it on refresh', () => {
+    const now = 1_793_520_003_000;
+    const store = createPolicyStore(gates({ now: () => now }));
+    const deadline = computeRetentionDeadline({ kind: 'finite', durationMs: 86_400_000 }, now);
+    const channels = {
+      ...CHANNELS,
+      'terminal.cache': { enabled: true, retention: { kind: 'finite', durationMs: 86_400_000 } },
+    };
+    const admitted = store.admitPolicy(share({ policy: policy({ channels }), retentionExpiresAt: deadline }));
+    expect(admitted.firstAdmissionExpiresAt).toBe(deadline);
+    const ack = activate(store, admitted.policyDigest);
+    store.commitReceipt({ policyId: 'policy-share-1', operationId: 'operation-1',
+      ackDigest: ack.ackDigest, policyDigest: admitted.policyDigest });
+    const grant = store.refreshCapture({ policyId: 'policy-share-1',
+      newTarget: { connectionId: 'connection-2', connectionGeneration: 2 }, stableSourceBinding: BINDING });
+    expect(grant.retainedExpiresAt).toBe(deadline);
+    expect(store.readRetained({ policyId: 'policy-share-1' }).expiresAt).toBe(deadline);
+  });
+  it('should refuse a non-safe-integer deadline and a zero consent revision (r2 fences)', () => {
+    const store = createPolicyStore(gates());
+    expect(() => store.admitPolicy(share({ retentionExpiresAt: Number.MAX_SAFE_INTEGER + 1 })))
+      .toThrowError(expect.objectContaining({ code: 'invalid_request' }));
+    expect(() => store.admitPolicy(share({ ownerConsentRevision: 0 })))
+      .toThrowError(expect.objectContaining({ code: 'revision_conflict' }));
   });
   it('should keep purge pending until the admitted writer settles it', () => {
     const store = createPolicyStore(gates());
