@@ -2736,6 +2736,9 @@ test-ci-browser-shards: ## Verify exact browser membership and measured balancin
 test-ci-live-provider-receipt: ## Reject incomplete live tuple and missing daily schedule evidence
 	node --test scripts/ci/live-provider-receipt.test.mjs
 
+test-ci-dev-image-pin: ## Prove dev-stack startup clears the production image pin
+	node --test scripts/ci/dev-image-pin.test.mjs
+
 ci-live-provider-select: ## Select a complete main application qualification before live dispatch
 	node scripts/ci/live-provider-receipt.mjs select
 
@@ -2899,9 +2902,9 @@ clean-node-modules: ## Remove workspace node_modules (root-owned cruft from cont
 .PHONY: prepare-node-workspace
 .NOTPARALLEL: prepare-node-workspace
 prepare-node-workspace: install-internal-packages build-chat-server build-cluster-mesh build-llm-mesh build-llm-gateway build-flow build-oauth-verify build-mcp-auth build-auth-hono build-auth-client build-comments build-ubo-contracts build-mcp-platform build-artifacts build-connector-host build-mcp-connector-google ## Prepare mounted workspace node_modules and package dist for dev/test runtime
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml build api
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'
+	API_IMAGE_REF= $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml build api
+	API_IMAGE_REF= $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps api sh -lc 'chown -R '"$$(id -u):$$(id -g)"' /workspace/node_modules 2>/dev/null || true'
+	API_IMAGE_REF= $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm --no-deps -u "$$(id -u):$$(id -g)" -e HOME=/tmp -e npm_config_cache=/tmp/npm-cache api sh -lc 'cd /workspace && npm ci --workspaces --include-workspace-root --ignore-scripts --audit=false'
 
 .PHONY: dev
 dev: prepare-node-workspace ## Start UI and API in watch mode
@@ -2941,11 +2944,11 @@ logs-e2e-vscode: ## Stream VSCode E2E logs
 
 .PHONY: up-api
 up-api: prepare-node-workspace ## Start the api stack in detached mode
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
+	API_IMAGE_REF= $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
 
 .PHONY: up-api-test
 up-api-test: ci-test-env prepare-node-workspace ## Start the api stack in detached mode with DISABLE_RATE_LIMIT=true
-	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml $(CI_PROVIDER_OVERLAY) up --build -d api --wait api
+	DISABLE_RATE_LIMIT=true API_IMAGE_REF= $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml $(CI_PROVIDER_OVERLAY) up --build -d api --wait api
 
 .PHONY: up-api-test-ci
 .NOTPARALLEL: up-api-test-ci
