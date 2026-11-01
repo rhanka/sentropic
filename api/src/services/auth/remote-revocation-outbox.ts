@@ -1,8 +1,13 @@
 import { randomUUID } from 'node:crypto';
-import { eq, like, sql } from 'drizzle-orm';
+import { eq, like } from 'drizzle-orm';
 import { db } from '../../db/client';
-import { settings, userSessions } from '../../db/schema';
+import { settings } from '../../db/schema';
 import type { RemoteSessionRevocation } from './remote-revocation';
+import {
+  listCmSessionsForUser,
+  revokeAllCmSessionsForUser,
+  revokeCmSession,
+} from '../identity/cm-sessions';
 
 const prefix = 'remote_session_revocation:';
 // Soft references survive account/workspace deletion. No credentials are stored here.
@@ -13,18 +18,29 @@ export async function queueRemoteRevocation(input: RemoteSessionRevocation, tx: 
   await tx.insert(settings).values({ key, value: JSON.stringify(input) });
   return key;
 }
+// Lot A4: sessions live in the cluster-mesh identity custody store
+// (cm_identity.identity_login_sessions + identity_login_token_bindings).
+// The legacy oauth_refresh_revoke_user() function was dropped by control
+// migration 0014; OAuth refresh-token revocation is handled by the
+// oauth-refresh adapter directly against cm_identity tables.
 export async function deleteAndQueueRemoteSessions(scope: { sessionId: string } | { userId: string }) {
-  return db.transaction(async tx => {
-    if ('userId' in scope) {
-      await tx.execute(sql`SELECT public.oauth_refresh_revoke_user(${scope.userId}, 'security_event')`);
-    }
-    const rows = await tx.delete(userSessions).where('sessionId' in scope
-      ? eq(userSessions.id, scope.sessionId) : eq(userSessions.userId, scope.userId)).returning({ id: userSessions.id });
-    const input = 'sessionId' in scope ? { sessionIds: [scope.sessionId] }
-      : { sessionIds: rows.map(row => row.id), userId: scope.userId };
-    const key = await queueRemoteRevocation(input, tx);
-    return { rows, input, key };
-  });
+  const sessionIds = 'sessionId' in scope
+    ? [scope.sessionId]
+    : (await listCmSessionsForUser(scope.userId)).map(row => row.id);
+  const input: RemoteSessionRevocation = 'sessionId' in scope
+    ? { sessionIds }
+    : { sessionIds, userId: scope.userId };
+  // Queue first (durable outbox on the surviving settings table), then revoke
+  // in CM. Both steps are idempotent; a crash between them is recovered by the
+  // remote-revocation worker draining the queue.
+  const key = await queueRemoteRevocation(input);
+  if ('sessionId' in scope) {
+    await revokeCmSession(scope.sessionId);
+  } else {
+    await revokeAllCmSessionsForUser(scope.userId);
+  }
+  const rows = sessionIds.map(id => ({ id }));
+  return { rows, input, key };
 }
 export const pendingRemoteRevocations = () => db.select().from(settings)
   .where(like(settings.key, `${prefix}%`)).orderBy(settings.updatedAt).limit(20);
