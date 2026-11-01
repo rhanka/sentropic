@@ -5,6 +5,7 @@ import { db, pool } from '../../../src/db/client';
 import { oauthClients, oauthConsents, tenantMemberships, users } from '../../../src/db/schema';
 import { createOAuthRefreshAdapter } from '../../../src/services/auth/oauth-refresh-adapter';
 import { createConsentStoreAdapter } from '../../../src/services/auth/consent-store-adapter';
+import { createOauthStateStoreAdapter } from '../../../src/services/auth/oauth-state-adapter';
 
 const now = new Date('2026-11-01T00:00:00Z');
 const userId = 'refresh-pg-user';
@@ -85,6 +86,21 @@ describe('PostgreSQL refresh storage', () => {
     })).rejects.toThrow('signing failed');
     expect(await adapter().findByHash(hash('family'))).toMatchObject({ consumedAt: null });
     expect(await adapter().findByHash(hash('child'))).toBeNull();
+  });
+
+  it('should retain spent digests until the complete family retention deadline', async () => {
+    await adapter().withLock(lock, async (tx) => { await tx.consume('family', 'child', now); });
+    const atDeadline = createOauthStateStoreAdapter({ now: () => row().familyExpiresAt });
+    await atDeadline.purgeExpired();
+    expect((await adapter().findAnchor('family'))?.consumedAt).not.toBeNull();
+    const afterDeadline = createOauthStateStoreAdapter({ now: () => new Date(+row().familyExpiresAt + 1000) });
+    await afterDeadline.purgeExpired();
+    expect(await adapter().findAnchor('family')).toBeNull();
+  });
+
+  it('should invalidate restored families and invalidate pending offline codes', async () => {
+    await db.execute(sql`SELECT public.oauth_refresh_invalidate_restore()`);
+    expect((await adapter().findAnchor('family'))?.revokedReason).toBe('db_restore_invalidation');
   });
 
   it.each(['account', 'policy', 'consent'])('should invalidate %s removal without resurrection', async (kind) => {
