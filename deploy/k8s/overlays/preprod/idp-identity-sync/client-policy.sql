@@ -89,6 +89,18 @@ SELECT s.target_client_id AS client_id, s.has_secret, s.name,
        ARRAY(SELECT pg_temp.rewrite_client_uri(uri) FROM unnest(s.resource_indicators) uri) AS resource_indicators,
        coalesce(s.tenant_id, 'sentropic') AS tenant_id, u.id AS owner_user_id, s.created_at, s.updated_at
 FROM selected_clients s LEFT JOIN users u ON u.id = s.owner_user_id;
+-- Preprod-only scope divergence (owner decision, immo artifacts): the immo-mcp
+-- client grants immo:artifacts:read and immo:artifacts:write in preprod only;
+-- prod never carries them. The scopes are appended after the prod convergence and
+-- before the desired state, so the upsert writes them, the exact client
+-- postcondition asserts them, and an unchanged rerun stays a no-op. When immo-mcp
+-- is not allowlisted this matches no row and changes nothing.
+UPDATE transformed_clients
+SET allowed_scopes = allowed_scopes || ARRAY(
+  SELECT scope FROM unnest(ARRAY['immo:artifacts:read', 'immo:artifacts:write']) AS preprod_only_scopes(scope)
+  WHERE NOT (scope = ANY(transformed_clients.allowed_scopes))
+)
+WHERE client_id = 'immo-mcp';
 CREATE TEMP TABLE desired_clients ON COMMIT DROP AS
 SELECT t.* FROM transformed_clients t
 WHERE NOT t.has_secret OR EXISTS (SELECT FROM oauth_clients c WHERE c.client_id = t.client_id);
