@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, appendFileSync, readdirSync, mkdirSync } from 'node:fs';
 import { createHash } from 'node:crypto';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 export function scheduleHealth(runs, { now = Date.now(), currentRun } = {}) {
@@ -72,6 +72,32 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     }
     writeFileSync(`${dir}/tuple.json`, JSON.stringify({ sourceSha: selection.sourceSha, api: image('api'), ui: image('ui'),
       lockSha256: createHash('sha256').update(readFileSync('package-lock.json')).digest('hex'), installedPackages }, null, 2));
+  } else if (command === 'run') {
+    const invoke = args => spawnSync('make', [...args, 'API_PORT=9405', 'UI_PORT=5605',
+      'MAILDEV_UI_PORT=1505', `ENV=${process.env.COMPOSE_PROJECT_NAME}`], { stdio: 'inherit' }).status ?? 1;
+    writeFileSync(`${dir}/calls.jsonl`, '');
+    const results = { api: 0, browser: 0, vscode: 0, spans: [] };
+    const measured = (lane, args) => {
+      const start = performance.now(); const status = invoke(args);
+      results.spans.push({ lane, command: args, seconds: (performance.now() - start) / 1000, status });
+      return status;
+    };
+    try {
+      results.api = measured('api-startup', ['up-api-test-ci']);
+      if (!results.api) for (const name of ['initiative-generation-async', 'initiative-generation-sync',
+        'executive-summary-sync', 'executive-summary-auto', 'company-enrichment-sync', 'chat-tools',
+        'chat-sync', 'documents-tool', 'comment-assistant', 'gw-native-qualification']) {
+        if (measured('api', ['test-api-ai', `SCOPE=tests/ai/${name}.test.ts`])) results.api = 1;
+      }
+      invoke(['down-api-ci']);
+      results.browser = measured('browser', ['test-e2e']);
+      invoke(['down']);
+      results.vscode = measured('vscode', ['test-e2e-vscode', 'E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts']);
+    } finally {
+      writeFileSync(`${dir}/results.json`, JSON.stringify(results, null, 2));
+      invoke(['down']);
+    }
+    if (results.api || results.browser || results.vscode) process.exitCode = 1;
   } else if (command === 'finish') {
     const runs = api('repos/rhanka/sentropic/actions/workflows/llm-live-daily.yml/runs?event=schedule&per_page=5').workflow_runs;
     const events = readFileSync(`${dir}/calls.jsonl`, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
