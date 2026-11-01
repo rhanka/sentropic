@@ -1,0 +1,128 @@
+{
+  "schema": "ast-grep-rules-manifest-v1",
+  "lot": "ACT-L04",
+  "specRef": "activation-amendment-r6.md (sha256 4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f) Lot 4 / SECDAILY S2c binding",
+  "config": {
+    "path": ".security/ast-grep/sgconfig.yml",
+    "sha256": "bb3c53f8449ac1b654510ee385a7ccab9986656045d23fbf23dd3966bbc88c87",
+    "ruleDirsLocalOnly": true,
+    "runtimeRuleDownload": "blocked",
+    "languageGlobs": {
+      "TypeScript": [
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.js",
+        "**/*.mjs",
+        "**/*.cjs"
+      ]
+    }
+  },
+  "severityMap": {
+    "error": "HIGH",
+    "warning": "MEDIUM",
+    "info": "LOW"
+  },
+  "blockingFloor": [
+    "HIGH",
+    "CRITICAL"
+  ],
+  "toolbox": {
+    "path": "api/Dockerfile",
+    "stage": "ci-tool-base",
+    "copyStage": "ci-tools",
+    "install": "wget release asset + sha256sum -c + unzip (no npm install, no install hooks, no postinstall)",
+    "binaryDir": "/opt/ast-grep",
+    "binaries": [
+      "sg",
+      "ast-grep"
+    ],
+    "pin": {
+      "name": "ast-grep",
+      "version": "0.51.0",
+      "origin": "https://github.com/ast-grep/ast-grep/releases/download/0.51.0/app-x86_64-unknown-linux-gnu.zip",
+      "asset": "app-x86_64-unknown-linux-gnu.zip",
+      "sha256": "a7eead5552d3a8daad70f5d50d935da44bd0c138e946b5b0a96b1d38169fa639",
+      "platform": "x86_64-unknown-linux-gnu",
+      "libc": "glibc",
+      "muslAssetAvailable": false,
+      "executionLane": "glibc pinned Node lane (MEMORY_L5_NODE_IMAGE bookworm-slim); alpine toolbox carries pinned bytes for Trivy embedded-binary inventory",
+      "npmPostinstallHook": "not used; the npm @ast-grep/cli wrapper is not the runner"
+    },
+    "zeroPython": {
+      "statement": "ast-grep 0.51.0 is a native Rust binary distributed as a prebuilt ELF; no Python interpreter, pip, node-gyp or Python-dependent native construction exists in its build or runtime path, and none is added to the toolbox",
+      "toolboxDockerfileForbids": [
+        "python",
+        "python3",
+        "pip",
+        "pip3",
+        "node-gyp",
+        "prebuild-install"
+      ]
+    }
+  }
+,
+  "rules": [
+    {"id":"no-eval","file":".security/ast-grep/rules/no-eval.yml","sha256":"fd8be97996a74f9f98a9a0fef2230c53229b30a5855e16a866e02819ebcd1677","severity":"error","mappedSeverity":"HIGH","language":"TypeScript","positive":"scripts/security/daily/fixtures/sast/positive/no-eval.ts","negative":"scripts/security/daily/fixtures/sast/negative/no-eval.ts"},
+    {"id":"no-function-constructor","file":".security/ast-grep/rules/no-function-constructor.yml","sha256":"1ce947889b58a0b38828dc9c5d3f0dc50d228802a435066b23a68451e86b2c69","severity":"error","mappedSeverity":"HIGH","language":"TypeScript","positive":"scripts/security/daily/fixtures/sast/positive/no-function-constructor.ts","negative":"scripts/security/daily/fixtures/sast/negative/no-function-constructor.ts"},
+    {"id":"no-child-process-exec","file":".security/ast-grep/rules/no-child-process-exec.yml","sha256":"4f48b1824e04a47af3868c22be5556d05d57df7561be2eec7cf2741e215f9c7a","severity":"error","mappedSeverity":"HIGH","language":"TypeScript","positive":"scripts/security/daily/fixtures/sast/positive/no-child-process-exec.ts","negative":"scripts/security/daily/fixtures/sast/negative/no-child-process-exec.ts"},
+    {"id":"no-sql-interpolation","file":".security/ast-grep/rules/no-sql-interpolation.yml","sha256":"0a38f80a8318e18378d2a8c90be4b5b26ac3b4776680c42c87a0822030b7ff14","severity":"error","mappedSeverity":"HIGH","language":"TypeScript","positive":"scripts/security/daily/fixtures/sast/positive/no-sql-interpolation.ts","negative":"scripts/security/daily/fixtures/sast/negative/no-sql-interpolation.ts"},
+    {"id":"no-inner-html","file":".security/ast-grep/rules/no-inner-html.yml","sha256":"ef313f9182c19a52f0a0ad59a64ac445ad73a4c482009b33daba56a6aff129e8","severity":"error","mappedSeverity":"HIGH","language":"TypeScript","positive":"scripts/security/daily/fixtures/sast/positive/no-inner-html.ts","negative":"scripts/security/daily/fixtures/sast/negative/no-inner-html.ts"},
+    {"id":"no-dangerously-set-html","file":".security/ast-grep/rules/no-dangerously-set-html.yml","sha256":"4320cdbc2fbb2abe9eb89318f196c157688a5f7a3b762c59ee8b35d4b40a7190","severity":"error","mappedSeverity":"HIGH","language":"TypeScript","positive":"scripts/security/daily/fixtures/sast/positive/no-dangerously-set-html.ts","negative":"scripts/security/daily/fixtures/sast/negative/no-dangerously-set-html.ts"},
+    {"id":"no-hardcoded-credential","file":".security/ast-grep/rules/no-hardcoded-credential.yml","sha256":"ead7fa2962092950f880e14f917bad05b6f014b25aa207e19a1f7890368f1000","severity":"error","mappedSeverity":"HIGH","language":"TypeScript","positive":"scripts/security/daily/fixtures/sast/positive/no-hardcoded-credential.ts","negative":"scripts/security/daily/fixtures/sast/negative/no-hardcoded-credential.ts"},
+    {"id":"no-weak-hash","file":".security/ast-grep/rules/no-weak-hash.yml","sha256":"bf2f83c8cc65452768656e57be9fa30745b0a79bdf527f317c6460cd8ad7ce34","severity":"warning","mappedSeverity":"MEDIUM","language":"TypeScript","positive":"scripts/security/daily/fixtures/sast/positive/no-weak-hash.ts","negative":"scripts/security/daily/fixtures/sast/negative/no-weak-hash.ts"},
+    {"id":"no-tls-bypass","file":".security/ast-grep/rules/no-tls-bypass.yml","sha256":"c68f8d520b71f85509d72748569a2adda99b295db4ebf3ff9163ed0447cd999f","severity":"error","mappedSeverity":"HIGH","language":"TypeScript","positive":"scripts/security/daily/fixtures/sast/positive/no-tls-bypass.ts","negative":"scripts/security/daily/fixtures/sast/negative/no-tls-bypass.ts"},
+    {"id":"no-sendfile-user-input","file":".security/ast-grep/rules/no-sendfile-user-input.yml","sha256":"036e9f66c66401c7c305247fa12431eb209f880cd6cbeff135d462450c3a5896","severity":"warning","mappedSeverity":"MEDIUM","language":"TypeScript","positive":"scripts/security/daily/fixtures/sast/positive/no-sendfile-user-input.ts","negative":"scripts/security/daily/fixtures/sast/negative/no-sendfile-user-input.ts"},
+    {"id":"no-cors-wildcard","file":".security/ast-grep/rules/no-cors-wildcard.yml","sha256":"f08330f39e99fcea22999375cbf22174bc0f18f079c3e97768c52d4f438a3617","severity":"warning","mappedSeverity":"MEDIUM","language":"TypeScript","positive":"scripts/security/daily/fixtures/sast/positive/no-cors-wildcard.ts","negative":"scripts/security/daily/fixtures/sast/negative/no-cors-wildcard.ts"}
+  ],
+  "validationReceipt": {
+    "engine": "ast-grep 0.51.0 (native, app-x86_64-unknown-linux-gnu.zip sha256 a7eead5552d3a8daad70f5d50d935da44bd0c138e946b5b0a96b1d38169fa639)",
+    "command": "ast-grep scan --config .security/ast-grep/sgconfig.yml --json=compact scripts/security/daily/fixtures/sast",
+    "result": "every rule id has exactly one positive fixture finding and zero negative fixture findings",
+    "perRule": {
+      "no-eval": {
+        "positive": 1,
+        "negative": 0
+      },
+      "no-function-constructor": {
+        "positive": 1,
+        "negative": 0
+      },
+      "no-child-process-exec": {
+        "positive": 1,
+        "negative": 0
+      },
+      "no-sql-interpolation": {
+        "positive": 1,
+        "negative": 0
+      },
+      "no-inner-html": {
+        "positive": 1,
+        "negative": 0
+      },
+      "no-dangerously-set-html": {
+        "positive": 1,
+        "negative": 0
+      },
+      "no-hardcoded-credential": {
+        "positive": 1,
+        "negative": 0
+      },
+      "no-weak-hash": {
+        "positive": 1,
+        "negative": 0
+      },
+      "no-tls-bypass": {
+        "positive": 1,
+        "negative": 0
+      },
+      "no-sendfile-user-input": {
+        "positive": 1,
+        "negative": 0
+      },
+      "no-cors-wildcard": {
+        "positive": 1,
+        "negative": 0
+      }
+    }
+}
+}
