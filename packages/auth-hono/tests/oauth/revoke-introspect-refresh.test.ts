@@ -9,6 +9,23 @@ const request = (f: Awaited<ReturnType<typeof refreshFixture>>, endpoint: string
     headers: { 'content-type': 'application/x-www-form-urlencoded', authorization: basicAuth('example-rp', 'client-secret') } });
 
 describe('opaque refresh revoke and introspection', () => {
+  it('should refuse another authenticated client before replay or revoke', async () => {
+    const f = await refreshFixture();
+    const first = await (await f.issue()).json();
+    const second = await (await renew(f, first.refresh_token)).json();
+    const findClient = f.ports.oauthStateStore.findClient;
+    f.ports.oauthStateStore.findClient = async (id) => id === 'other-rp'
+      ? { ...f.client, clientId: id } : findClient(id);
+    const headers = { authorization: basicAuth('other-rp', 'client-secret') };
+    const replay = await renew(f, first.refresh_token, headers);
+    expect(await replay.json()).toMatchObject({ error: 'invalid_grant' });
+    const revoke = await f.router.request('/oauth/revoke', { method: 'POST', headers,
+      body: new URLSearchParams({ token: first.refresh_token }) });
+    expect(revoke.status).toBe(400);
+    expect([...f.rows.values()].every((row) => !row.revokedAt)).toBe(true);
+    expect((await renew(f, second.refresh_token)).status).toBe(200);
+  });
+
   it('should verify the original proof before replay can revoke a bound family', async () => {
     const f = await refreshFixture();
     const first = await (await f.issue()).json();
