@@ -68,6 +68,10 @@ describe('host OAuth refresh HTTP integration', () => {
     const third = await thirdResponse.json();
     expect((await post('introspect', { token: third.refresh_token })).status).toBe(200);
     expect((await post('revoke', { token: initial.refresh_token })).status).toBe(200);
+    const { rows } = await pool.query(`SELECT count(*)::int AS count FROM oauth_tokens t
+      LEFT JOIN revoked_tokens r ON r.jti=t.jti
+      WHERE t.user_id=$1 AND t.expires_at > now() AND r.jti IS NULL`, [userId]);
+    expect(rows[0].count).toBe(0);
     expect((await post('token', { grant_type: 'refresh_token', refresh_token: third.refresh_token })).status).toBe(400);
   });
 

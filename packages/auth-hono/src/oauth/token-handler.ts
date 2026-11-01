@@ -532,6 +532,7 @@ export const issueTokens = async (
       idJti,
       tokenMeta({
         audience: client.clientId,
+        refreshFamilyId,
         client,
         codePayload,
         dpopJkt,

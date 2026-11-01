@@ -24,6 +24,10 @@ export const createOAuthRevokeHandler =
     if (!jti) return c.json({ success: true });
 
     const meta = await options.ports.oauthStateStore.findTokenMeta(jti);
+    if (meta?.dpopJkt) {
+      const dpop = await validateRevokeDpop(c, options, token, meta.dpopJkt);
+      if (dpop instanceof Response) return dpop;
+    }
     if (meta?.refreshFamilyId && options.ports.oauthRefresh) {
       const auth = await authenticateClient(c, form, options.ports);
       if (auth instanceof Response) return auth;
@@ -33,11 +37,6 @@ export const createOAuthRevokeHandler =
         return c.json({ success: true });
       });
     }
-    if (meta?.dpopJkt) {
-      const dpop = await validateRevokeDpop(c, options, token, meta.dpopJkt);
-      if (dpop instanceof Response) return dpop;
-    }
-
     await options.ports.oauthStateStore.revokeToken(jti);
     return c.json({ success: true });
   };
