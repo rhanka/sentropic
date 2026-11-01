@@ -5,10 +5,10 @@ import { createPostgresArtifactStore } from '../src/adapters/postgres.js';
 import { createPostgresManagementUnit } from '../src/adapters/postgres-management.js';
 import type { FinalizeTxClient } from '../src/server/commit/types.js';
 
+if (!process.env.DATABASE_URL) throw new Error('isolated DATABASE_URL required (make test-artifacts-integration)');
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const store = createPostgresArtifactStore(pool);
 beforeAll(async () => {
-  if (!process.env.DATABASE_URL) throw new Error('isolated DATABASE_URL required');
   await pool.query('DROP SCHEMA IF EXISTS artifacts CASCADE');
   for (const name of ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql', '0005_terminal_controls.sql']) {
     await pool.query(readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'));
