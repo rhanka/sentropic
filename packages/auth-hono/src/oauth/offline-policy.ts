@@ -2,7 +2,8 @@ import type { AuthHonoConsentGrant, AuthHonoPorts } from '../ports.js';
 import type { OauthClientRecord } from './state-store-types.js';
 
 export const isRefreshEligibleClient = (client: OauthClientRecord): boolean =>
-  client.grantTypes.includes('refresh_token') && client.allowedScopes.includes('offline_access') &&
+  client.grantTypes.includes('authorization_code') && client.grantTypes.includes('refresh_token') &&
+  client.allowedScopes.includes('offline_access') &&
   client.requiredAcr == null;
 
 export const hasOfflineCoverage = (grant: AuthHonoConsentGrant | null, input: {
