@@ -1,8 +1,16 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
-import { and, eq, inArray } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 
 import { db } from '../../../src/db/client';
-import { oauthClients, tenants, tenantMemberships } from '../../../src/db/schema';
+import { oauthClients } from '../../../src/db/schema';
+import {
+  createCmTenant,
+  findCmMembership,
+  listCmMembershipsForUser,
+  setCmMembershipState,
+  setCmTenantStatus,
+} from '../../../src/services/identity/cm-tenancy';
+import { cmDeleteTenantMembershipsForTenant, cmDeleteTenants } from '../../utils/cm-identity-test-store';
 import {
   requestMembership,
   decideMembership,
@@ -21,20 +29,12 @@ const TENANT_B = 'tm-b';
 const TEST_TENANTS = [TENANT_A, TENANT_B];
 
 async function seedTenant(id: string, status: 'active' | 'suspended' = 'active') {
-  await db.insert(tenants).values({ id, name: id, status }).onConflictDoUpdate({
-    target: tenants.id,
-    set: { status },
-  });
+  await createCmTenant({ tenantId: id, slug: id, status }).catch(() => {});
+  if (status !== 'active') await setCmTenantStatus(id, status);
 }
 
-async function makeMembership(tenantId: string, userId: string, status: string, role = 'member') {
-  await db
-    .insert(tenantMemberships)
-    .values({ tenantId, userId, status, role })
-    .onConflictDoUpdate({
-      target: [tenantMemberships.tenantId, tenantMemberships.userId],
-      set: { status, role },
-    });
+async function makeMembership(tenantId: string, userId: string, status: 'invited' | 'requested' | 'approved' | 'rejected' | 'suspended', role: 'member' | 'admin' = 'member') {
+  await setCmMembershipState(userId, tenantId, { status, role, decidedBy: 'tenant-membership-test' });
 }
 
 describe('BR-39e tenant membership acceptance (Lot 2)', () => {
@@ -45,8 +45,8 @@ describe('BR-39e tenant membership acceptance (Lot 2)', () => {
 
   afterEach(async () => {
     await db.delete(oauthClients).where(inArray(oauthClients.clientId, ['rp-a-test', 'rp-b-test', 'rp-default-test']));
-    await db.delete(tenantMemberships).where(inArray(tenantMemberships.tenantId, TEST_TENANTS));
-    await db.delete(tenants).where(inArray(tenants.id, TEST_TENANTS));
+    for (const t of TEST_TENANTS) await cmDeleteTenantMembershipsForTenant(t);
+    await cmDeleteTenants(TEST_TENANTS);
     await cleanupAuthData();
   });
 
@@ -69,10 +69,7 @@ describe('BR-39e tenant membership acceptance (Lot 2)', () => {
     const user = await createTestUser({ email: `req-${crypto.randomUUID()}@example.com`, displayName: 'U' });
     const res = await requestMembership(user.id, TENANT_A);
     expect(res).toEqual({ status: 'pending' });
-    const [m] = await db
-      .select()
-      .from(tenantMemberships)
-      .where(and(eq(tenantMemberships.tenantId, TENANT_A), eq(tenantMemberships.userId, user.id)));
+    const m = await findCmMembership(user.id, TENANT_A);
     expect(m?.status).toBe('requested');
     expect(m?.role).toBe('member');
   });
@@ -81,10 +78,7 @@ describe('BR-39e tenant membership acceptance (Lot 2)', () => {
     const user = await createTestUser({ email: `noenum-${crypto.randomUUID()}@example.com`, displayName: 'U' });
     const res = await requestMembership(user.id, 'tenant-does-not-exist');
     expect(res).toEqual({ status: 'pending' });
-    const rows = await db
-      .select()
-      .from(tenantMemberships)
-      .where(eq(tenantMemberships.userId, user.id));
+    const rows = await listCmMembershipsForUser(user.id);
     expect(rows).toHaveLength(0);
   });
 
@@ -93,11 +87,8 @@ describe('BR-39e tenant membership acceptance (Lot 2)', () => {
     const user = await createTestUser({ email: `susp-${crypto.randomUUID()}@example.com`, displayName: 'U' });
     const res = await requestMembership(user.id, TENANT_A);
     expect(res).toEqual({ status: 'pending' });
-    const rows = await db
-      .select()
-      .from(tenantMemberships)
-      .where(and(eq(tenantMemberships.tenantId, TENANT_A), eq(tenantMemberships.userId, user.id)));
-    expect(rows).toHaveLength(0);
+    const row = await findCmMembership(user.id, TENANT_A);
+    expect(row).toBeNull();
   });
 
   it('a non-admin caller cannot decide (403 / TenantAdminRequiredError)', async () => {
@@ -119,12 +110,9 @@ describe('BR-39e tenant membership acceptance (Lot 2)', () => {
     const res = await decideMembership(admin.id, 'editor', TENANT_A, target.id, 'approve');
     expect(res.status).toBe('approved');
 
-    const [m] = await db
-      .select()
-      .from(tenantMemberships)
-      .where(and(eq(tenantMemberships.tenantId, TENANT_A), eq(tenantMemberships.userId, target.id)));
+    const m = await findCmMembership(target.id, TENANT_A);
     expect(m?.status).toBe('approved');
-    expect(m?.approvedByUserId).toBe(admin.id);
+    expect(m?.decidedBy).toBe(admin.id);
     expect(m?.decidedAt).not.toBeNull();
   });
 
