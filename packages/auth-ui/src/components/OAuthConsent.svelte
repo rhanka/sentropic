@@ -18,6 +18,7 @@
      * (backward-compat for programmatic hosts).
      */
     decisionAction?: string;
+    initialDetails?: OAuthConsentDetails;
     labels?: Partial<OAuthConsentLabels>;
     onError?: (error: AuthUiError) => void;
     onRedirect?: (url: string) => void;
@@ -25,16 +26,16 @@
     transport: OAuthConsentTransport;
   }
 
-  let { decisionAction, labels, onError, onRedirect, state: consentState, transport }: Props = $props();
+  let { decisionAction, initialDetails, labels, onError, onRedirect, state: consentState, transport }: Props = $props();
 
   const resolvedLabels = $derived(createDefaultOAuthConsentLabels(labels ?? {}));
 
-  let details = $state<OAuthConsentDetails | null>(null);
+  let details = $state<OAuthConsentDetails | null>(initialDetails ?? null);
   let error = $state('');
-  let loading = $state(true);
+  let loading = $state(!initialDetails);
   let submitting = $state<'approve' | 'deny' | null>(null);
 
-  onMount(loadConsent);
+  onMount(() => { if (!initialDetails) void loadConsent(); });
 
   async function loadConsent(): Promise<void> {
     loading = true;
@@ -98,6 +99,16 @@
     </section>
 
     <section class="auth-ui-section">
+      {#if details.offline}
+        <Typography variant="body-sm" weight="semibold">{resolvedLabels.issuerLabel}</Typography>
+        <p>{details.offline.issuer}</p>
+        <Typography variant="body-sm" weight="semibold">
+          {details.offline.resource ? resolvedLabels.resourceLabel : resolvedLabels.defaultAudienceLabel}
+        </Typography>
+        <p>{details.offline.audience}</p>
+        <p>{resolvedLabels.offlineContinuation}</p>
+        <p>{resolvedLabels.offlineWithdrawal}</p>
+      {/if}
       <Typography variant="body-sm" weight="semibold">{resolvedLabels.redirectUriLabel}</Typography>
       <p class="auth-ui-redirect-uri">{details.redirectUri}</p>
     </section>
