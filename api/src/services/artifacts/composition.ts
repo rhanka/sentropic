@@ -77,6 +77,8 @@ export function createArtifactHost(options: ArtifactHostOptions) {
           const id = await store.getCurrentReleaseId(artifactId);
           return id === undefined ? undefined : store.getRelease(id);
         },
+        getRelease: (releaseId) => store.getRelease(releaseId),
+        listReleases: (artifactId) => store.listReleases(artifactId),
       },
     });
     const app: ArtifactApp = { selectedCapabilities: profile.selectedCapabilities, profileDigest: profile.profileDigest,
@@ -88,7 +90,7 @@ export function createArtifactHost(options: ArtifactHostOptions) {
             // Public app bodies follow the closed profile, including host-only scope fields.
             if (request.method === 'POST') profile.validate(capability, request.body ?? {}, request.idempotencyKey);
             const current = await authorization.current();
-            if (!current.readable || (['artifacts_ensure', 'artifacts_publish'].includes(capability) && !current.writable)) {
+            if (!current.readable || (['artifacts_ensure', 'artifacts_publish', 'artifacts_revert'].includes(capability) && !current.writable)) {
               throw new ArtifactOperationError('access_denied');
             }
           }
@@ -96,7 +98,7 @@ export function createArtifactHost(options: ArtifactHostOptions) {
           const artifactId = capability === 'artifacts_publish' && typeof body?.artifactId === 'string' ? body.artifactId : undefined;
           // Each call captures its own lock target; concurrent calls cannot exchange object authority.
           const outcome = await application(artifactId).execute(request, { ...invocation, invocationId: randomUUID() });
-          if (outcome.ok && ['artifacts_list', 'artifacts_get'].includes(capability ?? '') && !(await authorization.current()).readable) {
+          if (outcome.ok && ['artifacts_list', 'artifacts_get', 'artifacts_list_versions', 'artifacts_get_source'].includes(capability ?? '') && !(await authorization.current()).readable) {
             throw new ArtifactOperationError('access_denied');
           }
           return outcome;
