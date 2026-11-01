@@ -2741,19 +2741,27 @@ ci-live-provider-select: ## Select a complete main application qualification bef
 ci-live-provider-health: ## Monitor the daily provider schedule without making provider calls
 	node scripts/ci/live-provider-receipt.mjs health
 
-ci-live-provider-prepare: ci-test-env ## Load the exact qualified main artifacts; build tooling from the same source
+ci-live-provider-prepare: ci-test-env ## Verify the published qualified tuple; build tooling from the same source
 	@test "$(CI_PROVIDER_MODE)" = live
 	@$(if $(strip $(MISTRAL_API_KEY)),true,false) || { echo 'Daily MISTRAL_API_KEY is missing'; exit 1; }
 	@$(if $(strip $(TAVILY_API_KEY)),true,false) || { echo 'Daily TAVILY_API_KEY is missing'; exit 1; }
 	@mkdir -p .tmp/live-provider
 	@run="$$(node -p 'JSON.parse(require("fs").readFileSync(".tmp/live-provider/selection.json")).run')"; \
-	gh run download "$$run" --name api-image --dir . && gh run download "$$run" --name ui-image --dir . && \
-	$(MAKE) load-api load-ui GITHUB_RUN_ID="$$run" ENV=$(ENV)
+	gh run download "$$run" --name live-provider-api-identity --dir . && \
+	gh run download "$$run" --name live-provider-ui-identity --dir . && \
+	$(MAKE) ci-live-provider-pull GITHUB_RUN_ID="$$run" ENV=$(ENV)
 	@$(MAKE) build-api-tool-image build-e2e ENV=$(ENV)
 	docker image inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) > .tmp/live-provider/api.json
 	docker image inspect $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) > .tmp/live-provider/ui.json
 	@docker run --rm --entrypoint node $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) -e 'const fs=require("fs"), dir="/workspace/node_modules/@sentropic", out={}; for(const name of fs.readdirSync(dir)) { const p=JSON.parse(fs.readFileSync(dir+"/"+name+"/package.json","utf8")); out[p.name]=p.version; } console.log(JSON.stringify(out));' > .tmp/live-provider/installed-packages.json
 	node scripts/ci/live-provider-receipt.mjs tuple
+
+ci-live-provider-pull: docker-login ## Fail closed if registry images differ from the tested identities
+	docker pull $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION)
+	docker pull $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION)
+	node scripts/ci/image-receipt.mjs loaded api $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) unused api-image.json
+	node scripts/ci/image-receipt.mjs loaded ui $(REGISTRY)/$(UI_IMAGE_NAME):$(UI_VERSION) unused ui-image.json
+	@$(MAKE) record-api-image ENV=$(ENV)
 
 ci-live-provider-run: ci-test-env ## Preserve every selected API, browser and VSCode assertion on the live tuple
 	@test "$(CI_PROVIDER_MODE)" = live
