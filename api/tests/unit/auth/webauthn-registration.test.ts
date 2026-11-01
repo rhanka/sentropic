@@ -3,9 +3,10 @@ import {
   generateWebAuthnRegistrationOptions,
   verifyWebAuthnRegistration,
 } from '../../../src/services/webauthn-registration';
-import { db } from '../../../src/db/client';
-import { users, webauthnCredentials } from '../../../src/db/schema';
-import { eq } from 'drizzle-orm';
+import { createCmUser } from '../../../src/services/identity/cm-users';
+import { createCmCredential } from '../../../src/services/identity/cm-proofs';
+import { getWebAuthnConfig } from '../../../src/services/webauthn-config';
+import { cmPurgeAllIdentity, cmQuery, cmTable } from '../../utils/cm-identity-test-store';
 
 const testEmail = 'testuser@example.com';
 const testDisplayName = 'Test User';
@@ -15,20 +16,11 @@ describe('WebAuthn Registration Service', () => {
   
   beforeEach(async () => {
     testUserId = crypto.randomUUID();
-    await db.insert(users).values({
-      id: testUserId,
-      email: `test-${testUserId}@example.com`,
-      displayName: 'Test User',
-      role: 'editor',
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    await createCmUser({ userId: testUserId, email: `test-${testUserId}@example.com`, displayName: 'Test User', role: 'editor', emailVerified: true, accountStatus: 'active' });
   });
 
   afterEach(async () => {
-    await db.delete(webauthnCredentials);
-    await db.delete(users);
+    await cmPurgeAllIdentity();
   });
 
   describe('generateRegistrationOptions', () => {
@@ -55,15 +47,16 @@ describe('WebAuthn Registration Service', () => {
 
     it('should exclude existing credentials', async () => {
       // Create existing credential
-      await db.insert(webauthnCredentials).values({
-        id: crypto.randomUUID(),
+      await createCmCredential({
         userId: testUserId,
         credentialId: Buffer.from('existing-credential-id').toString('base64url'),
-        publicKeyCose: Buffer.from('existing-public-key').toString('base64url'),
+        publicKey: Buffer.from('existing-public-key').toString('base64url'),
         counter: 0,
-        deviceName: 'Existing Device',
-        transportsJson: JSON.stringify(['usb', 'nfc']),
+        name: 'Existing Device',
+        transports: ['usb', 'nfc'],
         uv: false,
+        rpId: getWebAuthnConfig().rpID,
+        now: new Date(),
       });
 
       const options = await generateWebAuthnRegistrationOptions({
@@ -106,13 +99,9 @@ describe('WebAuthn Registration Service', () => {
       });
 
       // Challenge should be stored in database
-      const challenges = await db
-        .select()
-        .from(webauthnCredentials)
-        .where(eq(webauthnCredentials.userId, testUserId));
-
-      // Note: Challenge is stored in webauthn_challenges table, not credentials
-      // This test verifies the options structure is correct
+      const stored = await cmQuery<{ proof_id: string }>(`SELECT "proof_id" FROM ${cmTable('identity_single_use_proofs')} WHERE "kind" = 'webauthn_challenge' AND "challenge" = $1`, [options.challenge]);
+      // The challenge is stored in the CM single-use-proof custody store.
+      expect(stored.length).toBe(1);
       expect(options.challenge).toBeDefined();
     });
   });
