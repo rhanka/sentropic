@@ -32,6 +32,9 @@ interface VerifyCodeParams {
 const CODE_TTL = 10 * 60; // 10 minutes in seconds
 const VERIFICATION_TOKEN_TTL = 15 * 60; // 15 minutes in seconds
 
+export const resolveEmailVerificationTokenSecret = (): string =>
+  env.JWT_SECRET || 'default-secret-change-in-production';
+
 /**
  * Hash a code for storage (SHA-256)
  */
@@ -154,7 +157,7 @@ export async function verifyEmailCode(
   }
 
   // Generate verification token (JWT)
-  const JWT_SECRET = new TextEncoder().encode(env.JWT_SECRET || 'default-secret-change-in-production');
+  const JWT_SECRET = new TextEncoder().encode(resolveEmailVerificationTokenSecret());
   const token = await new SignJWT({
     email: normalizedEmail,
     codeId: codeRecord.id,
@@ -193,7 +196,7 @@ export async function verifyValidationToken(
 ): Promise<{ valid: boolean; email?: string }> {
   try {
     // Verify JWT token
-    const JWT_SECRET = new TextEncoder().encode(env.JWT_SECRET || 'default-secret-change-in-production');
+    const JWT_SECRET = new TextEncoder().encode(resolveEmailVerificationTokenSecret());
     const { jwtVerify } = await import('jose');
     const { payload } = await jwtVerify(token, JWT_SECRET);
     const email = typeof payload.email === 'string' ? payload.email : undefined;
