@@ -37,6 +37,11 @@
   - `api/drizzle/control/0014_*.sql` (max 1 file)
   - `api/drizzle/control/meta/_journal.json`
   - `packages/cluster-mesh/package.json`
+  - `BRANCH.md` (this branch file)
+  - `package-lock.json` (BR01-EX3)
+  - `api/package-lock.json` (BR01-EX3)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR01-EX4)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR01-EX4)
 - **Exception process**:
   - BR03a-EX1 declared here before touching `Makefile`: reason = r6 §7.3 requires every §6.4 destination wired into its owning required Make suite (`test-security-daily`, already run by required CI job `validate-ci-capacity-metrics`); impact = additive SCOPE entries only, no existing entry removed; rollback = revert the single SCOPE line.
   - BR03a-EX2 declared here before touching the version files: reason = rules/workflow.md Post-Rebase Gate + `enforce-package-bump` CI job after the #681 rebase; impact = version string only in `packages/llm-mesh/package.json` and its workspace entry in `package-lock.json`; rollback = revert to `0.32.2`.
@@ -46,8 +51,11 @@
 - `BR01-EX1`: touch `api/drizzle/control/0014_*.sql` + `api/drizzle/control/meta/_journal.json` (one migration for policy admission/cursor/outbox/purge tables; reason: durable store needs new tables; impact: control schema +1 migration; rollback: drop tables, revert journal entry).
 - `BR01-EX2`: touch `packages/cluster-mesh/package.json` (version bump only; reason: CI enforce-package-bump requires bump when `packages/<pkg>/src/**` changes; impact: version field only; rollback: revert version line).
 - 2026-11-01 resume: rebased onto `origin/main` (`a67778379`); re-pinned r2 contract hashes (§Scope); fixed never-green test bugs with evidence (wrong `../../../src` depth, vacuous `toMatchObject` on throwing fns, non-hex `'t'.repeat(64)`, missing receipt before `refreshCapture`, amend missing repeated deadline). Implementation unchanged — it already enforced the contract.
+- 2026-11-01 r2 re-pin adjustment (only the r2 deltas that touch RC2.store, per CHANGES-r2.md): W-P3-3/annex E — retention now uses the frozen ContentPolicyV1 shape `{kind:'finite',durationMs}` with the 315576000000 ms ten-Julian-year product cap (`TEN_JULIAN_YEAR_MS`), `{kind:'none'}` = no expiry (not disabled storage), and `computeRetentionDeadline` implements vectors/r2-semantics.json `retentionDeadline` exactly (none→null, finite→firstAdmissionAt+durationMs, over-cap and unsafe-sum refuse); the store validates the first-admission deadline as null-or-safe-integer and keeps it immutable across amend/refresh/read. W-P2-4/annex E — `ownerConsentRevision` zero is unobserved/invalid, so admission refuses `< 1` (`revision_conflict`). ContentPolicy* schemas/vectors are byte-identical r1→r2 (changes-r2.json), so no other store change was needed; W-P1-3 chat dialect is RC3.chat scope (this store keeps `retainedPayload: null`, no payload bytes). MANIFEST.sha256 `133e23f5…` re-verified (`sha256sum -c` all OK) before push.
+- 2026-11-01 lane note: test ports overridden to `API_PORT=8812 UI_PORT=5198 MAILDEV_UI_PORT=1096` because 8802/1095 were already bound by another lane's compose project; `ENV=test-rc2-store` still last.
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
-- `BR01-EX3`: touch `package-lock.json` (1 line: `packages/cluster-mesh` version sync to `0.26.0-dev.4`; reason: CI `changes` gate requires train package versions to match the root lockfile after the `BR01-EX2` bump; impact: single version string; rollback: revert the line).
+- `BR01-EX3`: touch `package-lock.json` + `api/package-lock.json` (1 line each: `packages/cluster-mesh` / `../packages/cluster-mesh` version sync to `0.26.0-dev.4`; reason: CI `changes` gate requires train package versions to match the lockfiles after the `BR01-EX2` bump; impact: single version string per file; rollback: revert the line).
+- `BR01-EX4`: touch `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` + `package-lock.json` (pin `sentropic-cluster-mesh-0.26.0-dev.4.tgz` in the fixture deps and lock entry; reason: CI `validate-cluster-mesh` `prepare-artifacts.spec.ts` requires the selected fixture to track the candidate release tuple after the `BR01-EX2` bump, same pattern as `origin/main` dev.3; impact: 4 pin strings, no test logic; rollback: revert pins to `0.26.0-dev.3`).
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -65,50 +73,50 @@
   - Switch back to `tmp/feat-<slug>` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [ ] Read `rules/MASTER.md` and `rules/workflow.md`
-  - [ ] Create/confirm isolated worktree `tmp/worktrees/rc2-store` on `origin/main` (`455813bf923e9a58f701b17d2adbef01b2df0e71`)
-  - [ ] Capture Makefile targets needed for debug/testing.
-  - [ ] Define environment mapping (`dev`, `test`, `e2e`) and ports for this branch.
-  - [ ] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
-  - [ ] Confirm scope and guardrails.
-  - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
-  - [ ] Ports: `API_PORT=8802 UI_PORT=5188 MAILDEV_UI_PORT=1095 ENV=test-rc2-store`
-- [ ] **Lot 1 — Tests first (red)**
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/MASTER.md` and `rules/workflow.md`
+  - [x] Create/confirm isolated worktree `tmp/worktrees/rc2-store` on `origin/main` (`a67778379` after rebase)
+  - [x] Capture Makefile targets needed for debug/testing.
+  - [x] Define environment mapping (`dev`, `test`, `e2e`) and ports for this branch.
+  - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
+  - [x] Confirm scope and guardrails.
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
+  - [x] Ports: `API_PORT=8812 UI_PORT=5198 MAILDEV_UI_PORT=1096 ENV=test-rc2-store` (8802/1095 were bound by another lane; see Feedback Loop)
+- [x] **Lot 1 — Tests first (red)**
   - [x] Add `api/tests/api/session-content-receiver.test.ts` (STORE: F2-01 proposal/proof/activation, F2-02 post-ACK boundary, F2-05 retention/purge, denial races, immutable deadlines)
   - [x] Add `api/tests/unit/remote-action-audit.test.ts` (STORE-ERASURE: audit/payload/backup separation, writer-settled purge)
-  - [ ] Run red campaign scoped under flock: `flock .tmp/packets/DOCKER-LOCK.md make test-api-endpoints SCOPE=tests/api/session-content-receiver.test.ts API_PORT=8802 UI_PORT=5188 MAILDEV_UI_PORT=1095 ENV=test-rc2-store`
-  - [ ] Run red unit scope: `flock .tmp/packets/DOCKER-LOCK.md make test-api-unit SCOPE=tests/unit/remote-action-audit.test.ts API_PORT=8802 UI_PORT=5188 MAILDEV_UI_PORT=1095 ENV=test-rc2-store`
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api` + `make lint-api` API_PORT=8802 UI_PORT=5188 MAILDEV_UI_PORT=1095 ENV=test-rc2-store
-    - [ ] **API tests**
-      - [ ] New `api/tests/api/session-content-receiver.test.ts` (STORE)
-      - [ ] Scoped run while evolving: `make test-api-endpoints SCOPE=tests/api/session-content-receiver.test.ts API_PORT=8802 UI_PORT=5188 MAILDEV_UI_PORT=1095 ENV=test-rc2-store`
-      - [ ] Sub-lot gate: `make test-api-unit SCOPE=tests/unit/remote-action-audit.test.ts API_PORT=8802 UI_PORT=5188 MAILDEV_UI_PORT=1095 ENV=test-rc2-store`
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] No UI changes in this lot; no UI test updates.
-      - [ ] Sub-lot gate: not applicable (no UI scope)
-    - [ ] **E2E tests**
-      - [ ] No E2E changes in this lot; no E2E updates.
+  - [x] Run red campaign scoped under flock: `flock .tmp/packets/DOCKER-LOCK.md make test-api-endpoints SCOPE=tests/api/session-content-receiver.test.ts API_PORT=8812 UI_PORT=5198 MAILDEV_UI_PORT=1096 ENV=test-rc2-store`
+  - [x] Run red unit scope: `flock .tmp/packets/DOCKER-LOCK.md make test-api-unit SCOPE=tests/unit/remote-action-audit.test.ts API_PORT=8812 UI_PORT=5198 MAILDEV_UI_PORT=1096 ENV=test-rc2-store`
+  - [x] Lot gate (2026-11-01 r2 re-pin head, all green):
+    - [x] `make typecheck-api` + `make lint-api` API_PORT=8812 UI_PORT=5198 MAILDEV_UI_PORT=1096 ENV=test-rc2-store (tsc clean; eslint clean)
+    - [x] **API tests**
+      - [x] `api/tests/api/session-content-receiver.test.ts` (STORE green 11/11 incl. r2 finite-deadline and consent-fence cases)
+      - [x] Scoped run while evolving: `make test-api-endpoints SCOPE=tests/api/session-content-receiver.test.ts ... ENV=test-rc2-store`
+      - [x] Sub-lot gate: `make test-api-unit SCOPE=tests/unit/remote-action-audit.test.ts ... ENV=test-rc2-store` (STORE-ERASURE green 9/9 incl. retentionDeadline vector cases)
+    - [x] **UI tests (TypeScript only)**
+      - [x] No UI changes in this lot; no UI test updates.
+      - [x] Sub-lot gate: not applicable (no UI scope)
+    - [x] **E2E tests**
+      - [x] No E2E changes in this lot; no E2E updates.
 - [ ] **Lot 2 — Store implementation (green)**
   - [x] Add `packages/cluster-mesh/src/sessions/content-policy.ts` (channels, retention, policy digest domain, fail-closed gates)
   - [x] Add `api/src/services/cluster-mesh/session-content-policy-store.ts` (admission CAS, activation ACK/receipt, capture reconnect grant, cursor/outbox, writer-settled purge)
   - [x] Extend `api/src/db/control-schema.ts` (policy admission/cursor/outbox/purge tables)
   - [x] Add `api/drizzle/control/0014_*.sql` + journal entry (`BR01-EX1`)
   - [x] Bump `packages/cluster-mesh/package.json` patch (`BR01-EX2`)
-  - [x] Lot gate (2026-11-01, all green on rebased head):
-    - [x] `make typecheck-api` + `make lint-api` API_PORT=8802 UI_PORT=5188 MAILDEV_UI_PORT=1095 ENV=test-rc2-store (tsc clean; eslint 0 errors, no warnings in branch files)
+  - [x] Lot gate (2026-11-01 r2 re-pin head, all green):
+    - [x] `make typecheck-api` + `make lint-api` API_PORT=8812 UI_PORT=5198 MAILDEV_UI_PORT=1096 ENV=test-rc2-store (tsc clean; eslint clean)
     - [x] **API tests**
-      - [x] Updated `api/tests/api/session-content-receiver.test.ts` (STORE green 9/9)
-      - [x] Updated `api/tests/unit/remote-action-audit.test.ts` (STORE-ERASURE green 4/4)
+      - [x] Updated `api/tests/api/session-content-receiver.test.ts` (STORE green 11/11)
+      - [x] Updated `api/tests/unit/remote-action-audit.test.ts` (STORE-ERASURE green 9/9)
       - [x] Scoped runs while evolving (same commands as Lot 1)
-      - [x] Sub-lot gate: full `make test-api-unit API_PORT=8802 UI_PORT=5188 MAILDEV_UI_PORT=1095 ENV=test-rc2-store` (150 files, 1558 passed, 2 skipped)
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] No UI changes; no updates.
-    - [ ] **E2E tests**
-      - [ ] No E2E changes; no updates.
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] No `spec/BRANCH_SPEC_EVOL.md` created (single-slice branch, no spec evolution file).
+      - [x] Sub-lot gate: full `make test-api-unit API_PORT=8812 UI_PORT=5198 MAILDEV_UI_PORT=1096 ENV=test-rc2-store` (150 files, 1563 passed, 2 skipped); `make down ... ENV=test-rc2-store` after
+    - [x] **UI tests (TypeScript only)**
+      - [x] No UI changes; no updates.
+    - [x] **E2E tests**
+      - [x] No E2E changes; no updates.
+- [x] **Lot N-1 — Docs consolidation**
+  - [x] No `spec/BRANCH_SPEC_EVOL.md` created (single-slice branch, no spec evolution file).
 - [ ] **Lot N — Final validation**
   - [x] Typecheck & Lint
   - [x] Retest UI (not applicable, no UI scope)
@@ -116,6 +124,6 @@
   - [x] Retest e2e (not applicable, no e2e scope)
   - [x] Retest AI flaky tests (not applicable, no AI scope)
   - [x] Bumped `packages/cluster-mesh/package.json` version (semver) — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
-  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-  - [ ] Delivery stops at draft PR + one green CI + `.tmp/rv/rc2-store.md` report; no merge (per packet).
+  - [x] Final gate step 1: PR #874 (draft) exists; body refreshed from this `BRANCH.md`.
+  - [ ] Final gate step 2: run/verify branch CI on that PR (one run on the final head) and resolve remaining blockers.
+  - [ ] Delivery stops at draft PR + one CI + `.tmp/rv/rc2-store.md` report; no merge (per packet).
