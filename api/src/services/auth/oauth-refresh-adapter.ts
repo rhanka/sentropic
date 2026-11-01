@@ -25,7 +25,7 @@ interface Adapter extends OAuthRefreshStorePort {
 /** Client guard -> user -> durable anchor. All reads inside work see locked, current state. */
 export const lockOAuthRefresh = async (database: Database, lock: OAuthRefreshLock): Promise<void> => {
   await database.execute(sql`SELECT pg_advisory_xact_lock_shared(hashtextextended('oauth-refresh-client:' || ${lock.clientId}, 0))`);
-  await database.execute(sql`SELECT "id" FROM ${sql.raw(CM_IDENTITY_SCHEMA)}.identity_user_accounts WHERE "id" = ${lock.userId} FOR UPDATE`);
+  await database.execute(sql`SELECT "user_id" FROM ${sql.raw(CM_IDENTITY_SCHEMA)}.identity_user_accounts WHERE "user_id" = ${lock.userId} FOR UPDATE`);
   if (lock.familyId) {
     await database.select({ id: oauthRefreshTokens.id }).from(oauthRefreshTokens)
       .where(eq(oauthRefreshTokens.id, lock.familyId)).for('update');
