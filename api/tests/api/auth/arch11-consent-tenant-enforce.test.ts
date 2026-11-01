@@ -94,6 +94,23 @@ describe('ARCH-11 G1c — OAuth consent tenant enforcement', () => {
     const rows = await allRows(userId);
     expect(rows.map((r) => r.tenantId).sort()).toEqual([ORG_A, ORG_B].sort());
   });
+
+  it('SHADOW: refresh-enabled clients retain distinct local offline consent for each tenant', async () => {
+    env.TENANT_RESOLUTION_MODE = 'shadow';
+    await db.update(oauthClients).set({ grantTypes: ['authorization_code', 'refresh_token'],
+      allowedScopes: ['openid', 'profile', 'email', 'offline_access'] })
+      .where(eq(oauthClients.clientId, CLIENT_ID));
+    const { cookie, userId } = await seedMultiOrgUser();
+    await approve(cookie, ORG_A, 'openid offline_access');
+    const orgB = await authorize(cookie, 'openid offline_access', ORG_B);
+    expect(new URL(orgB.headers.get('location')!).pathname).toBe('/auth/oauth/consent');
+    await approve(cookie, ORG_B, 'openid offline_access');
+    const rows = await db.select().from(oauthConsents)
+      .where(and(eq(oauthConsents.userId, userId), eq(oauthConsents.clientId, CLIENT_ID)));
+    expect(rows.map(row => row.tenantId).sort()).toEqual([ORG_A, ORG_B].sort());
+    expect(rows.every(row => row.offlineGrantId && row.offlineIssuer && row.offlineConsentedAt)).toBe(true);
+    expect(new Set(rows.map(row => row.offlineGrantId)).size).toBe(2);
+  });
 });
 
 // --- helpers ---
@@ -129,8 +146,8 @@ const authorize = (cookie: string, scope: string, tenant: string): Promise<Respo
   return app.request(url.toString(), { headers: { Cookie: cookie } });
 };
 
-const approve = async (cookie: string, tenant: string): Promise<void> => {
-  const authorizeResponse = await authorize(cookie, 'openid profile email', tenant);
+const approve = async (cookie: string, tenant: string, scope = 'openid profile email'): Promise<void> => {
+  const authorizeResponse = await authorize(cookie, scope, tenant);
   const sealedState = new URL(authorizeResponse.headers.get('location') ?? '').searchParams.get('state') ?? '';
   expect(sealedState).toBeTruthy();
   const decision = await app.request('http://localhost:9197/api/v1/oauth/consent/decision', {

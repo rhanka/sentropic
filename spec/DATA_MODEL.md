@@ -5,6 +5,18 @@ Conventions: tables in `snake_case`, primary keys `text` (UUID string), multi-te
 
 ## Overview (tenancy + business objects)
 
+OAuth offline authority is stored separately from account/control identity tables.
+`oauth_refresh_tokens` stores SHA-256 digests and a generation-0 durable family anchor,
+immutable issuer/audience/tenant/consent epoch and original authentication claims.
+Its self references retain every spent generation until the 15-day family and access
+metadata retention boundary. A partial unique index permits only one active leaf.
+`oauth_tokens.refresh_family_id` links access metadata for atomic family revocation.
+`oauth_consents` adds local `offline_grant_id`, `offline_issuer`, `offline_scopes`,
+`approved_resources`, `default_audience_approved` and `offline_consented_at` evidence.
+Generic scope unions and tier-imported consents confer no offline authority.
+Control migration `0013_oauth_refresh_tokens` creates these public auth objects and
+their client/user/anchor serialization functions and lifecycle triggers.
+
 ```mermaid
 erDiagram
     users ||--o{ workspaces : "owner_user_id (nullable)"

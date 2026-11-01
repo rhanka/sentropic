@@ -30,7 +30,8 @@ SELECT test_assert((SELECT count(*) FROM oauth_consents WHERE user_id = 'efd6705
 SELECT test_assert((SELECT user_id FROM revoked_tokens WHERE jti = 'duplicate-revocation') = '1b9b9e15-2956-4df4-9ee1-a42273f0d096', 'revocation survives and is repointed');
 SELECT test_assert((SELECT client_secret_hash IS NULL AND token_endpoint_auth_method = 'none' AND require_pkce
   AND redirect_uris = ARRAY['https://claude.ai/api/mcp/auth_callback']::text[]
-  AND allowed_scopes = ARRAY['immo:read','immo:search','immo:documents:read','immo:artifacts:read','immo:artifacts:write']::text[]
+  AND allowed_scopes = ARRAY['immo:read','immo:search','immo:documents:read','immo:artifacts:read','immo:artifacts:write','offline_access']::text[]
+  AND grant_types = ARRAY['authorization_code','refresh_token']::text[]
   AND resource_indicators = ARRAY['https://preprod.immo.sent-tech.ca/mcp']::text[]
   AND tenant_id = 'sentropic' AND owner_user_id = 'prod-user-8'
   FROM oauth_clients WHERE client_id = 'immo-mcp'), 'immo-mcp public PKCE, external callback, preprod resource, preprod-only artifact scopes and synced owner');

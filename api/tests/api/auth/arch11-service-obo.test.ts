@@ -124,7 +124,7 @@ describe('ARCH-11 G1c — S2S OBO mint (token endpoint)', () => {
     env.TENANT_RESOLUTION_MODE = 'strict';
     const response = await mint(SINGLE_CLIENT_ID, SINGLE_SECRET, { tenant: ORG_B });
     expect(response.status).toBe(400);
-    expect(((await response.json()) as { error: { code: string } }).error.code).toBe('invalid_target');
+    expect(((await response.json()) as { error: string }).error).toBe('invalid_target');
   });
 
   it('strict multi-org (NON-VACUOUS ≥2-org): tenant selects the authorized org; out-of-set + absent fail closed', async () => {
@@ -137,10 +137,10 @@ describe('ARCH-11 G1c — S2S OBO mint (token endpoint)', () => {
     // org-C never enrolled → denied.
     const denied = await mint(MULTI_CLIENT_ID, MULTI_SECRET, { tenant: ORG_C });
     expect(denied.status).toBe(400);
-    expect(((await denied.json()) as { error: { code: string } }).error.code).toBe('invalid_target');
+    expect(((await denied.json()) as { error: string }).error).toBe('invalid_target');
     // multi-org with NO tenant selector → mandatory, fail closed.
     const absent = await mint(MULTI_CLIENT_ID, MULTI_SECRET);
     expect(absent.status).toBe(400);
-    expect(((await absent.json()) as { error: { code: string } }).error.code).toBe('invalid_target');
+    expect(((await absent.json()) as { error: string }).error).toBe('invalid_target');
   });
 });

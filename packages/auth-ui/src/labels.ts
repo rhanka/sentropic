@@ -213,6 +213,11 @@ export const createDefaultAuthUiBranding = (overrides: Partial<AuthUiBranding> =
 export const createDefaultOAuthConsentLabels = (
   overrides: Partial<OAuthConsentLabels> = {},
 ): OAuthConsentLabels => ({
+  issuerLabel: 'Authorization server',
+  resourceLabel: 'Approved resource',
+  defaultAudienceLabel: 'Default audience',
+  offlineContinuation: 'Allow this application to continue for up to 15 days after authorization, even after your browser session ends.',
+  offlineWithdrawal: 'Withdrawing this client and tenant offline grant stops renewal for all its token families.',
   approve: 'Approve',
   approving: 'Approving...',
   deny: 'Deny',
@@ -244,6 +249,11 @@ export const createFrenchOAuthConsentLabels = (
     errorGeneric: "Impossible de charger la demande d'autorisation.",
     loading: "Chargement de la demande d'autorisation...",
     redirectUriLabel: 'Destination de redirection',
+    issuerLabel: 'Serveur d’autorisation',
+    resourceLabel: 'Ressource autorisée',
+    defaultAudienceLabel: 'Audience par défaut',
+    offlineContinuation: 'Autoriser cette application à continuer pendant 15 jours après l’autorisation, même après la fin de la session du navigateur.',
+    offlineWithdrawal: 'Retirer cet accord hors ligne pour ce client et cette organisation arrête le renouvellement de toutes ses familles de jetons.',
     scopeDescriptions: {
       email: "Accéder à votre adresse email et à son statut de vérification.",
       openid: 'Confirmer votre identité avec ce compte.',

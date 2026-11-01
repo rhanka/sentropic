@@ -30,6 +30,10 @@ export const createMemoryOauthStateStore = (options: {
     revokedTokens: new Map(),
     serviceClients: new Map(options.serviceClients?.map((client) => [client.clientId, client]) ?? []),
     tokens: new Map(),
+    async findAuthCode(code) {
+      const entry = store.authCodes.get(code);
+      return entry && !entry.used && entry.expiresAt > now() ? entry.payload : null;
+    },
 
     async consumeAuthCode(code) {
       const entry = store.authCodes.get(code);
