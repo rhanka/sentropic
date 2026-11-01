@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { once } from 'node:events';
-import { createProviderServer, fixtureKey, installProviderBoundary } from './provider-server.mjs';
+import { createProviderServer, fixtureKey, installProviderBoundary, journeyResponse } from './provider-server.mjs';
 
 async function fixture(t, respond) {
   const result = createProviderServer(respond ? { respond } : {});
@@ -75,6 +75,7 @@ test('should reject invalid outbound request shapes and unknown model routes', a
 });
 
 test('should preserve request bytes and abort signal while forbidding real egress', async () => {
+  const originalFetch = globalThis.fetch;
   const requests = [];
   const restore = installProviderBoundary({ endpoint: 'http://127.0.0.1:7777/', fetchImpl: async request => {
     requests.push(request); return new Response('{}');
@@ -92,4 +93,43 @@ test('should preserve request bytes and abort signal while forbidding real egres
     assert.equal(requests.length, 1);
     assert.throws(() => installProviderBoundary({ endpoint: 'https://api.mistral.ai/' }), /Invalid fixture endpoint/);
   } finally { restore(); }
+  assert.equal(globalThis.fetch, originalFetch);
+});
+
+test('should preserve requested initiative count and structured fields over HTTP', async t => {
+  const { post } = await fixture(t);
+  const response = await (await post({ messages: [{ role: 'user', content:
+    'Génère exactement 2 cas. Réponds avec {"dossier":"", "initiatives":[]}' }] })).json();
+  const content = JSON.parse(response.choices[0].message.content);
+  assert.equal(content.initiatives.length, 2);
+  assert.ok(content.dossier);
+  assert.ok(content.initiatives.every(item => content.domains.some(domain => domain.id === item.domainId)));
+});
+
+test('should request real application tools with exact context IDs and consume their results', () => {
+  const tools = ['documents', 'web_search', 'organization_update'].map(name => ({ type: 'function', function: {
+    name, parameters: { required: name === 'organization_update' ? ['organizationId', 'updates'] : [] },
+  } }));
+  const messages = [{ role: 'system', content: "Tu travailles sur l'organisation org_1234567890." },
+    { role: 'user', content: "Consulte le document et appelle organization_update pour changer technologies." }];
+  const sequence = [];
+  for (let i = 0; i < 3; i++) {
+    const response = journeyResponse({ messages, tools });
+    const tool = response.tool_calls[0];
+    sequence.push(tool.function.name);
+    if (i === 2) assert.equal(JSON.parse(tool.function.arguments).organizationId, 'org_1234567890');
+    messages.push({ role: 'tool', name: tool.function.name, content: '{"status":"completed"}' });
+  }
+  assert.deepEqual(sequence, ['documents', 'web_search', 'organization_update']);
+  assert.ok(journeyResponse({ messages, tools }).content);
+});
+
+test('should serve web research locally and reject empty extraction requests', async t => {
+  const { url, receipt } = await fixture(t);
+  const post = (path, body) => fetch(`${url}/${path}`, { method: 'POST',
+    headers: { authorization: `Bearer ${fixtureKey}`, 'x-ci-upstream': 'api.tavily.com' }, body: JSON.stringify(body) });
+  assert.equal((await (await post('search', { query: 'cloud-native' })).json()).results.length, 1);
+  assert.equal((await (await post('extract', { urls: ['https://example.com/reference'] })).json()).results[0].url, 'https://example.com/reference');
+  assert.equal((await post('extract', { urls: [] })).status, 400);
+  assert.equal(receipt.calls, 2);
 });
