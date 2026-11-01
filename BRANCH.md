@@ -65,6 +65,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] ENV mapping: test-app-a4 / e2e-app-a4; ports API_PORT=9640 UI_PORT=5840 MAILDEV_UI_PORT=1740.
   - [x] Resume C1 PASS; review inherited account, challenge and invitation fixtures; restore original email data.
   - [x] Review inherited session, magic-link and WebAuthn fixtures without weakening assertions.
+  - [x] Correct CM fixture cleanup for indirect session, operation, invitation and outbox references.
   - [ ] Docker stack under flock, `make down ENV=test-app-a4` after.
 - [ ] **Lot 1 — CM identity composition + one data migration**
   - [ ] App-side CM identity composition (core stores, tenancy stores, custody host/UOW, F15 producer, atomic deletion V2, importer) over the app Postgres.
