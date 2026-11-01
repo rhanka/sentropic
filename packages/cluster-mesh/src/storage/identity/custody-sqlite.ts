@@ -141,7 +141,7 @@ export class SqliteCustodyTx implements IdentityCustodyStoresV1 {
         if (changed === 0) throw new IdentityCustodyErrorV1('proof_state_conflict');
       },
       purgeExpired: async (now) =>
-        this.changes(`DELETE FROM "identity_single_use_proofs" WHERE "expires_at" <= ? AND "state" != 'pending'`, [now]),
+        this.changes(`DELETE FROM "identity_single_use_proofs" WHERE "expires_at" < ? AND "state" != 'pending'`, [now]),
     };
 
     this.emailTickets = {
@@ -469,7 +469,7 @@ export class SqliteCustodyTx implements IdentityCustodyStoresV1 {
       throw new IdentityCustodyErrorV1('identity_material_invalid');
     }
     try {
-      this.connection.prepare(`INSERT INTO "identity_login_sessions" (${this.baseSessionColumns}) VALUES (?,?, 'active',?,?,?,?,?)`).run(record.sessionId, record.userId, record.login.mfaVerified ? 'step_up' : 'none', record.createdAt, record.expiresAt, record.rotationVersion);
+      this.connection.prepare(`INSERT INTO "identity_login_sessions" (${this.baseSessionColumns}) VALUES (?,?, 'active',?,?,?,?,?,?)`).run(record.sessionId, record.userId, record.login.mfaVerified ? 'step_up' : 'none', record.createdAt, record.expiresAt, null, record.rotationVersion);
     } catch (error) {
       if (isUniqueViolation(error)) throw new IdentityCustodyErrorV1('identity_record_conflict');
       throw error;
