@@ -4,7 +4,7 @@
 // `TenantResolver` (workspace -> tenant -> approved membership), and the `tid`
 // claim through the CM `TidIssuer`. No TENANT_RESOLUTION_MODE, no legacy alias.
 
-import { getCmIdentity } from './cm-identity';
+import { CM_IDENTITY_SCHEMA, cmStoreClient, getCmIdentity } from './cm-identity';
 
 export interface CmTenantRecord {
   readonly tenantId: string;
@@ -88,6 +88,42 @@ export const listCmApprovedTenantIds = async (userId: string): Promise<string[]>
 export const isCmApprovedMember = async (userId: string, tenantId: string): Promise<boolean> => {
   const { tenancy } = getCmIdentity();
   return Boolean(await tenancy.memberships.findApprovedMembership(userId, tenantId));
+};
+
+const toCmMembershipRecord = (row: {
+  userId: string; tenantId: string; status: string; tenantRole: string;
+  decidedBy?: string | null; decidedAt?: string | null; updatedAt: string;
+}): CmMembershipRecord => ({
+  userId: row.userId,
+  tenantId: row.tenantId,
+  status: row.status,
+  role: row.tenantRole,
+  decidedBy: row.decidedBy ?? null,
+  decidedAt: row.decidedAt ? new Date(row.decidedAt) : null,
+  updatedAt: new Date(row.updatedAt),
+});
+
+/** Membership in ANY state (unlike findCmApprovedMembership). */
+export const findCmMembership = async (userId: string, tenantId: string): Promise<CmMembershipRecord | null> => {
+  const { tenancy } = getCmIdentity();
+  const row = await tenancy.memberships.findMembership(userId, tenantId);
+  return row ? toCmMembershipRecord(row) : null;
+};
+
+export const countCmPendingMembershipsForUser = async (userId: string): Promise<number> => {
+  const result = await cmStoreClient.query(
+    `SELECT COUNT(*)::int AS n FROM ${CM_IDENTITY_SCHEMA}.cm_tenant_memberships WHERE "user_id" = $1 AND "status" = 'requested'`,
+    [userId],
+  );
+  return (result.rows[0] as { n: number } | undefined)?.n ?? 0;
+};
+
+export const countCmPendingMembershipsForTenant = async (tenantId: string): Promise<number> => {
+  const result = await cmStoreClient.query(
+    `SELECT COUNT(*)::int AS n FROM ${CM_IDENTITY_SCHEMA}.cm_tenant_memberships WHERE "tenant_id" = $1 AND "status" = 'requested'`,
+    [tenantId],
+  );
+  return (result.rows[0] as { n: number } | undefined)?.n ?? 0;
 };
 
 export const findCmApprovedMembership = async (userId: string, tenantId: string): Promise<CmMembershipRecord | null> => {

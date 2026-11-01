@@ -1,9 +1,21 @@
-import { and, eq, sql } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 import { db } from '../../db/client';
-import { oauthClients, tenantMemberships, tenants } from '../../db/schema';
+import { oauthClients } from '../../db/schema';
+import {
+  countCmPendingMembershipsForTenant,
+  countCmPendingMembershipsForUser,
+  findCmMembership,
+  findCmTenant,
+  listCmMembershipsForTenant,
+  setCmMembershipState,
+  upsertCmMembershipRequest,
+} from '../identity/cm-tenancy';
 
 // BR-39e Lot 2 — tenant-scoped membership acceptance.
+//
+// Lot A4: memberships and tenants live in the CM stores (cm_identity.cm_tenant_memberships
+// / cm_tenants); the legacy tables are dropped by control migration 0014.
 //
 // The tenant-scoped approver ("auth-admin", D4) is a user holding an `approved` membership
 // with role='admin' in that tenant. A global `admin_app` may also act (bootstrap). The
@@ -62,12 +74,8 @@ export async function isTenantAdmin(
   callerGlobalRole?: string,
 ): Promise<boolean> {
   if (callerGlobalRole === 'admin_app') return true;
-  const [row] = await db
-    .select({ status: tenantMemberships.status, role: tenantMemberships.role })
-    .from(tenantMemberships)
-    .where(and(eq(tenantMemberships.tenantId, tenantId), eq(tenantMemberships.userId, callerId)))
-    .limit(1);
-  return !!row && row.status === 'approved' && row.role === 'admin';
+  const membership = await findCmMembership(callerId, tenantId);
+  return !!membership && membership.status === 'approved' && membership.role === 'admin';
 }
 
 export async function assertTenantAdmin(
@@ -93,43 +101,23 @@ export async function requestMembership(
 ): Promise<{ status: 'pending' }> {
   const opaque = { status: 'pending' as const };
 
-  const [tenant] = await db
-    .select({ id: tenants.id, status: tenants.status })
-    .from(tenants)
-    .where(eq(tenants.id, tenantId))
-    .limit(1);
+  const tenant = await findCmTenant(tenantId);
   if (!tenant || tenant.status !== 'active') return opaque;
 
-  const [existing] = await db
-    .select({ userId: tenantMemberships.userId })
-    .from(tenantMemberships)
-    .where(and(eq(tenantMemberships.tenantId, tenantId), eq(tenantMemberships.userId, userId)))
-    .limit(1);
+  const existing = await findCmMembership(userId, tenantId);
   if (existing) return opaque;
 
-  const [{ count: userPending }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(tenantMemberships)
-    .where(and(eq(tenantMemberships.userId, userId), eq(tenantMemberships.status, 'requested')));
-  if (userPending >= MAX_PENDING_PER_USER) return opaque;
+  if (await countCmPendingMembershipsForUser(userId) >= MAX_PENDING_PER_USER) return opaque;
+  if (await countCmPendingMembershipsForTenant(tenantId) >= MAX_PENDING_PER_TENANT) return opaque;
 
-  const [{ count: tenantPending }] = await db
-    .select({ count: sql<number>`count(*)::int` })
-    .from(tenantMemberships)
-    .where(and(eq(tenantMemberships.tenantId, tenantId), eq(tenantMemberships.status, 'requested')));
-  if (tenantPending >= MAX_PENDING_PER_TENANT) return opaque;
-
-  await db
-    .insert(tenantMemberships)
-    .values({ tenantId, userId, status: 'requested', role: 'member' })
-    .onConflictDoNothing();
+  await upsertCmMembershipRequest(userId, tenantId, 'member');
   return opaque;
 }
 
 /**
  * Decide a pending/active membership. The caller MUST be a tenant admin of `tenantId`
  * (enforced first, so a non-admin gets 403 without learning whether the membership exists).
- * The state transition is validated; `approvedByUserId`/`decidedAt` are stamped for audit.
+ * The state transition is validated; `decidedBy`/`decidedAt` are stamped for audit.
  */
 export async function decideMembership(
   callerId: string,
@@ -140,11 +128,7 @@ export async function decideMembership(
 ): Promise<{ status: MembershipStatus }> {
   await assertTenantAdmin(callerId, tenantId, callerGlobalRole);
 
-  const [membership] = await db
-    .select({ status: tenantMemberships.status })
-    .from(tenantMemberships)
-    .where(and(eq(tenantMemberships.tenantId, tenantId), eq(tenantMemberships.userId, targetUserId)))
-    .limit(1);
+  const membership = await findCmMembership(targetUserId, tenantId);
   if (!membership) throw new MembershipNotFoundError();
 
   const from = membership.status as MembershipStatus;
@@ -153,11 +137,11 @@ export async function decideMembership(
     throw new InvalidMembershipTransitionError(from, to);
   }
 
-  const now = new Date();
-  await db
-    .update(tenantMemberships)
-    .set({ status: to, approvedByUserId: callerId, decidedAt: now, updatedAt: now })
-    .where(and(eq(tenantMemberships.tenantId, tenantId), eq(tenantMemberships.userId, targetUserId)));
+  await setCmMembershipState(targetUserId, tenantId, {
+    status: to,
+    role: membership.role as 'member' | 'admin',
+    decidedBy: callerId,
+  });
   return { status: to };
 }
 
@@ -169,20 +153,16 @@ export async function listTenantMemberships(
   status?: MembershipStatus,
 ): Promise<Array<{ userId: string; status: string; role: string; requestedAt: Date; decidedAt: Date | null }>> {
   await assertTenantAdmin(callerId, tenantId, callerGlobalRole);
-  return db
-    .select({
-      userId: tenantMemberships.userId,
-      status: tenantMemberships.status,
-      role: tenantMemberships.role,
-      requestedAt: tenantMemberships.requestedAt,
-      decidedAt: tenantMemberships.decidedAt,
-    })
-    .from(tenantMemberships)
-    .where(
-      status
-        ? and(eq(tenantMemberships.tenantId, tenantId), eq(tenantMemberships.status, status))
-        : eq(tenantMemberships.tenantId, tenantId),
-    );
+  const rows = await listCmMembershipsForTenant(tenantId);
+  return rows
+    .filter(row => !status || row.status === status)
+    .map(row => ({
+      userId: row.userId,
+      status: row.status,
+      role: row.role,
+      requestedAt: row.updatedAt,
+      decidedAt: row.decidedAt,
+    }));
 }
 
 /** Tenant-admin only: list the OAuth clients (RPs) belonging to a tenant — RP governance (Lot 4). */
