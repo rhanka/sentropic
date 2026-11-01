@@ -30,6 +30,8 @@ export type ArtifactState = 'active' | 'withdrawn' | 'deleted' | 'purged';
 export type ReleaseState = 'ready' | 'retired' | 'purged';
 
 export interface LifecycleStore {
+  isTerminal(artifactId: string): Promise<boolean>;
+  markTerminal(artifactId: string): Promise<void>;
   register(artifactId: string, ownerId: string): Promise<void>;
   getOwner(artifactId: string): Promise<string | undefined>;
   getArtifactState(artifactId: string): Promise<ArtifactState>;
@@ -43,6 +45,7 @@ export interface LifecycleStore {
 }
 
 interface ArtifactEntry {
+  terminal?: boolean;
   ownerId: string;
   state: ArtifactState;
   renewedAt?: string;
@@ -58,6 +61,13 @@ export function createMemoryLifecycleStore(): LifecycleStore & {
   const store: LifecycleStore & {
     setRelease(artifactId: string, releaseId: string): Promise<void>;
   } = {
+    async isTerminal(id) { return artifacts.get(id)?.terminal === true; },
+    async markTerminal(id) {
+      const entry = artifacts.get(id);
+      if (!entry) throw new Error('unknown artifact');
+      entry.terminal = true;
+      entry.state = 'deleted';
+    },
     async register(artifactId: string, ownerId: string): Promise<void> {
       const entry = artifacts.get(artifactId);
       if (entry !== undefined) {
@@ -75,6 +85,7 @@ export function createMemoryLifecycleStore(): LifecycleStore & {
     async setArtifactState(artifactId: string, state: ArtifactState): Promise<void> {
       const entry = artifacts.get(artifactId);
       if (entry === undefined) throw new Error(`unknown artifact: ${artifactId}`);
+      if (entry.terminal && state !== 'deleted' && state !== 'purged') throw new Error('terminal artifact');
       entry.state = state;
     },
     async getRenewedAt(artifactId: string): Promise<string | undefined> {
@@ -184,6 +195,7 @@ export function createLifecycleService(
     },
     async restore(artifactId: string, actorId: string): Promise<void> {
       await assertOwner(artifactId, actorId);
+      if (await store.isTerminal(artifactId)) throw new Error('cannot restore terminal artifact');
       const state = await store.getArtifactState(artifactId);
       if (state === 'purged') throw new Error(`cannot restore purged artifact: terminal ${artifactId}`);
       if (state === 'active') throw new Error(`already active: ${artifactId}`);
