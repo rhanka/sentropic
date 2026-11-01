@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import { createHttpArtifactApp } from '../../src/http.js';
 import { createArtifactsToolExecutor } from '../../src/mcp-core.js';
-import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../../src/profile/index.js';
+import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE, type ArtifactProviderProfile } from '../../src/profile/index.js';
 import { createRadarKeyDerivation } from '../../src/server/command-identity.js';
 import { createArtifactCommitCoordinator } from '../../src/server/commit/coordinator.js';
 import type { ArtifactHostFailureMapper } from '../../src/server/failures.js';
@@ -20,14 +20,15 @@ import { createMemoryBlobStore, createMemoryStateStore, type ReleaseRecord,
   type PublicationService } from '../../src/server/publication.js';
 
 export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], scope = 'scope-l6',
-  options: { mapHostError?: ArtifactHostFailureMapper; testObserver?: CommitBarrierObserver; parity?: boolean } = {}) {
-  const profile = compileArtifactsProfile(options.parity ? { ...RADAR_ARTIFACTS_PROFILE,
+  options: { mapHostError?: ArtifactHostFailureMapper; testObserver?: CommitBarrierObserver;
+    parity?: boolean; profile?: ArtifactProviderProfile } = {}) {
+  const profile = compileArtifactsProfile(options.profile ?? (options.parity ? { ...RADAR_ARTIFACTS_PROFILE,
     selectedCapabilities: [...RADAR_ARTIFACTS_PROFILE.selectedCapabilities, 'artifacts_get_source', 'artifacts_set_access', 'artifacts_delete'],
     operations: [...RADAR_ARTIFACTS_PROFILE.operations,
       { operation: 'get_source', limits: {}, defaults: {} },
       { operation: 'set_access', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} },
       { operation: 'delete', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} }],
-  } : RADAR_ARTIFACTS_PROFILE);
+  } : RADAR_ARTIFACTS_PROFILE));
   const receipts = new Map<string, StoredCommitReceipt>();
   const bindings = new Map<string, string>();
   const releases = new Map<string, ReleaseRecord>();
@@ -79,6 +80,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   const publication: PublicationService = {
     publish: async () => { throw new Error('use the guarded control app'); },
     getRelease: (releaseId) => state.getRelease(releaseId),
+    listReleases: (artifactId) => state.listReleases(artifactId),
     async getCurrent(artifactId) {
       const releaseId = await state.getCurrentReleaseId(artifactId);
       return releaseId === undefined ? undefined : state.getRelease(releaseId);
@@ -140,7 +142,8 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
       },
     },
     publication: {
-      blobs, intents, refs: createMemoryRefcountStore(), getCurrent: publication.getCurrent, getRelease: publication.getRelease,
+      blobs, intents, refs: createMemoryRefcountStore(), getCurrent: publication.getCurrent,
+      getRelease: publication.getRelease, listReleases: publication.listReleases,
       createUnitWriter: (client) => ({
         async readAuthorization(artifactId) { return { state: await lifecycle.stateOf(artifactId), acl: await acls.getArtifactAcl(artifactId) }; },
         async putRelease(release) { writes.get(client)!.push(async () => {
@@ -158,7 +161,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   const http = (path: string, body: unknown, context = invocation()) => app.execute({
     method: 'POST', path, body, actorId: context.actorId, storageScopeId: context.storageScopeId,
   }, context);
-  return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, blobs, legacyRecords, quotaReservations,
+  return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, lifecycleStore, state, blobs, legacyRecords, quotaReservations,
     approveConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.approved = true; },
     expireConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.expired = true; },
     executor, suspend: () => { approved = false; },
