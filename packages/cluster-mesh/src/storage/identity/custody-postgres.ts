@@ -170,7 +170,7 @@ export class PostgresCustodyTx implements IdentityCustodyStoresV1 {
       },
       purgeExpired: async (now) => {
         const result = await session.execute({
-          text: `DELETE FROM ${this.t('identity_single_use_proofs')} WHERE "expires_at" <= $1 AND "state" != 'pending'`,
+          text: `DELETE FROM ${this.t('identity_single_use_proofs')} WHERE "expires_at" < $1 AND "state" != 'pending'`,
           values: [now],
         });
         return result.rowCount ?? 0;

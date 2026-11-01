@@ -50,6 +50,32 @@ const stableStringify = (value: unknown): string => {
 
 const sameRecord = (left: unknown, right: unknown): boolean => stableStringify(left) === stableStringify(right);
 
+/**
+ * Staged-covers-existing comparison: every defined staged field must be
+ * present with the same value in the stored row. Storage-managed additions
+ * (decoded booleans, normalized timestamps) are ignored; a dropped staged
+ * field is a preservation failure. This keeps id-preserving and
+ * verification-material-preserving replay working across both profiles,
+ * whose drivers surface extra columns with different native types.
+ */
+const coversStaged = (staged: unknown, existing: unknown): boolean => {
+  if (staged === undefined) return true;
+  if (Array.isArray(staged)) {
+    return (
+      Array.isArray(existing) &&
+      staged.length === existing.length &&
+      staged.every((item, index) => coversStaged(item, (existing as readonly unknown[])[index]))
+    );
+  }
+  if (typeof staged === 'object' && staged !== null) {
+    if (typeof existing !== 'object' || existing === null || Array.isArray(existing)) return false;
+    return Object.entries(staged as Record<string, unknown>).every(([key, value]) =>
+      coversStaged(value, (existing as Record<string, unknown>)[key]),
+    );
+  }
+  return stableStringify(staged) === stableStringify(existing);
+};
+
 interface MutableIssue {
   readonly entity: Entity;
   readonly code: 'identity_import_conflict' | 'identity_import_invalid';
@@ -200,7 +226,7 @@ const readExisting = async (
     case 'workspace_membership':
       return host.journal.roleInWorkspace(row.record.workspaceId, row.record.userId);
     case 'oauth_consent':
-      return null;
+      return host.journal.findConsentCore(row.record.consentId);
   }
 };
 
@@ -288,13 +314,13 @@ export const createIdentityCustodyImporterV1 = (input: {
     for (const row of batch.rows) {
       const existing = await readExisting(host, row);
       if (existing !== null) {
-        if (!sameRecord(existing, normalizedForCompare(row))) throw new IdentityCustodyErrorV1('identity_import_conflict');
+        if (!coversStaged(normalizedForCompare(row), existing)) throw new IdentityCustodyErrorV1('identity_import_conflict');
         counts[row.entity] += 1;
         continue;
       }
       await insertRow(host, row, batch.importedAt);
       const reread = await readExisting(host, row);
-      if (reread === null || !sameRecord(reread, normalizedForCompare(row))) {
+      if (reread === null || !coversStaged(normalizedForCompare(row), reread)) {
         throw new IdentityCustodyErrorV1('identity_import_invalid');
       }
       counts[row.entity] += 1;
