@@ -9,10 +9,12 @@ import { OAuthDpopProofError, verifyOAuthDpopProof } from './dpop.js';
 import type { AuthCodePayload, OauthClientRecord, ServiceClientRecord, TokenMeta } from './state-store-types.js';
 import { TOKEN_EXCHANGE_GRANT_TYPE } from './state-store-types.js';
 import { handleTokenExchange } from './token-exchange-handler.js';
+import { handleRefreshToken } from './refresh-handler.js';
 
 const DEFAULT_SERVICE_ACCESS_TOKEN_TTL_SECONDS = 900;
 
 export interface OAuthTokenHandlerOptions {
+  refreshTokenTtlSeconds?: number;
   accessTokenTtlSeconds?: number;
   dpopIatSkewSeconds?: number;
   exchangeEnvironment?: string | null;
@@ -35,8 +37,12 @@ interface ServiceClientAuthentication {
 export const createOAuthTokenHandler =
   (options: OAuthTokenHandlerOptions) =>
   async (c: Context): Promise<Response> => {
+    c.header('Cache-Control', 'no-store');
+    c.header('Pragma', 'no-cache');
+    try {
     const form = new URLSearchParams(await c.req.text());
     const grantType = form.get('grant_type');
+    if (grantType === 'refresh_token') return await handleRefreshToken(c, form, options);
     if (grantType === 'client_credentials') {
       return handleClientCredentials(c, form, options);
     }
@@ -88,9 +94,12 @@ export const createOAuthTokenHandler =
       resolveUserinfoAudience(options.issuer, c.req.raw, '/token'),
     );
     return c.json(tokens);
+    } catch {
+      return oauthJsonError(c, 503, 'temporarily_unavailable', 'Token issuance is temporarily unavailable.');
+    }
   };
 
-const authenticateClient = async (
+export const authenticateClient = async (
   c: Context,
   form: URLSearchParams,
   ports: AuthHonoPorts
@@ -172,7 +181,7 @@ const validateTokenResource = (
   return null;
 };
 
-const resolveDpopJkt = async (
+export const resolveDpopJkt = async (
   c: Context,
   options: OAuthTokenHandlerOptions,
   client: OauthClientRecord,
@@ -395,13 +404,15 @@ const issueServiceToken = async (
   };
 };
 
-const issueTokens = async (
+export const issueTokens = async (
   options: OAuthTokenHandlerOptions,
   client: OauthClientRecord,
   codePayload: AuthCodePayload,
   user: AuthHonoUserRecord,
   dpopJkt: string | null,
   userinfoAudience: string,
+  refreshFamilyId?: string,
+  includeIdToken = true,
 ) => {
   const accessTokenTtlSeconds = options.accessTokenTtlSeconds ?? 3600;
   const idTokenTtlSeconds = options.idTokenTtlSeconds ?? 3600;
@@ -451,6 +462,7 @@ const issueTokens = async (
   await options.ports.oauthStateStore.saveTokenMeta(
     accessJti,
     tokenMeta({
+      refreshFamilyId,
       audience: accessAudience,
       client,
       codePayload,
@@ -469,7 +481,7 @@ const issueTokens = async (
     token_type: dpopJkt ? 'DPoP' : 'Bearer',
   };
 
-  if (scopes.includes('openid')) {
+  if (includeIdToken && scopes.includes('openid')) {
     const idJti = options.ports.random.uuid();
     const idToken = await jwks.signJwt(
       {
@@ -510,12 +522,13 @@ const issueTokens = async (
   return response;
 };
 
-const resolveUserinfoAudience = (issuer: string, request: Request, suffix: string): string => {
+export const resolveUserinfoAudience = (issuer: string, request: Request, suffix: string): string => {
   const path = new URL(request.url).pathname.replace(new RegExp(`${suffix}$`, 'u'), '/userinfo');
   return `${trimTrailingSlash(issuer)}${path}`;
 };
 
 const tokenMeta = (input: {
+  refreshFamilyId?: string;
   audience: string;
   client: OauthClientRecord;
   codePayload: AuthCodePayload;
@@ -524,6 +537,7 @@ const tokenMeta = (input: {
   jti: string;
   tokenType: 'access_token' | 'id_token';
 }): TokenMeta => ({
+  refreshFamilyId: input.refreshFamilyId,
   acr: input.codePayload.acr,
   amr: input.codePayload.amr ?? (input.codePayload.acr === 'urn:sentropic:loa:passkey-fresh' ? ['hwk', 'user', 'mfa'] : ['pwd']),
   audience: input.audience,
