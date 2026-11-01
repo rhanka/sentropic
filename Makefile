@@ -2719,6 +2719,9 @@ E2E_GROUPS ?= 00 01 02 03 04 05 06 07 08 09 10
 test-ci-provider-fixtures: ## Qualify local HTTP/SSE provider boundary without live credentials
 	node --test e2e/fixtures/provider-server.test.mjs
 
+test-ci-browser-shards: ## Verify exact browser membership and measured balancing
+	node --test scripts/ci/browser-shards.test.mjs
+
 check-e2e-inventory: ## Fail when a numbered E2E spec has no default group or CI lane
 	@./e2e/scripts/check-spec-lanes.sh "$(E2E_GROUPS)"
 
