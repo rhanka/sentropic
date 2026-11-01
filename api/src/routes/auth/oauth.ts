@@ -7,12 +7,10 @@ import {
   type AuthHonoSessionRecord,
   type AuthHonoUserRecord,
 } from '@sentropic/auth-hono';
-import { and, eq, sql } from 'drizzle-orm';
 import { jwtVerify, SignJWT } from 'jose';
 
 import { env, requiresOAuthProductionSecrets } from '../../config/env';
 import { db } from '../../db/client';
-import { emailVerificationCodes, magicLinks, tenantMemberships, userSessions, users } from '../../db/schema';
 import { logger } from '../../logger';
 import { createConsentStoreAdapter } from '../../services/auth/consent-store-adapter';
 import { createFederationAdapter } from '../../services/auth/federation-adapter';
@@ -24,6 +22,33 @@ import { authHonoCookiePort } from '../../services/auth/session-adapter';
 import { tombstoneRemoteSessions } from '../../services/auth/remote-revocation';
 import { deleteAndQueueRemoteSessions } from '../../services/auth/remote-revocation-outbox';
 import { deriveDisplayNameFromEmail } from '../../utils/display-name';
+import {
+  countCmRecentEmailCodes,
+  findCmMagicLinkByTokenHash,
+} from '../../services/identity/cm-proofs';
+import {
+  createCmSession,
+  findCmSessionById,
+  findCmSessionByRefreshTokenHash,
+  findCmSessionByTokenHash,
+  listCmSessionsForUser,
+  touchCmSession,
+  updateCmSessionTokens,
+  type CmSessionRecord,
+} from '../../services/identity/cm-sessions';
+import {
+  countCmUsers,
+  countCmUsersWithRole,
+  createCmUser,
+  findCmUserByEmail,
+  findCmUserById,
+  updateCmUser,
+  type CmUserRecord,
+} from '../../services/identity/cm-users';
+import {
+  isCmApprovedMember,
+  listCmApprovedTenantIds,
+} from '../../services/identity/cm-tenancy';
 
 /**
  * HS256 key for the session and verification tokens this host signs and verifies.
@@ -144,11 +169,9 @@ const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
     roleForNewUser: async ({ email }) => {
       const normalizedEmail = email.trim().toLowerCase();
       if (env.ADMIN_EMAIL && normalizedEmail === env.ADMIN_EMAIL.toLowerCase()) {
-        const [{ count }] = await db
-          .select({ count: sql<number>`count(*)::int` })
-          .from(users)
-          .where(eq(users.role, 'admin_app'));
-        return Number(count) === 0 ? 'admin_app' : 'guest';
+        // Lot A4: admin count reads the CM account store (public.users is dropped).
+        const count = await countCmUsersWithRole('admin_app');
+        return count === 0 ? 'admin_app' : 'guest';
       }
       return 'editor';
     },
@@ -201,11 +224,8 @@ const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
   federation: createFederationAdapter(),
   emailVerification: {
     async countRecent(email, since) {
-      const [{ count }] = await db
-        .select({ count: sql<number>`count(*)::int` })
-        .from(emailVerificationCodes)
-        .where(and(eq(emailVerificationCodes.email, email), sql`${emailVerificationCodes.createdAt} >= ${since}`));
-      return Number(count);
+      // Lot A4: email codes live in cm_identity.identity_single_use_proofs.
+      return countCmRecentEmailCodes(email, since);
     },
     createCode: unsupportedOAuthPort,
     findLatestValidCode: unsupportedOAuthPort,
@@ -216,43 +236,27 @@ const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
   magicLinks: {
     create: unsupportedOAuthPort,
     async findValidByTokenHash(tokenHash, now) {
-      const [row] = await db
-        .select()
-        .from(magicLinks)
-        .where(and(eq(magicLinks.tokenHash, tokenHash), eq(magicLinks.used, false), sql`${magicLinks.expiresAt} > ${now}`))
-        .limit(1);
-      return row ?? null;
+      // Lot A4: magic links live in cm_identity.identity_single_use_proofs (kind 'magic_link').
+      const row = await findCmMagicLinkByTokenHash(tokenHash);
+      if (!row || row.used || row.expiresAt <= now) return null;
+      return row;
     },
     markUsed: unsupportedOAuthPort,
   },
   oauthStateStore: createOauthStateStoreAdapter({ database: db }),
-  // ARCH-11 G1c: S2S on-behalf-of (OBO) tenant policy for the client_credentials mint. Mode-gated
-  // on TENANT_RESOLUTION_MODE — no `tid`, no rejection in alias/shadow (byte-identical); strict
-  // validates the `tenant` selector against the client's authorized set (fixed ∪ enrollments).
+  // ARCH-11 G1c: S2S on-behalf-of (OBO) tenant policy for the client_credentials mint.
+  // Lot A4: always strict — validates the `tenant` selector against the client's authorized
+  // set (fixed cm_service_clients binding ∪ enrollments).
   serviceTenant: createServiceTenantAdapter(),
   // BR-39e: tenancy spine. The tenant claim (`tid`) is derived from an `approved` membership
   // and re-validated at token time; both reads are tenant-scoped to the calling user.
   tenant: {
+    // Lot A4: memberships live in cm_identity.cm_tenant_memberships.
     async listApprovedTenantIds(userId: string) {
-      const rows = await db
-        .select({ tenantId: tenantMemberships.tenantId })
-        .from(tenantMemberships)
-        .where(and(eq(tenantMemberships.userId, userId), eq(tenantMemberships.status, 'approved')));
-      return rows.map((row) => row.tenantId);
+      return listCmApprovedTenantIds(userId);
     },
     async isApprovedMember(userId: string, tenantId: string) {
-      const [row] = await db
-        .select({ userId: tenantMemberships.userId })
-        .from(tenantMemberships)
-        .where(
-          and(
-            eq(tenantMemberships.userId, userId),
-            eq(tenantMemberships.tenantId, tenantId),
-            eq(tenantMemberships.status, 'approved'),
-          ),
-        )
-        .limit(1);
-      return Boolean(row);
+      return isCmApprovedMember(userId, tenantId);
     },
   },
   random: {
@@ -263,29 +267,35 @@ const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
     uuid: randomUUID,
   },
   sessions: {
+    // Lot A4: sessions live in the CM custody store (identity_login_token_bindings
+    // + identity_login_sessions); public.user_sessions is dropped by 0014.
     async create(input) {
-      await db.insert(userSessions).values({
-        createdAt: input.now,
-        deviceName: input.deviceInfo?.name ?? null,
-        expiresAt: input.expiresAt,
+      const created = await createCmSession({
         id: input.id,
-        ipAddress: input.deviceInfo?.ipAddress ?? null,
-        lastActivityAt: input.now,
-        mfaVerified: input.mfaVerified ?? false,
-        refreshTokenHash: input.refreshTokenHash ?? null,
-        sessionTokenHash: input.sessionTokenHash,
-        userAgent: input.deviceInfo?.userAgent ?? null,
         userId: input.userId,
+        sessionTokenHash: input.sessionTokenHash,
+        refreshTokenHash: input.refreshTokenHash ?? null,
+        deviceInfo: input.deviceInfo,
+        mfaVerified: input.mfaVerified ?? false,
+        expiresAt: input.expiresAt,
+        now: input.now,
       });
-      const created = await findSessionById(input.id);
-      if (!created) throw new Error('Failed to create session.');
-      return created;
+      return toAuthHonoSessionRecord(created);
     },
-    findById: findSessionById,
-    findByRefreshTokenHash: (refreshTokenHash) => findSessionByHash('refresh', refreshTokenHash),
-    findByTokenHash: (sessionTokenHash) => findSessionByHash('session', sessionTokenHash),
-    listForUser: async (userId) => {
-      const rows = await db.select().from(userSessions).where(eq(userSessions.userId, userId));
+    async findById(sessionId) {
+      const row = await findCmSessionById(sessionId);
+      return row ? toAuthHonoSessionRecord(row) : null;
+    },
+    async findByRefreshTokenHash(refreshTokenHash) {
+      const row = await findCmSessionByRefreshTokenHash(refreshTokenHash);
+      return row ? toAuthHonoSessionRecord(row) : null;
+    },
+    async findByTokenHash(sessionTokenHash) {
+      const row = await findCmSessionByTokenHash(sessionTokenHash);
+      return row ? toAuthHonoSessionRecord(row) : null;
+    },
+    async listForUser(userId) {
+      const rows = await listCmSessionsForUser(userId);
       return rows.map(toAuthHonoSessionRecord);
     },
     async revoke(sessionId) {
@@ -299,19 +309,15 @@ const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
       return deleted.length;
     },
     async touch(sessionId, now) {
-      await db.update(userSessions).set({ lastActivityAt: now }).where(eq(userSessions.id, sessionId));
+      await touchCmSession(sessionId, now);
     },
     async updateTokens(input) {
-      const [row] = await db
-        .update(userSessions)
-        .set({
-          expiresAt: input.expiresAt,
-          lastActivityAt: new Date(),
-          refreshTokenHash: input.refreshTokenHash,
-          sessionTokenHash: input.sessionTokenHash,
-        })
-        .where(eq(userSessions.id, input.sessionId))
-        .returning();
+      const row = await updateCmSessionTokens({
+        sessionId: input.sessionId,
+        sessionTokenHash: input.sessionTokenHash,
+        refreshTokenHash: input.refreshTokenHash,
+        expiresAt: input.expiresAt,
+      });
       return row ? toAuthHonoSessionRecord(row) : null;
     },
   },
@@ -356,70 +362,46 @@ const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
     },
   },
   users: {
+    // Lot A4: accounts live in cm_identity.identity_user_accounts (+ profiles);
+    // public.users is dropped by 0014.
     async count() {
-      const [{ count }] = await db.select({ count: sql<number>`count(*)::int` }).from(users);
-      return Number(count);
+      return countCmUsers();
     },
     async create(input) {
-      const now = new Date();
-      const id = randomUUID();
-      await db.insert(users).values({
+      const user = await createCmUser({
+        email: input.email,
+        displayName: input.displayName ?? null,
+        role: input.role,
+        emailVerified: input.emailVerified ?? false,
         accountStatus: input.accountStatus ?? 'active',
         approvalDueAt: input.approvalDueAt ?? null,
-        createdAt: now,
-        displayName: input.displayName ?? null,
-        email: input.email,
-        emailVerified: input.emailVerified ?? false,
-        id,
-        role: input.role,
-        updatedAt: now,
       });
-      const user = await findUserById(id);
-      if (!user) throw new Error('Failed to create user.');
-      return user;
+      return toAuthHonoUserRecord(user);
     },
-    findByEmail: async (email) => {
-      const [row] = await db.select().from(users).where(eq(users.email, email)).limit(1);
+    async findByEmail(email) {
+      const row = await findCmUserByEmail(email);
       return row ? toAuthHonoUserRecord(row) : null;
     },
-    findById: async (userId) => {
-      const [row] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    async findById(userId) {
+      const row = await findCmUserById(userId);
       return row ? toAuthHonoUserRecord(row) : null;
     },
     async update(userId, input) {
-      const [row] = await db
-        .update(users)
-        .set({
-          ...input,
-          updatedAt: input.updatedAt ?? new Date(),
-        })
-        .where(eq(users.id, userId))
-        .returning();
+      const row = await updateCmUser(userId, {
+        email: input.email,
+        displayName: input.displayName,
+        role: input.role,
+        emailVerified: input.emailVerified,
+        accountStatus: input.accountStatus,
+        approvalDueAt: input.approvalDueAt,
+        updatedAt: input.updatedAt ?? new Date(),
+      });
       return row ? toAuthHonoUserRecord(row) : null;
     },
   },
 });
 
-const findUserById = async (userId: string): Promise<AuthHonoUserRecord | null> => {
-  const [row] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
-  return row ? toAuthHonoUserRecord(row) : null;
-};
-
-const findSessionById = async (sessionId: string): Promise<AuthHonoSessionRecord | null> => {
-  const [row] = await db.select().from(userSessions).where(eq(userSessions.id, sessionId)).limit(1);
-  return row ? toAuthHonoSessionRecord(row) : null;
-};
-
-const findSessionByHash = async (
-  hashType: 'refresh' | 'session',
-  tokenHash: string,
-): Promise<AuthHonoSessionRecord | null> => {
-  const column = hashType === 'refresh' ? userSessions.refreshTokenHash : userSessions.sessionTokenHash;
-  const [row] = await db.select().from(userSessions).where(eq(column, tokenHash)).limit(1);
-  return row ? toAuthHonoSessionRecord(row) : null;
-};
-
-const toAuthHonoUserRecord = (row: typeof users.$inferSelect): AuthHonoUserRecord => ({
+const toAuthHonoUserRecord = (row: CmUserRecord): AuthHonoUserRecord => ({
   accountStatus: row.accountStatus as AuthHonoAccountStatus,
   approvalDueAt: row.approvalDueAt,
   createdAt: row.createdAt,
@@ -428,19 +410,19 @@ const toAuthHonoUserRecord = (row: typeof users.$inferSelect): AuthHonoUserRecor
   emailVerified: row.emailVerified,
   id: row.id,
   role: row.role,
-  updatedAt: row.updatedAt ?? row.createdAt,
+  updatedAt: row.updatedAt,
 });
 
-const toAuthHonoSessionRecord = (row: typeof userSessions.$inferSelect): AuthHonoSessionRecord => ({
+const toAuthHonoSessionRecord = (row: CmSessionRecord): AuthHonoSessionRecord => ({
   createdAt: row.createdAt,
   deviceName: row.deviceName,
   expiresAt: row.expiresAt,
   id: row.id,
   ipAddress: row.ipAddress,
-  lastActivityAt: row.lastActivityAt ?? row.createdAt,
+  lastActivityAt: row.lastActivityAt,
   mfaVerified: row.mfaVerified,
   refreshTokenHash: row.refreshTokenHash,
-  revokedAt: null,
+  revokedAt: row.revokedAt,
   sessionTokenHash: row.sessionTokenHash,
   userAgent: row.userAgent,
   userId: row.userId,
