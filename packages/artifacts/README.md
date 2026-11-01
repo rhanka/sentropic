@@ -417,7 +417,8 @@ publication, use the current package version and this bootstrap sequence
 3. After that, merges to `main` touching the artifacts package publish
    through the `publish-artifacts` job (`make publish-artifacts`, OIDC +
    provenance), gated by `validate-artifacts`.
-# Source and management capabilities
+
+## Source and management capabilities
 
 Hosts may explicitly select `artifacts_get_source`, `artifacts_set_access`, and
 `artifacts_delete` in their compiled profile. Configure `get_source` with empty
@@ -451,4 +452,3 @@ Get/list include binding, creation/modification dates, current release, digest,
 host URLs and available metadata. Historical modification dates stay nullable.
 The PostgreSQL projection reads the optional metadata column added by the
 publication parity lane without requiring that column for older stores.
-
