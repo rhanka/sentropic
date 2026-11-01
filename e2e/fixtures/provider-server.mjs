@@ -147,12 +147,9 @@ export function journeyResponse(body) {
   if (/"synthese_executive"/.test(promptText)) return json({
     introduction: 'Portfolio overview', analyse: 'Value and complexity analysis',
     recommandation: 'Validate the selected initiatives', synthese_executive: 'Operational improvements', references });
-  if (/"valueAxes"/.test(promptText) && /"levelDescriptions"/.test(promptText)) {
-    const axes = ids => ids.map(axisId => ({ axisId,
-      levelDescriptions: Array.from({ length: 5 }, (_, i) => ({ level: i + 1, description: `Observable qualification level ${i + 1}` })) }));
-    return json({ valueAxes: axes(['business_value', 'time_criticality', 'risk_reduction_opportunity']),
-      complexityAxes: axes(['implementation_effort', 'data_compliance', 'data_availability', 'change_management']) });
-  }
+  // The use-case detail prompt embeds the matrix JSON ("valueAxes" + "levelDescriptions")
+  // alongside its response schema ("valueScores" + "complexityScores"), so the detail branch
+  // must be tested first; the matrix-adaptation prompt only carries the former.
   if (/"valueScores"/.test(promptText) && /"complexityScores"/.test(promptText)) {
     const name = promptText.match(/"name"\s*:\s*"([^"]+)"/)?.[1] ?? 'AI initiative';
     const result = { name, description: 'Improve operational quality using verified data [1].',
@@ -162,6 +159,12 @@ export function journeyResponse(body) {
       complexityScores: [{ axisId: 'implementation_effort', rating: 21, description: 'Bounded integration' }] };
     for (const key of ['technologies', 'benefits', 'metrics', 'risks', 'constraints', 'nextSteps', 'dataSources', 'dataObjects']) result[key] = ['Verified operational evidence'];
     return json(result);
+  }
+  if (/"valueAxes"/.test(promptText) && /"levelDescriptions"/.test(promptText)) {
+    const axes = ids => ids.map(axisId => ({ axisId,
+      levelDescriptions: Array.from({ length: 5 }, (_, i) => ({ level: i + 1, description: `Observable qualification level ${i + 1}` })) }));
+    return json({ valueAxes: axes(['business_value', 'time_criticality', 'risk_reduction_opportunity']),
+      complexityAxes: axes(['implementation_effort', 'data_compliance', 'data_availability', 'change_management']) });
   }
   if (/"industry"/.test(promptText) && /"products"/.test(promptText) && !body.tools?.some(t => t.function?.name === 'organization_update')) {
     return json({ industry: 'Manufacturing', size: 'Enterprise', products: 'Industrial products', processes: 'Quality control',

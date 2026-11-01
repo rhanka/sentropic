@@ -209,3 +209,18 @@ test('should not treat schema keys inside tool-result payloads as a schema journ
   assert.ok(response.content);
   assert.equal(response.tool_calls, undefined);
 });
+
+test('should prefer the use-case detail journey when the prompt embeds the matrix JSON', () => {
+  // Detail prompt shape: matrix config ("valueAxes" + "levelDescriptions") plus the
+  // response schema ("valueScores" + "complexityScores") in the same prompt.
+  const detailPrompt = 'Génère un cas d\'usage détaillé. Matrice: {"valueAxes":[{"axisId":"business_value","levelDescriptions":[{"level":1,"description":"d"}]}],"complexityAxes":[]}. Réponds avec {"name":"X","valueScores":[],"complexityScores":[]}';
+  const detail = JSON.parse(journeyResponse({ messages: [{ role: 'user', content: detailPrompt }] }).content);
+  assert.ok(Array.isArray(detail.valueScores));
+  assert.ok(Array.isArray(detail.complexityScores));
+  assert.equal(detail.valueAxes, undefined);
+  // Matrix-adaptation prompt shape: only axes with level descriptions.
+  const axesPrompt = 'Adapte les descriptions de niveaux. Réponds avec {"valueAxes":[{"axisId":"a","levelDescriptions":[]}],"complexityAxes":[]}';
+  const axes = JSON.parse(journeyResponse({ messages: [{ role: 'user', content: axesPrompt }] }).content);
+  assert.ok(Array.isArray(axes.valueAxes));
+  assert.equal(axes.valueScores, undefined);
+});
