@@ -9,14 +9,16 @@ import {
   identityAmendmentDescriptorV1,
 } from '../../src/identity-contracts/custody-descriptors.js';
 import { IdentityCustodyErrorV1, scrubIdentityErrorForLog } from '../../src/identity-contracts/custody-errors.js';
-import { identityContractDescriptor } from '../../src/identity-contracts/descriptors.js';
+import { IDENTITY_CONTRACT_VERSION, IDENTITY_DOMAIN_DESCRIPTORS, identityDomainDescriptor } from '../../src/identity-contracts/descriptors.js';
 import * as clusterMesh from '../../src/index.js';
 
 describe('A2.0b custody contract surface', () => {
   it('pins the custody and atomic deletion contract versions', () => {
     expect(IDENTITY_CUSTODY_CONTRACT_VERSION).toBe('1.1.0');
     expect(IDENTITY_ATOMIC_DELETION_CONTRACT_VERSION).toBe('2.0.0');
-    expect(identityContractDescriptor.version).toBe('1.0.0');
+    expect(IDENTITY_CONTRACT_VERSION).toBe('1.0.0');
+    expect(IDENTITY_DOMAIN_DESCRIPTORS.length).toBeGreaterThan(0);
+    expect(identityDomainDescriptor('accounts')?.version).toBe('1.0.0');
   });
 
   it('ships exact amendment descriptors for all nine domains', () => {
