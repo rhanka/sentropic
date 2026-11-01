@@ -56,7 +56,7 @@ test.describe('VSCode lane smoke', () => {
       const persisted = await request.get(`${API_BASE_URL}/api/v1/chat/sessions/${sessionId}/messages?workspace_id=${workspaceId}`);
       expect(persisted.ok()).toBeTruthy();
       expect(await persisted.json()).toMatchObject({ messages: expect.arrayContaining([
-        expect.objectContaining({ id: assistantMessageId, role: 'assistant', content: expect.any(String) }),
+        expect.objectContaining({ id: assistantMessageId, role: 'assistant', content: expect.stringMatching(/\S/) }),
       ]) });
     } finally {
       await page.evaluate(() => (window as any).__vscodeStream?.close());

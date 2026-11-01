@@ -203,7 +203,7 @@ if (overlayImport && process.env.CI_PROVIDER_MODE === 'live') {
       record({ type: 'response', requestId, host, status: response.status });
       return response;
     } catch (error) {
-      record({ type: 'error', requestId, host });
+      record({ type: error?.name === 'AbortError' ? 'cancelled' : 'error', requestId, host });
       throw error;
     }
   };
