@@ -49,13 +49,20 @@ export interface NoExpiryRetention {
   readonly kind: 'none';
 }
 
-export interface DurationRetention {
-  readonly kind: 'duration';
-  readonly durationSeconds: number;
+export interface FiniteRetention {
+  readonly kind: 'finite';
+  readonly durationMs: number;
 }
 
+/**
+ * Explicit v1 product interoperability cap: ten Julian years
+ * (10 * 365.25 * 86400000 ms), per contract annex E (r2 W-P3-3).
+ * It is not a statutory retention obligation.
+ */
+export const TEN_JULIAN_YEAR_MS = 315576000000;
+
 /** Explicit tagged retention choice; default stored copies use `{ kind: 'none' }`. */
-export type ChannelRetention = NoExpiryRetention | DurationRetention;
+export type ChannelRetention = NoExpiryRetention | FiniteRetention;
 
 export type ContentPolicyErrorCode =
   | 'invalid_request'
@@ -79,12 +86,13 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
 /**
- * Validate the owner-selected per-channel retention map. Every retained
- * channel needs an explicit tagged choice: `{ kind: 'none' }` by default or
- * `{ kind: 'duration', durationSeconds }` with a positive safe-integer
- * duration. Omitted channels and untagged finite values fail as unsigned;
- * zero/negative/fractional durations and unknown tags fail as invalid. No
- * environment/tenant/admin default is ever substituted here.
+ * Validate the owner-selected per-channel retention map against the frozen
+ * ContentPolicyV1 shape. Every retained channel needs an explicit tagged
+ * choice: `{ kind: 'none' }` (no expiry, not disabled storage) or
+ * `{ kind: 'finite', durationMs }` with an integer 1..TEN_JULIAN_YEAR_MS.
+ * Omitted channels and untagged finite values fail as unsigned;
+ * zero/negative/fractional/over-cap durations and unknown tags fail as
+ * invalid. No environment/tenant/admin default is ever substituted here.
  */
 export const validateChannelRetention = (
   value: unknown,
@@ -104,27 +112,55 @@ export const validateChannelRetention = (
       throw new ContentPolicyError('unsigned_retention', `${channel} retention is required`);
     }
     if (!isRecord(entry) || typeof entry['kind'] !== 'string') {
-      if (isRecord(entry) && typeof entry['durationSeconds'] === 'number') {
+      if (isRecord(entry) && typeof entry['durationMs'] === 'number') {
         throw new ContentPolicyError('unsigned_retention', `${channel} retention kind is required`);
       }
       throw new ContentPolicyError('invalid_retention', `${channel} retention is malformed`);
     }
     if (entry['kind'] === 'none') {
       result[channel] = { kind: 'none' };
-    } else if (entry['kind'] === 'duration') {
-      const seconds = entry['durationSeconds'];
-      if (typeof seconds !== 'number' || !Number.isSafeInteger(seconds) || seconds <= 0) {
+    } else if (entry['kind'] === 'finite') {
+      const durationMs = entry['durationMs'];
+      if (
+        typeof durationMs !== 'number' || !Number.isSafeInteger(durationMs)
+        || durationMs <= 0 || durationMs > TEN_JULIAN_YEAR_MS
+      ) {
         throw new ContentPolicyError(
           'invalid_retention',
-          `${channel} durationSeconds must be a positive safe integer`,
+          `${channel} durationMs must be an integer in 1..${TEN_JULIAN_YEAR_MS}`,
         );
       }
-      result[channel] = { kind: 'duration', durationSeconds: seconds };
+      result[channel] = { kind: 'finite', durationMs };
     } else {
       throw new ContentPolicyError('invalid_retention', `${channel} retention kind is unknown`);
     }
   }
   return result;
+};
+
+/**
+ * r2 annex E retention-deadline evaluator (W-P3-3), matching
+ * vectors/r2-semantics.json `retentionDeadline`: `none` means no expiry
+ * (null), `finite` gives firstAdmissionAt+durationMs set once, with
+ * safe-integer overflow rejection. Amend/read/replay/import/reconnect
+ * never extend the result; the caller stores it immutably.
+ */
+export const computeRetentionDeadline = (
+  retention: ChannelRetention,
+  firstAdmissionAt: number,
+): number | null => {
+  if (retention.kind === 'none') return null;
+  if (!Number.isSafeInteger(firstAdmissionAt)) {
+    throw new ContentPolicyError('invalid_retention', 'firstAdmissionAt must be a safe integer');
+  }
+  if (retention.durationMs > TEN_JULIAN_YEAR_MS) {
+    throw new ContentPolicyError('invalid_retention', 'durationMs exceeds the ten-Julian-year product cap');
+  }
+  const deadline = firstAdmissionAt + retention.durationMs;
+  if (!Number.isSafeInteger(deadline)) {
+    throw new ContentPolicyError('invalid_retention', 'retention deadline overflows a safe integer');
+  }
+  return deadline;
 };
 
 /** Canonical JSON with sorted keys so both authorities hash the same bytes. */
