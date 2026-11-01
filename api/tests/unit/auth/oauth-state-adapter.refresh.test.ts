@@ -24,6 +24,8 @@ const lock = { clientId, userId, familyId: 'family' };
 
 describe('PostgreSQL refresh storage', () => {
   beforeEach(async () => {
+    await db.delete(oauthClients).where(eq(oauthClients.clientId, clientId));
+    await db.delete(users).where(eq(users.id, userId));
     await db.insert(users).values({ id: userId, email: 'refresh-pg@example.test', emailVerified: true });
     await db.insert(oauthClients).values({
       id: clientId, clientId, name: 'Refresh PG', redirectUris: ['https://client.test/cb'],
@@ -106,13 +108,13 @@ describe('PostgreSQL refresh storage', () => {
     if (kind === 'membership') await db.insert(tenantMemberships).values({ userId, tenantId: 'sentropic', status: 'approved' });
     const mutation = {
       account: "UPDATE users SET account_status='disabled_by_admin' WHERE id=$1",
-      policy: "UPDATE oauth_clients SET grant_types=ARRAY['authorization_code'] WHERE client_id=$2",
+      policy: "UPDATE oauth_clients SET grant_types=ARRAY['authorization_code'] WHERE client_id=$1",
       consent: 'DELETE FROM oauth_consents WHERE user_id=$1',
       membership: "UPDATE tenant_memberships SET status='suspended' WHERE user_id=$1",
       security: "SELECT oauth_refresh_revoke_user($1, 'security_event')",
       explicit: "SELECT oauth_refresh_revoke_user($1, 'explicit_revoke')",
     }[kind]!;
-    const values = kind === 'policy' ? [userId, clientId] : [userId];
+    const values = [kind === 'policy' ? clientId : userId];
     const writer = await pool.connect();
     const { rows: [{ pid }] } = await writer.query('SELECT pg_backend_pid() AS pid');
     const rotate = () => adapter().withLock(lock, async (tx) => {
@@ -144,8 +146,8 @@ describe('PostgreSQL refresh storage', () => {
         });
         await locked;
         const revocation = writer.query(mutation, values);
-        await waitForBlockedBy(rotationPid);
-        release(); await rotation; await revocation; await writer.query('COMMIT');
+        try { await waitForBlockedBy(rotationPid); } finally { release(); }
+        await rotation; await revocation; await writer.query('COMMIT');
         expect((await adapter().findByHash(hash('child')))?.revokedAt).not.toBeNull();
       }
       expect((await adapter().findAnchor('family'))?.revokedAt).not.toBeNull();
