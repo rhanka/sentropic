@@ -81,18 +81,19 @@ Implement the single canonical Sessions registry with typed projections (§3.3.1
   - [x] Implement `packages/cluster-mesh/src/sessions/registry.ts` (sole-writer ingest, deterministic join, tombstone dominance, quarantine on conflicting hash, freshness scheduler owned by origin writer, renewFreshness as internal/test trigger, fail-closed source-gaps).
   - [x] Export port through `packages/cluster-mesh/src/index.ts`.
   - [x] Bump `packages/cluster-mesh/package.json` patch for src change.
-  - [ ] Lot gate:
+  - [x] Lot gate:
     - [x] `make typecheck-cluster-mesh ENV=test-rc2-registry`
-    - [ ] **API tests**
-      - [ ] Evolve `api/tests/api/session-remote-view.test.ts` (new REGISTRY-LISTING selectors)
-      - [ ] Sub-lot gate: scoped api run for that file
-    - [ ] **UI tests (TypeScript only)**
-      - [ ] Evolve `ui/tests/session-content/navigation.test.ts` (new REGISTRY-LISTING rows)
-      - [ ] Sub-lot gate: scoped ui run for that file
-    - [ ] **Cluster-mesh tests**
-      - [ ] New `packages/cluster-mesh/tests/remote-session/registry.spec.ts`
+    - [x] **API tests**
+      - [x] Evolve `api/tests/api/session-remote-view.test.ts` (new REGISTRY-LISTING selectors)
+      - [x] Sub-lot gate: scoped api run for that file (2/2 PASS)
+    - [x] **UI tests (TypeScript only)**
+      - [x] Evolve `ui/tests/session-content/navigation.test.ts` (new REGISTRY-LISTING rows)
+      - [x] Sub-lot gate: scoped ui run for that file (4/4 PASS)
+    - [x] **Cluster-mesh tests**
+      - [x] New `packages/cluster-mesh/tests/remote-session/registry.spec.ts`
       - [x] Sub-lot gate: `make test-cluster-mesh ENV=test-rc2-registry` (17/17 PASS)
-    - [ ] `make down ENV=test-rc2-registry` after
+    - [x] Extra gates: `make typecheck-api`, `make lint-api`, `make lint-ui` (all PASS)
+    - [x] `make down ENV=test-rc2-registry` after
 - [ ] **Lot N — Final validation**
   - [ ] Typecheck & Lint
   - [ ] Retest cluster-mesh (cf Lot1, copy checklist)
