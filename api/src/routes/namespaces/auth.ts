@@ -12,7 +12,7 @@ import { applyAuthAuthorFence, type AuthCompositionRoot } from './auth-cutover';
 import { accountRouter } from './auth/cm-auth-hono';
 import { cmRegisterHandlers as registerHandlers } from './auth/cm-registration';
 import { cmLoginHandlers as loginHandlers } from './auth/cm-authentication';
-import { credentialHandlers } from './auth/credentials';
+import { cmCredentialHandlers as credentialHandlers } from './auth/cm-credentials';
 import { cmEmailHandlers as emailHandlers } from './auth/cm-email';
 import { createFederationRouter } from './auth/federation';
 import { cmMagicLinkHandlers as magicLinkHandlers } from './auth/cm-magic-link';
