@@ -3,11 +3,12 @@
 // `BoundLoginSessionStoreV1`); the lifecycle row (status / refresh count) lives
 // in `cm_identity.identity_login_sessions` (core `LoginSessionStore`). Writes go
 // through the custody unit of work so both tables move in ONE serializable
-// transaction; the core row is written via the raw host session inside it.
+// transaction; the CM store owns both rows.
 
-import type { BoundLoginSessionV1, IdentityTransactionV1, PostgresCustodyHandle } from '@sentropic/cluster-mesh';
+import { IdentityCustodyErrorV1, type BoundLoginSessionV1, type SignedLoginBindingV1 } from '@sentropic/cluster-mesh';
 
 import { CM_IDENTITY_SCHEMA, cmStoreClient, getCmIdentity } from './cm-identity';
+import { runCmIdentityWrite } from './cm-transaction';
 
 export interface CmSessionRecord {
   readonly id: string;
@@ -44,6 +45,7 @@ export interface CmRotateSessionInput {
   readonly expiresAt: Date;
   readonly sessionTokenHash: string;
   readonly refreshTokenHash: string;
+  readonly verifiedLogin: SignedLoginBindingV1;
 }
 
 const date = (value: string | null | undefined): Date | null =>
@@ -72,7 +74,6 @@ const lifecycleOf = async (sessionId: string) => {
 };
 
 export const createCmSession = async (input: CmCreateSessionInput): Promise<CmSessionRecord> => {
-  const { unitOfWork } = getCmIdentity();
   const now = input.now.toISOString();
   const bound: BoundLoginSessionV1 = {
     sessionId: input.id,
@@ -93,14 +94,9 @@ export const createCmSession = async (input: CmCreateSessionInput): Promise<CmSe
     userAgent: input.deviceInfo?.userAgent ?? null,
     lastActivityAt: now,
   };
-  await unitOfWork.runWrite({ mode: 'write', deadlineMs: 10_000 }, async (tx: IdentityTransactionV1<PostgresCustodyHandle>) => {
-    await tx.stores.sessions.insert(bound);
-    await tx.hostTransaction.raw.execute({
-      text: `INSERT INTO "${CM_IDENTITY_SCHEMA}"."identity_login_sessions"
-        ("session_id","user_id","status","mfa_state","created_at","expires_at","revoked_at","refresh_count")
-        VALUES ($1,$2,'active',$3,$4,$5,NULL,0)`,
-      values: [input.id, input.userId, bound.login.mfaVerified ? 'step_up' : 'none', now, bound.expiresAt],
-    });
+  await runCmIdentityWrite(async (tx) => {
+    await tx.lockSubject(input.userId);
+    await tx.custody.sessions.insert(bound);
   });
   const created = await findCmSessionById(input.id);
   if (!created) throw new Error('Failed to create session.');
@@ -138,7 +134,7 @@ export const listCmSessionsForUser = async (userId: string): Promise<CmSessionRe
 
 export const countCmSessions = async (): Promise<number> => {
   const result = await cmStoreClient.query(
-    `SELECT COUNT(*)::int AS n FROM ${CM_IDENTITY_SCHEMA}.identity_login_token_bindings WHERE "revoked_at" IS NULL`,
+    `SELECT COUNT(*)::int AS n FROM ${CM_IDENTITY_SCHEMA}.identity_login_sessions WHERE "status" = 'active' AND "revoked_at" IS NULL`,
     [],
   );
   const row = result.rows[0] as { n: number } | undefined;
@@ -146,43 +142,35 @@ export const countCmSessions = async (): Promise<number> => {
 };
 
 export const touchCmSession = async (sessionId: string, now: Date): Promise<void> => {
-  const { custody } = getCmIdentity();
-  await custody.sessions.touchActivity(sessionId, now.toISOString());
+  await runCmIdentityWrite(async (tx) => {
+    const session = await tx.custody.sessions.findById(sessionId);
+    if (!session) return;
+    await tx.lockSubject(session.userId);
+    await tx.custody.sessions.touchActivity(sessionId, now.toISOString());
+  });
 };
 
 export const rotateCmSession = async (input: CmRotateSessionInput): Promise<CmSessionRecord | null> => {
-  const { unitOfWork } = getCmIdentity();
   const at = new Date().toISOString();
-  const current = await findCmSessionByRefreshTokenHash(input.expectedRefreshTokenHash);
-  if (!current || current.id !== input.sessionId || current.userId !== input.userId) return null;
-  const rotated = await unitOfWork.runWrite({ mode: 'write', deadlineMs: 10_000 }, async (tx) => {
-    const next = await tx.stores.sessions.rotate({
+  const rotated = await runCmIdentityWrite(async (tx) => {
+    await tx.lockSubject(input.userId);
+    const current = await tx.custody.sessions.findByRefreshTokenHash(input.expectedRefreshTokenHash);
+    if (!current || current.sessionId !== input.sessionId || current.userId !== input.userId) return null;
+    return tx.custody.sessions.rotate({
       sessionId: input.sessionId,
       userId: input.userId,
       expectedRefreshTokenHash: input.expectedRefreshTokenHash,
-      expectedRotationVersion: current ? Number((await custodyRotationVersion(current.id))) : 1,
+      expectedRotationVersion: current.rotationVersion,
       // The signed login lineage is immutable across rotation: keep the original
       // authTime/sessionVersion so the refreshed JWT still matches the binding.
-      verifiedLogin: { mfaVerified: current.mfaVerified, authTime: current.authTime, sessionVersion: current.sessionVersion },
+      verifiedLogin: input.verifiedLogin,
       nextSessionTokenHash: input.sessionTokenHash,
       nextRefreshTokenHash: input.refreshTokenHash,
       nextExpiresAt: input.expiresAt.toISOString(),
       at,
     });
-    await tx.hostTransaction.raw.execute({
-      text: `UPDATE "${CM_IDENTITY_SCHEMA}"."identity_login_sessions"
-        SET "expires_at" = $2, "refresh_count" = "refresh_count" + 1 WHERE "session_id" = $1`,
-      values: [input.sessionId, input.expiresAt.toISOString()],
-    });
-    return next;
   });
-  return toRecord(rotated, await lifecycleOf(input.sessionId));
-};
-
-const custodyRotationVersion = async (sessionId: string): Promise<number> => {
-  const { custody } = getCmIdentity();
-  const bound = await custody.sessions.findById(sessionId);
-  return bound?.rotationVersion ?? 1;
+  return rotated ? toRecord(rotated, await lifecycleOf(input.sessionId)) : null;
 };
 
 export interface CmUpdateSessionTokensInput {
@@ -192,54 +180,26 @@ export interface CmUpdateSessionTokensInput {
   readonly expiresAt: Date;
 }
 
-// Plain token replacement (no rotation CAS): used by the OAuth session port's
-// updateTokens. Both tables move in ONE custody unit-of-work transaction.
-export const updateCmSessionTokens = async (input: CmUpdateSessionTokensInput): Promise<CmSessionRecord | null> => {
-  const { unitOfWork } = getCmIdentity();
-  const at = new Date().toISOString();
-  await unitOfWork.runWrite({ mode: 'write', deadlineMs: 10_000 }, async (tx) => {
-    await tx.hostTransaction.raw.execute({
-      text: `UPDATE "${CM_IDENTITY_SCHEMA}"."identity_login_token_bindings"
-        SET "session_token_hash" = $2, "refresh_token_hash" = $3, "last_activity_at" = $4
-        WHERE "session_id" = $1`,
-      values: [input.sessionId, input.sessionTokenHash, input.refreshTokenHash, at],
-    });
-    await tx.hostTransaction.raw.execute({
-      text: `UPDATE "${CM_IDENTITY_SCHEMA}"."identity_login_sessions"
-        SET "expires_at" = $2 WHERE "session_id" = $1`,
-      values: [input.sessionId, input.expiresAt.toISOString()],
-    });
-  });
-  return findCmSessionById(input.sessionId);
+/** r6 forbids revision-free token replacement; callers use the signed CM session service. */
+export const updateCmSessionTokens = async (_input: CmUpdateSessionTokensInput): Promise<CmSessionRecord | null> => {
+  throw new IdentityCustodyErrorV1('identity_contract_unavailable');
 };
 
 export const revokeCmSession = async (sessionId: string): Promise<boolean> => {
-  const { unitOfWork } = getCmIdentity();
   const at = new Date().toISOString();
   const existing = await findCmSessionById(sessionId);
   if (!existing) return false;
-  await unitOfWork.runWrite({ mode: 'write', deadlineMs: 10_000 }, async (tx) => {
-    await tx.stores.sessions.revoke(sessionId, at);
-    await tx.hostTransaction.raw.execute({
-      text: `UPDATE "${CM_IDENTITY_SCHEMA}"."identity_login_sessions"
-        SET "status" = 'revoked', "revoked_at" = $2 WHERE "session_id" = $1`,
-      values: [sessionId, at],
-    });
+  await runCmIdentityWrite(async (tx) => {
+    await tx.lockSubject(existing.userId);
+    await tx.custody.sessions.revoke(sessionId, at);
   });
   return true;
 };
 
 export const revokeAllCmSessionsForUser = async (userId: string): Promise<number> => {
-  const { unitOfWork } = getCmIdentity();
   const at = new Date().toISOString();
-  return unitOfWork.runWrite({ mode: 'write', deadlineMs: 30_000 }, async (tx) => {
-    const count = await tx.stores.sessions.revokeAllForUser(userId, at);
-    await tx.hostTransaction.raw.execute({
-      text: `UPDATE "${CM_IDENTITY_SCHEMA}"."identity_login_sessions"
-        SET "status" = 'revoked', "revoked_at" = $2
-        WHERE "user_id" = $1 AND "status" = 'active'`,
-      values: [userId, at],
-    });
-    return count;
+  return runCmIdentityWrite(async (tx) => {
+    await tx.lockSubject(userId);
+    return tx.custody.sessions.revokeAllForUser(userId, at);
   });
 };
