@@ -29,6 +29,7 @@
 - [x] Source RED found a foreign release-record acceptance; added record/manifest identity checks and regression coverage.
 - [x] Targeted source/control/transport run: 11 tests pass; broad SCOPE also selected the integration file, correctly refusing absent DATABASE_URL. The dedicated integration target is queued.
 - [x] Full unit gate exposed an outdated list fixture: enrichment now reads current releases. Updated its stub and asserted that foreign scopes are filtered before release reads.
+- [x] PostgreSQL initialization exceeded compose's health window; logs show initialization and checkpoint completion, and make ps now reports healthy. Retrying the targeted suite against the same stack.
 - [ ] Integration dependency: the D3 lane must preserve confirmation error details through the shared mcp-platform wire codec; this branch preserves them through the artifacts adapter.
 
 ## AI Flaky tests
