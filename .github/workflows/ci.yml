@@ -1607,7 +1607,7 @@ jobs:
         run: make logs-api-ci ENV=test-ci-api
       - name: Require local deterministic provider traffic
         if: always() && matrix.suite == 'ai'
-        run: make ci-provider-receipt ENV=test-ci-api
+        run: make ci-provider-receipt CI_PROVIDER_REQUIRE_CALLS=1 ENV=test-ci-api
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         if: always() && matrix.suite == 'ai'
         with:
@@ -1829,7 +1829,7 @@ jobs:
         run: make test-e2e-vscode ENV=e2e-vscode-ci
       - name: Require isolated provider traffic
         if: always()
-        run: make ci-provider-receipt ENV=e2e-vscode-ci
+        run: make ci-provider-receipt CI_PROVIDER_REQUIRE_CALLS=1 ENV=e2e-vscode-ci
       - name: Stop the VSCode test stack
         if: always()
         run: make down ENV=e2e-vscode-ci
@@ -1838,7 +1838,11 @@ jobs:
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: e2e-vscode-results
-          path: e2e/test-results/
+          path: |
+            e2e/test-results/
+            .tmp/ci-provider/
+          include-hidden-files: true
+          if-no-files-found: error
           retention-days: 7
 
   # BR-39r (L2 guard) — screen-driven SSO smoke for the standalone IdP. Drives

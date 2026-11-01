@@ -31,6 +31,7 @@ COMPOSE_RUN_UI  := $(DOCKER_COMPOSE) run --rm ui
 COMPOSE_RUN_API := $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api
 CI_PROVIDER_MODE ?= fixture
 export CI_PROVIDER_MODE
+export CI_PROVIDER_REQUIRE_CALLS ?= 0
 export CI_PROVIDER_FIXTURE = $(if $(filter fixture,$(CI_PROVIDER_MODE)),1,0)
 export CI_PROVIDER_INTERNAL = $(if $(filter fixture,$(CI_PROVIDER_MODE)),true,false)
 export CI_PROVIDER_OPENAI_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(OPENAI_API_KEY),ci-provider-fixture-no-live-credential)
