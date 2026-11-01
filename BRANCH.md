@@ -38,7 +38,8 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- None.
+- [ ] A4-STACK — A2.0b owner: supply the approved r6 combined UOW (`run`, `tx.stores`, `tx.custody`, subject lifecycle), auth-hono binding/runner, importer verifier and V2 planes before app qualification; A4 does not implement these CM APIs.
+- [ ] A4-QK — Deployment custodian: record the explicit email-code protection choice before the author switch; no secret or default choice is inferred.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -74,6 +75,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
 - [ ] **Lot 1 — CM identity composition + one data migration**
   - [ ] App-side CM identity composition (core stores, tenancy stores, custody host/UOW, F15 producer, atomic deletion V2, importer) over the app Postgres.
   - [x] Bind the r6 combined UOW to one app PostgreSQL connection, including indeterminate-commit refusal.
+  - [x] Join account/profile registration and partial updates to the active combined UOW; refuse absent profiles.
   - [ ] Control migration 0014: CM identity schema + id-preserving copy of users/proofs/invitations/login sessions/tenants/memberships/workspaces + rollback checkpoint row; journal integrity test passes.
   - [ ] Migration tests (both directions of the copy, id preservation, counts).
   - [x] Add isolated PostgreSQL cutover tests for checkpoint retention, rollback and OAuth invalidation.
