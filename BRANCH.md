@@ -66,6 +66,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Resume C1 PASS; review inherited account, challenge and invitation fixtures; restore original email data.
   - [x] Review inherited session, magic-link and WebAuthn fixtures without weakening assertions.
   - [x] Correct CM fixture cleanup for indirect session, operation, invitation and outbox references.
+  - [x] Review session-adoption setup and tenant-bound authorization fixtures against CM stores.
   - [x] Review document, history, stream and lock fixture conversions; preserve original email values.
   - [ ] Docker stack under flock, `make down ENV=test-app-a4` after.
 - [ ] **Lot 1 — CM identity composition + one data migration**
