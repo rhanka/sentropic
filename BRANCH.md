@@ -14,6 +14,8 @@
 - **Allowed Paths (implementation scope)**:
   - `packages/artifacts/**`
   - `BRANCH.md`
+  - `package-lock.json`
+  - `api/package-lock.json`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -25,6 +27,9 @@
   - [x] Record rationale, impact and rollback in Feedback Loop before exceptions.
 
 ## Feedback Loop
+- [x] BRP0B-EX1 (owner CI repair): synchronize only the artifacts workspace version in root/API locks; no dependency graph change; rollback with the version fix.
+- [x] BRLOCK-EX1: existing CI maintainers policy, review_by=2026-11-30T00:00:00Z; no renewal or scope expansion of the exemption.
+- [x] CI 41361090041 budget step passed; its oversized baseline deliberately reimports the governance corpus. The actual artifacts failure is the ensure HTTP/MCP integration fixture missing lifecycle.stateOf.
 - [x] Review r1 RED: ungranted mutation probes returned 403 instead of 404; real publication readers accepted purged releases and mismatched record digests.
 - [x] Review r1 visibility GREEN: all 6 parity transport tests pass, including ungranted/missing/withdrawn 404, visible non-owner 403 and terminal delete replay.
 - [x] Review r1 source GREEN: all 6 parity source tests pass; real publication readers reject purged/mismatched selected and current releases with zero blob reads.
@@ -63,12 +68,16 @@
   - [x] D4 get/list binding, dates, digest, URLs and optional metadata.
 - [ ] **Lot 3 — Final validation**
   - [ ] Scoped tests, artifacts unit suite, typecheck and lint through make.
-  - [x] Bump package version to 0.3.0 above published 0.2.4 (registry checked).
+  - [x] Ship package version 0.2.5 above published 0.2.4 and within existing artifacts peer ranges (registry checked).
   - [ ] Scope check before each atomic commit; push after each commit as explicitly requested.
   - [ ] Draft PR using this file; one final-head CI run; record exact head and result.
   - [ ] make down ENV=test-artifacts-p0b; write .tmp/rv/artifacts-parity-p0b.md and stop.
 - [ ] **Lot 4 — Fix review r1 (owner request, PR 878)**
   - [x] Mask invisible set_access/delete targets through visible(); qualify HTTP/MCP ungranted and visible non-owner outcomes while preserving delete replay.
-  - [x] Keep p0b as first artifacts 0.3.0 release; ship a D1/D2/D4 CHANGELOG without touching the sibling branch.
+  - [x] Ship p0b as artifacts 0.2.5 per owner CI repair; retain the D1/D2/D4 CHANGELOG without touching the sibling branch.
   - [x] Rename terminal controls migration to 0004; update README and integration fixture.
   - [x] Preserve release state and manifestDigest through publication readers; reject purged/mismatched selected and current source releases before blob reads.
+- [ ] **Lot 5 — Fix CI (owner request, PR 878)**
+  - [x] Restore compatible artifacts 0.2.5 manifest/provider/CHANGELOG and root/API workspace lock pins.
+  - [x] Qualify the actual ensure transport integration regression (7/7), full artifact budget, production API image (strict prune/audit) and lock-install guard (11/11) under the single Docker lock; make down completed.
+  - [ ] Commit through make, push the final head, run one workflow_dispatch CI, record its completed result and make down.
