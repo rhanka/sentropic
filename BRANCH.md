@@ -26,6 +26,7 @@ Implement the durable storage backends for the frozen identity contracts of lot 
   - `package-lock.json` (version-sync line only, BRA21-EX3)
   - `.gitignore` (root-anchored `identity/` ignore rule only, BRA21-EX4)
   - `BRANCH.md`
+  - `e2e/tests/05-usecase-detail.spec.ts` (SSE regression diagnosis and readiness assertion only, BRA21-EX5)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -44,6 +45,9 @@ Implement the durable storage backends for the frozen identity contracts of lot 
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] BRA21-EX5: owner=lane author; review_by=PR review; owner-requested investigation of run 41254113814 reproduced the unchanged constraints assertion locally; allow only the failing E2E scenario's diagnostic instrumentation and subscription readiness correction; impact limited to test ordering, no timeout increase; rollback by reverting the test hunk.
+- [x] BRA21-SSE1: root cause=test sends PUT after the SSE request starts but before PostgreSQL LISTEN is ready; unchanged baseline failed, observational timing alternated to success, and a controlled gate reproduced the exact failure with PUT 200 before SSE 200/ping and no usecase_update; fix=observe the first ping for the matching workspace/request before PUT, retaining the existing 15000ms readiness budget and 30000ms content assertion; full spec=15 passed, 1 skipped; no identity/auth production change or flaky waiver.
+- [x] BRA21-OBS2: PostgreSQL contract validation initially hit the unchanged 5000ms guards in the first two lifecycle cases (87 passed, 2 failed); the identical command and source then passed 89/89; both logs retained in `.tmp/a21-sse-pg-contracts{,-initial}.log`; no contract, timeout or store change and no waiver; timing cause not established.
 - [x] BRLOCK-EX1 carried verbatim from `origin/main` for gate continuity (owner=CI maintainers; review_by=2026-11-30T00:00:00Z; this branch exercises the lock scope via the one-line root lockfile workspace version sync under BRA21-EX3; remove on PR closure; rollback by reverting this branch).
 - [x] BRA21-EX1: owner=lane author; review_by=PR review; new-file commits above the 150-line advisory where a file must land whole (schema/codec/postgres/sqlite modules and profile harness, mirroring the A2.0 BRA2-EX1 whole-module precedent for compilable units); impact limited to branch history; rollback by reverting the branch.
 - [x] BRA21-EX2: owner=lane author; review_by=PR review; carry `0.26.0-dev.2` after rebasing over #860/#861 (`main` at `0.26.0-dev.1`); preserve main's `RESERVED_NEXT=0.26.0` and published pin `0.25.0` in `tests/fixtures/reserved-versions.ts` and `tests/storage/pack-only-dev-gate.mjs`; union both sides' negative vectors in `pack-only-dev-gate.spec.ts` and `prepare-artifacts.spec.ts`; registry rechecked at `0.25.0`, dependency/peer metadata unchanged; impact limited to version-train test support, no gate logic or frozen range widened; rollback by reverting the branch.
@@ -114,3 +118,10 @@ Implement the durable storage backends for the frozen identity contracts of lot 
   - [x] Run scope C2 and type checks; unmodified identity campaigns: PostgreSQL 89/89, SQLite 82 passed + 7 PG-only skips; A2.1 round trips 6/6 each; A2.2/A2.3 specs included; pack-only and artifact gates 20/20 each; publication bump fixtures 30/30; lockfile gate 11/11; all under the flock, PostgreSQL teardown and `make down` after.
   - [ ] Commit through `make commit`, push this branch only with `--force-with-lease`, wait for one CI run on the final head, append head/run/conflict/version evidence to `.tmp/rv/lot-A2.1.md`; do not merge.
   - [ ] Track handoff: designated main writer imports this source artifact and final report for the rebase request, deliverables and owner-selected `0.26.0-dev.2`; this lane does not write the shared `.track` log.
+- [ ] **Lot 7 — Owner-requested group-e SSE failure investigation**
+  - [x] Reproduce run 41254113814 with `make test-e2e E2E_SPEC=tests/05-usecase-detail.spec.ts WORKERS=1 RETRIES=0 API_PORT=9365 UI_PORT=5565 MAILDEV_UI_PORT=1465 ENV=e2e-cm-a2-1`; identical constraints assertion failed at the unchanged 30000ms guard on head `ea81f128c`.
+  - [x] Trace cookie/session validation, revoke-all and app wiring: app uses `session` and `userSessions`; A2.1 factories have no app callers; relevant auth/SSE files are byte-identical to base `329cc11d0`.
+  - [x] Establish event ordering with browser evidence, correct the demonstrated defect and rerun the scoped E2E without increasing timeouts; logs and the discarded diagnostic patch are retained in `.tmp/a21-sse-*`.
+  - [x] Run both identity contract profiles and relevant API tests sequentially under the shared flock: PostgreSQL 89/89, SQLite 82 passed + 7 PostgreSQL-only skips, round trips 6/6 on each engine; API 53/53 across `streams.test.ts`, `cluster-mesh-streams-cutover.test.ts`, `initiatives.test.ts`, `cluster-mesh-session.test.ts`, `auth/session.test.ts`, and `unit/auth/session-manager.test.ts`; PostgreSQL teardown, `down-api-ci` and `make down` completed.
+  - [ ] Commit through `make commit`, force-with-lease this branch only, wait for one final-head CI, append evidence to `.tmp/rv/lot-A2.1.md`, and stop without merging.
+  - [ ] Track handoff: designated main writer imports Lot 7 and the final report; this lane preserves the single-writer Track boundary.
