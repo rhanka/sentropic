@@ -18,6 +18,8 @@ export function assertCompleteOperation(config: OperationProfile): void {
       'maxDecodedFileBytes', 'maxDecodedTotalBytes'], defaults: ['profile'] },
     list: { limits: ['listLimitMin', 'listLimitMax'], defaults: ['limit', 'offset'] },
     commit_upload: { limits: ['idempotencyKeyMaxUnits'], defaults: ['profile'] },
+    set_access: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
+    delete: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
   };
   const fields = required[config.operation];
   if (fields && (fields.limits.some((key) => !Object.hasOwn(config.limits, key)) ||
