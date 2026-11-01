@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { liveReceipt, scheduleHealth, qualifiedMain } from './live-provider-receipt.mjs';
+import { liveReceipt, scheduleHealth, qualifiedMain, receiptFromDirectory } from './live-provider-receipt.mjs';
+import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 
 const sourceSha = 'a'.repeat(40);
 const tuple = { sourceSha, api: { id: `sha256:${'b'.repeat(64)}` }, ui: { id: `sha256:${'c'.repeat(64)}` },
@@ -26,6 +27,24 @@ test('should expose failed, missing and unfinished live calls and suite failures
     assert.equal(liveReceipt({ ...input, events }).qualified, false);
   }
   assert.equal(liveReceipt({ ...input, results: { ...input.results, browser: 1 } }).qualified, false);
+});
+
+test('should retain expected cancellations separately from provider errors', () => {
+  const receipt = liveReceipt({ ...input, events: [input.events[0], { type: 'cancelled', requestId: '1' }] });
+  assert.equal(receipt.cancelledCalls, 1);
+  assert.equal(receipt.failedCalls, 0);
+  assert.equal(receipt.qualified, true);
+});
+
+test('should publish a failed receipt with unknown calls when preparation never completed', () => {
+  mkdirSync('.tmp', { recursive: true });
+  const dir = mkdtempSync('.tmp/br81-live-receipt-');
+  try {
+    const receipt = receiptFromDirectory(dir, { schedule: { healthy: false }, event: 'schedule' });
+    assert.equal(receipt.qualified, false);
+    assert.equal(receipt.calls, null);
+    assert.ok(receipt.failure.missing.includes('tuple.json'));
+  } finally { rmSync(dir, { recursive: true }); }
 });
 
 test('should report a missing, stale, cancelled or failed schedule independently of manual runs', () => {
