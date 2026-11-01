@@ -13,11 +13,35 @@ const freeze = (value) => {
 // Policy belongs to the trusted runner checkout, never the repository under scan.
 export const policy = freeze(JSON.parse(readFileSync(new URL('../../../.security/trivy-toolchain.json', import.meta.url))));
 
+const PROFILES = freeze({
+  upstream: {
+    repository: 'aquasec/trivy',
+    issuer: 'https://token.actions.githubusercontent.com',
+    identity: 'https://github.com/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/v0.76.1',
+  },
+  'sentropic-patched': {
+    repository: 'ghcr.io/rhanka/sentropic-trivy',
+    issuer: 'https://token.actions.githubusercontent.com',
+    identity: 'https://github.com/rhanka/sentropic/.github/workflows/security-scanner-image.yml@refs/heads/main',
+  },
+});
+
 export function validateScanner({ indexBytes, manifestBytes, configBytes, signature }, p = policy) {
   const version = p.version.split('.').map(Number);
   requireEvidence(/^\d+\.\d+\.\d+$/.test(p.version) && (version[0] > 0 || version[1] > 71 ||
     (version[1] === 71 && version[2] >= 1)), 'Trivy must be >= 0.71.1');
-  requireEvidence(p.repository === 'aquasec/trivy' && p.platform === 'linux/amd64' &&
+  requireEvidence(p.profile === 'upstream' || p.profile === 'sentropic-patched', 'unknown publisher profile');
+  const fixed = PROFILES[p.profile];
+  requireEvidence(p.repository === fixed.repository && p.signature.issuer === fixed.issuer &&
+    p.signature.identity === fixed.identity, 'publisher profile pins');
+  const table = p.publishers?.[p.profile];
+  requireEvidence(table?.repository === fixed.repository && table?.signature?.issuer === fixed.issuer &&
+    table?.signature?.identity === fixed.identity, 'publisher profile table pins');
+  if (p.profile === 'sentropic-patched') {
+    requireEvidence(isDigest(table?.indexDigest) && isDigest(table?.manifestDigest) &&
+      isDigest(table?.configDigest) && table?.qualified === true, 'sentropic-patched candidate unadmitted');
+  }
+  requireEvidence(p.platform === 'linux/amd64' &&
     [p.indexDigest, p.manifestDigest, p.configDigest].every(isDigest), 'frozen scanner pins/platform');
   requireEvidence(digest(indexBytes) === p.indexDigest && digest(manifestBytes) === p.manifestDigest &&
     digest(configBytes) === p.configDigest, 'scanner bytes differ from reviewed pins');
