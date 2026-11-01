@@ -170,7 +170,9 @@ if (args[0] === 'pack') {
       fixture: JSON.parse(readFileSync(new URL('./fixtures/selected/package.json', import.meta.url), 'utf8')),
       candidate: JSON.parse(readFileSync(new URL('../../../cluster-mesh/package.json', import.meta.url), 'utf8')),
     };
-    const frozen = frozenBaseOf(fixture.dependencies);
+    const selectedSpec = `file:../sentropic-cluster-mesh-${meshCandidate.version}.tgz`;
+    const frozen = fixture.dependencies['@sentropic/cluster-mesh'] === selectedSpec
+      ? meshCandidate.version : frozenBaseOf(fixture.dependencies);
     expect(requests.flatMap((args) => args.filter((arg) => arg.startsWith('@sentropic/cluster-mesh@'))))
       .toEqual(frozen === meshCandidate.version ? [] : [`@sentropic/cluster-mesh@${frozen}`]);
     const dependency = (fixture: string) => JSON.parse(readFileSync(join(work, fixture, 'package.json'), 'utf8'))

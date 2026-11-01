@@ -137,6 +137,11 @@ export const buildOAuthClientRegistration = (
   }
 
   const scopes = parseList(source.OAUTH_CLIENT_SCOPES ?? 'openid,profile,email');
+  const grantTypes = parseList(source.OAUTH_CLIENT_GRANT_TYPES ?? 'authorization_code');
+  if (!grantTypes.includes('authorization_code') ||
+      grantTypes.some((grant) => !['authorization_code', 'refresh_token'].includes(grant))) {
+    throw new Error('OAUTH_CLIENT_GRANT_TYPES must contain authorization_code and optionally refresh_token.');
+  }
 
   // RFC 8707 resource-indicator allowlist. Absent ⇒ [] (default-deny). Each entry must be an
   // absolute https URI (the token audience a client may request on the authorization_code flow).
@@ -159,7 +164,7 @@ export const buildOAuthClientRegistration = (
     clientSecretHash,
     createdAt: now,
     dpopBoundAccessTokens: false,
-    grantTypes: ['authorization_code'],
+    grantTypes: [...new Set(grantTypes)],
     id: `client-${clientId}`,
     name,
     redirectUris,
@@ -193,6 +198,7 @@ const isAbsoluteHttpsUri = (value: string): boolean => {
 };
 
 export interface OAuthClientStoredPolicy {
+  grantTypes?: string[];
   allowedUserIds: string[];
   requiredAcr: string | null;
 }
@@ -209,6 +215,8 @@ export const resolvePolicyUpdate = (
 ): OAuthClientStoredPolicy => {
   if (!existing) return incoming;
   return {
+    ...(incoming.grantTypes || existing.grantTypes
+      ? { grantTypes: incoming.grantTypes ?? existing.grantTypes } : {}),
     allowedUserIds: incoming.allowedUserIds.length > 0 ? incoming.allowedUserIds : existing.allowedUserIds,
     requiredAcr: incoming.requiredAcr ?? existing.requiredAcr,
   };
@@ -219,6 +227,7 @@ const main = async (): Promise<void> => {
 
   const [stored] = await db
     .select({
+      grantTypes: oauthClients.grantTypes,
       allowedUserIds: oauthClients.allowedUserIds,
       requiredAcr: oauthClients.requiredAcr,
     })
@@ -228,8 +237,9 @@ const main = async (): Promise<void> => {
 
   // F5: never wipe policy on rotation when the operator omits the env vars.
   const policy = resolvePolicyUpdate(
-    stored ? { allowedUserIds: stored.allowedUserIds ?? [], requiredAcr: stored.requiredAcr ?? null } : null,
-    { allowedUserIds: values.allowedUserIds, requiredAcr: values.requiredAcr }
+    stored ? { ...stored, allowedUserIds: stored.allowedUserIds ?? [], requiredAcr: stored.requiredAcr ?? null } : null,
+    { allowedUserIds: values.allowedUserIds, requiredAcr: values.requiredAcr,
+      ...(process.env.OAUTH_CLIENT_GRANT_TYPES !== undefined ? { grantTypes: values.grantTypes } : {}) }
   );
 
   await db
@@ -241,7 +251,7 @@ const main = async (): Promise<void> => {
         allowedUserIds: policy.allowedUserIds,
         clientSecretHash: values.clientSecretHash,
         dpopBoundAccessTokens: values.dpopBoundAccessTokens,
-        grantTypes: values.grantTypes,
+        grantTypes: policy.grantTypes ?? values.grantTypes,
         name: values.name,
         redirectUris: values.redirectUris,
         requirePkce: values.requirePkce,

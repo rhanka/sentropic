@@ -24,6 +24,16 @@ SELECT pg_advisory_xact_lock(799);   -- serialize any two runs (scheduled + trig
 SET LOCAL lock_timeout = '10s';
 SET LOCAL statement_timeout = '120s';
 
+-- Acquire every client guard before any user lock, including client creation races.
+CREATE TEMP TABLE refresh_sync_map (prod_client_id text, preprod_client_id text) ON COMMIT DROP;
+\copy refresh_sync_map FROM '/sql/client-map.csv' WITH (FORMAT csv, HEADER true)
+DO $$ DECLARE c text; BEGIN
+  FOR c IN SELECT client_id FROM oauth_clients UNION SELECT preprod_client_id FROM refresh_sync_map ORDER BY 1 LOOP
+    PERFORM public.oauth_refresh_client_guard(c, true);
+  END LOOP;
+END $$;
+SELECT id FROM users ORDER BY id FOR UPDATE;
+
 -- Invariant snapshot (asserted unchanged at the end).
 CREATE TEMP TABLE inv_before ON COMMIT DROP AS
 SELECT (SELECT count(*) FROM oauth_clients) AS clients,
@@ -102,6 +112,9 @@ DELETE FROM user_sessions       WHERE user_id IN (SELECT old_id FROM rekey);
 DELETE FROM webauthn_challenges WHERE user_id IN (SELECT old_id FROM rekey);
 DELETE FROM magic_links         WHERE user_id IN (SELECT old_id FROM rekey);
 DELETE FROM authorization_codes WHERE user_id IN (SELECT old_id FROM rekey);
+SELECT public.oauth_refresh_revoke_family(id, 'security_event', now()::timestamp)
+  FROM oauth_refresh_tokens WHERE generation = 0 AND user_id IN (SELECT old_id FROM rekey) ORDER BY id;
+DELETE FROM oauth_refresh_tokens WHERE user_id IN (SELECT old_id FROM rekey);
 DELETE FROM oauth_tokens        WHERE user_id IN (SELECT old_id FROM rekey);
 DELETE FROM oauth_consents      WHERE user_id IN (SELECT old_id FROM rekey);
 -- Catalog FK classification: ephemeral-auth = the six tables deleted in 3a.
@@ -120,7 +133,7 @@ BEGIN
   FOR m IN SELECT old_id, new_id FROM rekey LOOP
     FOR fk IN
       SELECT c.conrelid::regclass AS tbl, a.attname AS col,
-             CASE WHEN c.conrelid = ANY (ARRAY['user_sessions', 'webauthn_challenges', 'magic_links', 'authorization_codes', 'oauth_tokens', 'oauth_consents']::regclass[])
+             CASE WHEN c.conrelid = ANY (ARRAY['user_sessions', 'webauthn_challenges', 'magic_links', 'authorization_codes', 'oauth_tokens', 'oauth_consents', 'oauth_refresh_tokens']::regclass[])
                   THEN 'ephemeral-auth' ELSE 'durable' END AS category
       FROM pg_constraint c
       JOIN pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = c.conkey[1]

@@ -18,6 +18,7 @@ import { createConsentStoreAdapter } from '../../services/auth/consent-store-ada
 import { createFederationAdapter } from '../../services/auth/federation-adapter';
 import { createJwksAdapter } from '../../services/auth/jwks-adapter';
 import { createOauthStateStoreAdapter } from '../../services/auth/oauth-state-adapter';
+import { createOAuthRefreshAdapter } from '../../services/auth/oauth-refresh-adapter';
 import { createServiceTenantAdapter } from '../../services/auth/service-tenant-adapter';
 import { authHonoCookiePort } from '../../services/auth/session-adapter';
 import { tombstoneRemoteSessions } from '../../services/auth/remote-revocation';
@@ -78,6 +79,7 @@ export const resolveOAuthUiBaseUrl = (request?: Request): string => {
 
 export const createSentropicOAuthOptions = (request?: Request) => ({
   accessTokenTtlSeconds: env.OAUTH_ACCESS_TOKEN_TTL_SEC,
+  refreshTokenTtlSeconds: env.OAUTH_REFRESH_TOKEN_TTL_SEC,
   authorizationCodeTtlSeconds: env.OAUTH_AUTHORIZATION_CODE_TTL_SEC,
   consentUrl: `${resolveOAuthUiBaseUrl(request)}/auth/oauth/consent`,
   dpopIatSkewSeconds: env.OAUTH_DPOP_IAT_SKEW_SEC,
@@ -101,7 +103,12 @@ export const resolveOAuthServiceResource = (request?: Request): string =>
     ? trimTrailingSlash(env.OAUTH_SERVICE_RESOURCE_URI)
     : resolveOAuthIssuer(request);
 
-const createSentropicOAuthPorts = (): AuthHonoPorts => ({
+const rootDb = db;
+const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
+  oauthRefresh: createOAuthRefreshAdapter({
+    database: db,
+    portsForDatabase: (tx) => createSentropicOAuthPorts(tx as unknown as typeof db),
+  }),
   accountPolicy: {
     canAuthenticate(user, now) {
       if (!user.emailVerified) {
@@ -173,7 +180,7 @@ const createSentropicOAuthPorts = (): AuthHonoPorts => ({
   },
   // Consent persistence: lets the IdP skip the consent screen when a stored grant for the
   // exact (user, client) covers the requested scopes; re-consents on any uncovered scope.
-  consentStore: createConsentStoreAdapter(),
+  consentStore: createConsentStoreAdapter({ database: db }),
   cookies: authHonoCookiePort,
   credentials: {
     create: unsupportedOAuthPort,
@@ -218,7 +225,7 @@ const createSentropicOAuthPorts = (): AuthHonoPorts => ({
     },
     markUsed: unsupportedOAuthPort,
   },
-  oauthStateStore: createOauthStateStoreAdapter(),
+  oauthStateStore: createOauthStateStoreAdapter({ database: db }),
   // ARCH-11 G1c: S2S on-behalf-of (OBO) tenant policy for the client_credentials mint. Mode-gated
   // on TENANT_RESOLUTION_MODE — no `tid`, no rejection in alias/shadow (byte-identical); strict
   // validates the `tenant` selector against the client's authorized set (fixed ∪ enrollments).
@@ -375,7 +382,10 @@ const createSentropicOAuthPorts = (): AuthHonoPorts => ({
       const [row] = await db.select().from(users).where(eq(users.email, email)).limit(1);
       return row ? toAuthHonoUserRecord(row) : null;
     },
-    findById: findUserById,
+    findById: async (userId) => {
+      const [row] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      return row ? toAuthHonoUserRecord(row) : null;
+    },
     async update(userId, input) {
       const [row] = await db
         .update(users)

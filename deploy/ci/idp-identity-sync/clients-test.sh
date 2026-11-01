@@ -113,6 +113,8 @@ assert_sql 'UPDATE test_before SET state = test_state()'
 echo 'PASS: class downgrade fails closed; absent owner becomes null; client checksum rejects tampering'
 
 stage=client-postconditions
+assert_sql "SELECT test_assert((SELECT grant_types = ARRAY['authorization_code','refresh_token']::text[] AND 'offline_access' = ANY(allowed_scopes) AND token_endpoint_auth_method = 'none' AND require_pkce FROM oauth_clients WHERE client_id = 'immo-mcp'), 'governed preprod public PKCE refresh opt-in')"
+sql -d app -c "DO \$\$ BEGIN IF NOT (SELECT grant_types = ARRAY['authorization_code']::text[] AND NOT ('offline_access' = ANY(allowed_scopes)) FROM oauth_clients WHERE client_id = 'immo-mcp') THEN RAISE EXCEPTION 'production refresh policy changed'; END IF; END \$\$;"
 sql -d preprod -c "CREATE FUNCTION test_client_tamper() RETURNS trigger LANGUAGE plpgsql AS \$\$ BEGIN NEW.name := 'unexpected'; RETURN NEW; END \$\$; CREATE TRIGGER test_client_tamper BEFORE INSERT OR UPDATE ON oauth_clients FOR EACH ROW EXECUTE FUNCTION test_client_tamper();"
 sql -d app -c "UPDATE oauth_clients SET name = 'Changed immo' WHERE client_id = 'immo-mcp'"
 refresh_relay

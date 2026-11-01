@@ -35,8 +35,10 @@ export const createSentropicWellKnownIngress = (oauthPublicPath: string): Hono =
   const ingress = new Hono();
   const forward = (path: string) => (c: Context): Response | Promise<Response> => {
     const url = new URL(c.req.url);
+    const clientId = url.searchParams.get('client_id');
     url.pathname = path;
     url.search = '';
+    if (clientId) url.searchParams.set('client_id', clientId);
     return createWellKnownRouter({
       issuer: resolveOAuthIssuer(c.req.raw),
       oauthPathPrefix: oauthPublicPath,

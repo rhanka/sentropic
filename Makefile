@@ -2630,9 +2630,11 @@ test-auth-client: build-auth-hono ## Run @sentropic/auth-client tests (needs aut
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-client $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules ../auth-hono/node_modules'
 
 .PHONY: test-auth-ui
+# Reuse the committed renderer graph; the browser-transport graph stays independently locked.
+AUTH_UI_RENDER_LINKS = render_dir="$$(mktemp -d)"; node /workspace/scripts/ci/locked-tools.mjs --prefix "$$render_dir" --ignore-scripts --no-audit --no-fund @sentropic/design-system-svelte@^0.34.33 @sveltejs/vite-plugin-svelte@6.2.4 @types/node jsdom@29.1.1 svelte@5.56.4 typescript@5.4.5 vite@7.3.6 vitest@4.0.18 >/dev/null; ln -sfn "$$render_dir/node_modules/svelte" node_modules/svelte; ln -sfn "$$render_dir/node_modules/esbuild" node_modules/esbuild; mkdir -p node_modules/@sentropic; ln -sfn "$$render_dir/node_modules/@sentropic/design-system-svelte" node_modules/@sentropic/design-system-svelte;
 test-auth-ui: ## Run @sentropic/auth-ui tests
 	@docker run --rm -v "$(CURDIR):/workspace" -w /workspace/packages/auth-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'rm -rf node_modules'
-	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/auth-ui/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node @simplewebauthn/browser@13.2.2 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@simplewebauthn" node_modules/@simplewebauthn; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
+	@docker run --rm -u "$$(id -u):$$(id -g)" -e HOME=/tmp -v "$(CURDIR):/workspace" -w /workspace/packages/auth-ui $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; scope="$(SCOPE)"; scope="$${scope#packages/auth-ui/}"; tool_dir="$$(mktemp -d)"; npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --no-save --no-audit --no-fund vitest@4.0.18 typescript@5.4.5 @types/node @simplewebauthn/browser@13.2.2 >/dev/null; mkdir -p node_modules; ln -sfn "$$tool_dir/node_modules/@simplewebauthn" node_modules/@simplewebauthn; ln -sfn "$$tool_dir/node_modules/vitest" node_modules/vitest; $(AUTH_UI_RENDER_LINKS) trap "rm -rf node_modules" EXIT; if [ -n "$$scope" ]; then "$$tool_dir/node_modules/.bin/vitest" run "$$scope" --environment node; else "$$tool_dir/node_modules/.bin/vitest" run tests --environment node; fi'
 
 .PHONY: test-packages
 test-packages: ## Run package tests by SCOPE path
@@ -3276,6 +3278,7 @@ db-restore: clean ## Restore backup to local database [BACKUP_FILE=filename.dump
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres sh -c " \
 		pg_restore -d postgres://app:app@localhost:5432/app --clean --if-exists --no-owner --no-privileges -v /tmp/restore.dump && rm /tmp/restore.dump"
 	@echo "📊 Inspecting database after restore (before migrations)..."
+	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -v ON_ERROR_STOP=1 -U app -d app -c 'SELECT public.oauth_refresh_invalidate_restore();'
 	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml exec -T postgres psql -U app -d app -c "\
 		SELECT 'initiatives' as table_name, COUNT(*) as count FROM initiatives \
 		UNION ALL \
@@ -3754,6 +3757,8 @@ k8s-db-restore-preprod: ## Seed the preprod DB from a prod dump [BACKUP_FILE=pro
 	PGPASSWORD=$$(KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) get secret sentropic-postgres -o jsonpath='{.data.POSTGRES_PASSWORD}' | base64 -d); \
 	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) exec -i "$$POD" -- env PGPASSWORD="$$PGPASSWORD" \
 		pg_restore -h 127.0.0.1 -U app -d app --clean --if-exists --no-owner --no-privileges < "data/backup/$(BACKUP_FILE)"; \
+	KUBECONFIG=$(KUBECONFIG) kubectl -n $(K8S_PREPROD_NAMESPACE) exec "$$POD" -- env PGPASSWORD="$$PGPASSWORD" \
+		psql -v ON_ERROR_STOP=1 -h 127.0.0.1 -U app -d app -c 'SELECT public.oauth_refresh_invalidate_restore();'; \
 	echo "✅ Preprod database restored from data/backup/$(BACKUP_FILE)"
 
 k8s-undeploy: ## Delete the tenant workload (namespace + quotas owned by poc-k8s stay)

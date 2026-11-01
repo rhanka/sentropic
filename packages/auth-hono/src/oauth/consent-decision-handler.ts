@@ -6,6 +6,7 @@ import { issueAuthorizedCode } from './issue-authorized-code.js';
 import type { OAuthContinuationCodec, OAuthContinuationState } from './state-codec.js';
 import { isSubjectAllowed, meetsRequiredAcr } from './authorize-handler.js';
 import { resolveOAuthAcr, resolveOAuthSession } from './session-resolver.js';
+import { isRefreshEligibleClient } from './offline-policy.js';
 
 export interface OAuthConsentHandlerOptions {
   authorizationCodeTtlSeconds?: number;
@@ -29,6 +30,11 @@ export const createOAuthConsentDetailsHandler =
       clientName: client.name,
       redirectUri: payload.redirectUri,
       scopes: payload.scope.split(/\s+/).filter(Boolean),
+      ...(payload.scope.split(/\s+/).includes('offline_access') ? {
+        offline: { issuer: options.issuer, resource: payload.resource ?? null,
+          audience: payload.resource ?? `${options.issuer}${new URL(c.req.url).pathname.replace(/\/consent$/u, '/userinfo')}`,
+          scopes: payload.scope.split(/\s+/).filter(Boolean), familyLifetimeDays: 15 },
+      } : {}),
     });
   };
 
@@ -82,7 +88,9 @@ export const createOAuthConsentDecisionHandler =
         payload.userId,
         payload.clientId,
         payload.scope.split(/\s+/).filter(Boolean),
-        payload.tenantId ?? undefined
+        payload.tenantId ?? undefined,
+        payload.scope.split(/\s+/).includes('offline_access')
+          ? { issuer: options.issuer, resource: payload.resource ?? null } : undefined
       );
     }
 
@@ -108,6 +116,9 @@ const validateConsentState = async (
   // (e.g. magic-link login in another tab). Re-check the LIVE session against
   // the client policy before minting a code.
   const client = await options.ports.oauthStateStore.findClient(payload.clientId);
+  if (!client || (payload.scope.split(/\s+/).includes('offline_access') && !isRefreshEligibleClient(client))) {
+    return oauthJsonError(c, 400, 'invalid_scope', 'The client is not authorized for offline access.');
+  }
   if (
     !isSubjectAllowed(session.user.id, client?.allowedUserIds) ||
     !meetsRequiredAcr(resolveOAuthAcr(session.sessionRecord), client?.requiredAcr)

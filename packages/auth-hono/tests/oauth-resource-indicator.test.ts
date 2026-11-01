@@ -119,7 +119,7 @@ describe('BR-39l Lot 2 — RFC 8707 resource indicator → variable aud', () => 
     const response = await tokenLeg(router, { code: 'code-multi', resources: [mcpResource, 'https://other.example.com'] });
 
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_target' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_target' });
   });
 
   // T3-authorize — Repeated `resource` at the authorize leg ⇒ invalid_target.
@@ -161,7 +161,7 @@ describe('BR-39l Lot 2 — RFC 8707 resource indicator → variable aud', () => 
     const response = await tokenLeg(router, { code: 'code-mismatch', resources: ['https://other.example.com'] });
 
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   // T5b — Token-leg sends a resource for a code that sealed none ⇒ invalid_grant.
@@ -173,7 +173,7 @@ describe('BR-39l Lot 2 — RFC 8707 resource indicator → variable aud', () => 
     const response = await tokenLeg(router, { code: 'code-unsealed', resources: [mcpResource] });
 
     expect(response.status).toBe(400);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   // T6 — userinfo RS rejects a resource-aud token (keeps accepting only aud = userinfo).

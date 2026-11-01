@@ -100,7 +100,7 @@ describe('OAuth client_credentials grant (stateless service tokens)', () => {
     });
 
     expect(response.status).toBe(401);
-    expect((await response.json()) as { error: { code: string } }).toMatchObject({ error: { code: 'invalid_client' } });
+    expect((await response.json()) as { error: string }).toMatchObject({ error: 'invalid_client' });
   });
 
   it('rejects scopes outside allowed_scopes with invalid_scope', async () => {
@@ -110,7 +110,7 @@ describe('OAuth client_credentials grant (stateless service tokens)', () => {
     const response = await tokenRequest(router, { scope: 'service:ping service:admin' });
 
     expect(response.status).toBe(400);
-    expect((await response.json()) as { error: { code: string } }).toMatchObject({ error: { code: 'invalid_scope' } });
+    expect((await response.json()) as { error: string }).toMatchObject({ error: 'invalid_scope' });
   });
 
   it('rejects a revoked service client with invalid_client', async () => {
@@ -121,7 +121,7 @@ describe('OAuth client_credentials grant (stateless service tokens)', () => {
     const response = await tokenRequest(router, { scope: 'service:ping' });
 
     expect(response.status).toBe(401);
-    expect((await response.json()) as { error: { code: string } }).toMatchObject({ error: { code: 'invalid_client' } });
+    expect((await response.json()) as { error: string }).toMatchObject({ error: 'invalid_client' });
   });
 
   it('rejects an unknown resource with invalid_target', async () => {
@@ -134,7 +134,7 @@ describe('OAuth client_credentials grant (stateless service tokens)', () => {
     });
 
     expect(response.status).toBe(400);
-    expect((await response.json()) as { error: { code: string } }).toMatchObject({ error: { code: 'invalid_target' } });
+    expect((await response.json()) as { error: string }).toMatchObject({ error: 'invalid_target' });
   });
 
   it('requires resource when the client has multiple indicators (invalid_target)', async () => {
@@ -147,7 +147,7 @@ describe('OAuth client_credentials grant (stateless service tokens)', () => {
     const response = await tokenRequest(router, { resource: undefined, scope: 'service:ping' });
 
     expect(response.status).toBe(400);
-    expect((await response.json()) as { error: { code: string } }).toMatchObject({ error: { code: 'invalid_target' } });
+    expect((await response.json()) as { error: string }).toMatchObject({ error: 'invalid_target' });
   });
 
   it('requires resource when the client has zero indicators (invalid_target)', async () => {
@@ -158,7 +158,7 @@ describe('OAuth client_credentials grant (stateless service tokens)', () => {
     const response = await tokenRequest(router, { resource: undefined, scope: 'service:ping' });
 
     expect(response.status).toBe(400);
-    expect((await response.json()) as { error: { code: string } }).toMatchObject({ error: { code: 'invalid_target' } });
+    expect((await response.json()) as { error: string }).toMatchObject({ error: 'invalid_target' });
   });
 
   it('returns unsupported_grant_type when findServiceClient is unavailable', async () => {
@@ -169,7 +169,7 @@ describe('OAuth client_credentials grant (stateless service tokens)', () => {
     const response = await tokenRequest(router, { scope: 'service:ping' });
 
     expect(response.status).toBe(400);
-    expect((await response.json()) as { error: { code: string } }).toMatchObject({ error: { code: 'unsupported_grant_type' } });
+    expect((await response.json()) as { error: string }).toMatchObject({ error: 'unsupported_grant_type' });
   });
 });
 

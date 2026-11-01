@@ -33,6 +33,7 @@ map=/workspace/deploy/k8s/overlays/preprod/idp-identity-sync/client-map.csv
 stage=migrations
 createdb identity_schema
 for migration in /workspace/api/drizzle/*.sql; do sql -d identity_schema -f "$migration"; done
+sql -d identity_schema -f /workspace/api/drizzle/control/0013_oauth_refresh_tokens.sql
 createdb -T identity_schema app
 createdb -T identity_schema preprod
 stage=fixtures

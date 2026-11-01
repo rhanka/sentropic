@@ -1,4 +1,5 @@
 export interface OAuthContinuationState {
+  sessionId?: string;
   acr?: string;
   amr?: string[] | null;
   authTime?: string;
