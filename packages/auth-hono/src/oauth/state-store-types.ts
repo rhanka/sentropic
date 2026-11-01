@@ -38,6 +38,10 @@ export interface OauthClientRecord {
 }
 
 export interface AuthCodePayload {
+  offlineGrantId?: string;
+  issuer?: string;
+  audience?: string;
+  sessionId?: string | null;
   clientId: string;
   userId: string;
   tenantId: string | null;
@@ -61,6 +65,7 @@ export interface AuthCodePayload {
 }
 
 export interface TokenMeta {
+  refreshFamilyId?: string | null;
   jti: string;
   tokenType: OauthTokenType;
   clientId: string;
@@ -127,6 +132,7 @@ export const TOKEN_EXCHANGE_REQUESTED_TOKEN_TYPE = 'urn:ietf:params:oauth:token-
 export const TOKEN_EXCHANGE_MAX_TTL_SECONDS = 300;
 
 export interface OauthStateStorePort {
+  findAuthCode?(code: string): Promise<AuthCodePayload | null>;
   findClient(clientId: string): Promise<OauthClientRecord | null>;
   findServiceClient?(clientId: string): Promise<ServiceClientRecord | null>;
   saveAuthCode(code: string, payload: AuthCodePayload, ttlSec: number): Promise<void>;
