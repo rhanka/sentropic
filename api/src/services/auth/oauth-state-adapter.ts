@@ -30,6 +30,12 @@ export const createOauthStateStoreAdapter = (
   const expiresFromTtl = (ttlSec: number): Date => new Date(now().getTime() + ttlSec * 1000);
 
   return {
+    async findAuthCode(code) {
+      const [row] = await database.select().from(authorizationCodes)
+        .where(and(eq(authorizationCodes.code, code), isNull(authorizationCodes.usedAt),
+          gt(authorizationCodes.expiresAt, now()))).limit(1);
+      return row ? toAuthCodePayload(row) : null;
+    },
     async consumeAuthCode(code) {
       const [row] = await database
         .update(authorizationCodes)
@@ -157,6 +163,7 @@ export const createOauthStateStoreAdapter = (
         .insert(oauthTokens)
         .values({
           audience: meta.audience,
+          refreshFamilyId: meta.refreshFamilyId ?? null,
           clientId: meta.clientId,
           createdAt: meta.createdAt,
           dpopJkt: meta.dpopJkt,
@@ -279,6 +286,10 @@ const toAuthCodePayload = (row: typeof authorizationCodes.$inferSelect): AuthCod
   const acr = typeof payload?.acr === 'string' ? payload.acr : 'urn:sentropic:loa:bearer';
   return {
     acr,
+    offlineGrantId: typeof payload?.offlineGrantId === 'string' ? payload.offlineGrantId : undefined,
+    issuer: typeof payload?.issuer === 'string' ? payload.issuer : undefined,
+    audience: typeof payload?.audience === 'string' ? payload.audience : undefined,
+    sessionId: typeof payload?.sessionId === 'string' ? payload.sessionId : null,
     amr: Array.isArray(payload?.amr) ? payload.amr : (acr === 'urn:sentropic:loa:passkey-fresh' ? ['hwk', 'user', 'mfa'] : ['pwd']),
     authTime: toDate(payload?.authTime) ?? row.createdAt,
     clientId: row.clientId,
@@ -297,6 +308,7 @@ const toAuthCodePayload = (row: typeof authorizationCodes.$inferSelect): AuthCod
 };
 
 const toTokenMeta = (row: typeof oauthTokens.$inferSelect): TokenMeta => ({
+  refreshFamilyId: row.refreshFamilyId,
   audience: row.audience,
   clientId: row.clientId,
   createdAt: row.createdAt,
