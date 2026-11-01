@@ -1,0 +1,6 @@
+id: no-function-constructor
+message: Do not use the Function constructor; it is implied eval.
+severity: error
+language: TypeScript
+rule:
+  pattern: new Function($$$ARGS)

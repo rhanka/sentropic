@@ -1,0 +1,8 @@
+id: no-weak-hash
+message: Do not use MD5 or SHA-1 for hashing; use SHA-256 or stronger.
+severity: warning
+language: TypeScript
+rule:
+  pattern: createHash($ALGO)
+constraints:
+  ALGO: { regex: "^['\"](md5|sha1)['\"]$" }
