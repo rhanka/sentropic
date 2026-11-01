@@ -317,3 +317,37 @@ export const issueCmTid = async (input: { userId: string; tenantId: string }, no
   const { tid } = getCmIdentity();
   return tid.issueTid(input, now.toISOString());
 };
+
+/** Enrol a workspace in the CM directory (A2.2). `repoIdentity` null = repo-less (Q-A). */
+export const enrolCmWorkspace = async (input: {
+  workspaceId: string;
+  tenantId: string;
+  repoIdentity?: string | null;
+  aliases?: string[];
+  enrolledAt?: Date;
+}): Promise<void> => {
+  const { tenancy } = getCmIdentity();
+  await tenancy.workspaces.enrolWorkspace({
+    workspaceId: input.workspaceId,
+    tenantId: input.tenantId,
+    repoIdentity: input.repoIdentity ?? null,
+    aliases: input.aliases ?? [],
+    enrolledAt: (input.enrolledAt ?? new Date()).toISOString(),
+  });
+};
+
+/** Put (upsert) a workspace member role in the CM store. */
+export const putCmWorkspaceMember = async (
+  workspaceId: string,
+  userId: string,
+  role: 'viewer' | 'commenter' | 'editor' | 'admin',
+): Promise<void> => {
+  const { tenancy } = getCmIdentity();
+  await tenancy.workspaceMembers.putWorkspaceMember({ workspaceId, userId, role });
+};
+
+/** Remove a workspace member from the CM store. */
+export const removeCmWorkspaceMember = async (workspaceId: string, userId: string): Promise<boolean> => {
+  const { tenancy } = getCmIdentity();
+  return tenancy.workspaceMembers.removeWorkspaceMember(workspaceId, userId);
+};
