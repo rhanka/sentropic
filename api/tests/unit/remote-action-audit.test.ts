@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   createPolicyStore,
   type PolicyStoreGates,
-} from '../../../src/services/cluster-mesh/session-content-policy-store';
+} from '../../src/services/cluster-mesh/session-content-policy-store';
 
 const POLICY = {
   format: 'h2a.session-content-policy/1',
@@ -92,7 +92,7 @@ describe('STORE-ERASURE audit and purge separation', () => {
     store.initiatePurge({ policyId: 'policy-audit-1', scope: 'terminal.cache' });
     expect(store.projectAudit({ policyId: 'policy-audit-1' }).purge.status).toBe('purge_pending');
     expect(() => store.readRetained({ policyId: 'policy-audit-1' }))
-      .toMatchObject({ code: 'purge_pending' });
+      .toThrowError(expect.objectContaining({ code: 'purge_pending' }));
   });
 
   it('should let purge initiate while the source is disconnected without source veto', () => {
