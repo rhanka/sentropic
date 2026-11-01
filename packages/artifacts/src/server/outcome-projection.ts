@@ -5,16 +5,22 @@ import type { ArtifactFailure, ArtifactOutcome } from './failures.js';
 
 export function projectArtifactHttpOutcome(outcome: ArtifactOutcome<HttpResponse>): HttpResponse {
   if (outcome.ok) return outcome.result;
-  return { status: outcome.failure.httpStatus, body: { error: outcome.failure.publicCode } };
+  const { failure } = outcome;
+  return { status: failure.httpStatus, body: { error: failure.publicCode,
+    ...(failure.conflict !== undefined ? { conflict: failure.conflict } : {}),
+    ...(failure.edit !== undefined ? { edit: failure.edit } : {}) } };
 }
 
 /** Feed this application result to mcp-platform's existing result codec. No second wire protocol. */
 export function projectArtifactMcpOutcome(outcome: ArtifactOutcome<HttpResponse>, auditId: string): AppToolResult {
   if (outcome.ok) return { ok: true, output: outcome.result.body, auditId, redactionClass: 'low' };
-  const { publicCode, retriable } = outcome.failure;
+  const { publicCode, retriable, conflict, edit } = outcome.failure;
+  // The platform error envelope is closed (code/message/retriable), so typed details ride in the message.
+  const details = conflict !== undefined ? conflict : edit;
+  const message = details === undefined ? publicCode : `${publicCode} ${JSON.stringify(details)}`;
   return {
     ok: false, auditId, redactionClass: 'low',
-    error: { code: publicCode, message: publicCode, retriable },
+    error: { code: publicCode, message, retriable },
   };
 }
 

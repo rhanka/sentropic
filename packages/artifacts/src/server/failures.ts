@@ -5,7 +5,20 @@ export type ArtifactInternalKey = string & { readonly __brand: 'internal-key' };
 export type ArtifactErrorKind =
   | 'provider_unavailable' | 'command_conflict' | 'pointer_conflict'
   | 'unauthorized_at_commit' | 'capability_unselected' | 'admission_unavailable'
-  | 'invalid_request' | 'anonymous' | 'access_denied' | 'not_found' | 'gone' | 'unprocessable' | 'verification_failed';
+  | 'invalid_request' | 'anonymous' | 'access_denied' | 'not_found' | 'gone' | 'unprocessable' | 'verification_failed'
+  | 'edit_mismatch';
+
+/** Optimistic-concurrency payload: the caller re-reads and merges against this. */
+export interface ArtifactConflictDetails {
+  readonly currentReleaseId: string | null;
+  readonly currentDigest: string | null;
+}
+
+/** Edit-application payload: which path failed the exactly-once rule and how often oldStr occurred. */
+export interface ArtifactEditDetails {
+  readonly path: string;
+  readonly occurrences: number;
+}
 export type ArtifactFailureCategory = ArtifactFailure['category'];
 
 interface ArtifactFailureFields {
@@ -17,6 +30,10 @@ interface ArtifactFailureFields {
   readonly operation: string;
   readonly phase: string;
   readonly commitState: ArtifactCommitState;
+  /** Present on pointer/command conflicts so the caller can re-read and merge. */
+  readonly conflict?: ArtifactConflictDetails;
+  /** Present on edit_mismatch so the caller sees the failing path and occurrence count. */
+  readonly edit?: ArtifactEditDetails;
   /** Original thrown value, retained by identity and deliberately non-enumerable. */
   readonly cause: unknown;
 }
@@ -28,7 +45,7 @@ export interface ArtifactOperationalFailure extends ArtifactFailureFields {
 
 export interface ArtifactOrdinaryFailure extends Omit<ArtifactFailureFields, 'variant' | 'retriable'> {
   readonly kind: 'ordinary';
-  readonly category: 'invalid_request' | 'not_found' | 'gone' | 'unprocessable' | 'verification_failed';
+  readonly category: 'invalid_request' | 'not_found' | 'gone' | 'unprocessable' | 'verification_failed' | 'edit_mismatch';
   readonly retriable: false;
 }
 
@@ -67,7 +84,8 @@ export interface ArtifactPublicRefusal {
 export class ArtifactOperationError extends Error {
   constructor(
     readonly kind: ArtifactErrorKind,
-    readonly details: { readonly cause?: unknown; readonly refusal?: ArtifactPublicRefusal } = {},
+    readonly details: { readonly cause?: unknown; readonly refusal?: ArtifactPublicRefusal;
+      readonly conflict?: ArtifactConflictDetails; readonly edit?: ArtifactEditDetails } = {},
   ) {
     super(kind, { cause: details.cause });
     this.name = 'ArtifactOperationError';
@@ -94,7 +112,7 @@ const UNAVAILABLE_CODES = new Set([
 const TIMEOUT_NAMES = new Set(['TimeoutError', 'RequestTimeout', 'RequestTimeoutError']);
 const DOMAIN_STATUS = {
   invalid_request: 400, anonymous: 401, access_denied: 403,
-  not_found: 404, gone: 410, unprocessable: 422, verification_failed: 422,
+  not_found: 404, gone: 410, unprocessable: 422, verification_failed: 422, edit_mismatch: 422,
 } as const;
 
 function field(value: unknown, name: string): unknown {
@@ -129,7 +147,10 @@ function operationProjection(error: ArtifactOperationError): Projection {
   const { kind } = error;
   switch (kind) {
     case 'provider_unavailable': case 'admission_unavailable': return unavailable(kind);
-    case 'command_conflict': case 'pointer_conflict': return conflict(kind);
+    case 'command_conflict': case 'pointer_conflict': {
+      const base = conflict(kind);
+      return error.details.conflict === undefined ? base : { ...base, conflict: error.details.conflict };
+    }
     case 'capability_unselected': return {
       kind: 'operational', category: kind, variant: 'unselected_operation',
       httpStatus: 503, publicCode: 'capability_unavailable', retriable: false,
@@ -149,7 +170,10 @@ function operationProjection(error: ArtifactOperationError): Projection {
     }
     case 'anonymous': case 'access_denied':
       return { kind: 'admission', category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind, retriable: false };
-    default: return { kind: 'ordinary', category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind, retriable: false };
+    default: {
+      const base = { kind: 'ordinary', category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind, retriable: false } as const;
+      return kind === 'edit_mismatch' && error.details.edit !== undefined ? { ...base, edit: error.details.edit } : base;
+    }
   }
 }
 
