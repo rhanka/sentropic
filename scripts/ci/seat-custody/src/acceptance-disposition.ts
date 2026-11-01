@@ -1,7 +1,7 @@
 // r6 §6.3/§6.4/T6-M1 acceptance disposition: enumerated inherited IDs, source paths,
 // destination rows, L03a test IDs and §4.5 credential/copy/loader receipts.
 // Embedded literals: the .tmp preservation inventories are not part of the shipped tree.
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const C_PREFIX = "scripts/ci/seat-custody/tests/";
@@ -1190,3 +1190,108 @@ export function validateAcceptanceDisposition(repoRoot: string): { ids: number; 
   return { ids: ACCEPTANCE_IDS.length, paths: REQUIRED_PATHS.length, rows: SECTION_64_ROWS.length };
 }
 
+export type CollectionProof = {
+  destinations: number;
+  missingFiles: string[];
+  unwired: string[];
+  unknownSuites: string[];
+  pending: string[];
+  cWired: number;
+  dWired: number;
+};
+
+// T6-M1/L3-K collection proof. Every enumerated destination (§6.4 rows, L03a/L03b
+// T5/T6 IDs, replacement paths) is checked against the real suite wiring:
+//  - C/ destinations are wired when the seat-custody Makefile's required glob
+//    (tests/*.test.ts tests/e2e/*.test.ts) covers the resolved file;
+//  - D/ destinations are wired when the root Makefile's test-security-daily SCOPE
+//    lists the resolved file;
+//  - replacement paths under C_PREFIX/D_PREFIX follow the same rules, other
+//    repo-relative replacements only need to exist.
+// Destinations owned by L03a/L03b must exist now (missingFiles); destinations of
+// later lots that have not landed yet are reported as pending, never silently
+// dropped. Any existing destination that no required suite runs is unwired.
+export function validateCollection(repoRoot: string): CollectionProof {
+  const seatMakefile = readFileSync(join(repoRoot, 'scripts/ci/seat-custody/Makefile'), 'utf8');
+  const rootMakefile = readFileSync(join(repoRoot, 'Makefile'), 'utf8');
+  const dailyBlock = (() => {
+    const start = rootMakefile.indexOf('\ntest-security-daily:');
+    if (start < 0) return '';
+    const rest = rootMakefile.slice(start);
+    const end = rest.indexOf('\n\n', 1);
+    return end < 0 ? rest : rest.slice(0, end);
+  })();
+  const cGlobWired = (rel: string): boolean =>
+    seatMakefile.includes('tests/*.test.ts') &&
+    (rel.startsWith(C_PREFIX) && /^scripts\/ci\/seat-custody\/tests\/[^/]+\.test\.ts$/.test(rel) ||
+      /^scripts\/ci\/seat-custody\/tests\/e2e\/[^/]+\.test\.ts$/.test(rel));
+  const isDWired = (rel: string): boolean => rel.startsWith(D_PREFIX) && dailyBlock.includes(rel);
+
+  const l03abOwned = new Set<string>([
+    ...Object.values(L03A_TEST_IDS).flat(),
+    ...Object.values(L03B_TEST_IDS).flat(),
+  ]);
+  const replacements = REQUIRED_PATHS.filter(p => p.status !== 'present').map(p => p.replacement!);
+  const allDestinations = [...new Set<string>([
+    ...SECTION_64_ROWS.flatMap(r => r.destinations),
+    ...l03abOwned,
+    ...replacements,
+  ])];
+
+  const missingFiles: string[] = [];
+  const unwired: string[] = [];
+  const pending: string[] = [];
+  let cWired = 0;
+  let dWired = 0;
+  for (const d of allDestinations) {
+    const rel = d.startsWith('C/') || d.startsWith('D/') ? resolveDestination(d) : d;
+    const exists = existsSync(join(repoRoot, rel));
+    if (!exists) {
+      if (l03abOwned.has(d) || replacements.includes(d)) missingFiles.push(d + ' -> ' + rel);
+      else pending.push(d + ' -> ' + rel);
+      continue;
+    }
+    if (rel.startsWith(C_PREFIX)) {
+      if (cGlobWired(rel)) cWired++;
+      else unwired.push(d);
+    } else if (rel.startsWith(D_PREFIX)) {
+      if (isDWired(rel)) dWired++;
+      else unwired.push(d);
+    }
+  }
+
+  // Every present inherited path's suite must be a real Make target (explicit or
+  // pattern rule) in the root Makefile or one of its included Makefiles.
+  const makefiles = [join(repoRoot, 'Makefile')];
+  for (const line of rootMakefile.split('\n')) {
+    const inc = /^-?include\s+(\S+)/.exec(line);
+    if (inc && existsSync(join(repoRoot, inc[1]))) makefiles.push(join(repoRoot, inc[1]));
+  }
+  const explicit = new Set<string>();
+  const patterns: string[] = [];
+  for (const mf of makefiles) {
+    for (const line of readFileSync(mf, 'utf8').split('\n')) {
+      const t = /^([A-Za-z0-9_.-]+):/.exec(line);
+      if (t) explicit.add(t[1]);
+      const p = /^([A-Za-z0-9_.-]+)%:/.exec(line);
+      if (p) patterns.push(p[1]);
+    }
+  }
+  const unknownSuites: string[] = [];
+  for (const p of REQUIRED_PATHS) {
+    if (p.status !== 'present') continue;
+    const target = p.suite.replace(/^make\s+/, '');
+    const known = explicit.has(target) || patterns.some(stem => target.startsWith(stem));
+    if (!known) unknownSuites.push(p.suite);
+  }
+
+  return {
+    destinations: allDestinations.length,
+    missingFiles,
+    unwired,
+    unknownSuites,
+    pending,
+    cWired,
+    dWired,
+  };
+}
