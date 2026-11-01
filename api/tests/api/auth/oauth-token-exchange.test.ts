@@ -90,7 +90,7 @@ describe('OAuth token exchange API route (2-IdP)', () => {
       method: 'POST',
     });
     expect(asPublic.status).toBe(401);
-    await expect(asPublic.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
+    await expect(asPublic.json()).resolves.toMatchObject({ error: 'invalid_client' });
 
     const wrongSecret = await app.request('http://localhost:9197/api/v1/auth/oauth/token', {
       body: exchangeBody(subject),
@@ -101,7 +101,7 @@ describe('OAuth token exchange API route (2-IdP)', () => {
       method: 'POST',
     });
     expect(wrongSecret.status).toBe(401);
-    await expect(wrongSecret.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
+    await expect(wrongSecret.json()).resolves.toMatchObject({ error: 'invalid_client' });
   });
 
   it('accepts only the new credential after a workload rekey', async () => {
@@ -112,7 +112,7 @@ describe('OAuth token exchange API route (2-IdP)', () => {
     }).where(eq(serviceClients.clientId, WORKLOAD_CLIENT_ID));
     const oldCredential = await workloadRequest(body);
     expect(oldCredential.status).toBe(401);
-    await expect(oldCredential.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
+    await expect(oldCredential.json()).resolves.toMatchObject({ error: 'invalid_client' });
     expect((await workloadRequest(body, rotated)).status).toBe(200);
   });
 
@@ -121,7 +121,7 @@ describe('OAuth token exchange API route (2-IdP)', () => {
     await db.update(serviceClients).set({ revokedAt: new Date() }).where(eq(serviceClients.clientId, WORKLOAD_CLIENT_ID));
     const res = await workloadRequest(body);
     expect(res.status).toBe(401);
-    await expect(res.json()).resolves.toMatchObject({ error: { code: 'invalid_client' } });
+    await expect(res.json()).resolves.toMatchObject({ error: 'invalid_client' });
   });
 
   it('rejects a scope outside the workload policy', async () => {
@@ -142,7 +142,7 @@ describe('OAuth token exchange API route (2-IdP)', () => {
       method: 'POST',
     });
     expect(res.status).toBe(400);
-    await expect(res.json()).resolves.toMatchObject({ error: { code: 'invalid_scope' } });
+    await expect(res.json()).resolves.toMatchObject({ error: 'invalid_scope' });
   });
 
   it.each(['missing', 'no-policy'])('denies an unregistered exchange client: %s', async (state) => {
@@ -162,20 +162,20 @@ describe('OAuth token exchange API route (2-IdP)', () => {
     body.set('audience', audience);
     const res = await workloadRequest(body.toString());
     expect(res.status).toBe(400);
-    await expect(res.json()).resolves.toMatchObject({ error: { code: 'invalid_target' } });
+    await expect(res.json()).resolves.toMatchObject({ error: 'invalid_target' });
   });
 
   it.each(['https://immo.sent-tech.ca/mcp', `${MCP_AUDIENCE}/`, RADAR_AUDIENCE])('denies subject audience %s', async (audience) => {
     await db.update(oauthClients).set({ resourceIndicators: [audience] }).where(eq(oauthClients.clientId, PUBLIC_CLIENT_ID));
     const res = await workloadRequest(exchangeBody(await issueSubjectToken(audience)));
     expect(res.status).toBe(400);
-    await expect(res.json()).resolves.toMatchObject({ error: { code: 'invalid_grant' } });
+    await expect(res.json()).resolves.toMatchObject({ error: 'invalid_grant' });
   });
 
   it('denies client credentials for the registered workload', async () => {
     const credentials = await workloadRequest(new URLSearchParams({ grant_type: 'client_credentials', scope: 'immo:search' }).toString());
     expect(credentials.status).toBe(400);
-    await expect(credentials.json()).resolves.toMatchObject({ error: { code: 'unauthorized_client' } });
+    await expect(credentials.json()).resolves.toMatchObject({ error: 'unauthorized_client' });
   });
 
   it.each(['missing', 'form-only', 'basic-and-form'])('requires Basic credentials without form credentials: %s', async (mode) => {
@@ -212,7 +212,7 @@ describe('OAuth token exchange API route (2-IdP)', () => {
       method: 'POST',
     });
     expect(exchange.status).toBe(400);
-    await expect(exchange.json()).resolves.toMatchObject({ error: { code: 'unauthorized_client' } });
+    await expect(exchange.json()).resolves.toMatchObject({ error: 'unauthorized_client' });
 
     const credentials = await app.request('http://localhost:9197/api/v1/auth/oauth/token', {
       body: new URLSearchParams({ grant_type: 'client_credentials', scope: 'immo:search' }).toString(),
@@ -223,7 +223,7 @@ describe('OAuth token exchange API route (2-IdP)', () => {
       method: 'POST',
     });
     expect(credentials.status).toBe(400);
-    await expect(credentials.json()).resolves.toMatchObject({ error: { code: 'unauthorized_client' } });
+    await expect(credentials.json()).resolves.toMatchObject({ error: 'unauthorized_client' });
   });
 });
 

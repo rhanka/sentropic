@@ -44,7 +44,7 @@ describe('OAuth consent re-checks the live session policy (F7)', () => {
     const response = await approve(bearerRouter, state);
 
     expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'access_denied' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'access_denied' });
   });
 
   it('issues a code when the live session still satisfies the policy', async () => {
@@ -94,6 +94,6 @@ describe('OAuth consent re-checks the live session policy (F7)', () => {
     const response = await approve(swappedRouter, state);
 
     expect(response.status).toBe(403);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: 'access_denied' } });
+    await expect(response.json()).resolves.toMatchObject({ error: 'access_denied' });
   });
 });
