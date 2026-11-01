@@ -8,7 +8,7 @@ export const boundaryKey = Symbol.for('sentropic.ci.provider-boundary');
 const upstreams = new Set(['api.mistral.ai', 'api.openai.com', 'chatgpt.com',
   'api.anthropic.com', 'generativelanguage.googleapis.com', 'api.tavily.com']);
 const localHosts = new Set(['localhost', '127.0.0.1', '[::1]', 'api', 'api-sut',
-  'ui', 'postgres', 'minio', 'scw-tem-mock', 'provider-fixture', 'openvscode']);
+  'ui', 'postgres', 'minio', 'scw-tem-mock', 'provider-fixture', 'openvscode', 'auth-idp']);
 
 // Loaded only from the read-only test overlay, never packaged in the application.
 export function installProviderBoundary({ endpoint, fetchImpl = globalThis.fetch, onUnexpected = () => {} } = {}) {
