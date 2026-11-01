@@ -71,3 +71,19 @@ export const createOAuthRefreshAdapter = (options: Options = {}): Adapter => {
     },
   };
 };
+
+export const purgeExpiredRefreshFamilies = async (database: typeof db, now: Date): Promise<number> => {
+  const candidates = await database.select().from(oauthRefreshTokens)
+    .where(and(eq(oauthRefreshTokens.generation, 0), sql`${oauthRefreshTokens.familyExpiresAt} < ${now}`));
+  let removed = 0;
+  for (const anchor of candidates) {
+    removed += await createOAuthRefreshAdapter({ database }).withLock(anchor, async (_store, tx) => {
+      const result = await tx.execute(sql`DELETE FROM public.oauth_refresh_tokens r
+        WHERE r.family_id = ${anchor.id} AND r.family_expires_at < ${now}
+          AND NOT EXISTS (SELECT 1 FROM public.oauth_tokens t
+            WHERE t.refresh_family_id = r.family_id AND t.expires_at >= ${now}) RETURNING r.id`);
+      return result.rowCount ?? 0;
+    });
+  }
+  return removed;
+};

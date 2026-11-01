@@ -8,6 +8,7 @@ import type {
 import { and, eq, gt, isNull, lt } from 'drizzle-orm';
 
 import { db } from '../../db/client';
+import { purgeExpiredRefreshFamilies } from './oauth-refresh-adapter';
 import {
   authorizationCodes,
   oauthClients,
@@ -101,7 +102,8 @@ export const createOauthStateStoreAdapter = (
         database.delete(revokedTokens).where(lt(revokedTokens.expiresAt, expiredAt)).returning(),
       ]);
 
-      return codes.length + tokens.length + proofs.length + revoked.length;
+      const refresh = await purgeExpiredRefreshFamilies(database, expiredAt);
+      return codes.length + tokens.length + proofs.length + revoked.length + refresh;
     },
 
     async recordDpopJti(jti, expiresAt) {
