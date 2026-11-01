@@ -56,6 +56,54 @@ BEGIN
   END IF;
 END $$;
 --> statement-breakpoint
+CREATE FUNCTION public.oauth_refresh_revoke_user(p_user text, p_reason text)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE f text;
+BEGIN
+  PERFORM 1 FROM public.users WHERE id = p_user FOR UPDATE;
+  FOR f IN SELECT id FROM public.oauth_refresh_tokens
+    WHERE user_id = p_user AND generation = 0 ORDER BY id FOR UPDATE LOOP
+    PERFORM public.oauth_refresh_revoke_family(f, p_reason, clock_timestamp()::timestamp);
+  END LOOP;
+END $$;
+--> statement-breakpoint
+-- Statement guard precedes tuple locking (a row trigger alone can deadlock on FK checks).
+CREATE FUNCTION public.oauth_refresh_client_statement_guard()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE c text;
+BEGIN
+  FOR c IN SELECT client_id FROM public.oauth_clients ORDER BY client_id LOOP
+    PERFORM public.oauth_refresh_client_guard(c, true);
+  END LOOP;
+  RETURN NULL;
+END $$;
+CREATE TRIGGER oauth_refresh_client_guard BEFORE UPDATE OR DELETE ON public.oauth_clients
+  FOR EACH STATEMENT EXECUTE FUNCTION public.oauth_refresh_client_statement_guard();
+--> statement-breakpoint
+CREATE FUNCTION public.oauth_refresh_client_invalidate()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE u text;
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    IF NEW.allowed_scopes @> OLD.allowed_scopes AND NEW.resource_indicators @> OLD.resource_indicators
+      AND NEW.grant_types @> OLD.grant_types AND NEW.required_acr IS NOT DISTINCT FROM OLD.required_acr
+      AND NEW.allowed_user_ids IS NOT DISTINCT FROM OLD.allowed_user_ids
+      AND NEW.dpop_bound_access_tokens IS NOT DISTINCT FROM OLD.dpop_bound_access_tokens
+      AND NEW.token_endpoint_auth_method IS NOT DISTINCT FROM OLD.token_endpoint_auth_method
+      THEN RETURN NEW; END IF;
+  END IF;
+  FOR u IN SELECT DISTINCT user_id FROM public.oauth_refresh_tokens
+    WHERE client_id = OLD.client_id ORDER BY user_id LOOP
+    PERFORM 1 FROM public.users WHERE id = u FOR UPDATE;
+  END LOOP;
+  PERFORM public.oauth_refresh_revoke_family(id, 'policy_denied', clock_timestamp()::timestamp)
+    FROM public.oauth_refresh_tokens WHERE client_id = OLD.client_id AND generation = 0 ORDER BY id;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER oauth_refresh_client_invalidate BEFORE UPDATE OR DELETE ON public.oauth_clients
+  FOR EACH ROW EXECUTE FUNCTION public.oauth_refresh_client_invalidate();
+--> statement-breakpoint
 CREATE FUNCTION public.oauth_refresh_revoke_family(p_family text, p_reason text, p_now timestamp)
 RETURNS void LANGUAGE plpgsql AS $$
 BEGIN
