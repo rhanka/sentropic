@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { workspaceMemberships } from '../../src/db/schema';
+import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
 
 async function importApp() {
   const mod = await import('../../src/app');
@@ -29,18 +29,9 @@ describe('Locks API', () => {
     admin = await createAuthenticatedUser('admin_org');
     workspaceId = userA.workspaceId;
 
-    await db
-      .insert(workspaceMemberships)
-      .values({ workspaceId, userId: userB.id, role: 'editor', createdAt: new Date() })
-      .onConflictDoNothing();
-    await db
-      .insert(workspaceMemberships)
-      .values({ workspaceId, userId: viewer.id, role: 'viewer', createdAt: new Date() })
-      .onConflictDoNothing();
-    await db
-      .insert(workspaceMemberships)
-      .values({ workspaceId, userId: admin.id, role: 'admin', createdAt: new Date() })
-      .onConflictDoNothing();
+    await putCmWorkspaceMember(workspaceId!, userB.id, 'editor');
+    await putCmWorkspaceMember(workspaceId!, viewer.id, 'viewer');
+    await putCmWorkspaceMember(workspaceId!, admin.id, 'admin');
   });
 
   afterEach(async () => {
