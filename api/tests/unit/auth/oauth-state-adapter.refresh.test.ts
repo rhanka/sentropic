@@ -4,6 +4,7 @@ import { eq, sql } from 'drizzle-orm';
 import { db } from '../../../src/db/client';
 import { oauthClients, users } from '../../../src/db/schema';
 import { createOAuthRefreshAdapter } from '../../../src/services/auth/oauth-refresh-adapter';
+import { createConsentStoreAdapter } from '../../../src/services/auth/consent-store-adapter';
 
 const now = new Date('2026-11-01T00:00:00Z');
 const userId = 'refresh-pg-user';
@@ -39,6 +40,21 @@ describe('PostgreSQL refresh storage', () => {
     expect(await adapter().findByHash(hash('family'))).toMatchObject({ id: 'family', generation: 0 });
     await expect(adapter().save({ ...row('duplicate'), familyId: 'family', generation: 1 }))
       .rejects.toThrow();
+  });
+
+  it('should keep offline scope/resource approvals separate from online scope unions', async () => {
+    const consents = createConsentStoreAdapter();
+    await consents.saveGrant(userId, clientId, ['read', 'offline_access'], undefined,
+      { issuer: 'https://idp.test', resource: 'https://a.test/mcp' });
+    const first = await consents.getGrant(userId, clientId);
+    await consents.saveGrant(userId, clientId, ['write', 'offline_access'], undefined,
+      { issuer: 'https://idp.test', resource: 'https://b.test/mcp' });
+    const second = await consents.getGrant(userId, clientId);
+    expect(second?.scopes).toEqual(expect.arrayContaining(['read', 'write', 'offline_access']));
+    expect(second?.offlineScopes).toEqual(['write', 'offline_access']);
+    expect(second?.approvedResources).toEqual(['https://b.test/mcp']);
+    expect(second?.offlineGrantId).not.toBe(first?.offlineGrantId);
+    expect(await consents.getGrant(userId, clientId, 'other-tenant')).toBeNull();
   });
 
   it('should serialize racing rotations and retain replay evidence', async () => {
