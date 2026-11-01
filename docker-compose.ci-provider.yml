@@ -2,21 +2,23 @@
 services:
   api:
     environment:
-      CI_PROVIDER_FIXTURE: "1"
+      CI_PROVIDER_FIXTURE: ${CI_PROVIDER_FIXTURE:-1}
+      CI_PROVIDER_MODE: ${CI_PROVIDER_MODE:-fixture}
       CI_PROVIDER_ENV: ${COMPOSE_PROJECT_NAME}
       NODE_OPTIONS: --import=/run/ci-provider/provider-server.mjs
-      OPENAI_API_KEY: ci-provider-fixture-no-live-credential
-      MISTRAL_API_KEY: ci-provider-fixture-no-live-credential
-      TAVILY_API_KEY: ci-provider-fixture-no-live-credential
-      GEMINI_API_KEY: ""
-      ANTHROPIC_API_KEY: ""
-      COHERE_API_KEY: ""
-      MUSE_API_KEY: ""
+      OPENAI_API_KEY: ${CI_PROVIDER_OPENAI_KEY:-ci-provider-fixture-no-live-credential}
+      MISTRAL_API_KEY: ${CI_PROVIDER_MISTRAL_KEY:-ci-provider-fixture-no-live-credential}
+      TAVILY_API_KEY: ${CI_PROVIDER_TAVILY_KEY:-ci-provider-fixture-no-live-credential}
+      GEMINI_API_KEY: ${CI_PROVIDER_GEMINI_KEY:-}
+      ANTHROPIC_API_KEY: ${CI_PROVIDER_ANTHROPIC_KEY:-}
+      COHERE_API_KEY: ${CI_PROVIDER_COHERE_KEY:-}
+      MUSE_API_KEY: ${CI_PROVIDER_MUSE_KEY:-}
       JEV_API_KEY: ""
       GOOGLE_APPLICATION_CREDENTIALS: ""
       GOOGLE_CLOUD_PROJECT: ""
     volumes:
       - ./e2e/fixtures/provider-server.mjs:/run/ci-provider/provider-server.mjs:ro
+      - ./.tmp/live-provider:/run/ci-live:rw
     configs:
       - source: ci-provider-marker
         target: /run/ci-provider/marker
@@ -38,4 +40,4 @@ configs:
     content: sentropic-ci-provider-v1
 networks:
   default:
-    internal: true
+    internal: ${CI_PROVIDER_INTERNAL:-true}

@@ -1,5 +1,6 @@
 import { createServer } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { readFileSync, appendFileSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
 
 export const fixtureKey = 'ci-provider-fixture-no-live-credential';
@@ -157,9 +158,30 @@ export function journeyResponse(body) {
   return { content: text.includes('Bob') ? 'Bonjour Bob, voici la réponse.' : 'CI provider response: opération terminée.' };
 }
 
-if (process.env.CI_PROVIDER_FIXTURE === '1') {
+const overlayImport = import.meta.url === 'file:///run/ci-provider/provider-server.mjs';
+if (overlayImport && process.env.CI_PROVIDER_FIXTURE === '1') {
   if (readFileSync('/run/ci-provider/marker', 'utf8').trim() !== 'sentropic-ci-provider-v1') throw new Error('Missing fixture marker');
   installProviderBoundary({ endpoint: 'http://provider-fixture:7777/' });
+}
+if (overlayImport && process.env.CI_PROVIDER_MODE === 'live') {
+  if (!/^(test|e2e)-/.test(process.env.CI_PROVIDER_ENV ?? '')) throw new Error('Live observation requires a test environment');
+  const transport = globalThis.fetch;
+  const record = row => appendFileSync('/run/ci-live/calls.jsonl', `${JSON.stringify({ ...row, at: new Date().toISOString() })}\n`);
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    const host = new URL(request.url).hostname;
+    if (!upstreams.has(host)) return transport(request);
+    const requestId = randomUUID();
+    record({ type: 'request', requestId, host });
+    try {
+      const response = await transport(request);
+      record({ type: 'response', requestId, host, status: response.status });
+      return response;
+    } catch (error) {
+      record({ type: 'error', requestId, host });
+      throw error;
+    }
+  };
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   createProviderServer().server.listen(Number(process.env.PORT ?? 7777), '0.0.0.0');
