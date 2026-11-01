@@ -1,0 +1,10 @@
+{
+  "recipe": "scripts/security/scanner/recipe.json",
+  "ordered": true,
+  "materials": [
+    { "kind": "upstream-source", "ref": "v0.76.1 lineage; exact commit pinned at build time" },
+    { "kind": "patch-set", "refs": ["CVE-2026-111497-brotli-libs-1.2.1-r0", "CVE-2026-92392-libcurl-8.23.0-r0", "CVE-2026-116587-go-jose-v4.1.6"] }
+  ],
+  "digestStatus": "pending-live-build-no-digest-invented",
+  "status": "unadmitted"
+}

@@ -1,0 +1,37 @@
+{
+  "stages": ["acquire-upstream", "apply-patches", "rebuild", "layout-sbom", "validate"],
+  "upstream": {
+    "version": "0.76.1"
+  },
+  "acquisition": {
+    "allowNetwork": false,
+    "origins": ["github.com/aquasecurity/trivy", "proxy.golang.org", "ghcr.io"],
+    "source": "v0.76.1 lineage as investigation input; exact commit pinned at build time",
+    "authenticatedUpstream": "release signature and provenance verified with admitted tooling; gaps recorded"
+  },
+  "allowedOrigins": ["github.com/aquasecurity/trivy", "proxy.golang.org", "ghcr.io", "pkg.go.dev"],
+  "patches": [
+    { "cve": "CVE-2026-111497", "component": "brotli-libs", "fixed": "1.2.1-r0" },
+    { "cve": "CVE-2026-92392", "component": "libcurl", "fixed": "8.23.0-r0" },
+    { "cve": "CVE-2026-116587", "component": "github.com/go-jose/go-jose/v4", "fixed": "v4.1.6" }
+  ],
+  "toolchain": {
+    "go": "pinned-by-upstream-go-dot-mod-at-v0.76.1",
+    "mode": "exact toolchain with locked module checksums; no network fetch of undeclared inputs"
+  },
+  "base": {
+    "image": "alpine-minimal-pinned@sha256:pending-live-build-no-digest-invented",
+    "packages": ["brotli-libs=1.2.1-r0", "libcurl=8.23.0-r0"]
+  },
+  "goModule": {
+    "note": "An operating-system layer update alone cannot repair the embedded Go module; the Go dependency below is rebuilt from locked checksums",
+    "patches": [{ "cve": "CVE-2026-116587", "package": "github.com/go-jose/go-jose/v4", "to": "v4.1.6" }]
+  },
+  "qualification": {
+    "admission": "blocked until independent content review, offline provenance verification and high-water state pass",
+    "reproducibility": "two isolated sequential builds in one job; normalized filesystem, binary and SBOM comparison; packaging time differences explicit and never hiding executable changes",
+    "sbom": "full build, runtime and embedded dependency inventory with exact digests",
+    "selfSca": "operating system and embedded Go dependencies scanned; required positive detection controls pass"
+  },
+  "status": "unadmitted-candidate-contract-only"
+}
