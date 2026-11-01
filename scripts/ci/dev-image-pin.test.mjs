@@ -2,32 +2,45 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-// The canonical production artifact is pinned through API_IMAGE_REF (Makefile
-// line 80 reads it from the recorded receipt). Dev-stack commands must clear
-// that pin: with the pin set, `image:` resolves to the production digest,
-// which ships without npm, so prepare-node-workspace fails with
-// `sh: npm: not found` and `up --build` boots production content as dev.
-const makefile = readFileSync(new URL('../../Makefile', import.meta.url), 'utf8');
+// The canonical production artifact is pinned through API_IMAGE_REF, which the
+// Makefile exports from the recorded receipt. The production digest ships
+// without npm, so any dev-stack command that resolves it fails with
+// `sh: npm: not found`. The dev overlay must therefore pin the development
+// tag explicitly (ignoring API_IMAGE_REF), while base and CI overlays keep
+// the pin for SUT lanes (BR81-EX5).
+const root = new URL('../../', import.meta.url);
+const read = (name) => readFileSync(new URL(name, root), 'utf8');
 
-const devApiRecipes = [
-  'prepare-node-workspace',
-  'up-api:',
-  'up-api-test:',
-];
+const serviceImageLines = (text, service) => {
+  const lines = text.split('\n');
+  const header = lines.findIndex((line) => line === `  ${service}:`);
+  assert.notEqual(header, -1, `service ${service} exists`);
+  const images = [];
+  for (let i = header + 1; i < lines.length; i++) {
+    if (/^  \S/.test(lines[i])) break;
+    if (/^    image:/.test(lines[i])) images.push(lines[i].trim());
+  }
+  return images;
+};
 
-for (const recipe of devApiRecipes) {
-  test(`${recipe} clears the production image pin`, () => {
-    const lines = makefile.split('\n');
-    const header = lines.findIndex((line) => line.startsWith(recipe));
-    assert.notEqual(header, -1, `recipe ${recipe} exists`);
-    const owned = [];
-    for (let i = header + 1; i < lines.length && lines[i].startsWith('\t'); i++) {
-      owned.push(lines[i]);
+test('dev overlay resolves the api service to the development tag', () => {
+  const images = serviceImageLines(read('docker-compose.dev.yml'), 'api');
+  assert.equal(images.length, 1, 'dev overlay declares exactly one api image');
+  assert.doesNotMatch(images[0], /API_IMAGE_REF/, 'dev api image ignores the production pin');
+  assert.match(images[0], /\$\{REGISTRY\}\/\$\{API_IMAGE_NAME:-sentropic-api\}:\$\{API_VERSION:-latest\}/,
+    'dev api image replicates the base fallback tag');
+});
+
+test('base and CI overlays retain the production pin for SUT lanes', () => {
+  const pinned = [
+    ['docker-compose.yml', 'api'],
+    ['docker-compose.ci.yml', 'api-sut'],
+  ];
+  for (const [file, service] of pinned) {
+    const images = serviceImageLines(read(file), service);
+    assert.ok(images.length > 0, `${file} declares a ${service} image`);
+    for (const image of images) {
+      assert.match(image, /API_IMAGE_REF/, `${file}: ${image} keeps the production pin`);
     }
-    const composeLines = owned.filter((line) => line.includes('docker-compose.dev.yml'));
-    assert.ok(composeLines.length > 0, `${recipe} issues dev-stack compose commands`);
-    for (const line of composeLines) {
-      assert.match(line, /API_IMAGE_REF=\s/, `${recipe}: ${line.trim()} must clear API_IMAGE_REF`);
-    }
-  });
-}
+  }
+});
