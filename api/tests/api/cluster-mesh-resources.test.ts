@@ -11,7 +11,10 @@ import {
 } from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
-import { tenantMemberships, tenants, workspaces } from '../../src/db/schema';
+import { workspaces } from '../../src/db/schema';
+import { createCmTenant, setCmMembershipState } from '../../src/services/identity/cm-tenancy';
+import { PLATFORM_TENANT_ID } from '../../src/services/workspace-service';
+import { cmDeleteTenants, cmQuery, cmTable } from '../utils/cm-identity-test-store';
 import {
   createResourcesTransportRouter,
   createResourcesNamespaceModule,
@@ -150,9 +153,9 @@ const clearResourceCutover = async () => {
     eq(clusterMeshNamespaceCutovers.namespace, resourceKey.namespace),
   ));
 };
-const grantDefaultTenant = (userId: string) => db.insert(tenantMemberships).values({
-  tenantId: 'sentropic', userId, status: 'approved', role: 'member',
-}).onConflictDoNothing();
+const grantDefaultTenant = (userId: string) => setCmMembershipState(userId, PLATFORM_TENANT_ID, {
+  status: 'approved', role: 'member', decidedBy: 'test',
+});
 
 describe('cluster mesh resources product scope', () => {
   let user: TestUser;
@@ -165,16 +168,18 @@ describe('cluster mesh resources product scope', () => {
     await grantDefaultTenant(user.id);
     outsider = await createAuthenticatedUser('editor');
     outsiderTenant = `resources-${crypto.randomUUID()}`;
-    await db.insert(tenants).values({ id: outsiderTenant, name: outsiderTenant, status: 'active' });
-    await db.update(workspaces).set({ tenantId: outsiderTenant })
-      .where(eq(workspaces.id, outsider.workspaceId!));
+    await createCmTenant({ tenantId: outsiderTenant, slug: outsiderTenant, status: 'active' });
+    await cmQuery(
+      `UPDATE ${cmTable('cm_workspaces')} SET "tenant_id" = $1 WHERE "workspace_id" = $2`,
+      [outsiderTenant, outsider.workspaceId!],
+    );
   });
 
   afterEach(async () => {
     await clearResourceCutover();
     await cleanupAuthData();
     await db.delete(workspaces).where(inArray(workspaces.id, [user.workspaceId!, outsider.workspaceId!]));
-    await db.delete(tenants).where(eq(tenants.id, outsiderTenant));
+    await cmDeleteTenants([outsiderTenant]);
   });
 
   it('matches canonical dispatcher reads and keeps catalog effects unavailable', async () => {
