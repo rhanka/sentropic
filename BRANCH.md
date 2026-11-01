@@ -1,10 +1,10 @@
-# Feature: cyber-act-L02 downstream patched scanner
+# Feature: cyber-act-L08a same-repo control and deadline
 
 ## Objective
-Produce and admit the sentropic downstream patched Trivy image contract per r6 section 3.
+Deliver ACT-L08a from activation amendment r6: same-repo public control, report writer and deploy-key rulesets, pinned control image, off and enable, DeadlineStatusV1 and daily deadline trigger.
 
 ## Scope / Guardrails
-- Scope limited to scanner policy profile, offline verifier, recipe, promotion workflow, receipts.
+- Scope limited to scripts/security/daily control, report, deadline, provisioning and resource modules plus one report-control workflow.
 - One migration max in `api/drizzle/*.sql` (if applicable).
 - Make-only workflow, no direct Docker commands.
 - Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
@@ -16,14 +16,9 @@ Produce and admit the sentropic downstream patched Trivy image contract per r6 s
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `scripts/security/daily/**`
+  - `docs/security/controls/**`
   - `BRANCH.md`
-  - `.security/trivy-toolchain.json`
-  - `scripts/security/daily/toolchain-contract.mjs`
-  - `scripts/security/daily/toolchain-contract.test.mjs`
-  - `scripts/security/daily/scanner-provenance.test.mjs`
-  - `scripts/security/daily/scanner-image-publish.test.mjs`
-  - `scripts/security/scanner/**`
-  - `docs/security/scanner-images/**`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -31,7 +26,6 @@ Produce and admit the sentropic downstream patched Trivy image contract per r6 s
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
-  - `docs/security/sec-s2b-qualify/**`
   - `Makefile`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
@@ -39,15 +33,8 @@ Produce and admit the sentropic downstream patched Trivy image contract per r6 s
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- `BRLOCK-EX1` acknowledgement: review_by=2026-11-30T00:00:00Z (CI lockfile lane policy, owner CI maintainers).
-- `BR02-EX1`: touch `.github/workflows/security-scanner-image.yml` only (new file, r6 section 3.2/3.3.1 required destination).
-  - Reason: r6 mandates this exact workflow path for builder, validator, publisher jobs.
-  - Impact: new workflow with workflow_dispatch only, no push/schedule/PR trigger, least-privilege per-job permissions.
-  - Rollback: delete the file, policy stays upstream-only and qualified false.
-- `BR02-EX2`: extend `Makefile` `test-security-daily` SCOPE with the two r6 section 6.4 required destinations.
-  - Reason: r6 section 6.4 wires T5-S1/S2/S3/S5/S6 and T6-S1 into `scanner-provenance` and `scanner-image-publish` suites owned by `test-security-daily`.
-  - Impact: one SCOPE line gains two files, existing five files unchanged.
-  - Rollback: revert the SCOPE line, new suites run standalone only.
+- `BR08a-EX1` (Makefile, conditional path): extend the existing `test-security-daily` `SCOPE` list with the fourteen L08a `scripts/security/daily/*.test.mjs` files. Reason: r6 section 6.4 requires every new case wired into its owning required Make suite, and the suite target already exists. Impact: one line, no target added, no existing file removed from the list. Rollback: restore the five-file list.
+- `BR08a-EX2` (.github/workflows/**, conditional path): add `.github/workflows/security-report-control.yml` with L08a-owned jobs only (report fence writers, deadline-record, control-receipt). Reason: T6-C1 parses actual emitted jobs against the section 4.1 single-environment map. Impact: new workflow, manual and schedule triggers for deadline only, no secrets. Rollback: delete the file.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -60,46 +47,49 @@ Produce and admit the sentropic downstream patched Trivy image contract per r6 s
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: Single lot ACT-L02, one review-ready head, one CI run.
-
-## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
-- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
-- Execution flow (mandatory):
-  - Develop and run tests in `tmp/feat-<slug>`.
-  - Push branch before UAT.
-  - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
-  - Switch back to `tmp/feat-<slug>` after UAT.
+- Rationale: single lane implementing one wave-table row with no orthogonal sub-workstreams.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline and constraints**
-  - [x] Read r6 sections 3, 7.2 ACT-L02, 7.3 T5-S1-S6, T6-S1, retained L2-A-E.
-  - [x] Confirm worktree `tmp/worktrees/cyber-act-L02` on branch `feat/cyber-act-L02` from `origin/main`.
-  - [x] Confirm ENV `test-cyber-L02` with ports API_PORT=8811 UI_PORT=5211 MAILDEV_UI_PORT=1111.
-  - [x] Confirm scope boundaries and BR02-EX1 before touching conditional paths.
-  - [x] Record base HEAD `1239f291f` in this file.
-- [x] **Lot 1 — RED tests first**
-  - [x] Cover dual publisher profile in `scanner-provenance.test.mjs`, existing contract suite unchanged.
-  - [x] Add `scripts/security/daily/scanner-provenance.test.mjs` for T5-S1/S2/S3/S5/S6 and T6-S1 offline/content cases.
-  - [x] Add `scripts/security/daily/scanner-image-publish.test.mjs` for T5-S4 and T6-S1 job/artifact/publication cases.
-  - [x] Prove RED locally before implementation.
-  - [x] Lot gate:
-    - [x] Targeted node test run under flock ENV=test-cyber-L02
-- [x] **Lot 2 — Policy, verifier, recipe, promotion workflow**
-  - [x] Extend `.security/trivy-toolchain.json` with upstream/sentropic-patched publisher profile, qualified false.
-  - [x] Extend `scripts/security/daily/toolchain-contract.mjs` with strict profile validation.
-  - [x] Add `scripts/security/scanner/recipe.json` and material manifest with pinned inputs.
-  - [x] Add `.github/workflows/security-scanner-image.yml` with builder, validator, publisher jobs per r6.
-  - [x] Add `docs/security/scanner-images/` qualification evidence placeholders with blocked admission.
-  - [x] No schedule enablement, no live digest invented, no seat operation.
-  - [x] Lot gate:
-    - [x] Targeted node test run under flock ENV=test-cyber-L02
-    - [x] `make scope-check ENV=test-cyber-L02`
-- [ ] **Lot N — Final validation**
-  - [x] Typecheck and lint impacted scopes.
-  - [x] Retest targeted suites ENV=test-cyber-L02.
-  - [x] `make scope-check ENV=test-cyber-L02`.
-  - [ ] Final gate step 1: create draft PR with BRANCH.md text as PR body.
-  - [ ] Final gate step 2: run ONE CI on final head and resolve blockers.
-  - [ ] Final gate step 3: report only, no merge, remove nothing.
+  - [x] Read COMMON-RULES, amendment r6 and wave-table row ACT-L08a plus section 7.3 tests.
+  - [x] Verify r6 sha256 `4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f`.
+  - [x] Create worktree `tmp/worktrees/cyber-act-L08a` on branch `feat/cyber-act-L08a` from `origin/main` (`1239f291f`).
+  - [x] Confirm command style: `make ... ENV=test-cyber-L08a` with `ENV` last.
+  - [x] Confirm scope and guardrails.
+  - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BR08a-EX1` and `BR08a-EX2`.
+  - [x] No ports needed: no compose services, tests run via `docker run` node image only.
+  - [x] No live credentials: synthetic fixtures only, fail-closed without live resources.
+- [x] **Lot 1 — Tests first**
+  - [x] Add `scripts/security/daily/workflow-contract.test.mjs` (T5-C1, T6-C1, L8-B, L8-G, L8-H).
+  - [x] Add `scripts/security/daily/report-branch-integrity.test.mjs` (T5-C4, L8-B, L8-D, L8-F subset).
+  - [x] Add `scripts/security/daily/report-format.test.mjs` (L8-C, L8-I, DeadlineStatusV1).
+  - [x] Add `scripts/security/daily/control-permit-channel.test.mjs` (T5-C6 part, T6-C3 part, L8-G).
+  - [x] Add `scripts/security/daily/control-clock.test.mjs` (T5-C6 part, T6-C3 part, L8-G, L8-J).
+  - [x] Add `scripts/security/daily/control-provisioning.test.mjs` (T5-C6 part, T6-C1 part, T6-M1 part, L8-J).
+  - [x] Add `scripts/security/daily/resource-envelope.test.mjs` (T6-B1, L8-H).
+  - [x] Add `scripts/security/daily/deadline-report.test.mjs` (L8-I).
+  - [x] Add `scripts/security/daily/collector-provenance.test.mjs` plus `control-image-publish.test.mjs` (L8-K).
+  - [x] Lot gate: tests written before implementation modules, failing run recorded.
+- [x] **Lot 2 — Implementation**
+  - [x] Add `job-environment-map.json` (section 4.1 map, twelve reader copies) plus loader module.
+  - [x] Add `report-branch-integrity.mjs` (hook-free SSH expected-parent writer contract).
+  - [x] Add `report-format.mjs` (DeadlineStatusV1 schema, sanitized public report, fence projection reader).
+  - [x] Add `control-image-pin.mjs` (pinned control image contract, fail-closed without digest).
+  - [x] Add `control-permit.mjs` (watcher, consumer, permits, translated peers, elevation, guardian).
+  - [x] Add `control-clock.mjs` (clock health, termination bounds).
+  - [x] Add `enable.mjs` (global-off-first, off and enable receipts).
+  - [x] Add `control-provisioning.mjs` (section 4.5 L08a rows, copies, expiry).
+  - [x] Add `resource-envelope.mjs` (section 7.4 L08a accounting).
+  - [x] Add `deadline-report.mjs` (07:30 trigger contract, shortfall handoff).
+  - [x] Add `.github/workflows/security-report-control.yml` (EX2).
+  - [x] Extend `test-security-daily` `SCOPE` with the L08a files (EX1).
+  - [x] Lot gate: full suite green locally under flock with `ENV=test-cyber-L08a` last, then `make down`.
+- [ ] **Lot 3 — Branch hygiene and PR**
+  - [x] Run `make scope-check`.
+  - [x] Atomic commits with `make commit` (150 lines max each), push after every few commits.
+  - [ ] Open draft PR with `BRANCH.md` as body.
+  - [ ] Run ONE CI on the final head and wait for completion.
+- [ ] **Lot 4 — Report and stop**
+  - [ ] Write `.tmp/rv/cyber-act-L08a.md` with PR, head, CI result and each acceptance item.
+  - [ ] Stop without merging.
