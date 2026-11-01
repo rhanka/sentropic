@@ -1,119 +1,47 @@
-# Feature: CI seat import (L1)
+# Feature: ACT-L03a — same-repo seat/control core on the preserved #681 lineage (daily cyber activation, amendment r6)
 
 ## Objective
-Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus challenge-opus-r6.md): import the five owner CLI seats (`agy`, `codex`, `vibe`, `muse`, `claude`) from connected CLIs (`--from cli|token`) into the sealed seat store, with the external refresh policy guard in `acquireDbAccountTransport` and the named transport paths, plus refusal tests, test-first.
+Implement lot ACT-L03a of r6 §7.2 (W1): preserve the #681 lineage rebased onto current origin/main and deliver the bounded same-repository seat/control core with qualified bootstrap placement — r6 §6 L3-A/B/C/D/F/H/I/L core, the required core suite, and tests T5-C1/C2/C3/C6, T6-C1/C2/C3/M1 (plus T6-D1 via L3-D) at the exact §6.4 destinations. Synthetic fixtures only; no live call, no payment, no custody repository or App.
 
 ## Scope / Guardrails
-- Scope limited to llm-mesh CLI/token import, external refresh policy, L1-local inspect helper, API persistence/acquisition/receiver, seat delivery integration.
-- One migration max in `api/drizzle/*.sql` (if applicable).
-- Make-only workflow, no direct Docker commands.
-- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development must happen in isolated worktree `tmp/feat-<slug>` (even for one active branch).
-- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
-- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- Scope limited to `scripts/ci/seat-custody/**`, the three new `scripts/security/daily/control-*.mjs` modules and their tests, `docs/security/activation/owner-procedure-r6.md`, and the two gate files listed under Conditional Paths.
+- Binding design: `.tmp/daily-cyber/activation-amendment-r6.md` (sha256 4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f). No design decision outside r6; anything else is reported, not decided.
+- Make-only workflow, Docker under the flock `/home/antoinefa/.cache-tmp/sentropic-docker.lock`, `ENV=test-cyber-L03a` always LAST, `make down ENV=test-cyber-L03a` after. Never `ENV=dev`, never `make clean-all`.
+- Zero Python. Zero payment on quota exhaustion. No secrets read, printed, logged or committed.
+- The preserved #681 work is rebased (never merged/cherry-picked) from `preserve/cyber-lot3-reconciled` onto `origin/main`; preserve refs stay untouched; the unadmitted broker blob `refs/preserve/cyber-lot3-broker` stays out of the tree.
+- Branch development happens in worktree `tmp/worktrees/cyber-act-L03a` on branch `feat/cyber-act-L03a`.
 - All new text in English.
-- Never read, print or copy a real secret value. Live provider calls only per spec gates (P-BILLING receipts, Q1=A caps).
-- llm-mesh release stays inside main's llm-gateway 0.21.0 declared range (`^0.27.0`): patch bump only (0.27.x), with a single-copy-of-mesh lock assertion (R6-1).
-- h2a complements: (a) fix `completeMuseDeviceImport` mis-route (stores `transportProviderId` `muse` + `refreshToken`, then re-reads CLI login file) with a test; (b) shared refresh authority across consumers (`refreshInFlight` local, `InMemoryAccountTransportCoordinator`) checked for coverage by spec 3.4/L3 and recorded.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `BRANCH.md`
-  - `spec/SPEC_EVOL_CI_SEATS.md`
-  - `packages/llm-mesh/src/enrollment/**`
-  - `packages/llm-mesh/src/account-transports.ts`
-  - `packages/llm-mesh/src/external-seat-marker.ts`
-  - `packages/llm-mesh/src/service/external-seat-authority.ts`
-  - `packages/llm-mesh/src/service/facade.ts`
-  - `packages/llm-mesh/src/service/local-account-transport-service.ts`
-  - `packages/llm-mesh/src/node/index.ts`
-  - `packages/llm-mesh/src/node/cli-seat-store-reader.ts`
-  - `packages/llm-mesh/src/node/seat-sidecar-file-backend.ts`
-  - `packages/llm-mesh/seat-tools/**`
-  - `packages/llm-mesh/tests/**`
-  - `packages/cluster-mesh/tests/integrations/llm-surface.spec.ts`
-  - `packages/cluster-mesh/tests/integrations/gateway-surface.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/llm-mesh/package.json`
-  - `packages/llm-mesh/README.md`
-  - `package-lock.json`
-  - `package.json` (CISEAT-EX6; root test-tool mesh override only)
-  - `api/src/services/llm-account-transports.ts`
-  - `api/tests/unit/llm-account-transports.test.ts`
-  - `api/tests/unit/llm-seat-projection-import.test.ts`
-  - `api/tests/unit/llm-seat-delivery-auth.test.ts`
-  - `api/tests/api/llm-seat-delivery.test.ts`
-  - `Makefile`
-  - `.github/workflows/ci.yml`
-  - `docker-compose.ci-seat.yml`
-  - `docker-compose.ci.yml`
-  - `docker-compose.test.yml`
-  - `rules/testing.md`
-  - `rules/workflow.md`
   - `scripts/ci/seat-custody/**`
-  - `api/src/config/env.ts`
-  - `api/src/services/ci-seat-runtime.ts`
-  - `api/src/services/llm-runtime/index.ts`
-  - `api/src/services/llm-runtime/mesh-dispatch.ts`
-  - `api/src/services/provider-credentials.ts`
-  - `api/src/services/queue-manager.ts`
-  - `api/tests/providers/**`
-  - `api/tests/utils/test-helpers.ts`
-  - `api/tests/utils/seed-test-data.ts`
-  - `api/tests/unit/ci-*.test.ts`
-  - `api/tests/unit/provider-credentials.test.ts`
-  - `api/tests/unit/llm-runtime-stream.test.ts`
-  - `api/tests/api/ci-*.test.ts`
-  - `api/tests/smoke/restore-validation.test.ts`
-  - `api/tests/ai/document-summary-live.test.ts`
-  - `e2e/helpers/ci-seat-model.ts`
-  - `e2e/helpers/ci-provider-profile.ts`
-  - `e2e/playwright.config.ts`
-  - `e2e/scripts/check-spec-lanes.sh`
-  - `e2e/tests/00-ci-seat-mode.spec.ts`
-  - `e2e/tests/03-chat.spec.ts`
-  - `e2e/tests/09-chat-multitool-demo.spec.ts`
-  - `packages/llm-mesh/src/transport/codex-runtime-wire.ts`
-  - `packages/llm-mesh/src/transport/codex-usage-reader.ts`
+  - `scripts/security/daily/control-provisioning.mjs`
+  - `scripts/security/daily/control-provisioning.test.mjs`
+  - `scripts/security/daily/control-permit-channel.mjs`
+  - `scripts/security/daily/control-permit-channel.test.mjs`
+  - `scripts/security/daily/control-clock.mjs`
+  - `scripts/security/daily/control-clock.test.mjs`
+  - `docs/security/activation/owner-procedure-r6.md`
+  - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `docker-compose.yml`
-  - `docker-compose.dev.yml`
-  - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `packages/llm-gateway/**`
-  - `api/drizzle/**`
-  - `ui/**`
-  - `e2e/tests/dev/**`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
-  - `api/src/routes/namespaces/llm-seat-delivery.ts`
-  - `api/src/middleware/llm-seat-delivery-auth.ts`
-  - `api/src/routes/namespaces/llm-mesh-router.ts`
-  - `deploy/k8s/base/seat-delivery-mtls.yaml`
-  - `deploy/k8s/base/kustomization.yaml`
-  - `deploy/k8s/overlays/**`
+  - `docker-compose*.yml`
+  - `.cursor/rules/**`
+  - `.track/**`
+  - `api/**`
+  - `packages/**` (except the two Conditional files below)
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `Makefile` (BR03a-EX1: only the `test-security-daily` SCOPE list gains the three new `control-*.test.mjs` files so the r6 §7.3 cases run in the required suite that CI already executes)
+  - `packages/llm-mesh/package.json` + `package-lock.json` (BR03a-EX2: post-rebase gate — branch touches `packages/llm-mesh/src/**`, so the version must be strictly greater than the published `0.32.2`; bump to `0.32.3`)
 - **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+  - BR03a-EX1 declared here before touching `Makefile`: reason = r6 §7.3 requires every §6.4 destination wired into its owning required Make suite (`test-security-daily`, already run by required CI job `validate-ci-capacity-metrics`); impact = additive SCOPE entries only, no existing entry removed; rollback = revert the single SCOPE line.
+  - BR03a-EX2 declared here before touching the version files: reason = rules/workflow.md Post-Rebase Gate + `enforce-package-bump` CI job after the #681 rebase; impact = version string only in `packages/llm-mesh/package.json` and its workspace entry in `package-lock.json`; rollback = revert to `0.32.2`.
 
 ## Feedback Loop
-- `CISEAT-EX6`: status active, directly blocking P0a's single-copy gate. Reason: main's development-only engram 0.21.1 depends on mesh ^0.19.0 and adds a second installed mesh. Impact: scope a root override to that exact test-tool package, resolving its mesh to the existing workspace; preserve its officeparser override and lock-only file-type pin. Removed only the stale seven-line nested lock entry, then npm install --package-lock-only and npm ls --all --package-lock-only prove every consumer dedupes to workspace mesh 0.27.1; file-type remains 22.1.0. Scoped mesh regression and real engram-memory tests remain required before acceptance; no upstream engram or product dependency version change. Rollback: remove that one nested override and regenerate only its lock edge; the single-copy gate must remain failed until resolved.
-- `CISEAT-P0A`: status active (2026-10-23). Owner requests L1 closure only, merge origin/main without rebase, exact-head CI and fresh immutable receipts; no PR merge or live seat activation. Remote baseline 7293130ee3f6bfc6dd1e2fefcc07b3bd4d751a99; main e6d17327898a0118af123ff36ae508eefda80ddf. Existing ci-seat-import worktree retains divergent local Lot 8 commits and its untracked broker; isolated author worktree tmp/worktrees/ci-seat-import-l1 starts from the published PR head and will push HEAD:feat/ci-seat-import without force.
-- `CISEAT-EX5`: status done in a53a64c4b (merge-only exception authorized by the owner). Reason: incorporate origin/main without rebase. Impact: incoming main paths are retained verbatim except the six named merge conflicts and L1 release pins; no unrelated authored changes. Rollback: revert the integration merge, preserving the original PR and local Lot 8 refs. Integration-only grants removed immediately afterward; incoming changes do not extend future implementation scope. The inherited Track files equal main byte-for-byte.
-- `R6-1-UPDATE`: status implemented, qualification pending. Main already supplies gateway 0.21.0 with mesh ^0.27.0; registry latest checked on 2026-10-23: mesh 0.27.0, gateway 0.21.0. L1 uses mesh 0.27.1, aligns seat-tools and installed fixture pins, and refreshes the packed sibling digest through the sanctioned Make flow. The selected manifest and lock root also pin 0.27.1. Preview mesh archive SHA-256: 0e236784a76bb543ec355e92455adc30cc3a6dee04a168d87c369d82a3a96139; this dirty-workspace preview is not an immutable acceptance receipt. No gateway source change is needed.
-- `CISEAT-BUILD`: status active. Owner packet `.tmp/packets/ci-seat-mode-build.md` authorizes C11-C21, commits and pushes, but no merge, publication, owner configuration/credential action or ungated provider call. Await addendum v6 plus checksum until 2026-10-17 19:25 UTC; use v5 only if that deadline expires. Owner model/exposure/transition answers and live receipts remain pending.
-- `CISEAT-BUILD`: status active. Owner packet `.tmp/packets/ci-seat-mode-build.md` authorizes C11-C21, commits and pushes, but no merge, publication, owner configuration/credential action or ungated provider call. Addendum v6 arrived before the wait deadline; verified SHA-256 `e5c0c64cb617a29d995ae63366d24f0994c730cbffd09b1ff6c1a9e0ef449463`. Owner model/exposure/transition answers and live receipts remain pending. Baseline diff before implementation: 52 changed paths, 4071 insertions, 32 deletions.
-- `CISEAT-EX5`: status active, authorized by the implementation packet and binding owner CI decisions. Reason: C11-C21 seat-first, bounded-credit CI with strict complete coverage. Impact: only the named CI/control/test-routing/queue/model-wire seams and their discriminating tests; minimum executable test/control foundations are prerequisites, while five-CLI L2/L3 stays deferred. Rollback: disable admission, preserve pending custody/reservations, leave required AI unavailable; never restore direct model-key injection. Existing EX3 extends only to reviewed owner lab/stdin/refresh helpers; no owner action is executed here.
-- `CISEAT-REBASE`: status done. Rebased 47 commits onto `origin/main` `5202dd87c6f16d37b8bcdc188acd92c32f5e0492`, without merge/squash/conflict; resulting baseline `7105c1850cee610ecd7a63dadeb35781b9a05f57`. Post-Rebase Gate: `make audit-llm-routing-package-versions API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import` reports mesh local 0.26.2 > registry 0.26.1; gateway local/registry 0.20.0. Harness branch PASS C1; clean tree before documentation.
-- `CISEAT-EX2`: status active. Reason: scoped sentropic-seat-delivery receiver integration (new route `api/src/routes/namespaces/llm-seat-delivery.ts`, auth `api/src/middleware/llm-seat-delivery-auth.ts`, optional mount in `llm-mesh-router.ts` via `delivery.enabled`, service tuple/drain/reopen in `llm-account-transports.ts`). k8s mTLS manifests (`deploy/k8s/base/seat-delivery-mtls.yaml`, preprod overlay patch) are explicitly deferred to L3 P-DEPLOY, which owns TLS-termination design; no speculative infra is committed (delivery shares the api pod behind existing ingress). Impact: bounded to this integration; router behavior unchanged when `delivery` is unset. Rollback: delete the new route/middleware files, revert the router mount hunk and the service delivery functions.
-- `CISEAT-EX3`: status acknowledged (reserved downstream requirement from L0a). Reason: owner-machine native Node helper (`seat-inspect`) needs native session keyrings (macOS Keychain, Windows Credential Manager, Linux Secret Service D-Bus). Bounds: only reviewed Make entrypoints run the bounded local store reader/inspect helper natively; no host test campaign, server, second refresher or whole-home/keyring export. No `seat-reenroll` helper exists in L1 (re-enroll stays an L3 concern). Rollback: disable/remove owner targets, revoke helper GitHub session, remove private runtime dir, retire disposable lab profile only.
-- `R6-1`: status superseded by R6-1-UPDATE after main's coordinated mesh/gateway release; keep the single-copy lock and declared-range assertions.
-- `r2-rework`: status done (Opus r2 NO-GO narrow R1/R2/n1-n6, test-first with recorded red runs). R1 external-seat 401 stays `active` (API `recordLlmAccountTransportOutcome` + mesh `applyOutcome`, secret/policy retained); R2 expired agy/cloud-code zero-refresh spies (`refreshAntigravityAccessToken`, `importAntigravityEnrollment`, `fetch`); n1 per-request `deliveryTrust` (no hop env); n2 held-account owner compare; n3 same-generation/operationId 409; n4 sidecar wired via `SEAT_SIDECAR` else explicit `unverified`, reader-fixed refusal reasons, schemaVersion label charset, node+mesh pins self-enforced; n5 discriminating rotation/codex tests, README enrollment re-export path; n6 this file per template (no prose sections, gates checked). Local gates: mesh 49 files / 886 tests; API unit 127 files / 1290 passed + 2 skipped; endpoints 126 files / 1302 passed; typechecks + lints clean (0 errors, nothing on touched files); scope PASS C2. Served-token identity proven through drain + R1; one unexplained read anomaly (direct column-content read vs serving path) documented in-conductor-report, not in code. Never merge without conductor sign-off; seat-mode lot on hold.
-- `CISEAT-EX4`: status active (conductor-approved under owner default authorization). Reason: L1's required mesh patch bump (0.26.1 to 0.26.2) necessarily evolves two installed-version pins in `packages/cluster-mesh/tests/integrations/{llm,gateway}-surface.spec.ts` plus the frozen `selected` fixture lock digest (`packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`: mesh entry to 0.26.2, registry URL, sibling-bytes integrity from the sanctioned `refresh-lazy-package-lock` flow). Impact: two assertion literals + one 3-line lock entry; the lock keeps the registry URL (provisional until 0.26.2 publishes, then the registry check compares). Rollback: revert the two literals and the lock entry.
+- BR03a-EX1: `acknowledge` — Makefile SCOPE addition for `test-security-daily` (see Conditional Paths).
+- BR03a-EX2: `acknowledge` — llm-mesh `0.32.2` → `0.32.3` post-rebase package gate (see Conditional Paths).
+- No open blockers: r6 supplies every design decision for this lot; anything not covered by r6 is reported in the final report, not decided here.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -122,398 +50,46 @@ Execute lot L1 exactly as in `.tmp/ci-seats-v4/spec-v10.md` (validated by Opus c
   - Never amend tests with additive timeouts.
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
+- This lot runs only synthetic, network-free suites; no AI flaky lane applies.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single sequential L1 integration branch; h2a consumes the published package after merge.
-
-## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
-- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
-- Execution flow (mandatory):
-  - Develop and run tests in `tmp/feat-<slug>`.
-  - Push branch before UAT.
-  - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
-  - Switch back to `tmp/feat-<slug>` after UAT.
+- [x] **Mono-branch + cherry-pick** (single branch `feat/cyber-act-L03a`; the preserved #681 lineage is rebased, not cherry-picked; one final CI on the review-ready head)
+- Rationale: one lot, one branch; no orthogonal sub-workstreams.
 
 ## Plan / Todo (lot-based)
-- [ ] **P0a — Fresh L1 integration and qualification (2026-10-23)**
-  - [x] Preserve the divergent local Lot 8 checkout and untracked broker; isolate published #681.
-  - [x] Resolve the six origin/main conflicts without rebase; retain the five imports, refusal tests and external-refresh guard.
-  - [x] Align mesh 0.27.1, gateway 0.21.0, seat-tools and integration pins after registry verification.
-  - [x] Refresh the frozen selected lock through pack-candidate-siblings and refresh-lazy-package-lock; align its exact dependency manifest.
-  - [x] Reproduce the root duplicate-mesh failure, resolve the engram development edge and pass all three mesh-release-invariants assertions; retain file-type 22.1.0.
-  - [ ] Package gate: typecheck-llm-mesh, lint-llm-mesh, test-llm-mesh and packed Cluster Mesh qualification.
-  - [ ] API gate: unit llm-account-transports, llm-seat-projection-import, llm-seat-delivery-auth; endpoints llm-seat-delivery; typecheck-api and lint-api.
-  - [x] Remove integration-only scope grants; preserve the original L1 scope for follow-up commits.
-  - [ ] Push the exact candidate to #681, collect H/B/T/run/artifact/control hashes and require complete green CI on H.
-  - [ ] Conductor/Muse review and acceptance; no live import, L2/L3, Lot 8 activation, publication or PR merge in P0a.
-
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read rules (`MASTER`, `workflow`, `subagents`, `testing`, `security`) and `README.md`.
-  - [x] Confirm worktree `tmp/worktrees/ci-seat-import` on branch `feat/ci-seat-import` from `fb5e92a6a` (L0a merged, mesh 0.26.1, SeatBundleV1).
-  - [x] Capture Makefile targets (`test-llm-mesh`, `typecheck-llm-mesh`, `lint-llm-mesh`, `up-api-test`, `test-api-unit`, `test-api-endpoints`, `typecheck-api`, `lint-api`, `test-api`, `down`, `scope-check`, `commit`, `ps-all`).
-  - [x] Define environment mapping (`ENV=test-ci-seat-import`; owner-only local inspect `ENV=dev-ci-seat-import` under CISEAT-EX3) and ports (API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680).
-  - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
-  - [x] Confirm scope and guardrails (no secret values, Q1=A caps, P-BILLING gates, R6-1 range rule).
-  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `CISEAT-EX2`/`CISEAT-EX3`/`R6-1` as above.
-  - [x] Lot gate:
-    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
-    - [x] **API tests**
-      - [x] No API test changes in Lot 0.
-      - [x] Sub-lot gate: none (baseline only).
-    - [x] **UI tests (TypeScript only)**
-      - [x] N/A (no UI changes in this branch).
-    - [x] **E2E tests**
-      - [x] N/A (no browser E2E in L1; P-DEPLOY gateway restart/delivery test stays in L3).
-    - [x] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
-      - [x] None in Lot 0.
-
-- [x] **Lot 1 — Package CLI/token import adapters (five CLIs)**
-  - [x] Add shared source-mode/authority contract: `--from cli` registrar path (selected lab profile via provider adapter, custody transfer explicit, original lab profile retired) and `--from token` bounded stdin/FD/SDK-stream path (argv never carries the value); consumer `--from cli` parses a private provider-shaped profile + trusted manifest (parse/validate only, no exchange/mint/reread/refresh).
-  - [x] Add `packages/llm-mesh/src/enrollment/cli-seat-import.ts` (common enroll/parse entry: `h2a llm-mesh account enroll <provider> --from cli|token`).
-  - [x] Add `packages/llm-mesh/src/enrollment/agy-cli-import.ts` (agy explicit mapping: package `providerId: cloud-code`, `accountTransport: cloud-code`, adapter/client/entitlement match).
-  - [x] Extend per-provider enrollment adapters without renaming global IDs (`codex`, `mistral-vibe`, `muse`, `claude-code` unchanged): canonical registration + consumer projection parsing, no second account registry.
-  - [x] Enforce: unknown expiry is not infinite validity; reimport N idempotent, N-1/another owner fails, new epoch needs controlled replacement; registrar stable opaque seat/account mapping, no secret-derived public identifiers.
-  - [x] r2 (M4/R2): codex consumer parse asserts zero provider calls via `fetch` spy.
-  - [x] Lot gate:
-    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
-    - [x] **API tests**
-      - [x] Existing, unchanged in this lot: `api/tests/unit/llm-account-transports.test.ts`.
-      - [x] New, none in this lot.
-      - [x] Scoped runs while evolving tests: `make test-llm-mesh SCOPE=tests/enrollment/cli-seat-import.test.ts ENV=test-ci-seat-import`.
-      - [x] Sub-lot gate: `make test-llm-mesh SCOPE=tests/enrollment/cli-seat-import.test.ts ENV=test-ci-seat-import`.
-    - [x] **UI tests (TypeScript only)**
-      - [x] N/A (no UI changes in this branch).
-    - [x] **E2E tests**
-      - [x] N/A (no browser E2E in L1).
-    - [x] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
-      - [x] None (synthetic only).
-
-- [x] **Lot 2 — Package external refresh policy + Muse/agy corrections**
-  - [x] Persist and enforce external-refresh policy across token import, keyring storage, listing/reload, acquisition, explicit refresh APIs, fallback routing, application receiving store.
-  - [x] Guard `local-account-transport-service.ts` (`refreshToken` + `acquire` expiry branch): on expiry an external account becomes `access-unavailable` (classified), waits for next imported projection; never erases owner claim, never derives refresh from missing token, never routes through metered key/different account/gateway.
-  - [x] Remove consumer provider-renewal and Muse key-minting paths (including after restart and 401); Muse key preparation happens in custody before import, never in mesh consumer.
-  - [x] Fix (a) `completeMuseDeviceImport` mis-route: device-flow grant no longer refreshes by re-reading the CLI login file; expired device access becomes `access-unavailable` with zero CLI-store reads, covered by a dedicated test.
-  - [x] Check (b) shared refresh authority across consumers (`refreshInFlight` local map, `InMemoryAccountTransportCoordinator`): record coverage by spec 3.4/L3 (serialized-stream single temporal authority) in `.h2a/build/ci_seat_l1_report.md`.
-  - [x] Keep `cloud-code-credential-rotation.test.ts` covering external consumers refusing rotation; cloud-code fixture never qualifies native agy.
-  - [x] r2 R1: mesh `applyOutcome` on an external-seat 401 keeps `active` + `lastError` diagnostic, secret/policy retained (served-external-seat 401 test, red-then-green).
-  - [x] r2 R2: expired cloud-code seat never refreshes (zero-refresh spy); held-account owner compare refuses takeover via same `seatRef`.
-  - [x] Lot gate:
-    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
-    - [x] **API tests**
-      - [x] Existing, unchanged in this lot.
-      - [x] New, none in this lot.
-      - [x] Scoped runs while evolving tests: `make test-llm-mesh SCOPE=tests/service/external-seat-authority.test.ts ENV=test-ci-seat-import`.
-      - [x] Sub-lot gate: `make test-llm-mesh SCOPE=tests/service/external-seat-authority.test.ts ENV=test-ci-seat-import`.
-    - [x] **UI tests (TypeScript only)**
-      - [x] N/A.
-    - [x] **E2E tests**
-      - [x] N/A.
-    - [x] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
-      - [x] None (synthetic only).
-
-- [x] **Lot 3 — L1-local inspect helper + node export**
-  - [x] Add `packages/llm-mesh/src/node/cli-seat-store-reader.ts` (bounded reader: explicitly selected lab record only; allowlisted schema/version/capability categories; no refresh/mint/provider call/GitHub write/transfer/activation; unsupported fields/backends return unverified/refused, never raw values).
-  - [x] Add `packages/llm-mesh/seat-tools/Makefile` (`seat-helper-setup`, `seat-inspect`; no root Makefile edit), `packages/llm-mesh/seat-tools/inspect.mjs`, `packages/llm-mesh/seat-tools/package.json`, `packages/llm-mesh/seat-tools/package-lock.json`, `packages/llm-mesh/seat-tools/node-runtime.json` (pins exact reviewed Node patch/checksum + helper deps + built mesh artifact), plus `seat-tools/README.md` (inspect-only use).
-  - [x] Expose bounded reader via `packages/llm-mesh/src/node/index.ts` for L3 reuse.
-  - [x] Add `packages/llm-mesh/tests/node/cli-seat-store-reader.test.ts` (five synthetic backend adapters; selector isolation; no live-home fallback; no refresh/mint; no raw/encoded canary in stdout/stderr/errors).
-  - [x] r2 n4: sidecar wired via `SEAT_SIDECAR` (`SeatSidecarFileBackend`) else explicit `unverified`; reader-fixed refusal reasons; schemaVersion label charset; node+mesh pins enforced by the script itself.
-  - [ ] Owner dry-run format inspection only after synthetic gates (under CISEAT-EX3, `ENV=dev-ci-seat-import`, never automated): `make seat-inspect -C packages/llm-mesh/seat-tools CLI=agy ENV=dev-ci-seat-import` (repeat `codex`, `vibe`, `muse`, `claude`).
-  - [x] Lot gate:
-    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
-    - [x] **API tests**
-      - [x] Existing, unchanged in this lot.
-      - [x] New, none in this lot.
-      - [x] Scoped runs while evolving tests: `make test-llm-mesh SCOPE=tests/node/cli-seat-store-reader.test.ts ENV=test-ci-seat-import`.
-      - [x] Sub-lot gate: `make test-llm-mesh SCOPE=tests/node/cli-seat-store-reader.test.ts ENV=test-ci-seat-import`.
-    - [x] **UI tests (TypeScript only)**
-      - [x] N/A.
-    - [x] **E2E tests**
-      - [x] N/A.
-    - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
-      - [ ] Owner dry-run inspect walkthrough (manual, after gates): five CLI labels return categories only.
-
-- [x] **Lot 4 — API persistence/acquisition guard + agy mapping + billed-fallback disable**
-  - [x] Update `api/src/services/llm-account-transports.ts`: external/access-only store variants for `storeAntigravityAccountTransport` (keep antigravity/cloudcode-pa/productAccountSource=antigravity) and `storeClaudeCodeAccountTransport`; parse/reload external variant in `parseClaudeCodeTokenSecret` without erasing policy or reclassifying as mesh-managed renewable; no refresh material or dummy token in consumer projections.
-  - [x] Guard `acquireDbAccountTransport:2164` before `refreshTokenIfNeeded` at `:2378` (policy read ahead of hook): external accounts skip every per-transport hook (`refreshAntigravityTokenIfNeeded:2094/:2100/:2104`, `refreshClaudeCodeTokenIfNeeded:1811/:1821`, `refreshCodexTokenIfNeeded:1748/:1758`, `refreshMuseTokenIfNeeded:1908`/`readMuseCliEntry:1927`, `refreshMistralVibeTokenIfNeeded:543`); valid unexpired access returns directly, expiry/401 classifies `access-unavailable`, retains `token_secret`/owner/lineage/policy, releases reservation, awaits next projection; policy also guards explicit refresh and outcome/401 paths; no missing-token branch erases an external account. `refreshCloudCodeTokenIfNeeded:1964/:1974` stays the forbidden cloud-code/gemini route for agy (never its guard).
-  - [x] Bypass `importAntigravityEnrollment` (`provider-connections.ts:1521`) in the new projection receiver: validate trusted access-only projection, invoke external store variant directly with exact agy tuple, zero discovery/refresh/mint side effect.
-  - [x] Disable C1 D3.3 billed-key fallback for these accounts (expiry, 401, delivery failure, exhausted seat quota never select a configured billed key).
-  - [x] Update `api/tests/unit/llm-account-transports.test.ts` (positive agy + Claude Code fixtures with no refresh token at all; import/persist/parse-reload/acquire valid unexpired access via `acquireAntigravityAccountTransport`, `acquireClaudeCodeAccountTransport`, `acquireOpenAICodexAccountTransport`, `acquireMuseAccountTransport` through the real guard; valid/expired/401/explicit-refresh cases; zero `refreshAntigravityAccessToken`/`readMuseCliEntry`/import-hook/renewal/mint/billed-fallback; `token_secret` + owner/lineage/policy preserved; newer-projection recovery; Vibe non-destructive regression).
-  - [x] Add `api/tests/unit/llm-seat-projection-import.test.ts` (agy package cloud-code to application antigravity/cloudcode-pa + productAccountSource; refuse gemini target, application cloud-code transport, mixed tuples, wrong clients with zero DB mutation/acquisition/provider calls and zero `importAntigravityEnrollment`; refuse refresh-bearing projections and live use lacking trusted billing clearance).
-  - [x] Start isolated API stack first: `make up-api-test API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
-  - [x] r2 R1: API `recordLlmAccountTransportOutcome` on an external-seat 401 records unavailable, status stays `active`, secret retained (served-external-seat 401 test, red-then-green).
-  - [x] r2 R2: expired agy seat never refreshes (zero `refreshAntigravityAccessToken` spy).
-  - [x] Lot gate:
-    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
-    - [x] **API tests**
-      - [x] Existing + updated: `api/tests/unit/llm-account-transports.test.ts`.
-      - [x] New: `api/tests/unit/llm-seat-projection-import.test.ts`.
-      - [x] Scoped runs while evolving tests: `make test-api-unit SCOPE=tests/unit/llm-account-transports.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
-      - [x] Scoped runs while evolving tests: `make test-api-unit SCOPE=tests/unit/llm-seat-projection-import.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
-      - [x] Sub-lot gate: both scoped runs above.
-    - [x] **UI tests (TypeScript only)**
-      - [x] N/A.
-    - [x] **E2E tests**
-      - [x] N/A.
-    - [x] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
-      - [x] None (synthetic API only).
-
-- [x] **Lot 5 — Seat-delivery receiver (conditional CISEAT-EX2)**
-  - [x] Declare `CISEAT-EX2` before editing conditional paths (exact overlay files, rationale, impact, rollback).
-  - [x] Add `api/src/routes/namespaces/llm-seat-delivery.ts` + `api/src/middleware/llm-seat-delivery-auth.ts`; mount in `api/src/routes/namespaces/llm-mesh-router.ts` (existing mount edit only).
-  - [ ] Add `deploy/k8s/base/seat-delivery-mtls.yaml` + `deploy/k8s/base/kustomization.yaml` + selected target overlay patch only (P-DEPLOY resolves target; no infra changes beyond selection).
-  - [x] Implement: scoped identity, wrong-owner refusal, forged-header/direct-access refusal, drain/ack/reload, monotonic import/ack, seat drain/reopen, zero billed-key fallback.
-  - [x] Add `api/tests/unit/llm-seat-delivery-auth.test.ts` + `api/tests/api/llm-seat-delivery.test.ts`.
-  - [x] r2 n1: trusted-hop marker is per-request attestation (`deliveryTrust`), never process-wide env; all handlers require trust.
-  - [x] r2 n3: same generation + different `operationId` refused with 409 lineage conflict.
-  - [x] r2: stored-row asserts prove registry-derived owner/scope/policy; served-token identity proven through drain (M4).
-  - [x] Lot gate:
-    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
-    - [x] **API tests**
-      - [x] Existing, unchanged in this lot (except receiver mount).
-      - [x] New: `api/tests/unit/llm-seat-delivery-auth.test.ts`, `api/tests/api/llm-seat-delivery.test.ts`.
-      - [x] Scoped runs while evolving tests: `make test-api-unit SCOPE=tests/unit/llm-seat-delivery-auth.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
-      - [x] Scoped runs while evolving tests: `make test-api-endpoints SCOPE=tests/api/llm-seat-delivery.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
-      - [x] Sub-lot gate: both scoped runs above.
-    - [x] **UI tests (TypeScript only)**
-      - [x] N/A.
-    - [x] **E2E tests**
-      - [x] N/A (L3 owns `tests/e2e/seat-persistent-delivery.test.ts` with real TLS/revocation on a non-production target).
-    - [ ] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
-      - [ ] Synthetic delivery walkthrough: import projection both modes, see one account; expire, see classified unavailable with zero refresh; deliver N+1, see recovery without duplication; wrong-owner and older-generation refusal.
-
-- [x] **Lot 6 — Mesh version, lock assertion, spec sync**
-  - [x] Bump `packages/llm-mesh/package.json` patch only (stay 0.26.x inside gateway `^0.26.0`); refresh `package-lock.json` (required mesh metadata only, no unrelated regeneration); assert exactly one llm-mesh copy in the custody harness lock.
-  - [x] Update existing package tests for all five adapters + authority/delivery (`contracts`, `codex`, `cloud-code`, `cloud-code-credential-rotation`, `claude-code`, `mistral-vibe`, `muse`, `facade`, `local-account-transport-service`, `local-account-transport-service-claude`, `local-account-transport-service-muse`) and retain/extend `seat-bundle.test.ts` (no duplicate creation).
-  - [x] Add `packages/llm-mesh/tests/enrollment/cli-seat-import.test.ts`, `packages/llm-mesh/tests/enrollment/agy-cli-import.test.ts`, `packages/llm-mesh/tests/service/external-seat-authority.test.ts`, `packages/llm-mesh/tests/service/seat-projection-delivery.test.ts`.
-  - [x] Sync `spec/SPEC_EVOL_CI_SEATS.md` (L1 interfaces, supported/unverified table deltas, gates) and `packages/llm-mesh/README.md`.
-  - [x] r2 n5: rotation refusal discriminates (positive control + smuggled-block detection); codex parse under `fetch` spy; README enrollment re-export path corrected.
-  - [x] Lot gate:
-    - [x] `make typecheck-<ui/api>` + `make lint-<ui/api>`>
-    - [x] **API tests**
-      - [x] Existing + updated: `api/tests/unit/llm-account-transports.test.ts`.
-      - [x] New: `api/tests/unit/llm-seat-projection-import.test.ts`, `api/tests/unit/llm-seat-delivery-auth.test.ts`, `api/tests/api/llm-seat-delivery.test.ts`.
-      - [x] Scoped runs while evolving tests: per-file `make test-api-unit` / `make test-api-endpoints` runs with `API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
-      - [x] Sub-lot gate: `make test-api API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`.
-    - [x] **UI tests (TypeScript only)**
-      - [x] N/A.
-    - [x] **E2E tests**
-      - [x] N/A.
-    - [x] non mandatory UAT if required user interaction strictly required before Lot 2, splitted by sublist for each env
-      - [x] None (packaging only).
-
-- [x] **Lot 7 — Repair packed Cluster Mesh qualification after r2 rework**
-  - [x] Read CI run `39039913760`, job `117419061139`; compare I861-F11 on PR #679: the selected fixture retains the pre-r2 mesh archive integrity at the same `0.26.2` version.
-  - [x] Rebuild guarded siblings with the failed job's exact CI context; local mesh sha256 `a82610f421a0c3867380d29fcec0336b7c2097902734b467ff2e45901a6556cd` matches CI byte-for-byte.
-  - [x] Reproduce the exact stale-integrity refusal before the fix: `make -f packages/cluster-mesh/packaging.mk test-lazy-package SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import` (exit 2; existing sibling-integrity assertion).
-  - [x] Run `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock SIBLING_ARCHIVES_FILE=tmp/ci-manifest-guard/siblings/cluster-mesh/receipts.json API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`; only the mesh integrity value changes (CISEAT-EX4).
-  - [x] Lot gate: rerun the exact packed qualification above; 10 files / 63 tests pass, including the existing sibling-integrity assertion.
-  - [x] Scope gate: `make scope-check API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import` (PASS C2).
-  - [x] Prepare one atomic fixture/checklist commit under 150 changed lines; the launch packet authorizes one push, CI observation and a handoff report (no merge/publication).
-  - [x] API/UI/browser E2E changes and UAT: N/A (fixture integrity only).
-
-- [ ] **Lot 8 — Complete blocking AI CI, seats first and bounded CI credit**
-  - [ ] 8a — Re-pin feat/ci-seat-import H/B/T, source run and artifact/control digests after L1 review and immediately before EX5. Local HEAD and cached origin/feat/ci-seat-import were 7293130ee3f6bfc6dd1e2fefcc07b3bd4d751a99 on 2026-10-17; cached main was 13bea76ea420bee94c9405378d216cf49c9f8c07. Live remote/tested merge state must be checked again; preserve concurrent edits.
-    - [ ] NB1/N3/m7 prerequisite: migration already in motion on separate product branch fix/openai-nano-retirement. Owner waits for the measured paired dossier `.tmp/model-retirement/dossier-remplacement-nano.html` and `qualification-results.md`, expected 2026-10-19: A gpt-6-luna is the reversible branch default; B gpt-5.6-luna is the other candidate, neither approved by this plan. Product maintainer replaces nano everywhere, including api/src/config/env.ts:37, api/tests/utils/test-helpers.ts:57, seed-test-data.ts:497, api/src/services/tool-service.ts:2506/2745, chat-service.ts:858/1669/2373 and context table :669, business/organizations.ts:377; inventory/catalog/deployed configuration must also be covered. Check legacy key/project access, unchanged product behavior without CI adapter, and main merge/deployment before 2026-10-23.
-    - [ ] Before live Lot 8 qualification, record that migration's merge SHA/model inventory/verification, rebase #681 onto main containing it and re-pin H/B/T/artifacts. Product changes remain outside #681; pending evidence blocks qualification, while synthetic work may proceed. C12/C17 maps are identity maps per operation on each admitted route, no nano alias; a seat-ineligible exact model may use qualified credit from case start. Different model means new prices/limits/allowlist/behavior proof. A retained key or merge freeze does not prevent the shutdown.
-    - [ ] Update BRANCH.md, spec/SPEC_EVOL_CI_SEATS.md, rules/testing.md and matching CI policy in rules/workflow.md: owner Q-CI1=C means complete blocking AI; credit is only for Sentropic CI product tests. Amend spec-v10 §§3.1/3.5 with separate ci-credit-broker (OPENAI_API_KEY only), ci-seat-broker (SEAT_USE_CODEX only), and required ci-search-relay (TAVILY_API_KEY only); amend :364/:617 so candidate CI receives no credential. Retain credit prohibition outside CI product tests. Align §3.3 plus the native-matrix schedule to the modes below. Require reviewed I→D/N changes listed in the PR body and planner summary.
-    - [ ] Record CISEAT-EX5 before edits: allow the named CI workflow, Makefile, docker-compose.ci-seat.yml, required CI/test overlays, scripts/ci/seat-custody/**, API CI policy/queue seams, test providers, E2E profile/model helpers and tests, mesh quota/wire/lab files and release metadata; keep UI component changes, production auth fallback, h2a/gateway source and migrations forbidden.
-    - [ ] Record EX5 reason=own-PR complete CI; impact=isolated test routing and private control; rollback=stop admission, preserve pending state/reservations, leave required AI unavailable, no silent direct-key restoration. Extend CISEAT-EX3 only for reviewed lab login/stdin enrollment/attended refresh wrappers.
-    - [ ] Preserve Q1=10 shared Codex units/UTC day and quota strictly above 20% in every window; normal partition CI≤6, enrollment/refresh qualification=2 protected, native/inference maintenance≤2; durable native-campaign mode CI=0/enrollment=2/native≤8. No borrowing or reset by mode switch. For 120/240/360 native units use ≥15/30/45 days in native-campaign mode, ≥60/120/180 normal; the old 12/24/36 assumes all ten and is invalid here. Unreadable quota permits zero seat calls. Q2 private notice/24-hour takeover and Q3 private repo/no Pro/zero paid Actions overage remain binding.
-    - [ ] Lot gate: mechanical branch check through harness before implementation; rtk make scope-check ENV=test-ci-seat-import before each commit; implementation commits authorized by the build packet.
-    - [ ] **API tests** — Existing + updated: none in policy-only slice. New: none. Scoped run/sub-lot gate: inventory validation in 8b before enabling the policy.
-    - [ ] **UI tests (TypeScript only)** — Existing unchanged; new none; no UI change.
-    - [ ] **E2E tests** — Existing unchanged; new none; no live calls in 8a.
-  - [ ] 8b — Add scripts/ci/seat-custody/config/ai-lanes.json and ci-ai-policy.json; src/seat-ci-plan.ts and src/seat-receipts.ts; e2e/scripts/check-spec-lanes.sh and .github/workflows/ci.yml expected-result validation.
-    - [ ] Consume one CiAiPlanV1 with H/B/T, original source run, graph/policy/control/workflow/toolchain/artifact hashes, stable complete case/conversation/queue-tree inventory, maximum attempts/cost/duration, dependencies and run/reuse/exclusion evidence. Emit full baseline until selector qualified. Print main-relative I→D/N/rename/assertion deltas and require exact-change review before accepting a downgrade; unknown graph/diff/path never empty-passes.
-    - [ ] Add tests/seat-ci-plan.test.ts and tests/seat-ci-receipts.test.ts under scripts/ci/seat-custody; cover cumulative diffs, BRANCH-only evidence reuse, source/base movement, missing cases, original continue-on-error outcomes, missing/forged receipts and neutral/skipped results. Inventory default/hard-coded model IDs by operation; test missing retirement merge/ancestry evidence and unmapped operations as qualification blockers.
-    - [ ] Lot gate: rtk make test-ci-seat-contract SCOPE=tests/seat-ci-plan.test.ts ENV=test-ci-seat-import; rtk make test-ci-seat-contract SCOPE=tests/seat-ci-receipts.test.ts ENV=test-ci-seat-import; rtk make check-e2e-inventory check-ci-version-filters ENV=test-ci-seat-import.
-    - [ ] **API tests** — Existing + updated: all live/deterministic inventory in 8j; new none in this slice; no provider requests.
-    - [ ] **UI tests (TypeScript only)** — Existing unchanged; new none.
-    - [ ] **E2E tests** — Existing inventory in 8j must be complete; new none in this slice; unclassified case blocks narrow selection.
-  - [ ] 8c — Add packages/llm-mesh/src/transport/codex-usage-reader.ts, tests/transport/codex-usage-reader.test.ts and Node export; add scripts/ci/seat-custody/src/seat-quota-probe.ts and tests/seat-quota-probe.test.ts.
-    - [ ] Qualify pinned access-only account/rateLimits/read with zero turn/refresh/native-store calls; reject unknown/null/stale/mismatched quota and every window at or below 20%; observe before every seat request. Unqualified quota permits CI credit only, never an enrollment/native smoke.
-    - [ ] Update packages/llm-mesh/src/transport/codex-runtime-wire.ts and tests/transport/codex-runtime-wire.test.ts for canonical structured output; retain tests/transport/codex-runtime-client.test.ts sync/stream/tools/image evidence.
-    - [ ] Lot gate: rtk make test-llm-mesh SCOPE=tests/transport/codex-usage-reader.test.ts ENV=test-ci-seat-import; rtk make test-llm-mesh SCOPE=tests/transport/codex-runtime-wire.test.ts ENV=test-ci-seat-import; rtk make test-ci-seat-contract SCOPE=tests/seat-quota-probe.test.ts ENV=test-ci-seat-import.
-    - [ ] **API tests** — Existing + updated: api/tests/unit/llm-account-transports.test.ts, api/tests/unit/llm-seat-projection-import.test.ts retained for real acquisition; new API tests come in 8f.
-    - [ ] **UI tests (TypeScript only)** — Existing unchanged; new none.
-    - [ ] **E2E tests** — No browser update/new file in 8c; metadata probe only after synthetic/billing admission.
-  - [ ] 8d — Build private bootstrap at scripts/ci/seat-custody/{Makefile,compose.yml,package.json,package-lock.json,node-runtime.json,seats.yml}; config/{consumers,seats,billing-receipts,reenrollment}.json; src/{github-seat-store,seat-writer,seat-admission,seat-enrollment,seat-reenroll,seat-refresh,seat-receipts}.ts.
-    - [ ] Preserve single writer, separate canonical/consumer roles, workflow exclusion sentropic-seat-custody-v1 with queue=max and no cancellation, durable pending intent, canonical-before-projection writes and newly queued verification; never wait holding the lock for a continuation.
-    - [ ] In a writer-control allocator job durably reserve the maximum attempts of whole seat cases atomically within CI≤6 and the shared ten; protect two enrollment units. The seat consumer gets only reservation data and no writer/allocator credential. Finish the phase, prove processes stopped, finalize its credential-free broker accounting journal and upload it in the private GitHub Actions transient manifest/handoff artifact before exit. Trusted control binds journal SHA-256 to reservation IDs, campaign/segment, producer run_id/run_attempt and promoted control digest; journal plus envelope share ≤1 MiB/segment, retention-days: 1, deleted after validated settlement consumption or terminal cleanup. Settlement validates trusted workflow provenance and every binding; missing/expired/corrupt/mismatched handoff retains the entire unresolved reservation. A later separate writer-control workflow on a fresh runner validates provenance/termination, settles once and releases proven unused units/Codex slot before credit; unresolved whole-case reservations remain counted. Credit never holds sentropic-seat-custody-v1 or blocks h2a; pending successors remain fenced.
-    - [ ] NB3 tests: seat-crash-recovery.test.ts and ci-seat-broker.test.ts retain the full reservation after crash/lost journal/ambiguity; missing evidence never refunds. seat-workflow-contract.test.ts rejects writer App key/token or allocator credential anywhere in a seat consumer workflow, including another job/inherited inputs. Gate: rtk make test-ci-seat-contract SCOPE=tests/seat-crash-recovery.test.ts ENV=test-ci-seat-import.
-    - [ ] C11: add src/ci-seat-set-mode.ts and tests/ci-seat-set-mode.test.ts; mode changes via sole allocator, next-day after drain by default, no reset of any spent/reserved unit; same-day native entry only with CI spent/reserved=0. S=0 skips the seat workflow, pull and stack and emits zero-seat receipt; with no seat reservation it satisfies settlement without a writer workflow. P-GH1 separates control and seat overhead. Gate: rtk make test-ci-seat-contract SCOPE=tests/ci-seat-set-mode.test.ts ENV=test-ci-seat-import.
-    - [ ] Implement packages/llm-mesh/src/node/codex-seat-store-backend.ts with tests/node/codex-seat-store-backend.test.ts; reconcile src/node/cli-seat-store-reader.ts and src/node/index.ts; update seat-tools/{Makefile,README.md,package.json,package-lock.json,node-runtime.json} and add seat-tools/{reenroll,lab-login,refresh,load-secret}.mjs.
-    - [ ] New control tests: scripts/ci/seat-custody/tests/github-seat-store.test.ts, seat-writer-isolation.test.ts, seat-enrollment.test.ts, seat-reenroll.test.ts, seat-refresh.test.ts, seat-admission.test.ts, seat-workflow-contract.test.ts, seat-secret-hygiene.test.ts, seat-degraded-binding.test.ts, seat-crash-recovery.test.ts.
-    - [ ] Existing package tests retained/updated: packages/llm-mesh/tests/enrollment/seat-bundle.test.ts, cli-seat-import.test.ts; tests/service/external-seat-authority.test.ts, seat-projection-delivery.test.ts, local-account-transport-service.test.ts; tests/node/cli-seat-store-reader.test.ts, mesh-release-invariants.test.ts.
-    - [ ] Lot gate: rtk make test-llm-mesh SCOPE=tests/node/codex-seat-store-backend.test.ts ENV=test-ci-seat-import; rtk make typecheck-llm-mesh lint-llm-mesh test-llm-mesh ENV=test-ci-seat-import; rtk make test-ci-seat-contract ENV=test-ci-seat-import.
-    - [ ] **API tests** — Existing + updated: api/tests/unit/llm-seat-delivery-auth.test.ts and api/tests/api/llm-seat-delivery.test.ts retain receiver isolation. New API tests none in 8d.
-    - [ ] **UI tests (TypeScript only)** — Existing unchanged; new none.
-    - [ ] **E2E tests** — New scripts/ci/seat-custody/tests/e2e/github-seat-roundtrip.test.ts; synthetic later-run roundtrip first, no provider inference.
-  - [ ] 8e — Add src/ci-credit-broker.ts, ci-credit-budget.ts, ci-seat-broker.ts, ci-search-relay.ts, config/model-prices.json and tests/ci-credit-broker.test.ts, ci-credit-budget.test.ts, ci-seat-broker.test.ts, ci-search-relay.test.ts under scripts/ci/seat-custody.
-    - [ ] C12 request-bound default: every attempt declares serialized UTF-8 input/wire bytes, qualified framing/history/image token bound and max output including reasoning; broker enforces final body, exact model/endpoint/tier and immutable case context. For Q-NANO candidate A gpt-6-luna use short-band cache-write-safe rates 0.125/0.50 USD per million: I=200,000/O=16,384 gives 33,192 micro-USD; 60 attempts fit USD 2 (1.991520), 61 do not (2.024712). For B gpt-5.6-luna use 0.25/1.20: 69,661 micro-USD; 28 fit, 29 do not; 17 fit at 1.184237. These are illustrations until the measured dossier and exact-map qualification. Initial I≤272,000. Long-band/cache-write tariffs and full-context refusal tested. No truncation or average/refund-based case admission. Same-case previousResponseId inherits all context/output bounds; unknown IDs/classes refuse.
-    - [ ] C13 seat proxy: only promoted ci-seat-broker holds SEAT_USE_CODEX by FD/0600. Candidate mesh uses existing fetch seam, its own wire builder/parser, a non-secret sentinel and bounded ticket. Broker validates URL/model/body, inserts real auth and checks quota windows>20% with observation≤30s. Serialize each debit in a broker-only append-only journal and fsync before send within the already durable whole-case reservation; no per-send GitHub write/debit service. Fsync failure sends zero. Crash/lost/corrupt journal/ambiguity counts the whole reservation until separate writer settlement; duplicate/restart/parallel/midnight paths cannot recreate capacity. No writer/allocator token in the consumer workflow. Canaries cover file/env/proc/docker-inspect, direct backend-api, exhausted reservation and replay with positive proxy. Broker unqualified means no seat route; actual isolation breach blocks both routes.
-    - [ ] N2 image residual: derive tokens from decoded dimensions and effective detail; only explicit high uses ≤2,500 patches /3,001 tokens. Missing detail=auto; auto uses original sizing up to 30,000 patches /36,001 tokens including conservative rounding. Test identical images with high/auto/original/omitted detail, unknown detail refusal and a large auto image exceeding a 4,000-token declaration. Include image history; refuse over-envelope, never reduce detail.
-    - [ ] Credit FIFO has one upstream in flight. creditQueueWaitMs declared per case≤60,000 ms and remaining case deadline minus send/cleanup margin; never extend test timeouts. Pre-send cancellation/timeout refunds only proved unsent reservation; duplicate/restart cannot reset counters. Fake-clock tests cover queued second request.
-
-    - [ ] Enforce USD 2 per admitted private execution segment/run-attempt, USD 5/UTC day, USD 25/UTC month; 250/1000/5000 attempts respectively; ≤USD 0.12 reserved/request; one paid request in flight. Original source run remains campaign provenance; new segment allowance requires durable allocation, never a caller ID/restart/gate rerun. Whole-case continuations reuse only complete successful same-H/B/T/plan/policy/artifact receipts; campaign totals remain visible and day/month limits never reset.
-    - [ ] Use a freshly rotated dedicated-project OPENAI_API_KEY only in the isolated broker from reviewed custody digest; new private key first for #681 qualification; remove public secret/revoke predecessor immediately after merge after other consumers are rotated, with explicit freeze only as the owner's alternative. Trusted custody revision supplies broker, budget, prices, policy and all host Make/Compose/runner code. Candidate containers have no key, socket, privilege, host namespace or broker mounts. Run file/env/proc/docker-inspect canaries before live provisioning; candidate host execution leaves both inference routes disabled.
-    - [ ] P-CI-CREDIT requires owner-approved exact model and finite E_owner_USD, evidenced finite E_provider_USD≤E_owner_USD including shared funds/delayed liability, recharge off/no automatic postpaid, endpoint/model restrictions and observed hard-stop/rate scope. Missing/unknown/oversized exposure refuses; changes fence credit pending requalification. Enforce Chat stream_options.include_usage=true and Responses response.completed usage in broker; normal settlement releases unused reservation, truncation/missing usage retains it.
-    - [ ] Pin each full case to the exact operation/model IDs inherited from the owner-approved product migration and required test inventory; broker forwarding is identity on either route. Only gpt-5.6-luna has a qualified seat route; neither its seat qualification nor either credit example decides the product replacement. If the seat cannot serve a required exact ID, choose qualified credit before starting the case. If Q-NANO selects gpt-6-luna, all cases with former-gpt-4.1-nano operations run wholly on qualified credit until a gpt-6-luna seat route is qualified; that new seat qualification consumes Q1 native/inference-maintenance units (normal≤2/day, native-campaign≤8/day), never the two protected enrollment units. Only gpt-4.1-nano and gpt-4.1-nano-2025-04-14 are excluded by the retirement rule; gpt-5.4-nano remains valid until 2027-04-01, subject to its own approved, qualified mapping. Both ci-credit-broker.test.ts and ci-seat-broker.test.ts refuse unmapped IDs before send. Preserve tool-loop/reasoning/previousResponseId/queue route; new maps require priced capability/behavior requalification, never an alias or mid-attempt switch.
-    - [ ] Lot gate: rtk make test-ci-seat-contract SCOPE=tests/ci-credit-budget.test.ts ENV=test-ci-seat-import; rtk make test-ci-seat-contract SCOPE=tests/ci-credit-broker.test.ts ENV=test-ci-seat-import; zero network/real credentials in synthetic tests.
-    - [ ] **API tests** — New API coverage in 8f exercises the real adapter and broker refusal path; no production route changes.
-    - [ ] **UI tests (TypeScript only)** — Existing unchanged; new none.
-    - [ ] **E2E tests** — New control bootstrap test in 8i verifies counted/summarized credit fallback, not seat activation with credit.
-  - [ ] 8f — Update api/src/config/env.ts, api/src/services/provider-credentials.ts, api/src/services/llm-runtime/index.ts and mesh-dispatch.ts; add api/src/services/ci-seat-runtime.ts; update Makefile and add docker-compose.ci-seat.yml with the required CI/test overlay hooks.
-    - [ ] Bind API/toolbox sync/stream/background requests to one trusted case ticket and pre-reserved route; product external-seat behavior remains zero-refresh/zero-credit. Strip model aliases/ADC/BYOK paths. Production startup refuses every non-empty CI_PROVIDER_MODE and all broker/fixture configuration, even with CI=true/test admin flags; CI production-built images run the admitted test deployment with NODE_ENV=test, while genuine production startup smokes use no CI settings.
-    - [ ] C14/C15/N7: classify verified quota/expiry/401/5xx/transport/capacity failure before any assertion, with no schema/side-effect failure and proven cleanup, as route-infrastructure. Controller permits one automatic complete fresh-state recovery per case/campaign, rechooses route at new admission and reserves new budget. Preserve both outcomes/costs; recoveryIndex survives segment/restart. Behavior/assertion/schema/side-effect or unknown/security/contract failures have no within-campaign retry. Same-H new campaign requires explicit maintainer request with investigation; no flaky allowance. Only complete successful recovery plus linked first failure/cleanup/authorization satisfies coverage.
-    - [ ] Existing + updated API unit files: api/tests/unit/provider-credentials.test.ts, llm-runtime-stream.test.ts, llm-account-transports.test.ts, llm-seat-projection-import.test.ts.
-    - [ ] New API unit files: api/tests/unit/ci-seat-runtime.test.ts, ci-seat-admission.test.ts. New API integration: api/tests/api/ci-seat-runtime.test.ts.
-    - [ ] Lot gate: rtk make up-api-test CI_PROVIDER_MODE=synthetic API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import; rtk make test-api-unit SCOPE="tests/unit/ci-seat-runtime.test.ts tests/unit/ci-seat-admission.test.ts" CI_PROVIDER_MODE=synthetic API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import.
-    - [ ] Integration gate: rtk make test-api-endpoints SCOPE=tests/api/ci-seat-runtime.test.ts CI_PROVIDER_MODE=synthetic API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import; rtk make typecheck-api lint-api API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import; rtk make down API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import.
-    - [ ] **UI tests (TypeScript only)** — Existing unchanged; new none.
-    - [ ] **E2E tests** — New e2e/tests/00-ci-seat-mode.spec.ts for synthetic seat/credit decisions, missing/invalid authorization, sentinel keys and receipt assertions; actual live proof stays in the existing generation files.
-  - [ ] 8g — Add api/tests/providers/deterministic-ci-provider.ts and ci-provider-manifest.json; propagate trusted internal operation context in api/src/services/queue-manager.ts; update api/tests/utils/test-helpers.ts and seed-test-data.ts; add e2e/helpers/ci-provider-profile.ts and ci-seat-model.ts.
-    - [ ] Preserve HTTP, extraction, queue, stream, cancellation, validation and persistence. Script only incidental model outcomes; unknown operations fail. Production rejects every CI mode/channel/fixture. Keep upload/status summaries deterministic and generation/tool assertions live. Classify test-smoke-restore as N, remove model and Tavily keys/aliases, block provider/search egress before restored production boot/restart, including stored BYOK and pending queue jobs; no seat/credit eligibility for production data.
-    - [ ] **API tests** — Existing + updated: api/tests/ai/comment-assistant.test.ts and documents-tool.test.ts remain deterministic. New: api/tests/unit/ci-deterministic-provider.test.ts, api/tests/api/ci-incidental-inference.test.ts, api/tests/ai/document-summary-live.test.ts.
-    - [ ] Restore tests: update api/tests/smoke/restore-validation.test.ts and api/tests/api/ci-incidental-inference.test.ts using a synthetic pending document_summary/stored-key fixture; assert zero egress and retain schema/data/restart assertions. Gate on prepared synthetic backup: rtk make restore-api-sut verify-api-sut-restart test-api-smoke-restore BACKUP_FILE=<synthetic-fixture.dump> API_TEST_CI=1 API_TEST_SUT=1 API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import; no CI_PROVIDER_MODE on the production restore API.
-    - [ ] Scoped/sub-lot gates: rtk make up-api-test CI_PROVIDER_MODE=synthetic API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import; rtk make test-api-unit SCOPE=tests/unit/ci-deterministic-provider.test.ts CI_PROVIDER_MODE=synthetic API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import; rtk make test-api-endpoints SCOPE=tests/api/ci-incidental-inference.test.ts CI_PROVIDER_MODE=synthetic API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import; rtk make down API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import.
-    - [ ] **UI tests (TypeScript only)** — Existing unchanged; new none.
-    - [ ] **E2E tests** — Existing + updated profile/model declarations: e2e/tests/03-chat.spec.ts, 09-chat-multitool-demo.spec.ts and D-profile files enumerated in 8j. New browser file only 00-ci-seat-mode.spec.ts. Keep group-e and vscode public with zero provider egress.
-    - [ ] Prepare/gate: rtk make build-api build-ui-image API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=e2e-ci-seat-import; rtk make clean test-e2e E2E_SPEC=tests/04-documents-ui-actions.spec.ts CI_PROVIDER_MODE=deterministic WORKERS=1 RETRIES=0 QUEUE_CONCURRENCY=1 API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=e2e-ci-seat-import; repeat the exact single-file entrypoint for 08-document-summary-formats.spec.ts, 08-documents-summary.spec.ts and 09-chat-freeze-terminal.spec.ts; preserve all assertions/timeouts.
-  - [ ] 8h — Add scripts/ci/seat-custody/src/seat-ci-artifacts.ts and tests/seat-ci-artifacts.test.ts; export exact public API/toolbox/UI/E2E OCI images to allowlisted public ghcr.io/rhanka/sentropic-ci-* packages; deliver trusted ci-seat-import-images. Public publish token is scoped to packages, never copied to custody.
-    - [ ] Before large OCI uploads, prove all four allowlisted GHCR packages already public and anonymously readable. If missing, bootstrap ≤1 MiB probe per package with reserved temporary storage, owner sets public visibility, then recheck; no default-private GB upload. Separate source-reader App job verifies H/B/T/source-run/producer jobs and small manifest only; trusted consumer pulls anonymously by digest with empty registry configuration. Verify manifest/index/platform/config/layer digests and measured bytes; reject denied anonymous pull/missing images/mismatch. No private image archive re-upload, SCW password or candidate Make/Compose execution on host; /opt/seat-control uses the reviewed custody digest.
-    - [ ] C18/C20/NB2: deliver src/ci-seat-promote-control.ts, ci-seat-topology.ts, ci-seat-audit-secret-names.ts and named tests. Independently reviewed tooling accepts successive reviewed #681 commits until its merge, each with its own control-delta review and strictly increasing durable promotionIndex. Disable admission, drain/settle without dropping pending reservations, copy the reviewed bundle as data, record source/target/review/digests/index and invalidate affected qualification/case/gate receipts. Requalify before enabling admission. Verify current merge metadata at every promotion; unknown refuses. Merge irreversibly closes bootstrap; then accept only protected-main-reachable source via main authority, never a #681 bootstrap request. Rollback needs another reviewed indexed promotion under the same phase rules, no ledger reset.
-    - [ ] ci-seat-promote-control.test.ts accepts a second reviewed pre-merge #681 promotion and verifies receipt invalidation/admission off; rejects unreviewed delta, stale index, mismatched review/hash and #681 bootstrap after merge; accepts verified main promotion after merge. Test rollback cannot reopen the window.
-    - [ ] C18 topology: compile candidate declarative data into trusted template; admitted image digests, bounded services, typed app env, internal networks, fresh named volumes and inside-container allowlisted init/test/migration argv. No host recipes, interpolation/includes/dotenv, mounts/sockets/privilege/namespaces, unknown fields or broker settings. Allowed service/env delta passes; unsupported delta emits control-topology-update-required. Before #681 merges, use another reviewed bootstrap promotion; afterward, use a control-only change merged/promoted from main. Each has synthetic gates independent of blocked application CI; no stale topology proof.
-    - [ ] Normalize actual Compose through reviewed config/ci-topology.json: exact legacy nodes map images to admitted digests, safe typed test values, fixed container init argv and isolated network/volumes. Never evaluate candidate expressions or forward host binds/network. Changed forbidden nodes refuse; baseline positive and one-node hostile fixtures protect implementability.
-    - [ ] Gates: rtk make test-ci-seat-contract SCOPE=tests/ci-seat-promote-control.test.ts ENV=test-ci-seat-import; rtk make test-ci-seat-contract SCOPE=tests/ci-seat-topology.test.ts ENV=test-ci-seat-import; rtk make test-ci-seat-contract SCOPE=tests/ci-seat-audit-secret-names.test.ts ENV=test-ci-seat-import.
-    - [ ] Export depends only on successfully completed credential-free producer jobs, never on ci-ai-seats/ci-gate or whole-run completion; test the dependency graph for an own-PR wait cycle.
-    - [ ] P-GH1 measures image compressed/unpacked sizes, pull time/disk, remaining account minutes/storage and zero-paid stop. Reserve private job-timeout maxima plus recovery/cleanup; transient metadata≤1 MiB/segment with retention-days:1 and deletion on consumption; durable continuation/audit metadata≤10 MiB aggregate with 90-day audit, no unresolved-state eviction; sealed recovery≤7 days. Reject unknown/insufficient capacity. Historical 47.07 execution/50 rounded minutes are inherited observations.
-    - [ ] Lot gate: rtk make test-ci-seat-contract SCOPE=tests/seat-ci-artifacts.test.ts ENV=test-ci-seat-import; rtk make test-ci-seat-contract SCOPE=tests/seat-workflow-contract.test.ts ENV=test-ci-seat-import; rtk make test-security-iac ENV=test-ci-seat-import.
-    - [ ] **API tests** — Existing image/runtime verification retained; new API files none in this slice.
-    - [ ] **UI tests (TypeScript only)** — Existing unchanged; new none; UI image identity verified.
-    - [ ] **E2E tests** — Synthetic transfer proof in scripts/ci/seat-custody/tests/e2e/seat-ci-bootstrap.test.ts; digest mismatch/missing artifact produces zero provider calls.
-  - [ ] 8i — Implement src/seat-ci-consumer.ts and seat-ci-reporter.ts under scripts/ci/seat-custody; connect ci-ai-seats/result to public waiter/ci-gate with complete manifest validation, failure taxonomy and sanitized always-run summaries.
-    - [ ] Q-NANO — Retrait de gpt-4.1-nano : quel modèle, après le dossier mesuré ? Décision en attente du dossier mesuré de fix/openai-nano-retirement (résultats prévus le 19 octobre 2026 : .tmp/model-retirement/dossier-remplacement-nano.html et qualification-results.md). Ce dossier compare A = gpt-6-luna (défaut réversible de la branche) et B = gpt-5.6-luna sur les mêmes cas. Dans les deux cas : fusion et déploiement avant le 23 octobre 2026, puis rebase de #681. Sans décision mesurée ou sans déploiement à cette date, les E2E live du CI de main et les fonctions produit dépendantes de nano tombent en panne; le propriétaire désigne qui décide du déploiement intermédiaire. La branche ne fusionne ni ne déploie seule. La traduction nano → Luna limitée au CI reste écartée. — Option A : gpt-6-luna : tarifs 0,10 / 0,125 / 0,50 USD par million (entrée / écriture cache / sortie). Le siège Codex n'est qualifié que pour gpt-5.6-luna, donc les cas qui contiennent une opération gpt-6-luna passent en crédit tant qu'une route siège gpt-6-luna n'est pas qualifiée. Cette qualification consomme des unités Q1 de la classe native/inference-maintenance : au plus 2/jour en normal, 8/jour en native-campaign, sans prendre les deux unités protégées d'enrôlement/refresh. Les cas contenant les anciennes opérations nano (titres de session, analyse de documents, compaction, organisations) passent entièrement en crédit dès le départ; seuls les cas intégralement servis par gpt-5.6-luna restent sur siège. Les plafonds crédit restent inchangés, dont 5 USD/jour et 250 tentatives par segment. Option B : gpt-5.6-luna : tarifs 0,20 / 0,25 / 1,20 USD par million (entrée / écriture cache / sortie), aligné sur le siège qualifié. Pour les deux candidats, remplacer gpt-4.1-nano dans les défauts, tests produit, analyse de documents, titres, résumés, organisations et table de contexte; vérifier l'accès avec l'ancienne clé et les mêmes assertions, sans alias.
-    - [ ] Q-MODEL — Quelle carte exacte de modèles crédit qualifie le choix Q-NANO ? — Option A : Carte crédit = le modèle retenu par Q-NANO, tarifs et bornes recalculés pour chaque opération, puis chaque route qualifiée sans réécriture du modèle. Illustrations avant qualification, pour 200 000 entrées +16 384 sorties : A gpt-6-luna réserve 0,033192 USD/tentative; 60 tiennent dans 2 USD (1,991520), 61 non (2,024712). Exemple B seulement, gpt-5.6-luna : 0,069661 USD/tentative; 28 tiennent dans 2 USD, 29 non; 17 réservent 1,184237 USD. Garder 0,12 USD/requête et les autres plafonds. Option B : Attendre le dossier mesuré de fix/openai-nano-retirement et le choix du propriétaire; aucun ID crédit n'est choisi par défaut. Tout autre ID requis par l'inventaire doit aussi être qualifié avec ses tarifs, bornes et fixtures. Tant que la carte exacte n'est pas consignée et qualifiée, zéro appel crédit; aucun remplacement automatique.
-    - [ ] Q-EXPOSURE — Quel montant maximal de fonds accessibles au nouveau credential CI acceptez-vous d'exposer si le contrôle privé est contourné ? — Option A : Fixer **un montant explicite en USD** E_owner. Relever la borne effective E_provider incluant fonds partagés et passif de facturation; crédit admis seulement si elle est finie et ≤E_owner. Les plafonds broker 2/5/25 USD restent inchangés. Option B : Réduire/isoler d'abord les fonds avec les mécanismes disponibles du compte existant, puis fixer E_owner. Crédit bloqué entre-temps. Une autre organisation n'est pas créée implicitement; sa compatibilité avec « aucun nouveau compte fournisseur » exige une décision séparée.
-    - [ ] Q-TRANSITION — Comment gérer la clé de main pendant #681 et le retrait du modèle ? — Option A : Nouvelle clé privée d'abord, ancienne clé publique conservée jusqu'à la fusion; suppression et révocation immédiatement après. Elle ne protège pas du retrait du modèle : sans la migration produit de Q-NANO achevée à temps, le CI de main casse le 23 octobre. Relever l'exposition temporaire, son plafond réel et le responsable du basculement. Option B : Déclarer explicitement un gel des fusions et campagnes dépendantes avant de supprimer plus tôt. Le gel ne rend pas non plus le CI de main utilisable; il évite seulement de fusionner pendant la panne. Il ne remplace pas Q-NANO et ne rétablit aucune fonction produit.
-    - [ ] Propriétaire — 1. **Contrôle privé.** Vérifier/créer rhanka/sentropic-seat-custody et ses droits d'écriture. A : avant la fusion de #681, promouvoir chaque nouvelle version du contrôle depuis un commit relu de #681, avec sa propre preuve de revue du delta, le digest du helper et un index de promotion strictement croissant. Désactiver l'admission, arrêter et terminer les campagnes avant chaque promotion depuis l'outillage vérifié; invalider les résultats concernés. L'admission reste désactivée jusqu'aux contrôles synthétiques et à la nouvelle qualification. Après la fusion, fermer irréversiblement cette fenêtre : seules les promotions depuis main sont acceptées. B : différer, donc aucune campagne privée; un défaut de contrôle non corrigé laisse la qualification et la fusion bloquées.
-      - [ ] Commande : `rtk make ci-seat-promote-control CONTROL_SHA=<reviewed-sha> REVIEW_REF=<review-artifact> ENV=dev-ci-seat-import`
-    - [ ] Propriétaire — 2. **Apps et capacité GitHub.** A : installer sentropic-seat-custodian seulement sur custody (Secrets/Variables write, sans Contents write), sentropic-seat-source-reader seulement sur rhanka/sentropic (Actions/Contents read), sentropic-seat-reporter seulement sur rhanka/sentropic (Commit statuses write). Relever identifiants App/installation, minutes/stockage partagés et arrêt effectif des dépassements payants dans P-GH1. Charger les clés par stdin. B : différer si ces preuves manquent; aucune offre Pro n'est demandée, aucune campagne n'est admise.
-      - [ ] Commande : `rtk make seat-load-app-key -C packages/llm-mesh/seat-tools ROLE=writer KEY_FILE=/absolute/owner-only/writer.pem ENV=dev-ci-seat-import`
-      - [ ] Commande : `rtk make seat-load-app-key -C packages/llm-mesh/seat-tools ROLE=source-reader KEY_FILE=/absolute/owner-only/source-reader.pem ENV=dev-ci-seat-import`
-      - [ ] Commande : `rtk make seat-load-app-key -C packages/llm-mesh/seat-tools ROLE=reporter KEY_FILE=/absolute/owner-only/reporter.pem ENV=dev-ci-seat-import`
-    - [ ] Propriétaire — 3. **Images publiques par digest.** A : vérifier les paquets GHCR rhanka/sentropic-ci-api, -toolbox, -ui, -e2e. S'ils manquent, publier uniquement les probes de contrôle≤1 MiB/paquet sous réservation temporaire, les rendre publics dans leurs paramètres et prouver le pull anonyme avant les grandes images. B : différer si visibilité/capacité non prouvée; aucun upload privé d'images candidates.
-      - [ ] Commande : `rtk make ci-seat-bootstrap-registry ENV=dev-ci-seat-import`
-    - [ ] Propriétaire — 4. **Inventaire avant toute révocation.** A : exécuter le contrôle du workflow candidat et l'audit des **noms seulement**; identifier l'ancienne clé OpenAI par ID/nom/projet/dernière utilisation. Vérifier ses consommateurs production/Kubernetes, configuration locale et autres dépôts; faire tourner ces usages par leurs responsables avant la fusion. Inclure OPENAI/GEMINI/ANTHROPIC/MISTRAL/COHERE/MUSE/MODEL_API_KEY, portées héritées et Tavily. B : si un usage reste inconnu, conserver l'ancienne clé et bloquer le basculement, pas le dossier documentaire. Ne lire/copier aucune valeur pour comparer.
-      - [ ] Commande : `rtk make test-ci-seat-contract SCOPE=tests/seat-workflow-contract.test.ts ENV=test-ci-seat-import`
-      - [ ] Commande : `rtk make ci-seat-audit-secret-names REPO=rhanka/sentropic ENV=dev-ci-seat-import`
-      - [ ] Le nouvel audit utilise GitHub secret-list avec projection JSON du champ name seulement, pour le dépôt puis les portées environnement/organisation accessibles; une portée inaccessible reste unknown. Son rapport relie chaque nom aux références workflow et au propriétaire de l'usage. Il ne prétend pas déduire les consommateurs d'une valeur chiffrée. MUSE doit disparaître du public après fusion; MODEL_API_KEY est supprimé s'il existe. Tavily sort du restore; les tests de recherche requis gardent leurs assertions via le relais privé à endpoint fixe, credential Tavily isolé et ticket de cas. Tout autre consommateur Tavily découvert est nommé avec son responsable avant une suppression, jamais ignoré.
-    - [ ] Propriétaire — 5. **Nouvelle clé crédit privée.** A : répondre Q-MODEL/Q-EXPOSURE, créer une clé dédiée au projet CI du compte OpenAI existant, restreindre modèle/endpoints, vérifier prépaiement fini, recharge off, absence de bascule postpayée et borne effective≤montant accepté. Charger uniquement custody, puis qualifier isolation, sorties, tarifs, images et usage des streams avec de petits probes déjà budgétés. B : garder crédit unqualified, zéro appel. **Ne pas supprimer l'ancienne clé publique à cette étape.**
-      - [ ] Commande : `rtk make seat-load-ci-credit-key -C packages/llm-mesh/seat-tools KEY_FILE=/absolute/owner-only/openai-ci-project.key ENV=dev-ci-seat-import`
-      - [ ] Si Tavily est requis, A : clé restreinte du compte existant chargée uniquement dans le relais privé; B : recherche requise indisponible, sans achat ni substitution des assertions. Commande : `rtk make seat-load-ci-search-key -C packages/llm-mesh/seat-tools KEY_FILE=/absolute/owner-only/tavily-ci.key ENV=dev-ci-seat-import`
-    - [ ] Propriétaire — 6. **Siège Codex distinct.** A : dans ChatGPT/Codex Settings → Usage vérifier Credits/additional usage et automatic purchase/auto-recharge; établir P-BILLING sans dépassement payant, y compris fonds déjà achetés. Qualifier quota lisible et broker siège. Créer ensuite un profil laboratoire indépendant, fermer ses processus, enrôler et suivre les deux smokes réservés et la vérification dans un nouveau run. B : laisser siège unqualified; seuls les tests produit peuvent utiliser le crédit qualifié.
-      - [ ] Commande : `rtk make seat-lab-login -C packages/llm-mesh/seat-tools CLI=codex LAB_HOME=/home/antoinefa/.codex-lab-ci ENV=dev-ci-seat-import`
-      - [ ] Commande : `rtk make seat-reenroll -C packages/llm-mesh/seat-tools CLI=codex ENV=dev-ci-seat-import`
-      - [ ] Le helper impose stockage fichier/connexion ChatGPT et device-auth (ou navigateur isolé), avec CODEX_HOME construit seulement dans l'environnement enfant. Il ne copie jamais le profil quotidien. Quota illisible : zéro smoke et pas de crédit d'enrôlement. Exit 0 actif vérifié, 2 attente transitoire, 1 refus. Après transfert, retirer uniquement le profil jetable sans logout/révocation de la famille transférée. La connexion quotidienne reste intacte.
-    - [ ] Propriétaire — 7. **Campagne native.** A : avant la matrice Codex, enregistrer le mode native-campaign (CI siège 0, natif 8, enrôlement 2 protégés); attendre sa date d'effet et le drain. Pour 120 unités, prévoir au moins 15 jours, hors aléas. B : rester en normal (CI 6/natif 2), donc au moins 60 jours pour cette matrice. Aucun compteur ni quota n'est réinitialisé.
-      - [ ] Commande : `rtk make ci-seat-set-mode CLI=codex MODE=native-campaign CAMPAIGN_ID=<native-campaign-id> ENV=dev-ci-seat-import`
-    - [ ] Propriétaire — 8. **Qualification exacte de #681.** A : vérifier les preuves de fusion et de déploiement de fix/openai-nano-retirement et le rebase de #681 sur le main contenant cette migration, puis soumettre H/B/T, plan et digests renouvelés après les preuves synthétiques et les qualifications disponibles. Une fusion ou un déploiement après le 23 octobre 2026 laisse main et les fonctions produit dépendantes en panne jusque-là, mais n'interdit pas la qualification une fois ces preuves réunies. Le crédit nouveau est privé même pendant la transition publique. B : différer en conservant les résultats requis incomplete. Un dispatch via la session GitHub n'est pas une preuve de présence humaine.
-      - [ ] Commande : `rtk make ci-seat-request SOURCE_RUN_ID=<run-id> ENV=e2e-ci-seat-import`
-      - [ ] Si le résultat complet arrive après expiration du waiter, A : relancer son observation puis ci-gate sans inférence; B : nouvelle campagne seulement si code/base/artifacts/politique ont changé. Vérifier tous les autres prérequis.
-      - [ ] Commande : `rtk make ci-seat-recheck SOURCE_RUN_ID=<run-id> ENV=e2e-ci-seat-import`
-    - [ ] Propriétaire — 9. **Basculement immédiatement après fusion, par le propriétaire/conducteur.** A : seulement lorsque preuve #681 complète et rotation des autres consommateurs prête, fusionner selon la procédure habituelle; la fusion ferme la fenêtre de promotion depuis #681. Supprimer les secrets publics de modèles et les portées héritées correspondantes, arrêter/drainer les anciens runs ayant pu capturer ces valeurs, révoquer l'ancienne clé OpenAI, vérifier le workflow de main et l'absence des noms. Émettre le reçu steady-state; ne pas revenir à l'injection directe en cas d'échec. B : si l'opérateur n'est pas disponible ou la rotation inachevée, reporter la fusion; l'option gel nécessite sa déclaration explicite.
-      - [ ] Commande : `rtk make test-ci-seat-contract SCOPE=tests/seat-workflow-contract.test.ts SOURCE_REF=<merged-main-sha> ENV=test-ci-seat-import`
-      - [ ] Commande : `rtk make ci-seat-audit-secret-names REPO=rhanka/sentropic ENV=dev-ci-seat-import`
-      - [ ] Supprimer Tavily du public lorsque son inventaire n'a plus de consommateur; le relais privé requis reste le seul détenteur. Aucun secret de déploiement sans rapport n'est modifié par ces helpers. La réussite pré-fusion et la fin du basculement sont deux reçus distincts.
-    - [ ] Propriétaire — 10. **Renouvellement accompagné.** A : mesurer une émission puis deux cycles, afficher l'expiration observée et la prochaine échéance sûre (durée maximale de phase siège +5 minutes). Faire rafraîchir uniquement le custodian, sans inférence, avec intention durable, successeur et vérification dans un nouveau run. B : si autorité perdue ou refresh non qualifiable, ré-enrôler via l'étape 6; le siège reste indisponible entre-temps. Aucun cron ni durée supposée n'est introduit.
-      - [ ] Commande : `rtk make seat-refresh -C packages/llm-mesh/seat-tools CLI=codex ENV=dev-ci-seat-import`
-      - [ ] P-REFRESH/P-BILLING/Q3 et arrêt des consommateurs précèdent le refresh. Toute qualification avec inférence prend ses unités protégées; la phase crédit n'occupe pas le slot Codex. Cinq CLIs et cadence complète restent L3. Q2 conserve notification privée et reprise propriétaire sous 24 heures après livraison.
-    - [ ] Hors périmètre N9 : propriétaire déploiement choisit séparément backup smoke sur push main (preuve pré-PR perdue) ou environment/exécuteur privé restreint à qualifier; KUBECONFIG_B64 demeure exposé aux PR internes tant que non traité. Ne modifier aucun secret de déploiement dans ce lot.
-    - [ ] Prérequis NB1/N3/m7 : vérifier les preuves de la migration déjà engagée, fix/openai-nano-retirement fusionnée/déployée et #681 rebasée sur le main contenant cette migration; modèle exact choisi par le propriétaire après le dossier mesuré A gpt-6-luna / B gpt-5.6-luna, inventaire par opération et carte sans alias. Le 23 octobre 2026 est l'échéance pour éviter la panne, pas une interdiction de qualifier après une fusion et un déploiement tardifs. Sans ces preuves, qualification Lot 8 bloquée; garder la clé ou geler les fusions ne répare pas le retrait.
-    - [ ] **API tests** — Required live files in 8j run under admitted policy after synthetic success; transport-specific qualification remains distinct.
-    - [ ] **UI tests (TypeScript only)** — Existing regression gate: rtk make test-ui API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import; new none.
-    - [ ] **E2E tests** — New scripts/ci/seat-custody/tests/e2e/github-seat-roundtrip.test.ts and seat-ci-bootstrap.test.ts pass synthetic first, then qualified exact-candidate proof. Browser files remain those in 8j.
-    - [ ] UAT propriétaire : vérifier Q-NANO, migration fusionnée/déployée, modèle exact et rebase de #681; vérifier dépôts/Apps, reçu de promotion/index/revue/digest; avant fusion constater isolation de la nouvelle clé privée et préparation des autres consommateurs, après fusion constater fermeture du bootstrap et suppression publique/révocation; lancer login/enrôlement; lire état actif/attente/refus, réserve des deux smokes et prochaine échéance; vérifier connexion quotidienne inchangée et absence de secret dans la sortie.
-    - [ ] UAT web: upload document in deterministic profile, observe real queue/status/summary; run admitted organization/initiative/summary generation and streamed tools/vision; compare result validation and sanitized actual route/model.
-    - [ ] UAT Chrome: run admitted existing chat extension generation with correct application authorization; confirm no model key/projection reaches browser. VSCode: public host/API health passes without credentials; do not label it live chat proof.
-    - [ ] UAT fallback: simulate absent/unreadable/CI-share-exhausted seat before a whole case; see no seat request and authorized credit with reason/usage before completion. Start another seat case, force a mid-tool-loop failure, confirm no credit continuation. After six CI units, admit two enrollment smokes and a native campaign while credit remains running, with quota satisfied. Product/custody/native never calls broker.
-    - [ ] UAT failure: wrong plan/source/digest, partial side effect, missing summary/case stays failed/incomplete. Inject verified route infrastructure before assertions: one fresh full-case recovery can reselect credit, with both outcomes/counts visible. A second such failure, any assertion/schema failure or uncertain side effect cannot retry within the campaign. Explicit maintainer request is needed for a new same-H campaign.
-    - [ ] UAT control/topology: promote first and second reviewed #681 control versions before merge, each with its own delta review, increasing index, drain/admission off and invalidated affected receipts. Refuse unreviewed delta/stale index; after merge refuse #681 bootstrap and accept only verified main. Allow safe internal service/env/init delta; reject host socket/mount/privilege/interpolation. S=0 records no seat stack/minutes. Enter native mode only after safe effective-day transition; CI never consumes the protected two.
-    - [ ] UAT seat accounting: synthetic crash mid-phase or lost journal retains the entire pre-reserved case allowance. Confirm no writer/allocator credential in the consumer workflow and no per-send state service. A later separate writer job settles trusted evidence only after termination; missing evidence/replay never releases capacity. High versus auto/original/omitted image detail changes the priced bound; over-envelope image refuses without downsampling.
-    - [ ] UAT continuation/gate: complete >250 paid attempts across separate bounded segments, retain same-plan successful cases and aggregate caps; simulate a normal stream then a truncated stream and inspect released/retained reservations. Let the public waiter expire, deliver the complete matching result, run ci-seat-recheck and verify waiter plus ci-gate succeed without another provider call; stale source/receipt or unrelated failed job remains blocked.
-    - [ ] UAT GitHub: verify #681 current H/B/T, image digests, expected complete coverage, counted seat/credit split and private minute reservation; no merge until required proofs pass.
-  - [ ] 8j — Final complete campaign, docs and release metadata.
-    - [ ] **API tests — existing live**: api/tests/ai/chat-sync.test.ts, executive-summary-auto.test.ts, initiative-generation-async.test.ts, executive-summary-sync.test.ts, chat-tools.test.ts, company-enrichment-sync.test.ts, initiative-generation-sync.test.ts. **New live**: api/tests/ai/document-summary-live.test.ts. **Existing deterministic**: api/tests/ai/comment-assistant.test.ts, documents-tool.test.ts.
-    - [ ] Keep separate explicit api/tests/ai/gw-native-qualification.test.ts and its gw-native-qualification-{ledger,receipts,run,readiness,http}.ts helpers; a product credit pass never satisfies a required native-seat proof.
-    - [ ] **API regression gate**: rtk make test-api CI_PROVIDER_MODE=synthetic API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import; live scoped commands are driven by the admitted inventory, not uncontrolled test discovery.
-    - [ ] **UI tests (TypeScript only)** — Existing all unchanged, updated/new none; rtk make test-ui API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import.
-    - [ ] **E2E existing intentional-live files under e2e/tests/**: 00-ai-generation.spec.ts; 03-chat.spec.ts; 03-chat-chrome-extension.spec.ts; 08-chat-heavy.spec.ts; 08-pptx-org-generation.spec.ts; 08-xlsx-multisheet-query.spec.ts; 09-chat-multitool-demo.spec.ts; 09-chat-org-update-tool.spec.ts.
-    - [ ] **E2E existing deterministic-provider files under e2e/tests/**: 04-documents-ui-actions.spec.ts; 04-chat-image-paste.spec.ts; 04-google-drive-composer.spec.ts; 04-google-drive-settings-documents.spec.ts; 03-chat-mobile-docked-nav.spec.ts; 08-chat-checkpoint-restore.spec.ts; 08-chat-context-chips.spec.ts; 08-chat-workspace-switch.spec.ts; 08-document-summary-formats.spec.ts; 08-documents-summary.spec.ts; 09-chat-freeze-terminal.spec.ts; 09-run-steering-core.spec.ts; 09-todo-runtime-panel-actions.spec.ts; 07_comment_assistant.spec.ts.
-    - [ ] **E2E existing no-inference files under e2e/tests/, group a**: 00-access-control.spec.ts; 02-auth-devices.spec.ts; 02-auth-oauth-authorization-code.spec.ts; 02-auth-oauth-revoke.spec.ts; 02-auth-oauth-wellknown.spec.ts; 02-auth-routes.spec.ts; 02-auth-s2s-client-credentials.spec.ts; 02-auth-simple.spec.ts; 02-auth-webauthn.spec.ts; 02-auth-workflow.spec.ts; 02-organizations.spec.ts; 06-settings-codex-provider.spec.ts; 06-settings.spec.ts; 06-streams.spec.ts; 06-tooling-visual-parity.spec.ts; 06-usecase.spec.ts; 10-cluster-mesh-control-plane.spec.ts.
-    - [ ] **E2E existing no-inference files under e2e/tests/, groups b/c**: 01-admin-users.spec.ts; 01-app.spec.ts; 01-organizations-detail.spec.ts; 04-dossiers-reload-draft.spec.ts; 04-tenancy-workspaces.spec.ts; 03-chat-chrome-extension-auth.spec.ts; 03-dashboard.spec.ts; 03-prioritization-matrix.spec.ts.
-    - [ ] **E2E existing no-inference files under e2e/tests/, group e/VSCode**: 05-error-handling.spec.ts; 05-executive-summary.spec.ts; 05-folder-new-multi-org.spec.ts; 05-folders.spec.ts; 05-i18n.spec.ts; 05-usecase-detail.spec.ts; 07-import-export.spec.ts; 07-matrix.spec.ts; 07-workflow.spec.ts; vscode/01-vscode-chat-streaming.spec.ts.
-    - [ ] Record separate developer scripts e2e/tests/dev/00-record-auth.spec.ts, e2e/tests/dev/01-google-drive-live-readiness.spec.ts and e2e/tests/dev/page-screenshot-proof.spec.ts outside the current numbered-root/VSCode CI inventory; do not run account capture/readiness/screenshot scripts under the AI fallback policy.
-    - [ ] **E2E new**: e2e/tests/00-ci-seat-mode.spec.ts; all case/profile classifications verified against collection and attempted-outbound traces; static skip inventory cannot hide a required live case.
-    - [ ] **E2E scoped pattern**: rtk make clean test-e2e E2E_SPEC=tests/03-chat.spec.ts WORKERS=1 RETRIES=0 QUEUE_CONCURRENCY=1 API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=e2e-ci-seat-import; the manifest runner invokes this existing entrypoint once per selected file/profile with exact scope, not a space-separated E2E_SPEC.
-    - [ ] **E2E public group-e gate**: rtk make clean test-e2e E2E_GROUPS="05 07" CI_PROVIDER_MODE=deterministic WORKERS=1 RETRIES=0 QUEUE_CONCURRENCY=1 API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=e2e-ci-seat-import.
-    - [ ] **E2E public VSCode gate**: rtk make clean test-e2e-vscode E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts CI_PROVIDER_MODE=deterministic WORKERS=1 RETRIES=0 QUEUE_CONCURRENCY=1 OPENVSCODE_PORT=3115 API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=e2e-ci-seat-import.
-    - [ ] Production-image prerequisite: rtk make build-api build-ui-image API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=e2e-ci-seat-import; private hosts use rtk make -f /opt/seat-control/Makefile ci-seat-import-images ENV=e2e-ci-seat-import for anonymous exact-digest pulls and never rebuild after admission. Normal production entrypoint rejects all CI configuration; the separate admitted test deployment uses NODE_ENV=test.
-    - [ ] Complete private live gate: from reviewed custody bundle run rtk make -f /opt/seat-control/Makefile ci-seat-run PHASE=seat LANE=intentional API_TEST_WORKERS=1 WORKERS=1 RETRIES=0 QUEUE_CONCURRENCY=1 API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=e2e-ci-seat-import; drain, finalize journal/receipts and exit the consumer workflow. A separate writer-control job on a fresh runner settles the pre-reservation, releases only proven unused units and the Codex slot, then exits. Only after that receipt run PHASE=credit in its separate workflow and rtk make -f /opt/seat-control/Makefile ci-seat-receipt PHASE=credit ENV=e2e-ci-seat-import. Require complete case union, no continue-on-error/AI-flaky allowance or writer credential in consumers.
-    - [ ] Complete public deterministic inventory gate: rtk make ci-seat-run LANE=deterministic API_TEST_WORKERS=1 WORKERS=1 RETRIES=0 QUEUE_CONCURRENCY=1 API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=e2e-ci-seat-import with zero provider credentials/egress.
-    - [ ] Final package/control gates: rtk make typecheck-llm-mesh lint-llm-mesh test-llm-mesh ENV=test-ci-seat-import; rtk make test-ci-seat-contract ENV=test-ci-seat-import; rtk make check-e2e-inventory check-ci-version-filters ENV=test-ci-seat-import; required impacted security gates pass.
-    - [ ] Patch mesh version within 0.26.x only after published-version check; update packages/llm-mesh/package.json and README.md, root package-lock.json, packages/cluster-mesh/tests/integrations/llm-surface.spec.ts and gateway-surface.spec.ts, and packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json through sanctioned flow; one mesh copy and gateway range verified.
-    - [ ] Consolidate spec/SPEC_EVOL_CI_SEATS.md and rule changes; record real calls, fallback reasons/spend, private minutes, P-BILLING/P-CODEX-QUOTA/P-REFRESH/P-CI-CREDIT/P-GH1 results and incomplete proofs separately.
-    - [ ] Always cleanup: in developer/synthetic worktree rtk make down API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import and rtk make down API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=e2e-ci-seat-import; private host uses rtk make -f /opt/seat-control/Makefile down API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=e2e-ci-seat-import. Remove private materializations/transient metadata; preserve pending custody, durable receipts and unsettled reservations.
-    - [ ] Review the final candidate, update PR from BRANCH.md, complete UAT and exact-candidate required CI; branch closure/removal/merge remains conductor-owned and outside this planning task.
-  - [x] Build packet: execute C11-C21 and necessary foundations only; owner actions, C22/C23 live qualification, merge and publication remain pending.
-  - [x] Baseline rebase, Post-Rebase Gate and v6 SHA-256 verification completed; source digests must be renewed at qualification.
-  - [ ] C11: durable whole-case reservation, normal/native modes, zero-seat and later settlement; control tests seat-admission, ci-seat-set-mode, seat-crash-recovery.
-  - [ ] C12: price/envelope, FIFO, terminal usage, cumulative segment/day/month caps; control tests ci-credit-budget.
-  - [ ] C13: isolated seat/credit/search brokers, journal and canaries; control tests ci-seat-broker, ci-credit-broker, ci-search-relay, seat-secret-hygiene.
-  - [ ] C14: CI policy before credentials, production startup refusal; API tests unit/ci-seat-runtime and unit/ci-seat-admission.
-  - [ ] C15: sync/stream/reasoning/queue inheritance and one complete infrastructure recovery; API tests api/ci-seat-runtime and control seat-ci-receipts.
-  - [ ] C16: declared deterministic profiles and restore zero egress; API tests unit/ci-deterministic-provider, api/ci-incidental-inference, smoke/restore-validation.
-  - [ ] C17: unchanged exact operation/model identity; API live document-summary and E2E model helpers; retirement prerequisite pending.
-  - [ ] C18: reviewed immutable control/topology and successive promotion; control tests ci-seat-promote-control and ci-seat-topology.
-  - [ ] C19: public exact-digest OCI transfer, capacity and bounded metadata; control tests seat-ci-artifacts and e2e/seat-ci-bootstrap.
-  - [ ] C20: separate workflow roles, stdin owner helpers and name-only audit; control tests seat-workflow-contract and ci-seat-audit-secret-names.
-  - [ ] C21: public D/N split, strict complete waiter/gate and zero-inference recheck; control tests seat-ci-plan, seat-ci-receipts and seat-workflow-contract.
-  - [ ] Scoped control gate per slice: `make test-ci-seat-contract SCOPE=tests/<named-file>.test.ts API_PORT=9580 UI_PORT=5780 MAILDEV_UI_PORT=1680 ENV=test-ci-seat-import`; full gate at completion. UI new/updated files: none; existing `make test-ui` regression. Live calls stay disabled.
-  - [ ] Implementation increments (each recorded with its own BRANCH update and commit of at most 150 changed lines).
-    - [x] C11a: container-only control runner and initial whole-case/protected-reserve refusal tests; expected red (admission module absent), no provider egress.
-    - [x] C11b: whole-case stable admission and protected quotas; four scoped tests green; pinned container identifies Node 24.21.0.
-    - [x] C11c: native-campaign mode, deferred effective day, drain/expiry refusal and no replenishment; red then green scoped tests, with persistent mode/expiry fencing.
-    - [x] C11d: red then three green crash/concurrency tests; fsync/atomic writer and later private-handoff settlement validate provenance/expiry/digest, retain unresolved reservations and refuse a second refund.
-    - [x] C12a: red then four green model-specific price/envelope/image/segment tests; examples remain unqualified, owner operation/model map empty.
-    - [x] C12b: red then three green FIFO/cancellation/usage tests; trusted terminal usage settles once, missing usage retains full reservation and overrun fences. Duplicate-request rejection corrected to preserve async contract.
-    - [ ] C13a: seat proxy, signed-case/endpoint/model/replay refusal and pre-send fsync canary tests (red first).
-
-- [ ] **Lot N-2** UAT
-  - [ ] Web app (splitted by sublist for each env)
-    - [ ] Synthetic projection import through both modes shows one account (no live seat needed).
-    - [ ] Expired projection shows classified unavailable state with zero refresh calls.
-    - [ ] N+1 delivery recovers without account duplication.
-    - [ ] Wrong-owner and older-generation imports are refused.
-    - [ ] Per qualified live lab seat (only with P-BILLING receipt + Q1 quota): both imports through the trusted helper.
-
-- [ ] **Lot N-1 — Docs consolidation**
-  - [ ] Refactor and integrate `spec/BRANCH_SPEC_EVOL.md` into existing specs (if not a new standalone spec).
-  - [ ] Delete `spec/BRANCH_SPEC_EVOL.md` after integration.
-
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, COMMON-RULES, r6 amendment, Lot 3 STOP report.
+  - [x] Create worktree `tmp/worktrees/cyber-act-L03a` on branch `feat/cyber-act-L03a` from `origin/main`.
+  - [x] Rebase `preserve/cyber-lot3-reconciled` (62 commits over `e6d17327`) onto `origin/main`; BRANCH.md conflicts keep the #681 copy, version/lockfile conflicts keep current-main pins.
+  - [x] Post-rebase gate: bump `packages/llm-mesh` to `0.32.3` (> published `0.32.2`).
+  - [x] Confirm command style: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make ... ENV=test-cyber-L03a` (ENV last), then `make down ENV=test-cyber-L03a`.
+- [ ] **Lot 1 — Tests first (r6 §6.4 destinations)**
+  - [ ] C/ `scripts/ci/seat-custody/tests/seat-environment-custody.test.ts` (T5-C1/C2, T6-C1): one environment per job, literal secret names, twelve reader copies, synthetic canonical→projection→N+1 roundtrip, same-run/stale-rerun/ambiguous-PUT/interrupted-write refusals.
+  - [ ] C/ `scripts/ci/seat-custody/tests/seat-workflow-contract.test.ts` (T5-C1, T6-C1): emitted-workflow scan — no `secrets: inherit`, ≤1 environment per job, allowlisted literal secret refs only, hostile PR/fork/tag/unprotected-ref/indirection refusals.
+  - [ ] C/ `scripts/ci/seat-custody/tests/custody-state-store.test.ts` (T6-C2): eight-job transaction, bank/HEAD fencing, full interruption matrix, limits at/above ceilings, mixed-generation/stale-pointer refusal.
+  - [ ] C/ `scripts/ci/seat-custody/tests/e2e/github-seat-roundtrip.test.ts` (T5-C2 real later-run probes): synthetic payloads against the environment-secret API surface in a separate process/run.
+  - [ ] C/ `scripts/ci/seat-custody/tests/ci-seat-broker.test.ts` (extend, T5-C3), `seat-ci-artifacts.test.ts`, `seat-secret-hygiene.test.ts` (T5-C3): positive wire + candidate file/env/process/socket/egress negatives, ciphertext-only artifacts, names-only hygiene.
+  - [ ] C/ `scripts/ci/seat-custody/tests/ci-seat-topology.test.ts` (T6-C3): translated SO_PEERCRED triples, fixed elevation entry, guardian receipt fields.
+  - [ ] C/ `scripts/ci/seat-custody/tests/acceptance-disposition.test.ts` (T6-M1): all 69 acceptance IDs, 63 paths, §6.4 rows, T5/T6 IDs, credential/copy/loader receipts.
+  - [ ] C/ `scripts/ci/seat-custody/tests/owner-procedure-contract.test.ts` (T6-D1): §5.1/§5.2 equivalence against one fixture, both V6 5/8i withdrawals, retired IDs/cutoff, six steps, two owner quotes byte-for-byte.
+  - [ ] D/ `scripts/security/daily/control-provisioning.test.mjs` (T5-C6, T6-M1), `control-permit-channel.test.mjs` (T5-C6, T6-C3), `control-clock.test.mjs` (T5-C6, T6-C3).
+  - [ ] RED run: `flock … make test-ci-seat-contract ENV=test-cyber-L03a` and `flock … make test-security-daily ENV=test-cyber-L03a`.
+- [ ] **Lot 2 — Same-repo seat/control core implementation**
+  - [ ] `src/seat-environment-custody.ts` (L3-B store binding: sentropic protected environments, sealed PUT, N+1, canonical→projection ordering).
+  - [ ] `src/custody-state-store.ts` (L3-B/§4.3.1: CustodyStateV1, two banks ×16 segments, HEAD, fence CAS, eight-job transaction).
+  - [ ] `src/seat-workflow-contract.ts` (L3-C/L3-F: job→environment contract, bootstrap placement on protected main only, permanent closure after #681 merge).
+  - [ ] `src/ci-seat-broker.ts` (L3-C: reservation-bound wire, journal fsync-before-send, FD-only loading, permits).
+  - [ ] `src/acceptance-disposition.ts`, `src/owner-procedure.ts` (T6-M1, T6-D1 data).
+  - [ ] D/ `control-provisioning.mjs`, `control-permit-channel.mjs`, `control-clock.mjs` (L3-I/L3-L, T5-C6/T6-C3).
+  - [ ] `docs/security/activation/owner-procedure-r6.md` (synchronized §5.1/§5.2 copy).
+  - [ ] Wire D/ tests into `test-security-daily` SCOPE (BR03a-EX1).
+  - [ ] GREEN run of both suites; `make down ENV=test-cyber-L03a`.
+- [ ] **Lot 3 — Preservation receipts & gates**
+  - [ ] `spec/evidence/ci-seats/activation-lot3-preservation.json` re-read and extended with the rebase-onto-current-main record (L3-H).
+  - [ ] `make scope-check` before every commit; `git diff --check`; atomic `make commit` ≤150 lines, push after every few commits (crash safety).
+  - [ ] `make test-llm-mesh` + `make typecheck-llm-mesh` regression on the rebased lineage.
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest UI (cf Lot1, copy checklist)
-  - [ ] Retest API (cf Lot1, copy checklist)
-  - [ ] Retest e2e (cf lots e2e_groups like in Lot1)
-  - [ ] Retest AI flaky tests (non-blocking only under acceptance rule) and document pass/fail signatures in `BRANCH.md`
-  - [ ] Record explicit user sign-off if any AI flaky test is accepted
-  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
-  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
+  - [ ] Both suites GREEN under the flock with `ENV=test-cyber-L03a` last; `make down ENV=test-cyber-L03a`; `make ps` empty.
+  - [ ] Push review-ready head; open draft PR with this BRANCH.md as body.
+  - [ ] Run ONE CI on the final head; wait for completion; record result.
+  - [ ] Report to `.tmp/rv/cyber-act-L03a.md`; do not merge.
