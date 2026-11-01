@@ -28,12 +28,18 @@ describe('mesh release invariants', () => {
       dependencies: Record<string, string>;
     };
     const range = gateway.dependencies['@sentropic/llm-mesh'];
-    const caret = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(range ?? '');
-    expect(caret).not.toBeNull();
-    const [major, minor] = mesh.version.split('.').map(Number);
-    // Caret rule for 0.x: same minor, any patch.
-    expect(major).toBe(Number((caret as RegExpExecArray)[1]));
-    expect(minor).toBe(Number((caret as RegExpExecArray)[2]));
+    // Current main declares a union of caret ranges; the mesh version must satisfy one.
+    const ranges = (range ?? '').split('||').map((s) => s.trim()).filter((s) => /^\^\d+\.\d+\.\d+$/.test(s));
+    expect(ranges.length).toBeGreaterThan(0);
+    const [major, minor, patch] = mesh.version.split('.').map(Number);
+    const admitted = ranges.some((r) => {
+      const caret = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(r)!;
+      const cMajor = Number(caret[1]); const cMinor = Number(caret[2]); const cPatch = Number(caret[3]);
+      if (cMajor > 0) return major === cMajor && (minor > cMinor || (minor === cMinor && patch >= cPatch));
+      // Caret rule for 0.x: same minor, any patch.
+      return major === 0 && minor === cMinor;
+    });
+    expect(admitted).toBe(true);
   });
 
   it('wires the seat surfaces on the enrollment and node entries', async () => {
