@@ -132,10 +132,18 @@ export const openConnectorCapabilityV1 = (input: {
   if (ciphertext.byteLength === 0 || ciphertext.byteLength > 4096) {
     throw new IdentityCustodyErrorV1('identity_revocation_custody_invalid');
   }
-  const decipher = createDecipheriv('aes-256-gcm', Buffer.from(input.key), Buffer.from(nonce));
-  decipher.setAAD(aadBytesV1(input));
-  decipher.setAuthTag(Buffer.from(authTag));
-  const plaintext = Buffer.concat([decipher.update(Buffer.from(ciphertext)), decipher.final()]);
+  let plaintext: Buffer;
+  try {
+    const decipher = createDecipheriv('aes-256-gcm', Buffer.from(input.key), Buffer.from(nonce));
+    decipher.setAAD(aadBytesV1(input));
+    decipher.setAuthTag(Buffer.from(authTag));
+    plaintext = Buffer.concat([decipher.update(Buffer.from(ciphertext)), decipher.final()]);
+  } catch {
+    nonce.fill(0);
+    (authTag as Uint8Array).fill(0);
+    (ciphertext as Uint8Array).fill(0);
+    throw new IdentityCustodyErrorV1('identity_revocation_custody_invalid');
+  }
   try {
     return decodeCapability(new Uint8Array(plaintext.buffer, plaintext.byteOffset, plaintext.byteLength));
   } finally {
