@@ -19,14 +19,18 @@ export const oauthJsonError = (
   status: 400 | 401 | 403 | 503,
   code: string,
   message: string
-): Response =>
-  c.json(
+): Response => {
+  if (status === 401 && c.req.header('authorization')?.startsWith('Basic ')) {
+    c.header('WWW-Authenticate', 'Basic realm="oauth"');
+  }
+  return c.json(
     {
       error: code,
       error_description: message,
     },
     status
   );
+};
 
 export const redirectWithOAuthError = (
   redirectUri: string,

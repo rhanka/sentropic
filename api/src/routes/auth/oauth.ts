@@ -382,7 +382,10 @@ const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
       const [row] = await db.select().from(users).where(eq(users.email, email)).limit(1);
       return row ? toAuthHonoUserRecord(row) : null;
     },
-    findById: findUserById,
+    findById: async (userId) => {
+      const [row] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      return row ? toAuthHonoUserRecord(row) : null;
+    },
     async update(userId, input) {
       const [row] = await db
         .update(users)
