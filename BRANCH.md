@@ -53,7 +53,7 @@ Implement the single canonical Sessions registry with typed projections (§3.3.1
 ## Feedback Loop
 - [x] `attention`: manifest pin drift — assignment cites dfb2589969f78cf0 prefix; r1-baseline.json confirms it as the r1 MANIFEST seal; contract 3d827eaa… and manifest JSON 5e86b2a1… are the r1 pinned bytes per app ACK review §1 finding 2.
 - [x] `attention`: r2 reseal observed mid-lot (CHANGES-r2.md, contract cc8965c9…, manifest JSON f7e4a148…); r2 states the r1 ACK does not auto-accept it and a new receiving pin is required. In-scope r1→r2 schema deltas are $comment-only; metadata/producer attributions and semantic clarifications (revision counter, freshness interval, method signatures) match implemented behavior. Staying on ACKed r1; r2 re-pin needs a new app ACK (conductor/owner decision).
-- [ ] `blocked`: PR #873 `pull_request` events (opened, close, reopen) created no CI run; a `workflow_dispatch` run (41316253441) fails in setup (`changes` needs PR context). Pushing this note to test the `synchronize` trigger path.
+- [x] `blocked`: PR #873 `pull_request` events (opened, close, reopen, 2x synchronize) created no CI run (anomaly open for owner; precedent packet allows `workflow_dispatch` fallback). CI green via dispatch run 41324095985 on head 37e6320e9: previous dispatch failures fixed in-branch (root lockfile sync BR01-EX1, fixture tuple refresh + BRLOCK-EX1 line + artifacts baseline BR01-EX2).
 
 ## AI Flaky tests
 - [x] No AI-dependent tests or timeout changes.
