@@ -119,6 +119,10 @@ export function journeyResponse(body) {
   const messageText = content => Array.isArray(content) ? content.map(part => part.text ?? '').join('\n') : String(content ?? '');
   const text = messages.map(m => messageText(m.content)).join('\n');
   const user = messageText(messages.findLast(m => m.role === 'user')?.content);
+  // Schema-driven prompts are not always the last user message: web-search follow-ups append
+  // tool results as a trailing user message. Match schema keys on every non-tool message so
+  // those flows still resolve, while tool-result payloads stay excluded.
+  const promptText = messages.filter(m => m.role !== 'tool').map(m => messageText(m.content)).join('\n');
   const json = value => ({ content: JSON.stringify(value) });
   const references = [{ title: 'Provider protocol reference', url: 'https://example.com/reference', excerpt: 'Local qualification evidence.' }];
   if (user.includes('Produire une contraction (résumé détaillé)')) {
@@ -132,7 +136,7 @@ export function journeyResponse(body) {
     }
     return { content: 'red' };
   }
-  if (/"dossier"/.test(user) && /"initiatives"/.test(user)) {
+  if (/"dossier"/.test(promptText) && /"initiatives"/.test(promptText)) {
     const count = Number(text.match(/(?:exactement|à générer:|a generer:)\s*(\d+)/i)?.[1] ?? 3);
     if (count < 1 || count > 50) throw new Error('Unexpected initiative count');
     const domains = ['operations', 'service', 'data', 'compliance', 'sales'].map(id => ({ id, label: id }));
@@ -140,17 +144,17 @@ export function journeyResponse(body) {
       initiatives: Array.from({ length: count }, (_, i) => ({ titre: `AI initiative ${i + 1}`,
         description: 'Improve operational quality using verified data [1].', ref: references[0].url, domainId: 'operations' })) });
   }
-  if (/"synthese_executive"/.test(user)) return json({
+  if (/"synthese_executive"/.test(promptText)) return json({
     introduction: 'Portfolio overview', analyse: 'Value and complexity analysis',
     recommandation: 'Validate the selected initiatives', synthese_executive: 'Operational improvements', references });
-  if (/"valueAxes"/.test(user) && /"levelDescriptions"/.test(user)) {
+  if (/"valueAxes"/.test(promptText) && /"levelDescriptions"/.test(promptText)) {
     const axes = ids => ids.map(axisId => ({ axisId,
       levelDescriptions: Array.from({ length: 5 }, (_, i) => ({ level: i + 1, description: `Observable qualification level ${i + 1}` })) }));
     return json({ valueAxes: axes(['business_value', 'time_criticality', 'risk_reduction_opportunity']),
       complexityAxes: axes(['implementation_effort', 'data_compliance', 'data_availability', 'change_management']) });
   }
-  if (/"valueScores"/.test(user) && /"complexityScores"/.test(user)) {
-    const name = user.match(/"name"\s*:\s*"([^"]+)"/)?.[1] ?? 'AI initiative';
+  if (/"valueScores"/.test(promptText) && /"complexityScores"/.test(promptText)) {
+    const name = promptText.match(/"name"\s*:\s*"([^"]+)"/)?.[1] ?? 'AI initiative';
     const result = { name, description: 'Improve operational quality using verified data [1].',
       problem: 'Operational data needs consistent validation.', solution: 'Apply a repeatable validation process.',
       leadtime: 'Pilot validation', prerequisites: 'Validated data access', contact: 'Product owner', references,
@@ -159,7 +163,7 @@ export function journeyResponse(body) {
     for (const key of ['technologies', 'benefits', 'metrics', 'risks', 'constraints', 'nextSteps', 'dataSources', 'dataObjects']) result[key] = ['Verified operational evidence'];
     return json(result);
   }
-  if (/"industry"/.test(user) && /"products"/.test(user) && !body.tools?.some(t => t.function?.name === 'organization_update')) {
+  if (/"industry"/.test(promptText) && /"products"/.test(promptText) && !body.tools?.some(t => t.function?.name === 'organization_update')) {
     return json({ industry: 'Manufacturing', size: 'Enterprise', products: 'Industrial products', processes: 'Quality control',
       kpis: 'Quality and adoption', challenges: 'Data integration', objectives: 'Improve operations', technologies: 'Cloud platforms', references });
   }

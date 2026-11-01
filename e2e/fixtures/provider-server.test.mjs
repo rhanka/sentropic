@@ -182,3 +182,30 @@ test('should request a real PPTX generation tool and preserve explicit reply tok
   });
   assert.equal(journeyResponse({ messages: [{ role: 'user', content: 'Réponds uniquement "OK_SKILLS_OK" sans rien d’autre.' }] }).content, 'OK_SKILLS_OK');
 });
+
+test('should resolve schema journeys when tool results trail the prompt as a user message', () => {
+  // Web-search follow-up shape: the structured prompt is an earlier user message and the
+  // last user message carries the search results.
+  const messages = [
+    { role: 'system', content: 'Follow-up system prompt' },
+    { role: 'user', content: 'Score this initiative with {"name":"AI initiative","valueScores":[],"complexityScores":[]}' },
+    { role: 'assistant', content: 'Let me research.' },
+    { role: 'user', content: 'Voici les résultats de recherche web:\n[{"title":"t","url":"https://example.com/r","excerpt":"e"}]' },
+  ];
+  const content = JSON.parse(journeyResponse({ messages }).content);
+  assert.equal(content.name, 'AI initiative');
+  assert.ok(content.valueScores[0].rating > 0);
+  assert.ok(content.complexityScores[0].rating > 0);
+});
+
+test('should not treat schema keys inside tool-result payloads as a schema journey', () => {
+  const messages = [
+    { role: 'system', content: 'Chat system' },
+    { role: 'user', content: 'Read initiative init_1234567890' },
+    { role: 'assistant', tool_calls: [{ id: 'ci_tool_0', type: 'function', function: { name: 'read_initiative', arguments: '{"initiativeId":"init_1234567890"}' } }] },
+    { role: 'tool', tool_call_id: 'ci_tool_0', content: '{"id":"init_1234567890","name":"X","valueScores":[{"axisId":"business_value","rating":55}],"complexityScores":[{"axisId":"implementation_effort","rating":21}]}' },
+  ];
+  const response = journeyResponse({ messages, tools: [{ function: { name: 'read_initiative', parameters: { required: ['initiativeId'] } } }] });
+  assert.ok(response.content);
+  assert.equal(response.tool_calls, undefined);
+});
