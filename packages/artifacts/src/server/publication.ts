@@ -45,6 +45,8 @@ export interface ReleaseRecord {
 export interface PublicationStateStore {
   putRelease(release: ReleaseRecord): Promise<void>;
   getRelease(releaseId: string): Promise<ReleaseRecord | undefined>;
+  /** Full release history of one artifact, oldest first (creation order, then id). */
+  listReleases(artifactId: string): Promise<ReleaseRecord[]>;
   getCurrentReleaseId(artifactId: string): Promise<string | undefined>;
   compareAndSwapCurrent(artifactId: string, expected: string | null, next: string): Promise<boolean>;
 }
@@ -76,6 +78,12 @@ export function createMemoryStateStore(): PublicationStateStore {
     },
     getRelease(releaseId: string): Promise<ReleaseRecord | undefined> {
       return Promise.resolve(releases.get(releaseId));
+    },
+    listReleases(artifactId: string): Promise<ReleaseRecord[]> {
+      // Stable sort: createdAt ties keep insertion (creation) order.
+      return Promise.resolve([...releases.values()]
+        .filter((release) => release.artifactId === artifactId)
+        .sort((a, b) => (a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0)));
     },
     getCurrentReleaseId(artifactId: string): Promise<string | undefined> {
       return Promise.resolve(current.get(artifactId));
@@ -194,6 +202,8 @@ export interface PublicationService {
   publish(input: PublishInput, sources?: SourceStore): Promise<PublishResult>;
   getCurrent(artifactId: string): Promise<{ releaseId: string; manifest: string } | undefined>;
   getRelease(releaseId: string): Promise<{ releaseId: string; manifest: string } | undefined>;
+  /** Release history records (digest, manifest, createdAt) for list_versions. */
+  listReleases(artifactId: string): Promise<ReleaseRecord[]>;
 }
 
 /** Create a publication service over injected stores (no driver imports). */
@@ -267,6 +277,9 @@ export function createPublicationService(deps: {
       const release = await deps.state.getRelease(releaseId);
       if (release === undefined) return undefined;
       return { releaseId: release.releaseId, manifest: release.manifest };
+    },
+    async listReleases(artifactId: string): Promise<ReleaseRecord[]> {
+      return deps.state.listReleases(artifactId);
     },
   };
 }

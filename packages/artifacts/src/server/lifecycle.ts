@@ -137,6 +137,8 @@ export interface LifecycleService {
   listReleases(artifactId: string): Promise<string[]>;
   /** Track a published release so promotion sees it (idempotent). */
   trackRelease(artifactId: string, releaseId: string): Promise<void>;
+  /** Per-release lifecycle state (ready/retired/purged; ready when untracked). */
+  getReleaseState(releaseId: string): Promise<ReleaseState>;
 }
 
 /** Create a lifecycle service over an injected store (mutations owner-only). */
@@ -162,6 +164,9 @@ export function createLifecycleService(
     },
     async stateOf(artifactId: string): Promise<ArtifactState> {
       return store.getArtifactState(artifactId);
+    },
+    async getReleaseState(releaseId: string): Promise<ReleaseState> {
+      return store.getReleaseState(releaseId);
     },
     canRead(
       artifact: { artifactId: string; state: ArtifactState },
