@@ -35,6 +35,9 @@ describe('OAuth consent contracts', () => {
     const french = createFrenchOAuthConsentLabels();
 
     expect(labels.title).toBe('Authorize application');
+    expect(labels.offlineContinuation).toContain('15 days');
+    expect(labels.offlineWithdrawal).toContain('all');
+    expect(labels.defaultAudienceLabel).toContain('Default');
     expect(labels.approve).toBe('Allow');
     expect(labels.scopeDescriptions.email).toContain('email');
     expect(labels.scopeDescriptions['immo:artifacts:read']).toContain('Immo artifacts');
