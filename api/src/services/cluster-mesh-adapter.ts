@@ -30,7 +30,7 @@ import {
   issueDeviceCode,
   pollDeviceCode,
 } from './device-code-store';
-import { resolveTenantAuthoritatively } from './tenancy/resolve-tenant';
+import { resolveCmTenant } from './identity/cm-tenancy';
 import { PostgresClusterMeshCutoverStore } from './cluster-mesh/postgres-cutover-store';
 import { PostgresClusterMeshRuntimeStore } from './cluster-mesh/postgres-runtime-store';
 import { createClusterMeshInvocationVerifier } from './cluster-mesh/invocation-verifier';
@@ -321,7 +321,7 @@ export const clusterMeshAdapter = createClusterMeshAppAdapter({
   issueDeviceCode,
   pollDeviceCode,
   approveDeviceCode,
-  resolveTenant: resolveTenantAuthoritatively,
+  resolveTenant: resolveCmTenant,
   sessionAdmission: {
     generationId: sessionGenerationId,
     store: runtimeStore,
