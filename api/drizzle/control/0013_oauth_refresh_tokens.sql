@@ -67,6 +67,11 @@ BEGIN
     WHERE user_id = p_user AND generation = 0 ORDER BY id FOR UPDATE LOOP
     PERFORM public.oauth_refresh_revoke_family(f, p_reason, clock_timestamp()::timestamp);
   END LOOP;
+  IF p_reason IN ('security_event', 'db_restore_invalidation') THEN
+    UPDATE public.oauth_consents SET offline_grant_id = NULL, offline_issuer = NULL,
+      offline_scopes = '{}', approved_resources = '{}', default_audience_approved = false,
+      offline_consented_at = NULL WHERE user_id = p_user AND offline_grant_id IS NOT NULL;
+  END IF;
 END $$;
 --> statement-breakpoint
 -- Statement guard precedes tuple locking (a row trigger alone can deadlock on FK checks).
