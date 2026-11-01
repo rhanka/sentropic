@@ -130,7 +130,7 @@ Implement the durable storage backends for the frozen identity contracts of lot 
   - [ ] Track handoff: designated main writer imports Lot 7 and the final report; this lane preserves the single-writer Track boundary.
 - [ ] **Lot 8 — Delta review product correction**
   - [x] Fix subscription setup in `api/src/routes/namespaces/streams.ts` before response delivery and initial catch-up; buffer startup notifications and serialize filtered live delivery with cursor replay.
-  - [ ] Commit deterministic API regressions in `api/tests/api/cluster-mesh-streams-cutover.test.ts`: lost initiative/chat notifications reproduce on the original product; overlapping outbox replay reproduces duplicate sequence 3 after the first fix; final regression scope 3/3 and full streams scope 11/11; API typecheck and lint passed.
-  - [ ] Restore `e2e/tests/05-usecase-detail.spec.ts` byte-for-byte to the main version, removing the CDP ping wait.
-  - [ ] Run the new API regression, both streams API files, and E2E spec 05 sequentially under the shared flock with ports 9365/5565/1465 and `ENV=e2e-cm-a2-1` last; run matching teardown.
+  - [x] Commit deterministic API regressions in `api/tests/api/cluster-mesh-streams-cutover.test.ts`: lost initiative/chat notifications reproduce on the original product; overlapping outbox replay reproduces duplicate sequence 3 after the first fix; final regression scope 3/3 and full streams scope 11/11; API typecheck and lint passed.
+  - [x] Restore `e2e/tests/05-usecase-detail.spec.ts` byte-for-byte to the main version, removing the CDP ping wait.
+  - [x] Run the new API regression, both streams API files, and E2E spec 05 sequentially under the shared flock with ports 9365/5565/1465 and `ENV=e2e-cm-a2-1` last; final E2E 15 passed, 1 skipped, SSE scenario 539ms; matching teardown completed.
   - [ ] Scope-check, `make commit`, force-with-lease this branch only, one CI on the final head, append evidence to the owner report and designated Track-writer handoff; stop without merging.
