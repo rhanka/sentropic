@@ -8,6 +8,13 @@ const obj = (properties: Record<string, unknown>, required: string[] = []): Arti
 const id = { type: 'string', pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' };
 const primitiveRecord = { type: 'object',
   additionalProperties: { type: ['string', 'number', 'boolean', 'null'] }, default: {} };
+/** Artifact display metadata: one short word for the icon. */
+const metadata = {
+  title: { type: 'string', maxLength: 200, description: 'Artifact display title.' },
+  description: { type: 'string', maxLength: 2000, description: 'Short artifact description.' },
+  icon: { type: 'string', pattern: '^[a-z0-9][a-z0-9_-]{0,31}$',
+    description: 'One short lowercase word.' },
+} as const;
 
 /** Required configuration includes semantic limits absent from JSON Schema. */
 export function assertCompleteOperation(config: OperationProfile): void {
@@ -18,6 +25,7 @@ export function assertCompleteOperation(config: OperationProfile): void {
       'maxDecodedFileBytes', 'maxDecodedTotalBytes'], defaults: ['profile'] },
     list: { limits: ['listLimitMin', 'listLimitMax'], defaults: ['limit', 'offset'] },
     commit_upload: { limits: ['idempotencyKeyMaxUnits'], defaults: ['profile'] },
+    revert: { limits: ['idempotencyKeyMaxUnits'], defaults: [] },
   };
   const fields = required[config.operation];
   if (fields && (fields.limits.some((key) => !Object.hasOwn(config.limits, key)) ||
@@ -43,7 +51,7 @@ export function capabilitySchema(name: ArtifactCapabilityName, profile: Effectiv
   switch (operation) {
     case 'ensure': return obj({ bindingName: { type: 'string', minLength: limits.bindingNameMinUnits,
       maxLength: limits.bindingNameMaxUnits }, parameters: { ...obj({}), default: config.defaults.parameters },
-      idempotencyKey: key }, ['bindingName', 'idempotencyKey']);
+      idempotencyKey: key, ...metadata }, ['bindingName', 'idempotencyKey']);
     case 'publish': {
       const reserved = profile.rules.reservedFirstSegments.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
       const path = { type: 'string', minLength: 1, maxLength: profile.rules.pathMaxBytes,
@@ -56,13 +64,23 @@ export function capabilitySchema(name: ArtifactCapabilityName, profile: Effectiv
         bytes: { type: 'array', maxItems: limits.maxDecodedFileBytes, items: integer(0, 255) } }, ['path', 'mimeType']),
         oneOf: [{ required: ['text'], not: { required: ['bytes'] } },
           { required: ['bytes'], not: { required: ['text'] } }] };
-      return obj({ artifactId: id, idempotencyKey: key, files: { type: 'array', items: file,
-        minItems: limits.publishFilesMin, maxItems: limits.publishFilesMax },
-        profile: { ...primitiveRecord, default: config.defaults.profile } }, ['artifactId', 'files', 'idempotencyKey']);
+      const edit = obj({ path, oldStr: { type: 'string', minLength: 1, maxLength: limits.maxDecodedFileBytes,
+        description: 'Must occur exactly once in the current file text.' },
+        newStr: { type: 'string', maxLength: limits.maxDecodedFileBytes } }, ['path', 'oldStr', 'newStr']);
+      return obj({ artifactId: id, idempotencyKey: key,
+        files: { type: 'array', items: file, minItems: limits.publishFilesMin, maxItems: limits.publishFilesMax,
+          description: 'Full file set; required unless edits is supplied.' },
+        edits: { type: 'array', items: edit, maxItems: limits.publishFilesMax,
+          description: 'Small old/new edits applied to the current release text files; required unless files is supplied.' },
+        expectedCurrentReleaseId: { ...id, description: 'Optimistic concurrency: refuse with a typed conflict when the current release differs.' },
+        profile: { ...primitiveRecord, default: config.defaults.profile },
+        ...metadata }, ['artifactId', 'idempotencyKey']);
     }
     case 'list': return obj({ limit: { ...integer(limits.listLimitMin, limits.listLimitMax), default: config.defaults.limit },
       offset: { ...integer(0), default: config.defaults.offset } });
-    case 'get': case 'get_source': case 'fork': case 'renew': case 'delete': case 'restore': return idOnly;
+    case 'get': case 'get_source': case 'list_versions': case 'fork': case 'renew': case 'delete': case 'restore': return idOnly;
+    case 'revert': return obj({ artifactId: id, releaseId: id, expectedCurrentReleaseId: id, idempotencyKey: key },
+      ['artifactId', 'releaseId', 'idempotencyKey']);
     case 'get_template': return obj({ templateId: str }, ['templateId']);
     case 'get_api_guide': return obj({ version: str });
     case 'create_upload': return obj({ artifactId: id, mimeType: str, maxSize: integer(1) }, ['artifactId', 'mimeType']);
