@@ -85,12 +85,13 @@ export function buildManifest(files = browserFiles(), durations = baselineDurati
 
 export function testIdentities(report) {
   const identities = [];
-  const visit = suite => {
+  const visit = (suite, parents = []) => {
+    const titles = suite.title ? [...parents, suite.title] : parents;
     for (const spec of suite.specs ?? []) for (const test of spec.tests ?? []) {
-      identities.push({ id: `${test.projectName}:${spec.file}:${spec.line}:${spec.column}:${spec.title}`,
+      identities.push({ id: `${test.projectName}:${spec.file}:${spec.line}:${spec.column}:${JSON.stringify([...titles, spec.title])}`,
         expectedStatus: test.expectedStatus, results: test.results ?? [] });
     }
-    for (const child of suite.suites ?? []) visit(child);
+    for (const child of suite.suites ?? []) visit(child, titles);
   };
   for (const suite of report.suites ?? []) visit(suite);
   return identities;
@@ -98,10 +99,12 @@ export function testIdentities(report) {
 
 export function reconcileReports(expected, actual) {
   const before = testIdentities(expected), after = testIdentities(actual);
+  const expectedById = new Map(before.map(row => [row.id, row]));
   const unique = rows => new Set(rows.map(row => row.id));
   if (!before.length || unique(before).size !== before.length || unique(after).size !== after.length
     || before.length !== after.length || before.some(row => !unique(after).has(row.id))) throw new Error('Incomplete or duplicate browser membership');
-  const failures = after.filter(row => !row.results.length || row.results.some(r =>
+  const failures = after.filter(row => row.expectedStatus !== expectedById.get(row.id)?.expectedStatus
+    || !row.results.length || row.results.some(r =>
     r.status !== (row.expectedStatus === 'skipped' ? 'skipped' : row.expectedStatus)));
   if (failures.length || actual.errors?.length) throw new Error('Browser failures, cancellations or retries remain visible');
   return { expected: before.length, executed: after.filter(row => row.expectedStatus !== 'skipped').length,
