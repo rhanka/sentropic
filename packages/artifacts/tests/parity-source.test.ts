@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { canonicalManifest, manifestDigest } from '../src/codecs.js';
 import { readArtifactSource } from '../src/server/source-read.js';
+import { encodeToolResult } from '@sentropic/mcp-platform/transport/result-codec';
 
 const artifactId = '00000000-0000-4000-8000-000000000001';
 const releaseId = '00000000-0000-4000-8000-000000000002';
@@ -52,6 +53,9 @@ describe('verified author source', () => {
     expect(output.files).toHaveLength(32);
     expect(output.files.reduce((total, file) => total + file.bytes.length, 0)).toBe(262144);
     expect(Buffer.byteLength(JSON.stringify(output))).toBeLessThan(2097152);
+    const wire = encodeToolResult({ ok: true, output, auditId: 'budget-test', redactionClass: 'low' });
+    expect(Buffer.byteLength(JSON.stringify(wire))).toBeLessThan(2097152);
+    expect(JSON.parse((wire.content[0] as { text: string }).text)).toEqual(output);
     await expect(readArtifactSource(deps, { artifactId, paths: [] })).rejects.toThrow('invalid_request');
   });
 });

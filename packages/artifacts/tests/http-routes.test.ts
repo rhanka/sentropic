@@ -78,9 +78,12 @@ describe('L6 selected transport boundary', () => {
     for (let i = 0; i < ids.length; i += 1) await acls.putArtifactAcl(ids[i], {
       ownerId: 'alice', storageScopeId: i === 0 ? 'foreign' : 'scope-1', grants: [], isPublic: false, withdrawn: false,
     });
-    const app = boundary(profile, { acls, lifecycle: { stateOf: async () => 'active', canRead: () => true } });
+    const read: string[] = [];
+    const app = boundary(profile, { acls, lifecycle: { stateOf: async () => 'active', canRead: () => true },
+      publication: { getCurrent: async (id) => { read.push(id); return undefined; } } as HttpAppDeps['publication'] });
     const result = await app.handle({ method: 'POST', path: '/list', body: { offset: 1, limit: 1 }, actorId: 'alice' }, invocation);
     expect(result).toMatchObject({ status: 200, body: { total: 2, artifacts: [{ artifactId: ids[2] }] } });
+    expect(read).toEqual(ids.slice(1));
   });
   it('should quarantine legacy successes through the actual app without dispatching a replacement', async () => {
     const keys: string[] = [];
