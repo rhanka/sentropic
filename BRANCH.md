@@ -1,42 +1,29 @@
-# Feature: Preprod-only immo artifact scopes on the IdP
+# Feature: Preprod IdP access-token TTL palliative (15 days)
 
 ## Objective
-Grant the preprod `immo-mcp` PKCE client the explicit scopes `immo:artifacts:read` and `immo:artifacts:write` (resource `https://preprod.immo.sent-tech.ca/mcp`), advertise them in the AS `scopes_supported` metadata and label them on the consent screen. Prod is untouched: the prod `immo-mcp` row keeps its three immo scopes.
+Make the already-applied live preprod IdP setting `OAUTH_ACCESS_TOKEN_TTL_SEC=1296000` (15 days) survive `deploy-preprod` by declaring it in the preprod auth-idp ConfigMap strategic-merge overlay. Palliative for the hourly MCP relogin. Owner decision 2026-11-01 (option (a)), risks explicitly accepted: global to all preprod clients, and a leaked token cannot be revoked by resource servers validating via JWKS. PREPROD ONLY: prod overlays are untouched and keep the code default 3600. To be reverted to 3600 when IdP refresh lots 1-3 (`spec/SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md`) are deployed in preprod.
 
 ## Scope / Guardrails
-- Scope limited to the preprod IdP client governance (idp-identity-sync preprod overlay), AS metadata, consent labels, and their tests.
-- Owner decision relayed by immo: PREPROD ONLY; any change to the prod client path must be refused and reported.
-- Preprod client rows for allowlisted clients are rewritten from prod on each sync (`sync-clients.sql` upsert overwrites `allowed_scopes`), so a manual preprod-only DB edit would be reverted. The divergence is therefore expressed inside the preprod sync desired state (`client-policy.sql`) and asserted by the exact client postcondition.
+- Scope limited to the preprod auth-idp ConfigMap overlay key.
+- Prod overlays must not change; a request to change them on this branch is refused and reported.
 - No migration (`api/drizzle/*.sql`).
 - Make-only workflow, no direct Docker commands.
-- Branch development happens in isolated worktree `tmp/worktrees/preprod-immo-scopes`.
-- Automated test campaigns run on dedicated environments (`ENV=test-*`), never on root `dev`.
-- In every `make` command, `ENV=<env>` is passed as the last argument.
-- No Docker compose stack in this lane (machine-load rule); the targeted gates are one-off `docker run` containers. `make down ENV=<env>` after any stack use.
+- Branch development happens in isolated worktree `tmp/worktrees/preprod-ttl`.
+- No Docker compose stack in this lane; the targeted gates are one-off `docker run` containers. `ENV=test-*` for every test command, always last.
+- No package `src/**` change, so no `enforce-package-bump` version bump applies.
 - CI lockfile-lane policy acknowledged (review_by=2026-11-30T00:00:00Z); installs resolve committed tool profiles or frozen consumer closures.
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `deploy/k8s/overlays/preprod/idp-identity-sync/client-policy.sql`
-  - `deploy/ci/idp-identity-sync/fixtures/assert-committed.sql`
-  - `deploy/ci/idp-identity-sync/authorize.selftest.mjs`
-  - `deploy/ci/idp-identity-sync/README.md`
-  - `api/src/routes/namespaces/oauth-ingress.ts`
-  - `api/tests/api/auth/oauth-wellknown.test.ts`
-  - `api/tests/api/cluster-mesh-oauth-roots.test.ts`
-  - `packages/auth-ui/src/labels.ts`
-  - `packages/auth-ui/package.json`
-  - `packages/auth-ui/tests/oauth-consent.test.ts`
-  - `spec/SPEC_EVOL_IDP_OAUTH_CLIENT_SYNC.md`
+  - `deploy/k8s/overlays/preprod/patch-auth-idp-config.yaml`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `deploy/ci/idp-identity-sync/fixtures/prod.sql` (the synthetic prod `immo-mcp` row keeps `immo:read`, `immo:search`, `immo:documents:read`)
+  - `plan/NN-BRANCH_*.md` (except this branch file)
   - `deploy/k8s/overlays/prod/**`
-  - `.github/workflows/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `api/drizzle/*.sql` (max 1 file) — not used
   - `.github/workflows/**` — not used
@@ -46,7 +33,7 @@ Grant the preprod `immo-mcp` PKCE client the explicit scopes `immo:artifacts:rea
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
-- None open. The prod path (`fixtures/prod.sql`, `deploy/k8s/overlays/prod/**`) is explicitly out of scope; any request to change it on this branch is refused and reported to the owner.
+- Manifest selftest survey (verification, no exception needed): no selftest asserts the preprod auth-idp ConfigMap keys — `deploy/ci/artifact-content/bundle.selftest.mjs` asserts the `api` and `artifact-content` ConfigMaps and Deployment images, `deploy/ci/idp-identity-sync/idp-sync.selftest.mjs` asserts the sync bundles and Ingress hosts, and `deploy/ci/idp-identity-sync/session-preflight.selftest.mjs` asserts base Deployment refs. Nothing to update; the deploy manifest selftests run unmodified as the regression gate.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -59,46 +46,29 @@ Grant the preprod `immo-mcp` PKCE client the explicit scopes `immo:artifacts:rea
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: one small governance change across sync SQL, metadata and labels; single branch, single CI.
+- Rationale: one preprod-only ConfigMap key; single branch, single CI.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT happens after merge during the owner-gated preprod CD acceptance (dry-run dispatch, then real run), not on this branch. Local gates prove the committed row and authorize behavior synthetically.
+- **Mono-branch**: no UAT on this branch. The owner already accepted the change and applied it live via kubectl; acceptance for this PR is the rendered-overlay parity with that live state, proven by the deploy manifest selftests.
 
 ## Plan / Todo (lot-based)
 - [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md` and `deploy/ci/idp-identity-sync/README.md`.
-  - [x] Confirm isolated worktree `tmp/worktrees/preprod-immo-scopes` on branch `feat/preprod-immo-artifact-scopes` from `origin/main`.
-  - [x] Confirm governance: preprod `immo-mcp` row converges from prod via `client-policy.sql` → `sync-clients.sql`, asserted by `client-postcondition.sql`; token scope issuance is the requested ∩ client-allowed intersection per resource (`authorize-handler.ts` `validateScope`, `token-handler.ts` `issueTokens`).
-  - [x] Confirm consent label table exists: `packages/auth-ui/src/labels.ts` `scopeDescriptions` (default + French), rendered with raw-scope fallback in `OAuthConsent.svelte`.
-  - [x] Confirm environment mapping: `ENV=test-idp-sync` for the sync gates, `ENV=test-immo-scopes` for package unit tests; no ports needed (one-off containers).
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`.
+  - [x] Confirm isolated worktree `tmp/worktrees/preprod-ttl` on branch `chore/preprod-idp-ttl-palliative` from `origin/main`.
+  - [x] `harness check branch` PASS (C1).
+  - [x] Confirm mechanism: strategic-merge patch on ConfigMap `auth-idp` (`envFrom` of the IdP Deployment); base and prod overlays set no `OAUTH_ACCESS_TOKEN_TTL_SEC`, code default 3600 (`api/src/config/env.ts`, consumed by `api/src/routes/auth/oauth.ts`).
+  - [x] Survey manifest selftests: none asserts the preprod auth-idp ConfigMap keys (see Feedback Loop).
 
-- [x] **Lot 1 — Preprod client governance divergence**
-  - [x] Add the preprod-only scope augmentation for `immo-mcp` in `deploy/k8s/overlays/preprod/idp-identity-sync/client-policy.sql` (after `transformed_clients`, before `desired_clients`), appending `immo:artifacts:read` and `immo:artifacts:write` idempotently.
-  - [x] Update `deploy/ci/idp-identity-sync/fixtures/assert-committed.sql` to assert the committed preprod row carries the five scopes.
-  - [x] Update `deploy/ci/idp-identity-sync/authorize.selftest.mjs` committed-row scope assertion.
-  - [x] Document the divergence in `deploy/ci/idp-identity-sync/README.md` (client convergence + synthetic acceptance) and `spec/SPEC_EVOL_IDP_OAUTH_CLIENT_SYNC.md`.
-  - [x] Do not touch `fixtures/prod.sql` or `deploy/k8s/overlays/prod/**`.
-  - [x] Lot gate:
-    - [x] `make test-idp-sync-selftest ENV=test-idp-sync` (70 PASS, 0 failures)
-    - [x] `make test-idp-sync-sql ENV=test-idp-sync` (committed 5-scope row asserted; rerun 0/0; authorize 302/400/invalid_target green)
+- [x] **Lot 1 — Preprod TTL palliative key**
+  - [x] Add `OAUTH_ACCESS_TOKEN_TTL_SEC: "1296000"` to `deploy/k8s/overlays/preprod/patch-auth-idp-config.yaml` with the palliative comment (owner decision 2026-11-01, revert to 3600 with refresh lots 1-3).
+  - [x] Do not touch `deploy/k8s/overlays/prod/**`.
 
-- [x] **Lot 2 — AS metadata and consent labels**
-  - [x] Add the two scopes to `additionalScopesSupported` in `api/src/routes/namespaces/oauth-ingress.ts`.
-  - [x] Add consent labels for the two scopes to `packages/auth-ui/src/labels.ts` (default + French `scopeDescriptions`).
-  - [x] Bump `packages/auth-ui/package.json` version (0.7.7 → 0.8.0, additive labels feature).
-  - [x] Update `packages/auth-ui/tests/oauth-consent.test.ts` label assertions.
-  - [x] Update `api/tests/api/auth/oauth-wellknown.test.ts` and `api/tests/api/cluster-mesh-oauth-roots.test.ts` `scopes_supported` expectations.
-  - [x] Lot gate:
-    - [x] `make test-auth-ui ENV=test-immo-scopes` (54/54 passed, consent label assertions green)
-    - [ ] API endpoint tests (well-known, cluster-mesh roots) verified by branch CI (compose stack avoided in this lane per machine-load rule).
-
-- [x] **Lot N-1 — Docs consolidation**
-  - [x] Spec and README updates handled inside Lot 1 (no `spec/BRANCH_SPEC_EVOL.md` needed for a branch of this size).
-
-- [ ] **Lot N — Final validation**
-  - [x] `make scope-check`-equivalent mechanical scope check before each commit (host `harness check scope`).
-  - [x] Targeted gates re-run clean on the final head.
-  - [x] Bumped `packages/auth-ui/package.json` version for `src/**` change — enforced by CI `enforce-package-bump`.
-  - [x] Final gate step 1: create PR using `BRANCH.md` text as PR body.
-  - [ ] Final gate step 2: one CI run on the final head; resolve remaining blockers.
-  - [ ] Final gate step 3 (owner-side, after merge): dispatch the `IdP identity sync` workflow per the apply step in the lane report; merge decision belongs to the owner.
+- [ ] **Lot 2 — Final validation**
+  - [x] `make test-idp-sync-selftest ENV=test-preprod-ttl` — 70 PASS, 0 failures.
+  - [x] `make test-artifact-content-manifests ENV=test-preprod-ttl` — 54 PASS, 0 failures.
+  - [x] `make test-idp-sync-sql ENV=test-preprod-ttl` — PASS.
+  - [x] `make scope-check`
+  - [x] `make test-ci-lockfile-installs ENV=test-ci-manifests` (BRLOCK-EX1 acknowledgment present, 11 pass)
+  - [ ] `make commit MSG="chore(preprod): 15-day IdP access-token TTL palliative"`
+  - [ ] Push branch, create PR with this `BRANCH.md` as body, one CI run, wait completed.
+  - [ ] Stop without merging (owner-accepted, reviewed on the PR).
