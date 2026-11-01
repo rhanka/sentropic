@@ -3288,7 +3288,7 @@ jobs:
       - name: Qualify CI capacity metrics and expected-result fixtures
         run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity
       - name: Qualify provider boundary, browser membership and live receipts
-        run: make test-ci-provider-fixtures test-ci-browser-shards test-ci-live-provider-receipt check-e2e-inventory ENV=test-ci-capacity
+        run: make test-ci-provider-fixtures test-ci-browser-shards test-ci-live-provider-receipt test-ci-dev-image-pin check-e2e-inventory ENV=test-ci-capacity
       - name: Qualify artifact dispatch and fail-closed scan joins
         run: make test-ci-dag test-security-parser ENV=test-ci-capacity
       - name: Qualify daily security adapters without activating the service
