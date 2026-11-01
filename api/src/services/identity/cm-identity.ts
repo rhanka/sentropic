@@ -73,6 +73,11 @@ const storeClient: PostgresStoreClient = {
   query: (text, values) => pool.query(text, (values ?? []) as unknown[]),
 };
 
+/** Raw access for app-side reads/writes that are not part of the frozen CM
+ *  store surface (e.g. business projections joined with CM identity rows). */
+export const cmStoreClient = storeClient;
+export const cmPgDriver = pgDriver;
+
 /** In-process divergence metrics for the transition tooling (F12). */
 const divergenceMetrics = createInMemoryDivergenceMetrics();
 
@@ -177,10 +182,21 @@ export const createCmIdentityComposition = (catalog: DecisionToolCatalog): CmIde
 };
 
 let composition: CmIdentityComposition | undefined;
+let catalogHolder: DecisionToolCatalog | null = null;
 
-/** Process-wide composition. The catalog is supplied by the catalog service so
- *  the F15 producer can map an allowed decision to the allowed tool set. */
-export const getCmIdentity = (catalog: DecisionToolCatalog): CmIdentityComposition => {
-  composition ??= createCmIdentityComposition(catalog);
+/** Installed once by the catalog service at boot; the F15 producer maps an
+ *  allowed decision to the allowed tool set through it. */
+export const setCmDecisionToolCatalog = (catalog: DecisionToolCatalog): void => {
+  catalogHolder = catalog;
+};
+
+const lazyCatalog: DecisionToolCatalog = {
+  toolsForDecision: (decision) => catalogHolder?.toolsForDecision(decision) ?? [],
+};
+
+/** Process-wide composition (no legacy fallback: every app identity read/write
+ *  goes through this module after the A4 cutover). */
+export const getCmIdentity = (): CmIdentityComposition => {
+  composition ??= createCmIdentityComposition(lazyCatalog);
   return composition;
 };
