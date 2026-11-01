@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { liveReceipt, scheduleHealth, qualifiedMain, receiptFromDirectory } from './live-provider-receipt.mjs';
+import { liveReceipt, scheduleHealth, qualifiedMain, receiptFromDirectory, readAllPages } from './live-provider-receipt.mjs';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 
 const sourceSha = 'a'.repeat(40);
@@ -62,8 +62,16 @@ test('should report a missing, stale, cancelled or failed schedule independently
 test('should select completed main application qualification rather than a partial or PR run', () => {
   const run = { id: 1, head_branch: 'main', event: 'push', status: 'completed', conclusion: 'success', head_sha: sourceSha,
     jobs: [...Array.from({ length: 3 }, (_, i) => `test-api-unit-integration (ai, ${i})`),
-      ...Array.from({ length: 6 }, (_, i) => `test-e2e (${i + 1})`), 'e2e-vscode'].map(name => ({ name, conclusion: 'success' })) };
+      ...Array.from({ length: 6 }, (_, i) => `test-e2e (${i + 1})`), 'e2e-vscode',
+      'publish-api-image', 'publish-ui-image'].map(name => ({ name, conclusion: 'success' })) };
   assert.equal(qualifiedMain([run]).sourceSha, sourceSha);
   for (const changed of [{ ...run, event: 'pull_request' }, { ...run, jobs: run.jobs.slice(0, 1) },
-    { ...run, status: 'in_progress' }, { ...run, conclusion: 'failure' }]) assert.throws(() => qualifiedMain([changed]), /tuple/);
+    { ...run, jobs: run.jobs.slice(0, -1) }, { ...run, status: 'in_progress' },
+    { ...run, conclusion: 'failure' }]) assert.throws(() => qualifiedMain([changed]), /tuple/);
+});
+
+test('should retain application jobs and identities beyond the first GitHub page', () => {
+  const rows = Array.from({ length: 205 }, (_, id) => ({ id }));
+  assert.deepEqual(readAllPages(page => ({ jobs: rows.slice((page - 1) * 100, page * 100) }), 'jobs'), rows);
+  assert.throws(() => readAllPages(() => ({}), 'artifacts'), /Missing GitHub page/);
 });
