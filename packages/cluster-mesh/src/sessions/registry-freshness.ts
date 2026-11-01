@@ -7,6 +7,7 @@ import type {
 import {
   currentGrantFor,
   outboxRefFor,
+  rowRef,
   sessionKey,
 } from './registry-store.js';
 import type { RegistryState } from './registry-store.js';
@@ -23,6 +24,8 @@ export function ensureScheduler(state: RegistryState): void {
     const timestamp = state.now();
     for (const row of state.sessions.values()) {
       if (row.tombstoned || row.quarantined) continue;
+      const ref = rowRef(state, row);
+      if (ref === null || currentGrantFor(state, ref) === null) continue;
       if (row.lastFreshnessAt !== null && timestamp - row.lastFreshnessAt > FRESHNESS_INTERVAL_MS) {
         row.missedEmission = true;
       }
