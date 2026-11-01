@@ -1,7 +1,10 @@
 export const FRESHNESS_INTERVAL_MS = 5000;
 export const FRESHNESS_BOUND_MS = 15000;
+export const FRESHNESS_GRANT_MARGIN_MS = 5000;
 export const LISTING_LEASE_MS = 60_000;
 export const OBSERVATION_QUEUE_CAP = 256;
+export const LISTING_DIGEST_DOMAIN = 'cluster-mesh.session-listing/1/coarse-v1\0';
+export const SNAPSHOT_DIGEST_DOMAIN = 'cluster-mesh.session/1/snapshot\0';
 
 export const LISTING_STAGE_ROUTES = [
   'GET M/listing-grants/:grantId',
@@ -112,10 +115,29 @@ export type CommitResult =
   | { readonly status: 'refused'; readonly error: RelayError };
 
 export type PublishResult =
-  | { readonly status: 'remote-committed'; readonly sessionRef: SessionRef; readonly writerEpoch: number; readonly originRevision: number; readonly projection: CoarseProjection; readonly sourceAckDigest: string }
+  | { readonly status: 'remote-committed'; readonly sessionRef: SessionRef; readonly writerEpoch: number; readonly originRevision: number; readonly projection: CoarseProjection; readonly projectionDigest: string; readonly sourceAckDigest: string }
   | { readonly status: 'remote-unknown'; readonly sessionRef: SessionRef; readonly writerEpoch: number; readonly originRevision: number; readonly outboxRef: RevisionRef; readonly snapshot?: OriginSnapshot }
   | { readonly status: 'rate-limited'; readonly nextEligibleAt: number }
   | { readonly status: 'refused'; readonly error: RelayError };
+
+export interface RegistryCallOptions { readonly signal?: AbortSignal }
+export interface SessionOriginIngestLifecycleParametersV1 {
+  readonly processBindingRef: ProcessBindingRef;
+  readonly fact: LifecycleFact;
+}
+export interface SessionOriginIngestCapabilitiesParametersV1 {
+  readonly processBindingRef: ProcessBindingRef;
+  readonly capabilities: CapabilitiesRecord;
+}
+export interface SessionOriginPublishListingParametersV1 {
+  readonly sessionRef: SessionRef;
+  readonly grantRef: RevisionRef;
+}
+export interface SessionOriginRenewFreshnessParametersV1 {
+  readonly sessionRef: SessionRef;
+  readonly visibility: Visibility;
+}
+export interface SessionOriginSnapshotParametersV1 { readonly sessionRef: SessionRef }
 
 export interface OriginSnapshot {
   readonly descriptor: {
