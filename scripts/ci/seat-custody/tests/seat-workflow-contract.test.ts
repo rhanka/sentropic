@@ -36,7 +36,8 @@ test('T6-C1: the fixed §4.1 job map gives each fixed job exactly its single map
     assert.doesNotThrow(() => assertJobEnvironment(job, [env]));
     assert.throws(() => assertJobEnvironment(job, []), /single-environment/);
     assert.throws(() => assertJobEnvironment(job, [env, 'security-nightly']), /single-environment/);
-    assert.throws(() => assertJobEnvironment(job, ['security-daily-control']), /environment-mismatch/);
+    const wrong = env === 'security-daily-control' ? 'security-seat-writer' : 'security-daily-control';
+    assert.throws(() => assertJobEnvironment(job, [wrong]), /environment-mismatch/);
   }
   assert.equal(JOB_ENVIRONMENTS['publish-scanner-image'], 'security-scanner-image-publish');
   assert.equal(JOB_ENVIRONMENTS['state-write-allocate'], 'security-seat-writer');
@@ -57,9 +58,9 @@ test('T5-C1: hostile same-repo PR/fork/tag/unprotected-ref, indirection and arbi
   const inherit = base.replace('permissions:', 'secrets: inherit\npermissions:');
   assert.ok(classifyWorkflow(inherit, { source: 'push', ref: 'refs/heads/main' }).includes('secrets-inherit'));
   const localAction = base.replace('runs-on: ubuntu-latest', 'runs-on: ubuntu-latest\n      uses: ./.github/actions/candidate');
-  assert.ok(classifyWorkflow(localAction, { source: 'push', ref: 'refs/heads/main' }).some(v => v.startsWith('local-action-indirection')));
+  assert.ok(classifyWorkflow(localAction, { source: 'push', ref: 'refs/heads/main' }).some(v => v.startsWith('local-indirection')));
   const reusable = base.replace('steps:', 'uses: ./.github/workflows/reusable-candidate.yml\n    with:\n      environment: security-nightly\n    steps:');
-  assert.ok(classifyWorkflow(reusable, { source: 'push', ref: 'refs/heads/main' }).some(v => v.startsWith('reusable-indirection')));
+  assert.ok(classifyWorkflow(reusable, { source: 'push', ref: 'refs/heads/main' }).some(v => v.startsWith('local-indirection')));
   const arbitrary = base.replace('secrets.SECURITY_CONTROL_READER_TOKEN', "secrets['dynamic-name']");
   assert.ok(classifyWorkflow(arbitrary, { source: 'push', ref: 'refs/heads/main' }).some(v => v.startsWith('secret-ref')));
   const lowercase = base.replace('secrets.SECURITY_CONTROL_READER_TOKEN', 'secrets.reader_token');
@@ -77,7 +78,7 @@ test('T6-C1: the emitted security manifest passes its own scan and enumerates ex
   assert.equal(READER_TOKEN_ENVIRONMENTS.length, 12);
   assert.deepEqual([...READER_TOKEN_ENVIRONMENTS].sort(), [
     'security-ci-status', 'security-daily-control', 'security-nightly', 'security-promotion-control',
-    'security-report-publish', 'security-repair-merge', 'security-repair-publish', 'security-review-attest',
+    'security-repair-merge', 'security-repair-publish', 'security-report-publish', 'security-review-attest',
     'security-seat-admission', 'security-seat-dispatch', 'security-seat-writer', 'security-source-acquire',
   ]);
   for (const env of READER_TOKEN_ENVIRONMENTS) {

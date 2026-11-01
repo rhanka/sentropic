@@ -6,4 +6,4 @@ test-ci-seat-contract:
 	@docker run --rm --network none --read-only --cap-drop ALL --security-opt no-new-privileges \
 		-u "$$(id -u):$$(id -g)" --tmpfs /tmp:rw,nosuid,nodev \
 		-v "$(CURDIR):/workspace:ro" -w /workspace/scripts/ci/seat-custody \
-		$(SEAT_NODE) sh -ec 'if [ -n "$(SCOPE)" ]; then node --test "$(SCOPE)"; else node --test tests/*.test.ts; fi'
+		$(SEAT_NODE) sh -ec 'if [ -n "$(SCOPE)" ]; then node --test $(SCOPE); else node --test tests/*.test.ts; fi'
