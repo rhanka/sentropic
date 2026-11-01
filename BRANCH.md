@@ -34,6 +34,9 @@
   - `docs/**restore**`
   - `scripts/**restore**`
   - `spec/DATA_MODEL.md`
+  - `package-lock.json`
+  - `api/package-lock.json`
+  - `ui/package-lock.json`
   - `Makefile`
   - `deploy/k8s/overlays/preprod/idp-identity-sync/client-policy.sql`
   - `deploy/k8s/overlays/preprod/idp-identity-sync/client-postcondition.sql`
