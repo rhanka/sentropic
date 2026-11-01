@@ -323,22 +323,54 @@ BEGIN
   ON CONFLICT ("cutover_id") DO NOTHING;
 END $$;
 --> statement-breakpoint
--- 0013 refresh-token invalidation triggers/functions reference the legacy identity tables; the CM revocation outbox owns this now.
+-- OAuth refresh rows remain app-owned. Rebind their invalidation to CM identity
+-- while preserving client policy, consent, linked-JTI and restore protections.
 --> statement-breakpoint
-DROP TRIGGER IF EXISTS oauth_refresh_client_guard ON public.oauth_clients;
-DROP TRIGGER IF EXISTS oauth_refresh_client_invalidate ON public.oauth_clients;
-DROP TRIGGER IF EXISTS oauth_refresh_consent_invalidate ON public.oauth_consents;
+CREATE OR REPLACE FUNCTION public.oauth_refresh_revoke_user(p_user text, p_reason text)
+RETURNS void LANGUAGE plpgsql AS $$
+DECLARE f text;
+BEGIN
+  PERFORM 1 FROM cm_identity.identity_user_accounts WHERE user_id = p_user FOR UPDATE;
+  IF NOT FOUND THEN RETURN; END IF;
+  DELETE FROM public.authorization_codes WHERE user_id = p_user AND 'offline_access' = ANY(string_to_array(scope, ' '));
+  FOR f IN SELECT id FROM public.oauth_refresh_tokens
+    WHERE user_id = p_user AND generation = 0 ORDER BY id FOR UPDATE LOOP
+    PERFORM public.oauth_refresh_revoke_family(f, p_reason, clock_timestamp() AT TIME ZONE 'UTC');
+  END LOOP;
+  IF p_reason IN ('security_event', 'db_restore_invalidation') THEN
+    UPDATE public.oauth_consents SET offline_grant_id = NULL, offline_issuer = NULL,
+      offline_scopes = '{}', approved_resources = '{}', default_audience_approved = false,
+      offline_consented_at = NULL WHERE user_id = p_user AND offline_grant_id IS NOT NULL;
+  END IF;
+END $$;
 --> statement-breakpoint
-DROP FUNCTION IF EXISTS public.oauth_refresh_client_guard(text, boolean);
-DROP FUNCTION IF EXISTS public.oauth_refresh_client_statement_guard();
-DROP FUNCTION IF EXISTS public.oauth_refresh_client_invalidate();
-DROP FUNCTION IF EXISTS public.oauth_refresh_user_invalidate();
-DROP FUNCTION IF EXISTS public.oauth_refresh_membership_invalidate();
-DROP FUNCTION IF EXISTS public.oauth_refresh_consent_invalidate();
-DROP FUNCTION IF EXISTS public.oauth_refresh_credential_invalidate();
-DROP FUNCTION IF EXISTS public.oauth_refresh_revoke_user(text, text);
-DROP FUNCTION IF EXISTS public.oauth_refresh_revoke_family(text, text, timestamp);
-DROP FUNCTION IF EXISTS public.oauth_refresh_invalidate_restore();
+CREATE OR REPLACE FUNCTION public.oauth_refresh_user_invalidate()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN
+    PERFORM public.oauth_refresh_revoke_user(OLD.user_id, 'security_event');
+    RETURN OLD;
+  END IF;
+  IF NEW.account_status IS DISTINCT FROM OLD.account_status THEN
+    PERFORM public.oauth_refresh_revoke_user(OLD.user_id, 'security_event');
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER oauth_refresh_user_invalidate BEFORE UPDATE OR DELETE ON cm_identity.identity_user_accounts
+  FOR EACH ROW EXECUTE FUNCTION public.oauth_refresh_user_invalidate();
+--> statement-breakpoint
+CREATE FUNCTION public.oauth_refresh_profile_invalidate()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  IF NEW.email_verified IS DISTINCT FROM OLD.email_verified
+    OR NEW.disabled_at IS DISTINCT FROM OLD.disabled_at
+    OR NEW.legacy_account_status IS DISTINCT FROM OLD.legacy_account_status THEN
+    PERFORM public.oauth_refresh_revoke_user(OLD.user_id, 'security_event');
+  END IF;
+  RETURN NEW;
+END $$;
+CREATE TRIGGER oauth_refresh_profile_invalidate BEFORE UPDATE ON cm_identity.identity_account_profiles
+  FOR EACH ROW EXECUTE FUNCTION public.oauth_refresh_profile_invalidate();
 --> statement-breakpoint
 -- Legacy identity tables leave the app schema in this same lot (replacement gate).
 --> statement-breakpoint
@@ -359,5 +391,4 @@ DROP TABLE IF EXISTS public.users;
 -- Post-deletion attestation row (same transaction: rollback of this migration restores everything).
 --> statement-breakpoint
 INSERT INTO "control"."app_cm_identity_cutover" ("cutover_id","phase","detail")
-VALUES ('a4-identity-cutover','post-deletion-attestation', jsonb_build_object('legacy_tables_dropped', true, 'recorded_at', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')))
-ON CONFLICT ("cutover_id") DO UPDATE SET "phase" = 'post-deletion-attestation', "detail" = EXCLUDED."detail", "recorded_at" = now();
+VALUES ('a4-identity-cutover-completed','post-deletion-attestation', jsonb_build_object('legacy_tables_dropped', true, 'recorded_at', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')));
