@@ -30,6 +30,14 @@ test('should reject missing, duplicated, failed, cancelled and retried journeys'
   }
   const duplicate = report(); duplicate.suites.push(duplicate.suites[0]);
   assert.throws(() => reconcileReports(report([]), duplicate), /duplicate/);
+  const runtimeSkip = report([{ status: 'skipped' }]);
+  runtimeSkip.suites[0].specs[0].tests[0].expectedStatus = 'skipped';
+  assert.throws(() => reconcileReports(report([]), runtimeSkip), /failures/);
+});
+
+test('should distinguish generated tests with equal leaf titles in different suites', () => {
+  const nested = { suites: [{ title: 'a', suites: report().suites }, { title: 'b', suites: report().suites }] };
+  assert.equal(reconcileReports(nested, nested).expected, 2);
 });
 
 test('should fail when the workflow omits or duplicates a generated shard', () => {
