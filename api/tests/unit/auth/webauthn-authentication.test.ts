@@ -3,9 +3,10 @@ import {
   generateWebAuthnAuthenticationOptions,
   verifyWebAuthnAuthentication,
 } from '../../../src/services/webauthn-authentication';
-import { db } from '../../../src/db/client';
-import { users, webauthnCredentials } from '../../../src/db/schema';
-import { eq } from 'drizzle-orm';
+import { createCmUser, updateCmUser } from '../../../src/services/identity/cm-users';
+import { createCmCredential } from '../../../src/services/identity/cm-proofs';
+import { getWebAuthnConfig } from '../../../src/services/webauthn-config';
+import { cmPurgeAllIdentity } from '../../utils/cm-identity-test-store';
 
 describe('WebAuthn Authentication Service', () => {
   let testUserId: string;
@@ -15,32 +16,24 @@ describe('WebAuthn Authentication Service', () => {
     testUserId = crypto.randomUUID();
     testCredentialId = crypto.randomUUID();
     
-    await db.insert(users).values({
-      id: testUserId,
-      email: `test-${testUserId}@example.com`,
-      displayName: 'Test User',
-      role: 'editor',
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    await createCmUser({ userId: testUserId, email: `test-${testUserId}@example.com`, displayName: 'Test User', role: 'editor', emailVerified: true, accountStatus: 'active' });
 
     // Create test credential
-    await db.insert(webauthnCredentials).values({
-      id: testCredentialId,
+    await createCmCredential({
       userId: testUserId,
       credentialId: Buffer.from('test-credential-id').toString('base64url'),
-      publicKeyCose: Buffer.from('test-public-key').toString('base64url'),
+      publicKey: Buffer.from('test-public-key').toString('base64url'),
       counter: 0,
-      deviceName: 'Test Device',
-      transportsJson: JSON.stringify(['usb', 'nfc']),
+      name: 'Test Device',
+      transports: ['usb', 'nfc'],
       uv: false,
+      rpId: getWebAuthnConfig().rpID,
+      now: new Date(),
     });
   });
 
   afterEach(async () => {
-    await db.delete(webauthnCredentials);
-    await db.delete(users);
+    await cmPurgeAllIdentity();
   });
 
   describe('generateAuthenticationOptions', () => {
@@ -69,9 +62,7 @@ describe('WebAuthn Authentication Service', () => {
       expect(optionsEditor.userVerification).toBe('required');
 
       // Update user to admin role — still required.
-      await db.update(users)
-        .set({ role: 'admin_app' })
-        .where(eq(users.id, testUserId));
+      await updateCmUser(testUserId, { role: 'admin_app' });
 
       const optionsAdmin = await generateWebAuthnAuthenticationOptions({
         userId: testUserId,
@@ -89,15 +80,16 @@ describe('WebAuthn Authentication Service', () => {
 
     it('should include all user credentials in allowCredentials', async () => {
       // Add another credential
-      await db.insert(webauthnCredentials).values({
-        id: crypto.randomUUID(),
+      await createCmCredential({
         userId: testUserId,
         credentialId: Buffer.from('second-credential-id').toString('base64url'),
-        publicKeyCose: Buffer.from('second-public-key').toString('base64url'),
+        publicKey: Buffer.from('second-public-key').toString('base64url'),
         counter: 5,
-        deviceName: 'Second Device',
-        transportsJson: JSON.stringify(['internal']),
+        name: 'Second Device',
+        transports: ['internal'],
         uv: true,
+        rpId: getWebAuthnConfig().rpID,
+        now: new Date(),
       });
 
       const options = await generateWebAuthnAuthenticationOptions({
@@ -116,15 +108,7 @@ describe('WebAuthn Authentication Service', () => {
     it('should handle user with no credentials', async () => {
       // Create user without credentials
       const userIdNoCreds = crypto.randomUUID();
-      await db.insert(users).values({
-        id: userIdNoCreds,
-        email: `test-${userIdNoCreds}@example.com`,
-        displayName: 'No Creds User',
-        role: 'guest',
-        emailVerified: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      await createCmUser({ userId: userIdNoCreds, email: `test-${userIdNoCreds}@example.com`, displayName: 'No Creds User', role: 'guest', emailVerified: true, accountStatus: 'active' });
 
       const options = await generateWebAuthnAuthenticationOptions({
         userId: userIdNoCreds,
@@ -304,25 +288,18 @@ describe('WebAuthn Authentication Service', () => {
     it('should reject credential from different user', async () => {
       // Create another user with their own credential
       const otherUserId = crypto.randomUUID();
-      await db.insert(users).values({
-        id: otherUserId,
-        email: `other-${otherUserId}@example.com`,
-        displayName: 'Other User',
-        role: 'guest',
-        emailVerified: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
+      await createCmUser({ userId: otherUserId, email: `other-${otherUserId}@example.com`, displayName: 'Other User', role: 'guest', emailVerified: true, accountStatus: 'active' });
 
-      await db.insert(webauthnCredentials).values({
-        id: crypto.randomUUID(),
+      await createCmCredential({
         userId: otherUserId,
         credentialId: Buffer.from('other-credential-id').toString('base64url'),
-        publicKeyCose: Buffer.from('other-public-key').toString('base64url'),
+        publicKey: Buffer.from('other-public-key').toString('base64url'),
         counter: 0,
-        deviceName: 'Other Device',
-        transportsJson: JSON.stringify(['usb']),
+        name: 'Other Device',
+        transports: ['usb'],
         uv: false,
+        rpId: getWebAuthnConfig().rpID,
+        now: new Date(),
       });
 
       const options = await generateWebAuthnAuthenticationOptions({

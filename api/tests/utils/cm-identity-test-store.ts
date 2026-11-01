@@ -7,21 +7,15 @@ import type { CmSessionRecord } from '../../src/services/identity/cm-sessions';
 
 const q = (table: string) => `"${CM_IDENTITY_SCHEMA}"."${table}"`;
 
-// Tables carrying a user_id column, in FK-safe delete order.
+// Direct user references only; session bindings and attempts join their parents.
 const USER_SCOPED_TABLES: readonly string[] = [
-  'identity_login_token_bindings',
-  'identity_login_sessions',
   'identity_webauthn_credentials',
-  'identity_single_use_proofs',
   'identity_email_registration_tickets',
-  'identity_invitation_digests',
-  'identity_invitations',
+  'identity_single_use_proofs',
+  'identity_proofs',
+  'identity_login_sessions',
   'identity_social_links',
-  'identity_device_codes',
-  'identity_deletion_attempts',
   'identity_deletion_operations',
-  'identity_revocation_outbox',
-  'identity_legacy_connector_tombstones',
   'identity_account_profiles',
   'identity_user_accounts',
   'cm_workspace_members',
@@ -30,13 +24,25 @@ const USER_SCOPED_TABLES: readonly string[] = [
 
 // Tables carrying an email column (proofs/tickets are email-scoped, not user-scoped).
 const EMAIL_SCOPED_TABLES: readonly string[] = [
-  'identity_single_use_proofs',
   'identity_email_registration_tickets',
+  'identity_single_use_proofs',
+  'identity_invitation_digests',
+  'identity_invitations',
 ];
 
 /** Delete every identity row bound to the given users (any state). */
 export async function cmDeleteForUsers(userIds: readonly string[]): Promise<void> {
   if (userIds.length === 0) return;
+  await cmStoreClient.query(`DELETE FROM ${q('identity_login_token_bindings')}
+    WHERE session_id IN (SELECT session_id FROM ${q('identity_login_sessions')} WHERE user_id = ANY($1))`, [userIds]);
+  await cmStoreClient.query(`DELETE FROM ${q('identity_deletion_attempts')}
+    WHERE operation_id IN (SELECT operation_id FROM ${q('identity_deletion_operations')} WHERE user_id = ANY($1))`, [userIds]);
+  await cmStoreClient.query(`DELETE FROM ${q('identity_device_codes')} WHERE approved_user_id = ANY($1)`, [userIds]);
+  await cmStoreClient.query(`DELETE FROM ${q('identity_invitation_digests')} WHERE consumed_by_user_id = ANY($1)`, [userIds]);
+  await cmStoreClient.query(`DELETE FROM ${q('identity_legacy_connector_tombstones')} WHERE subject_id = ANY($1)`, [userIds]);
+  await cmStoreClient.query(`DELETE FROM ${q('connector_revocation_custody')}
+    WHERE delivery_id IN (SELECT delivery_id FROM ${q('identity_revocation_outbox')} WHERE subject_id = ANY($1))`, [userIds]);
+  await cmStoreClient.query(`DELETE FROM ${q('identity_revocation_outbox')} WHERE subject_id = ANY($1)`, [userIds]);
   for (const table of USER_SCOPED_TABLES) {
     await cmStoreClient.query(`DELETE FROM ${q(table)} WHERE "user_id" = ANY($1)`, [userIds]);
   }
@@ -53,15 +59,25 @@ export async function cmDeleteForEmails(emails: readonly string[]): Promise<void
 /** Purge the whole cm_identity store (full reset between suites). */
 export async function cmPurgeAllIdentity(): Promise<void> {
   const all = [
+    'identity_legacy_connector_tombstones',
+    'connector_revocation_custody',
+    'identity_revocation_outbox',
+    'identity_deletion_attempts',
+    'identity_login_token_bindings',
+    'identity_device_codes',
+    'identity_invitation_digests',
+    'identity_invitations',
     ...USER_SCOPED_TABLES,
     ...EMAIL_SCOPED_TABLES,
     'identity_audit_events',
+    'identity_subject_fences',
     'cm_workspaces',
     'cm_oauth_consents',
     'cm_service_clients',
     'cm_tenants',
     'cm_identity_conversation_sessions',
-    'cm_identity_escalation_entries',
+    'cm_identity_escalation_chain',
+    'cm_identity_audit_events',
   ];
   const seen = new Set<string>();
   for (const table of all) {
