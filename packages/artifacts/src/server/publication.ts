@@ -20,7 +20,7 @@ import type { IdempotencyStore } from './idempotency.js';
 import { parseSourceRef, type SourceRef, type SourceStore } from './sources.js';
 import { publicationLimits, validatePublicationFiles, type PublicationLimits } from './publication-limits.js';
 import type { ArtifactAcl } from './access.js';
-import type { ArtifactState } from './lifecycle.js';
+import type { ArtifactState, ReleaseState } from './lifecycle.js';
 import { createPostgresDeletionClaimStore, type RefcountStore } from './gc.js';
 import type { CommandIdentity } from './command-identity.js';
 import type {
@@ -38,7 +38,7 @@ export interface ReleaseRecord {
   artifactId: string;
   manifestDigest: string;
   manifest: string;
-  state: 'ready';
+  state: ReleaseState;
   createdAt: string;
 }
 
@@ -192,8 +192,8 @@ export interface PublicationService {
   readonly limits?: Readonly<PublicationLimits>;
   /** The host source store participates in the idempotent commit when a source is supplied. */
   publish(input: PublishInput, sources?: SourceStore): Promise<PublishResult>;
-  getCurrent(artifactId: string): Promise<{ releaseId: string; manifest: string } | undefined>;
-  getRelease(releaseId: string): Promise<{ releaseId: string; manifest: string } | undefined>;
+  getCurrent(artifactId: string): Promise<ReleaseRecord | undefined>;
+  getRelease(releaseId: string): Promise<ReleaseRecord | undefined>;
 }
 
 /** Create a publication service over injected stores (no driver imports). */
@@ -256,17 +256,17 @@ export function createPublicationService(deps: {
       }
       return commitOnce(input, prepared, sources);
     },
-    async getCurrent(artifactId: string): Promise<{ releaseId: string; manifest: string } | undefined> {
+    async getCurrent(artifactId: string): Promise<ReleaseRecord | undefined> {
       const releaseId = await deps.state.getCurrentReleaseId(artifactId);
       if (releaseId === undefined) return undefined;
       const release = await deps.state.getRelease(releaseId);
       if (release === undefined) return undefined;
-      return { releaseId: release.releaseId, manifest: release.manifest };
+      return release;
     },
-    async getRelease(releaseId: string): Promise<{ releaseId: string; manifest: string } | undefined> {
+    async getRelease(releaseId: string): Promise<ReleaseRecord | undefined> {
       const release = await deps.state.getRelease(releaseId);
       if (release === undefined) return undefined;
-      return { releaseId: release.releaseId, manifest: release.manifest };
+      return release;
     },
   };
 }
