@@ -69,15 +69,15 @@ Implement lot ACT-L03b of r6 §7.2 (W2) on the preserved #681 lineage now merged
   - [x] D/ `review.test.mjs` (T5-C5): native-review classification, automated-translation event contract, attestor != author, bot self-approval refusal, person-owned token vs human-intent refusal.
   - [x] D/ `post-merge-effects.test.mjs` (T6-R1 PR-trigger side): exact-head PR CI with no release passes; post-merge exact-M dispatch contract (one per effect, idempotent intent, wrong-head/main-move/push-only refusals, pause+debt on failure).
   - [x] RED run: `flock … make test-ci-seat-contract ENV=test-cyber-L03b` and `flock … make test-security-daily ENV=test-cyber-L03b`.
-- [ ] **Lot 2 — Implementation (GREEN)**
+- [x] **Lot 2 — Implementation (GREEN)**
   - [x] C/ `config/operation-model-map.v1.json` + `src/operation-model-map.ts` (L3-E/L3-J OperationModelMapV1).
   - [x] C/ `src/acceptance-disposition.ts`: replacement mappings, L03B_TEST_IDS, `validateCollection` (destination existence + Make-suite wiring).
   - [x] D/ `ci-trigger-bridge.mjs`, `review.mjs`, `post-merge-effects.mjs`.
-  - [ ] `spec/evidence/ci-seats/activation-lot3-preservation.json` re-landed and extended with the #872 rebase record (L3-H).
-  - [ ] Wire D/ tests into `test-security-daily` SCOPE (BR03b-EX1).
-  - [ ] GREEN run of both suites; `make down ENV=test-cyber-L03b`.
+  - [x] `spec/evidence/ci-seats/activation-lot3-preservation.json` re-landed and extended with the #872 rebase record (L3-H).
+  - [x] Wire D/ tests into `test-security-daily` SCOPE (BR03b-EX1).
+  - [x] GREEN run of both suites; `make down ENV=test-cyber-L03b`.
 - [ ] **Lot 3 — Gates, PR, CI, report**
-  - [ ] `make scope-check` before every commit; `git diff --check`; atomic `make commit` ≤150 lines, push after every few commits (crash safety).
+  - [x] `make scope-check` before every commit; `git diff --check`; atomic `make commit` ≤150 lines, push after every few commits (crash safety).
   - [ ] Push review-ready head; open draft PR with this BRANCH.md as body.
   - [ ] Run ONE CI on the final head; wait for completion; record result.
   - [ ] Report to `.tmp/rv/cyber-act-L03b.md`; do not merge.
