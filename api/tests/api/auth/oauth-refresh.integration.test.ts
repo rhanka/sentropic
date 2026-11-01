@@ -75,6 +75,37 @@ describe('host OAuth refresh HTTP integration', () => {
     expect((await post('token', { grant_type: 'refresh_token', refresh_token: third.refresh_token })).status).toBe(400);
   });
 
+  it('should revoke the committed successor when concurrent HTTP refresh retries reuse its parent', async () => {
+    const initial = await issue();
+    const responses = await Promise.all([0, 1].map(() => post('token', {
+      grant_type: 'refresh_token', refresh_token: initial.refresh_token,
+    })));
+    expect(responses.map((response) => response.status).sort()).toEqual([200, 400]);
+    const successor = await responses.find((response) => response.status === 200)!.json();
+    expect(await (await post('introspect', { token: successor.refresh_token })).json()).toEqual({ active: false });
+    expect((await post('token', { grant_type: 'refresh_token', refresh_token: successor.refresh_token })).status).toBe(400);
+    const { rows } = await pool.query(`SELECT count(*)::int AS count FROM oauth_tokens t
+      LEFT JOIN revoked_tokens r ON r.jti=t.jti WHERE t.user_id=$1 AND t.expires_at > now() AND r.jti IS NULL`, [userId]);
+    expect(rows[0].count).toBe(0);
+  });
+
+  it('should roll back code consumption and family creation when signing fails', async () => {
+    const code = await obtainCode();
+    const ports = getSentropicOAuthPorts();
+    const original = ports.oauthRefresh!.transaction;
+    try {
+      ports.oauthRefresh!.transaction = (lock, work) => original(lock, (bound) => work({ ...bound,
+        jwks: { ...bound.jwks, getActiveKey: async () => { throw new Error('Injected signing failure'); } },
+      }));
+      const failed = await exchangeCode(code);
+      expect(failed.status).toBe(503);
+      expect(await failed.json()).toMatchObject({ error: 'temporarily_unavailable' });
+      const { rows } = await pool.query('SELECT count(*)::int AS count FROM oauth_refresh_tokens WHERE user_id=$1', [userId]);
+      expect(rows[0].count).toBe(0);
+    } finally { ports.oauthRefresh!.transaction = original; }
+    expect((await exchangeCode(code)).status).toBe(200);
+  });
+
   it.each(['account', 'consent', 'security'])('should invalidate %s authority without restoration revival', async (kind) => {
     const initial = await issue();
     if (kind === 'account') {
