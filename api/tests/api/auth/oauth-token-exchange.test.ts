@@ -154,7 +154,7 @@ describe('OAuth token exchange API route (2-IdP)', () => {
     }
     const res = await workloadRequest(exchangeBody(subject));
     expect(res.status).toBe(state === 'missing' ? 401 : 400);
-    await expect(res.json()).resolves.toMatchObject({ error: { code: state === 'missing' ? 'invalid_client' : 'unauthorized_client' } });
+    await expect(res.json()).resolves.toMatchObject({ error: state === 'missing' ? 'invalid_client' : 'unauthorized_client' });
   });
 
   it.each(['https://immo.sent-tech.ca', `${RADAR_AUDIENCE}/`, MCP_AUDIENCE])('denies target audience %s', async (audience) => {
@@ -192,7 +192,7 @@ describe('OAuth token exchange API route (2-IdP)', () => {
     });
     expect(res.status).toBe(mode === 'basic-and-form' ? 400 : 401);
     await expect(res.json()).resolves.toMatchObject({
-      error: { code: mode === 'basic-and-form' ? 'invalid_request' : 'invalid_client' },
+      error: mode === 'basic-and-form' ? 'invalid_request' : 'invalid_client',
     });
   });
 
