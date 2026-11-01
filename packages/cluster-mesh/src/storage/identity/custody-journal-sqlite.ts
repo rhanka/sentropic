@@ -396,7 +396,6 @@ export class SqliteCustodyJournal {
     check('identity_login_sessions', `SELECT COUNT(*) AS "count" FROM "identity_login_sessions" WHERE "user_id" = ?`, [input.userId]);
     check('identity_login_token_bindings', `SELECT COUNT(*) AS "count" FROM "identity_login_token_bindings" WHERE "session_id" IN (SELECT "session_id" FROM "identity_login_sessions" WHERE "user_id" = ?)`, [input.userId]);
     check('identity_account_profiles', `SELECT COUNT(*) AS "count" FROM "identity_account_profiles" WHERE "user_id" = ?`, [input.userId]);
-    check('identity_user_accounts', `SELECT COUNT(*) AS "count" FROM "identity_user_accounts" WHERE "user_id" = ?`, [input.userId]);
     check('cm_tenant_memberships', `SELECT COUNT(*) AS "count" FROM "cm_tenant_memberships" WHERE "user_id" = ?`, [input.userId]);
     check('cm_workspace_members', `SELECT COUNT(*) AS "count" FROM "cm_workspace_members" WHERE "user_id" = ?`, [input.userId]);
     check('cm_oauth_consents', `SELECT COUNT(*) AS "count" FROM "cm_oauth_consents" WHERE "user_id" = ?`, [input.userId]);
