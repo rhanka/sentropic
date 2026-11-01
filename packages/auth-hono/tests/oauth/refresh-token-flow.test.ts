@@ -2,8 +2,22 @@ import { decodeJwt } from 'jose';
 import { describe, expect, it } from 'vitest';
 import { oauthNow } from '../__fixtures__/oauth-fixtures.js';
 import { refreshFixture, renew } from './refresh-fixtures.js';
+import { basicAuth } from '../__fixtures__/oauth-flow-fixtures.js';
 
 describe('OAuth refresh protocol', () => {
+  it('should reject repeated resources without consuming the grant', async () => {
+    const f = await refreshFixture();
+    const first = await (await f.issue()).json();
+    const form = new URLSearchParams({ grant_type: 'refresh_token', refresh_token: first.refresh_token });
+    form.append('resource', 'https://resource.test/mcp');
+    form.append('resource', 'https://resource.test/mcp');
+    const response = await f.router.request('/oauth/token', { method: 'POST', body: form,
+      headers: { authorization: basicAuth('example-rp', 'client-secret') } });
+    expect(response.status).toBe(400);
+    expect(await response.json()).toMatchObject({ error: 'invalid_target' });
+    expect((await renew(f, first.refresh_token)).status).toBe(200);
+  });
+
   it('should issue and rotate twice with one digest, immutable claims and a sealed family', async () => {
     const f = await refreshFixture();
     const initial = await f.issue();
