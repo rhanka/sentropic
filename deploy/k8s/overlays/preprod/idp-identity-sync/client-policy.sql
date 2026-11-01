@@ -101,6 +101,12 @@ SET allowed_scopes = allowed_scopes || ARRAY(
   WHERE NOT (scope = ANY(transformed_clients.allowed_scopes))
 )
 WHERE client_id = 'immo-mcp';
+-- Governed preprod-only refresh rollout. Production source policy stays unchanged.
+UPDATE transformed_clients
+SET grant_types = ARRAY['authorization_code', 'refresh_token']::text[],
+    allowed_scopes = allowed_scopes || ARRAY(
+      SELECT 'offline_access' WHERE NOT ('offline_access' = ANY(transformed_clients.allowed_scopes)))
+WHERE client_id = 'immo-mcp' AND token_endpoint_auth_method = 'none' AND require_pkce;
 CREATE TEMP TABLE desired_clients ON COMMIT DROP AS
 SELECT t.* FROM transformed_clients t
 WHERE NOT t.has_secret OR EXISTS (SELECT FROM oauth_clients c WHERE c.client_id = t.client_id);
