@@ -89,7 +89,7 @@ describe('Executive Summary - Automatic Generation', () => {
 
     while (!allInitiativesCompleted && attempts < maxAttempts) {
       await queueManager.processJobsForWorkspace(workspaceId);
-      await sleep(1000);
+      if (attempts > 0) await sleep(1000);
 
       // Check initiatives status
       const initiativesList = await fetchInitiatives(folderId);
@@ -177,8 +177,7 @@ describe('Executive Summary - Automatic Generation', () => {
     // We'll check by looking at the queue before and after
     const executiveSummaryJobsBefore = await fetchExecutiveSummaryJobs(folderId);
 
-    // Wait a bit
-    await sleep(2000);
+    await queueManager.processJobsForWorkspace(workspaceId);
 
     // 4. Check that NO new executive_summary job was created
     const executiveSummaryJobsAfter = await fetchExecutiveSummaryJobs(folderId);
