@@ -30,6 +30,7 @@
 - [x] Targeted source/control/transport run: 11 tests pass; broad SCOPE also selected the integration file, correctly refusing absent DATABASE_URL. The dedicated integration target is queued.
 - [x] Full unit gate exposed an outdated list fixture: enrichment now reads current releases. Updated its stub and asserted that foreign scopes are filtered before release reads.
 - [x] PostgreSQL initialization exceeded compose's health window; logs show initialization and checkpoint completion, and make ps now reports healthy. Retrying the targeted suite against the same stack.
+- [x] Draft PR https://github.com/rhanka/sentropic/pull/878; intermediate commits skip CI; final head remains to qualify.
 - [ ] Integration dependency: the D3 lane must preserve confirmation error details through the shared mcp-platform wire codec; this branch preserves them through the artifacts adapter.
 
 ## AI Flaky tests
