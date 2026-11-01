@@ -129,6 +129,9 @@ export const openSqliteEnv = (): SqliteEnv => {
 
 export type AnyEnv = { readonly unitOfWork: IdentityUnitOfWorkV1<CustodyOpHost> };
 
+/** PostgreSQL legs run only when the qualification lane provides CM_PG_URL. */
+export { pgEnabled } from '../storage/pg-driver.js';
+
 export const asOpHost = (unitOfWork: IdentityUnitOfWorkV1<PostgresCustodyHandle> | IdentityUnitOfWorkV1<SqliteCustodyHandle>): IdentityUnitOfWorkV1<CustodyOpHost> =>
   unitOfWork as unknown as IdentityUnitOfWorkV1<CustodyOpHost>;
 

@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { SingleUseProofV1 } from '../../src/index.js';
-import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, randomBase64Url, sha256Hex, syntheticCoseKey } from './a20b-helpers.js';
+import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, randomBase64Url, sha256Hex, syntheticCoseKey } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 import type { IdentityTransactionV1, IdentityUnitOfWorkV1 } from '../../src/index.js';
 
@@ -26,7 +26,9 @@ const emailProof = (proofId: string, email: string, digest: { algorithm: 'sha256
   consumedAt: null, revokedAt: null, email, codeDigest: digest,
 });
 
-describe.each([{ profile: 'postgres' }, { profile: 'sqlite' }])('A2.0b custody storage on $profile', ({ profile }) => {
+const PROFILES = (pgEnabled ? ['postgres', 'sqlite'] : ['sqlite']) as const;
+
+describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody storage on $profile', ({ profile }) => {
   const openEnv = async (): Promise<ProfileEnv> => {
     if (profile === 'postgres') {
       const pg = await openPostgresEnv();

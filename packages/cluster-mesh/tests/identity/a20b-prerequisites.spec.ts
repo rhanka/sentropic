@@ -23,7 +23,7 @@ import {
 import { createAtomicPersonDeletionV2 } from '../../src/index.js';
 import { createIdentityCustodyImporterV1 } from '../../src/index.js';
 import { hashPresentedTokenV1 } from '../../src/index.js';
-import { asOpHost, createFixtureBusiness, LATER, NOW, openPostgresEnv, openSqliteEnv, randomBase64Url, sha256Hex, syntheticCoseKey, type FixtureBusinessState } from './a20b-helpers.js';
+import { asOpHost, createFixtureBusiness, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, randomBase64Url, sha256Hex, syntheticCoseKey, type FixtureBusinessState } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 
 const WRITE = { mode: 'write' as const, deadlineMs: 5000 };
@@ -80,7 +80,11 @@ interface ProfileEnv {
   readonly reopen: () => ProfileEnv;
 }
 
-describe.each([{ profile: 'postgres' }, { profile: 'sqlite' }])('A2.0b prerequisites on $profile', ({ profile }) => {
+// Qualification lanes provide CM_PG_URL and run both profiles with zero
+// skips; the plain lane runs the SQLite legs only.
+const PROFILES = (pgEnabled ? ['postgres', 'sqlite'] : ['sqlite']) as const;
+
+describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b prerequisites on $profile', ({ profile }) => {
   const openEnv = async (): Promise<ProfileEnv> => {
     if (profile === 'postgres') {
       const env = await openPostgresEnv();
