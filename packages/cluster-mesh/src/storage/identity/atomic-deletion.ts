@@ -196,6 +196,9 @@ export const createAtomicPersonDeletionV2 = (input: {
         await input.business.assertNoOrphans(plan, host);
         await journal.assertNoLiveReferences({ userId: command.userId, accountEmail: account.email, deletedWorkspaceIds: [...plan.workspaceIdsToDelete] });
         await journal.deleteAccountCore(command.userId);
+        if (await journal.findAccountCore(command.userId)) {
+          throw new IdentityCustodyErrorV1('identity_orphan_detected');
+        }
         await journal.retireFence(command.userId, at);
         completed.add('account');
 
