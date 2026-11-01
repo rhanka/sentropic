@@ -4,7 +4,8 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 
 export function scheduleHealth(runs, { now = Date.now(), currentRun } = {}) {
-  const latest = runs.filter(run => run.event === 'schedule' && String(run.id) !== String(currentRun))
+  const latest = runs.filter(run => run.event === 'schedule' && String(run.id) !== String(currentRun)
+    && (!run.display_title || run.display_title === 'Live provider qualification'))
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
   if (!latest) return { healthy: false, reason: 'missing scheduled live run', lastRun: null, ageSeconds: null };
   const ageSeconds = (now - Date.parse(latest.created_at)) / 1000;
@@ -98,13 +99,20 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       invoke(['down']);
     }
     if (results.api || results.browser || results.vscode) process.exitCode = 1;
+  } else if (command === 'health') {
+    const runs = api('repos/rhanka/sentropic/actions/workflows/llm-live-daily.yml/runs?event=schedule&per_page=100').workflow_runs;
+    const health = scheduleHealth(runs);
+    console.log(JSON.stringify(health, null, 2));
+    if (!health.healthy) process.exitCode = 1;
   } else if (command === 'finish') {
-    const runs = api('repos/rhanka/sentropic/actions/workflows/llm-live-daily.yml/runs?event=schedule&per_page=5').workflow_runs;
+    const runs = api('repos/rhanka/sentropic/actions/workflows/llm-live-daily.yml/runs?event=schedule&per_page=100').workflow_runs;
     const events = readFileSync(`${dir}/calls.jsonl`, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse);
     const receipt = liveReceipt({ tuple: json(`${dir}/tuple.json`), selection: json(`${dir}/selection.json`), events,
       results: json(`${dir}/results.json`), schedule: scheduleHealth(runs, { currentRun: process.env.GITHUB_RUN_ID }), event: process.env.GITHUB_EVENT_NAME });
     writeFileSync(`${dir}/receipt.json`, JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt, null, 2));
-    if (!receipt.qualified || !receipt.schedule.healthy) process.exitCode = 1;
+    // The first actual scheduled qualification can establish the first successful
+    // receipt; the independent hourly monitor still exposes missing prior data.
+    if (!receipt.qualified || (!receipt.schedule.healthy && process.env.GITHUB_EVENT_NAME !== 'schedule')) process.exitCode = 1;
   } else throw new Error('Expected select, tuple or finish');
 }
