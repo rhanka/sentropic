@@ -10,6 +10,7 @@ A prerelease Cluster Mesh version on main (the planned bump-gate dev series betw
 - Never publish a prerelease version: the Publish and post-publication qualification steps run only when the decision is `publish`.
 - Development in worktree `tmp/worktrees/cm-publish-skip` (branch `fix/cm-publish-prerelease-skip` from `origin/main`); harness branch check PASS.
 - Local targeted tests on `ENV=test-cmps`; `ENV=<env>` last in every make command; never `ENV=dev`.
+- Retain CI lockfile-lane policy acknowledgment `review_by=2026-11-30T00:00:00Z` required by the existing manifest regression gate (BRLOCK-EX1 scope covers this branch's Makefile and CI workflow paths); this branch changes no install surface.
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
