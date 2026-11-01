@@ -17,24 +17,30 @@ export function qualifiedMain(runs) {
   const run = runs.find(row => row.head_branch === 'main' && row.event === 'push'
     && row.status === 'completed' && row.conclusion === 'success'
     && ['test-api-unit-integration (ai', 'test-e2e (', 'e2e-vscode'].every(prefix =>
-      row.jobs?.some(job => job.name.startsWith(prefix) && job.conclusion === 'success')));
+      row.jobs?.some(job => job.name.startsWith(prefix) && job.conclusion === 'success'))
+    && row.jobs.filter(job => job.name.startsWith('test-api-unit-integration (ai') && job.conclusion === 'success').length === 3
+    && row.jobs.filter(job => job.name.startsWith('test-e2e (') && job.conclusion === 'success').length === 6);
   if (!run || !/^[a-f0-9]{40}$/.test(run.head_sha)) throw new Error('No complete qualified main tuple');
   return { sourceSha: run.head_sha, workflowSha: run.head_sha, run: run.id, attempt: run.run_attempt };
 }
 
 export function liveReceipt({ tuple, selection, events, results, schedule, event }) {
-  if (tuple.sourceSha !== selection.sourceSha || !tuple.api?.id?.startsWith('sha256:')
-    || !tuple.ui?.id?.startsWith('sha256:') || !tuple.lockSha256 || !Object.keys(tuple.installedPackages ?? {}).length) {
+  if (tuple.sourceSha !== selection.sourceSha || !/^sha256:[a-f0-9]{64}$/.test(tuple.api?.id)
+    || !/^sha256:[a-f0-9]{64}$/.test(tuple.ui?.id) || !/^[a-f0-9]{64}$/.test(tuple.lockSha256)
+    || !Object.keys(tuple.installedPackages ?? {}).length) {
     throw new Error('Incomplete or mismatched live application/package tuple');
   }
   const calls = events.filter(row => row.type === 'request');
   const outcomes = events.filter(row => row.type === 'response' || row.type === 'error');
   const qualified = ['api', 'browser', 'vscode'].every(lane => results[lane] === 0)
-    && calls.length > 0 && outcomes.length === calls.length && outcomes.every(row => row.type === 'response' && row.status < 400);
+    && calls.length > 0 && outcomes.length === calls.length
+    && new Set(calls.map(row => row.requestId)).size === calls.length
+    && calls.every(call => outcomes.filter(row => row.requestId === call.requestId).length === 1)
+    && outcomes.every(row => row.type === 'response' && row.status >= 200 && row.status < 400);
   return { version: 1, tuple, selection, trigger: event, qualified,
     schedule, results, calls: calls.length, failedCalls: outcomes.filter(row => row.type === 'error' || row.status >= 400).length,
     unfinishedCalls: calls.length - outcomes.length, costUsd: null, costStatus: 'to measure: runtime observations do not price provider calls',
-    retryAttempts: Math.max(0, calls.length - new Set(calls.map(row => row.requestId)).size) };
+    retryAttempts: null, retryStatus: 'to measure: wire attempts are counted without inferring logical retry identity' };
 }
 
 const json = file => JSON.parse(readFileSync(file, 'utf8'));
