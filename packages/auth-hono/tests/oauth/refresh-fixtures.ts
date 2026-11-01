@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import type { AuthHonoConsentGrant, OAuthRefreshRecord, OAuthRefreshStorePort } from '../../src/index.js';
-import { createOauthClient, createOauthPorts, createOauthRouterForTest, oauthNow } from '../__fixtures__/oauth-fixtures.js';
+import { createOauthClient, createOauthPorts, createOauthRouterForTest, createOauthSession, oauthNow } from '../__fixtures__/oauth-fixtures.js';
 import { saveOAuthCode, tokenRequest } from '../__fixtures__/oauth-flow-fixtures.js';
 
 export const refreshFixture = async () => {
@@ -12,6 +12,8 @@ export const refreshFixture = async () => {
   let now = oauthNow;
   ports.clock.now = () => now;
   ports.tokens.hashSecret = (raw) => createHash('sha256').update(raw).digest('hex');
+  ports.sessions.findByTokenHash = async (hash) => hash === await ports.tokens.hashSecret('session-token')
+    ? createOauthSession() : null;
   client.clientSecretHash = await ports.tokens.hashSecret('client-secret');
   ports.random.token = (bytes) => randomBytes(bytes).toString('base64url');
   ports.random.uuid = randomUUID;
