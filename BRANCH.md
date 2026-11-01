@@ -86,6 +86,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] Rollback checkpoint recorded BEFORE any legacy table deletion; one author per namespace via cutover records.
   - [x] Preserve the pre-deletion checkpoint row and retain account-driven OAuth invalidation after cutover.
   - [x] Rebind client, consent, membership, credential and restore invalidation to CM identity records.
+  - [x] Correct PostgreSQL index qualification and the OAuth consent account lock column.
   - [ ] All residual readers of legacy identity tables switched to CM stores (46-file inventory).
   - [x] Replace omitted artifact authorization and login-credential SQL readers with CM identity sources.
 - [ ] **Lot 3 — Deletions**
