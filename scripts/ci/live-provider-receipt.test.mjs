@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { liveReceipt, scheduleHealth, qualifiedMain, receiptFromDirectory, readAllPages, readPages } from './live-provider-receipt.mjs';
+import { liveReceipt, scheduleHealth, qualifiedMain, receiptFromDirectory, readAllPages, readPages, fixtureReceipt } from './live-provider-receipt.mjs';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 
 const sourceSha = 'a'.repeat(40);
@@ -30,10 +30,23 @@ test('should expose failed, missing and unfinished live calls and suite failures
 });
 
 test('should retain expected cancellations separately from provider errors', () => {
-  const receipt = liveReceipt({ ...input, events: [input.events[0], { type: 'cancelled', requestId: '1' }] });
+  const cancelled = [{ type: 'request', requestId: '2' }, { type: 'cancelled', requestId: '2' }];
+  const receipt = liveReceipt({ ...input, events: [...input.events, ...cancelled] });
   assert.equal(receipt.cancelledCalls, 1);
   assert.equal(receipt.failedCalls, 0);
   assert.equal(receipt.qualified, true);
+  assert.equal(liveReceipt({ ...input, events: cancelled }).qualified, false);
+});
+
+test('should require provider traffic for AI and VSCode while retaining non-provider browser journeys', () => {
+  const input = { traffic: { calls: 1, failedRequests: 0 }, networkInternal: true, requireCalls: true };
+  assert.equal(fixtureReceipt(input).qualified, true);
+  assert.equal(fixtureReceipt(input).liveProviderCalls, 0);
+  for (const changed of [{ networkInternal: false }, { traffic: { calls: 0, failedRequests: 0 } },
+    { traffic: { calls: 1, failedRequests: 1 } }, { unexpectedEgress: [{ host: 'unexpected.example' }] }]) {
+    assert.equal(fixtureReceipt({ ...input, ...changed }).qualified, false);
+  }
+  assert.equal(fixtureReceipt({ ...input, requireCalls: false, traffic: { calls: 0, failedRequests: 0 } }).qualified, true);
 });
 
 test('should publish a failed receipt with unknown calls when preparation never completed', () => {
