@@ -190,7 +190,8 @@ export function journeyResponse(body) {
     if (/matrix_get/.test(user)) return call('matrix_get', { folderId: id('folder') });
     if (/web_extract/.test(user)) return call('web_extract', { urls: [...new Set(String(user).match(/https?:\/\/[^\s"\],]+/g) ?? [])] });
     if (/update_initiative|update the description|Ajoute.*Test E2E/i.test(user)) return call('update_initiative', {
-      initiativeId: id('initiative'), updates: [{ path: 'description', value: /Test E2E/.test(user) ? 'Test E2E: Updated description' : 'Updated description for testing' }] });
+      initiativeId: id('initiative'),
+      patch: { description: /Test E2E/.test(user) ? 'Test E2E: Updated description' : 'Updated description for testing' } });
     if (/read.*initiative/i.test(user)) return call('read_initiative', { initiativeId: id('initiative') });
   }
   if (/Consulte le document/.test(user)) {
