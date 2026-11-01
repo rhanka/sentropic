@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 import { db, pool } from '../../../src/db/client';
-import { oauthClients, oauthConsents, users } from '../../../src/db/schema';
+import { oauthClients, oauthConsents, tenantMemberships, users } from '../../../src/db/schema';
 import { createOAuthRefreshAdapter } from '../../../src/services/auth/oauth-refresh-adapter';
 import { createConsentStoreAdapter } from '../../../src/services/auth/consent-store-adapter';
 
@@ -99,7 +99,20 @@ describe('PostgreSQL refresh storage', () => {
     expect((await adapter().findByHash(hash('family')))?.revokedAt).not.toBeNull();
   });
 
-  it.each(['rotation-first', 'revoke-first'])('should serialize real PostgreSQL revocation: %s', async (order) => {
+  it.each(['account', 'policy', 'consent', 'membership', 'security', 'explicit'].flatMap((kind) =>
+    ['rotation-first', 'revoke-first'].map((order) => ({ kind, order }))))
+  ('should serialize PostgreSQL $kind revocation: $order', async ({ kind, order }) => {
+    if (kind === 'consent') await db.insert(oauthConsents).values({ userId, clientId, scopes: ['offline_access'] });
+    if (kind === 'membership') await db.insert(tenantMemberships).values({ userId, tenantId: 'sentropic', status: 'approved' });
+    const mutation = {
+      account: "UPDATE users SET account_status='disabled_by_admin' WHERE id=$1",
+      policy: "UPDATE oauth_clients SET grant_types=ARRAY['authorization_code'] WHERE client_id=$2",
+      consent: 'DELETE FROM oauth_consents WHERE user_id=$1',
+      membership: "UPDATE tenant_memberships SET status='suspended' WHERE user_id=$1",
+      security: "SELECT oauth_refresh_revoke_user($1, 'security_event')",
+      explicit: "SELECT oauth_refresh_revoke_user($1, 'explicit_revoke')",
+    }[kind]!;
+    const values = kind === 'policy' ? [userId, clientId] : [userId];
     const writer = await pool.connect();
     const { rows: [{ pid }] } = await writer.query('SELECT pg_backend_pid() AS pid');
     const rotate = () => adapter().withLock(lock, async (tx) => {
@@ -112,8 +125,7 @@ describe('PostgreSQL refresh storage', () => {
     try {
       await writer.query('BEGIN');
       if (order === 'revoke-first') {
-        await writer.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [userId]);
-        await writer.query("SELECT oauth_refresh_revoke_family('family','explicit_revoke',now()::timestamp)");
+        await writer.query(mutation, values);
         const rotation = rotate();
         await waitForBlockedBy(pid);
         await writer.query('COMMIT');
@@ -131,7 +143,7 @@ describe('PostgreSQL refresh storage', () => {
           await tx.save({ ...row('child'), familyId: 'family', parentId: 'family', generation: 1 });
         });
         await locked;
-        const revocation = writer.query("SELECT oauth_refresh_revoke_user($1, 'security_event')", [userId]);
+        const revocation = writer.query(mutation, values);
         await waitForBlockedBy(rotationPid);
         release(); await rotation; await revocation; await writer.query('COMMIT');
         expect((await adapter().findByHash(hash('child')))?.revokedAt).not.toBeNull();
