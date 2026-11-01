@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { liveReceipt, scheduleHealth, qualifiedMain, receiptFromDirectory, readAllPages } from './live-provider-receipt.mjs';
+import { liveReceipt, scheduleHealth, qualifiedMain, receiptFromDirectory, readAllPages, readPages } from './live-provider-receipt.mjs';
 import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
 
 const sourceSha = 'a'.repeat(40);
@@ -74,4 +74,16 @@ test('should retain application jobs and identities beyond the first GitHub page
   const rows = Array.from({ length: 205 }, (_, id) => ({ id }));
   assert.deepEqual(readAllPages(page => ({ jobs: rows.slice((page - 1) * 100, page * 100) }), 'jobs'), rows);
   assert.throws(() => readAllPages(() => ({}), 'artifacts'), /Missing GitHub page/);
+});
+
+test('should search later workflow pages and stop fetching after the selected run', () => {
+  const rows = Array.from({ length: 250 }, (_, id) => ({ id }));
+  const pages = [];
+  let selected;
+  for (const row of readPages(page => {
+    pages.push(page);
+    return { workflow_runs: rows.slice((page - 1) * 100, page * 100) };
+  }, 'workflow_runs')) if (row.id === 150) { selected = row.id; break; }
+  assert.equal(selected, 150);
+  assert.deepEqual(pages, [1, 2]);
 });
