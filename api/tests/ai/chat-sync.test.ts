@@ -44,7 +44,7 @@ describe('Chat AI - Complete Integration', () => {
       const maxAttempts = 10;
 
       while (!jobCompleted && attempts < maxAttempts) {
-        await sleep(1000); // Wait 1 second between checks
+        if (attempts > 0) await sleep(1000);
 
         const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, jobId)).limit(1);
         expect(job).toBeDefined();
@@ -109,7 +109,7 @@ describe('Chat AI - Complete Integration', () => {
       const maxAttempts = 20;
 
       while (!jobCompleted && attempts < maxAttempts) {
-        await sleep(1000);
+        if (attempts > 0) await sleep(1000);
 
         const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, jobId)).limit(1);
         expect(job).toBeDefined();
@@ -153,7 +153,7 @@ describe('Chat AI - Complete Integration', () => {
       const maxAttempts = 5;
 
       while (!jobCompleted && attempts < maxAttempts) {
-        await sleep(5000);
+        if (attempts > 0) await sleep(5000);
 
         const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, jobId)).limit(1);
         expect(job).toBeDefined();
@@ -199,7 +199,7 @@ describe('Chat AI - Complete Integration', () => {
       const maxAttempts = 10;
 
       while (!firstJobCompleted && attempts < maxAttempts) {
-        await sleep(1000);
+        if (attempts > 0) await sleep(1000);
         const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, firstJobId)).limit(1);
         expect(job).toBeDefined();
         if (job && (job.status === 'completed' || job.status === 'failed')) {
@@ -226,7 +226,7 @@ describe('Chat AI - Complete Integration', () => {
       attempts = 0;
 
       while (!secondJobCompleted && attempts < maxAttempts) {
-        await sleep(1000);
+        if (attempts > 0) await sleep(1000);
         const [job] = await db.select().from(jobQueue).where(eq(jobQueue.id, secondJobId)).limit(1);
         expect(job).toBeDefined();
         if (job && (job.status === 'completed' || job.status === 'failed')) {
