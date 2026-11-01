@@ -223,7 +223,7 @@ SELECT "id","user_id", CASE WHEN "expires_at" <= now() THEN 'expired' ELSE 'acti
 -- user_sessions -> identity_login_token_bindings
 --> statement-breakpoint
 INSERT INTO "cm_identity"."identity_login_token_bindings" ("session_id","session_token_hash","refresh_token_hash","mfa_verified","auth_time","session_version","rotation_version","device_name","ip_address","user_agent","last_activity_at")
-SELECT "id","session_token_hash","refresh_token_hash", CASE WHEN "mfa_verified" THEN 1 ELSE 0 END, FLOOR(EXTRACT(EPOCH FROM "created_at" AT TIME ZONE 'UTC') * 1000)::bigint, 1, 1, "device_name","ip_address","user_agent", pg_temp.a4_iso("last_activity_at") FROM public.user_sessions ON CONFLICT DO NOTHING;
+SELECT "id","session_token_hash","refresh_token_hash", CASE WHEN "mfa_verified" THEN 1 ELSE 0 END, FLOOR(EXTRACT(EPOCH FROM "created_at" AT TIME ZONE 'UTC'))::bigint, FLOOR(EXTRACT(EPOCH FROM "created_at" AT TIME ZONE 'UTC') * 1000)::bigint, 1, "device_name","ip_address","user_agent", pg_temp.a4_iso("last_activity_at") FROM public.user_sessions ON CONFLICT DO NOTHING;
 --> statement-breakpoint
 -- tenants -> cm_tenants (slug == tid == id)
 --> statement-breakpoint
