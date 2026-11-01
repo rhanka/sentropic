@@ -5,7 +5,8 @@ ALTER TABLE artifacts.artifacts ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ;
 CREATE OR REPLACE FUNCTION artifacts.reject_terminal_restore() RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
   IF OLD.terminal_deleted_at IS NOT NULL AND
-    (NEW.terminal_deleted_at IS DISTINCT FROM OLD.terminal_deleted_at OR NEW.lifecycle_state NOT IN ('deleted', 'purged')) THEN
+    (NEW.terminal_deleted_at IS DISTINCT FROM OLD.terminal_deleted_at OR NEW.lifecycle_state NOT IN ('deleted', 'purged')
+      OR NEW.renewed_at IS DISTINCT FROM OLD.renewed_at) THEN
     RAISE EXCEPTION 'terminal artifact' USING ERRCODE = '23514';
   END IF;
   RETURN NEW;

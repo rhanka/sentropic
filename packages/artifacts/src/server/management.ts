@@ -23,7 +23,7 @@ export interface DeleteConfirmationContext {
   commandHash: string;
   internalKey: string;
 }
-/** Issue only after a trusted human action; consume on the domain transaction. */
+/** Host challenges require trusted human approval; consume on the domain transaction. */
 export interface ArtifactConfirmationPort {
   request(context: DeleteConfirmationContext): Promise<{ confirmationRef: string; managementUrl: string; expiresAt: string }>;
   consume(client: FinalizeTxClient, context: DeleteConfirmationContext, confirmationRef: string): Promise<
@@ -75,7 +75,10 @@ export async function manageArtifact(deps: {
       if (target.terminal || target.state === 'deleted' || target.state === 'purged') throw refused('gone');
       const now = new Date().toISOString();
       if (deleting) {
-        if (target.currentReleaseId !== context.expectedCurrentReleaseId) throw new ArtifactOperationError('pointer_conflict');
+        if (target.currentReleaseId !== context.expectedCurrentReleaseId) {
+          if (proof) throw confirmationFailure('confirmation_stale');
+          throw new ArtifactOperationError('pointer_conflict');
+        }
         if (!deps.confirmation) throw new ArtifactOperationError('provider_unavailable');
         if (!proof) throw confirmationFailure('confirmation_required', await deps.confirmation.request(context));
         const verdict = await deps.confirmation.consume(client, context, proof);

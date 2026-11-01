@@ -16,6 +16,7 @@ import type { IntentKind, PreparationIntentStore, ObjectIntent } from '../server
 import type { IdempotencyStore, IdempotentResult } from '../server/idempotency.js';
 import type { PublicationStateStore, ReleaseRecord } from '../server/publication.js';
 import type { KvPort } from '../server/ports.js';
+import { ArtifactOperationError } from '../server/failures.js';
 
 /** Read-only migration inventory. Never promotes a legacy success into an authorized receipt. */
 export function createPostgresLegacyArtifactRecords(pool: Pool): Pick<KvPort, 'get'> {
@@ -104,11 +105,12 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
     async ensureArtifact(input: ArtifactBindingInput): Promise<ArtifactBinding> {
       const where = `WHERE storage_scope_id = $1 AND owner_id = $2 AND binding_name = $3`;
       const args = [input.storageScopeId, input.ownerId, input.bindingName];
-      const found = await pool.query<{ id: string }>(
-        `SELECT id FROM artifacts.artifacts ${where}`,
+      const found = await pool.query<{ id: string; terminal: boolean }>(
+        `SELECT id, (to_jsonb(artifacts.artifacts)->>'terminal_deleted_at') IS NOT NULL AS terminal FROM artifacts.artifacts ${where}`,
         args,
       );
       if (found.rowCount !== 0 && found.rows[0] !== undefined) {
+        if (found.rows[0].terminal) throw new ArtifactOperationError('gone');
         return { artifactId: found.rows[0].id, created: false };
       }
       const inserted = await pool.query<{ id: string }>(
@@ -120,12 +122,13 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
       if (inserted.rowCount !== 0 && inserted.rows[0] !== undefined) {
         return { artifactId: inserted.rows[0].id, created: true };
       }
-      const raced = await pool.query<{ id: string }>(
-        `SELECT id FROM artifacts.artifacts ${where}`,
+      const raced = await pool.query<{ id: string; terminal: boolean }>(
+        `SELECT id, (to_jsonb(artifacts.artifacts)->>'terminal_deleted_at') IS NOT NULL AS terminal FROM artifacts.artifacts ${where}`,
         args,
       );
       const row = raced.rows[0];
       if (row === undefined) throw new Error(`artifact binding lost for ${input.bindingName}`);
+      if (row.terminal) throw new ArtifactOperationError('gone');
       return { artifactId: row.id, created: false };
     },
     async record(
@@ -437,11 +440,11 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
     },
     async isTerminal(artifactId: string): Promise<boolean> {
       const { rows } = await pool.query<{ terminal: boolean }>(
-        'SELECT terminal_deleted_at IS NOT NULL AS terminal FROM artifacts.artifacts WHERE id = $1', [artifactId]);
+        "SELECT (to_jsonb(a)->>'terminal_deleted_at') IS NOT NULL AS terminal FROM artifacts.artifacts a WHERE id = $1", [artifactId]);
       return rows[0]?.terminal === true;
     },
     async markTerminal(artifactId: string): Promise<void> {
-      await pool.query("UPDATE artifacts.artifacts SET terminal_deleted_at = now(), lifecycle_state = 'deleted' WHERE id = $1", [artifactId]);
+      await pool.query("UPDATE artifacts.artifacts SET terminal_deleted_at = coalesce(terminal_deleted_at, now()), lifecycle_state = 'deleted' WHERE id = $1", [artifactId]);
     },
     async setArtifactState(artifactId: string, state: ArtifactState): Promise<void> {
       const updated = await pool.query(
