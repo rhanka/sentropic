@@ -41,7 +41,8 @@ export type HeadPointer = {
 };
 
 export class InterruptedAt extends Error {
-  constructor(public point: string) { super(`interrupted:${point}`); this.name = 'InterruptedAt'; }
+  point: string;
+  constructor(point: string) { super(`interrupted:${point}`); this.name = 'InterruptedAt'; this.point = point; }
 }
 
 export function makeGenesisState(overrides: Partial<CustodyStateV1> = {}): CustodyStateV1 {
@@ -224,7 +225,9 @@ export type TxResult = {
 const segName = (bank: 'A' | 'B', index: number) => `SEAT_STATE_${bank}_${String(index).padStart(2, '0')}`;
 
 export class CustodyStateStore {
-  constructor(private api: SyntheticEnvironmentApi, private fence: SeatStateFenceV1) {}
+  private api: SyntheticEnvironmentApi;
+  private fence: SeatStateFenceV1;
+  constructor(api: SyntheticEnvironmentApi, fence: SeatStateFenceV1) { this.api = api; this.fence = fence; }
 
   async readHead(runId: string): Promise<HeadPointer> {
     return parseHead(await this.api.readSecret(WRITER_ENV, SEAT_STATE_HEAD, runId));

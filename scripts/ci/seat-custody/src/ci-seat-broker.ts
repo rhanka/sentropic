@@ -28,7 +28,9 @@ export type JournalRecord = { requestId: string; ticketDigest: string; at: numbe
 // line refuses the whole load; a replayed requestId refuses the send.
 export class BrokerJournal {
   records: JournalRecord[] = [];
-  private constructor(private file: string, private syncFailure: () => boolean) {}
+  private file: string;
+  private syncFailure: () => boolean;
+  private constructor(file: string, syncFailure: () => boolean) { this.file = file; this.syncFailure = syncFailure; }
 
   static async create(file: string, syncFailure: () => boolean = () => false): Promise<BrokerJournal> {
     const journal = new BrokerJournal(file, syncFailure);
@@ -90,7 +92,9 @@ export class SeatBroker {
   private unitsLeft: number;
   private endpoint: string;
   private now: () => number;
-  constructor(private opts: BrokerOpts) {
+  private opts: BrokerOpts;
+  constructor(opts: BrokerOpts) {
+    this.opts = opts;
     const now = (opts.now ?? Date.now)();
     ensure(opts.qualified && opts.billing, 'broker-not-qualified');
     ensure(opts.expiresAt > now, 'broker-expired');
