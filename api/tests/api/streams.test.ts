@@ -7,7 +7,7 @@ import {
   cleanupAuthData 
 } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { organizations, chatStreamEvents, chatMessages, chatSessions, users, workspaces } from '../../src/db/schema';
+import { organizations, chatStreamEvents, chatMessages, chatSessions, workspaces } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { writeStreamEvent, getNextSequence } from '../../src/services/stream-service';
 import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
