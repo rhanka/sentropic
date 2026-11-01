@@ -97,7 +97,7 @@ describe('OAuth S2S OBO mint (ARCH-11 G1c)', () => {
 
     const response = await clientCredentialsRequest(router, { tenant: 'org-x' });
     expect(response.status).toBe(400);
-    const body = (await response.json()) as { error: { code: string } };
-    expect(body.error.code).toBe('invalid_target');
+    const body = (await response.json()) as { error: string };
+    expect(body.error).toBe('invalid_target');
   });
 });

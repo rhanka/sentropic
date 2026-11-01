@@ -67,8 +67,8 @@ describe('OAuth token exchange', () => {
 
     const response = await exchangeRequest(router, { scope: 'immo:read', subject });
     expect(response.status).toBe(400);
-    expect((await response.json()) as { error: { code: string } }).toMatchObject({
-      error: { code: 'invalid_scope' },
+    expect((await response.json()) as { error: string }).toMatchObject({
+      error: 'invalid_scope',
     });
   });
 
@@ -107,8 +107,8 @@ describe('OAuth token exchange', () => {
       method: 'POST',
     });
     expect(response.status).toBe(400);
-    expect((await response.json()) as { error: { code: string } }).toMatchObject({
-      error: { code: 'unauthorized_client' },
+    expect((await response.json()) as { error: string }).toMatchObject({
+      error: 'unauthorized_client',
     });
   });
 
@@ -131,8 +131,8 @@ describe('OAuth token exchange', () => {
       method: 'POST',
     });
     expect(response.status).toBe(400);
-    expect((await response.json()) as { error: { code: string } }).toMatchObject({
-      error: { code: 'unauthorized_client' },
+    expect((await response.json()) as { error: string }).toMatchObject({
+      error: 'unauthorized_client',
     });
   });
 });
