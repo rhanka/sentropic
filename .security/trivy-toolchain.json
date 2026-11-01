@@ -2,6 +2,27 @@
   "schema": 1,
   "option": "B",
   "qualified": false,
+  "profile": "upstream",
+  "publishers": {
+    "upstream": {
+      "repository": "aquasec/trivy",
+      "signature": {
+        "issuer": "https://token.actions.githubusercontent.com",
+        "identity": "https://github.com/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/v0.76.1"
+      }
+    },
+    "sentropic-patched": {
+      "repository": "ghcr.io/rhanka/sentropic-trivy",
+      "signature": {
+        "issuer": "https://token.actions.githubusercontent.com",
+        "identity": "https://github.com/rhanka/sentropic/.github/workflows/security-scanner-image.yml@refs/heads/main"
+      },
+      "qualified": false,
+      "indexDigest": null,
+      "manifestDigest": null,
+      "configDigest": null
+    }
+  },
   "version": "0.76.1",
   "minimumVersion": "0.71.1",
   "repository": "aquasec/trivy",
@@ -36,6 +57,7 @@
     "Current-main archive identities are verified; canonical remote API/toolbox tags are absent and UI registry config differs from its main-CI archive; independent completeness admission remains pending",
     "Successful remote scan needs narrowly scoped pull authorization; broad operator credentials must stay outside scanner tools",
     "Isolated rebuild requires an admitted builder without shared daemon or secrets; approved Node sandbox has no builder",
-    "Successful remote/rebuild measurements and CI critical path at most 600 seconds remain missing; S2c/S3 are separate gates"
+    "Successful remote/rebuild measurements and CI critical path at most 600 seconds remain missing; S2c/S3 are separate gates",
+    "Downstream sentropic-patched candidate unadmitted: no signed index digest, provenance or content qualification yet (r6 section 3)"
   ]
 }
