@@ -8,6 +8,7 @@ Implement lot ACT-L06a of r6 §7.2 (W2): persistent provider-first/account-secon
 - Binding design: `.tmp/daily-cyber/activation-amendment-r6.md` (sha256 4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f, verified at session start). r6 §7.2 row ACT-L06a, §6.4 rows L9-C/L9-F, §7.3 T5-N2/T6-P1, §4.3.3. Depends on ACT-L03a (merged on main as 9899cf336); reuses its CustodyStateV1 store, broker and admission caps unchanged.
 - Make-only workflow, Docker under the flock `/home/antoinefa/.cache-tmp/sentropic-docker.lock`, `ENV=test-cyber-L06a` always LAST, `make down ENV=test-cyber-L06a` after. Never `ENV=dev`, never `make clean-all`. At most one locked Docker lane at a time.
 - Zero Python. Zero payment on quota exhaustion (no paid fallback, top-up, overage or purchase). No secret read, printed, logged or committed; synthetic fixtures only.
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required verbatim by `scripts/ci/ci-lockfile-installs.test.mjs`, run by the required `validate-publishable-manifests` CI job).
 - Tests first: RED run of `make test-ci-seat-contract SCOPE=...` under the flock, then implementation, then GREEN run of the full `make test-ci-seat-contract ENV=test-cyber-L06a`.
 - Branch development happens in worktree `tmp/worktrees/cyber-act-L06a` on branch `feat/cyber-act-L06a` created from `origin/main` (9899cf336).
 - All new text in English. No human-effort or time estimates.
