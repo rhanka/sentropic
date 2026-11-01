@@ -27,6 +27,7 @@
 ## Feedback Loop
 - [x] D4 metadata reads preserve optional fields; metadata writes belong to feat/artifacts-parity-p0.
 - [x] Source RED found a foreign release-record acceptance; added record/manifest identity checks and regression coverage.
+- [x] Targeted source/control/transport run: 11 tests pass; broad SCOPE also selected the integration file, correctly refusing absent DATABASE_URL. The dedicated integration target is queued.
 
 ## AI Flaky tests
 - [x] No AI-dependent tests or timeout changes.
