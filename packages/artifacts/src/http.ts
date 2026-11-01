@@ -169,6 +169,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
         if (capability === 'artifacts_get_source') {
           const artifactId = normalized.artifactId as string;
           const result = await readArtifactSource({
+            storageScopeId: invocation.storageScopeId,
             authorize: async () => {
               const acl = await visible(artifactId, invocation);
               const state = await deps.lifecycle.stateOf(artifactId);

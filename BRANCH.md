@@ -47,10 +47,10 @@
 - [ ] **Lot 2 — Common implementation**
   - [x] D1 verified manifest and author file reads with separate provenance (transport qualification pending).
   - [ ] D2 coordinator-bound named read grants and confirmed terminal deletion.
-  - [ ] D4 get/list binding, dates, digest, URLs and optional metadata.
+  - [x] D4 get/list binding, dates, digest, URLs and optional metadata.
 - [ ] **Lot 3 — Final validation**
   - [ ] Scoped tests, artifacts unit suite, typecheck and lint through make.
-  - [ ] Bump package version above published version.
+  - [x] Bump package version to 0.3.0 above published 0.2.4 (registry checked).
   - [ ] Scope check before each atomic commit; push after each commit as explicitly requested.
   - [ ] Draft PR using this file; one final-head CI run; record exact head and result.
   - [ ] make down ENV=test-artifacts-p0b; write .tmp/rv/artifacts-parity-p0b.md and stop.
