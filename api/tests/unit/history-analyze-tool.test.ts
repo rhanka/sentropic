@@ -6,7 +6,9 @@ vi.mock('../../src/services/llm-runtime', () => ({
 }));
 
 import { db } from '../../src/db/client';
-import { chatMessages, chatSessions, users, workspaces, workspaceMemberships } from '../../src/db/schema';
+import { chatMessages, chatSessions, workspaces } from '../../src/db/schema';
+import { createCmUser } from '../../src/services/identity/cm-users';
+import { cmDeleteForUsers, cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
 import { createId } from '../../src/utils/id';
 import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
 import { toolService } from '../../src/services/tool-service';
@@ -21,15 +23,7 @@ describe('toolService.analyzeHistory', () => {
 
   beforeEach(async () => {
     userId = createId();
-    await db.insert(users).values({
-      id: userId,
-      email: `history-analyze-${userId}@example.com`,
-      displayName: 'History Analyze User',
-      role: 'editor',
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
+    await createCmUser({ userId, email: `history-analyze-${userId}@example.com`, displayName: 'History Analyze User', role: 'editor', emailVerified: true, accountStatus: 'active' });
 
     ({ workspaceId } = await ensureWorkspaceForUser(userId));
 
@@ -86,11 +80,9 @@ describe('toolService.analyzeHistory', () => {
   afterEach(async () => {
     await db.delete(chatMessages).where(eq(chatMessages.sessionId, sessionId));
     await db.delete(chatSessions).where(eq(chatSessions.id, sessionId));
-    await db
-      .delete(workspaceMemberships)
-      .where(and(eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, userId)));
+    await cmDeleteWorkspaceMembers(workspaceId);
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
-    await db.delete(users).where(eq(users.id, userId));
+    await cmDeleteForUsers([userId]);
     vi.clearAllMocks();
   });
 
