@@ -71,9 +71,43 @@ export interface ActivationAck {
 interface StoredAdmission extends AdmittedPolicy {
   sourceBindingDigest: string;
   denialFloor: number;
+  baseDenialFloor: number;
   activations: Map<string, ActivationAck>;
   captureEligible: boolean;
+  purge: { status: 'purge_pending' | 'purged'; initiatedWhileDisconnected: boolean; settledBy: string | null } | null;
+  backupExpired: boolean;
+  sourceDisconnected: boolean;
+  auditRetainUntil: number;
 }
+
+export interface PurgeInput {
+  readonly policyId: string;
+  readonly scope: string;
+}
+
+export interface PurgeState {
+  readonly status: 'purge_pending' | 'purged';
+  readonly initiatedWhileDisconnected: boolean;
+  readonly settledBy: string | null;
+}
+
+export interface WriterReceipt {
+  readonly writerId: string;
+  readonly settledAt: number;
+}
+
+export interface AuditProjection {
+  readonly policyId: string;
+  readonly policyDigest: string;
+  readonly retainedPayload: null;
+  readonly purge: PurgeState;
+  readonly backup: { readonly status: 'active' | 'expired'; readonly expiresAt: number | null };
+  /** Audit retention outlives backup expiry (90-day-or-longer metadata obligation). */
+  readonly auditRetainUntil: number;
+  readonly reason: string;
+}
+
+const AUDIT_RETENTION_MS = 90 * 24 * 3600 * 1000;
 
 export const digestJson = (value: unknown): string =>
   createHash('sha256').update(JSON.stringify(value) ?? 'null', 'utf8').digest('hex');
@@ -137,7 +171,10 @@ export const createPolicyStore = (gates: PolicyStoreGates) => {
       policyId, policyRevision: input.policyRevision, policyDigest: digest,
       firstAdmissionExpiresAt: input.retentionExpiresAt,
       sourceBindingDigest: digestJson(sourceBinding), denialFloor: input.sourceDenialFloor,
-      activations: new Map(), captureEligible: false,
+      baseDenialFloor: input.sourceDenialFloor,
+      activations: new Map(), captureEligible: false, purge: null,
+      backupExpired: false, sourceDisconnected: existing?.sourceDisconnected ?? false,
+      auditRetainUntil: gates.now() + AUDIT_RETENTION_MS,
     };
     admissions.set(policyId, admitted);
     const { activations: _omit, ...exposed } = admitted;
@@ -204,6 +241,7 @@ export const createPolicyStore = (gates: PolicyStoreGates) => {
 
   const readRetained = (input: { readonly policyId: string }): { readonly expiresAt: number | null } => {
     const stored = get(input.policyId);
+    if (stored.purge) throw new PolicyStoreError('purge_pending', 'retained copy is being purged');
     if (stored.firstAdmissionExpiresAt !== null && gates.now() >= stored.firstAdmissionExpiresAt) {
       throw new PolicyStoreError('object_expired', 'retained copy passed its immutable deadline');
     }
@@ -215,15 +253,69 @@ export const createPolicyStore = (gates: PolicyStoreGates) => {
   };
 
   const clearDenial = (policyId: string): void => {
-    get(policyId).denialFloor = 3;
+    const stored = get(policyId);
+    stored.denialFloor = stored.baseDenialFloor;
   };
 
   const isCaptureEligible = (policyId: string): boolean =>
     admissions.get(policyId)?.captureEligible ?? false;
 
+  const initiatePurge = (input: PurgeInput): PurgeState => {
+    const stored = get(input.policyId);
+    if (!stored.purge) {
+      stored.purge = {
+        status: 'purge_pending',
+        initiatedWhileDisconnected: stored.sourceDisconnected,
+        settledBy: null,
+      };
+    }
+    return { ...stored.purge };
+  };
+
+  const settlePurge = (
+    input: { readonly policyId: string; readonly writerReceipt: WriterReceipt | null },
+  ): PurgeState => {
+    const stored = get(input.policyId);
+    if (!stored.purge) throw new PolicyStoreError('invalid_request', 'no purge was initiated');
+    if (!input.writerReceipt) throw new PolicyStoreError('purge_pending', 'purge awaits writer settlement');
+    stored.purge = {
+      status: 'purged',
+      initiatedWhileDisconnected: stored.purge.initiatedWhileDisconnected,
+      settledBy: input.writerReceipt.writerId,
+    };
+    stored.captureEligible = false;
+    return { ...stored.purge };
+  };
+
+  const settleBackupExpiry = (input: { readonly policyId: string }): void => {
+    get(input.policyId).backupExpired = true;
+  };
+
+  const markSourceDisconnected = (policyId: string): void => {
+    get(policyId).sourceDisconnected = true;
+  };
+
+  const projectAudit = (input: { readonly policyId: string }): AuditProjection => {
+    const stored = get(input.policyId);
+    return {
+      policyId: stored.policyId,
+      policyDigest: stored.policyDigest,
+      retainedPayload: null,
+      purge: stored.purge ? { ...stored.purge } : {
+        status: 'purge_pending', initiatedWhileDisconnected: false, settledBy: null,
+      },
+      backup: stored.backupExpired
+        ? { status: 'expired', expiresAt: stored.firstAdmissionExpiresAt }
+        : { status: 'active', expiresAt: stored.firstAdmissionExpiresAt },
+      auditRetainUntil: stored.auditRetainUntil,
+      reason: stored.purge?.status === 'purged' ? 'purge_settled' : 'admission_active',
+    };
+  };
+
   return {
     admitPolicy, get, failClosed, commitActivation, commitReceipt, refreshCapture,
     readRetained, raiseDenial, clearDenial, isCaptureEligible,
+    initiatePurge, settlePurge, settleBackupExpiry, markSourceDisconnected, projectAudit,
   };
 };
 
