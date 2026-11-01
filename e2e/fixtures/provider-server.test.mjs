@@ -142,3 +142,33 @@ test('should serve web research locally and reject empty extraction requests', a
   assert.equal((await post('extract', { urls: [] })).status, 400);
   assert.equal(receipt.calls, 2);
 });
+
+test('should require image content on the selected vision model request', async t => {
+  const { post } = await fixture(t);
+  const question = 'What is the dominant color of the attached image?';
+  const content = [{ type: 'text', text: question }, { type: 'image_url', image_url: { url: 'data:image/png;base64,iVBORw0KGgo=' } }];
+  const response = await (await post({ model: 'mistral-medium-3.5', messages: [{ role: 'user', content }] })).json();
+  assert.equal(response.choices[0].message.content, 'red');
+  assert.equal((await post({ model: 'mistral-medium-3.5', messages: [{ role: 'user', content: question }] })).status, 400);
+});
+
+test('should cite actual document tool results using standard call IDs', () => {
+  const messages = [{ role: 'system', content: 'Session de chat (session_12345)' },
+    { role: 'user', content: 'Liste les documents de la session et cite leur nom.' }];
+  const tools = [{ function: { name: 'documents', parameters: { required: ['action', 'contextType', 'contextId'] } } }];
+  const first = journeyResponse({ messages, tools });
+  assert.equal(JSON.parse(first.tool_calls[0].function.arguments).contextId, 'session_12345');
+  messages.push({ role: 'assistant', tool_calls: first.tool_calls });
+  messages.push({ role: 'tool', tool_call_id: first.tool_calls[0].id, content: '{"items":[{"filename":"README.md"}]}' });
+  assert.equal(journeyResponse({ messages, tools }).content, 'README.md');
+});
+
+test('should request a real PPTX generation tool and preserve explicit reply tokens', () => {
+  const response = journeyResponse({ messages: [{ role: 'system', content: "Tu travailles sur l'organisation org_1234567890." },
+    { role: 'user', content: 'Use the document_generate tool with format "pptx" to create a presentation titled "Organization".' }],
+  tools: [{ function: { name: 'document_generate', parameters: { required: ['action'] } } }] });
+  assert.deepEqual(JSON.parse(response.tool_calls[0].function.arguments), {
+    action: 'generate', format: 'pptx', title: 'Organization', entityType: 'organization', entityId: 'org_1234567890',
+  });
+  assert.equal(journeyResponse({ messages: [{ role: 'user', content: 'Réponds uniquement "OK_SKILLS_OK" sans rien d’autre.' }] }).content, 'OK_SKILLS_OK');
+});
