@@ -22,7 +22,8 @@ export async function readArtifactSource(ports: SourceReadPorts, input: SourceRe
   await ports.authorize();
   const release = input.releaseId === undefined ? await ports.getCurrent(input.artifactId)
     : await ports.getRelease(input.releaseId);
-  if (!release) throw new ArtifactOperationError(input.releaseId ? 'not_found' : 'gone');
+  if (!release) throw input.releaseId ? new ArtifactOperationError('not_found')
+    : new ArtifactOperationError('release_unavailable', { publicDetails: { reason: 'unpublished' } });
   if ((input.releaseId !== undefined && release.releaseId !== input.releaseId) ||
     ('artifactId' in release && release.artifactId !== input.artifactId)) throw new ArtifactOperationError('not_found');
   let manifest;
@@ -31,7 +32,7 @@ export async function readArtifactSource(ports: SourceReadPorts, input: SourceRe
   if (manifest.artifactId !== input.artifactId) throw new ArtifactOperationError('not_found');
   if (ports.storageScopeId !== undefined && manifest.storageScopeId !== ports.storageScopeId) throw new ArtifactOperationError('verification_failed');
   if ('manifestDigest' in release && release.manifestDigest !== manifest.digest) throw new ArtifactOperationError('verification_failed');
-  if ('state' in release && release.state === 'purged') throw new ArtifactOperationError('gone');
+  if ('state' in release && release.state === 'purged') throw new ArtifactOperationError('release_unavailable', { publicDetails: { reason: 'purged' } });
   if (!manifest.digest || !Array.isArray(manifest.files) || manifest.files.length > ports.maxFiles) {
     throw new ArtifactOperationError('verification_failed');
   }
@@ -44,7 +45,7 @@ export async function readArtifactSource(ports: SourceReadPorts, input: SourceRe
       !/^sha256:[0-9a-f]{64}$/.test(file.digest) || !Number.isSafeInteger(file.size) || file.size < 0 ||
       paths.has(file.path)) throw new ArtifactOperationError('verification_failed');
     total += file.size;
-    if (total > ports.maxTotalBytes) throw new ArtifactOperationError('unprocessable');
+    if (total > ports.maxTotalBytes) throw new ArtifactOperationError('limit_exceeded');
     paths.add(file.path);
     entries.push(file);
   }
@@ -56,7 +57,8 @@ export async function readArtifactSource(ports: SourceReadPorts, input: SourceRe
   const files = [];
   for (const file of selected) {
     const bytes = await ports.getBlob(`artifacts/${manifest.storageScopeId}/blobs/sha256/${file.digest.slice(7)}`);
-    if (!bytes || bytes.length !== file.size ||
+    if (!bytes) throw new ArtifactOperationError('release_unavailable', { publicDetails: { reason: 'not_retained' } });
+    if (bytes.length !== file.size ||
       createHash('sha256').update(bytes).digest('hex') !== file.digest.slice(7)) {
       throw new ArtifactOperationError('verification_failed');
     }
