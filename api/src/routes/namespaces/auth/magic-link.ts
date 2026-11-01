@@ -12,9 +12,8 @@ import {
 } from '../../../services/magic-link';
 import { createSession } from '../../../services/session-manager';
 import { env } from '../../../config/env';
-import { db } from '../../../db/client';
-import { users, webauthnCredentials } from '../../../db/schema';
-import { eq, desc } from 'drizzle-orm';
+import { findCmUserById } from '../../../services/identity/cm-users';
+import { listCmCredentialsForUser } from '../../../services/identity/cm-proofs';
 import { ensureWorkspaceForUser } from '../../../services/workspace-service';
 
 /**
@@ -78,19 +77,7 @@ export const magicLinkHandlers: AuthHonoRouteHandlers = {
       return c.json({ error: 'Invalid or expired magic link' }, 400);
     }
 
-    const [user] = await db
-      .select({
-        id: users.id,
-        email: users.email,
-        displayName: users.displayName,
-        role: users.role,
-        emailVerified: users.emailVerified,
-        accountStatus: users.accountStatus,
-        approvalDueAt: users.approvalDueAt,
-      })
-      .from(users)
-      .where(eq(users.id, result.userId))
-      .limit(1);
+    const user = await findCmUserById(result.userId);
 
     if (!user) {
       logger.error({ userId: result.userId }, 'User not found during magic link verification');
@@ -115,24 +102,11 @@ export const magicLinkHandlers: AuthHonoRouteHandlers = {
     // Note: verifyMagicLink already marks emailVerified: true
     // Now we need to check if there's a new device waiting to be activated
     // Get the most recently created device for this user
-    const [newestDevice] = await db
-      .select({
-        id: webauthnCredentials.id,
-        credentialId: webauthnCredentials.credentialId,
-        deviceName: webauthnCredentials.deviceName,
-        createdAt: webauthnCredentials.createdAt,
-      })
-      .from(webauthnCredentials)
-      .where(eq(webauthnCredentials.userId, result.userId))
-      .orderBy(desc(webauthnCredentials.createdAt))
-      .limit(1);
-    
-    // Check if user has existing devices
-    const allDevices = await db
-      .select({ id: webauthnCredentials.id })
-      .from(webauthnCredentials)
-      .where(eq(webauthnCredentials.userId, result.userId));
-    
+    const allDevices = await listCmCredentialsForUser(result.userId);
+    const newestDevice = [...allDevices].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+    )[0];
+
     const hasDevices = allDevices.length > 0;
     
     // If there's a device (new or existing), create session and activate

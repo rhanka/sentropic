@@ -61,12 +61,12 @@ import {
   contextDocuments,
   contextModificationHistory,
   executionRuns,
-  users,
   workflowDefinitionTasks,
   workflowTaskTransitions,
   workflowTaskResults,
-  workspaceMemberships,
 } from '../db/schema';
+import { findCmUserById } from './identity/cm-users';
+import { listCmWorkspaceMembers } from './identity/cm-tenancy';
 import { settingsService } from './settings';
 import { generateExecutiveSummary } from './executive-summary';
 import { chatService } from './chat-service';
@@ -1404,22 +1404,15 @@ export class QueueManager {
   }): Promise<string | null> {
     const preferredUserId = (opts.preferredUserId ?? '').trim();
     if (preferredUserId) {
-      const [preferredUser] = await db
-        .select({ id: users.id })
-        .from(users)
-        .where(eq(users.id, preferredUserId))
-        .limit(1);
+      const preferredUser = await findCmUserById(preferredUserId);
       if (preferredUser?.id) return preferredUser.id;
     }
 
     const workspaceId = (opts.workspaceId ?? '').trim();
     if (!workspaceId) return null;
 
-    const [fallbackMember] = await db
-      .select({ userId: workspaceMemberships.userId })
-      .from(workspaceMemberships)
-      .where(eq(workspaceMemberships.workspaceId, workspaceId))
-      .limit(1);
+    const fallbackMembers = await listCmWorkspaceMembers(workspaceId);
+    const fallbackMember = fallbackMembers[0];
 
     return (fallbackMember?.userId ?? '').trim() || null;
   }

@@ -1,12 +1,14 @@
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { db } from '../../db/client';
-import { workspaceMemberships, workspaces } from '../../db/schema';
+import { workspaces } from '../../db/schema';
 import { sql } from 'drizzle-orm';
 import { env } from '../../config/env';
 import { CHAT_SYSTEM_PROMPTS } from '../../config/default-chat-system';
 import { getUserWorkspaces } from '../../services/workspace-access';
 import { createId } from '../../utils/id';
+import { enrolCmWorkspace, putCmWorkspaceMember } from '../../services/identity/cm-tenancy';
+import { PLATFORM_TENANT_ID } from '../../services/workspace-service';
 
 const DEFAULT_EXTENSION_VERSION = '0.1.0';
 const DEFAULT_EXTENSION_SOURCE = 'ui/vscode-ext';
@@ -439,22 +441,15 @@ vscodeExtensionRouter.post(
       normalizeWorkspaceNameCandidate(payload.repositoryName) ||
       `Code workspace ${payload.projectFingerprint.slice(0, 8)}`;
 
-    await db.transaction(async (tx) => {
-      await tx.insert(workspaces).values({
-        id: workspaceId,
-        ownerUserId: user.userId!,
-        name: workspaceName,
-        createdAt: now,
-        updatedAt: now,
-      });
-
-      await tx.insert(workspaceMemberships).values({
-        workspaceId,
-        userId: user.userId!,
-        role: 'admin',
-        createdAt: now,
-      });
+    // Lot A4: business row only; enrolment + creator membership live in the CM store.
+    await db.insert(workspaces).values({
+      id: workspaceId,
+      name: workspaceName,
+      createdAt: now,
+      updatedAt: now,
     });
+    await enrolCmWorkspace({ workspaceId, tenantId: PLATFORM_TENANT_ID });
+    await putCmWorkspaceMember(workspaceId, user.userId!, 'admin');
 
     const codeWorkspaces = await listCodeWorkspacesForUser(user.userId);
     const state = await readWorkspaceState(user.userId);

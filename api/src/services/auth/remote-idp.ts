@@ -1,11 +1,12 @@
 import { readFileSync } from 'node:fs';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { fromJwksPort, verifyAccessToken } from '@sentropic/oauth-verify';
 import { z } from 'zod';
 import type { RemoteEvidenceRoutePorts } from '../../routes/auth/remote-evidence';
 import { getSentropicOAuthPorts } from '../../routes/auth/oauth';
 import { db } from '../../db/client';
-import { tenantMemberships, workspaceMemberships, workspaces } from '../../db/schema';
+import { workspaces } from '../../db/schema';
+import { findCmMembership, findCmWorkspace, findCmWorkspaceMember } from '../identity/cm-tenancy';
 import { RemoteAuthorityError, parseRemoteJson, remoteId } from './remote-contract';
 import { createRemoteEvidenceIssuer, type RemoteEvidenceIssuerPorts } from './remote-evidence';
 import { loadRemoteSigner } from './remote-keys';
@@ -57,13 +58,13 @@ export function createRemoteIdpEvidencePorts(
           const approved = await nativeTarget(digest, actor);
           if (!approved) return null;
           // The issuer independently resolves current tenancy; A supplies no identity fields.
-          const [workspace] = await db.select({ id: workspaces.id }).from(workspaces).where(and(
-            eq(workspaces.id, approved.workspaceId), eq(workspaces.tenantId, approved.tenantId))).limit(1);
-          const [tenant] = await db.select({ status: tenantMemberships.status }).from(tenantMemberships).where(and(
-            eq(tenantMemberships.tenantId, approved.tenantId), eq(tenantMemberships.userId, actor.sub))).limit(1);
-          const [member] = await db.select({ role: workspaceMemberships.role }).from(workspaceMemberships).where(and(
-            eq(workspaceMemberships.workspaceId, approved.workspaceId), eq(workspaceMemberships.userId, actor.sub))).limit(1);
-          return workspace && tenant?.status === 'approved' && member ? approved : null;
+          // Lot A4: tenancy resolves through the CM stores; only the business row is app-side.
+          const [workspace] = await db.select({ id: workspaces.id }).from(workspaces).where(
+            eq(workspaces.id, approved.workspaceId)).limit(1);
+          const cmWorkspace = await findCmWorkspace(approved.workspaceId);
+          const tenant = await findCmMembership(actor.sub, approved.tenantId);
+          const member = await findCmWorkspaceMember(approved.workspaceId, actor.sub);
+          return workspace && cmWorkspace?.tenantId === approved.tenantId && tenant?.status === 'approved' && member ? approved : null;
         },
       })(request);
     },

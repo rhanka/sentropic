@@ -1,9 +1,10 @@
 import { and, eq, gt, lt } from 'drizzle-orm';
 import { db, pool } from '../db/client';
-import { objectLocks, users } from '../db/schema';
+import { objectLocks } from '../db/schema';
 import { createId } from '../utils/id';
 import { findPgError } from '../utils/pg-errors';
 import { hasWorkspaceRole } from './workspace-access';
+import { findCmUserById } from './identity/cm-users';
 
 export type LockObjectType = 'organization' | 'folder' | 'initiative';
 
@@ -91,14 +92,11 @@ export async function getActiveLock(
       lockedAt: objectLocks.lockedAt,
       expiresAt: objectLocks.expiresAt,
       lockedByUserId: objectLocks.lockedByUserId,
-      lockedByEmail: users.email,
-      lockedByDisplayName: users.displayName,
       unlockRequestedAt: objectLocks.unlockRequestedAt,
       unlockRequestedByUserId: objectLocks.unlockRequestedByUserId,
       unlockRequestMessage: objectLocks.unlockRequestMessage,
     })
     .from(objectLocks)
-    .innerJoin(users, eq(objectLocks.lockedByUserId, users.id))
     .where(
       and(
         eq(objectLocks.workspaceId, workspaceId),
@@ -110,6 +108,8 @@ export async function getActiveLock(
     .limit(1);
 
   if (!row?.id) return null;
+  // Lot A4: locker identity resolves through the CM identity store.
+  const locker = await findCmUserById(row.lockedByUserId);
   return {
     id: row.id,
     workspaceId: row.workspaceId,
@@ -119,8 +119,8 @@ export async function getActiveLock(
     expiresAt: row.expiresAt,
     lockedBy: {
       userId: row.lockedByUserId,
-      email: row.lockedByEmail ?? null,
-      displayName: row.lockedByDisplayName ?? null,
+      email: locker?.email ?? null,
+      displayName: locker?.displayName ?? null,
     },
     unlockRequestedAt: row.unlockRequestedAt ?? null,
     unlockRequestedByUserId: row.unlockRequestedByUserId ?? null,
