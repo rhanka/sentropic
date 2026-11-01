@@ -11,24 +11,20 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   },
 });
 
+// Lot A4: `workspaces` keeps business columns only. Ownership and the tenant
+// edge moved to the CM stores (cm_identity.cm_workspace_members /
+// cm_workspaces); control migration 0014 drops `owner_user_id` and
+// `tenant_id` from the public table.
 export const workspaces = pgTable('workspaces', {
   id: text('id').primaryKey(),
-  ownerUserId: text('owner_user_id'), // nullable; UNIQUE constraint removed to allow multiple workspaces per user
   name: text('name').notNull(),
   type: text('type').notNull().default('ai-priorities'), // 'neutral' | 'ai-priorities' | 'opportunity' | 'code'
-  // ARCH-11 G1a: the single durable `workspace → tenant` edge (one tenant → many workspaces;
-  // one workspace → exactly one tenant). Real FK to `tenants` (D1=B: tenant = org). DEFAULT-safe
-  // for rolling deploys: fast-default 'sentropic' so old + new pods both satisfy NOT NULL during
-  // the roll. `tenantId` is NOT the alias `workspaceId` — G1b wires `resolveTenant`; NO alias here.
-  tenantId: text('tenant_id').notNull().default('sentropic').references(() => tenants.id),
   gateConfig: jsonb('gate_config'), // nullable; gate sequence config per workspace. null = free gates (backward-compatible)
   hiddenAt: timestamp('hidden_at', { withTimezone: false }), // nullable; timestamp when workspace was hidden
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
 }, (table) => ({
   typeIdx: index('workspaces_type_idx').on(table.type),
-  ownerUserIdIdx: index('workspaces_owner_user_id_idx').on(table.ownerUserId),
-  tenantIdIdx: index('workspaces_tenant_id_idx').on(table.tenantId),
 }));
 
 export const organizations = pgTable('organizations', {
@@ -143,146 +139,6 @@ export const jobQueue = pgTable('job_queue', {
   statusStartedAtIdx: index('job_queue_status_started_at_idx').on(table.status, table.startedAt),
 }));
 
-// WebAuthn Authentication Tables
-export const users = pgTable('users', {
-  id: text('id').primaryKey(),
-  email: text('email').unique(),
-  displayName: text('display_name'),
-  role: text('role').notNull().default('guest'), // 'admin_app' | 'admin_org' | 'editor' | 'guest'
-  accountStatus: text('account_status').notNull().default('active'),
-  approvalDueAt: timestamp('approval_due_at', { withTimezone: false }),
-  approvedAt: timestamp('approved_at', { withTimezone: false }),
-  // Self-FK: define via table callback below to avoid TS self-referential initializer inference issues.
-  approvedByUserId: text('approved_by_user_id'),
-  disabledAt: timestamp('disabled_at', { withTimezone: false }),
-  disabledReason: text('disabled_reason'),
-  emailVerified: boolean('email_verified').notNull().default(false), // Email verification required before WebAuthn registration
-  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow()
-}, (table) => ({
-  approvedByUserIdFk: foreignKey({
-    columns: [table.approvedByUserId],
-    foreignColumns: [table.id],
-  }),
-}));
-
-export const webauthnCredentials = pgTable('webauthn_credentials', {
-  id: text('id').primaryKey(),
-  credentialId: text('credential_id').notNull().unique(), // base64url-encoded
-  publicKeyCose: text('public_key_cose').notNull(), // base64url-encoded COSE public key
-  counter: integer('counter').notNull().default(0),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  deviceName: text('device_name').notNull(),
-  transportsJson: text('transports_json'), // JSON-encoded array
-  uv: boolean('uv').notNull().default(false), // user verification
-  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
-  lastUsedAt: timestamp('last_used_at', { withTimezone: false })
-}, (table) => ({
-  userIdIdx: index('webauthn_credentials_user_id_idx').on(table.userId),
-}));
-
-export const userSessions = pgTable('user_sessions', {
-  id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  sessionTokenHash: text('session_token_hash').notNull().unique(),
-  refreshTokenHash: text('refresh_token_hash').unique(),
-  deviceName: text('device_name'),
-  ipAddress: text('ip_address'),
-  userAgent: text('user_agent'),
-  mfaVerified: boolean('mfa_verified').notNull().default(false),
-  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
-  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
-  lastActivityAt: timestamp('last_activity_at', { withTimezone: false }).defaultNow()
-}, (table) => ({
-  userIdIdx: index('user_sessions_user_id_idx').on(table.userId),
-  expiresAtIdx: index('user_sessions_expires_at_idx').on(table.expiresAt),
-}));
-
-export const webauthnChallenges = pgTable('webauthn_challenges', {
-  id: text('id').primaryKey(),
-  challenge: text('challenge').notNull().unique(), // base64url-encoded
-  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }), // nullable for registration
-  type: text('type').notNull(), // 'registration' | 'authentication'
-  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
-  used: boolean('used').notNull().default(false),
-  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow()
-}, (table) => ({
-  expiresAtIdx: index('webauthn_challenges_expires_at_idx').on(table.expiresAt),
-  userIdIdx: index('webauthn_challenges_user_id_idx').on(table.userId),
-}));
-
-export const magicLinks = pgTable('magic_links', {
-  id: text('id').primaryKey(),
-  tokenHash: text('token_hash').notNull().unique(),
-  email: text('email').notNull(),
-  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }), // nullable for new users
-  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
-  used: boolean('used').notNull().default(false),
-  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow()
-}, (table) => ({
-  expiresAtIdx: index('magic_links_expires_at_idx').on(table.expiresAt),
-  emailIdx: index('magic_links_email_idx').on(table.email),
-}));
-
-export const emailVerificationCodes = pgTable('email_verification_codes', {
-  id: text('id').primaryKey(),
-  codeHash: text('code_hash').notNull(), // SHA-256 hash of the 6-digit code
-  email: text('email').notNull(),
-  verificationToken: text('verification_token').unique(), // Token returned after code verification, used for registration
-  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
-  used: boolean('used').notNull().default(false),
-  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow()
-}, (table) => ({
-  expiresAtIdx: index('email_verification_codes_expires_at_idx').on(table.expiresAt),
-  emailIdx: index('email_verification_codes_email_idx').on(table.email),
-  verificationTokenIdx: index('email_verification_codes_verification_token_idx').on(table.verificationToken),
-}));
-
-// BR-39r L4: single-use invitation tokens (invitation → direct device enrollment).
-// Token value is opaque high-entropy with prefix `sit_`; only the SHA-256 hash is stored.
-// Consumed ATOMICALLY at registration (UPDATE ... WHERE consumed_at IS NULL AND expires_at>now).
-export const authInviteTokens = pgTable('auth_invite_tokens', {
-  id: text('id').primaryKey(),
-  tokenHash: text('token_hash').notNull().unique(), // SHA-256 hash of the opaque `sit_` token
-  email: text('email').notNull(),
-  clientId: text('client_id'), // nullable: invite may not be bound to a specific RP
-  expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
-  consumedAt: timestamp('consumed_at', { withTimezone: false }), // nullable until consumed (single-use)
-  consumedByUserId: text('consumed_by_user_id').references(() => users.id, { onDelete: 'set null' }),
-  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow()
-}, (table) => ({
-  expiresAtIdx: index('auth_invite_tokens_expires_at_idx').on(table.expiresAt),
-}));
-
-// BR-39e Lot 0: social/enterprise federation substrate.
-// `identities` links a stable external identity `(provider, provider_subject)` to exactly one
-// Sentropic user (D6). `provider_subject` is the STABLE upstream subject (Google `sub`, GitHub
-// numeric id, MS `oid`, Apple `sub`, FB id) — NEVER the email. `email_at_link` is audit-only (D13);
-// `token_secret` stays null in v1 (broker drops the provider token, D1). FK ON DELETE CASCADE from
-// `users` implements GDPR erasure of the linked profile (D14).
-export const identities = pgTable('identities', {
-  id: text('id').primaryKey(),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  provider: text('provider').notNull(), // 'google'|'github'|'microsoft'|'apple'|'facebook'
-  providerSubject: text('provider_subject').notNull(), // STABLE subject, NOT the email
-  emailAtLink: text('email_at_link'), // provider-asserted email at link time (audit only, D13)
-  emailVerifiedByProvider: boolean('email_verified_by_provider').notNull().default(false),
-  providerTenant: text('provider_tenant'), // MS `tid` (null for others); part of the MS subject policy
-  tokenSecret: text('token_secret'), // nullable; enc:v1: AES-256-GCM if a provider token is ever stored
-  linkedAt: timestamp('linked_at', { withTimezone: true }).notNull().defaultNow(),
-  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
-}, (table) => ({
-  // One external identity ↔ exactly one user (D6): duplicate insert is rejected (K-UNIQUE).
-  providerSubjectUnique: uniqueIndex('identities_provider_subject_unique').on(table.provider, table.providerSubject),
-  userIdIdx: index('identities_user_id_idx').on(table.userId),
-}));
-
 // One-time, SERVER-SIDE federation flow-state (D5, CRITICAL). Holds the upstream CSRF `state`, the
 // OIDC `nonce`, the PKCE `code_verifier`, and a POINTER (`continuation_token`) to the sealed OAuth
 // continuation. Referenced by the opaque `id` (the ONLY value carried through the provider round-trip,
@@ -318,8 +174,8 @@ export const oauthClients = pgTable('oauth_clients', {
   resourceIndicators: text('resource_indicators').array().notNull().default(sql`'{}'`),
   // BR-39e Lot 4: a client belongs to a tenant (governance). FK to `tenants`, default to the
   // public `sentropic` tenant; ON DELETE set null so removing a tenant orphans (not deletes) clients.
-  tenantId: text('tenant_id').references(() => tenants.id, { onDelete: 'set null' }).default('sentropic'),
-  ownerUserId: text('owner_user_id').references(() => users.id, { onDelete: 'cascade' }),
+  tenantId: text('tenant_id').default('sentropic'),
+  ownerUserId: text('owner_user_id'),
   // B3: per-client minimum ACR (NULL = no policy, zero change for existing clients).
   // When set to `urn:sentropic:loa:passkey-fresh`, authorize forces re-auth and
   // refuses bearer sessions (magic-link/federation) with `access_denied`.
@@ -341,8 +197,7 @@ export const authorizationCodes = pgTable('authorization_codes', {
     .notNull()
     .references(() => oauthClients.clientId, { onDelete: 'cascade' }),
   userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+    .notNull(),
   tenantId: text('tenant_id'),
   redirectUri: text('redirect_uri').notNull(),
   scope: text('scope').notNull(),
@@ -369,7 +224,7 @@ export const oauthRefreshTokens = pgTable('oauth_refresh_tokens', {
   replacedById: text('replaced_by_id'),
   generation: integer('generation').notNull().default(0),
   clientId: text('client_id').notNull().references(() => oauthClients.clientId, { onDelete: 'cascade' }),
-  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull(),
   tenantId: text('tenant_id'),
   scope: text('scope').notNull(),
   offlineGrantId: text('offline_grant_id').notNull(),
@@ -405,8 +260,7 @@ export const oauthTokens = pgTable('oauth_tokens', {
     .notNull()
     .references(() => oauthClients.clientId, { onDelete: 'cascade' }),
   userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+    .notNull(),
   tenantId: text('tenant_id'),
   scope: text('scope').notNull(),
   audience: text('audience').notNull(),
@@ -436,8 +290,7 @@ export const oauthConsents = pgTable('oauth_consents', {
   defaultAudienceApproved: boolean('default_audience_approved').notNull().default(false),
   offlineConsentedAt: timestamp('offline_consented_at'),
   userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+    .notNull(),
   clientId: text('client_id')
     .notNull()
     .references(() => oauthClients.clientId, { onDelete: 'cascade' }),
@@ -465,7 +318,7 @@ export const oauthDpopProofs = pgTable('oauth_dpop_proofs', {
 export const revokedTokens = pgTable('revoked_tokens', {
   jti: text('jti').primaryKey(),
   clientId: text('client_id').references(() => oauthClients.clientId, { onDelete: 'cascade' }),
-  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  userId: text('user_id'),
   tenantId: text('tenant_id'),
   revokedAt: timestamp('revoked_at', { withTimezone: false }).notNull().defaultNow(),
   expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
@@ -521,8 +374,7 @@ export const documentConnectorAccounts = pgTable('document_connector_accounts', 
     .notNull()
     .references(() => workspaces.id, { onDelete: 'cascade' }),
   userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+    .notNull(),
   provider: text('provider').notNull().default('google_drive'),
   status: text('status').notNull().default('disconnected'), // 'connected' | 'disconnected' | 'error'
   accountEmail: text('account_email'),
@@ -551,7 +403,7 @@ export const documentConnectorAccounts = pgTable('document_connector_accounts', 
 export const llmProviderAccounts = pgTable('llm_provider_accounts', {
   id: text('id').primaryKey(),
   workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
-  ownerUserId: text('owner_user_id').references(() => users.id, { onDelete: 'cascade' }),
+  ownerUserId: text('owner_user_id'),
   scope: text('scope').notNull().default('user'),
   targetProviderId: text('target_provider_id').notNull(),
   transportProviderId: text('transport_provider_id').notNull(),
@@ -592,7 +444,7 @@ export const llmProviderAccounts = pgTable('llm_provider_accounts', {
 export const llmAccountLeases = pgTable('llm_account_leases', {
   id: text('id').primaryKey(),
   workspaceId: text('workspace_id').references(() => workspaces.id, { onDelete: 'cascade' }),
-  userId: text('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  userId: text('user_id'),
   affinityKey: text('affinity_key').notNull(),
   targetProviderId: text('target_provider_id').notNull(),
   transportProviderId: text('transport_provider_id').notNull(),
@@ -675,8 +527,7 @@ export type WorkspaceRow = typeof workspaces.$inferSelect;
 export const chatSessions = pgTable('chat_sessions', {
   id: text('id').primaryKey(),
   userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+    .notNull(),
   // Workspace scope for this chat session.
   // - For regular users: their own workspace (set at session creation)
   // - For admin_app: can be a shared workspace (read-only) or Admin Workspace
@@ -755,8 +606,7 @@ export const chatMessageFeedback = pgTable('chat_message_feedback', {
     .notNull()
     .references(() => chatMessages.id, { onDelete: 'cascade' }),
   userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+    .notNull(),
   vote: integer('vote').notNull(), // 1 = up, -1 = down
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).notNull().defaultNow()
@@ -777,8 +627,7 @@ export const chatGenerationTraces = pgTable('chat_generation_traces', {
     .notNull()
     .references(() => chatMessages.id, { onDelete: 'cascade' }),
   userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+    .notNull(),
   workspaceId: text('workspace_id').references(() => workspaces.id),
   phase: text('phase').notNull(), // 'pass1' | 'pass2'
   iteration: integer('iteration').notNull(), // within phase
@@ -871,12 +720,6 @@ export const contextDocumentVersions = pgTable('context_document_versions', {
   documentVersionUnique: uniqueIndex('context_document_versions_document_id_version_unique').on(table.documentId, table.version),
 }));
 
-export type UserRow = typeof users.$inferSelect;
-export type WebauthnCredentialRow = typeof webauthnCredentials.$inferSelect;
-export type UserSessionRow = typeof userSessions.$inferSelect;
-export type WebauthnChallengeRow = typeof webauthnChallenges.$inferSelect;
-export type MagicLinkRow = typeof magicLinks.$inferSelect;
-export type EmailVerificationCodeRow = typeof emailVerificationCodes.$inferSelect;
 export type OauthClientRow = typeof oauthClients.$inferSelect;
 export type AuthorizationCodeRow = typeof authorizationCodes.$inferSelect;
 export type OauthTokenRow = typeof oauthTokens.$inferSelect;
@@ -898,67 +741,6 @@ export type ContextModificationHistoryRow = typeof contextModificationHistory.$i
 export type ContextDocumentRow = typeof contextDocuments.$inferSelect;
 export type ContextDocumentVersionRow = typeof contextDocumentVersions.$inferSelect;
 
-// Collaboration tables (Lot 1-5) - Migration will be created at Lot 5
-export const workspaceMemberships = pgTable('workspace_memberships', {
-  workspaceId: text('workspace_id')
-    .notNull()
-    .references(() => workspaces.id, { onDelete: 'cascade' }),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  role: text('role').notNull(), // 'viewer' | 'commenter' | 'editor' | 'admin'
-  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
-}, (table) => ({
-  workspaceUserUnique: uniqueIndex('workspace_memberships_workspace_id_user_id_unique').on(table.workspaceId, table.userId),
-  workspaceIdIdx: index('workspace_memberships_workspace_id_idx').on(table.workspaceId),
-  userIdIdx: index('workspace_memberships_user_id_idx').on(table.userId),
-}));
-
-export type WorkspaceMembershipRow = typeof workspaceMemberships.$inferSelect;
-
-// BR-39e: IdP tenancy spine — a `tenant` registry + per-(user,tenant) membership.
-// `tenant` models WHICH ORG a human belongs to (distinct from `oauth_clients.tenant_id`,
-// which only records which client a token was minted for). The tenant claim (`tid`) is
-// derived from a VALIDATED `approved` membership — never a request param.
-// See spec/SPEC_EVOL_AUTH_39E_MULTITENANT.md. No `parent_tenant_id` (nested tenants out of v1).
-export const tenants = pgTable('tenants', {
-  id: text('id').primaryKey(), // immutable slug == the `tid` claim (e.g. 'sentropic')
-  name: text('name').notNull(),
-  status: text('status').notNull().default('active'), // 'active' | 'suspended' | 'offboarded'
-  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
-}, (table) => ({
-  statusIdx: index('tenants_status_idx').on(table.status),
-}));
-
-export type TenantRow = typeof tenants.$inferSelect;
-
-// Per-(user,tenant) membership, mirroring `workspace_memberships`. A human is ONE `users`
-// row that can hold several memberships (D0/A: `tenant_id` is NOT on `users`; email stays
-// globally unique). Status drives tenant-scoped acceptance (Lot 2).
-export const tenantMemberships = pgTable('tenant_memberships', {
-  tenantId: text('tenant_id')
-    .notNull()
-    .references(() => tenants.id, { onDelete: 'cascade' }),
-  userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  status: text('status').notNull().default('requested'), // 'invited'|'requested'|'approved'|'rejected'|'suspended'
-  role: text('role').notNull().default('member'), // tenant-scoped: 'member' | 'admin'
-  approvedByUserId: text('approved_by_user_id').references(() => users.id, { onDelete: 'set null' }),
-  requestedAt: timestamp('requested_at', { withTimezone: false }).notNull().defaultNow(),
-  decidedAt: timestamp('decided_at', { withTimezone: false }),
-  createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
-  updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
-}, (table) => ({
-  tenantUserUnique: uniqueIndex('tenant_memberships_tenant_id_user_id_unique').on(table.tenantId, table.userId),
-  tenantIdIdx: index('tenant_memberships_tenant_id_idx').on(table.tenantId),
-  userIdIdx: index('tenant_memberships_user_id_idx').on(table.userId),
-  statusIdx: index('tenant_memberships_status_idx').on(table.status),
-}));
-
-export type TenantMembershipRow = typeof tenantMemberships.$inferSelect;
-
 // Lot 2: Object edition locks (soft locks with TTL, enforced on mutations)
 export const objectLocks = pgTable('object_locks', {
   id: text('id').primaryKey(),
@@ -968,12 +750,11 @@ export const objectLocks = pgTable('object_locks', {
   objectType: text('object_type').notNull(), // 'organization' | 'folder' | 'usecase'
   objectId: text('object_id').notNull(),
   lockedByUserId: text('locked_by_user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+    .notNull(),
   lockedAt: timestamp('locked_at', { withTimezone: false }).notNull().defaultNow(),
   expiresAt: timestamp('expires_at', { withTimezone: false }).notNull(),
   unlockRequestedAt: timestamp('unlock_requested_at', { withTimezone: false }),
-  unlockRequestedByUserId: text('unlock_requested_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  unlockRequestedByUserId: text('unlock_requested_by_user_id'),
   unlockRequestMessage: text('unlock_request_message'),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
 }, (table) => ({
@@ -1018,9 +799,8 @@ export const comments = pgTable('comments', {
   contextId: text('context_id').notNull(),
   sectionKey: text('section_key'), // optional sub-section key (e.g., 'description', 'matrix.cell.x.y')
   createdBy: text('created_by')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
-  assignedTo: text('assigned_to').references(() => users.id, { onDelete: 'set null' }),
+    .notNull(),
+  assignedTo: text('assigned_to'),
   status: text('status').notNull().default('open'), // 'open' | 'closed'
   threadId: text('thread_id').notNull(),
   content: text('content').notNull(),
@@ -1042,8 +822,7 @@ export type CommentRow = typeof comments.$inferSelect;
 export const extensionToolPermissions = pgTable('extension_tool_permissions', {
   id: text('id').primaryKey(),
   userId: text('user_id')
-    .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+    .notNull(),
   workspaceId: text('workspace_id')
     .notNull()
     .references(() => workspaces.id, { onDelete: 'cascade' }),
@@ -1068,8 +847,8 @@ export const plans = pgTable('plans', {
     .references(() => workspaces.id, { onDelete: 'cascade' }),
   title: text('title').notNull(),
   description: text('description'),
-  createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
-  ownerUserId: text('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdByUserId: text('created_by_user_id'),
+  ownerUserId: text('owner_user_id'),
   metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
@@ -1087,8 +866,8 @@ export const todos = pgTable('todos', {
   title: text('title').notNull(),
   description: text('description'),
   position: integer('position').notNull().default(0),
-  createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
-  ownerUserId: text('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdByUserId: text('created_by_user_id'),
+  ownerUserId: text('owner_user_id'),
   closedAt: timestamp('closed_at', { withTimezone: false }),
   metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
@@ -1117,8 +896,8 @@ export const tasks = pgTable('tasks', {
   description: text('description'),
   position: integer('position').notNull().default(0),
   status: text('status').notNull().default('todo'),
-  createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
-  assigneeUserId: text('assignee_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdByUserId: text('created_by_user_id'),
+  assigneeUserId: text('assignee_user_id'),
   startedAt: timestamp('started_at', { withTimezone: false }),
   completedAt: timestamp('completed_at', { withTimezone: false }),
   metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
@@ -1182,7 +961,7 @@ export const agentDefinitions = pgTable('agent_definitions', {
   parentId: text('parent_id'),
   isDetached: boolean('is_detached').notNull().default(false),
   lastParentSyncAt: timestamp('last_parent_sync_at', { withTimezone: false }),
-  createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdByUserId: text('created_by_user_id'),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
 }, (table) => ({
@@ -1210,7 +989,7 @@ export const workflowDefinitions = pgTable('workflow_definitions', {
   parentId: text('parent_id'),
   isDetached: boolean('is_detached').notNull().default(false),
   lastParentSyncAt: timestamp('last_parent_sync_at', { withTimezone: false }),
-  createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdByUserId: text('created_by_user_id'),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
 }, (table) => ({
@@ -1284,7 +1063,7 @@ export const guardrails = pgTable('guardrails', {
   instruction: text('instruction').notNull(),
   config: jsonb('config').notNull().default(sql`'{}'::jsonb`),
   isActive: boolean('is_active').notNull().default(true),
-  createdByUserId: text('created_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  createdByUserId: text('created_by_user_id'),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
 }, (table) => ({
@@ -1326,7 +1105,7 @@ export const executionRuns = pgTable('execution_runs', {
   agentDefinitionId: text('agent_definition_id').references(() => agentDefinitions.id, { onDelete: 'set null' }),
   mode: text('mode').notNull().default('manual'),
   status: text('status').notNull().default('pending'),
-  startedByUserId: text('started_by_user_id').references(() => users.id, { onDelete: 'set null' }),
+  startedByUserId: text('started_by_user_id'),
   startedAt: timestamp('started_at', { withTimezone: false }).notNull().defaultNow(),
   completedAt: timestamp('completed_at', { withTimezone: false }),
   metadata: jsonb('metadata').notNull().default(sql`'{}'::jsonb`),
