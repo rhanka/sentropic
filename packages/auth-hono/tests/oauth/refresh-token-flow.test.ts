@@ -55,10 +55,11 @@ describe('OAuth refresh protocol', () => {
     } else expect(body).toMatchObject({ error: 'invalid_grant', error_description: expect.any(String) });
   });
 
-  it.each(['grant', 'scope', 'resource', 'acr', 'dpop', 'consent'])('should permanently revoke removed %s authority', async (kind) => {
+  it.each(['grant', 'code-grant', 'scope', 'resource', 'acr', 'dpop', 'consent'])('should permanently revoke removed %s authority', async (kind) => {
     const f = await refreshFixture();
     const initial = await (await f.issue()).json();
     if (kind === 'grant') f.client.grantTypes = ['authorization_code'];
+    if (kind === 'code-grant') f.client.grantTypes = ['refresh_token'];
     if (kind === 'scope') f.client.allowedScopes = ['openid', 'offline_access'];
     if (kind === 'resource') f.client.resourceIndicators = [];
     if (kind === 'acr') f.client.requiredAcr = 'urn:sentropic:loa:bearer';
