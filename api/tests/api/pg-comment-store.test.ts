@@ -8,7 +8,9 @@ import {
 } from '@sentropic/comments';
 
 import { db } from '../../src/db/client';
-import { comments, workspaceMemberships } from '../../src/db/schema';
+import { comments } from '../../src/db/schema';
+import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
+import { cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
 import { createId } from '../../src/utils/id';
 import {
   createAuthenticatedUser,
@@ -49,10 +51,7 @@ describe('PgCommentStore adapter parity (BR-42d Lot 2)', () => {
     other = await createAuthenticatedUser('editor', `other-${createId()}@example.com`);
 
     // Make `other` a member of the owner's workspace (for assignment FK + scoping).
-    await db
-      .insert(workspaceMemberships)
-      .values({ workspaceId: owner.workspaceId!, userId: other.id, role: 'editor', createdAt: new Date() })
-      .onConflictDoNothing();
+    await putCmWorkspaceMember(owner.workspaceId!, other.id, 'editor');
 
     tenant = {
       // Live convention: tenantId := workspaceId (catalog.ts:32). The adapter
@@ -68,7 +67,7 @@ describe('PgCommentStore adapter parity (BR-42d Lot 2)', () => {
   afterEach(async () => {
     if (owner.workspaceId) {
       await db.delete(comments).where(eq(comments.workspaceId, owner.workspaceId));
-      await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, owner.workspaceId));
+      await cmDeleteWorkspaceMembers(owner.workspaceId);
     }
     await cleanupAuthData();
   });
