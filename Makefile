@@ -2734,32 +2734,29 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	# - QUEUE_CONCURRENCY (default: 30) -> upsert settings.ai_concurrency before running tests
 	# - QUEUE_PROCESSING_INTERVAL (optional) -> upsert settings.queue_processing_interval (ms)
 	# - E2E_GROUPS (default: "00 01 02 03 04 05 06 07 08 09 10") -> list of groups to run
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml run --rm --no-deps \
-	  -e E2E_SPEC -e WORKERS -e RETRIES -e MAX_FAILURES -e E2E_GROUPS="$(E2E_GROUPS)" \
+	@$(E2E_COMPOSE) run --rm --no-deps \
+	  -v "$(CURDIR)/scripts/ci/browser-shards.mjs:/app/browser-shards.mjs:ro" \
+	  -e E2E_SPEC -e E2E_SHARD="$(E2E_SHARD)" -e WORKERS -e RETRIES -e MAX_FAILURES -e E2E_GROUPS="$(E2E_GROUPS)" \
 	  e2e sh -lc ' \
+	    set -eu; mkdir -p test-results; \
 	    workers="$${WORKERS:-4}"; \
-	    retries="$${RETRIES:-2}"; \
+	    retries="$${RETRIES:-0}"; \
 	    max_fail="$${MAX_FAILURES:-}"; \
 	    extra=""; \
-	    status=0; summary=""; \
 	    if [ -n "$$max_fail" ]; then extra="--max-failures=$$max_fail"; fi; \
-	    if [ -n "$$E2E_SPEC" ]; then \
-	      spec_path="$$E2E_SPEC"; \
-	      spec_path="$${spec_path#e2e/}"; \
-	      echo "▶ Running scoped Playwright: $$spec_path (workers=$$workers retries=$$retries $${extra:-})"; \
-	      code=0; npx --no-install playwright test "$$spec_path" --workers="$$workers" --retries="$$retries" $$extra || code=$$?; \
-	      summary="$$spec_path: exit $$code"; status=$$code; \
+	    if [ -n "$$E2E_SHARD" ]; then \
+	      set -- $$(node /app/browser-shards.mjs files "$$E2E_SHARD"); \
+	    elif [ -n "$$E2E_SPEC" ]; then \
+	      set -- $${E2E_SPEC#e2e/}; \
 	    else \
-	      echo "▶ Running Playwright by groups: $$E2E_GROUPS (workers=$$workers retries=$$retries $${extra:-})"; \
-	      for g in $$E2E_GROUPS; do \
-	        pattern="tests/$${g}[-_].*\\.spec\\.ts$$"; \
-	        echo "▶ Running group $$g: $$pattern"; \
-	        code=0; npx --no-install playwright test "$$pattern" --workers="$$workers" --retries="$$retries" $$extra || code=$$?; \
-	        summary="$${summary}$${summary:+; }$$g: exit $$code"; \
-	        if [ "$$code" -ne 0 ]; then status=1; fi; \
-	      done; \
+	      groups="$$(printf "%s" "$$E2E_GROUPS" | tr " " "|")"; \
+	      set -- "tests/($$groups)[-_].*\\.spec\\.ts$$"; \
 	    fi; \
-	    echo "Playwright invocation summary: $$summary"; \
+	    receipt="test-results/browser-$${E2E_SHARD:-scoped}"; \
+	    npx --no-install playwright test "$$@" --project=chromium --list --reporter=json > "$$receipt.expected.json"; \
+	    status=0; PLAYWRIGHT_JSON_OUTPUT_FILE="$$receipt.actual.json" npx --no-install playwright test "$$@" \
+	      --project=chromium --workers="$$workers" --retries="$$retries" --reporter=list,json $$extra || status=$$?; \
+	    node /app/browser-shards.mjs reconcile "$$receipt.expected.json" "$$receipt.actual.json" || status=1; \
 	    exit "$$status"'
 	@echo "🛑 Stopping services..."
 	# @$(DOCKER_COMPOSE) down
