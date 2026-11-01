@@ -5,7 +5,9 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 
 import { db } from '../../../src/db/client';
-import { tenants, workspaces } from '../../../src/db/schema';
+import { workspaces } from '../../../src/db/schema';
+import { createCmTenant } from '../../../src/services/identity/cm-tenancy';
+import { cmDeleteTenants } from '../../utils/cm-identity-test-store';
 
 const migrationSql = readFileSync(
   join(process.cwd(), 'drizzle/control/0006_arch11_outbox_tenant_rekey.sql'),
@@ -33,12 +35,12 @@ describe('ARCH-11 G1a outbox tenant re-key migration', () => {
          OR (aggregate_type = 'tenant_rekey' AND aggregate_id = ${workspaceId})
     `);
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
-    await db.delete(tenants).where(eq(tenants.id, tenantId));
+    await cmDeleteTenants([tenantId]);
   });
 
   it('re-keys only proven aliases, including embedded tenant and UBO scope copies', async () => {
-    await db.insert(tenants).values({ id: tenantId, name: tenantId, status: 'active' });
-    await db.insert(workspaces).values({ id: workspaceId, name: workspaceId, tenantId });
+    await createCmTenant({ tenantId, slug: tenantId, status: 'active' });
+    await db.insert(workspaces).values({ id: workspaceId, name: workspaceId });
 
     const aliasedEnvelope = JSON.stringify({
       tenant: { tenantId: workspaceId, workspaceId, userId: 'user-a' },

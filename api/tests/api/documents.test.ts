@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { app as sharedApp } from '../../src/app';
 import { createAuthenticatedUser, cleanupAuthData, authenticatedRequest } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { contextDocuments, jobQueue, workspaces, workspaceMemberships } from '../../src/db/schema';
+import { contextDocuments, jobQueue, workspaces } from '../../src/db/schema';
+import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
 import { eq, and } from 'drizzle-orm';
 
 const mockPutObject = vi.fn();
@@ -53,15 +54,7 @@ describe('Documents API', () => {
     createdDocId = null;
 
     if (user.workspaceId) {
-      await db
-        .insert(workspaceMemberships)
-        .values({
-          workspaceId: user.workspaceId,
-          userId: viewer.id,
-          role: 'viewer',
-          createdAt: new Date(),
-        })
-        .onConflictDoNothing();
+      await putCmWorkspaceMember(user.workspaceId, viewer.id, 'viewer');
     }
 
     // Spy queueManager.addJob so we can:
@@ -520,22 +513,9 @@ describe('Documents API', () => {
     createdDocId = created.id;
 
     // Find editor workspace and grant admin_app membership
-    const [ws] = await db
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(eq(workspaces.ownerUserId, user.id))
-      .limit(1);
-    expect(ws?.id).toBeTruthy();
-    const editorWorkspaceId = ws!.id;
-    await db
-      .insert(workspaceMemberships)
-      .values({
-        workspaceId: editorWorkspaceId,
-        userId: admin.id,
-        role: 'viewer',
-        createdAt: new Date(),
-      })
-      .onConflictDoNothing();
+    const editorWorkspaceId = user.workspaceId;
+    expect(editorWorkspaceId).toBeTruthy();
+    await putCmWorkspaceMember(editorWorkspaceId!, admin.id, 'viewer');
 
     // Admin lists docs in that workspace
     const list = await app.request(`/api/v1/documents?context_type=folder&context_id=f_1&workspace_id=${encodeURIComponent(editorWorkspaceId)}`, {
