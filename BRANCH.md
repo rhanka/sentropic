@@ -32,6 +32,7 @@ Opted-in MCP clients can renew a one-hour access token within a rotating 15-day 
   - `packages/cluster-mesh/package.json`
   - `packages/cluster-mesh/src/modules/catalog.ts`
   - `packages/cluster-mesh/tests/fixtures/train.ts`
+  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts`
@@ -66,6 +67,8 @@ Opted-in MCP clients can renew a one-hour access token within a rotating 15-day 
 - [x] BRIR-EX5: align the cluster-mesh catalog's bounded auth-hono range and its source-test tuple with 0.18; directly required by the installed-package CI failure; no token-exchange behavior changes; rollback restores the previous range and fixture tuple.
 - [x] BRIR-EX6: owner-authorized CI repair refreshes the selected packaging fixture from verified candidate sibling archives for auth-hono 0.18 and gateway 0.22.3; impact limited to qualification metadata; rollback restores the preceding fixture tuple.
 - [x] BRIR-EX7: the packaging fetch test must distinguish an exact local candidate from a frozen published pin; retain strict tuple/metadata checks and the stable-only fallback assertion; rollback restores the preceding test lookup.
+- [x] Registry boundary regression keeps 0.18 admission and adds explicit 0.19 rejection after widening the qualified interval; no rejection assertion or timeout is removed.
+- [x] Local SQLite qualification uses a mounted ext4 scratch directory after measured Docker-layer write amplification; 20 scoped tests pass with unchanged five-second deadlines, WAL/FULL/exclusive ownership and separate owner processes. CI definitions remain unchanged.
 - [ ] CI repair after run 41278374635: reproduce all failed causes, refresh selected sibling tuple/integrities, qualify UI and API builds, then push with force-with-lease and require ci-gate success within three additional runs.
 - [x] Track source ready for designated-writer import under owner item `01M588EA0X3RQPCATVR987CFB4`; concurrent `.track` writes are reserved to the conductor.
 - [x] A4 identity cutover may land in parallel; no identity-table redesign or new account/session references.

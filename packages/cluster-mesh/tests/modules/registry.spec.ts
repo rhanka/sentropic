@@ -23,12 +23,12 @@ const registry = (disabled: readonly string[] = []) =>
   createModuleRegistry({ disabled: disabled as never }, { anchorDir });
 
 describe('module registry', () => {
-  it.each(['0.15.2', '0.16.0', '0.17.0', '0.18.0'])('should enforce the qualified auth-hono boundary for %s', async (version) => {
+  it.each(['0.15.2', '0.16.0', '0.17.0', '0.18.0', '0.19.0'])('should enforce the qualified auth-hono boundary for %s', async (version) => {
     tree.install('app', fakeMesh('mesh'));
     tree.install('app', fakeGateway('gateway'));
     tree.install('app', fakeAuthHono('auth', version));
     const load = registry().load('gateway/auth-hono');
-    if (version === '0.18.0') {
+    if (version === '0.19.0') {
       await expect(load).rejects.toMatchObject({ reason: 'incompatible_version', packageName: '@sentropic/auth-hono' });
       expect(evaluations()).toEqual([]);
     } else {
