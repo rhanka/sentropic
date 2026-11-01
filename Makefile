@@ -29,7 +29,10 @@ CM_RUN_IMAGE = qualification
 endif
 COMPOSE_RUN_UI  := $(DOCKER_COMPOSE) run --rm ui
 COMPOSE_RUN_API := $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api
-CI_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.ci.yml
+CI_PROVIDER_MODE ?= fixture
+CI_PROVIDER_OVERLAY = $(if $(filter fixture,$(CI_PROVIDER_MODE)),-f docker-compose.ci-provider.yml)
+E2E_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml $(CI_PROVIDER_OVERLAY)
+CI_COMPOSE = $(E2E_COMPOSE) -f docker-compose.ci.yml
 API_TEST_CI ?= 0
 API_TEST_SUT ?= 0
 API_TEST_RUN = $(if $(filter 1,$(API_TEST_CI)),$(CI_COMPOSE) run --rm --no-deps,$(DOCKER_COMPOSE) exec -T)
@@ -2764,7 +2767,7 @@ test-e2e-vscode: up-e2e-vscode wait-ready db-seed-test e2e-set-queue ## Run VSCo
 	  echo "❌ E2E_SPEC is required (example: tests/vscode/01-vscode-chat-streaming.spec.ts)"; \
 	  exit 2; \
 	fi
-	@$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml run --rm --no-deps \
+	@$(E2E_COMPOSE) -f docker-compose.e2e-vscode.yml run --rm --no-deps \
 	  -e E2E_SPEC -e WORKERS -e RETRIES -e MAX_FAILURES -e OPENVSCODE_BASE_URL="http://localhost:$${OPENVSCODE_PORT:-3115}" \
 	  e2e-vscode sh -lc ' \
 	    workers="$${WORKERS:-2}"; \
@@ -2857,11 +2860,11 @@ up: prepare-node-workspace ## Start the full stack in detached mode
 
 .PHONY: up-e2e
 up-e2e: ## Start stack with test overrides (UI env for API URL)
-	DISABLE_RATE_LIMIT=true ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml up -d
+	DISABLE_RATE_LIMIT=true ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(E2E_COMPOSE) up -d
 
 .PHONY: up-e2e-vscode
 up-e2e-vscode: ## Start VSCode E2E stack (api/ui/e2e/openvscode)
-	DISABLE_RATE_LIMIT=true ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml -f docker-compose.e2e-vscode.yml up -d
+	DISABLE_RATE_LIMIT=true ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(E2E_COMPOSE) -f docker-compose.e2e-vscode.yml up -d
 
 .PHONY: down-e2e-vscode
 down-e2e-vscode: ## Stop VSCode E2E stack
@@ -2881,7 +2884,7 @@ up-api: prepare-node-workspace ## Start the api stack in detached mode
 
 .PHONY: up-api-test
 up-api-test: prepare-node-workspace ## Start the api stack in detached mode with DISABLE_RATE_LIMIT=true
-	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
+	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml $(CI_PROVIDER_OVERLAY) up --build -d api --wait api
 
 .PHONY: up-api-test-ci
 .NOTPARALLEL: up-api-test-ci
@@ -2958,7 +2961,7 @@ down: ## Stop and remove containers, networks, volumes
 ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-mem-release test-artifacts-021 test-artifacts-022 test-llm-judge test-memory-mcp),)
 	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans
 else
-	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml $(CI_PROVIDER_OVERLAY) down --remove-orphans
 endif
 
 # -----------------------------------------------------------------------------
