@@ -49,3 +49,4 @@ export {
 export * from './identity-contracts/index.js';
 export * from './identity-stores/index.js';
 export * from './identity/index.js';
+export * from './storage/identity/index.js';
