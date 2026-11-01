@@ -8,7 +8,7 @@ import {
   cleanupAuthData 
 } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { workspaceMemberships } from '../../src/db/schema';
+import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
 
 describe('Use Cases API', () => {
   let user: any;
@@ -18,10 +18,7 @@ describe('Use Cases API', () => {
     user = await createAuthenticatedUser('editor', `editor-${createTestId()}@example.com`);
     viewer = await createAuthenticatedUser('guest', `viewer-${createTestId()}@example.com`);
     if (user.workspaceId) {
-      await db
-        .insert(workspaceMemberships)
-        .values({ workspaceId: user.workspaceId, userId: viewer.id, role: 'viewer', createdAt: new Date() })
-        .onConflictDoNothing();
+      await putCmWorkspaceMember(user.workspaceId, viewer.id, 'viewer');
     }
   });
 

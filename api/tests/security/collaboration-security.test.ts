@@ -3,7 +3,8 @@ import { app } from '../../src/app';
 import { createTestId } from '../utils/test-helpers';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { contextDocuments, workspaceMemberships } from '../../src/db/schema';
+import { contextDocuments } from '../../src/db/schema';
+import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
 import { eq } from 'drizzle-orm';
 import { __test_clearLocksForUser } from '../../src/services/lock-service';
 import { productLocksPorts } from '../../src/routes/namespaces/locks-product-ports';
@@ -39,13 +40,8 @@ describe('Collaboration security', () => {
     outsider = await createAuthenticatedUser('editor', `outsider-${createTestId()}@example.com`);
     workspaceId = editor.workspaceId;
 
-    await db
-      .insert(workspaceMemberships)
-      .values([
-        { workspaceId, userId: viewer.id, role: 'viewer', createdAt: new Date() },
-        { workspaceId, userId: otherEditor.id, role: 'editor', createdAt: new Date() },
-      ])
-      .onConflictDoNothing();
+    await putCmWorkspaceMember(workspaceId!, viewer.id, 'viewer');
+    await putCmWorkspaceMember(workspaceId!, otherEditor.id, 'editor');
   });
 
   afterEach(async () => {
