@@ -30,7 +30,17 @@ endif
 COMPOSE_RUN_UI  := $(DOCKER_COMPOSE) run --rm ui
 COMPOSE_RUN_API := $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml run --rm api
 CI_PROVIDER_MODE ?= fixture
-CI_PROVIDER_OVERLAY = $(if $(filter fixture,$(CI_PROVIDER_MODE)),-f docker-compose.ci-provider.yml)
+export CI_PROVIDER_MODE
+export CI_PROVIDER_FIXTURE = $(if $(filter fixture,$(CI_PROVIDER_MODE)),1,0)
+export CI_PROVIDER_INTERNAL = $(if $(filter fixture,$(CI_PROVIDER_MODE)),true,false)
+export CI_PROVIDER_OPENAI_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(OPENAI_API_KEY),ci-provider-fixture-no-live-credential)
+export CI_PROVIDER_MISTRAL_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(MISTRAL_API_KEY),ci-provider-fixture-no-live-credential)
+export CI_PROVIDER_TAVILY_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(TAVILY_API_KEY),ci-provider-fixture-no-live-credential)
+export CI_PROVIDER_GEMINI_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(GEMINI_API_KEY),)
+export CI_PROVIDER_ANTHROPIC_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(ANTHROPIC_API_KEY),)
+export CI_PROVIDER_COHERE_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(COHERE_API_KEY),)
+export CI_PROVIDER_MUSE_KEY = $(if $(filter live,$(CI_PROVIDER_MODE)),$(MUSE_API_KEY),)
+CI_PROVIDER_OVERLAY = -f docker-compose.ci-provider.yml
 E2E_COMPOSE = $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.test.yml $(CI_PROVIDER_OVERLAY)
 CI_COMPOSE = $(E2E_COMPOSE) -f docker-compose.ci.yml
 API_TEST_CI ?= 0
@@ -2722,6 +2732,9 @@ test-ci-provider-fixtures: ## Qualify local HTTP/SSE provider boundary without l
 test-ci-browser-shards: ## Verify exact browser membership and measured balancing
 	node --test scripts/ci/browser-shards.test.mjs
 
+test-ci-live-provider-receipt: ## Reject incomplete live tuple and missing daily schedule evidence
+	node --test scripts/ci/live-provider-receipt.test.mjs
+
 check-e2e-inventory: ## Fail when a numbered E2E spec has no default group or CI lane
 	@./e2e/scripts/check-spec-lanes.sh "$(E2E_GROUPS)"
 
@@ -2736,7 +2749,7 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	# - E2E_GROUPS (default: "00 01 02 03 04 05 06 07 08 09 10") -> list of groups to run
 	@$(E2E_COMPOSE) run --rm --no-deps \
 	  -v "$(CURDIR)/scripts/ci/browser-shards.mjs:/app/browser-shards.mjs:ro" \
-	  -e E2E_SPEC -e E2E_SHARD="$(E2E_SHARD)" -e WORKERS -e RETRIES -e MAX_FAILURES -e E2E_GROUPS="$(E2E_GROUPS)" \
+	  -e CI_PROVIDER_MODE -e E2E_SPEC -e E2E_SHARD="$(E2E_SHARD)" -e WORKERS -e RETRIES -e MAX_FAILURES -e E2E_GROUPS="$(E2E_GROUPS)" \
 	  e2e sh -lc ' \
 	    set -eu; mkdir -p test-results; \
 	    workers="$${WORKERS:-4}"; \
@@ -2859,11 +2872,11 @@ up: prepare-node-workspace ## Start the full stack in detached mode
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d --wait
 
 .PHONY: up-e2e
-up-e2e: ## Start stack with test overrides (UI env for API URL)
+up-e2e: ci-test-env ## Start stack with test overrides (UI env for API URL)
 	DISABLE_RATE_LIMIT=true ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(E2E_COMPOSE) up -d
 
 .PHONY: up-e2e-vscode
-up-e2e-vscode: ## Start VSCode E2E stack (api/ui/e2e/openvscode)
+up-e2e-vscode: ci-test-env ## Start VSCode E2E stack (api/ui/e2e/openvscode)
 	DISABLE_RATE_LIMIT=true ADMIN_EMAIL=e2e-admin@example.com TARGET=production $(E2E_COMPOSE) -f docker-compose.e2e-vscode.yml up -d
 
 .PHONY: down-e2e-vscode
