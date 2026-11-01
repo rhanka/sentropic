@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { digest, policy } from './toolchain-contract.mjs';
 import { executeImageScan, prepareImageScan, requireIacQualification, validateComparison, validateImageReport, validateReportAgreement, validateTarget } from './trivy.mjs';
+import { COHORT_KEYS, PRODUCER_JOBS, resolveCohort } from './target-custody.mjs';
 import { preflight } from './toolchain-preflight.mjs';
 
 const sourceSha = 'a'.repeat(40);
@@ -187,4 +188,38 @@ test('should retain bounded raw diagnostics when process or report validation fa
   assert.throws(() => validateImageReport('x'.repeat(16 * 1024 * 1024 + 1), target()),
     (error) => error.scanEvidence?.truncated === true && error.scanEvidence.reportBytes === 16 * 1024 * 1024 + 1 &&
       Buffer.byteLength(error.scanEvidence.stdout) === 16 * 1024 * 1024);
+});
+
+test('L5-A: the exact three-image main cohort resolves once and feeds the remote adapter seam per surface', async (t) => {
+  const registry = 'registry.example/nc-reg';
+  const workflowBytes = Buffer.from('protected ci workflow bytes');
+  const imageNames = { 'api-production': 'sentropic-api', 'api-toolbox': 'sentropic-api-tools', 'ui-production': 'sentropic-ui' };
+  const cohortSourceSha = '2ea238790fe992cdbb8e0202b1a73a937b6a1793';
+  const producers = Object.fromEntries(COHORT_KEYS.map((key) => [key, {
+    schema: 1, kind: key, ref: `${registry}/${imageNames[key]}:f751cf`, sourceSha: cohortSourceSha,
+    workflowDigest: digest(workflowBytes), runId: '40876641000', architecture: policy.platform,
+    imageId: digest(`config-${key}`), archiveDigest: digest(`archive-${key}`),
+    producer: { job: PRODUCER_JOBS[key], attempt: '1' },
+  }]));
+  const jobs = COHORT_KEYS.map((key) => ({ name: PRODUCER_JOBS[key], conclusion: 'success',
+    head_sha: cohortSourceSha, id: 1, run_attempt: 1, run_id: 40876641000 }));
+  const inspections = Object.fromEntries(COHORT_KEYS.map((key) => [key, {
+    Descriptor: { digest: digest(`manifest-${key}`), platform: { os: 'linux', architecture: 'amd64' } },
+    SchemaV2Manifest: { config: { digest: digest(`config-${key}`) } },
+    Layers: [{ digest: digest(`layer-${key}`) }],
+  }]));
+  const cohort = resolveCohort({ sourceSha: cohortSourceSha, workflowBytes, registry, producers, jobs, inspections });
+  const snapshots = { vulnerability: await snapshot(t, 'vulnerability'), java: await snapshot(t, 'java') };
+  for (const key of COHORT_KEYS) {
+    const resolved = cohort.targets[key];
+    assert.equal(validateTarget(resolved, cohortSourceSha, key), resolved);
+    const plan = await prepareImageScan({ target: resolved, sourceSha: cohortSourceSha, key, snapshots, now });
+    assert.ok(plan.args.includes('--image-src') && plan.args.includes('remote'));
+    assert.ok(plan.args.includes(resolved.ref), `${key} immutable digest ref must be the scan target`);
+    assert.ok(!plan.args.some((arg) => arg.includes(registry) && !arg.includes('@sha256:')),
+      `${key} no mutable tag may be scanned`);
+  }
+  // A cohort with one wrong-SHA producer rejects the whole surface set before any scan.
+  producers['api-toolbox'].sourceSha = 'f'.repeat(40);
+  assert.throws(() => resolveCohort({ sourceSha: cohortSourceSha, workflowBytes, registry, producers, jobs, inspections }), /source SHA/);
 });
