@@ -211,6 +211,32 @@ streamsRouter.get('/sse', async (c) => {
 
   const encoder = new TextEncoder();
 
+  // LISTEN must be effective before returning 200 or reading the initial cursor.
+  // Queue live notifications until catch-up has advanced lastSeq, avoiding replay duplicates.
+  const startupNotifications: StreamNotification[] = [];
+  let dispatchNotification = (msg: StreamNotification) => { startupNotifications.push(msg); };
+  let unsubscribe: () => Promise<void>;
+  try {
+    unsubscribe = await ports.notifications.subscribe({
+      channels: [
+        'job_events',
+        'organization_events',
+        'folder_events',
+        'initiative_events',
+        'stream_events',
+        'lock_events',
+        'presence_events',
+        'workspace_events',
+        'workspace_membership_events',
+        'comment_events',
+      ],
+      onNotification: (msg) => dispatchNotification(msg),
+    });
+  } catch (error) {
+    await releaseSseConnection();
+    throw error;
+  }
+
   const readable = new ReadableStream<Uint8Array>({
     start: async (controller) => {
       const draining = new Map<string, boolean>();
@@ -434,9 +460,6 @@ streamsRouter.get('/sse', async (c) => {
         }
       }
 
-      // LISTEN/NOTIFY
-      let unsubscribe: (() => Promise<void>) | undefined;
-
       const cleanup = async () => {
         if (closed) return;
         closed = true;
@@ -466,7 +489,8 @@ streamsRouter.get('/sse', async (c) => {
             const streamId = payload.stream_id;
             if (!streamId || typeof streamId !== 'string') return;
             if (hasStreamFilter && !wanted.has(streamId)) return;
-            if (isChatStreamId(streamId)) {
+            // Cursor replay and live delivery must share the same serialized drain.
+            if (isChatStreamId(streamId) || hasStreamFilter) {
               void drainStream(streamId).catch(() => {});
               return;
             }
@@ -565,21 +589,9 @@ streamsRouter.get('/sse', async (c) => {
         }
       };
 
-      unsubscribe = await ports.notifications.subscribe({
-        channels: [
-          'job_events',
-          'organization_events',
-          'folder_events',
-          'initiative_events',
-          'stream_events',
-          'lock_events',
-          'presence_events',
-          'workspace_events',
-          'workspace_membership_events',
-          'comment_events',
-        ],
-        onNotification,
-      });
+      dispatchNotification = onNotification;
+      for (const notification of startupNotifications) onNotification(notification);
+      startupNotifications.length = 0;
 
       // Presence may have been announced before LISTEN was ready. Refresh it
       // immediately on connection instead of waiting for the periodic heartbeat.
