@@ -1,122 +1,105 @@
-# Feature: IdP OAuth refresh token — lots 1–3
-
-Opted-in MCP clients can renew a one-hour access token within a rotating 15-day refresh family. Explicit local offline consent, atomic rotation and durable revocation remove the hourly connector relogin while preserving the absolute family deadline.
+# Feature: cyber-act-L02 downstream patched scanner
 
 ## Objective
-- [ ] Deliver rotated OAuth refresh families capped at 15 days, preserving 1-hour access tokens, in one draft PR to main.
+Produce and admit the sentropic downstream patched Trivy image contract per r6 section 3.
 
 ## Scope / Guardrails
-- [x] Implement merged `spec/SPEC_EVOL_IDP_OAUTH_REFRESH_TOKEN.md` and its reconciliation amendment; no design changes.
-- [x] Worktree `tmp/worktrees/idp-refresh`; branch `feat/idp-refresh-token`; ENV `test-idp-refresh`.
-- [x] Ports: API 9590, UI 5790, Maildev UI 1690; Docker under `.tmp/packets/DOCKER-LOCK.md` flock; one local suite at a time.
-- [x] One new additive control migration after main's final migration; refresh rows remain separate from identity tables.
-- [x] Make-only; tests first; selective staging; `make commit`; each commit under 150 lines; three ordered commit groups.
-- [x] Owner authorization 2026-11-01: up to three additional CI runs; targeted local checks before every push; draft PR; wait for completion; no merge.
-- [x] D-R1, D-R2, D-R3 use the proposed defaults: **pending owner ratification**.
+- Scope limited to scanner policy profile, offline verifier, recipe, promotion workflow, receipts.
+- One migration max in `api/drizzle/*.sql` (if applicable).
+- Make-only workflow, no direct Docker commands.
+- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
+- Branch development must happen in isolated worktree `tmp/feat-<slug>` (even for one active branch).
+- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
+- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
   - `BRANCH.md`
-  - `api/src/config/env.ts`
-  - `api/src/db/schema.ts`
-  - `api/src/services/auth/**`
-  - `api/src/services/session-manager.ts`
-  - `api/src/services/tenant*`
-  - `api/src/routes/auth/**`
-  - `api/src/routes/namespaces/oauth-ingress.ts`
-  - `api/src/scripts/oauth-register-client.ts`
-  - `api/tests/**`
-  - `api/drizzle/**`
-  - `packages/auth-hono/**`
-  - `packages/auth-ui/**`
-  - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/src/modules/catalog.ts`
-  - `packages/cluster-mesh/tests/fixtures/train.ts`
-  - `packages/cluster-mesh/tests/modules/registry.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `packages/cluster-mesh/tests/packaging/prepare-artifacts.spec.ts`
-  - `packages/llm-gateway/package.json`
-  - `deploy/ci/idp-identity-sync/**`
-  - `deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql`
-  - `deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sql`
-  - `docs/oauth-client-rotation.md`
-  - `docs/**restore**`
-  - `scripts/**restore**`
-  - `spec/DATA_MODEL.md`
-  - `package-lock.json`
-  - `api/package-lock.json`
-  - `ui/package-lock.json`
-  - `Makefile`
-  - `deploy/k8s/overlays/preprod/idp-identity-sync/client-policy.sql`
-  - `deploy/k8s/overlays/preprod/idp-identity-sync/client-postcondition.sql`
-  - `deploy/k8s/overlays/preprod/patch-auth-idp-config.yaml`
+  - `.security/trivy-toolchain.json`
+  - `scripts/security/daily/toolchain-contract.mjs`
+  - `scripts/security/daily/toolchain-contract.test.mjs`
+  - `scripts/security/daily/scanner-provenance.test.mjs`
+  - `scripts/security/daily/scanner-image-publish.test.mjs`
+  - `scripts/security/scanner/**`
+  - `docs/security/scanner-images/**`
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.github/workflows/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (one migration only)
+  - `api/drizzle/*.sql` (max 1 file)
+  - `.github/workflows/**`
+  - `docs/security/sec-s2b-qualify/**`
+  - `Makefile`
+- **Exception process**:
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- [x] BRIR-EX1: extend only test-auth-ui tool dependencies to render the mandated real Svelte consent component; impact limited to that test target; rollback restores the prior isolated tool list.
-- [x] BRIR-EX2: add mandatory refresh invalidation after supported database restore targets, before reopening token traffic; impact is fail-closed restore completion; rollback restores prior target recipes.
-- [x] BRIR-EX3: retire PR #868's temporary preprod 15-day access TTL when deploying these lots, as that override requires; restore the binding 1-hour access TTL and leave prod unchanged.
-- [x] BRIR-EX4: admit auth-hono 0.18 in the two existing optional consumer peer ranges and synchronize auth package lock metadata; required by the reproduced CI frozen-install failure; no consumer source behavior changes; rollback restores the preceding peer metadata.
-- [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
-- [x] BRIR-EX5: align the cluster-mesh catalog's bounded auth-hono range and its source-test tuple with 0.18; directly required by the installed-package CI failure; no token-exchange behavior changes; rollback restores the previous range and fixture tuple.
-- [x] BRIR-EX6: owner-authorized CI repair refreshes the selected packaging fixture from verified candidate sibling archives for auth-hono 0.18 and gateway 0.22.3; impact limited to qualification metadata; rollback restores the preceding fixture tuple.
-- [x] BRIR-EX7: the packaging fetch test must distinguish an exact local candidate from a frozen published pin; retain strict tuple/metadata checks and the stable-only fallback assertion; rollback restores the preceding test lookup.
-- [x] Registry boundary regression keeps 0.18 admission and adds explicit 0.19 rejection after widening the qualified interval; no rejection assertion or timeout is removed.
-- [x] Local SQLite qualification uses a mounted ext4 scratch directory after measured Docker-layer write amplification; 20 scoped tests pass with unchanged five-second deadlines, WAL/FULL/exclusive ownership and separate owner processes. CI definitions remain unchanged.
-- [x] CI retry 41284990576: align API gateway evidence with 0.22.3; restore shadow/alias consent for ordinary clients while keeping refresh-client grants tenant-exact and stripping offline evidence from aliased online reads. The new cross-tenant offline regression, 61 targeted tests, API typecheck/lint, 1,554 unit tests, 549 app/content tests and 265 endpoint shard-4 tests pass before the next authorized push.
-- [ ] CI repair after run 41278374635: reproduce all failed causes, refresh selected sibling tuple/integrities, qualify UI and API builds, then push with force-with-lease and require ci-gate success within three additional runs.
-- [x] Track source ready for designated-writer import under owner item `01M588EA0X3RQPCATVR987CFB4`; concurrent `.track` writes are reserved to the conductor.
-- [x] A4 identity cutover may land in parallel; no identity-table redesign or new account/session references.
-- [x] Final review: preserve client_id through the host discovery ingress; both well-known endpoints have an HTTP regression, including default-deny unknown/absent clients.
-- [x] Final sync acceptance: the imported-client HTTP fixture records response headers and asserts no-store on OAuth errors.
-- [x] D-R1: require a new authorize flow at day 15; D-R2: browser logout preserves consented offline MCP families; D-R3: non-null required_acr remains ineligible — **pending owner ratification**.
+- `BRLOCK-EX1` acknowledgement: review_by=2026-11-30T00:00:00Z (CI lockfile lane policy, owner CI maintainers).
+- `BR02-EX1`: touch `.github/workflows/security-scanner-image.yml` only (new file, r6 section 3.2/3.3.1 required destination).
+  - Reason: r6 mandates this exact workflow path for builder, validator, publisher jobs.
+  - Impact: new workflow with workflow_dispatch only, no push/schedule/PR trigger, least-privilege per-job permissions.
+  - Rollback: delete the file, policy stays upstream-only and qualified false.
+- `BR02-EX2`: extend `Makefile` `test-security-daily` SCOPE with the two r6 section 6.4 required destinations.
+  - Reason: r6 section 6.4 wires T5-S1/S2/S3/S5/S6 and T6-S1 into `scanner-provenance` and `scanner-image-publish` suites owned by `test-security-daily`.
+  - Impact: one SCOPE line gains two files, existing five files unchanged.
+  - Rollback: revert the SCOPE line, new suites run standalone only.
 
 ## AI Flaky tests
-- [x] No provider-backed test or flaky exception planned.
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] Mono-branch; sequential implementation and verification of lots 1–3.
+- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
+- Rationale: Single lot ACT-L02, one review-ready head, one CI run.
+
+## UAT Management (in orchestration context)
+- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
+- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
+- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
+- Execution flow (mandatory):
+  - Develop and run tests in `tmp/feat-<slug>`.
+  - Push branch before UAT.
+  - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
+  - Switch back to `tmp/feat-<slug>` after UAT.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 1 — Persistence, consent and sync**
-  - [x] Add migration, schema, refresh transaction port, client/user/anchor lock ordering and TTL.
-  - [x] Preserve grant_types during registration/rotation; keep offline evidence local during sync and invalidate removals/rekeys.
-  - [x] Tests first: `api/tests/unit/auth/oauth-state-adapter.refresh.test.ts`, `api/tests/unit/oauth-register-client.test.ts`, `api/tests/scripts/idp-identity-sync.test.ts`.
-  - [x] Gate: PostgreSQL races/failure rollback and `api/tests/unit/drizzle-journal-integrity.test.ts`.
-- [x] **Lot 2 — Protocol and consent UI**
-  - [x] Add live-policy predicate, resource-aware offline consent, sealed epoch/audience, initial issuance and atomic rotation.
-  - [x] Enforce one digest, absolute cap and wire errors; advertise refresh only for opted-in clients.
-  - [x] Tests first: `packages/auth-hono/tests/oauth/refresh-token-flow.test.ts`, `packages/auth-hono/tests/oauth/authorize-offline-access.test.ts`.
-  - [x] Tests first: `packages/auth-ui/tests/oauth-consent.test.ts`, `packages/auth-ui/tests/oauth-consent-rendering.test.ts`, `api/tests/api/auth/oauth-refresh.integration.test.ts`.
-  - [x] Gate: protocol, host and visible consent suites; independent T−1/T/T+1 fixtures.
-  - [x] Rendered-component acceptance: client, issuer, concrete/default audience, exact offline scopes, 15-day continuation and withdrawal scope. Native claude.ai preprod UAT belongs to Lots 0/5.
-- [x] **Lot 3 — Revocation and security**
-  - [x] Join all revoke/policy/account/tenant/consent/security-generation writers to serialization; opaque revoke/introspection, no resurrection and DR invalidation.
-  - [x] Tests first: `packages/auth-hono/tests/oauth/revoke-introspect-refresh.test.ts`; PostgreSQL lifecycle and initial-creation races in adapter suite; host security integration.
-  - [x] Make only the governed preprod public PKCE immo-mcp row eligible; assert preprod divergence and unchanged prod row.
-  - [x] Gate: PostgreSQL reuse/rotation/revocation races, registration/sync suites, affected typecheck/lint and package version checks.
-- [ ] **Delivery**
-  - [x] Review code, address findings, keep each commit under 150 lines, run scope-check before each commit.
-  - [x] Create draft PR with this file as body and 3–6 step first comment.
-  - [ ] Complete targeted local checks and final-head CI within the owner-authorized retry budget.
-  - [ ] Write `.tmp/rv/idp-refresh.md`: PR, head, CI, every §9 group and preprod apply steps (sync row, deploy); stop without merging.
-
-## Validation and rollout
-- Auth-hono: full existing suite plus scoped protocol/security additions; real compiled Svelte consent rendering and auth-ui regression suite.
-- PostgreSQL: deterministic separate-connection barriers in both orders, concurrent HTTP rotation/reuse, linked-JTI revocation, code/signing/insert/commit rollback, retention and restore invalidation.
-- Registration and SQL sync self-tests assert preprod divergence and unchanged prod policy; journal integrity checks the single new control migration `0013_oauth_refresh_tokens` after `0012_app_artifact_host`.
-- Deploy the migration/runtime to every preprod replica, then use governed identity sync (`ALLOWED_CLIENTS=immo-mcp`, dry-run then approved apply) to opt in the public PKCE row. PR #868's temporary access TTL is reset to 3600 by this rollout.
-- Package candidates: auth-hono 0.18.0 > registry 0.17.0; auth-ui 0.9.0 > registry 0.8.0, rechecked after rebase.
-- Reboot qualification: 263 auth-hono tests, 56 auth-ui tests (including rendered consent), and 58 API/PostgreSQL tests pass; both sync selftests pass.
-- API and auth-hono type checks, auth-ui type checks and scoped API lint pass; the lint result has zero errors.
-- Independent GLM r4 and Mistral r6 code reviews have no blocking findings; the final Mistral delta review also has no blocking findings. The interrupted final GLM attempt produced no verdict.
-- Post-CI local corrections: frozen UI dependency resolution passes, installation guard 11/11 passes, and gateway installed-surface compatibility 7/7 passes. Registry checks pass for auth-hono 0.18.0, auth-ui 0.9.0, llm-gateway 0.22.3 and cluster-mesh 0.26.0-dev.3; the latter preserves main's unpublished prerelease policy.
-- CI repair: UI typecheck/lint, 84 files / 497 UI tests, production/static UI builds, API production build/prune/audit and both container scans pass locally. The selected fixture pins the corrected candidate and verified auth-hono/gateway archives, preserving the unchanged published artifacts baseline.
-- Local validation reused existing images; `make down ENV=test-idp-refresh` completed after the campaign.
-- D-R1, D-R2 and D-R3 remain **pending owner ratification**. Lots 0/4/5 and production activation are outside this PR.
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read r6 sections 3, 7.2 ACT-L02, 7.3 T5-S1-S6, T6-S1, retained L2-A-E.
+  - [x] Confirm worktree `tmp/worktrees/cyber-act-L02` on branch `feat/cyber-act-L02` from `origin/main`.
+  - [x] Confirm ENV `test-cyber-L02` with ports API_PORT=8811 UI_PORT=5211 MAILDEV_UI_PORT=1111.
+  - [x] Confirm scope boundaries and BR02-EX1 before touching conditional paths.
+  - [x] Record base HEAD `1239f291f` in this file.
+- [x] **Lot 1 — RED tests first**
+  - [x] Cover dual publisher profile in `scanner-provenance.test.mjs`, existing contract suite unchanged.
+  - [x] Add `scripts/security/daily/scanner-provenance.test.mjs` for T5-S1/S2/S3/S5/S6 and T6-S1 offline/content cases.
+  - [x] Add `scripts/security/daily/scanner-image-publish.test.mjs` for T5-S4 and T6-S1 job/artifact/publication cases.
+  - [x] Prove RED locally before implementation.
+  - [x] Lot gate:
+    - [x] Targeted node test run under flock ENV=test-cyber-L02
+- [x] **Lot 2 — Policy, verifier, recipe, promotion workflow**
+  - [x] Extend `.security/trivy-toolchain.json` with upstream/sentropic-patched publisher profile, qualified false.
+  - [x] Extend `scripts/security/daily/toolchain-contract.mjs` with strict profile validation.
+  - [x] Add `scripts/security/scanner/recipe.json` and material manifest with pinned inputs.
+  - [x] Add `.github/workflows/security-scanner-image.yml` with builder, validator, publisher jobs per r6.
+  - [x] Add `docs/security/scanner-images/` qualification evidence placeholders with blocked admission.
+  - [x] No schedule enablement, no live digest invented, no seat operation.
+  - [x] Lot gate:
+    - [x] Targeted node test run under flock ENV=test-cyber-L02
+    - [x] `make scope-check ENV=test-cyber-L02`
+- [ ] **Lot N — Final validation**
+  - [x] Typecheck and lint impacted scopes.
+  - [x] Retest targeted suites ENV=test-cyber-L02.
+  - [x] `make scope-check ENV=test-cyber-L02`.
+  - [ ] Final gate step 1: create draft PR with BRANCH.md text as PR body.
+  - [ ] Final gate step 2: run ONE CI on final head and resolve blockers.
+  - [ ] Final gate step 3: report only, no merge, remove nothing.
