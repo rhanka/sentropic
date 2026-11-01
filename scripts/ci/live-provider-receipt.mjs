@@ -19,10 +19,22 @@ export function qualifiedMain(runs) {
     && row.status === 'completed' && row.conclusion === 'success'
     && ['test-api-unit-integration (ai', 'test-e2e (', 'e2e-vscode'].every(prefix =>
       row.jobs?.some(job => job.name.startsWith(prefix) && job.conclusion === 'success'))
+    && ['publish-api-image', 'publish-ui-image'].every(name =>
+      row.jobs?.some(job => job.name === name && job.conclusion === 'success'))
     && row.jobs.filter(job => job.name.startsWith('test-api-unit-integration (ai') && job.conclusion === 'success').length === 3
     && row.jobs.filter(job => job.name.startsWith('test-e2e (') && job.conclusion === 'success').length === 6);
   if (!run || !/^[a-f0-9]{40}$/.test(run.head_sha)) throw new Error('No complete qualified main tuple');
   return { sourceSha: run.head_sha, workflowSha: run.head_sha, run: run.id, attempt: run.run_attempt };
+}
+
+export function readAllPages(readPage, key) {
+  const rows = [];
+  for (let page = 1; ; page++) {
+    const next = readPage(page)[key];
+    if (!Array.isArray(next)) throw new Error(`Missing GitHub page: ${key}`);
+    rows.push(...next);
+    if (next.length < 100) return rows;
+  }
 }
 
 export function liveReceipt({ tuple, selection, events, results, schedule, event }) {
@@ -58,15 +70,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const [command, dir = '.tmp/live-provider'] = process.argv.slice(2);
   mkdirSync(dir, { recursive: true });
   const api = route => JSON.parse(execFileSync('gh', ['api', route], { encoding: 'utf8' }));
+  const pages = (route, key) => readAllPages(page => api(`${route}?per_page=100&page=${page}`), key);
   if (command === 'select') {
-    const runs = api('repos/rhanka/sentropic/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=20').workflow_runs;
+    const runs = api('repos/rhanka/sentropic/actions/workflows/ci.yml/runs?branch=main&event=push&status=success&per_page=100').workflow_runs;
     for (const run of runs) {
-      run.jobs = api(`repos/rhanka/sentropic/actions/runs/${run.id}/jobs?per_page=100`).jobs;
+      run.jobs = pages(`repos/rhanka/sentropic/actions/runs/${run.id}/jobs`, 'jobs');
       try {
         const selection = qualifiedMain([run]);
-        const artifacts = api(`repos/rhanka/sentropic/actions/runs/${run.id}/artifacts?per_page=100`).artifacts;
-        if (!['api-image', 'ui-image'].every(name => artifacts.some(row => row.name === name && !row.expired))) {
-          throw new Error('Qualified main application artifacts are absent or expired');
+        const artifacts = pages(`repos/rhanka/sentropic/actions/runs/${run.id}/artifacts`, 'artifacts');
+        if (!['live-provider-api-identity', 'live-provider-ui-identity'].every(name => artifacts.some(row => row.name === name && !row.expired))) {
+          throw new Error('Qualified main application identities are absent or expired');
         }
         writeFileSync(`${dir}/selection.json`, JSON.stringify(selection, null, 2));
         if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `sha=${selection.sourceSha}\nrun=${selection.run}\n`);
