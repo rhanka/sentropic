@@ -9,10 +9,11 @@ import { assertArtifactReplayMigration } from './server/idempotency.js';
 import type { KvPort } from './server/ports.js';
 import { createGuardedPublicationService, type GuardedPublicationDeps,
   type PublicationService } from './server/publication.js';
-import type { ArtifactAcl, AclStore } from './server/access.js';
+import type { ArtifactAcl, ArtifactMetadata, AclStore } from './server/access.js';
 import type { LifecycleService } from './server/lifecycle.js';
+import { applyEdits, type EditableFile, type EditOperation } from './server/edits.js';
 import { CommitQuarantineError, type ArtifactInvocationContext,
-  type ArtifactCommitCoordinator } from './server/commit/types.js';
+  type ArtifactCommitCoordinator, type FinalizeResult } from './server/commit/types.js';
 import { ArtifactOperationError, classifyArtifactFailure, type ArtifactOutcome, type ArtifactHostFailureMapper } from './server/failures.js';
 import { projectArtifactHttpOutcome } from './server/outcome-projection.js';
 export { projectArtifactHttpOutcome } from './server/outcome-projection.js';
@@ -45,9 +46,11 @@ export interface HttpAppDeps {
   ensureHost: GuardedEnsureHost;
   publication: Omit<GuardedPublicationDeps, 'coordinator' | 'limits'> & {
     getCurrent: PublicationService['getCurrent'];
+    getRelease: PublicationService['getRelease'];
+    listReleases: PublicationService['listReleases'];
   };
   acls: AclStore;
-  lifecycle: Pick<LifecycleService, 'stateOf' | 'canRead'>;
+  lifecycle: Pick<LifecycleService, 'stateOf' | 'canRead' | 'getReleaseState'>;
   isApprovedAccount?: (principalId: string) => boolean;
   /** One trusted URL policy shared by HTTP and MCP receipts. */
   publicationUrls?: (artifactId: string, releaseId: string) => { stableUrl: string; pinnedUrl: string };
@@ -61,6 +64,7 @@ export interface ArtifactApp {
 
 /** Retained for consumers describing canonical textual publication inputs. */
 export const TEXT_MIME_PATTERN = '^(?:text/[a-z0-9!#$&^_.+-]+|application/(?:javascript|ecmascript|json|xml|[a-z0-9!#$&^_.+-]+\\+(?:json|xml))|image/svg\\+xml)(?![\\s\\S])';
+const TEXT_MIME_RE = new RegExp(TEXT_MIME_PATTERN);
 
 function object(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new ArtifactProfileInputError();
@@ -69,7 +73,8 @@ function object(value: unknown): Record<string, unknown> {
 /** Other mutation surfaces need their own qualification before host activation. */
 export function assertArtifactsTransportProfile(value: unknown): asserts value is CompiledArtifactsProfile {
   assertCompiledArtifactsProfile(value);
-  const supported = ['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get'];
+  const supported = ['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get',
+    'artifacts_list_versions', 'artifacts_get_source', 'artifacts_revert'];
   if (value.selectedCapabilities.some((name) => !supported.includes(name))) {
     throw new Error('unsupported artifacts transport capability');
   }
@@ -88,14 +93,96 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
   const ensure = createGuardedEnsureService({ profile, coordinator: deps.coordinator,
     derivation: deps.derivation, host: deps.ensureHost });
 
-  async function visible(artifactId: string, invocation: ArtifactInvocationContext): Promise<ArtifactAcl> {
+  async function visible(artifactId: string, invocation: ArtifactInvocationContext,
+    action: 'read' | 'source' = 'read'): Promise<ArtifactAcl> {
     const acl = await deps.acls.getArtifactAcl(artifactId);
     if (!acl || acl.storageScopeId !== invocation.storageScopeId) throw new ArtifactOperationError('not_found');
     const state = await deps.lifecycle.stateOf(artifactId);
-    if (!deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, 'read', deps.isApprovedAccount)) {
+    if (!deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, action, deps.isApprovedAccount)) {
       throw new ArtifactOperationError('not_found');
     }
     return acl;
+  }
+
+  /** Display metadata fields present on validated args (ensure/publish). */
+  function metadataOf(normalized: Record<string, JsonValue>): ArtifactMetadata | undefined {
+    const meta: ArtifactMetadata = {};
+    if (typeof normalized.title === 'string') meta.title = normalized.title;
+    if (typeof normalized.description === 'string') meta.description = normalized.description;
+    if (typeof normalized.icon === 'string') meta.icon = normalized.icon;
+    return Object.keys(meta).length > 0 ? meta : undefined;
+  }
+
+  async function storeMetadata(artifactId: string, meta: ArtifactMetadata | undefined): Promise<void> {
+    if (meta === undefined) return;
+    const acl = await deps.acls.getArtifactAcl(artifactId);
+    if (acl === undefined) return;
+    await deps.acls.putArtifactAcl(artifactId, { ...acl, metadata: { ...acl.metadata, ...meta } });
+  }
+
+  /** Optimistic concurrency: refuse with a typed conflict carrying the actual current pointer. */
+  async function assertExpectedCurrent(expected: unknown, artifactId: string): Promise<void> {
+    if (expected === undefined) return;
+    const current = await deps.publication.getCurrent(artifactId);
+    const currentReleaseId = current?.releaseId ?? null;
+    if (currentReleaseId !== expected) {
+      const currentDigest = current === undefined ? null : parseManifest(current.manifest).digest ?? null;
+      throw new ArtifactOperationError('pointer_conflict',
+        { conflict: { currentReleaseId, currentDigest } });
+    }
+  }
+
+  function blobKey(storageScopeId: string, digest: string): string {
+    // Manifest digests are `sha256:<hex>`; physical keys are `.../blobs/sha256/<hex>`.
+    return `artifacts/${storageScopeId}/blobs/${digest.replace(':', '/')}`;
+  }
+
+  interface ManifestFileEntry { path: string; digest: string; size?: number; mimeType: string }
+
+  async function readManifestFiles(manifest: string, storageScopeId: string): Promise<EditableFile[]> {
+    const parsed = parseManifest(manifest);
+    const entries = (parsed.files as ManifestFileEntry[] | undefined) ?? [];
+    const files: EditableFile[] = [];
+    for (const entry of entries) {
+      const bytes = await deps.publication.blobs.getBlob(blobKey(storageScopeId, entry.digest));
+      if (bytes === undefined) throw new ArtifactOperationError('not_found');
+      files.push({ path: entry.path, mimeType: entry.mimeType, bytes: new Uint8Array(bytes),
+        ...(TEXT_MIME_RE.test(entry.mimeType) ? { text: new TextDecoder().decode(bytes) } : {}) });
+    }
+    return files;
+  }
+
+  /** Apply publish edits to the current release's text files; typed edit_mismatch changes nothing. */
+  async function editedFiles(artifactId: string, invocation: ArtifactInvocationContext,
+    edits: readonly EditOperation[]) {
+    const current = await deps.publication.getCurrent(artifactId);
+    if (current === undefined) throw new ArtifactOperationError('not_found');
+    const files = await readManifestFiles(current.manifest, invocation.storageScopeId);
+    return applyEdits(files, edits).map((file) => ({
+      path: file.path, mimeType: file.mimeType,
+      bytes: file.text === undefined ? file.bytes : new Uint8Array(Buffer.from(file.text, 'utf8')),
+    }));
+  }
+
+  /** Shared guarded-commit response for publish and revert (same commit path, same receipt shape). */
+  function commitOutcome(outcome: FinalizeResult,
+    artifactId: string, meta: ArtifactMetadata | undefined,
+    setCommitState: (state: 'not_committed' | 'committed' | 'unknown') => void) {
+    if (!outcome.ok) {
+      const failure = { ...outcome.failure, kind: 'operational' as const };
+      Object.defineProperty(failure, 'cause', { value: outcome.failure.cause, enumerable: false });
+      return { ok: false as const, failure: Object.freeze(failure) };
+    }
+    setCommitState(outcome.commitState);
+    const receipt = object(outcome.result.receipt);
+    if (typeof receipt.releaseId !== 'string' || typeof receipt.manifest !== 'string') {
+      throw new Error('invalid publication receipt');
+    }
+    return { ...outcome, result: { status: 201, body: {
+      artifactId, releaseId: receipt.releaseId, manifest: receipt.manifest,
+      digest: parseManifest(receipt.manifest).digest,
+      ...deps.publicationUrls?.(artifactId, receipt.releaseId), ...(meta ?? {}),
+    } } };
   }
 
   const app: ArtifactApp = {
