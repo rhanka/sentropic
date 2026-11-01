@@ -393,8 +393,9 @@ export const identitySchemaStatements = (dialect: IdentitySchemaDialect, schema:
     return `CREATE TABLE IF NOT EXISTS ${qualified(definition.table)} (${columns}${composite})`;
   });
   const index = (name: string, table: IdentityTableName, columns: string, unique: boolean, where?: string): string => {
-    const indexName = dialect === 'postgres' && schema ? `"${schema}"."${name}"` : `"${name}"`;
-    return `CREATE ${unique ? 'UNIQUE ' : ''}INDEX IF NOT EXISTS ${indexName} ON ${qualified(table)} (${columns})${where ? ` WHERE ${where}` : ''}`;
+    // PostgreSQL never schema-qualifies the index name in CREATE INDEX; the
+    // index lands in the parent table's schema, so only the table is qualified.
+    return `CREATE ${unique ? 'UNIQUE ' : ''}INDEX IF NOT EXISTS "${name}" ON ${qualified(table)} (${columns})${where ? ` WHERE ${where}` : ''}`;
   };
   // A2.0b lookup/disposal indexes; all idempotent.
   const indexes = [
