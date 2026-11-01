@@ -4,6 +4,7 @@ import type { JWTPayload } from 'jose';
 import type { AuthHonoPorts } from '../ports.js';
 import { oauthJsonError } from './http-utils.js';
 import { createJwksService } from './jwks-service.js';
+import { handleOpaqueRefresh } from './opaque-refresh-handler.js';
 
 export interface OAuthIntrospectHandlerOptions {
   issuer: string;
@@ -13,10 +14,11 @@ export interface OAuthIntrospectHandlerOptions {
 export const createOAuthIntrospectHandler =
   (options: OAuthIntrospectHandlerOptions) =>
   async (c: Context): Promise<Response> => {
+    const form = new URLSearchParams(await c.req.text());
+    if (form.get('token')?.startsWith('srt_')) return handleOpaqueRefresh(c, form, options, 'introspect');
     const authenticated = await authenticateIntrospectionClient(c, options.ports);
     if (authenticated instanceof Response) return authenticated;
 
-    const form = new URLSearchParams(await c.req.text());
     const token = form.get('token');
     if (!token) return c.json({ active: false });
 
