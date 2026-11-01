@@ -2,10 +2,8 @@ import type {
   AuthHonoWebAuthnAuthenticationService,
   AuthHonoWebAuthnRegistrationService,
 } from '@sentropic/auth-hono';
-import { eq } from 'drizzle-orm';
-import { db } from '../../db/client';
-import { webauthnCredentials } from '../../db/schema';
 import { verifyChallenge } from '../challenge-manager';
+import { findCmCredentialByCredentialId } from '../identity/cm-proofs';
 import {
   generateWebAuthnAuthenticationOptions,
   verifyWebAuthnAuthentication,
@@ -49,12 +47,9 @@ export const authHonoWebAuthnRegistrationService: AuthHonoWebAuthnRegistrationSe
     }
 
     // Duplicate credential check (a credential id can only register once).
+    // Lot A4: credentials live in cm_identity.identity_webauthn_credentials.
     const credentialIdBase64 = credential.id;
-    const [existing] = await db
-      .select({ id: webauthnCredentials.id })
-      .from(webauthnCredentials)
-      .where(eq(webauthnCredentials.credentialId, credentialIdBase64))
-      .limit(1);
+    const existing = await findCmCredentialByCredentialId(credentialIdBase64);
     if (existing) {
       return {
         error: {
