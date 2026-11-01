@@ -6,9 +6,10 @@
 
 import { randomUUID } from 'node:crypto';
 
-import type { AccountStatus, GlobalRole } from '@sentropic/cluster-mesh';
+import { IdentityCustodyErrorV1, type AccountStatus, type GlobalRole } from '@sentropic/cluster-mesh';
 
 import { getCmIdentity } from './cm-identity';
+import { runCmIdentityWrite } from './cm-transaction';
 
 export interface CmUserRecord {
   readonly id: string;
@@ -62,8 +63,8 @@ const date = (value: string | null | undefined): Date | null =>
 const toCmStatus = (appStatus: string | undefined): AccountStatus => {
   switch (appStatus) {
     case 'active':
-    case 'approval_expired_readonly':
       return 'active';
+    case 'approval_expired_readonly':
     case 'pending_admin_approval':
       return 'pending_admin_approval';
     case 'disabled_by_user':
@@ -73,19 +74,21 @@ const toCmStatus = (appStatus: string | undefined): AccountStatus => {
     case 'deleted':
       return 'deleted';
     default:
-      return 'active';
+      throw new IdentityCustodyErrorV1('identity_material_invalid');
   }
 };
 
 const fromCmStatus = (status: AccountStatus, legacy: string | null): string => {
-  if (legacy) return legacy;
+  if (status === 'disabled') {
+    if (legacy === 'disabled_by_user' || legacy === 'disabled_by_admin') return legacy;
+    throw new IdentityCustodyErrorV1('identity_material_invalid');
+  }
+  if (status === 'pending_admin_approval' && legacy === 'approval_expired_readonly') return legacy;
   switch (status) {
     case 'active':
       return 'active';
     case 'pending_admin_approval':
       return 'pending_admin_approval';
-    case 'disabled':
-      return 'disabled_by_admin';
     case 'deleted':
       return 'deleted';
   }
@@ -94,7 +97,9 @@ const fromCmStatus = (status: AccountStatus, legacy: string | null): string => {
 const toRecord = (
   account: { userId: string; email: string; accountStatus: AccountStatus; globalRole: GlobalRole; createdAt: string; updatedAt: string },
   profile: { emailVerified: boolean; displayName: string | null; approvalDueAt: string | null; approvedAt: string | null; approvedByUserId: string | null; disabledAt: string | null; disabledReason: string | null; legacyAccountStatus: string | null } | null,
-): CmUserRecord => ({
+): CmUserRecord => {
+  if (!profile) throw new IdentityCustodyErrorV1('identity_material_missing');
+  return ({
   id: account.userId,
   email: account.email,
   displayName: profile?.displayName ?? null,
@@ -108,7 +113,8 @@ const toRecord = (
   disabledReason: profile?.disabledReason ?? null,
   createdAt: new Date(account.createdAt),
   updatedAt: new Date(account.updatedAt),
-});
+  });
+};
 
 export const findCmUserById = async (userId: string): Promise<CmUserRecord | null> => {
   const { core, custody } = getCmIdentity();
@@ -148,20 +154,18 @@ export const countCmUsersWithRole = async (role: string): Promise<number> => {
   return accounts.filter((account) => account.globalRole === role).length;
 };
 
-export const createCmUser = async (input: CmCreateUserInput): Promise<CmUserRecord> => {
-  const { core, custody } = getCmIdentity();
+export const createCmUser = (input: CmCreateUserInput): Promise<CmUserRecord> => runCmIdentityWrite(async (tx) => {
   const now = new Date().toISOString();
   const userId = input.userId ?? randomUUID();
   const appStatus = input.accountStatus ?? 'active';
-  await core.accounts.createAccount({
+  await tx.custody.subjects.register({
     userId,
     email: input.email.trim().toLowerCase(),
     accountStatus: toCmStatus(appStatus),
     globalRole: (input.role as GlobalRole) ?? 'guest',
     createdAt: now,
     updatedAt: now,
-  });
-  await custody.profiles.put({
+  }, {
     userId,
     emailVerified: input.emailVerified ?? false,
     displayName: input.displayName ?? null,
@@ -170,25 +174,32 @@ export const createCmUser = async (input: CmCreateUserInput): Promise<CmUserReco
     approvedByUserId: null,
     disabledAt: null,
     disabledReason: null,
-    legacyAccountStatus: appStatus,
+    legacyAccountStatus: legacyStatus(appStatus, null),
   });
   const created = await findCmUserById(userId);
   if (!created) throw new Error('Failed to create user.');
   return created;
-};
+});
 
-export const updateCmUser = async (userId: string, input: CmUpdateUserInput): Promise<CmUserRecord | null> => {
+export const updateCmUser = (userId: string, input: CmUpdateUserInput): Promise<CmUserRecord | null> => runCmIdentityWrite(async (tx) => {
   const { core, custody } = getCmIdentity();
   const at = (input.updatedAt ?? new Date()).toISOString();
+  if (!(await core.accounts.findAccount(userId))) return null;
+  await tx.lockSubject(userId);
   const account = await core.accounts.findAccount(userId);
   if (!account) return null;
-  if (input.accountStatus !== undefined && input.accountStatus !== fromCmStatus(account.accountStatus, null)) {
+  const profile = await custody.profiles.find(userId);
+  if (!profile) throw new IdentityCustodyErrorV1('identity_material_missing');
+  if (input.email !== undefined) {
+    if (!input.email) throw new IdentityCustodyErrorV1('identity_material_invalid');
+    await tx.custody.subjects.updateEmail(userId, input.email.trim().toLowerCase(), at);
+  }
+  if (input.accountStatus !== undefined && toCmStatus(input.accountStatus) !== account.accountStatus) {
     await core.accounts.setAccountStatus(userId, toCmStatus(input.accountStatus), at);
   }
   if (input.role !== undefined && input.role !== account.globalRole) {
     await core.accounts.setGlobalRole(userId, input.role as GlobalRole, at);
   }
-  const profile = await custody.profiles.find(userId);
   await custody.profiles.put({
     userId,
     emailVerified: input.emailVerified ?? profile?.emailVerified ?? false,
@@ -198,7 +209,17 @@ export const updateCmUser = async (userId: string, input: CmUpdateUserInput): Pr
     approvedByUserId: input.approvedByUserId !== undefined ? input.approvedByUserId : (profile?.approvedByUserId ?? null),
     disabledAt: input.disabledAt !== undefined ? iso(input.disabledAt) : (profile?.disabledAt ?? null),
     disabledReason: input.disabledReason !== undefined ? input.disabledReason : (profile?.disabledReason ?? null),
-    legacyAccountStatus: input.accountStatus ?? profile?.legacyAccountStatus ?? null,
+    legacyAccountStatus: input.accountStatus === undefined ? profile.legacyAccountStatus
+      : legacyStatus(input.accountStatus, profile.legacyAccountStatus),
   });
   return findCmUserById(userId);
+});
+
+const legacyStatus = (status: string, previous: string | null): string | null => {
+  if (status === 'approval_expired_readonly' || status === 'disabled_by_user' || status === 'disabled_by_admin') return status;
+  if (status === 'disabled') {
+    if (previous === 'disabled_by_user' || previous === 'disabled_by_admin') return previous;
+    throw new IdentityCustodyErrorV1('identity_material_invalid');
+  }
+  return null;
 };

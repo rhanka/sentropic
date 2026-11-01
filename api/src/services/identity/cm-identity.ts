@@ -35,6 +35,7 @@ import {
 import type { InjectedPgDriver, PgSession, PgTransactionOptions } from '@sentropic/cluster-mesh/storage/postgres';
 
 import { pool } from '../../db/client';
+import { currentCmIdentityTransaction, type CmIdentityTransaction } from './cm-transaction';
 
 export const CM_IDENTITY_SCHEMA = 'cm_identity';
 
@@ -70,7 +71,8 @@ const pgDriver: InjectedPgDriver = {
 };
 
 const storeClient: PostgresStoreClient = {
-  query: (text, values) => pool.query(text, (values ?? []) as unknown[]),
+  query: (text, values) => (currentCmIdentityTransaction()?.hostTransaction ?? pool)
+    .query(text, [...values ?? []]),
 };
 
 /** Raw access for app-side reads/writes that are not part of the frozen CM
@@ -197,6 +199,27 @@ const lazyCatalog: DecisionToolCatalog = {
 /** Process-wide composition (no legacy fallback: every app identity read/write
  *  goes through this module after the A4 cutover). */
 export const getCmIdentity = (): CmIdentityComposition => {
+  const tx = currentCmIdentityTransaction();
+  if (tx) return composeCmTransaction(tx);
   composition ??= createCmIdentityComposition(lazyCatalog);
   return composition;
+};
+
+/** Per-attempt domains use the combined r6 stores, never a root-pool adapter. */
+const composeCmTransaction = (tx: CmIdentityTransaction): CmIdentityComposition => {
+  const core = { accounts: tx.stores.accounts, proofs: tx.stores.proofs,
+    invitations: tx.stores.invitations, deviceCodes: tx.stores.deviceCodes,
+    sessions: tx.stores.sessions, audit: tx.stores.audit };
+  const tenancy = { tenants: tx.stores.tenants, memberships: tx.stores.memberships,
+    workspaces: tx.stores.workspaces, workspaceMembers: tx.stores.workspaceMembers, oauth: tx.stores.oauth };
+  return {
+    ...createCmIdentityComposition(lazyCatalog), core, custody: tx.custody, tenancy,
+    enforcement: { conversations: tx.conversations, ledger: tx.ledger },
+    tenants: createTenantRegistry({ ...core, ...tenancy }),
+    memberships: createTenantMemberships({ ...tenancy, audit: tx.stores.audit }),
+    workspaces: createWorkspaceDirectory({ ...tenancy, members: tenancy.workspaceMembers, audit: tx.stores.audit }),
+    resolver: createTenantResolver({ ...tenancy, metrics: divergenceMetrics }),
+    tid: createTidIssuer(tenancy), oauth: createTenantOAuth({ oauth: tenancy.oauth }),
+    decision: createFreshDecisionProducer({ ...core, ...tenancy, conversations: tx.conversations, catalog: lazyCatalog }),
+  };
 };
