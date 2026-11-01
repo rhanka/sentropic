@@ -1,5 +1,7 @@
 import { Hono, type Context } from 'hono';
 
+import { createSeatDeliveryRouter } from './llm-seat-delivery';
+
 export interface LlmMeshHttpPrincipal {
   readonly userId: string;
   readonly role?: string;
@@ -32,6 +34,8 @@ export interface CreateLlmMeshRouterOptions {
     updateTransportMode(input: LlmMeshPortRequest & { readonly providerId: string }): Promise<Response>;
   };
   readonly enrollment: LlmMeshEnrollmentPort;
+  /** L1 seat delivery (conditional CISEAT-EX2); absent until the deployment wires it. */
+  readonly delivery?: { readonly enabled: boolean };
 }
 
 const requestFor = async (context: Context, options: CreateLlmMeshRouterOptions) => {
@@ -71,5 +75,8 @@ export const createLlmMeshRouter = (options: CreateLlmMeshRouterOptions): Hono =
       action: c.req.param('action'),
     }),
   ));
+  if (options.delivery?.enabled) {
+    router.route('/seat-delivery', createSeatDeliveryRouter());
+  }
   return router;
 };

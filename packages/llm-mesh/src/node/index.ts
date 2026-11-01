@@ -29,6 +29,23 @@ export {
   resolveEffectiveAuthority,
   validateSeatBundle,
 } from '../enrollment/seat-bundle.js';
+export type {
+  SeatRecordSelector,
+  SeatStoreBackend,
+  SeatStoreRecordDescriptor,
+} from './cli-seat-store-reader.js';
+export { inspectSeatStoreRecord, SeatStoreReadError } from './cli-seat-store-reader.js';
+export type { SeatSidecar } from './seat-sidecar-file-backend.js';
+export { SEAT_SIDECAR_MAX_BYTES, SeatSidecarFileBackend, parseSeatSidecar } from './seat-sidecar-file-backend.js';
+export type { SeatExternalAuthority } from '../service/external-seat-authority.js';
+export {
+  SEAT_EXTERNAL_AUTHORITY_KEY,
+  isDeviceFlowSeatAccount,
+  isExternalSeatAccount,
+  isExternalSeatUnavailable,
+  markExternalSeatAuthority,
+  readExternalSeatAuthority,
+} from '../service/external-seat-authority.js';
 export { EncryptedFileKeyring } from './keyring/encrypted-file-keyring.js';
 export { EnvKeyring } from './keyring/env-keyring.js';
 export { InMemoryKeyring } from './keyring/in-memory-keyring.js';

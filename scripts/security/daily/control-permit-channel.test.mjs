@@ -1,4 +1,4 @@
-import { describe, it } from 'node:test';
+import { describe, it, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   PERMIT_TTL_MS,
@@ -14,6 +14,14 @@ import {
   validatePlacementReceipt,
   validateGuardianReceipt,
 } from './control-permit.mjs';
+import {
+  PERMIT_VALIDITY_S,
+  SOCKET_FAMILY,
+  assertChannel,
+  permitKeys,
+  signPermit,
+  verifyPermit,
+} from './control-permit-channel.mjs';
 
 const ctx = {
   hostBootId: 'boot-1',
@@ -112,4 +120,62 @@ describe('T6-C3: placement receipt refuses identity confusion', () => {
     assert.deepEqual(validateGuardianReceipt({ executable: 'security-control-guardian', configDigest: 'c'.repeat(64), processId: 13, watchedGroups: ['watcher'], livenessFd: 7, clockSource: 'chronyd', clockEpoch: 5, behaviors: { kill: true, eof: true, pause: true, restart: true } }), []);
     assert.ok(validateGuardianReceipt({ executable: 'other', configDigest: 'c', processId: 1, watchedGroups: [], livenessFd: 0, clockSource: 'x', clockEpoch: 0, behaviors: {} }).length > 0);
   });
+});
+
+// T5-C6 / T6-C3 (r6 §6.4 D/ destination): watcher 62001 / consumer 62002 AF_UNIX permit
+// channel — translated SO_PEERCRED triples, 5-second ed25519 permits, and refusal of
+// forged/expired permits, wrong UIDs, wrong family and host-value substitution.
+const keys = permitKeys();
+const nowMs = 1_800_000_000_000;
+const peer = { pid: 4242, uid: CONSUMER_UID, gid: CONSUMER_UID };
+const hostPeer = { pid: 4242, uid: 0, gid: 0 };
+
+function permit(overrides = {}) {
+  const payload = { channelBinding: 'chan-1', consumerUid: CONSUMER_UID, issuedAtMs: nowMs, nonce: 'n-1', ...overrides };
+  return { payload, signature: signPermit(keys.privatePem, payload) };
+}
+
+function channel(overrides = {}) {
+  return {
+    socketFamily: SOCKET_FAMILY, watcherUid: WATCHER_UID, consumerUid: CONSUMER_UID,
+    expectedPeer: peer, observedPeer: peer, hostPeer, sameNamespace: false,
+    permit: permit(), publicPem: keys.publicPem, nowMs,
+    ...overrides,
+  };
+}
+
+test('T5-C6/T6-C3: a valid channel admission passes with fixed UIDs, matching translated peer and a fresh permit', () => {
+  const payload = assertChannel(channel());
+  assert.equal(payload.consumerUid, CONSUMER_UID);
+  assert.equal(WATCHER_UID, 62001);
+  assert.equal(CONSUMER_UID, 62002);
+  assert.equal(PERMIT_VALIDITY_S, 5);
+});
+
+test('T5-C6/T6-C3: wrong socket family, wrong watcher/consumer UID or peer mismatch refuses', () => {
+  assert.throws(() => assertChannel(channel({ socketFamily: 'AF_INET' })), /channel-family/);
+  assert.throws(() => assertChannel(channel({ watcherUid: 0 })), /watcher-uid/);
+  assert.throws(() => assertChannel(channel({ consumerUid: 0 })), /consumer-uid/);
+  assert.throws(() => assertChannel(channel({ observedPeer: { ...peer, pid: 9999 } })), /peer-triple-mismatch/);
+  assert.throws(() => assertChannel(channel({ observedPeer: { pid: 1, uid: 0, gid: 0 } })), /peer-uid-mismatch/);
+});
+
+test('T5-C6/T6-C3: host-value substitution inside a different namespace refuses', () => {
+  const substituted = { pid: hostPeer.pid, uid: 0, gid: 0 };
+  assert.throws(
+    () => assertChannel(channel({ observedPeer: substituted, expectedPeer: substituted, hostPeer })),
+    /host-value-substitution|peer-uid-mismatch/,
+  );
+  // Same triple in the same namespace is legitimate.
+  assert.equal(assertChannel(channel({ sameNamespace: true, hostPeer: null })).consumerUid, CONSUMER_UID);
+});
+
+test('T5-C6/T6-C3: forged, expired, future or wrong-consumer permits refuse', () => {
+  const forged = permit();
+  forged.signature = signPermit(permitKeys().privatePem, forged.payload);
+  assert.throws(() => assertChannel(channel({ permit: forged })), /permit-forged/);
+  assert.throws(() => assertChannel(channel({ permit: permit({ issuedAtMs: nowMs - (PERMIT_VALIDITY_S + 1) * 1000 }) })), /permit-expired/);
+  assert.throws(() => assertChannel(channel({ permit: permit({ issuedAtMs: nowMs + 5000 }) })), /permit-future/);
+  assert.throws(() => assertChannel(channel({ permit: permit({ consumerUid: 0 }) })), /permit-consumer-mismatch/);
+  assert.throws(() => verifyPermit(keys.publicPem, { payload: {}, signature: 'AAAA' }, nowMs), /permit-forged|permit-malformed/);
 });
