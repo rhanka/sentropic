@@ -9,6 +9,7 @@ export type ArtifactErrorKind =
 export type ArtifactFailureCategory = ArtifactFailure['category'];
 
 interface ArtifactFailureFields {
+  readonly details?: Readonly<Record<string, unknown>>;
   readonly variant?: string;
   readonly httpStatus: number;
   readonly publicCode: string;
@@ -67,7 +68,8 @@ export interface ArtifactPublicRefusal {
 export class ArtifactOperationError extends Error {
   constructor(
     readonly kind: ArtifactErrorKind,
-    readonly details: { readonly cause?: unknown; readonly refusal?: ArtifactPublicRefusal } = {},
+    readonly details: { readonly cause?: unknown; readonly refusal?: ArtifactPublicRefusal;
+      readonly publicDetails?: Readonly<Record<string, unknown>> } = {},
   ) {
     super(kind, { cause: details.cause });
     this.name = 'ArtifactOperationError';
@@ -186,6 +188,9 @@ export function classifyArtifactFailure(
   if (context.commitState === 'committed' && projection.category === 'unauthorized_at_commit') projection = unavailable();
   const failure: ArtifactFailure = {
     ...projection, invocationId: context.invocationId, operation: context.operation,
+    ...(cause instanceof ArtifactOperationError && cause.details.publicDetails &&
+      ['confirmation_required', 'confirmation_invalid', 'confirmation_expired', 'confirmation_stale'].includes(projection.publicCode)
+      ? { details: cause.details.publicDetails } : {}),
     phase: context.phase, commitState: context.commitState, cause,
   };
   Object.defineProperty(failure, 'cause', { value: cause, enumerable: false });
