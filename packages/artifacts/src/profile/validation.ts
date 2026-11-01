@@ -55,12 +55,17 @@ export function normalizeArguments(profile: EffectiveArtifactProfile, name: stri
   const operation = name.slice('artifacts_'.length);
   const { defaults, limits } = operationProfile(profile, operation);
   const normalized = { ...copyJson(defaults) as Record<string, JsonValue>, ...args } as Record<string, JsonValue>;
-  if (operation === 'ensure' || operation === 'publish' || operation === 'commit_upload') {
+  if (['ensure', 'publish', 'commit_upload', 'set_access', 'delete'].includes(operation)) {
     const key = args.idempotencyKey;
     requireInput(typeof key === 'string' && key.trim().length > 0 && key.length <= limits.idempotencyKeyMaxUnits);
     requireInput(envelopeKey === undefined || envelopeKey === key);
   } else requireInput(envelopeKey === undefined);
   if (Object.hasOwn(args, 'artifactId')) requireInput(isArtifactId(args.artifactId));
+  if (operation === 'get_source' && args.paths !== undefined) {
+    const paths = args.paths as string[];
+    requireInput(new Set(paths).size === paths.length && paths.every((path) =>
+      Buffer.byteLength(path, 'utf8') <= profile.rules.pathMaxBytes));
+  }
   if (operation === 'publish') {
     const paths = new Set<string>();
     let total = 0;
