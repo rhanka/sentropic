@@ -107,9 +107,9 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b atomic person del
     const deletion = createAtomicPersonDeletionV2({ unitOfWork: env.unitOfWork, business: fixture.business, deletionOptions: DELETE_OPTS });
     await expect(deletion.deletePerson({ userId: 'admin2', actorId: 'admin', handlerId: 'admin_account', operationId: 'op-admin2' })).rejects.toBeInstanceOf(AdminUserProtectedError);
     await expect(deletion.deletePerson({ userId: 'ghost', actorId: 'admin', handlerId: 'admin_account', operationId: 'op-ghost' })).rejects.toBeInstanceOf(IdentityNotFoundError);
-    // Sole admin of a retained workspace: the deletion tx refuses, nothing mutates.
-    const rolled = await deletion.deletePerson({ userId: 'marie', actorId: 'admin', handlerId: 'admin_account', operationId: 'op-last-admin' });
-    expect(rolled.transaction).toBe('rolled_back');
+    // Sole admin of a retained workspace: a precondition refusal throws the
+    // existing typed error, nothing mutates and the operation stays queued.
+    await expect(deletion.deletePerson({ userId: 'marie', actorId: 'admin', handlerId: 'admin_account', operationId: 'op-last-admin' })).rejects.toBeInstanceOf(IdentityConflictError);
     expect(await env.unitOfWork.runRead(READ, (tx) => tx.hostTransaction.journal.findAccountCore('marie'))).not.toBeNull();
     expect(await deletion.getOperation('op-last-admin')).toMatchObject({ state: 'queued' });
   });

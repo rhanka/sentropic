@@ -186,6 +186,7 @@ export const createFixtureBusiness = (input: {
     deleteRows: async (plan: PlanV1, host: CustodyOpHost) => {
       input.state.reachedDelete = true;
       if (input.state.failAt === 'delete') throw new Error('injected-business');
+      await exec(host, 'CREATE TABLE IF NOT EXISTS "biz_rows" ("owner_id" TEXT NOT NULL, "workspace_id" TEXT NOT NULL, "payload" TEXT NOT NULL, PRIMARY KEY ("owner_id", "workspace_id"))', []);
       let deleted = 0;
       for (const workspaceId of plan.workspaceIdsToDelete) {
         deleted += (await exec(host, 'DELETE FROM "biz_rows" WHERE "workspace_id" = ?', [workspaceId])).changes;
