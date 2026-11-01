@@ -10,7 +10,7 @@ import {
   cleanupAuthData 
 } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { workspaceMemberships } from '../../src/db/schema';
+import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
 
 describe('Organizations API', () => {
   const createUser = (role: Parameters<typeof createAuthenticatedUser>[0]) =>
@@ -67,10 +67,7 @@ describe('Organizations API', () => {
     const editor = await createUser('editor');
     const viewer = await createUser('guest');
     if (editor.workspaceId) {
-      await db
-        .insert(workspaceMemberships)
-        .values({ workspaceId: editor.workspaceId, userId: viewer.id, role: 'viewer', createdAt: new Date() })
-        .onConflictDoNothing();
+      await putCmWorkspaceMember(editor.workspaceId, viewer.id, 'viewer');
     }
 
     const companyData = {
@@ -160,15 +157,7 @@ describe('Organizations API', () => {
     const editor = await createUser('editor');
     const viewer = await createUser('guest');
 
-    await db
-      .insert(workspaceMemberships)
-      .values({
-        workspaceId: editor.workspaceId,
-        userId: viewer.id,
-        role: 'viewer',
-        createdAt: new Date(),
-      })
-      .onConflictDoNothing();
+    await putCmWorkspaceMember(editor.workspaceId!, viewer.id, 'viewer');
 
     const createRes = await authenticatedRequest(app, 'POST', '/api/v1/organizations', editor.sessionToken!, {
       name: `Test Company ${createTestId()}`,

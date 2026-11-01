@@ -5,7 +5,9 @@ import { eq } from 'drizzle-orm';
 
 import { app } from '../../../src/app';
 import { db } from '../../../src/db/client';
-import { serviceClients, tenants, workspaces } from '../../../src/db/schema';
+import { serviceClients, workspaces } from '../../../src/db/schema';
+import { createCmTenant, enrolCmWorkspace } from '../../../src/services/identity/cm-tenancy';
+import { cmDeleteTenants } from '../../utils/cm-identity-test-store';
 import { getSentropicOAuthPorts } from '../../../src/routes/auth/oauth';
 import { createJwksAdapter } from '../../../src/services/auth/jwks-adapter';
 import { createLlmCallerIdentity } from '../../../src/services/llm-identity/caller-auth';
@@ -107,15 +109,16 @@ describe('S2S token through the LLM gateway caller identity (Lot D B2)', () => {
   beforeEach(async () => {
     await ensureActiveSigningKey('test-s2s-kid');
     await seedServiceClient();
-    await db.insert(tenants).values({ id: TENANT, name: TENANT, status: 'active' }).onConflictDoNothing();
-    await db.insert(workspaces).values({ id: WORKSPACE, name: WORKSPACE, tenantId: TENANT }).onConflictDoNothing();
+    await createCmTenant({ tenantId: TENANT, slug: TENANT, status: 'active' }).catch(() => {});
+    await db.insert(workspaces).values({ id: WORKSPACE, name: WORKSPACE }).onConflictDoNothing();
+    await enrolCmWorkspace({ workspaceId: WORKSPACE, tenantId: TENANT }).catch(() => {});
     await db.update(serviceClients).set({ tenantId: TENANT }).where(eq(serviceClients.clientId, CLIENT_ID));
   });
 
   afterEach(async () => {
     await db.delete(serviceClients).where(eq(serviceClients.clientId, CLIENT_ID));
     await db.delete(workspaces).where(eq(workspaces.id, WORKSPACE));
-    await db.delete(tenants).where(eq(tenants.id, TENANT));
+    await cmDeleteTenants([TENANT]);
   });
 
   it('attributes a real IdP service token to the service principal of service_clients.tenant_id', async () => {
