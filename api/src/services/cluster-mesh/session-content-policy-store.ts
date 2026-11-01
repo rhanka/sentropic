@@ -144,7 +144,87 @@ export const createPolicyStore = (gates: PolicyStoreGates) => {
     return exposed;
   };
 
-  return { admitPolicy, get, failClosed };
+  const commitActivation = (input: ActivationInput): ActivationAck => {
+    failClosed();
+    const stored = get(input.policyId);
+    if (!validTargetDigest(input.targetDigest)) {
+      throw new PolicyStoreError('invalid_request', 'targetDigest must be 64 lowercase hex');
+    }
+    if (input.policyDigest !== stored.policyDigest) {
+      throw new PolicyStoreError('policy_digest_mismatch', 'activation must reference the admitted digest');
+    }
+    if (input.denialFloor !== stored.denialFloor) {
+      throw new PolicyStoreError('denial_active', 'concurrent denial dominates activation');
+    }
+    const replayKey = `${input.operationId}:${input.policyDigest}`;
+    const duplicate = stored.activations.get(replayKey);
+    if (duplicate) return duplicate;
+    if (stored.activations.size > 0) {
+      throw new PolicyStoreError('revision_conflict', 'mutation under another operation refuses');
+    }
+    const ack: ActivationAck = {
+      phase: 'native-consumed', policyId: input.policyId, operationId: input.operationId,
+      ackDigest: digestJson([input.policyId, input.operationId, input.policyDigest, input.targetDigest]),
+    };
+    stored.activations.set(replayKey, ack);
+    return ack;
+  };
+
+  const commitReceipt = (
+    input: { readonly policyId: string; readonly operationId: string; readonly ackDigest: string; readonly policyDigest: string },
+  ): { readonly phase: 'activation-committed'; readonly policyId: string; readonly operationId: string; readonly authorityRevision: number } => {
+    failClosed();
+    const stored = get(input.policyId);
+    const ack = stored.activations.get(`${input.operationId}:${input.policyDigest}`);
+    if (!ack || ack.ackDigest !== input.ackDigest) {
+      throw new PolicyStoreError('invalid_request', 'receipt must match a committed activation');
+    }
+    stored.captureEligible = true;
+    // Separate durable A activation transaction coordinate, never the policyRevision.
+    const authorityRevision = 100 + stored.activations.size;
+    return { phase: 'activation-committed', policyId: input.policyId, operationId: input.operationId, authorityRevision };
+  };
+
+  const refreshCapture = (
+    input: { readonly policyId: string; readonly newTarget: { readonly connectionId: string; readonly connectionGeneration: number }; readonly stableSourceBinding: Record<string, unknown> },
+  ): { readonly policyId: string; readonly connectionId: string; readonly retainedExpiresAt: number | null } => {
+    failClosed();
+    const stored = get(input.policyId);
+    if (!stored.captureEligible) {
+      throw new PolicyStoreError('invalid_request', 'capture requires a committed activation');
+    }
+    if (digestJson(input.stableSourceBinding) !== stored.sourceBindingDigest) {
+      throw new PolicyStoreError('source_reauthorization_required', 'stable binding change needs new intent');
+    }
+    return {
+      policyId: input.policyId, connectionId: input.newTarget.connectionId,
+      retainedExpiresAt: stored.firstAdmissionExpiresAt,
+    };
+  };
+
+  const readRetained = (input: { readonly policyId: string }): { readonly expiresAt: number | null } => {
+    const stored = get(input.policyId);
+    if (stored.firstAdmissionExpiresAt !== null && gates.now() >= stored.firstAdmissionExpiresAt) {
+      throw new PolicyStoreError('object_expired', 'retained copy passed its immutable deadline');
+    }
+    return { expiresAt: stored.firstAdmissionExpiresAt };
+  };
+
+  const raiseDenial = (policyId: string, floor: number): void => {
+    get(policyId).denialFloor = floor;
+  };
+
+  const clearDenial = (policyId: string): void => {
+    get(policyId).denialFloor = 3;
+  };
+
+  const isCaptureEligible = (policyId: string): boolean =>
+    admissions.get(policyId)?.captureEligible ?? false;
+
+  return {
+    admitPolicy, get, failClosed, commitActivation, commitReceipt, refreshCapture,
+    readRetained, raiseDenial, clearDenial, isCaptureEligible,
+  };
 };
 
 export type PolicyStore = ReturnType<typeof createPolicyStore>;
