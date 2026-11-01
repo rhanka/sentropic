@@ -340,13 +340,20 @@ export interface AuthHonoServiceTenantPort {
  */
 export interface AuthHonoConsentGrant {
   scopes: string[];
+  offlineGrantId?: string | null;
+  offlineIssuer?: string | null;
+  offlineScopes?: string[];
+  approvedResources?: string[];
+  defaultAudienceApproved?: boolean;
+  offlineConsentedAt?: Date | null;
 }
 
 export interface AuthHonoConsentStorePort {
   /** The user's currently granted scopes for this client (optionally scoped to `tenantId`), or `null`. */
   getGrant(userId: string, clientId: string, tenantId?: string): Promise<AuthHonoConsentGrant | null>;
   /** Upsert the grant for `(userId, clientId[, tenantId])`, unioning `scopes` with any prior grant. */
-  saveGrant(userId: string, clientId: string, scopes: string[], tenantId?: string): Promise<void>;
+  saveGrant(userId: string, clientId: string, scopes: string[], tenantId?: string,
+    offline?: { issuer: string; resource: string | null }): Promise<void>;
 }
 
 /**
@@ -459,6 +466,7 @@ export interface AuthHonoFederationPort {
 }
 
 export interface AuthHonoPorts {
+  oauthRefresh?: import('./oauth/refresh-types.js').OAuthRefreshStorePort;
   users: AuthHonoUserPort;
   credentials: AuthHonoCredentialPort;
   challenges: AuthHonoChallengePort;
