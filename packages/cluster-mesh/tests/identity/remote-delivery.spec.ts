@@ -36,7 +36,9 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b remote revocation
     const env = await openEnv();
     await env.unitOfWork.runWrite(WRITE, async (tx) => {
       await tx.hostTransaction.journal.enqueueDelivery(delivery('d1'));
-      await tx.hostTransaction.journal.enqueueDelivery(delivery('d2'));
+      // The outbox tuple (operation_id, step, target_kind, target_ref) is UNIQUE
+      // per the amendment, so the second delivery needs its own target.
+      await tx.hostTransaction.journal.enqueueDelivery(delivery('d2', 'remote_session', 'reader-2'));
     });
     const first = await env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.journal.claimPending(NOW, 'worker-a', LATER, 10));
     expect(first.map((entry) => entry.deliveryId)).toEqual(['d1', 'd2']);
