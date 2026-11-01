@@ -236,7 +236,7 @@ describe('ensure authorization', () => {
       }),
       derivation: createRadarKeyDerivation({ storageScopeId: SCOPE, actorIds: ['alice', 'bob'] }),
       legacyRecords: { get: async () => undefined }, ensureHost: pgHost(),
-      acls: {}, lifecycle: {}, publication: {},
+      acls: {}, lifecycle: { stateOf: async () => 'active' }, publication: {},
     } as unknown as HttpAppDeps);
     const args = { bindingName: 'transport-race', idempotencyKey: ' cross-transport ' };
     const before = await countRows('artifacts.operation_receipts');

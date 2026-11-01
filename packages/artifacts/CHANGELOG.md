@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.3.0
+## 0.2.5
 
 - D1: Read verified author manifests and file bytes for the current or a selected
   release, with path selection, source authorization, bounded snapshots and
