@@ -84,6 +84,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Add real JWT custodian tests for token use, signed MFA lineage, ticket import and key disposal.
   - [x] Implement the host token/digest adapter against the approved r6 signer/verifier contracts.
   - [x] Add the r6 per-attempt auth binding/runner with callback-owned audit drain and post-commit mail publication.
+  - [x] Construct OAuth refresh/state/consent/JWKS participants on the active app executor; no nested transaction in bound refresh/consent.
   - [x] Add transaction-bound auth workspace provisioning and an explicit Q-K configuration parser with key-reader disposal tests.
   - [x] Remove app SQL session writes and duplicate base-row inserts; refresh projects remotely only after CM CAS commits.
   - [ ] /workspaces (absorbs /tenants) over A2.2 stores; delete tenant-membership.ts, membership seam in cluster-mesh-adapter.ts, product tenant/workspace identity routes.
