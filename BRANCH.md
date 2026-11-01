@@ -15,6 +15,7 @@ Implement the single canonical Sessions registry with typed projections (§3.3.1
 - All new text in English.
 - Contract pins (binding, r1): MANIFEST seal sha256 dfb2589969f78cf040e8b3f0857cd933722aff5ad5445553ac42b7ba583abbed; plan v1.6 draft sha256 6168b73ba9b236530bde6bb4998929de1ede0c92d61aa0fc07fcd4f9983b7b18; RC2-CONTRACT.md sha256 3d827eaa4322cd980509679f91b65d3740568c5faaf6dd29339ad99b4a46015d; manifest JSON sha256 5e86b2a114052eae27aebef913af9dd7c208c3c675609060009c542774ea568d; app ACK review .h2a/reviews/rc2-contract_app-ack_spark.stdout.md VERDICT ACK with RC2.registry START scoped.
 - r2 reseal observed mid-lot (contract cc8965c9, manifest JSON f7e4a148) has NO receiving ACK and is NOT adopted; implementation verified against r1-baseline.json bytes. See Feedback Loop.
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 - Contract inputs used: listing/registry/snapshot/descriptor/log-ref/lifecycle/freshness/projection-ACK schemas; coarse allowlist (contract §7); 5000ms scheduler with 15000ms bound (contract §7); grant/ACK/withdrawal rules (contract §7); origin-registry port methods + observation emit (contract §8).
 - Source-gaps stay fail-closed (refuse), never invented: DEP-FED (H2-I/F1/F2/F15), DEP-AUTH-B/M0 (H1-H4/L1-L2/admission/executor custody), DEP-AUTH-A/A2.0b, SG-R15, N1/N4/N5 packed exports, DEP-RESIDENCE/RCP.
 - Re-verify contract manifest hash before each push.
@@ -47,6 +48,7 @@ Implement the single canonical Sessions registry with typed projections (§3.3.1
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 - **Exceptions granted**:
   - `BR01-EX1` (`package-lock.json`, root): mechanically required sync of the `packages/cluster-mesh` 0.26.0-dev.4 version bump via `make lock-root`; CI train lock-sync gate fails without it. Reason: enforce-package-bump companion. Impact: version field sync only (verify diff). Rollback: `git checkout HEAD -- package-lock.json` + revert version bump.
+  - `BR01-EX2` (`packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` + `package-lock.json`): mechanically required companion of the same version bump; CI packaging gate (`prepare-artifacts`, lazy lanes) resolves the candidate tuple from these fixtures. Precedent: dev.3 lane commit 8dee07193. Impact: single dep spec line + regenerated lock (verify diff). Rollback: `git checkout HEAD -- packages/cluster-mesh/tests/packaging/fixtures/selected/`.
 
 ## Feedback Loop
 - [x] `attention`: manifest pin drift — assignment cites dfb2589969f78cf0 prefix; r1-baseline.json confirms it as the r1 MANIFEST seal; contract 3d827eaa… and manifest JSON 5e86b2a1… are the r1 pinned bytes per app ACK review §1 finding 2.
