@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { buildManifest, browserFiles, baselineDurations, reconcileReports, validateMatrix } from './browser-shards.mjs';
 
 test('should assign every browser file exactly once with measured durations retained', () => {
@@ -35,4 +36,5 @@ test('should fail when the workflow omits or duplicates a generated shard', () =
   const workflow = `  test-e2e:\n    matrix:\n${Array.from({ length: 6 }, (_, i) => `      shard: ${i + 1}`).join('\n')}\n  next:\n`;
   assert.equal(validateMatrix(workflow), browserFiles().length);
   assert.throws(() => validateMatrix(workflow.replace('shard: 6', 'shard: 1')), /matrix/);
+  assert.equal(validateMatrix(readFileSync('.github/workflows/ci.yml', 'utf8')), browserFiles().length);
 });

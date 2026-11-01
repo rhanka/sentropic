@@ -111,7 +111,7 @@ export function reconcileReports(expected, actual) {
 
 export function validateMatrix(workflow, manifest = buildManifest()) {
   const section = workflow.match(/^  test-e2e:\n([\s\S]*?)(?=^  [\w-]+:)/m)?.[1] ?? '';
-  const selected = [...section.matchAll(/^\s+shard: (\d+)\s*$/gm)].map(m => Number(m[1]));
+  const selected = [...section.matchAll(/^\s+(?:- )?shard: (\d+)\s*$/gm)].map(m => Number(m[1]));
   if (selected.length !== manifest.shards.length || new Set(selected).size !== selected.length
     || manifest.shards.some(shard => !selected.includes(shard.id))) throw new Error('CI shard matrix differs from complete inventory');
   return manifest.expectedFiles.length;

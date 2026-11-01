@@ -163,7 +163,6 @@ test.describe('Codex provider settings', () => {
     await expect(
       page.getByRole('button', { name: /Cancel|Annuler/i }),
     ).toBeVisible();
-    await page.waitForTimeout(4500);
 
     await expect(page.getByText('admin@example.com', { exact: true })).toBeVisible();
     await expect(page.getByText('Prêt', { exact: true })).toBeVisible();
