@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../../../src/db/client';
-import { oauthClients, users } from '../../../src/db/schema';
+import { oauthClients, oauthConsents, users } from '../../../src/db/schema';
 import { createOAuthRefreshAdapter } from '../../../src/services/auth/oauth-refresh-adapter';
 import { createConsentStoreAdapter } from '../../../src/services/auth/consent-store-adapter';
 
@@ -83,5 +83,19 @@ describe('PostgreSQL refresh storage', () => {
     })).rejects.toThrow('signing failed');
     expect(await adapter().findByHash(hash('family'))).toMatchObject({ consumedAt: null });
     expect(await adapter().findByHash(hash('child'))).toBeNull();
+  });
+
+  it.each(['account', 'policy', 'consent'])('should invalidate %s removal without resurrection', async (kind) => {
+    if (kind === 'account') {
+      await db.update(users).set({ accountStatus: 'disabled_by_admin' }).where(eq(users.id, userId));
+      await db.update(users).set({ accountStatus: 'active' }).where(eq(users.id, userId));
+    } else if (kind === 'policy') {
+      await db.update(oauthClients).set({ grantTypes: ['authorization_code'] }).where(eq(oauthClients.clientId, clientId));
+      await db.update(oauthClients).set({ grantTypes: ['authorization_code', 'refresh_token'] }).where(eq(oauthClients.clientId, clientId));
+    } else {
+      await db.insert(oauthConsents).values({ userId, clientId, scopes: ['offline_access'] });
+      await db.delete(oauthConsents).where(eq(oauthConsents.userId, userId));
+    }
+    expect((await adapter().findByHash(hash('family')))?.revokedAt).not.toBeNull();
   });
 });
