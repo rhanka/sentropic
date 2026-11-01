@@ -121,87 +121,10 @@ export async function createSession(
  * @param sessionToken - JWT session token
  * @returns Session payload if valid, null otherwise
  */
-export async function validateSession(
-  sessionToken: string
-): Promise<SessionPayload | null> {
-  try {
-    // Verify JWT signature and expiration
-    const { payload } = await jwtVerify(sessionToken, JWT_SECRET, { algorithms: ['HS256'] });
-    if (payload.tokenUse === 'refresh') return null;
-
-    // Verify payload structure (userId, sessionId, role are required strings)
-    if (
-      typeof payload.userId !== 'string' ||
-      typeof payload.sessionId !== 'string' ||
-      typeof payload.role !== 'string'
-    ) {
-      logger.warn({ payloadKeys: Object.keys(payload) }, 'Invalid session payload structure');
-      return null;
-    }
-
-    const { userId, sessionId, role } = payload;
-
-    // Check if session exists and is not revoked (CM custody binding by token hash)
-    const sessionHash = hashToken(sessionToken);
-    const session = await findCmSessionByTokenHash(sessionHash);
-
-    if (!session || session.id !== sessionId) {
-      logger.warn({ sessionId }, 'Session not found in database (possibly revoked)');
-      return null;
-    }
-    if (session.revokedAt) {
-      logger.warn({ sessionId }, 'Session revoked');
-      return null;
-    }
-
-    // Check if session is expired
-    if (session.expiresAt < new Date()) {
-      logger.warn({ sessionId }, 'Session expired');
-      return null;
-    }
-
-    // Security: verify user status (emailVerified + admin approval rules)
-    const user = await findCmUserById(userId);
-
-    if (!user || !user.emailVerified) {
-      logger.warn({ userId, sessionId }, 'Session validation failed - email not verified');
-      return null;
-    }
-
-    const status = user.accountStatus ?? 'active';
-    const now = new Date();
-
-    // Blocked statuses
-    if (status === 'disabled_by_user' || status === 'disabled_by_admin') {
-      logger.warn({ userId, sessionId, status }, 'Session validation failed - account disabled');
-      return null;
-    }
-
-    let effectiveRole = (user.role ?? role) as string;
-
-    if (status === 'approval_expired_readonly') {
-      effectiveRole = 'guest';
-    } else if (status === 'pending_admin_approval') {
-      const due = user.approvalDueAt;
-      if (due && now > due) {
-        effectiveRole = 'guest';
-      }
-    }
-
-    // Update last activity
-    await touchCmSession(sessionId, new Date());
-
-    return {
-      userId,
-      sessionId,
-      role: effectiveRole,
-      email: user.email ?? null,
-      displayName: user.displayName ?? null,
-    };
-  } catch (error) {
-    logger.debug({ err: error }, 'Invalid session token');
-    return null;
-  }
+export async function validateSession(sessionToken: string): Promise<SessionPayload | null> {
+  const result = await cmAuthSessionService.validateSessionToken(sessionToken);
+  return result ? { userId: result.user.id, sessionId: result.sessionRecord.id,
+    role: result.role, email: result.user.email, displayName: result.user.displayName } : null;
 }
 
 /**
