@@ -1,14 +1,18 @@
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { db } from '../../db/client';
-import {
-  tenantMemberships,
-  tenants,
-  users,
-  workspaceMemberships,
-  workspaces,
-} from '../../db/schema';
+import { workspaces } from '../../db/schema';
 import type { WorkspaceRole } from '../../services/workspace-access';
 import { resolveOAuthIssuer } from '../auth/oauth';
+import {
+  findCmUserById,
+} from '../../services/identity/cm-users';
+import {
+  findCmMembership,
+  findCmTenant,
+  findCmWorkspace,
+  findCmWorkspaceMember,
+  listCmTenants,
+} from '../../services/identity/cm-tenancy';
 import type {
   LiveProductBindingAuthorizationInput,
   LiveProductBindingAuthorizationPort,
@@ -28,10 +32,13 @@ export interface CodeWorkspaceBindingAuthorizerOptions {
  * - Principal must have an approved tenant membership in the tenant.
  * - When bound to a workspace:
  *   - Workspace must exist in the tenant, have hiddenAt IS NULL, and have type === 'code'.
- *   - Principal must have an allowed role (at least 'editor') in workspaceMemberships.
+ *   - Principal must have an allowed role (at least 'editor') in the CM workspace members.
  *   - serverIssuer must match the resolved OAuth issuer for the deployment.
  *   - bindingRevision must be an integer >= 1.
- * - Read-only: workspaceMemberships, tenantMemberships, and connectorTenantEnrollments remain strictly invariant.
+ * - Read-only: CM workspace members, tenant memberships, and connectorTenantEnrollments remain strictly invariant.
+ *
+ * Lot A4: tenant/user/membership/workspace-enrolment reads go through the CM
+ * identity stores; only the business `workspaces` row is read from the app DB.
  */
 export class DatabaseCodeWorkspaceBindingAuthorizer implements LiveProductBindingAuthorizationPort {
   private readonly database: typeof db;
@@ -45,40 +52,23 @@ export class DatabaseCodeWorkspaceBindingAuthorizer implements LiveProductBindin
   async authorizeProductBinding(input: LiveProductBindingAuthorizationInput): Promise<void> {
     const { tenant, principal, serverWorkspaceId, serverIssuer, bindingRevision } = input;
 
-    const [tenantRow] = await this.database
-      .select({ id: tenants.id, status: tenants.status })
-      .from(tenants)
-      .where(eq(tenants.id, tenant))
-      .limit(1);
+    // The binding `tenant` may be the CM tenant id or its slug (tid).
+    const tenantRow =
+      (await findCmTenant(tenant)) ??
+      (await listCmTenants()).find((t) => t.slug === tenant) ??
+      null;
 
     if (!tenantRow || tenantRow.status !== 'active') {
       throw new Error(`tenant "${tenant}" is not active or does not exist`);
     }
 
-    const [userRow] = await this.database
-      .select({
-        id: users.id,
-        accountStatus: users.accountStatus,
-        disabledAt: users.disabledAt,
-      })
-      .from(users)
-      .where(eq(users.id, principal))
-      .limit(1);
+    const userRow = await findCmUserById(principal);
 
     if (!userRow || userRow.accountStatus !== 'active' || userRow.disabledAt !== null) {
       throw new Error(`principal "${principal}" is not active or disabled`);
     }
 
-    const [tenantMembership] = await this.database
-      .select({ status: tenantMemberships.status })
-      .from(tenantMemberships)
-      .where(
-        and(
-          eq(tenantMemberships.tenantId, tenant),
-          eq(tenantMemberships.userId, principal),
-        ),
-      )
-      .limit(1);
+    const tenantMembership = await findCmMembership(principal, tenantRow.tenantId);
 
     if (!tenantMembership || tenantMembership.status !== 'approved') {
       throw new Error(
@@ -105,14 +95,16 @@ export class DatabaseCodeWorkspaceBindingAuthorizer implements LiveProductBindin
       .select({
         id: workspaces.id,
         type: workspaces.type,
-        tenantId: workspaces.tenantId,
         hiddenAt: workspaces.hiddenAt,
       })
       .from(workspaces)
-      .where(and(eq(workspaces.id, serverWorkspaceId), eq(workspaces.tenantId, tenant)))
+      .where(eq(workspaces.id, serverWorkspaceId))
       .limit(1);
 
-    if (!wsRow || wsRow.hiddenAt !== null) {
+    // Lot A4: the workspace -> tenant binding lives in the CM workspace directory.
+    const cmWorkspace = await findCmWorkspace(serverWorkspaceId);
+
+    if (!wsRow || wsRow.hiddenAt !== null || !cmWorkspace || cmWorkspace.tenantId !== tenantRow.tenantId) {
       throw new Error(
         `workspace "${serverWorkspaceId}" not found or hidden in tenant "${tenant}"`,
       );
@@ -124,16 +116,7 @@ export class DatabaseCodeWorkspaceBindingAuthorizer implements LiveProductBindin
       );
     }
 
-    const [membership] = await this.database
-      .select({ role: workspaceMemberships.role })
-      .from(workspaceMemberships)
-      .where(
-        and(
-          eq(workspaceMemberships.workspaceId, serverWorkspaceId),
-          eq(workspaceMemberships.userId, principal),
-        ),
-      )
-      .limit(1);
+    const membership = await findCmWorkspaceMember(serverWorkspaceId, principal);
 
     if (!membership) {
       throw new Error(
