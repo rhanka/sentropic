@@ -13,7 +13,7 @@ collaboration vocabulary, schema generator, or editor code is published (DS-owne
 
 | Package | Installed version | Recorded and verified |
 | --- | --- | --- |
-| `yjs` | `13.6.27` | `api/package.json` devDeps (exact), api and root lockfiles, workspace install |
+| `yjs` | `13.6.33` | `api/package.json` devDeps (exact), api and root lockfiles, workspace install |
 | `y-protocols` | `1.0.7` | `api/package.json` devDeps (exact), api and root lockfiles, workspace install |
 | `@hocuspocus/server` | `4.7.1` | `api/package.json` devDeps (exact), api and root lockfiles, workspace install |
 | `@hocuspocus/provider` | `4.7.1` | `api/package.json` devDeps (exact), api and root lockfiles, workspace install |
