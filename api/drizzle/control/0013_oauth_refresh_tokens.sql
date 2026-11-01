@@ -65,7 +65,7 @@ BEGIN
   DELETE FROM public.authorization_codes WHERE user_id = p_user AND 'offline_access' = ANY(string_to_array(scope, ' '));
   FOR f IN SELECT id FROM public.oauth_refresh_tokens
     WHERE user_id = p_user AND generation = 0 ORDER BY id FOR UPDATE LOOP
-    PERFORM public.oauth_refresh_revoke_family(f, p_reason, clock_timestamp()::timestamp);
+    PERFORM public.oauth_refresh_revoke_family(f, p_reason, clock_timestamp() AT TIME ZONE 'UTC');
   END LOOP;
   IF p_reason IN ('security_event', 'db_restore_invalidation') THEN
     UPDATE public.oauth_consents SET offline_grant_id = NULL, offline_issuer = NULL,
@@ -104,7 +104,7 @@ BEGIN
     PERFORM 1 FROM public.users WHERE id = u FOR UPDATE;
   END LOOP;
   DELETE FROM public.authorization_codes WHERE client_id = OLD.client_id AND 'offline_access' = ANY(string_to_array(scope, ' '));
-  PERFORM public.oauth_refresh_revoke_family(id, 'policy_denied', clock_timestamp()::timestamp)
+  PERFORM public.oauth_refresh_revoke_family(id, 'policy_denied', clock_timestamp() AT TIME ZONE 'UTC')
     FROM public.oauth_refresh_tokens WHERE client_id = OLD.client_id AND generation = 0 ORDER BY id;
   IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
   RETURN NEW;
@@ -161,7 +161,7 @@ BEGIN
       THEN RETURN NEW; END IF;
   END IF;
   PERFORM 1 FROM public.users WHERE id = OLD.user_id FOR UPDATE;
-  PERFORM public.oauth_refresh_revoke_family(id, 'consent_revoked', clock_timestamp()::timestamp)
+  PERFORM public.oauth_refresh_revoke_family(id, 'consent_revoked', clock_timestamp() AT TIME ZONE 'UTC')
     FROM public.oauth_refresh_tokens WHERE user_id = OLD.user_id AND client_id = OLD.client_id
       AND coalesce(tenant_id, 'sentropic') = OLD.tenant_id AND generation = 0 ORDER BY id;
   IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
