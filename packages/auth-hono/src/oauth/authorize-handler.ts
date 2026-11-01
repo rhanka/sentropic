@@ -122,7 +122,8 @@ export const createOAuthAuthorizeHandler =
       return c.redirect(appendParams(options.loginUrl, loginParams, c.req.url), 302);
     }
 
-    const consentState: Pick<OAuthContinuationState, 'acr' | 'amr' | 'authTime' | 'userId'> = {
+    const consentState: Pick<OAuthContinuationState, 'acr' | 'amr' | 'authTime' | 'userId' | 'sessionId'> = {
+      sessionId: session.sessionRecord.id,
       acr: resolveOAuthAcr(session.sessionRecord),
       amr: resolveOAuthAmr(session.sessionRecord),
       authTime: session.sessionRecord.createdAt.toISOString(),
@@ -305,6 +306,7 @@ const resumeLoginContinuation = async (
     scope: _preValidationScope,
     tenantId: _preLoginTenantId,
     userId: _preLoginUserId,
+    sessionId: _preLoginSessionId,
     ...restFromRequest
   } = payload;
 
@@ -318,6 +320,7 @@ const resumeLoginContinuation = async (
     scope: scopeResult,
     tenantId: resumeTenantId,
     userId: session.user.id,
+    sessionId: session.sessionRecord.id,
   });
 
   // `prompt=login` forces re-AUTHENTICATION but must NOT force re-CONSENT (OIDC): a stored grant
