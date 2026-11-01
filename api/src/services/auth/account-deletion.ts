@@ -143,7 +143,11 @@ const deleteWorkspaceBusinessRows = async (host: Raw, workspaceId: string): Prom
  * PgSession of the unit-of-work transaction, so every statement below commits
  * or rolls back with the identity cascade.
  */
-const appBusinessDeletion = (capturedGrants: CapturedConnectorGrant[], handlerId: 'self_account' | 'admin_account') => ({
+const appBusinessDeletion = (
+  capturedGrants: CapturedConnectorGrant[],
+  handlerId: 'self_account' | 'admin_account',
+  hooks?: { onRemoteQueue?: (key: string | null) => void },
+) => ({
   handlerId,
   resolvePlan: async (userId: string, host: CustodyOpHost): Promise<BusinessDeletionPlanV1> => {
     const raw = host.raw as Raw;
@@ -187,7 +191,8 @@ const appBusinessDeletion = (capturedGrants: CapturedConnectorGrant[], handlerId
       [plan.userId],
     );
     const sessionIds = sessions.map((row) => String(row.id));
-    await queueRemoteRevocationRaw(raw, { sessionIds, userId: plan.userId });
+    const key = await queueRemoteRevocationRaw(raw, { sessionIds, userId: plan.userId });
+    hooks?.onRemoteQueue?.(key);
     deletedRows.chatSessions = sessionIds.length;
     return { handlerId, deletedRows };
   },
@@ -210,6 +215,8 @@ const appBusinessDeletion = (capturedGrants: CapturedConnectorGrant[], handlerId
 export interface AccountDeletionOutcome {
   readonly receipt: PersonDeletionReceiptV2;
   readonly capturedGrants: CapturedConnectorGrant[];
+  /** Outbox key of the in-transaction remote-revocation entry, if queued. */
+  readonly remoteRevocationKey: string | null;
 }
 
 /**
@@ -227,8 +234,11 @@ export const deleteAccountAtomically = async (input: {
     userId: input.userId,
     ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
   });
+  let remoteRevocationKey: string | null = null;
   const { createDeletion } = getCmIdentity();
-  const deletion = createDeletion(appBusinessDeletion(capturedGrants, input.handlerId));
+  const deletion = createDeletion(appBusinessDeletion(capturedGrants, input.handlerId, {
+    onRemoteQueue: (key) => { remoteRevocationKey = key; },
+  }));
   const receipt = await deletion.deletePerson({
     userId: input.userId,
     actorId: input.actorId,
@@ -238,5 +248,5 @@ export const deleteAccountAtomically = async (input: {
   if (receipt.transaction === 'committed') {
     await revokeCapturedConnectorGrants(capturedGrants);
   }
-  return { receipt, capturedGrants };
+  return { receipt, capturedGrants, remoteRevocationKey };
 };
