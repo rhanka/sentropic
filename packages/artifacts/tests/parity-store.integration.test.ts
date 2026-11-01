@@ -50,6 +50,7 @@ describe('transactional management store', () => {
       await expect(store.setArtifactState(artifactId, 'active')).rejects.toThrow('terminal');
       await expect(store.setRenewedAt(artifactId, '2026-11-02T00:00:00Z')).rejects.toThrow('terminal');
       await expect(create('deleted')).rejects.toThrow('gone');
+      await expect(pool.query('DELETE FROM artifacts.artifacts WHERE id = $1', [artifactId])).rejects.toThrow('terminal');
       await expect(pool.query(`INSERT INTO artifacts.releases (id, artifact_id, manifest_digest, manifest)
         VALUES (gen_random_uuid(), $1, 'digest', '{}')`, [artifactId])).rejects.toThrow('terminal');
     } finally { client.release(); }
