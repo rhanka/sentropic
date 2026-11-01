@@ -107,7 +107,7 @@ const rootDb = db;
 const createSentropicOAuthPorts = (db = rootDb): AuthHonoPorts => ({
   oauthRefresh: createOAuthRefreshAdapter({
     database: db,
-    portsForDatabase: (tx) => createSentropicOAuthPorts(tx as typeof db),
+    portsForDatabase: (tx) => createSentropicOAuthPorts(tx as unknown as typeof db),
   }),
   accountPolicy: {
     canAuthenticate(user, now) {
