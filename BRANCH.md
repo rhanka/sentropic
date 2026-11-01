@@ -55,7 +55,6 @@ Grant the preprod `immo-mcp` PKCE client the explicit scopes `immo:artifacts:rea
   - Never amend tests with additive timeouts.
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
-- Record (BRA21-FLAKE1): `make test-cluster-mesh ENV=test-cm-a2-1` at head `7ef805dbf` failed 13 tests, every one with signature `Error: Test timed out in 5000ms` (`tests/engram-memory/sqlite-roundtrip.spec.ts`, `tests/storage/instance-ownership.spec.ts`, `tests/storage/sqlite-capabilities.spec.ts`, `tests/storage/sqlite-corpus.spec.ts`, `tests/storage/sqlite-lanes.spec.ts`, `tests/storage/sqlite-s0-identity.spec.ts`, `tests/storage/sqlite-s0.spec.ts`) while parallel lanes held the shared machine at load average ~25; unrelated to this branch (no kernel or frozen-spec change; the same command at the same head passed 1471/1471 once the machine quieted); no test amended, no timeout raised.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
