@@ -56,6 +56,19 @@ describe('host OAuth refresh HTTP integration', () => {
     await db.delete(oauthClients).where(eq(oauthClients.clientId, clientId));
     await cleanupAuthData();
   });
+  it('should advertise refresh only for an opted-in client through both host discovery endpoints', async () => {
+    for (const path of ['openid-configuration', 'oauth-authorization-server']) {
+      const url = `http://localhost:9197/.well-known/${path}`;
+      const eligible = await app.request(`${url}?client_id=${clientId}`);
+      expect(eligible.status).toBe(200);
+      expect((await eligible.json()).grant_types_supported).toContain('refresh_token');
+      for (const query of ['', '?client_id=unknown-client']) {
+        const denied = await app.request(`${url}${query}`);
+        expect(denied.status).toBe(200);
+        expect((await denied.json()).grant_types_supported).not.toContain('refresh_token');
+      }
+    }
+  });
 
   it('should authorize, consent, rotate twice and revoke the entire family through a spent token', async () => {
     const initial = await issue();
