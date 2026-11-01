@@ -1,6 +1,6 @@
 // r6 §4.1/§4.3.1 same-repository custody binding: sentropic protected environments hold
 // every credential; the store is environment secrets, never a custody repository or App.
-import { createHash, createPrivateKey, createPublicKey, generateKeyPairSync, privateDecrypt, publicEncrypt, randomUUID } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, createPrivateKey, createPublicKey, generateKeyPairSync, privateDecrypt, publicEncrypt, randomBytes, randomUUID } from 'node:crypto';
 import {
   JOB_ENVIRONMENTS, MAX_SLOTS, READER_TOKEN_ENVIRONMENTS, REPOSITORY, SEAT_STATE_HEAD,
   allowedSecretNames, slotSecretNames, stateBankNames,
@@ -10,7 +10,8 @@ export { MAX_SLOTS, REPOSITORY, SEAT_STATE_HEAD, allowedSecretNames, slotSecretN
 export const ensure = (value: unknown, code: string): void => { if (!value) throw new Error(code); };
 
 export type SealedEnvelope = {
-  version: 1; keyId: string; algorithm: 'RSA-OAEP-SHA256-sealed'; ciphertext: string; digest: string;
+  version: 1; keyId: string; algorithm: 'RSA-OAEP-AES-256-GCM-sealed';
+  ek: string; nonce: string; tag: string; ciphertext: string; digest: string;
 };
 
 const keyIdOf = (pem: string) => createHash('sha256').update(pem).digest('hex').slice(0, 32);
@@ -23,18 +24,29 @@ export function sealSecret(a: string | { keyId: string; pem: string }, b: string
   const keyId = typeof a === 'string' ? b : a.keyId;
   const value = typeof a === 'string' ? (c as string) : b;
   ensure(keyId === keyIdOf(pem), 'key-id-mismatch');
-  const ciphertext = publicEncrypt(
-    { key: createPublicKey(pem), padding: 4 /* RSA_PKCS1_OAEP_PADDING */ }, Buffer.from(value, 'utf8'),
+  // Hybrid sealed envelope: a fresh AES-256-GCM data key per secret, itself sealed under the
+  // environment RSA public key with OAEP — arbitrary payload sizes, one recipient key.
+  const dataKey = randomBytes(32);
+  const ek = publicEncrypt(
+    { key: createPublicKey(pem), padding: 4 /* RSA_PKCS1_OAEP_PADDING */ }, dataKey,
   ).toString('base64');
-  return { version: 1, keyId, algorithm: 'RSA-OAEP-SHA256-sealed', ciphertext, digest: digestOf(ciphertext) };
+  const nonce = randomBytes(12);
+  const cipher = createCipheriv('aes-256-gcm', dataKey, nonce);
+  const ciphertext = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]).toString('base64');
+  const tag = cipher.getAuthTag().toString('base64');
+  const digest = digestOf(`${ek}.${nonce}.${tag}.${ciphertext}`);
+  return { version: 1, keyId, algorithm: 'RSA-OAEP-AES-256-GCM-sealed', ek, nonce, tag, ciphertext, digest };
 }
 
 export function openSealed(privatePem: string, envelope: SealedEnvelope): string {
-  ensure(envelope.version === 1 && envelope.digest === digestOf(envelope.ciphertext), 'digest-mismatch');
+  ensure(envelope.version === 1 && envelope.digest === digestOf(`${envelope.ek}.${envelope.nonce}.${envelope.tag}.${envelope.ciphertext}`), 'digest-mismatch');
   try {
-    return privateDecrypt(
-      { key: createPrivateKey(privatePem), padding: 4 }, Buffer.from(envelope.ciphertext, 'base64'),
-    ).toString('utf8');
+    const dataKey = privateDecrypt(
+      { key: createPrivateKey(privatePem), padding: 4 }, Buffer.from(envelope.ek, 'base64'),
+    );
+    const decipher = createDecipheriv('aes-256-gcm', dataKey, Buffer.from(envelope.nonce, 'base64'));
+    decipher.setAuthTag(Buffer.from(envelope.tag, 'base64'));
+    return Buffer.concat([decipher.update(Buffer.from(envelope.ciphertext, 'base64')), decipher.final()]).toString('utf8');
   } catch {
     throw new Error('key-or-decrypt-mismatch');
   }
@@ -99,7 +111,8 @@ export class SyntheticEnvironmentApi {
     if (name.startsWith('SEAT_STATE_') && env !== 'security-seat-writer') throw new Error('environment-not-writer');
     ensure(allowedSecretNames(env).has(name), 'secret-name-not-allowlisted');
     const key = this.keys.get(env)!;
-    ensure(envelope.keyId === key.keyId && envelope.digest === digestOf(envelope.ciphertext), 'envelope-invalid');
+    ensure(envelope.keyId === key.keyId
+      && envelope.digest === digestOf(`${envelope.ek}.${envelope.nonce}.${envelope.tag}.${envelope.ciphertext}`), 'envelope-invalid');
     const value = openSealed(key.privatePem, envelope);
     const pendingKey = `${env}/${name}`;
     const pendingDigest = this.ambiguousPending.get(pendingKey);
