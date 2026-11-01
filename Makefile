@@ -2738,10 +2738,13 @@ test-ci-live-provider-receipt: ## Reject incomplete live tuple and missing daily
 ci-live-provider-select: ## Select a complete main application qualification before live dispatch
 	node scripts/ci/live-provider-receipt.mjs select
 
+ci-live-provider-health: ## Monitor the daily provider schedule without making provider calls
+	node scripts/ci/live-provider-receipt.mjs health
+
 ci-live-provider-prepare: ci-test-env ## Reuse the qualified production tags; tooling is built from the same source
 	@test "$(CI_PROVIDER_MODE)" = live
-	@test -n "$(MISTRAL_API_KEY)" || { echo 'Daily MISTRAL_API_KEY is missing'; exit 1; }
-	@test -n "$(TAVILY_API_KEY)" || { echo 'Daily TAVILY_API_KEY is missing'; exit 1; }
+	@$(if $(strip $(MISTRAL_API_KEY)),true,false) || { echo 'Daily MISTRAL_API_KEY is missing'; exit 1; }
+	@$(if $(strip $(TAVILY_API_KEY)),true,false) || { echo 'Daily TAVILY_API_KEY is missing'; exit 1; }
 	@mkdir -p .tmp/live-provider
 	@$(MAKE) pull-api-image pull-ui-image record-api-image build-api-tool-image build-e2e ENV=$(ENV)
 	docker image inspect $(REGISTRY)/$(API_IMAGE_NAME):$(API_VERSION) > .tmp/live-provider/api.json
