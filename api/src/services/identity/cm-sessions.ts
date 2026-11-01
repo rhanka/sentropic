@@ -185,6 +185,34 @@ const custodyRotationVersion = async (sessionId: string): Promise<number> => {
   return bound?.rotationVersion ?? 1;
 };
 
+export interface CmUpdateSessionTokensInput {
+  readonly sessionId: string;
+  readonly sessionTokenHash: string;
+  readonly refreshTokenHash: string;
+  readonly expiresAt: Date;
+}
+
+// Plain token replacement (no rotation CAS): used by the OAuth session port's
+// updateTokens. Both tables move in ONE custody unit-of-work transaction.
+export const updateCmSessionTokens = async (input: CmUpdateSessionTokensInput): Promise<CmSessionRecord | null> => {
+  const { unitOfWork } = getCmIdentity();
+  const at = new Date().toISOString();
+  await unitOfWork.runWrite({ mode: 'write', deadlineMs: 10_000 }, async (tx) => {
+    await tx.hostTransaction.raw.execute({
+      text: `UPDATE "${CM_IDENTITY_SCHEMA}"."identity_login_token_bindings"
+        SET "session_token_hash" = $2, "refresh_token_hash" = $3, "last_activity_at" = $4
+        WHERE "session_id" = $1`,
+      values: [input.sessionId, input.sessionTokenHash, input.refreshTokenHash, at],
+    });
+    await tx.hostTransaction.raw.execute({
+      text: `UPDATE "${CM_IDENTITY_SCHEMA}"."identity_login_sessions"
+        SET "expires_at" = $2 WHERE "session_id" = $1`,
+      values: [input.sessionId, input.expiresAt.toISOString()],
+    });
+  });
+  return findCmSessionById(input.sessionId);
+};
+
 export const revokeCmSession = async (sessionId: string): Promise<boolean> => {
   const { unitOfWork } = getCmIdentity();
   const at = new Date().toISOString();
