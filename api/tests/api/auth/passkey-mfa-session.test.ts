@@ -30,8 +30,7 @@ vi.mock('../../../src/services/auth/webauthn-adapter', async (importOriginal) =>
 });
 
 import { app } from '../../../src/app';
-import { db } from '../../../src/db/client';
-import { userSessions } from '../../../src/db/schema';
+import { listCmSessionsForUser } from '../../../src/services/identity/cm-sessions';
 import { cleanupAuthData, createTestUser } from '../../utils/auth-helper';
 
 const setVerdict = (userId: string, userVerified: boolean): void => {
@@ -66,11 +65,7 @@ const loginVerify = (): Promise<Response> =>
   });
 
 const readMfaFlag = async (userId: string): Promise<boolean | null> => {
-  const [row] = await db
-    .select({ mfaVerified: userSessions.mfaVerified })
-    .from(userSessions)
-    .where(eq(userSessions.userId, userId))
-    .limit(1);
+  const [row] = await listCmSessionsForUser(userId);
   return row?.mfaVerified ?? null;
 };
 
