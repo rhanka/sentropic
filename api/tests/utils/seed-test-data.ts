@@ -1,22 +1,14 @@
 import { db } from '../../src/db/client.js';
-import { 
-  organizations, 
-  folders, 
-  initiatives, 
-  settings, 
-  users, 
+import {
+  organizations,
+  folders,
+  initiatives,
+  settings,
   workspaces,
-  workspaceMemberships,
-  tenantMemberships,
   objectLocks,
   contextDocuments,
-  webauthnCredentials, 
   sessions,
-  userSessions,
-  webauthnChallenges,
-  magicLinks,
   jobQueue,
-  emailVerificationCodes,
   authorizationCodes,
   oauthClients,
   oauthDpopProofs,
@@ -37,6 +29,10 @@ import {
 } from '../../src/db/schema.js';
 import { createJwksAdapter } from '../../src/services/auth/jwks-adapter.js';
 import { seedOAuthClients, seedServiceClients } from '../../src/services/auth/oauth-client-seed.js';
+import { createCmUser } from '../../src/services/identity/cm-users.js';
+import { enrolCmWorkspace, putCmWorkspaceMember, setCmMembershipState } from '../../src/services/identity/cm-tenancy.js';
+import { PLATFORM_TENANT_ID } from '../../src/services/workspace-service.js';
+import { cmPurgeAllIdentity } from './cm-identity-test-store.js';
 import { testMatrix } from './test-data.js';
 
 export async function seedTestData() {
@@ -61,19 +57,16 @@ export async function seedTestData() {
     await db.delete(organizations); // Depends on workspaces
     
     // 2. Delete auth-related tables with foreign keys
-    await db.delete(userSessions); // Depends on users
-    await db.delete(authorizationCodes); // Depends on oauth_clients/users
-    await db.delete(oauthTokens); // Depends on oauth_clients/users
+    // Lot A4: identity custody (users, sessions, credentials, proofs, memberships)
+    // lives in the cluster-mesh cm_identity schema; purge it wholesale.
+    await cmPurgeAllIdentity();
+    await db.delete(authorizationCodes); // Depends on oauth_clients
+    await db.delete(oauthTokens); // Depends on oauth_clients
     await db.delete(oauthDpopProofs);
-    await db.delete(revokedTokens); // Depends on oauth_clients/users
+    await db.delete(revokedTokens); // Depends on oauth_clients
     await db.delete(oauthClients); // May depend on users via owner_user_id
-    await db.delete(webauthnCredentials); // Depends on users
-    await db.delete(webauthnChallenges); // Depends on users
-    await db.delete(magicLinks); // Depends on users
-    await db.delete(emailVerificationCodes); // Depends on users/email
     await db.delete(sessions); // Old sessions table (if exists)
-    await db.delete(users); // No dependencies
-    
+
     // 3. Delete other tables
     await db.delete(jobQueue); // Clean job queue to avoid interference
     await db.delete(settings); // Clean settings to ensure clean state
@@ -82,7 +75,6 @@ export async function seedTestData() {
     await db.delete(workflowDefinitionTasks);
     await db.delete(workflowDefinitions);
     await db.delete(agentDefinitions);
-    await db.delete(workspaceMemberships);
     await db.delete(viewTemplates); // FK -> workspaces
     await db.delete(workspaces);
     
@@ -110,87 +102,81 @@ export async function seedTestData() {
     await db.insert(workspaces).values([
       {
         id: E2E_WS_ADMIN,
-        ownerUserId: E2E_ADMIN_ID, // will be claimed by actual admin_app at boot; OK for E2E fixtures
         name: 'Admin Workspace',
         createdAt: now,
         updatedAt: now,
       },
       {
         id: E2E_WS_A,
-        ownerUserId: E2E_USER_A_ID,
         name: 'Workspace A (E2E)',
         createdAt: now,
         updatedAt: now,
       },
       {
         id: E2E_WS_B,
-        ownerUserId: E2E_USER_B_ID,
         name: 'Workspace B (E2E)',
         createdAt: now,
         updatedAt: now,
       },
       {
         id: E2E_WS_VICTIM,
-        ownerUserId: E2E_USER_VICTIM_ID,
         name: 'Workspace Victim (E2E)',
         createdAt: now,
         updatedAt: now,
       },
     ]);
 
-    await db.insert(users).values([
+    // Users live in the cluster-mesh cm_identity custody store (lot A4).
+    const e2eUsers = [
       {
-        id: E2E_ADMIN_ID,
+        userId: E2E_ADMIN_ID,
         email: 'e2e-admin@example.com',
         displayName: 'E2E Admin',
         role: 'admin_app',
         accountStatus: 'active',
         emailVerified: true,
-        createdAt: now,
-        updatedAt: now,
+        approvalDueAt: null,
       },
       {
-        id: E2E_USER_A_ID,
+        userId: E2E_USER_A_ID,
         email: 'e2e-user-a@example.com',
         displayName: 'E2E User A',
         role: 'editor',
         accountStatus: 'active',
         emailVerified: true,
-        createdAt: now,
-        updatedAt: now,
+        approvalDueAt: null,
       },
       {
-        id: E2E_USER_B_ID,
+        userId: E2E_USER_B_ID,
         email: 'e2e-user-b@example.com',
         displayName: 'E2E User B',
         role: 'editor',
         accountStatus: 'active',
         emailVerified: true,
-        createdAt: now,
-        updatedAt: now,
+        approvalDueAt: null,
       },
       {
-        id: E2E_USER_VICTIM_ID,
+        userId: E2E_USER_VICTIM_ID,
         email: 'e2e-user-victim@example.com',
         displayName: 'E2E Victim',
         role: 'editor',
         accountStatus: 'active',
         emailVerified: true,
-        createdAt: now,
-        updatedAt: now,
+        approvalDueAt: null,
       },
       {
-        id: E2E_PENDING_ID,
+        userId: E2E_PENDING_ID,
         email: 'e2e-user-pending@example.com',
         displayName: 'E2E Pending',
         role: 'editor',
         accountStatus: 'pending_admin_approval',
         approvalDueAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
         emailVerified: true,
-        createdAt: now,
-        updatedAt: now,
       },
-    ]);
+    ];
+    for (const user of e2eUsers) {
+      await createCmUser(user);
+    }
 
     console.log('✅ Workspaces + users seeded (admin + userA + userB + userVictim + pending)');
 
@@ -207,18 +193,18 @@ export async function seedTestData() {
       console.log(`✅ OAuth signing key initialized (${createdSigningKey.kid})`);
     }
 
-    await db.insert(workspaceMemberships).values([
-      { workspaceId: E2E_WS_ADMIN, userId: E2E_ADMIN_ID, role: 'admin', createdAt: now },
-      { workspaceId: E2E_WS_A, userId: E2E_USER_A_ID, role: 'admin', createdAt: now },
-      { workspaceId: E2E_WS_B, userId: E2E_USER_B_ID, role: 'admin', createdAt: now },
-      { workspaceId: E2E_WS_VICTIM, userId: E2E_USER_VICTIM_ID, role: 'admin', createdAt: now },
-    ]);
+    // Workspace enrolment + membership live in the CM workspace directory (lot A4).
+    for (const ws of [E2E_WS_ADMIN, E2E_WS_A, E2E_WS_B, E2E_WS_VICTIM]) {
+      await enrolCmWorkspace({ workspaceId: ws, tenantId: PLATFORM_TENANT_ID });
+    }
+    await putCmWorkspaceMember(E2E_WS_ADMIN, E2E_ADMIN_ID, 'admin');
+    await putCmWorkspaceMember(E2E_WS_A, E2E_USER_A_ID, 'admin');
+    await putCmWorkspaceMember(E2E_WS_B, E2E_USER_B_ID, 'admin');
+    await putCmWorkspaceMember(E2E_WS_VICTIM, E2E_USER_VICTIM_ID, 'admin');
     // Active fixture accounts need tenant approval for catalog discovery and chat tools.
-    await db.insert(tenantMemberships).values(
-      [E2E_ADMIN_ID, E2E_USER_A_ID, E2E_USER_B_ID, E2E_USER_VICTIM_ID].map(userId => ({
-        tenantId: 'sentropic', userId, status: 'approved', role: 'member',
-      })),
-    );
+    for (const userId of [E2E_ADMIN_ID, E2E_USER_A_ID, E2E_USER_B_ID, E2E_USER_VICTIM_ID]) {
+      await setCmMembershipState(userId, PLATFORM_TENANT_ID, { status: 'approved', role: 'member', decidedBy: 'seed-test-data' });
+    }
 
     // 1. Organisations de test (profil dans organizations.data JSONB)
     const testOrganizationsData = [
