@@ -56,8 +56,13 @@ describe('A2.0b connector revocation custody', () => {
   it('keeps ciphertext opaque and refuses empty or oversized capabilities', () => {
     const key = deriveConnectorCustodyKeyV1(new Uint8Array(32).fill(9));
     expectCustodyInvalid(() => sealConnectorCapabilityV1({ key, keyRef: 'secret-crypto:v1', custodyRef: 'cc', deliveryId: 'd', connectorAccountId: 'c', provider: 'p', capability: { tokenKind: 'access', token: '' } }));
-    const sealed = sealConnectorCapabilityV1({ key, keyRef: 'secret-crypto:v1', custodyRef: 'cc', deliveryId: 'd', connectorAccountId: 'c', provider: 'p', capability: { tokenKind: 'refresh', token: 'r' } });
-    expect(sealed.ciphertext).not.toContain('r');
+    const token = 'refresh-token-secret-0123456789abcdef';
+    const sealed = sealConnectorCapabilityV1({ key, keyRef: 'secret-crypto:v1', custodyRef: 'cc', deliveryId: 'd', connectorAccountId: 'c', provider: 'p', capability: { tokenKind: 'refresh', token } });
+    // Opacity: neither the base64url envelope nor the raw ciphertext bytes
+    // contain the plaintext token (a single-char token would appear in the
+    // base64url alphabet by chance, so the token is long and distinctive).
+    expect(sealed.ciphertext).not.toContain(token);
+    expect(Buffer.from(sealed.ciphertext, 'base64url').toString('latin1')).not.toContain(token);
     key.fill(0);
   });
 
