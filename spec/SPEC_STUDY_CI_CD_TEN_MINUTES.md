@@ -817,3 +817,96 @@ required set to avoid a cycle, and still part of whole-run success. Retain unsuc
 incomplete attempts and fork/cancellation/API-error fallback. Evidence reports
 are excluded. Wiring/expected-results/DAG contracts qualify this composed tree;
 the second PR to land must preserve these resolutions and repeat the suites.
+
+## 14. BR-81 deterministic journeys — implementation evidence
+
+Branch `test/ci-deterministic-journeys` starts from main
+`1239f291f7ec32a09cfa98be8ac2897fd1da6997`. The owner assigns worktree
+`tmp/worktrees/ci-br81`, `ENV=test-ci-br81`, API/UI/mail ports 9405/5605/1505,
+and reserves Docker for #869 until its merge or 18:00 Europe/Paris on 1 November.
+No application or image qualification is credited before that gate opens.
+
+### 14.1 Fresh measured baseline
+
+[Main run 41277623779](https://github.com/rhanka/sentropic/actions/runs/41277623779),
+attempt 1, source/workflow revision `1239f291f7ec32a09cfa98be8ac2897fd1da6997`,
+completed successfully from 2026-11-01T05:36:53Z to 05:53:31Z: **998s wall**.
+The retained workflow SHA-256 is
+`1d1557b2534ca85c0bb07bad4fd4a707ac1430294e2648eae3db7375f0258603`.
+Paginated Jobs API evidence contains 105 rows: 71 executions, 34 skips,
+zero missing execution timestamps, **164.33 runner-minutes**, peak 30,
+queue p50/max **2s/12s**. The qualification endpoint is 987s; selected images
+848s and preproduction 937s. Package publication is unselected, hence null.
+Critical-path qualification scheduling is 35s. Runners use `ubuntu-latest`.
+API/toolbox/UI build logs show GHA cache imports and reused layers; this is
+partial cache reuse, not proof that every input or job was warm.
+
+| Complete baseline job | Job ID | Measured seconds | BR-81 ceiling |
+| --- | --- | ---: | ---: |
+| Browser A: 00/02/06/10 | 124763781744 | 283 | 180 |
+| Browser B: 01/04 | 124763781873 | 161 | 180 |
+| Browser C: 03 | 124763781719 | 217 | 180 |
+| Browser D: 08/09 | 124763781722 | 161 | 180 |
+| Browser E: 05/07 | 124763781735 | 158 | 180 |
+| VSCode | 124763781680 | 99 | 150 |
+| API AI: initiative async / summary sync | 124763800091 | 328 | 180 |
+| API AI: chat / summary auto / comments | 124763800095 | 251 | 180 |
+| API AI: tools / enrichment / documents / initiative sync | 124763800171 | 223 | 180 |
+| API unit, including app cluster-mesh | 124763800100 | 460 | 180 |
+| API endpoints 1 | 124763800179 | 218 | 180 |
+| API endpoints 2 | 124763800191 | 234 | 180 |
+| API endpoints 3 | 124763800196 | 269 | 180 |
+| API endpoints 4 | 124763800178 | 193 | 180 |
+| API queue / security / limit | 124763800102 / 124763800182 / 124763800172 | 118 / 123 / 123 | 180 each |
+| API outbox / artifact-store / object-registry | 124763800186 / 124763800233 / 124763800114 | 110 / 113 / 102 | 180 each |
+| API smoke | 124763800264 | 144 | 180 |
+
+The older 255s browser sample remains historical; the fresh maximum is 283s.
+The 460s unit job includes a separate 205s app-cluster-mesh action and 148s
+unit action. Its unit runner reports 148 files, 1,528 passes and two declared
+skips. API static job 124762950021 takes 581s; artifacts validator
+124762950254 takes 781s. These spans remain visible constraints on the train;
+fixture unit checks cannot establish their budget acceptance.
+
+### 14.2 Implemented behavior and pending qualification
+
+The test-only overlay redirects provider HTTP/SSE at the transport boundary,
+keeps the application image, auth, database, queue, tools and persistence,
+and requires an internal test network plus an unexpected-egress journal.
+Environment configuration alone cannot enable the production fixture guard.
+Selected chat-completion, vision and Tavily protocols have deterministic
+responses; other remote hosts fail closed. Real credentials are confined to
+the daily workflow. Existing application assertions and E2E timeouts are
+unchanged; browser retries cannot conceal failures.
+
+Six explicit Chromium shards balance the 56 numbered browser files using
+successful test durations from the five identified baseline logs. Each run
+lists expected identities, executes one Playwright process with one real-login
+setup, and reconciles actual identities, declared skips and failures. Missing
+measurements stay null. Existing autosave sleeps now wait on actual responses.
+The VSCode lane adds request-payload streaming and persisted-message checks;
+this does not claim qualification of the installed editor extension UI.
+
+Daily qualification selects a completed, published main tuple with all selected
+AI/browser/VSCode results. Two small image-identity artifacts survive for 30 days;
+the existing validator checks registry images against source/tree/workflow,
+profile, original run and tested image IDs. Large transport archives retain
+their one-day expiry and successful-consumer deletion. Actual installed package
+versions and lock digest join the daily receipt. Provider wire attempts,
+errors, cancellations and unknown pricing remain explicit; unknown cost is null.
+The independent hourly monitor rejects missing, failed or stale daily execution.
+
+Offline checks pass: 15 protocol scenarios, five browser-manifest scenarios and
+eight live-receipt scenarios, plus the existing 69 CI wiring/verdict tests.
+Application runs, exact production image identities, zero live-egress proof,
+new job/wall durations and one actual scheduled live result remain **to measure**.
+The tenth API file, `gw-native-qualification.test.ts`, requires protected UAT
+readiness, two authorized sessions and an active metered gateway partition;
+those prerequisites are absent here. Owner clarification is pending. Its daily
+invocation remains explicit and fails on absent readiness; no success or scope
+waiver is claimed. PR dispatch of that file is unresolved.
+
+Final evidence is collected in `.tmp/rv/br81.md` with raw run/jobs/workflow,
+expected membership and measured summaries under `.tmp/br81/`. A final PR run
+does not replace an actual main delivery or scheduled daily receipt. Each
+unmet ceiling stays open; no whole-train ten-minute acceptance is claimed.
