@@ -5,15 +5,19 @@ import type {
   AuthHonoSessionService,
   AuthHonoUserRecord,
 } from '@sentropic/auth-hono';
-import { count, eq } from 'drizzle-orm';
-import { db } from '../../db/client';
-import { userSessions, users } from '../../db/schema';
 import {
   refreshSession as refreshSessionTokens,
   revokeSession as revokeSessionById,
   validateSession,
 } from '../session-manager';
 import { readDeviceCodeSnapshot } from '../device-code-store';
+import {
+  countCmSessions,
+  findCmSessionById,
+} from '../identity/cm-sessions';
+import { findCmUserById } from '../identity/cm-users';
+import type { CmSessionRecord } from '../identity/cm-sessions';
+import type { CmUserRecord } from '../identity/cm-users';
 
 /**
  * Sentropic adapters for `@sentropic/auth-hono` session route handlers.
@@ -64,24 +68,22 @@ export const authHonoCookiePort: AuthHonoCookiePort = {
     serializeCookie(SESSION_COOKIE, token, maxAgeFrom(expiresAt)),
 };
 
-const toAuthHonoSessionRecord = (
-  row: typeof userSessions.$inferSelect
-): AuthHonoSessionRecord => ({
+const toAuthHonoSessionRecord = (row: CmSessionRecord): AuthHonoSessionRecord => ({
   createdAt: row.createdAt,
   deviceName: row.deviceName,
   expiresAt: row.expiresAt,
   id: row.id,
   ipAddress: row.ipAddress,
-  lastActivityAt: row.lastActivityAt ?? row.createdAt,
+  lastActivityAt: row.lastActivityAt,
   mfaVerified: row.mfaVerified,
   refreshTokenHash: row.refreshTokenHash,
-  revokedAt: null,
+  revokedAt: row.revokedAt,
   sessionTokenHash: row.sessionTokenHash,
   userAgent: row.userAgent,
   userId: row.userId,
 });
 
-const toAuthHonoUserRecord = (row: typeof users.$inferSelect): AuthHonoUserRecord => ({
+const toAuthHonoUserRecord = (row: CmUserRecord): AuthHonoUserRecord => ({
   accountStatus: row.accountStatus as AuthHonoAccountStatus,
   approvalDueAt: row.approvalDueAt,
   createdAt: row.createdAt,
@@ -90,7 +92,7 @@ const toAuthHonoUserRecord = (row: typeof users.$inferSelect): AuthHonoUserRecor
   emailVerified: row.emailVerified,
   id: row.id,
   role: row.role,
-  updatedAt: row.updatedAt ?? row.createdAt,
+  updatedAt: row.updatedAt,
 });
 
 export const authHonoSessionService: AuthHonoSessionService = {
@@ -130,16 +132,8 @@ export const authHonoSessionService: AuthHonoSessionService = {
       return null;
     }
 
-    const [sessionRow] = await db
-      .select()
-      .from(userSessions)
-      .where(eq(userSessions.id, payload.sessionId))
-      .limit(1);
-    const [userRow] = await db
-      .select()
-      .from(users)
-      .where(eq(users.id, payload.userId))
-      .limit(1);
+    const sessionRow = await findCmSessionById(payload.sessionId);
+    const userRow = await findCmUserById(payload.userId);
 
     if (!sessionRow || !userRow) {
       return null;
@@ -161,18 +155,18 @@ export const authHonoSessionService: AuthHonoSessionService = {
 };
 
 export async function findSessionUser(userId: string) {
-  const [user] = await db.select({
-    email: users.email,
-    displayName: users.displayName,
-    role: users.role,
-  }).from(users).where(eq(users.id, userId)).limit(1);
-  return user ?? null;
+  const user = await findCmUserById(userId);
+  if (!user) return null;
+  return {
+    email: user.email,
+    displayName: user.displayName,
+    role: user.role,
+  };
 }
 
 export async function readSessionShadowSnapshot() {
-  const [sessions] = await db.select({ value: count() }).from(userSessions);
   return {
-    sessions: sessions?.value ?? 0,
+    sessions: await countCmSessions(),
     devices: readDeviceCodeSnapshot(),
   };
 }
