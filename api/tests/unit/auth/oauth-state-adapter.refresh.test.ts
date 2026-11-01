@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { eq, sql } from 'drizzle-orm';
-import { db } from '../../../src/db/client';
+import { db, pool } from '../../../src/db/client';
 import { oauthClients, oauthConsents, users } from '../../../src/db/schema';
 import { createOAuthRefreshAdapter } from '../../../src/services/auth/oauth-refresh-adapter';
 import { createConsentStoreAdapter } from '../../../src/services/auth/consent-store-adapter';
@@ -98,4 +98,54 @@ describe('PostgreSQL refresh storage', () => {
     }
     expect((await adapter().findByHash(hash('family')))?.revokedAt).not.toBeNull();
   });
+
+  it.each(['rotation-first', 'revoke-first'])('should serialize real PostgreSQL revocation: %s', async (order) => {
+    const writer = await pool.connect();
+    const { rows: [{ pid }] } = await writer.query('SELECT pg_backend_pid() AS pid');
+    const rotate = () => adapter().withLock(lock, async (tx) => {
+      const anchor = await tx.findAnchor('family');
+      if (anchor!.revokedAt) return false;
+      await tx.consume('family', 'child', now);
+      await tx.save({ ...row('child'), familyId: 'family', parentId: 'family', generation: 1 });
+      return true;
+    });
+    try {
+      await writer.query('BEGIN');
+      if (order === 'revoke-first') {
+        await writer.query('SELECT id FROM users WHERE id=$1 FOR UPDATE', [userId]);
+        await writer.query("SELECT oauth_refresh_revoke_family('family','explicit_revoke',now()::timestamp)");
+        const rotation = rotate();
+        await waitForBlockedBy(pid);
+        await writer.query('COMMIT');
+        expect(await rotation).toBe(false);
+      } else {
+        let release!: () => void;
+        const barrier = new Promise<void>((resolve) => { release = resolve; });
+        let entered!: () => void;
+        const locked = new Promise<void>((resolve) => { entered = resolve; });
+        let rotationPid = 0;
+        const rotation = adapter().withLock(lock, async (tx, connection) => {
+          const { rows } = await connection.execute(sql`SELECT pg_backend_pid() AS pid`);
+          rotationPid = Number(rows[0].pid); entered(); await barrier;
+          await tx.consume('family', 'child', now);
+          await tx.save({ ...row('child'), familyId: 'family', parentId: 'family', generation: 1 });
+        });
+        await locked;
+        const revocation = writer.query("SELECT oauth_refresh_revoke_user($1, 'security_event')", [userId]);
+        await waitForBlockedBy(rotationPid);
+        release(); await rotation; await revocation; await writer.query('COMMIT');
+        expect((await adapter().findByHash(hash('child')))?.revokedAt).not.toBeNull();
+      }
+      expect((await adapter().findAnchor('family'))?.revokedAt).not.toBeNull();
+    } finally { await writer.query('ROLLBACK'); writer.release(); }
+  });
 });
+
+async function waitForBlockedBy(pid: number) {
+  for (let attempt = 0; attempt < 500; attempt++) {
+    const { rows } = await pool.query('SELECT 1 FROM pg_stat_activity WHERE $1 = ANY(pg_blocking_pids(pid))', [pid]);
+    if (rows.length) return;
+    await new Promise<void>((resolve) => setImmediate(resolve));
+  }
+  throw new Error('Expected PostgreSQL lock barrier was not reached.');
+}
