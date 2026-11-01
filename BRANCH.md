@@ -57,6 +57,7 @@ Opted-in MCP clients can renew a one-hour access token within a rotating 15-day 
 - [x] Track source ready for designated-writer import under owner item `01M588EA0X3RQPCATVR987CFB4`; concurrent `.track` writes are reserved to the conductor.
 - [x] A4 identity cutover may land in parallel; no identity-table redesign or new account/session references.
 - [x] Final review: preserve client_id through the host discovery ingress; both well-known endpoints have an HTTP regression, including default-deny unknown/absent clients.
+- [x] Final sync acceptance: the imported-client HTTP fixture records response headers and asserts no-store on OAuth errors.
 - [x] D-R1: require a new authorize flow at day 15; D-R2: browser logout preserves consented offline MCP families; D-R3: non-null required_acr remains ineligible — **pending owner ratification**.
 
 ## AI Flaky tests
@@ -84,7 +85,7 @@ Opted-in MCP clients can renew a one-hour access token within a rotating 15-day 
   - [x] Make only the governed preprod public PKCE immo-mcp row eligible; assert preprod divergence and unchanged prod row.
   - [x] Gate: PostgreSQL reuse/rotation/revocation races, registration/sync suites, affected typecheck/lint and package version checks.
 - [ ] **Delivery**
-  - [ ] Review code, address findings, keep each commit under 150 lines, run scope-check before each commit.
+  - [x] Review code, address findings, keep each commit under 150 lines, run scope-check before each commit.
   - [ ] Create draft PR with this file as body and 3–6 step first comment; one final-head CI run and wait for completion.
   - [ ] Write `.tmp/rv/idp-refresh.md`: PR, head, CI, every §9 group and preprod apply steps (sync row, deploy); stop without merging.
 
@@ -94,4 +95,8 @@ Opted-in MCP clients can renew a one-hour access token within a rotating 15-day 
 - Registration and SQL sync self-tests assert preprod divergence and unchanged prod policy; journal integrity checks the single new control migration `0013_oauth_refresh_tokens` after `0012_app_artifact_host`.
 - Deploy the migration/runtime to every preprod replica, then use governed identity sync (`ALLOWED_CLIENTS=immo-mcp`, dry-run then approved apply) to opt in the public PKCE row. PR #868's temporary access TTL is reset to 3600 by this rollout.
 - Package candidates: auth-hono 0.18.0 > registry 0.17.0; auth-ui 0.9.0 > registry 0.8.0, rechecked after rebase.
+- Reboot qualification: 263 auth-hono tests, 56 auth-ui tests (including rendered consent), and 58 API/PostgreSQL tests pass; both sync selftests pass.
+- API and auth-hono type checks, auth-ui type checks and scoped API lint pass; the lint result has zero errors.
+- Independent GLM r4 and Mistral r6 code reviews have no blocking findings; the final Mistral delta review also has no blocking findings. The interrupted final GLM attempt produced no verdict.
+- Local validation reused existing images; `make down ENV=test-idp-refresh` completed after the campaign.
 - D-R1, D-R2 and D-R3 remain **pending owner ratification**. Lots 0/4/5 and production activation are outside this PR.

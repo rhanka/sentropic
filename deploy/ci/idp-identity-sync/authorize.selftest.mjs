@@ -27,15 +27,18 @@ const handler = createOAuthAuthorizeHandler({
 });
 const request = resource => {
   const url = new URL(`${issuer}/api/v1/auth/oauth/authorize`);
+  const headers = new Headers();
   url.search = new URLSearchParams({ client_id: 'immo-mcp', response_type: 'code',
     redirect_uri: client.redirectUris[0], scope: client.allowedScopes.join(' '),
     code_challenge: 'synthetic-s256-proof', code_challenge_method: 'S256', resource }).toString();
   return { req: { url: url.href, raw: new Request(url), query: key => url.searchParams.get(key), queries: key => url.searchParams.getAll(key) },
-    json: (body, status) => Response.json(body, { status }), redirect: (target, status) => Response.redirect(target, status) };
+    header: (name, value) => headers.set(name, value),
+    json: (body, status) => Response.json(body, { status, headers }), redirect: (target, status) => Response.redirect(target, status) };
 };
 stored = null;
 let response = await handler(request(client.resourceIndicators[0]));
 assert.equal(response.status, 400);
+assert.equal(response.headers.get('cache-control'), 'no-store');
 assert.equal((await response.json()).error_description, 'Unknown OAuth client.');
 stored = client;
 response = await handler(request(client.resourceIndicators[0]));
