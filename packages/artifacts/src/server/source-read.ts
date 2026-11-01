@@ -23,6 +23,8 @@ export async function readArtifactSource(ports: SourceReadPorts, input: SourceRe
   const release = input.releaseId === undefined ? await ports.getCurrent(input.artifactId)
     : await ports.getRelease(input.releaseId);
   if (!release) throw new ArtifactOperationError(input.releaseId ? 'not_found' : 'gone');
+  if ((input.releaseId !== undefined && release.releaseId !== input.releaseId) ||
+    ('artifactId' in release && release.artifactId !== input.artifactId)) throw new ArtifactOperationError('not_found');
   let manifest;
   try { manifest = parseManifest(release.manifest); }
   catch (cause) { throw new ArtifactOperationError('verification_failed', { cause }); }
