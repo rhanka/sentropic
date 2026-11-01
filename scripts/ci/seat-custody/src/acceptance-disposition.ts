@@ -1,7 +1,7 @@
 // r6 §6.3/§6.4/T6-M1 acceptance disposition: enumerated inherited IDs, source paths,
 // destination rows, L03a test IDs and §4.5 credential/copy/loader receipts.
 // Embedded literals: the .tmp preservation inventories are not part of the shipped tree.
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 export const C_PREFIX = "scripts/ci/seat-custody/tests/";
@@ -288,7 +288,7 @@ export const ACCEPTANCE_IDS: AcceptanceIdRow[] = [
  }
 ];
 
-export type RequiredPathRow = { path: string; status: string; suite: string };
+export type RequiredPathRow = { path: string; status: string; suite: string; replacement?: string; replacementOwner?: string };
 export const REQUIRED_PATHS: RequiredPathRow[] = [
  {
   "path": "packages/llm-mesh/tests/enrollment/seat-bundle.test.ts",
@@ -323,6 +323,8 @@ export const REQUIRED_PATHS: RequiredPathRow[] = [
  {
   "path": "packages/llm-mesh/tests/node/codex-seat-store-backend.test.ts",
   "status": "missing",
+  "replacement": "packages/llm-mesh/tests/node/cli-seat-store-reader.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-llm-mesh"
  },
  {
@@ -343,6 +345,8 @@ export const REQUIRED_PATHS: RequiredPathRow[] = [
  {
   "path": "packages/llm-mesh/tests/transport/codex-usage-reader.test.ts",
   "status": "missing",
+  "replacement": "scripts/ci/seat-custody/tests/seat-admission.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-llm-mesh"
  },
  {
@@ -373,16 +377,22 @@ export const REQUIRED_PATHS: RequiredPathRow[] = [
  {
   "path": "api/tests/unit/ci-seat-runtime.test.ts",
   "status": "missing",
+  "replacement": "api/tests/unit/llm-account-transports.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-api-unit"
  },
  {
   "path": "api/tests/unit/ci-seat-admission.test.ts",
   "status": "missing",
+  "replacement": "scripts/ci/seat-custody/tests/seat-admission.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-api-unit"
  },
  {
   "path": "api/tests/unit/ci-deterministic-provider.test.ts",
   "status": "missing",
+  "replacement": "scripts/ci/seat-custody/tests/ci-seat-broker.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-api-unit"
  },
  {
@@ -393,11 +403,15 @@ export const REQUIRED_PATHS: RequiredPathRow[] = [
  {
   "path": "api/tests/api/ci-seat-runtime.test.ts",
   "status": "missing",
+  "replacement": "api/tests/api/llm-seat-delivery.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-api-endpoints"
  },
  {
   "path": "api/tests/api/ci-incidental-inference.test.ts",
   "status": "missing",
+  "replacement": "scripts/ci/seat-custody/tests/ci-credit-broker.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-api-endpoints"
  },
  {
@@ -443,6 +457,8 @@ export const REQUIRED_PATHS: RequiredPathRow[] = [
  {
   "path": "api/tests/ai/document-summary-live.test.ts",
   "status": "missing",
+  "replacement": "scripts/ci/seat-custody/tests/operation-model-map.test.ts",
+  "replacementOwner": "L03b",
   "suite": "make test-api-ai"
  },
  {
@@ -463,31 +479,43 @@ export const REQUIRED_PATHS: RequiredPathRow[] = [
  {
   "path": "scripts/ci/seat-custody/tests/github-seat-store.test.ts",
   "status": "missing",
+  "replacement": "scripts/ci/seat-custody/tests/seat-environment-custody.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-ci-seat-contract"
  },
  {
   "path": "scripts/ci/seat-custody/tests/seat-writer-isolation.test.ts",
   "status": "missing",
+  "replacement": "scripts/ci/seat-custody/tests/custody-state-store.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-ci-seat-contract"
  },
  {
   "path": "scripts/ci/seat-custody/tests/seat-enrollment.test.ts",
   "status": "missing",
+  "replacement": "scripts/ci/seat-custody/tests/seat-admission.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-ci-seat-contract"
  },
  {
   "path": "scripts/ci/seat-custody/tests/seat-reenroll.test.ts",
   "status": "missing",
+  "replacement": "scripts/ci/seat-custody/tests/seat-admission.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-ci-seat-contract"
  },
  {
   "path": "scripts/ci/seat-custody/tests/seat-refresh.test.ts",
   "status": "missing",
+  "replacement": "scripts/ci/seat-custody/tests/custody-state-store.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-ci-seat-contract"
  },
  {
   "path": "scripts/ci/seat-custody/tests/seat-quota-probe.test.ts",
   "status": "missing",
+  "replacement": "scripts/ci/seat-custody/tests/seat-admission.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-ci-seat-contract"
  },
  {
@@ -497,17 +525,19 @@ export const REQUIRED_PATHS: RequiredPathRow[] = [
  },
  {
   "path": "scripts/ci/seat-custody/tests/seat-workflow-contract.test.ts",
-  "status": "missing",
+  "status": "present",
   "suite": "make test-ci-seat-contract"
  },
  {
   "path": "scripts/ci/seat-custody/tests/seat-secret-hygiene.test.ts",
-  "status": "missing",
+  "status": "present",
   "suite": "make test-ci-seat-contract"
  },
  {
   "path": "scripts/ci/seat-custody/tests/seat-degraded-binding.test.ts",
   "status": "missing",
+  "replacement": "scripts/ci/seat-custody/tests/ci-seat-broker.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-ci-seat-contract"
  },
  {
@@ -518,16 +548,20 @@ export const REQUIRED_PATHS: RequiredPathRow[] = [
  {
   "path": "scripts/ci/seat-custody/tests/seat-ci-plan.test.ts",
   "status": "missing",
+  "replacement": "scripts/ci/seat-custody/tests/acceptance-disposition.test.ts",
+  "replacementOwner": "L03b",
   "suite": "make test-ci-seat-contract"
  },
  {
   "path": "scripts/ci/seat-custody/tests/seat-ci-artifacts.test.ts",
-  "status": "missing",
+  "status": "present",
   "suite": "make test-ci-seat-contract"
  },
  {
   "path": "scripts/ci/seat-custody/tests/seat-ci-receipts.test.ts",
   "status": "missing",
+  "replacement": "scripts/security/daily/ci-trigger-bridge.test.mjs",
+  "replacementOwner": "L03b",
   "suite": "make test-ci-seat-contract"
  },
  {
@@ -548,11 +582,13 @@ export const REQUIRED_PATHS: RequiredPathRow[] = [
  {
   "path": "scripts/ci/seat-custody/tests/ci-seat-promote-control.test.ts",
   "status": "missing",
+  "replacement": "scripts/security/daily/control-image-publish.test.mjs",
+  "replacementOwner": "L03a",
   "suite": "make test-ci-seat-contract"
  },
  {
   "path": "scripts/ci/seat-custody/tests/ci-seat-topology.test.ts",
-  "status": "missing",
+  "status": "present",
   "suite": "make test-ci-seat-contract"
  },
  {
@@ -563,26 +599,34 @@ export const REQUIRED_PATHS: RequiredPathRow[] = [
  {
   "path": "scripts/ci/seat-custody/tests/ci-seat-audit-secret-names.test.ts",
   "status": "missing",
+  "replacement": "scripts/ci/seat-custody/tests/seat-secret-hygiene.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-ci-seat-contract"
  },
  {
   "path": "scripts/ci/seat-custody/tests/ci-search-relay.test.ts",
   "status": "missing",
+  "replacement": "scripts/ci/seat-custody/tests/seat-secret-hygiene.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-ci-seat-contract"
  },
  {
   "path": "scripts/ci/seat-custody/tests/e2e/github-seat-roundtrip.test.ts",
-  "status": "missing",
+  "status": "present",
   "suite": "make test-ci-seat-contract"
  },
  {
   "path": "scripts/ci/seat-custody/tests/e2e/seat-ci-bootstrap.test.ts",
   "status": "missing",
+  "replacement": "scripts/ci/seat-custody/tests/seat-workflow-contract.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-ci-seat-contract"
  },
  {
   "path": "e2e/tests/00-ci-seat-mode.spec.ts",
   "status": "missing",
+  "replacement": "scripts/ci/seat-custody/tests/ci-seat-set-mode.test.ts",
+  "replacementOwner": "L03a",
   "suite": "make test-e2e"
  },
  {
@@ -989,6 +1033,25 @@ export const L03A_TEST_IDS: Record<string, string[]> = {
  ]
 };
 
+// ACT-L03b additions (r6 §6.4 exact destinations): T5-C5 bot-PR trigger/check bridge
+// and attestor semantics, T6-R1 post-merge effects, T6-M1 collection proof, L3-E map.
+export const L03B_TEST_IDS: Record<string, string[]> = {
+ "T5-C5": [
+  "D/ci-trigger-bridge.test.mjs",
+  "D/review.test.mjs"
+ ],
+ "T6-R1": [
+  "D/post-merge-effects.test.mjs"
+ ],
+ "T6-M1": [
+  "C/acceptance-disposition.test.ts",
+  "D/control-provisioning.test.mjs"
+ ],
+ "L3-E": [
+  "C/operation-model-map.test.ts"
+ ]
+};
+
 export type CredentialRow = { credential: string; owner: string; expiry: string; copies: string[]; loaderKind: string };
 export const CREDENTIAL_ROWS: CredentialRow[] = [
  {
@@ -1095,14 +1158,29 @@ export function validateAcceptanceDisposition(repoRoot: string): { ids: number; 
   for (const p of REQUIRED_PATHS) {
     if (!p.path || !p.suite) throw new Error('path-disposition-missing:' + p.path);
     if (p.status === 'present' && !existsSync(join(repoRoot, p.path))) throw new Error('present-path-absent:' + p.path);
+    // A missing source path is never a bare N/A: it must carry an exact reviewed
+    // replacement destination (repo-relative, existing) and a replacement owner.
+    if (p.status !== 'present') {
+      if (!p.replacement || !p.replacementOwner) throw new Error('replacement-missing:' + p.path);
+      if (p.replacement.startsWith('C/') || p.replacement.startsWith('D/')) throw new Error('replacement-not-repo-relative:' + p.path);
+      if (!existsSync(join(repoRoot, p.replacement))) throw new Error('replacement-absent:' + p.path + ':' + p.replacement);
+    }
   }
   if (SECTION_64_ROWS.length !== 28) throw new Error('section64-row-count');
   for (const row of SECTION_64_ROWS) {
     if (!row.owner || row.destinations.length === 0) throw new Error('section64-row-incomplete:' + row.id);
+    for (const d of row.destinations) {
+      if (!/^[CD]\//.test(d)) throw new Error('section64-destination-non-concrete:' + row.id + ':' + d);
+    }
   }
   for (const [id, dests] of Object.entries(L03A_TEST_IDS)) {
     for (const d of dests) {
       if (!existsSync(join(repoRoot, resolveDestination(d)))) throw new Error('l03a-destination-missing:' + id + ':' + d);
+    }
+  }
+  for (const [id, dests] of Object.entries(L03B_TEST_IDS)) {
+    for (const d of dests) {
+      if (!existsSync(join(repoRoot, resolveDestination(d)))) throw new Error('l03b-destination-missing:' + id + ':' + d);
     }
   }
   for (const row of CREDENTIAL_ROWS) {
@@ -1110,4 +1188,110 @@ export function validateAcceptanceDisposition(repoRoot: string): { ids: number; 
     if (!LOADER_KINDS.includes(row.loaderKind)) throw new Error('loader-kind-unknown:' + row.loaderKind);
   }
   return { ids: ACCEPTANCE_IDS.length, paths: REQUIRED_PATHS.length, rows: SECTION_64_ROWS.length };
+}
+
+export type CollectionProof = {
+  destinations: number;
+  missingFiles: string[];
+  unwired: string[];
+  unknownSuites: string[];
+  pending: string[];
+  cWired: number;
+  dWired: number;
+};
+
+// T6-M1/L3-K collection proof. Every enumerated destination (§6.4 rows, L03a/L03b
+// T5/T6 IDs, replacement paths) is checked against the real suite wiring:
+//  - C/ destinations are wired when the seat-custody Makefile's required glob
+//    (tests/*.test.ts tests/e2e/*.test.ts) covers the resolved file;
+//  - D/ destinations are wired when the root Makefile's test-security-daily SCOPE
+//    lists the resolved file;
+//  - replacement paths under C_PREFIX/D_PREFIX follow the same rules, other
+//    repo-relative replacements only need to exist.
+// Destinations owned by L03a/L03b must exist now (missingFiles); destinations of
+// later lots that have not landed yet are reported as pending, never silently
+// dropped. Any existing destination that no required suite runs is unwired.
+export function validateCollection(repoRoot: string): CollectionProof {
+  const seatMakefile = readFileSync(join(repoRoot, 'scripts/ci/seat-custody/Makefile'), 'utf8');
+  const rootMakefile = readFileSync(join(repoRoot, 'Makefile'), 'utf8');
+  const dailyBlock = (() => {
+    const start = rootMakefile.indexOf('\ntest-security-daily:');
+    if (start < 0) return '';
+    const rest = rootMakefile.slice(start);
+    const end = rest.indexOf('\n\n', 1);
+    return end < 0 ? rest : rest.slice(0, end);
+  })();
+  const cGlobWired = (rel: string): boolean =>
+    seatMakefile.includes('tests/*.test.ts') &&
+    (rel.startsWith(C_PREFIX) && /^scripts\/ci\/seat-custody\/tests\/[^/]+\.test\.ts$/.test(rel) ||
+      /^scripts\/ci\/seat-custody\/tests\/e2e\/[^/]+\.test\.ts$/.test(rel));
+  const isDWired = (rel: string): boolean => rel.startsWith(D_PREFIX) && dailyBlock.includes(rel);
+
+  const l03abOwned = new Set<string>([
+    ...Object.values(L03A_TEST_IDS).flat(),
+    ...Object.values(L03B_TEST_IDS).flat(),
+  ]);
+  const replacements = REQUIRED_PATHS.filter(p => p.status !== 'present').map(p => p.replacement!);
+  const allDestinations = [...new Set<string>([
+    ...SECTION_64_ROWS.flatMap(r => r.destinations),
+    ...l03abOwned,
+    ...replacements,
+  ])];
+
+  const missingFiles: string[] = [];
+  const unwired: string[] = [];
+  const pending: string[] = [];
+  let cWired = 0;
+  let dWired = 0;
+  for (const d of allDestinations) {
+    const rel = d.startsWith('C/') || d.startsWith('D/') ? resolveDestination(d) : d;
+    const exists = existsSync(join(repoRoot, rel));
+    if (!exists) {
+      if (l03abOwned.has(d) || replacements.includes(d)) missingFiles.push(d + ' -> ' + rel);
+      else pending.push(d + ' -> ' + rel);
+      continue;
+    }
+    if (rel.startsWith(C_PREFIX)) {
+      if (cGlobWired(rel)) cWired++;
+      else unwired.push(d);
+    } else if (rel.startsWith(D_PREFIX)) {
+      if (isDWired(rel)) dWired++;
+      else unwired.push(d);
+    }
+  }
+
+  // Every present inherited path's suite must be a real Make target (explicit or
+  // pattern rule) in the root Makefile or one of its included Makefiles.
+  const makefiles = [join(repoRoot, 'Makefile')];
+  for (const line of rootMakefile.split('\n')) {
+    const inc = /^-?include\s+(\S+)/.exec(line);
+    if (inc && existsSync(join(repoRoot, inc[1]))) makefiles.push(join(repoRoot, inc[1]));
+  }
+  const explicit = new Set<string>();
+  const patterns: string[] = [];
+  for (const mf of makefiles) {
+    for (const line of readFileSync(mf, 'utf8').split('\n')) {
+      const t = /^([A-Za-z0-9_.-]+):/.exec(line);
+      if (t) explicit.add(t[1]);
+      const p = /^([A-Za-z0-9_.-]+)%:/.exec(line);
+      if (p) patterns.push(p[1]);
+    }
+  }
+  const unknownSuites: string[] = [];
+  for (const p of REQUIRED_PATHS) {
+    if (p.status !== 'present') continue;
+    const target = p.suite.replace(/^make\s+/, '');
+    const known = explicit.has(target) || patterns.some(stem => target.startsWith(stem));
+    if (!known) unknownSuites.push(p.suite);
+  }
+
+  return {
+    destinations: allDestinations.length,
+    missingFiles,
+    unwired,
+    unknownSuites,
+    pending,
+    cWired,
+    dWired,
+  };
 }

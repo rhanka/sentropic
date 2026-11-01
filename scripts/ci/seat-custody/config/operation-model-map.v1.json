@@ -1,0 +1,101 @@
+{
+  "schemaVersion": 1,
+  "mapId": "OperationModelMapV1",
+  "generatedFrom": {
+    "head": "9899cf33661f23b02c47e123f54a3840172b4af2",
+    "base": "9899cf33661f23b02c47e123f54a3840172b4af2",
+    "tree": "721d6d075af139b65d29e00b1f19ba03311b2b13"
+  },
+  "productDefaultModel": "gpt-5.4-nano",
+  "ciDefaultModel": "mistral-small-2603",
+  "retiredIds": ["gpt-4.1-nano", "gpt-4.1-nano-2025-04-14"],
+  "historicalIds": ["gpt-6-luna", "gpt-5.6-luna"],
+  "nanoModel": "gpt-5.4-nano",
+  "nanoCutoffIso": "2027-04-01T00:00:00Z",
+  "operations": [
+    {
+      "operationId": "product-default",
+      "classification": "intentional-live",
+      "sourceLocations": ["api/src/config/env.ts:37", "api/src/services/settings.ts:27", "api/src/services/model-catalog.ts:41"],
+      "provider": "openai",
+      "modelId": "gpt-5.4-nano",
+      "endpoint": "https://api.openai.com/v1/responses",
+      "runtime": "api",
+      "capabilities": ["sync", "stream", "tools"],
+      "requestBounds": "bounded-context",
+      "responseBounds": "bounded-output",
+      "qualifiedSeatRoutes": [],
+      "deploymentEvidence": "source-gap"
+    },
+    {
+      "operationId": "product-operations",
+      "classification": "intentional-live",
+      "sourceLocations": ["api/src/services/business/organizations.ts:381", "api/src/services/chat-service.ts:859", "api/src/services/chat-service.ts:1670", "api/src/services/chat-service.ts:2374", "api/src/services/tool-service.ts:2506", "api/src/services/tool-service.ts:2745", "api/src/services/context-organization.ts:287", "api/src/services/tools.ts:1170"],
+      "provider": "openai",
+      "modelId": "gpt-5.4-nano",
+      "endpoint": "https://api.openai.com/v1/responses",
+      "runtime": "api",
+      "capabilities": ["sync", "stream", "tools", "image"],
+      "requestBounds": "bounded-context",
+      "responseBounds": "bounded-output",
+      "qualifiedSeatRoutes": [],
+      "deploymentEvidence": "source-gap"
+    },
+    {
+      "operationId": "api-ai-test-defaults",
+      "classification": "incidental-deterministic",
+      "sourceLocations": ["api/tests/utils/test-helpers.ts:59", "api/tests/seed-test-data.ts:504"],
+      "provider": "mistral",
+      "modelId": "mistral-small-2603",
+      "endpoint": "https://api.mistral.ai/v1/chat/completions",
+      "runtime": "api-test",
+      "capabilities": ["sync"],
+      "requestBounds": "test-fixture",
+      "responseBounds": "test-fixture",
+      "qualifiedSeatRoutes": [],
+      "deploymentEvidence": "source-gap"
+    },
+    {
+      "operationId": "e2e-defaults",
+      "classification": "incidental-deterministic",
+      "sourceLocations": ["e2e/global.setup.ts:489", "e2e/global.setup.ts:494", "e2e/tests/03-chat.spec.ts:301", "e2e/tests/09-chat-multitool-demo.spec.ts:57"],
+      "provider": "mistral",
+      "modelId": "mistral-small-2603",
+      "endpoint": "https://api.mistral.ai/v1/chat/completions",
+      "runtime": "e2e",
+      "capabilities": ["sync"],
+      "requestBounds": "test-fixture",
+      "responseBounds": "test-fixture",
+      "qualifiedSeatRoutes": [],
+      "deploymentEvidence": "source-gap"
+    },
+    {
+      "operationId": "retired-id-occurrences",
+      "classification": "no-inference",
+      "sourceLocations": ["packages/llm-mesh/src/providers.ts:23", "packages/llm-mesh/src/catalog.ts:385", "api/src/services/model-selection-legacy.ts:62"],
+      "provider": "openai",
+      "modelId": "gpt-4.1-nano",
+      "endpoint": "none-historical-mock-only",
+      "runtime": "historical-tests-and-legacy-selection",
+      "capabilities": [],
+      "requestBounds": "none",
+      "responseBounds": "none",
+      "qualifiedSeatRoutes": [],
+      "deploymentEvidence": "retired-exact-id"
+    },
+    {
+      "operationId": "ci-seat-chat",
+      "classification": "intentional-live",
+      "sourceLocations": ["scripts/ci/seat-custody/src/ci-seat-broker.ts"],
+      "provider": "openai",
+      "modelId": "",
+      "endpoint": "https://chatgpt.com/backend-api/codex/responses",
+      "runtime": "seat-broker",
+      "capabilities": ["sync", "stream", "tools"],
+      "requestBounds": "reservation-bounded",
+      "responseBounds": "bounded-output",
+      "qualifiedSeatRoutes": [],
+      "deploymentEvidence": "source-gap"
+    }
+  ]
+}

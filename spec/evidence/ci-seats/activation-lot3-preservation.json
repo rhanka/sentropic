@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "lot": "ACT-L03",
+  "amendmentSha256": "4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f",
+  "base": "9899cf33661f23b02c47e123f54a3840172b4af2",
+  "reconciledHead": "8226fe8038eb4c0ccc01fe4eb89712116e1dc85b",
+  "status": "preserved-not-qualified",
+  "sources": [
+    {
+      "commit": "5991bfc8c459379c871803acf67d71902524ba72",
+      "ref": "refs/heads/preserve/cyber-lot3-published",
+      "sourceInventorySha256": "e2fbdae5a096b18cf352da10edbd0d66eaf8ebcf23b694d2b7d92d497e13d49a"
+    },
+    {
+      "commit": "50f2109171137f3424b5cbe8634e84c502f6ae51",
+      "ref": "refs/heads/preserve/cyber-lot3-local",
+      "sourceInventorySha256": "aff1df1216dc5d2bd000090865dc645c29084392876fc100d3fef1057d411199"
+    },
+    {
+      "commit": "ed849782cf3293c1f3d19527c140ccdc0ab89002",
+      "ref": "refs/heads/preserve/cyber-lot3-reconciled",
+      "sourceInventorySha256": "retained from the preserved reconciliation; no destructive history operation repeated"
+    }
+  ],
+  "l03bRefresh": {
+    "lot": "ACT-L03b",
+    "branch": "feat/cyber-act-L03b",
+    "worktree": "tmp/worktrees/cyber-act-L03b",
+    "currentMain": {
+      "head": "9899cf33661f23b02c47e123f54a3840172b4af2",
+      "tree": "721d6d075af139b65d29e00b1f19ba03311b2b13"
+    },
+    "rebaseRecord": {
+      "method": "rebase-onto-current-main",
+      "mergedAsPr": 872,
+      "mergeCommit": "9899cf33661f23b02c47e123f54a3840172b4af2",
+      "lineageHead": "8226fe8038eb4c0ccc01fe4eb89712116e1dc85b",
+      "noMergeMainIntoLineage": true,
+      "noCherryPickDuplicateLineage": true,
+      "sublotExtraction": "ACT-L03a delivered the bounded same-repo core (merged as #872); ACT-L03b continues the preserved #681 integration for the remaining L3 items — ancestry recorded here so no change is implemented twice"
+    },
+    "currentGates": {
+      "registryVersionRange": "llm-mesh gated 0.32.3 (cluster-mesh train/selected fixtures rebound at 8226fe803); no downgrade to historical pins",
+      "artifactGate": "exact packed/installed artifact bound to the admitted receipt; one-copy/range enforced by D/ci-trigger-bridge.test.mjs lateReceiptGate",
+      "packageVersionGate": "post-rebase package.json version must exceed the published version"
+    },
+    "changeEventMapping": "reviewed per-change/event-containment matrix retained in .tmp/daily-cyber/lot3; divergent/conflicting/untracked collision simulation covered by the seat-custody crash-recovery and state-store suites"
+  },
+  "broker": {
+    "path": "scripts/ci/seat-custody/src/ci-seat-broker.ts",
+    "blob": "b1e59bec1ec399dbdbbe60e37ccecf66df74a783",
+    "sha256": "fdd4b8581aea70146ed64f565a9e5847feb393c39461492c7bf6c59f340ed602",
+    "ref": "refs/preserve/cyber-lot3-broker",
+    "isolatedCopy": "tmp/worktrees/cyber-lot3-preservation/scripts/ci/seat-custody/src/ci-seat-broker.ts",
+    "disposition": "preserved; requalification required before activation"
+  },
+  "reconciliation": {
+    "method": "rebase",
+    "duplicatedCherryPicks": false,
+    "localUniqueCommits": 12,
+    "rangeDiffSha256": "fbabdb8b8d22698a6d7d50dc638bad0f6e173db5750ec5370e3a55f5b536f72f",
+    "evidenceDirectory": ".tmp/daily-cyber/lot3",
+    "historicalPins": "superseded by current-main release train; no downgrade",
+    "engramOverride": "same workspace-mesh override retained on current exact engram 0.22.0"
+  },
+  "originalWorktree": {
+    "path": "tmp/worktrees/ci-seat-import",
+    "filesAndIndex": "unchanged",
+    "head": "refs/heads/preserve/cyber-lot3-local"
+  },
+  "trackOwner": "conductor; source artifact handoff only",
+  "qualification": "unverified"
+}
