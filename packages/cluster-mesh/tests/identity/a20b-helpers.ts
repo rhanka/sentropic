@@ -178,8 +178,11 @@ export const createFixtureBusiness = (input: {
   const exec = async (host: CustodyOpHost, text: string, values: readonly (string | number | null)[]): Promise<{ readonly rows: readonly Record<string, unknown>[]; readonly changes: number }> => {
     if (host.profile === 'postgres') {
       const session = host.raw as { execute(stmt: { text: string; values: readonly unknown[] }): Promise<{ rows: readonly Record<string, unknown>[]; rowCount: number | null }> };
-      const isSelect = text.trimStart().toUpperCase().startsWith('SELECT');
-      const pgText = isSelect ? text : text.split('?').map((part, index, parts) => (index < parts.length - 1 ? `${part}$${index + 1}` : part)).join('');
+      // The driver never sets search_path, so the fixture table must be
+      // schema-qualified to stay inside the per-test control schema.
+      const schema = (host as { readonly schema?: string }).schema;
+      const qualified = schema ? text.replaceAll('"biz_rows"', `"${schema}"."biz_rows"`) : text;
+      const pgText = qualified.split('?').map((part, index, parts) => (index < parts.length - 1 ? `${part}$${index + 1}` : part)).join('');
       const result = await session.execute({ text: pgText, values });
       return { rows: result.rows, changes: result.rowCount ?? 0 };
     }
