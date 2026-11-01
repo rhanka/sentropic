@@ -13,6 +13,7 @@ export interface CommandIdentity {
   readonly commandHash: string;
   readonly codecVersion: typeof COMMAND_CODEC_VERSION;
 }
+export type ArtifactCommandOperation = 'ensure' | 'publish' | 'revert';
 export interface EffectiveArtifactCommand {
   readonly operation: ArtifactCommandOperation;
   readonly scopeBinding: string;
@@ -51,7 +52,7 @@ export function createRadarKeyDerivation(config: { readonly storageScopeId: stri
     for (const other of actors) {
       if (other === actor || !other.startsWith(`${actor}|`)) continue;
       const [operation, objectId] = other.slice(actor.length + 1).split('|');
-      if ((operation === 'ensure' && objectId === '') || (['publish', 'set_access', 'delete'].includes(operation) && isArtifactId(objectId))) {
+      if ((operation === 'ensure' && objectId === '') || (['publish', 'set_access', 'delete', 'revert'].includes(operation) && isArtifactId(objectId))) {
         throw new Error('ambiguous Radar actor domain');
       }
     }
@@ -61,7 +62,7 @@ export function createRadarKeyDerivation(config: { readonly storageScopeId: stri
     derive(input) {
       const { storageScopeId, actorId, operation, objectId, callerKey } = input;
       if (storageScopeId !== scope || !actors.has(actorId) ||
-        !['ensure', 'publish', 'set_access', 'delete'].includes(operation) ||
+        !['ensure', 'publish', 'set_access', 'delete', 'revert'].includes(operation) ||
         (operation === 'ensure' ? objectId !== '' : !isArtifactId(objectId))) throw new ArtifactProfileInputError();
       assertWellFormed(callerKey);
       if (!callerKey.trim() || callerKey.length > 256) throw new ArtifactProfileInputError();
@@ -80,7 +81,7 @@ export function createArtifactCommand(profile: CompiledArtifactsProfile, name: s
   assertCompiledArtifactsProfile(profile);
   if (derivation.algorithm !== profile.profile.rules.keyDerivationAlgorithm) throw new Error('profile/derivation mismatch');
   const normalized = profile.validate(name, args, envelopeKey);
-  if (!['artifacts_ensure', 'artifacts_publish', 'artifacts_set_access', 'artifacts_delete'].includes(name)) throw new ArtifactProfileInputError(true);
+  if (!['artifacts_ensure', 'artifacts_publish', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert'].includes(name)) throw new ArtifactProfileInputError(true);
   const operation = name.slice('artifacts_'.length) as ArtifactCommandOperation;
   const { idempotencyKey, confirmationRef: _proof, ...payload } = normalized;
   const scopeBinding = authority.storageScopeId;
