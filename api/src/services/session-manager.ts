@@ -1,4 +1,5 @@
 import { cmAuthSessionService, createCmLoginForSubject } from './identity/cm-session-facade';
+import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { createHash } from 'crypto';
 import { logger } from '../logger';
@@ -107,51 +108,11 @@ async function signSessionToken(
  * @returns Session tokens (sessionToken, refreshToken) and expiration
  */
 export async function createSession(
-  userId: string,
-  role: string,
-  deviceInfo?: DeviceInfo,
-  options?: { mfaVerified?: boolean }
+  userId: string, _role: string, deviceInfo?: DeviceInfo, options?: { mfaVerified?: boolean },
 ): Promise<SessionTokens> {
-  const sessionId = crypto.randomUUID();
-  const now = new Date();
-  const expiresAt = new Date(now.getTime() + SESSION_DURATION * 1000);
-
-  // Generate JWT session token
-  const login = { mfaVerified: options?.mfaVerified === true,
-    authTime: Math.floor(now.getTime() / 1000), sessionVersion: now.getTime() };
-  const sessionToken = await signSessionToken({ userId, sessionId, role, login, tokenUse: 'session' }, expiresAt);
-
-  // Signed immutable lineage prevents shared-store writers from elevating MFA during refresh.
-  const refreshToken = await signSessionToken({ userId, sessionId, role, login, tokenUse: 'refresh' }, expiresAt);
-
-  // Store session in the CM custody store (with hashed tokens).
-  // B1: passkey login with userVerified=true mints mfaVerified=true; every other
-  // path (magic-link, federation, registration) stays false via the default.
-  await createCmSession({
-    id: sessionId,
-    userId,
-    sessionTokenHash: hashToken(sessionToken),
-    refreshTokenHash: hashToken(refreshToken),
-    deviceInfo,
-    mfaVerified: options?.mfaVerified === true,
-    expiresAt,
-    now,
-  });
-  getRemoteSessionAuthority()?.create({ sessionId, userId, login, revoked: false,
-    sessionTokenHash: hashToken(sessionToken), refreshTokenHash: hashToken(refreshToken), expiresAt: expiresAt.getTime() });
-
-  logger.info({
-    userId,
-    sessionId,
-    deviceName: deviceInfo?.name
-  }, 'Session created');
-
-  return {
-    sessionId,
-    sessionToken,
-    refreshToken,
-    expiresAt,
-  };
+  // MFA login is minted only by the verified CM assertion completion.
+  if (options?.mfaVerified) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+  return createCmLoginForSubject(userId, deviceInfo);
 }
 
 /**
