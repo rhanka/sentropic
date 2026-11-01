@@ -2,11 +2,11 @@ import { createHash, generateKeyPairSync } from 'node:crypto';
 import { mkdirSync, mkdtempSync, rmSync, unlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { eq } from 'drizzle-orm';
 import { decodeJwt } from 'jose';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { db } from '../../../src/db/client';
-import { users, userSessions } from '../../../src/db/schema';
+import { createCmUser } from '../../../src/services/identity/cm-users';
+import { findCmSessionById } from '../../../src/services/identity/cm-sessions';
+import { cmCountActiveSessionsForUser, cmDeleteForUsers, cmQuery, cmReinsertSession, cmTable } from '../../utils/cm-identity-test-store';
 import { createSession, refreshSession, revokeAllSessions, revokeSession, validateSession } from '../../../src/services/session-manager';
 import { commitRemoteEvidence, resolveRemoteLogin, reserveRemoteEvidence } from '../../../src/services/auth/remote-session';
 import { createRemoteEvidenceIssuer } from '../../../src/services/auth/remote-evidence';
@@ -22,11 +22,10 @@ beforeEach(async () => {
   vi.stubEnv('REMOTE_ACTION_ROLE', 'auth-idp');
   vi.stubEnv('REMOTE_ACTION_SESSION_STATE_DIR', directory);
   userId = crypto.randomUUID();
-  await db.insert(users).values({ id: userId, email: `rc1-${userId}@example.test`,
-    role: 'editor', emailVerified: true });
+  await createCmUser({ userId, email: `rc1-${userId}@example.test`, role: 'editor', emailVerified: true, accountStatus: 'active' });
 });
 afterEach(async () => {
-  await db.delete(users).where(eq(users.id, userId));
+  await cmDeleteForUsers([userId]);
   vi.unstubAllEnvs();
   rmSync(directory, { recursive: true, force: true });
 });
@@ -56,7 +55,7 @@ describe('RC1 current issuer session store', () => {
     ['lock', 'corrupt-foreign-file', 'missing-pvc'].map(failure => ({ operation, failure }))))
   ('should complete $operation and refuse authority after $failure', async ({ operation, failure }) => {
     const { tokens, request, issue } = await setup();
-    const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
+    const row = await findCmSessionById(tokens.sessionId);
     if (failure === 'lock') mkdirSync(join(directory, `${createHash('sha256').update(tokens.sessionId).digest('hex')}.json.lock`));
     if (failure === 'corrupt-foreign-file') writeFileSync(join(directory, `${'0'.repeat(64)}.json`), '{');
     if (failure === 'missing-pvc') rmSync(directory, { recursive: true });
@@ -65,19 +64,19 @@ describe('RC1 current issuer session store', () => {
     if (operation === 'revoke-all') await expect(revokeAllSessions(userId)).resolves.toBeUndefined();
     if (operation === 'oauth-logout') await expect(ports.revoke(tokens.sessionId)).resolves.toBe(true);
     if (operation === 'oauth-revoke-all') await expect(ports.revokeAllForUser(userId)).resolves.toBe(1);
-    expect(await db.select().from(userSessions).where(eq(userSessions.userId, userId))).toEqual([]);
+    expect(await cmCountActiveSessionsForUser(userId)).toBe(0);
     expect(await validateSession(tokens.sessionToken)).toBeNull();
     await expect(issue(request)).rejects.toMatchObject({ code: 'authentication_required' });
     // Recovery of shared DB/files alone must not reopen authority in the issuer process.
     mkdirSync(directory, { recursive: true });
-    await db.insert(userSessions).values(row);
+    await cmReinsertSession(row!);
     const code = failure === 'corrupt-foreign-file' && !operation.endsWith('all')
       ? 'authentication_required' : 'authority_unavailable';
     await expect(issue(request)).rejects.toMatchObject({ code });
   });
   it('should fence the late private creation of a session deleted by actual OAuth bulk revoke', async () => {
     const { tokens } = await setup();
-    const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
+    const row = await findCmSessionById(tokens.sessionId);
     const store = getRemoteSessionAuthority()!;
     const pending = store.find(tokens.sessionId)!;
     if (pending.revoked) throw new Error('Expected active test session');
@@ -85,26 +84,26 @@ describe('RC1 current issuer session store', () => {
     unlinkSync(join(directory, `${createHash('sha256').update(tokens.sessionId).digest('hex')}.json`));
     expect(await getSentropicOAuthPorts().sessions.revokeAllForUser(userId)).toBe(1);
     expect(() => store.create(pending)).toThrow();
-    await db.insert(userSessions).values(row);
+    await cmReinsertSession(row!);
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
   });
   it('should preserve OIDC end_session logout after shared-row restoration', async () => {
     const { tokens } = await setup();
-    const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
+    const row = await findCmSessionById(tokens.sessionId);
     const { createIdpApp } = await import('../../../../apps/auth-idp/idp-app');
     const result = await createIdpApp().request('https://idp/api/v1/auth/oauth/end_session', {
       headers: { cookie: `session=${tokens.sessionToken}`, 'sec-fetch-mode': 'navigate' },
     });
     expect(result.status).toBe(200);
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
-    await db.insert(userSessions).values(row);
+    await cmReinsertSession(row!);
     expect(await resolveRemoteLogin(tokens.sessionToken)).toBeNull();
   });
   it('should refuse restored shared-DB authority after issuer logout', async () => {
     const { tokens, request, issue } = await setup();
-    const [row] = await db.select().from(userSessions).where(eq(userSessions.id, tokens.sessionId));
+    const row = await findCmSessionById(tokens.sessionId);
     await revokeSession(tokens.sessionId);
-    await db.insert(userSessions).values(row);
+    await cmReinsertSession(row!);
     await expect(issue(request)).rejects.toMatchObject({ code: 'authentication_required' });
   });
   it('should preserve sid/version/auth_time/MFA across credential refresh and fresh actions', async () => {
@@ -126,10 +125,8 @@ describe('RC1 current issuer session store', () => {
     const { tokens, request, issue } = await setup();
     if (reason === 'logout') await revokeSession(tokens.sessionId);
     if (reason === 'revoke-all') await revokeAllSessions(userId);
-    if (reason === 'expiry') await db.update(userSessions).set({ expiresAt: new Date(0) })
-      .where(eq(userSessions.id, tokens.sessionId));
-    if (reason === 'version') await db.update(userSessions).set({ createdAt: new Date(0) })
-      .where(eq(userSessions.id, tokens.sessionId));
+    if (reason === 'expiry') await cmQuery(`UPDATE ${cmTable('identity_login_sessions')} SET "expires_at" = $1 WHERE "session_id" = $2`, [new Date(0).toISOString(), tokens.sessionId]);
+    if (reason === 'version') await cmQuery(`UPDATE ${cmTable('identity_login_sessions')} SET "created_at" = $1 WHERE "session_id" = $2`, [new Date(0).toISOString(), tokens.sessionId]);
     await expect(issue(request)).rejects.toMatchObject({ code: 'authentication_required' });
   });
   it('should refuse a single-factor session and durable repeated issuance', async () => {
