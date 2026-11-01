@@ -1596,6 +1596,16 @@ jobs:
       - name: Show API logs on failure
         if: failure()
         run: make logs-api-ci ENV=test-ci-api
+      - name: Require local deterministic provider traffic
+        if: always() && matrix.suite == 'ai'
+        run: make ci-provider-receipt ENV=test-ci-api
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always() && matrix.suite == 'ai'
+        with:
+          name: provider-api-${{ strategy.job-index }}
+          path: .tmp/ci-provider/
+          include-hidden-files: true
+          if-no-files-found: error
       - name: Tear down API test stack
         if: always()
         run: make down-api-ci ENV=test-ci-api
@@ -1745,6 +1755,21 @@ jobs:
       - name: E2E service diagnostics
         if: failure()
         run: make logs-api ENV=e2e-ci
+      - name: Require isolated provider traffic
+        if: always()
+        run: make ci-provider-receipt ENV=e2e-ci
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        if: always()
+        with:
+          name: browser-shard-${{ matrix.shard }}
+          path: |
+            e2e/test-results/
+            .tmp/ci-provider/
+          include-hidden-files: true
+          if-no-files-found: error
+      - name: Stop the browser test stack
+        if: always()
+        run: make down ENV=e2e-ci
 
   e2e-vscode:
     runs-on: ubuntu-latest
@@ -1784,6 +1809,12 @@ jobs:
         run: make load-e2e ENV=e2e-vscode-ci
       - name: Test VSCode E2E lane
         run: make test-e2e-vscode ENV=e2e-vscode-ci
+      - name: Require isolated provider traffic
+        if: always()
+        run: make ci-provider-receipt ENV=e2e-vscode-ci
+      - name: Stop the VSCode test stack
+        if: always()
+        run: make down ENV=e2e-vscode-ci
       - name: Upload VSCode E2E artifacts
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -3234,6 +3265,8 @@ jobs:
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4
       - name: Qualify CI capacity metrics and expected-result fixtures
         run: make ci-capacity-policy test-ci-run-metrics test-ci-expected-results ENV=test-ci-capacity
+      - name: Qualify provider boundary, browser membership and live receipts
+        run: make test-ci-provider-fixtures test-ci-browser-shards test-ci-live-provider-receipt check-e2e-inventory ENV=test-ci-capacity
       - name: Qualify artifact dispatch and fail-closed scan joins
         run: make test-ci-dag test-security-parser ENV=test-ci-capacity
       - name: Qualify daily security adapters without activating the service
