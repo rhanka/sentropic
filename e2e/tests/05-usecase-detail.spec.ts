@@ -242,26 +242,19 @@ test.describe('Détail des cas d\'usage', () => {
       storageState: await withWorkspaceStorageState(USER_A_STATE, workspaceAId),
     });
     const page = await userAContext.newPage();
-    const cdp = await userAContext.newCDPSession(page);
-    await cdp.send('Network.enable');
-    const sseRequestIds = new Set<string>();
-    let sseReady = false;
-    cdp.on('Network.requestWillBeSent', ({ requestId, request }) => {
-      const url = new URL(request.url);
-      if (url.pathname.endsWith('/api/v1/streams/sse') && url.searchParams.get('workspace_id') === workspaceAId) {
-        sseRequestIds.add(requestId);
+    const sseRequestPromise = page.waitForRequest((req) => {
+      try {
+        const url = new URL(req.url());
+        return url.pathname.endsWith('/api/v1/streams/sse') && url.searchParams.get('workspace_id') === workspaceAId;
+      } catch {
+        return false;
       }
-    });
-    cdp.on('Network.eventSourceMessageReceived', ({ requestId, eventName }) => {
-      if (sseRequestIds.has(requestId) && eventName === 'ping') sseReady = true;
-    });
+    }, { timeout: 15_000 });
 
     await page.goto(`/initiative/${encodeURIComponent(useCaseId)}`);
     await page.waitForLoadState('domcontentloaded');
     await expect(page.locator('h1')).toBeVisible({ timeout: 30_000 });
-    // Request headers precede PostgreSQL LISTEN; the first ping follows subscription setup.
-    await expect.poll(() => sseReady, { timeout: 15_000 }).toBe(true);
-    await cdp.detach();
+    await sseRequestPromise;
 
     const token = `E2E_CONSTRAINT_${Date.now()}`;
     const updateRes = await page.request.put(
