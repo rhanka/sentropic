@@ -1,3 +1,4 @@
+import { cmAuthSessionService, createCmLoginForSubject } from './identity/cm-session-facade';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { createHash } from 'crypto';
 import { logger } from '../logger';
@@ -248,100 +249,8 @@ export async function validateSession(
  * @param refreshToken - Refresh token
  * @returns New session tokens if valid, null otherwise
  */
-export async function refreshSession(
-  refreshToken: string
-): Promise<SessionTokens | null> {
-  try {
-    const { payload } = await jwtVerify(refreshToken, JWT_SECRET, { algorithms: ['HS256'] });
-    const login = readSignedLogin(payload);
-    if (payload.tokenUse !== 'refresh' || !login) return null;
-    const refreshHash = hashToken(refreshToken);
-
-    // Find session by refresh token (CM custody binding)
-    const session = await findCmSessionByRefreshTokenHash(refreshHash);
-
-    if (!session) {
-      logger.warn('Refresh token not found');
-      return null;
-    }
-    if (session.revokedAt) return null;
-    if (payload.sessionId !== session.id || payload.userId !== session.userId
-      || login.sessionVersion !== session.sessionVersion
-      || login.authTime !== session.authTime
-      || login.mfaVerified !== session.mfaVerified) return null;
-
-    // Check if session is expired
-    if (session.expiresAt < new Date()) {
-      logger.warn({ sessionId: session.id }, 'Refresh session expired');
-      return null;
-    }
-
-    const user = await findCmUserById(session.userId);
-
-    if (!user) {
-      logger.warn({ userId: session.userId }, 'Refresh failed: user not found');
-      return null;
-    }
-
-    const status = user.accountStatus ?? 'active';
-    const now = new Date();
-
-    if (status === 'disabled_by_user' || status === 'disabled_by_admin') {
-      logger.warn({ userId: session.userId, status }, 'Refresh failed: account disabled');
-      return null;
-    }
-
-    let role = user.role as string;
-    if (status === 'approval_expired_readonly') role = 'guest';
-    if (status === 'pending_admin_approval' && user.approvalDueAt && now > user.approvalDueAt) {
-      role = 'guest';
-    }
-
-    // Generate new tokens (the signed login lineage is carried over unchanged)
-    const newExpiresAt = new Date(Date.now() + SESSION_DURATION * 1000);
-    const newRefreshToken = await signSessionToken({ userId: session.userId,
-      sessionId: session.id, role, login, tokenUse: 'refresh' }, newExpiresAt);
-    const newSessionToken = await signSessionToken(
-      {
-        userId: session.userId,
-        sessionId: session.id,
-        role,
-        login,
-        tokenUse: 'session',
-      },
-      newExpiresAt
-    );
-
-    // Atomic rotation in the CM custody store: CAS on the expected refresh hash.
-    const rotated = await rotateCmSession({
-      sessionId: session.id,
-      userId: session.userId,
-      expectedRefreshTokenHash: refreshHash,
-      expiresAt: newExpiresAt,
-      sessionTokenHash: hashToken(newSessionToken),
-      refreshTokenHash: hashToken(newRefreshToken),
-      verifiedLogin: login,
-    });
-    if (!rotated) return null;
-    getRemoteSessionAuthority()?.rotate(refreshHash, { sessionId: session.id, userId: session.userId,
-      login, revoked: false, sessionTokenHash: hashToken(newSessionToken),
-      refreshTokenHash: hashToken(newRefreshToken), expiresAt: newExpiresAt.getTime() });
-
-    logger.info({
-      userId: session.userId,
-      sessionId: session.id
-    }, 'Session refreshed');
-
-    return {
-      sessionId: session.id,
-      sessionToken: newSessionToken,
-      refreshToken: newRefreshToken,
-      expiresAt: newExpiresAt,
-    };
-  } catch (error) {
-    logger.error({ err: error }, 'Error refreshing session');
-    return null;
-  }
+export async function refreshSession(refreshToken: string): Promise<SessionTokens | null> {
+  return cmAuthSessionService.refreshSession(refreshToken);
 }
 
 /**
