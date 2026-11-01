@@ -55,6 +55,10 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       run.jobs = api(`repos/rhanka/sentropic/actions/runs/${run.id}/jobs?per_page=100`).jobs;
       try {
         const selection = qualifiedMain([run]);
+        const artifacts = api(`repos/rhanka/sentropic/actions/runs/${run.id}/artifacts?per_page=100`).artifacts;
+        if (!['api-image', 'ui-image'].every(name => artifacts.some(row => row.name === name && !row.expired))) {
+          throw new Error('Qualified main application artifacts are absent or expired');
+        }
         writeFileSync(`${dir}/selection.json`, JSON.stringify(selection, null, 2));
         if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `sha=${selection.sourceSha}\nrun=${selection.run}\n`);
         console.log(JSON.stringify(selection)); break;
@@ -68,11 +72,17 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
       try { const pkg = json(`packages/${name}/package.json`); return [[pkg.name, pkg.version]]; } catch { return []; }
     }));
     const installedPackages = json(`${dir}/installed-packages.json`);
+    const applicationReceipts = { api: json('api-image.json'), ui: json('ui-image.json') };
+    for (const kind of ['api', 'ui']) {
+      if (applicationReceipts[kind].sourceSha !== selection.sourceSha || applicationReceipts[kind].imageId !== image(kind).id) {
+        throw new Error(`Qualified application artifact differs: ${kind}`);
+      }
+    }
     for (const [name, version] of Object.entries(installedPackages)) {
       if (declaredPackages[name] && declaredPackages[name] !== version) throw new Error(`Installed tuple differs: ${name}`);
     }
     writeFileSync(`${dir}/tuple.json`, JSON.stringify({ sourceSha: selection.sourceSha, api: image('api'), ui: image('ui'),
-      lockSha256: createHash('sha256').update(readFileSync('package-lock.json')).digest('hex'), installedPackages }, null, 2));
+      lockSha256: createHash('sha256').update(readFileSync('package-lock.json')).digest('hex'), installedPackages, applicationReceipts }, null, 2));
   } else if (command === 'run') {
     const invoke = args => spawnSync('make', [...args, 'API_PORT=9405', 'UI_PORT=5605',
       'MAILDEV_UI_PORT=1505', `ENV=${process.env.COMPOSE_PROJECT_NAME}`], { stdio: 'inherit' }).status ?? 1;
