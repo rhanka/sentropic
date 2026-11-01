@@ -1,6 +1,3 @@
-import { db } from '../db/client';
-import { userSessions, users } from '../db/schema';
-import { eq, and, gt } from 'drizzle-orm';
 import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { createHash } from 'crypto';
 import { logger } from '../logger';
@@ -8,16 +5,29 @@ import { env } from '../config/env';
 import { getRemoteSessionAuthority } from './auth/remote-private-session';
 import { tombstoneRemoteSessions } from './auth/remote-revocation';
 import { deleteAndQueueRemoteSessions } from './auth/remote-revocation-outbox';
+import {
+  createCmSession,
+  findCmSessionByRefreshTokenHash,
+  findCmSessionByTokenHash,
+  listCmSessionsForUser,
+  rotateCmSession,
+  touchCmSession,
+} from './identity/cm-sessions';
+import { findCmUserById } from './identity/cm-users';
 
 /**
  * Session Manager Service
- * 
+ *
  * Manages user sessions with JWT tokens and refresh tokens:
  * - Create sessions with access + refresh tokens
  * - Validate session tokens
  * - Refresh expired sessions
  * - Revoke sessions (logout)
  * - List user sessions for device management
+ *
+ * Lot A4: session persistence lives in the cluster-mesh identity custody store
+ * (cm_identity.identity_login_token_bindings + identity_login_sessions); the
+ * legacy `public.user_sessions` table is dropped by control migration 0014.
  */
 
 interface DeviceInfo {
@@ -89,7 +99,7 @@ async function signSessionToken(
 
 /**
  * Create a new session for a user
- * 
+ *
  * @param userId - User ID
  * @param role - User role
  * @param deviceInfo - Optional device information
@@ -104,42 +114,37 @@ export async function createSession(
   const sessionId = crypto.randomUUID();
   const now = new Date();
   const expiresAt = new Date(now.getTime() + SESSION_DURATION * 1000);
-  // refreshExpiresAt not currently used but may be needed for future refresh token logic
-  // const refreshExpiresAt = new Date(now.getTime() + REFRESH_DURATION * 1000);
-  
+
   // Generate JWT session token
   const login = { mfaVerified: options?.mfaVerified === true,
     authTime: Math.floor(now.getTime() / 1000), sessionVersion: now.getTime() };
   const sessionToken = await signSessionToken({ userId, sessionId, role, login, tokenUse: 'session' }, expiresAt);
-  
+
   // Signed immutable lineage prevents shared-store writers from elevating MFA during refresh.
   const refreshToken = await signSessionToken({ userId, sessionId, role, login, tokenUse: 'refresh' }, expiresAt);
-  
-  // Store session in database (with hashed tokens)
+
+  // Store session in the CM custody store (with hashed tokens).
   // B1: passkey login with userVerified=true mints mfaVerified=true; every other
   // path (magic-link, federation, registration) stays false via the default.
-  await db.insert(userSessions).values({
+  await createCmSession({
     id: sessionId,
     userId,
     sessionTokenHash: hashToken(sessionToken),
     refreshTokenHash: hashToken(refreshToken),
-    deviceName: deviceInfo?.name || null,
-    ipAddress: deviceInfo?.ipAddress || null,
-    userAgent: deviceInfo?.userAgent || null,
+    deviceInfo,
     mfaVerified: options?.mfaVerified === true,
     expiresAt,
-    createdAt: now,
-    lastActivityAt: now,
+    now,
   });
   getRemoteSessionAuthority()?.create({ sessionId, userId, login, revoked: false,
     sessionTokenHash: hashToken(sessionToken), refreshTokenHash: hashToken(refreshToken), expiresAt: expiresAt.getTime() });
-  
-  logger.info({ 
-    userId, 
-    sessionId, 
-    deviceName: deviceInfo?.name 
+
+  logger.info({
+    userId,
+    sessionId,
+    deviceName: deviceInfo?.name
   }, 'Session created');
-  
+
   return {
     sessionId,
     sessionToken,
@@ -150,7 +155,7 @@ export async function createSession(
 
 /**
  * Validate a session token
- * 
+ *
  * @param sessionToken - JWT session token
  * @returns Session payload if valid, null otherwise
  */
@@ -161,7 +166,7 @@ export async function validateSession(
     // Verify JWT signature and expiration
     const { payload } = await jwtVerify(sessionToken, JWT_SECRET, { algorithms: ['HS256'] });
     if (payload.tokenUse === 'refresh') return null;
-    
+
     // Verify payload structure (userId, sessionId, role are required strings)
     if (
       typeof payload.userId !== 'string' ||
@@ -171,61 +176,37 @@ export async function validateSession(
       logger.warn({ payloadKeys: Object.keys(payload) }, 'Invalid session payload structure');
       return null;
     }
-    
+
     const { userId, sessionId, role } = payload;
-    
-    // Check if session exists and is not revoked
+
+    // Check if session exists and is not revoked (CM custody binding by token hash)
     const sessionHash = hashToken(sessionToken);
-    const [session] = await db
-      .select()
-      .from(userSessions)
-      .where(
-        and(
-          eq(userSessions.sessionTokenHash, sessionHash),
-          eq(userSessions.id, sessionId)
-        )
-      )
-      .limit(1);
-    
-    if (!session) {
+    const session = await findCmSessionByTokenHash(sessionHash);
+
+    if (!session || session.id !== sessionId) {
       logger.warn({ sessionId }, 'Session not found in database (possibly revoked)');
       return null;
     }
-    
+    if (session.revokedAt) {
+      logger.warn({ sessionId }, 'Session revoked');
+      return null;
+    }
+
     // Check if session is expired
     if (session.expiresAt < new Date()) {
       logger.warn({ sessionId }, 'Session expired');
       return null;
     }
-    
+
     // Security: verify user status (emailVerified + admin approval rules)
-    const [user] = await db
-      .select({ emailVerified: users.emailVerified })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
-    
+    const user = await findCmUserById(userId);
+
     if (!user || !user.emailVerified) {
       logger.warn({ userId, sessionId }, 'Session validation failed - email not verified');
       return null;
     }
 
-    // Compute effective role based on account status/approval window
-    const [userAuth] = await db
-      .select({
-        role: users.role,
-        accountStatus: users.accountStatus,
-        approvalDueAt: users.approvalDueAt,
-        email: users.email,
-        displayName: users.displayName,
-      })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
-
-    if (!userAuth) return null;
-
-    const status = userAuth.accountStatus ?? 'active';
+    const status = user.accountStatus ?? 'active';
     const now = new Date();
 
     // Blocked statuses
@@ -234,29 +215,26 @@ export async function validateSession(
       return null;
     }
 
-    let effectiveRole = (userAuth.role ?? role) as string;
+    let effectiveRole = (user.role ?? role) as string;
 
     if (status === 'approval_expired_readonly') {
       effectiveRole = 'guest';
     } else if (status === 'pending_admin_approval') {
-      const due = userAuth.approvalDueAt;
+      const due = user.approvalDueAt;
       if (due && now > due) {
         effectiveRole = 'guest';
       }
     }
-    
+
     // Update last activity
-    await db
-      .update(userSessions)
-      .set({ lastActivityAt: new Date() })
-      .where(eq(userSessions.id, sessionId));
-    
+    await touchCmSession(sessionId, new Date());
+
     return {
       userId,
       sessionId,
       role: effectiveRole,
-      email: userAuth.email ?? null,
-      displayName: userAuth.displayName ?? null,
+      email: user.email ?? null,
+      displayName: user.displayName ?? null,
     };
   } catch (error) {
     logger.debug({ err: error }, 'Invalid session token');
@@ -266,7 +244,7 @@ export async function validateSession(
 
 /**
  * Refresh a session using refresh token
- * 
+ *
  * @param refreshToken - Refresh token
  * @returns New session tokens if valid, null otherwise
  */
@@ -278,45 +256,34 @@ export async function refreshSession(
     const login = readSignedLogin(payload);
     if (payload.tokenUse !== 'refresh' || !login) return null;
     const refreshHash = hashToken(refreshToken);
-    
-    // Find session by refresh token
-    const [session] = await db
-      .select()
-      .from(userSessions)
-      .where(eq(userSessions.refreshTokenHash, refreshHash))
-      .limit(1);
-    
+
+    // Find session by refresh token (CM custody binding)
+    const session = await findCmSessionByRefreshTokenHash(refreshHash);
+
     if (!session) {
       logger.warn('Refresh token not found');
       return null;
     }
+    if (session.revokedAt) return null;
     if (payload.sessionId !== session.id || payload.userId !== session.userId
-      || login.sessionVersion !== session.createdAt.getTime()
-      || login.authTime !== Math.floor(session.createdAt.getTime() / 1000)
+      || login.sessionVersion !== session.sessionVersion
+      || login.authTime !== session.authTime
       || login.mfaVerified !== session.mfaVerified) return null;
-    
+
     // Check if session is expired
     if (session.expiresAt < new Date()) {
       logger.warn({ sessionId: session.id }, 'Refresh session expired');
       return null;
     }
-    
-    const [userAuth] = await db
-      .select({
-        role: users.role,
-        accountStatus: users.accountStatus,
-        approvalDueAt: users.approvalDueAt,
-      })
-      .from(users)
-      .where(eq(users.id, session.userId))
-      .limit(1);
 
-    if (!userAuth) {
+    const user = await findCmUserById(session.userId);
+
+    if (!user) {
       logger.warn({ userId: session.userId }, 'Refresh failed: user not found');
       return null;
     }
 
-    const status = userAuth.accountStatus ?? 'active';
+    const status = user.accountStatus ?? 'active';
     const now = new Date();
 
     if (status === 'disabled_by_user' || status === 'disabled_by_admin') {
@@ -324,13 +291,13 @@ export async function refreshSession(
       return null;
     }
 
-    let role = userAuth.role as string;
+    let role = user.role as string;
     if (status === 'approval_expired_readonly') role = 'guest';
-    if (status === 'pending_admin_approval' && userAuth.approvalDueAt && now > userAuth.approvalDueAt) {
+    if (status === 'pending_admin_approval' && user.approvalDueAt && now > user.approvalDueAt) {
       role = 'guest';
     }
-    
-    // Generate new tokens
+
+    // Generate new tokens (the signed login lineage is carried over unchanged)
     const newExpiresAt = new Date(Date.now() + SESSION_DURATION * 1000);
     const newRefreshToken = await signSessionToken({ userId: session.userId,
       sessionId: session.id, role, login, tokenUse: 'refresh' }, newExpiresAt);
@@ -344,28 +311,26 @@ export async function refreshSession(
       },
       newExpiresAt
     );
-    
-    // Update session with new tokens
+
     getRemoteSessionAuthority()?.rotate(refreshHash, { sessionId: session.id, userId: session.userId,
       login, revoked: false, sessionTokenHash: hashToken(newSessionToken),
       refreshTokenHash: hashToken(newRefreshToken), expiresAt: newExpiresAt.getTime() });
-    const updated = await db
-      .update(userSessions)
-      .set({
-        sessionTokenHash: hashToken(newSessionToken),
-        refreshTokenHash: hashToken(newRefreshToken),
-        expiresAt: newExpiresAt,
-        lastActivityAt: new Date(),
-      })
-      .where(and(eq(userSessions.id, session.id), eq(userSessions.refreshTokenHash, refreshHash)))
-      .returning({ id: userSessions.id });
-    if (updated.length !== 1) return null;
-    
-    logger.info({ 
-      userId: session.userId, 
-      sessionId: session.id 
+    // Atomic rotation in the CM custody store: CAS on the expected refresh hash.
+    const rotated = await rotateCmSession({
+      sessionId: session.id,
+      userId: session.userId,
+      expectedRefreshTokenHash: refreshHash,
+      expiresAt: newExpiresAt,
+      sessionTokenHash: hashToken(newSessionToken),
+      refreshTokenHash: hashToken(newRefreshToken),
+    });
+    if (!rotated) return null;
+
+    logger.info({
+      userId: session.userId,
+      sessionId: session.id
     }, 'Session refreshed');
-    
+
     return {
       sessionId: session.id,
       sessionToken: newSessionToken,
@@ -380,52 +345,47 @@ export async function refreshSession(
 
 /**
  * Revoke a session (logout)
- * 
+ *
  * @param sessionId - Session ID to revoke
  */
 export async function revokeSession(sessionId: string): Promise<void> {
   const { input, key } = await deleteAndQueueRemoteSessions({ sessionId });
   await tombstoneRemoteSessions(input, key);
-  
+
   logger.info({ sessionId }, 'Session revoked');
 }
 
 /**
  * List all active sessions for a user
- * 
+ *
  * @param userId - User ID
  * @returns Array of session records
  */
 export async function listUserSessions(userId: string) {
   const now = new Date();
-  
-  return await db
-    .select({
-      id: userSessions.id,
-      deviceName: userSessions.deviceName,
-      ipAddress: userSessions.ipAddress,
-      userAgent: userSessions.userAgent,
-      createdAt: userSessions.createdAt,
-      lastActivityAt: userSessions.lastActivityAt,
-      expiresAt: userSessions.expiresAt,
-    })
-    .from(userSessions)
-    .where(
-      and(
-        eq(userSessions.userId, userId),
-        gt(userSessions.expiresAt, now) // expiresAt > now (active sessions)
-      )
-    );
+
+  const sessions = await listCmSessionsForUser(userId);
+  return sessions
+    .filter(session => !session.revokedAt && session.expiresAt > now)
+    .map(session => ({
+      id: session.id,
+      deviceName: session.deviceName,
+      ipAddress: session.ipAddress,
+      userAgent: session.userAgent,
+      createdAt: session.createdAt,
+      lastActivityAt: session.lastActivityAt,
+      expiresAt: session.expiresAt,
+    }));
 }
 
 /**
  * Revoke all sessions for a user (logout everywhere)
- * 
+ *
  * @param userId - User ID
  */
 export async function revokeAllSessions(userId: string): Promise<void> {
   const { rows: deleted, input, key } = await deleteAndQueueRemoteSessions({ userId });
   await tombstoneRemoteSessions(input, key);
-  
+
   logger.info({ userId, count: deleted.length }, 'All user sessions revoked');
 }
