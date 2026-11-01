@@ -1,8 +1,6 @@
 import { createAuthWebAuthnAuthenticationRouteHandlers } from '@sentropic/auth-hono';
-import { eq } from 'drizzle-orm';
-import { db } from '../../../db/client';
-import { users } from '../../../db/schema';
 import { logger } from '../../../logger';
+import { findCmUserByEmail, findCmUserById } from '../../../services/identity/cm-users';
 import { authHonoWebAuthnAuthenticationService } from '../../../services/auth/webauthn-adapter';
 import { createSession } from '../../../services/session-manager';
 import { ensureWorkspaceForUser } from '../../../services/workspace-service';
@@ -17,19 +15,7 @@ import { ensureWorkspaceForUser } from '../../../services/workspace-service';
 
 export const loginHandlers = createAuthWebAuthnAuthenticationRouteHandlers({
   finalizeAuthentication: async ({ credentialId, request, userId, userVerified }, c) => {
-    const [user] = await db
-      .select({
-        accountStatus: users.accountStatus,
-        approvalDueAt: users.approvalDueAt,
-        displayName: users.displayName,
-        email: users.email,
-        emailVerified: users.emailVerified,
-        id: users.id,
-        role: users.role,
-      })
-      .from(users)
-      .where(eq(users.id, userId))
-      .limit(1);
+    const user = await findCmUserById(userId);
 
     if (!user) {
       logger.error({ userId }, 'User not found after authentication');
@@ -123,11 +109,7 @@ export const loginHandlers = createAuthWebAuthnAuthenticationRouteHandlers({
       return { userId: undefined };
     }
     const normalizedEmail = email.trim().toLowerCase();
-    const [user] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.email, normalizedEmail))
-      .limit(1);
+    const user = await findCmUserByEmail(normalizedEmail);
     return { userId: user?.id };
   },
   service: authHonoWebAuthnAuthenticationService,

@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
 import { db } from '../../../db/client';
-import { workspaces, workspaceMemberships, folders, initiatives } from '../../../db/schema';
-import { and, count, eq, isNull, max, sql } from 'drizzle-orm';
+import { workspaces, folders, initiatives } from '../../../db/schema';
+import { and, count, eq, inArray, isNull, max, ne } from 'drizzle-orm';
+import { listCmWorkspaceMembershipsForUser } from '../../../services/identity/cm-tenancy';
 
 export const neutralRouter = new Hono();
 
@@ -19,23 +20,26 @@ export const neutralRouter = new Hono();
 neutralRouter.get('/dashboard', async (c) => {
   const user = c.get('user') as { userId: string };
 
-  // Get all non-hidden workspaces the user is a member of (except neutral)
-  const userWorkspaces = await db
-    .select({
-      id: workspaces.id,
-      name: workspaces.name,
-      type: workspaces.type,
-      createdAt: workspaces.createdAt,
-    })
-    .from(workspaceMemberships)
-    .innerJoin(workspaces, eq(workspaceMemberships.workspaceId, workspaces.id))
-    .where(
-      and(
-        eq(workspaceMemberships.userId, user.userId),
-        isNull(workspaces.hiddenAt),
-        sql`${workspaces.type} != 'neutral'`
-      )
-    );
+  // Get all non-hidden workspaces the user is a member of (except neutral).
+  // Lot A4: memberships live in the CM store; business rows stay in public.workspaces.
+  const memberships = await listCmWorkspaceMembershipsForUser(user.userId);
+  const userWorkspaces = memberships.length === 0
+    ? []
+    : await db
+        .select({
+          id: workspaces.id,
+          name: workspaces.name,
+          type: workspaces.type,
+          createdAt: workspaces.createdAt,
+        })
+        .from(workspaces)
+        .where(
+          and(
+            inArray(workspaces.id, memberships.map((m) => m.workspaceId)),
+            isNull(workspaces.hiddenAt),
+            ne(workspaces.type, 'neutral')
+          )
+        );
 
   // Aggregate stats per workspace
   const result = await Promise.all(
