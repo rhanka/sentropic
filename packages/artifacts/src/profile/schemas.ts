@@ -62,15 +62,23 @@ export function capabilitySchema(name: ArtifactCapabilityName, profile: Effectiv
     }
     case 'list': return obj({ limit: { ...integer(limits.listLimitMin, limits.listLimitMax), default: config.defaults.limit },
       offset: { ...integer(0), default: config.defaults.offset } });
-    case 'get': case 'get_source': case 'fork': case 'renew': case 'delete': case 'restore': return idOnly;
+    case 'get': case 'fork': case 'renew': case 'restore': return idOnly;
+    case 'get_source': return obj({ artifactId: id, releaseId: id,
+      paths: { type: 'array', minItems: 1, maxItems: 32, items: { ...str, maxLength: profile.rules.pathMaxBytes } } }, ['artifactId']);
+    case 'delete': return obj({ artifactId: id, expectedCurrentReleaseId: { ...id, type: ['string', 'null'] },
+      idempotencyKey: key, confirmationRef: { ...str, maxLength: 4096 } }, ['artifactId', 'expectedCurrentReleaseId', 'idempotencyKey']);
     case 'get_template': return obj({ templateId: str }, ['templateId']);
     case 'get_api_guide': return obj({ version: str });
     case 'create_upload': return obj({ artifactId: id, mimeType: str, maxSize: integer(1) }, ['artifactId', 'mimeType']);
     case 'commit_upload': return obj({ artifactId: id, uploadId: str, path: str, mimeType: str,
       digest: str, size: integer(0), profile: primitiveRecord, idempotencyKey: key },
     ['artifactId', 'uploadId', 'path', 'mimeType', 'digest', 'size', 'idempotencyKey']);
-    case 'set_access': return obj({ artifactId: id, action: { type: 'string', enum: ['grant', 'revoke', 'set-public'] },
-      principalId: str, grant: { type: 'string', enum: ['read', 'source'] }, isPublic: { type: 'boolean' } }, ['artifactId', 'action']);
+    case 'set_access': return { ...obj({ artifactId: id, action: { type: 'string', enum: ['grant', 'revoke'] },
+      principalId: { ...str, maxLength: 256 }, grant: { type: 'string', enum: ['read'] }, idempotencyKey: key },
+    ['artifactId', 'action', 'principalId', 'idempotencyKey']), oneOf: [
+      { properties: { action: { enum: ['grant'] } }, required: ['grant'] },
+      { properties: { action: { enum: ['revoke'] } }, not: { required: ['grant'] } },
+    ] };
     case 'promote': return obj({ artifactId: id, releaseId: id, expectedCurrent: id }, ['artifactId', 'releaseId', 'expectedCurrent']);
     default: throw new Error(`unsupported operation profile: ${operation}`);
   }

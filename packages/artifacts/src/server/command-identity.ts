@@ -7,13 +7,14 @@ import { assertWellFormed, copyJson, freezeDeep, orderedDigest } from '../profil
 export const COMMAND_CODEC_VERSION = 'artifacts-command/v1' as const;
 export type CallerIdempotencyKey = string & { readonly __brand: 'caller-key' };
 export type InternalIdempotencyKey = string & { readonly __brand: 'internal-key' };
+export type ArtifactCommandOperation = 'ensure' | 'publish' | 'set_access' | 'delete';
 export interface CommandIdentity {
   readonly internalKey: InternalIdempotencyKey;
   readonly commandHash: string;
   readonly codecVersion: typeof COMMAND_CODEC_VERSION;
 }
 export interface EffectiveArtifactCommand {
-  readonly operation: 'ensure' | 'publish';
+  readonly operation: ArtifactCommandOperation;
   readonly scopeBinding: string;
   readonly payload: Readonly<Record<string, JsonValue>>;
   readonly provenance: { readonly kind: 'inline-original' };
@@ -22,7 +23,7 @@ export interface EffectiveArtifactCommand {
 export interface ArtifactCommandAuthority { readonly storageScopeId: string; readonly actorId: string }
 export interface ArtifactKeyDerivationBinding {
   readonly algorithm: string;
-  derive(input: ArtifactCommandAuthority & { readonly operation: 'ensure' | 'publish';
+  derive(input: ArtifactCommandAuthority & { readonly operation: ArtifactCommandOperation;
     readonly objectId: string; readonly callerKey: CallerIdempotencyKey }): InternalIdempotencyKey;
 }
 /** Trusted server input for the compiled command normalizer, never tool arguments. */
@@ -50,7 +51,7 @@ export function createRadarKeyDerivation(config: { readonly storageScopeId: stri
     for (const other of actors) {
       if (other === actor || !other.startsWith(`${actor}|`)) continue;
       const [operation, objectId] = other.slice(actor.length + 1).split('|');
-      if ((operation === 'ensure' && objectId === '') || (operation === 'publish' && isArtifactId(objectId))) {
+      if ((operation === 'ensure' && objectId === '') || (['publish', 'set_access', 'delete'].includes(operation) && isArtifactId(objectId))) {
         throw new Error('ambiguous Radar actor domain');
       }
     }
@@ -60,7 +61,7 @@ export function createRadarKeyDerivation(config: { readonly storageScopeId: stri
     derive(input) {
       const { storageScopeId, actorId, operation, objectId, callerKey } = input;
       if (storageScopeId !== scope || !actors.has(actorId) ||
-        (operation !== 'ensure' && operation !== 'publish') ||
+        !['ensure', 'publish', 'set_access', 'delete'].includes(operation) ||
         (operation === 'ensure' ? objectId !== '' : !isArtifactId(objectId))) throw new ArtifactProfileInputError();
       assertWellFormed(callerKey);
       if (!callerKey.trim() || callerKey.length > 256) throw new ArtifactProfileInputError();
@@ -79,9 +80,9 @@ export function createArtifactCommand(profile: CompiledArtifactsProfile, name: s
   assertCompiledArtifactsProfile(profile);
   if (derivation.algorithm !== profile.profile.rules.keyDerivationAlgorithm) throw new Error('profile/derivation mismatch');
   const normalized = profile.validate(name, args, envelopeKey);
-  if (name !== 'artifacts_ensure' && name !== 'artifacts_publish') throw new ArtifactProfileInputError(true);
-  const operation = name === 'artifacts_ensure' ? 'ensure' : 'publish';
-  const { idempotencyKey, ...payload } = normalized;
+  if (!['artifacts_ensure', 'artifacts_publish', 'artifacts_set_access', 'artifacts_delete'].includes(name)) throw new ArtifactProfileInputError(true);
+  const operation = name.slice('artifacts_'.length) as ArtifactCommandOperation;
+  const { idempotencyKey, confirmationRef: _proof, ...payload } = normalized;
   const scopeBinding = authority.storageScopeId;
   if (typeof scopeBinding !== 'string' || typeof authority.actorId !== 'string') throw new ArtifactProfileInputError();
   assertWellFormed(scopeBinding);
@@ -91,7 +92,7 @@ export function createArtifactCommand(profile: CompiledArtifactsProfile, name: s
   const effective = copyJson({ operation, scopeBinding, payload: { ...payload, provenance } }) as unknown as
     Omit<EffectiveArtifactCommand, 'identity' | 'provenance'>;
   const internalKey = derivation.derive({ storageScopeId: scopeBinding, actorId: authority.actorId, operation,
-    objectId: operation === 'publish' ? normalized.artifactId as string : '',
+    objectId: operation === 'ensure' ? '' : normalized.artifactId as string,
     callerKey: idempotencyKey as CallerIdempotencyKey });
   if (!/^[0-9a-f]{64}$/.test(internalKey) || !derivation.algorithm) throw new Error('invalid key derivation binding');
   return freezeDeep({ ...effective, provenance, identity: { internalKey,

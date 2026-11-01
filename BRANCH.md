@@ -41,8 +41,8 @@
   - [x] Read master, workflow, testing, common rules and binding design.
   - [x] Verify branch mechanically using harness (PASS C1).
 - [ ] **Lot 1 — Tests before implementation**
-  - [ ] packages/artifacts/tests/parity-source.test.ts: release selection, source rights, corruption and revocation.
-  - [ ] packages/artifacts/tests/parity-control.test.ts: targeted grants, confirmation, replay and terminal guards.
+  - [x] packages/artifacts/tests/parity-source.test.ts: release selection, source rights, corruption and revocation.
+  - [x] packages/artifacts/tests/parity-control.test.ts: targeted grants, confirmation, replay and terminal guards.
   - [ ] packages/artifacts/tests/parity-transport.test.ts: selected HTTP/MCP operations and enriched summaries.
 - [ ] **Lot 2 — Common implementation**
   - [x] D1 verified manifest and author file reads with separate provenance (transport qualification pending).
