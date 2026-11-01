@@ -66,7 +66,7 @@ export const handleRefreshToken = async (c: Context, form: URLSearchParams,
       tokenHash: await ports.tokens.hashSecret(raw), generation: current.generation + 1,
       createdAt: now, consumedAt: null, replacedById: null });
     const user = await ports.users.findById(current.userId);
-    const tokens = await issueTokens({ ...locked, accessTokenTtlSeconds:
+    const tokens = await issueTokens({ ...locked, accessTokenDeadline: current.familyExpiresAt, accessTokenTtlSeconds:
       Math.min(options.accessTokenTtlSeconds ?? 3600, remaining) }, live.client,
       { ...asCode(current), scope: requested.join(' '), createdAt: now }, user!, current.dpopJkt,
       current.audience, current.familyId, false);
