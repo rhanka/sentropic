@@ -8,7 +8,7 @@ import { createHash, randomUUID } from 'node:crypto';
 
 import type { IdentityDigestV1 } from '@sentropic/cluster-mesh';
 
-import { getCmIdentity } from './cm-identity';
+import { CM_IDENTITY_SCHEMA, cmStoreClient, getCmIdentity } from './cm-identity';
 
 export const sha256Hex = (secret: string): string =>
   createHash('sha256').update(secret).digest('hex');
@@ -515,14 +515,94 @@ export const revokeCmCredential = async (credentialRecordId: string, userId: str
   return true;
 };
 
-export const findCmSocialBySubject = async (provider: string, providerSubject: string) => {
+// Purges consumed/revoked proofs past their expiry (the custody store only
+// deletes non-pending rows; pending rows simply stop matching find*).
+export const purgeCmExpiredProofs = async (now = new Date()): Promise<number> => {
   const { custody } = getCmIdentity();
-  return custody.social.findBySubject(provider, providerSubject);
+  return custody.singleUseProofs.purgeExpired(now.toISOString());
 };
 
-export const listCmSocialForUser = async (userId: string) => {
+export interface CmSocialRecord {
+  readonly id: string;
+  readonly userId: string;
+  readonly provider: string;
+  readonly providerSubject: string;
+  readonly providerTenant: string | null;
+  readonly emailAtLink: string | null;
+  readonly emailVerifiedByProvider: boolean;
+  readonly linkedAt: Date;
+  readonly lastLoginAt: Date | null;
+  readonly revokedAt: Date | null;
+}
+
+const toCmSocialRecord = (row: {
+  proofId: string; userId: string; provider: string; providerSubject: string;
+  providerTenant: string | null; emailAtLink: string | null; emailVerifiedByProvider: boolean;
+  linkedAt: string; lastLoginAt: string | null; revokedAt: string | null;
+}): CmSocialRecord => ({
+  id: row.proofId,
+  userId: row.userId,
+  provider: row.provider,
+  providerSubject: row.providerSubject,
+  providerTenant: row.providerTenant,
+  emailAtLink: row.emailAtLink,
+  emailVerifiedByProvider: row.emailVerifiedByProvider,
+  linkedAt: new Date(row.linkedAt),
+  lastLoginAt: date(row.lastLoginAt),
+  revokedAt: date(row.revokedAt),
+});
+
+export const findCmSocialBySubject = async (
+  provider: string,
+  providerSubject: string,
+): Promise<CmSocialRecord | null> => {
   const { custody } = getCmIdentity();
-  return custody.social.listForUser(userId);
+  const row = await custody.social.findBySubject(provider, providerSubject);
+  return row ? toCmSocialRecord(row) : null;
+};
+
+export const unlinkCmSocial = async (
+  userId: string,
+  provider: string,
+  providerSubject: string,
+  now = new Date(),
+): Promise<boolean> => {
+  const { custody } = getCmIdentity();
+  const existing = await custody.social.findBySubject(provider, providerSubject);
+  if (!existing || existing.userId !== userId || existing.revokedAt) return false;
+  try {
+    await custody.social.unlink(existing.proofId, userId, existing.revision, now.toISOString());
+    return true;
+  } catch {
+    return false;
+  }
+};
+
+export const touchCmSocialLogin = async (identityId: string, now = new Date()): Promise<void> => {
+  const { custody } = getCmIdentity();
+  const existing = await custody.social.findById(identityId);
+  if (!existing) return;
+  try {
+    await custody.social.touchLogin(identityId, existing.revision, now.toISOString());
+  } catch {
+    // Lost CAS race: another login already touched this link; not an error.
+  }
+};
+
+/** True when the user has at least one consumed magic link (a completed sign-in factor). */
+export const hasConsumedCmMagicLinkForUser = async (userId: string): Promise<boolean> => {
+  const result = await cmStoreClient.query(
+    `SELECT 1 AS found FROM ${CM_IDENTITY_SCHEMA}.identity_single_use_proofs
+     WHERE "kind" = 'magic_link' AND "user_id" = $1 AND "state" = 'consumed' LIMIT 1`,
+    [userId],
+  );
+  return result.rows.length > 0;
+};
+
+export const listCmSocialForUser = async (userId: string): Promise<CmSocialRecord[]> => {
+  const { custody } = getCmIdentity();
+  const rows = await custody.social.listForUser(userId);
+  return rows.map(toCmSocialRecord);
 };
 
 export const createCmSocialLink = async (input: {
@@ -533,7 +613,7 @@ export const createCmSocialLink = async (input: {
   emailAtLink?: string | null;
   emailVerifiedByProvider?: boolean;
   now: Date;
-}) => {
+}): Promise<CmSocialRecord> => {
   const { custody } = getCmIdentity();
   const proofId = randomUUID();
   await custody.social.insert({
@@ -549,5 +629,7 @@ export const createCmSocialLink = async (input: {
     revokedAt: null,
     revision: 1,
   });
-  return custody.social.findById(proofId);
+  const created = await custody.social.findById(proofId);
+  if (!created) throw new Error('Social link was not persisted.');
+  return toCmSocialRecord(created);
 };
