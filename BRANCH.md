@@ -1,82 +1,73 @@
-# Feature: cyber-act-L05 immutable main image cohort, trusted acquisition, isolated rebuild, report transfer
+# Feature: artifacts parity P0 (list_versions, revert, conflict detection, metadata, edits, get_source)
 
 ## Objective
-Implement r6 wave W2 lot ACT-L05: exact main image cohort, trusted remote acquisition, isolated rebuild and report transfer, with receipt validation in the existing daily adapter seams (acceptance L5-A–E).
+Close the generic P0 gaps of @sentropic/artifacts so the artifact MCP reaches Claude-artifacts parity for the modification lifecycle: version history, revert, optimistic-concurrency conflict detection, title/description/icon metadata, small old/new edits on publish, and source read-back for editing.
 
 ## Scope / Guardrails
-- Scope limited to `scripts/security/daily/**` target-custody / rebuild-isolation / report-transfer / trivy adapter seams plus the `test-security-daily` SCOPE wiring.
-- One migration max in `api/drizzle/*.sql` (if applicable).
-- Make-only workflow, no direct Docker commands (Docker only under the shared flock in `.tmp/packets/DOCKER-LOCK.md`).
-- Root workspace is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development happens in isolated worktree `tmp/worktrees/cyber-act-L05`.
-- Automated test campaigns run on dedicated environments (`ENV=test-cyber-L05`), never on root `dev`.
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
-- All new text in English. Zero Python. No secret values read, printed or committed.
-- No schedule enablement, no seat operation, no live provider/registry call, no other lot touched.
+- Scope limited to `packages/artifacts/**` plus the artifacts-host wiring in `api/src/services/artifacts/composition.ts` (only if the dep shape forces it).
+- Reuse the existing commit/release/current-pointer model; no redesign.
+- Make-only workflow, Docker under the single flock `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`, `ENV=test-artifacts-parity` always LAST, `make down ENV=test-artifacts-parity` after; never `ENV=dev`; never `make clean-all`.
+- Tests first: new unit suite `packages/artifacts/tests/parity-p0.test.ts`; run via `make test-artifacts SCOPE=packages/artifacts/tests/parity-p0.test.ts ENV=test-artifacts-parity` plus the full package unit suite, `make typecheck-artifacts`, `make build-artifacts`.
+- Commits: `make commit MSG="..."` only, <=150 lines each, selective `git add`, push after each commit.
+- All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `packages/artifacts/**`
+  - `api/src/services/artifacts/composition.ts` (host store wiring only)
   - `BRANCH.md`
-  - `scripts/security/daily/target-custody.mjs`
-  - `scripts/security/daily/target-custody.test.mjs`
-  - `scripts/security/daily/rebuild-isolation.mjs`
-  - `scripts/security/daily/rebuild-isolation.test.mjs`
-  - `scripts/security/daily/report-transfer.mjs`
-  - `scripts/security/daily/report-transfer.test.mjs`
-  - `scripts/security/daily/trivy.test.mjs`
-  - `scripts/security/daily/acceptance-disposition.mjs`
 - **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `packages/artifacts/l0-freeze/**` (frozen L0 contract vectors)
+  - `packages/artifacts/probe/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file)
+  - `api/drizzle/*.sql` (max 1 file) — not needed; the artifacts schema migration lives in `packages/artifacts/migrations/`
   - `.github/workflows/**`
-  - `Makefile` (BR05-EX1: one-line SCOPE extension of `test-security-daily`)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
-- `BRLOCK-EX1` acknowledgement: review_by=2026-11-30T00:00:00Z (CI lockfile lane policy, owner CI maintainers).
-- `BR05-EX1`: extend `Makefile` `test-security-daily` SCOPE with the two new r4 Lot-5 required destinations (`target-custody.test.mjs`, `rebuild-isolation.test.mjs`).
-  - Reason: r4 Lot 5 names `target-custody.test.mjs` and `rebuild-isolation.test.mjs` as required test files; r6 §7.3/§6.4 requires every file/case wired into its owning required Make suite, and `publishable-ci-wiring.test.mjs` fails if an on-disk daily test is not in the SCOPE.
-  - Impact: one SCOPE line gains two files, all existing entries unchanged.
-  - Rollback: revert the SCOPE line; the new suites still run standalone via `node --test`.
+- (none open)
 
 ## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
+- Acceptance rule: only non-systematic provider/network/model nondeterminism as `flaky accepted`; never additive timeouts. None expected here (pure unit tests, no AI calls).
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single lot ACT-L05, one review-ready head, one CI run.
+- [x] **Mono-branch + cherry-pick** (single branch `feat/artifacts-parity-p0`, one final test cycle)
+- [ ] **Multi-branch**
+- Rationale: one package, one concern; no orthogonal sub-workstreams.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read r6 §7.2 row ACT-L05, §7.3, §7.4, §8 A5 and r4 Lot 5 (L5-A–E, test destinations).
-  - [x] Verify amendment sha256 `4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f`.
-  - [x] Create worktree `tmp/worktrees/cyber-act-L05` on branch `feat/cyber-act-L05` from `origin/main`; `harness check branch` PASS C1.
-  - [x] Confirm ENV `test-cyber-L05` (ports API_PORT=8815 UI_PORT=5215 MAILDEV_UI_PORT=1115 if a stack is ever started; tests here are compose-free).
-  - [x] Confirm scope boundaries and BR05-EX1 before touching the Makefile.
-- [ ] **Lot 1 — Tests first (L5-A–E)**
-  - [ ] `target-custody.test.mjs` — L5-A cohort identity negatives/positives, L5-B acquisition boundary.
-  - [ ] `rebuild-isolation.test.mjs` — L5-C isolated rebuild plan and receipt validation.
-  - [ ] Extend `report-transfer.test.mjs` — L5-D hostile transfer negatives, L5-E budget/storage-independence.
-  - [ ] Extend `trivy.test.mjs` — cohort at the adapter seam (`validateTarget`/`prepareImageScan` per surface).
-  - [ ] Extend `acceptance-disposition.mjs` — L05_ACCEPTANCE rows; validate in `target-custody.test.mjs`.
-  - [ ] Wire both new test files into `Makefile` `test-security-daily` SCOPE (BR05-EX1).
-  - [ ] Local gate: `flock .tmp/packets/DOCKER-LOCK.md make test-security-daily ENV=test-cyber-L05` green, then `make down ENV=test-cyber-L05`; `make scope-check` PASS C2.
-- [ ] **Lot 2 — Implementation**
-  - [ ] `target-custody.mjs`, `rebuild-isolation.mjs`, `report-transfer.mjs` extensions.
-  - [ ] Re-run the full daily suite under the flock; `make down ENV=test-cyber-L05`.
-- [ ] **Lot 3 — Final validation**
-  - [ ] `make scope-check` PASS C2 on the final tree.
-  - [ ] Atomic `make commit` per logical change (≤150 lines), push branch (crash-safety copy).
-  - [ ] Open draft PR (body = this BRANCH.md), run ONE CI on the final head, wait for completion.
-  - [ ] Write `.tmp/rv/cyber-act-L05.md`; do not merge.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read rules/MASTER.md, rules/workflow.md, COMMON-RULES packet, conductor brief.
+  - [x] Worktree `tmp/worktrees/artifacts-parity-p0` on `feat/artifacts-parity-p0` from origin/main; `harness check branch` PASS.
+  - [x] Make targets: `make test-artifacts SCOPE=... ENV=test-artifacts-parity`, `make typecheck-artifacts`, `make build-artifacts`, `make commit`, `make scope-check`, `make down`.
+  - [x] Docker under flock `.tmp/packets/DOCKER-LOCK.md`, ENV last.
+- [x] **Lot 1 — Tests first (tests/parity-p0-*.test.ts + fixtures/parity-world.ts)**
+  - [x]  `artifacts_list_versions`: history of one artifact (id, createdAt, author, state, isCurrent, digest); read scope; foreign scope/not found hidden.
+  - [ ] `artifacts_revert`: new release copying earlier content (stable URL, history grows); purged release refused with typed error; write scope + idempotency.
+  - [x]  conflict: `expectedCurrentReleaseId` on publish and revert; mismatch returns typed `conflict` carrying current release id + digest; absent field keeps today's behaviour.
+  - [x]  metadata: title/description/icon accepted on ensure and publish, returned by get and list.
+  - [x]  edits: `edits:[{path,oldStr,newStr}]` on publish applied to current release text files; oldStr != exactly once -> typed `edit_mismatch`, nothing changed; result goes through the same commit path.
+  - [x]  get_source: returns current content files (text decoded) for editing.
+  - [x]  MCP executor routes the three new tools; manifest exposes them when selected.
+- [x] **Lot 2 — Implementation**
+  - [ ] profile/contracts.ts: add `artifacts_list_versions`, `artifacts_revert` to capability names.
+  - [ ] profile/schemas.ts + validation.ts + index.ts: schemas for new ops; publish gains optional `expectedCurrentReleaseId`, `edits`, metadata; ensure gains metadata; files becomes conditionally required (files XOR edits); revert schema; routes in capabilityForRoute; idempotency for revert.
+  - [ ] server/failures.ts: typed `edit_mismatch` (422) and conflict details carrier on `pointer_conflict`.
+  - [ ] server/edits.ts: pure edit application with exactly-once rule.
+  - [ ] server/publication.ts: `listReleases` on state store + service; memory double.
+  - [ ] server/access.ts: optional `metadata` on ArtifactAcl; postgres adapter + migration 0004 for the metadata column.
+  - [ ] server/command-identity.ts: allow `revert` operation in command/derivation.
+  - [ ] http.ts: routes + handlers for /versions/:id, /source/:id, /revert; conflict pre-check; edits application; metadata read/write on ensure/publish; metadata in get/list; get_source content.
+  - [ ] mcp-core.ts: route new tools; read-only mutability for list_versions; provider version bump.
+  - [ ] server/outcome-projection.ts: carry conflict details in HTTP body and MCP error.
+  - [ ] api host composition.ts: supply getRelease/listReleases if the dep shape requires.
+  - [ ] templates.ts API guide text; CHANGELOG.md; package.json version bump (minor 0.3.0, must be > published 0.2.4).
+- [~] **Lot 3 — Verify & ship**
+  - [x] `make test-artifacts ENV=test-artifacts-parity` (full unit suite 472/472) green under flock; typecheck + build green; `make typecheck-artifacts`, `make build-artifacts` green; `make down ENV=test-artifacts-parity`.
+  - [ ] `make scope-check` before each commit; commits <=150 lines; push after each commit.
+  - [ ] Draft PR from BRANCH.md; ONE CI run on the final head; report to `.tmp/rv/artifacts-parity-p0.md`; do not merge.
