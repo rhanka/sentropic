@@ -23,14 +23,17 @@ export function createPostgresManagementUnit(client: FinalizeTxClient): Manageme
         currentReleaseId: row.release_id };
     },
     async setAccess(id, principalId, action, updatedAt) {
-      if (action === 'grant') await client.query(
+      const changed = action === 'grant' ? await client.query(
         `INSERT INTO artifacts.artifact_access (artifact_id, principal_id, permission) VALUES ($1, $2, 'read')
-         ON CONFLICT (artifact_id, principal_id) DO NOTHING`, [id, principalId]);
-      else await client.query('DELETE FROM artifacts.artifact_access WHERE artifact_id = $1 AND principal_id = $2', [id, principalId]);
-      await client.query('UPDATE artifacts.artifacts SET is_public = false, updated_at = $2 WHERE id = $1', [id, updatedAt]);
+         ON CONFLICT (artifact_id, principal_id) DO NOTHING`, [id, principalId])
+        : await client.query('DELETE FROM artifacts.artifact_access WHERE artifact_id = $1 AND principal_id = $2', [id, principalId]);
+      await client.query(`UPDATE artifacts.artifacts SET is_public = false, updated_at = $2
+        WHERE id = $1 AND ($3::boolean OR is_public)`, [id, updatedAt, changed.rowCount > 0]);
       const result = await client.query<{ principal_id: string; permission: string }>(
         'SELECT principal_id, permission FROM artifacts.artifact_access WHERE artifact_id = $1 ORDER BY principal_id', [id]);
-      return result.rows.map((row) => ({ principalId: row.principal_id, grant: row.permission }));
+      const stamp = await client.query<{ updated_at: Date | null }>('SELECT updated_at FROM artifacts.artifacts WHERE id = $1', [id]);
+      return { grants: result.rows.map((row) => ({ principalId: row.principal_id, grant: row.permission })),
+        updatedAt: stamp.rows[0]?.updated_at?.toISOString() ?? null };
     },
     async delete(id, deletedAt) {
       await client.query(`UPDATE artifacts.artifacts SET lifecycle_state = 'deleted', terminal_deleted_at = $2,
