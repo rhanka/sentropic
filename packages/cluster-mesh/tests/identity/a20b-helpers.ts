@@ -150,7 +150,6 @@ export interface FixtureBusinessState {
 }
 
 import type { BusinessDeletionPlanV1 as PlanV1, BusinessDeletionPortV1 as PortV1 } from '../../src/identity-contracts/custody.js';
-import type { CustodyOpHost } from '../../src/storage/identity/custody-host.js';
 
 /** Transactional business participant over the exact host transaction. */
 export const createFixtureBusiness = (input: {
@@ -159,8 +158,8 @@ export const createFixtureBusiness = (input: {
   readonly state: FixtureBusinessState;
 }): {
   readonly business: PortV1<CustodyOpHost> & { resolvePlan(userId: string, tx: CustodyOpHost): Promise<PlanV1> };
-  setup(host: { readonly profile: string; readonly raw: unknown }, rows: readonly { readonly ownerId: string; readonly workspaceId: string; readonly payload: string }[]): Promise<void>;
-  rows(host: { readonly profile: string; readonly raw: unknown }): Promise<readonly { readonly ownerId: string; readonly workspaceId: string }[]>;
+  setup(host: CustodyOpHost, rows: readonly { readonly ownerId: string; readonly workspaceId: string; readonly payload: string }[]): Promise<void>;
+  rows(host: CustodyOpHost): Promise<readonly { readonly ownerId: string; readonly workspaceId: string }[]>;
 } => {
   const exec = async (host: CustodyOpHost, text: string, values: readonly (string | number | null)[]): Promise<{ readonly rows: readonly Record<string, unknown>[]; readonly changes: number }> => {
     if (host.profile === 'postgres') {
