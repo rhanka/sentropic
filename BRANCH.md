@@ -6,7 +6,7 @@ Implement the durable storage backends for the frozen identity contracts of lot 
 ## Scope / Guardrails
 - Scope limited to the A2.1 slice of `packages/cluster-mesh` (accounts, proofs, invitations, device enrolment, login sessions, their audit appends). Tenants, memberships, workspaces, resolution, tid, RBAC decisions and cascades belong to lots A2.2/A2.3 and are NOT touched.
 - `packages/cluster-mesh/src/identity-contracts/**` is FROZEN: no semantic change; only type imports and factory calls. `packages/cluster-mesh/tests/identity-*.spec.ts` is FROZEN: the contract suite runs UNMODIFIED against the durable profiles through a campaign alias, never by editing the specs.
-- No app change (`api/**`, `ui/**` untouched); the hosted drizzle control migration for the app cutover belongs to A4.1 per spec r2 §1/§5.
+- App changes limited to the owner-requested SSE subscription race fix (BRA21-EX6); the hosted drizzle control migration for the app cutover belongs to A4.1 per spec r2 §1/§5.
 - No new dependency: PostgreSQL goes through the existing `InjectedPgDriver` protocol, SQLite through the existing `node:sqlite` engine in `src/storage/sqlite/`.
 - Make-only workflow; Docker one build at a time under the packet flock; `ENV=test-cm-a2-1` always LAST; `make down ENV=test-cm-a2-1` after each campaign.
 - All new text in English.
@@ -27,12 +27,14 @@ Implement the durable storage backends for the frozen identity contracts of lot 
   - `.gitignore` (root-anchored `identity/` ignore rule only, BRA21-EX4)
   - `BRANCH.md`
   - `e2e/tests/05-usecase-detail.spec.ts` (SSE regression diagnosis and readiness assertion only, BRA21-EX5)
+  - `api/src/routes/namespaces/streams.ts` (SSE subscription race only, BRA21-EX6)
+  - `api/tests/api/cluster-mesh-streams-cutover.test.ts` (deterministic SSE regression, BRA21-EX6)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `api/**`, `ui/**`
+  - `api/**` (except the two BRA21-EX6 paths), `ui/**`
   - `packages/cluster-mesh/src/identity-contracts/**` (frozen public contracts)
   - `packages/cluster-mesh/tests/identity-*.spec.ts` (frozen contract suite, runs unmodified)
   - `packages/cluster-mesh/assets/**` (migration assets belong to the kernel migration chain, not this slice)
@@ -45,8 +47,9 @@ Implement the durable storage backends for the frozen identity contracts of lot 
   - Mirror the same exception in this file under `## Feedback Loop`.
 
 ## Feedback Loop
+- [x] BRA21-EX6: owner=lane author; review_by=PR review; explicitly requested after delta review MAJOR finding; permit `api/src/routes/namespaces/streams.ts` and its API regression test to establish LISTEN before the SSE response and buffer notifications through initial catch-up; impact limited to SSE connection setup and delivery ordering, no auth, schema or timeout change; rollback by reverting the product and regression-test changes together.
 - [x] BRA21-EX5: owner=lane author; review_by=PR review; owner-requested investigation of run 41254113814 reproduced the unchanged constraints assertion locally; allow only the failing E2E scenario's diagnostic instrumentation and subscription readiness correction; impact limited to test ordering, no timeout increase; rollback by reverting the test hunk.
-- [x] BRA21-SSE1: root cause=test sends PUT after the SSE request starts but before PostgreSQL LISTEN is ready; unchanged baseline failed, observational timing alternated to success, and a controlled gate reproduced the exact failure with PUT 200 before SSE 200/ping and no usecase_update; fix=observe the first ping for the matching workspace/request before PUT, retaining the existing 15000ms readiness budget and 30000ms content assertion; full spec=15 passed, 1 skipped; no identity/auth production change or flaky waiver.
+- [x] BRA21-SSE1: superseded by Lot 8 after delta review; root cause=product returns SSE 200 and drains history before PostgreSQL LISTEN is ready, losing notifications during startup; the initial CDP ping workaround is removed and the product now subscribes before responding, buffering notifications until cursor catch-up completes; no timeout increase or flaky waiver.
 - [x] BRA21-OBS2: PostgreSQL contract validation initially hit the unchanged 5000ms guards in the first two lifecycle cases (87 passed, 2 failed); the identical command and source then passed 89/89; both logs retained in `.tmp/a21-sse-pg-contracts{,-initial}.log`; no contract, timeout or store change and no waiver; timing cause not established.
 - [x] BRLOCK-EX1 carried verbatim from `origin/main` for gate continuity (owner=CI maintainers; review_by=2026-11-30T00:00:00Z; this branch exercises the lock scope via the one-line root lockfile workspace version sync under BRA21-EX3; remove on PR closure; rollback by reverting this branch).
 - [x] BRA21-EX1: owner=lane author; review_by=PR review; new-file commits above the 150-line advisory where a file must land whole (schema/codec/postgres/sqlite modules and profile harness, mirroring the A2.0 BRA2-EX1 whole-module precedent for compilable units); impact limited to branch history; rollback by reverting the branch.
@@ -125,3 +128,9 @@ Implement the durable storage backends for the frozen identity contracts of lot 
   - [x] Run both identity contract profiles and relevant API tests sequentially under the shared flock: PostgreSQL 89/89, SQLite 82 passed + 7 PostgreSQL-only skips, round trips 6/6 on each engine; API 53/53 across `streams.test.ts`, `cluster-mesh-streams-cutover.test.ts`, `initiatives.test.ts`, `cluster-mesh-session.test.ts`, `auth/session.test.ts`, and `unit/auth/session-manager.test.ts`; PostgreSQL teardown, `down-api-ci` and `make down` completed.
   - [ ] Commit through `make commit`, force-with-lease this branch only, wait for one final-head CI, append evidence to `.tmp/rv/lot-A2.1.md`, and stop without merging.
   - [ ] Track handoff: designated main writer imports Lot 7 and the final report; this lane preserves the single-writer Track boundary.
+- [ ] **Lot 8 — Delta review product correction**
+  - [x] Fix subscription setup in `api/src/routes/namespaces/streams.ts` before response delivery and initial catch-up; buffer startup notifications and serialize filtered live delivery with cursor replay.
+  - [ ] Commit deterministic API regressions in `api/tests/api/cluster-mesh-streams-cutover.test.ts`: lost initiative/chat notifications reproduce on the original product; overlapping outbox replay reproduces duplicate sequence 3 after the first fix; final regression scope 3/3 and full streams scope 11/11; API typecheck and lint passed.
+  - [ ] Restore `e2e/tests/05-usecase-detail.spec.ts` byte-for-byte to the main version, removing the CDP ping wait.
+  - [ ] Run the new API regression, both streams API files, and E2E spec 05 sequentially under the shared flock with ports 9365/5565/1465 and `ENV=e2e-cm-a2-1` last; run matching teardown.
+  - [ ] Scope-check, `make commit`, force-with-lease this branch only, one CI on the final head, append evidence to the owner report and designated Track-writer handoff; stop without merging.
