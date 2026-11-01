@@ -128,6 +128,18 @@ describe('PostgreSQL refresh storage', () => {
     expect((await adapter().findAnchor('family'))?.revokedReason).toBe('db_restore_invalidation');
   });
 
+  it('should revoke live linked JTIs even when the SQL writer uses a non-UTC timezone', async () => {
+    await pool.query(`INSERT INTO oauth_tokens (jti, token_type, client_id, user_id, scope, audience,
+      expires_at, refresh_family_id) VALUES ('refresh-zone-jti', 'access_token', $1, $2,
+      'offline_access', 'https://immo.test/mcp', (clock_timestamp() AT TIME ZONE 'UTC') + interval '1 hour', 'family')`, [clientId, userId]);
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL TIME ZONE 'Pacific/Kiritimati'`);
+      await tx.execute(sql`SELECT public.oauth_refresh_revoke_user(${userId}, 'security_event')`);
+    });
+    const { rows } = await pool.query("SELECT jti FROM revoked_tokens WHERE jti='refresh-zone-jti'");
+    expect(rows).toEqual([{ jti: 'refresh-zone-jti' }]);
+  });
+
   it.each(['account', 'policy', 'consent'])('should invalidate %s removal without resurrection', async (kind) => {
     if (kind === 'account') {
       await db.update(users).set({ accountStatus: 'disabled_by_admin' }).where(eq(users.id, userId));
