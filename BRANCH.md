@@ -42,7 +42,11 @@ Implement the single canonical Sessions registry with typed projections (§3.3.1
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
 - **Exception process**:
-  - [x] Record rationale, impact and rollback in Feedback Loop before exceptions.
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+- **Exceptions granted**:
+  - `BR01-EX1` (`package-lock.json`, root): mechanically required sync of the `packages/cluster-mesh` 0.26.0-dev.4 version bump via `make lock-root`; CI train lock-sync gate fails without it. Reason: enforce-package-bump companion. Impact: version field sync only (verify diff). Rollback: `git checkout HEAD -- package-lock.json` + revert version bump.
 
 ## Feedback Loop
 - [x] `attention`: manifest pin drift — assignment cites dfb2589969f78cf0 prefix; r1-baseline.json confirms it as the r1 MANIFEST seal; contract 3d827eaa… and manifest JSON 5e86b2a1… are the r1 pinned bytes per app ACK review §1 finding 2.
