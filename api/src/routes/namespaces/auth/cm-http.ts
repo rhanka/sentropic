@@ -2,6 +2,8 @@ import type { Context, Hono } from 'hono';
 import type { IdentityAuthCompletionFlowV1, IdentityAuthHonoTransactionBindingV1,
   IdentityAuthRefusalV1 } from '@sentropic/cluster-mesh';
 import { withAppCmAuth } from '../../../services/identity/cm-auth-runtime';
+import type { CmIdentityTransaction } from '../../../services/identity/cm-transaction';
+import type { CmRegistrationPresentation } from '../../../services/identity/cm-auth-binding';
 
 interface StagedResponse {
   readonly status: number;
@@ -25,24 +27,28 @@ const refusalResponse = (refusal: IdentityAuthRefusalV1): Response => {
 
 /** Execute an unchanged handler on a private context; publish only a committed copy. */
 export async function runCmAuthHttp(c: Context, flow: IdentityAuthCompletionFlowV1 | null,
-  router: (binding: IdentityAuthHonoTransactionBindingV1) => Hono): Promise<Response> {
+  router: (binding: IdentityAuthHonoTransactionBindingV1, tx: CmIdentityTransaction) => Hono,
+  presentation?: CmRegistrationPresentation): Promise<Response> {
   const request = c.req.raw;
   const body = request.method === 'GET' || request.method === 'HEAD' ? undefined : await request.arrayBuffer();
   try {
     return await withAppCmAuth(async runner => {
-      const work = async (binding: IdentityAuthHonoTransactionBindingV1): Promise<StagedResponse> => {
+      const work = async (binding: IdentityAuthHonoTransactionBindingV1, tx: CmIdentityTransaction): Promise<StagedResponse> => {
         // Each retry gets fresh headers/context/body. No failed-attempt cookie survives.
-        const response = await router(binding).fetch(new Request(request.url, {
+        const stagedRouter = router(binding, tx);
+        stagedRouter.onError(error => { throw error; });
+        const response = await stagedRouter.fetch(new Request(request.url, {
           method: request.method, headers: new Headers(request.headers), body: body?.slice(0),
         }));
         const headers: [string, string][] = [...response.headers.entries()].filter(([key]) => key !== 'set-cookie');
         for (const cookie of response.headers.getSetCookie()) headers.push(['set-cookie', cookie]);
         const copy = { status: response.status, headers, body: await response.text() };
-        if (copy.status >= 400) throw new HttpRefusal(copy);
+        if (copy.status >= 500 || (flow !== null && copy.status >= 400)) throw new HttpRefusal(copy);
         return copy;
       };
-      if (flow === null) return publish(await runner.request(work));
-      const outcome = await runner.complete(flow, work);
+      const trusted = presentation ? (tx: CmIdentityTransaction) => runner.registrationContext(presentation, tx) : null;
+      if (flow === null) return publish(await runner.request(work, trusted));
+      const outcome = await runner.complete(flow, work, trusted);
       return outcome.committed ? publish(outcome.value) : refusalResponse(outcome.refusal);
     });
   } catch (error) {
@@ -51,3 +57,8 @@ export async function runCmAuthHttp(c: Context, flow: IdentityAuthCompletionFlow
     return Response.json({ error: { code: 'identity_unavailable', message: 'Identity service unavailable.' } }, { status: 503 });
   }
 }
+
+export const refuseCmRegistration = (): never => {
+  throw new HttpRefusal({ status: 400, headers: [['content-type', 'application/json']],
+    body: JSON.stringify({ error: { code: 'registration_verification_failed', message: 'Registration verification failed.' } }) });
+};
