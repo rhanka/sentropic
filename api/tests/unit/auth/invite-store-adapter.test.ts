@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { randomUUID } from 'node:crypto';
-import { eq } from 'drizzle-orm';
 
-import { db } from '../../../src/db/client';
-import { authInviteTokens, users } from '../../../src/db/schema';
+import { createCmUser } from '../../../src/services/identity/cm-users';
+import { consumeCmInvitationByTokenHash, createCmInvitation, findCmInvitationByTokenHash } from '../../../src/services/identity/cm-proofs';
+import { cmPurgeAllIdentity } from '../../utils/cm-identity-test-store';
 import { createInviteStoreAdapter, hashInviteToken } from '../../../src/services/auth/invite-store-adapter';
 
 /**
@@ -25,36 +25,21 @@ const seedInvite = async (input: {
   expiresAt: Date;
   consumedAt?: Date | null;
 }): Promise<void> => {
-  await db.insert(authInviteTokens).values({
-    id: randomUUID(),
-    tokenHash: hashInviteToken(input.token),
-    email: input.email,
-    clientId: null,
-    expiresAt: input.expiresAt,
-    consumedAt: input.consumedAt ?? null,
-    consumedByUserId: null,
-    createdAt: new Date(),
-  });
+  await createCmInvitation({ email: input.email, clientId: null, token: input.token, expiresAt: input.expiresAt, now: new Date() });
+  if (input.consumedAt) {
+    const consumed = await consumeCmInvitationByTokenHash(hashInviteToken(input.token), input.email, randomUUID(), input.consumedAt);
+    if (!consumed) throw new Error('Failed to seed consumed invite.');
+  }
 };
 
 describe('createInviteStoreAdapter (BR-39r L4 single-use invite tokens)', () => {
   beforeEach(async () => {
-    await db.delete(authInviteTokens);
-    await db.delete(users).where(eq(users.id, userId));
-    await db.insert(users).values({
-      createdAt: new Date(),
-      displayName: 'Invitee',
-      email,
-      emailVerified: true,
-      id: userId,
-      role: 'editor',
-      updatedAt: new Date(),
-    });
+    await cmPurgeAllIdentity();
+    await createCmUser({ userId, email, displayName: 'Invitee', role: 'editor', emailVerified: true, accountStatus: 'active' });
   });
 
   afterEach(async () => {
-    await db.delete(authInviteTokens);
-    await db.delete(users).where(eq(users.id, userId));
+    await cmPurgeAllIdentity();
   });
 
   it('findValid returns the bound email for a valid (unconsumed, unexpired) token', async () => {
@@ -108,9 +93,9 @@ describe('createInviteStoreAdapter (BR-39r L4 single-use invite tokens)', () => 
     const second = await adapter.consume(hash, new Date(), userId);
     expect(second).toBeNull();
 
-    const [row] = await db.select().from(authInviteTokens).where(eq(authInviteTokens.tokenHash, hash));
-    expect(row.consumedAt).not.toBeNull();
-    expect(row.consumedByUserId).toBe(userId);
+    const row = await findCmInvitationByTokenHash(hash);
+    expect(row?.consumedAt).not.toBeNull();
+    expect(row?.consumedByUserId).toBe(userId);
   });
 
   it('consume on an expired token returns null (no consume)', async () => {

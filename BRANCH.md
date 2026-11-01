@@ -63,6 +63,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Worktree `tmp/worktrees/app-cm-a4-3`, branch `feat/app-cm-a4` from origin/feat/cm-identity-a2-0b head; harness C1 PASS.
   - [x] BRANCH.md from plan/BRANCH_TEMPLATE.md.
   - [x] ENV mapping: test-app-a4 / e2e-app-a4; ports API_PORT=9640 UI_PORT=5840 MAILDEV_UI_PORT=1740.
+  - [x] Resume C1 PASS; review inherited account, challenge and invitation fixtures; restore original email data.
   - [ ] Docker stack under flock, `make down ENV=test-app-a4` after.
 - [ ] **Lot 1 — CM identity composition + one data migration**
   - [ ] App-side CM identity composition (core stores, tenancy stores, custody host/UOW, F15 producer, atomic deletion V2, importer) over the app Postgres.
