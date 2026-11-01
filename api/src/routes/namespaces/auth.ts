@@ -9,13 +9,13 @@ import { requireAuth } from '../../middleware/auth';
 import { clusterMeshAdapter } from '../../services/cluster-mesh-adapter';
 import { getSentropicOAuthPorts } from '../auth/oauth';
 import { applyAuthAuthorFence, type AuthCompositionRoot } from './auth-cutover';
-import { accountRouter } from './auth/account';
+import { accountRouter, registerHandlers } from './auth/cm-auth-hono';
 import { loginHandlers } from './auth/authentication';
 import { credentialHandlers } from './auth/credentials';
 import { emailHandlers } from './auth/email';
 import { createFederationRouter } from './auth/federation';
 import { magicLinkHandlers } from './auth/magic-link';
-import { registerHandlers } from './auth/registration';
+
 
 export interface AuthPathProjection {
   readonly accountPath: string;
