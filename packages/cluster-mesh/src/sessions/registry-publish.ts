@@ -5,7 +5,6 @@ import type {
   PublishResult,
   RevisionRef,
   SessionRef,
-  Visibility,
 } from './registry-types.js';
 import {
   buildProjection,
@@ -30,7 +29,6 @@ function parseSessionRef(state: RegistryState, ref: SessionRef): SessionRef | nu
   }
   return { ...ref };
 }
-
 export function publishListing(state: RegistryState, ref: SessionRef, grantRef: RevisionRef): PublishResult {
   const parsed = parseSessionRef(state, ref);
   if (parsed === null) return { status: 'refused', error: relayError('relay_origin_refused') };
