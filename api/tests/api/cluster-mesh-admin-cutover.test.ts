@@ -12,7 +12,7 @@ import {
 } from '../../src/app';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
-import { users } from '../../src/db/schema';
+import { findCmUserById, updateCmUser } from '../../src/services/identity/cm-users';
 import { requireAuth } from '../../src/middleware/auth';
 import { requireAdmin, requireRole } from '../../src/middleware/rbac';
 import type { AdminCutoverControl } from '../../src/routes/namespaces/admin-cutover';
@@ -131,11 +131,11 @@ describe('cluster mesh admin cutover', () => {
 
   it('executes seeded authenticated admin and tenant safe reads over authoritative state', async () => {
     const pending = await createAuthenticatedUser('editor');
-    await db.update(users).set({
+    await updateCmUser(pending.id, {
       accountStatus: 'pending_admin_approval',
       approvalDueAt: new Date('2026-09-04T00:00:00.000Z'),
       updatedAt: new Date('2026-09-02T00:00:00.000Z'),
-    }).where(eq(users.id, pending.id));
+    });
     recordTenantResolution('d11-admin-safe-read');
 
     const reads = [
@@ -166,8 +166,8 @@ describe('cluster mesh admin cutover', () => {
       approvedAt: null,
       approvedByUserId: null,
     };
-    await db.update(users).set(pendingState).where(eq(users.id, candidateTarget.id));
-    await db.update(users).set(pendingState).where(eq(users.id, historicalTarget.id));
+    await updateCmUser(candidateTarget.id, pendingState);
+    await updateCmUser(historicalTarget.id, pendingState);
     const approve = (app: Hono, userId: string) => authenticatedRequest(
       app,
       'POST',
@@ -179,10 +179,8 @@ describe('cluster mesh admin cutover', () => {
     const active = await approve(candidate(), candidateTarget.id);
     expect({ status: active.status, body: await active.json() })
       .toEqual({ status: 200, body: { success: true } });
-    const [candidateRow] = await db.select().from(users)
-      .where(eq(users.id, candidateTarget.id)).limit(1);
-    const [untouchedHistoricalRow] = await db.select().from(users)
-      .where(eq(users.id, historicalTarget.id)).limit(1);
+    const candidateRow = await findCmUserById(candidateTarget.id);
+    const untouchedHistoricalRow = await findCmUserById(historicalTarget.id);
     expect(candidateRow).toMatchObject({
       role: 'guest', accountStatus: 'active', approvedByUserId: appAdmin.id,
     });
@@ -194,8 +192,7 @@ describe('cluster mesh admin cutover', () => {
     const legacy = await approve(historical, historicalTarget.id);
     expect({ status: legacy.status, body: await legacy.json() })
       .toEqual({ status: 200, body: { success: true } });
-    const [historicalRow] = await db.select().from(users)
-      .where(eq(users.id, historicalTarget.id)).limit(1);
+    const historicalRow = await findCmUserById(historicalTarget.id);
     expect(historicalRow).toMatchObject({
       role: 'guest', accountStatus: 'active', approvedByUserId: appAdmin.id,
     });
