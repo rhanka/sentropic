@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync, existsSync } from 'node:fs';
+import { readdirSync, readFileSync, existsSync, writeFileSync } from 'node:fs';
+import { relative, sep } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 // Sum of observed successful test durations, main run 41277623779, attempt 1.
@@ -95,6 +96,27 @@ export function testIdentities(report) {
   };
   for (const suite of report.suites ?? []) visit(suite);
   return identities;
+}
+
+// Snapshot collected tests before hooks can mark them skipped at runtime.
+export function expectedFromSuite(config, suite) {
+  const serialize = (node, projectName) => ({ title: node.title,
+    specs: node.tests.map(test => ({ title: test.title,
+      file: relative(config.rootDir, test.location.file).split(sep).join('/'),
+      line: test.location.line, column: test.location.column,
+      tests: [{ projectName, expectedStatus: test.expectedStatus, results: [] }] })),
+    suites: node.suites.map(child => serialize(child, projectName)) });
+  return { suites: suite.suites.flatMap(project =>
+    project.suites.map(file => serialize(file, project.project().name))) };
+}
+
+export default class BrowserMembershipReporter {
+  printsToStdio() { return false; }
+  onBegin(config, suite) {
+    const file = process.env.CI_BROWSER_EXPECTED_FILE;
+    if (!file) throw new Error('Missing expected browser membership output');
+    writeFileSync(file, JSON.stringify(expectedFromSuite(config, suite), null, 2));
+  }
 }
 
 export function reconcileReports(expected, actual) {
