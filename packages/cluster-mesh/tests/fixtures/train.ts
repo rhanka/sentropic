@@ -2,7 +2,7 @@
  * Independently authored at the rebased baseline: never derive these from
  * package manifests or production catalog constants. Historical and skew
  * fixtures stay inline in their specs until 1.26b centralizes them. */
-export const TRAIN_LLM_MESH_VERSION = '0.32.2';
+export const TRAIN_LLM_MESH_VERSION = '0.32.3';
 export const TRAIN_LLM_GATEWAY_VERSION = '0.22.3';
 export const TRAIN_CLUSTER_MESH_VERSION = '0.24.0';
 /** Supported ranges consumed by registry/topology specs (adopted in 1.26b). */
