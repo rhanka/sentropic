@@ -1465,6 +1465,7 @@ jobs:
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make test-artifact-content-image ENV=test-ci-api
       - name: Save API image as artifact
+        id: application
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make save-api
       - name: Upload API image artifact
@@ -1479,6 +1480,14 @@ jobs:
             .tmp/ci-prod-image/api-image-id
           include-hidden-files: true
           compression-level: 0
+      - name: Retain qualified API identity for daily providers
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.application.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: live-provider-api-identity
+          path: api-image.json
+          retention-days: 30
+          if-no-files-found: error
 
   build-api-tool-image:
     runs-on: ubuntu-latest
@@ -1664,6 +1673,7 @@ jobs:
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make ci-build-ui ENV=test-ci-images
       - name: Save UI image as artifact
+        id: application
         if: needs.changes.outputs.ui == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.global == 'true'
         run: make save-ui
       - name: Upload UI image artifact
@@ -1676,6 +1686,14 @@ jobs:
             ui-image.tar.zst
             ui-image.json
           compression-level: 0
+      - name: Retain qualified UI identity for daily providers
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main' && steps.application.outcome == 'success'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: live-provider-ui-identity
+          path: ui-image.json
+          retention-days: 30
+          if-no-files-found: error
 
   build-ui-static:
     runs-on: ubuntu-latest
@@ -3179,12 +3197,6 @@ jobs:
               return;
             }
             const names = new Set(['api-tool-image', 'api-image', 'ui-image', 'e2e-image', 'desktop-download', 'package-candidates']);
-            // The daily live job consumes the exact main application images.
-            // Their existing one-day retention remains the expiry boundary.
-            if (context.eventName === 'push' && context.ref === 'refs/heads/main') {
-              names.delete('api-image');
-              names.delete('ui-image');
-            }
             const artifacts = await github.paginate(github.rest.actions.listWorkflowRunArtifacts,
               { ...context.repo, run_id: context.runId, per_page: 100 });
             for (const artifact of artifacts.filter(item => names.has(item.name))) {

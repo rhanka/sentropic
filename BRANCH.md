@@ -57,6 +57,7 @@
 - [ ] BR81-EX4 — Add isolated provider fixture service overlay; impact: test networks only; rollback: remove the overlay and restore prior test startup, with no production endpoint bypass.
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 - [x] Offline receipt checks reject unpublished main tuples and paginate all job/artifact rows; application qualification is pending.
+- [x] Daily preparation reuses published images only after the existing source/tree/workflow/profile/run/image validator accepts them. Retain two small identity receipts for 30 days; preserve transport archive deletion and one-day expiry.
 
 ## AI Flaky tests
 - [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
