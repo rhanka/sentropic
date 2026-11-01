@@ -29,6 +29,8 @@ Opted-in MCP clients can renew a one-hour access token within a rotating 15-day 
   - `api/drizzle/**`
   - `packages/auth-hono/**`
   - `packages/auth-ui/**`
+  - `packages/cluster-mesh/package.json`
+  - `packages/llm-gateway/package.json`
   - `deploy/ci/idp-identity-sync/**`
   - `deploy/k8s/overlays/prod/idp-identity-sync/export-prod.sql`
   - `deploy/k8s/overlays/preprod/idp-identity-sync/import-preprod.sql`
@@ -54,6 +56,7 @@ Opted-in MCP clients can renew a one-hour access token within a rotating 15-day 
 - [x] BRIR-EX1: extend only test-auth-ui tool dependencies to render the mandated real Svelte consent component; impact limited to that test target; rollback restores the prior isolated tool list.
 - [x] BRIR-EX2: add mandatory refresh invalidation after supported database restore targets, before reopening token traffic; impact is fail-closed restore completion; rollback restores prior target recipes.
 - [x] BRIR-EX3: retire PR #868's temporary preprod 15-day access TTL when deploying these lots, as that override requires; restore the binding 1-hour access TTL and leave prod unchanged.
+- [x] BRIR-EX4: admit auth-hono 0.18 in the two existing optional consumer peer ranges and synchronize auth package lock metadata; required by the reproduced CI frozen-install failure; no consumer source behavior changes; rollback restores the preceding peer metadata.
 - [x] Track source ready for designated-writer import under owner item `01M588EA0X3RQPCATVR987CFB4`; concurrent `.track` writes are reserved to the conductor.
 - [x] A4 identity cutover may land in parallel; no identity-table redesign or new account/session references.
 - [x] Final review: preserve client_id through the host discovery ingress; both well-known endpoints have an HTTP regression, including default-deny unknown/absent clients.
