@@ -2,7 +2,9 @@ import { describe, it, expect, afterEach } from 'vitest';
 import { app } from '../../src/app';
 import { authenticatedRequest, createAuthenticatedUser, cleanupAuthData } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
-import { chatGenerationTraces, chatMessages, chatSessions, userSessions, users, workspaces } from '../../src/db/schema';
+import { chatGenerationTraces, chatMessages, chatSessions, workspaces } from '../../src/db/schema';
+import { findCmUserById, updateCmUser } from '../../src/services/identity/cm-users';
+import { listCmSessionsForUser } from '../../src/services/identity/cm-sessions';
 import { eq } from 'drizzle-orm';
 import { createTestId } from '../utils/test-helpers';
 import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
@@ -20,14 +22,11 @@ describe('Admin users API (approval + disable/reactivate + delete)', () => {
     const editor = await createAuthenticatedUser('editor', `editor-users-${suffix}@example.com`);
 
     // mark editor as pending approval
-    await db
-      .update(users)
-      .set({
-        accountStatus: 'pending_admin_approval',
-        approvalDueAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, editor.id));
+    await updateCmUser(editor.id, {
+      accountStatus: 'pending_admin_approval',
+      approvalDueAt: new Date(Date.now() + 48 * 60 * 60 * 1000),
+      updatedAt: new Date(),
+    });
 
     const listRes = await authenticatedRequest(
       app,
@@ -48,12 +47,12 @@ describe('Admin users API (approval + disable/reactivate + delete)', () => {
     );
     expect(approveRes.status).toBe(200);
 
-    const [approved] = await db.select().from(users).where(eq(users.id, editor.id)).limit(1);
+    const approved = await findCmUserById(editor.id);
     expect(approved.accountStatus).toBe('active');
     expect(approved.approvedAt).toBeInstanceOf(Date);
     expect(approved.approvedByUserId).toBe(admin.id);
 
-    const editorSessions = await db.select().from(userSessions).where(eq(userSessions.userId, editor.id));
+    const editorSessions = await listCmSessionsForUser(editor.id);
     expect(editorSessions.length).toBeGreaterThan(0);
 
     // --- Disable + reactivate ---
@@ -66,7 +65,7 @@ describe('Admin users API (approval + disable/reactivate + delete)', () => {
     );
     expect(disableRes.status).toBe(200);
 
-    const [disabled] = await db.select().from(users).where(eq(users.id, editor.id)).limit(1);
+    const disabled = await findCmUserById(editor.id);
     expect(disabled.accountStatus).toBe('disabled_by_admin');
     expect(disabled.disabledAt).toBeInstanceOf(Date);
     expect(disabled.disabledReason).toBe('test');
@@ -79,16 +78,15 @@ describe('Admin users API (approval + disable/reactivate + delete)', () => {
     );
     expect(reactivateRes.status).toBe(200);
 
-    const [reactivated] = await db.select().from(users).where(eq(users.id, editor.id)).limit(1);
+    const reactivated = await findCmUserById(editor.id);
     expect(reactivated.accountStatus).toBe('active');
 
     // --- Delete: must require disabled, and must not 500 if admin chat sessions/traces are scoped to the user's workspace ---
     const delUser = await createAuthenticatedUser('editor', `delete-users-${suffix}@example.com`);
     await ensureWorkspaceForUser(delUser.id);
 
-    const [ws] = await db.select().from(workspaces).where(eq(workspaces.ownerUserId, delUser.id)).limit(1);
-    expect(ws?.id).toBeTruthy();
-    const wsId = ws!.id;
+    const wsId = delUser.workspaceId;
+    expect(wsId).toBeTruthy();
 
     // Refuse deletion if not disabled
     const refuseRes = await authenticatedRequest(app, 'DELETE', `/api/v1/admin/users/${delUser.id}`, admin.sessionToken!);
@@ -133,17 +131,13 @@ describe('Admin users API (approval + disable/reactivate + delete)', () => {
     });
 
     // Disable user (required before deletion)
-    await db
-      .update(users)
-      .set({ accountStatus: 'disabled_by_admin', disabledAt: new Date(), disabledReason: 'test', updatedAt: new Date() })
-      .where(eq(users.id, delUser.id));
+    await updateCmUser(delUser.id, { accountStatus: 'disabled_by_admin', disabledAt: new Date(), disabledReason: 'test', updatedAt: new Date() });
 
     const deleteRes = await authenticatedRequest(app, 'DELETE', `/api/v1/admin/users/${delUser.id}`, admin.sessionToken!);
     expect(deleteRes.status).toBe(200);
 
     // User + workspace deleted
-    const u2 = await db.select().from(users).where(eq(users.id, delUser.id));
-    expect(u2.length).toBe(0);
+    expect(await findCmUserById(delUser.id)).toBeNull();
     const ws2 = await db.select().from(workspaces).where(eq(workspaces.id, wsId));
     expect(ws2.length).toBe(0);
 
