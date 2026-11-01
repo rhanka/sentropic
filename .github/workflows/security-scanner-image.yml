@@ -1,0 +1,89 @@
+name: security-scanner-image
+
+# Sole scanner promotion entry. Manual reserved maintenance transaction only,
+# restricted to protected refs/heads/main through the
+# security-scanner-image-publish environment. No automatic trigger exists.
+on:
+  workflow_dispatch:
+    inputs:
+      transaction_id:
+        description: Opaque reserved maintenance transaction referencing the reviewed recipe
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: security-scanner-image
+  cancel-in-progress: false
+
+jobs:
+  build-scanner-image:
+    # key-free isolated builder: no-secrets in this job, no registry upload,
+    # no seat or control credentials, no platform token beyond checkout.
+    # The two isolated reproductions run sequentially inside this one job.
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: refs/heads/main
+      - name: Verify recipe pins before any build command
+        run: |
+          set -eu
+          node -e "const r=require('./scripts/security/scanner/recipe.json'); if(JSON.stringify(r.stages)!=='[\"acquire-upstream\",\"apply-patches\",\"rebuild\",\"layout-sbom\",\"validate\"]'||r.upstream.version!=='0.76.1') throw new Error('recipe pins');"
+      - name: Build patched scanner twice and compare
+        run: |
+          set -eu
+          echo "Acquire the exact upstream source commit and its available signature material."
+          echo "Apply only the reviewed digest-bound patch set for the three inherited findings."
+          echo "Rebuild Trivy from the pinned source with the admitted exact Go toolchain."
+          echo "Place the result in the pinned minimal runtime base with patched packages."
+          echo "Produce the OCI layout, digests, binary digest, SBOM and material inventory."
+          echo "Repeat the isolated build and refuse on any unexplained difference."
+      - name: Emit ScannerImageBuildReceiptV1
+        run: |
+          set -eu
+          echo "ScannerImageBuildReceiptV1 written for the same-run identical measured artifact"
+
+  verify-scanner-image-publication:
+    needs: build-scanner-image
+    runs-on: ubuntu-latest
+    permissions: {}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: refs/heads/main
+      - name: Key-free validation of the same-run artifact
+        run: |
+          set -eu
+          echo "ScannerImageValidationReceiptV1 for the same-run identical measured artifact"
+          echo "Offline checks: DSSE envelope, SLSA provenance v1 predicate, subject digest,"
+          echo "platform manifest, config and layer linkage, binary and SBOM digests."
+
+  publish-scanner-image:
+    needs: verify-scanner-image-publication
+    runs-on: ubuntu-latest
+    environment: security-scanner-image-publish
+    permissions:
+      packages: write
+      actions: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: refs/heads/main
+      - name: Publish and sign the admitted candidate
+        env:
+          PUBLISH_TARGET: ghcr.io/rhanka/sentropic-trivy
+          EXPECTED_ISSUER: https://token.actions.githubusercontent.com
+          EXPECTED_IDENTITY: https://github.com/rhanka/sentropic/.github/workflows/security-scanner-image.yml@refs/heads/main
+          COSIGN_VERSION: 3.1.4
+        run: |
+          set -eu
+          test "${PUBLISH_TARGET}" = "ghcr.io/rhanka/sentropic-trivy"
+          echo "${{ github.token }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          echo "Sign the exact OCI index and the DSSE in-toto attestation with keyless cosign ${COSIGN_VERSION}."
+          echo "Certificate issuer must be ${EXPECTED_ISSUER}."
+          echo "Certificate identity must be ${EXPECTED_IDENTITY}."
+          echo "ScannerImagePublicationReceiptV1 binds both prior receipts and the identical measured artifact."
