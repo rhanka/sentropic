@@ -63,6 +63,7 @@
 - [x] Protocol review cycle 2 correction: abort before Playwright if shard-file generation fails or returns no files; allow the local `auth-idp` service without admitting external egress. Docker proof is pending.
 - [x] Daily main selection searches workflow pages lazily until a complete published tuple with retained identities is found; API and artifact errors still fail qualification. Schedule monitoring examines the latest 100 scheduled runs, which cover more than its 26-hour freshness window at the declared 25-per-day cadence.
 - [x] Browser membership snapshots are emitted by the execution process before hooks run; remove the separate Playwright list process while retaining runtime-skip rejection and expected/actual receipts.
+- [x] AI/VSCode fixture receipts require actual provider-boundary requests; non-provider browser shards retain their complete journeys. Live qualification requires at least one successful provider response and preserves expected cancellations separately. VSCode uploads its isolation receipt.
 
 ## AI Flaky tests
 - [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.

@@ -47,6 +47,7 @@ export function liveReceipt({ tuple, selection, events, results, schedule, event
   const outcomes = events.filter(row => ['response', 'error', 'cancelled'].includes(row.type));
   const qualified = ['api', 'browser', 'vscode'].every(lane => results[lane] === 0)
     && calls.length > 0 && outcomes.length === calls.length
+    && outcomes.some(row => row.type === 'response' && row.status >= 200 && row.status < 400)
     && new Set(calls.map(row => row.requestId)).size === calls.length
     && calls.every(call => outcomes.filter(row => row.requestId === call.requestId).length === 1)
     && outcomes.every(row => row.type === 'cancelled' || row.type === 'response' && row.status >= 200 && row.status < 400);
@@ -55,6 +56,14 @@ export function liveReceipt({ tuple, selection, events, results, schedule, event
     cancelledCalls: outcomes.filter(row => row.type === 'cancelled').length,
     unfinishedCalls: calls.length - outcomes.length, costUsd: null, costStatus: 'to measure: runtime observations do not price provider calls',
     retryAttempts: null, retryStatus: 'to measure: wire attempts are counted without inferring logical retry identity' };
+}
+
+export function fixtureReceipt({ traffic, networkInternal, unexpectedEgress = [], requireCalls = false }) {
+  const qualified = networkInternal && traffic.failedRequests === 0 && unexpectedEgress.length === 0
+    && Number.isSafeInteger(traffic.calls) && traffic.calls >= (requireCalls ? 1 : 0);
+  return { qualified, networkInternal, unexpectedEgress, traffic, requireCalls,
+    liveProviderCalls: networkInternal ? 0 : null,
+    proof: 'API test network has no external route; provider fetches are redirected locally' };
 }
 
 const json = file => JSON.parse(readFileSync(file, 'utf8'));
@@ -140,12 +149,11 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const networkInternal = readFileSync(`${dir}/network-internal.txt`, 'utf8').trim() === 'true';
     const file = '.tmp/live-provider/unexpected-egress.jsonl';
     const unexpectedEgress = existsSync(file) ? readFileSync(file, 'utf8').trim().split('\n').filter(Boolean).map(JSON.parse) : [];
-    const qualified = networkInternal && traffic.failedRequests === 0 && unexpectedEgress.length === 0;
-    const receipt = { qualified, networkInternal, unexpectedEgress, traffic,
-      liveProviderCalls: networkInternal ? 0 : null, proof: 'API test network has no external route; provider fetches are redirected locally' };
+    const receipt = fixtureReceipt({ traffic, networkInternal, unexpectedEgress,
+      requireCalls: process.env.CI_PROVIDER_REQUIRE_CALLS === '1' });
     writeFileSync(`${dir}/receipt.json`, JSON.stringify(receipt, null, 2));
     console.log(JSON.stringify(receipt, null, 2));
-    if (!qualified) process.exitCode = 1;
+    if (!receipt.qualified) process.exitCode = 1;
   } else if (command === 'health') {
     const runs = api('repos/rhanka/sentropic/actions/workflows/llm-live-daily.yml/runs?event=schedule&per_page=100').workflow_runs;
     const health = scheduleHealth(runs);
