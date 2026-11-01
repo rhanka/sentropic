@@ -74,7 +74,7 @@ jobs:
         with:
           name: live-provider-selection
           path: .tmp/live-provider/
-      - name: Reuse the selected immutable production tuple
+      - name: Verify published images against the selected production identities
         run: make ci-live-provider-prepare ENV=test-ci-live
       - name: Qualify complete API, browser and VSCode journeys with real providers
         run: make ci-live-provider-run ENV=test-ci-live
