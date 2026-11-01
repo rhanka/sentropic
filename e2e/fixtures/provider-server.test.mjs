@@ -163,6 +163,16 @@ test('should cite actual document tool results using standard call IDs', () => {
   assert.equal(journeyResponse({ messages, tools }).content, 'README.md');
 });
 
+test('should request update_initiative with the skill-bundle patch shape', () => {
+  const tools = [{ type: 'function', function: { name: 'update_initiative',
+    parameters: { required: ['initiativeId', 'patch'] } } }];
+  const response = journeyResponse({ tools, messages: [{ role: 'user',
+    content: 'Ajoute Test E2E à la description initiativeId=init_1234567890' }] });
+  const args = JSON.parse(response.tool_calls[0].function.arguments);
+  assert.equal(args.initiativeId, 'init_1234567890');
+  assert.equal(args.patch.description, 'Test E2E: Updated description');
+});
+
 test('should request a real PPTX generation tool and preserve explicit reply tokens', () => {
   const response = journeyResponse({ messages: [{ role: 'system', content: "Tu travailles sur l'organisation org_1234567890." },
     { role: 'user', content: 'Use the document_generate tool with format "pptx" to create a presentation titled "Organization".' }],
