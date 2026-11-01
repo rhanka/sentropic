@@ -7,6 +7,7 @@ import { appendParams, oauthJsonError, redirectWithOAuthError } from './http-uti
 import { issueAuthorizedCode } from './issue-authorized-code.js';
 import { validateRedirectUri } from './redirect-utils.js';
 import { resolveOAuthAcr, resolveOAuthAmr, resolveOAuthSession } from './session-resolver.js';
+import { hasOfflineCoverage, isRefreshEligibleClient } from './offline-policy.js';
 
 export interface OAuthAuthorizeHandlerOptions {
   authorizationCodeTtlSeconds?: number;
@@ -145,7 +146,7 @@ export const createOAuthAuthorizeHandler =
         session.user.id,
         validation.client.clientId,
         validation.scope,
-        authorizeTenantId
+        authorizeTenantId, options.issuer, validation.resource
       ));
 
     if (prompts.has('none')) {
@@ -207,13 +208,18 @@ const hasCoveringGrant = async (
   userId: string,
   clientId: string,
   requestedScope: string,
-  tenantId: string | null
+  tenantId: string | null,
+  issuer: string,
+  resource: string | null
 ): Promise<boolean> => {
   if (!ports.consentStore) return false;
   const grant = await ports.consentStore.getGrant(userId, clientId, tenantId ?? undefined);
   if (!grant) return false;
   const granted = new Set(grant.scopes);
   const requested = requestedScope.split(/\s+/).filter(Boolean);
+  if (requested.includes('offline_access')) {
+    return hasOfflineCoverage(grant, { issuer, resource, scope: requestedScope });
+  }
   return requested.every((scope) => granted.has(scope));
 };
 
@@ -322,7 +328,8 @@ const resumeLoginContinuation = async (
   // `resumeTenantId` is the SAME value sealed above, so the grant this check READS and the grant
   // the consent handler later WRITES are keyed on one tenant. When they diverged, the write passed
   // `undefined` and Postgres applied the `oauth_consents` column default.
-  if (await hasCoveringGrant(options.ports, session.user.id, client.clientId, scopeResult, resumeTenantId)) {
+  if (await hasCoveringGrant(options.ports, session.user.id, client.clientId, scopeResult, resumeTenantId,
+    options.issuer, payload.resource ?? null)) {
     const codePayload = await options.stateCodec.unseal(sealedState);
     if (codePayload) return issueAuthorizedCode(c, options, codePayload);
   }
@@ -384,7 +391,7 @@ const validateScope = (
   issuer: string
 ): string | Response => {
   const requestedScopes = scope.split(/\s+/).filter(Boolean);
-  if (requestedScopes.includes('offline_access')) {
+  if (requestedScopes.includes('offline_access') && !isRefreshEligibleClient(client)) {
     return redirectWithOAuthError(redirectUri, 'invalid_scope', state, baseUrl, issuer);
   }
   if (requestedScopes.some((requestedScope) => !client.allowedScopes.includes(requestedScope))) {
