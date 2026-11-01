@@ -50,31 +50,31 @@ CREATE TABLE IF NOT EXISTS "cm_identity"."connector_revocation_custody" ("custod
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "cm_identity"."identity_legacy_connector_tombstones" ("source_event_id" text PRIMARY KEY, "connector_account_id" text NOT NULL, "provider" text NOT NULL, "subject_id" text, "disposition" text NOT NULL CHECK ("disposition" IN ('queued','unresolved','acknowledged')), "delivery_id" text UNIQUE, "evidence_ref" text, "imported_at" text NOT NULL)
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "cm_identity"."identity_single_use_proofs_email_code_lookup" ON "cm_identity"."identity_single_use_proofs" ("kind", "email", "digest_algorithm", "digest_key_ref", "secret_digest", "created_at", "proof_id")
+CREATE INDEX IF NOT EXISTS "identity_single_use_proofs_email_code_lookup" ON "cm_identity"."identity_single_use_proofs" ("kind", "email", "digest_algorithm", "digest_key_ref", "secret_digest", "created_at", "proof_id")
 --> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "cm_identity"."identity_single_use_proofs_challenge_lookup" ON "cm_identity"."identity_single_use_proofs" ("challenge") WHERE "challenge" IS NOT NULL
+CREATE UNIQUE INDEX IF NOT EXISTS "identity_single_use_proofs_challenge_lookup" ON "cm_identity"."identity_single_use_proofs" ("challenge") WHERE "challenge" IS NOT NULL
 --> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "cm_identity"."identity_single_use_proofs_magic_lookup" ON "cm_identity"."identity_single_use_proofs" ("secret_digest") WHERE "kind" = 'magic_link'
+CREATE UNIQUE INDEX IF NOT EXISTS "identity_single_use_proofs_magic_lookup" ON "cm_identity"."identity_single_use_proofs" ("secret_digest") WHERE "kind" = 'magic_link'
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "cm_identity"."identity_webauthn_credentials_user" ON "cm_identity"."identity_webauthn_credentials" ("user_id")
+CREATE INDEX IF NOT EXISTS "identity_webauthn_credentials_user" ON "cm_identity"."identity_webauthn_credentials" ("user_id")
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "cm_identity"."identity_single_use_proofs_user" ON "cm_identity"."identity_single_use_proofs" ("user_id") WHERE "user_id" IS NOT NULL
+CREATE INDEX IF NOT EXISTS "identity_single_use_proofs_user" ON "cm_identity"."identity_single_use_proofs" ("user_id") WHERE "user_id" IS NOT NULL
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "cm_identity"."identity_login_token_bindings_session" ON "cm_identity"."identity_login_token_bindings" ("session_token_hash")
+CREATE INDEX IF NOT EXISTS "identity_login_token_bindings_session" ON "cm_identity"."identity_login_token_bindings" ("session_token_hash")
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "cm_identity"."identity_social_links_user" ON "cm_identity"."identity_social_links" ("user_id")
+CREATE INDEX IF NOT EXISTS "identity_social_links_user" ON "cm_identity"."identity_social_links" ("user_id")
 --> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "cm_identity"."identity_social_links_subject" ON "cm_identity"."identity_social_links" ("provider", "provider_subject")
+CREATE UNIQUE INDEX IF NOT EXISTS "identity_social_links_subject" ON "cm_identity"."identity_social_links" ("provider", "provider_subject")
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "cm_identity"."identity_invitation_digests_email" ON "cm_identity"."identity_invitation_digests" ("email")
+CREATE INDEX IF NOT EXISTS "identity_invitation_digests_email" ON "cm_identity"."identity_invitation_digests" ("email")
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "cm_identity"."identity_deletion_attempts_operation" ON "cm_identity"."identity_deletion_attempts" ("operation_id", "at", "attempt_id")
+CREATE INDEX IF NOT EXISTS "identity_deletion_attempts_operation" ON "cm_identity"."identity_deletion_attempts" ("operation_id", "at", "attempt_id")
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "cm_identity"."identity_revocation_outbox_operation" ON "cm_identity"."identity_revocation_outbox" ("operation_id")
+CREATE INDEX IF NOT EXISTS "identity_revocation_outbox_operation" ON "cm_identity"."identity_revocation_outbox" ("operation_id")
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "cm_identity"."identity_revocation_outbox_pending" ON "cm_identity"."identity_revocation_outbox" ("state", "next_attempt_at", "created_at", "delivery_id")
+CREATE INDEX IF NOT EXISTS "identity_revocation_outbox_pending" ON "cm_identity"."identity_revocation_outbox" ("state", "next_attempt_at", "created_at", "delivery_id")
 --> statement-breakpoint
-CREATE UNIQUE INDEX IF NOT EXISTS "cm_identity"."identity_revocation_outbox_tuple" ON "cm_identity"."identity_revocation_outbox" ("operation_id", "step", "target_kind", "target_ref")
+CREATE UNIQUE INDEX IF NOT EXISTS "identity_revocation_outbox_tuple" ON "cm_identity"."identity_revocation_outbox" ("operation_id", "step", "target_kind", "target_ref")
 --> statement-breakpoint
 -- Custody schema attestation (must match applyPostgresIdentityCustodySchemaV1: migration_id 'A2.0b/1', contract 1.1.0).
 INSERT INTO "cm_identity"."identity_custody_schema_versions" ("migration_id","contract_version","asset_sha256","applied_at")
