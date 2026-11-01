@@ -1,64 +1,44 @@
-# Feature: RC2.receiver — frozen source routes and source/browser/relay middleware separation
+# Feature: app-cm-a4 — consolidated app identity cutover (A4.1+A4.2+A4.3)
 
 ## Objective
-Implement lot RC2.receiver of the approved remote-control plan v1.6 r2 (plan SHA-256 6168b73b…, lot row line 646): the exact frozen source routes under `/api/v1/auth/session/content` and `/api/v1/auth/session/remote`, plus the machine relay mount at `/mesh/v1/session-relay` and the inner virtual mount `/mesh/v1/remote-sessions/:sessionId`, with strict source/browser/relay middleware separation on the real RC1 approvedTarget and endpoint authority, per RC2.contract **r3** (pinned from the first commit): MANIFEST.sha256 `6245d3ae51f601195926bc36600d1097cef30694f3feb01f79f1a7ec9fa17715`, manifest JSON sha256 `88823475eca151d908450e4abadcac7b2b60d4b5ea16bae0f590d419fa394565` (replaces r2 `133e23f5…`; r3 delta in CHANGES-r3.md: N1 tool_call_delta args→delta, N2 policy-confirm bodyless plus the zero-entity-bytes rule on the 14 bodyless/query routes, N3/N4 labels only), all under `/home/antoinefa/src/h2a/tmp/h-cond/rc2-contract/`. Every source-gap stays fail-closed; no source-gap field is filled locally; the h2a native side is faked in tests only. A re-pin is required when a later contract revision lands.
+One lot: migrate app identity data (users, proofs, invitations, login sessions, tenants, both memberships, workspaces) into the cluster-mesh stores, switch the single author under the r13 D11 protocol with the rollback checkpoint recorded before any legacy table deletion, point every reader/writer at the CM stores, delete the legacy app identity tables/files, replace request-authority with F15, and land the F11 screens.
 
 ## Scope / Guardrails
-- Scope limited to the API receiver surface: new `api/src/routes/session-content/**`, mounts in `api/src/app.ts`, tests in `api/tests/api/session-content-receiver.test.ts`.
-- Reuses merged RC2.store #874 (a861fbd3e) and RC2.registry #873 (5e8a08b96) exports only; does not duplicate or modify them (no `packages/**` changes, no package version bump needed).
-- Make-only workflow, no direct Docker commands; single Docker lock `.tmp/packets/DOCKER-LOCK.md` taken PER COMMAND via `flock`.
-- Root workspace reserved for user dev/UAT (`ENV=dev`) and untouched; all work in worktree `tmp/worktrees/rc2-receiver`.
-- Automated tests run on `ENV=test-rc2-receiver` only, `ENV` always LAST, `make down ENV=test-rc2-receiver` after.
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
-- All new text in English. No secrets read, printed, logged or committed. No `[skip ci]`. Commits via `make commit MSG="..."` only, ≤150 lines, selective staging.
-- Branch: `feat/rc2-receiver` from `origin/main` (d1f45c625; prerequisites RC2.store #874 a861fbd3e and RC2.registry #873 5e8a08b96 are ancestors), worktree `tmp/worktrees/rc2-receiver`. Ports: `API_PORT=8793 UI_PORT=5193 MAILDEV_UI_PORT=1093`, `ENV=test-rc2-receiver`.
-- Contract pins (binding, r3, under `/home/antoinefa/src/h2a/tmp/h-cond/rc2-contract/`): MANIFEST.sha256 `6245d3ae51f601195926bc36600d1097cef30694f3feb01f79f1a7ec9fa17715`; remote-session-contract-manifest.v1.json `88823475eca151d908450e4abadcac7b2b60d4b5ea16bae0f590d419fa394565`; CHANGES-r3.md `04cbf4ad38cdac9417c6c17148736852036bc5636e3f8acc47c5190727448456`; plan v1.6 draft `6168b73ba9b236530bde6bb4998929de1ede0c92d61aa0fc07fcd4f9983b7b18`. Re-verify `sha256sum -c MANIFEST.sha256` before each push.
-- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
-- r3 consumer scope for this lot (CHANGES-r3.md "Consumer re-pin"): all 38 route http entries — in particular the 14 bodyless/query routes (action-stream, browser-detail, browser-events, browser-list, browser-listing-delete, drive-binding-fetch, grant-fetch, history-admission, history-auth, listing-grant-fetch, policy-confirm, policy-fetch, relay-upgrade, source-control) with their vectors/route-*.json hashes; policy-confirm maxRequestBytes 65536→0 with the annex-D family mapping (invalid_request / view_refused / relay_protocol_refused). N1 chat dialect files are store/RC3.chat scope, not this lot.
-- h2a ACK conditions: every source-gap stays fail-closed; no source-gap field is filled locally; a re-pin is required when a later contract revision lands.
-- Acceptance (plan lot row 646 + vectors 789–790 + closures W04/W06 979–981): before-body owner/source/scope/key rejection; atomic ACK and gaps; wrong-lane refusal; upgrade isolation (machine mount rejects cookies/Origin, wrong audience/protocol, stale/foreign/replayed tunnel before upgrade or body allocation; browser mount rejects source-only credentials); relay mount at `/mesh/v1/session-relay`. Cases RECEIVER / CHAIN-MOUNT / CHAIN-LANE in `api/tests/api/session-content-receiver.test.ts`.
+- Scope limited to the app cutover: api identity read/write paths, one control data migration, ui F11 screens, e2e.
+- One migration max: `api/drizzle/control/0014_app_cm_identity_cutover.sql` (control stream).
+- Make-only workflow, no direct Docker commands; Docker under the packet flock; `make down ENV=<env>` after.
+- Branch development in isolated worktree `tmp/worktrees/app-cm-a4-3` on branch `feat/app-cm-a4` from `origin/feat/cm-identity-a2-0b` (code against the A2.0b contract; missing A2.0b APIs are stack dependencies, recorded in the report, not implemented here).
+- Test campaigns on `ENV=test-app-a4` / `ENV=e2e-app-a4` (ENV last), never root dev.
+- All new text in English.
+- No dual writer, no legacy fallback; the app keeps business data only.
+- Pins: A2-lots.md sha256 015d821d066a6bcc368113adf3fa45dd73a32abebc2f37cedb5f4eb1ced8c0c2; r2.md (APPROVED) sha256 f24480ee9e39396c2ecfb71be790e2a5a247976be15980a18b185101542cd518; A2.0b amendment r6 sha256 5bde078cd12a35fb752eadb48496f0373dc8940883c701b920878a165; owner-answers-20261030.md sha256 01554c2f81d88f1c96815b5e4a60e7f5c91ad51622d637ca83af5422a578c1c7 (Q-G answered 2026-11-01: interim accepted); gap.fr.md; STOP reports .tmp/rv/lot-A4-2.md and .tmp/rv/lot-A4.2.md; base origin/feat/cm-identity-a2-0b.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `api/src/routes/session-content/**`
-  - `api/src/app.ts`
-  - `api/tests/api/session-content-receiver.test.ts`
+  - `api/src/**`
+  - `api/tests/**`
+  - `api/drizzle/control/0014_app_cm_identity_cutover.sql` + `api/drizzle/control/meta/**`
+  - `ui/src/**`
+  - `ui/tests/**`
+  - `e2e/tests/**`
   - `BRANCH.md`
-  - `packages/cluster-mesh/src/identity-contracts/**`
-  - `packages/cluster-mesh/src/storage/identity/**`
-  - `packages/cluster-mesh/src/identity-stores/**`
-  - `packages/cluster-mesh/src/identity/**`
-  - `packages/cluster-mesh/tests/identity/**`
-  - `packages/cluster-mesh/tests/identity-*.spec.ts`
-  - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/CHANGELOG.md`
-  - `package-lock.json` (BR-A20B-EX3)
-  - `api/package-lock.json` (BR-A20B-EX3)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR-A20B-EX3)
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR-A20B-EX3)
-  - `packages/cluster-mesh/tests/packaging/identity-auth-types.spec.ts` (BR-A20B-EX4)
-  - `packages/cluster-mesh/tests/storage/postgres.mk` (BR-A20B-EX1)
-  - `packages/cluster-mesh/tests/storage/cold-workspace.sh` (BR-A20B-EX2)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `packages/**` (RC2.store/RC2.registry reused as-is; no package edits, no version bump)
-  - `api/drizzle/*.sql`
+  - `packages/**` (A2.0b owns cluster-mesh; contract gaps are stack dependencies)
   - `.github/workflows/**`
-  - `ui/**`, `e2e/**`, `apps/**`, `spec/**`
-  - `api/src/services/**`, `api/src/db/**`, `api/src/middleware/**` (existing services reused read-only)
+  - `spec/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/**`
-  - `packages/cluster-mesh/tests/storage/postgres.mk` (BR-A20B-EX1)
+  - `api/drizzle/*.sql` public stream (not used; control stream only)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- (none open)
+- None.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -69,43 +49,40 @@ Implement lot RC2.receiver of the approved remote-control plan v1.6 r2 (plan SHA
   - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
+- [x] **Mono-branch + cherry-pick** (single consolidated lot; single final test cycle)
 - [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single lot RC2.receiver, one branch, one scoped test file; no sub-workstreams.
+- Rationale: conductor decision 2026-10-31T22:57Z consolidated A4.1+A4.2+A4.3 into ONE lot (tables interlinked; splitting failed twice: .tmp/rv/lot-A4-2.md, .tmp/rv/lot-A4.2.md). Stacked on feat/cm-identity-a2-0b; draft PR with base feat/cm-identity-a2-0b while A2.0b is open; rebase onto origin/main after A2.0b merges; one CI run on the final head.
 
 ## UAT Management (in orchestration context)
 - **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- No UI changes in this lot; API-only acceptance via `api/tests/api/session-content-receiver.test.ts` (RECEIVER / CHAIN-MOUNT / CHAIN-LANE).
-- Execution flow (mandatory):
-  - Develop and run tests in `tmp/worktrees/rc2-receiver`.
-  - Push branch before UAT.
-  - No user UAT required (no UI surface); API witnesses only.
+- F11 screens land in this lot; e2e on ENV=e2e-app-a4 covers them.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, `.tmp/packets/COMMON-RULES.md`, plan v1.6 r2 (lot row 646, vectors 789–790, closures 979–981), RC2.contract r2 (MANIFEST 133e23f5…).
-  - [x] Create/confirm isolated worktree `tmp/worktrees/rc2-receiver` on `feat/rc2-receiver` from `origin/main` (5e8a08b96); `harness check branch` PASS.
-  - [x] Capture Make targets: `up-api-test`, `test-api-endpoints SCOPE=…`, `typecheck-api`, `lint-api`, `down`.
-  - [x] Environment mapping: `ENV=test-rc2-receiver`, `API_PORT=8793 UI_PORT=5193 MAILDEV_UI_PORT=1093`.
-  - [x] Command style: `flock .tmp/packets/DOCKER-LOCK.md make … ENV=test-rc2-receiver` with `ENV` last.
-  - [x] Scope boundaries declared above; no exceptions needed.
-- [ ] **Lot 1 — Tests first: RECEIVER / CHAIN-MOUNT / CHAIN-LANE**
-  - [x] Extend `api/tests/api/session-content-receiver.test.ts` with `describe` blocks RECEIVER, CHAIN-MOUNT, CHAIN-LANE (existing STORE block untouched).
-  - [ ] RECEIVER: before-body owner/source/scope/key rejection on frozen source routes; atomic ACK commit + gap reporting; idempotent replay; conflict refusal.
-  - [ ] CHAIN-LANE: content-only grant refused on actions/results lanes before handler/body; mismatched lane on inner mount refused; stage subset enforcement.
-  - [ ] CHAIN-MOUNT: relay mount at `/mesh/v1/session-relay` rejects cookies/Origin, wrong audience, wrong subprotocol, stale/foreign/replayed tunnel before 101 or body allocation; browser mount rejects source-only credentials; inner mount refuses without bound socket.
-  - [ ] Lot gate:
-    - [ ] `make typecheck-api … ENV=test-rc2-receiver`
-    - [ ] `make lint-api … ENV=test-rc2-receiver`
-    - [ ] `make test-api-endpoints SCOPE=tests/api/session-content-receiver.test.ts … ENV=test-rc2-receiver`
-    - [ ] `make down ENV=test-rc2-receiver`
-- [ ] **Lot 2 — Implementation**
-  - [ ] `api/src/routes/session-content/**`: frozen route table, source/browser/relay middleware, routers, fail-closed product ports (real RC1 approvedTarget port type; capsule header pin and H2-I/DEP-FED slots null → fail-closed).
-  - [ ] Mounts in `api/src/app.ts`: `/api/v1/auth/session/content`, `/api/v1/auth/session/remote`, `/mesh/v1/session-relay`, `/mesh/v1/remote-sessions`.
-  - [ ] Re-run Lot 1 gates green; `make scope-check` before each commit.
-- [ ] **Lot N — Final validation**
-  - [ ] Typecheck & lint API.
-  - [ ] Scoped receiver suite green on `ENV=test-rc2-receiver`; `make down ENV=test-rc2-receiver`.
-  - [ ] Atomic commits ≤150 lines via `make commit`; push `feat/rc2-receiver` (crash safety: push after each commit batch).
-  - [ ] Open READY (non-draft) PR with BRANCH.md text as body; run ONE CI on the final head; record result.
-  - [ ] Report to `.tmp/rv/rc2-receiver.md` (PR, head, CI, each acceptance item). Do not merge.
+- [ ] **Lot 0 — Baseline & constraints**
+  - [x] Read COMMON-RULES, MASTER, A2-lots, r2 §5/§9.3, gap.fr.md, STOP reports, A2.0b r6, owner answers (Q-G recorded), workflow.
+  - [x] Worktree `tmp/worktrees/app-cm-a4-3`, branch `feat/app-cm-a4` from origin/feat/cm-identity-a2-0b head; harness C1 PASS.
+  - [x] BRANCH.md from plan/BRANCH_TEMPLATE.md.
+  - [x] ENV mapping: test-app-a4 / e2e-app-a4; ports API_PORT=9640 UI_PORT=5840 MAILDEV_UI_PORT=1740.
+  - [ ] Docker stack under flock, `make down ENV=test-app-a4` after.
+- [ ] **Lot 1 — CM identity composition + one data migration**
+  - [ ] App-side CM identity composition (core stores, tenancy stores, custody host/UOW, F15 producer, atomic deletion V2, importer) over the app Postgres.
+  - [ ] Control migration 0014: CM identity schema + id-preserving copy of users/proofs/invitations/login sessions/tenants/memberships/workspaces + rollback checkpoint row; journal integrity test passes.
+  - [ ] Migration tests (both directions of the copy, id preservation, counts).
+- [ ] **Lot 2 — Author switch (r13 D11) + reader/writer cutover**
+  - [ ] /auth + /session over CM custody stores (auth-hono ports backed by CM); delete registration.ts, account.ts, session-manager identity paths.
+  - [ ] /workspaces (absorbs /tenants) over A2.2 stores; delete tenant-membership.ts, membership seam in cluster-mesh-adapter.ts, product tenant/workspace identity routes.
+  - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
+  - [ ] Account deletion through the A2.3/A2.0b atomic cascade (V2), self + admin handlers.
+  - [ ] Rollback checkpoint recorded BEFORE any legacy table deletion; one author per namespace via cutover records.
+  - [ ] All residual readers of legacy identity tables switched to CM stores (46-file inventory).
+- [ ] **Lot 3 — Deletions**
+  - [ ] Drop legacy identity tables in migration; delete identity part of api/src/db/schema.ts and the named files; no dual writer, no legacy fallback.
+- [ ] **Lot 4 — F11 screens + e2e**
+  - [ ] Login, registration, admin, membership decision, members screens; e2e on ENV=e2e-app-a4.
+- [ ] **Lot 5 — Tests**
+  - [ ] gap-§1 scenario end to end; registration → approval → login; invitation consumed once; revoke-all; mid-session suspension empties tool set; account deletion with injected failure leaves no orphan and preserves rows; migration tests; F11 e2e.
+  - [ ] Rehearse migration on a fresh prod dump (existing rehearsal make target); record receipt.
+- [ ] **Lot 6 — Final validation**
+  - [ ] typecheck/lint api+ui; targeted make tests; push often; draft PR base feat/cm-identity-a2-0b.
+  - [ ] ONE CI run on the final head (after rebase onto origin/main once A2.0b merges).
+  - [ ] Report to .tmp/rv/lot-A4.md; stop; do not merge.
