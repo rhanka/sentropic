@@ -1,7 +1,8 @@
 import type { Context } from 'hono';
 
 import type { AuthHonoPorts } from '../ports.js';
-import { appendParams, redirectOrJson } from './http-utils.js';
+import { appendParams, redirectOrJson, oauthJsonError } from './http-utils.js';
+import { hasOfflineCoverage } from './offline-policy.js';
 import type { OAuthContinuationState } from './state-codec.js';
 
 export interface IssueAuthorizedCodeOptions {
@@ -24,10 +25,20 @@ export const issueAuthorizedCode = async (
 ): Promise<Response> => {
   const code = options.ports.random.token(32);
   const now = options.ports.clock.now();
+  const offline = payload.scope.split(/\s+/).includes('offline_access');
+  const grant = offline && payload.userId ? await options.ports.consentStore?.getGrant(
+    payload.userId, payload.clientId, payload.tenantId ?? undefined) : null;
+  if (offline && !hasOfflineCoverage(grant ?? null,
+    { issuer: options.issuer, resource: payload.resource ?? null, scope: payload.scope })) {
+    return oauthJsonError(c, 400, 'invalid_grant', 'Local offline consent is required.');
+  }
+  const userinfoPath = new URL(c.req.url).pathname.replace(/\/(?:authorize|consent\/decision)$/u, '/userinfo');
   await options.ports.oauthStateStore.saveAuthCode(
     code,
     {
       acr: payload.acr ?? 'urn:sentropic:loa:bearer',
+      ...(offline ? { offlineGrantId: grant!.offlineGrantId!, issuer: options.issuer,
+        audience: payload.resource ?? `${options.issuer}${userinfoPath}` } : {}),
       amr: payload.amr ?? (payload.acr === 'urn:sentropic:loa:passkey-fresh' ? ['hwk', 'user', 'mfa'] : ['pwd']),
       authTime: new Date(payload.authTime ?? now.toISOString()),
       clientId: payload.clientId,
