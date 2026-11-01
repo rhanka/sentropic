@@ -5,7 +5,7 @@
 - [ ] Branch `test/ci-deterministic-journeys`, step 6 of nine; train order BR-81 → BR-82; dependencies: BR-80 merged for train order; BR-78 image identity and BR-79 scheduling.
 
 ## Scope / Guardrails
-- [ ] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`; all timings below are **budget to measure**, not delivered results.
+- [x] Follow `spec/SPEC_STUDY_CI_CD_TEN_MINUTES.md`; all timings below are **budget to measure**, not delivered results.
 - [x] Owner packet override: worktree `tmp/worktrees/ci-br81`, branch `test/ci-deterministic-journeys` from `origin/main`; rebase only when updating the base.
 - [x] Owner packet override: `ENV=test-ci-br81` last for every Make invocation; Docker only after #869 merges or 18:00 Europe/Paris, under the shared flock, followed by `make down`.
 - [ ] Slot 0 owner: branch author; API_PORT=9405, UI_PORT=5605, MAILDEV_UI_PORT=1505; verify availability before starting services and pass all three ports to service commands.
@@ -51,13 +51,16 @@
 - [ ] Track import belongs to the designated conductor; `.track/**` remains forbidden here. Import this branch plan, deliverables and final receipt during the next single-writer sync.
 - [x] Local harness is absent from PATH; mechanical checks use the existing repository harness dist through an external Make entry point, without a Docker build.
 - [ ] `DOCKER-LOCK.md` was empty at dispatch; acquire both the packet-file flock and the established `/home/antoinefa/.cache-tmp/sentropic-docker.lock` for Docker execution.
-- [ ] BR81-EX1 — Planned workflow exception: replace PR/merge AI `continue-on-error` with required deterministic results and adjust API/browser/VSCode matrices. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
-- [ ] BR81-EX2 — Planned Makefile exception: change `test-api-*`, `test-e2e`, and `test-e2e-vscode` startup; add fixture, shard-manifest, and live-receipt tests; one Playwright process per shard. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
-- [ ] BR81-EX3 — Add daily live workflow for the exact selected tuple; impact: daily calls/cost and schedule monitoring; rollback: restore prior live execution ownership with visible schedule status.
-- [ ] BR81-EX4 — Add isolated provider fixture service overlay; impact: test networks only; rollback: remove the overlay and restore prior test startup, with no production endpoint bypass.
+- [x] BR81-EX1 — Declared workflow exception: replace PR/merge AI `continue-on-error` with required deterministic results and adjust API/browser/VSCode matrices. Impact: selected CI/CD dispatch and required results. Rollback: revert this branch's workflow changes while preserving complete-result checks.
+- [x] BR81-EX2 — Declared Makefile exception: change `test-api-*`, `test-e2e`, and `test-e2e-vscode` startup; add fixture, shard-manifest, and live-receipt tests; one Playwright process per shard. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
+- [x] BR81-EX3 — Declared daily workflow exception for the exact selected tuple; impact: daily calls/cost and schedule monitoring; rollback: restore prior live execution ownership with visible schedule status.
+- [x] BR81-EX4 — Declared isolated provider fixture service overlay; impact: test networks only; rollback: remove the overlay and restore prior test startup, with no production endpoint bypass.
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
 - [x] Offline receipt checks reject unpublished main tuples and paginate all job/artifact rows; application qualification is pending.
 - [x] Daily preparation reuses published images only after the existing source/tree/workflow/profile/run/image validator accepts them. Retain two small identity receipts for 30 days; preserve transport archive deletion and one-day expiry.
+- [ ] `attention`, owner: BR-81 author and CI-train conductor; `gw-native-qualification.test.ts` requires operator UAT evidence, two authorized sessions and an active metered partition. None is available locally. Owner clarification is pending; do not fabricate readiness, drop the suite or treat it as qualified.
+- [x] Code review disposition: selected Mistral/OpenAI chat-completion and Tavily protocols are implemented; other remote hosts fail closed. Any failed attempt remains fatal in deterministic browser reconciliation. Generated receipts contain no credentials and are kept out of selective staging.
+- [x] Protocol review cycle 2 correction: abort before Playwright if shard-file generation fails or returns no files; allow the local `auth-idp` service without admitting external egress. Docker proof is pending.
 
 ## AI Flaky tests
 - [ ] Deterministic checks are blocking. Any retained live-provider exception needs non-systematic same-commit/same-command success, failure signature, impact analysis, and explicit owner sign-off; never increase timeouts.
@@ -77,7 +80,7 @@
   - [ ] Capture a real baseline with run/attempt/job IDs, source SHA, workflow SHA, cache state, runner class, spans, selected endpoints, and executed test identities.
   - [ ] Declare exceptions above; names marked new below are deliverables to create, not existing commands or evidence.
 - [ ] **Lot 1 — Provider-boundary protocol fixtures**
-  - [x] Initial offline protocol gate: 8/8 HTTP/SSE, tools, errors/retries, cancellation/reconnection and egress tests pass; application qualification remains pending.
+  - [x] Offline protocol gate: 15/15 HTTP/SSE, tools, errors/retries, cancellation/reconnection, egress, vision, document and PPTX request-shape tests pass; application qualification remains pending.
   - [ ] Add the named HTTP/SSE fixture and tests; cover streaming, tool requests/results, malformed output, errors/rate limits, cancellation, reconnection, model routing, and retries; assert outbound request shape and forbid unexpected real egress.
   - [ ] Adapt only the two named runtime composition seams and ten named API AI test files; preserve application HTTP/auth/database/queue/tool behavior. Runtime fixture configuration is test-only and cannot become a production bypass.
   - [ ] Lot gate: new `make test-ci-provider-fixtures ENV=test-ci-deterministic-journeys`; run every changed API AI file through `make test-api-ai` scoped by file on the assigned isolated environment; failures must block.

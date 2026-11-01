@@ -2800,7 +2800,8 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	    extra=""; \
 	    if [ -n "$$max_fail" ]; then extra="--max-failures=$$max_fail"; fi; \
 	    if [ -n "$$E2E_SHARD" ]; then \
-	      set -- $$(node /app/browser-shards.mjs files "$$E2E_SHARD"); \
+	      files="$$(node /app/browser-shards.mjs files "$$E2E_SHARD")" || exit 1; \
+	      test -n "$$files"; set -- $$files; \
 	    elif [ -n "$$E2E_SPEC" ]; then \
 	      set -- $${E2E_SPEC#e2e/}; \
 	    else \
