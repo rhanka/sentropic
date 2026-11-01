@@ -12,6 +12,7 @@ import {
   grantCovers,
   grantIsCurrent,
   outboxRefFor,
+  projectionDigestOf,
   rowRef,
   sessionKey,
   snapshotOf,
@@ -54,12 +55,14 @@ export function publishListing(state: RegistryState, ref: SessionRef, grantRef: 
       outboxRef: outboxRefFor(key, row.originRevision),
     };
   }
+  const projection = buildProjection(parsed, row);
   return {
     status: 'remote-committed',
     sessionRef: parsed,
     writerEpoch: row.writerEpoch,
     originRevision: row.originRevision,
-    projection: buildProjection(parsed, row),
+    projection,
+    projectionDigest: projectionDigestOf(projection),
     sourceAckDigest: ackDigest,
   };
 }
