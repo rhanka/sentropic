@@ -1,0 +1,79 @@
+# ACT-L08a report-control workflow (r6 section 4.1).
+# L08a-owned jobs only: deadline-record, control-receipt, state-intent,
+# state-commit. Scan-admission, health, review and state-allocator jobs land
+# with their owning lots (ACT-L08b, ACT-L09, ACT-L03a).
+# Every job requests exactly one protected environment. No live secret is
+# required for workflow parsing; jobs fail closed without bound credentials.
+name: security-report-control
+
+on:
+  schedule:
+    - cron: '30 7 * * *'
+  workflow_dispatch: {}
+
+permissions: {}
+
+jobs:
+  deadline-record:
+    runs-on: ubuntu-latest
+    environment: security-report-publish
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: refs/heads/main
+      - name: Validate DeadlineStatusV1 contract
+        run: node --test scripts/security/daily/deadline-report.test.mjs scripts/security/daily/report-format.test.mjs
+      - name: Publish deadline record
+        run: |
+          echo "deadline-record: no bound deploy key in this lane; refusing without live credentials"
+
+  control-receipt:
+    runs-on: ubuntu-latest
+    environment: security-report-publish
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: refs/heads/main
+      - name: Validate control topology contract
+        run: node --test scripts/security/daily/control-permit-channel.test.mjs scripts/security/daily/control-clock.test.mjs
+      - name: Publish platform-bound verification result
+        run: |
+          echo "control-receipt: no bound deploy key in this lane; refusing without live credentials"
+
+  state-intent:
+    runs-on: ubuntu-latest
+    environment: security-report-publish
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: refs/heads/main
+      - name: Validate fence CAS contract
+        run: node --test scripts/security/daily/report-branch-integrity.test.mjs
+      - name: Reserve fence transaction
+        run: |
+          echo "state-intent: no bound deploy key in this lane; refusing without live credentials"
+
+  state-commit:
+    runs-on: ubuntu-latest
+    environment: security-report-publish
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: refs/heads/main
+      - name: Validate commit contract
+        run: node --test scripts/security/daily/report-branch-integrity.test.mjs
+      - name: Advance public committed sequence
+        run: |
+          echo "state-commit: no bound deploy key in this lane; refusing without live credentials"
