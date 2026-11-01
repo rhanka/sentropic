@@ -388,10 +388,11 @@ test.describe('Configuration de la matrice', () => {
           
           // Modifier la valeur avec une nouvelle valeur différente
           const newValue = initialValue === '8' ? '13' : '8';
-          await pointsInput.fill(newValue);
-          
-          // Attendre 6 secondes pour que l'auto-save se déclenche (5s + marge)
-          await page.waitForTimeout(6000);
+          await Promise.all([
+            page.waitForResponse(response => response.request().method() === 'PUT'
+              && /\/api\/v1\/folders\/[^/]+\/matrix/.test(response.url()) && response.ok(), { timeout: 6000 }),
+            pointsInput.fill(newValue),
+          ]);
           
           // Vérifier qu'une requête PUT a été envoyée pour sauvegarder
           // On peut vérifier en rechargeant la page

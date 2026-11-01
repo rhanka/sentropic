@@ -466,6 +466,7 @@ async function magicLinkLoginAndSave(browser: Browser, user: TestUser, storagePa
 }
 
 export default async function globalSetup() {
+  const setupStarted = performance.now();
   debug('Starting global setup...');
   let browser: Browser | null = null;
   try {
@@ -502,6 +503,7 @@ export default async function globalSetup() {
 
     // Fail-fast: verify that all required seed users exist and are verified.
     await assertSeededUsersExist(STORAGE_STATE_PATH, [ADMIN_USER, USER_A, USER_B, USER_VICTIM]);
+    console.log(`CI browser seed/auth setup: ${((performance.now() - setupStarted) / 1000).toFixed(3)}s`);
     
     // Si on arrive ici, c'est un succès - on peut nettoyer le buffer
     clearDebugBuffer();
