@@ -1,9 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { AuthUser } from '../../middleware/auth';
-import { db } from '../../db/client';
-import { workspaces } from '../../db/schema';
-import { eq } from 'drizzle-orm';
 import { getCmIdentity, setCmDecisionToolCatalog } from '../identity/cm-identity';
+import { runCmIdentityRead } from '../identity/cm-transaction';
 import { findCmApprovedMembership } from '../identity/cm-tenancy';
 import { compositeCatalogRegistry, prepareHostRegistryCatalog } from '../skills/catalog';
 import { createCatalogContextResolver, type CatalogContextInput } from './request-context';
@@ -31,7 +29,7 @@ const baseToolNames = (): string[] => {
 // allowed tool set through this catalog.
 setCmDecisionToolCatalog({ toolsForDecision: () => baseToolNames() });
 
-const resolve = createCatalogContextResolver(async input => {
+const resolve = createCatalogContextResolver(input => runCmIdentityRead(async tx => {
   const { decision: producer } = getCmIdentity();
   const now = new Date().toISOString();
   const fresh = await producer.decide(
@@ -44,8 +42,9 @@ const resolve = createCatalogContextResolver(async input => {
   const { decision } = fresh;
 
   const membership = await findCmApprovedMembership(input.userId, decision.tenantId);
-  const [wsRow] = await db.select({ type: workspaces.type }).from(workspaces)
-    .where(eq(workspaces.id, input.workspaceId)).limit(1);
+  const { rows: [wsRow] } = await tx.hostTransaction.query<{ type: string }>(
+    'SELECT type FROM public.workspaces WHERE id = $1 AND hidden_at IS NULL', [input.workspaceId]);
+  if (!wsRow) throw new Error('catalog_access_denied');
 
   const policyVersion = createHash('sha256').update(
     [decision.tid, decision.tenantRole, decision.workspaceRole, membership?.updatedAt.toISOString() ?? '', decision.scopes.join(',')].join('|'),
@@ -61,7 +60,7 @@ const resolve = createCatalogContextResolver(async input => {
     policyVersion,
     roles: [decision.workspaceRole], workspaceType: wsRow?.type, readOnly: !['editor', 'admin'].includes(decision.workspaceRole),
     allowedTools: [...new Set(names)] };
-});
+}));
 
 export const resolveHttpCatalogContext = (user: AuthUser) => resolve({ kind: 'http',
   userId: user?.userId, sessionId: user?.sessionId, workspaceId: user?.workspaceId });

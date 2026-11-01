@@ -9,7 +9,7 @@ import { randomUUID } from 'node:crypto';
 import { IdentityCustodyErrorV1, type AccountStatus, type GlobalRole } from '@sentropic/cluster-mesh';
 
 import { getCmIdentity } from './cm-identity';
-import { runCmIdentityWrite } from './cm-transaction';
+import { runCmIdentityRead, runCmIdentityWrite } from './cm-transaction';
 
 export interface CmUserRecord {
   readonly id: string;
@@ -116,23 +116,23 @@ const toRecord = (
   });
 };
 
-export const findCmUserById = async (userId: string): Promise<CmUserRecord | null> => {
+export const findCmUserById = (userId: string): Promise<CmUserRecord | null> => runCmIdentityRead(async () => {
   const { core, custody } = getCmIdentity();
   const account = await core.accounts.findAccount(userId);
   if (!account) return null;
   const profile = await custody.profiles.find(userId);
   return toRecord(account, profile);
-};
+});
 
-export const findCmUserByEmail = async (email: string): Promise<CmUserRecord | null> => {
+export const findCmUserByEmail = (email: string): Promise<CmUserRecord | null> => runCmIdentityRead(async () => {
   const { core, custody } = getCmIdentity();
   const account = await core.accounts.findAccountByEmail(email.trim().toLowerCase());
   if (!account) return null;
   const profile = await custody.profiles.find(account.userId);
   return toRecord(account, profile);
-};
+});
 
-export const listCmUsers = async (): Promise<CmUserRecord[]> => {
+export const listCmUsers = (): Promise<CmUserRecord[]> => runCmIdentityRead(async () => {
   const { core, custody } = getCmIdentity();
   const accounts = await core.accounts.listAccounts();
   const records: CmUserRecord[] = [];
@@ -141,18 +141,18 @@ export const listCmUsers = async (): Promise<CmUserRecord[]> => {
     records.push(toRecord(account, profile));
   }
   return records;
-};
+});
 
-export const countCmUsers = async (): Promise<number> => {
+export const countCmUsers = (): Promise<number> => runCmIdentityRead(async () => {
   const { core } = getCmIdentity();
   return (await core.accounts.listAccounts()).length;
-};
+});
 
-export const countCmUsersWithRole = async (role: string): Promise<number> => {
+export const countCmUsersWithRole = (role: string): Promise<number> => runCmIdentityRead(async () => {
   const { core } = getCmIdentity();
   const accounts = await core.accounts.listAccounts();
   return accounts.filter((account) => account.globalRole === role).length;
-};
+});
 
 export const createCmUser = (input: CmCreateUserInput): Promise<CmUserRecord> => runCmIdentityWrite(async (tx) => {
   const now = new Date().toISOString();
