@@ -15,6 +15,12 @@ import { CommitQuarantineError, type ArtifactInvocationContext,
   type ArtifactCommitCoordinator } from './server/commit/types.js';
 import { ArtifactOperationError, classifyArtifactFailure, type ArtifactOutcome, type ArtifactHostFailureMapper } from './server/failures.js';
 import { projectArtifactHttpOutcome } from './server/outcome-projection.js';
+import { readArtifactSource } from './server/source-read.js';
+import { artifactSummary } from './server/summary.js';
+import { manageArtifact, type ManagementUnit, type ArtifactConfirmationPort } from './server/management.js';
+import { createPostgresManagementUnit } from './adapters/postgres-management.js';
+import type { FinalizeTxClient } from './server/commit/types.js';
+import type { SourceStore } from './server/sources.js';
 export { projectArtifactHttpOutcome } from './server/outcome-projection.js';
 
 export interface HttpRequest {
@@ -45,7 +51,10 @@ export interface HttpAppDeps {
   ensureHost: GuardedEnsureHost;
   publication: Omit<GuardedPublicationDeps, 'coordinator' | 'limits'> & {
     getCurrent: PublicationService['getCurrent'];
+    getRelease?: PublicationService['getRelease'];
   };
+  sources?: Pick<SourceStore, 'getSource'>;
+  management?: { createUnit?: (client: FinalizeTxClient) => ManagementUnit; confirmation?: ArtifactConfirmationPort };
   acls: AclStore;
   lifecycle: Pick<LifecycleService, 'stateOf' | 'canRead'>;
   isApprovedAccount?: (principalId: string) => boolean;
@@ -69,7 +78,8 @@ function object(value: unknown): Record<string, unknown> {
 /** Other mutation surfaces need their own qualification before host activation. */
 export function assertArtifactsTransportProfile(value: unknown): asserts value is CompiledArtifactsProfile {
   assertCompiledArtifactsProfile(value);
-  const supported = ['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get'];
+  const supported = ['artifacts_ensure', 'artifacts_publish', 'artifacts_list', 'artifacts_get',
+    'artifacts_get_source', 'artifacts_set_access', 'artifacts_delete'];
   if (value.selectedCapabilities.some((name) => !supported.includes(name))) {
     throw new Error('unsupported artifacts transport capability');
   }
@@ -85,6 +95,11 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
   }
   if (typeof deps.legacyRecords?.get !== 'function') throw new Error('artifacts requires a legacy record inventory');
   const profile = deps.profile;
+  if (profile.selectedCapabilities.includes('artifacts_get_source') &&
+    (!deps.sources || !deps.publication.getRelease)) throw new Error('artifact source read ports required');
+  if (profile.selectedCapabilities.includes('artifacts_delete') && !deps.management?.confirmation) {
+    throw new Error('artifact delete confirmation port required');
+  }
   const ensure = createGuardedEnsureService({ profile, coordinator: deps.coordinator,
     derivation: deps.derivation, host: deps.ensureHost });
 
@@ -92,6 +107,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     const acl = await deps.acls.getArtifactAcl(artifactId);
     if (!acl || acl.storageScopeId !== invocation.storageScopeId) throw new ArtifactOperationError('not_found');
     const state = await deps.lifecycle.stateOf(artifactId);
+    if (acl.ownerId === invocation.actorId && (state === 'deleted' || state === 'purged')) throw new ArtifactOperationError('gone');
     if (!deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, 'read', deps.isApprovedAccount)) {
       throw new ArtifactOperationError('not_found');
     }
@@ -134,9 +150,9 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           }
         }
         const normalized = profile.validate(capability, args, request.idempotencyKey);
-        const command = capability === 'artifacts_ensure' || capability === 'artifacts_publish'
+        const command = ['artifacts_ensure', 'artifacts_publish', 'artifacts_set_access', 'artifacts_delete'].includes(capability)
           ? createArtifactCommand(profile, capability, args, invocation, deps.derivation, request.idempotencyKey) : undefined;
-        if (command) {
+        if (command && ['ensure', 'publish'].includes(command.operation)) {
           phase = 'migration';
           await assertArtifactReplayMigration(deps.legacyRecords, command, invocation, normalized.idempotencyKey as string);
         }
@@ -144,7 +160,35 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
         if (capability === 'artifacts_ensure') {
           const outcome = await ensure.ensure(invocation, { ...normalized,
             envelopeKey: request.idempotencyKey } as Parameters<typeof ensure.ensure>[1]);
+          if (outcome.ok) {
+            const state = await deps.lifecycle.stateOf(outcome.result.artifactId);
+            if (state === 'deleted' || state === 'purged') throw new ArtifactOperationError('gone');
+          }
           return outcome.ok ? { ...outcome, result: { status: 201, body: outcome.result } } : outcome;
+        }
+        if (capability === 'artifacts_get_source') {
+          const artifactId = normalized.artifactId as string;
+          const result = await readArtifactSource({
+            authorize: async () => {
+              const acl = await visible(artifactId, invocation);
+              const state = await deps.lifecycle.stateOf(artifactId);
+              if (!deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, 'source', deps.isApprovedAccount)) {
+                throw new ArtifactOperationError('access_denied');
+              }
+            }, getCurrent: deps.publication.getCurrent, getRelease: deps.publication.getRelease!,
+            getSource: (id) => deps.sources!.getSource(id), getBlob: (key) => deps.publication.blobs.getBlob(key),
+            urls: deps.publicationUrls, maxFiles: 32, maxTotalBytes: 262144,
+          }, normalized as unknown as Parameters<typeof readArtifactSource>[1]);
+          return { ok: true, result: { status: 200, body: result }, invocationId: invocation.invocationId,
+            commitState: 'not_committed', replayed: false };
+        }
+        if (capability === 'artifacts_set_access' || capability === 'artifacts_delete') {
+          const outcome = await manageArtifact({ coordinator: deps.coordinator,
+            createUnit: deps.management?.createUnit ?? createPostgresManagementUnit,
+            confirmation: deps.management?.confirmation, readPolicyRevision: () => deps.ensureHost.readPolicyRevision(),
+            isApprovedPrincipal: deps.isApprovedAccount ?? (() => false),
+          }, invocation, command!, normalized.confirmationRef as string | undefined);
+          return outcome.ok ? { ...outcome, result: { status: 200, body: outcome.result } } : outcome;
         }
         if (capability === 'artifacts_publish') {
           const artifactId = normalized.artifactId as string;
@@ -186,8 +230,8 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           const state = await deps.lifecycle.stateOf(artifactId);
           const current = await deps.publication.getCurrent(artifactId);
           return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed', replayed: false,
-            result: { status: 200, body: { artifactId, ownerId: acl.ownerId, storageScopeId: acl.storageScopeId,
-              state, isPublic: acl.isPublic, withdrawn: state === 'withdrawn', currentReleaseId: current?.releaseId,
+            result: { status: 200, body: { ...artifactSummary({ artifactId, acl, state, current,
+              actorId: invocation.actorId, urls: deps.publicationUrls, approved: deps.isApprovedAccount }),
               ...(acl.ownerId === invocation.actorId ? { grants: acl.grants } : {}) } } };
         }
         const visibleArtifacts: unknown[] = [];
@@ -196,7 +240,8 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           if (!acl || acl.storageScopeId !== invocation.storageScopeId) continue;
           const state = await deps.lifecycle.stateOf(artifactId);
           if (deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, 'read', deps.isApprovedAccount)) {
-            visibleArtifacts.push({ artifactId, ownerId: acl.ownerId, state, isPublic: acl.isPublic });
+            visibleArtifacts.push(artifactSummary({ artifactId, acl, state, actorId: invocation.actorId,
+              current: await deps.publication.getCurrent(artifactId), urls: deps.publicationUrls, approved: deps.isApprovedAccount }));
           }
         }
         const offset = normalized.offset as number;

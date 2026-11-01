@@ -18,6 +18,12 @@ export interface GrantRecord {
 }
 
 export interface ArtifactAcl {
+  bindingName?: string;
+  createdAt?: string;
+  updatedAt?: string | null;
+  title?: string;
+  description?: string;
+  icon?: string | null;
   ownerId: string;
   /** Physical scope of the artifact (set at creation; read by publish). */
   storageScopeId?: string;
