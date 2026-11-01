@@ -9,6 +9,7 @@ Implement lot ACT-L03a of r6 §7.2 (W1): preserve the #681 lineage rebased onto 
 - Make-only workflow, Docker under the flock `/home/antoinefa/.cache-tmp/sentropic-docker.lock`, `ENV=test-cyber-L03a` always LAST, `make down ENV=test-cyber-L03a` after. Never `ENV=dev`, never `make clean-all`.
 - Zero Python. Zero payment on quota exhaustion. No secrets read, printed, logged or committed.
 - The preserved #681 work is rebased (never merged/cherry-picked) from `preserve/cyber-lot3-reconciled` onto `origin/main`; preserve refs stay untouched; the unadmitted broker blob `refs/preserve/cyber-lot3-broker` stays out of the tree.
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required verbatim by `scripts/ci/ci-lockfile-installs.test.mjs`, run by the required `validate-publishable-manifests` CI job).
 - Branch development happens in worktree `tmp/worktrees/cyber-act-L03a` on branch `feat/cyber-act-L03a`.
 - All new text in English.
 
@@ -29,18 +30,21 @@ Implement lot ACT-L03a of r6 §7.2 (W1): preserve the #681 lineage rebased onto 
   - `.cursor/rules/**`
   - `.track/**`
   - `api/**`
-  - `packages/**` (except the two Conditional files below)
+  - `packages/**` (except the Conditional files below)
   - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `Makefile` (BR03a-EX1: only the `test-security-daily` SCOPE list gains the three new `control-*.test.mjs` files so the r6 §7.3 cases run in the required suite that CI already executes)
   - `packages/llm-mesh/package.json` + `package-lock.json` (BR03a-EX2: post-rebase gate — branch touches `packages/llm-mesh/src/**`, so the version must be strictly greater than the published `0.32.2`; bump to `0.32.3`)
+  - `packages/cluster-mesh/tests/fixtures/train.ts`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR03a-EX3: version-gate consequence — the EX2 candidate `0.32.3` must be reflected in the cluster-mesh train literal and the frozen selected tuple, so the exact gateway/mesh artifact/range/one-copy proofs required by r6 §6.1 hold at the gated version)
 - **Exception process**:
   - BR03a-EX1 declared here before touching `Makefile`: reason = r6 §7.3 requires every §6.4 destination wired into its owning required Make suite (`test-security-daily`, already run by required CI job `validate-ci-capacity-metrics`); impact = additive SCOPE entries only, no existing entry removed; rollback = revert the single SCOPE line.
   - BR03a-EX2 declared here before touching the version files: reason = rules/workflow.md Post-Rebase Gate + `enforce-package-bump` CI job after the #681 rebase; impact = version string only in `packages/llm-mesh/package.json` and its workspace entry in `package-lock.json`; rollback = revert to `0.32.2`.
+  - BR03a-EX3 declared here before touching the cluster-mesh fixtures: reason = r6 §6.1 post-rebase package-version gate (EX2) makes `packages/llm-mesh` the unpublished candidate `0.32.3`, and the cluster-mesh train/selected fixtures pin the workspace tuple exactly (main precedent: commit d1e9d31fd rebound them to `0.32.2`); impact = version literals plus the single `@sentropic/llm-mesh` lock entry (version/resolved/sibling sha512) only, no spec logic changed; rollback = revert the three files to the `0.32.2` pins.
 
 ## Feedback Loop
 - BR03a-EX1: `acknowledge` — Makefile SCOPE addition for `test-security-daily` (see Conditional Paths).
 - BR03a-EX2: `acknowledge` — llm-mesh `0.32.2` → `0.32.3` post-rebase package gate (see Conditional Paths).
+- BR03a-EX3: `acknowledge` — cluster-mesh train/selected fixture literals rebound to the gated llm-mesh `0.32.3` (see Conditional Paths).
 - No open blockers: r6 supplies every design decision for this lot; anything not covered by r6 is reported in the final report, not decided here.
 
 ## AI Flaky tests
