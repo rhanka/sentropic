@@ -88,6 +88,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Add transaction-bound auth workspace provisioning and an explicit Q-K configuration parser with key-reader disposal tests.
   - [x] Add the production auth runner configuration and private HTTP response staging with sanitized failures.
   - [x] Mount real CM WebAuthn options/authentication and login creation in one completion callback.
+  - [x] Mount CM email and magic-link completions; consume proof and create login before the same commit; delete old email handler.
   - [x] Remove app SQL session writes and duplicate base-row inserts; refresh projects remotely only after CM CAS commits.
   - [ ] /workspaces (absorbs /tenants) over A2.2 stores; delete tenant-membership.ts, membership seam in cluster-mesh-adapter.ts, product tenant/workspace identity routes.
   - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
