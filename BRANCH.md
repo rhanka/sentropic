@@ -1,40 +1,51 @@
-# Feature: cyber-act-L08a same-repo control and deadline
+# Feature: ACT-L03a — same-repo seat/control core on the preserved #681 lineage (daily cyber activation, amendment r6)
 
 ## Objective
-Deliver ACT-L08a from activation amendment r6: same-repo public control, report writer and deploy-key rulesets, pinned control image, off and enable, DeadlineStatusV1 and daily deadline trigger.
+Implement lot ACT-L03a of r6 §7.2 (W1): preserve the #681 lineage rebased onto current origin/main and deliver the bounded same-repository seat/control core with qualified bootstrap placement — r6 §6 L3-A/B/C/D/F/H/I/L core, the required core suite, and tests T5-C1/C2/C3/C6, T6-C1/C2/C3/M1 (plus T6-D1 via L3-D) at the exact §6.4 destinations. Synthetic fixtures only; no live call, no payment, no custody repository or App.
 
 ## Scope / Guardrails
-- Scope limited to scripts/security/daily control, report, deadline, provisioning and resource modules plus one report-control workflow.
-- One migration max in `api/drizzle/*.sql` (if applicable).
-- Make-only workflow, no direct Docker commands.
-- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development must happen in isolated worktree `tmp/feat-<slug>` (even for one active branch).
-- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
-- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- Scope limited to `scripts/ci/seat-custody/**`, the three new `scripts/security/daily/control-*.mjs` modules and their tests, `docs/security/activation/owner-procedure-r6.md`, and the two gate files listed under Conditional Paths.
+- Binding design: `.tmp/daily-cyber/activation-amendment-r6.md` (sha256 4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f). No design decision outside r6; anything else is reported, not decided.
+- Make-only workflow, Docker under the flock `/home/antoinefa/.cache-tmp/sentropic-docker.lock`, `ENV=test-cyber-L03a` always LAST, `make down ENV=test-cyber-L03a` after. Never `ENV=dev`, never `make clean-all`.
+- Zero Python. Zero payment on quota exhaustion. No secrets read, printed, logged or committed.
+- The preserved #681 work is rebased (never merged/cherry-picked) from `preserve/cyber-lot3-reconciled` onto `origin/main`; preserve refs stay untouched; the unadmitted broker blob `refs/preserve/cyber-lot3-broker` stays out of the tree.
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required verbatim by `scripts/ci/ci-lockfile-installs.test.mjs`, run by the required `validate-publishable-manifests` CI job).
+- Branch development happens in worktree `tmp/worktrees/cyber-act-L03a` on branch `feat/cyber-act-L03a`.
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `scripts/security/daily/**`
-  - `docs/security/controls/**`
+  - `scripts/ci/seat-custody/**`
+  - `scripts/security/daily/control-provisioning.mjs`
+  - `scripts/security/daily/control-provisioning.test.mjs`
+  - `scripts/security/daily/control-permit-channel.mjs`
+  - `scripts/security/daily/control-permit-channel.test.mjs`
+  - `scripts/security/daily/control-clock.mjs`
+  - `scripts/security/daily/control-clock.test.mjs`
+  - `docs/security/activation/owner-procedure-r6.md`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
+  - `.github/workflows/**`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
+  - `.track/**`
+  - `api/**`
+  - `packages/**` (except the Conditional files below)
   - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file)
-  - `.github/workflows/**`
-  - `Makefile`
+  - `Makefile` (BR03a-EX1: only the `test-security-daily` SCOPE list gains the three new `control-*.test.mjs` files so the r6 §7.3 cases run in the required suite that CI already executes)
+  - `packages/llm-mesh/package.json` + `package-lock.json` (BR03a-EX2: post-rebase gate — branch touches `packages/llm-mesh/src/**`, so the version must be strictly greater than the published `0.32.2`; bump to `0.32.3`)
+  - `packages/cluster-mesh/tests/fixtures/train.ts`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`, `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR03a-EX3: version-gate consequence — the EX2 candidate `0.32.3` must be reflected in the cluster-mesh train literal and the frozen selected tuple, so the exact gateway/mesh artifact/range/one-copy proofs required by r6 §6.1 hold at the gated version)
 - **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
+  - BR03a-EX1 declared here before touching `Makefile`: reason = r6 §7.3 requires every §6.4 destination wired into its owning required Make suite (`test-security-daily`, already run by required CI job `validate-ci-capacity-metrics`); impact = additive SCOPE entries only, no existing entry removed; rollback = revert the single SCOPE line.
+  - BR03a-EX2 declared here before touching the version files: reason = rules/workflow.md Post-Rebase Gate + `enforce-package-bump` CI job after the #681 rebase; impact = version string only in `packages/llm-mesh/package.json` and its workspace entry in `package-lock.json`; rollback = revert to `0.32.2`.
+  - BR03a-EX3 declared here before touching the cluster-mesh fixtures: reason = r6 §6.1 post-rebase package-version gate (EX2) makes `packages/llm-mesh` the unpublished candidate `0.32.3`, and the cluster-mesh train/selected fixtures pin the workspace tuple exactly (main precedent: commit d1e9d31fd rebound them to `0.32.2`); impact = version literals plus the single `@sentropic/llm-mesh` lock entry (version/resolved/sibling sha512) only, no spec logic changed; rollback = revert the three files to the `0.32.2` pins.
 
 ## Feedback Loop
-- `BR08a-EX1` (Makefile, conditional path): extend the existing `test-security-daily` `SCOPE` list with the fourteen L08a `scripts/security/daily/*.test.mjs` files. Reason: r6 section 6.4 requires every new case wired into its owning required Make suite, and the suite target already exists. Impact: one line, no target added, no existing file removed from the list. Rollback: restore the five-file list.
-- `BR08a-EX2` (.github/workflows/**, conditional path): add `.github/workflows/security-report-control.yml` with L08a-owned jobs only (report fence writers, deadline-record, control-receipt). Reason: T6-C1 parses actual emitted jobs against the section 4.1 single-environment map. Impact: new workflow, manual and schedule triggers for deadline only, no secrets. Rollback: delete the file.
+- BR03a-EX1: `acknowledge` — Makefile SCOPE addition for `test-security-daily` (see Conditional Paths).
+- BR03a-EX2: `acknowledge` — llm-mesh `0.32.2` → `0.32.3` post-rebase package gate (see Conditional Paths).
+- BR03a-EX3: `acknowledge` — cluster-mesh train/selected fixture literals rebound to the gated llm-mesh `0.32.3` (see Conditional Paths).
+- No open blockers: r6 supplies every design decision for this lot; anything not covered by r6 is reported in the final report, not decided here.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -43,53 +54,46 @@ Deliver ACT-L08a from activation amendment r6: same-repo public control, report 
   - Never amend tests with additive timeouts.
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
+- This lot runs only synthetic, network-free suites; no AI flaky lane applies.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single lane implementing one wave-table row with no orthogonal sub-workstreams.
+- [x] **Mono-branch + cherry-pick** (single branch `feat/cyber-act-L03a`; the preserved #681 lineage is rebased, not cherry-picked; one final CI on the review-ready head)
+- Rationale: one lot, one branch; no orthogonal sub-workstreams.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline and constraints**
-  - [x] Read COMMON-RULES, amendment r6 and wave-table row ACT-L08a plus section 7.3 tests.
-  - [x] Verify r6 sha256 `4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f`.
-  - [x] Create worktree `tmp/worktrees/cyber-act-L08a` on branch `feat/cyber-act-L08a` from `origin/main` (`1239f291f`).
-  - [x] Confirm command style: `make ... ENV=test-cyber-L08a` with `ENV` last.
-  - [x] Confirm scope and guardrails.
-  - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
-  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BR08a-EX1` and `BR08a-EX2`.
-  - [x] No ports needed: no compose services, tests run via `docker run` node image only.
-  - [x] No live credentials: synthetic fixtures only, fail-closed without live resources.
-- [x] **Lot 1 — Tests first**
-  - [x] Add `scripts/security/daily/workflow-contract.test.mjs` (T5-C1, T6-C1, L8-B, L8-G, L8-H).
-  - [x] Add `scripts/security/daily/report-branch-integrity.test.mjs` (T5-C4, L8-B, L8-D, L8-F subset).
-  - [x] Add `scripts/security/daily/report-format.test.mjs` (L8-C, L8-I, DeadlineStatusV1).
-  - [x] Add `scripts/security/daily/control-permit-channel.test.mjs` (T5-C6 part, T6-C3 part, L8-G).
-  - [x] Add `scripts/security/daily/control-clock.test.mjs` (T5-C6 part, T6-C3 part, L8-G, L8-J).
-  - [x] Add `scripts/security/daily/control-provisioning.test.mjs` (T5-C6 part, T6-C1 part, T6-M1 part, L8-J).
-  - [x] Add `scripts/security/daily/resource-envelope.test.mjs` (T6-B1, L8-H).
-  - [x] Add `scripts/security/daily/deadline-report.test.mjs` (L8-I).
-  - [x] Add `scripts/security/daily/collector-provenance.test.mjs` plus `control-image-publish.test.mjs` (L8-K).
-  - [x] Lot gate: tests written before implementation modules, failing run recorded.
-- [x] **Lot 2 — Implementation**
-  - [x] Add `job-environment-map.json` (section 4.1 map, twelve reader copies) plus loader module.
-  - [x] Add `report-branch-integrity.mjs` (hook-free SSH expected-parent writer contract).
-  - [x] Add `report-format.mjs` (DeadlineStatusV1 schema, sanitized public report, fence projection reader).
-  - [x] Add `control-image-pin.mjs` (pinned control image contract, fail-closed without digest).
-  - [x] Add `control-permit.mjs` (watcher, consumer, permits, translated peers, elevation, guardian).
-  - [x] Add `control-clock.mjs` (clock health, termination bounds).
-  - [x] Add `enable.mjs` (global-off-first, off and enable receipts).
-  - [x] Add `control-provisioning.mjs` (section 4.5 L08a rows, copies, expiry).
-  - [x] Add `resource-envelope.mjs` (section 7.4 L08a accounting).
-  - [x] Add `deadline-report.mjs` (07:30 trigger contract, shortfall handoff).
-  - [x] Add `.github/workflows/security-report-control.yml` (EX2).
-  - [x] Extend `test-security-daily` `SCOPE` with the L08a files (EX1).
-  - [x] Lot gate: full suite green locally under flock with `ENV=test-cyber-L08a` last, then `make down`.
-- [ ] **Lot 3 — Branch hygiene and PR**
-  - [x] Run `make scope-check`.
-  - [x] Atomic commits with `make commit` (150 lines max each), push after every few commits.
-  - [ ] Open draft PR with `BRANCH.md` as body.
-  - [ ] Run ONE CI on the final head and wait for completion.
-- [ ] **Lot 4 — Report and stop**
-  - [ ] Write `.tmp/rv/cyber-act-L08a.md` with PR, head, CI result and each acceptance item.
-  - [ ] Stop without merging.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, COMMON-RULES, r6 amendment, Lot 3 STOP report.
+  - [x] Create worktree `tmp/worktrees/cyber-act-L03a` on branch `feat/cyber-act-L03a` from `origin/main`.
+  - [x] Rebase `preserve/cyber-lot3-reconciled` (62 commits over `e6d17327`) onto `origin/main`; BRANCH.md conflicts keep the #681 copy, version/lockfile conflicts keep current-main pins.
+  - [x] Post-rebase gate: bump `packages/llm-mesh` to `0.32.3` (> published `0.32.2`).
+  - [x] Confirm command style: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make ... ENV=test-cyber-L03a` (ENV last), then `make down ENV=test-cyber-L03a`.
+- [ ] **Lot 1 — Tests first (r6 §6.4 destinations)**
+  - [ ] C/ `scripts/ci/seat-custody/tests/seat-environment-custody.test.ts` (T5-C1/C2, T6-C1): one environment per job, literal secret names, twelve reader copies, synthetic canonical→projection→N+1 roundtrip, same-run/stale-rerun/ambiguous-PUT/interrupted-write refusals.
+  - [ ] C/ `scripts/ci/seat-custody/tests/seat-workflow-contract.test.ts` (T5-C1, T6-C1): emitted-workflow scan — no `secrets: inherit`, ≤1 environment per job, allowlisted literal secret refs only, hostile PR/fork/tag/unprotected-ref/indirection refusals.
+  - [ ] C/ `scripts/ci/seat-custody/tests/custody-state-store.test.ts` (T6-C2): eight-job transaction, bank/HEAD fencing, full interruption matrix, limits at/above ceilings, mixed-generation/stale-pointer refusal.
+  - [ ] C/ `scripts/ci/seat-custody/tests/e2e/github-seat-roundtrip.test.ts` (T5-C2 real later-run probes): synthetic payloads against the environment-secret API surface in a separate process/run.
+  - [ ] C/ `scripts/ci/seat-custody/tests/ci-seat-broker.test.ts` (extend, T5-C3), `seat-ci-artifacts.test.ts`, `seat-secret-hygiene.test.ts` (T5-C3): positive wire + candidate file/env/process/socket/egress negatives, ciphertext-only artifacts, names-only hygiene.
+  - [ ] C/ `scripts/ci/seat-custody/tests/ci-seat-topology.test.ts` (T6-C3): translated SO_PEERCRED triples, fixed elevation entry, guardian receipt fields.
+  - [ ] C/ `scripts/ci/seat-custody/tests/acceptance-disposition.test.ts` (T6-M1): all 69 acceptance IDs, 63 paths, §6.4 rows, T5/T6 IDs, credential/copy/loader receipts.
+  - [ ] C/ `scripts/ci/seat-custody/tests/owner-procedure-contract.test.ts` (T6-D1): §5.1/§5.2 equivalence against one fixture, both V6 5/8i withdrawals, retired IDs/cutoff, six steps, two owner quotes byte-for-byte.
+  - [ ] D/ `scripts/security/daily/control-provisioning.test.mjs` (T5-C6, T6-M1), `control-permit-channel.test.mjs` (T5-C6, T6-C3), `control-clock.test.mjs` (T5-C6, T6-C3).
+  - [ ] RED run: `flock … make test-ci-seat-contract ENV=test-cyber-L03a` and `flock … make test-security-daily ENV=test-cyber-L03a`.
+- [ ] **Lot 2 — Same-repo seat/control core implementation**
+  - [ ] `src/seat-environment-custody.ts` (L3-B store binding: sentropic protected environments, sealed PUT, N+1, canonical→projection ordering).
+  - [ ] `src/custody-state-store.ts` (L3-B/§4.3.1: CustodyStateV1, two banks ×16 segments, HEAD, fence CAS, eight-job transaction).
+  - [ ] `src/seat-workflow-contract.ts` (L3-C/L3-F: job→environment contract, bootstrap placement on protected main only, permanent closure after #681 merge).
+  - [ ] `src/ci-seat-broker.ts` (L3-C: reservation-bound wire, journal fsync-before-send, FD-only loading, permits).
+  - [ ] `src/acceptance-disposition.ts`, `src/owner-procedure.ts` (T6-M1, T6-D1 data).
+  - [ ] D/ `control-provisioning.mjs`, `control-permit-channel.mjs`, `control-clock.mjs` (L3-I/L3-L, T5-C6/T6-C3).
+  - [ ] `docs/security/activation/owner-procedure-r6.md` (synchronized §5.1/§5.2 copy).
+  - [ ] Wire D/ tests into `test-security-daily` SCOPE (BR03a-EX1).
+  - [ ] GREEN run of both suites; `make down ENV=test-cyber-L03a`.
+- [ ] **Lot 3 — Preservation receipts & gates**
+  - [ ] `spec/evidence/ci-seats/activation-lot3-preservation.json` re-read and extended with the rebase-onto-current-main record (L3-H).
+  - [ ] `make scope-check` before every commit; `git diff --check`; atomic `make commit` ≤150 lines, push after every few commits (crash safety).
+  - [ ] `make test-llm-mesh` + `make typecheck-llm-mesh` regression on the rebased lineage.
+- [ ] **Lot N — Final validation**
+  - [ ] Both suites GREEN under the flock with `ENV=test-cyber-L03a` last; `make down ENV=test-cyber-L03a`; `make ps` empty.
+  - [ ] Push review-ready head; open draft PR with this BRANCH.md as body.
+  - [ ] Run ONE CI on the final head; wait for completion; record result.
+  - [ ] Report to `.tmp/rv/cyber-act-L03a.md`; do not merge.

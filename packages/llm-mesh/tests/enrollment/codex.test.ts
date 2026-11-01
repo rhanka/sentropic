@@ -305,3 +305,35 @@ describe('CodexEnrollmentProvider', () => {
     expect(exchangeCalls).toBe(2);
   });
 });
+
+describe('Codex seat consumer mapping', () => {
+  it('parses a codex consumer profile under the codex package id without provider calls', async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockRejectedValue(new Error('provider call forbidden during seat parse'));
+    try {
+      const { parseCliSeatProfile } = await import('../../src/enrollment/cli-seat-import.js');
+    const bundle = parseCliSeatProfile({
+      cli: 'codex',
+      seatRef: 'seat-codex-01',
+      refreshFamilyRef: 'family-codex-01',
+      ownerScope: 'owner-seat-01',
+      issuingClientRef: 'client-codex-01',
+      endpointFamily: 'endpoint-codex-01',
+      accountBinding: 'binding-codex-01',
+      entitlementClass: 'lab-seat',
+      epoch: 1,
+      generation: 1,
+      operationId: 'op-codex-01',
+      issuedAt: '2026-10-17T00:00:00Z',
+      providerExpiry: '2099-01-01T00:00:00Z',
+      accessRef: 'access-codex-01',
+    });
+      expect(bundle.identity.packageProviderId).toBe('codex');
+      expect(bundle.lifecycle.refreshAuthority).toBe('none');
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      fetchSpy.mockRestore();
+    }
+  });
+});

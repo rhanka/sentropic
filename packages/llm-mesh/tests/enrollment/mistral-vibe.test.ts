@@ -141,3 +141,27 @@ describe('MistralVibeEnrollmentProvider', () => {
       .rejects.toThrow(/cancelled/);
   });
 });
+
+describe('Mistral Vibe seat consumer mapping', () => {
+  it('parses a vibe consumer profile under the mistral-vibe package id', async () => {
+    const { parseCliSeatProfile } = await import('../../src/enrollment/cli-seat-import.js');
+    const bundle = parseCliSeatProfile({
+      cli: 'vibe',
+      seatRef: 'seat-vibe-01',
+      refreshFamilyRef: 'family-vibe-01',
+      ownerScope: 'owner-seat-01',
+      issuingClientRef: 'client-vibe-01',
+      endpointFamily: 'endpoint-vibe-01',
+      accountBinding: 'binding-vibe-01',
+      entitlementClass: 'lab-seat',
+      epoch: 1,
+      generation: 1,
+      operationId: 'op-vibe-01',
+      issuedAt: '2026-10-17T00:00:00Z',
+      providerExpiry: '2099-01-01T00:00:00Z',
+      accessRef: 'access-vibe-01',
+    });
+    expect(bundle.identity.packageProviderId).toBe('mistral-vibe');
+    expect(bundle.authority).toBe('consumer');
+  });
+});

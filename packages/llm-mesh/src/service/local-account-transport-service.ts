@@ -21,6 +21,20 @@ import { ClaudeRefreshPreparationError } from '../enrollment/claude-code.js';
 import type { ConfigResolver, KeyringAdapter } from './facade.js';
 import { listModelProfilesByProvider } from '../catalog.js';
 import type { LlmMesh } from '../mesh.js';
+import {
+  isDeviceFlowSeatAccount,
+  isExternalSeatAccount,
+  isExternalSeatUnavailable,
+  markExternalSeatAuthority,
+  readExternalSeatAuthority,
+  throwExternalSeatUnavailable,
+} from './external-seat-authority.js';
+import {
+  classifyTransition,
+  validateSeatBundle,
+  type SeatBundleV1,
+  type SeatCli,
+} from '../enrollment/seat-bundle.js';
 import type { ProviderId } from '../providers.js';
 import type {
   AccountDirectoryPort, EligibleAccountDescriptor, PlannedRouteTarget,
@@ -498,6 +512,124 @@ export class LocalAccountTransportService {
     return { accountId: credential.accountId, label };
   }
 
+  /**
+   * L1 trusted seat-bundle entry: the single mesh path from a custodian
+   * consumer projection to a registered, externally marked account. It
+   * validates the projection (consumer authority, owner binding, usable
+   * access material, required provider expiry), applies the stored
+   * lineage transition (idempotent N, refused stale N-1 and new epochs),
+   * and persists through the canonical register/persist path so restart
+   * restores the same externally marked account. No second registry.
+   */
+  async importSeatBundle(input: {
+    bundle: unknown;
+    ownerScope: string;
+  }): Promise<{ accountId: string; seatRef: string; generation: number; idempotent: boolean }> {
+    const owner = this.requireOwnerScope(input.ownerScope);
+    await this.restorePersistedAccounts();
+    const validated = validateSeatBundle(input.bundle, { ownerScope: owner, trustedAuthority: 'consumer' });
+    if (!validated.ok) {
+      throw new Error(`Seat bundle refused: ${validated.code}; ${validated.detail}`);
+    }
+    const bundle: SeatBundleV1 = validated.bundle;
+    if (bundle.credentialClass !== 'access-only' && bundle.credentialClass !== 'static-key') {
+      throw new Error('Seat bundle must be access-only; the custodian holds every refresh grant');
+    }
+    if (bundle.lifecycle.refreshAuthority !== 'none') {
+      throw new Error('Seat bundle must not carry refresh authority into the mesh');
+    }
+    const meshUse = bundle.meshUse;
+    if ((meshUse.kind !== 'access' && meshUse.kind !== 'static-key') || !meshUse.accessRef) {
+      throw new Error('Seat bundle carries no usable access reference');
+    }
+    if (!bundle.lifecycle.providerExpiry) {
+      throw new Error('Seat bundle requires providerExpiry; unknown expiry is not infinite validity');
+    }
+    const pair: Record<SeatCli, readonly [string, string]> = {
+      agy: ['gemini', 'cloud-code'],
+      codex: ['openai', 'codex'],
+      vibe: ['mistral', 'mistral-vibe'],
+      muse: ['muse', 'muse'],
+      claude: ['anthropic', 'claude-code'],
+    };
+    const [targetProviderId, transportProviderId] = pair[bundle.identity.cli];
+    const seatRef = bundle.identity.seatRef;
+    const accountId = `seat-${bundle.identity.cli}-${seatRef}`;
+    const incoming = {
+      epoch: bundle.lifecycle.epoch,
+      generation: bundle.lifecycle.generation,
+      operationId: bundle.lifecycle.operationId,
+    };
+    const held = this.accountsMap.get(accountId);
+    const heldAuthority = held
+      ? readExternalSeatAuthority(held.metadata as Record<string, unknown> | undefined)
+      : null;
+    if (held && heldAuthority && heldAuthority.seatRef === seatRef) {
+      // The held account's owner wins: another owner scope presenting the
+      // same seatRef never takes the account over, even at a higher
+      // generation. Only the holding owner may advance its lineage.
+      if (heldAuthority.ownerScope !== owner) {
+        throw new Error('Seat bundle refused: held seat is owned by another owner scope');
+      }
+      const transition = classifyTransition(
+        { epoch: heldAuthority.epoch, generation: heldAuthority.generation, operationId: heldAuthority.operationId },
+        incoming,
+      );
+      if (transition === 'idempotent') {
+        return { accountId, seatRef, generation: incoming.generation, idempotent: true };
+      }
+      // A forward transition falls through to registration below, which
+      // overwrites the same stable account (no duplicate registry).
+      if (transition === 'stale') {
+        throw new Error(`stale-generation: incoming N-${incoming.generation} is older than current`);
+      }
+      if (transition === 'conflict') {
+        throw new Error('conflicting reimport: same generation with a different lineage');
+      }
+      if (transition !== 'forward') {
+        throw new Error('epoch-replacement-required: a new epoch needs the controlled replacement operation');
+      }
+    }
+    const now = new Date().toISOString();
+    const account: AccountTransportAccount = {
+      accountId,
+      ownerScopeRef: owner,
+      accountLabel: `Seat ${bundle.identity.cli} (${seatRef})`,
+      targetProviderId,
+      transportProviderId,
+      accessToken: meshUse.accessRef,
+      expiresAt: bundle.lifecycle.providerExpiry ?? undefined,
+      status: 'active',
+      enrollmentCompletedAt: now,
+      metadata: markExternalSeatAuthority(
+        { productAccountSource: bundle.identity.packageProviderId },
+        { seatRef, ownerScope: owner, ...incoming },
+      ),
+    };
+    this.registerAccount(account, bundle.identity.credentialFormatVersion);
+    await this.persistCredential(
+      {
+        accountId,
+        accountLabel: account.accountLabel ?? accountId,
+        providerId: transportProviderId,
+        status: 'active',
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        accountId,
+        accessToken: meshUse.accessRef,
+        // Unknown provider expiry is stored as '': Date.parse('') is NaN,
+        // so every finite-date check fails closed. External seats never
+        // refresh here; availability is gated by isExternalSeatUnavailable.
+        expiresAt: bundle.lifecycle.providerExpiry ?? '',
+        authClientConfigVersion: bundle.identity.credentialFormatVersion,
+      },
+      account,
+    );
+    return { accountId, seatRef, generation: incoming.generation, idempotent: false };
+  }
+
   private async hasClaudeGrant(credential: PreparedCredential, ownerScopeRef: string): Promise<boolean> {
     const index = await this.keyring.getSecret(LocalAccountTransportService.accountIndexKey);
     for (const accountId of this.parseAccountIndex(index)) {
@@ -694,9 +826,20 @@ export class LocalAccountTransportService {
     const nowMs = typeof input.now === 'number' ? input.now : Date.now();
 
     // Check if access token is expired
+    // L1 external policy: custodied seats never refresh here and never
+    // serve on unknown expiry. Expired or dateless access becomes
+    // access-unavailable; valid access is returned directly with the owner
+    // claim and policy retained. Mesh-managed device-flow seats fall
+    // through to refreshToken(), which dispatches them to the muse-code
+    // device provider.
+    const externallyManaged = !!account && isExternalSeatAccount(account);
+    if (account && externallyManaged && isExternalSeatUnavailable(account, nowMs)) {
+      await acquisition.release?.();
+      throwExternalSeatUnavailable(account);
+    }
     if (account && account.expiresAt) {
       const expiresAtMs = new Date(account.expiresAt).getTime();
-      if (expiresAtMs <= nowMs || this.refreshInFlight.has(account.accountId)) {
+      if (!externallyManaged && (expiresAtMs <= nowMs || this.refreshInFlight.has(account.accountId))) {
         try {
           const version = this.credentialVersions.get(account.accountId) ?? 'v1.0.0';
           const refreshed = await this.refreshToken({
@@ -920,6 +1063,10 @@ export class LocalAccountTransportService {
   }
 
   private async refreshToken(input: RefreshInput): Promise<PreparedCredential> {
+    // L1 external policy: custodied seats never renew here; refuse before the
+    // single-flight map so no state mutates and no provider is called.
+    const held = this.accountsMap.get(input.accountId);
+    if (held && isExternalSeatAccount(held)) throwExternalSeatUnavailable(held);
     // P0-5: Single-flight refresh map to prevent parallel refresh races
     if (this.refreshInFlight.has(input.accountId)) {
       return this.refreshInFlight.get(input.accountId)!;
@@ -929,7 +1076,13 @@ export class LocalAccountTransportService {
       const account = this.accountsMap.get(input.accountId);
       let requestMayHaveBeenSent = false;
       try {
-        const providerId = account?.transportProviderId ?? 'cloud-code';
+        // L1 (a): a mesh-managed device-flow Muse grant refreshes through
+        // the muse-code device provider with its stored refresh token,
+        // never by re-reading the CLI store (which may hold another login).
+        // Externally custodied seats were refused above.
+        const providerId = account && isDeviceFlowSeatAccount(account)
+          ? 'muse-code'
+          : (account?.transportProviderId ?? 'cloud-code');
         const provider = this.providers.get(providerId);
 
         if (!provider) {

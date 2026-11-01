@@ -1353,4 +1353,30 @@ describe('LocalAccountTransportService', () => {
     expect(accounts.map((account) => account.accountId).sort())
       .toEqual(['acct-codex-1', 'acct-muse-1']);
   });
+
+  it('keeps a single registry entry across seat generations', async () => {
+    const { parseCliSeatProfile } = await import('../../src/enrollment/cli-seat-import.js');
+    const keyring = new InMemoryKeyring();
+    const service = new LocalAccountTransportService(keyring, new Map(), { async resolveConfig() { return {}; } });
+    const profile = (generation: number, operationId: string) => ({
+      cli: 'claude' as const,
+      seatRef: 'seat-single-01',
+      refreshFamilyRef: 'family-single-01',
+      ownerScope: 'owner-seat-01',
+      issuingClientRef: 'client-single-01',
+      endpointFamily: 'endpoint-single-01',
+      accountBinding: 'binding-single-01',
+      entitlementClass: 'lab-seat',
+      epoch: 1,
+      generation,
+      operationId,
+      issuedAt: '2026-10-17T00:00:00Z',
+      providerExpiry: '2099-01-01T00:00:00Z',
+      accessRef: `access-single-0${generation}`,
+    });
+    await service.importSeatBundle({ bundle: parseCliSeatProfile(profile(1, 'op-single-01')), ownerScope: 'owner-seat-01' });
+    await service.importSeatBundle({ bundle: parseCliSeatProfile(profile(2, 'op-single-02')), ownerScope: 'owner-seat-01' });
+    const accounts = await service.listAccounts('owner-seat-01');
+    expect(accounts.map((account) => account.accountId)).toEqual(['seat-claude-seat-single-01']);
+  });
 });
