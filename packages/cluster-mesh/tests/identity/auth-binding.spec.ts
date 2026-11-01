@@ -50,7 +50,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b auth binding on $
     secret.fill(0);
   });
 
-  it('matches email codes across the SHA-256/HMAC-SHA256 union in keyring order', async () => {
+  it('matches email codes across the SHA-256/HMAC-SHA256 union in one recency-ordered query', async () => {
     const env = await openEnv();
     const activeKey = new Uint8Array(32).fill(11);
     const previousKey = new Uint8Array(32).fill(13);
@@ -73,7 +73,9 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b auth binding on $
         kind: 'email_code', proofId: 'union-sha', userId: null, state: 'pending', revision: 0, createdAt: NOW, expiresAt: LATER,
         consumedAt: null, revokedAt: null, email, codeDigest: { algorithm: 'sha256', value: sha },
       }));
-    // Active HMAC first, then SHA-256, then previous-key HMAC: keyring order.
+    // Candidates are computed in keyring order (active HMAC, previous keys,
+    // then legacy SHA-256), but the union is queried once and rows are ordered
+    // by recency: equal createdAt ties break on bytewise descending proofId.
     const hmacPrevious = await digest.hmacSha256('previous', emailCodePreimageV1(email, '123456'));
     const found = await env.unitOfWork.runRead(READ, (tx) =>
       tx.hostTransaction.singleUseProofs.findLatestEmailCode(email, [
@@ -81,7 +83,10 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b auth binding on $
         { algorithm: 'sha256', value: sha },
         { algorithm: 'hmac-sha256', value: hmacPrevious, keyRef: 'previous' },
       ], NOW));
-    expect(found?.proofId).toBe('union-hmac');
+    expect(found?.proofId).toBe('union-sha');
+    const foundHmac = await env.unitOfWork.runRead(READ, (tx) =>
+      tx.hostTransaction.singleUseProofs.findLatestEmailCode(email, [{ algorithm: 'hmac-sha256', value: hmacActive, keyRef: 'active' }], NOW));
+    expect(foundHmac?.proofId).toBe('union-hmac');
     const foundSha = await env.unitOfWork.runRead(READ, (tx) =>
       tx.hostTransaction.singleUseProofs.findLatestEmailCode(email, [{ algorithm: 'sha256', value: sha }], NOW));
     expect(foundSha?.proofId).toBe('union-sha');
