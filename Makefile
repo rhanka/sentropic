@@ -2759,6 +2759,13 @@ ci-live-provider-run: ci-test-env ## Preserve every selected API, browser and VS
 ci-live-provider-finish: ## Retain failures, actual wire calls and schedule-health gaps
 	node scripts/ci/live-provider-receipt.mjs finish
 
+ci-provider-receipt: ci-test-env ## Verify test-network isolation and retain actual fixture traffic
+	@test "$(CI_PROVIDER_MODE)" = fixture
+	@mkdir -p .tmp/ci-provider
+	@docker network inspect $(COMPOSE_PROJECT_NAME)_default --format '{{.Internal}}' > .tmp/ci-provider/network-internal.txt
+	@$(E2E_COMPOSE) exec -T provider-fixture node -e 'fetch("http://localhost:7777/receipt").then(r=>r.text()).then(console.log)' > .tmp/ci-provider/traffic.json
+	node scripts/ci/live-provider-receipt.mjs fixture .tmp/ci-provider
+
 check-e2e-inventory: ## Fail when a numbered E2E spec has no default group or CI lane
 	@./e2e/scripts/check-spec-lanes.sh "$(E2E_GROUPS)"
 
