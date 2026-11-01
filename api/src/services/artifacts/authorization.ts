@@ -32,14 +32,17 @@ export function createArtifactAuthorization(options: {
   const { identity, workspaceId, storageScopeId } = options;
   const read = async (client: FinalizeTxClient, lock = false) => {
     const { rows } = await client.query<{ revision: string; role: string; approved: boolean }>(
-      `SELECT concat_ws(':', u.xmin, t.xmin, tm.xmin, w.xmin, wm.xmin) AS revision, wm.role,
-        (u.account_status = 'active' AND u.disabled_at IS NULL AND t.status = 'active'
+      `SELECT concat_ws(':', u.xmin, p.xmin, t.xmin, tm.xmin, cw.xmin, w.xmin, wm.xmin) AS revision, wm.role,
+        (u.account_status = 'active' AND p.disabled_at IS NULL AND t.status = 'active'
           AND tm.status = 'approved' AND w.hidden_at IS NULL) AS approved
        FROM workspaces w
-       JOIN workspace_memberships wm ON wm.workspace_id = w.id AND wm.user_id = $1
-       JOIN tenant_memberships tm ON tm.tenant_id = w.tenant_id AND tm.user_id = wm.user_id
-       JOIN tenants t ON t.id = tm.tenant_id JOIN users u ON u.id = wm.user_id
-       WHERE w.id = $2 AND w.tenant_id = $3 ${lock ? 'FOR SHARE OF u, t, tm, w, wm' : ''}`,
+       JOIN cm_identity.cm_workspaces cw ON cw.workspace_id = w.id
+       JOIN cm_identity.cm_workspace_members wm ON wm.workspace_id = cw.workspace_id AND wm.user_id = $1
+       JOIN cm_identity.cm_tenant_memberships tm ON tm.tenant_id = cw.tenant_id AND tm.user_id = wm.user_id
+       JOIN cm_identity.cm_tenants t ON t.tenant_id = tm.tenant_id
+       JOIN cm_identity.identity_user_accounts u ON u.user_id = wm.user_id
+       JOIN cm_identity.identity_account_profiles p ON p.user_id = u.user_id
+       WHERE w.id = $2 AND cw.tenant_id = $3 ${lock ? 'FOR SHARE OF u, p, t, tm, cw, w, wm' : ''}`,
       [identity.subject, workspaceId, identity.tenantId],
     );
     const row = rows[0];
