@@ -1,0 +1,6 @@
+id: no-tls-bypass
+message: Do not disable TLS certificate verification.
+severity: error
+language: TypeScript
+rule:
+  pattern: '{ rejectUnauthorized: false }'

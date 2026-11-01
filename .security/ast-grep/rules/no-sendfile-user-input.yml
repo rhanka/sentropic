@@ -1,0 +1,8 @@
+id: no-sendfile-user-input
+message: Do not pass request-controlled input to sendFile; normalize and validate the path first.
+severity: warning
+language: TypeScript
+rule:
+  pattern: '$RES.sendFile($PATH)'
+constraints:
+  PATH: { regex: '\breq\.(params|query|body)\.[A-Za-z_$]' }
