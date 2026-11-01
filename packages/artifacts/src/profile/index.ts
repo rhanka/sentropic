@@ -79,7 +79,7 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
     for (const [key, value] of Object.entries(defaults)) {
       if (!Object.hasOwn(props, key) || !matchesSchema(value, props[key])) throw new Error('profile/schema default mismatch');
     }
-    if (['artifacts_ensure', 'artifacts_publish', 'artifacts_commit_upload', 'artifacts_set_access', 'artifacts_delete'].includes(name)) {
+    if (['artifacts_ensure', 'artifacts_publish', 'artifacts_commit_upload', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert'].includes(name)) {
       (idempotency as Record<string, unknown>)[name] = { required: true, scope: 'principal' };
     }
   }
@@ -104,7 +104,10 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
       if (method === 'POST' && path === '/get_source') name = 'artifacts_get_source';
       if (method === 'POST' && path === '/set_access') name = 'artifacts_set_access';
       if (method === 'POST' && path === '/delete') name = 'artifacts_delete';
+      if (method === 'POST' && path === '/revert') name = 'artifacts_revert';
       if (method === 'GET' && path.startsWith('/meta/') && isArtifactId(path.slice(6))) name = 'artifacts_get';
+      if (method === 'GET' && path.startsWith('/versions/') && isArtifactId(path.slice(10))) name = 'artifacts_list_versions';
+      if (method === 'GET' && path.startsWith('/source/') && isArtifactId(path.slice(8))) name = 'artifacts_get_source';
       return name && selectedCapabilities.includes(name) ? name : undefined;
     },
   };
