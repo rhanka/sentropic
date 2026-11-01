@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { computeRetentionDeadline, TEN_JULIAN_YEAR_MS } from '@sentropic/cluster-mesh';
 import {
   createPolicyStore,
   type PolicyStoreGates,
@@ -29,7 +30,7 @@ const POLICY = {
   channels: {
     'session.events': { enabled: true, retention: { kind: 'none' } },
     'terminal.live': { enabled: false },
-    'terminal.cache': { enabled: true, retention: { kind: 'duration', durationSeconds: 3600 } },
+    'terminal.cache': { enabled: true, retention: { kind: 'finite', durationMs: 3_600_000 } },
     'native.mirror': { enabled: false, retention: { kind: 'none' } },
   },
 };
@@ -43,20 +44,23 @@ const gates = (overrides: Partial<PolicyStoreGates> = {}): PolicyStoreGates => (
   ...overrides,
 });
 
+const shareInput = (overrides = {}) => ({
+  policy: POLICY,
+  purpose: 'share' as const,
+  policyRevision: 1,
+  priorRevision: 0,
+  priorDigest: null,
+  approvedRegistrationRef: { id: 'registration-1', revision: 3 },
+  ownerConsentRevision: 12,
+  membershipRevision: 9,
+  sourceDenialFloor: 3,
+  retentionExpiresAt: 1_793_523_600_000,
+  ...overrides,
+});
+
 const admit = () => {
   const store = createPolicyStore(gates());
-  store.admitPolicy({
-    policy: POLICY,
-    purpose: 'share',
-    policyRevision: 1,
-    priorRevision: 0,
-    priorDigest: null,
-    approvedRegistrationRef: { id: 'registration-1', revision: 3 },
-    ownerConsentRevision: 12,
-    membershipRevision: 9,
-    sourceDenialFloor: 3,
-    retentionExpiresAt: 1_793_523_600_000,
-  });
+  store.admitPolicy(shareInput());
   return store;
 };
 
@@ -101,5 +105,42 @@ describe('STORE-ERASURE audit and purge separation', () => {
     const pending = store.initiatePurge({ policyId: 'policy-audit-1', scope: 'terminal.cache' });
     expect(pending.status).toBe('purge_pending');
     expect(store.projectAudit({ policyId: 'policy-audit-1' }).purge.initiatedWhileDisconnected).toBe(true);
+  });
+});
+
+describe('r2 annex E retention deadline (W-P3-3, vectors/r2-semantics.json retentionDeadline)', () => {
+  it('should map none to no expiry and finite to firstAdmissionAt+durationMs', () => {
+    expect(computeRetentionDeadline({ kind: 'none' }, 1_793_520_000_000)).toBeNull();
+    expect(computeRetentionDeadline({ kind: 'finite', durationMs: 1000 }, 1_793_520_000_000))
+      .toBe(1_793_520_001_000);
+    expect(computeRetentionDeadline({ kind: 'finite', durationMs: TEN_JULIAN_YEAR_MS }, 1_793_520_000_000))
+      .toBe(2_109_096_000_000);
+  });
+  it('should refuse over-cap durations and unsafe deadline sums', () => {
+    expect(() => computeRetentionDeadline(
+      { kind: 'finite', durationMs: TEN_JULIAN_YEAR_MS + 1 }, 1_793_520_000_000,
+    )).toThrowError(expect.objectContaining({ code: 'invalid_retention' }));
+    expect(() => computeRetentionDeadline(
+      { kind: 'finite', durationMs: 1 }, Number.MAX_SAFE_INTEGER,
+    )).toThrowError(expect.objectContaining({ code: 'invalid_retention' }));
+  });
+  it('should refuse admission with an over-cap channel duration', () => {
+    const store = createPolicyStore(gates());
+    const channels = {
+      ...POLICY.channels,
+      'terminal.cache': { enabled: true, retention: { kind: 'finite', durationMs: TEN_JULIAN_YEAR_MS + 1 } },
+    };
+    expect(() => store.admitPolicy(shareInput({ policy: { ...POLICY, channels } })))
+      .toThrowError(expect.objectContaining({ code: 'invalid_request' }));
+  });
+  it('should refuse admission with zero owner consent revision (r2 W-P2-4 fence)', () => {
+    const store = createPolicyStore(gates());
+    expect(() => store.admitPolicy(shareInput({ ownerConsentRevision: 0 })))
+      .toThrowError(expect.objectContaining({ code: 'revision_conflict' }));
+  });
+  it('should refuse a non-safe-integer first-admission deadline', () => {
+    const store = createPolicyStore(gates());
+    expect(() => store.admitPolicy(shareInput({ retentionExpiresAt: Number.MAX_SAFE_INTEGER + 1 })))
+      .toThrowError(expect.objectContaining({ code: 'invalid_request' }));
   });
 });
