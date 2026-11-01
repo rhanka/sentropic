@@ -72,8 +72,8 @@
   - [ ] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
   - [ ] Ports: `API_PORT=8802 UI_PORT=5188 MAILDEV_UI_PORT=1095 ENV=test-rc2-store`
 - [ ] **Lot 1 — Tests first (red)**
-  - [ ] Add `api/tests/api/session-content-receiver.test.ts` (STORE: F2-01 proposal/proof/activation, F2-02 post-ACK boundary, F2-05 retention/purge, denial races, immutable deadlines)
-  - [ ] Add `api/tests/unit/remote-action-audit.test.ts` (STORE-ERASURE: audit/payload/backup separation, writer-settled purge)
+  - [x] Add `api/tests/api/session-content-receiver.test.ts` (STORE: F2-01 proposal/proof/activation, F2-02 post-ACK boundary, F2-05 retention/purge, denial races, immutable deadlines)
+  - [x] Add `api/tests/unit/remote-action-audit.test.ts` (STORE-ERASURE: audit/payload/backup separation, writer-settled purge)
   - [ ] Run red campaign scoped under flock: `flock .tmp/packets/DOCKER-LOCK.md make test-api-endpoints SCOPE=tests/api/session-content-receiver.test.ts API_PORT=8802 UI_PORT=5188 MAILDEV_UI_PORT=1095 ENV=test-rc2-store`
   - [ ] Run red unit scope: `flock .tmp/packets/DOCKER-LOCK.md make test-api-unit SCOPE=tests/unit/remote-action-audit.test.ts API_PORT=8802 UI_PORT=5188 MAILDEV_UI_PORT=1095 ENV=test-rc2-store`
   - [ ] Lot gate:
