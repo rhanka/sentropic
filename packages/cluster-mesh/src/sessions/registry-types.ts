@@ -136,6 +136,12 @@ export type EmitResult =
   | { readonly status: 'enqueued'; readonly queued: number }
   | { readonly status: 'dropped'; readonly dropped: number };
 
+export interface ListingRow {
+  readonly visibility: Visibility;
+  readonly projection: CoarseProjection;
+  readonly state: SessionState;
+}
+
 export interface RegistryInput {
   readonly originInstanceId: string;
   readonly now?: () => number;
