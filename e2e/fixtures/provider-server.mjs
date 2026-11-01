@@ -123,13 +123,14 @@ export function journeyResponse(body) {
   if (/"dossier"/.test(user) && /"initiatives"/.test(user)) {
     const count = Number(text.match(/(?:exactement|à générer:|a generer:)\s*(\d+)/i)?.[1] ?? 3);
     if (count < 1 || count > 50) throw new Error('Unexpected initiative count');
-    return json({ dossier: 'AI opportunities', domains: [{ id: 'operations', label: 'Operations' }],
+    const domains = ['operations', 'service', 'data', 'compliance', 'sales'].map(id => ({ id, label: id }));
+    return json({ dossier: 'AI opportunities', domains,
       initiatives: Array.from({ length: count }, (_, i) => ({ titre: `AI initiative ${i + 1}`,
         description: 'Improve operational quality using verified data [1].', ref: references[0].url, domainId: 'operations' })) });
   }
-  if (/"synthese_executive"/.test(user)) return json({ executive_summary: {
+  if (/"synthese_executive"/.test(user)) return json({
     introduction: 'Portfolio overview', analyse: 'Value and complexity analysis',
-    recommandation: 'Validate the selected initiatives', synthese_executive: 'Operational improvements', references } });
+    recommandation: 'Validate the selected initiatives', synthese_executive: 'Operational improvements', references });
   if (/"valueAxes"/.test(user) && /"levelDescriptions"/.test(user)) {
     const axes = ids => ids.map(axisId => ({ axisId,
       levelDescriptions: Array.from({ length: 5 }, (_, i) => ({ level: i + 1, description: `Observable qualification level ${i + 1}` })) }));
@@ -137,7 +138,8 @@ export function journeyResponse(body) {
       complexityAxes: axes(['implementation_effort', 'data_compliance', 'data_availability', 'change_management']) });
   }
   if (/"valueScores"/.test(user) && /"complexityScores"/.test(user)) {
-    const result = { name: 'AI initiative', description: 'Improve operational quality using verified data [1].',
+    const name = user.match(/"name"\s*:\s*"([^"]+)"/)?.[1] ?? 'AI initiative';
+    const result = { name, description: 'Improve operational quality using verified data [1].',
       problem: 'Operational data needs consistent validation.', solution: 'Apply a repeatable validation process.',
       leadtime: 'Pilot validation', prerequisites: 'Validated data access', contact: 'Product owner', references,
       valueScores: [{ axisId: 'business_value', rating: 55, description: 'Measured business benefit' }],
