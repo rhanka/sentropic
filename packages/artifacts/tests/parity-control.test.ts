@@ -33,6 +33,8 @@ describe('P0 control contracts', () => {
     const first = createArtifactCommand(profile, 'artifacts_delete', args, authority, derivation);
     const confirmed = createArtifactCommand(profile, 'artifacts_delete', { ...args, confirmationRef: 'proof' }, authority, derivation);
     expect(first.identity).toEqual(confirmed.identity);
+    expect(() => profile.validate('artifacts_delete', { ...args, confirmed: true })).toThrow();
+    expect(() => profile.validate('artifacts_delete', { ...args, idempotencyKey: 'a'.repeat(257) })).toThrow();
   });
   it('should prevent legacy restoration after terminal deletion', async () => {
     const store = createMemoryLifecycleStore();
