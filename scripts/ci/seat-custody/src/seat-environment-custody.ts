@@ -208,6 +208,16 @@ export class SyntheticEnvironmentApi {
   }
 }
 
+// Later-run (cross-process) read-back guard over an immutable run snapshot: the same
+// writer/native separation and availability rules as the live readSecret apply to a
+// snapshot taken by a newly queued N+1 workflow.
+export function readSnapshotSecret(snapshot: Record<string, Record<string, string>>, env: string, name: string): string {
+  if (name.startsWith('SEAT_STATE_') && env !== 'security-seat-writer') throw new Error('writer-native-separation');
+  const value = snapshot[env]?.[name];
+  ensure(value !== undefined, 'secret-unavailable');
+  return value;
+}
+
 export type RoundtripOptions = {
   cli: string; slot: string; writerRunId: string; writerRunAttempt: number;
   sameRun?: boolean; wrongGeneration?: boolean; refreshBearing?: boolean; projectionFirst?: boolean;
