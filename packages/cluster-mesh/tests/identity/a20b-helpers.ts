@@ -99,10 +99,24 @@ export const openSqliteEnv = (): SqliteEnv => {
   const path = join(dir, 'custody.db');
   const build = (): SqliteEnv => {
     const engine = openSqliteEngine({ path, moduleId: 'identity-a20b' });
-    for (const ddl of identitySchemaStatements('sqlite', '')) engine.db.exec(ddl);
-    engine.db.exec(IDENTITY_A22_SQLITE_DDL);
-    applyIdentitySqliteSchema(engine.db);
-    const host = createSqliteIdentityHostV1({ connection: engine.db });
+    // One transaction for the whole DDL batch (SQLite DDL is transactional):
+    // with synchronous=FULL each autocommitted statement would fsync on its
+    // own, which dominates setup cost on a loaded host. Same statements, one
+    // commit — mirrors the single-transaction DDL batch in openPostgresEnv.
+    engine.db.exec('BEGIN IMMEDIATE');
+    try {
+      for (const ddl of identitySchemaStatements('sqlite', '')) engine.db.exec(ddl);
+      engine.db.exec(IDENTITY_A22_SQLITE_DDL);
+      applyIdentitySqliteSchema(engine.db);
+      engine.db.exec('COMMIT');
+    } catch (error) {
+      try { engine.db.exec('ROLLBACK'); } catch { /* already rolled back */ }
+      engine.close();
+      throw error;
+    }
+    // Schema is already applied above in one transaction; skip the host's own
+    // per-statement autocommitted re-application.
+    const host = createSqliteIdentityHostV1({ connection: engine.db, applySchema: false });
     const unitOfWork = createSqliteIdentityUnitOfWorkV1({ host });
     const env: SqliteEnv = {
       profile: 'sqlite',
