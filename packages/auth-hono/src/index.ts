@@ -27,6 +27,7 @@ export * from './oauth/redirect-utils.js';
 export * from './oauth/router.js';
 export * from './oauth/revoke-handler.js';
 export * from './oauth/refresh-types.js';
+export * from './oauth/offline-policy.js';
 export * from './oauth/service-auth-middleware.js';
 export * from './oauth/session-resolver.js';
 export * from './oauth/state-store-types.js';
