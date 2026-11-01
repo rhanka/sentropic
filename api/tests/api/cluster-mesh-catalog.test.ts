@@ -10,7 +10,11 @@ import {
   ROOT_MOUNTED_NAMESPACE_REGISTRY,
 } from '../../src/app';
 import { db } from '../../src/db/client';
-import { chatMessages, chatSessions, tenantMemberships, userSessions } from '../../src/db/schema';
+import { chatMessages, chatSessions } from '../../src/db/schema';
+import { setCmMembershipState } from '../../src/services/identity/cm-tenancy';
+import { listCmSessionsForUser, revokeCmSession } from '../../src/services/identity/cm-sessions';
+import { PLATFORM_TENANT_ID } from '../../src/services/workspace-service';
+import { cmDeleteTenantMembershipsForUser } from '../utils/cm-identity-test-store';
 import { resolveHttpCatalogContext } from '../../src/services/catalog/request-authority';
 import { revalidateCatalogInvocation } from '../../src/services/catalog/request-context';
 import { compositeCatalogRegistry, resolveFoundationChatTools, executeFoundationSearchCatalog } from '../../src/services/skills/catalog';
@@ -128,7 +132,7 @@ describe('cluster mesh catalog product authority', () => {
   beforeEach(async () => {
     await clearCutover();
     user = await createAuthenticatedUser('editor');
-    await db.insert(tenantMemberships).values({ userId: user.id, tenantId: 'sentropic', status: 'approved' });
+    await setCmMembershipState(user.id, PLATFORM_TENANT_ID, { status: 'approved', role: 'member', decidedBy: 'test' });
   });
 
   afterEach(async () => {
@@ -141,7 +145,7 @@ describe('cluster mesh catalog product authority', () => {
 
   it('should expose compiled host tools through mounted discovery, search and model selection', async () => {
     vi.stubEnv('APP_ARTIFACT_HOST_ENABLED', '1');
-    const [session] = await db.select().from(userSessions).where(eq(userSessions.userId, user.id));
+    const [session] = await listCmSessionsForUser(user.id);
     const context = await resolveHttpCatalogContext({ userId: user.id, sessionId: session.id,
       workspaceId: user.workspaceId!, role: 'editor' });
     expect(compositeCatalogRegistry.getSources(context).filter(source => source.kind === 'mcp')
@@ -157,7 +161,7 @@ describe('cluster mesh catalog product authority', () => {
       allowedTools: [], context });
     expect(tools.filter(tool => tool.type === 'function').map(tool => tool.function.name)).toEqual(expect.arrayContaining(names));
     const other = await createAuthenticatedUser('guest');
-    await db.insert(tenantMemberships).values({ userId: other.id, tenantId: 'sentropic', status: 'approved' });
+    await setCmMembershipState(other.id, PLATFORM_TENANT_ID, { status: 'approved', role: 'member', decidedBy: 'test' });
     const denied = await authenticatedRequest(productApp, 'GET',
       '/api/v1/catalog/entries/artifacts_publish', other.sessionToken!);
     expect(denied.status).toBe(404);
@@ -173,7 +177,7 @@ describe('cluster mesh catalog product authority', () => {
     await db.insert(chatMessages).values({ id: messageId, sessionId, role: 'assistant', sequence: 0 });
     const invoke = vi.spyOn(productArtifactTransport, 'invoke').mockResolvedValue({ status: 201, body: { artifactId: 'one' } });
     // Await request-bound plan preparation through the same authority entry as HTTP discovery.
-    const [session] = await db.select().from(userSessions).where(eq(userSessions.userId, user.id));
+    const [session] = await listCmSessionsForUser(user.id);
     await resolveHttpCatalogContext({ userId: user.id, sessionId: session.id, workspaceId: user.workspaceId!, role: 'editor' });
     const args = { bindingName: 'report', idempotencyKey: 'one' };
     let sequence = 0;
@@ -190,13 +194,13 @@ describe('cluster mesh catalog product authority', () => {
       tenantId: 'sentropic', clientId: 'sentropic-turn',
       credentialId: JSON.stringify(['turn', sessionId, user.workspaceId, []]) }), user.workspaceId,
     ['mcp:tools:invoke'], 'artifacts_ensure', args);
-    await db.delete(tenantMemberships).where(eq(tenantMemberships.userId, user.id));
+    await cmDeleteTenantMembershipsForUser(user.id);
     await expect(call()).resolves.toMatchObject({ result: { error: 'catalog_access_denied' } });
     expect(invoke).toHaveBeenCalledOnce();
   });
 
   it('matches direct canonical deterministic discovery without a predecessor shadow', async () => {
-    const [session] = await db.select().from(userSessions).where(eq(userSessions.userId, user.id));
+    const [session] = await listCmSessionsForUser(user.id);
     const context = await resolveHttpCatalogContext({ userId: user.id, sessionId: session.id,
       workspaceId: user.workspaceId!, role: 'editor' });
     const directSearch = productCatalogDiscovery.search({
@@ -245,7 +249,7 @@ describe('cluster mesh catalog product authority', () => {
   });
 
   it('should deny all mounted discovery paths after tenant membership is revoked', async () => {
-    await db.delete(tenantMemberships).where(eq(tenantMemberships.userId, user.id));
+    await cmDeleteTenantMembershipsForUser(user.id);
     for (const suffix of ['entries', 'entries/workspace', 'search?query=workspace', 'sources']) {
       const response = await authenticatedRequest(productApp, 'GET', `/api/v1/catalog/${suffix}`, user.sessionToken!);
       expect(response.status).toBe(403);
@@ -255,7 +259,7 @@ describe('cluster mesh catalog product authority', () => {
 
   it('should isolate interleaved mounted discovery for two real users and workspaces', async () => {
     const other = await createAuthenticatedUser('guest');
-    await db.insert(tenantMemberships).values({ userId: other.id, tenantId: 'sentropic', status: 'approved' });
+    await setCmMembershipState(other.id, PLATFORM_TENANT_ID, { status: 'approved', role: 'member', decidedBy: 'test' });
     expect(other.workspaceId).not.toBe(user.workspaceId);
     standaloneToolSource.register({ tool: { name: 'catalog_context_probe', description: 'Private mutation probe',
       inputSchema: {}, sideEffect: true }, handler: vi.fn() });
@@ -264,21 +268,21 @@ describe('cluster mesh catalog product authority', () => {
     const responses = await Promise.all([discover(user), discover(other), discover(other), discover(user)]);
     expect(responses.map(response => response.status)).toEqual([200, 404, 404, 200]);
     await expect(responses[0].json()).resolves.toMatchObject({ item: { metadata: { name: 'catalog_context_probe' } } });
-    await db.delete(tenantMemberships).where(eq(tenantMemberships.userId, other.id));
+    await cmDeleteTenantMembershipsForUser(other.id);
     const [denied, allowed] = await Promise.all([discover(other), discover(user)]);
     expect(denied.status).toBe(403);
     expect(allowed.status).toBe(200);
   });
 
   it('should reject stale session authority and foreign workspace selectors before execution', async () => {
-    const [session] = await db.select().from(userSessions).where(eq(userSessions.userId, user.id));
+    const [session] = await listCmSessionsForUser(user.id);
     const authenticated = { userId: user.id, sessionId: session.id, workspaceId: user.workspaceId!, role: 'editor' };
     const context = await resolveHttpCatalogContext(authenticated);
     await authenticatedRequest(productApp, 'GET', '/api/v1/catalog/sources', user.sessionToken!);
     await expect(revalidateCatalogInvocation(context, 'workspace_list', {})).resolves.toMatchObject({ subjectId: user.id });
     await expect(resolveHttpCatalogContext({ ...authenticated, workspaceId: 'foreign-workspace' }))
       .rejects.toThrow('catalog_access_denied');
-    await db.delete(userSessions).where(eq(userSessions.id, session.id));
+    await revokeCmSession(session.id);
     await expect(revalidateCatalogInvocation(context, 'workspace_list', {})).rejects.toThrow('catalog_access_denied');
   });
 
@@ -301,7 +305,7 @@ describe('cluster mesh catalog product authority', () => {
       isAllowedOrganizationId: async () => false,
       tools: [{ type: 'function', function: { name: 'catalog_context_probe', parameters: {} } }] });
     await expect(invoke()).resolves.toMatchObject({ result: { actor: user.id, workspace: user.workspaceId } });
-    await db.delete(tenantMemberships).where(eq(tenantMemberships.userId, user.id));
+    await cmDeleteTenantMembershipsForUser(user.id);
     await expect(invoke()).resolves.toMatchObject({ result: { error: 'catalog_access_denied' } });
     expect(handler).toHaveBeenCalledOnce();
   });
