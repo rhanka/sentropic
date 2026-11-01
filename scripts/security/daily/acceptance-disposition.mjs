@@ -16,6 +16,14 @@ export const L08A_ACCEPTANCE = [
   { id: 'T6-M1', owner: 'ACT-L03b/ACT-L08a/ACT-L10a', destinations: ['control-provisioning.test.mjs'], tests: [], disposition: 'shared-disposition-enumeration', suite: 'test-security-daily' },
 ];
 
+export const L05_ACCEPTANCE = [
+  { id: 'L5-A', owner: 'ACT-L05', destinations: ['target-custody.test.mjs', 'trivy.test.mjs'], tests: [], disposition: 'exact-three-image-main-cohort-with-immutable-remote-scan', suite: 'test-security-daily' },
+  { id: 'L5-B', owner: 'ACT-L05', destinations: ['target-custody.test.mjs'], tests: [], disposition: 'target-scoped-acquisition-boundary-with-anonymous-public-pull', suite: 'test-security-daily' },
+  { id: 'L5-C', owner: 'ACT-L05', destinations: ['rebuild-isolation.test.mjs'], tests: [], disposition: 'isolated-rebuild-with-verified-receipt', suite: 'test-security-daily' },
+  { id: 'L5-D', owner: 'ACT-L05', destinations: ['report-transfer.test.mjs'], tests: [], disposition: 'chunked-public-report-transfer-with-forgery-rejection', suite: 'test-security-daily' },
+  { id: 'L5-E', owner: 'ACT-L05', destinations: ['report-transfer.test.mjs'], tests: [], disposition: 'measured-transfer-budget-with-independent-report-storage', suite: 'test-security-daily' },
+];
+
 export function validateDisposition(rows) {
   const errors = [];
   for (const row of rows) {
