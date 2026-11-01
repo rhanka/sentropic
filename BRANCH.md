@@ -39,12 +39,14 @@
   - [ ] `scripts/ci/browser-shards.test.mjs`
   - [ ] `scripts/ci/live-provider-receipt.mjs`
   - [ ] `scripts/ci/live-provider-receipt.test.mjs`
+  - [ ] `scripts/ci/dev-image-pin.test.mjs`
 - [ ] **Forbidden Paths (must not change in this branch)**:
   - [ ] `.cursor/rules/**`; `api/drizzle/*.sql`.
   - [ ] `plan/NN-BRANCH_*.md` except this branch file; `PLAN.md`; `.track/**`; production deployment configuration.
 - [ ] **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - [ ] `.github/workflows/ci.yml` under BR81-EX1; `Makefile` under BR81-EX2.
   - [ ] `.github/workflows/llm-live-daily.yml` under BR81-EX3; `docker-compose.ci-provider.yml` under BR81-EX4 (both new).
+  - [ ] `docker-compose.dev.yml` under BR81-EX5 (one `api` image line).
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
@@ -55,7 +57,9 @@
 - [x] BR81-EX2 — Declared Makefile exception: change `test-api-*`, `test-e2e`, and `test-e2e-vscode` startup; add fixture, shard-manifest, and live-receipt tests; one Playwright process per shard. Impact: named CI entry points only. Rollback: restore the previous recipes and rerun their qualification.
 - [x] BR81-EX3 — Declared daily workflow exception for the exact selected tuple; impact: daily calls/cost and schedule monitoring; rollback: restore prior live execution ownership with visible schedule status.
 - [x] BR81-EX4 — Declared isolated provider fixture service overlay; impact: test networks only; rollback: remove the overlay and restore prior test startup, with no production endpoint bypass.
+- [x] BR81-EX5 — Declared dev-overlay image exception: `docker-compose.dev.yml` `api` pins the development tag verbatim (base fallback minus `API_IMAGE_REF`); base and CI overlays keep the pin for SUT lanes. Reason: the canonical-artifact pin (merged to main after this plan) redirects every dev-stack `build`/`run`/`up` at the npm-less production digest once a receipt exists. Impact: dev/test stacks only; SUT/production resolution unchanged. Rollback: delete the added `image:` line. Regression guard: `scripts/ci/dev-image-pin.test.mjs` wired into the CI deterministic gate.
 - [ ] Record failed acceptance with run/attempt/job IDs and a responsible branch owner; do not mark an unmet budget as done.
+- [x] 2026-11-01 Lot 5 rerun 1 FAILED at `make test-api` (rc=2, 617s): `sh: npm: not found` in `prepare-node-workspace`. Root cause: the canonical-artifact receipt (`.tmp/ci-prod-image/api-image-id`, main mechanism newer than this plan) is exported as `API_IMAGE_REF` (Makefile line 80), so the dev `api` service resolved to the production digest, which ships without npm. First attempted in `755d28b8f` as Makefile recipe overrides (reverted as redundant); final fix under BR81-EX5 keeps one mechanism. Local Lot 5 order runs API/UI regression before `build-api` so E2E keeps the exact production tuple.
 - [x] Offline receipt checks reject unpublished main tuples and paginate all job/artifact rows; application qualification is pending.
 - [x] Daily preparation reuses published images only after the existing source/tree/workflow/profile/run/image validator accepts them. Retain two small identity receipts for 30 days; preserve transport archive deletion and one-day expiry.
 - [ ] `attention`, owner: BR-81 author and CI-train conductor; `gw-native-qualification.test.ts` requires operator UAT evidence, two authorized sessions and an active metered partition. None is available locally. Owner clarification is pending; do not fabricate readiness, drop the suite or treat it as qualified.
