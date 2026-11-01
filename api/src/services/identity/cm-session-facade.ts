@@ -1,4 +1,5 @@
-import type { AuthHonoSessionService } from '@sentropic/auth-hono';
+import type { AuthHonoDeviceInfo, AuthHonoSessionService } from '@sentropic/auth-hono';
+import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
 import { withAppCmAuth } from './cm-auth-runtime';
 
 /** Root calls enter CM; transaction-bound consumers use binding.sessions directly. */
@@ -16,3 +17,10 @@ export const cmAuthSessionService: AuthHonoSessionService = {
     return result.committed ? result.value : null;
   }),
 };
+
+export const createCmLoginForSubject = (userId: string, deviceInfo?: AuthHonoDeviceInfo) =>
+  withAppCmAuth(runner => runner.request(async binding => {
+    const user = await binding.ports.users.findById(userId);
+    if (!user) throw new IdentityCustodyErrorV1('identity_material_missing');
+    return binding.sessions.createSession({ user, deviceInfo, mfaVerified: false });
+  }));
