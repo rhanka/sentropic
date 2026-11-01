@@ -11,7 +11,7 @@ const sessionRef: SessionRef = {
   incarnation: 'incarnation-1',
 };
 
-function viewerRegistry() {
+async function viewerRegistry() {
   const registry = createSessionOriginRegistry({
     originInstanceId: 'origin-B',
     now: () => 1_793_520_000_000,
@@ -29,36 +29,40 @@ function viewerRegistry() {
     withdrawn: false,
     futureSessionsOptIn: false,
   });
-  registry.ingestLifecycle(
-    { id: 'process-1', revision: 1, digest: '0'.repeat(64) },
-    {
+  await registry.ingestLifecycle({
+    processBindingRef: { id: 'process-1', revision: 1, digest: '0'.repeat(64) },
+    fact: {
       kind: 'started',
       sourceRef: { sourceSessionId: 'src-1', sourceGeneration: 1, streamIncarnation: 'stream-1' },
       sourceAt: 1_793_520_000_000,
       factRef: { id: 'fact-1', revision: 1, digest: '1'.repeat(64) },
     },
-  );
+  });
   registry.commitSourceAck({ ...sessionRef }, 'AAAAAAAAAAAAAAAAAAAAAA', '2'.repeat(64));
   return registry;
 }
 
 describe('RC2.registry REGISTRY-LISTING api selectors (session-remote-view)', () => {
-  it('should expose a coarse row with the exact allowlist and no forbidden field', () => {
-    const registry = viewerRegistry();
-    const published = registry.publishListing({ ...sessionRef }, { id: 'AAAAAAAAAAAAAAAAAAAAAA', revision: 1, digest: '3'.repeat(64) });
+  it('should expose a coarse row with the exact allowlist and no forbidden field', async () => {
+    const registry = await viewerRegistry();
+    const published = await registry.publishListing({
+      sessionRef: { ...sessionRef },
+      grantRef: { id: 'AAAAAAAAAAAAAAAAAAAAAA', revision: 1, digest: '3'.repeat(64) },
+    });
     expect(published.status).toBe('remote-committed');
     if (published.status !== 'remote-committed') return;
     expect(Object.keys(published.projection).sort()).toEqual(
       ['engineKind', 'originRevision', 'providerClass', 'sessionRef', 'state'],
     );
+    expect(published.projectionDigest).toMatch(/^[a-f0-9]{64}$/);
     const serialized = JSON.stringify(published.projection);
     for (const field of FORBIDDEN_LISTING_FIELDS) {
       expect(serialized).not.toContain(field);
     }
   });
 
-  it('should show no row without a grant and downgrade the row on read loss', () => {
-    const registry = viewerRegistry();
+  it('should show no row without a grant and downgrade the row on read loss', async () => {
+    const registry = await viewerRegistry();
     expect(registry.getListingRow({ ...sessionRef })?.visibility).toBe('listing');
     registry.grantActivatedRead({ ...sessionRef });
     expect(registry.getListingRow({ ...sessionRef })?.visibility).toBe('activated');
