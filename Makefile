@@ -2800,7 +2800,7 @@ test-e2e: up-e2e wait-ready db-seed-test e2e-set-queue ## Run E2E tests with Pla
 	      set -- "tests/($$groups)[-_].*\\.spec\\.ts$$"; \
 	    fi; \
 	    receipt="test-results/browser-$${E2E_SHARD:-scoped}"; \
-	    npx --no-install playwright test "$$@" --project=chromium --list --reporter=json > "$$receipt.expected.json"; \
+	    PLAYWRIGHT_JSON_OUTPUT_FILE="$$receipt.expected.json" npx --no-install playwright test "$$@" --project=chromium --list --reporter=json; \
 	    status=0; PLAYWRIGHT_JSON_OUTPUT_FILE="$$receipt.actual.json" npx --no-install playwright test "$$@" \
 	      --project=chromium --workers="$$workers" --retries="$$retries" --reporter=list,json $$extra || status=$$?; \
 	    node /app/browser-shards.mjs reconcile "$$receipt.expected.json" "$$receipt.actual.json" || status=1; \
@@ -2930,7 +2930,7 @@ up-api: prepare-node-workspace ## Start the api stack in detached mode
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml up --build -d api --wait api
 
 .PHONY: up-api-test
-up-api-test: prepare-node-workspace ## Start the api stack in detached mode with DISABLE_RATE_LIMIT=true
+up-api-test: ci-test-env prepare-node-workspace ## Start the api stack in detached mode with DISABLE_RATE_LIMIT=true
 	DISABLE_RATE_LIMIT=true $(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml $(CI_PROVIDER_OVERLAY) up --build -d api --wait api
 
 .PHONY: up-api-test-ci
