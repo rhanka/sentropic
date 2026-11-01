@@ -4,7 +4,9 @@ import { eq } from 'drizzle-orm';
 import { app } from '../../../src/app';
 import { db, pool } from '../../../src/db/client';
 import { getSentropicOAuthPorts } from '../../../src/routes/auth/oauth';
-import { oauthClients, oauthConsents, users } from '../../../src/db/schema';
+import { oauthClients, oauthConsents } from '../../../src/db/schema';
+import { updateCmUser } from '../../../src/services/identity/cm-users';
+import { listCmSessionsForUser } from '../../../src/services/identity/cm-sessions';
 import { createJwksAdapter } from '../../../src/services/auth/jwks-adapter';
 import { cleanupAuthData, createTestUser } from '../../utils/auth-helper';
 
@@ -122,8 +124,8 @@ describe('host OAuth refresh HTTP integration', () => {
   it.each(['account', 'consent', 'security'])('should invalidate %s authority without restoration revival', async (kind) => {
     const initial = await issue();
     if (kind === 'account') {
-      await db.update(users).set({ accountStatus: 'disabled_by_admin' }).where(eq(users.id, userId));
-      await db.update(users).set({ accountStatus: 'active' }).where(eq(users.id, userId));
+      await updateCmUser(userId, { accountStatus: 'disabled_by_admin' });
+      await updateCmUser(userId, { accountStatus: 'active' });
     } else if (kind === 'consent') await db.delete(oauthConsents).where(eq(oauthConsents.userId, userId));
     else {
       const { deleteAndQueueRemoteSessions } = await import('../../../src/services/auth/remote-revocation-outbox');
@@ -134,8 +136,7 @@ describe('host OAuth refresh HTTP integration', () => {
 
   it('should preserve consented offline authority after a local browser logout', async () => {
     const initial = await issue();
-    const { userSessions } = await import('../../../src/db/schema');
-    const [{ id: sessionId }] = await db.select({ id: userSessions.id }).from(userSessions).where(eq(userSessions.userId, userId));
+    const [{ id: sessionId }] = await listCmSessionsForUser(userId);
     const { deleteAndQueueRemoteSessions } = await import('../../../src/services/auth/remote-revocation-outbox');
     await deleteAndQueueRemoteSessions({ sessionId });
     expect((await post('token', { grant_type: 'refresh_token', refresh_token: initial.refresh_token })).status).toBe(200);
