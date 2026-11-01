@@ -15,6 +15,31 @@ describe('P0 source, control and summary transports', () => {
       invocation: world.invocation(actor), args: { artifactId, ...args } });
     return { world, artifactId, releaseId, call };
   }
+  it.each(['artifacts_set_access', 'artifacts_delete'])('should mask invisible artifacts for %s over HTTP and MCP', async (tool) => {
+    const { world, artifactId, releaseId, call } = await published();
+    const path = tool === 'artifacts_set_access' ? '/set_access' : '/delete';
+    const args = tool === 'artifacts_set_access'
+      ? { action: 'grant', principalId: 'alice', grant: 'read', idempotencyKey: 'probe' }
+      : { expectedCurrentReleaseId: releaseId, idempotencyKey: 'probe' };
+    const http = (id: string) => world.app.handle({ method: 'POST', path,
+      body: { artifactId: id, ...args }, actorId: 'bob' }, world.invocation('bob'));
+    const hidden = { status: 404, body: { error: 'not_found' } };
+    expect(await call(tool, args, 'bob')).toEqual(hidden);
+    expect(await http(artifactId)).toEqual(hidden);
+    const missingId = '00000000-0000-4000-8000-000000000099';
+    expect(await call(tool, { ...args, artifactId: missingId }, 'bob')).toEqual(hidden);
+    expect(await http(missingId)).toEqual(hidden);
+    expect((await call('artifacts_set_access', { action: 'grant', principalId: 'bob', grant: 'read',
+      idempotencyKey: 'share-probe' })).status).toBe(200);
+    const denied = { status: 403, body: { error: 'access_denied' } };
+    expect(await call(tool, args, 'bob')).toEqual(denied);
+    expect(await http(artifactId)).toEqual(denied);
+    await world.lifecycle.withdraw(artifactId, 'alice');
+    expect(await call(tool, args, 'bob')).toEqual(hidden);
+    expect(await http(artifactId)).toEqual(hidden);
+    expect(world.receipts.size).toBe(3);
+    expect(world.quotaReservations).toHaveLength(2);
+  });
   it('should share read access without source and revoke the next read', async () => {
     const { world, artifactId, call } = await published();
     const args = { action: 'grant', principalId: 'bob', grant: 'read', idempotencyKey: 'share' };

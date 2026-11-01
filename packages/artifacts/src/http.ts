@@ -103,11 +103,15 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
   const ensure = createGuardedEnsureService({ profile, coordinator: deps.coordinator,
     derivation: deps.derivation, host: deps.ensureHost });
 
-  async function visible(artifactId: string, invocation: ArtifactInvocationContext): Promise<ArtifactAcl> {
+  async function visible(artifactId: string, invocation: ArtifactInvocationContext, allowTerminalOwner = false): Promise<ArtifactAcl> {
     const acl = await deps.acls.getArtifactAcl(artifactId);
     if (!acl || acl.storageScopeId !== invocation.storageScopeId) throw new ArtifactOperationError('not_found');
     const state = await deps.lifecycle.stateOf(artifactId);
-    if (acl.ownerId === invocation.actorId && (state === 'deleted' || state === 'purged')) throw new ArtifactOperationError('gone');
+    if (acl.ownerId === invocation.actorId && (state === 'deleted' || state === 'purged')) {
+      // Management must still authorize terminal owners before replaying a receipt.
+      if (allowTerminalOwner) return acl;
+      throw new ArtifactOperationError('gone');
+    }
     if (!deps.lifecycle.canRead({ artifactId, state }, acl, invocation.actorId, 'read', deps.isApprovedAccount)) {
       throw new ArtifactOperationError('not_found');
     }
@@ -184,6 +188,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             commitState: 'not_committed', replayed: false };
         }
         if (capability === 'artifacts_set_access' || capability === 'artifacts_delete') {
+          await visible(normalized.artifactId as string, invocation, true);
           const outcome = await manageArtifact({ coordinator: deps.coordinator,
             createUnit: deps.management?.createUnit ?? createPostgresManagementUnit,
             confirmation: deps.management?.confirmation, readPolicyRevision: () => deps.ensureHost.readPolicyRevision(),
