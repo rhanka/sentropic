@@ -90,9 +90,9 @@
 - [ ] **Lot 2 — Store implementation (green)**
   - [ ] Add `packages/cluster-mesh/src/sessions/content-policy.ts` (channels, retention, policy digest domain, fail-closed gates)
   - [ ] Add `api/src/services/cluster-mesh/session-content-policy-store.ts` (admission CAS, activation ACK/receipt, capture reconnect grant, cursor/outbox, writer-settled purge)
-  - [ ] Extend `api/src/db/control-schema.ts` (policy admission/cursor/outbox/purge tables)
-  - [ ] Add `api/drizzle/control/0014_*.sql` + journal entry (`BR01-EX1`)
-  - [ ] Bump `packages/cluster-mesh/package.json` patch (`BR01-EX2`)
+  - [x] Extend `api/src/db/control-schema.ts` (policy admission/cursor/outbox/purge tables)
+  - [x] Add `api/drizzle/control/0014_*.sql` + journal entry (`BR01-EX1`)
+  - [x] Bump `packages/cluster-mesh/package.json` patch (`BR01-EX2`)
   - [ ] Lot gate:
     - [ ] `make typecheck-api` + `make lint-api` API_PORT=8802 UI_PORT=5188 MAILDEV_UI_PORT=1095 ENV=test-rc2-store
     - [ ] **API tests**
