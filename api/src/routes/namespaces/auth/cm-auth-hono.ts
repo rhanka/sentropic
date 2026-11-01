@@ -312,80 +312,6 @@ const resolveSentropicRegistrationUser: AuthHonoResolveRegistrationUser = async 
   return { userId: tempUserId };
 };
 
-const finalizeSentropicRegistration: AuthHonoFinalizeRegistration = async (
-  { credentialId, request, userId },
-  c
-) => {
-  const user = await findCmUserById(userId);
-
-  if (!user) {
-    logger.error({ userId }, 'User missing after registration');
-    return c.json(
-      { error: { code: 'user_not_found', message: 'User not found after registration.' } },
-      500
-    );
-  }
-
-  const otherDevices = (await listCmCredentialsForUser(userId))
-    .filter((cred) => cred.credentialId !== credentialId && !cred.revokedAt)
-    .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
-    .map((cred) => ({ createdAt: cred.createdAt, deviceName: cred.name, id: cred.id }));
-
-  const isFirstDevice = otherDevices.length === 0;
-
-  let effectiveRole: string = user.role;
-  if (user.accountStatus === 'approval_expired_readonly') effectiveRole = 'guest';
-  if (user.accountStatus === 'pending_admin_approval' && user.approvalDueAt && new Date() > user.approvalDueAt) {
-    effectiveRole = 'guest';
-  }
-
-  const session = await createSession(userId, effectiveRole, {
-    ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
-    name: request.deviceName,
-    userAgent: c.req.header('user-agent'),
-  });
-
-  const isProduction = process.env.NODE_ENV === 'production';
-  const origin = c.req.header('origin') || '';
-  let domainAttr = '';
-  try {
-    const { hostname } = new URL(origin);
-    if (hostname === 'localhost' || hostname === '127.0.0.1') {
-      domainAttr = 'Domain=localhost';
-    }
-  } catch {
-    // origin missing/malformed — skip Domain attribute
-  }
-
-  const cookieParts = [
-    `session=${session.sessionToken}`,
-    'HttpOnly',
-    isProduction ? 'Secure' : '',
-    'SameSite=Lax',
-    'Path=/',
-    domainAttr,
-    `Max-Age=${7 * 24 * 60 * 60}`,
-  ].filter(Boolean);
-  c.header('Set-Cookie', cookieParts.join('; '));
-
-  logger.info({ credentialId, emailVerified: true, isFirstDevice, role: user.role, userId }, 'Registration successful');
-
-  return c.json({
-    expiresAt: session.expiresAt.toISOString(),
-    isFirstDevice,
-    otherDevices: otherDevices.length > 0 ? otherDevices : undefined,
-    refreshToken: session.refreshToken,
-    sessionToken: session.sessionToken,
-    success: true,
-    user: {
-      displayName: user.displayName || null,
-      email: user.email,
-      id: user.id,
-      role: user.role,
-    },
-  });
-};
-
 /**
  * BR-39r L4 — pre-persist invite consume. The hook runs after WebAuthn
  * verification, before the credential row is written, and ATOMICALLY consumes
@@ -409,11 +335,3 @@ const resolveRegistrationBeforePersist = (
   };
 };
 
-export const registerHandlers = createAuthWebAuthnRegistrationRouteHandlers({
-  finalizeRegistration: finalizeSentropicRegistration,
-  prepareRegistrationOptions: prepareSentropicRegistrationOptions,
-  resolveBeforePersist: (input) =>
-    resolveRegistrationBeforePersist({ email: input.email, verificationToken: input.verificationToken }),
-  resolveRegistrationUser: resolveSentropicRegistrationUser,
-  service: authHonoWebAuthnRegistrationService,
-});
