@@ -11,7 +11,8 @@ const localHosts = new Set(['localhost', '127.0.0.1', '[::1]', 'api', 'api-sut',
   'ui', 'postgres', 'minio', 'scw-tem-mock', 'provider-fixture', 'openvscode']);
 
 // Loaded only from the read-only test overlay, never packaged in the application.
-export function installProviderBoundary({ endpoint, fetchImpl = globalThis.fetch } = {}) {
+export function installProviderBoundary({ endpoint, fetchImpl = globalThis.fetch, onUnexpected = () => {} } = {}) {
+  const originalFetch = globalThis.fetch;
   const target = new URL(endpoint);
   if (target.protocol !== 'http:' || !['provider-fixture', '127.0.0.1'].includes(target.hostname)
     || target.username || target.password || target.pathname !== '/') throw new Error('Invalid fixture endpoint');
@@ -19,7 +20,10 @@ export function installProviderBoundary({ endpoint, fetchImpl = globalThis.fetch
     const request = new Request(input, init);
     const url = new URL(request.url);
     if (localHosts.has(url.hostname)) return fetchImpl(request);
-    if (!upstreams.has(url.hostname)) throw new Error(`Unexpected CI egress: ${url.hostname}`);
+    if (!upstreams.has(url.hostname)) {
+      onUnexpected({ host: url.hostname });
+      throw new Error(`Unexpected CI egress: ${url.hostname}`);
+    }
     const headers = new Headers(request.headers);
     headers.delete('authorization');
     headers.delete('x-api-key');
@@ -29,7 +33,7 @@ export function installProviderBoundary({ endpoint, fetchImpl = globalThis.fetch
   };
   globalThis.fetch = guardedFetch;
   globalThis[boundaryKey] = true;
-  return () => { globalThis.fetch = fetchImpl; delete globalThis[boundaryKey]; };
+  return () => { globalThis.fetch = originalFetch; delete globalThis[boundaryKey]; };
 }
 
 export function createProviderServer({ respond = journeyResponse } = {}) {
@@ -48,8 +52,23 @@ export function createProviderServer({ respond = journeyResponse } = {}) {
         if (raw.length > 8_000_000) throw new Error('Fixture request too large');
       }
       const body = JSON.parse(raw);
+      if (req.headers['x-ci-upstream'] === 'api.tavily.com') {
+        if (!['/search', '/extract'].includes(req.url)) throw new Error('Unexpected web tool endpoint');
+        const extract = req.url === '/extract';
+        if (extract ? !Array.isArray(body.urls) || !body.urls.length : typeof body.query !== 'string' || !body.query.trim()) {
+          throw new Error('Unexpected web tool request shape');
+        }
+        receipt.calls++;
+        receipt.requests.push({ tool: extract ? 'web_extract' : 'web_search' });
+        res.setHeader('content-type', 'application/json');
+        return res.end(JSON.stringify({ results: extract
+          ? body.urls.map(url => ({ url, raw_content: 'Verified cloud-native Kubernetes platform evidence.' }))
+          : [{ title: 'Cloud-native platforms', url: 'https://example.com/reference', content: 'Kubernetes, containers and infrastructure-as-code.' }],
+        failed_results: [], response_time: 0.001 }));
+      }
+      if (req.url !== '/v1/chat/completions') throw new Error('Unexpected provider endpoint');
       if (!body.model || !Array.isArray(body.messages) || body.messages.length === 0) throw new Error('Expected model and messages');
-      if (!/^(mistral-|gpt-)/.test(body.model)) throw new Error('Unexpected model route');
+      if (!['mistral-small-2603', 'gpt-5.4-nano'].includes(body.model)) throw new Error('Unexpected model route');
       const outcome = await respond(body);
       receipt.calls++;
       receipt.models[body.model] = (receipt.models[body.model] ?? 0) + 1;
@@ -62,17 +81,17 @@ export function createProviderServer({ respond = journeyResponse } = {}) {
       const message = { role: 'assistant', content: outcome.content ?? null,
         ...(outcome.tool_calls ? { tool_calls: outcome.tool_calls } : {}) };
       const finish = outcome.tool_calls ? 'tool_calls' : 'stop';
-      const envelope = { id: 'ci-completion', created: 1, model: body.model,
-        usage: { prompt_tokens: 20, completion_tokens: 10, total_tokens: 30 } };
+      const envelope = { id: 'ci-completion', created: 1, model: body.model };
+      const usage = { prompt_tokens: 20, completion_tokens: 10, total_tokens: 30 };
       if (!body.stream) {
         res.setHeader('content-type', 'application/json');
-        return res.end(JSON.stringify({ ...envelope, object: 'chat.completion', choices: [{ index: 0, message, finish_reason: finish }] }));
+        return res.end(JSON.stringify({ ...envelope, usage, object: 'chat.completion', choices: [{ index: 0, message, finish_reason: finish }] }));
       }
       res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-cache' });
       let ended = false;
       res.on('close', () => { if (!ended) receipt.cancelled++; });
       const event = (delta, finish_reason = null) => res.write(`data: ${JSON.stringify({ ...envelope,
-        object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason }] })}\r\n\r\n`);
+        ...(finish_reason ? { usage } : {}), object: 'chat.completion.chunk', choices: [{ index: 0, delta, finish_reason }] })}\r\n\r\n`);
       if (outcome.malformed) return res.end('data: {invalid}\n\n');
       if (message.tool_calls) event({ tool_calls: message.tool_calls.map((tool, index) => ({ index, ...tool })) });
       else {
@@ -98,26 +117,26 @@ export function createProviderServer({ respond = journeyResponse } = {}) {
 export function journeyResponse(body) {
   const messages = body.messages;
   const text = messages.map(m => typeof m.content === 'string' ? m.content : JSON.stringify(m.content)).join('\n');
-  const user = messages.findLast(m => m.role === 'user')?.content ?? '';
+  const user = String(messages.findLast(m => m.role === 'user')?.content ?? '');
   const json = value => ({ content: JSON.stringify(value) });
   const references = [{ title: 'Provider protocol reference', url: 'https://example.com/reference', excerpt: 'Local qualification evidence.' }];
-  if (/"dossier"/.test(text) && /"initiatives"/.test(text)) {
+  if (/"dossier"/.test(user) && /"initiatives"/.test(user)) {
     const count = Number(text.match(/(?:exactement|à générer:|a generer:)\s*(\d+)/i)?.[1] ?? 3);
     if (count < 1 || count > 50) throw new Error('Unexpected initiative count');
     return json({ dossier: 'AI opportunities', domains: [{ id: 'operations', label: 'Operations' }],
       initiatives: Array.from({ length: count }, (_, i) => ({ titre: `AI initiative ${i + 1}`,
         description: 'Improve operational quality using verified data [1].', ref: references[0].url, domainId: 'operations' })) });
   }
-  if (/"synthese_executive"/.test(text)) return json({ executive_summary: {
+  if (/"synthese_executive"/.test(user)) return json({ executive_summary: {
     introduction: 'Portfolio overview', analyse: 'Value and complexity analysis',
     recommandation: 'Validate the selected initiatives', synthese_executive: 'Operational improvements', references } });
-  if (/"valueAxes"/.test(text) && /"levelDescriptions"/.test(text)) {
+  if (/"valueAxes"/.test(user) && /"levelDescriptions"/.test(user)) {
     const axes = ids => ids.map(axisId => ({ axisId,
       levelDescriptions: Array.from({ length: 5 }, (_, i) => ({ level: i + 1, description: `Observable qualification level ${i + 1}` })) }));
     return json({ valueAxes: axes(['business_value', 'time_criticality', 'risk_reduction_opportunity']),
       complexityAxes: axes(['implementation_effort', 'data_compliance', 'data_availability', 'change_management']) });
   }
-  if (/"valueScores"/.test(text) && /"complexityScores"/.test(text)) {
+  if (/"valueScores"/.test(user) && /"complexityScores"/.test(user)) {
     const result = { name: 'AI initiative', description: 'Improve operational quality using verified data [1].',
       problem: 'Operational data needs consistent validation.', solution: 'Apply a repeatable validation process.',
       leadtime: 'Pilot validation', prerequisites: 'Validated data access', contact: 'Product owner', references,
@@ -126,7 +145,7 @@ export function journeyResponse(body) {
     for (const key of ['technologies', 'benefits', 'metrics', 'risks', 'constraints', 'nextSteps', 'dataSources', 'dataObjects']) result[key] = ['Verified operational evidence'];
     return json(result);
   }
-  if (/"industry"/.test(text) && /"products"/.test(text) && !body.tools?.some(t => t.function?.name === 'organization_update')) {
+  if (/"industry"/.test(user) && /"products"/.test(user) && !body.tools?.some(t => t.function?.name === 'organization_update')) {
     return json({ industry: 'Manufacturing', size: 'Enterprise', products: 'Industrial products', processes: 'Quality control',
       kpis: 'Quality and adoption', challenges: 'Data integration', objectives: 'Improve operations', technologies: 'Cloud platforms', references });
   }
@@ -137,9 +156,12 @@ export function journeyResponse(body) {
   const id = kind => String(user).match(new RegExp(`${kind}Id[=\\s:\\"']+([\\w-]+)`, 'i'))?.[1]
     ?? text.match(new RegExp(`(?:${kind}Id|${kind}_id)[=\\s:\\"']+([\\w-]+)`, 'i'))?.[1]
     ?? text.match(new RegExp(`${kind} (?:with id )?([a-z0-9_-]{10,})`, 'i'))?.[1]
+    ?? text.match(new RegExp(`${({ organization: 'organisation', folder: 'dossier' })[kind] ?? kind} ([a-z0-9_-]{10,})`, 'i'))?.[1]
     ?? text.match(/"(?:contextId|id)"\s*:\s*"([\w-]+)"/)?.[1];
   const call = (name, args) => {
     if (!tools.includes(name)) throw new Error(`Journey requires unavailable tool: ${name}`);
+    const schema = body.tools.find(tool => tool.function?.name === name).function.parameters;
+    for (const key of schema?.required ?? []) if (args[key] == null) throw new Error(`Missing journey tool argument: ${name}.${key}`);
     return { tool_calls: [{ id: `ci_tool_${results.length}`, type: 'function', function: { name, arguments: JSON.stringify(args) } }] };
   };
   if (results.length === 0) {
@@ -161,7 +183,8 @@ export function journeyResponse(body) {
 const overlayImport = import.meta.url === 'file:///run/ci-provider/provider-server.mjs';
 if (overlayImport && process.env.CI_PROVIDER_FIXTURE === '1') {
   if (readFileSync('/run/ci-provider/marker', 'utf8').trim() !== 'sentropic-ci-provider-v1') throw new Error('Missing fixture marker');
-  installProviderBoundary({ endpoint: 'http://provider-fixture:7777/' });
+  installProviderBoundary({ endpoint: 'http://provider-fixture:7777/', onUnexpected: row =>
+    appendFileSync('/run/ci-live/unexpected-egress.jsonl', `${JSON.stringify(row)}\n`) });
 }
 if (overlayImport && process.env.CI_PROVIDER_MODE === 'live') {
   if (!/^(test|e2e)-/.test(process.env.CI_PROVIDER_ENV ?? '')) throw new Error('Live observation requires a test environment');
