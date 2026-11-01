@@ -3525,7 +3525,7 @@ security-daily-scan: ## Emit a local raw receipt; incomplete coverage exits nonz
 		sh -ec 'tool_dir="$$(mktemp -d)"; node /workspace/scripts/ci/locked-tools.mjs --prefix "$$tool_dir" --ignore-scripts --no-save --no-audit --no-fund yaml@2.8.1 semver@7.7.2 >/dev/null; export MANIFEST_GUARD_TOOL_DIR="$$tool_dir"; node scripts/security/daily/scan.mjs'
 
 test-security-daily: ## Run daily inventory, schema and adapter regressions in the approved pinned Node lane
-	@$(MAKE) test-publishable-manifests MANIFEST_GUARD_IMAGE="$(MEMORY_L5_NODE_IMAGE)" SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs scripts/security/daily/scan.test.mjs scripts/security/daily/toolchain-contract.test.mjs scripts/security/daily/trivy.test.mjs" ENV=$(ENV)
+	@$(MAKE) test-publishable-manifests MANIFEST_GUARD_IMAGE="$(MEMORY_L5_NODE_IMAGE)" SCOPE="scripts/security/daily/schema.test.mjs scripts/security/daily/inventory.test.mjs scripts/security/daily/scan.test.mjs scripts/security/daily/toolchain-contract.test.mjs scripts/security/daily/trivy.test.mjs scripts/security/daily/scanner-provenance.test.mjs scripts/security/daily/scanner-image-publish.test.mjs" ENV=$(ENV)
 
 # SECDAILY-EX1: explicit DB preparation, never scanner admission or scheduled activation.
 include scripts/security/daily/qualify.mk

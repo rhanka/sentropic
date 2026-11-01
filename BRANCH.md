@@ -16,6 +16,7 @@ Produce and admit the sentropic downstream patched Trivy image contract per r6 s
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
   - `.security/trivy-toolchain.json`
   - `scripts/security/daily/toolchain-contract.mjs`
   - `scripts/security/daily/toolchain-contract.test.mjs`
@@ -24,7 +25,6 @@ Produce and admit the sentropic downstream patched Trivy image contract per r6 s
   - `scripts/security/scanner/**`
   - `docs/security/scanner-images/**`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
@@ -32,6 +32,7 @@ Produce and admit the sentropic downstream patched Trivy image contract per r6 s
   - `api/drizzle/*.sql` (max 1 file)
   - `.github/workflows/**`
   - `docs/security/sec-s2b-qualify/**`
+  - `Makefile`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
@@ -42,6 +43,10 @@ Produce and admit the sentropic downstream patched Trivy image contract per r6 s
   - Reason: r6 mandates this exact workflow path for builder, validator, publisher jobs.
   - Impact: new workflow with workflow_dispatch only, no push/schedule/PR trigger, least-privilege per-job permissions.
   - Rollback: delete the file, policy stays upstream-only and qualified false.
+- `BR02-EX2`: extend `Makefile` `test-security-daily` SCOPE with the two r6 section 6.4 required destinations.
+  - Reason: r6 section 6.4 wires T5-S1/S2/S3/S5/S6 and T6-S1 into `scanner-provenance` and `scanner-image-publish` suites owned by `test-security-daily`.
+  - Impact: one SCOPE line gains two files, existing five files unchanged.
+  - Rollback: revert the SCOPE line, new suites run standalone only.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -67,34 +72,33 @@ Produce and admit the sentropic downstream patched Trivy image contract per r6 s
   - Switch back to `tmp/feat-<slug>` after UAT.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline and constraints**
-  - [ ] Read r6 sections 3, 7.2 ACT-L02, 7.3 T5-S1-S6, T6-S1, retained L2-A-E.
-  - [ ] Confirm worktree `tmp/worktrees/cyber-act-L02` on branch `feat/cyber-act-L02` from `origin/main`.
-  - [ ] Confirm ENV `test-cyber-L02` with ports API_PORT=8811 UI_PORT=5211 MAILDEV_UI_PORT=1111.
-  - [ ] Confirm scope boundaries and BR02-EX1 before touching conditional paths.
-  - [ ] Record base HEAD `1239f291f` in this file.
-- [ ] **Lot 1 — RED tests first**
-  - [ ] Extend `scripts/security/daily/toolchain-contract.test.mjs` for dual publisher profile.
-  - [ ] Add `scripts/security/daily/scanner-provenance.test.mjs` for T5-S1/S2/S3/S5/S6 and T6-S1 offline/content cases.
-  - [ ] Add `scripts/security/daily/scanner-image-publish.test.mjs` for T5-S4 and T6-S1 job/artifact/publication cases.
-  - [ ] Prove RED locally before implementation.
-  - [ ] Lot gate:
-    - [ ] `make typecheck` scoped where applicable ENV=test-cyber-L02
-    - [ ] Targeted node test run under flock ENV=test-cyber-L02
-- [ ] **Lot 2 — Policy, verifier, recipe, promotion workflow**
-  - [ ] Extend `.security/trivy-toolchain.json` with upstream/sentropic-patched publisher profile, qualified false.
-  - [ ] Extend `scripts/security/daily/toolchain-contract.mjs` with strict profile validation.
-  - [ ] Add `scripts/security/scanner/recipe.json` and material manifest with pinned inputs.
-  - [ ] Add `.github/workflows/security-scanner-image.yml` with builder, validator, publisher jobs per r6.
-  - [ ] Add `docs/security/scanner-images/` qualification evidence placeholders with blocked admission.
-  - [ ] No schedule enablement, no live digest invented, no seat operation.
-  - [ ] Lot gate:
-    - [ ] Targeted node test run under flock ENV=test-cyber-L02
-    - [ ] `make scope-check ENV=test-cyber-L02`
+- [x] **Lot 0 — Baseline and constraints**
+  - [x] Read r6 sections 3, 7.2 ACT-L02, 7.3 T5-S1-S6, T6-S1, retained L2-A-E.
+  - [x] Confirm worktree `tmp/worktrees/cyber-act-L02` on branch `feat/cyber-act-L02` from `origin/main`.
+  - [x] Confirm ENV `test-cyber-L02` with ports API_PORT=8811 UI_PORT=5211 MAILDEV_UI_PORT=1111.
+  - [x] Confirm scope boundaries and BR02-EX1 before touching conditional paths.
+  - [x] Record base HEAD `1239f291f` in this file.
+- [x] **Lot 1 — RED tests first**
+  - [x] Cover dual publisher profile in `scanner-provenance.test.mjs`, existing contract suite unchanged.
+  - [x] Add `scripts/security/daily/scanner-provenance.test.mjs` for T5-S1/S2/S3/S5/S6 and T6-S1 offline/content cases.
+  - [x] Add `scripts/security/daily/scanner-image-publish.test.mjs` for T5-S4 and T6-S1 job/artifact/publication cases.
+  - [x] Prove RED locally before implementation.
+  - [x] Lot gate:
+    - [x] Targeted node test run under flock ENV=test-cyber-L02
+- [x] **Lot 2 — Policy, verifier, recipe, promotion workflow**
+  - [x] Extend `.security/trivy-toolchain.json` with upstream/sentropic-patched publisher profile, qualified false.
+  - [x] Extend `scripts/security/daily/toolchain-contract.mjs` with strict profile validation.
+  - [x] Add `scripts/security/scanner/recipe.json` and material manifest with pinned inputs.
+  - [x] Add `.github/workflows/security-scanner-image.yml` with builder, validator, publisher jobs per r6.
+  - [x] Add `docs/security/scanner-images/` qualification evidence placeholders with blocked admission.
+  - [x] No schedule enablement, no live digest invented, no seat operation.
+  - [x] Lot gate:
+    - [x] Targeted node test run under flock ENV=test-cyber-L02
+    - [x] `make scope-check ENV=test-cyber-L02`
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck and lint impacted scopes.
-  - [ ] Retest targeted suites ENV=test-cyber-L02.
-  - [ ] `make scope-check ENV=test-cyber-L02`.
+  - [x] Typecheck and lint impacted scopes.
+  - [x] Retest targeted suites ENV=test-cyber-L02.
+  - [x] `make scope-check ENV=test-cyber-L02`.
   - [ ] Final gate step 1: create draft PR with BRANCH.md text as PR body.
   - [ ] Final gate step 2: run ONE CI on final head and resolve blockers.
   - [ ] Final gate step 3: report only, no merge, remove nothing.
