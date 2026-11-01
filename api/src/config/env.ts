@@ -139,6 +139,7 @@ const envSchema = z.object({
   OAUTH_SIGNING_KEK: z.string().optional(),
   OAUTH_ISSUER_URL: z.string().optional(),
   OAUTH_ACCESS_TOKEN_TTL_SEC: z.coerce.number().default(3600),
+  OAUTH_REFRESH_TOKEN_TTL_SEC: z.coerce.number().int().positive().default(1296000),
   OAUTH_ID_TOKEN_TTL_SEC: z.coerce.number().default(3600),
   OAUTH_AUTHORIZATION_CODE_TTL_SEC: z.coerce.number().default(60),
   OAUTH_DPOP_IAT_SKEW_SEC: z.coerce.number().default(60),
