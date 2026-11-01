@@ -31,7 +31,7 @@ import { SHARED_AGENTS } from '../config/default-agents-shared';
 import type { CommentContextType, CommentThreadSummary, CommentUserLabel } from './context-comments';
 import { commentStore, commentEventSink } from './comments/instance';
 import { buildThreadSummariesFromComments } from './comments/comment-summary-mapper';
-import { reconcileTenantId } from './tenancy/resolve-tenant';
+import { reconcileCmTenantId } from './identity/cm-tenancy';
 import { hasWorkspaceRole } from './workspace-access';
 import { evaluateGate } from './gate-service';
 import { type AppLocale, normalizeLocale } from '../utils/locale';
@@ -1287,7 +1287,7 @@ export class ToolService {
     // `createdBy/createdAt/updatedAt`, so the mapper groups the full `Comment`
     // rows directly to reproduce the live shape (must-fix #2).
     // ARCH-11 G1b (§4.3): tenant leg via reconcileTenantId (no acting user on this AI-read path).
-    const tenantId = await reconcileTenantId({ workspaceId, path: 'tool-service:ai-read' });
+    const tenantId = await reconcileCmTenantId({ workspaceId, path: 'tool-service:ai-read' });
     const tenant: TenantContext = { tenantId, workspaceId, userId: '' };
 
     const collected: Comment[] = [];
@@ -1413,7 +1413,7 @@ export class ToolService {
       // allowed-context) stays app-local; the `[row]` lookup is kept (it feeds
       // the gating + the note's target/contextType).
       // ARCH-11 G1b (§4.3): tenant leg via reconcileTenantId with the acting user cross-check.
-      const tenantId = await reconcileTenantId({ workspaceId, userId, path: 'tool-service:ai-write' });
+      const tenantId = await reconcileCmTenantId({ workspaceId, userId, path: 'tool-service:ai-write' });
       const tenant: TenantContext = { tenantId, workspaceId, userId };
       const noteTarget = targetFromLive({
         contextType: row.contextType,
@@ -1665,7 +1665,7 @@ export class ToolService {
     // the live insert), host-emit `{created, comment_id}` (origin `auto`) via the
     // shared sink (SPEC §4 matrix; DEC-4 shared instance reused out-of-request).
     // ARCH-11 G1b (§4.3): tenant leg via reconcileTenantId for the auto-field seeding path.
-    const tenantId = await reconcileTenantId({ workspaceId, userId: createdBy, path: 'tool-service:auto-field' });
+    const tenantId = await reconcileCmTenantId({ workspaceId, userId: createdBy, path: 'tool-service:auto-field' });
     const tenant: TenantContext = { tenantId, workspaceId, userId: createdBy };
     for (const sectionKey of uniqueSectionKeys) {
       const target = targetFromLive({ contextType: opts.contextType, contextId, sectionKey });

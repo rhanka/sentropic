@@ -222,6 +222,60 @@ export const resolveCmTenantAuthoritatively = async (input: {
   return resolver.resolveAuthoritatively(input);
 };
 
+export type CmResolveTenantResult =
+  | { tenantId: string }
+  | { error: 'unknown' | 'ambiguous_tenant' };
+
+/** Same result shape as the legacy `resolveTenantAuthoritatively` seam, over CM. */
+export const resolveCmTenant = async (input: {
+  workspaceId: string;
+  userId: string;
+}): Promise<CmResolveTenantResult> => {
+  try {
+    const resolved = await resolveCmTenantAuthoritatively(input);
+    return { tenantId: resolved.tid };
+  } catch {
+    return { error: 'unknown' };
+  }
+};
+
+/** Raised by `reconcileCmTenantId` when a tenant cannot be resolved (fail-closed). */
+export class CmTenantResolutionError extends Error {
+  constructor(
+    public readonly reason: 'unknown' | 'ambiguous_tenant',
+    public readonly path: string,
+    public readonly workspaceId: string,
+  ) {
+    super(`tenant resolution failed (${reason}) at '${path}' for workspace '${workspaceId}'`);
+    this.name = 'CmTenantResolutionError';
+  }
+}
+
+/**
+ * Strict-only replacement for the legacy mode-aware `reconcileTenantId`: resolution is
+ * always authoritative through the CM resolver; an unresolved input DENIES (throws).
+ * Without an acting user (background/AI-read paths) it resolves workspace -> tenant only.
+ */
+export const reconcileCmTenantId = async (input: {
+  workspaceId: string;
+  userId?: string;
+  path: string;
+}): Promise<string> => {
+  try {
+    if (input.userId) {
+      const resolved = await resolveCmTenantAuthoritatively({ workspaceId: input.workspaceId, userId: input.userId });
+      return resolved.tid;
+    }
+    const workspace = await findCmWorkspace(input.workspaceId);
+    if (!workspace) throw new Error('unknown');
+    const tenant = await findCmTenant(workspace.tenantId);
+    if (!tenant || tenant.status !== 'active') throw new Error('unknown');
+    return tenant.slug;
+  } catch (error) {
+    throw new CmTenantResolutionError('unknown', input.path, input.workspaceId);
+  }
+};
+
 /** `tid` claim issuance from an approved membership (replaces the OAuth tid legs). */
 export const issueCmTid = async (input: { userId: string; tenantId: string }, now = new Date()) => {
   const { tid } = getCmIdentity();
