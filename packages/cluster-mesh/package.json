@@ -12,6 +12,15 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./ui/auth-flow": {
+      "types": "./ui/auth-flow.ts", "import": "./ui/auth-flow.ts"
+    },
+    "./ui/LoginScreen.svelte": {
+      "types": "./ui/LoginScreen.svelte.d.ts", "svelte": "./ui/LoginScreen.svelte", "import": "./ui/LoginScreen.svelte"
+    },
+    "./ui/RegistrationScreen.svelte": {
+      "types": "./ui/RegistrationScreen.svelte.d.ts", "svelte": "./ui/RegistrationScreen.svelte", "import": "./ui/RegistrationScreen.svelte"
+    },
     "./speech": {
       "types": "./dist/speech/index.d.ts",
       "import": "./dist/speech/index.js"
@@ -182,6 +191,7 @@
     }
   },
   "files": [
+    "ui",
     "dist",
     "examples/memory-mcp-stdio.mjs",
     "docs/memory-mcp.md",
@@ -196,6 +206,7 @@
     "access": "public"
   },
   "sideEffects": [
+    "./ui/*.svelte",
     "./dist/modules/topology.js",
     "./dist/modules/topology-guard.js",
     "./dist/modules/topology-guard-gateway.js",
@@ -217,6 +228,8 @@
     "hono": "^4.10.7"
   },
   "peerDependencies": {
+    "@sentropic/auth-ui": "^0.9.0",
+    "svelte": "^5.0.0",
     "@sentropic/engram": ">=0.22.0 <0.23.0",
     "@sentropic/comments": "^0.3.0",
     "@sentropic/llm-mesh": "0.19.2 || >=0.22.0 <0.33.0",
@@ -228,6 +241,8 @@
     "jose": "^5.10.0"
   },
   "peerDependenciesMeta": {
+    "@sentropic/auth-ui": { "optional": true },
+    "svelte": { "optional": true },
     "@sentropic/engram": { "optional": true },
     "@sentropic/comments": { "optional": true },
     "@sentropic/llm-mesh": { "optional": true },

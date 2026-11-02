@@ -176,6 +176,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
 - [ ] **Lot 3 — Deletions**
   - [ ] Drop legacy identity tables in migration; delete identity part of api/src/db/schema.ts and the named files; no dual writer, no legacy fallback.
 - [ ] **Lot 4 — F11 screens + e2e**
+  - [x] Add CM-owned login/registration screens and shared completion/continuation behavior with host-only navigation/session ports.
   - [ ] Login, registration, admin, membership decision, members screens; e2e on ENV=e2e-app-a4.
 - [ ] **Lot 5 — Tests**
   - [ ] gap-§1 scenario end to end; registration → approval → login; invitation consumed once; revoke-all; mid-session suspension empties tool set; account deletion with injected failure leaves no orphan and preserves rows; migration tests; F11 e2e.
