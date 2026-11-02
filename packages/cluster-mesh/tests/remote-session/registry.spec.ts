@@ -5,6 +5,7 @@ import {
   FRESHNESS_BOUND_MS,
   FRESHNESS_INTERVAL_MS,
   LISTING_STAGE_ROUTES,
+  type LifecycleEventKind,
   type ListingGrantRecord,
   type SessionRef,
 } from '../../src/sessions/registry.js';
@@ -65,6 +66,61 @@ const renew = (registry: ReturnType<typeof createSessionOriginRegistry>) =>
   registry.renewFreshness({ sessionRef: { ...sessionRef }, visibility: 'listing' });
 const snap = (registry: ReturnType<typeof createSessionOriginRegistry>) =>
   registry.snapshot({ sessionRef: { ...sessionRef } });
+
+describe('RC2.registry ingest validation', () => {
+  it.each([undefined, null, 42, '', 'unknown', 'STARTED', 'toString'])(
+    'should refuse an invalid lifecycle kind %j without creating or changing origin state', async (kind) => {
+      const { registry, now } = registryWithSession();
+      const fact = { ...startedFact(now.value), kind: kind as never };
+      const refused = { status: 'refused', error: { code: 'relay_protocol_refused' } };
+      expect(await registry.ingestLifecycle({ processBindingRef: binding, fact })).toMatchObject(refused);
+      expect((await snap(registry)).status).toBe('refused');
+      expect(await ingest(registry, startedFact(now.value))).toMatchObject({ originRevision: 1 });
+      const before = await snap(registry);
+      const nextFact = { ...fact, factRef: { ...fact.factRef, id: 'fact-2' } };
+      expect(await registry.ingestLifecycle({ processBindingRef: binding, fact: nextFact })).toMatchObject(refused);
+      expect(await snap(registry)).toEqual(before);
+      expect(await registry.ingestLifecycle({
+        processBindingRef: binding, fact: { ...nextFact, kind: 'completed' },
+      })).toMatchObject({ status: 'local-committed', originRevision: 2 });
+      expect(registry.getListingRow({ ...sessionRef })?.state).toBe('ended');
+    },
+  );
+
+  it.each<LifecycleEventKind>([
+    'admitted', 'started', 'waiting-input', 'permission-pending', 'capability-changed',
+    'capture-enabled', 'capture-paused', 'capture-revoked', 'route-opened', 'route-degraded',
+    'route-closed', 'source-disconnected', 'source-reconnected', 'gap-detected',
+    'completed', 'stopped', 'crashed', 'tombstoned',
+  ])('should accept the contracted lifecycle kind %s', async (kind) => {
+    const { registry, now } = registryWithSession();
+    expect(await registry.ingestLifecycle({
+      processBindingRef: binding, fact: { ...startedFact(now.value), kind },
+    })).toMatchObject({ status: 'local-committed', originRevision: 1 });
+  });
+
+  it.each([{ id: '' }, { id: 42 }, { digest: '' }, { digest: null }])(
+    'should reject the same malformed binding %j before either ingest resolves it', async (invalid) => {
+      const resolveSession = vi.fn(() => ({ ...sessionRef }));
+      const registry = createSessionOriginRegistry({ originInstanceId: 'origin-B', resolveSession });
+      const fact = startedFact(1_793_520_000_000);
+      await ingest(registry, fact);
+      const before = await snap(registry);
+      resolveSession.mockClear();
+      const processBindingRef = { ...binding, ...invalid } as never;
+      const refused = { status: 'refused', error: { code: 'relay_auth_required' } };
+      expect(await registry.ingestLifecycle({ processBindingRef, fact })).toMatchObject(refused);
+      expect(await registry.ingestCapabilities({
+        processBindingRef, capabilities: { sourceRef: fact.sourceRef, hostKind: 'codex' },
+      })).toMatchObject(refused);
+      expect(resolveSession).not.toHaveBeenCalled();
+      expect(await snap(registry)).toEqual(before);
+      expect(await registry.ingestCapabilities({
+        processBindingRef: binding, capabilities: { sourceRef: fact.sourceRef, hostKind: 'codex' },
+      })).toMatchObject({ status: 'local-committed', originRevision: 2 });
+    },
+  );
+});
 
 describe('RC2.registry REGISTRY-LISTING', () => {
   it('should project exactly the coarse allowlist with no forbidden field at the export boundary', async () => {
@@ -249,6 +305,45 @@ describe('RC2.registry REGISTRY-STALE', () => {
 });
 
 describe('RC2.registry REGISTRY-SPLIT-BRAIN', () => {
+  it.each([[1, 2], [2, 1], [2, 2], [0, 1]])(
+    'should quarantine unfenced writer epochs %s/%s and fence a live session',
+    async (leftEpoch, rightEpoch) => {
+      const { registry, now } = registryWithSession();
+      await ingest(registry, startedFact(now.value));
+      registry.commitSourceAck({ ...sessionRef }, grantRef.id, '2'.repeat(64));
+      await renew(registry);
+      expect(registry.isLive({ ...sessionRef })).toBe(true);
+      expect((await publish(registry)).status).toBe('remote-committed');
+      expect(registry.reportSplitBrain(
+        { ...sessionRef },
+        { writerEpoch: leftEpoch, originRevision: 1, digest: 'a'.repeat(64) },
+        { writerEpoch: rightEpoch, originRevision: 2, digest: 'a'.repeat(64) },
+      )).toEqual({ quarantined: true });
+      expect(registry.isQuarantined({ ...sessionRef })).toBe(true);
+      expect(registry.isLive({ ...sessionRef })).toBe(false);
+      for (const result of [await publish(registry), await renew(registry),
+        await ingest(registry, startedFact(now.value))]) {
+        expect(result).toMatchObject({ status: 'refused', error: { code: 'relay_origin_refused' } });
+      }
+    },
+  );
+
+  it.each([
+    { originRevision: 1, digest: 'a'.repeat(64) },
+    { originRevision: 2, digest: 'b'.repeat(64) },
+  ])('should keep matching-epoch nonconflicting reports available (%j)', async (right) => {
+    const { registry, now } = registryWithSession();
+    await ingest(registry, startedFact(now.value));
+    await renew(registry);
+    expect(registry.reportSplitBrain(
+      { ...sessionRef },
+      { writerEpoch: 1, originRevision: 1, digest: 'a'.repeat(64) },
+      { writerEpoch: 1, ...right },
+    )).toEqual({ quarantined: false });
+    expect(registry.isQuarantined({ ...sessionRef })).toBe(false);
+    expect(registry.isLive({ ...sessionRef })).toBe(true);
+  });
+
   it('should quarantine on divergent writers at one epoch without timestamp arbitration', async () => {
     const { registry } = registryWithSession();
     await ingest(registry, startedFact(1_793_520_000_000));
