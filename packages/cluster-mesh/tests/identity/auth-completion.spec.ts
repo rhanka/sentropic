@@ -31,6 +31,63 @@ const shared = {
 describe.each(pgEnabled ? ['sqlite', 'postgres'] as const : ['sqlite'] as const)('real auth completion on %s', (profile) => {
   const open = async () => asOpHost((profile === 'postgres' ? await openPostgresEnv() : openSqliteEnv()).unitOfWork);
 
+  it('retries a social revision race only after rolling back the whole callback', async () => {
+    const unitOfWork = await open();
+    await unitOfWork.run(WRITE, async (tx) => {
+      const binding = createIdentityAuthHonoTransactionBindingV1({ ...shared, tx });
+      const user = await binding.ports.users.create({ email: 'social@example.test', role: 'editor' });
+      await binding.ports.federation!.linkIdentity({ userId: user.id, provider: 'google', providerSubject: 'subject-1', emailAtLink: user.email, emailVerifiedByProvider: true, now: new Date(NOW) });
+    });
+    let attempts = 0;
+    const outcome = await runIdentityAuthCompletionV1({ flow: 'social', unitOfWork, options: { ...WRITE, maxAttempts: 2 }, operation: async (tx) => {
+      attempts++;
+      const binding = createIdentityAuthHonoTransactionBindingV1({ ...shared, tx }), row = (await binding.ports.federation!.findIdentityBySubject('google', 'subject-1'))!;
+      await tx.ledger.append({ at: NOW, kind: 'social.attempt.' + attempts });
+      if (attempts === 1) await tx.custody.social.touchLogin(row.id, 0, NOW);
+      await binding.ports.federation!.touchLogin(row.id, new Date(NOW));
+      return row.userId;
+    } });
+    expect(attempts).toBe(2);
+    expect(outcome.committed).toBe(true);
+    await unitOfWork.run(READ, async (tx) => {
+      expect(await tx.custody.social.findBySubject('google', 'subject-1')).toMatchObject({ revision: 1 });
+      expect((await tx.ledger.listAuditEvents()).map((event) => event.kind)).toEqual(['social.attempt.2']);
+    });
+    await expect(unitOfWork.run(WRITE, async (tx) => {
+      const binding = createIdentityAuthHonoTransactionBindingV1({ ...shared, tx }), row = (await binding.ports.federation!.findIdentityBySubject('google', 'subject-1'))!;
+      await tx.custody.social.touchLogin(row.id, 1, NOW);
+      await binding.ports.federation!.touchLogin(row.id, new Date(NOW));
+    })).rejects.toMatchObject({ code: 'identity_record_conflict' });
+  });
+
+  it('retries the recognized social email-create collision without SQL in the failed attempt', async () => {
+    const unitOfWork = await open();
+    const owner = await unitOfWork.run(WRITE, (tx) => createIdentityAuthHonoTransactionBindingV1({ ...shared, tx }).ports.users.create({ email: 'race@example.test', role: 'editor' }));
+    let attempts = 0;
+    const result = await runIdentityAuthCompletionV1({ flow: 'social', unitOfWork, options: { ...WRITE, maxAttempts: 2 }, operation: async (tx) => {
+      attempts++;
+      if (attempts === 1) tx.stores.accounts.findAccountByEmail = async () => null;
+      return createIdentityAuthHonoTransactionBindingV1({ ...shared, tx }).resolveFederatedUser({
+        provider: 'google', providerSubject: 'racing-subject', email: owner.email, emailVerifiedByProvider: true, now: new Date(NOW),
+      });
+    } });
+    expect(attempts).toBe(2);
+    expect(result).toMatchObject({ committed: true, value: { kind: 'auto-linked', userId: owner.id } });
+    await unitOfWork.run(READ, async (tx) => { expect(await tx.stores.accounts.listAccounts()).toHaveLength(1); });
+  });
+
+  it('permits the authorized owned unlink of a revoked imported subject', async () => {
+    const unitOfWork = await open();
+    await unitOfWork.run(WRITE, async (tx) => {
+      const binding = createIdentityAuthHonoTransactionBindingV1({ ...shared, tx });
+      const user = await binding.ports.users.create({ email: 'unlink@example.test', role: 'editor' });
+      await tx.custody.social.insert({ proofId: 'revoked-subject', userId: user.id, provider: 'google', providerSubject: 'revoked',
+        providerTenant: null, emailAtLink: user.email, emailVerifiedByProvider: true, linkedAt: NOW, lastLoginAt: null, revokedAt: NOW, revision: 1 });
+      expect(await binding.ports.federation!.unlinkIdentity(user.id, 'google', 'revoked')).toBe(true);
+      expect(await tx.custody.social.findBySubject('google', 'revoked')).toBeNull();
+    });
+  });
+
   it('aborts invalid registration continuations and rolls back provisional accounts', async () => {
     const unitOfWork = await open();
     const outcome = await runIdentityAuthCompletionV1({ flow: 'registration', unitOfWork, options: WRITE, operation: async (tx) => {
