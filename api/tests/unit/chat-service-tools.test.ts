@@ -1,3 +1,4 @@
+import { createAdmittedChatMessage } from '../utils/cm-chat-fixture';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { db } from '../../src/db/client';
 import {
@@ -10,15 +11,13 @@ import {
   folders,
   plans,
   tasks,
-  tenantMemberships,
   todos,
-  users,
   workspaces,
-  workspaceMemberships,
 } from '../../src/db/schema';
 import { and, eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
-import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
+import { createTestUser } from '../utils/auth-helper';
+import { cmDeleteForUsers, cmDeleteWorkspaceMembers, cmQuery, cmTable } from '../utils/cm-identity-test-store';
 import { todoOrchestrationService } from '../../src/services/todo-orchestration';
 
 // Mock OpenAI streaming to keep unit tests deterministic and fast.
@@ -66,19 +65,9 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     savedReasoningEffortEvalTemplate = CHAT_COMMON_PROMPTS.reasoning_effort_eval;
     CHAT_COMMON_PROMPTS.reasoning_effort_eval = '';
     userId = createId();
-    await db.insert(users).values({
-      id: userId,
-      email: `test-${userId}@example.com`,
-      displayName: 'Test User',
-      role: 'editor',
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date()
-    });
-
-    // Ensure owner workspace exists (ChatService relies on it).
-    ({ workspaceId } = await ensureWorkspaceForUser(userId));
-    await db.insert(tenantMemberships).values({ userId, tenantId: 'sentropic', status: 'approved' });
+    const actor = await createTestUser({ email: `test-${userId}@example.com`, displayName: 'Test User', role: 'editor' });
+    userId = actor.id;
+    workspaceId = actor.workspaceId!;
 
     folderId = createId();
     await db.insert(folders).values({
@@ -104,10 +93,11 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     await db.delete(tasks).where(eq(tasks.workspaceId, workspaceId));
     await db.delete(todos).where(eq(todos.workspaceId, workspaceId));
     await db.delete(plans).where(eq(plans.workspaceId, workspaceId));
-    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
+    await cmDeleteWorkspaceMembers(workspaceId);
     await db.delete(folders).where(eq(folders.workspaceId, workspaceId));
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
-    await db.delete(users).where(eq(users.id, userId));
+    await cmDeleteForUsers([userId]);
+    await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = $1`, [workspaceId]);
     if (savedReasoningEffortEvalTemplate !== undefined) {
       CHAT_COMMON_PROMPTS.reasoning_effort_eval = savedReasoningEffortEvalTemplate;
       savedReasoningEffortEvalTemplate = undefined;
@@ -139,7 +129,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     });
 
     const documentId = createId();
-    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+    const msg = await createAdmittedChatMessage({
       userId,
       workspaceId,
       content: 'What is in this image?',
@@ -217,7 +207,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
     ];
 
     for (const ctx of contexts) {
-      const { sessionId, assistantMessageId, model } = await chatService.createUserMessageWithAssistantPlaceholder({
+      const { sessionId, assistantMessageId, model } = await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'test',
@@ -285,7 +275,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
         ])
       );
 
-    const msg1 = await chatService.createUserMessageWithAssistantPlaceholder({
+    const msg1 = await createAdmittedChatMessage({
       userId,
       workspaceId,
       content: 'matrix',
@@ -339,7 +329,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
         ])
       );
 
-    const msg2 = await chatService.createUserMessageWithAssistantPlaceholder({
+    const msg2 = await createAdmittedChatMessage({
       userId,
       workspaceId,
       content: 'matrix wrong',
@@ -392,7 +382,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
         ]),
       );
 
-    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+    const msg = await createAdmittedChatMessage({
       userId,
       workspaceId,
       content: 'find a relevant skill',
@@ -439,7 +429,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
       ]);
     });
 
-    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+    const msg = await createAdmittedChatMessage({
       userId,
       workspaceId,
       content: 'inspect active tab',
@@ -507,7 +497,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
       ]);
     });
 
-    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+    const msg = await createAdmittedChatMessage({
       userId,
       workspaceId,
       content: 'read current tab',
@@ -569,7 +559,7 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
       ]);
     });
 
-    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+    const msg = await createAdmittedChatMessage({
       userId,
       workspaceId,
       content: 'read local file',
@@ -662,7 +652,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
       ]);
     });
 
-    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+    const msg = await createAdmittedChatMessage({
       userId,
       workspaceId,
       content: 'Assess this request',
@@ -715,7 +705,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
       ]);
     });
 
-    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+    const msg = await createAdmittedChatMessage({
       userId,
       workspaceId,
       content: 'search web without domain context',
@@ -767,7 +757,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
       ]);
     });
 
-    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+    const msg = await createAdmittedChatMessage({
       userId,
       workspaceId,
       content: 'Create a release TODO with tasks',
@@ -812,7 +802,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
       ]);
     });
 
-    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+    const msg = await createAdmittedChatMessage({
       userId,
       workspaceId,
       content: 'Continue and check the TODO progression now',
@@ -854,7 +844,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
       ]);
     });
 
-    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+    const msg = await createAdmittedChatMessage({
       userId,
       workspaceId,
       content: 'Create a new TODO list and replace the current one',
@@ -888,7 +878,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
     const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     const calls: any[] = [];
 
-    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+    const msg = await createAdmittedChatMessage({
       userId,
       workspaceId,
       content: 'go',
@@ -983,7 +973,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
       ]);
     });
 
-    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+    const msg = await createAdmittedChatMessage({
       userId,
       workspaceId,
       content: 'Run the plan tool with invalid args repeatedly',
@@ -1020,7 +1010,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
       ]);
     });
 
-    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+    const msg = await createAdmittedChatMessage({
       userId,
       workspaceId,
       content: 'Continue TODO execution',
@@ -1063,7 +1053,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
     const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     const calls: any[] = [];
 
-    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+    const msg = await createAdmittedChatMessage({
       userId,
       workspaceId,
       content: 'Continue TODO progression now',
@@ -1146,7 +1136,7 @@ it('should evaluate reasoning effort with gemini-3.1-flash-lite when provider is
     const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     const calls: any[] = [];
 
-    const msg = await chatService.createUserMessageWithAssistantPlaceholder({
+    const msg = await createAdmittedChatMessage({
       userId,
       workspaceId,
       content: 'Renomme la TODO actuelle en TODO finale',
