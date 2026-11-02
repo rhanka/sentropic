@@ -15,7 +15,7 @@ import { applyIdentitySqliteSchema } from '../../src/identity/sqlite.js';
 import { identityEnforcementPgSchema } from '../../src/identity/postgres.js';
 import { identityA22PostgresDdl, IDENTITY_A22_SQLITE_DDL } from '../../src/identity-stores/tenancy-schema.js';
 import { identitySchemaStatements } from '../../src/storage/identity/schema.js';
-import type { IdentityUnitOfWorkV1 } from '../../src/identity-contracts/custody.js';
+import type { IdentityUnitOfWorkV1, IdentityTransactionV1, AtomicPersonDeletionInput, PersonDeletionCommandV2 } from '../../src/identity-contracts/custody.js';
 import { IdentityCustodyErrorV1 } from '../../src/identity-contracts/custody-errors.js';
 import { createPostgresIdentityHostV1, createPostgresIdentityUnitOfWorkV1, type PostgresCustodyHandle } from '../../src/storage/identity/custody-postgres.js';
 import { createSqliteIdentityHostV1, createSqliteIdentityUnitOfWorkV1, type SqliteCustodyHandle } from '../../src/storage/identity/custody-sqlite.js';
@@ -186,7 +186,7 @@ export const createFixtureBusiness = (input: {
   readonly plan: PlanV1;
   readonly state: FixtureBusinessState;
 }): {
-  readonly business: PortV1<CustodyOpHost> & { resolvePlan(userId: string, tx: CustodyOpHost): Promise<PlanV1> };
+  readonly business: PortV1<CustodyOpHost>;
   setup(host: CustodyOpHost, rows: readonly { readonly ownerId: string; readonly workspaceId: string; readonly payload: string }[]): Promise<void>;
   rows(host: CustodyOpHost): Promise<readonly { readonly ownerId: string; readonly workspaceId: string }[]>;
 } => {
@@ -210,12 +210,12 @@ export const createFixtureBusiness = (input: {
   };
   const business = {
     handlerId: input.handlerId,
-    resolvePlan: async (userId: string, _tx: CustodyOpHost): Promise<PlanV1> => {
-      void _tx;
+    prepare: async ({ userId }: PersonDeletionCommandV2): Promise<PlanV1> => {
       if (userId !== input.plan.userId) throw new Error('unknown subject');
       return input.plan;
     },
-    deleteRows: async (plan: PlanV1, host: CustodyOpHost) => {
+    deleteRows: async (plan: PlanV1, tx: IdentityTransactionV1<CustodyOpHost>) => {
+      const host = tx.hostTransaction;
       input.state.reachedDelete = true;
       if (input.state.failAt === 'delete') throw new Error('injected-business');
       await exec(host, 'CREATE TABLE IF NOT EXISTS "biz_rows" ("owner_id" TEXT NOT NULL, "workspace_id" TEXT NOT NULL, "payload" TEXT NOT NULL, PRIMARY KEY ("owner_id", "workspace_id"))', []);
@@ -226,7 +226,8 @@ export const createFixtureBusiness = (input: {
       deleted += (await exec(host, 'DELETE FROM "biz_rows" WHERE "owner_id" = ?', [plan.userId])).changes;
       return { handlerId: input.handlerId, deletedRows: { biz_rows: deleted } };
     },
-    assertNoOrphans: async (plan: PlanV1, host: CustodyOpHost) => {
+    assertNoOrphans: async (plan: PlanV1, tx: IdentityTransactionV1<CustodyOpHost>) => {
+      const host = tx.hostTransaction;
       input.state.reachedAssert = true;
       if (input.state.failAt === 'assert') throw new Error('injected-assert');
       const remaining = await exec(host, 'SELECT "owner_id", "workspace_id" FROM "biz_rows" WHERE "owner_id" = ?', [plan.userId]);
@@ -247,6 +248,26 @@ export const createFixtureBusiness = (input: {
     },
     rows: async (host: CustodyOpHost) => (await exec(host, 'SELECT "owner_id", "workspace_id" FROM "biz_rows" ORDER BY "owner_id", "workspace_id"', [])).rows.map((row) => ({ ownerId: String(row['owner_id']), workspaceId: String(row['workspace_id']) })),
   };
+};
+
+
+
+/** Explicit trusted-service bindings: these fixtures have no external plane rows. */
+export const fixtureDeletionDependencies: Pick<AtomicPersonDeletionInput<CustodyOpHost>, 'authorization' | 'planes' | 'clock' | 'transactionOptions'> = {
+  authorization: { assertAllowed: async () => undefined },
+  clock: () => NOW,
+  planes: (['remote_reader_sessions', 'connector_grants', 'agent_plane', 'purpose_grants', 'catalogue'] as const).map((step) => ({
+    step, placement: 'absent',
+    apply: async () => { throw new Error('absent fixture plane applied'); },
+    assertDeliveryInScope: async () => { throw new Error('absent fixture plane scope'); },
+    assertAbsent: async () => undefined,
+  })),
+  transactionOptions: {
+    reservation: { mode: 'write', purpose: 'delete', deadlineMs: 8000, maxAttempts: 3 },
+    deletion: { mode: 'write', purpose: 'delete', deadlineMs: 8000, maxAttempts: 3 },
+    diagnostic: { mode: 'write', purpose: 'delete', deadlineMs: 8000, maxAttempts: 3 },
+    read: { mode: 'read', purpose: 'delete', deadlineMs: 8000, maxAttempts: 3 },
+  },
 };
 
 
