@@ -57,6 +57,7 @@ Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, r
   - [x] Add R2 switchover regression tests before implementation; retain both source/control and editing suites with exact-byte assertions.
   - [x] Implement independent trusted profile/result descriptors, exact typed precondition refusals and replay before strict admission.
   - [x] Add retained-receipt switchover and strict v2 history/revert lineage acceptance tests.
+  - [x] Record new release authors and lineage without inventing historical data; expose bounded v2 history and targetReleaseId revert.
   - [ ] Regenerate Memory L5 inventory using make, with no manual digest edits.
   - [ ] Run artifacts and mcp-platform typecheck/test/lint plus API boot under the single Docker lock; make down.
   - [ ] Commit using make, force-with-lease push, mark PR ready, wait for pull_request CI and append the lane report; do not merge.

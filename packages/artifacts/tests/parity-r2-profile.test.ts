@@ -50,12 +50,16 @@ describe('R2 explicit profile and result switchovers', () => {
     expect(reverted.status).toBe(201);
     expect(output(reverted)).toMatchObject({ previousReleaseId: second.releaseId,
       revertedFromReleaseId: first.releaseId, title: 'Current', digest: first.digest, stableUrl: first.stableUrl });
+    const all = output(await call('artifacts_list_versions', { artifactId }));
+    expect(all.versions).toHaveLength(3);
+    expect(all.versions.find((version: { releaseId: string }) => version.releaseId === output(reverted).releaseId))
+      .toMatchObject({ releaseId: output(reverted).releaseId, authorPrincipalId: 'alice',
+        parentReleaseId: second.releaseId, revertedFromReleaseId: first.releaseId, isCurrent: true, pinnedUrl: expect.any(String) });
     const history = output(await call('artifacts_list_versions', { artifactId, limit: 1 }));
     expect(history.versions).toHaveLength(1);
-    expect(history.versions[0]).toMatchObject({ releaseId: output(reverted).releaseId, authorPrincipalId: 'alice',
-      parentReleaseId: second.releaseId, revertedFromReleaseId: first.releaseId, isCurrent: true, pinnedUrl: expect.any(String) });
+    expect(history.versions[0].releaseId).toBe(all.versions[0].releaseId);
     const page = output(await call('artifacts_list_versions', { artifactId, limit: 1, cursor: history.nextCursor }));
-    expect(page.versions[0].releaseId).toBe(second.releaseId);
+    expect(page.versions[0].releaseId).toBe(all.versions[1].releaseId);
     const source = output(await call('artifacts_get_source', { artifactId }));
     expect(source.files[0].bytes).toEqual([...Buffer.from('one')]);
     expect((await w.acls.getArtifactAcl(artifactId))?.grants).toEqual([{ principalId: 'bob', grant: 'read' }]);

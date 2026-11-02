@@ -80,6 +80,9 @@ function toIntent(row: IntentRow): ObjectIntent {
 }
 
 interface ReleaseRow {
+  author_principal_id?: string | null;
+  parent_release_id?: string | null;
+  reverted_from_release_id?: string | null;
   id: string;
   artifact_id: string;
   manifest_digest: string;
@@ -90,6 +93,9 @@ interface ReleaseRow {
 
 function toRelease(row: ReleaseRow): ReleaseRecord {
   return {
+    authorPrincipalId: row.author_principal_id ?? null,
+    parentReleaseId: row.parent_release_id ?? null,
+    revertedFromReleaseId: row.reverted_from_release_id ?? null,
     releaseId: row.id,
     artifactId: row.artifact_id,
     manifestDigest: row.manifest_digest,
@@ -244,8 +250,7 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
     },
     async getRelease(releaseId: string): Promise<ReleaseRecord | undefined> {
       const { rows } = await pool.query<ReleaseRow>(
-        `SELECT id, artifact_id, manifest_digest, manifest, state, created_at
-         FROM artifacts.releases WHERE id = $1`,
+        `SELECT * FROM artifacts.releases WHERE id = $1`,
         [releaseId],
       );
       const row = rows[0];
@@ -253,8 +258,7 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
     },
     async listReleases(artifactId: string): Promise<ReleaseRecord[]> {
       const { rows } = await pool.query<ReleaseRow>(
-        `SELECT id, artifact_id, manifest_digest, manifest, state, created_at
-         FROM artifacts.releases WHERE artifact_id = $1 ORDER BY created_at, id`,
+        `SELECT * FROM artifacts.releases WHERE artifact_id = $1 ORDER BY created_at, id`,
         [artifactId],
       );
       return rows.map(toRelease);

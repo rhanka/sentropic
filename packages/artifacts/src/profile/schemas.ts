@@ -82,14 +82,19 @@ export function capabilitySchema(name: ArtifactCapabilityName, profile: Effectiv
     }
     case 'list': return obj({ limit: { ...integer(limits.listLimitMin, limits.listLimitMax), default: config.defaults.limit },
       offset: { ...integer(0), default: config.defaults.offset } });
-    case 'get': case 'list_versions': case 'fork': case 'renew': case 'restore': return idOnly;
+    case 'get': case 'fork': case 'renew': case 'restore': return idOnly;
+    case 'list_versions': return profile.resultEnvelopeVersion !== 2 ? idOnly : obj({ artifactId: id,
+      limit: { ...integer(1, 100), default: 20 }, cursor: { ...str, maxLength: 4096 } }, ['artifactId']);
     case 'get_source': return obj({ artifactId: id, releaseId: id,
       paths: { type: 'array', minItems: 1, maxItems: 32, items: { ...str, maxLength: profile.rules.pathMaxBytes } } }, ['artifactId']);
     case 'delete': return obj({ artifactId: id, expectedCurrentReleaseId: { ...id, type: ['string', 'null'] },
       idempotencyKey: key, confirmationRef: { ...str, maxLength: 4096 } },
       ['artifactId', 'idempotencyKey', ...(profile.requireExpectedCurrentReleaseId ? ['expectedCurrentReleaseId'] : [])]);
-    case 'revert': return obj({ artifactId: id, releaseId: id, expectedCurrentReleaseId: { ...id, type: ['string', 'null'] }, idempotencyKey: key },
-      ['artifactId', 'releaseId', 'idempotencyKey', ...(profile.requireExpectedCurrentReleaseId ? ['expectedCurrentReleaseId'] : [])]);
+    case 'revert': {
+      const target = profile.resultEnvelopeVersion === 2 ? 'targetReleaseId' : 'releaseId';
+      return obj({ artifactId: id, [target]: id, expectedCurrentReleaseId: { ...id, type: ['string', 'null'] }, idempotencyKey: key },
+        ['artifactId', target, 'idempotencyKey', ...(profile.requireExpectedCurrentReleaseId ? ['expectedCurrentReleaseId'] : [])]);
+    }
     case 'get_template': return obj({ templateId: str }, ['templateId']);
     case 'get_api_guide': return obj({ version: str });
     case 'create_upload': return obj({ artifactId: id, mimeType: str, maxSize: integer(1) }, ['artifactId', 'mimeType']);

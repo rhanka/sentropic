@@ -19,6 +19,7 @@ import { ArtifactOperationError, classifyArtifactFailure, type ArtifactOutcome, 
 import { projectArtifactHttpOutcome } from './server/outcome-projection.js';
 import { readArtifactSource } from './server/source-read.js';
 import { artifactSummary } from './server/summary.js';
+import { artifactVersions } from './server/versions.js';
 import { manageArtifact, type ManagementUnit, type ArtifactConfirmationPort } from './server/management.js';
 import { createPostgresManagementUnit } from './adapters/postgres-management.js';
 import type { FinalizeTxClient } from './server/commit/types.js';
@@ -227,6 +228,8 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     }
     return { ...outcome, result: { status: 201, body: {
       artifactId, releaseId: receipt.releaseId, manifest: receipt.manifest,
+      previousReleaseId: receipt.previousReleaseId ?? null, updatedAt: receipt.updatedAt ?? null,
+      ...(typeof receipt.revertedFromReleaseId === 'string' ? { revertedFromReleaseId: receipt.revertedFromReleaseId } : {}),
       digest: parseManifest(receipt.manifest).digest,
       ...deps.publicationUrls?.(artifactId, receipt.releaseId), ...(receipt.metadata as ArtifactMetadata ?? meta ?? {}),
     } } };
@@ -352,7 +355,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             source = { kind: 'inline-original' };
             releaseProfile = normalized.profile as Record<string, JsonValue>;
           } else {
-            const releaseId = normalized.releaseId as string;
+            const releaseId = normalized[profile.resultEnvelopeVersion === 2 ? 'targetReleaseId' : 'releaseId'] as string;
             const target = await deps.publication.getRelease(releaseId);
             const targetManifest = target === undefined ? undefined : parseManifest(target.manifest);
             if (target === undefined || targetManifest?.artifactId !== artifactId) {
@@ -387,6 +390,15 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           const artifactId = normalized.artifactId as string;
           await visible(artifactId, invocation);
           const current = await deps.publication.getCurrent(artifactId);
+          if (profile.resultEnvelopeVersion === 2) {
+            const body = await artifactVersions({ artifactId, storageScopeId: invocation.storageScopeId,
+              currentReleaseId: current?.releaseId ?? null, releases: await deps.publication.listReleases(artifactId),
+              limit: normalized.limit as number | undefined, cursor: normalized.cursor as string | undefined,
+              state: id => deps.lifecycle.getReleaseState(id), urls: deps.publicationUrls });
+            await visible(artifactId, invocation);
+            return { ok: true, invocationId: invocation.invocationId, commitState: 'not_committed', replayed: false,
+              result: { status: 200, body } };
+          }
           const releases = [];
           for (const release of await deps.publication.listReleases(artifactId)) {
             const manifest = parseManifest(release.manifest);
