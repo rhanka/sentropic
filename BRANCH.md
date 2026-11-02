@@ -157,6 +157,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Delete `services/auth/tenant-membership.ts`, including the caller-role trust seam and duplicate transition rules.
   - [x] Convert the workspace cutover HTTP fixtures to CM stores, retaining cross-tenant/workspace denial and exact decision-replay assertions.
   - [x] Add `api/tests/api/auth/cm-workspace-members.test.ts` for current-role authorization, isolated role changes, personal workspace restrictions and joined business rollback.
+  - [x] Bind workspace member reads and mutations to CM domains in one transaction, with subject/workspace locks, audit, last-admin protection and current actor checks.
   - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
   - [x] Evaluate F15 and business workspace visibility on one serializable read transaction.
   - [x] Add explicit verified-HTTP conversation admission and an opaque CM reference on business chats; no identity authority is inferred from a chat id.
