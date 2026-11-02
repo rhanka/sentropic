@@ -1,13 +1,17 @@
 /**
- * L-5d — transport-free content handler (spec-v8 §9 5d). Serves raw
- * release bytes on the separate content domain (never HTML on the
- * control origin). Per-version activation: a single-use ticket redeemed
- * by the host-authenticated subject mints a short subject+artifact+
- * release grant as a host-only cookie. Every request re-verifies the
- * grant AND live ACL/lifecycle state, so withdrawal cuts readers at the
- * next request (inside the 60s budget, no cache reliance). Republish
- * demands fresh consent on the stable origin (401); pinned origins keep
- * their release. Unknown/unreadable → same 404; bad grants → 401.
+ * L-5d — transport-free content handler (owner decision relayed by immo).
+ * Serves raw release bytes on the separate content domain (never HTML on
+ * the control origin). One wildcard per base: the single UUID label
+ * `<id>.<base>` is resolved server-side — an artifact id serves its
+ * current release, a release id serves that frozen version; an unknown id
+ * gets the same 404 response and timing class whatever kind it would be.
+ * Per-version activation: a single-use ticket redeemed by the
+ * host-authenticated subject mints a short subject+artifact+release grant
+ * as a host-only cookie. Every request re-verifies the grant AND live
+ * ACL/lifecycle state, so withdrawal cuts readers at the next request
+ * (inside the 60s budget, no cache reliance). Republish demands fresh
+ * consent on an artifact id (401); a release id keeps its release.
+ * Unknown/unreadable → same 404; bad grants → 401.
  */
 import { errorBody } from '../http.js';
 import type { AclStore } from '../server/access.js';
@@ -101,24 +105,33 @@ export function createContentHandler(deps: ContentHandlerDeps) {
       if (request.method !== 'GET' && request.method !== 'HEAD') return fail(404);
       const origin = parseContentHost(request.host, deps.baseDomain);
       if (origin === undefined) return fail(404);
+      // One label, resolved server-side: an artifact id serves its current
+      // release, a release id serves that frozen version. Both lookups
+      // always run, so an unknown id gets the same 404 and timing class
+      // whether it is a missing artifact or a missing release.
+      const [current, byRelease] = await Promise.all([
+        deps.publication.getCurrent(origin.id),
+        deps.publication.getRelease(origin.id),
+      ]);
       let artifactId: string;
-      let release: { releaseId: string; manifest: string } | undefined;
-      if (origin.kind === 'stable') {
-        artifactId = origin.artifactId;
-        release = await deps.publication.getCurrent(artifactId);
+      let release: { releaseId: string; manifest: string };
+      let channel: 'stable' | 'pinned';
+      if (current !== undefined) {
+        artifactId = origin.id;
+        release = current;
+        channel = 'stable';
+      } else if (byRelease !== undefined) {
+        artifactId = byRelease.artifactId;
+        release = byRelease;
+        channel = 'pinned';
       } else {
-        release = await deps.publication.getRelease(origin.releaseId);
-        if (release === undefined) return fail(404);
-        const owner = (JSON.parse(release.manifest) as { artifactId?: unknown }).artifactId;
-        if (typeof owner !== 'string') return fail(404);
-        artifactId = owner;
+        return fail(404);
       }
-      if (release === undefined) return fail(404);
       if (request.ticket !== undefined) {
         if (request.actorId === undefined || request.actorId.length === 0) return fail(401);
         try {
           await deps.tickets.redeem(request.ticket, {
-            subjectId: request.actorId, artifactId, releaseId: release.releaseId, channel: origin.kind,
+            subjectId: request.actorId, artifactId, releaseId: release.releaseId, channel,
           });
         } catch {
           return fail(401);

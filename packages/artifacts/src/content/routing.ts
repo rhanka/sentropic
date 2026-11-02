@@ -1,20 +1,17 @@
 /**
- * L-5d — content routing (spec-v8 §9 5d).
- *
- * Two origins per artifact, each with a single UUID label: the stable
- * origin `<artifactId>.<base>` follows the current release; the pinned
- * origin `<releaseId>.pinned.<base>` serves one immutable release. Two
- * concatenated UUIDs, extra labels, foreign bases and non-UUID labels
- * never route. Paths normalize to manifest file paths with an
+ * L-5d — content routing (owner decision relayed by immo): one wildcard
+ * per base with a single UUID label `<id>.<base>`. The label is resolved
+ * server-side by the handler — an artifact id serves its current release,
+ * a release id serves that frozen version. The former `<id>.pinned.<base>`
+ * form, two labels, foreign bases and non-UUID labels never route (no
+ * legacy fallback). Paths normalize to manifest file paths with an
  * `index.html` default; traversal, empty segments, backslashes and
  * encoded traversal never resolve (no history fallback hiding missing
  * assets). Service workers are detectable so the handler can deny them.
  */
 import { isArtifactId } from '../contracts.js';
 
-export type ContentOrigin =
-  | { kind: 'stable'; artifactId: string }
-  | { kind: 'pinned'; releaseId: string };
+export type ContentOrigin = { kind: 'id'; id: string };
 
 /** Parse a content Host header against the configured base domain. */
 export function parseContentHost(host: string, baseDomain: string): ContentOrigin | undefined {
@@ -24,10 +21,7 @@ export function parseContentHost(host: string, baseDomain: string): ContentOrigi
   if (!normalized.endsWith(`.${base}`)) return undefined;
   const labels = normalized.slice(0, normalized.length - base.length - 1).split('.');
   if (labels.length === 1 && isArtifactId(labels[0])) {
-    return { kind: 'stable', artifactId: labels[0] as string };
-  }
-  if (labels.length === 2 && labels[1] === 'pinned' && isArtifactId(labels[0])) {
-    return { kind: 'pinned', releaseId: labels[0] as string };
+    return { kind: 'id', id: labels[0] as string };
   }
   return undefined;
 }

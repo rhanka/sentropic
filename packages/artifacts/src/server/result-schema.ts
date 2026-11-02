@@ -19,7 +19,7 @@ const pointer = object({ variant: { enum: ['pointer_conflict'] }, artifactId: st
   expectedCurrentReleaseId: nullable, currentReleaseId: nullable, currentDigest: nullable,
   currentSource: object({ artifactId: string, releaseId: string, digest: nullable,
     manifest: string, files: { type: 'array', items: sourceFile }, sourceRef: { type: ['object', 'null'] },
-    guideRef, stableUrl: string, pinnedUrl: string },
+    guideRef, stableUrl: string, versionUrl: string },
     ['artifactId', 'releaseId', 'digest', 'manifest', 'files', 'sourceRef', 'guideRef']),
 }, ['variant', 'artifactId', 'expectedCurrentReleaseId', 'currentReleaseId', 'currentDigest']);
 const common = { invocationId: string,
