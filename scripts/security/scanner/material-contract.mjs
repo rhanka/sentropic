@@ -26,7 +26,7 @@ const manifestSchema = record({ schemaVersion: literal(1), recipeDigest: hash, m
 
 // Validates declared contracts and retained bytes only. Authentication, tool/content
 // admission and actual execution remain separate r6 gates; this function grants none.
-export function validateMaterialContract({ recipeBytes, manifest, files } = {}) {
+export function validateMaterialInventory({ recipeBytes, manifest } = {}) {
   check(Buffer.isBuffer(recipeBytes) && recipeBytes.length > 0, 'recipe bytes');
   let recipe;
   try { recipe = JSON.parse(recipeBytes); } catch { check(false, 'recipe JSON'); }
@@ -48,10 +48,15 @@ export function validateMaterialContract({ recipeBytes, manifest, files } = {}) 
   ];
   check(new Set(expected.map(([p]) => p)).size === expected.length, 'unique material references');
   check(equal(expected, manifest.materials.map(m => [m.path, m.kind])), 'ordered material inventory');
-  check(files && equal(Object.keys(files).sort(), expected.map(([p]) => p).sort()), 'complete retained materials');
   for (const material of manifest.materials) {
     check(recipe.origins.includes(new URL(material.url).origin), 'material origin');
-    measured(material, files);
   }
+  return recipe;
+}
+
+export function validateMaterialContract({ recipeBytes, manifest, files } = {}) {
+  validateMaterialInventory({ recipeBytes, manifest });
+  check(files && equal(Object.keys(files).sort(), manifest.materials.map(m => m.path).sort()), 'complete retained materials');
+  for (const material of manifest.materials) measured(material, files);
   return CONTRACT_ONLY;
 }

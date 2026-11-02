@@ -1,0 +1,31 @@
+{
+  "schemaVersion": 1,
+  "files": [
+    {
+      "path": "go.mod",
+      "beforeDigest": "sha256:3b80afcc13ad1abbafa5a3054198622ea51444295967069899f907be1acaba71",
+      "afterDigest": "sha256:cb75cc749fd36f4ec0a6a152aa40598653e0b5a8f58b9cf9702a29f62f5bcc81",
+      "edits": [
+        {
+          "before": "github.com/go-jose/go-jose/v4 v4.1.5",
+          "after": "github.com/go-jose/go-jose/v4 v4.1.6"
+        }
+      ]
+    },
+    {
+      "path": "go.sum",
+      "beforeDigest": "sha256:24155b9b13b24ad37ca2938d53304974a18bc84e9db00dd77b0e707c838b1cd6",
+      "afterDigest": "sha256:a934abfc262a21a885c2c9b755f43397460996d67a07d1ab3fa52e8e66d94e84",
+      "edits": [
+        {
+          "before": "github.com/go-jose/go-jose/v4 v4.1.5 h1:RjgjO2LOtWOJKUC5wpwY9LR3B3vwVAz6JS2YHfYU6eA=",
+          "after": "github.com/go-jose/go-jose/v4 v4.1.6 h1:sNRkftxFJxwsILiQukqp5z83QBSmntVwmgRY7AqBDO4="
+        },
+        {
+          "before": "github.com/go-jose/go-jose/v4 v4.1.5/go.mod",
+          "after": "github.com/go-jose/go-jose/v4 v4.1.6/go.mod"
+        }
+      ]
+    }
+  ]
+}

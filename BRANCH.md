@@ -1,25 +1,17 @@
-# Feature: RC2.registry canonical Sessions registry
+# Feature: Resolve exact scanner sources and retained materials (A02)
 
 ## Objective
-Implement the single canonical Sessions registry with typed projections (§3.3.1), exported through SessionOriginRegistryPortV1, behind the frozen RC2 contract shape, fail-closed on source-gaps.
+- [ ] Implement admission-plan-r1 section 5 row A02 (R1) under approved amendment r6 section 3.2: resolve/authenticate public sources and exact compiler/base/module/package snapshots, implement ordered patches and retained-material acquisition. Candidate-only; no build eligibility, admission or promotion claim.
 
 ## Scope / Guardrails
-- Scope limited to canonical registry, typed listing projection, freshness scheduler, SessionOriginRegistryPortV1, observation emit.
-- One migration max in `api/drizzle/*.sql` (if applicable).
-- Make-only workflow, no direct Docker commands.
-- Root workspace `~/src/top-ai-ideas-fullstack` is reserved for user dev/UAT (`ENV=dev`) and must remain stable.
-- Branch development must happen in isolated worktree `tmp/worktrees/rc2-registry` (even for one active branch).
-- Automated test campaigns must run on dedicated environments (`ENV=test` / `ENV=e2e`), never on root `dev`.
-- UAT qualification branch/worktree must be commit-identical to the branch under qualification (same HEAD SHA; no extra commits before sign-off). If subtree/sync is used, record source and target SHAs in `BRANCH.md`.
-- In every `make` command, `ENV=<env>` must be passed as the last argument.
-- All new text in English.
-- Contract pins (binding, r2 — re-pinned per conductor instruction on the ACCEPTED r2): MANIFEST seal sha256 133e23f54d7268c104fe45be753d2ea28b402b8621beefab95ed35062d84318e; plan v1.6 draft sha256 6168b73ba9b236530bde6bb4998929de1ede0c92d61aa0fc07fcd4f9983b7b18; RC2-CONTRACT.md sha256 cc8965c9affad415c35261d1909489ab12a4db15b33296a9e1dba8b6952544d0; manifest JSON sha256 f7e4a148aef4db2732d770b723751e9f8f9fb6a2dffcfdaac12913498915a23a; CHANGES-r2.md sha256 c618df116c7a35f30a974e7e48ab3c91aff0d016d3ef7d45b2921e9e5bf24 (all under /home/antoinefa/src/h2a/tmp/h-cond/rc2-contract/); app ACK review .h2a/reviews/rc2-contract_app-ack_spark.stdout.md VERDICT ACK (r1 lineage, preserved in r1-baseline.json: r1 MANIFEST dfb2589969f78cf040e8b3f0857cd933722aff5ad5445553ac42b7ba583abbed, contract 3d827eaa…, manifest JSON 5e86b2a1…).
-- r2 re-pin scope (CHANGES-r2.md / changes-r2.json): in-scope registry schema deltas are $comment-only; applied exactly the r2 semantic deltas — exact runtime port signatures (single named parameter object + options?: { signal?: AbortSignal }, Promise results, synchronous emit, TypeError only on invalid JS API use), freshness interval rule W-P2-1 (expiresAt <= min(issuedAt+15000, G-5000); A stops at now >= min(expiresAt, G-5000) or age >= 15000ms; reject nonpositive intervals and unknown clock confidence), revision counter W-P1-1 (integer-exhaustion refusal; writerEpoch never resets originRevision; duplicates allocate nothing), exact digest domains (cluster-mesh.session-listing/1/coarse-v1\0 over JCS(coarse projection), exposed as projectionDigest; activated snapshot digest stays fail-closed without an enrolled origin key). Source-gaps stay fail-closed.
-- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
-- Contract inputs used: listing/registry/snapshot/descriptor/log-ref/lifecycle/freshness/projection-ACK schemas; coarse allowlist (contract §7); 5000ms scheduler with 15000ms bound (contract §7); grant/ACK/withdrawal rules (contract §7); origin-registry port methods + observation emit (contract §8).
-- Source-gaps stay fail-closed (refuse), never invented: DEP-FED (H2-I/F1/F2/F15), DEP-AUTH-B/M0 (H1-H4/L1-L2/admission/executor custody), DEP-AUTH-A/A2.0b, SG-R15, N1/N4/N5 packed exports, DEP-RESIDENCE/RCP.
-- Re-verify contract manifest hash before each push.
-- ENV=test-rc2-registry always LAST; make down after; at most 2 build lanes; one CI per final head; push often (crash safety); secrets by NAME from .env only.
+- [x] Binding r6 SHA-256: `4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f`.
+- [x] Binding plan SHA-256: `528dd39308a6e2cf8bdf31307c82da373cf3ceb666cb865a0417abfa7ece49d2`.
+- [x] Worktree: `tmp/worktrees/cyber-admission-a02`; branch: `feat/cyber-admission-a02`; base: origin/main `e3fa8fab7f6a9ea802550f2a4e1b269fbb212375` (A01 merged as PR #883).
+- [x] Make-only Docker-first; single shared Docker lock `.tmp/packets/DOCKER-LOCK.md` taken per command; reuse the pinned Node image; no new image build.
+- [x] `ENV=test-cyber-adm` last; no listening services or ports; no registry login, OIDC, secrets, live promotion or merge.
+- [x] Keep production admission, A03+ execution, policy changes and Track writes out of scope; the conductor remains the sole Track writer.
+- [x] Tests first; selective staging; `make commit` under 150 changed lines; push after every commit; never suppress CI; never `[skip ci]`.
+- [x] Stop on an unresolved design decision; pin selection and implementation follow the approved R1/r6 section 3.2 contract.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -32,93 +24,56 @@ Implement the single canonical Sessions registry with typed projections (§3.3.1
   - `api/tests/api/session-remote-view.test.ts`
   - `ui/tests/session-content/navigation.test.ts`
   - `BRANCH.md`
-  - `package-lock.json`
-  - `api/package-lock.json`
-  - `api/src/services/mcp/cluster-registry.ts`
-  - `api/tests/api/app-mcp-registry.test.ts`
-  - `api/tests/api/app-mcp-installed.test.ts`
+  - `scripts/security/scanner/**`
+  - `scripts/security/daily/scanner-provenance.test.mjs`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `packages/mcp-platform/**`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `.security/**`
+  - `.track/**`
+  - `packages/**`
   - `.github/workflows/**`
+  - `scripts/ci/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - none
 - **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
-  - Include reason, impact, and rollback strategy.
-  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
-- **Exceptions granted**:
-  - `BR01-EX1` (`package-lock.json`, root): mechanically required sync of the `packages/cluster-mesh` 0.26.0-dev.5 version bump via `make lock-root`; CI train lock-sync gate fails without it. Reason: enforce-package-bump companion. Impact: version field sync only (verify diff). Rollback: `git checkout HEAD -- package-lock.json` + revert version bump.
-  - `BR01-EX2` (`packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` + `package-lock.json`): mechanically required companion of the same version bump; CI packaging gate (`prepare-artifacts`, lazy lanes) resolves the candidate tuple from these fixtures. Precedent: dev.3 lane commit 8dee07193. Impact: single dep spec line + regenerated lock (verify diff). Rollback: `git checkout HEAD -- packages/cluster-mesh/tests/packaging/fixtures/selected/`.
+  - [x] No exception declared; no conditional or forbidden path is touched.
 
 ## Feedback Loop
-- [x] Review r1 MAJOR: quarantine any reported epoch that differs from the current origin epoch; prove live-state, publication and ingest fencing in `registry.spec.ts`.
-- [x] Review r1 MINOR: reject out-of-union lifecycle kinds before mutation; retain all 18 contracted kinds in `registry.spec.ts`.
-- [x] Review r1 MINOR: apply the same binding validation before both ingest resolvers; prove refusal without revision/capability mutation in `registry.spec.ts`.
-- [x] Review r1 MINOR: sync the API lockfile linked cluster-mesh version to the existing package/root-lock version; both version-equality checks pass.
-- [x] Review r1 regression evidence: Docker RED 15 expected failures / 42 passes, then GREEN 57/57 on `ENV=test-rc2-registry`; source-gaps remain fail-closed and no source-gap field is filled locally.
-- [x] Review r1 CI recovery: rebased onto `origin/main` e1c0ef97d; the RC2.store union retains both content-policy and registry exports and aligned 0.26.0-dev.5 pins, preserving both lots; the later BRANCH-only conflict changed no package source or lock bytes; restored the registry scope; version 0.26.0-dev.5 remains greater than published 0.25.0.
-- [x] Rebase after #874: preserved this branch's plan and both exports on main `78c746f53`; regenerated the selected fixture via `refresh-lazy-package-lock` with guarded artifacts 0.2.6 / mcp-platform 0.4.1 sibling archives, removing an obsolete replayed artifacts 0.1.4 pin; the regenerated lock exactly matches the semantic merge result, and train/API/fixture version checks pass.
-- [x] `attention`: manifest pin drift — assignment cites dfb2589969f78cf0 prefix; r1-baseline.json confirms it as the r1 MANIFEST seal; contract 3d827eaa… and manifest JSON 5e86b2a1… are the r1 pinned bytes per app ACK review §1 finding 2. Resolved by the r2 re-pin above (r1 kept as lineage only).
-- [x] `attention`: r2 reseal observed mid-lot (CHANGES-r2.md, contract cc8965c9…, manifest JSON f7e4a148…). Re-pinned to the ACCEPTED r2 (MANIFEST 133e23f5…) per conductor instruction; in-scope r1→r2 schema deltas verified $comment-only via changes-r2.json; only the r2 semantic deltas were adjusted in code (port signatures, W-P2-1 freshness margin, W-P1-1 exhaustion refusal + digest domains). r2 listing digest vector (vectors/registry-revision-digests.json, 226ad2fe…) reproduced exactly in tests.
-- [x] `attention`: rebased onto origin/main a67778379 (merge-tree showed BRANCH.md as the sole conflict; `-X theirs` kept the branch version per conductor rebase rule; every other file is a strict union — no main code or tests dropped). Post-Rebase Gate: packages/cluster-mesh 0.26.0-dev.5 > npm published 0.25.0 (verified via `npm view @sentropic/cluster-mesh version`).
-- [x] `blocked`: PR #873 `pull_request` events (opened, close, reopen, 2x synchronize) created no CI run (anomaly open for owner; precedent packet allows `workflow_dispatch` fallback). CI green via dispatch run 41325626558 on pre-rebase head ce9c8b7e0: previous dispatch failures fixed in-branch (root lockfile sync BR01-EX1, fixture tuple refresh + BRLOCK-EX1 line + artifacts baseline BR01-EX2).
+- [x] Retain inherited BRLOCK-EX1 under `.security/ci-lockfile-policy.json`: owner=CI maintainers, review_by=2026-11-30T00:00:00Z; bounded scope and removal trigger remain unchanged, and catalog SCA debt stays open.
+- [x] A01 local gate passed 298 tests with zero failures/skips; ready PR #883 CI run 41414318957 passed and merged as `e3fa8fab7`; this branch is rebased on origin/main.
+- [x] Prior A02 lane commits (patch/acquisition/offline machinery plus tests) are retained and rebased; the native replay executor and the resolved recipe/material pins are the remaining work.
+- [x] Public source investigation confirms Trivy v0.76.1 at commit `e713f67f7d54decdcd9b3132c9751833dcced698` (tag ref, commit API and tree API retained), Go 1.27.3 toolchain, alpine 3.24.2 base at index `sha256:294b683c...`, and the inherited embedded go-jose v4.1.5 defect.
+- [x] Preserve upstream authentication gaps and tool-qualification boundaries; a fetched hash or candidate-only fixture grants no admission.
+- [x] Retained materials stay outside the repository (`.tmp/daily-cyber/a02-materials`); only the reviewed recipe, material manifest and patch data are committed.
 
 ## AI Flaky tests
-- [x] No AI-dependent tests or timeout changes.
+- [x] Deterministic source/material tests and offline replay; no AI flaky exception.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
-- [ ] **Multi-branch** (only if sub-workstreams require independent CI or long-running validation)
-- Rationale: single registry slice with one writer; no orthogonal sub-workstreams.
+- [x] **Mono-branch**: single A02 lane with one ready PR against main; no merge.
 
 ## UAT Management (in orchestration context)
-- **Mono-branch**: UAT is performed on the integrated branch only (after each lot, when UI changes exist).
-- **Multi-branch**: no UAT on sub-branches; UAT happens only after integration on the main branch.
-- UAT checkpoints must be listed as checkboxes inside each relevant lot (no separate UAT section).
-- Execution flow (mandatory):
-  - Develop and run tests in `tmp/worktrees/rc2-registry`.
-  - Push branch before UAT.
-  - Run user UAT from root workspace (`~/src/top-ai-ideas-fullstack`, `ENV=dev`).
-  - Switch back to `tmp/worktrees/rc2-registry` after UAT.
+- [x] No UI surface; executable material and offline dependency checks provide the applicable gate.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read COMMON-RULES.md, plan v1.6 draft lot row RC2.registry, contract freeze, app ACK review.
-  - [x] Create isolated worktree `tmp/worktrees/rc2-registry` on feat/rc2-registry from origin/main 455813bf9.
-  - [x] Verify branch feat/rc2-registry.
-  - [x] Capture Makefile targets: make typecheck-cluster-mesh, make test-cluster-mesh, make build-cluster-mesh, make down, make commit, make scope-check.
-  - [x] Define environment mapping (test-rc2-registry) and ports for this branch.
-  - [x] Confirm command style: `make ... ENV=test-rc2-registry` with `ENV` last.
-  - [x] Confirm scope and guardrails.
-  - [x] Validate scope boundaries (`Allowed/Forbidden/Conditional`) and declare `BRxx-EXn` exceptions if needed.
-- [ ] **Lot 1 — Canonical registry + SessionOriginRegistryPortV1**
-  - [x] Write failing tests first in `packages/cluster-mesh/tests/remote-session/registry.spec.ts` (REGISTRY-PARTITION / REGISTRY-STALE / REGISTRY-SPLIT-BRAIN / REGISTRY-LISTING; allowlist, forbidden-field absence, stage refusals, source ACK, expiry/withdrawal, subscriber/cache teardown; dedupe/tombstone, sole writers, freshness carrier; scheduler 5000ms emissions, no catch-up burst, no 15000ms extension, no native ingest calls).
-  - [x] Write failing paired selectors in `api/tests/api/session-remote-view.test.ts` (grant-state rows, read-loss downgrade).
-  - [x] Write failing paired selectors in `ui/tests/session-content/navigation.test.ts` (coarse/activated/downgrade rows).
-  - [x] Implement `packages/cluster-mesh/src/sessions/registry.ts` (sole-writer ingest, deterministic join, tombstone dominance, quarantine on conflicting hash, freshness scheduler owned by origin writer, renewFreshness as internal/test trigger, fail-closed source-gaps).
-  - [x] Export port through `packages/cluster-mesh/src/index.ts`.
-  - [x] Bump `packages/cluster-mesh/package.json` patch for src change.
-  - [x] Lot gate:
-    - [x] `make typecheck-cluster-mesh ENV=test-rc2-registry`
-    - [x] **API tests**
-      - [x] Evolve `api/tests/api/session-remote-view.test.ts` (new REGISTRY-LISTING selectors)
-      - [x] Sub-lot gate: scoped api run for that file (2/2 PASS)
-    - [x] **UI tests (TypeScript only)**
-      - [x] Evolve `ui/tests/session-content/navigation.test.ts` (new REGISTRY-LISTING rows)
-      - [x] Sub-lot gate: scoped ui run for that file (4/4 PASS)
-    - [x] **Cluster-mesh tests**
-      - [x] New `packages/cluster-mesh/tests/remote-session/registry.spec.ts`
-      - [x] Sub-lot gate: `make test-cluster-mesh ENV=test-rc2-registry` (17/17 PASS)
-    - [x] Extra gates: `make typecheck-api`, `make lint-api`, `make lint-ui` (all PASS)
-    - [x] `make down ENV=test-rc2-registry` after
-- [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest cluster-mesh (cf Lot1, copy checklist)
-  - [ ] Retest API (cf Lot1, copy checklist)
-  - [ ] Retest UI (cf Lot1, copy checklist)
-  - [ ] Bumped affected `packages/<pkg>/package.json` version (semver) for every package whose `src/**` changed in this branch — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
-  - [ ] Final gate step 1: create/update PR using `BRANCH.md` text as PR body (source of truth).
-  - [ ] Final gate step 2: run/verify branch CI on that PR and resolve remaining blockers.
-  - [ ] Final gate step 3: once UAT + CI are both `OK`, commit removal of `BRANCH.md`, push, and merge.
+- [ ] **Lot 0 — Baseline & constraints**
+  - [x] Read rules, approved r6/plan and the A01 contract; verify both document hashes.
+  - [x] Create/confirm isolated worktree `tmp/worktrees/cyber-admission-a02` from origin/main and pass the mechanical harness branch check (PASS C1).
+  - [x] Locate the existing pinned Node test lane and the shared Docker lock; preserve production admission off.
+- [ ] **Lot 1 — Tests before implementation**
+  - [x] Ordered-patch, retained-acquisition and offline-resolution unit tests are collected by `scanner-provenance.test.mjs`.
+- [x] Retained proxy paths encode reversibly inside the contract charset (`!x`→uppercase, `/@v/`→`/`, `+`→`-plus-`) with asserted round-trips.
+  - [x] Native offline replay test (`native-replay.test.mjs`) requires `SCANNER_MATERIALS` and never skips.
+  - [x] Update `scanner-provenance.test.mjs`: resolved real recipe passes inventory validation, refuses empty retained bytes, and every patch/source/checksum mutation of the real recipe/manifest refuses; wire the native replay test when `SCANNER_MATERIALS` is set.
+- [ ] **Lot 2 — Exact source, patch and material implementation**
+  - [x] Ordered data-only patches with exact input/output checksums exist under `scripts/security/scanner/patches/`.
+  - [x] Resolved and measured the actual pins (upstream archive/authentication/license, Go compiler/go.mod/go.sum/module proxy, base index/manifest/config/layer, APK index/packages, tools, Actions); `recipe.json` and `material-manifest.json` carry no prose pin or pending digest (recipeDigest `sha256:c857dc4b...`, 3138 materials, 10 origins).
+  - [x] Assembled the retained material directory (3138 files, 1,071,738,643 bytes, outside the repo) and implemented `native-replay.mjs`: offline replay of the patched source resolves go-jose v4.1.6; the OS-only source still exposes v4.1.5 and is rejected. Native gate passed under `--network=none` (1 test, 0 fail, 431s).
+- [ ] **Lot 3 — Gates, ready PR and report**
+  - [x] Ran `make test-security-daily ENV=test-cyber-adm` under the single lock at `32c95098c`: 311 passed, 0 fail, 0 skip; native offline replay with `SCANNER_MATERIALS` under `--network=none` passed (1 test, 0 fail, 68s; patched source resolves go-jose v4.1.6, OS-only source still exposes v4.1.5 and is rejected); `make down ENV=test-cyber-adm` exit 0.
+  - [x] `harness check scope` PASS C2 and `harness check branch` PASS C1 before every commit; atomic `make commit` under 150 lines; pushed after every commit; rebased onto `origin/main` `5e8a08b96` with `-X theirs` (BRANCH.md sole conflict) and force-with-lease pushed.
+  - [x] Opened ready (non-draft) PR #884 against main at head `32c95098c`; pull_request CI fires on the final head.
+  - [ ] Record exact heads, PR, CI and every test gate in `.tmp/rv/cyber-admission-a02.md` for conductor Track import.
+  - [ ] Stop after A02; leave A03+ and all live admission/activation work fenced.
