@@ -155,6 +155,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Delete the replaced app passkey authentication handler.
   - [x] Mount CM email and magic-link completions; consume proof and create login before the same commit; delete old email handler.
   - [x] Bind registration to verified email/invitation context and stage a fresh private HTTP context per attempt.
+  - [x] Add mounted registration/approval/login coverage with real attestation/assertion and invitation replay across two prepared ceremonies; assert that account approval does not approve tenant membership. Execution awaits A2.0b.
   - [x] Remove the replaced registration finalizer and its old route factory mount.
   - [x] Remove the replaced app registration account/proof writers.
   - [x] Remove the replaced app registration challenge preparation.
