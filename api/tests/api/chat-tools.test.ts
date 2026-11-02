@@ -1,3 +1,5 @@
+import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
+import { cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 vi.mock('../../src/services/llm-runtime', () => ({
@@ -25,7 +27,6 @@ import {
   comments,
   folders,
   organizations,
-  workspaceMemberships,
   initiatives
 } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
@@ -61,17 +62,11 @@ describe('Chat tools API - comment_assistant', () => {
   beforeEach(async () => {
     user = await createAuthenticatedUser('editor', `editor-${createTestId()}@example.com`);
     viewer = await createAuthenticatedUser('guest', `viewer-${createTestId()}@example.com`);
-    admin = await createAuthenticatedUser('admin', `admin-${createTestId()}@example.com`);
+    admin = await createAuthenticatedUser('admin_org', `admin-${createTestId()}@example.com`);
 
     if (user.workspaceId) {
-      await db
-        .insert(workspaceMemberships)
-        .values({ workspaceId: user.workspaceId, userId: viewer.id, role: 'viewer', createdAt: new Date() })
-        .onConflictDoNothing();
-      await db
-        .insert(workspaceMemberships)
-        .values({ workspaceId: user.workspaceId, userId: admin.id, role: 'admin', createdAt: new Date() })
-        .onConflictDoNothing();
+      await putCmWorkspaceMember(user.workspaceId, viewer.id, 'viewer');
+      await putCmWorkspaceMember(user.workspaceId, admin.id, 'admin');
     }
 
     const orgResponse = await authenticatedRequest(app, 'POST', '/api/v1/organizations', user.sessionToken!, {
@@ -138,7 +133,7 @@ describe('Chat tools API - comment_assistant', () => {
     await db.delete(folders).where(eq(folders.id, folderId));
     await db.delete(organizations).where(eq(organizations.id, organizationId));
     if (user.workspaceId) {
-      await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, user.workspaceId));
+      await cmDeleteWorkspaceMembers(user.workspaceId);
     }
     await cleanupAuthData();
     assistantMessageIds.length = 0;
