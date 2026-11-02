@@ -31,6 +31,56 @@ const shared = {
 describe.each(pgEnabled ? ['sqlite', 'postgres'] as const : ['sqlite'] as const)('real auth completion on %s', (profile) => {
   const open = async () => asOpHost((profile === 'postgres' ? await openPostgresEnv() : openSqliteEnv()).unitOfWork);
 
+  it('aborts invalid registration continuations and rolls back provisional accounts', async () => {
+    const unitOfWork = await open();
+    const outcome = await runIdentityAuthCompletionV1({ flow: 'registration', unitOfWork, options: WRITE, operation: async (tx) => {
+      const binding = createIdentityAuthHonoTransactionBindingV1({ ...shared, tx });
+      await binding.ports.users.create({ email: 'ticket@example.test', role: 'editor' });
+      await binding.ports.emailVerification.verifyToken('ticket@example.test', 'bad.signature', new Date(NOW));
+      return { verified: true };
+    } });
+    expect(outcome).toMatchObject({ committed: false, refusal: { flow: 'registration', result: { verified: false,
+      error: { code: 'registration_verification_failed', status: 400 } } } });
+    await unitOfWork.run(READ, async (tx) => { expect(await tx.stores.accounts.findAccountByEmail('ticket@example.test')).toBeNull(); });
+  });
+
+  it('keeps the registration default floor and stores each admitted origin once', async () => {
+    const unitOfWork = await open();
+    await unitOfWork.run(WRITE, async (tx) => {
+      const binding = createIdentityAuthHonoTransactionBindingV1({ ...shared, tx,
+        rp: { ...shared.rp, expectedOrigins: ['https://example.test', 'https://example.test'] },
+        accountPolicy: { ...shared.accountPolicy, resolveUserVerification: () => 'discouraged' },
+        webAuthnPolicy: { ...shared.webAuthnPolicy, registrationUserVerification: 'discouraged' },
+      });
+      const user = await binding.ports.users.create({ email: 'uv@example.test', role: 'editor' });
+      const options = await binding.registration.generateRegistrationOptions({ userId: user.id, userName: user.email!, userDisplayName: 'UV' });
+      expect(options.authenticatorSelection?.userVerification).toBe('preferred');
+      expect(await tx.custody.singleUseProofs.findChallenge(options.challenge, 'registration'))
+        .toMatchObject({ userVerification: 'preferred', allowedOrigins: ['https://example.test'] });
+    });
+  });
+
+  it('allows a pure session validation callback in read mode', async () => {
+    const unitOfWork = await open();
+    expect(await runIdentityAuthCompletionV1({ flow: 'session_validate', unitOfWork, options: READ,
+      operation: async (tx) => ({ accounts: await tx.stores.accounts.listAccounts() }),
+    })).toEqual({ committed: true, value: { accounts: [] } });
+  });
+
+  it('preserves administrative MFA reads while request views require matching token evidence', async () => {
+    const unitOfWork = await open();
+    await unitOfWork.run(WRITE, async (tx) => {
+      const binding = createIdentityAuthHonoTransactionBindingV1({ ...shared, tx });
+      const user = await binding.ports.users.create({ email: 'mfa@example.test', role: 'editor' });
+      await tx.custody.sessions.insert({ sessionId: 'mfa-session', userId: user.id, sessionTokenHash: 'a'.repeat(64), refreshTokenHash: 'b'.repeat(64),
+        login: { mfaVerified: true, authTime: 123, sessionVersion: 1 }, rotationVersion: 0, deviceName: null, ipAddress: null, userAgent: null,
+        createdAt: NOW, lastActivityAt: NOW, expiresAt: '2026-11-01T13:00:00.000Z', revokedAt: null });
+      expect(await binding.ports.sessions.findById('mfa-session')).toMatchObject({ mfaVerified: true });
+      expect(await binding.ports.sessions.findByRefreshTokenHash('b'.repeat(64))).toMatchObject({ mfaVerified: true });
+      expect(await binding.ports.sessions.findByTokenHash('a'.repeat(64))).toMatchObject({ mfaVerified: false });
+    });
+  });
+
   it('evaluates the root creation policy instead of accepting requested privilege or approval', async () => {
     const unitOfWork = await open(), due = new Date('2026-12-01T00:00:00.000Z');
     await unitOfWork.run(WRITE, async (tx) => {
