@@ -38,7 +38,7 @@ if (DATABASE_URL === undefined || DATABASE_URL.length === 0) {
   throw new Error('publication authorization proof needs DATABASE_URL');
 }
 
-const MIGRATIONS = ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql'].map(
+const MIGRATIONS = ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql', '0004_metadata.sql'].map(
   (name) =>
     readFileSync(join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations', name), 'utf8'),
 );

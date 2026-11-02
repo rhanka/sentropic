@@ -110,7 +110,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     const meta: ArtifactMetadata = {};
     if (typeof normalized.title === 'string') meta.title = normalized.title;
     if (typeof normalized.description === 'string') meta.description = normalized.description;
-    if (typeof normalized.icon === 'string') meta.icon = normalized.icon;
+    if (typeof normalized.icon === 'string' || normalized.icon === null) meta.icon = normalized.icon;
     return Object.keys(meta).length > 0 ? meta : undefined;
   }
 

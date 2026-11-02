@@ -2,13 +2,22 @@
 
 ## 0.2.5
 
+- D3: profiles can require explicit `expectedCurrentReleaseId` (including `null`),
+  refusing missing preconditions with HTTP 428 and disabling writers without CAS.
+  Pointer checks, metadata, references and receipts share the coordinator transaction.
+- Replay guarded receipts before editing files or evaluating stale preconditions;
+  command hashes bind metadata, edits and preconditions without changing durable keys.
+- Publish complete `artifacts-outcome/v2` MCP results through mcp-platform 0.4.1,
+  including commit state, replay status and typed conflict/edit/availability details.
+  Edits use the observed snapshot and conflicts include authorized edited paths.
+
 - Add `artifacts_list_versions`: release history of one artifact — per release
   the id, created at, author principal, state, whether it is current, and a
   content digest. Read scope, like `artifacts_get`.
 - Add `artifacts_revert`: make an earlier release current again by creating a
   NEW release that copies the earlier content, so the artifact URL stays
   stable and history only grows. A purged target release is refused with a
-  typed `gone` error. Write scope, idempotent per principal like publish.
+  typed `release_unavailable` error. Write scope, idempotent per principal like publish.
 - Add optimistic concurrency to `artifacts_publish` and `artifacts_revert`:
   optional `expectedCurrentReleaseId`; on mismatch the call returns a typed
   `conflict` error (HTTP 409) carrying the current release id and content

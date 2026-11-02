@@ -20,7 +20,8 @@ export function projectArtifactHttpOutcome(outcome: ArtifactOutcome<HttpResponse
 export function projectArtifactMcpOutcome(outcome: ArtifactOutcome<HttpResponse>, auditId: string): AppToolResult {
   if (outcome.ok) return { ok: true, output: outcome.result.body, auditId, redactionClass: 'low',
     invocationId: outcome.invocationId, commitState: outcome.commitState, replayed: outcome.replayed };
-  const { publicCode, retriable, conflict, edit, release, variant, invocationId, commitState } = outcome.failure;
+  const { publicCode, retriable, conflict, edit, release, invocationId, commitState } = outcome.failure;
+  const variant = 'variant' in outcome.failure ? outcome.failure.variant : undefined;
   const details = conflict !== undefined ? { variant: 'pointer_conflict', ...conflict }
     : edit !== undefined ? { ...edit } : release !== undefined ? { ...release }
       : variant !== undefined ? { variant } : undefined;

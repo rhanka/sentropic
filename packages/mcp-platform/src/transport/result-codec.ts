@@ -81,7 +81,7 @@ export function decodeToolResult(wire: unknown): AppToolResult {
       ? (record['_meta'] as Record<string, unknown>)
       : {};
   const auditId = typeof meta['auditId'] === 'string' ? meta['auditId'] : '';
-  const redactionClass =
+  const redactionClass: AppToolResult['redactionClass'] =
     meta['redactionClass'] === 'none' ||
     meta['redactionClass'] === 'low' ||
     meta['redactionClass'] === 'moderate' ||
