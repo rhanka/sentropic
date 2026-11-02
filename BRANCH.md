@@ -61,16 +61,16 @@ Make `EncryptedFileKeyring` reads side-effect free (no `mkdir`/`chmod` on the re
   - [x] write path (`create=true`): still creates; `chmod` only when the mode differs
   - [x] export `KeyringInsecurePermissionsError` from `src/node/index.ts`
   - [x] ambient `node:fs/promises` shim in `src/global.d.ts` gains `stat`/`Stats` (package compiles with `types: []`)
-- [ ] **Lot 3 — Gates**
-  - [ ] `make test-llm-mesh SCOPE=tests/node/encrypted-file-keyring.test.ts ENV=test-keyring-ro` green
-  - [ ] `make test-llm-mesh ENV=test-keyring-ro` full suite green
-  - [ ] `make typecheck-llm-mesh ENV=test-keyring-ro` green
-  - [ ] `make build-llm-mesh ENV=test-keyring-ro` green
-- [ ] **Lot 4 — Release**
-  - [ ] bump `packages/llm-mesh/package.json` to 0.32.4 (pre-check vs `npm view @sentropic/llm-mesh version`)
-  - [ ] update fixture `packages/llm-mesh/tests/decision-public-surface.test.ts` to 0.32.4
-  - [ ] `packages/llm-mesh/CHANGELOG.md` entry under Unreleased
-  - [ ] `make lock-root ENV=test-keyring-ro` to refresh the root lockfile
+- [x] **Lot 3 — Gates**
+  - [x] `make test-llm-mesh SCOPE=tests/node/encrypted-file-keyring.test.ts ENV=test-keyring-ro` green (9/9)
+  - [x] `make test-llm-mesh ENV=test-keyring-ro` full suite green (95 files, 1651 tests)
+  - [x] `make typecheck-llm-mesh ENV=test-keyring-ro` green
+  - [x] `make build-llm-mesh ENV=test-keyring-ro` green
+- [x] **Lot 4 — Release**
+  - [x] bump `packages/llm-mesh/package.json` to 0.32.4 (pre-check: registry publishes 0.32.3, 0.32.4 > 0.32.3)
+  - [x] update fixture `packages/llm-mesh/tests/decision-public-surface.test.ts` to 0.32.4
+  - [x] `packages/llm-mesh/CHANGELOG.md` 0.32.4 entry
+  - [x] `make lock-root ENV=test-keyring-ro` run; kept only the in-scope `packages/llm-mesh` lock entry (other workspace entries on main are stale from other lanes, out of scope)
 - [ ] **Lot 5 — Commit, push, PR, CI**
   - [ ] `make scope-check ENV=test-keyring-ro`
   - [ ] `git add` specific files + `make commit MSG="fix(llm-mesh): ..."` (atomic, ≤150 lines)
