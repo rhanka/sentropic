@@ -1,5 +1,12 @@
 # @sentropic/artifacts — generic artifact contracts (L-5a)
 
+Publication profiles can set `requireExpectedCurrentReleaseId: true` to require an
+explicit UUID or `null` on publish/revert. Strict profiles reject writers without
+CAS. Omission remains supported in generic profiles. Replay the same caller key
+after an unknown commit outcome; changing files, edits, metadata or the precondition
+requires a new key. The `artifacts-outcome/v2` MCP envelope requires
+`@sentropic/mcp-platform >=0.4.1` and preserves commit state and typed error details.
+
 ## Shared PostgreSQL activation (UP-T, 0.2.3)
 
 W1.c/W3.a and Radar S1/A6 use the same imports:
