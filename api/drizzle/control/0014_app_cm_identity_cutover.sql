@@ -169,6 +169,7 @@ DROP TABLE IF EXISTS public.webauthn_credentials;
 DROP TABLE IF EXISTS public.user_sessions;
 DROP TABLE IF EXISTS public.tenants;
 ALTER TABLE public.workspaces DROP COLUMN IF EXISTS "tenant_id";
+ALTER TABLE public.service_clients DROP COLUMN IF EXISTS "tenant_id";
 DROP TABLE IF EXISTS public.users;
 --> statement-breakpoint
 -- Post-deletion attestation row (same transaction: rollback of this migration restores everything).
