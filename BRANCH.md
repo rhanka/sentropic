@@ -192,6 +192,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Commit CM consent authority with OAuth protocol evidence under the subject fence; reject unbound writes, remove the default tenant, and honor CM revocation on reads.
   - [x] Add service-client tenant regressions for absent binding, distinct registry id/slug, suspended tenant and joint protocol/CM rollback.
   - [x] Read fixed S2S bindings exclusively from CM, and validate connector enrollment tenants in the same CM snapshot.
+  - [x] Use CM service bindings in the LLM directory's shared snapshot and drain S2S mint audits through the current CM binding instead of a root logger.
   - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
   - [x] Evaluate F15 and business workspace visibility on one serializable read transaction.
   - [x] Add explicit verified-HTTP conversation admission and an opaque CM reference on business chats; no identity authority is inferred from a chat id.

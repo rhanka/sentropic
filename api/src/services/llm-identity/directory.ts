@@ -9,9 +9,11 @@
  */
 import { eq } from 'drizzle-orm';
 
-import { db } from '../../db/client';
+import type { db } from '../../db/client';
 import { serviceClients, workspaces } from '../../db/schema';
 import { findCmMembership, findCmTenant, findCmWorkspace, listCmWorkspaceMembershipsForUser } from '../identity/cm-tenancy';
+import { bindCmAppDatabase, runCmIdentityRead, type CmIdentityTransaction } from '../identity/cm-transaction';
+import { findCmServiceClientTenant } from '../identity/cm-service-clients';
 import type {
   LlmIdentityDirectoryPort,
   ServiceClientRecord,
@@ -21,8 +23,11 @@ import type {
 
 type Database = Pick<typeof db, 'select'>;
 
-export const createLlmIdentityDirectory = (database: Database = db): LlmIdentityDirectoryPort => ({
-  async listUserWorkspaceGrants(userId: string): Promise<readonly UserWorkspaceGrant[]> {
+export const createLlmIdentityDirectory = (
+  databaseForTransaction: (tx: CmIdentityTransaction) => Database = bindCmAppDatabase,
+): LlmIdentityDirectoryPort => ({
+  listUserWorkspaceGrants: (userId: string): Promise<readonly UserWorkspaceGrant[]> => runCmIdentityRead(async tx => {
+    const database = databaseForTransaction(tx);
     const memberships = await listCmWorkspaceMembershipsForUser(userId);
     const grants: UserWorkspaceGrant[] = [];
     for (const membership of memberships) {
@@ -36,23 +41,24 @@ export const createLlmIdentityDirectory = (database: Database = db): LlmIdentity
       // Fail closed: a workspace without CM enrolment has no tenant and is skipped.
       if (!cmWorkspace) continue;
       const tenant = await findCmTenant(cmWorkspace.tenantId);
+      if (!tenant) continue;
       const tenantMembership = await findCmMembership(userId, cmWorkspace.tenantId);
       grants.push({
         workspaceId: membership.workspaceId,
-        workspaceTenantId: cmWorkspace.tenantId,
+        workspaceTenantId: tenant.slug,
         workspaceHidden: ws.hiddenAt !== null,
         tenantStatus: tenant?.status ?? null,
         tenantMembershipStatus: tenantMembership?.status ?? null,
       });
     }
     return grants;
-  },
+  }),
 
-  async findServiceClient(clientId: string): Promise<ServiceClientRecord | null> {
+  findServiceClient: (clientId: string): Promise<ServiceClientRecord | null> => runCmIdentityRead(async tx => {
+    const database = databaseForTransaction(tx);
     const [row] = await database
       .select({
         clientId: serviceClients.clientId,
-        tenantId: serviceClients.tenantId,
         revokedAt: serviceClients.revokedAt,
         dpopBound: serviceClients.dpopBoundAccessTokens,
       })
@@ -60,10 +66,12 @@ export const createLlmIdentityDirectory = (database: Database = db): LlmIdentity
       .where(eq(serviceClients.clientId, clientId))
       .limit(1);
     if (!row) return null;
-    return { clientId: row.clientId, tenantId: row.tenantId ?? null, revoked: row.revokedAt !== null, dpopBound: row.dpopBound };
-  },
+    return { clientId: row.clientId, tenantId: await findCmServiceClientTenant(clientId),
+      revoked: row.revokedAt !== null, dpopBound: row.dpopBound };
+  }),
 
-  async findWorkspaceTenant(workspaceId: string): Promise<WorkspaceTenantRecord | null> {
+  findWorkspaceTenant: (workspaceId: string): Promise<WorkspaceTenantRecord | null> => runCmIdentityRead(async tx => {
+    const database = databaseForTransaction(tx);
     const [row] = await database
       .select({ hiddenAt: workspaces.hiddenAt })
       .from(workspaces)
@@ -75,6 +83,6 @@ export const createLlmIdentityDirectory = (database: Database = db): LlmIdentity
     const cmWorkspace = await findCmWorkspace(workspaceId);
     if (!cmWorkspace) return null;
     const tenant = await findCmTenant(cmWorkspace.tenantId);
-    return { workspaceId, tenantId: cmWorkspace.tenantId, hidden: row.hiddenAt !== null, tenantStatus: tenant?.status ?? null };
-  },
+    return tenant ? { workspaceId, tenantId: tenant.slug, hidden: row.hiddenAt !== null, tenantStatus: tenant.status } : null;
+  }),
 });
