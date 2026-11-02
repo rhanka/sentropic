@@ -52,6 +52,11 @@ cluster-mesh-pg-test: cluster-mesh-pg-up
 		CM_PG_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME):5432/storage_test" \
 		SCOPE="$(if $(SCOPE),$(SCOPE),tests/storage/postgres-)" ENV=$(ENV)
 
+.PHONY: cluster-mesh-identity-test
+cluster-mesh-identity-test: cluster-mesh-pg-up
+	@$(MAKE) cluster-mesh-workspace CM_ACTION=identity CM_DOCKER_NETWORK="--network $(CM_PG_NAME)" \
+		CM_PG_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME):5432/storage_test" ENV=$(ENV)
+
 .PHONY: cluster-mesh-pg-diagnostics
 cluster-mesh-pg-diagnostics:
 	@docker run --rm $(LOCKED_INSTALL_MOUNTS) -v "$(CURDIR):/workspace" -w /workspace $(LLM_MESH_NODE_IMAGE) sh -lc \
