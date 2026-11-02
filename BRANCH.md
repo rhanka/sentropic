@@ -98,6 +98,8 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Port workspace-type, generic-dispatch, extended-object, flow-runtime, transfers and chat-tool API membership fixtures to CM while retaining business assertions.
   - [x] Port artifacts-host-publication.test.ts to CM identity rows in its isolated database; retain expiry, race and revocation assertions.
   - [x] Port artifacts-host-recovery.test.ts to CM identity rows in its isolated database; retain expiry, race and revocation assertions.
+  - [x] Port artifacts-host-credentials.test.ts to CM identity rows in its isolated database; retain expiry, race and revocation assertions.
+  - [x] Port artifacts-reader-activation.test.ts to CM identity rows in its isolated database; retain expiry, race and revocation assertions.
   - [ ] Docker stack under flock, `make down ENV=test-app-a4` after.
 - [ ] **Lot 1 — CM identity composition + one data migration**
   - [ ] App-side CM identity composition (core stores, tenancy stores, custody host/UOW, F15 producer, atomic deletion V2, importer) over the app Postgres.
@@ -268,6 +270,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Delete the replaced app member list/add/role/remove behavior and selection watcher; only the CM screen owns those interactions.
   - [ ] Login, registration, admin, membership decision, members screens; e2e on ENV=e2e-app-a4.
 - [ ] **Lot 5 — Tests**
+  - [x] Add artifact effect-guard regressions for absent/revoked/expired/foreign CM conversations and withdrawn CM OAuth consent while business chat/protocol rows remain.
   - [x] Prepare fresh isolated databases with real prior migrations and protected synthetic checkpoint files, then exercise the unchanged A4 migration runner; no synthetic receipt qualifies rehearsal.
   - [x] Port comment-assistant fixtures and the read-only gateway qualification probe to CM accounts, sessions, tenant bindings and memberships.
   - [x] Port live-code registration fixtures and immutable membership snapshots to CM, retaining account, profile, tenant, editor-role and hidden-workspace refusal assertions.
