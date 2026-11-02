@@ -54,3 +54,36 @@ export { EnvKeyring } from './keyring/env-keyring.js';
 export { InMemoryKeyring } from './keyring/in-memory-keyring.js';
 export { LinuxSecretstoreKeyring } from './keyring/linux-secretstore-keyring.js';
 export { MacOSKeychainKeyring } from './keyring/macos-keychain-keyring.js';
+export type {
+  PbtxtField,
+  PbtxtScalar,
+  SeatCellSynthesis,
+  SeatEnvelopeV1,
+  SeatLaunchGate,
+  SeatOnboardingCode,
+  SeatOnboardingDestKey,
+  SeatOnboardingFile,
+  SeatOnboardingFormat,
+  SeatOnboardingStatus,
+  SeatOnboardingV1,
+  SeatEnvelopeValidationResult,
+  SeatOnboardingValidationResult,
+} from '../enrollment/seat-onboarding.js';
+export {
+  AGY_REQUIRED_COMPLETED_STEPS,
+  CODEX_APPROVAL_POLICY_VALUES,
+  MUSE_TRUST_KNOWN_SCHEMA_VERSIONS,
+  SEAT_ENVELOPE_AUTH_FILES,
+  SEAT_ONBOARDING_FILE_CAPS,
+  SEAT_ONBOARDING_MAX_BYTES,
+  SEAT_ONBOARDING_SCHEMA_VERSION,
+  SeatOnboardingError,
+  canonicalAgyJetskiBytes,
+  parseAgyJetskiPbtxt,
+  rebindSeatOnboarding,
+  seatLaunchGate,
+  validateAgyJetskiContent,
+  validateOnboardingFileContent,
+  validateSeatEnvelope,
+  validateSeatOnboarding,
+} from '../enrollment/seat-onboarding.js';
