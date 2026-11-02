@@ -91,6 +91,6 @@ Ship a durable LOCAL SQLite adapter set in @sentropic/artifacts equivalent to th
   - [x] `make pack-artifacts ENV=test-artifacts-u1` guarded pack GREEN: `PASS @sentropic/artifacts@0.3.0 mode=block (standalone-default) sha256=d43ce28738cb77aa0daf74ebbef092711e25bbb1f47fb1a715db5d520ef67a70`.
   - [x] api scoped tests for the APP-P1 refresh: app-mcp-registry + app-mcp-installed GREEN (24/24) after `up-api-test REGISTRY=local ENV=test-artifacts-u1` booted with the new digest; `make down` after.
   - [x] cluster-mesh artifacts-tuple source coherence GREEN (4 passed, 3 pre-existing skips).
-- [ ] **Lot 8 — Ship**
-  - [ ] Commits <=150 lines via make commit, `make scope-check` before each, push after each commit.
-  - [ ] READY PR from BRANCH.md text; one CI run; report to .tmp/rv/artifacts-sqlite-u1.md. Do not merge.
+- [x] **Lot 8 — Ship**
+  - [x] Commits <=150 lines via make commit, `make scope-check` PASS C2 before each, push after each commit (21 commits, head `06af81ce5`).
+  - [x] READY PR #891 (base main, head `06af81ce5b713216971a6df667d4b867b2dd7953`); CI dispatched manually (pull_request event spawned no Actions run): run 41513527288 on `02b867035` FAILED only on the selected-fixture candidate-version pin, fixed in `06af81ce5` (fixture + tuple-spec integrity pinned to the 0.3.0 candidate archive; local `make test-cluster-mesh SCOPE=tests/packaging ENV=test-artifacts-u1` 83 passed / 55 pre-existing skips); re-run 41524343776 on `06af81ce5` **success**, zero failed jobs. Report at `.tmp/rv/artifacts-sqlite-u1.md`. Not merged.
