@@ -12,6 +12,9 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./ui/MembershipDecisionsScreen.svelte": {
+      "types": "./ui/MembershipDecisionsScreen.svelte.d.ts", "svelte": "./ui/MembershipDecisionsScreen.svelte", "import": "./ui/MembershipDecisionsScreen.svelte"
+    },
     "./ui/AdminUsersScreen.svelte": {
       "types": "./ui/AdminUsersScreen.svelte.d.ts", "svelte": "./ui/AdminUsersScreen.svelte", "import": "./ui/AdminUsersScreen.svelte"
     },
@@ -237,6 +240,7 @@
     "hono": "^4.10.7"
   },
   "peerDependencies": {
+    "@sentropic/design-system-svelte": "^0.34.0",
     "@sentropic/auth-ui": "^0.9.0",
     "svelte": "^5.0.0",
     "@sentropic/engram": ">=0.22.0 <0.23.0",
@@ -250,6 +254,7 @@
     "jose": "^5.10.0"
   },
   "peerDependenciesMeta": {
+    "@sentropic/design-system-svelte": { "optional": true },
     "@sentropic/auth-ui": { "optional": true },
     "svelte": { "optional": true },
     "@sentropic/engram": { "optional": true },
