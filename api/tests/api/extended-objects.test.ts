@@ -1,9 +1,9 @@
+import { cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
 import {
   workspaces,
-  workspaceMemberships,
   folders,
   initiatives,
   solutions,
@@ -80,7 +80,7 @@ describe('Extended objects API (solutions, products, bids)', () => {
       await db.delete(folders).where(eq(folders.id, id));
     }
     for (const id of cleanupIds.workspaceIds) {
-      await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, id));
+      await cmDeleteWorkspaceMembers(id);
       await db.delete(workspaces).where(eq(workspaces.id, id));
     }
     Object.values(cleanupIds).forEach(arr => (arr.length = 0));
