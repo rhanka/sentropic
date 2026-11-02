@@ -121,14 +121,14 @@ export const createAtomicPersonDeletionV2 = (input: AtomicPersonDeletionInput<Cu
         }
         if (recorded.state === 'committed') return currentDeletionReceipt(recorded.committedReceipt, tx);
         await tx.lockSubject(command.userId);
-        await tx.lockSubject(command.userId);
-      const account = await journal.findAccountCore(command.userId);
+        const account = await journal.findAccountCore(command.userId);
         if (!account) throw new IdentityNotFoundError('user', command.userId);
         const actor = command.actorId === command.userId ? account : await journal.findAccountCore(command.actorId);
         await authorize(command, account, actor?.accountStatus ?? null);
         await input.authorization.assertAllowed(command, tx);
         return null;
       }
+      await tx.lockSubject(command.userId);
       const account = await journal.findAccountCore(command.userId);
       if (!account) throw new IdentityNotFoundError('user', command.userId);
       const actor = command.actorId === command.userId ? account : await journal.findAccountCore(command.actorId);
@@ -147,6 +147,9 @@ export const createAtomicPersonDeletionV2 = (input: AtomicPersonDeletionInput<Cu
         const host = tx.hostTransaction;
         const journal = host.journal;
         const stores = host.stores;
+        completed.clear();
+        const steps: AtomicRevocationStepReceiptV2[] = [];
+        const deliveryIds = new Set<string>();
         const reserved = await tx.deletionJournal.lock(command.operationId);
         if (!reserved || reserved.requestDigest !== operation.requestDigest || reserved.actorId !== command.actorId || reserved.handlerId !== command.handlerId) throw new IdentityCustodyErrorV1('identity_operation_conflict');
         if (reserved.state === 'committed') return (await currentDeletionReceipt(reserved.committedReceipt, tx))!;
@@ -161,48 +164,55 @@ export const createAtomicPersonDeletionV2 = (input: AtomicPersonDeletionInput<Cu
         for (const id of [...plan.workspaceIdsToDelete, ...plan.retainedWorkspaceIds].sort()) await tx.lockWorkspace(id);
         await validatePlan(plan, command.userId, journal);
 
+        await tx.ledger.append({ at, kind: 'person.delete.started', actorId: command.actorId, subjectId: command.userId, detail: command.operationId });
         failedStep = 'login_sessions';
-        const revokedSessions = await stores.sessions.revokeAllForUser(command.userId, at);
+        await stores.sessions.revokeAllForUser(command.userId, at);
         completed.add('login_sessions');
+        steps.push({ step: 'login_sessions', outcome: 'applied', detailCode: 'local_effects_committed' });
+        const apply = async (name: 'remote_reader_sessions' | 'connector_grants' | 'agent_plane' | 'purpose_grants' | 'catalogue'): Promise<void> => {
+          failedStep = name;
+          const plane = input.planes.find((entry) => entry.step === name)!;
+          const result = await applyDeletionPlane(plane, command, plan, tx, at);
+          steps.push(result.step);
+          for (const id of result.deliveryIds) deliveryIds.add(id);
+          completed.add(name);
+        };
+        await apply('remote_reader_sessions');
+        await apply('connector_grants');
 
         failedStep = 'tenant_memberships';
-        const deletedMemberships = await journal.deleteMembershipsForUser(command.userId);
+        await journal.deleteMembershipsForUser(command.userId);
         completed.add('tenant_memberships');
+        steps.push({ step: 'tenant_memberships', outcome: 'applied', detailCode: 'local_effects_committed' });
+        await apply('agent_plane');
+        await apply('purpose_grants');
+        await apply('catalogue');
 
         failedStep = 'account';
         const businessReceipt = await input.business.deleteRows(plan, tx);
-        await journal.deleteWorkspaceMembersIn(plan.workspaceIdsToDelete);
-        await journal.deleteWorkspaceMembersForUser(command.userId);
-        for (const workspaceId of plan.workspaceIdsToDelete) {
-          await journal.detachInvitationWorkspace(workspaceId);
-          await journal.deleteWorkspace(workspaceId);
-        }
-        await journal.deleteConsentsForUser(command.userId);
-        await journal.deleteConversationsForUser(command.userId);
-        await journal.deleteProofsForUser(command.userId);
-        await journal.deleteDeviceCodesForUser(command.userId);
-        await journal.deleteSessionsForUser(command.userId);
-        const cleanup = await journal.cleanupCustodyForUser(command.userId, account.email);
-        const revokedInvitations = await journal.revokePendingInvitationsForEmail(account.email);
-        const detachedConsumers = await journal.detachInvitationConsumer(command.userId);
+        const cleanup = await tx.cleanup.deleteSubjectReferences({ userId: command.userId, accountEmail: account.email, workspaceIdsToDelete: plan.workspaceIdsToDelete, at });
         await input.business.assertNoOrphans(plan, tx);
-        await journal.assertNoLiveReferences({ userId: command.userId, accountEmail: account.email, deletedWorkspaceIds: [...plan.workspaceIdsToDelete] });
+        await tx.cleanup.assertNoLiveReferences({ userId: command.userId, accountEmail: account.email, deletedWorkspaceIds: plan.workspaceIdsToDelete });
+        for (const plane of input.planes) await plane.assertAbsent(command, plan, tx);
         await journal.deleteAccountCore(command.userId);
         if (await journal.findAccountCore(command.userId)) {
           throw new IdentityCustodyErrorV1('identity_orphan_detected');
         }
-        await journal.retireFence(command.userId, at);
+        await tx.advanceSubjectRevision(command.userId, at, true);
+        await tx.ledger.append({ at, kind: 'person.delete.committed', actorId: command.actorId, subjectId: command.userId, detail: command.operationId });
         completed.add('account');
+        steps.push({ step: 'account', outcome: 'applied', detailCode: 'local_effects_committed' });
 
         const receipt: PersonDeletionReceiptV2 = {
+          contractVersion: '2.0.0', operationId: command.operationId, deliveryIds: [...deliveryIds],
           userId: command.userId,
           mode: DELETE,
           transaction: 'committed',
           resultCode: 'identity_deleted',
-          complete: true,
-          steps: committedSteps(revokedSessions, deletedMemberships),
+          complete: deliveryIds.size === 0,
+          steps,
           business: businessReceipt,
-          cleanup: { ...cleanup, revokedInvitationsForEmail: revokedInvitations, detachedInvitationConsumers: detachedConsumers },
+          cleanup,
           at,
         };
         await journal.markOperationCommitted(command.operationId, receipt, at);
@@ -210,14 +220,16 @@ export const createAtomicPersonDeletionV2 = (input: AtomicPersonDeletionInput<Cu
       });
       return receipt;
     } catch (error) {
+      if (error instanceof IdentityCustodyErrorV1 && ['identity_transaction_indeterminate', 'identity_operation_conflict', 'identity_subject_retired'].includes(error.code)) throw error;
       if (error instanceof IdentityNotFoundError || error instanceof SelfActionForbiddenError || error instanceof AdminUserProtectedError || error instanceof IdentityConflictError) {
         throw error;
       }
       if (error instanceof AccountTransitionError) throw error;
-      const receipt = PostgresCustodyJournal.rollbackReceipt({ userId: command.userId, failedStep, completedBeforeFailure: completed, at });
+      const receipt = PostgresCustodyJournal.rollbackReceipt({ operationId: command.operationId, userId: command.userId, failedStep, completedBeforeFailure: completed, at });
       const attemptId = `${command.operationId}:${randomUUID()}`;
       try {
         await input.unitOfWork.run(diagnosticOptions, async (tx: IdentityTransactionV1<CustodyOpHost>) => {
+          await tx.ledger.append({ at, kind: 'person.delete.rolled_back', actorId: command.actorId, subjectId: command.userId, detail: command.operationId });
           await tx.hostTransaction.journal.appendAttempt({ attemptId, operationId: command.operationId, at, receipt });
         });
       } catch {
