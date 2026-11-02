@@ -28,7 +28,7 @@ import type {
 import { IdentityCustodyErrorV1 } from '../../identity-contracts/custody-errors.js';
 import type { SqliteConnection } from '../sqlite/connection.js';
 import { decodeSession } from './records.js';
-import { InvitationError } from '../../identity-contracts/errors.js';
+import { InvitationError, ProofVerificationError } from '../../identity-contracts/errors.js';
 import { identitySchemaStatements, identityTable, type IdentityTableName } from './schema.js';
 import { applySqliteIdentityCoreSchema } from './sqlite.js';
 import {
@@ -256,10 +256,12 @@ export class SqliteCustodyTx implements IdentityCustodyStoresV1 {
     readonly newCounter: number;
     readonly at: string;
   }): Promise<WebAuthnCredentialV1> => {
-    if (!Number.isInteger(input.newCounter) || input.newCounter < 0 || input.newCounter > 4294967295) {
+    if (![input.expectedCounter, input.newCounter].every((value) => Number.isInteger(value) && value >= 0 && value <= 4294967295)
+      || !Number.isSafeInteger(input.expectedRevision) || input.expectedRevision < 0 || input.expectedRevision === Number.MAX_SAFE_INTEGER
+      || !input.proofId || !input.userId || !Number.isFinite(Date.parse(input.at))) {
       throw new IdentityCustodyErrorV1('identity_material_invalid');
     }
-    if (input.newCounter !== 0 && input.newCounter <= input.expectedCounter) {
+    if ((input.newCounter !== 0 || input.expectedCounter !== 0) && input.newCounter <= input.expectedCounter) {
       const snapshot = await this.one(decodeWebAuthnCredential, `SELECT * FROM "identity_webauthn_credentials" WHERE "proof_id" = ?`, [input.proofId]);
       if (snapshot && snapshot.userId === input.userId && snapshot.revokedAt === null && snapshot.revision === input.expectedRevision && snapshot.counter === input.expectedCounter) {
         throw new IdentityCustodyErrorV1('webauthn_counter_rejected');
@@ -273,9 +275,9 @@ export class SqliteCustodyTx implements IdentityCustodyStoresV1 {
     );
     if (updated) return updated;
     const current = await this.one(decodeWebAuthnCredential, `SELECT * FROM "identity_webauthn_credentials" WHERE "proof_id" = ?`, [input.proofId]);
-    if (!current) throw new IdentityCustodyErrorV1('identity_material_missing');
+    if (!current) throw new ProofVerificationError('not_found');
     if (current.userId !== input.userId) throw new IdentityCustodyErrorV1('proof_binding_mismatch');
-    if (current.revokedAt !== null) throw new IdentityCustodyErrorV1('identity_material_missing');
+    if (current.revokedAt !== null) throw new ProofVerificationError('revoked');
     throw new IdentityCustodyErrorV1('webauthn_credential_stale');
   };
 
