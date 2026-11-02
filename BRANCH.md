@@ -46,6 +46,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
 ## Feedback Loop
 - [x] BRxx-EX1 — Approved r2 F11 requires CM-owned screens. Allow only `packages/cluster-mesh/ui/**`, `tests/ui/**`, its browser exports/optional peer metadata, and root/UI lock/dependency entries needed to mount them. Backend CM source/tests stay excluded. Impact: one shared screen behavior across root projections; publication/version validation is required after rebase. Rollback: revert the UI projection/package commits together before activation; no data or A2.0b branch changes.
 - [ ] A4-STACK — A2.0b owner: supply the approved r6 combined UOW (`run`, `tx.stores`, `tx.custody`, subject lifecycle), auth-hono binding/runner, importer verifier and V2 planes before app qualification; A4 does not implement these CM APIs.
+- [ ] A4-WORKSPACE-DELETE — CM has no standalone workspace deletion contract. The app endpoint now refuses after its existing authorization/hidden guards, with zero writes; restore its 204 contract only through an approved atomic CM cleanup API. Existing success acceptance remains unmet (Mistral M1).
 - [ ] A4-QK — Deployment custodian: record the explicit email-code protection choice before the author switch; no secret or default choice is inferred.
 - [x] A4-OWNERSHIP — r6 §5.3 requires business-authorized ownership. Preserve `public.workspaces.owner_user_id` solely for destruction policy; CM owns membership/tenant access. Membership never substitutes for ownership. Rollback uses the recorded source checkpoint.
 - [x] A4-CONVERSATION — Business chats retain an opaque CM authority reference. Verified HTTP admission opens a separate seven-day conversation lifetime; login expiry/logout never renews or revokes it. Revoked/expired records cannot be reopened. Workspace adoption must revoke/clear the prior binding.
@@ -184,6 +185,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Remove bootstrap and per-request admin membership upserts; workspace selection requires an existing CM admin membership (Mistral M3).
   - [x] Resolve workspace selection on one CM snapshot and delegate explicit personal-workspace provisioning to the bound CM hook without role elevation (Mistral M4).
   - [x] Join VS Code workspace enrollment, creator membership, business metadata and mapping state in the CM transaction (Mistral M2).
+  - [x] Delete the unsafe standalone workspace business-first/member-after deletion path; record the missing CM cleanup contract instead of duplicating identity SQL.
   - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
   - [x] Evaluate F15 and business workspace visibility on one serializable read transaction.
   - [x] Add explicit verified-HTTP conversation admission and an opaque CM reference on business chats; no identity authority is inferred from a chat id.

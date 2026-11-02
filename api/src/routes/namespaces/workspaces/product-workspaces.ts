@@ -2,26 +2,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '../../../utils/zod-validator';
 import { db } from '../../../db/client';
-import {
-  chatGenerationTraces,
-  chatSessions,
-  contextDocuments,
-  jobQueue,
-  initiatives,
-  folders,
-  organizations,
-  workspaces,
-  workflowDefinitionTasks,
-  workflowDefinitions,
-  agentDefinitions,
-  workspaceTypeWorkflows,
-  executionRuns,
-  executionEvents,
-  entityLinks,
-  guardrails,
-  viewTemplates,
-} from '../../../db/schema';
-import { eq, inArray } from 'drizzle-orm';
+import { workspaces } from '../../../db/schema';
+import { eq } from 'drizzle-orm';
 import { requireEditor } from '../../../middleware/rbac';
 import { createId } from '../../../utils/id';
 import { runCmIdentityWrite } from '../../../services/identity/cm-transaction';
@@ -30,15 +12,6 @@ import {
   notifyWorkspaceCreated, notifyWorkspaceEvent,
   provisionWorkspace, seedWorkspaceTypeResources,
 } from '../../../services/workspace-provisioning';
-import {
-  listCmWorkspaceMembers,
-  removeCmWorkspaceMember,
-} from '../../../services/identity/cm-tenancy';
-import {
-  captureConnectorGrantsForTeardown,
-  recordConnectorGrantTombstones,
-  revokeCapturedConnectorGrants,
-} from '../../../services/connector-grant-teardown';
 
 export const workspacesRouter = new Hono();
 
@@ -214,67 +187,9 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
   if (!ws) return c.json({ message: 'Not found' }, 404);
   if (!ws.hiddenAt) return c.json({ message: 'Workspace must be hidden before deletion' }, 400);
 
-  const members = await listCmWorkspaceMembers(workspaceId);
-  const memberUserIds = members.map((m) => m.userId);
-
-  // Capture external grants BEFORE the deletion. This path deletes a workspace only, but connector
-  // rows cascade from `workspaces` too, and they belong to EVERY member — not just the caller — so
-  // the scope here is the workspace, not the acting user. See services/connector-grant-teardown.ts.
-  const capturedGrants = await captureConnectorGrantsForTeardown({ workspaceId });
-
-  await db.transaction(async (tx) => {
-    // Atomic with the destruction.
-    await recordConnectorGrantTombstones(tx, capturedGrants);
-
-    // Detach traces that use workspace FK (optional; keep history)
-    await tx.update(chatGenerationTraces).set({ workspaceId: null }).where(eq(chatGenerationTraces.workspaceId, workspaceId));
-
-    // Delete chat sessions scoped to workspace (cascades to messages/contexts/events via FK)
-    await tx.delete(chatSessions).where(eq(chatSessions.workspaceId, workspaceId));
-
-    // Documents (versions cascade)
-    await tx.delete(contextDocuments).where(eq(contextDocuments.workspaceId, workspaceId));
-
-    // Jobs (history references are set null)
-    await tx.delete(jobQueue).where(eq(jobQueue.workspaceId, workspaceId));
-
-    // BR-04 tables: execution events/runs, entity links, guardrails
-    await tx.delete(executionEvents).where(eq(executionEvents.workspaceId, workspaceId));
-    await tx.delete(executionRuns).where(eq(executionRuns.workspaceId, workspaceId));
-    await tx.delete(entityLinks).where(eq(entityLinks.workspaceId, workspaceId));
-    await tx.delete(guardrails).where(eq(guardrails.workspaceId, workspaceId));
-
-    // BR-04 tables: workflow tasks → workflow definitions → workspace type workflows, agent definitions
-    const wfIds = (await tx.select({ id: workflowDefinitions.id }).from(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, workspaceId))).map(r => r.id);
-    if (wfIds.length > 0) {
-      await tx.delete(workflowDefinitionTasks).where(inArray(workflowDefinitionTasks.workflowDefinitionId, wfIds));
-      await tx.delete(workspaceTypeWorkflows).where(inArray(workspaceTypeWorkflows.workflowDefinitionId, wfIds));
-    }
-    await tx.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, workspaceId));
-    await tx.delete(agentDefinitions).where(eq(agentDefinitions.workspaceId, workspaceId));
-
-    // BR-04B: view templates
-    await tx.delete(viewTemplates).where(eq(viewTemplates.workspaceId, workspaceId));
-
-    // Core business tables
-    await tx.delete(initiatives).where(eq(initiatives.workspaceId, workspaceId));
-    await tx.delete(folders).where(eq(folders.workspaceId, workspaceId));
-    await tx.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
-
-    // Finally delete workspace
-    await tx.delete(workspaces).where(eq(workspaces.id, workspaceId));
-  });
-
-  // Lot A4: memberships live in the CM store; remove them after the business commit.
-  for (const memberUserId of memberUserIds) {
-    await removeCmWorkspaceMember(workspaceId, memberUserId);
-  }
-
-  // Only after a successful commit.
-  await revokeCapturedConnectorGrants(capturedGrants);
-
-  await notifyWorkspaceEvent(workspaceId, { action: 'deleted' }, memberUserIds);
-
-  return c.body(null, 204);
+  // Stack dependency: A2.2's WorkspaceRegistryStore exposes no deletion operation;
+  // r6 V2 is a person cascade and cannot authorize deleting another principal.
+  // Do not recreate CM cleanup with host SQL or commit partial business destruction.
+  return c.json({ error: 'identity_contract_unavailable', message: 'Workspace deletion unavailable.' }, 503);
 });
 
