@@ -1,8 +1,10 @@
+import { putCmWorkspaceMember } from "../../src/services/identity/cm-tenancy";
+import { cmDeleteWorkspaceMembers } from "../utils/cm-identity-test-store";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { app } from "../../src/app";
 import { db } from "../../src/db/client";
-import { agentDefinitions, workspaceMemberships } from "../../src/db/schema";
+import { agentDefinitions } from "../../src/db/schema";
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from "../utils/auth-helper";
 
 describe("Agent config API", () => {
@@ -12,21 +14,13 @@ describe("Agent config API", () => {
   beforeEach(async () => {
     editor = await createAuthenticatedUser("editor");
     viewer = await createAuthenticatedUser("guest");
-    await db
-      .insert(workspaceMemberships)
-      .values({
-        workspaceId: editor.workspaceId,
-        userId: viewer.id,
-        role: "viewer",
-        createdAt: new Date(),
-      })
-      .onConflictDoNothing();
+    await putCmWorkspaceMember(editor.workspaceId, viewer.id, "viewer");
   });
 
   afterEach(async () => {
     if (editor?.workspaceId) {
       await db.delete(agentDefinitions).where(eq(agentDefinitions.workspaceId, editor.workspaceId));
-      await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, editor.workspaceId));
+      await cmDeleteWorkspaceMembers(editor.workspaceId);
     }
     await cleanupAuthData();
   });
