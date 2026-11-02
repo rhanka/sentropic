@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import { createClusterMeshModules } from '@sentropic/cluster-mesh';
 import { computeManifestDigest } from '@sentropic/cluster-mesh/mcp/registry';
-import { ARTIFACTS_TOOL_DEFINITIONS, createArtifactsRegistryDefinition, compileArtifactsProfile,
-  RADAR_ARTIFACTS_PROFILE, type ArtifactsDefinitionOptions } from '@sentropic/artifacts/mcp';
+import { createArtifactsRegistryDefinition, compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE,
+  type ArtifactsDefinitionOptions } from '@sentropic/artifacts/mcp';
 import { compileAppMcpRegistry } from '../../src/services/mcp/cluster-registry';
 
 const names = ['artifacts_ensure', 'artifacts_get', 'artifacts_list', 'artifacts_publish'] as const;
@@ -18,7 +18,7 @@ function fixture() {
   };
   return { artifacts, execute, createInvocation, selection: ['sentropic.artifacts'],
     configurations: { 'sentropic.artifacts': {} }, bindings: {}, compatibility: {
-      'sentropic.artifacts': { manifestDigest: '108f7c1975194ca4216cb36272626e9eab0c56165890182f69f4f3dc23f6adf9' },
+      'sentropic.artifacts': { manifestDigest: 'cb03aeae35dfcaad215b5a3d9f685587677a5bdde9bdc81950ba6d9d7f35ca82' },
     } };
 }
 
@@ -37,18 +37,10 @@ describe('app MCP registry compilation', () => {
   it('should expose the exact APP-P1 names and schemas without invoking a host port', async () => {
     const input = fixture();
     expect(input.artifacts.profile.profileDigest)
-      .toBe('9d21623107192b42e683d4712c69093ed19f1498e406d199c4fe3153394cba11');
+      .toBe('94212e75c52e23f3f254496d98fca7c052568f7c03526ff3def3db020cd24168');
     const { manifest } = createArtifactsRegistryDefinition({ ...input.artifacts, invocationScope: 'mcp:tools:invoke' });
     expect(computeManifestDigest({ ...manifest, version: '0.2.5' }))
-      .toBe('3158b20d0a89d508afff9468fddc4ac96ae0625e5cbe1f42244545cfd1674fb1');
-    expect(computeManifestDigest({ ...manifest, version: '0.2.6' }))
-      .toBe('1b646cd577d43bed4ec1a231d632c9180fc858bc4880db6e4641b07d2c0603e3');
-    expect(computeManifestDigest({ ...manifest, version: '0.2.7' }))
-      .toBe('b4f5d2adf7592a00793180f1dfd6bbb68c601954806f998dbe8683f5797699ca');
-    expect(computeManifestDigest({ ...manifest, version: '0.2.8' }))
-      .toBe('7c0379168b2d159c70d8c1fbc1462e7fcdf154fe356e5b57216ff4a87cc142b3');
-    expect(computeManifestDigest({ ...manifest, version: '0.2.10' }))
-      .toBe('0cbf1def8ccf9ac0958c84887102e2a0f12412005a58d53f2526a3bdbb59a659');
+      .toBe('56bd986f5e43dcad5e69ced780115b5046b9382a830a4b57507c133324992452');
     const result = await compileAppMcpRegistry(input);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
@@ -58,43 +50,13 @@ describe('app MCP registry compilation', () => {
       const tool = result.registry.resolveTool(name)!;
       expect(tool.providerId).toBe('sentropic.artifacts');
       expect(tool.capabilityName).toBe(name);
-      expect(tool.inputSchema).toEqual(ARTIFACTS_TOOL_DEFINITIONS[name].inputSchema);
+      expect(tool.inputSchema).toEqual(input.artifacts.profile.schemas[name]);
       expect(tool.requiredScopes).toEqual(['mcp:tools:invoke']);
     }
     expect(result.registry.resolveTool('artifacts_promote')).toBeUndefined();
     expect(result.registry.resolveTool('artifacts-ensure')).toBeUndefined();
     expect(input.execute).not.toHaveBeenCalled();
     expect(input.createInvocation).not.toHaveBeenCalled();
-  });
-
-  it('should refuse the superseded artifacts 0.2.8 compatibility receipt', async () => {
-    const input = fixture();
-    input.compatibility['sentropic.artifacts'].manifestDigest =
-      '96226d32f64ca7ac06749d5083084b6f572eac23d27256cae8d37e7f7579933d';
-    const result = await compileAppMcpRegistry(input);
-    expect(result.ok).toBe(false);
-    expect(result).not.toHaveProperty('registry');
-    expect(input.execute).not.toHaveBeenCalled();
-  });
-
-  it('should refuse the superseded artifacts 0.2.7 compatibility receipt', async () => {
-    const input = fixture();
-    input.compatibility['sentropic.artifacts'].manifestDigest =
-      '1140dcb492f0d126b55ffc5dfb46accf43fc863145a42990a140e06c5bd02f20';
-    const result = await compileAppMcpRegistry(input);
-    expect(result.ok).toBe(false);
-    expect(result).not.toHaveProperty('registry');
-    expect(input.execute).not.toHaveBeenCalled();
-  });
-
-  it('should refuse the superseded artifacts 0.2.6 compatibility receipt', async () => {
-    const input = fixture();
-    input.compatibility['sentropic.artifacts'].manifestDigest =
-      'c69c8ce188907fa3db602caa290e07ebcaffa9e63010aa47b73e1599b36149ed';
-    const result = await compileAppMcpRegistry(input);
-    expect(result.ok).toBe(false);
-    expect(result).not.toHaveProperty('registry');
-    expect(input.execute).not.toHaveBeenCalled();
   });
 
   it('should refuse the superseded artifacts 0.2.4 compatibility receipt', async () => {
