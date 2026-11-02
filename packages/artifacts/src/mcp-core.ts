@@ -9,6 +9,7 @@ import { ARTIFACT_CAPABILITY_NAMES, ArtifactProfileInputError,
 import type { ArtifactInvocationContext } from './server/commit/types.js';
 import { ArtifactOperationError, classifyArtifactFailure, type ArtifactOutcome, type ArtifactHostFailureMapper } from './server/failures.js';
 import { projectArtifactHttpOutcome, projectArtifactMcpOutcome } from './server/outcome-projection.js';
+import { ARTIFACT_RESULT_SCHEMA } from './server/result-schema.js';
 export * from './profile/index.js';
 export { createRadarKeyDerivation } from './server/command-identity.js';
 export type { ArtifactKeyDerivationBinding } from './server/command-identity.js';
@@ -45,7 +46,7 @@ export function createArtifactsManifest(options: ArtifactsManifestOptions): Arti
     tools: ARTIFACTS_TOOL_SPECS.filter((spec) => profile.selectedCapabilities.includes(spec.name)).map((spec) => ({
       kind: 'tool', name: spec.name,
       description: spec.description,
-      inputSchema: profile.schemas[spec.name]!, outputSchema: { type: 'object' },
+      inputSchema: profile.schemas[spec.name]!, outputSchema: ARTIFACT_RESULT_SCHEMA,
       requiredScopes: [...scopes], requiredClaims: [], redactionClass: 'low',
       mutability: spec.mutability, mutatesExternalSystem: spec.mutability !== 'read-only',
       idempotency: profile.idempotency[spec.name] ?? { required: false },
