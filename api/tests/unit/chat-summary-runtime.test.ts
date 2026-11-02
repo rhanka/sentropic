@@ -1,5 +1,6 @@
+import { createAdmittedChatMessage } from '../utils/cm-chat-fixture';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { and, eq } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 
 vi.mock('../../src/services/llm-runtime', () => {
   return {
@@ -13,12 +14,11 @@ import {
   chatMessages,
   chatSessions,
   chatStreamEvents,
-  users,
-  workspaceMemberships,
   workspaces,
 } from '../../src/db/schema';
 import { createId } from '../../src/utils/id';
-import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
+import { createTestUser } from '../utils/auth-helper';
+import { cmDeleteForUsers, cmDeleteWorkspaceMembers, cmQuery, cmTable } from '../utils/cm-identity-test-store';
 import { callLLM, callLLMStream } from '../../src/services/llm-runtime';
 import { chatService } from '../../src/services/chat-service';
 
@@ -54,17 +54,9 @@ describe('Chat summary runtime (Lot 4)', () => {
 
   beforeEach(async () => {
     userId = createId();
-    await db.insert(users).values({
-      id: userId,
-      email: `chat-summary-runtime-${userId}@example.com`,
-      displayName: 'Chat Summary Runtime',
-      role: 'editor',
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    ({ workspaceId } = await ensureWorkspaceForUser(userId));
+    const actor = await createTestUser({ email: `chat-summary-runtime-${userId}@example.com`, displayName: 'Chat Summary Runtime', role: 'editor' });
+    userId = actor.id;
+    workspaceId = actor.workspaceId!;
 
     sessionId = createId();
     await db.insert(chatSessions).values({
@@ -85,11 +77,10 @@ describe('Chat summary runtime (Lot 4)', () => {
     await db.delete(chatStreamEvents);
     await db.delete(chatMessages).where(eq(chatMessages.sessionId, sessionId));
     await db.delete(chatSessions).where(eq(chatSessions.id, sessionId));
-    await db
-      .delete(workspaceMemberships)
-      .where(and(eq(workspaceMemberships.workspaceId, workspaceId), eq(workspaceMemberships.userId, userId)));
+    await cmDeleteWorkspaceMembers(workspaceId);
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
-    await db.delete(users).where(eq(users.id, userId));
+    await cmDeleteForUsers([userId]);
+    await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = $1`, [workspaceId]);
     vi.clearAllMocks();
   });
 
@@ -108,7 +99,7 @@ describe('Chat summary runtime (Lot 4)', () => {
       ]),
     );
 
-    const created = await chatService.createUserMessageWithAssistantPlaceholder({
+    const created = await createAdmittedChatMessage({
       userId,
       workspaceId,
       sessionId,
@@ -170,7 +161,7 @@ describe('Chat summary runtime (Lot 4)', () => {
         ]),
       );
 
-    const created = await chatService.createUserMessageWithAssistantPlaceholder({
+    const created = await createAdmittedChatMessage({
       userId,
       workspaceId,
       sessionId,
