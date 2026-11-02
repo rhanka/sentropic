@@ -1,7 +1,7 @@
 import { identityCustodySchemaAssetV1 } from '@sentropic/cluster-mesh';
 import { env } from '../../config/env';
 import { resolveSessionTokenSecret } from '../../routes/auth/oauth';
-import { resolveEmailVerificationTokenSecret } from '../email-verification';
+import { resolveEmailVerificationTokenSecret } from './cm-token-secrets';
 import { getWebAuthnConfig } from '../webauthn-config';
 import { loadCmCutoverCheckpoint } from './cm-cutover-checkpoint';
 import { connectorCustodyAssetSha256 } from './cm-connector-custody-values';
