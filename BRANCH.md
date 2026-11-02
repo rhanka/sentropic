@@ -210,6 +210,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Load artifact assets outside CM callbacks and pass every tool identifier through the F15 catalog mapping.
   - [x] Fence chat creation with CM subject/workspace locks and atomically revoke conversation authority when deleting its business chat.
   - [ ] Account deletion through the A2.3/A2.0b atomic cascade (V2), self + admin handlers.
+  - [x] Add a real V2 deletion failure test with a subject-scoped final-delete trigger, nontransactional reachability probe, exact row snapshots, durable rollback receipt and orphan checks; execution awaits A2.0b.
   - [x] Add fixed V2 self/admin authorizers with current CM prerequisites and a complete business ownership/reference plan; membership alone never authorizes destruction.
   - [x] Declare personal-data deletion and nullable shared-attribution dispositions, with a database inventory guard for unclassified person references.
   - [x] Extract the unchanged persisted job-to-stream mapping for deletion inventory without initializing the queue manager in CM callbacks.
