@@ -7,6 +7,7 @@ import type { IdentityExternalRevocationV1, IdentityUnitOfWorkV1 } from '../../s
 import { acknowledgeIdentityRevocationV1, createNodeConnectorCustody, createConnectorRevocationCustodyPortV1 } from '../../src/index.js';
 import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
+import { boundIdentitySql } from '../../src/storage/identity/custody-transaction-ports.js';
 
 const WRITE = { mode: 'write' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 };
 const READ = { mode: 'read' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 8000 };
@@ -32,6 +33,44 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b remote revocation
     return { unitOfWork: asOpHost(openSqliteEnv().unitOfWork), schema: null };
   };
 
+
+  it('captures the selected source owner and rolls custody back with source deletion', async () => {
+    const env = await openEnv();
+    const sql = (tx: import('../../src/index.js').IdentityTransactionV1<CustodyOpHost>) => boundIdentitySql(tx.hostTransaction);
+    await env.unitOfWork.run(WRITE, async (tx) => {
+      const db = sql(tx);
+      await db.query(`CREATE TABLE ${db.table('fixture_connector_source')} (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, workspace_id TEXT NOT NULL)`, []);
+      await db.query(`INSERT INTO ${db.table('fixture_connector_source')} VALUES (?, ?, ?)`, ['connector-other', 'other-owner', 'deleted-workspace']);
+    });
+    const custody = createNodeConnectorCustody({ masterKey: new Uint8Array(32).fill(7) });
+    const port = createConnectorRevocationCustodyPortV1({ custody, readSource: async (id, tx) => {
+      const db = sql(tx), rows = await db.query(`SELECT * FROM ${db.table('fixture_connector_source')} WHERE id = ?`, [id]);
+      const row = rows[0];
+      return row ? { userId: String(row.user_id), workspaceId: String(row.workspace_id), provider: 'drive', capability: { tokenKind: 'refresh', token: 'fixture-only' } } : null;
+    } });
+    const capture = { operationId: 'delete-user', deliveryId: 'selected-owner-delivery', connectorAccountId: 'connector-other', subjectId: 'other-owner', at: NOW };
+    await expect(env.unitOfWork.run(WRITE, (tx) => port.capture({ ...capture, subjectId: 'marie' }, tx)))
+      .rejects.toMatchObject({ code: 'identity_revocation_custody_invalid' });
+    let record: IdentityExternalRevocationV1;
+    await expect(env.unitOfWork.run(WRITE, async (tx) => {
+      const captured = await port.capture(capture, tx);
+      if (captured.kind !== 'captured') throw new Error('Expected source capability');
+      record = { ...delivery(capture.deliveryId, 'connector_grant', capture.connectorAccountId), operationId: capture.operationId,
+        step: 'connector_grants', subjectId: 'other-owner', custodyRef: captured.reference.custodyRef };
+      await tx.revocationOutbox.enqueue(record);
+      await port.assertCaptured(record, tx);
+      const db = sql(tx);
+      await db.query(`DELETE FROM ${db.table('fixture_connector_source')} WHERE id = ?`, [capture.connectorAccountId]);
+      throw new Error('rollback capture and source deletion');
+    })).rejects.toThrow('rollback capture and source deletion');
+    await env.unitOfWork.run(READ, async (tx) => {
+      const db = sql(tx);
+      expect(await db.query(`SELECT user_id FROM ${db.table('fixture_connector_source')} WHERE id = ?`, [capture.connectorAccountId])).toEqual([{ user_id: 'other-owner' }]);
+      expect(await tx.revocationOutbox.find(capture.deliveryId)).toBeNull();
+      await expect(port.assertCaptured(record!, tx)).rejects.toMatchObject({ code: 'identity_revocation_custody_missing' });
+    });
+    custody.dispose();
+  });
   it('claims exclusively, releases and redelivers at least once', async () => {
     const env = await openEnv();
     await env.unitOfWork.run(WRITE, async (tx) => {

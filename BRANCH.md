@@ -61,6 +61,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] R1: exercise the R6 source-owner check with real transactional source, AEAD custody, outbox and rollback on both profiles.
 - [x] R1: keep assertion counter writes bound to verified state and project OAuth MFA only from matched signed token evidence.
 - [x] R1: verify real signed 5-to-0 assertion refusal and rollback of challenge, credential and audit state.
 - [x] R1: require actual verifier evidence for credential persistence and bind anonymous challenge consumption to its verified owner.
