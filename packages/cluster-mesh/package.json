@@ -12,6 +12,9 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./ui/AdminUsersScreen.svelte": {
+      "types": "./ui/AdminUsersScreen.svelte.d.ts", "svelte": "./ui/AdminUsersScreen.svelte", "import": "./ui/AdminUsersScreen.svelte"
+    },
     "./ui/management": {
       "types": "./ui/management-transport.ts", "import": "./ui/management-transport.ts"
     },
