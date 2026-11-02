@@ -1,17 +1,9 @@
-import {
-  createAuthMagicLinkRouteHandlers,
-  type AuthHonoMagicLinkService,
-  type AuthHonoRouteHandlers,
-} from '@sentropic/auth-hono';
+import type { AuthHonoRouteHandlers } from '@sentropic/auth-hono';
 import { z } from 'zod';
 import { logger } from '../../../logger';
-import {
-  generateMagicLink,
-  verifyMagicLink,
-  sendMagicLinkEmail,
-} from '../../../services/magic-link';
+import { verifyMagicLink } from '../../../services/magic-link';
+import { cmMagicLinkHandlers } from './cm-magic-link';
 import { createSession } from '../../../services/session-manager';
-import { env } from '../../../config/env';
 import { findCmUserById } from '../../../services/identity/cm-users';
 import { listCmCredentialsForUser } from '../../../services/identity/cm-proofs';
 import { ensureWorkspaceForUser } from '../../../services/workspace-service';
@@ -29,41 +21,12 @@ const verifyMagicLinkSchema = z.object({
   token: z.string(),
 });
 
-const magicLinkRequestService: AuthHonoMagicLinkService = {
-  async requestMagicLink(input) {
-    const normalizedEmail = input.email.trim().toLowerCase();
-    const { token, expiresAt } = await generateMagicLink({
-      email: normalizedEmail,
-      userId: input.userId ?? undefined,
-    });
-    const baseUrl = env.AUTH_CALLBACK_BASE_URL || 'http://localhost:5173';
-    const magicLinkUrl = `${baseUrl}/auth/magic-link/verify?token=${token}`;
-
-    await sendMagicLinkEmail(normalizedEmail, magicLinkUrl);
-
-    logger.info({ email: normalizedEmail }, 'Magic link requested');
-
-    return {
-      expiresAt,
-      success: true,
-    };
-  },
-
-  async verifyMagicLink() {
-    throw new Error('Magic-link verification remains app-owned in Sentropic API.');
-  },
-};
-
-const magicLinkRequestHandlers = createAuthMagicLinkRouteHandlers({
-  service: magicLinkRequestService,
-});
-
 /**
  * POST /auth/magic-link/verify
  * Verify magic link token and create session
  */
 export const magicLinkHandlers: AuthHonoRouteHandlers = {
-  ...magicLinkRequestHandlers,
+  ...cmMagicLinkHandlers,
   async verifyMagicLink(c) {
   try {
     const body = await c.req.json();
