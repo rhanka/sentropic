@@ -5,7 +5,7 @@ import { ensureIndexes } from './db/ensure-indexes';
 import { db, pool } from './db/client';
 import { objectLocks } from './db/schema';
 import { purgeExpiredAuthData } from './services/challenge-purge';
-import { runAdminApprovalSweep } from './services/admin-approval-sweep';
+import { drainCmRevocations } from './services/identity/cm-revocation-worker';
 import { runChatTracePurge } from './services/chat-trace-sweep';
 import { runQueueReaperSweep } from './services/queue-reaper-sweep';
 import { loadReservationReaperConfig, runReservationReaperSweep, startReservationReaper } from './services/llm-metering/reservation-reaper';
@@ -130,21 +130,21 @@ try {
   logger.error({ err: error }, 'Failed to purge locks at startup, continuing anyway');
 }
 
-// Admin approval sweep (48h -> read-only). Run once at boot, then periodically.
+// CM computes effective approval roles on reads; this worker only delivers committed revocations.
 const reservationReaper = startReservationReaper(reservationReaperConfig,
   (limit) => runReservationReaperSweep({ database: db, limit }));
 process.once('exit', () => { void reservationReaper.stop(); });
 
 if (process.env.NODE_ENV !== 'test') {
   try {
-    await runAdminApprovalSweep();
+    await drainCmRevocations();
   } catch (error) {
-    logger.error({ err: error }, 'Admin approval sweep failed at startup, continuing anyway');
+    logger.error({ err: error }, 'Identity revocation delivery failed at startup');
   }
 
   setInterval(() => {
-    runAdminApprovalSweep().catch((error) => {
-      logger.error({ err: error }, 'Admin approval sweep failed');
+    drainCmRevocations().catch((error) => {
+      logger.error({ err: error }, 'Identity revocation delivery failed');
     });
   }, 15 * 60 * 1000); // every 15 minutes
 
