@@ -109,7 +109,7 @@ describe('artifacts_revert', () => {
     expect((versions.body as Body).releases).toHaveLength(3);
   });
 
-  it('should refuse a purged release with a typed gone error', async () => {
+  it('should refuse a purged release with a typed release_unavailable error', async () => {
     const w = parityWorld();
     const artifactId = await ensureSite(w, 'rv-purged');
     const v1 = await publishText(w, artifactId, 'a', 'rp-p1');
@@ -117,7 +117,7 @@ describe('artifacts_revert', () => {
     await w.lifecycleStore.setReleaseState((v1.body as Body).releaseId as string, 'purged');
     const res = await revert(w, { artifactId, releaseId: (v1.body as Body).releaseId, idempotencyKey: 'rp-r' });
     expect(res.status).toBe(410);
-    expect((res.body as Body).error).toBe('gone');
+    expect(res.body).toEqual({ error: 'release_unavailable', details: { reason: 'purged' } });
     const versions = await listVersions(w, artifactId);
     expect((versions.body as Body).releases).toHaveLength(2);
   });

@@ -17,6 +17,7 @@ Close the generic P0 gaps of @sentropic/artifacts so the artifact MCP reaches Cl
   - `packages/artifacts/**`
   - `packages/mcp-platform/src/runtime.ts`, `packages/mcp-platform/src/transport/result-codec.ts` (D3 outcome codec only)
   - `packages/mcp-platform/tests/artifact-result-codec.test.ts`, `packages/mcp-platform/package.json`, `packages/mcp-platform/CHANGELOG.md` (D3 codec tests and release metadata)
+  - `packages/mcp-platform/etc/mcp-platform.api.md`, `packages/mcp-platform/etc/mcp-platform-memory.api.md` (generated D3 public result fields and declaration line references)
   - `api/src/services/artifacts/composition.ts` (host store wiring only)
   - `api/src/services/artifacts/host-storage.ts` (artifacts-host migration journal: add the 0004_metadata asset)
   - `api/src/services/mcp/cluster-registry.ts` (APP-P1 pin realignment for artifacts 0.2.5, per the 0.2.4 precedent)
@@ -56,6 +57,7 @@ Close the generic P0 gaps of @sentropic/artifacts so the artifact MCP reaches Cl
   - [x] Publish the v2 outcome schema; include authorized edited paths in pointer conflicts and complete strict HTTP outcomes.
   - [x] Add recovery tests: lost COMMIT acknowledgement, one quota charge, authorized conflict paths, unavailable-target replay.
   - [x] Add real PostgreSQL CAS/metadata/quota acceptance in `commit-publication-boundary.integration.test.ts`; load the metadata migration in publication fixtures.
+  - [x] D3 targeted unit checks: 9/9; update existing outcome assertions to the v2 contract, retaining cause-redaction assertions.
   - [ ] Targeted tests, package gates, atomic commits with pushes, one final CI; append report and stop without merging.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read rules/MASTER.md, rules/workflow.md, COMMON-RULES packet, conductor brief.
