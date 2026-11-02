@@ -54,6 +54,7 @@
   - [ ] Validate exact source/tool/base/module/package/patch pins and retained material bytes under `scripts/security/scanner/`.
   - [ ] Reject current pending recipe and material pins; accept a complete synthetic contract only.
 - [ ] **Lot 2 — Receipt and artifact contracts**
+  - [x] Define a synthetic three-receipt tuple with measured fixture outputs; it supplies no platform authority.
   - [ ] Replace weak text assertions in `scripts/security/daily/scanner-image-publish.test.mjs`.
   - [ ] Enforce strict receipt schemas, matching identities, nonempty measured artifact outputs and ordered material binding.
   - [ ] Demonstrate that receipt-name echoes and missing outputs cannot establish eligibility.
