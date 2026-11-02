@@ -57,12 +57,15 @@ export interface ProcessBindingRef { readonly id: string; readonly revision: num
 export interface RevisionRef { readonly id: string; readonly revision: number; readonly digest: string }
 export interface NativeSourceRef { readonly sourceSessionId: string; readonly sourceGeneration: number; readonly streamIncarnation: string }
 
-export type LifecycleEventKind =
-  | 'admitted' | 'started' | 'waiting-input' | 'permission-pending'
-  | 'capability-changed' | 'capture-enabled' | 'capture-paused' | 'capture-revoked'
-  | 'route-opened' | 'route-degraded' | 'route-closed'
-  | 'source-disconnected' | 'source-reconnected' | 'gap-detected'
-  | 'completed' | 'stopped' | 'crashed' | 'tombstoned';
+export const LIFECYCLE_EVENT_KINDS = [
+  'admitted', 'started', 'waiting-input', 'permission-pending',
+  'capability-changed', 'capture-enabled', 'capture-paused', 'capture-revoked',
+  'route-opened', 'route-degraded', 'route-closed',
+  'source-disconnected', 'source-reconnected', 'gap-detected',
+  'completed', 'stopped', 'crashed', 'tombstoned',
+] as const;
+
+export type LifecycleEventKind = (typeof LIFECYCLE_EVENT_KINDS)[number];
 
 export const TERMINAL_KINDS: ReadonlySet<LifecycleEventKind> = new Set([
   'tombstoned', 'completed', 'stopped', 'crashed',

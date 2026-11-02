@@ -16,9 +16,9 @@ export function reportSplitBrain(
   const row = state.sessions.get(sessionKey(ref));
   if (row === undefined) return { quarantined: false };
   if (
-    left.writerEpoch === right.writerEpoch &&
-    left.originRevision === right.originRevision &&
-    left.digest !== right.digest
+    left.writerEpoch !== row.writerEpoch ||
+    right.writerEpoch !== row.writerEpoch ||
+    (left.originRevision === right.originRevision && left.digest !== right.digest)
   ) {
     row.quarantined = true;
     return { quarantined: true };
