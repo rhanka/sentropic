@@ -2,6 +2,7 @@
 // on the SQLite local profile. Shares the caller's connection — and therefore
 // the exclusive transaction — with the custody stores.
 
+import { decodeRevocationDelivery, sameRevocationTarget } from './custody-delivery-record.js';
 import { createHash } from 'node:crypto';
 import type {
   AtomicRevocationStepReceiptV2,
@@ -73,6 +74,7 @@ export class SqliteCustodyJournal {
         state: row['state'] as IdentityDeletionOperationV2['state'],
         createdAt: String(row['created_at']),
         committedAt: (row['committed_at'] as string | null) ?? null,
+        committedReceipt: row['committed_receipt_json'] ? JSON.parse(String(row['committed_receipt_json'])) as PersonDeletionReceiptV2 : null,
       }),
       `SELECT * FROM "identity_deletion_operations" WHERE "operation_id" = ?`,
       [operationId],
@@ -106,31 +108,14 @@ export class SqliteCustodyJournal {
   // -- Revocation outbox ----------------------------------------------------
 
   async enqueueDelivery(delivery: IdentityExternalRevocationV1): Promise<void> {
-    try {
-      this.connection.prepare(`INSERT INTO "identity_revocation_outbox" ("delivery_id","operation_id","step","subject_id","target_kind","target_ref","state","created_at","next_attempt_at","custody_ref","delivered_at","claim_owner","lease_until","claim_version","attempt_count") VALUES (?,?,?,?,?,?,'pending',?,?,?,NULL,NULL,NULL,0,0)`).run(delivery.deliveryId, delivery.operationId, delivery.step, delivery.subjectId, delivery.targetKind, delivery.targetRef, delivery.createdAt, delivery.nextAttemptAt, null);
-    } catch (error) {
-      if (!(error instanceof Error) || !error.message.includes('UNIQUE constraint failed')) throw error;
-      const existing = await this.findDelivery(delivery.deliveryId);
-      if (!existing) throw new IdentityCustodyErrorV1('identity_transaction_indeterminate');
-      if (existing.subjectId !== delivery.subjectId || existing.targetKind !== delivery.targetKind || existing.targetRef !== delivery.targetRef || existing.step !== delivery.step) {
-        throw new IdentityCustodyErrorV1('identity_operation_conflict');
-      }
-    }
+    this.connection.prepare(`INSERT INTO "identity_revocation_outbox" ("delivery_id","operation_id","step","subject_id","target_kind","target_ref","state","created_at","next_attempt_at","custody_ref","delivered_at","claim_owner","lease_until","claim_version","attempt_count") VALUES (?,?,?,?,?,?,'pending',?,?,?,NULL,NULL,NULL,0,0) ON CONFLICT ("delivery_id") DO NOTHING`).run(delivery.deliveryId, delivery.operationId, delivery.step, delivery.subjectId, delivery.targetKind, delivery.targetRef, delivery.createdAt, delivery.nextAttemptAt, delivery.custodyRef);
+    const existing = await this.findDelivery(delivery.deliveryId);
+    if (!existing || !sameRevocationTarget(existing, delivery)) throw new IdentityCustodyErrorV1('identity_operation_conflict');
   }
 
   findDelivery = (deliveryId: string): Promise<IdentityExternalRevocationV1 | null> =>
     this.one(
-      (row) => ({
-        deliveryId: String(row['delivery_id']),
-        operationId: String(row['operation_id']),
-        step: String(row['step']),
-        subjectId: String(row['subject_id']),
-        targetKind: String(row['target_kind']),
-        targetRef: String(row['target_ref']),
-        state: row['state'] as IdentityExternalRevocationV1['state'],
-        createdAt: String(row['created_at']),
-        nextAttemptAt: String(row['next_attempt_at']),
-      }),
+      decodeRevocationDelivery,
       `SELECT * FROM "identity_revocation_outbox" WHERE "delivery_id" = ?`,
       [deliveryId],
     );
@@ -148,26 +133,14 @@ export class SqliteCustodyJournal {
         [owner, leaseUntil, deliveryId, now],
       );
       if (!updated) continue;
-      const record = updated.row;
-      claimed.push({
-        deliveryId: String(record['delivery_id']),
-        operationId: String(record['operation_id']),
-        step: String(record['step']),
-        subjectId: String(record['subject_id']),
-        targetKind: String(record['target_kind']),
-        targetRef: String(record['target_ref']),
-        state: record['state'] as IdentityExternalRevocationV1['state'],
-        createdAt: String(record['created_at']),
-        nextAttemptAt: String(record['next_attempt_at']),
-        claimVersion: updated.version,
-      });
+      claimed.push(decodeRevocationDelivery(updated.row));
     }
     return claimed;
   }
 
   async acknowledgeDelivery(deliveryId: string, owner: string, version: number, at: string): Promise<void> {
     const changed = Number((this.connection.prepare(`UPDATE "identity_revocation_outbox" SET "state" = 'delivered', "delivered_at" = ?, "claim_owner" = NULL, "lease_until" = NULL WHERE "delivery_id" = ? AND "state" = 'pending' AND "claim_owner" = ? AND "claim_version" = ? AND "lease_until" > ?`).run(at, deliveryId, owner, version, at) as { changes: number | bigint }).changes);
-    if (changed === 0) throw new IdentityCustodyErrorV1('identity_delivery_claim_conflict');
+    if (changed === 0 && (await this.findDelivery(deliveryId))?.state !== 'delivered') throw new IdentityCustodyErrorV1('identity_delivery_claim_conflict');
   }
 
   async releaseClaim(deliveryId: string, owner: string, version: number, nextAttemptAt: string): Promise<void> {
@@ -177,17 +150,7 @@ export class SqliteCustodyJournal {
 
   listPendingByOperation = async (operationId: string): Promise<readonly IdentityExternalRevocationV1[]> => {
     const rows = this.connection.prepare(`SELECT * FROM "identity_revocation_outbox" WHERE "operation_id" = ? ORDER BY "next_attempt_at", "created_at", "delivery_id"`).all(operationId) as readonly Record<string, unknown>[];
-    return rows.map((row) => ({
-      deliveryId: String(row['delivery_id']),
-      operationId: String(row['operation_id']),
-      step: String(row['step']),
-      subjectId: String(row['subject_id']),
-      targetKind: String(row['target_kind']),
-      targetRef: String(row['target_ref']),
-      state: row['state'] as IdentityExternalRevocationV1['state'],
-      createdAt: String(row['created_at']),
-      nextAttemptAt: String(row['next_attempt_at']),
-    }));
+    return rows.map(decodeRevocationDelivery);
   };
 
   // -- Import receipts ------------------------------------------------------
