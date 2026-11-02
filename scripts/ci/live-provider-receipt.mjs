@@ -2,6 +2,7 @@ import { readFileSync, writeFileSync, appendFileSync, readdirSync, mkdirSync, ex
 import { createHash } from 'node:crypto';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { buildManifest } from './browser-shards.mjs';
 
 export function scheduleHealth(runs, { now = Date.now(), currentRun } = {}) {
   const latest = runs.filter(run => run.event === 'schedule' && String(run.id) !== String(currentRun)
@@ -137,9 +138,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
         if (measured('api', ['test-api-ai', `SCOPE=tests/ai/${name}.test.ts`])) results.api = 1;
       }
       invoke(['down-api-ci']);
-      results.browser = measured('browser', ['test-e2e']);
-      invoke(['down']);
-      results.vscode = measured('vscode', ['test-e2e-vscode', 'E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts']);
+      for (const shard of buildManifest().shards) {
+        const status = measured('browser', ['clean', 'test-e2e', `E2E_SHARD=${shard.id}`]);
+        const teardown = measured('browser-teardown', ['down']);
+        if (status || teardown) results.browser = status || teardown;
+      }
+      results.vscode = measured('vscode', ['clean', 'test-e2e-vscode', 'E2E_SPEC=tests/vscode/01-vscode-chat-streaming.spec.ts']);
     } finally {
       writeFileSync(`${dir}/results.json`, JSON.stringify(results, null, 2));
       invoke(['down']);
