@@ -1,8 +1,8 @@
-import { randomUUID } from 'node:crypto';
 import { createWorkspaceDirectory, IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import { workspaces, ADMIN_WORKSPACE_ID } from '../../db/schema';
 import type { CmIdentityTransaction } from './cm-transaction';
+import { plannedCmAuthWorkspaceId } from './cm-auth-entity-plan';
 
 /** Business provisioning called only from the CM authentication transaction. */
 export async function provisionCmAuthWorkspace(userId: string, tx: CmIdentityTransaction): Promise<void> {
@@ -19,19 +19,20 @@ export async function provisionCmAuthWorkspace(userId: string, tx: CmIdentityTra
        AND ($2::boolean AND w.id = $3 OR NOT $2::boolean AND w.type = 'neutral')
      ORDER BY w.created_at, w.id LIMIT 1`, [userId, isAdmin, ADMIN_WORKSPACE_ID]);
   if (rows.length) return;
-  const workspaceId = isAdmin ? ADMIN_WORKSPACE_ID : randomUUID();
-  await tx.lockWorkspace(workspaceId);
-  await drizzle(tx.hostTransaction).insert(workspaces).values({
-    id: workspaceId, ownerUserId: isAdmin ? null : userId,
-    name: isAdmin ? 'Admin Workspace' : 'My Workspace', type: 'neutral',
-  }).onConflictDoNothing();
+  const workspaceId = isAdmin ? ADMIN_WORKSPACE_ID : plannedCmAuthWorkspaceId();
   const directory = createWorkspaceDirectory({ workspaces: tx.stores.workspaces,
     members: tx.stores.workspaceMembers, audit: tx.stores.audit });
   const existing = await tx.stores.workspaces.findWorkspace(workspaceId);
   if (existing) {
+    await tx.lockWorkspace(workspaceId);
     if (!isAdmin || existing.tenantId !== tenant.tenantId) throw new IdentityCustodyErrorV1('identity_record_conflict');
     await directory.addWorkspaceMember({ workspaceId, userId, role: 'admin', actorId: userId });
   } else {
+    // The transaction-bound CM enrolment reserves the prospective key before insertion.
     await directory.enrolWorkspace({ workspaceId, tenantId: tenant.tenantId, repoIdentity: null, creatorUserId: userId });
   }
+  await drizzle(tx.hostTransaction).insert(workspaces).values({
+    id: workspaceId, ownerUserId: isAdmin ? null : userId,
+    name: isAdmin ? 'Admin Workspace' : 'My Workspace', type: 'neutral',
+  }).onConflictDoNothing();
 }
