@@ -66,14 +66,14 @@
   - [x] Ordered-patch, retained-acquisition and offline-resolution unit tests are collected by `scanner-provenance.test.mjs`.
 - [x] Retained proxy paths encode reversibly inside the contract charset (`!x`→uppercase, `/@v/`→`/`, `+`→`-plus-`) with asserted round-trips.
   - [x] Native offline replay test (`native-replay.test.mjs`) requires `SCANNER_MATERIALS` and never skips.
-  - [ ] Update `scanner-provenance.test.mjs`: resolved real recipe passes inventory validation, refuses empty retained bytes, and every patch/source/checksum mutation of the real recipe/manifest refuses; wire the native replay test when `SCANNER_MATERIALS` is set.
+  - [x] Update `scanner-provenance.test.mjs`: resolved real recipe passes inventory validation, refuses empty retained bytes, and every patch/source/checksum mutation of the real recipe/manifest refuses; wire the native replay test when `SCANNER_MATERIALS` is set.
 - [ ] **Lot 2 — Exact source, patch and material implementation**
   - [x] Ordered data-only patches with exact input/output checksums exist under `scripts/security/scanner/patches/`.
   - [x] Resolved and measured the actual pins (upstream archive/authentication/license, Go compiler/go.mod/go.sum/module proxy, base index/manifest/config/layer, APK index/packages, tools, Actions); `recipe.json` and `material-manifest.json` carry no prose pin or pending digest (recipeDigest `sha256:c857dc4b...`, 3138 materials, 10 origins).
   - [x] Assembled the retained material directory (3138 files, 1,071,738,643 bytes, outside the repo) and implemented `native-replay.mjs`: offline replay of the patched source resolves go-jose v4.1.6; the OS-only source still exposes v4.1.5 and is rejected. Native gate passed under `--network=none` (1 test, 0 fail, 431s).
 - [ ] **Lot 3 — Gates, ready PR and report**
-  - [ ] Run `make test-security-daily ENV=test-cyber-adm` under the single lock, then the native offline replay with `SCANNER_MATERIALS`, then `make down ENV=test-cyber-adm`.
-  - [ ] `make scope-check` before every commit; atomic `make commit` under 150 lines; push after every commit.
-  - [ ] Open a ready (non-draft) PR against main once the A02 test gate passes; record its head and CI.
+  - [x] Ran `make test-security-daily ENV=test-cyber-adm` under the single lock at `32c95098c`: 311 passed, 0 fail, 0 skip; native offline replay with `SCANNER_MATERIALS` under `--network=none` passed (1 test, 0 fail, 68s; patched source resolves go-jose v4.1.6, OS-only source still exposes v4.1.5 and is rejected); `make down ENV=test-cyber-adm` exit 0.
+  - [x] `harness check scope` PASS C2 and `harness check branch` PASS C1 before every commit; atomic `make commit` under 150 lines; pushed after every commit; rebased onto `origin/main` `5e8a08b96` with `-X theirs` (BRANCH.md sole conflict) and force-with-lease pushed.
+  - [x] Opened ready (non-draft) PR #884 against main at head `32c95098c`; pull_request CI fires on the final head.
   - [ ] Record exact heads, PR, CI and every test gate in `.tmp/rv/cyber-admission-a02.md` for conductor Track import.
   - [ ] Stop after A02; leave A03+ and all live admission/activation work fenced.
