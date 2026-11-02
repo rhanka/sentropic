@@ -1,28 +1,20 @@
-# Feature: Resolve exact scanner sources and retained materials (A02)
+# Feature: Isolated two-build scanner executor (A03)
 
 ## Objective
-- [ ] Implement admission-plan-r1 section 5 row A02 (R1) under approved amendment r6 section 3.2: resolve/authenticate public sources and exact compiler/base/module/package snapshots, implement ordered patches and retained-material acquisition. Candidate-only; no build eligibility, admission or promotion claim.
+- [ ] Implement admission-plan-r1 section 5 row A03 (R2 commands) under approved amendment r6 section 3.2 stage 4: actual build/layout/SBOM/reproducibility commands in `scripts/security/scanner/`, executed against the reviewed qualification sandbox with bounded retained acquisition. Candidate-only; no workflow change, live build, admission or promotion claim.
 
 ## Scope / Guardrails
 - [x] Binding r6 SHA-256: `4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f`.
 - [x] Binding plan SHA-256: `528dd39308a6e2cf8bdf31307c82da373cf3ceb666cb865a0417abfa7ece49d2`.
-- [x] Worktree: `tmp/worktrees/cyber-admission-a02`; branch: `feat/cyber-admission-a02`; base: origin/main `e3fa8fab7f6a9ea802550f2a4e1b269fbb212375` (A01 merged as PR #883).
-- [x] Make-only Docker-first; single shared Docker lock `.tmp/packets/DOCKER-LOCK.md` taken per command; reuse the pinned Node image; no new image build.
-- [x] `ENV=test-cyber-adm` last; no listening services or ports; no registry login, OIDC, secrets, live promotion or merge.
-- [x] Keep production admission, A03+ execution, policy changes and Track writes out of scope; the conductor remains the sole Track writer.
+- [x] Worktree: `tmp/worktrees/cyber-admission-a03`; branch: `feat/cyber-admission-a03`; base: origin/main `d1f45c625` (A02 merged as PR #884, A01 as PR #883).
+- [x] Make-only Docker-first; single shared Docker lock `.tmp/packets/DOCKER-LOCK.md` taken per command (`flock <lock> make ...`); reuse the pinned Node image `node:24-bookworm-slim@sha256:0e0ff40c...`; no new image build.
+- [x] `ENV=test-cyber-adm` last; no listening services or ports; no registry login, OIDC, secrets, live promotion or merge; `make down ENV=test-cyber-adm` after.
+- [x] Keep the promotion workflow (A08), verifier (A05), trust state (A06), production admission, policy changes and Track writes out of scope; the conductor remains the sole Track writer.
 - [x] Tests first; selective staging; `make commit` under 150 changed lines; push after every commit; never suppress CI; never `[skip ci]`.
-- [x] Stop on an unresolved design decision; pin selection and implementation follow the approved R1/r6 section 3.2 contract.
+- [x] Stop on an unresolved design decision; the two-build normalized comparison (filesystem/binary/dependencies, empty allowedDifferences) and the isolation probes are fixed by r6 section 3.2 and receipt-schema.mjs.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/cluster-mesh/src/sessions/registry*.ts`
-  - `packages/cluster-mesh/src/index.ts`
-  - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/tests/remote-session/registry.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `api/tests/api/session-remote-view.test.ts`
-  - `ui/tests/session-content/navigation.test.ts`
   - `BRANCH.md`
   - `scripts/security/scanner/**`
   - `scripts/security/daily/scanner-provenance.test.mjs`
@@ -42,38 +34,40 @@
 
 ## Feedback Loop
 - [x] Retain inherited BRLOCK-EX1 under `.security/ci-lockfile-policy.json`: owner=CI maintainers, review_by=2026-11-30T00:00:00Z; bounded scope and removal trigger remain unchanged, and catalog SCA debt stays open.
-- [x] A01 local gate passed 298 tests with zero failures/skips; ready PR #883 CI run 41414318957 passed and merged as `e3fa8fab7`; this branch is rebased on origin/main.
-- [x] Prior A02 lane commits (patch/acquisition/offline machinery plus tests) are retained and rebased; the native replay executor and the resolved recipe/material pins are the remaining work.
-- [x] Public source investigation confirms Trivy v0.76.1 at commit `e713f67f7d54decdcd9b3132c9751833dcced698` (tag ref, commit API and tree API retained), Go 1.27.3 toolchain, alpine 3.24.2 base at index `sha256:294b683c...`, and the inherited embedded go-jose v4.1.5 defect.
-- [x] Preserve upstream authentication gaps and tool-qualification boundaries; a fetched hash or candidate-only fixture grants no admission.
-- [x] Retained materials stay outside the repository (`.tmp/daily-cyber/a02-materials`); only the reviewed recipe, material manifest and patch data are committed.
+- [x] A01 merged as PR #883 (`e3fa8fab7`), A02 merged as PR #884 (`d1f45c625`); this branch is cut from origin/main `d1f45c625`.
+- [x] A02 retained materials stay outside the repository at `.tmp/daily-cyber/a02-materials/retained` (3138 files, 1,071,738,643 bytes); the native two-build fixture gate mounts them read-only with `SCANNER_MATERIALS` under `--network=none`. Retained bytes grant no admission.
+- [x] Real scanner outputs remain candidate data: the executor returns `productionAdmitted: false` and never writes a receipt, policy pin or admission flag.
 
 ## AI Flaky tests
-- [x] Deterministic source/material tests and offline replay; no AI flaky exception.
+- [x] Deterministic fixture builds and contract tests; no AI flaky exception.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch**: single A02 lane with one ready PR against main; no merge.
+- [x] **Mono-branch**: single A03 lane with one ready PR against main; no merge.
 
 ## UAT Management (in orchestration context)
-- [x] No UI surface; executable material and offline dependency checks provide the applicable gate.
+- [x] No UI surface; the executable fixture two-build gate and the isolation probes provide the applicable gate.
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline & constraints**
-  - [x] Read rules, approved r6/plan and the A01 contract; verify both document hashes.
-  - [x] Create/confirm isolated worktree `tmp/worktrees/cyber-admission-a02` from origin/main and pass the mechanical harness branch check (PASS C1).
-  - [x] Locate the existing pinned Node test lane and the shared Docker lock; preserve production admission off.
+  - [x] Read rules, approved r6/plan and the A01/A02 contracts; verify both document hashes.
+  - [x] Create isolated worktree `tmp/worktrees/cyber-admission-a03` from origin/main and pass the mechanical harness branch check (PASS C1).
+  - [x] Locate the existing pinned Node test lane (`make test-security-daily`) and the shared Docker lock; preserve production admission off.
 - [ ] **Lot 1 — Tests before implementation**
-  - [x] Ordered-patch, retained-acquisition and offline-resolution unit tests are collected by `scanner-provenance.test.mjs`.
-- [x] Retained proxy paths encode reversibly inside the contract charset (`!x`→uppercase, `/@v/`→`/`, `+`→`-plus-`) with asserted round-trips.
-  - [x] Native offline replay test (`native-replay.test.mjs`) requires `SCANNER_MATERIALS` and never skips.
-  - [x] Update `scanner-provenance.test.mjs`: resolved real recipe passes inventory validation, refuses empty retained bytes, and every patch/source/checksum mutation of the real recipe/manifest refuses; wire the native replay test when `SCANNER_MATERIALS` is set.
-- [ ] **Lot 2 — Exact source, patch and material implementation**
-  - [x] Ordered data-only patches with exact input/output checksums exist under `scripts/security/scanner/patches/`.
-  - [x] Resolved and measured the actual pins (upstream archive/authentication/license, Go compiler/go.mod/go.sum/module proxy, base index/manifest/config/layer, APK index/packages, tools, Actions); `recipe.json` and `material-manifest.json` carry no prose pin or pending digest (recipeDigest `sha256:c857dc4b...`, 3138 materials, 10 origins).
-  - [x] Assembled the retained material directory (3138 files, 1,071,738,643 bytes, outside the repo) and implemented `native-replay.mjs`: offline replay of the patched source resolves go-jose v4.1.6; the OS-only source still exposes v4.1.5 and is rejected. Native gate passed under `--network=none` (1 test, 0 fail, 431s).
+  - [x] `build-executor.test.mjs` (collected by `scanner-provenance.test.mjs`): build refusal without verified materials, CLI probe report.
+  - [x] `build-isolation.test.mjs`: sanitized env inherits no process env; refuses credential/OIDC/docker keys, shared daemon sockets (real unix socket and plain file) and any python on the build PATH.
+  - [x] `build-layout.test.mjs`: deterministic filesystem normalization across roots (symlink/mode/content refusals), APK/Go-module parsing, stable dependency inventory, deterministic OCI layout with index→manifest→config→layer linkage, two-build compare with forced mismatch refusal.
+  - [x] `native-build.test.mjs` (collected only with `SCANNER_MATERIALS`, never skips): compiles the small Go executable fixture twice with the pinned retained compiler under `--network=none`, compares binary/filesystem/dependencies, forces a mismatch, probes isolation, stages the real patched source.
+  - [x] Tests pushed RED first (`9d1f69cf0`, `3114494bf`, `dcb8775a2`), then GREEN after implementation.
+- [x] **Lot 2 — Executor implementation**
+  - [x] `build-isolation.mjs`: `buildEnvironment` (constructed from scratch, no process.env inheritance) and `probeIsolation` (credentials/OIDC/shared-socket/Python refusal).
+  - [x] `build-layout.mjs`: `normalizeOutputTree`, `parseApkPackage`, `parseGoModuleList`, `dependenciesInventory`, deterministic `makeOciLayout`, `compareBuilds` (empty allowedDifferences only).
+  - [x] `build-executor.mjs`: `stagePatchedSource` (verified retained materials → pinned source → digest-bound patches), `buildOnce` (pinned offline Go build, isolation probe, OCI layout, normalized SBOM), `runTwoBuilds` (sequential isolated reproductions + reproducibility gate). Candidate data only (`productionAdmitted: false`).
+  - [x] `build-cli.mjs`: fixed `probe` / `build-once` / `build-twice` command surface for the later A08 workflow wiring.
 - [ ] **Lot 3 — Gates, ready PR and report**
-  - [x] Ran `make test-security-daily ENV=test-cyber-adm` under the single lock at `32c95098c`: 311 passed, 0 fail, 0 skip; native offline replay with `SCANNER_MATERIALS` under `--network=none` passed (1 test, 0 fail, 68s; patched source resolves go-jose v4.1.6, OS-only source still exposes v4.1.5 and is rejected); `make down ENV=test-cyber-adm` exit 0.
-  - [x] `harness check scope` PASS C2 and `harness check branch` PASS C1 before every commit; atomic `make commit` under 150 lines; pushed after every commit; rebased onto `origin/main` `5e8a08b96` with `-X theirs` (BRANCH.md sole conflict) and force-with-lease pushed.
-  - [x] Opened ready (non-draft) PR #884 against main at head `32c95098c`; pull_request CI fires on the final head.
-  - [ ] Record exact heads, PR, CI and every test gate in `.tmp/rv/cyber-admission-a02.md` for conductor Track import.
-  - [ ] Stop after A02; leave A03+ and all live admission/activation work fenced.
+  - [x] `flock .tmp/packets/DOCKER-LOCK.md make test-security-daily ENV=test-cyber-adm` at head `ecb6e1f60`: **321 passed, 0 fail, 0 skip** (37 suites); log `.tmp/rv/cyber-admission-a03-test-security-daily.log`.
+  - [x] Native two-build fixture gate under the same lock, `--network=none`, `SCANNER_MATERIALS` mounted read-only at head `ecb6e1f60`: **3 passed, 0 fail** (two-build reproducible 25.9s, forced mismatch refused 35.5s, real patched source staged 2.4s); log `.tmp/rv/cyber-admission-a03-native-build.log`.
+  - [x] `flock ... make down ENV=test-cyber-adm` after the gates; no new image built (reused pinned `node:24-bookworm-slim@sha256:0e0ff40c...`); scratch work dir removed.
+  - [x] `make scope-check` PASS C2 and `harness check branch` PASS C1; atomic `make commit` under 150 lines each; pushed after every commit; no `[skip ci]`.
+  - [ ] Open ready (non-draft) PR against main; pull_request CI fires on the final head.
+  - [ ] Record exact heads, PR, CI and every test gate in `.tmp/rv/cyber-admission-a03.md` for conductor Track import.
+  - [ ] Stop after A03; leave A04+ and all live admission/activation work fenced.
