@@ -228,7 +228,7 @@ const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?:
   // BR-39e Lot 0: social/enterprise federation substrate (identities link table + one-time
   // server-side flow-state). Inert for the OAuth-server handlers; wired here so the (Lot 1)
   // federation router consumes the port through the same host ports bag.
-  federation: createFederationAdapter(),
+  federation: createFederationAdapter({ database: db }),
   emailVerification: {
     async countRecent(email, since) {
       // Lot A4: email codes live in cm_identity.identity_single_use_proofs.
