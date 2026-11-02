@@ -6,7 +6,7 @@
 ## Scope / Guardrails
 - [x] Binding r6 SHA-256: `4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f`.
 - [x] Binding plan SHA-256: `528dd39308a6e2cf8bdf31307c82da373cf3ceb666cb865a0417abfa7ece49d2`.
-- [x] Worktree: `tmp/worktrees/cyber-admission-a01`; branch: `feat/cyber-admission-a01`; base: `e1c0ef97d1806065b8e238da9302716fc789da3a`.
+- [x] Worktree: `tmp/worktrees/cyber-admission-a01`; branch: `feat/cyber-admission-a01`; base: `78c746f538f1381dfc7bf06834dc7ea9d654d5a9`.
 - [x] Make-only Docker-first; shared `.tmp/packets/DOCKER-LOCK.md` flock; reuse pinned Node image; no image build.
 - [x] `ENV=test-cyber-adm` last; no services or listening ports needed; no credentials, registry login or OIDC.
 - [x] No policy admission changes, A03+ work, new dependencies, Track writes or merge.
@@ -32,6 +32,7 @@
   - [x] Declare BRADM-EXn with reason, impact and rollback before a conditional change.
 
 ## Feedback Loop
+- [x] Rebased from the initial `e1c0ef97d` base to resolve the sole BRANCH.md conflict; the code patch and scanner material context remain byte-identical, retaining both passing code reviews under r6 section 1.3.
 - [x] Mistral F1: constrain executed no-op test blocks to literal echo statements; reject commands, expressions, redirection and substitutions before execution.
 - [x] Mistral F2: restore parsed checkout-ref assertions for all three jobs; F4: add workflow/control mutation negatives.
 - [x] Design authority and Track writer remain the conductor; this branch supplies source artifacts and test evidence.
