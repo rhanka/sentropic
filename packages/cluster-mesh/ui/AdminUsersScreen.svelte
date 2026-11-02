@@ -7,6 +7,7 @@
 
   type AccountStatus = AdminUserRow['accountStatus'];
   type Role = AdminUserRow['role'];
+  const operations = new Map<string, string>();
 
   let loading = false;
   let statusFilter: AccountStatus | '' = '';
@@ -78,8 +79,11 @@
     }
     if (!await ports.confirm(t('adminUsers.confirm.deletePermanently', { values: { target: u.email ?? u.id } }))) return;
     try {
-      await ports.transport.deleteUser(u.id, ports.operationId());
-      ports.notify({ type: 'success', message: t('adminUsers.toasts.deleted') });
+      const operationId = operations.get(u.id) ?? ports.operationId();
+      operations.set(u.id, operationId);
+      const receipt = await ports.transport.deleteUser(u.id, operationId);
+      ports.notify({ type: receipt.complete ? 'success' : 'info',
+        message: t(receipt.complete ? 'adminUsers.toasts.deleted' : 'adminUsers.toasts.deletionPending') });
       await load();
     } catch {
       ports.notify({ type: 'error', message: t('adminUsers.errors.delete') });
