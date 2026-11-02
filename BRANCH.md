@@ -50,10 +50,11 @@ Make `EncryptedFileKeyring` reads side-effect free (no `mkdir`/`chmod` on the re
 - [ ] **Lot 1 — Tests first** (`packages/llm-mesh/tests/node/encrypted-file-keyring.test.ts`)
   - [x] read from a read-only mount succeeds with no EROFS (mutating syscalls mocked to throw EROFS)
   - [x] a read never changes the directory or master-key ctime/mtime
-  - [ ] wrong dir mode (0755) and wrong key mode (0644) on a read give the typed `keyring_insecure_permissions` refusal
-  - [ ] read on a missing directory returns null (no account) and creates nothing
-  - [ ] read with a missing master key keeps the existing error and does not touch the directory
-  - [ ] write path on a non-existent directory still creates dir 0700 / `.key` 0600 / record 0600
+  - [x] wrong dir mode (0755) and wrong key mode (0644) on a read give the typed `keyring_insecure_permissions` refusal
+  - [x] read on a missing directory returns null (no account) and creates nothing
+  - [x] read with a missing master key keeps the existing error and does not touch the directory
+  - [x] write path on a non-existent directory still creates dir 0700 / `.key` 0600 / record 0600
+  - [x] write path sets modes only when they differ (chmod spy)
   - [x] Scoped run `make test-llm-mesh SCOPE=tests/node/encrypted-file-keyring.test.ts` shows the new tests failing on the unfixed code (5 failed / 4 passed before the fix)
 - [ ] **Lot 2 — Fix** (`packages/llm-mesh/src/node/keyring/encrypted-file-keyring.ts`)
   - [ ] read path (`create=false`): stat dir + `.key`, read only when modes are 0700/0600, typed refusal otherwise, missing dir/key keeps the existing not-found behaviour, zero mkdir/chmod
