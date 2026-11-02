@@ -13,6 +13,7 @@ export const changeCmAccountAsAdmin = (input: {
   for (const id of ids) await tx.lockSubject(id);
   const actor = await tx.stores.accounts.findAccount(input.actorId);
   if (!actor || actor.accountStatus !== 'active' || actor.globalRole !== 'admin_app') throw new CmIdentityForbiddenError();
+  if (!await tx.custody.profiles.find(input.actorId)) throw new IdentityCustodyErrorV1('identity_material_missing');
   const target = await tx.stores.accounts.findAccount(input.userId);
   if (!target) throw new IdentityNotFoundError('user', input.userId);
   const profile = await tx.custody.profiles.find(input.userId);
