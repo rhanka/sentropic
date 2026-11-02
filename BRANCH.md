@@ -188,6 +188,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Add the CM workspace-members screen with current-member management gates, committed-role display and scope-bound mutations/refresh.
   - [x] Share the app's management host ports and localized membership labels; locale changes refresh the projected screen text.
   - [x] Project CM members in workspace settings and mount the membership decision/request page, including the no-workspace recovery path.
+  - [x] Delete the replaced app member list/add/role/remove behavior and selection watcher; only the CM screen owns those interactions.
   - [ ] Login, registration, admin, membership decision, members screens; e2e on ENV=e2e-app-a4.
 - [ ] **Lot 5 — Tests**
   - [ ] gap-§1 scenario end to end; registration → approval → login; invitation consumed once; revoke-all; mid-session suspension empties tool set; account deletion with injected failure leaves no orphan and preserves rows; migration tests; F11 e2e.
