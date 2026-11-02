@@ -5,7 +5,6 @@ import { ensureIndexes } from './db/ensure-indexes';
 import { db, pool } from './db/client';
 import { objectLocks } from './db/schema';
 import { purgeExpiredAuthData } from './services/challenge-purge';
-import { ensureAdminWorkspaceExists, claimAdminWorkspaceOwner } from './services/workspace-service';
 import { runAdminApprovalSweep } from './services/admin-approval-sweep';
 import { runChatTracePurge } from './services/chat-trace-sweep';
 import { runQueueReaperSweep } from './services/queue-reaper-sweep';
@@ -126,8 +125,6 @@ try {
 
 // Ensure Admin Workspace exists (idempotent) and is claimed by admin_app if present
 try {
-  await ensureAdminWorkspaceExists();
-  await claimAdminWorkspaceOwner();
 } catch (error) {
   logger.error({ err: error }, 'Failed to ensure admin workspace at startup, continuing anyway');
 }
