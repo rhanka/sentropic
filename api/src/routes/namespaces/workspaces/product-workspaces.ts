@@ -1,4 +1,4 @@
-import { Hono, type Context } from 'hono';
+import { Hono } from 'hono';
 import { z } from 'zod';
 import { zValidator } from '../../../utils/zod-validator';
 import { db } from '../../../db/client';
@@ -23,14 +23,13 @@ import {
 } from '../../../db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { requireEditor } from '../../../middleware/rbac';
-import { getUserWorkspaces, requireWorkspaceAdmin, requireWorkspaceAccess, isNeutralWorkspace } from '../../../services/workspace-access';
+import { getUserWorkspaces, requireWorkspaceAdmin } from '../../../services/workspace-access';
 import {
-  notifyWorkspaceCreated, notifyWorkspaceEvent, notifyWorkspaceMembershipEvent,
+  notifyWorkspaceCreated, notifyWorkspaceEvent,
   provisionWorkspace, seedWorkspaceTypeResources,
 } from '../../../services/workspace-provisioning';
 import {
   listCmWorkspaceMembers,
-  putCmWorkspaceMember,
   removeCmWorkspaceMember,
 } from '../../../services/identity/cm-tenancy';
 import {
@@ -40,8 +39,6 @@ import {
 } from '../../../services/connector-grant-teardown';
 
 export const workspacesRouter = new Hono();
-
-const roleSchema = z.enum(['viewer', 'commenter', 'editor', 'admin']);
 
 workspacesRouter.get('/', async (c) => {
   const user = c.get('user') as { userId: string };
@@ -277,54 +274,3 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
   return c.body(null, 204);
 });
 
-const updateMemberSchema = z.object({
-  role: roleSchema,
-});
-
-async function updateMemberRoleHandler(c: Context) {
-  const actor = c.get('user') as { userId: string; role: string };
-
-  const workspaceId = c.req.param('id')!;
-  const targetUserId = c.req.param('userId')!;
-  if (targetUserId === actor.userId) return c.json({ message: 'Cannot change your own role' }, 400);
-
-  try {
-    await requireWorkspaceAdmin(actor.userId, workspaceId);
-  } catch {
-    return c.json({ error: 'Insufficient permissions' }, 403);
-  }
-
-  // Avoid relying on typed `c.req.valid()` here: this handler is shared between PATCH and PUT,
-  // and TypeScript cannot infer the validated type through the function boundary.
-  const raw = await c.req.json().catch(() => null);
-  const parsed = updateMemberSchema.safeParse(raw);
-  if (!parsed.success) return c.json({ message: 'Invalid body' }, 400);
-  const { role } = parsed.data;
-  await putCmWorkspaceMember(workspaceId, targetUserId, role);
-
-  await notifyWorkspaceMembershipEvent(workspaceId, targetUserId, { action: 'role_updated', role });
-  return c.json({ success: true });
-}
-
-// Support both PATCH and PUT for ergonomics/backward compatibility with UI callers.
-workspacesRouter.patch('/:id/members/:userId', requireEditor, zValidator('json', updateMemberSchema), updateMemberRoleHandler);
-workspacesRouter.put('/:id/members/:userId', requireEditor, zValidator('json', updateMemberSchema), updateMemberRoleHandler);
-
-workspacesRouter.delete('/:id/members/:userId', requireEditor, async (c) => {
-  const actor = c.get('user') as { userId: string; role: string };
-
-  const workspaceId = c.req.param('id')!;
-  const targetUserId = c.req.param('userId')!;
-  if (targetUserId === actor.userId) return c.json({ message: 'Cannot remove yourself' }, 400);
-
-  try {
-    await requireWorkspaceAdmin(actor.userId, workspaceId);
-  } catch {
-    return c.json({ error: 'Insufficient permissions' }, 403);
-  }
-
-  await removeCmWorkspaceMember(workspaceId, targetUserId);
-
-  await notifyWorkspaceMembershipEvent(workspaceId, targetUserId, { action: 'removed' });
-  return c.body(null, 204);
-});
