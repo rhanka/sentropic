@@ -454,6 +454,8 @@ export interface ArtifactCommitCoordinator {
   /** Provider-internal prepared units; domain effects remain inside the same transaction. */
   finalizePrepared(request: FinalizeRequest): Promise<FinalizeResult>;
   replayPrepared(request: FinalizeRequest): Promise<FinalizeResult>;
+  /** Guard an existing receipt before preparing content; absence has no side effects. */
+  findReplayPrepared(request: FinalizeRequest): Promise<FinalizeResult | undefined>;
 }
 
 /** Unknown legacy codec on a found success row: L6 projects the migration condition. */
