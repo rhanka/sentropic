@@ -32,6 +32,8 @@ import { eq } from 'drizzle-orm';
 
 import { db, pool } from '../db/client';
 import { serviceClients } from '../db/schema';
+import { bindCmAppDatabase, runCmIdentityWrite } from '../services/identity/cm-transaction';
+import { bindCmServiceClientTenant } from '../services/identity/cm-service-clients';
 
 const WORKLOAD_CLIENT_ID = 'immo-mcp-workload';
 const DEFAULT_SUBJECT_AUD = 'https://immo.sent-tech.ca/mcp';
@@ -105,18 +107,20 @@ try {
         console.log(`Workload client ${clientId} already provisioned (replay no-op).`);
       } else {
         const now = new Date();
-        await db.insert(serviceClients).values({
-          allowedScopes: ['immo:search'],
-          clientId,
-          clientSecretHash: hashSecret(secret),
-          createdAt: now,
-          displayName: 'Immo MCP workload (token exchange only)',
-          dpopBoundAccessTokens: false,
-          exchangePolicy: policy,
-          id: `provisioned-${clientId}`,
-          resourceIndicators: [targetAud],
-          revokedAt: null,
-          tenantId: 'sentropic',
+        await runCmIdentityWrite(async tx => {
+          await bindCmAppDatabase(tx).insert(serviceClients).values({
+            allowedScopes: ['immo:search'],
+            clientId,
+            clientSecretHash: hashSecret(secret),
+            createdAt: now,
+            displayName: 'Immo MCP workload (token exchange only)',
+            dpopBoundAccessTokens: false,
+            exchangePolicy: policy,
+            id: `provisioned-${clientId}`,
+            resourceIndicators: [targetAud],
+            revokedAt: null,
+          });
+          await bindCmServiceClientTenant(tx, clientId, 'sentropic');
         });
         console.log(`Workload client ${clientId} created with search-only exchange policy.`);
       }
