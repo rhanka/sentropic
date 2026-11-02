@@ -249,6 +249,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] gap-§1 scenario end to end; registration → approval → login; invitation consumed once; revoke-all; mid-session suspension empties tool set; account deletion with injected failure leaves no orphan and preserves rows; migration tests; F11 e2e.
   - [ ] Rehearse migration on a fresh prod dump (existing rehearsal make target); record receipt.
 - [ ] **Lot 6 — Final validation**
+  - [x] Delete the standalone email-code exchange writer and exercise the CM completion service from registration test fixtures.
   - [x] Isolate the inherited ticket signing seed for CM import/runtime and delete the unused legacy validation-token verifier.
   - [x] Move OAuth state regression fixtures to CM accounts and independent bound request transactions, retaining consume-once concurrency assertions.
   - [x] Reject unbound and escaped OAuth state participants before any protocol query; join protocol expiry cleanup to a CM write transaction.
