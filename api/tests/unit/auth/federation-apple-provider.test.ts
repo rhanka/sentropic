@@ -102,6 +102,7 @@ describe('Apple federation provider', () => {
       profile: { displayName: 'Ada Lovelace', email: 'relay@privaterelay.appleid.com' },
     });
     expect(identity).toEqual({
+      assertionExpiresAt: expect.any(String),
       displayName: 'Ada Lovelace',
       email: 'relay@privaterelay.appleid.com',
       emailScope: 'provider',
