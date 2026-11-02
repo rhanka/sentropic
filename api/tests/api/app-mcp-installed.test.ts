@@ -25,7 +25,7 @@ describe('physical app registry installation', () => {
           createInvocation: () => { throw new Error('Compilation must not bind'); } },
         selection: ['sentropic.artifacts'], configurations: { 'sentropic.artifacts': {} }, bindings: {},
         compatibility: { 'sentropic.artifacts': {
-          manifestDigest: '17daebce5bc0e85244c321b6229a3ee71f58676e8dcf964b52e006ffba843ab7' } },
+          manifestDigest: '8c0d2ec1c49e8ff81ebe082bb784982ba2d828026aa31d6d65d75b16e5c14b1d' } },
       });
       assert.equal(result.ok, true, JSON.stringify(result));
       assert.deepEqual([...result.registry.tools.keys()],
@@ -51,7 +51,7 @@ describe('physical app registry installation', () => {
             createInvocation: () => { throw new Error('No binding'); } },
           selection: ['sentropic.artifacts'], configurations: { 'sentropic.artifacts': {} }, bindings: {},
           compatibility: { 'sentropic.artifacts': {
-            manifestDigest: '17daebce5bc0e85244c321b6229a3ee71f58676e8dcf964b52e006ffba843ab7' } },
+            manifestDigest: '8c0d2ec1c49e8ff81ebe082bb784982ba2d828026aa31d6d65d75b16e5c14b1d' } },
         });
         if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
         if (result.registry.tools.size !== 4) throw new Error('APP-P1 tool count');
