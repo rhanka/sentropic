@@ -16,6 +16,14 @@ export const L08A_ACCEPTANCE = [
   { id: 'T6-M1', owner: 'ACT-L03b/ACT-L08a/ACT-L10a', destinations: ['control-provisioning.test.mjs'], tests: [], disposition: 'shared-disposition-enumeration', suite: 'test-security-daily' },
 ];
 
+export const L04_ACCEPTANCE = [
+  { id: 'L4-A', owner: 'ACT-L04', destinations: ['sast-contract.test.mjs'], tests: ['L4-A'], disposition: 'qualified-native-ast-grep-rules-with-frozen-local-manifest', suite: 'test-security-daily' },
+  { id: 'L4-B', owner: 'ACT-L04', destinations: ['sast-contract.test.mjs'], tests: ['L4-B'], disposition: 'pinned-native-elf-toolbox-with-zero-python', suite: 'test-security-daily' },
+  { id: 'L4-C', owner: 'ACT-L04', destinations: ['iac-contract.test.mjs'], tests: ['L4-C'], disposition: 'complete-multi-document-iac-inventory-with-positive-controls', suite: 'test-security-daily' },
+  { id: 'L4-D', owner: 'ACT-L04', destinations: ['inventory.test.mjs'], tests: ['L4-D'], disposition: 'independent-expected-inventories-with-completeness-proof', suite: 'test-security-daily' },
+  { id: 'L4-E', owner: 'ACT-L04', destinations: ['inventory.test.mjs'], tests: ['L4-E'], disposition: 'exact-coverage-blockers-and-positive-proof-applicability', suite: 'test-security-daily' },
+];
+
 export function validateDisposition(rows) {
   const errors = [];
   for (const row of rows) {

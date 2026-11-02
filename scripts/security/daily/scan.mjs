@@ -6,7 +6,9 @@ import { tmpdir } from 'node:os';
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createRequire } from 'node:module';
-import { failClosedReport, inventoryRepository, normalizeRegister, summarizeBacklog } from './inventory.mjs';
+import { failClosedReport, inventoryRepository, normalizeRegister, summarizeBacklog, validateCompleteness } from './inventory.mjs';
+import { loadSastContract, planSastTasks } from './sast.mjs';
+import { inventoryIacDocuments } from './iac.mjs';
 import { canonicalAliases, joinRegister, loadContract, validDate } from './schema.mjs';
 import { policy as trivyPolicy } from './toolchain-contract.mjs';
 
@@ -27,6 +29,18 @@ export function planScan(root, contract) {
   for (const image of inventory.images) tasks.push({ kind: 'image', scanner: 'trivy', target: image.key,
     args: ['image', ...trivyArgs], blocked: image.present ? null : 'missing image definition' });
   tasks.push({ kind: 'iac', scanner: 'trivy', target: '.', args: ['config', ...trivyArgs, '.'], blocked: null });
+  // ACT-L04: expected multi-document IaC inventory attached to the config scan; unsupported
+  // constructs become exact coverage blockers instead of silent omissions.
+  let iac;
+  try { iac = inventoryIacDocuments(root); } catch (error) { iac = { documents: [], blockers: [`coverage-blocked: IaC inventory: ${error.message}`], surfaces: [] }; }
+  tasks.find((task) => task.kind === 'iac').expected = iac;
+  for (const blocker of iac.blockers) tasks.push({ kind: 'iac-coverage', scanner: 'trivy', target: blocker, args: [], blocked: blocker });
+  // ACT-L04: one fenced ast-grep task per inventoried SAST root (execution admission is L02).
+  try {
+    tasks.push(...planSastTasks(root, loadSastContract(root), inventory.sast).tasks);
+  } catch (error) {
+    tasks.push({ kind: 'sast', scanner: 'ast-grep', target: '.', args: [], blocked: `coverage-blocked: sast contract: ${error.message}` });
+  }
   return { inventory, tasks };
 }
 
@@ -149,6 +163,16 @@ export async function scanRepository({ root = '.', sourceSha, repository, contra
       coverageBlocked.push(`${task.target}: ${error.message}`);
     }
   }
+  // L4-D: completeness is proven against the independent expected inventory, never against
+  // agreement between scanner outputs; mutually agreeing incomplete outputs still fail.
+  const scannerOutputs = [];
+  for (const surface of surfaces) {
+    if (!['complete-clean', 'complete-with-findings'].includes(surface.state) || surface.scanner !== 'npm') continue;
+    scannerOutputs.push(inventory.expected.lockComponents
+      .filter((component) => component.identity.startsWith(`lock:${surface.target}#`))
+      .map((component) => component.identity).concat([`lockfile:${surface.target}`]));
+  }
+  try { validateCompleteness(scannerOutputs, inventory.expected); } catch (error) { coverageBlocked.push(error.message); }
   for (const [path, before] of Object.entries(inputHashes)) {
     const after = existsSync(join(root, path)) ? hash(readFileSync(join(root, path))) : null;
     if (after !== before) coverageBlocked.push(`source bytes changed: ${path}`);

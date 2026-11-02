@@ -3,6 +3,7 @@ import { isAbsolute, join } from 'node:path';
 import { assertQualified, digest, isDigest, policy, requireEvidence, validateScanner } from './toolchain-contract.mjs';
 import { hashFile, restoreSnapshot } from './toolchain-cache.mjs';
 import { failClosedReport } from './inventory.mjs';
+import { inventoryIacDocuments } from './iac.mjs';
 
 // Only the trusted preparation path can establish archive identity; JSON cannot mint this proof.
 const verifiedArchives = new WeakMap();
@@ -173,6 +174,17 @@ export function validateReportAgreement(coldReport, warmReport) {
   return true;
 }
 
-export function requireIacQualification() {
-  throw new Error('coverage-blocked: IaC rules snapshot and complete multi-document adaptation require qualification');
+// ACT-L04: IaC admission requires the qualified rules snapshot AND the complete
+// multi-document inventory over compose, Makefile and deploy/ surfaces; unsupported
+// constructs block instead of being skipped.
+export function requireIacQualification(root = '.') {
+  if (!policy.data.checks.qualified) {
+    throw new Error('coverage-blocked: IaC rules snapshot and complete multi-document adaptation require qualification');
+  }
+  const expected = inventoryIacDocuments(root);
+  if (expected.blockers.length) {
+    throw new Error(`coverage-blocked: IaC unsupported constructs: ${expected.blockers.join('; ')}`);
+  }
+  if (!expected.documents.length) throw new Error('coverage-blocked: IaC document inventory is empty');
+  return expected;
 }
