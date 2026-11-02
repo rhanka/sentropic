@@ -14,8 +14,10 @@ import { chatMessages, chatSessions } from '../../src/db/schema';
 import { setCmMembershipState } from '../../src/services/identity/cm-tenancy';
 import { listCmSessionsForUser, revokeCmSession } from '../../src/services/identity/cm-sessions';
 import { PLATFORM_TENANT_ID } from '../../src/services/workspace-service';
-import { cmDeleteTenantMembershipsForUser } from '../utils/cm-identity-test-store';
-import { resolveHttpCatalogContext } from '../../src/services/catalog/request-authority';
+import { cmDeleteTenantMembershipsForUser, cmQuery } from '../utils/cm-identity-test-store';
+import { resolveHttpCatalogContext, resolveTurnCatalogContext } from '../../src/services/catalog/request-authority';
+import { admitCmBusinessConversation, withCmConversationCaller } from '../../src/services/identity/cm-conversation-authority';
+import { createAdmittedChatMessage } from '../utils/cm-chat-fixture';
 import { revalidateCatalogInvocation } from '../../src/services/catalog/request-context';
 import { compositeCatalogRegistry, resolveFoundationChatTools, executeFoundationSearchCatalog } from '../../src/services/skills/catalog';
 import { productArtifactTransport } from '../../src/services/artifacts/instance';
@@ -178,6 +180,8 @@ describe('cluster mesh catalog product authority', () => {
     const invoke = vi.spyOn(productArtifactTransport, 'invoke').mockResolvedValue({ status: 201, body: { artifactId: 'one' } });
     // Await request-bound plan preparation through the same authority entry as HTTP discovery.
     const [session] = await listCmSessionsForUser(user.id);
+    expect(await withCmConversationCaller({ userId: user.id, sessionId: session.id,
+      workspaceId: user.workspaceId!, role: 'editor' }, () => admitCmBusinessConversation(sessionId))).toBe(true);
     await resolveHttpCatalogContext({ userId: user.id, sessionId: session.id, workspaceId: user.workspaceId!, role: 'editor' });
     const args = { bindingName: 'report', idempotencyKey: 'one' };
     let sequence = 0;
@@ -197,6 +201,28 @@ describe('cluster mesh catalog product authority', () => {
     await cmDeleteTenantMembershipsForUser(user.id);
     await expect(call()).resolves.toMatchObject({ result: { error: 'catalog_access_denied' } });
     expect(invoke).toHaveBeenCalledOnce();
+  });
+
+  it('should reject a retained invocation after its CM conversation reference changes', async () => {
+    const message = await createAdmittedChatMessage({ userId: user.id, workspaceId: user.workspaceId!, content: 'Hello' });
+    const context = await resolveTurnCatalogContext({ userId: user.id, workspaceId: user.workspaceId!,
+      sessionId: message.sessionId, allowedTools: ['search_skills'] });
+    await expect(revalidateCatalogInvocation(context, 'search_skills', {})).resolves.toMatchObject({
+      consentRef: context.consentRef });
+    // Both records are valid for the same actor/workspace, but they are distinct authorities.
+    const replacement = crypto.randomUUID();
+    await cmQuery(`INSERT INTO cm_identity.cm_identity_conversation_sessions
+      (conversation_session_id, user_id, workspace_id, status, opened_at, expires_at)
+      SELECT $1, s.user_id, s.workspace_id, s.status, s.opened_at, s.expires_at
+      FROM cm_identity.cm_identity_conversation_sessions s
+      JOIN public.chat_sessions c ON c.cm_conversation_session_id = s.conversation_session_id WHERE c.id = $2`,
+    [replacement, message.sessionId]);
+    await db.update(chatSessions).set({ cmConversationSessionId: replacement })
+      .where(eq(chatSessions.id, message.sessionId));
+    await expect(revalidateCatalogInvocation(context, 'search_skills', {})).rejects.toThrow('catalog_access_denied');
+    const fresh = await resolveTurnCatalogContext({ userId: user.id, workspaceId: user.workspaceId!,
+      sessionId: message.sessionId, allowedTools: ['search_skills'] });
+    expect(fresh.consentRef).not.toBe(context.consentRef);
   });
 
   it('matches direct canonical deterministic discovery without a predecessor shadow', async () => {
