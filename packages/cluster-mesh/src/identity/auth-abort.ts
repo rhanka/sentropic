@@ -37,7 +37,7 @@ export const guardAuthStep = async <T>(flow: IdentityAuthCompletionFlowV1, stage
         message: magic ? 'Magic link is invalid or expired.' : 'Verification code is invalid or expired.', status: 400 } } });
     }
     if (['session_validate', 'session_refresh'].includes(flow) && ['login_binding_mismatch', 'login_refresh_conflict'].includes(code)) return finishAuthCompletion(flow, null as T);
-    if (flow === 'social_unlink' && code === 'identity_record_conflict') return finishAuthCompletion(flow, false as T);
+    if (flow === 'social_unlink' && code === 'proof_state_conflict') return finishAuthCompletion(flow, false as T);
     throw error;
   }
 };
