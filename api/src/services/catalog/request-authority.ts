@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import type { AuthUser } from '../../middleware/auth';
-import { getCmIdentity, setCmDecisionToolCatalog } from '../identity/cm-identity';
+import { createFreshDecisionProducer } from '@sentropic/cluster-mesh';
 import { runCmIdentityRead } from '../identity/cm-transaction';
 import { findCmApprovedMembership } from '../identity/cm-tenancy';
 import { compositeCatalogRegistry, prepareHostRegistryCatalog } from '../skills/catalog';
@@ -25,12 +25,16 @@ const baseToolNames = (): string[] => {
   return [...new Set(['search_skills', 'search_catalog', ...names])];
 };
 
-// Installed once at module load: the F15 producer maps an allowed decision to the
-// allowed tool set through this catalog.
-setCmDecisionToolCatalog({ toolsForDecision: () => baseToolNames() });
-
-const resolve = createCatalogContextResolver(input => runCmIdentityRead(async tx => {
-  const { decision: producer } = getCmIdentity();
+const resolve = createCatalogContextResolver(async input => {
+  // Resolve filesystem assets before the replayable database callback. Every public
+  // identifier, including artifact tools, passes through the F15 catalog mapping.
+  const registry = process.env.APP_ARTIFACT_HOST_ENABLED === '1' ? await prepareHostRegistryCatalog() : null;
+  const toolNames = Object.freeze([...new Set([...baseToolNames(), ...(registry?.tools.keys() ?? [])])]);
+  return runCmIdentityRead(async tx => {
+  const producer = createFreshDecisionProducer({ accounts: tx.stores.accounts, sessions: tx.stores.sessions,
+    tenants: tx.stores.tenants, memberships: tx.stores.memberships, workspaces: tx.stores.workspaces,
+    workspaceMembers: tx.stores.workspaceMembers, conversations: tx.conversations,
+    catalog: { toolsForDecision: () => [...toolNames] } });
   const now = new Date().toISOString();
   let conversationSessionId: string | undefined;
   if (input.kind === 'turn') {
@@ -58,17 +62,13 @@ const resolve = createCatalogContextResolver(input => runCmIdentityRead(async tx
     [decision.tid, decision.tenantRole, decision.workspaceRole, membership?.updatedAt.toISOString() ?? '', decision.scopes.join(',')].join('|'),
   ).digest('hex');
 
-  const names = [...fresh.allowedTools];
-  if (process.env.APP_ARTIFACT_HOST_ENABLED === '1') {
-    // The compiled registry owns public identifiers; never sanitize or reconstruct them here.
-    names.push(...(await prepareHostRegistryCatalog())!.tools.keys());
-  }
   return { tenantId: decision.tenantId, membershipRef: `${input.workspaceId}:${input.userId}:${decision.workspaceRole}`,
     consentRef: `first-party:${input.kind}:${input.sessionId}`,
     policyVersion,
     roles: [decision.workspaceRole], workspaceType: wsRow?.type, readOnly: !['editor', 'admin'].includes(decision.workspaceRole),
-    allowedTools: [...new Set(names)] };
-}));
+    allowedTools: [...new Set(fresh.allowedTools)] };
+  });
+});
 
 export const resolveHttpCatalogContext = (user: AuthUser) => resolve({ kind: 'http',
   userId: user?.userId, sessionId: user?.sessionId, workspaceId: user?.workspaceId });
