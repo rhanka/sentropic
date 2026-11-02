@@ -60,9 +60,10 @@ Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, r
 ## Plan / Todo (lot-based)
 - [ ] **Fix CI integrate — run 41388209369**
   - [x] Update and verify the exact 17-name Cluster Mesh artifacts inventory (21 surface tests pass).
-  - [ ] Align the selected fixture, frozen candidate installs and package publication ordering.
+  - [x] Align the selected fixture, frozen candidate installs and package publication ordering (129 lazy tests, 16 installed stateful tests, clean install qualification and 33 CI wiring tests pass).
   - [x] Repair the W1.a upgrade fixture and reader activation causes; retain rejection and concurrency assertions (102 targeted API tests pass).
-  - [ ] Run targeted make checks under the single Docker lock, make down, commit, push and observe pull_request CI.
+  - [x] Run targeted make checks under the single Docker lock; API unit 102/102 and endpoints 86/86 pass with unchanged timeout and security assertions.
+  - [ ] Make down, commit, push and observe pull_request CI; the lane report records the final head and result.
   - [ ] Append evidence under Fix CI integrate in the lane report; stop without merging.
 - [ ] **Integrate on main — owner-priority part 1**
   - [x] Verify branch mechanically, read the full lane report and binding R2 design, rebase with semantic union.

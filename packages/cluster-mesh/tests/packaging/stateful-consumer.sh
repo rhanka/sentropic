@@ -15,12 +15,13 @@ for package in oauth-verify mcp-auth mcp-platform cluster-mesh; do
   pack_candidate "$package"
 done
 sha256sum "$pack_dir"/*.tgz
-node tests/packaging/candidate-platform-registry.mjs ../mcp-platform/package.json \
-  "$pack_dir"/sentropic-mcp-platform-*.tgz > "$pack_dir/registry-url" &
-registry_pid=$!
-trap 'kill "$registry_pid" 2>/dev/null || true' EXIT
-while [ ! -s "$pack_dir/registry-url" ]; do kill -0 "$registry_pid"; sleep 0.1; done
-export npm_config_registry="$(cat "$pack_dir/registry-url")"
+# Authorize the transitive candidate through the frozen installer's archive manifest.
+# The consumer still declares only cluster-mesh as its runtime dependency.
+node --input-type=module -e '
+  import fs from "node:fs";
+  fs.writeFileSync(process.argv[1] + "/package.json", JSON.stringify({ private: true,
+    overrides: { "@sentropic/mcp-platform": "file:" + process.argv[2] } }));
+' "$pack_dir" "$pack_dir"/sentropic-mcp-platform-*.tgz
 cd "$consumer"
 npm init -y >/dev/null
 npm pkg set type=module >/dev/null
@@ -37,8 +38,9 @@ node --input-type=module -e '
   const pkg = JSON.parse(fs.readFileSync("package.json"));
   assert.deepEqual(Object.keys(pkg.dependencies), ["@sentropic/cluster-mesh"]);
   assert.equal(pkg.devDependencies["@sentropic/mcp-platform"], undefined);
-  assert.equal(JSON.parse(fs.readFileSync("node_modules/@sentropic/mcp-platform/package.json")).version, "0.4.0");
-'
+  assert.equal(JSON.parse(fs.readFileSync("node_modules/@sentropic/mcp-platform/package.json")).version,
+    JSON.parse(fs.readFileSync(process.argv[1])).version);
+' "$source_root/packages/mcp-platform/package.json"
 node --input-type=module -e '
   import assert from "node:assert/strict";
   import fs from "node:fs";
