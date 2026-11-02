@@ -6,6 +6,7 @@ import type { SQL } from 'drizzle-orm';
 import { createPostgresIdentityUnitOfWorkV1, IdentityCustodyErrorV1,
   type IdentityTransactionV1, type PostgresIdentityHostV1 } from '@sentropic/cluster-mesh';
 import { pool, type db } from '../../db/client';
+import { createCmScopedHostClient } from './cm-host-scope';
 
 export type CmIdentityTransaction = IdentityTransactionV1<PoolClient>;
 export const cmRequestWriteOptions = {
@@ -19,6 +20,7 @@ export const cmRequestReadOptions = {
 const host: PostgresIdentityHostV1<PoolClient> = {
   async runSerializable(options, operation) {
     const client = await pool.connect();
+    const scoped = createCmScopedHostClient(client);
     let committing = false;
     let failure: Error | undefined;
     try {
@@ -26,14 +28,21 @@ const host: PostgresIdentityHostV1<PoolClient> = {
         : 'BEGIN ISOLATION LEVEL SERIALIZABLE READ WRITE');
       await client.query("SELECT set_config('statement_timeout', $1, true)", [String(options.deadlineMs)]);
       const result = await operation({
-        transactionId: randomUUID(), hostTransaction: client, readOnly: options.readOnly,
+        transactionId: randomUUID(), hostTransaction: scoped.client, readOnly: options.readOnly,
         session: { async execute(statement) {
-          const result = await client.query(statement.text, [...statement.values ?? []]);
+          const result = await scoped.client.query(statement.text, [...statement.values ?? []]);
           return { rows: result.rows, rowCount: result.rowCount };
         } },
       });
+      scoped.seal();
       committing = true;
-      await client.query('COMMIT');
+      const committed = await client.query('COMMIT');
+      if (committed.command !== 'COMMIT') {
+        committing = false; // PostgreSQL confirmed rollback of an aborted transaction.
+        scoped.assertCommitted();
+        throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+      }
+      scoped.assertCommitted();
       return result;
     } catch (error) {
       failure = error instanceof Error ? error : new Error('Identity transaction failed');
@@ -44,7 +53,7 @@ const host: PostgresIdentityHostV1<PoolClient> = {
         throw new IdentityCustodyErrorV1('identity_transaction_indeterminate');
       }
       throw error;
-    } finally { client.release(failure); }
+    } finally { scoped.expire(); client.release(failure); }
   },
 };
 

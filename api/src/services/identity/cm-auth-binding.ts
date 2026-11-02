@@ -10,6 +10,7 @@ import { cmIdentityUnitOfWork, cmRequestWriteOptions, withCmIdentityTransaction,
   type CmIdentityTransaction } from './cm-transaction';
 import type { createCmTokenCustodian } from './cm-token-custodian';
 import { createCmAuthEntityPlan, withCmAuthEntityPlan } from './cm-auth-entity-plan';
+import { assertCmHostHealthy } from './cm-host-scope';
 
 export interface CmAuthBindingConfig {
   readonly hostPortsForTransaction: (tx: CmIdentityTransaction, boundPorts: () => AuthHonoPorts) => AuthHonoPorts;
@@ -49,6 +50,7 @@ export function createCmAuthRequestRunner(config: CmAuthBindingConfig) {
       currentBinding = binding;
       try {
         const value = await work(binding, tx);
+        assertCmHostHealthy(tx.hostTransaction);
         // Drain the callback-owned synchronous audit buffer before any commit/publication.
         await binding.flushAudit();
         return { value, mail: binding.deferredMail.map(intent => ({ ...intent })) };
