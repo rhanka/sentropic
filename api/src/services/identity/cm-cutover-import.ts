@@ -14,6 +14,7 @@ import { reconcileA4RemoteSnapshot } from './cm-import-remote-snapshot';
 import { mapA4IdentitySource, readA4IdentitySource } from './cm-import-source';
 import { invalidA4Import } from './cm-import-values';
 import { cmIdentityUnitOfWork } from './cm-transaction';
+import { rebindA4BusinessReferences } from './cm-cutover-references';
 
 /** One caller-owned SERIALIZABLE transaction: schema, capture, typed import and D11 evidence. */
 export async function importAppCmIdentityInTransaction(client: PoolClient, config: AppCmCutoverConfiguration): Promise<void> {
@@ -78,5 +79,6 @@ export async function importAppCmIdentityInTransaction(client: PoolClient, confi
   const invitationIds = oldInvitations.map(row => row.entity === 'invitation' ? row.record.invitationId : invalidA4Import());
   await client.query('DELETE FROM cm_identity.identity_invitations WHERE invitation_id = ANY($1::text[])', [invitationIds]);
   await client.query('DELETE FROM public.settings WHERE key = ANY($1::text[]) AND user_id IS NULL', [pendingRemote.sourceKeys]);
+  await rebindA4BusinessReferences(client);
   await client.query("SELECT set_config('app.a4_import_manifest_digest', $1, true)", [receipt.manifestDigest]);
 }
