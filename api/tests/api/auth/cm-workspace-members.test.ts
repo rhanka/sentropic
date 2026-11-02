@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { db } from '../../../src/db/client';
 import { workspaces } from '../../../src/db/schema';
 import { findCmWorkspaceMember, putCmWorkspaceMember } from '../../../src/services/identity/cm-tenancy';
@@ -7,6 +7,7 @@ import { changeCmWorkspaceMember, listCmWorkspaceMemberViews } from '../../../sr
 import { CmIdentityForbiddenError } from '../../../src/services/identity/cm-deletion-authorization';
 import { bindCmAppDatabase, runCmIdentityWrite } from '../../../src/services/identity/cm-transaction';
 import { cleanupAuthData, createTestUser, type TestUser } from '../../utils/auth-helper';
+import { cmQuery, cmTable } from '../../utils/cm-identity-test-store';
 
 describe('CM workspace membership authorization and atomicity', () => {
   let admin: TestUser;
@@ -19,7 +20,14 @@ describe('CM workspace membership authorization and atomicity', () => {
     await db.update(workspaces).set({ type: 'code' }).where(eq(workspaces.id, workspaceId));
     await putCmWorkspaceMember(workspaceId, admin.id, 'admin');
   });
-  afterEach(cleanupAuthData);
+  afterEach(async () => {
+    const ids = [admin?.workspaceId, target?.workspaceId].filter((id): id is string => Boolean(id));
+    await cleanupAuthData();
+    if (ids.length) {
+      await db.delete(workspaces).where(inArray(workspaces.id, ids));
+      await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = ANY($1)`, [ids]);
+    }
+  });
 
   it('adds, changes and removes only the named workspace membership', async () => {
     await changeCmWorkspaceMember({ actorId: admin.id, workspaceId,
