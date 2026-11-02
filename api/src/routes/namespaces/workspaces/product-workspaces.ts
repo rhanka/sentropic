@@ -28,7 +28,6 @@ import {
   notifyWorkspaceCreated, notifyWorkspaceEvent, notifyWorkspaceMembershipEvent,
   provisionWorkspace, seedWorkspaceTypeResources,
 } from '../../../services/workspace-provisioning';
-import { findCmUserByEmail, findCmUserById } from '../../../services/identity/cm-users';
 import {
   listCmWorkspaceMembers,
   putCmWorkspaceMember,
@@ -276,96 +275,6 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
   await notifyWorkspaceEvent(workspaceId, { action: 'deleted' }, memberUserIds);
 
   return c.body(null, 204);
-});
-
-// --- Members management (admin-only) ---
-
-workspacesRouter.get('/:id/members', async (c) => {
-  const user = c.get('user') as { userId: string };
-  const workspaceId = c.req.param('id')!;
-  try {
-    await requireWorkspaceAccess(user.userId, workspaceId);
-  } catch {
-    return c.json({ error: 'Insufficient permissions' }, 403);
-  }
-
-  const members = await listCmWorkspaceMembers(workspaceId);
-  const rows = await Promise.all(
-    members.map(async (m) => {
-      const u = await findCmUserById(m.userId);
-      return {
-        userId: m.userId,
-        email: u?.email ?? null,
-        displayName: u?.displayName ?? null,
-        role: m.role,
-        createdAt: null,
-      };
-    })
-  );
-  rows.sort((a, b) => a.userId.localeCompare(b.userId));
-
-  return c.json({ items: rows });
-});
-
-// Members list for @mentions (workspace access required)
-workspacesRouter.get('/:id/members/mentions', async (c) => {
-  const user = c.get('user') as { userId: string };
-  const workspaceId = c.req.param('id')!;
-
-  try {
-    await requireWorkspaceAccess(user.userId, workspaceId);
-  } catch {
-    return c.json({ error: 'Insufficient permissions' }, 403);
-  }
-
-  const members = await listCmWorkspaceMembers(workspaceId);
-  const rows = await Promise.all(
-    members.map(async (m) => {
-      const u = await findCmUserById(m.userId);
-      return {
-        userId: m.userId,
-        email: u?.email ?? null,
-        displayName: u?.displayName ?? null,
-        role: m.role,
-      };
-    })
-  );
-
-  return c.json({ items: rows });
-});
-
-const addMemberSchema = z.object({
-  email: z.string().email(),
-  role: roleSchema,
-});
-
-workspacesRouter.post('/:id/members', requireEditor, zValidator('json', addMemberSchema), async (c) => {
-  const actor = c.get('user') as { userId: string; role: string };
-
-  const workspaceId = c.req.param('id')!;
-
-  // Neutral workspaces are personal and non-delegable.
-  if (await isNeutralWorkspace(workspaceId)) {
-    return c.json({ error: 'Neutral workspaces do not support memberships' }, 400);
-  }
-
-  try {
-    await requireWorkspaceAdmin(actor.userId, workspaceId);
-  } catch {
-    return c.json({ error: 'Insufficient permissions' }, 403);
-  }
-
-  const body = c.req.valid('json');
-  const normalizedEmail = body.email.trim().toLowerCase();
-
-  const target = await findCmUserByEmail(normalizedEmail);
-  if (!target) return c.json({ message: 'User not found' }, 404);
-
-  // Lot A4: membership upsert in the CM store (put semantics = insert or update role).
-  await putCmWorkspaceMember(workspaceId, target.id, body.role);
-
-  await notifyWorkspaceMembershipEvent(workspaceId, target.id, { action: 'added', role: body.role });
-  return c.json({ success: true });
 });
 
 const updateMemberSchema = z.object({
