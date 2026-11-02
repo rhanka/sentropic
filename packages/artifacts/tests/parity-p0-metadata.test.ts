@@ -6,6 +6,18 @@ import { describe, expect, it } from 'vitest';
 import { ensureSite, getMeta, listAll, parityWorld, publish, type Body } from './fixtures/parity-world.js';
 
 describe('metadata title/description/icon', () => {
+  it('should preserve existing metadata when resolving a binding and roll back refused creation', async () => {
+    const w = parityWorld();
+    const artifactId = await ensureSite(w, 'binding', { title: 'Original' });
+    const resolved = await w.mcp.invoke({ tool: 'artifacts_ensure', invocation: w.invocation(), args: {
+      bindingName: 'binding', idempotencyKey: 'resolve', title: 'Replacement' } });
+    expect(resolved.body).toMatchObject({ artifactId, created: false, title: 'Original' });
+    w.deny();
+    expect((await w.mcp.invoke({ tool: 'artifacts_ensure', invocation: w.invocation(), args: {
+      bindingName: 'refused', idempotencyKey: 'refused', title: 'Never stored' } })).status).toBe(403);
+    expect(await w.acls.listArtifactIds()).toEqual([artifactId]);
+  });
+
   it('should accept metadata on ensure and return it from get and list', async () => {
     const w = parityWorld();
     const res = await w.mcp.invoke({ tool: 'artifacts_ensure', invocation: w.invocation(),

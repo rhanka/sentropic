@@ -106,7 +106,18 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     throw new Error('artifact delete confirmation port required');
   }
   const ensure = createGuardedEnsureService({ profile, coordinator: deps.coordinator,
-    derivation: deps.derivation, host: deps.ensureHost });
+    derivation: deps.derivation, host: {
+      lockBinding: (client, binding) => deps.ensureHost.lockBinding(client, binding),
+      abandonAttempt: id => deps.ensureHost.abandonAttempt(id),
+      readPolicyRevision: () => deps.ensureHost.readPolicyRevision(),
+      async resolveBinding(client, binding) {
+        const receipt = await deps.ensureHost.resolveBinding(client, binding);
+        if (receipt.created && binding.metadata) {
+          await deps.publication.createUnitWriter(client).updateMetadata(receipt.artifactId, binding.metadata);
+        }
+        return receipt;
+      },
+    } });
 
   async function visible(artifactId: string, invocation: ArtifactInvocationContext,
     action: 'read' | 'source' | true = 'read'): Promise<ArtifactAcl> {
@@ -131,13 +142,6 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     if (typeof normalized.description === 'string') meta.description = normalized.description;
     if (typeof normalized.icon === 'string' || normalized.icon === null) meta.icon = normalized.icon;
     return Object.keys(meta).length > 0 ? meta : undefined;
-  }
-
-  async function storeMetadata(artifactId: string, meta: ArtifactMetadata | undefined): Promise<void> {
-    if (meta === undefined) return;
-    const acl = await deps.acls.getArtifactAcl(artifactId);
-    if (acl === undefined) return;
-    await deps.acls.putArtifactAcl(artifactId, { ...acl, metadata: { ...acl.metadata, ...meta } });
   }
 
   function blobKey(storageScopeId: string, digest: string): string {
@@ -283,16 +287,20 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
         }
         phase = 'dispatch';
         if (capability === 'artifacts_ensure') {
-          const meta = metadataOf(normalized);
           const outcome = await ensure.ensure(invocation, { ...normalized,
             envelopeKey: request.idempotencyKey } as Parameters<typeof ensure.ensure>[1]);
           if (outcome.ok) {
+            commitState = outcome.commitState;
             const state = await deps.lifecycle.stateOf(outcome.result.artifactId);
             if (state === 'deleted' || state === 'purged') throw new ArtifactOperationError('gone');
           }
           if (!outcome.ok) return outcome;
-          if (outcome.result.created) await storeMetadata(outcome.result.artifactId, meta);
-          return { ...outcome, result: { status: 201, body: { ...outcome.result, ...(meta ?? {}) } } };
+          const artifactId = outcome.result.artifactId;
+          const acl = await visible(artifactId, invocation);
+          const summary = artifactSummary({ artifactId, acl, actorId: invocation.actorId,
+            state: await deps.lifecycle.stateOf(artifactId), current: await deps.publication.getCurrent(artifactId),
+            urls: deps.publicationUrls, approved: deps.isApprovedAccount });
+          return { ...outcome, result: { status: 201, body: { ...summary, ...outcome.result } } };
         }
         if (capability === 'artifacts_get_source') {
           const artifactId = normalized.artifactId as string;

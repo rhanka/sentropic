@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.2.6
+
+- Integrate part 1 with the source reads, sharing, terminal deletion, masking and
+  summaries published in 0.2.5. Apply `0005_metadata.sql` after 0004; it adds
+  editorial metadata and nullable release authors/lineage without backfilling history.
+- Add version history and revert as a new release on the same stable URL, preserving
+  current metadata and ACLs. The v2 profile uses `targetReleaseId` and paginated history.
+- Add full-bundle or exactly-once text edits, metadata on ensure/publish, and
+  transactional release CAS, metadata, references, quota and receipts.
+- Separate trusted `profileRevisionId`, `requireExpectedCurrentReleaseId` and
+  `resultEnvelopeVersion`. Compatible bindings keep root results; strict v2 retains
+  commit state, replay status and typed failures through mcp-platform 0.4.1.
+- Replay historical receipts before enforcing new preconditions or preparing edits.
+  Missing strict preconditions use the R2 `precondition_required` message and details.
+
+IMMO activates part 1 only after its qualified input and result switchovers.
+Artifacts 0.2.6 stays inside the existing cluster-mesh `>=0.2.0 <0.3.0` range;
+the API consumes the workspace package and retains its pinned APP-P1 profile.
+
 ## 0.2.5
 
 - D1: Read verified author manifests and file bytes for the current or a selected
@@ -13,36 +32,3 @@
 
 Apply `0004_terminal_controls.sql` after migrations 0001–0003 before enabling
 the management capabilities.
-## 0.2.6
-- D3: profiles can require explicit `expectedCurrentReleaseId` (including `null`),
-  refusing missing preconditions with HTTP 428 and disabling writers without CAS.
-  Pointer checks, metadata, references and receipts share the coordinator transaction.
-- Replay guarded receipts before editing files or evaluating stale preconditions;
-  command hashes bind metadata, edits and preconditions without changing durable keys.
-- Publish complete `artifacts-outcome/v2` MCP results through mcp-platform 0.4.1,
-  including commit state, replay status and typed conflict/edit/availability details.
-  Edits use the observed snapshot and conflicts include authorized edited paths.
-
-- Add `artifacts_list_versions`: release history of one artifact — per release
-  the id, created at, author principal, state, whether it is current, and a
-  content digest. Read scope, like `artifacts_get`.
-- Add `artifacts_revert`: make an earlier release current again by creating a
-  NEW release that copies the earlier content, so the artifact URL stays
-  stable and history only grows. A purged target release is refused with a
-  typed `release_unavailable` error. Write scope, idempotent per principal like publish.
-- Add optimistic concurrency to `artifacts_publish` and `artifacts_revert`:
-  optional `expectedCurrentReleaseId`; on mismatch the call returns a typed
-  `conflict` error (HTTP 409) carrying the current release id and content
-  digest so the caller can re-read and merge. Without the field, behaviour is
-  unchanged.
-- Add display metadata `title`, `description` and `icon` (one short word) on
-  `artifacts_ensure` and `artifacts_publish`; returned by `artifacts_get` and
-  `artifacts_list`. Persisted in the new `artifacts.artifacts.metadata`
-  JSONB column (migration 0004).
-- `artifacts_publish` accepts optional `edits: [{path, oldStr, newStr}]`
-  applied to the current release's text files; `oldStr` must occur exactly
-  once per file, otherwise a typed `edit_mismatch` error (HTTP 422) is
-  returned and nothing changes. `files` becomes optional when `edits` is
-  given; the edited files become the new release through the same commit path.
-- `artifacts_get_source` now returns the current release's file contents
-  (text files decoded) for editing; covered by new tests.
