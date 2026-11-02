@@ -2,14 +2,19 @@ import { IdentityNotFoundError, TenantNotActiveError } from '@sentropic/cluster-
 import { runCmIdentityRead, type CmIdentityTransaction } from './cm-transaction';
 
 /** Fixed service-client authority lives exclusively in the CM tenant registry. */
-export const findCmServiceClientTenant = (clientId: string): Promise<string | null> => runCmIdentityRead(async tx => {
+export const findCmServiceClientBinding = (clientId: string) => runCmIdentityRead(async tx => {
   for (const tenant of await tx.stores.tenants.listTenants()) {
-    if (tenant.status !== 'active') continue;
     const clients = await tx.stores.oauth.listTenantServiceClients(tenant.tenantId);
-    if (clients.some(client => client.clientId === clientId)) return tenant.slug;
+    const binding = clients.find(client => client.clientId === clientId);
+    if (binding) return { binding, tenant };
   }
   return null;
 });
+
+export const findCmServiceClientTenant = async (clientId: string): Promise<string | null> => {
+  const current = await findCmServiceClientBinding(clientId);
+  return current?.tenant.status === 'active' ? current.tenant.slug : null;
+};
 
 /** Host provisioning supplies an explicit slug and borrows its protocol transaction. */
 export async function bindCmServiceClientTenant(tx: CmIdentityTransaction, clientId: string, slug: string) {
