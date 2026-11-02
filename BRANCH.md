@@ -1,68 +1,92 @@
-# Feature: Scope AI test shards to AI-relevant path changes in CI
+# Feature: SQLite local durable artifacts adapter set (upstream request U1)
 
 ## Objective
-Make the `test-api-unit-integration (ai, …)` shards run only when AI-relevant paths change, using the existing `changes` path-filter job in `.github/workflows/ci.yml`, and record the root cause of the recurring AI-shard flakiness (`initiative-generation-async`, `executive-summary-sync`, `chat-tools`/`company-enrichment-sync`) from recent failing job logs, fixing it if it is a test or determinism defect. The ci-gate must still require a green AI shard whenever it runs.
+Ship a durable LOCAL SQLite adapter set in @sentropic/artifacts equivalent to the Postgres adapters (bindings, intents, idempotency, ACL, lifecycle, publication state, refcounts, commit coordinator with the 0.2.6 CAS, activation store, local PublicationBlobStore with digest verification), proven by one parameterized conformance suite run against BOTH Postgres and SQLite, exported as the new `@sentropic/artifacts/sqlite` subpath so the root/portable entries stay free of node:sqlite.
 
 ## Scope / Guardrails
-- Scope limited to `.github/workflows/ci.yml`, the CI scripts under `scripts/ci/**` that cite this owner request of 2026-11-03, and `BRANCH.md`.
-- Owner request of 2026-11-03 (AI-flaky tests may NOT be accepted without passing green at least once; making them non-flaky belongs to CI/CD improvements, e.g. not running AI tests on changes that do not concern them).
-- Never increase timeouts to hide a defect; never `[skip ci]`; never `gh run rerun` on a PR CI.
-- Make-only workflow; one Docker lock per make command; `ENV=<env>` always last; end test lanes with `make down-volumes ENV=<env>`.
-- Branch development happens in worktree `tmp/worktrees/ci-ai-scoped` (branch `chore/ci-ai-tests-scoped` from `origin/main`).
-- All new text in English. No `[skip ci]` anywhere.
-- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- Scope limited to packages/artifacts (new sqlite adapters + tests + packaging), the cluster-mesh artifacts peer-range widening, api APP-P1 digest refresh, and the two workspace lock version entries.
+- Make-only workflow, no direct Docker commands; the single Docker lock is /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md taken PER COMMAND via flock.
+- Branch development happens in isolated worktree tmp/worktrees/artifacts-sqlite-u1 on branch feat/artifacts-sqlite-u1 from origin/main.
+- Tests run on ENV=test-artifacts-u1 (passed LAST), never ENV=dev; `make down ENV=test-artifacts-u1` after.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English. No secrets anywhere. No [skip ci]. Commits via `make commit MSG="..."` only, <=150 lines, selective staging, push after each commit.
+- Driver: node:sqlite (DatabaseSync), the same driver cluster-mesh identity/storage uses; no new native dependency, no better-sqlite3.
+- Where SQLite cannot give the same atomicity as Postgres, one serialized writer transaction (BEGIN IMMEDIATE) is used and documented in the adapter header. There is no second behaviour.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `.github/workflows/ci.yml`
-  - `scripts/ci/**` (only where needed to keep the ci-gate/capacity machinery consistent with the workflow change, citing the owner request of 2026-11-03)
+  - `packages/artifacts/**` (new `src/adapters/sqlite*.ts`, `src/adapters/local-blob.ts`, `sql/sqlite/*`, tests, package.json, CHANGELOG.md, README.md)
+  - `packages/cluster-mesh/src/modules/catalog.ts`
+  - `packages/cluster-mesh/package.json`
+  - `packages/cluster-mesh/CHANGELOG.md`
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
+  - `api/src/services/mcp/cluster-registry.ts`
+  - `api/tests/api/app-mcp-registry.test.ts`
+  - `api/tests/api/app-mcp-installed.test.ts`
+  - `package-lock.json` (workspace version entries only)
+  - `api/package-lock.json` (workspace version entries only)
   - `BRANCH.md`
-  - `api/tests/ai/initiative-generation-async.test.ts` — BR02-EX3 (proven wait/race defect in the test harness, owner request of 2026-11-04; see Feedback Loop)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `api/**`, `ui/**`, `e2e/**`, `packages/**` (no product or test code changes unless a proven test/determinism defect requires it; any such change needs a new exception below)
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `packages/artifacts/src/server/**` (ports and domain stay untouched)
+  - `packages/artifacts/src/adapters/postgres*.ts`, `packages/artifacts/src/adapters/s3.ts` (reference adapters stay untouched)
+  - `packages/artifacts/src/index.ts` (root barrel must stay free of node:sqlite)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `.github/workflows/**` — BR02-EX1 (see Feedback Loop)
-  - `scripts/ci/**` — BR02-EX2 (see Feedback Loop)
+  - `.github/workflows/**`
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- BR02-EX1 (scope exception, `.github/workflows/**`, owner request of 2026-11-03): the AI shards `test-api-unit-integration (ai, …)` must run only when AI-relevant paths change, using the existing `changes` path-filter job. Edit `.github/workflows/ci.yml` only: add the `ai` path filter, move the three `suite: ai` matrix legs into a dedicated AI job gated on `needs.changes.outputs.ai`, and keep ci-gate requiring a green AI shard whenever it runs. Rollback: revert `ci.yml` to origin/main.
-- BR02-EX2 (scope exception, `scripts/ci/**`, owner request of 2026-11-03): only if the ci-gate expected-results/capacity scripts hard-code the current job/matrix shape (e.g. `matrixWidths.api === 15` in `scripts/ci/ci-expected-results.mjs` or fixtures in `scripts/ci/*.test.mjs`); update them to stay consistent with the new AI job while keeping the gate strict (a selected AI shard must be green). Rollback: revert the script changes.
-- BR02-EX3 (scope exception, `api/tests/ai/initiative-generation-async.test.ts`, owner request of 2026-11-04): proven wait/race defect in the test harness, not product code. In `waitFor`, each poll iteration awaited `queueManager.processJobsForWorkspace(workspaceId)`, which drains the whole workspace queue inline (live LLM calls, minutes under provider latency) before the condition and the wait's own deadline are checked; the per-wait timeout was therefore never enforced while blocked and the vitest 180s wall clock fired as an opaque `Test timed out in 180000ms` even when the awaited condition was already satisfied (evidence: runs 41742721513 / 41651846843 / 41665890098 / 41726745334 / 41729365882 — no `Timed out waiting for …` message in any log; run 41742721513 shows the `executive_summary` job still `processing` from 00:02:34 until the 00:04:30 kill). Fix: kick the drain fire-and-forget (guarded, errors swallowed) and poll the real condition every 1s so the existing deadline is enforced. No timeout added or increased, no assertion weakened. Rollback: revert the test file to origin/main.
-- Root-cause note (from failing job logs, 2026-11-03/04): runs 41651846843 / 41665890098 / 41726745334 / 41729365882 on `feat/share-g1-access-model` and 41742721513 on this branch all failed the shard `(ai, initiative-generation-async,executive-summary-sync)` with `Error: Test timed out in 180000ms` in `tests/ai/initiative-generation-async.test.ts` (test `should accept the org-aware list schema with explicit org_ids` in 3 of 5 runs, `should complete full AI workflow…` in 2 of 5); `tests/ai/executive-summary-sync.test.ts` passed in all 5 runs. No `Timed out waiting for …` from the test's own `waitFor` ever fired: every poll iteration was blocked inside the awaited full-queue drain, so the 180s vitest wall clock was the only effective bound. The `test-cleanup` job failures in the logs are the afterEach `hardResetQueue` cancel, a symptom. One secondary observation (run 41742721513, 00:02:06): `TypeError: Cannot read properties of undefined (reading 'map')` at `validateScores` (score-validation.ts:23) when the LLM omitted `valueScores` — model nondeterminism, self-healed by the queue's existing 1-retry (job re-processed and completed at 00:02:08); not the cause of the shard timeout. No 429/rate-limit errors in any of the 5 logs. Main 836a82f88 and run 41739731875 passed the same shard (full-workflow test 110656ms, org-aware 55406ms — both well inside 180s when the provider is fast). Signature: async race in the test wait harness (deadline starved by a blocked poll iteration), triggered by provider latency on live LLM calls. Fix: BR02-EX3; plus BR02-EX1 scoping so non-AI PRs are not blocked; no timeout increase.
+- (empty at branch start)
 
 ## AI Flaky tests
-- Acceptance rule: AI-flaky tests (allowlist in `rules/testing.md`, CI shards `test-api-unit-integration (ai, …)`) may NOT be accepted without passing green at least once (owner rule). This branch does not accept any flaky failure; it removes the noise by scoping. The ci-gate still requires a green AI shard whenever the shard runs.
-- Never amend tests with additive timeouts.
+- Acceptance rule: non-systematic provider/network/model nondeterminism only, with one success on the same commit and command; never additive timeouts; record command + file + signature here if accepted.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (single branch, single final test cycle)
-- Rationale: one cohesive CI change in `.github/workflows/ci.yml` (+ possibly `scripts/ci/**`); no parallel sub-workstreams.
-
-## UAT Management (in orchestration context)
-- **Mono-branch**: no UI surface change; validation is CI-only (workflow YAML validity + `make test-ci-expected-results` / `ci-capacity-policy` fixtures) plus one PR CI run.
+- Rationale: one deliverable (U1) on one branch; no orthogonal sub-workstreams.
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/testing.md`, `.tmp/packets/COMMON-RULES.md`.
-  - [x] Create isolated worktree `tmp/worktrees/ci-ai-scoped` on branch `chore/ci-ai-tests-scoped` from `origin/main`.
-  - [x] Confirm command style: `make ... <vars> ENV=<env>` with `ENV` last.
-  - [x] Validate scope boundaries and declare BR02-EX1 / BR02-EX2.
-- [ ] **Lot 1 — Scope AI shards via the `changes` path-filter job**
-  - [ ] Add an `ai:` filter (AI-relevant paths) to the `changes` job in `.github/workflows/ci.yml`.
-  - [ ] Move the three `suite: ai` matrix legs out of `test-api-unit-integration` into a dedicated AI job gated on `needs.changes.outputs.ai == 'true' || needs.changes.outputs.global == 'true'` (plus the existing api/global condition), keeping `max-parallel: 15` on the base job for the capacity shape check.
-  - [ ] Add the new AI job to `ci-gate` `needs` so the gate still requires a green AI shard whenever it runs.
-  - [ ] Keep `scripts/ci/**` consistent if the expected-results/capacity fixtures hard-code the old shape (BR02-EX2); run `make test-ci-expected-results ci-capacity-policy test-ci-run-metrics` equivalents on a test ENV.
-  - [ ] Lot gate: `make scope-check`; commit with `make commit MSG="..."`; push; open READY PR; one CI run.
-- [ ] **Lot 2 — Root cause of AI shard flakiness**
-  - [x] Collect failing AI-shard job logs (runs 41651846843, 41665890098, 41726523582, 41726745334, 41729365882, 41742721513) and green shards (836a82f88 check-run 125953857584; run 41739731875 job 126281476055).
-  - [x] Record signature: 180s vitest wall-clock timeout while live LLM queue jobs still processing; `test-cleanup` cancel is the afterEach symptom; no `waitFor` deadline ever fired (starved by the awaited drain).
-  - [x] Fix the proven wait/race defect under BR02-EX3 (fire-and-forget drain kick in `waitFor`); never increase timeouts.
-- [ ] **Lot N — Final validation**
-  - [ ] `make scope-check` before every commit.
-  - [ ] One CI run on the final head (READY PR); do not merge.
-  - [ ] Report to `.tmp/rv/ai-flaky-rootcause.md`.
+  - [x] Read rules/MASTER.md, rules/workflow.md, COMMON-RULES packet, h2a plan §1.3 U1 wording.
+  - [x] Create worktree tmp/worktrees/artifacts-sqlite-u1 on feat/artifacts-sqlite-u1 from origin/main; `harness check branch` PASS.
+  - [x] Write BRANCH.md from plan/BRANCH_TEMPLATE.md.
+  - [x] Confirm command style: `flock <docker-lock> make ... ENV=test-artifacts-u1` with ENV last.
+- [ ] **Lot 1 — Tests first: parameterized conformance suite (RED)**
+  - [ ] `packages/artifacts/tests/fixtures/adapter-conformance.ts` — one parameterized suite over a backend factory: store conformance (ensure/bindings incl. concurrent + terminal gone, intents, preparation-intent cleanup reads, idempotency replay/conflict, ACL, sources, lifecycle, publication state + CAS, refcounts/pins, registered blobs), commit-executor conformance (coordination-row convergence, serialized finalization, receipt exactly-once + replay, rollback residue, CAS), activation conformance (vector list incl. concurrent-consume, single-use, expiry, cleanup bounds, invalidation, ttl cap, commit-unknown), blob-store conformance (round-trip, digest verification, hostile keys, prefix listing, strict delete), restart durability (reopen), concurrent writers.
+  - [ ] `packages/artifacts/tests/sqlite-conformance.test.ts` — runs the suite against SQLite only (unit run, no services).
+  - [ ] `packages/artifacts/tests/adapter-conformance.integration.test.ts` — runs the SAME suite against Postgres (DATABASE_URL) and SQLite in one file (parity proof).
+  - [ ] RED: suite fails because `../src/adapters/sqlite.js` does not exist yet.
+- [ ] **Lot 2 — SQLite store adapter (GREEN)**
+  - [ ] `packages/artifacts/sql/sqlite/0001_artifacts.sql` (+ activation schema asset) — SQLite DDL mirroring migrations 0001-0005 + sql/0001_activation.sql semantics.
+  - [ ] `packages/artifacts/src/adapters/sqlite.ts` — `createSqliteArtifactStore` implementing the same interfaces as `PostgresArtifactStore` over node:sqlite, BEGIN IMMEDIATE serialized writer, documented atomicity note.
+  - [ ] Targeted run: `make test-artifacts SCOPE=tests/sqlite-conformance.test.ts ENV=test-artifacts-u1` GREEN; `make down ENV=test-artifacts-u1`.
+- [ ] **Lot 3 — Commit coordinator + management unit**
+  - [ ] `packages/artifacts/src/adapters/sqlite-commit.ts` — `createSqliteCommitExecutor` (CommitExecutor: ensureCoordinationRow, beginFinalization returning a FinalizeConnection with BEGIN IMMEDIATE, lockOperationKey as in-transaction serialization, receipts, commit/rollback/release).
+  - [ ] `packages/artifacts/src/adapters/sqlite-management.ts` — `createSqliteManagementUnit` (ManagementUnit port).
+  - [ ] Coordinator conformance vectors GREEN on both backends.
+- [ ] **Lot 4 — Activation store**
+  - [ ] `packages/artifacts/src/adapters/sqlite-activation.ts` — tickets/flows/consume/cleanup/invalidate with the same semantics (generation invalidation, single-use consume, bounded cleanup, ActivationCommitUnknownError on commit-ack loss).
+  - [ ] Activation conformance vectors GREEN on both backends.
+- [ ] **Lot 5 — Local blob store**
+  - [ ] `packages/artifacts/src/adapters/local-blob.ts` — `createLocalBlobStore({ root })` implementing PublicationBlobStore on the filesystem with sha256 digest verification on put and get, same key validation, strict delete, sorted prefix listing, restart durability.
+- [ ] **Lot 6 — Packaging**
+  - [ ] package.json: `./sqlite` subpath export(s), files, version 0.3.0 (minor over published 0.2.6), peerDependenciesMeta unchanged (node:sqlite is builtin).
+  - [ ] Root/portable entries stay free of node:sqlite: test asserting the root barrel module graph contains no `node:sqlite`/`better-sqlite3` and that `@sentropic/artifacts/sqlite` resolves (portable size/entry budget).
+  - [ ] `ARTIFACTS_PROVIDER_VERSION` = '0.3.0' in mcp-core.ts; CHANGELOG entries (artifacts 0.3.0, cluster-mesh range widening).
+  - [ ] cluster-mesh: ARTIFACTS_RANGE `>=0.2.0 <0.4.0` (catalog.ts + package.json peerDependencies), artifacts-tuple.spec.ts assertion, cluster-mesh version bump.
+  - [ ] Lock refresh through make: root + api package-lock.json workspace version entries.
+  - [ ] APP-P1 refresh through make: recompute APP_P1_MANIFEST_DIGEST, update api cluster-registry.ts + app-mcp-registry.test.ts + app-mcp-installed.test.ts.
+- [ ] **Lot 7 — Full verification**
+  - [ ] `make build-artifacts typecheck-artifacts lint-artifacts ENV=test-artifacts-u1` (flock per command).
+  - [ ] `make test-artifacts ENV=test-artifacts-u1` GREEN (unit incl. sqlite conformance).
+  - [ ] `make test-artifacts-integration SCOPE=tests/adapter-conformance.integration.test.ts ENV=test-artifacts-u1` GREEN on BOTH backends; then `make down ENV=test-artifacts-u1`.
+  - [ ] `make pack-artifacts ENV=test-artifacts-u1` guarded pack GREEN.
+  - [ ] api scoped tests for the APP-P1 refresh: app-mcp-registry + app-mcp-installed GREEN.
+  - [ ] cluster-mesh artifacts-tuple source coherence GREEN.
+- [ ] **Lot 8 — Ship**
+  - [ ] Commits <=150 lines via make commit, `make scope-check` before each, push after each commit.
+  - [ ] READY PR from BRANCH.md text; one CI run; report to .tmp/rv/artifacts-sqlite-u1.md. Do not merge.
