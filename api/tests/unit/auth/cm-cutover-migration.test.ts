@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
-import { Client } from 'pg';
+import { Client, Pool, type PoolClient } from 'pg';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -9,7 +9,8 @@ const controlFolder = `${publicFolder}control`;
 const cutover = readFileSync(`${controlFolder}/0014_app_cm_identity_cutover.sql`, 'utf8');
 const sourceUrl = process.env.DATABASE_URL!;
 let admin: Client;
-let database: Client;
+let database: PoolClient;
+let databasePool: Pool;
 let databaseName: string;
 
 beforeEach(async () => {
@@ -21,8 +22,8 @@ beforeEach(async () => {
   await admin.query(`CREATE DATABASE "${databaseName}" TEMPLATE template0`);
   const url = new URL(sourceUrl);
   url.pathname = `/${databaseName}`;
-  database = new Client({ connectionString: url.toString() });
-  await database.connect();
+  databasePool = new Pool({ connectionString: url.toString() });
+  database = await databasePool.connect();
   for (const migration of readMigrationFiles({ migrationsFolder: publicFolder })) {
     for (const statement of migration.sql) await database.query(statement);
   }
@@ -40,28 +41,35 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await database?.end();
+  database?.release();
+  await databasePool?.end();
   if (admin) {
     if (databaseName) await admin.query(`DROP DATABASE IF EXISTS "${databaseName}" WITH (FORCE)`);
     await admin.end();
   }
 });
 
-async function migrate(failBeforeCommit = false) {
-  await database.query('BEGIN');
+async function migrate(failBeforeCommit = false, boundImport = true) {
+  // Import through the same real runner used by control migrations, with no SQL
+  // fabrication of the CM receipt, schema attestations or D11 checkpoint.
+  const fixture = boundImport ? await (await import('../../utils/cm-cutover-test-config'))
+    .createCmCutoverTestConfiguration(database) : null;
+  await database.query('BEGIN ISOLATION LEVEL SERIALIZABLE');
   try {
+    if (fixture) await (await import('../../../src/services/identity/cm-cutover-import'))
+      .importAppCmIdentityInTransaction(database, fixture.config);
     for (const statement of cutover.split('--> statement-breakpoint')) await database.query(statement);
     if (failBeforeCommit) throw new Error('injected cutover failure');
     await database.query('COMMIT');
   } catch (error) {
     await database.query('ROLLBACK');
     throw error;
-  }
+  } finally { await fixture?.dispose(); }
 }
 
 describe('A4 single control identity migration', () => {
   it('should refuse SQL-only deletion without the bound CM importer and protected checkpoint', async () => {
-    await expect(migrate()).rejects.toThrow('A4 bound import checkpoint required');
+    await expect(migrate(false, false)).rejects.toThrow('A4 bound import checkpoint required');
     expect((await database.query("SELECT id FROM users WHERE id = 'a4-owner'")).rowCount).toBe(1);
   });
 
@@ -70,8 +78,11 @@ describe('A4 single control identity migration', () => {
     const { rows } = await database.query(`SELECT phase, detail FROM control.app_cm_identity_cutover
       WHERE cutover_id = 'a4-identity-cutover'`);
     expect(rows[0]?.phase).toBe('pre-deletion-checkpoint');
-    expect(rows[0]?.detail.legacy_counts.users).toBe(1);
-    expect(rows[0]?.detail.cm_counts.identity_user_accounts).toBe(1);
+    expect(rows[0]?.detail.sourceInventory.users.count).toBe(1);
+    expect(rows[0]?.detail.importReceipt).toMatchObject({ identitiesPreserved: true,
+      verificationMaterialPreserved: true, lifecyclePreserved: true });
+    expect((await database.query('SELECT user_id FROM cm_identity.identity_user_accounts')).rows)
+      .toEqual([{ user_id: 'a4-owner' }]);
     expect((await database.query("SELECT to_regclass('public.users') AS relation")).rows[0].relation).toBeNull();
     expect((await database.query("SELECT name FROM public.workspaces WHERE id = 'a4-owned'")).rows)
       .toEqual([{ name: 'Owned business data' }]);
