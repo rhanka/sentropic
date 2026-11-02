@@ -5,13 +5,15 @@ import { IdentityCustodyErrorV1 } from '../identity-contracts/custody-errors.js'
 import { IdentitySocialRaceRetrySignal } from '../storage/identity/custody-shared.js';
 import { boundIdentitySql } from '../storage/identity/custody-transaction-ports.js';
 import { identityTransactionHost } from '../storage/identity/custody-transaction-guards.js';
+import { finishAuthCompletion, guardAuthStep } from './auth-abort.js';
 
 export const authFederationPort = <H>(input: IdentityAuthBindingInput<H>, check: () => void): AuthHonoFederationPort => {
-  const { tx } = input, snapshots = new Map<string, SocialIdentityV1>();
+  const { tx } = input, snapshots = new Map<string, SocialIdentityV1>(), subjects = new Map<string, SocialIdentityV1>();
   const project = (row: SocialIdentityV1 | null): AuthHonoIdentityRecord | null => {
     if (!row) return null;
     if (row.revokedAt) throw new IdentityCustodyErrorV1('social_subject_conflict');
     snapshots.set(row.proofId, row);
+    subjects.set(JSON.stringify([row.provider, row.providerSubject]), row);
     return { id: row.proofId, userId: row.userId, provider: row.provider, providerSubject: row.providerSubject, providerTenant: row.providerTenant,
       emailAtLink: row.emailAtLink, emailVerifiedByProvider: row.emailVerifiedByProvider, linkedAt: new Date(row.linkedAt), lastLoginAt: row.lastLoginAt ? new Date(row.lastLoginAt) : null };
   };
@@ -31,14 +33,19 @@ export const authFederationPort = <H>(input: IdentityAuthBindingInput<H>, check:
     },
     unlinkIdentity: async (id, provider, subject) => {
       check(); await tx.lockSubject(id); const row = await tx.custody.social.findBySubject(provider, subject);
-      if (!row || row.userId !== id) return false;
-      await tx.custody.social.unlink(row.proofId, id, row.revision, input.hostPorts.clock.now().toISOString()); return true;
+      if (!row || row.userId !== id) return finishAuthCompletion('social_unlink', false);
+      subjects.set(JSON.stringify([provider, subject]), row);
+      await guardAuthStep('social_unlink', 'social', () => tx.custody.social.unlink(row.proofId, id, row.revision, input.hostPorts.clock.now().toISOString()));
+      snapshots.delete(row.proofId); subjects.delete(JSON.stringify([provider, subject])); return true;
     },
     touchLogin: async (id, at) => {
       check(); const row = snapshots.get(id);
       if (!row) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
-      await tx.lockSubject(row.userId); await tx.custody.social.touchLogin(id, row.revision, at.toISOString());
+      await tx.lockSubject(row.userId);
+      try { await tx.custody.social.touchLogin(id, row.revision, at.toISOString()); }
+      catch (error) { if (error instanceof IdentityCustodyErrorV1 && error.code === 'identity_record_conflict') throw new IdentitySocialRaceRetrySignal('identity_record_conflict'); throw error; }
       snapshots.set(id, { ...row, revision: row.revision + 1, lastLoginAt: at.toISOString() });
+      subjects.set(JSON.stringify([row.provider, row.providerSubject]), snapshots.get(id)!);
     },
     isUserCredentialed: async (id) => {
       check(); await tx.lockSubject(id);
