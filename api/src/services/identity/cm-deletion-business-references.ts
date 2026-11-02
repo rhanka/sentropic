@@ -35,6 +35,9 @@ export async function assertCmBusinessReferenceInventory(tx: CmIdentityTransacti
 
 export async function deleteCmBusinessSubjectReferences(userId: string, tx: CmIdentityTransaction) {
   const deletedByTable: Record<string, number> = {}, detachedByTable: Record<string, number> = {};
+  const jobs = await tx.hostTransaction.query(`DELETE FROM public.job_queue
+    WHERE data::jsonb->>'userId' = $1 OR data::jsonb->>'initiatedByUserId' = $1`, [userId]);
+  deletedByTable.job_queue = jobs.rowCount ?? 0;
   for (const [table, column] of deleted) {
     const personalScope = table === 'llm_provider_accounts' ? " AND scope = 'user'" : '';
     const result = await tx.hostTransaction.query(`DELETE FROM public."${table}" WHERE "${column}" = $1${personalScope}`, [userId]);
@@ -52,6 +55,9 @@ export async function deleteCmBusinessSubjectReferences(userId: string, tx: CmId
 }
 
 export async function assertNoCmBusinessSubjectReferences(userId: string, tx: CmIdentityTransaction): Promise<void> {
+  const jobs = await tx.hostTransaction.query(`SELECT 1 FROM public.job_queue
+    WHERE data::jsonb->>'userId' = $1 OR data::jsonb->>'initiatedByUserId' = $1 LIMIT 1`, [userId]);
+  if (jobs.rows.length) throw new IdentityCustodyErrorV1('identity_material_invalid');
   for (const [table, column] of [...deleted, ...detached]) {
     const result = await tx.hostTransaction.query(`SELECT 1 FROM public."${table}" WHERE "${column}" = $1 LIMIT 1`, [userId]);
     if (result.rows.length) throw new IdentityCustodyErrorV1('identity_material_invalid');
