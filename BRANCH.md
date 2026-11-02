@@ -67,11 +67,12 @@
 - `BR01-EX5`: touch `packages/cluster-mesh/src/index.ts` (one line: `export * from './sessions/content-policy.js';`; reason: the store and both acceptance specs import the policy domain from the package root, so the public re-export is functionally required — reverting it breaks the build; impact: a single re-export line in the package entrypoint, no other `packages/**` change; rollback: remove the export line).
 - [x] Review rc2-store_large4_r1 finding 1: declare BR01-EX5 for the required package-root export; preserve the export.
 - [x] List the exact exception-approved paths as Allowed because harness precedence is Allowed > Forbidden > Conditional; retain all exception limits and unrelated forbidden paths.
-- [ ] Review finding 2: align Drizzle policy/revision uniqueness with migration 0014 and verify metadata parity.
-- [ ] Review finding 3: refuse absent or malformed channels before admission; verify rejected input leaves no admitted policy.
-- [ ] Review finding 4: distinguish absent, pending and settled purge states; keep retained reads closed during and after purge.
+- [x] Review finding 2: align Drizzle policy/revision uniqueness with migration 0014 and verify metadata parity, including PostgreSQL's constraint name.
+- [x] Review finding 3: refuse absent or malformed channels before admission; verify rejected input leaves no admitted policy.
+- [x] Review finding 4: distinguish absent, pending and settled purge states; keep retained reads closed during and after purge.
 - [x] Continuation: preserve the inherited tests and rebase onto `origin/main` (`c8e9fa652`); only BRANCH.md conflicted and this branch's declaration was kept.
 - [x] Review tests first: STORE reproduces 5 failures / 17 tests; STORE-ERASURE reproduces 2 failures / 11 tests. Post-Rebase Gate: local cluster-mesh `0.26.0-dev.4` exceeds published `0.25.0` (`npm view` through `make exec-api`).
+- [x] Review green: STORE 17/17 and STORE-ERASURE 11/11. Reuse the existing `test-rc2-store` API image `e38674` and mounted dependencies; no dependency additions or Dockerfile changes. Run typecheck/lint with `make -o prepare-node-workspace typecheck-api lint-api API_VERSION=e38674 ... ENV=test-rc2-store`.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -140,6 +141,6 @@
   - [x] Retest e2e (not applicable, no e2e scope)
   - [x] Retest AI flaky tests (not applicable, no AI scope)
   - [x] Bumped `packages/cluster-mesh/package.json` version (semver) — enforced by CI `enforce-package-bump`. See `rules/workflow.md → Package Publication`.
-  - [x] Final gate step 1: PR #874 (draft) exists; body refreshed from this `BRANCH.md`.
+  - [x] Final gate step 1: PR #874 is ready; push the locally verified review fixes to trigger pull_request CI.
   - [ ] Final gate step 2: run/verify branch CI on that PR (one run on the final head) and resolve remaining blockers.
-  - [ ] Delivery stops at draft PR + one CI + `.tmp/rv/rc2-store.md` report; no merge (per packet).
+  - [ ] Continuation delivery stops after one final-head CI and `.tmp/rv/fix-874.md` with head, CI result and per-finding fix/test evidence; no merge. The designated Track writer imports this branch's review checkboxes and final report.
