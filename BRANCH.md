@@ -59,6 +59,8 @@ Close the generic P0 gaps of @sentropic/artifacts so the artifact MCP reaches Cl
   - [x] Add real PostgreSQL CAS/metadata/quota acceptance in `commit-publication-boundary.integration.test.ts`; load the metadata migration in publication fixtures.
   - [x] D3 targeted unit checks: 9/9; update existing outcome assertions to the v2 contract, retaining cause-redaction assertions.
   - [x] Reauthorize before evaluating the locked CAS, so revoked writers receive no current-pointer details.
+  - [x] Package unit suite 482/482, typecheck/build/lint, codec 5/5 and transport/wire parity 8/8; API reports regenerated.
+  - [x] Realign host APP-P1 profile/manifest pins with the compiled v2 outcome and nullable-CAS schemas.
   - [ ] Targeted tests, package gates, atomic commits with pushes, one final CI; append report and stop without merging.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read rules/MASTER.md, rules/workflow.md, COMMON-RULES packet, conductor brief.
