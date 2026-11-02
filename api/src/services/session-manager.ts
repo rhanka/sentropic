@@ -1,21 +1,9 @@
 import { cmAuthSessionService, createCmLoginForSubject } from './identity/cm-session-facade';
 import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
-import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
-import { createHash } from 'crypto';
 import { logger } from '../logger';
-import { env } from '../config/env';
-import { getRemoteSessionAuthority } from './auth/remote-private-session';
 import { tombstoneRemoteSessions } from './auth/remote-revocation';
 import { deleteAndQueueRemoteSessions } from './auth/remote-revocation-outbox';
-import {
-  createCmSession,
-  findCmSessionByRefreshTokenHash,
-  findCmSessionByTokenHash,
-  listCmSessionsForUser,
-  rotateCmSession,
-  touchCmSession,
-} from './identity/cm-sessions';
-import { findCmUserById } from './identity/cm-users';
+import { listCmSessionsForUser } from './identity/cm-sessions';
 
 /**
  * Session Manager Service
@@ -51,52 +39,6 @@ interface SessionPayload {
   role: string;
   email?: string | null;
   displayName?: string | null;
-}
-
-type SessionTokenClaims = JWTPayload & {
-  userId: string;
-  sessionId: string;
-  role: string;
-  login: { mfaVerified: boolean; authTime: number; sessionVersion: number };
-  tokenUse?: 'session' | 'refresh';
-};
-
-function readSignedLogin(payload: JWTPayload): SessionTokenClaims['login'] | null {
-  const login = payload.login as Partial<SessionTokenClaims['login']> | undefined;
-  return login && typeof login.mfaVerified === 'boolean'
-    && Number.isSafeInteger(login.authTime) && Number.isSafeInteger(login.sessionVersion)
-    && login.authTime! >= 0 && login.sessionVersion! >= 0
-    ? login as SessionTokenClaims['login'] : null;
-}
-
-// JWT secret key (from environment or generate random for dev)
-const JWT_SECRET = new TextEncoder().encode(
-  env.JWT_SECRET || 'dev-secret-key-change-in-production-please'
-);
-
-// Token durations
-const SESSION_DURATION = 7 * 24 * 60 * 60; // 7 days in seconds
-// REFRESH_DURATION kept for future refresh token implementation
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const REFRESH_DURATION = 30 * 24 * 60 * 60; // 30 days in seconds
-
-/**
- * Hash a token for storage (SHA-256)
- */
-function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
-}
-
-async function signSessionToken(
-  claims: SessionTokenClaims,
-  expiresAt: Date
-): Promise<string> {
-  return await new SignJWT(claims)
-    .setProtectedHeader({ alg: 'HS256' })
-    .setJti(crypto.randomUUID())
-    .setIssuedAt()
-    .setExpirationTime(expiresAt)
-    .sign(JWT_SECRET);
 }
 
 /**
