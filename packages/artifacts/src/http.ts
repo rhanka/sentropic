@@ -120,18 +120,6 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     await deps.acls.putArtifactAcl(artifactId, { ...acl, metadata: { ...acl.metadata, ...meta } });
   }
 
-  /** Optimistic concurrency: refuse with a typed conflict carrying the actual current pointer. */
-  async function assertExpectedCurrent(expected: unknown, artifactId: string): Promise<void> {
-    if (expected === undefined) return;
-    const current = await deps.publication.getCurrent(artifactId);
-    const currentReleaseId = current?.releaseId ?? null;
-    if (currentReleaseId !== expected) {
-      const currentDigest = current === undefined ? null : parseManifest(current.manifest).digest ?? null;
-      throw new ArtifactOperationError('pointer_conflict',
-        { conflict: { currentReleaseId, currentDigest } });
-    }
-  }
-
   function blobKey(storageScopeId: string, digest: string): string {
     // Manifest digests are `sha256:<hex>`; physical keys are `.../blobs/sha256/<hex>`.
     return `artifacts/${storageScopeId}/blobs/${digest.replace(':', '/')}`;
@@ -154,9 +142,11 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
 
   /** Apply publish edits to the current release's text files; typed edit_mismatch changes nothing. */
   async function editedFiles(artifactId: string, invocation: ArtifactInvocationContext,
-    edits: readonly EditOperation[]) {
-    const current = await deps.publication.getCurrent(artifactId);
-    if (current === undefined) throw new ArtifactOperationError('not_found');
+    edits: readonly EditOperation[], expected: string | null | undefined) {
+    const current = expected === undefined ? await deps.publication.getCurrent(artifactId)
+      : expected === null ? undefined : await deps.publication.getRelease(expected);
+    if (current === undefined) throw new ArtifactOperationError(expected === null ? 'release_unavailable' : 'not_found');
+    if (parseManifest(current.manifest).artifactId !== artifactId) throw new ArtifactOperationError('not_found');
     const files = await readManifestFiles(current.manifest, invocation.storageScopeId);
     return applyEdits(files, edits).map((file) => ({
       path: file.path, mimeType: file.mimeType,
@@ -181,7 +171,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     return { ...outcome, result: { status: 201, body: {
       artifactId, releaseId: receipt.releaseId, manifest: receipt.manifest,
       digest: parseManifest(receipt.manifest).digest,
-      ...deps.publicationUrls?.(artifactId, receipt.releaseId), ...(meta ?? {}),
+      ...deps.publicationUrls?.(artifactId, receipt.releaseId), ...(receipt.metadata as ArtifactMetadata ?? meta ?? {}),
     } } };
   }
 
@@ -244,20 +234,32 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           const artifactId = normalized.artifactId as string;
           const acl = await visible(artifactId, invocation);
           if (acl.ownerId !== invocation.actorId) throw new ArtifactOperationError('access_denied');
-          await assertExpectedCurrent(normalized.expectedCurrentReleaseId, artifactId);
           const limits = profile.operations.find((entry) => entry.operation === 'publish')!.limits;
           const publication = createGuardedPublicationService({ ...deps.publication, coordinator: deps.coordinator,
             limits: { maxFiles: limits.publishFilesMax, maxFileBytes: limits.maxDecodedFileBytes,
               maxTotalBytes: limits.maxDecodedTotalBytes } });
+          const meta = metadataOf(normalized);
+          const input = { ownerId: acl.ownerId, storageScopeId: invocation.storageScopeId, artifactId,
+            identity: command!.identity, actorId: invocation.actorId, invocationId: invocation.invocationId,
+            attemptId: invocation.invocationId, policyRevision: await deps.ensureHost.readPolicyRevision(),
+            authorizeCommit: invocation.authorizeCommit, metadata: meta,
+            operation: capability === 'artifacts_revert' ? 'revert' as const : 'publish' as const,
+            expectedCurrentReleaseId: normalized.expectedCurrentReleaseId as string | null | undefined };
+          const replay = await publication.replayFinalized(input);
+          if (replay !== undefined) return commitOutcome(replay, artifactId, meta, state => { commitState = state; });
           let files: { path: string; mimeType: string; bytes: Uint8Array }[];
           let source: { kind: 'inline-original' } | { kind: 'base-commit'; commit: string };
           let releaseProfile: Record<string, JsonValue>;
           if (capability === 'artifacts_publish') {
             files = normalized.edits !== undefined
-              ? await editedFiles(artifactId, invocation, normalized.edits as unknown as EditOperation[])
+              ? await editedFiles(artifactId, invocation, normalized.edits as unknown as EditOperation[], input.expectedCurrentReleaseId)
               : (normalized.files as Record<string, JsonValue>[]).map((file) => ({
                 path: file.path as string, mimeType: file.mimeType as string, bytes: Uint8Array.from(file.bytes as number[]),
               }));
+            if (normalized.edits !== undefined) {
+              const { edits: _edits, ...snapshot } = normalized;
+              profile.validate(capability, { ...snapshot, files: files.map(file => ({ ...file, bytes: Array.from(file.bytes) })) });
+            }
             source = { kind: 'inline-original' };
             releaseProfile = normalized.profile as Record<string, JsonValue>;
           } else {
@@ -268,7 +270,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
               throw new ArtifactOperationError('not_found');
             }
             if (await deps.lifecycle.getReleaseState(releaseId) === 'purged') {
-              throw new ArtifactOperationError('gone');
+              throw new ArtifactOperationError('release_unavailable');
             }
             files = (await readManifestFiles(target.manifest, invocation.storageScopeId))
               .map((file) => ({ path: file.path, mimeType: file.mimeType, bytes: file.bytes }));
@@ -276,14 +278,9 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             releaseProfile = (targetManifest.profile ?? {}) as Record<string, JsonValue>;
           }
           const outcome = await publication.publishFinalized({
-            ownerId: acl.ownerId, storageScopeId: invocation.storageScopeId, artifactId,
-            identity: command!.identity, actorId: invocation.actorId, invocationId: invocation.invocationId,
-            attemptId: invocation.invocationId, policyRevision: await deps.ensureHost.readPolicyRevision(),
-            authorizeCommit: invocation.authorizeCommit, source, profile: releaseProfile, files,
+            ...input, source, profile: releaseProfile, files,
           });
-          const meta = metadataOf(normalized);
           const committed = commitOutcome(outcome, artifactId, meta, (state) => { commitState = state; });
-          if (committed.ok) await storeMetadata(artifactId, meta);
           return committed;
         }
         if (capability === 'artifacts_get') {

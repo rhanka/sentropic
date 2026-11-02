@@ -49,7 +49,7 @@ Close the generic P0 gaps of @sentropic/artifacts so the artifact MCP reaches Cl
 - [ ] **Delta D3 — Binding R1 concurrency and transport contract only**
   - [ ] Tests first: `packages/artifacts/tests/parity-d3.test.ts`; strict null preconditions, concurrent CAS, replay before edits, command identity, complete MCP errors.
   - [x] Require explicit expectedCurrentReleaseId in strict profiles; forbid bypass writers and defaults.
-  - [ ] Move pointer comparison and metadata into the coordinator transaction; replay before preparation.
+  - [x] Move pointer comparison and metadata into the coordinator transaction; replay before preparation.
   - [x] Add coordinator receipt lookup and transaction-scoped pointer/metadata writers; serialize memory transaction tests.
   - [ ] Preserve typed conflict/edit/release details, commitState and replayed through MCP codec.
   - [ ] Targeted tests, package gates, atomic commits with pushes, one final CI; append report and stop without merging.
