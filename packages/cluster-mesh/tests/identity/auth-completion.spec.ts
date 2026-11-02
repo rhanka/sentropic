@@ -31,6 +31,27 @@ const shared = {
 describe.each(pgEnabled ? ['sqlite', 'postgres'] as const : ['sqlite'] as const)('real auth completion on %s', (profile) => {
   const open = async () => asOpHost((profile === 'postgres' ? await openPostgresEnv() : openSqliteEnv()).unitOfWork);
 
+  it('evaluates the root creation policy instead of accepting requested privilege or approval', async () => {
+    const unitOfWork = await open(), due = new Date('2026-12-01T00:00:00.000Z');
+    await unitOfWork.run(WRITE, async (tx) => {
+      const binding = createIdentityAuthHonoTransactionBindingV1({ ...shared, tx, accountPolicy: { ...shared.accountPolicy,
+        statusForNewUser: () => ({ accountStatus: 'pending_admin_approval', approvalDueAt: due }),
+      } });
+      const user = await binding.ports.users.create({ email: 'policy@example.test', role: 'admin_app', accountStatus: 'active', approvalDueAt: null });
+      expect(user).toMatchObject({ role: 'editor', accountStatus: 'pending_admin_approval', approvalDueAt: due });
+      expect(await tx.stores.accounts.findAccount(user.id)).toMatchObject({ globalRole: 'editor', accountStatus: 'pending_admin_approval' });
+    });
+  });
+
+  it('rejects an unknown completion flow before invoking the callback', async () => {
+    const unitOfWork = await open();
+    let called = false;
+    await expect(runIdentityAuthCompletionV1({ flow: 'unknown' as never, unitOfWork, options: WRITE,
+      operation: async () => { called = true; return true; },
+    })).rejects.toMatchObject({ code: 'identity_transaction_unbound' });
+    expect(called).toBe(false);
+  });
+
   it('rolls back an actual signed assertion when its counter regresses to zero', async () => {
     const unitOfWork = await open(), fixture = webauthnFixture();
     await unitOfWork.run(WRITE, async (tx) => {
