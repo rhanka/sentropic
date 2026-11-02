@@ -38,6 +38,7 @@ test('should separate builder, validator and publisher jobs with least-privilege
   assert.equal(jobs['publish-scanner-image'].needs, 'verify-scanner-image-publication');
   assert.deepEqual(jobs['publish-scanner-image'].permissions, { packages: 'write', actions: 'read', 'id-token': 'write' });
   assert.equal(jobs['publish-scanner-image'].environment, 'security-scanner-image-publish');
+  for (const job of Object.values(jobs)) assert.equal(job.steps[0].with.ref, 'refs/heads/main');
 });
 
 test('should bind the exact keyless publisher identity and the single package', async () => {
@@ -59,6 +60,21 @@ test('should validate the complete synthetic chain only as a contract', () => {
   assert.deepEqual(validateReceiptContract(receiptFixture()), { contractValid: true, productionAdmitted: false });
 });
 
+function assertLiteralEchoes(script) {
+  assert.ok(typeof script === 'string' && script.trim().split('\n').every(line =>
+    /^\s*(?:set -eu|echo "[^"$`\\]*")\s*$/.test(line)), 'only literal echo commands may execute');
+}
+
+test('should refuse executable additions and shell expansions before running receipt echo controls', () => {
+  for (const script of [
+    'echo "ScannerImageBuildReceiptV1"\n/usr/bin/curl https://example.org',
+    'echo "ScannerImageBuildReceiptV1 $(id)"', 'echo "ScannerImageBuildReceiptV1 `id`"',
+    'echo "ScannerImageBuildReceiptV1 ${TOKEN}"', 'echo "ScannerImageBuildReceiptV1 ${{ secrets.TOKEN }}"',
+    'echo "ScannerImageBuildReceiptV1" > /tmp/output', 'echo "ScannerImageBuildReceiptV1"; id',
+    'echo "ScannerImageBuildReceiptV1 \\"; id',
+  ]) assert.throws(() => assertLiteralEchoes(script), /literal echo/);
+});
+
 test('should refuse receipt-name echoes as a substitute for produced receipts and artifacts', async () => {
   const { jobs } = parse(await loadWorkflow());
   const directory = await mkdtemp(join(tmpdir(), 'scanner-noop-'));
@@ -66,6 +82,7 @@ test('should refuse receipt-name echoes as a substitute for produced receipts an
     // Only the two key-free receipt emitters; never execute the publisher/login.
     for (const name of ['build-scanner-image', 'verify-scanner-image-publication']) {
       const step = jobs[name].steps.at(-1);
+      assertLiteralEchoes(step.run);
       assert.match(step.run, /^\s*echo "ScannerImage/m);
       const stdout = execFileSync('/bin/sh', ['-eu', '-c', step.run], { cwd: directory, env: {}, encoding: 'utf8' });
       assert.match(stdout, /ScannerImage(?:Build|Validation)ReceiptV1/);
@@ -92,6 +109,8 @@ test('should refuse missing, empty or altered artifacts and mismatched receipt b
     f => { f.receipts.validation.attempt++; },
     f => { f.receipts.validation.runId++; },
     f => { f.receipts.publication.repositoryId++; },
+    f => { f.receipts.validation.workflow.commit = 'b'.repeat(40); },
+    f => { f.receipts.validation.controlDigest = digest('different control'); },
     f => { f.receipts.build.upstream.commit = 'b'.repeat(40); },
     f => { f.receipts.build.patchDigests.reverse(); },
     f => { f.receipts.build.reproducibility.second.binaryDigest = digest('other'); },
