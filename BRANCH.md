@@ -59,6 +59,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] R1 Argon r3: reject incompatible normalizers at composition using trim/case/tag/Unicode probes, retaining byte-exact validation for every actual email input.
 - [x] R1 Argon r3: refuse mismatched ticket subjects and null email flags; admit pure read-mode binding while guarding mutations and preserving session activity.
 - [x] R1 Argon r3 tests first: reject a noncanonical host normalizer when constructing the binding, before any auth method runs.
 - [x] R1 final refusal regressions: both profiles reproduced ignored credential-refusal commits and required-UV 401; abort at the port boundary and map the actual verifier's UV refusal to 403.
