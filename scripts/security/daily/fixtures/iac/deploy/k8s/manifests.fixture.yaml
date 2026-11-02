@@ -1,0 +1,20 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fixture-app
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          image: nginx:1.27
+          securityContext:
+            privileged: true
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fixture-app
+spec:
+  ports:
+    - port: 80

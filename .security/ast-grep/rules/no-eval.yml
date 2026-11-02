@@ -1,0 +1,6 @@
+id: no-eval
+message: Do not use eval(); it executes arbitrary strings as code.
+severity: error
+language: TypeScript
+rule:
+  pattern: eval($$$ARGS)
