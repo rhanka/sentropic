@@ -91,6 +91,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Load pinned migration assets, verifier policy, protected snapshots and borrowed token keys before transaction entry.
   - [x] Apply the canonical CM asset and bound importer/custody verifier on the control migration connection, recording D11 before any legacy-row deletion.
   - [x] Invoke the typed import from the real control migration runner on its SERIALIZABLE connection; dispose keys after success or rollback and skip completed journals.
+  - [x] Delete the manually copied CM core/custody DDL from control migration 0014; the canonical package asset is its schema source.
   - [x] Refuse SQL-only cutover without the real importer/checkpoint; remove fabricated schema and import attestations.
   - [x] Require protected D11 checkpoint evidence, verify snapshot/asset digests and keep backup paths out of durable receipts.
   - [x] Add production custody-envelope regressions for absent/empty v1 configuration, AAD corruption, fresh nonce and buffer disposal.
