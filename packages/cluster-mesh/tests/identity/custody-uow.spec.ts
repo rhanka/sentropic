@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { IdentityTransactionV1, CustodyOpHost } from '../../src/index.js';
+import { createPostgresIdentityUnitOfWorkV1, createSqliteIdentityUnitOfWorkV1, bindPostgresIdentityTransactionV1, bindSqliteIdentityTransactionV1 } from '../../src/index.js';
+import { assertIdentityTransactionActive } from '../../src/storage/identity/custody-transaction-guards.js';
+import type { PgSession } from '../../src/storage/postgres/protocol.js';
+import type { SqliteConnection } from '../../src/storage/sqlite/connection.js';
 import { asOpHost, NOW, openPostgresEnv, openSqliteEnv } from './a20b-helpers.js';
 
 const WRITE = { mode: 'write', purpose: 'request', deadlineMs: 5000, maxAttempts: 1 } as const;
@@ -9,6 +13,29 @@ const profile = { userId: 'combined', emailVerified: true, displayName: null, ap
 
 describe.each(process.env.CM_PG_URL ? ['postgres', 'sqlite'] : ['sqlite'])('A2.0b combined UOW on %s', (dialect) => {
   const open = async () => asOpHost((dialect === 'postgres' ? await openPostgresEnv() : openSqliteEnv()).unitOfWork);
+
+  it('preserves a host-owned business facade in both exported transaction factories', async () => {
+    const uow = await open();
+    await uow.run(WRITE, async (tx) => {
+      const facade = { business: true };
+      const base = { transactionId: tx.transactionId, readOnly: false, hostTransaction: facade };
+      if (dialect === 'postgres') {
+        const binding = { ...base, session: tx.hostTransaction.raw as PgSession };
+        const joined = createPostgresIdentityUnitOfWorkV1({ schema: tx.hostTransaction.schema!, host: { runSerializable: async (_, operation) => operation(binding) } });
+        await joined.run(WRITE, async (inner) => { expect(inner.hostTransaction).toBe(facade); });
+        const bound = bindPostgresIdentityTransactionV1({ schema: tx.hostTransaction.schema!, binding });
+        expect(bound.hostTransaction).toBe(facade);
+        expect(() => assertIdentityTransactionActive(bound, true)).not.toThrow();
+      } else {
+        const binding = { ...base, connection: tx.hostTransaction.raw as SqliteConnection };
+        const joined = createSqliteIdentityUnitOfWorkV1({ host: { runExclusiveTransaction: async (_, operation) => operation(binding) } });
+        await joined.run(WRITE, async (inner) => { expect(inner.hostTransaction).toBe(facade); });
+        const bound = bindSqliteIdentityTransactionV1({ binding });
+        expect(bound.hostTransaction).toBe(facade);
+        expect(() => assertIdentityTransactionActive(bound, true)).not.toThrow();
+      }
+    });
+  });
 
   it('binds core, custody, locks, ledger, journal and outbox to one callback', async () => {
     const uow = await open();
