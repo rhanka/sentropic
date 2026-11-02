@@ -7,11 +7,20 @@ const object = (properties: Record<string, unknown>, required = Object.keys(prop
 const error = (code: string, details: unknown) => object({
   code: { enum: [code] }, message: string, retriable: { type: 'boolean' }, details,
 });
+/** get_source file: verified raw bytes encoded as UTF-8 text or base64, never an integer array. */
+const sourceFile = { type: 'object', additionalProperties: false,
+  properties: { path: string, mimeType: string, size: { type: 'integer', minimum: 0 }, digest: string,
+    encoding: { enum: ['utf8', 'base64'] }, text: string, base64: string },
+  required: ['path', 'mimeType', 'size', 'digest', 'encoding'],
+  oneOf: [{ required: ['text'], not: { required: ['base64'] } },
+    { required: ['base64'], not: { required: ['text'] } }] };
+const guideRef = object({ tool: string, version: string }, ['tool', 'version']);
 const pointer = object({ variant: { enum: ['pointer_conflict'] }, artifactId: string,
   expectedCurrentReleaseId: nullable, currentReleaseId: nullable, currentDigest: nullable,
   currentSource: object({ artifactId: string, releaseId: string, digest: nullable,
-    manifest: string, files: { type: 'array', items: { type: 'object' } }, sourceRef: { type: ['object', 'null'] },
-    stableUrl: string, pinnedUrl: string }, ['artifactId', 'releaseId', 'digest', 'manifest', 'files', 'sourceRef']),
+    manifest: string, files: { type: 'array', items: sourceFile }, sourceRef: { type: ['object', 'null'] },
+    guideRef, stableUrl: string, pinnedUrl: string },
+    ['artifactId', 'releaseId', 'digest', 'manifest', 'files', 'sourceRef', 'guideRef']),
 }, ['variant', 'artifactId', 'expectedCurrentReleaseId', 'currentReleaseId', 'currentDigest']);
 const common = { invocationId: string,
   commitState: { enum: ['not_committed', 'committed', 'unknown'] } };

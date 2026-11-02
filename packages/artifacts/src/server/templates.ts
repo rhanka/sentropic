@@ -34,6 +34,8 @@ export interface TemplateCatalogPort {
 
 export const DEFAULT_TEMPLATE_ID = 'static-html';
 export const DEFAULT_API_GUIDE_VERSION = 'v1';
+/** Wire reference returned by get_source instead of embedding the guide body. */
+export const API_GUIDE_REF = { tool: 'artifacts_get_api_guide', version: DEFAULT_API_GUIDE_VERSION } as const;
 
 const INDEX_HTML = [
   '<!doctype html>',
@@ -95,7 +97,11 @@ const GUIDE_V1 = [
   '- `artifacts_list_versions`: full release history of one artifact —',
   '  per release: id, created at, author, state, whether it is current,',
   '  and a content digest.',
-  '- `artifacts_get_source`: current file contents (text decoded) for editing.',
+  '- `artifacts_get_source`: verified file contents of the current or a selected',
+  '  release, for editing. Text mime types come back as `text` with',
+  '  `encoding: "utf8"`; every other file as `base64` with `encoding: "base64"` —',
+  '  never an integer array. The result carries a `guideRef` (tool + version),',
+  '  never the guide body. Per call: at most 32 files and 256 KiB decoded.',
   '- `artifacts_revert`: make an earlier release current again as a NEW',
   '  release that copies its content — the artifact URL stays stable and',
   '  history only grows. Purged releases are refused with `release_unavailable`.',

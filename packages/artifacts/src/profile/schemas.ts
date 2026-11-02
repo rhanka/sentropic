@@ -88,7 +88,10 @@ export function capabilitySchema(name: ArtifactCapabilityName, profile: Effectiv
     case 'list_versions': return profile.resultEnvelopeVersion !== 2 ? idOnly : obj({ artifactId: id,
       limit: { ...integer(1, 100), default: 20 }, cursor: { ...str, maxLength: 4096 } }, ['artifactId']);
     case 'get_source': return obj({ artifactId: id, releaseId: id,
-      paths: { type: 'array', minItems: 1, maxItems: 32, items: { ...str, maxLength: profile.rules.pathMaxBytes } } }, ['artifactId']);
+      paths: { type: 'array', minItems: 1, maxItems: 32, items: { ...str, maxLength: profile.rules.pathMaxBytes },
+        description: 'Unique manifest paths; omit to read the whole snapshot (max 32 files, 256 KiB decoded). ' +
+          'Result files are `text` with encoding "utf8" or `base64` with encoding "base64" (never an integer ' +
+          'array), plus a guideRef; the guide body is never embedded.' } }, ['artifactId']);
     case 'delete': return obj({ artifactId: id, expectedCurrentReleaseId: { ...id, type: ['string', 'null'] },
       idempotencyKey: key, confirmationRef: { ...str, maxLength: 4096 } },
       ['artifactId', 'idempotencyKey', ...(profile.requireExpectedCurrentReleaseId ? ['expectedCurrentReleaseId'] : [])]);
