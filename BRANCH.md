@@ -126,6 +126,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Add social-completion regression cases for whole-attempt retry, fresh linking-session checks and no SQL after an insert conflict.
   - [x] Require a completion boundary in the federation broker contract; isolate the in-memory resolver adapter in protocol test fixtures.
   - [x] Resolve social sign-in and mint its session through per-attempt CM capabilities; recheck the pinned assertion deadline on retry.
+  - [x] Remove manual-link catch-and-reread; revalidate the current link actor each attempt and consume email-challenge proof inside the same completion.
   - [x] Add real JWT custodian tests for token use, signed MFA lineage, ticket import and key disposal.
   - [x] Implement the host token/digest adapter against the approved r6 signer/verifier contracts.
   - [x] Add the r6 per-attempt auth binding/runner with callback-owned audit drain and post-commit mail publication.
