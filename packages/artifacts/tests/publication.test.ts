@@ -80,7 +80,9 @@ describe('finalized publication regressions', () => {
 
   it('should retain committed refs when COMMIT acknowledgement is lost', async () => {
     const f = guardedFixture(async (request) => {
-      await request.provisional!({ query: async () => ({ rows: [], rowCount: 0 }) });
+      const client = { query: async () => ({ rows: [], rowCount: 0 }) };
+      for (const lock of request.locks?.['artifact-lifecycle'] ?? []) await lock(client);
+      await request.provisional!(client);
       return { ok: false, failure: { commitState: 'unknown' } } as FinalizeResult;
     });
     await createGuardedPublicationService(f.deps).publishFinalized(f.input);

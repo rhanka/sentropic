@@ -10,6 +10,7 @@ Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, r
 - Tests first: new unit suite `packages/artifacts/tests/parity-p0.test.ts`; run via `make test-artifacts SCOPE=packages/artifacts/tests/parity-p0.test.ts ENV=test-artifacts-parity` plus the full package unit suite, `make typecheck-artifacts`, `make build-artifacts`.
 - Commits: `make commit MSG="..."` only, <=150 lines each, selective `git add`, push after each commit.
 - All new text in English.
+- API boot slot: API_PORT=9686 UI_PORT=5886 MAILDEV_UI_PORT=1786; ENV=test-artifacts-parity.
 - Retain the BRLOCK-EX1 policy reference verbatim in this BRANCH.md (required by `scripts/ci/ci-lockfile-installs.test.mjs`, run by required CI job `validate-publishable-manifests`): owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -52,13 +53,14 @@ Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, r
 - [ ] **Integrate on main — owner-priority part 1**
   - [x] Verify branch mechanically, read the full lane report and binding R2 design, rebase with semantic union.
   - [ ] Retain p0b source authorization, masking, management confirmation, terminal controls and all tests.
-  - [ ] Renumber part 1 metadata migration to 0005; journal both migrations without gaps.
+  - [x] Renumber part 1 metadata migration to 0005; journal both migrations without gaps.
   - [ ] Qualify strict v2 and compatible p0b projections; align artifacts 0.2.6, consumer ranges and APP-P1 pins.
   - [x] Add R2 switchover regression tests before implementation; retain both source/control and editing suites with exact-byte assertions.
   - [x] Implement independent trusted profile/result descriptors, exact typed precondition refusals and replay before strict admission.
   - [x] Add retained-receipt switchover and strict v2 history/revert lineage acceptance tests.
   - [x] Record new release authors and lineage without inventing historical data; expose bounded v2 history and targetReleaseId revert.
   - [x] Initialize ensure metadata in the coordinator transaction, preserve resolved bindings and restrict explicit p0b schemas to their compatible inputs.
+  - [x] Preserve strict delete refusals outside the operational finalizer codec and replay historical terminal receipts before new-command validation.
   - [ ] Regenerate Memory L5 inventory using make, with no manual digest edits.
   - [ ] Run artifacts and mcp-platform typecheck/test/lint plus API boot under the single Docker lock; make down.
   - [ ] Commit using make, force-with-lease push, mark PR ready, wait for pull_request CI and append the lane report; do not merge.

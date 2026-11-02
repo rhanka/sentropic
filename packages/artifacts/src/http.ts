@@ -320,7 +320,8 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             commitState: 'not_committed', replayed: false };
         }
         if (capability === 'artifacts_set_access' || capability === 'artifacts_delete') {
-          await visible(normalized.artifactId as string, invocation, true);
+          const acl = await visible(normalized.artifactId as string, invocation, true);
+          if (acl.ownerId !== invocation.actorId) throw new ArtifactOperationError('access_denied');
           const outcome = await manageArtifact({ coordinator: deps.coordinator,
             createUnit: deps.management?.createUnit ?? createPostgresManagementUnit,
             confirmation: deps.management?.confirmation, readPolicyRevision: () => deps.ensureHost.readPolicyRevision(),
