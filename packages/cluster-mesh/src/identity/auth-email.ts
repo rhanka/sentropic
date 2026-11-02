@@ -74,6 +74,7 @@ export const authEmailService = <H>(input: IdentityAuthBindingInput<H>, evidence
     check(); await tx.lockSubject(userId);
     const user = await tx.stores.accounts.findAccount(userId);
     const ticket = user ? tickets.get(user.email) : undefined;
+    if (tickets.size > 0 && !ticket) return refuseWebAuthn('registration', 'registration_verification_failed', 'Registration verification failed.', 400);
     if (ticket) {
       await tx.lockEmail(ticket.email);
       await tx.custody.emailTickets.consume({ tokenHash: ticket.tokenHash, email: ticket.email, expectedRevision: ticket.revision, bindUserId: userId, at: input.hostPorts.clock.now().toISOString() });

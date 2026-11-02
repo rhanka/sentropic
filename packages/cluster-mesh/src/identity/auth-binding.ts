@@ -16,7 +16,7 @@ import { IdentityEmailCreateCollision, IdentitySocialRaceRetrySignal } from '../
 export const createIdentityAuthHonoTransactionBindingV1 = <H>(supplied: IdentityAuthBindingInput<H>): IdentityAuthHonoTransactionBindingV1 => {
   const input = { ...supplied, rp: { ...supplied.rp, expectedOrigins: [...new Set(supplied.rp.expectedOrigins)] } };
   if (!input.rp.id || input.rp.expectedOrigins.length === 0 || input.rp.expectedOrigins.some((origin) => typeof origin !== 'string' || !origin)) throw new IdentityCustodyErrorV1('identity_material_invalid');
-  const check = () => assertIdentityTransactionActive(input.tx, true);
+  const check = () => assertIdentityTransactionActive(input.tx, false);
   check();
   const evidence = new Set<string>(), deferredMail: IdentityDeferredMailV1[] = [];
   const state: WebAuthnAttempt = { flow: null, completionOwner: null, owner: null, registration: undefined, registrationUv: false, issuanceUv: 'required' };

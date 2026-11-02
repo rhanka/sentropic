@@ -46,6 +46,7 @@ export const authUserPorts = <H>(input: IdentityAuthBindingInput<H>, evidence: S
     count: async () => { check(); return (await tx.stores.accounts.listAccounts()).filter((a) => a.accountStatus !== 'deleted').length; },
     create: async (value) => {
       check();
+      if (value.emailVerified !== undefined && typeof value.emailVerified !== 'boolean') throw new IdentityCustodyErrorV1('identity_material_invalid');
       if (Object.keys(value).some((key) => !['email', 'displayName', 'role', 'emailVerified', 'accountStatus', 'approvalDueAt'].includes(key))) throw new IdentityCustodyErrorV1('identity_material_invalid');
       const email = normalizeEmail(value.email), at = iso(input.hostPorts.clock.now()), userId = input.hostPorts.random.uuid();
       authRole(value.role);
@@ -65,6 +66,7 @@ export const authUserPorts = <H>(input: IdentityAuthBindingInput<H>, evidence: S
     },
     update: async (id, value) => {
       check(); await tx.lockSubject(id);
+      if (value.emailVerified !== undefined && typeof value.emailVerified !== 'boolean') throw new IdentityCustodyErrorV1('identity_material_invalid');
       const user = await users.findById(id);
       if (!user) return null;
       if (Object.keys(value).some((key) => !['email', 'displayName', 'role', 'emailVerified', 'accountStatus', 'approvalDueAt', 'updatedAt'].includes(key))) throw new IdentityCustodyErrorV1('identity_material_invalid');

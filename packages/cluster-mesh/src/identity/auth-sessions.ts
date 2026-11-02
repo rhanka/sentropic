@@ -36,7 +36,7 @@ export const authSessionService = <H>(input: IdentityAuthBindingInput<H>, users:
       if (claims.tokenUse !== use || claims.expiresAt <= now().toISOString()) return null;
       const account = await tx.stores.accounts.findAccount(claims.userId);
       if (!account || account.accountStatus === 'deleted') return null;
-      await tx.lockSubject(claims.userId);
+      if (tx.mode === 'write' || use === 'refresh') await tx.lockSubject(claims.userId);
       const record = await store.findById(claims.sessionId), digest = await hash(token);
       if (!record || record.userId !== claims.userId || record.revokedAt || record.expiresAt <= now().toISOString()
         || digest !== (use === 'session' ? record.sessionTokenHash : record.refreshTokenHash)) return null;
@@ -69,7 +69,7 @@ export const authSessionService = <H>(input: IdentityAuthBindingInput<H>, users:
     validateSessionToken: async (token) => {
       const found = await readToken(token, 'session');
       if (!found) return null;
-      await store.touchActivity(found.record.sessionId, now().toISOString());
+      if (tx.mode === 'write') await store.touchActivity(found.record.sessionId, now().toISOString());
       return { role: found.role, user: found.user, sessionRecord: projectEvidence(found.record), session: { userId: found.user.id, sessionId: found.record.sessionId, role: found.role } };
     },
     refreshSession: async (token) => {
