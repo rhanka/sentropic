@@ -457,10 +457,10 @@ export class PostgresCustodyJournal {
       counts[table] = (counts[table] ?? 0) + (result.rowCount ?? 0);
     };
     await remove('identity_webauthn_credentials', '"user_id" = $1', [userId]);
-    await remove('identity_single_use_proofs', '"user_id" = $1', [userId]);
-    await remove('identity_single_use_proofs', '"user_id" IS NULL AND "email" = $1', [email]);
     await remove('identity_email_registration_tickets', '"user_id" = $1', [userId]);
     await remove('identity_email_registration_tickets', '"user_id" IS NULL AND "email" = $1', [email]);
+    await remove('identity_single_use_proofs', '"user_id" = $1', [userId]);
+    await remove('identity_single_use_proofs', '"user_id" IS NULL AND "email" = $1', [email]);
     await remove('identity_social_links', '"user_id" = $1', [userId]);
     await remove('identity_account_profiles', '"user_id" = $1', [userId]);
     return counts;

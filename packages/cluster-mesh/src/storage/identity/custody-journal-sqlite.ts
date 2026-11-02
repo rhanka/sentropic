@@ -382,10 +382,10 @@ export class SqliteCustodyJournal {
       counts[table] = (counts[table] ?? 0) + changed;
     };
     remove('identity_webauthn_credentials', '"user_id" = ?', [userId]);
-    remove('identity_single_use_proofs', '"user_id" = ?', [userId]);
-    remove('identity_single_use_proofs', '"user_id" IS NULL AND "email" = ?', [email]);
     remove('identity_email_registration_tickets', '"user_id" = ?', [userId]);
     remove('identity_email_registration_tickets', '"user_id" IS NULL AND "email" = ?', [email]);
+    remove('identity_single_use_proofs', '"user_id" = ?', [userId]);
+    remove('identity_single_use_proofs', '"user_id" IS NULL AND "email" = ?', [email]);
     remove('identity_social_links', '"user_id" = ?', [userId]);
     remove('identity_account_profiles', '"user_id" = ?', [userId]);
     return counts;
