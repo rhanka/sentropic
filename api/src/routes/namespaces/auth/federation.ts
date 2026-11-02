@@ -15,9 +15,8 @@ import type {
   FederationCallbackProfile,
   FederationProvider,
 } from '../../../services/auth/federation/types';
-import { verifyValidationToken } from '../../../services/email-verification';
-import { createSession, validateSession } from '../../../services/session-manager';
-import { ensureWorkspaceForUser } from '../../../services/workspace-service';
+import { validateSession } from '../../../services/session-manager';
+import { createCmFederationCompletion } from '../../../services/identity/cm-federation-completion';
 import { getSentropicOAuthPorts, resolveOAuthIssuer, resolveOAuthUiBaseUrl } from '../../auth/oauth';
 
 /**
@@ -145,7 +144,7 @@ const brokerFor = (
   const uiBase = resolveOAuthUiBaseUrl(c.req.raw);
 
   return createFederationBroker({
-    accountPolicy: ports.accountPolicy,
+    complete: createCmFederationCompletion(getCookie(c, 'session') || c.req.header('authorization')?.replace('Bearer ', '') || null),
     audit: ports.auditLog,
     clock: ports.clock,
     config: {
@@ -157,17 +156,12 @@ const brokerFor = (
     },
     // The federation port is optional on the ports bag; this host always wires it (Lot 0 adapter).
     federation: ports.federation!,
-    mintSession: (input) => createSession(input.user.id, input.user.role, input.deviceInfo),
     provider,
-    provisionWorkspace: async (userId: string) => {
-      await ensureWorkspaceForUser(userId);
-    },
     secrets: {
       codeVerifier: generateCodeVerifier,
       nonce: () => randomBytes(32).toString('base64url'),
       state: generateState,
     },
-    users: ports.users,
   });
 };
 
@@ -197,6 +191,9 @@ const resolveOrRespond = (c: Context): FederationProvider | Response => {
 
 export const createFederationRouter = (oauthAuthorizePath: string): Hono => {
 const federationRouter = new Hono();
+federationRouter.onError(() => new Response(JSON.stringify({ error: {
+  code: 'identity_service_unavailable', message: 'Identity service unavailable.' } }),
+  { status: 503, headers: { 'content-type': 'application/json' } }));
 
 federationRouter.get('/:provider/start', async (c) => {
   const provider = resolveOrRespond(c);
@@ -394,17 +391,8 @@ federationRouter.post('/challenge/complete', async (c) => {
   }
   const normalizedEmail = parsed.data.email.trim().toLowerCase();
 
-  // Proof-of-email: the verification token (issued by the email-code flow) must be valid AND match the
-  // submitted email. A caller cannot claim an arbitrary email without holding a real proof for it.
-  const proof = await verifyValidationToken(parsed.data.verificationToken);
-  if (!proof.valid || proof.email?.trim().toLowerCase() !== normalizedEmail) {
-    return c.json(
-      { error: { code: 'email_verification_required', message: 'Email ownership was not proven.' } },
-      400,
-    );
-  }
-
-  // Verify-and-DELETE the pending pointer (single-use + TTL) only AFTER the email proof succeeds.
+  // The protocol pointer is consumed once, outside retry. CM verifies and consumes the
+  // email ticket atomically with the user/link/session, inside every completion attempt.
   const pending = pendingFederationStore.consume(challengeId, new Date());
   deleteCookie(c, CHALLENGE_COOKIE, { path: FEDERATION_CALLBACK_PREFIX });
   if (!pending) {
@@ -431,6 +419,8 @@ federationRouter.post('/challenge/complete', async (c) => {
     providerSubject: pending.providerSubject,
     providerTenant: pending.providerTenant,
     verifiedEmail: normalizedEmail,
+    verificationToken: parsed.data.verificationToken,
+    expiresAt: pending.expiresAt.toISOString(),
   });
 
   if (result.kind === 'authenticated') {
