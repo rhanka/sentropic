@@ -149,3 +149,98 @@ export const SEAT_ONBOARDING_FILE_CAPS: Record<SeatOnboardingDestKey, number> = 
   'muse-trust': 1024,
   'codex-config': 2048,
 };
+
+const DEST_FORMAT: Record<SeatOnboardingDestKey, SeatOnboardingFormat> = {
+  'agy-jetski': 'agy-jetski-pbtxt-v1',
+  'claude-json': 'claude-json-projection-v1',
+  'muse-trust': 'muse-trust-json-v1',
+  'codex-config': 'codex-config-projection-v1',
+};
+
+/** v1 allowlist entry per CLI; vibe has none until a gate is measured. */
+const CLI_DEST: Record<SeatCli, SeatOnboardingDestKey | null> = {
+  agy: 'agy-jetski',
+  claude: 'claude-json',
+  muse: 'muse-trust',
+  codex: 'codex-config',
+  vibe: null,
+};
+
+/** Reviewed full completed-step set per pinned agy version (measured 1.4.12). */
+export const AGY_REQUIRED_COMPLETED_STEPS: Record<string, readonly string[]> = {
+  '1.4.12': [
+    'POST_ONBOARDING_STEP_TYPE_MANAGER_WELCOME',
+    'POST_ONBOARDING_STEP_TYPE_USAGE_MODE',
+    'POST_ONBOARDING_STEP_TYPE_AGENT_CONFIGURATION',
+    'POST_ONBOARDING_STEP_TYPE_ADD_WORKSPACE',
+  ],
+};
+
+/** Reviewed muse trust.json schema versions; starts as a singleton. */
+export const MUSE_TRUST_KNOWN_SCHEMA_VERSIONS: readonly number[] = [1];
+
+/** Reviewed codex approval policies for v1 (sufficiency unverified until the L4 probe). */
+export const CODEX_APPROVAL_POLICY_VALUES: readonly string[] = [
+  'untrusted',
+  'on-failure',
+  'on-request',
+  'never',
+];
+
+const CLIS: readonly SeatCli[] = ['agy', 'codex', 'vibe', 'muse', 'claude'];
+const GATED_CLIS: readonly SeatCli[] = ['agy', 'claude', 'muse', 'codex'];
+const SYNTHESIS_CLIS: Record<SeatCellSynthesis, SeatCli> = {
+  'claude-workspace-trust': 'claude',
+  'muse-workspace-trust': 'muse',
+  'codex-project-trust': 'codex',
+};
+
+/**
+ * The single gate fact every downstream stage uses: a present block (any
+ * CLI) and vibe-absent are eligible; agy/claude/muse/codex absent close the
+ * gate with the launch-gate code `onboarding-required`.
+ */
+export function seatLaunchGate(cli: SeatCli, onboardingStatus: SeatOnboardingStatus): SeatLaunchGate {
+  if (onboardingStatus === 'present') return { eligible: true };
+  if (!GATED_CLIS.includes(cli)) return { eligible: true };
+  return { eligible: false, code: 'onboarding-required' };
+}
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const unknownKey = (value: Record<string, unknown>, allowed: readonly string[]): string | null =>
+  Object.keys(value).find((k) => !allowed.includes(k)) ?? null;
+
+const nonEmpty = (value: unknown): value is string =>
+  typeof value === 'string' && value.length > 0;
+
+const validDate = (value: unknown): value is string =>
+  typeof value === 'string' && !Number.isNaN(Date.parse(value));
+
+const validInt = (value: unknown, min: number): value is number =>
+  typeof value === 'number' && Number.isInteger(value) && value >= min;
+
+const utf8Bytes = (text: string): Uint8Array => new TextEncoder().encode(text);
+
+const fail = (
+  code: SeatOnboardingCode,
+  detail: string,
+): SeatOnboardingValidationResult => ({ ok: false, code, detail });
+
+const SEAT_ONBOARDING_TOP_KEYS = [
+  'schemaVersion', 'cli', 'seatRef', 'accountBinding', 'accountBindingBasis',
+  'lineage', 'reboundFrom', 'reboundAt', 'nativeCliVersion', 'os',
+  'capturedAt', 'consent', 'cellSynthesis', 'files',
+] as const;
+
+const SEAT_ONBOARDING_FILE_KEYS = ['destKey', 'format', 'contentBase64', 'sha256', 'byteLength'] as const;
+const LINEAGE_KEYS = ['epoch', 'generation', 'operationId'] as const;
+const CONSENT_KEYS = ['source', 'ownerScope'] as const;
+
+function validateLineageTuple(value: unknown): value is SeatLineageTuple {
+  if (!isRecord(value)) return false;
+  if (unknownKey(value, LINEAGE_KEYS)) return false;
+  return validInt(value['epoch'], 1) && validInt(value['generation'], 0) && nonEmpty(value['operationId']);
+}
+
