@@ -100,8 +100,8 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
     },
   };
   const appDeps: HttpAppDeps = { ...options, profile, coordinator,
-    publicationUrls: (artifactId, releaseId) => ({ stableUrl: `https://artifacts.test/a/${artifactId}`,
-      pinnedUrl: `https://artifacts.test/a/${artifactId}/r/${releaseId}` }),
+    publicationUrls: (artifactId, releaseId) => ({ stableUrl: `https://${artifactId}.artifacts.test/`,
+      versionUrl: `https://${releaseId}.artifacts.test/` }),
     derivation: createRadarKeyDerivation({ storageScopeId: scope, actorIds: actors }),
     legacyRecords, acls, lifecycle, sources, isApprovedAccount: (id) => actors.includes(id),
     management: {
