@@ -59,6 +59,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] Review r1 tests first: a signed assertion missing required UV must return user_verification_required/403 and roll back challenge, counter and audit writes.
 - [x] Review r1 tests first: ignored credential-management refusals must still abort and roll back earlier account and ledger writes.
 - [x] Review r1: map social revision CAS loss to whole-callback retry with exact identity_record_conflict exhaustion; narrow invalid registration tickets before their snapshot.
 - [x] R1 Argon D3: retry whole social callbacks after recognized email/touch races and abort unlink revision loss before a transaction can commit.
