@@ -94,18 +94,17 @@ describe('Registration API Routes', () => {
       expect(data.error.code).toBe('email_verification_required');
     });
 
-    it('should reuse a migrated legacy user (migration 0014 backfills null emails)', async () => {
+    it('should reuse the exact existing CM account id for a verified email', async () => {
       const legacyId = randomUUID();
       const localPart = `legacy-${randomUUID().slice(0, 8)}`;
-      // Migration 0014 maps a legacy NULL email to 'legacy-<id>@invalid.local'; the
-      // CM store requires an email, so the legacy local-part matching path is gone.
-      const migratedEmail = `legacy-${legacyId}@invalid.local`;
+      // Null source emails refuse import; this fixture has an explicit existing email.
+      const migratedEmail = uniqueEmail('existing-id');
       await createCmUser({
         userId: legacyId,
         email: migratedEmail,
         displayName: localPart,
         role: 'guest',
-        emailVerified: true, // Legacy users are considered verified
+        emailVerified: true,
         accountStatus: 'active',
       });
 
