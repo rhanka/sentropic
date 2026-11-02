@@ -8,7 +8,7 @@ import { randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { createArtifactsManifest } from '../src/mcp-core.js';
 import { createTransportWorld } from './fixtures/transport-world.js';
-import { ensureSite, getSource, listVersions, parityProfile, parityWorld, publishText, revert,
+import { ensureSite, getSource, listVersions, parityProfile, parityWorld, publishText, revert, sourceText,
   type Body } from './fixtures/parity-world.js';
 
 describe('artifacts_list_versions', () => {
@@ -92,7 +92,7 @@ describe('artifacts_revert', () => {
     expect(releases[2].isCurrent).toBe(true);
     expect(releases[2].digest).toBe((v1.body as Body).digest);
     const source = await getSource(w, artifactId);
-    expect(((source.body as Body).files as Record<string, unknown>[])[0].text).toBe('<h1>v1</h1>');
+    expect(sourceText(source)).toBe('<h1>v1</h1>');
   });
 
   it('should replay the same idempotency key instead of creating another release', async () => {

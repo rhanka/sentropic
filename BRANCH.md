@@ -54,6 +54,7 @@ Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, r
   - [ ] Retain p0b source authorization, masking, management confirmation, terminal controls and all tests.
   - [ ] Renumber part 1 metadata migration to 0005; journal both migrations without gaps.
   - [ ] Qualify strict v2 and compatible p0b projections; align artifacts 0.2.6, consumer ranges and APP-P1 pins.
+  - [x] Add R2 switchover regression tests before implementation; retain both source/control and editing suites with exact-byte assertions.
   - [ ] Regenerate Memory L5 inventory using make, with no manual digest edits.
   - [ ] Run artifacts and mcp-platform typecheck/test/lint plus API boot under the single Docker lock; make down.
   - [ ] Commit using make, force-with-lease push, mark PR ready, wait for pull_request CI and append the lane report; do not merge.
