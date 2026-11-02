@@ -155,6 +155,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Delete the replaced `workspaces/product-tenants.ts` identity routes.
   - [x] Remove the replaced app membership request, decision and directory implementations.
   - [x] Delete `services/auth/tenant-membership.ts`, including the caller-role trust seam and duplicate transition rules.
+  - [x] Remove the obsolete root deletion factory/UOW and unused pool-based membership counters; fixed V2 coordinators own deletion.
   - [x] Convert the workspace cutover HTTP fixtures to CM stores, retaining cross-tenant/workspace denial and exact decision-replay assertions.
   - [x] Add `api/tests/api/auth/cm-workspace-members.test.ts` for current-role authorization, isolated role changes, personal workspace restrictions and joined business rollback.
   - [x] Bind workspace member reads and mutations to CM domains in one transaction, with subject/workspace locks, audit, last-admin protection and current actor checks.
