@@ -5,8 +5,8 @@ import type {
 } from '@sentropic/auth-hono';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createFederationBroker } from '../../../src/services/auth/federation/broker';
-import type { FederationBrokerDeps, FederationProviderIdentity } from '../../../src/services/auth/federation/types';
+import { createFederationBroker, type FederationBrokerDeps } from '../../utils/federation-broker';
+import type { FederationProviderIdentity } from '../../../src/services/auth/federation/types';
 
 const NOW = new Date('2026-07-11T00:00:00.000Z');
 const SECRET_TOKEN = 'EAAB_SECRET-facebook-token-must-never-leak';
