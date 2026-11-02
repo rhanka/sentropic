@@ -1,4 +1,5 @@
-import { resolveOrCreateFederatedUser } from '@sentropic/auth-hono';
+import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
+import { FederationCompletionRefusal } from './types';
 
 import type {
   FederationBroker,
@@ -7,6 +8,7 @@ import type {
   FederationCallbackResult,
   FederationEmailChallengeCompletion,
   FederationErrorResult,
+  FederationIdentityAttempt,
   FederationLinkCallbackRequest,
   FederationLinkResult,
   FederationProviderIdentity,
@@ -40,17 +42,12 @@ import type {
  */
 export const createFederationBroker = (deps: FederationBrokerDeps): FederationBroker => {
   const {
-    accountPolicy,
     audit,
     clock,
     config,
     federation,
-    isFirstUser,
-    mintSession,
     provider,
-    provisionWorkspace,
     secrets,
-    users,
   } = deps;
 
   const resumeLocation = (continuation: string): string => {
@@ -70,6 +67,20 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
     kind: 'error',
     status,
   });
+
+  const completed = async <T>(operation: (attempt: FederationIdentityAttempt) => Promise<T>)
+    : Promise<T | FederationErrorResult> => {
+    try { return await deps.complete(operation); }
+    catch (error) {
+      // This catch is outside the UOW: no SQL may follow a transaction-aborting conflict.
+      if (error instanceof FederationCompletionRefusal) return errorResult(error.status, error.code, error.message);
+      if (error instanceof IdentityCustodyErrorV1 && error.code === 'social_subject_conflict') {
+        return errorResult(409, 'identity_linked_other_account',
+          'This provider account is already linked to a different Sentropic account.');
+      }
+      throw error;
+    }
+  };
 
   const start = async (request: FederationStartRequest): Promise<FederationStartResult> => {
     const now = clock.now();
@@ -107,7 +118,7 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
   const runFlowAndVerify = async (
     request: FederationCallbackRequest,
   ): Promise<
-    | { ok: true; identity: FederationProviderIdentity; continuation: string | null }
+    | { ok: true; identity: FederationProviderIdentity; continuation: string | null; expiresAt: string }
     | { ok: false; result: FederationErrorResult }
   > => {
     const now = clock.now();
@@ -195,33 +206,37 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
       };
     }
 
-    return { continuation: flowState.continuationToken, identity, ok: true };
+    const expiresAt = Math.min(flowState.expiresAt.getTime(),
+      identity.assertionExpiresAt ? Date.parse(identity.assertionExpiresAt) : Infinity);
+    if (!Number.isFinite(expiresAt)) throw new Error('Invalid federation assertion expiry');
+    // Provider verification pins issuer/audience/tenant/subject once. Retry uses only this
+    // immutable copy; neither the one-time exchange nor transient flow consumption is repeated.
+    return { continuation: flowState.continuationToken, identity: Object.freeze({ ...identity }),
+      expiresAt: new Date(expiresAt).toISOString(), ok: true };
+  };
+
+  const requireFreshAssertion = (expiresAt: string, now: Date): void => {
+    if (!Number.isFinite(Date.parse(expiresAt)) || Date.parse(expiresAt) <= now.getTime()) {
+      throw new FederationCompletionRefusal(401, 'federation_verification_failed', 'Federation verification failed.');
+    }
   };
 
   /** Load the user, mint a FRESH rotated session (D10), and resume the continuation or land (D11). */
   const authenticatedResult = async (
+    attempt: FederationIdentityAttempt,
     userId: string,
     continuation: string | null,
     deviceInfo: FederationCallbackRequest['deviceInfo'],
-    now: Date,
     outcomeKind: string,
   ): Promise<FederationCallbackResult> => {
-    const user = await users.findById(userId);
-    if (!user) {
-      await audit.record('error', 'federation.user_missing', { provider: provider.id, userId });
-      return errorResult(500, 'federation_user_missing', 'User not found after federation.');
-    }
+    await attempt.consumeEmailProof(userId);
+    const session = await attempt.authenticate(userId, deviceInfo);
 
-    // K-ROTATE (D10): mint a FRESH session (new session id) — anti session-fixation. The session
-    // role is derived from the account policy exactly as the passkey/email paths do.
-    const role = await accountPolicy.resolveSessionRole(user, now);
-    const session = await mintSession({ deviceInfo, user: { ...user, role } });
-
-    await audit.record('info', 'federation.login', {
+    await attempt.audit.record('info', 'federation.login', {
       outcome: outcomeKind,
       provider: provider.id,
       sessionId: session.sessionId,
-      userId: user.id,
+      userId,
     });
 
     const location = continuation ? resumeLocation(continuation) : config.landingUrl;
@@ -234,24 +249,16 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
    * email). Encodes D7/D8/D9/OD2: never silently merge, no no-email user, subject-first.
    */
   const resolveAndFinish = async (
+    attempt: FederationIdentityAttempt,
     identity: FederationProviderIdentity,
     continuation: string | null,
     deviceInfo: FederationCallbackRequest['deviceInfo'],
-    now: Date,
   ): Promise<FederationCallbackResult> => {
-    const outcome = await resolveOrCreateFederatedUser(
-      {
-        accountPolicy,
-        autoLinkProviders: config.autoLinkProviders,
-        federation,
-        isFirstUser,
-        provisionWorkspace,
-        users,
-      },
+    const outcome = await attempt.resolveFederatedUser(
       {
         email: identity.email,
         emailVerifiedByProvider: identity.emailVerified,
-        now,
+        now: attempt.now,
         provider: provider.id,
         providerSubject: identity.subject,
         providerTenant: identity.providerTenant ?? null,
@@ -262,7 +269,7 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
       case 'manual-link-required':
         // K-NOMERGE-CRED / K-GH-MANUAL (D7/D8/OD2): never merge; surface a safe "sign in to link"
         // signal. GitHub always lands here on a collision (never on the auto-link allowlist, D8).
-        await audit.record('warn', 'federation.manual_link_required', {
+        await attempt.audit.record('warn', 'federation.manual_link_required', {
           provider: provider.id,
           reason: outcome.reason,
         });
@@ -274,7 +281,7 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
       case 'email-challenge-required':
         // D9 / K-GH-NOVERIFIED: no usable verified email — no user/identity row was written. The route
         // drives a local email-verification challenge, then calls `completeEmailChallenge`.
-        await audit.record('info', 'federation.email_challenge_required', { provider: provider.id });
+        await attempt.audit.record('info', 'federation.email_challenge_required', { provider: provider.id });
         return {
           continuation,
           kind: 'email-challenge',
@@ -285,15 +292,17 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
       case 'auto-linked':
       case 'created':
       case 'linked-existing':
-        return authenticatedResult(outcome.userId, continuation, deviceInfo, now, outcome.kind);
+        return authenticatedResult(attempt, outcome.userId, continuation, deviceInfo, outcome.kind);
     }
   };
 
   const callback = async (request: FederationCallbackRequest): Promise<FederationCallbackResult> => {
-    const now = clock.now();
     const verified = await runFlowAndVerify(request);
     if (!verified.ok) return verified.result;
-    return resolveAndFinish(verified.identity, verified.continuation, request.deviceInfo, now);
+    return completed(attempt => {
+      requireFreshAssertion(verified.expiresAt, attempt.now);
+      return resolveAndFinish(attempt, verified.identity, verified.continuation, request.deviceInfo);
+    });
   };
 
   const linkCallback = async (request: FederationLinkCallbackRequest): Promise<FederationLinkResult> => {
