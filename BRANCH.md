@@ -88,6 +88,9 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Review document, history, stream and lock fixture conversions; preserve original email values.
   - [x] Port chat-service-tools.test.ts to CM identity fixtures and explicit conversation admission where needed; retain business assertions.
   - [x] Port chat-service-tab-tools.test.ts to CM identity fixtures and explicit conversation admission where needed; retain business assertions.
+  - [x] Port chat-service-batch-create-orgs.test.ts to CM identity fixtures and explicit conversation admission where needed; retain business assertions.
+  - [x] Port chat-service-document-generate.test.ts to CM identity fixtures and explicit conversation admission where needed; retain business assertions.
+  - [x] Port chat-service-document-generate-pptx.test.ts to CM identity fixtures and explicit conversation admission where needed; retain business assertions.
   - [ ] Docker stack under flock, `make down ENV=test-app-a4` after.
 - [ ] **Lot 1 — CM identity composition + one data migration**
   - [ ] App-side CM identity composition (core stores, tenancy stores, custody host/UOW, F15 producer, atomic deletion V2, importer) over the app Postgres.

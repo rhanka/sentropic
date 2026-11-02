@@ -1,3 +1,4 @@
+import { createAdmittedChatMessage } from '../utils/cm-chat-fixture';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { db } from '../../src/db/client';
 import {
@@ -7,14 +8,12 @@ import {
   folders,
   jobQueue,
   organizations,
-  tenantMemberships,
-  users,
   workspaces,
-  workspaceMemberships,
 } from '../../src/db/schema';
 import { eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
-import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
+import { createTestUser } from '../utils/auth-helper';
+import { cmDeleteForUsers, cmDeleteWorkspaceMembers, cmQuery, cmTable } from '../utils/cm-identity-test-store';
 
 // Mock OpenAI streaming — must be declared before importing chatService.
 vi.mock('../../src/services/llm-runtime', () => {
@@ -83,18 +82,9 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     savedReasoningEffortEvalTemplate = CHAT_COMMON_PROMPTS.reasoning_effort_eval;
     CHAT_COMMON_PROMPTS.reasoning_effort_eval = '';
     userId = createId();
-    await db.insert(users).values({
-      id: userId,
-      email: `batch-orgs-test-${userId}@example.com`,
-      displayName: 'BatchOrgs Test User',
-      role: 'editor',
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    ({ workspaceId } = await ensureWorkspaceForUser(userId));
-    await db.insert(tenantMemberships).values({ userId, tenantId: 'sentropic', status: 'approved' });
+    const actor = await createTestUser({ email: `batch-orgs-test-${userId}@example.com`, displayName: 'BatchOrgs Test User', role: 'editor' });
+    userId = actor.id;
+    workspaceId = actor.workspaceId!;
 
     folderId = createId();
     await db.insert(folders).values({
@@ -116,9 +106,10 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     await db.delete(jobQueue).where(eq(jobQueue.workspaceId, workspaceId));
     await db.delete(folders).where(eq(folders.workspaceId, workspaceId));
     await db.delete(organizations).where(eq(organizations.workspaceId, workspaceId));
-    await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, workspaceId));
+    await cmDeleteWorkspaceMembers(workspaceId);
     await db.delete(workspaces).where(eq(workspaces.ownerUserId, userId));
-    await db.delete(users).where(eq(users.id, userId));
+    await cmDeleteForUsers([userId]);
+    await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = $1`, [workspaceId]);
     if (savedReasoningEffortEvalTemplate !== undefined) {
       CHAT_COMMON_PROMPTS.reasoning_effort_eval = savedReasoningEffortEvalTemplate;
       savedReasoningEffortEvalTemplate = undefined;
@@ -141,7 +132,7 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     });
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'create organizations',
@@ -175,7 +166,7 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     });
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'create organizations',
@@ -195,7 +186,7 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
   });
 
   it('should NOT include batch_create_organizations for neutral workspace', async () => {
-    // ensureWorkspaceForUser creates neutral by default, no update needed
+    // The fixture workspace is neutral by default, no update needed
 
     const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
     let capturedTools: string[] = [];
@@ -209,7 +200,7 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     });
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'create organizations',
@@ -251,7 +242,7 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     );
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'create organizations from description',
@@ -308,7 +299,7 @@ describe('ChatService - batch_create_organizations tool (unit, mocked OpenAI)', 
     );
 
     const { sessionId, assistantMessageId, model } =
-      await chatService.createUserMessageWithAssistantPlaceholder({
+      await createAdmittedChatMessage({
         userId,
         workspaceId,
         content: 'batch create orgs',
