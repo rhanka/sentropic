@@ -34,6 +34,15 @@ describe('CM V2 account deletion and external connector delivery', () => {
     disabledAt: new Date(), disabledReason: 'connector deletion fixture' });
   const remove = () => authenticatedRequest(app, 'DELETE', `/api/v1/admin/users/${target.id}`, admin.sessionToken!);
 
+  it('refuses active self deletion without destroying its connector or revoking its grant', async () => {
+    const grant = await createCmConnectorFixture(target), before = await findConnectorFixture(grant.accountId);
+    const response = await authenticatedRequest(app, 'DELETE', '/api/v1/me', target.sessionToken!);
+    expect(response.status).toBe(409);
+    expect(await findCmUserById(target.id)).toMatchObject({ accountStatus: 'active' });
+    expect(await findConnectorFixture(grant.accountId)).toEqual(before);
+    expect(revokedTokens).toEqual([]);
+  });
+
   it('commits scoped encrypted custody before deletion and delivers the exact captured capabilities afterward', async () => {
     const member = await createAuthenticatedUser('editor'); actors.push(member);
     await putCmWorkspaceMember(target.workspaceId!, member.id, 'editor');
