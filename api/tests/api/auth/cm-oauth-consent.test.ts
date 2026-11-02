@@ -56,7 +56,11 @@ describe('CM OAuth consent authority and protocol participant', () => {
     await runCmIdentityWrite(async transaction => {
       await transaction.lockSubject(userId);
       await transaction.stores.oauth.revokeConsent(consentId, new Date().toISOString());
-      expect(await createConsentStoreAdapter({ transaction }).getGrant(userId, clientId, tenantId)).toBeNull();
+      const port = createConsentStoreAdapter({ transaction });
+      expect(await port.getGrant(userId, clientId, tenantId)).toBeNull();
+      await port.saveGrant(userId, clientId, ['write'], tenantId);
+      expect(await port.getGrant(userId, clientId, tenantId))
+        .toMatchObject({ scopes: ['write'], offlineGrantId: null, offlineScopes: [] });
     });
   });
 
