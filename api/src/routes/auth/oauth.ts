@@ -151,7 +151,7 @@ const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?:
   },
   // Consent persistence: lets the IdP skip the consent screen when a stored grant for the
   // exact (user, client) covers the requested scopes; re-consents on any uncovered scope.
-  consentStore: createConsentStoreAdapter({ database: db, transactionBound: Boolean(boundPorts) }),
+  consentStore: createConsentStoreAdapter({ transaction }),
   cookies: authHonoCookiePort,
   credentials: {
     create: unsupportedOAuthPort,

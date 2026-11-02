@@ -9,6 +9,7 @@ import { cmDeleteForUsers, cmDeleteTenants, cmTable } from '../../utils/cm-ident
 import { createOAuthRefreshAdapter } from '../../../src/services/auth/oauth-refresh-adapter';
 import { createConsentStoreAdapter } from '../../../src/services/auth/consent-store-adapter';
 import { createOauthStateStoreAdapter } from '../../../src/services/auth/oauth-state-adapter';
+import { runCmIdentityWrite } from '../../../src/services/identity/cm-transaction';
 
 const now = new Date('2026-11-01T00:00:00Z');
 const userId = 'refresh-pg-user';
@@ -50,18 +51,23 @@ describe('PostgreSQL refresh storage', () => {
   });
 
   it('should keep offline scope/resource approvals separate from online scope unions', async () => {
-    const consents = createConsentStoreAdapter();
-    await consents.saveGrant(userId, clientId, ['read', 'offline_access'], undefined,
-      { issuer: 'https://idp.test', resource: 'https://a.test/mcp' });
-    const first = await consents.getGrant(userId, clientId);
-    await consents.saveGrant(userId, clientId, ['write', 'offline_access'], undefined,
-      { issuer: 'https://idp.test', resource: 'https://b.test/mcp' });
-    const second = await consents.getGrant(userId, clientId);
-    expect(second?.scopes).toEqual(expect.arrayContaining(['read', 'write', 'offline_access']));
-    expect(second?.offlineScopes).toEqual(['write', 'offline_access']);
-    expect(second?.approvedResources).toEqual(['https://b.test/mcp']);
-    expect(second?.offlineGrantId).not.toBe(first?.offlineGrantId);
-    expect(await consents.getGrant(userId, clientId, 'other-tenant')).toBeNull();
+    const tenantId = 'refresh-pg-tenant';
+    await createCmTenant({ tenantId });
+    await setCmMembershipState(userId, tenantId, { status: 'approved', decidedBy: userId });
+    await runCmIdentityWrite(async transaction => {
+      const consents = createConsentStoreAdapter({ transaction });
+      await consents.saveGrant(userId, clientId, ['read', 'offline_access'], tenantId,
+        { issuer: 'https://idp.test', resource: 'https://a.test/mcp' });
+      const first = await consents.getGrant(userId, clientId, tenantId);
+      await consents.saveGrant(userId, clientId, ['write', 'offline_access'], tenantId,
+        { issuer: 'https://idp.test', resource: 'https://b.test/mcp' });
+      const second = await consents.getGrant(userId, clientId, tenantId);
+      expect(second?.scopes).toEqual(expect.arrayContaining(['read', 'write', 'offline_access']));
+      expect(second?.offlineScopes).toEqual(['write', 'offline_access']);
+      expect(second?.approvedResources).toEqual(['https://b.test/mcp']);
+      expect(second?.offlineGrantId).not.toBe(first?.offlineGrantId);
+      expect(await consents.getGrant(userId, clientId, 'other-tenant')).toBeNull();
+    });
   });
 
   it('should serialize racing rotations and retain replay evidence', async () => {
