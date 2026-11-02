@@ -86,11 +86,14 @@ export const transactionOperationPorts = (host: CustodyOpHost, requireWrite: () 
         await journal.deleteConversationsForUser(userId);
         await journal.deleteProofsForUser(userId);
         await journal.deleteDeviceCodesForUser(userId);
-        await journal.deleteSessionsForUser(userId);
         Object.assign(deletedByTable, await journal.cleanupCustodyForUser(userId, accountEmail ?? ''));
+        await journal.deleteSessionsForUser(userId);
         const detachedByTable = { invitationConsumers: await journal.detachInvitationConsumer(userId) };
         if (accountEmail) await journal.revokePendingInvitationsForEmail(accountEmail);
-        for (const id of workspaceIdsToDelete) { await journal.detachInvitationWorkspace(id); await journal.deleteWorkspace(id); }
+        for (const id of workspaceIdsToDelete) {
+          await sql.query(`DELETE FROM ${sql.table('cm_identity_conversation_sessions')} WHERE workspace_id = ?`, [id]);
+          await journal.detachInvitationWorkspace(id); await journal.deleteWorkspace(id);
+        }
         return { deletedByTable, detachedByTable, remainingLiveReferences: 0 };
       },
       assertNoLiveReferences: (input) => journal.assertNoLiveReferences({ ...input, accountEmail: input.accountEmail ?? '' }),

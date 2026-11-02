@@ -59,7 +59,7 @@ export class PostgresCustodyJournal {
   // -- Deletion operations --------------------------------------------------
 
   static requestDigestV1(userId: string, actorId: string, handlerId: string, operationId: string): string {
-    return createHash('sha256').update(JSON.stringify(['A2.0b', '2.0.0', userId, actorId, handlerId, operationId]), 'utf8').digest('hex');
+    return createHash('sha256').update(JSON.stringify(['A2.0b', '2.0.0', userId, actorId, handlerId]), 'utf8').digest('hex');
   }
 
   async reserveOperation(op: IdentityDeletionOperationV2): Promise<'reserved' | 'committed'> {
@@ -498,6 +498,7 @@ export class PostgresCustodyJournal {
   }
 
   static rollbackReceipt(input: {
+    readonly operationId: string;
     readonly userId: string;
     readonly failedStep: RevocationStepKind;
     readonly completedBeforeFailure: ReadonlySet<RevocationStepKind>;
@@ -506,17 +507,14 @@ export class PostgresCustodyJournal {
     const order: readonly RevocationStepKind[] = ['login_sessions', 'remote_reader_sessions', 'connector_grants', 'tenant_memberships', 'agent_plane', 'purpose_grants', 'catalogue', 'account'];
     const failedIndex = order.indexOf(input.failedStep);
     const steps: AtomicRevocationStepReceiptV2[] = order.map((step, index): AtomicRevocationStepReceiptV2 => {
-      if (step === input.failedStep) return { step, outcome: 'queued', detail: 'required_local_step_failed' };
-      if (step === 'remote_reader_sessions' || step === 'connector_grants' || step === 'purpose_grants' || step === 'catalogue') {
-        return { step, outcome: 'not_applicable', detail: 'plane absent' };
-      }
-      if (step === 'agent_plane') return { step, outcome: 'not_applicable', detail: 'agent-plane hook not bound' };
+      if (step === input.failedStep) return { step, outcome: 'queued', detailCode: 'required_local_step_failed' };
       if (index < failedIndex && input.completedBeforeFailure.has(step)) {
-        return { step, outcome: 'rolled_back', detail: 'transaction_rolled_back' };
+        return { step, outcome: 'rolled_back', detailCode: 'transaction_rolled_back' };
       }
-      return { step, outcome: 'queued', detail: 'not_attempted_after_failure' };
+      return { step, outcome: 'queued', detailCode: 'not_attempted_after_failure' };
     });
     return {
+      contractVersion: '2.0.0', operationId: input.operationId, deliveryIds: [],
       userId: input.userId,
       mode: 'delete',
       transaction: 'rolled_back',
@@ -524,7 +522,7 @@ export class PostgresCustodyJournal {
       complete: false,
       steps,
       business: null,
-      cleanup: {},
+      cleanup: null,
       at: input.at,
     };
   }
