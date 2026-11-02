@@ -1,10 +1,10 @@
 import type { Context } from 'hono';
-import { RELAY_WSS_SUBPROTOCOL, type ReceiverRoute } from './route-table';
+import { RELAY_WSS_SUBPROTOCOL } from './route-table';
 import { relayRefusal } from './errors';
 import type { SessionContentReceiverPorts } from './ports';
 
 /** Relay upgrade (CHAIN-MOUNT): every tunnel/protocol check refuses before HTTP 101 and before body allocation. */
-export const upgradeHandler = (ports: SessionContentReceiverPorts, route: ReceiverRoute) => async (c: Context) => {
+export const upgradeHandler = (ports: SessionContentReceiverPorts, _route: unknown) => async (c: Context) => {
   if (c.req.header('cookie') || c.req.header('origin')) throw relayRefusal('relay_origin_refused');
   // Bodyless upgrade (r3 N2): any entity bytes refuse before 101 and before allocation.
   // c.req.header() returns undefined (not null) for absent headers — test with undefined.
