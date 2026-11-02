@@ -2,6 +2,7 @@ import { MicrosoftEntraId } from 'arctic';
 import { createRemoteJWKSet, jwtVerify, type JWTPayload } from 'jose';
 
 import type { FederationProvider, FederationProviderIdentity } from './types';
+import { federationAssertionExpiry } from './assertion-expiry';
 
 const MICROSOFT_LOGIN = 'https://login.microsoftonline.com';
 const MICROSOFT_JWKS_URL = new URL(
@@ -156,6 +157,7 @@ export const createMicrosoftProvider = (
             : null;
 
       return {
+        assertionExpiresAt: federationAssertionExpiry(payload),
         email,
         emailVerified: payload.email_verified === true,
         providerTenant,
