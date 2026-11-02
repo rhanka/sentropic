@@ -5,6 +5,7 @@
 // claim through the CM `TidIssuer`. No TENANT_RESOLUTION_MODE, no legacy alias.
 
 import { getCmIdentity } from './cm-identity';
+import { runCmIdentityRead } from './cm-transaction';
 
 export interface CmTenantRecord {
   readonly tenantId: string;
@@ -246,9 +247,8 @@ export interface CmWorkspaceMembershipRecord {
 
 /** Workspace memberships are keyed by workspace in the CM store; the per-user
  *  enumeration is a raw read over `cm_workspace_members`. */
-export const listCmWorkspaceMembershipsForUser = async (userId: string): Promise<CmWorkspaceMembershipRecord[]> => {
-  const { pool } = await import('../../db/client');
-  const result = await pool.query(
+export const listCmWorkspaceMembershipsForUser = (userId: string): Promise<CmWorkspaceMembershipRecord[]> => runCmIdentityRead(async tx => {
+  const result = await tx.hostTransaction.query(
     `SELECT "workspace_id", "user_id", "role" FROM "cm_identity"."cm_workspace_members" WHERE "user_id" = $1`,
     [userId],
   );
@@ -257,7 +257,7 @@ export const listCmWorkspaceMembershipsForUser = async (userId: string): Promise
     userId: String(row.user_id),
     role: String(row.role) as CmWorkspaceMembershipRecord['role'],
   }));
-};
+});
 
 /** Authoritative workspace -> tenant resolution (replaces resolve-tenant.ts). */
 export const resolveCmTenantAuthoritatively = async (input: {
