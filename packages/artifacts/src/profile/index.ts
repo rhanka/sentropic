@@ -79,7 +79,7 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
     for (const [key, value] of Object.entries(defaults)) {
       if (!Object.hasOwn(props, key) || !matchesSchema(value, props[key])) throw new Error('profile/schema default mismatch');
     }
-    if (name === 'artifacts_ensure' || name === 'artifacts_publish' || name === 'artifacts_commit_upload') {
+    if (['artifacts_ensure', 'artifacts_publish', 'artifacts_commit_upload', 'artifacts_set_access', 'artifacts_delete'].includes(name)) {
       (idempotency as Record<string, unknown>)[name] = { required: true, scope: 'principal' };
     }
   }
@@ -101,6 +101,9 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
       if (method === 'POST' && path === '/ensure') name = 'artifacts_ensure';
       if (method === 'POST' && path === '/publish') name = 'artifacts_publish';
       if (method === 'POST' && path === '/list') name = 'artifacts_list';
+      if (method === 'POST' && path === '/get_source') name = 'artifacts_get_source';
+      if (method === 'POST' && path === '/set_access') name = 'artifacts_set_access';
+      if (method === 'POST' && path === '/delete') name = 'artifacts_delete';
       if (method === 'GET' && path.startsWith('/meta/') && isArtifactId(path.slice(6))) name = 'artifacts_get';
       return name && selectedCapabilities.includes(name) ? name : undefined;
     },
