@@ -30,6 +30,16 @@ test('should preserve streaming chunks, usage and model routing over HTTP', asyn
   assert.equal(receipt.calls, 1);
 });
 
+test('should preserve complete Unicode code points in each streamed event', async t => {
+  const content = `${'a'.repeat(79)}🧪suffix`;
+  const { post } = await fixture(t, () => ({ content }));
+  const wire = await (await post({ stream: true })).text();
+  const chunks = wire.split('\n\n').filter(packet => packet.startsWith('data: {'))
+    .map(packet => JSON.parse(packet.slice(6)).choices[0].delta.content).filter(Boolean);
+  assert.equal(chunks.join(''), content);
+  assert.ok(chunks.every(chunk => chunk.isWellFormed()));
+});
+
 test('should carry tool requests and results through successive HTTP requests', async t => {
   const tool = { id: 'tool-1', type: 'function', function: { name: 'read_initiative', arguments: '{"initiativeId":"abc"}' } };
   const { post, receipt } = await fixture(t, body => body.messages.at(-1).role === 'tool'
@@ -236,6 +246,21 @@ test('should not treat schema keys inside tool-result payloads as a schema journ
   const response = journeyResponse({ messages, tools: [{ function: { name: 'read_initiative', parameters: { required: ['initiativeId'] } } }] });
   assert.ok(response.content);
   assert.equal(response.tool_calls, undefined);
+});
+
+test('should use instruction and user schemas without treating assistant replies as new schema requests', () => {
+  const response = journeyResponse({ messages: [
+    { role: 'system', content: 'Chat system' },
+    { role: 'assistant', content: '{"valueScores":[],"complexityScores":[]}' },
+    { role: 'user', content: 'Reply with a sentence.' },
+  ] });
+  assert.doesNotMatch(response.content, /valueScores|complexityScores/);
+  const detail = JSON.parse(journeyResponse({ messages: [
+    { role: 'developer', content: 'Return {"name":"X","valueScores":[],"complexityScores":[]}' },
+    { role: 'assistant', content: '{"dossier":"Previous reply","initiatives":[]}' },
+    { role: 'user', content: 'Web research results' },
+  ] }).content);
+  assert.ok(detail.valueScores.length > 0);
 });
 
 test('should prefer the use-case detail journey when the prompt embeds the matrix JSON', () => {

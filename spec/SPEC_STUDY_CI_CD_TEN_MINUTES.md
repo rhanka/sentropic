@@ -881,7 +881,7 @@ unchanged; browser retries cannot conceal failures.
 
 Six explicit Chromium shards balance the 56 numbered browser files using
 successful test durations from the five identified baseline logs. Each run
-lists expected identities, executes one Playwright process with one real-login
+snapshots expected identities before test hooks, executes one Playwright process with one real-login
 setup, and reconciles actual identities, declared skips and failures. Missing
 measurements stay null. Existing autosave sleeps now wait on actual responses.
 The VSCode lane adds request-payload streaming and persisted-message checks;
@@ -895,9 +895,14 @@ their one-day expiry and successful-consumer deletion. Actual installed package
 versions and lock digest join the daily receipt. Provider wire attempts,
 errors, cancellations and unknown pricing remain explicit; unknown cost is null.
 The independent hourly monitor rejects missing, failed or stale daily execution.
+It checks the latest completed scheduled qualification while the next one is
+queued or running. Daily browsers execute the same six manifest shards on clean
+state, preserving every failed shard and teardown status; VSCode starts clean.
 
-Offline checks pass: 15 protocol scenarios, five browser-manifest scenarios and
-eight live-receipt scenarios, plus the existing 69 CI wiring/verdict tests.
+Offline checks pass: 23 protocol tests, six browser-manifest tests and
+11 live-receipt tests, plus the existing 69 CI wiring/verdict tests and two
+development-image pin guards. Provider credential headers are scrubbed, unsupported
+queries fail visibly, and SSE chunks preserve Unicode code points.
 Application runs, exact production image identities, zero live-egress proof,
 new job/wall durations and one actual scheduled live result remain **to measure**.
 The tenth API file, `gw-native-qualification.test.ts`, requires protected UAT
