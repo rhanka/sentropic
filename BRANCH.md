@@ -57,6 +57,7 @@
   - [x] Define a synthetic three-receipt tuple with measured fixture outputs; it supplies no platform authority.
   - [x] Replace weak text assertions in `scripts/security/daily/scanner-image-publish.test.mjs`.
   - [x] Write rehashed receipt substitution, missing/empty output and strict-field negative controls before implementation.
+  - [x] Define strict schemaVersion 1 build, validation and publication receipt fields from r6 sections 1.3 and 3.3.1.
   - [ ] Enforce strict receipt schemas, matching identities, nonempty measured artifact outputs and ordered material binding.
   - [ ] Demonstrate that receipt-name echoes and missing outputs cannot establish eligibility.
 - [ ] **Lot 3 — Final validation and handoff**
