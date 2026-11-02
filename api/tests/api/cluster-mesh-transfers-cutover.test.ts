@@ -9,6 +9,8 @@ import JSZip from 'jszip';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { db } from '../../src/db/client';
+import { cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
+import { findCmWorkspaceMember, listCmWorkspaceMembers } from '../../src/services/identity/cm-tenancy';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import {
   comments,
@@ -16,7 +18,6 @@ import {
   folders,
   initiatives,
   organizations,
-  workspaceMemberships,
   workspaces,
 } from '../../src/db/schema';
 import { requireAuth } from '../../src/middleware/auth';
@@ -151,7 +152,7 @@ describe('cluster mesh transfers cutover', () => {
     await clearCutover();
     artifactRoot = join(tmpdir(), `transfer-cutover-${process.pid}-${crypto.randomUUID()}`);
     setArtifactStoreForTesting(new LocalFsArtifactStore(artifactRoot, 'transfer-cutover'));
-    owner = await createAuthenticatedUser('admin');
+    owner = await createAuthenticatedUser('admin_org');
     workspaceIds.add(owner.workspaceId!);
   });
 
@@ -163,7 +164,7 @@ describe('cluster mesh transfers cutover', () => {
       await db.delete(initiatives).where(inArray(initiatives.workspaceId, ids));
       await db.delete(folders).where(inArray(folders.workspaceId, ids));
       await db.delete(organizations).where(inArray(organizations.workspaceId, ids));
-      await db.delete(workspaceMemberships).where(inArray(workspaceMemberships.workspaceId, ids));
+      for (const id of ids) await cmDeleteWorkspaceMembers(id);
       await db.delete(workspaces).where(inArray(workspaces.id, ids));
     }
     workspaceIds.clear();
@@ -314,19 +315,14 @@ describe('cluster mesh transfers cutover', () => {
   });
 
   it('denies cross-workspace imports through both admin and editor authorization', async () => {
-    const targetOwner = await createAuthenticatedUser('admin');
+    const targetOwner = await createAuthenticatedUser('admin_org');
     const targetWorkspaceId = targetOwner.workspaceId!;
     workspaceIds.add(targetWorkspaceId);
-    expect(await db.select().from(workspaceMemberships).where(and(
-      eq(workspaceMemberships.workspaceId, targetWorkspaceId),
-      eq(workspaceMemberships.userId, owner.id),
-    ))).toHaveLength(0);
+    expect(await findCmWorkspaceMember(targetWorkspaceId, owner.id)).toBeNull();
 
     const durableState = async () => ({
       workspaces: await db.select().from(workspaces).orderBy(workspaces.id),
-      memberships: await db.select().from(workspaceMemberships).where(
-        eq(workspaceMemberships.workspaceId, targetWorkspaceId),
-      ),
+      memberships: await listCmWorkspaceMembers(targetWorkspaceId),
       organizations: await db.select().from(organizations).where(
         eq(organizations.workspaceId, targetWorkspaceId),
       ),
@@ -430,9 +426,7 @@ describe('cluster mesh transfers cutover', () => {
       });
     };
     const assertTwin = async (workspaceId: string): Promise<void> => {
-      expect(await db.select().from(workspaceMemberships).where(
-        eq(workspaceMemberships.workspaceId, workspaceId),
-      )).toHaveLength(1);
+      expect(await listCmWorkspaceMembers(workspaceId)).toHaveLength(1);
       expect(await db.select().from(organizations).where(
         eq(organizations.workspaceId, workspaceId),
       )).toHaveLength(1);
