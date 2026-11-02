@@ -196,6 +196,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Provision service protocol credentials and CM tenant bindings atomically; seed replay preserves existing bindings, including suspended tenants.
   - [x] Replace the obsolete sweep-expiry expectation with r6's current-read guest role while preserving pending status and its deadline.
   - [x] Delete the app approval-expiry writer; schedule only the CM revocation worker, and run proof retention through the CM UOW.
+  - [x] Preserve committed membership success when post-commit realtime hints fail, with HTTP regression coverage for both notification and mutation failures.
   - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
   - [x] Evaluate F15 and business workspace visibility on one serializable read transaction.
   - [x] Add explicit verified-HTTP conversation admission and an opaque CM reference on business chats; no identity authority is inferred from a chat id.

@@ -5,6 +5,13 @@ import { CmIdentityForbiddenError } from '../../../services/identity/cm-deletion
 import { changeCmWorkspaceMember, CmWorkspaceMembershipPolicyError,
   listCmWorkspaceMemberViews } from '../../../services/identity/cm-workspace-members';
 import { notifyWorkspaceMembershipEvent } from '../../../services/workspace-provisioning';
+import { logger } from '../../../logger';
+
+// Realtime hints follow commit. The next authority read always observes CM directly.
+const notifyCommitted = async (...args: Parameters<typeof notifyWorkspaceMembershipEvent>) => {
+  try { await notifyWorkspaceMembershipEvent(...args); }
+  catch { logger.warn({ workspaceId: args[0], userId: args[1] }, 'Workspace membership notification unavailable'); }
+};
 
 const role = z.enum(['viewer', 'commenter', 'editor', 'admin']);
 const add = z.object({ email: z.string().email(), role });
@@ -33,7 +40,7 @@ export const cmMemberPorts: Pick<WorkspacesRouterPorts['workspaces'],
     const workspaceId = c.req.param('id')!;
     const result = await changeCmWorkspaceMember({ actorId: c.get('user').userId, workspaceId,
       action: { kind: 'add', ...parsed.data } });
-    await notifyWorkspaceMembershipEvent(workspaceId, result.userId, { action: 'added', role: parsed.data.role });
+    await notifyCommitted(workspaceId, result.userId, { action: 'added', role: parsed.data.role });
     return c.json({ success: true });
   }),
   updateMember: handle(async c => {
@@ -42,14 +49,14 @@ export const cmMemberPorts: Pick<WorkspacesRouterPorts['workspaces'],
     const workspaceId = c.req.param('id')!;
     const result = await changeCmWorkspaceMember({ actorId: c.get('user').userId, workspaceId,
       action: { kind: 'set_role', userId: c.req.param('userId')!, role: parsed.data.role } });
-    await notifyWorkspaceMembershipEvent(workspaceId, result.userId, { action: 'role_updated', role: parsed.data.role });
+    await notifyCommitted(workspaceId, result.userId, { action: 'role_updated', role: parsed.data.role });
     return c.json({ success: true });
   }),
   removeMember: handle(async c => {
     const workspaceId = c.req.param('id')!;
     const result = await changeCmWorkspaceMember({ actorId: c.get('user').userId, workspaceId,
       action: { kind: 'remove', userId: c.req.param('userId')! } });
-    if (result.changed) await notifyWorkspaceMembershipEvent(workspaceId, result.userId, { action: 'removed' });
+    if (result.changed) await notifyCommitted(workspaceId, result.userId, { action: 'removed' });
     return c.body(null, 204);
   }),
 };
