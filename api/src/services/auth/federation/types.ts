@@ -190,6 +190,7 @@ export type FederationCallbackResult =
    */
   | {
       kind: 'email-challenge';
+      expiresAt: string;
       provider: string;
       providerSubject: string;
       providerTenant: string | null;
