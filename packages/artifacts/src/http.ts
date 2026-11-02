@@ -64,8 +64,8 @@ export interface HttpAppDeps {
   acls: AclStore;
   lifecycle: Pick<LifecycleService, 'stateOf' | 'canRead' | 'getReleaseState'>;
   isApprovedAccount?: (principalId: string) => boolean;
-  /** One trusted URL policy shared by HTTP and MCP receipts. */
-  publicationUrls?: (artifactId: string, releaseId: string) => { stableUrl: string; pinnedUrl: string };
+  /** One trusted URL policy shared by HTTP and MCP receipts: the artifact page and the exact version page. */
+  publicationUrls?: (artifactId: string, releaseId: string) => { stableUrl: string; versionUrl: string };
 }
 export interface ArtifactApp {
   readonly selectedCapabilities: CompiledArtifactsProfile['selectedCapabilities'];
