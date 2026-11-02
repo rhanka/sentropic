@@ -46,14 +46,15 @@ Implement lot ACT-L04 of r6 §7.2 (W2): qualify native Rust ast-grep with frozen
   - `plan/NN-BRANCH_*.md` (except this branch file)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `Makefile` (BR04-EX1: only the `test-security-daily` SCOPE list gains `scripts/security/daily/sast-contract.test.mjs` and `scripts/security/daily/iac-contract.test.mjs` so the L4-A/L4-B/L4-C cases run in the required suite that CI already executes)
-  - `api/Dockerfile` (BR04-EX2: SECDAILY-EX6 permits only local rules and pin references in the exact approved toolbox path — add the pinned ast-grep release fetch with sha256 verification to `ci-tool-base`, COPY it and `.security/ast-grep` into `ci-tools`; no other Docker instruction changes)
+  - `api/Dockerfile` (BR04-EX2: SECDAILY-EX6 permits only local rules and pin references in the exact approved toolbox path — add the pinned ast-grep release fetch with sha256 verification to `ci-tool-base` and COPY the pinned binary into `ci-tools`; the frozen rules stay in the repo checkout, not in the image; no other Docker instruction changes)
 - **Exception process**:
   - BR04-EX1 declared here before touching `Makefile`: reason = r6 §7.3/§6.4 require every destination wired into its owning required Make suite (`test-security-daily`, already run by required CI job `validate-ci-capacity-metrics`); impact = two additive SCOPE entries only, no existing entry removed; rollback = revert the single SCOPE line.
-  - BR04-EX2 declared here before touching `api/Dockerfile`: reason = r6/r4 Lot 4 and SECDAILY-EX6 require the native ast-grep pin reference in the approved toolbox image so its reviewed digest binds the binary; impact = one verified pin fetch RUN in `ci-tool-base` plus two COPY lines in `ci-tools`, no other instruction; rollback = revert those lines.
+  - BR04-EX2 declared here before touching `api/Dockerfile`: reason = r6/r4 Lot 4 and SECDAILY-EX6 require the native ast-grep pin reference in the approved toolbox image so its reviewed digest binds the binary; impact = one verified pin fetch RUN in `ci-tool-base` plus one COPY line in `ci-tools`, no other instruction; rollback = revert those lines.
 
 ## Feedback Loop
 - BR04-EX1: `acknowledge` — Makefile SCOPE addition for `test-security-daily` (see Conditional Paths).
 - BR04-EX2: `acknowledge` — `api/Dockerfile` SECDAILY-EX6 pin reference for ast-grep (see Conditional Paths).
+- `BRLOCK-EX1` acknowledgement: review_by=2026-11-30T00:00:00Z (CI lockfile lane policy, owner CI maintainers).
 - No open blockers: r6/r4 supply every design decision for this lot; anything not covered is reported in the final report, not decided here.
 
 ## AI Flaky tests

@@ -417,7 +417,6 @@ COPY --from=ci-tool-base /workspace/node_modules /workspace/node_modules
 COPY --from=ci-tool-base /workspace/package.json /workspace/package-lock.json /workspace/
 COPY --from=ci-tool-base /workspace/.security /workspace/.security
 COPY --from=ci-tool-base /opt/ast-grep /opt/ast-grep
-COPY .security/ast-grep /workspace/.security/ast-grep
 COPY --from=base /workspace/api /workspace/api
 COPY --from=base /workspace/packages /workspace/packages
 COPY --from=base /workspace/apps /workspace/apps
