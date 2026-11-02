@@ -5,7 +5,6 @@ import { sql } from 'drizzle-orm';
 import type { Pool, PoolClient } from 'pg';
 import { pool } from './client';
 import { installArtifactPackageAssets } from '../services/artifacts/host-storage';
-import { env } from '../config/env';
 import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
 import { A4_CONTROL_MIGRATION_TIMESTAMP, loadAppCmCutoverConfiguration } from '../services/identity/cm-cutover-config';
 import { importAppCmIdentityInTransaction } from '../services/identity/cm-cutover-import';
@@ -125,9 +124,6 @@ export async function runMigrations(migrationPool: Pool = pool): Promise<void> {
     const db = drizzle(client);
     await migrate(db, { migrationsFolder: './drizzle' });
     await reconcileSettingsUserScopeSchema(db);
-    // Lot A4: control migration 0014 reads the WebAuthn RP ID from this GUC when
-    // copying legacy webauthn_credentials/challenges into cm_identity.
-    await client.query(`SELECT set_config('app.webauthn_rp_id', $1, false)`, [env.WEBAUTHN_RP_ID || 'localhost']);
     await runControlMigrations(db, './drizzle/control', client);
     await installArtifactPackageAssets(client);
   } catch (error) {
