@@ -20,6 +20,7 @@ export const artifactMigrationAssets = Object.freeze([
     ['0001_artifacts.sql', '7b12713b949a956ad0b4c370a16e80fb4625a99a5097769ed0653df5973dc533'],
     ['0002_lifecycle.sql', 'fdfbe97f84774b47a207e66915f7426926650e85b6dbb9a4d80272591df624fd'],
     ['0003_coordinator.sql', '852f8d388ac3bd8bfc0b484ca55bba9ff2e3bf34b3339384732ffeda5f8f1420'],
+    ['0004_metadata.sql', 'fae2a8cbb7bb7787c75ae1b66ede10695ce07bf70b3bebc528b2886200ce3fdd'],
   ].map(([name, sha256]) => {
     const id = `@sentropic/artifacts/migrations/${name}`;
     return Object.freeze({ id, sha256, read: () => readFileSync(require.resolve(id), 'utf8') });

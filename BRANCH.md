@@ -16,8 +16,9 @@ Close the generic P0 gaps of @sentropic/artifacts so the artifact MCP reaches Cl
 - **Allowed Paths (implementation scope)**:
   - `packages/artifacts/**`
   - `api/src/services/artifacts/composition.ts` (host store wiring only)
+  - `api/src/services/artifacts/host-storage.ts` (artifacts-host migration journal: add the 0004_metadata asset)
   - `api/src/services/mcp/cluster-registry.ts` (APP-P1 pin realignment for artifacts 0.2.5, per the 0.2.4 precedent)
-  - `api/tests/api/app-mcp-registry.test.ts`, `api/tests/api/app-mcp-installed.test.ts`, `api/tests/api/artifacts-host-publication.test.ts` (digest/version pins only)
+  - `api/tests/api/app-mcp-registry.test.ts`, `api/tests/api/app-mcp-installed.test.ts`, `api/tests/api/artifacts-host-publication.test.ts`, `api/tests/api/artifacts-host-migrations.test.ts` (digest/version/journal-count pins only)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
