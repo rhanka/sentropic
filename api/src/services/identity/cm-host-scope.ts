@@ -14,7 +14,10 @@ export function createCmScopedHostClient(client: PoolClient) {
     if (scope.active && scope.acceptingQueries) remember(error);
     throw error;
   };
-  const check = () => { if (!scope.active || !scope.acceptingQueries) reject(); };
+  const check = () => {
+    if (!scope.active || !scope.acceptingQueries) reject();
+    if (scope.failure !== undefined) throw scope.failure;
+  };
   const scoped = new Proxy(client, {
     get(target, property) {
       if (property === 'release' || property === 'end' || property === 'connect') return reject;
@@ -67,3 +70,37 @@ export const assertCmHostHealthy = (client: PoolClient): void => {
   if (!scope?.active || !scope.acceptingQueries) unbound();
   if (scope.failure !== undefined) throw scope.failure;
 };
+
+/** Retained handlers may catch a port error; the callback must still roll back or restart. */
+export function createCmPortFailureFence(client: PoolClient) {
+  const copies = new WeakMap<object, object>();
+  const fail = (error: unknown): never => {
+    const scope = scopes.get(client);
+    if (!scope?.active || !scope.acceptingQueries) return unbound();
+    if (scope.failure === undefined) scope.failure = error;
+    throw scope.failure;
+  };
+  const capture = <T extends object>(port: T): T => {
+    const existing = copies.get(port);
+    if (existing) return existing as T;
+    // A separate facade also supports frozen port objects without Proxy invariant violations.
+    const facade = new Proxy(Object.create(null) as T, {
+      ownKeys: () => Reflect.ownKeys(port),
+      getOwnPropertyDescriptor: () => ({ configurable: true, enumerable: true }),
+      get(_target, key) {
+        const value = Reflect.get(port, key, port);
+        if (typeof value === 'function') return (...args: unknown[]) => {
+          assertCmHostHealthy(client);
+          try {
+            const result = Reflect.apply(value, port, args);
+            return result && typeof result.then === 'function' ? result.then(undefined, fail) : result;
+          } catch (error) { return fail(error); }
+        };
+        return value && typeof value === 'object' && !Array.isArray(value) ? capture(value) : value;
+      },
+    });
+    copies.set(port, facade); copies.set(facade, facade);
+    return facade;
+  };
+  return capture;
+}
