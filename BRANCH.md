@@ -96,6 +96,8 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Port todo-orchestration-chat-progression.test.ts to CM identity fixtures and explicit conversation admission where needed; retain business assertions.
   - [x] Port vscode-code-agent-prompt-profile.test.ts to CM identity fixtures and explicit conversation admission where needed; retain business assertions.
   - [x] Port workspace-type, generic-dispatch, extended-object, flow-runtime, transfers and chat-tool API membership fixtures to CM while retaining business assertions.
+  - [x] Port artifacts-host-publication.test.ts to CM identity rows in its isolated database; retain expiry, race and revocation assertions.
+  - [x] Port artifacts-host-recovery.test.ts to CM identity rows in its isolated database; retain expiry, race and revocation assertions.
   - [ ] Docker stack under flock, `make down ENV=test-app-a4` after.
 - [ ] **Lot 1 — CM identity composition + one data migration**
   - [ ] App-side CM identity composition (core stores, tenancy stores, custody host/UOW, F15 producer, atomic deletion V2, importer) over the app Postgres.
