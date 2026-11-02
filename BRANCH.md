@@ -69,7 +69,7 @@
   - [ ] Update `scanner-provenance.test.mjs`: resolved real recipe passes inventory validation, refuses empty retained bytes, and every patch/source/checksum mutation of the real recipe/manifest refuses; wire the native replay test when `SCANNER_MATERIALS` is set.
 - [ ] **Lot 2 — Exact source, patch and material implementation**
   - [x] Ordered data-only patches with exact input/output checksums exist under `scripts/security/scanner/patches/`.
-  - [ ] Resolve and measure the actual pins: upstream archive/authentication/license, Go compiler/go.mod/go.sum/module proxy, base index/manifest/config/layer, APK index/packages, tools and Actions; write `recipe.json` and `material-manifest.json` with no prose pin or pending digest.
+  - [x] Resolved and measured the actual pins (upstream archive/authentication/license, Go compiler/go.mod/go.sum/module proxy, base index/manifest/config/layer, APK index/packages, tools, Actions); `recipe.json` and `material-manifest.json` carry no prose pin or pending digest (recipeDigest `sha256:c857dc4b...`, 3138 materials, 10 origins).
   - [ ] Assemble the retained material directory and implement `native-replay.mjs`: offline replay of the patched source resolves go-jose v4.1.6; the OS-only source still exposes v4.1.5 and is rejected.
 - [ ] **Lot 3 — Gates, ready PR and report**
   - [ ] Run `make test-security-daily ENV=test-cyber-adm` under the single lock, then the native offline replay with `SCANNER_MATERIALS`, then `make down ENV=test-cyber-adm`.
