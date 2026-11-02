@@ -775,6 +775,10 @@ publish-e2e-image: docker-login
 check-ci-version-filters: ## Assert the ci.yml api/ui change-filters cover every API_VERSION/UI_VERSION hash input
 	@./scripts/check-ci-version-filters.sh
 
+.PHONY: check-down-volumes
+check-down-volumes: ## Assert make down-volumes refuses empty/dev/non-test ENV and dry-runs down --volumes --remove-orphans for test-*/e2e-* (BRDV-EX1)
+	@./scripts/check-down-volumes-guard.sh
+
 # BRCI-EX1 — publishable manifest guard (spec/SPEC_EVOL_CI_PUBLISHABLE_MANIFEST_GUARD.md).
 # Every npm pack/publish lane inspects the real archive; tools are pinned in ephemeral dirs.
 MANIFEST_GUARD_IMAGE ?= $(LLM_MESH_NODE_IMAGE)
@@ -2956,6 +2960,23 @@ ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 te
 	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans
 else
 	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down
+endif
+
+# BRDV-EX1 (owner-approved 2026-11-02 « Cible make + nettoyage »): down-volumes removes the
+# volumes of a TEST env only, so test lanes stop leaking node_modules/pg/minio volumes.
+# The guard is the first recipe line and exits before any compose call: empty, dev and any
+# non test-*/e2e-* ENV is refused. Same compose project selection as `down` (ARTIFACTS_COMPOSE
+# family included), always with `down --volumes --remove-orphans`. `make down` is unchanged.
+.PHONY: down-volumes
+down-volumes: ## Stop a TEST env (test-*/e2e-* only; refuses empty/dev/other) and remove containers, networks AND volumes
+	@case "$(ENV)" in \
+		test-*|e2e-*) ;; \
+		*) echo "❌ Error: down-volumes refuses ENV='$(ENV)'. Only test-* or e2e-* environments are allowed (empty and dev are refused)." >&2; exit 1 ;; \
+	esac
+ifneq ($(filter $(ENV),test-861-int test-861-gaps test-e2-int test-mem-batch1 test-mem-e10 test-mem-e10-fin test-mem-e11 test-mem-e11b test-mem-release test-artifacts-021 test-artifacts-022 test-llm-judge test-memory-mcp),)
+	$(ARTIFACTS_COMPOSE) down --volumes --remove-orphans
+else
+	$(DOCKER_COMPOSE) -f docker-compose.yml -f docker-compose.dev.yml -f docker-compose.test.yml down --volumes --remove-orphans
 endif
 
 # -----------------------------------------------------------------------------

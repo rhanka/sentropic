@@ -56,6 +56,7 @@ On TARGET=production (requires `make build-api build-ui-image` first):
 - For branch number `nn` and slot `0..4`: API ports are `9000 + (nn * 5) + slot`, UI ports are `5200 + (nn * 5) + slot`, and Maildev UI ports are `1100 + (nn * 5) + slot`
 - Test commands must include all three ports explicitly whenever any service stack can start
 - OAuth/Picker tests may only use local ports that are also registered as exact Google OAuth redirect URIs and JavaScript origins
+- Every test lane ends with `make down-volumes ENV=<its test env>` — including on failure — so node_modules, pg and minio volumes of the test compose project are removed (`down --volumes --remove-orphans`). `make down-volumes` refuses an empty ENV, `ENV=dev` and any non `test-*`/`e2e-*` ENV with a clear error; `make down` stays unchanged for other uses. Guard test: `make check-down-volumes ENV=<test env>`
 
 ## Branch Workflow Alignment
 - Defer full test runs until end of branch
