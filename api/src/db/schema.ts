@@ -351,10 +351,6 @@ export const serviceClients = pgTable('service_clients', {
   allowedScopes: text('allowed_scopes').array().notNull(),
   resourceIndicators: text('resource_indicators').array().notNull().default(sql`'{}'`),
   dpopBoundAccessTokens: boolean('dpop_bound_access_tokens').notNull().default(false),
-  // ARCH-11 G1a (§4.1.6): the S2S source of tenant (resolveTenant({clientId}) reads this, NOT
-  // oauth_clients.tenant_id). Stays nullable, but gains a DEFAULT so new single-org clients inherit
-  // a tenant; existing NULL rows are backfilled to 'sentropic' by migration 0038.
-  tenantId: text('tenant_id').default('sentropic'),
   secretRotatedAt: timestamp('secret_rotated_at', { withTimezone: false }),
   createdAt: timestamp('created_at', { withTimezone: false }).notNull().defaultNow(),
   revokedAt: timestamp('revoked_at', { withTimezone: false }),
@@ -365,7 +361,6 @@ export const serviceClients = pgTable('service_clients', {
   exchangePolicy: jsonb('exchange_policy'),
 }, (table) => ({
   clientIdIdx: index('service_clients_client_id_idx').on(table.clientId),
-  tenantIdIdx: index('service_clients_tenant_id_idx').on(table.tenantId),
 }));
 
 export const documentConnectorAccounts = pgTable('document_connector_accounts', {
