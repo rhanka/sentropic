@@ -31,6 +31,71 @@ const shared = {
 describe.each(pgEnabled ? ['sqlite', 'postgres'] as const : ['sqlite'] as const)('real auth completion on %s', (profile) => {
   const open = async () => asOpHost((profile === 'postgres' ? await openPostgresEnv() : openSqliteEnv()).unitOfWork);
 
+  it.each(['create', 'update'] as const)('rejects explicit null emailVerified during %s', async (operation) => {
+    const unitOfWork = await open();
+    await expect(unitOfWork.run(WRITE, async (tx) => {
+      const binding = createIdentityAuthHonoTransactionBindingV1({ ...shared, tx });
+      if (operation === 'create') return binding.ports.users.create({ email: 'null-flag@example.test', role: 'editor', emailVerified: null as never });
+      const user = await binding.ports.users.create({ email: 'null-flag@example.test', role: 'editor' });
+      return binding.ports.users.update(user.id, { emailVerified: null as never });
+    })).rejects.toMatchObject({ code: 'identity_material_invalid' });
+    await unitOfWork.run(READ, async (tx) => { expect(await tx.stores.accounts.findAccountByEmail('null-flag@example.test')).toBeNull(); });
+  });
+
+  it('refuses registration for an account whose email differs from the verified ticket', async () => {
+    const unitOfWork = await open(), fixture = webauthnFixture();
+    const token = await unitOfWork.run(WRITE, async (tx) => {
+      const binding = createIdentityAuthHonoTransactionBindingV1({ ...shared, tx });
+      await binding.emailVerification.requestEmailCode({ email: 'ticket-owner@example.test' });
+      const result = await binding.emailVerification.verifyEmailCode({ email: 'ticket-owner@example.test', code: '123456' });
+      if (!result.valid) throw new Error('Ticket fixture failed');
+      return result.verificationToken;
+    });
+    const outcome = await runIdentityAuthCompletionV1({ flow: 'registration', unitOfWork, options: WRITE, operation: async (tx) => {
+      const binding = createIdentityAuthHonoTransactionBindingV1({ ...shared, tx });
+      await binding.ports.emailVerification.verifyToken('ticket-owner@example.test', token, new Date(NOW));
+      const user = await binding.ports.users.create({ email: 'different-owner@example.test', role: 'editor' });
+      const options = await binding.registration.generateRegistrationOptions({ userName: user.email!, userDisplayName: 'Different owner' });
+      return binding.registration.verifyRegistration({ userId: user.id, expectedChallenge: options.challenge, credential: fixture.registration(options.challenge) });
+    } });
+    expect(outcome).toMatchObject({ committed: false, refusal: { flow: 'registration', result: { verified: false,
+      error: { code: 'registration_verification_failed', status: 400 } } } });
+    await unitOfWork.run(READ, async (tx) => {
+      expect(await tx.stores.accounts.findAccountByEmail('different-owner@example.test')).toBeNull();
+      expect(await tx.custody.credentials.findByCredentialId(fixture.credentialId)).toBeNull();
+      const digest = await shared.digest.sha256(Buffer.from(token));
+      expect(await tx.custody.emailTickets.findByTokenHash(digest)).toMatchObject({ state: 'pending' });
+    });
+  });
+
+  it('validates through the real binding in read mode without touching activity or allowing writes', async () => {
+    const unitOfWork = await open(), token = 'read-mode-session', sessionId = 'read-mode-session-id';
+    const login = { mfaVerified: false, authTime: 123, sessionVersion: 1 }, expiresAt = '2026-11-01T13:00:00.000Z';
+    const userId = await unitOfWork.run(WRITE, async (tx) => {
+      const user = await createIdentityAuthHonoTransactionBindingV1({ ...shared, tx }).ports.users.create({ email: 'read-mode@example.test', role: 'editor' });
+      const profile = (await tx.custody.profiles.find(user.id))!;
+      await tx.custody.profiles.put({ ...profile, emailVerified: true });
+      await tx.custody.sessions.insert({ sessionId, userId: user.id, sessionTokenHash: await shared.digest.sha256(Buffer.from(token)), refreshTokenHash: null,
+        login, rotationVersion: 0, createdAt: NOW, expiresAt, revokedAt: null, deviceName: null, ipAddress: null, userAgent: null, lastActivityAt: null });
+      return user.id;
+    });
+    const outcome = await runIdentityAuthCompletionV1({ flow: 'session_validate', unitOfWork, options: READ, operation: async (tx) => {
+      const binding = createIdentityAuthHonoTransactionBindingV1({ ...shared, tx, loginTokens: { ...shared.loginTokens,
+        verify: async () => ({ userId, sessionId, role: 'editor', tokenUse: 'session', login, expiresAt }),
+      } });
+      const result = await binding.sessions.validateSessionToken(token);
+      await expect(binding.ports.users.create({ email: 'forbidden-read-write@example.test', role: 'editor' }))
+        .rejects.toMatchObject({ code: 'identity_transaction_unbound' });
+      await binding.flushAudit();
+      return result;
+    } });
+    expect(outcome).toMatchObject({ committed: true, value: { user: { id: userId }, session: { sessionId } } });
+    await unitOfWork.run(READ, async (tx) => {
+      expect(await tx.custody.sessions.findById(sessionId)).toMatchObject({ lastActivityAt: null });
+      expect(await tx.stores.accounts.findAccountByEmail('forbidden-read-write@example.test')).toBeNull();
+    });
+  });
+
   it.each(['credential_rename', 'credential_revoke'] as const)('aborts %s even when its refused result is ignored', async (flow) => {
     const unitOfWork = await open();
     const outcome = await runIdentityAuthCompletionV1({ flow, unitOfWork, options: WRITE, operation: async (tx) => {
