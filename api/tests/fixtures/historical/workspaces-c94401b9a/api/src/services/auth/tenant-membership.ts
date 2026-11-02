@@ -1,1 +1,1 @@
-export * from '../../../../../../../../src/services/auth/tenant-membership';
+export * from '../../../../../../../../src/services/identity/cm-membership';
