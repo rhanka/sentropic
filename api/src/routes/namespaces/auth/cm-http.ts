@@ -21,9 +21,21 @@ const publish = (response: StagedResponse): Response => new Response(
 const refusalResponse = (refusal: IdentityAuthRefusalV1): Response => {
   const result = refusal.result;
   if (result && typeof result === 'object' && 'error' in result) {
+    if (!Number.isInteger(result.error.status) || result.error.status < 400 || result.error.status > 599) {
+      throw new Error('identity_invalid_refusal');
+    }
     return Response.json({ error: { code: result.error.code, message: result.error.message } }, { status: result.error.status });
   }
-  return Response.json({ error: { code: 'authentication_required', message: 'Authentication required.' } }, { status: 401 });
+  // Match the unchanged auth-hono handlers for their primitive service results.
+  if (refusal.flow === 'credential_rename' || refusal.flow === 'credential_revoke') {
+    return Response.json({ error: { code: 'credential_not_found', message: 'Credential not found.' } }, { status: 404 });
+  }
+  if (refusal.flow === 'session_validate' || refusal.flow === 'session_refresh') {
+    return Response.json({ error: { code: 'invalid_session', message: refusal.flow === 'session_refresh'
+      ? 'Invalid or expired refresh token.' : 'Invalid session.' } }, { status: 401 });
+  }
+  // Social unlink has a separate consumer; no generic HTTP shape is inferred for it.
+  throw new Error('identity_unsupported_http_refusal');
 };
 const captureBody = async (request: Request): Promise<ArrayBuffer | undefined> => {
   if (request.method === 'GET' || request.method === 'HEAD' || !request.body) return undefined;
