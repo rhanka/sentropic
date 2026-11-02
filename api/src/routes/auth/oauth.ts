@@ -9,7 +9,6 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { env, requiresOAuthProductionSecrets } from '../../config/env';
 import { db } from '../../db/client';
 import { bindCmAppDatabase, withAppDatabaseMethods, type CmIdentityTransaction } from '../../services/identity/cm-transaction';
-import { logger } from '../../logger';
 import { createConsentStoreAdapter } from '../../services/auth/consent-store-adapter';
 import { createFederationAdapter } from '../../services/auth/federation-adapter';
 import { createJwksAdapter } from '../../services/auth/jwks-adapter';
@@ -134,11 +133,7 @@ const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?:
       };
     },
   },
-  auditLog: {
-    record(level, event, fields) {
-      logger[level]({ ...fields }, event);
-    },
-  },
+  auditLog: { record: unsupportedOAuthPort },
   challenges: {
     create: unsupportedOAuthPort,
     findValid: unsupportedOAuthPort,
@@ -187,7 +182,7 @@ const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?:
   // ARCH-11 G1c: S2S on-behalf-of (OBO) tenant policy for the client_credentials mint.
   // Lot A4: always strict — validates the `tenant` selector against the client's authorized
   // set (fixed cm_service_clients binding ∪ enrollments).
-  serviceTenant: createServiceTenantAdapter(),
+  serviceTenant: createServiceTenantAdapter(transaction, boundPorts ? () => boundPorts().auditLog : undefined),
   tenant: createCmOAuthTenantPort(transaction),
   random: {
     bytes: (length) => new Uint8Array(randomBytes(length)),

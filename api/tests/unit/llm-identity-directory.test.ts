@@ -4,6 +4,8 @@ import { eq, inArray, like } from 'drizzle-orm';
 import { db } from '../../src/db/client';
 import { serviceClients, workspaces } from '../../src/db/schema';
 import { createCmUser } from '../../src/services/identity/cm-users';
+import { bindCmServiceClientTenant } from '../../src/services/identity/cm-service-clients';
+import { runCmIdentityWrite } from '../../src/services/identity/cm-transaction';
 import {
   createCmTenant,
   enrolCmWorkspace,
@@ -17,6 +19,7 @@ import {
   cmDeleteTenantMembershipsForTenant,
   cmDeleteTenants,
   cmDeleteWorkspaceMembersForUser,
+  cmQuery, cmTable,
 } from '../utils/cm-identity-test-store';
 import {
   createLlmCallerIdentity,
@@ -70,12 +73,14 @@ const seed = async () => {
   await setCmMembershipState(USER, TENANT, { status: 'approved', decidedBy: 'llm-identity-test' });
   await putCmWorkspaceMember(WS, USER, 'editor');
   await db.insert(serviceClients).values({
-    id: CLIENT, clientId: CLIENT, clientSecretHash: 'x', allowedScopes: ['gateway:invoke'], tenantId: TENANT,
+    id: CLIENT, clientId: CLIENT, clientSecretHash: 'x', allowedScopes: ['gateway:invoke'],
   });
+  await runCmIdentityWrite(tx => bindCmServiceClientTenant(tx, CLIENT, TENANT));
 };
 
 const cleanup = async () => {
   await db.delete(serviceClients).where(like(serviceClients.clientId, `llmid-${run}-%`));
+  await cmQuery(`DELETE FROM ${cmTable('cm_service_clients')} WHERE client_id = $1`, [CLIENT]);
   await db.delete(workspaces).where(inArray(workspaces.id, [WS, WS_2, WS_OTHER]));
   await cmDeleteWorkspaceMembersForUser(USER);
   await cmDeleteForUsers([USER]);
@@ -137,7 +142,7 @@ describe('LLM identity directory — session users (existing memberships)', () =
   });
 });
 
-describe('LLM identity directory — service clients (service_clients.tenant_id)', () => {
+describe('LLM identity directory — CM service-client tenant bindings', () => {
   it('attributes to the service identity, never to a user id', async () => {
     const principal = await identity().resolveServicePrincipal(service());
     expect(principal).toEqual({
@@ -150,9 +155,10 @@ describe('LLM identity directory — service clients (service_clients.tenant_id)
     const resolver = identity();
     await db.update(serviceClients).set({ revokedAt: new Date() }).where(eq(serviceClients.clientId, CLIENT));
     await expect(resolver.resolveServicePrincipal(service())).resolves.toBeUndefined();
-    await db.update(serviceClients).set({ revokedAt: null, tenantId: null }).where(eq(serviceClients.clientId, CLIENT));
+    await db.update(serviceClients).set({ revokedAt: null }).where(eq(serviceClients.clientId, CLIENT));
+    await cmQuery(`DELETE FROM ${cmTable('cm_service_clients')} WHERE client_id = $1`, [CLIENT]);
     await expect(resolver.resolveServicePrincipal(service())).resolves.toBeUndefined();
-    await db.update(serviceClients).set({ tenantId: OTHER_TENANT }).where(eq(serviceClients.clientId, CLIENT));
+    await runCmIdentityWrite(tx => bindCmServiceClientTenant(tx, CLIENT, OTHER_TENANT));
     await expect(resolver.resolveServicePrincipal(service())).resolves.toBeUndefined();
     await db.delete(serviceClients).where(eq(serviceClients.clientId, CLIENT));
     await expect(resolver.resolveServicePrincipal(service())).resolves.toBeUndefined();
@@ -185,7 +191,7 @@ describe('LLM identity directory — service clients (service_clients.tenant_id)
 
 describe('LLM identity directory — outage and configuration', () => {
   it('turns a database outage into a sanitized unavailable error, never an allow', async () => {
-    const broken = createLlmIdentityDirectory({ select: () => { throw new Error('ECONNREFUSED postgres://secret'); } } as never);
+    const broken = createLlmIdentityDirectory(() => ({ select: () => { throw new Error('ECONNREFUSED postgres://secret'); } } as never));
     const resolver = createLlmCallerIdentity({ directory: broken, config: config() });
     for (const attempt of [resolver.resolveServicePrincipal(service()), resolver.resolveSessionPrincipal(session())]) {
       const error = await attempt.catch((caught: unknown) => caught);
