@@ -1,3 +1,5 @@
+import { putCmWorkspaceMember } from "../../src/services/identity/cm-tenancy";
+import { cmDeleteWorkspaceMembers } from "../utils/cm-identity-test-store";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import { app } from "../../src/app";
@@ -9,7 +11,6 @@ import {
   plans,
   tasks,
   todos,
-  workspaceMemberships,
 } from "../../src/db/schema";
 import { createId } from "../../src/utils/id";
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from "../utils/auth-helper";
@@ -22,15 +23,7 @@ describe("Tasks API through the root-mounted workflows namespace", () => {
     editor = await createAuthenticatedUser("editor");
     assignee = await createAuthenticatedUser("editor");
 
-    await db
-      .insert(workspaceMemberships)
-      .values({
-        workspaceId: editor.workspaceId,
-        userId: assignee.id,
-        role: "editor",
-        createdAt: new Date(),
-      })
-      .onConflictDoNothing();
+    await putCmWorkspaceMember(editor.workspaceId, assignee.id, "editor");
   });
 
   afterEach(async () => {
@@ -41,7 +34,7 @@ describe("Tasks API through the root-mounted workflows namespace", () => {
       await db.delete(tasks).where(eq(tasks.workspaceId, editor.workspaceId));
       await db.delete(todos).where(eq(todos.workspaceId, editor.workspaceId));
       await db.delete(plans).where(eq(plans.workspaceId, editor.workspaceId));
-      await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, editor.workspaceId));
+      await cmDeleteWorkspaceMembers(editor.workspaceId);
     }
     await cleanupAuthData();
   });
