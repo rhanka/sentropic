@@ -46,6 +46,15 @@ describe('CM HTTP publication boundary', () => {
     expect(await response.json()).toEqual({ error: 'invalid_grant' });
   });
 
+  it('preserves the unchanged handler validation error details after rollback', async () => {
+    const error = { code: 'invalid_input', message: 'Invalid request data.',
+      details: [{ path: ['email'], message: 'Invalid email address.' }] };
+    const response = await request(new Hono().post('/test', c => c.json({ error }, 400)), '', true);
+    expect(harness.events).toEqual(['rollback']);
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error });
+  });
+
   it('refuses an oversized body before opening a transaction', async () => {
     const response = await request(new Hono(), 'x'.repeat(65_537));
     expect(response.status).toBe(413);
