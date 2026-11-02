@@ -13,14 +13,15 @@ export function projectArtifactHttpOutcome(outcome: ArtifactOutcome<HttpResponse
 
 /** Feed this application result to mcp-platform's existing result codec. No second wire protocol. */
 export function projectArtifactMcpOutcome(outcome: ArtifactOutcome<HttpResponse>, auditId: string): AppToolResult {
-  if (outcome.ok) return { ok: true, output: outcome.result.body, auditId, redactionClass: 'low' };
-  const { publicCode, retriable, conflict, edit } = outcome.failure;
-  // The platform error envelope is closed (code/message/retriable), so typed details ride in the message.
-  const details = conflict !== undefined ? conflict : edit;
-  const message = details === undefined ? publicCode : `${publicCode} ${JSON.stringify(details)}`;
+  if (outcome.ok) return { ok: true, output: outcome.result.body, auditId, redactionClass: 'low',
+    invocationId: outcome.invocationId, commitState: outcome.commitState, replayed: outcome.replayed };
+  const { publicCode, retriable, conflict, edit, release, variant, invocationId, commitState } = outcome.failure;
+  const details = conflict !== undefined ? { variant: 'pointer_conflict', ...conflict }
+    : edit !== undefined ? { ...edit } : release !== undefined ? { ...release }
+      : variant !== undefined ? { variant } : undefined;
   return {
-    ok: false, auditId, redactionClass: 'low',
-    error: { code: publicCode, message, retriable },
+    ok: false, auditId, redactionClass: 'low', invocationId, commitState,
+    error: { code: publicCode, message: publicCode, retriable, ...(details === undefined ? {} : { details }) },
   };
 }
 

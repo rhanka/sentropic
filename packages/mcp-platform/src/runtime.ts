@@ -47,7 +47,11 @@ export type AppResultEnvelope<TOutput> = {
   durableCallRef?: DurableCallRef; // present when the work is durable/long-running
   auditId: string;
   redactionClass: RedactionClass;
-  error?: { code: string; message: string; retriable: boolean };
+  error?: { code: string; message: string; retriable: boolean; details?: Record<string, unknown> };
+  /** Opt-in complete domain result, preserved in MCP content by the shared codec. */
+  invocationId?: string;
+  commitState?: 'not_committed' | 'committed' | 'unknown';
+  replayed?: boolean;
 };
 
 export type AppToolResult = AppResultEnvelope<unknown>;

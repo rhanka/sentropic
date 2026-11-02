@@ -51,7 +51,7 @@ Close the generic P0 gaps of @sentropic/artifacts so the artifact MCP reaches Cl
   - [x] Require explicit expectedCurrentReleaseId in strict profiles; forbid bypass writers and defaults.
   - [x] Move pointer comparison and metadata into the coordinator transaction; replay before preparation.
   - [x] Add coordinator receipt lookup and transaction-scoped pointer/metadata writers; serialize memory transaction tests.
-  - [ ] Preserve typed conflict/edit/release details, commitState and replayed through MCP codec.
+  - [x] Preserve typed conflict/edit/release details, commitState and replayed through MCP codec.
   - [x] Classify edit index/reasons and release availability; preserve explicit command-conflict variants.
   - [ ] Targeted tests, package gates, atomic commits with pushes, one final CI; append report and stop without merging.
 - [x] **Lot 0 — Baseline & constraints**
