@@ -158,6 +158,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Construct fixed self/admin V2 coordinators over the combined UOW; require explicitly qualified reservation/deletion/diagnostic/read budgets before entry.
   - [x] Mount self deletion without pre-disabling outside V2; preserve operation ids and distinguish rollback, pending delivery and complete HTTP outcomes.
   - [x] Mount admin deletion on its fixed V2 authorizer; remove outside-transaction prerequisite reads and direct remote delivery.
+  - [x] Delete the replaced app cascade coordinator and its membership-as-ownership business participant.
   - [ ] Rollback checkpoint recorded BEFORE any legacy table deletion; one author per namespace via cutover records.
   - [x] Preserve the pre-deletion checkpoint row and retain account-driven OAuth invalidation after cutover.
   - [x] Rebind client, consent, membership, credential and restore invalidation to CM identity records.
