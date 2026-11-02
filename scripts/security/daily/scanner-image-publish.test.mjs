@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { receiptFixture } from '../scanner/receipt-fixture.mjs';
 import { validateReceiptContract } from '../scanner/receipt-contract.mjs';
+import { digest } from './toolchain-contract.mjs';
 const { parse } = createRequire(`${process.env.MANIFEST_GUARD_TOOL_DIR}/package.json`)('yaml');
 
 const WORKFLOW = '../../../.github/workflows/security-scanner-image.yml';
@@ -61,4 +62,52 @@ test('should refuse receipt-name echoes as a substitute for produced receipts an
   assert.match(emittedNames, /echo "ScannerImageBuildReceiptV1/);
   assert.throws(() => validateReceiptContract({ ...receiptFixture(), receipts: emittedNames,
     artifactBytes: Buffer.alloc(0), outputs: {} }), /scanner-contract/);
+});
+
+function relink(f) {
+  f.receipts.validation.buildReceiptDigest = digest(JSON.stringify(f.receipts.build));
+  f.receipts.publication.buildReceiptDigest = f.receipts.validation.buildReceiptDigest;
+  f.receipts.publication.validationReceiptDigest = digest(JSON.stringify(f.receipts.validation));
+}
+
+test('should refuse missing, empty or altered artifacts and mismatched receipt bindings', () => {
+  for (const mutate of [
+    f => { f.artifactBytes = Buffer.alloc(0); },
+    f => { f.artifactBytes = Buffer.from('substituted artifact'); },
+    f => { f.outputs.trivy = Buffer.from('changed binary'); },
+    f => { delete f.outputs['sbom.json']; },
+    f => { f.receipts.validation.artifact.id++; },
+    f => { f.receipts.validation.attempt++; },
+    f => { f.receipts.validation.runId++; },
+    f => { f.receipts.publication.repositoryId++; },
+    f => { f.receipts.build.upstream.commit = 'b'.repeat(40); },
+    f => { f.receipts.build.patchDigests.reverse(); },
+    f => { f.receipts.build.reproducibility.second.binaryDigest = digest('other'); },
+    f => { f.receipts.validation.publicationEligible = false; },
+    f => { f.receipts.validation.checks.noExecution = false; },
+    f => { f.receipts.validation.expiresAt = '2026-11-02T09:00:00Z'; },
+    f => { f.receipts.publication.signing.sourceCommit = 'b'.repeat(40); },
+    f => { f.receipts.publication.anonymousPullDigest = digest('other'); },
+    f => { f.receipts.publication.package = 'ghcr.io/other/scanner'; },
+    f => { f.receipts.publication.signing.identity = 'https://example.org'; },
+    f => { f.receipts.build.materialDigest = digest('other manifest'); },
+    f => { f.receipts.build.artifact.files = []; },
+    f => { f.receipts.build.failures = ['failed']; },
+    f => { f.receipts.validation.skips = ['skipped']; },
+    f => { f.receipts.publication.tokenInvalidated = false; },
+  ]) {
+    const fixture = receiptFixture(); mutate(fixture); relink(fixture);
+    assert.throws(() => validateReceiptContract(fixture), /scanner-contract/);
+  }
+});
+
+test('should reject unknown or missing fields in each versioned receipt', () => {
+  for (const name of ['build', 'validation', 'publication']) {
+    for (const key of Object.keys(receiptFixture().receipts[name])) {
+      const fixture = receiptFixture(); delete fixture.receipts[name][key];
+      assert.throws(() => validateReceiptContract(fixture), /scanner-contract/, `${name}.${key}`);
+    }
+    const fixture = receiptFixture(); fixture.receipts[name].admitted = true; relink(fixture);
+    assert.throws(() => validateReceiptContract(fixture), /scanner-contract/);
+  }
 });

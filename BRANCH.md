@@ -56,6 +56,7 @@
 - [ ] **Lot 2 — Receipt and artifact contracts**
   - [x] Define a synthetic three-receipt tuple with measured fixture outputs; it supplies no platform authority.
   - [x] Replace weak text assertions in `scripts/security/daily/scanner-image-publish.test.mjs`.
+  - [x] Write rehashed receipt substitution, missing/empty output and strict-field negative controls before implementation.
   - [ ] Enforce strict receipt schemas, matching identities, nonempty measured artifact outputs and ordered material binding.
   - [ ] Demonstrate that receipt-name echoes and missing outputs cannot establish eligibility.
 - [ ] **Lot 3 — Final validation and handoff**
