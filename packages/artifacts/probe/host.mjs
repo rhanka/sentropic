@@ -67,6 +67,16 @@ export function createProbeHost({ mapHostError } = {}) {
     },
     publication: { blobs, intents, refs: createMemoryRefcountStore(), getCurrent,
       createUnitWriter: (client) => ({
+        async lockCurrent(id) {
+          const current = await getCurrent(id);
+          return { currentReleaseId: current?.releaseId ?? null, currentDigest: current?.manifestDigest ?? null };
+        },
+        async updateMetadata(id, metadata) {
+          const acl = await acls.getArtifactAcl(id);
+          const merged = { ...acl.metadata, ...metadata };
+          writes.get(client).push(() => acls.putArtifactAcl(id, { ...acl, metadata: merged }));
+          return merged;
+        },
         async readAuthorization(id) { return { state: await lifecycle.stateOf(id), acl: await acls.getArtifactAcl(id) }; },
         async putRelease(release) { writes.get(client).push(() => state.putRelease(release)); },
         async promoteCurrentLatestWins(id, releaseId) { writes.get(client).push(async () => {

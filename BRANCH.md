@@ -54,6 +54,7 @@ Close the generic P0 gaps of @sentropic/artifacts so the artifact MCP reaches Cl
   - [x] Preserve typed conflict/edit/release details, commitState and replayed through MCP codec.
   - [x] Classify edit index/reasons and release availability; preserve explicit command-conflict variants.
   - [x] Publish the v2 outcome schema; include authorized edited paths in pointer conflicts and complete strict HTTP outcomes.
+  - [x] Add recovery tests: lost COMMIT acknowledgement, one quota charge, authorized conflict paths, unavailable-target replay.
   - [ ] Targeted tests, package gates, atomic commits with pushes, one final CI; append report and stop without merging.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read rules/MASTER.md, rules/workflow.md, COMMON-RULES packet, conductor brief.
