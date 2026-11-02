@@ -9,10 +9,10 @@ export const identityDeliveryId = (operationId: string, step: string, targetKind
 export const validLegacyConnectorInventory = (batch: IdentityImportBatchV1): boolean => {
   const ids = batch.legacyConnectorSourceEventIds;
   if (!Array.isArray(ids) || ids.some((id, i) => !id || (i > 0 && Buffer.compare(Buffer.from(ids[i - 1]), Buffer.from(id)) >= 0))) return false;
-  const tombstones = batch.rows.filter((row) => row.entity === 'legacy_connector_tombstone').map((row) => row.record);
+  const tombstones = batch.rows.flatMap((row) => row.entity === 'legacy_connector_tombstone' ? [row.record] : []);
   if (tombstones.length !== ids.length || new Set(tombstones.map((row) => row.sourceEventId)).size !== ids.length) return false;
   if (tombstones.some((row) => !ids.includes(row.sourceEventId))) return false;
-  const deliveries = batch.rows.filter((row) => row.entity === 'revocation_delivery').map((row) => row.record);
+  const deliveries = batch.rows.flatMap((row) => row.entity === 'revocation_delivery' ? [row.record] : []);
   if (new Set(deliveries.map((row) => row.deliveryId)).size !== deliveries.length) return false;
   for (const row of tombstones) {
     if (!row.connectorAccountId || !row.provider || !Number.isFinite(Date.parse(row.importedAt))) return false;
