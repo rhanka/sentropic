@@ -34,7 +34,7 @@ export const validateConnectorCapability = (bytes: Buffer): { tokenKind: 'access
   const record = value as Record<string, unknown>;
   if (Object.keys(record).join(',') !== 'tokenKind,token' || (record.tokenKind !== 'access' && record.tokenKind !== 'refresh')
     || typeof record.token !== 'string' || !record.token) return invalidConnectorCustody();
-  const result = { tokenKind: record.tokenKind, token: record.token };
+  const result: { tokenKind: 'access' | 'refresh'; token: string } = { tokenKind: record.tokenKind, token: record.token };
   const canonical = Buffer.from(JSON.stringify(result));
   try { if (!canonical.equals(bytes)) return invalidConnectorCustody(); }
   finally { canonical.fill(0); }
