@@ -81,6 +81,27 @@ it('should bind a conversation credential to its subject and workspace through t
   expect((await pool.query('SELECT count(*)::int AS n FROM artifacts.operation_receipts')).rows).toEqual([{ n: 1 }]);
 });
 
+it('should refuse a turn from another workspace even when both memberships allow writes', async () => {
+  await seedCmArtifactConversation(pool);
+  await pool.query(`INSERT INTO public.workspaces (id, name) VALUES ('workspace-b', 'B');
+    INSERT INTO cm_identity.cm_workspaces (workspace_id, tenant_id, enrolled_at)
+      VALUES ('workspace-b', 'tenant-a', clock_timestamp());
+    INSERT INTO cm_identity.cm_workspace_members (workspace_id, user_id, role)
+      VALUES ('workspace-b', 'alice', 'editor')`);
+  const host = createArtifactHost({ pool, blobs: createMemoryBlobStore(), quotaBytes: 262144,
+    currentIdentity: createCurrentArtifactIdentity(resource) });
+  const identity = { subject: 'alice', tenantId: 'tenant-a', clientId: 'sentropic-turn',
+    credentialId: artifactTurnCredential('turn-a', 'workspace-a') };
+  // The second workspace is independently accessible with the user's login credential.
+  const login = await host.bind({ ...identity, clientId: 'sentropic-session',
+    credentialId: artifactCredential('session', 'session-a') }, 'workspace-b');
+  expect((await login.mcp({ tool: 'artifacts_list', args: {} })).status).toBe(200);
+  await expect(host.bind(identity, 'workspace-b')).rejects.toThrow();
+  const turn = await host.bind(identity, 'workspace-a');
+  expect((await turn.mcp({ tool: 'artifacts_list', args: {} })).status).toBe(200);
+  expect((await pool.query('SELECT count(*)::int AS n FROM artifacts.operation_receipts')).rows).toEqual([{ n: 0 }]);
+});
+
 it.each(['missing', 'revoked', 'expired', 'foreign-subject', 'foreign-workspace'])(
   'refuses an existing business chat with %s CM conversation authority', async reason => {
     await seedCmArtifactConversation(pool);
@@ -173,7 +194,7 @@ describe.each(['session', 'oauth'] as const)('current artifact %s credential', (
     return reader(jkt)({ query: async (sql, params) => {
       const result = await pool.query(sql, [...params]);
       return { rows: result.rows, rowCount: result.rowCount ?? 0 };
-    } }, { ...identity(), ...overrides });
+    } }, { ...identity(), ...overrides }, 'workspace-a');
   }
   it('should bind the exact current credential tuple and reject substitutions', async () => {
     expect(await authority()).toEqual({ readable: true, writable: true });
