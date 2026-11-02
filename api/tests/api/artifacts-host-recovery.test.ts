@@ -5,7 +5,7 @@ import { GetPublicAccessBlockCommand, ListObjectsV2Command, PutObjectCommand, ty
 import { blobDigestOfKey, createMemoryBlobStore } from '@sentropic/artifacts/server/publication';
 import { createHmacGrantSigner } from '@sentropic/artifacts/content/grants';
 import { createPostgresArtifactStore } from '@sentropic/artifacts/adapters/postgres';
-import { runMigrations } from '../../src/db/run-migrations';
+import { migrateCmFixtureDatabase as runMigrations } from '../utils/cm-fresh-database';
 import { createArtifactHost } from '../../src/services/artifacts/composition';
 import { createArtifactHostJobs, createPrivateArtifactStorage, type ArtifactBlobPage } from '../../src/services/artifacts/lifecycle';
 

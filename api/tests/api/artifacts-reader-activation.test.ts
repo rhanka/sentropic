@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
-import { runMigrations } from '../../src/db/run-migrations';
 import { installArtifactPackageAssets } from '../../src/services/artifacts/host-storage';
+import { migrateCmFixtureDatabase as runMigrations } from '../utils/cm-fresh-database';
 import { createArtifactReaderActivation } from '../../src/services/artifacts/reader-activation';
 import { createArtifactHttpRouter } from '../../src/routes/namespaces/artifacts';
 import { ARTIFACT_SESSION_CLIENT } from '../../src/services/artifacts/credentials';
