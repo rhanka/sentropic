@@ -160,6 +160,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Remove the replaced app registration account/proof writers.
   - [x] Remove the replaced app registration challenge preparation.
   - [x] Route credential listing, rename and revocation through a fresh CM binding; add the CM session-service facade.
+  - [x] Resolve credential-route actors with the unchanged bound OAuth consumer, avoiding a nested session-validation abort; add revoked-session mutation regressions.
   - [x] Delete the replaced app credential handler and its revision-free counter/proof mutations.
   - [x] Replace the app session adapter implementation with the CM session-service facade.
   - [x] Remove the app refresh signer and rotation algorithm in favor of CM signed refresh completion.
