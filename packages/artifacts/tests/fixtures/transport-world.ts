@@ -24,7 +24,7 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
     parity?: boolean; profile?: ArtifactProviderProfile } = {}) {
   const profile = compileArtifactsProfile(options.profile ?? (options.parity ? { ...RADAR_ARTIFACTS_PROFILE,
     selectedCapabilities: [...RADAR_ARTIFACTS_PROFILE.selectedCapabilities, 'artifacts_get_source', 'artifacts_set_access', 'artifacts_delete'],
-    operations: [...RADAR_ARTIFACTS_PROFILE.operations,
+    operations: [...RADAR_ARTIFACTS_PROFILE.operations.filter(op => op.operation !== 'get_source'),
       { operation: 'get_source', limits: {}, defaults: {} },
       { operation: 'set_access', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} },
       { operation: 'delete', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} }],

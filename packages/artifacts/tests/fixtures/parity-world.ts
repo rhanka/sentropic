@@ -23,6 +23,11 @@ export function parityProfile() {
 
 export interface Body { [key: string]: unknown }
 
+export function sourceText(response: { body: unknown }, index = 0): string {
+  const file = (response.body as { files: { bytes: number[] }[] }).files[index];
+  return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(file.bytes));
+}
+
 export async function ensureSite(w: ReturnType<typeof parityWorld>, key: string,
   metadata?: Record<string, string>) {
   // The key doubles as bindingName so two ensureSite calls in one world create distinct artifacts.
