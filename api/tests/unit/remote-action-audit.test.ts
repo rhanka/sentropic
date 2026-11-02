@@ -74,8 +74,8 @@ describe('STORE-ERASURE audit and purge separation', () => {
     });
     const audit = store.projectAudit({ policyId: 'policy-audit-1' });
     expect(audit.policyDigest).toMatch(/^[0-9a-f]{64}$/);
-    expect(audit.purge.status).toBe('purged');
-    expect(audit.purge.settledBy).toBe('writer-1');
+    expect(audit.purge?.status).toBe('purged');
+    expect(audit.purge?.settledBy).toBe('writer-1');
     expect(JSON.stringify(audit)).not.toContain('terminal payload bytes');
     expect(audit.retainedPayload).toBeNull();
   });
@@ -94,7 +94,7 @@ describe('STORE-ERASURE audit and purge separation', () => {
   it('should record pending purge in audit until the writer settles', () => {
     const store = admit();
     store.initiatePurge({ policyId: 'policy-audit-1', scope: 'terminal.cache' });
-    expect(store.projectAudit({ policyId: 'policy-audit-1' }).purge.status).toBe('purge_pending');
+    expect(store.projectAudit({ policyId: 'policy-audit-1' }).purge?.status).toBe('purge_pending');
     expect(() => store.readRetained({ policyId: 'policy-audit-1' }))
       .toThrowError(expect.objectContaining({ code: 'purge_pending' }));
   });
@@ -104,7 +104,30 @@ describe('STORE-ERASURE audit and purge separation', () => {
     store.markSourceDisconnected('policy-audit-1');
     const pending = store.initiatePurge({ policyId: 'policy-audit-1', scope: 'terminal.cache' });
     expect(pending.status).toBe('purge_pending');
-    expect(store.projectAudit({ policyId: 'policy-audit-1' }).purge.initiatedWhileDisconnected).toBe(true);
+    expect(store.projectAudit({ policyId: 'policy-audit-1' }).purge?.initiatedWhileDisconnected).toBe(true);
+  });
+
+  it('should report no purge in the audit projection when none was initiated', () => {
+    const store = admit();
+    const audit = store.projectAudit({ policyId: 'policy-audit-1' });
+    expect(audit.purge).toBeNull();
+    expect(audit.reason).toBe('admission_active');
+    expect(store.readRetained({ policyId: 'policy-audit-1' }).expiresAt).toBe(1_793_523_600_000);
+  });
+
+  it('should not report a settled purge as pending in audit or retained reads', () => {
+    const store = admit();
+    store.initiatePurge({ policyId: 'policy-audit-1', scope: 'terminal.cache' });
+    store.settlePurge({
+      policyId: 'policy-audit-1',
+      writerReceipt: { writerId: 'writer-1', settledAt: 1_793_520_003_000 },
+    });
+    const audit = store.projectAudit({ policyId: 'policy-audit-1' });
+    expect(audit.purge?.status).toBe('purged');
+    expect(audit.reason).toBe('purge_settled');
+    expect(store.isCaptureEligible('policy-audit-1')).toBe(false);
+    expect(() => store.readRetained({ policyId: 'policy-audit-1' }))
+      .toThrowError(expect.objectContaining({ code: 'purged' }));
   });
 });
 
