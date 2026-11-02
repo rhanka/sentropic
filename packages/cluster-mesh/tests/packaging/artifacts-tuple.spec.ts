@@ -36,7 +36,7 @@ describe('artifacts source tuple coherence', () => {
 
   it('declares the optional artifacts peer once, in the candidate range', () => {
     expect(sourceManifest.peerDependencies?.[ARTIFACTS_PACKAGE]).toBe(ARTIFACTS_RANGE);
-    expect(ARTIFACTS_RANGE).toBe('>=0.2.0 <0.3.0');
+    expect(ARTIFACTS_RANGE).toBe('>=0.2.0 <0.4.0');
     expect(sourceManifest.peerDependenciesMeta?.[ARTIFACTS_PACKAGE]).toEqual({ optional: true });
     expect(sourceManifest.dependencies?.['@sentropic/mcp-platform']).toBe(MCP_PLATFORM_RANGE);
     expect(sourceManifest.peerDependencies?.['@sentropic/mcp-platform']).toBeUndefined();
