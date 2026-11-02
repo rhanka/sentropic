@@ -11,7 +11,8 @@ export const version = value => typeof value === 'string' && /^\d+\.\d+\.\d+$/.t
 export const path = value => text(value) && /^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/.test(value) &&
   !value.split('/').some(part => ['', '.', '..'].includes(part));
 export const timestamp = value => typeof value === 'string' &&
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value) && Number.isFinite(Date.parse(value));
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/.test(value) && Number.isFinite(Date.parse(value)) &&
+  new Date(value).toISOString() === value.replace('Z', '.000Z');
 export const literal = expected => value => value === expected;
 export const list = rule => value => Array.isArray(value) && value.length > 0 && value.every(rule);
 export const empty = value => Array.isArray(value) && value.length === 0;
