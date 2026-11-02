@@ -3,7 +3,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { createPostgresActivationStore, ACTIVATION_SQL_ASSET, ACTIVATION_SQL_ASSET_SHA256, ActivationCommitUnknownError } from '@sentropic/artifacts/adapters/postgres-activation';
 import { runPostgresActivationConformance, POSTGRES_ACTIVATION_VECTOR_IDS } from '@sentropic/artifacts/adapters/postgres-activation/vectors';
-import { runMigrations } from '../../src/db/run-migrations';
+import { migrateCmFixtureDatabase as runMigrations } from '../utils/cm-fresh-database';
 import { artifactMigrationAssets, installArtifactPackageAssets } from '../../src/services/artifacts/host-storage';
 import { createArtifactHostActivationStorage } from '../../src/services/artifacts/activation-storage';
 

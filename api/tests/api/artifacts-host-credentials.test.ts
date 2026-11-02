@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { Hono } from 'hono';
 import { createMemoryBlobStore } from '@sentropic/artifacts/server/publication';
-import { runMigrations } from '../../src/db/run-migrations';
+import { migrateCmFixtureDatabase as runMigrations } from '../utils/cm-fresh-database';
 import { createArtifactHost } from '../../src/services/artifacts/composition';
 import { createArtifactCredentialReader, createCurrentArtifactIdentity, artifactCredential, artifactTurnCredential } from '../../src/services/artifacts/credentials';
 import { createArtifactTransport } from '../../src/services/artifacts/transport';
