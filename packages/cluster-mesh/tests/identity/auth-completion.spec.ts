@@ -31,6 +31,30 @@ const shared = {
 describe.each(pgEnabled ? ['sqlite', 'postgres'] as const : ['sqlite'] as const)('real auth completion on %s', (profile) => {
   const open = async () => asOpHost((profile === 'postgres' ? await openPostgresEnv() : openSqliteEnv()).unitOfWork);
 
+  it('rolls back an actual signed assertion when its counter regresses to zero', async () => {
+    const unitOfWork = await open(), fixture = webauthnFixture();
+    await unitOfWork.run(WRITE, async (tx) => {
+      const binding = createIdentityAuthHonoTransactionBindingV1({ ...shared, tx });
+      const user = await binding.ports.users.create({ email: 'counter@example.test', role: 'editor' });
+      const registration = await binding.registration.generateRegistrationOptions({ userName: user.email!, userDisplayName: 'Counter' });
+      await binding.registration.verifyRegistration({ userId: user.id, expectedChallenge: registration.challenge, credential: fixture.registration(registration.challenge) });
+      const challenge = await binding.authentication.generateAuthenticationOptions({});
+      await binding.authentication.verifyAuthentication({ expectedChallenge: challenge.challenge, credential: fixture.assertion(challenge.challenge, 5) });
+    });
+    const options = await unitOfWork.run(WRITE, async (tx) => createIdentityAuthHonoTransactionBindingV1({ ...shared, tx }).authentication.generateAuthenticationOptions({}));
+    const refused = await runIdentityAuthCompletionV1({ flow: 'authentication', unitOfWork, options: WRITE, operation: async (tx) => {
+      const binding = createIdentityAuthHonoTransactionBindingV1({ ...shared, tx });
+      await tx.ledger.append({ at: NOW, kind: 'counter.must.rollback' });
+      return binding.authentication.verifyAuthentication({ expectedChallenge: options.challenge, credential: fixture.assertion(options.challenge, 0) });
+    } });
+    expect(refused).toMatchObject({ committed: false, refusal: { flow: 'authentication', result: { verified: false, error: { code: 'authentication_verification_failed', status: 401 } } } });
+    await unitOfWork.run(READ, async (tx) => {
+      expect(await tx.custody.credentials.findByCredentialId(fixture.credentialId)).toMatchObject({ counter: 5 });
+      expect(await tx.custody.singleUseProofs.findChallenge(options.challenge, 'authentication')).toMatchObject({ state: 'pending' });
+      expect((await tx.ledger.listAuditEvents()).some((event) => event.kind === 'counter.must.rollback')).toBe(false);
+    });
+  });
+
   it('persists actual registration and assertion evidence with the exact anonymous challenge owner', async () => {
     const unitOfWork = await open(), fixture = webauthnFixture();
     const userId = await unitOfWork.run(WRITE, async (tx) => {
