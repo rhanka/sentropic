@@ -16,8 +16,8 @@ import {
 import { asOpHost, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, randomBase64Url, sha256Hex, syntheticCoseKey } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 
-const WRITE = { mode: 'write' as const, deadlineMs: 5000 };
-const READ = { mode: 'read' as const, deadlineMs: 5000 };
+const WRITE = { mode: 'write' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 };
+const READ = { mode: 'read' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 };
 
 const KNOWN_SHA256_ABC = 'ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad';
 // RFC 4231 test case 1: key 20x0x0b, data "Hi There".
@@ -79,12 +79,12 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody security 
     const env = await openEnv();
     const secret = `tok-${randomBase64Url(16)}-marie@example.test`;
     const email = 'marie@example.test';
-    await env.unitOfWork.runWrite(WRITE, (tx) =>
+    await env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.singleUseProofs.insert({
         kind: 'email_code', proofId: 'sec-1', userId: null, state: 'pending', revision: 0, createdAt: NOW, expiresAt: '2026-11-01T13:00:00.000Z',
         consumedAt: null, revokedAt: null, email, codeDigest: { algorithm: 'sha256', value: sha256Hex(secret) },
       }));
-    const failure = await env.unitOfWork.runWrite(WRITE, (tx) =>
+    const failure = await env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.singleUseProofs.consume({
         key: { kind: 'email_code', proofId: 'sec-1' }, expectedRevision: 0, expectedUserId: null, bindUserId: null,
         match: { kind: 'email_code', email, digest: { algorithm: 'sha256', value: sha256Hex('wrong') } }, at: NOW,
@@ -105,7 +105,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody security 
     const presentedToken = `sit_${randomBase64Url(24)}`;
     const presentedCode = randomBase64Url(12);
     const credentialCose = syntheticCoseKey('sec-cred');
-    await env.unitOfWork.runWrite(WRITE, async (tx) => {
+    await env.unitOfWork.run(WRITE, async (tx) => {
       const host = tx.hostTransaction;
       await host.journal.insertAccountCore({ userId: 'sec-u', email: 'sec@example.test', accountStatus: 'active', globalRole: 'editor', createdAt: NOW, updatedAt: NOW });
       await host.journal.ensureLiveFence('sec-u', NOW);
@@ -131,7 +131,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody security 
       });
     });
     const forbidden = [presentedToken, presentedCode, 'sec-session-token', 'sec-refresh-token'];
-    await env.unitOfWork.runRead(READ, async (tx) => {
+    await env.unitOfWork.run(READ, async (tx) => {
       const rows: string[] = [];
       const credential = await tx.hostTransaction.stores.credentials.findById('sec-cred');
       rows.push(JSON.stringify(credential));
