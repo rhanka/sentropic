@@ -111,7 +111,8 @@ describe('artifact host migrations', () => {
 
   it('should install unchanged package schemas and durable host state on an empty database', async () => {
     await runMigrations(database);
-    expect(await journal()).toEqual(artifactMigrationAssets.map(({ id, sha256 }) => ({ asset_id: id, sha256 })));
+    expect(await journal()).toEqual(artifactMigrationAssets.map(({ id, sha256 }) => ({ asset_id: id, sha256 }))
+      .sort((a, b) => a.asset_id.localeCompare(b.asset_id)));
     const { rows } = await database.query(`SELECT to_regclass('artifacts.operation_receipts')::text AS receipts,
       to_regclass('artifacts.blob_ref_holders')::text AS refs,
       to_regclass('control.artifact_host_kv')::text AS kv`);
