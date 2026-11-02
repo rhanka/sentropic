@@ -152,6 +152,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Add CM membership-domain adapters with current tenant-admin checks, serialized anti-abuse caps, full decision auditing and CM-authorized OAuth client listing.
   - [x] Point membership acceptance tests at CM and cover forged global roles and current approver suspension; execution awaits the combined UOW.
   - [x] Mount CM membership handlers directly in the shared workspace router, with typed refusals and sanitized infrastructure failures.
+  - [x] Delete the replaced `workspaces/product-tenants.ts` identity routes.
   - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
   - [x] Evaluate F15 and business workspace visibility on one serializable read transaction.
   - [x] Add explicit verified-HTTP conversation admission and an opaque CM reference on business chats; no identity authority is inferred from a chat id.
