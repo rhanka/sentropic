@@ -13,9 +13,9 @@ const handle = (operation: Handler): [Handler] => [async (c, next) => {
   try { return await operation(c, next); }
   catch (error) {
     if (error instanceof CmIdentityForbiddenError) return c.json({ error: 'Insufficient permissions' }, 403);
-    if (error instanceof IdentityNotFoundError) return c.json({ message: 'Not found' }, 404);
+    if (error instanceof IdentityNotFoundError) return c.json({ message: error.entity === 'user' ? 'User not found' : 'Not found' }, 404);
     if (error instanceof IdentityConflictError) return c.json({ error: 'Membership conflict' }, 409);
-    if (error instanceof CmWorkspaceMembershipPolicyError) return c.json({ message: error.message }, 400);
+    if (error instanceof CmWorkspaceMembershipPolicyError) return c.json({ [error.responseKey]: error.message }, 400);
     return c.json({ error: 'Identity service unavailable' }, 503);
   }
 }];
@@ -49,7 +49,7 @@ export const cmMemberPorts: Pick<WorkspacesRouterPorts['workspaces'],
     const workspaceId = c.req.param('id')!;
     const result = await changeCmWorkspaceMember({ actorId: c.get('user').userId, workspaceId,
       action: { kind: 'remove', userId: c.req.param('userId')! } });
-    await notifyWorkspaceMembershipEvent(workspaceId, result.userId, { action: 'removed' });
+    if (result.changed) await notifyWorkspaceMembershipEvent(workspaceId, result.userId, { action: 'removed' });
     return c.body(null, 204);
   }),
 };
