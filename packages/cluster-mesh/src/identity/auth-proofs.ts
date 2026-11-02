@@ -76,8 +76,9 @@ export const authProofPorts = <H>(input: IdentityAuthBindingInput<H>, evidence: 
       if (!record || !input.trustedRegistration) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
       await tx.lockSubject(userId);
       if ((await tx.stores.accounts.findAccount(userId))?.email !== record.email) throw new IdentityCustodyErrorV1('proof_binding_mismatch');
-      const used = await tx.custody.invitations.consumeByDigest({ tokenHash: hash, email: input.trustedRegistration.email,
-        clientId: input.trustedRegistration.clientId, userId, expectedRevision: record.revision, at: at.toISOString() });
+      const trusted = input.trustedRegistration;
+      const used = await guardAuthStep('registration', 'invitation', () => tx.custody.invitations.consumeByDigest({ tokenHash: hash, email: trusted.email,
+        clientId: trusted.clientId, userId, expectedRevision: record.revision, at: at.toISOString() }));
       return { email: used.email };
     },
   };

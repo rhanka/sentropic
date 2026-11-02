@@ -19,16 +19,17 @@ export const refuseWebAuthn = (flow: 'registration' | 'authentication', code: st
 };
 export const guardAuthStep = async <T>(flow: IdentityAuthCompletionFlowV1, stage: 'credential' | 'challenge' | 'invitation' | 'ticket' | 'proof' | 'session' | 'social', operation: () => Promise<T>): Promise<T> => {
   try { return await operation(); } catch (error) {
+    const frozen = typeof error === 'object' && error !== null && 'code' in error ? error.code : null;
     const code = error instanceof IdentityCustodyErrorV1 ? error.code
-      : typeof error === 'object' && error !== null && 'code' in error && error.code === 'proof_verification_failed' ? 'proof_verification_failed' : null;
+      : frozen === 'proof_verification_failed' || frozen === 'invitation_invalid' ? frozen : null;
     if (!code) throw error;
     if (flow === 'registration' || flow === 'authentication') {
       if (stage === 'credential' && code === 'webauthn_credential_conflict') refuseWebAuthn(flow, 'duplicate_credential', 'Credential is already registered.', 409);
-      if (stage === 'credential' && code === 'proof_verification_failed') refuseWebAuthn(flow, 'credential_not_found', 'Credential was not found.', 401);
+      if (flow === 'authentication' && stage === 'credential' && code === 'proof_verification_failed') refuseWebAuthn(flow, 'credential_not_found', 'Credential was not found.', 401);
       if (['webauthn_credential_stale', 'webauthn_counter_rejected'].includes(code)) refuseWebAuthn(flow, 'authentication_verification_failed', 'Authentication verification failed.', 401);
       if (stage === 'challenge' && ['proof_state_conflict', 'proof_verification_failed'].includes(code)) refuseWebAuthn(flow, 'invalid_or_expired_challenge', flow === 'registration' ? 'Registration challenge is invalid or expired.' : 'Authentication challenge is invalid or expired.', 400);
       if (stage === 'challenge' && code === 'proof_binding_mismatch') refuseWebAuthn(flow, 'challenge_user_mismatch', 'Authentication challenge does not belong to this user.', 400);
-      if (['invitation', 'ticket'].includes(stage) && ['proof_binding_mismatch', 'proof_state_conflict', 'proof_verification_failed'].includes(code)) refuseWebAuthn(flow, 'registration_verification_failed', 'Registration verification failed.', 400);
+      if (['invitation', 'ticket'].includes(stage) && ['proof_binding_mismatch', 'proof_state_conflict', 'proof_verification_failed', 'invitation_invalid'].includes(code)) refuseWebAuthn(flow, 'registration_verification_failed', 'Registration verification failed.', 400);
     }
     if ((flow === 'magic_link' || flow === 'email_code') && ['proof_binding_mismatch', 'proof_state_conflict', 'proof_verification_failed'].includes(code)) {
       const magic = flow === 'magic_link';
