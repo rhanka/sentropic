@@ -99,6 +99,22 @@ test('should preserve request bytes and abort signal while forbidding real egres
   assert.equal(globalThis.fetch, originalFetch);
 });
 
+test('should strip provider credential headers while preserving local application credentials', async () => {
+  const requests = [];
+  const names = ['x-goog-api-key', 'api-key', 'cookie', 'proxy-authorization'];
+  const restore = installProviderBoundary({ endpoint: 'http://127.0.0.1:7777/', fetchImpl: async request => {
+    requests.push(request); return new Response('{}');
+  } });
+  try {
+    await fetch('https://api.mistral.ai/v1/chat/completions', { method: 'POST', body: '{}',
+      headers: Object.fromEntries(names.map(name => [name, 'inert-test-credential'])) });
+    assert.deepEqual(names.filter(name => requests[0].headers.has(name)), []);
+    assert.equal(requests[0].headers.get('authorization'), `Bearer ${fixtureKey}`);
+    await fetch('http://api:8787/api/v1/session', { headers: { cookie: 'inert-local-session' } });
+    assert.equal(requests[1].headers.get('cookie'), 'inert-local-session');
+  } finally { restore(); }
+});
+
 test('should preserve requested initiative count and structured fields over HTTP', async t => {
   const { post } = await fixture(t);
   const response = await (await post({ messages: [{ role: 'user', content:

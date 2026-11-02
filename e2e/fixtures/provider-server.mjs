@@ -25,8 +25,9 @@ export function installProviderBoundary({ endpoint, fetchImpl = globalThis.fetch
       throw new Error(`Unexpected CI egress: ${url.hostname}`);
     }
     const headers = new Headers(request.headers);
-    headers.delete('authorization');
-    headers.delete('x-api-key');
+    for (const name of ['authorization', 'x-api-key', 'x-goog-api-key', 'api-key', 'cookie', 'proxy-authorization']) {
+      headers.delete(name);
+    }
     headers.set('authorization', `Bearer ${fixtureKey}`);
     headers.set('x-ci-upstream', url.hostname);
     return fetchImpl(new Request(new URL(url.pathname, target), new Request(request, { headers, redirect: 'error' })));
