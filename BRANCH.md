@@ -25,6 +25,13 @@
   - `api/src/db/control-schema.ts`
   - `api/tests/api/session-content-receiver.test.ts`
   - `api/tests/unit/remote-action-audit.test.ts`
+  - `api/drizzle/control/0014_session_content_policy_store.sql` (BR01-EX1)
+  - `api/drizzle/control/meta/_journal.json` (BR01-EX1)
+  - `packages/cluster-mesh/package.json` (BR01-EX2)
+  - `api/package-lock.json` (BR01-EX3)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR01-EX4)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR01-EX4)
+  - `packages/cluster-mesh/src/index.ts` (BR01-EX5)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -42,6 +49,7 @@
   - `api/package-lock.json` (BR01-EX3)
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR01-EX4)
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR01-EX4)
+  - `packages/cluster-mesh/src/index.ts` (BR01-EX5)
 - **Exception process**:
   - BR03a-EX1 declared here before touching `Makefile`: reason = r6 §7.3 requires every §6.4 destination wired into its owning required Make suite (`test-security-daily`, already run by required CI job `validate-ci-capacity-metrics`); impact = additive SCOPE entries only, no existing entry removed; rollback = revert the single SCOPE line.
   - BR03a-EX2 declared here before touching the version files: reason = rules/workflow.md Post-Rebase Gate + `enforce-package-bump` CI job after the #681 rebase; impact = version string only in `packages/llm-mesh/package.json` and its workspace entry in `package-lock.json`; rollback = revert to `0.32.2`.
@@ -56,6 +64,14 @@
 - [x] Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 - `BR01-EX3`: touch `package-lock.json` + `api/package-lock.json` (1 line each: `packages/cluster-mesh` / `../packages/cluster-mesh` version sync to `0.26.0-dev.4`; reason: CI `changes` gate requires train package versions to match the lockfiles after the `BR01-EX2` bump; impact: single version string per file; rollback: revert the line).
 - `BR01-EX4`: touch `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` + `package-lock.json` (pin `sentropic-cluster-mesh-0.26.0-dev.4.tgz` in the fixture deps and lock entry; reason: CI `validate-cluster-mesh` `prepare-artifacts.spec.ts` requires the selected fixture to track the candidate release tuple after the `BR01-EX2` bump, same pattern as `origin/main` dev.3; impact: 4 pin strings, no test logic; rollback: revert pins to `0.26.0-dev.3`).
+- `BR01-EX5`: touch `packages/cluster-mesh/src/index.ts` (one line: `export * from './sessions/content-policy.js';`; reason: the store and both acceptance specs import the policy domain from the package root, so the public re-export is functionally required — reverting it breaks the build; impact: a single re-export line in the package entrypoint, no other `packages/**` change; rollback: remove the export line).
+- [x] Review rc2-store_large4_r1 finding 1: declare BR01-EX5 for the required package-root export; preserve the export.
+- [x] List the exact exception-approved paths as Allowed because harness precedence is Allowed > Forbidden > Conditional; retain all exception limits and unrelated forbidden paths.
+- [ ] Review finding 2: align Drizzle policy/revision uniqueness with migration 0014 and verify metadata parity.
+- [ ] Review finding 3: refuse absent or malformed channels before admission; verify rejected input leaves no admitted policy.
+- [ ] Review finding 4: distinguish absent, pending and settled purge states; keep retained reads closed during and after purge.
+- [x] Continuation: preserve the inherited tests and rebase onto `origin/main` (`c8e9fa652`); only BRANCH.md conflicted and this branch's declaration was kept.
+- [x] Review tests first: STORE reproduces 5 failures / 17 tests; STORE-ERASURE reproduces 2 failures / 11 tests. Post-Rebase Gate: local cluster-mesh `0.26.0-dev.4` exceeds published `0.25.0` (`npm view` through `make exec-api`).
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)

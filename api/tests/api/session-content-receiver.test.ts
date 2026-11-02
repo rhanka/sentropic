@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { computeRetentionDeadline } from '@sentropic/cluster-mesh';
+import { getTableConfig } from 'drizzle-orm/pg-core';
+import { sessionContentPolicyAdmissions } from '../../src/db/control-schema';
 import {
   createPolicyStore,
   POLICY_FORMAT,
@@ -38,6 +40,16 @@ const activate = (store: ReturnType<typeof createPolicyStore>, digest: string, o
     nonceId: 'nonce-1', policyDigest: digest, targetDigest: 'a'.repeat(64), denialFloor: 3 });
 
 describe('STORE session-content policy receiver', () => {
+  it('should preserve the migration policy revision uniqueness constraint in Drizzle', () => {
+    const { uniqueConstraints } = getTableConfig(sessionContentPolicyAdmissions);
+    expect(uniqueConstraints.map((constraint) => ({
+      name: constraint.name,
+      columns: constraint.columns.map((column) => column.name),
+    }))).toContainEqual({
+      name: 'session_content_policy_admissions_policy_id_policy_revision_key',
+      columns: ['policy_id', 'policy_revision'],
+    });
+  });
   it('should admit share and commit activation with a separate authority revision', () => {
     const store = createPolicyStore(gates());
     const admitted = store.admitPolicy(share());
@@ -62,6 +74,22 @@ describe('STORE session-content policy receiver', () => {
     expect(() => store.admitPolicy(share({ policy: policy({ channels }) })))
       .toThrowError(expect.objectContaining({ code: 'invalid_request' }));
   });
+  it('should refuse admission when the policy has no channels key', () => {
+    const store = createPolicyStore(gates());
+    const noChannels: Record<string, unknown> = policy();
+    delete noChannels.channels;
+    expect(() => store.admitPolicy(share({ policy: noChannels })))
+      .toThrowError(expect.objectContaining({ code: 'invalid_request' }));
+    expect(store.isCaptureEligible('policy-share-1')).toBe(false);
+    expect(store.admitPolicy(share()).policyRevision).toBe(1);
+  });
+  it.each([{ channels: null }, { channels: 'session.events' }, { channels: [] }])(
+    'should refuse malformed channels $channels', ({ channels }) => {
+      const store = createPolicyStore(gates());
+      expect(() => store.admitPolicy(share({ policy: policy({ channels }) })))
+        .toThrowError(expect.objectContaining({ code: 'invalid_request' }));
+    },
+  );
   it('should refuse activation without identity or durable writer', () => {
     expect(() => createPolicyStore(gates({ identityAvailable: false })).admitPolicy(share()))
       .toThrowError(expect.objectContaining({ code: 'authority_unavailable' }));
@@ -152,5 +180,16 @@ describe('STORE session-content policy receiver', () => {
       .toThrowError(expect.objectContaining({ code: 'purge_pending' }));
     expect(store.settlePurge({ policyId: 'policy-share-1',
       writerReceipt: { writerId: 'writer-1', settledAt: 1_793_520_003_000 } }).status).toBe('purged');
+  });
+  it('should report the true purge state on retained reads (pending vs settled)', () => {
+    const store = createPolicyStore(gates());
+    store.admitPolicy(share());
+    store.initiatePurge({ policyId: 'policy-share-1', scope: 'terminal.cache' });
+    expect(() => store.readRetained({ policyId: 'policy-share-1' }))
+      .toThrowError(expect.objectContaining({ code: 'purge_pending' }));
+    store.settlePurge({ policyId: 'policy-share-1',
+      writerReceipt: { writerId: 'writer-1', settledAt: 1_793_520_003_000 } });
+    expect(() => store.readRetained({ policyId: 'policy-share-1' }))
+      .toThrowError(expect.objectContaining({ code: 'purged' }));
   });
 });
