@@ -17,6 +17,24 @@
 - Tool schema (`artifacts_get_source` description, v2 result schema source files),
   the API guide text and the README source section describe the text/base64
   encoding and the guide reference.
+- Content hosts use a single UUID label: `https://<id>.<base>/` resolves server-side,
+  either an artifact id (serves its current release) or a release id (serves that
+  frozen version). `parseContentHost` now returns `{ kind: 'id', id }` for exactly one
+  UUID label and nothing else; the former `<id>.pinned.<base>` form, two-label hosts and
+  foreign bases do not route.
+- Unknown ids return a uniform 404: the artifact and release lookups always both run,
+  and "no such artifact" and "no such release" share the same response body and timing
+  class, without revealing which kind exists. Digest verification and the deny rules
+  (service workers, traversal) are unchanged.
+- One wildcard per base at the edge: the `*.pinned.<base>` TLS host and ingress rule are
+  removed from the prod and preprod artifact-content overlays. No legacy fallback; immo
+  handles 301 redirects for its old hosts on its side.
+- Rename decision (recorded): the `pinnedUrl` field is renamed to `versionUrl` in the
+  `publicationUrls` hook, the summary, versions and source-read outputs and the result
+  schema, now holding `https://<releaseId>.<base>/`. The converged contract allows the
+  rename: no consumer outside `packages/artifacts` references `pinnedUrl`/`stableUrl`
+  (verified by grep over ui/contracts/e2e/api/cluster-mesh), and every in-package
+  consumer is updated atomically in this release.
 
 ## 0.2.6
 
