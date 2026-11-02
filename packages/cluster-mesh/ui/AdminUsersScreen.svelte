@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import type { IdentityAdminUserView as AdminUserRow } from './management-ports.js';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
   import { session } from '$lib/stores/session';
@@ -8,31 +9,8 @@
 
   export let embeddedTitle: string | null = null;
 
-  type AccountStatus =
-    | 'active'
-    | 'pending_admin_approval'
-    | 'approval_expired_readonly'
-    | 'disabled_by_user'
-    | 'disabled_by_admin';
-  type Role = 'admin_app' | 'admin_org' | 'editor' | 'guest';
-
-  type AdminUserRow = {
-    id: string;
-    email: string | null;
-    displayName: string | null;
-    role: Role;
-    accountStatus: AccountStatus;
-    approvalDueAt: string | null;
-    approvedAt: string | null;
-    approvedByUserId: string | null;
-    disabledAt: string | null;
-    disabledReason: string | null;
-    emailVerified: boolean;
-    createdAt: string;
-    updatedAt: string | null;
-    workspaceId: string | null;
-    workspaceName: string | null;
-  };
+  type AccountStatus = AdminUserRow['accountStatus'];
+  type Role = AdminUserRow['role'];
 
   let loading = false;
   let statusFilter: AccountStatus | '' = '';
