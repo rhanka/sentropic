@@ -30,6 +30,7 @@ import type { SqliteConnection } from '../sqlite/connection.js';
 import { decodeSession } from './records.js';
 import { InvitationError } from '../../identity-contracts/errors.js';
 import { identitySchemaStatements, identityTable, type IdentityTableName } from './schema.js';
+import { applySqliteIdentityCoreSchema } from './sqlite.js';
 import {
   identityCustodySchemaAssetV1,
   isSocialRaceRetry,
@@ -638,7 +639,7 @@ export const createSqliteIdentityHostV1 = (options: {
   readonly applySchema?: boolean;
 }): SqliteIdentityHostV1<SqliteCustodyHandle> => {
   if (options.applySchema !== false) {
-    for (const ddl of identitySchemaStatements('sqlite', '')) options.connection.exec(ddl);
+    applySqliteIdentityCoreSchema(options.connection);
   }
   return {
   runExclusiveTransaction: async (runOptions, operation) => {
@@ -669,7 +670,7 @@ export const createSqliteIdentityHostV1 = (options: {
 /** Standalone per-method custody stores for direct store tests. */
 export const createSqliteCustodyStores = (options: { readonly connection: SqliteConnection }): IdentityCustodyStoresV1 => {
   const tx = new SqliteCustodyTx(options.connection);
-  for (const ddl of identitySchemaStatements('sqlite', '')) options.connection.exec(ddl);
+  applySqliteIdentityCoreSchema(options.connection);
   return tx;
 };
 
