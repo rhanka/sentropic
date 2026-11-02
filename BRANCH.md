@@ -27,6 +27,8 @@ Implement the single canonical Sessions registry with typed projections (§3.3.1
   - `packages/cluster-mesh/src/index.ts`
   - `packages/cluster-mesh/package.json`
   - `packages/cluster-mesh/tests/remote-session/registry.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `api/tests/api/session-remote-view.test.ts`
   - `ui/tests/session-content/navigation.test.ts`
   - `BRANCH.md`
@@ -57,6 +59,7 @@ Implement the single canonical Sessions registry with typed projections (§3.3.1
 - [x] Review r1 MINOR: sync the API lockfile linked cluster-mesh version to the existing package/root-lock version; both version-equality checks pass.
 - [x] Review r1 regression evidence: Docker RED 15 expected failures / 42 passes, then GREEN 57/57 on `ENV=test-rc2-registry`; source-gaps remain fail-closed and no source-gap field is filled locally.
 - [x] Review r1 CI recovery: rebased onto `origin/main` e1c0ef97d; the RC2.store union retains both content-policy and registry exports and aligned 0.26.0-dev.5 pins, preserving both lots; the later BRANCH-only conflict changed no package source or lock bytes; restored the registry scope; version 0.26.0-dev.5 remains greater than published 0.25.0.
+- [x] Rebase after #874: preserved this branch's plan and both exports on main `78c746f53`; regenerated the selected fixture via `refresh-lazy-package-lock` with guarded artifacts 0.2.6 / mcp-platform 0.4.1 sibling archives, removing an obsolete replayed artifacts 0.1.4 pin; the regenerated lock exactly matches the semantic merge result, and train/API/fixture version checks pass.
 - [x] `attention`: manifest pin drift — assignment cites dfb2589969f78cf0 prefix; r1-baseline.json confirms it as the r1 MANIFEST seal; contract 3d827eaa… and manifest JSON 5e86b2a1… are the r1 pinned bytes per app ACK review §1 finding 2. Resolved by the r2 re-pin above (r1 kept as lineage only).
 - [x] `attention`: r2 reseal observed mid-lot (CHANGES-r2.md, contract cc8965c9…, manifest JSON f7e4a148…). Re-pinned to the ACCEPTED r2 (MANIFEST 133e23f5…) per conductor instruction; in-scope r1→r2 schema deltas verified $comment-only via changes-r2.json; only the r2 semantic deltas were adjusted in code (port signatures, W-P2-1 freshness margin, W-P1-1 exhaustion refusal + digest domains). r2 listing digest vector (vectors/registry-revision-digests.json, 226ad2fe…) reproduced exactly in tests.
 - [x] `attention`: rebased onto origin/main a67778379 (merge-tree showed BRANCH.md as the sole conflict; `-X theirs` kept the branch version per conductor rebase rule; every other file is a strict union — no main code or tests dropped). Post-Rebase Gate: packages/cluster-mesh 0.26.0-dev.5 > npm published 0.25.0 (verified via `npm view @sentropic/cluster-mesh version`).
