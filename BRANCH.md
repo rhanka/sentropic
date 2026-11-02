@@ -87,6 +87,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Add production custody-envelope regressions for absent/empty v1 configuration, AAD corruption, fresh nonce and buffer disposal.
   - [x] Borrow the unchanged v1 derived key for HKDF-separated connector custody; add authenticated envelopes with owned-buffer disposal.
   - [x] Define the host control-schema custody contribution and strict minimal-capability/envelope codecs; retain bounded long capabilities.
+  - [x] Verify custody against the actual pending/delivered CM outbox tuple and erase only the acknowledged envelope on its transaction.
 - [ ] **Lot 2 — Author switch (r13 D11) + reader/writer cutover**
   - [ ] /auth + /session over CM custody stores (auth-hono ports backed by CM); delete registration.ts, account.ts, session-manager identity paths.
   - [x] Add real JWT custodian tests for token use, signed MFA lineage, ticket import and key disposal.
