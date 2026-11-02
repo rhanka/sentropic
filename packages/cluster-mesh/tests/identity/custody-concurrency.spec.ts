@@ -6,7 +6,7 @@ import type { IdentityUnitOfWorkV1 } from '../../src/index.js';
 import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, randomBase64Url, seedCustodyParents, sha256Hex } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 
-const WRITE = { mode: 'write' as const, deadlineMs: 8000 };
+const WRITE = { mode: 'write' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 8000 };
 
 interface ProfileEnv {
   readonly unitOfWork: IdentityUnitOfWorkV1<CustodyOpHost>;
@@ -30,14 +30,14 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody concurren
   it('consumes one registration challenge exactly once', async () => {
     const env = await openEnv();
     const challenge = randomBase64Url(32);
-    await env.unitOfWork.runWrite(WRITE, (tx) =>
+    await env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.singleUseProofs.insert({
         kind: 'webauthn_challenge', proofId: 'race', userId: null, state: 'pending', revision: 0, createdAt: NOW, expiresAt: LATER,
         consumedAt: null, revokedAt: null, challenge, purpose: 'registration', rpId: 'idp.example.test',
         allowedOrigins: ['https://idp.example.test'], userVerification: 'preferred',
       }));
     const attempt = (bindUserId: string) =>
-      env.unitOfWork.runWrite(WRITE, (tx) =>
+      env.unitOfWork.run(WRITE, (tx) =>
         tx.hostTransaction.singleUseProofs.consume({
           key: { kind: 'webauthn_challenge', proofId: 'race' }, expectedRevision: 0, expectedUserId: null, bindUserId,
           match: { kind: 'webauthn_challenge', challenge, purpose: 'registration', rpId: 'idp.example.test' }, at: NOW,
@@ -53,14 +53,14 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody concurren
 
   it('rotates one session exactly once per rotation version', async () => {
     const env = await openEnv();
-    await env.unitOfWork.runWrite(WRITE, (tx) =>
+    await env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.sessions.insert({
         sessionId: 'race-session', userId: 'u1', sessionTokenHash: sha256Hex('race-sess'), refreshTokenHash: sha256Hex('race-refr'),
         login: { mfaVerified: false, authTime: 1000, sessionVersion: 1000 },
         rotationVersion: 0, createdAt: NOW, expiresAt: LATER, revokedAt: null, deviceName: null, ipAddress: null, userAgent: null, lastActivityAt: null,
       }));
     const attempt = (tag: string) =>
-      env.unitOfWork.runWrite(WRITE, (tx) =>
+      env.unitOfWork.run(WRITE, (tx) =>
         tx.hostTransaction.sessions.rotate({
           sessionId: 'race-session', userId: 'u1', expectedRefreshTokenHash: sha256Hex('race-refr'), expectedRotationVersion: 0,
           verifiedLogin: { mfaVerified: false, authTime: 1000, sessionVersion: 1000 },
@@ -83,7 +83,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody concurren
       emailVerifiedByProvider: false, linkedAt: NOW, lastLoginAt: null, revokedAt: null, revision: 0,
     });
     const attempt = (proofId: string, userId: string) =>
-      env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.stores.social.insert(link(proofId, userId)));
+      env.unitOfWork.run(WRITE, (tx) => tx.hostTransaction.stores.social.insert(link(proofId, userId)));
     const settled = env.concurrent
       ? await Promise.allSettled([attempt('p-a', 'u-a'), attempt('p-b', 'u-b')])
       : [await attempt('p-a', 'u-a').then((value) => ({ status: 'fulfilled' as const, value }), (reason: unknown) => ({ status: 'rejected' as const, reason })),
