@@ -11,7 +11,8 @@ const checkpointSchema = z.object({
   purpose: z.enum(['rehearsal', 'cutover']),
   candidateCommit: z.string().regex(/^[a-f0-9]{40}$/),
   sourceSnapshotPath: reference, sourceSnapshotRef: reference, sourceSnapshotDigest: digest,
-  remoteSnapshotRef: reference, mappingSha256: digest, identityAssetSha256: digest, connectorAssetSha256: digest,
+  remoteSnapshotPath: reference, remoteSnapshotRef: reference, remoteSnapshotDigest: digest,
+  mappingSha256: digest, identityAssetSha256: digest, connectorAssetSha256: digest,
   writerFenceRef: reference, legacyWritersStopped: z.literal(true), remoteFileWriterStopped: z.literal(true),
   rollbackCheckpointRef: reference, rollbackLimitsRef: reference, sourceMetadataDispositionRef: reference,
   rehearsalReceiptRef: reference.nullable(),
@@ -33,9 +34,12 @@ export async function loadCmCutoverCheckpoint(path: string | undefined, expected
   if (value.mappingSha256 !== expected.mappingSha256 || value.identityAssetSha256 !== expected.identityAssetSha256
     || value.connectorAssetSha256 !== expected.connectorAssetSha256
     || (value.purpose === 'cutover' && !value.rehearsalReceiptRef)) return invalidA4Import();
-  const hash = createHash('sha256');
-  for await (const chunk of createReadStream(value.sourceSnapshotPath)) hash.update(chunk);
-  if (hash.digest('hex') !== value.sourceSnapshotDigest) return invalidA4Import();
+  for (const [snapshot, expectedDigest] of [[value.sourceSnapshotPath, value.sourceSnapshotDigest],
+    [value.remoteSnapshotPath, value.remoteSnapshotDigest]]) {
+    const hash = createHash('sha256');
+    for await (const chunk of createReadStream(snapshot)) hash.update(chunk);
+    if (hash.digest('hex') !== expectedDigest) return invalidA4Import();
+  }
   return value;
 }
 
@@ -43,7 +47,8 @@ export async function loadCmCutoverCheckpoint(path: string | undefined, expected
 export const cmCutoverCheckpointReceipt = (checkpoint: CmCutoverCheckpoint) => ({
   format: checkpoint.format, purpose: checkpoint.purpose, candidateCommit: checkpoint.candidateCommit,
   sourceSnapshotRef: checkpoint.sourceSnapshotRef, sourceSnapshotDigest: checkpoint.sourceSnapshotDigest,
-  remoteSnapshotRef: checkpoint.remoteSnapshotRef, mappingSha256: checkpoint.mappingSha256,
+  remoteSnapshotRef: checkpoint.remoteSnapshotRef, remoteSnapshotDigest: checkpoint.remoteSnapshotDigest,
+  mappingSha256: checkpoint.mappingSha256,
   identityAssetSha256: checkpoint.identityAssetSha256, connectorAssetSha256: checkpoint.connectorAssetSha256,
   writerFenceRef: checkpoint.writerFenceRef, rollbackCheckpointRef: checkpoint.rollbackCheckpointRef,
   rollbackLimitsRef: checkpoint.rollbackLimitsRef, sourceMetadataDispositionRef: checkpoint.sourceMetadataDispositionRef,
