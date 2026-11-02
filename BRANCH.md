@@ -61,6 +61,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] R1: test actual WebAuthn ceremonies, anonymous owner binding, policy consistency and rejection of unverified writes.
 - [x] R1: add real P-256 registration and assertion wire fixtures for qualification through the shipped verifier.
 - [x] R1: resolve the import-only optional auth-hono peer lazily and serialize redacted audit detail using its frozen string shape.
 - [x] R1 follow-up G1: install the section 6.3 tombstone delivery foreign key with ON DELETE RESTRICT in both profiles.
