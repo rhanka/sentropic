@@ -2,10 +2,19 @@ import { IdentityCustodyErrorV1 } from '../../identity-contracts/custody-errors.
 import type { IdentityRunOptionsV1 } from '../../identity-contracts/custody.js';
 import type { PgSession } from '../postgres/protocol.js';
 import type { SqliteConnection } from '../sqlite/connection.js';
+import type { CustodyOpHost } from './custody-host.js';
 
 const activeTransactions = new WeakMap<object, (write?: boolean) => void>();
-export const registerIdentityTransaction = <T extends object>(tx: T, check: (write?: boolean) => void): T => {
+const transactionHosts = new WeakMap<object, CustodyOpHost>();
+export const identityTransactionHost = (tx: object): CustodyOpHost => {
+  assertIdentityTransactionActive(tx);
+  const host = transactionHosts.get(tx);
+  if (!host) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+  return host;
+};
+export const registerIdentityTransaction = <T extends object>(tx: T, check: (write?: boolean) => void, host: CustodyOpHost): T => {
   activeTransactions.set(tx, check);
+  transactionHosts.set(tx, host);
   return tx;
 };
 export const assertIdentityTransactionActive = (tx: object, write = false): void => {
