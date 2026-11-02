@@ -58,6 +58,7 @@
 - [x] **Lot 0 — Scope and baseline**
   - [x] Read the approved A02/R1 contract, template, rules and available source evidence; create the stacked worktree and pass the mechanical branch check.
 - [ ] **Lot 1 — Tests before implementation**
+  - [x] Write the collected ordered-patch, source/patch/checksum mutation and OS-only source negative controls before their implementation.
   - [ ] Add `material-acquisition.test.mjs`, collected by `scanner-provenance.test.mjs`, for source/checksum mutation, ordered patches and bounded retained acquisition.
   - [ ] Add offline dependency replay and OS-only negative controls, with the native replay repeated on the actual resolved sources.
   - [ ] Record the failing pre-implementation gate before adding implementation.
