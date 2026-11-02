@@ -10,8 +10,11 @@ import { authFederationPort } from './auth-social.js';
 import { authBoundaryPorts } from './auth-boundary.js';
 import { authHonoRuntime, authWebAuthnServices, type WebAuthnAttempt } from './auth-webauthn.js';
 import { finishAuthCompletion, guardAuthStep } from './auth-abort.js';
+import { IdentityCustodyErrorV1 } from '../identity-contracts/custody-errors.js';
 
-export const createIdentityAuthHonoTransactionBindingV1 = <H>(input: IdentityAuthBindingInput<H>): IdentityAuthHonoTransactionBindingV1 => {
+export const createIdentityAuthHonoTransactionBindingV1 = <H>(supplied: IdentityAuthBindingInput<H>): IdentityAuthHonoTransactionBindingV1 => {
+  const input = { ...supplied, rp: { ...supplied.rp, expectedOrigins: [...new Set(supplied.rp.expectedOrigins)] } };
+  if (!input.rp.id || input.rp.expectedOrigins.length === 0 || input.rp.expectedOrigins.some((origin) => typeof origin !== 'string' || !origin)) throw new IdentityCustodyErrorV1('identity_material_invalid');
   const check = () => assertIdentityTransactionActive(input.tx, true);
   check();
   const evidence = new Set<string>(), deferredMail: IdentityDeferredMailV1[] = [];
