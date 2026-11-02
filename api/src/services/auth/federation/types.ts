@@ -1,13 +1,10 @@
 import type {
-  AuthHonoAccountPolicyPort,
   AuthHonoAuditLogPort,
   AuthHonoClockPort,
   AuthHonoDeviceInfo,
   AuthHonoFederationPort,
   AuthHonoIdentityRecord,
   AuthHonoSessionTokens,
-  AuthHonoUserPort,
-  AuthHonoUserRecord,
   FederationResolveInput,
   FederationResolveOutcome,
 } from '@sentropic/auth-hono';
@@ -108,23 +105,13 @@ export interface FederationBrokerConfig {
 
 export interface FederationBrokerDeps {
   provider: FederationProvider;
-  federation: AuthHonoFederationPort;
-  users: Pick<AuthHonoUserPort, 'create' | 'findByEmail' | 'findById'>;
-  accountPolicy: Pick<
-    AuthHonoAccountPolicyPort,
-    'deriveDisplayName' | 'normalizeEmail' | 'resolveSessionRole' | 'roleForNewUser' | 'statusForNewUser'
-  >;
-  provisionWorkspace: (userId: string) => Promise<void>;
-  /** Mint a FRESH Sentropic session (session rotation / anti-fixation, D10). */
-  mintSession: (input: {
-    user: AuthHonoUserRecord;
-    deviceInfo?: AuthHonoDeviceInfo;
-  }) => Promise<AuthHonoSessionTokens>;
+  federation: Pick<AuthHonoFederationPort, 'createFlowState' | 'consumeFlowState'>;
+  /** Owns whole-callback rollback/retry and releases a copied result only after commit. */
+  complete<T>(operation: (attempt: FederationIdentityAttempt) => Promise<T>): Promise<T>;
   audit: AuthHonoAuditLogPort;
   clock: AuthHonoClockPort;
   secrets: FederationBrokerSecrets;
   config: FederationBrokerConfig;
-  isFirstUser?: () => Promise<boolean> | boolean;
 }
 
 export interface FederationStartRequest {
@@ -170,6 +157,9 @@ export interface FederationEmailChallengeCompletion {
   providerTenant?: string | null;
   /** The email the user just proved via the local challenge (treated as provider-verified, D9). */
   verifiedEmail: string;
+  verificationToken: string;
+  /** Deadline captured with the one-time pending identity before entering the UOW. */
+  expiresAt: string;
   /** The sealed OAuth continuation pointer captured at the original callback (D11), or null. */
   continuation: string | null;
   deviceInfo?: AuthHonoDeviceInfo;
