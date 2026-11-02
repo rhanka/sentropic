@@ -23,6 +23,7 @@ export async function prepareCmBusinessDeletion(command: PersonDeletionCommandV2
     UNION SELECT workspace_id FROM public.agent_definitions WHERE created_by_user_id = $1
     UNION SELECT workspace_id FROM public.workflow_definitions WHERE created_by_user_id = $1
     UNION SELECT workspace_id FROM public.guardrails WHERE created_by_user_id = $1
+    UNION SELECT workspace_id FROM public.job_queue WHERE data::jsonb->>'userId' = $1 OR data::jsonb->>'initiatedByUserId' = $1
     ) AS related ORDER BY workspace_id COLLATE "C"`, [command.userId]);
   return { userId: command.userId, workspaceIdsToDelete,
     retainedWorkspaceIds: referenced.rows.map(row => row.workspace_id).filter(id => !workspaceIdsToDelete.includes(id)) };
