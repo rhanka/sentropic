@@ -123,6 +123,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Add the CM leased delivery drain with short claim/ack/release transactions and atomic custody erasure; network delivery stays outside callbacks.
   - [x] Drain the CM ledger on periodic sweeps and delete the replaced settings queue/pending/ack module.
 - [ ] **Lot 2 — Author switch (r13 D11) + reader/writer cutover**
+  - [x] Preserve credential/session HTTP refusal shapes after rollback and reject malformed completion status; regression execution remains pending.
   - [ ] /auth + /session over CM custody stores (auth-hono ports backed by CM); delete registration.ts, account.ts, session-manager identity paths.
   - [x] Add social-completion regression cases for whole-attempt retry, fresh linking-session checks and no SQL after an insert conflict.
   - [x] Require a completion boundary in the federation broker contract; isolate the in-memory resolver adapter in protocol test fixtures.
