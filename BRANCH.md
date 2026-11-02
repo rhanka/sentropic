@@ -61,6 +61,7 @@
   - [x] Enforce strict receipt schemas, matching identities, nonempty measured artifact outputs and ordered material binding.
   - [x] Add isolated execution of the actual key-free echo steps and assert no receipt files are produced.
   - [x] Add rehashed malformed-OCI and impossible-calendar-date negative controls.
+  - [x] Fail closed on malformed OCI structures and normalized impossible dates.
 - [ ] **Lot 3 — Final validation and handoff**
   - [ ] Run `make test-security-daily ENV=test-cyber-adm` under the single lock.
   - [ ] Run `make down ENV=test-cyber-adm`; verify scope before each commit.

@@ -5,7 +5,10 @@ import { receiptSchemas } from './receipt-schema.mjs';
 
 const jsonDigest = value => digest(JSON.stringify(value));
 const readJson = bytes => {
-  try { return JSON.parse(bytes); } catch { check(false, 'output JSON'); }
+  let value;
+  try { value = JSON.parse(bytes); } catch { check(false, 'output JSON'); }
+  check(value !== null && typeof value === 'object' && !Array.isArray(value), 'output JSON object');
+  return value;
 };
 const sameDescriptor = (a, b) => a?.digest === b.digest && a?.size === b.size;
 
@@ -42,7 +45,8 @@ export function validateReceiptContract({ materials, receipts, artifactBytes, ou
   check(outputs && equal(Object.keys(outputs).sort(), entries.map(e => e.path).sort()), 'complete outputs');
   entries.forEach(entry => measured(entry, outputs));
   const index = readJson(outputs[chain.index.path]);
-  const matches = index.manifests?.filter(m => m.platform?.os === 'linux' && m.platform?.architecture === 'amd64');
+  check(Array.isArray(index.manifests), 'index manifests');
+  const matches = index.manifests.filter(m => m?.platform?.os === 'linux' && m.platform?.architecture === 'amd64');
   check(matches?.length === 1 && sameDescriptor(matches[0], chain.manifest), 'index/platform linkage');
   const manifest = readJson(outputs[chain.manifest.path]);
   check(sameDescriptor(manifest.config, chain.config) && Array.isArray(manifest.layers) &&
