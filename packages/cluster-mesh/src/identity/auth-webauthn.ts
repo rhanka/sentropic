@@ -56,7 +56,12 @@ export const authWebAuthnServices = <H>(input: IdentityAuthBindingInput<H>, port
       const policy = await verificationPolicy('authentication', args.expectedChallenge);
       let result;
       try { result = await server.verifyAuthenticationResponse({ ...args, ...policy }); }
-      catch { return refuseWebAuthn('authentication', 'authentication_verification_failed', 'Authentication verification failed.', 401); }
+      catch (error) {
+        if (policy.requireUserVerification && error instanceof Error && error.message === 'User verification required, but user could not be verified') {
+          return refuseWebAuthn('authentication', 'user_verification_required', 'User verification is required.', 403);
+        }
+        return refuseWebAuthn('authentication', 'authentication_verification_failed', 'Authentication verification failed.', 401);
+      }
       if (result.verified && policy.requireUserVerification && !result.authenticationInfo.userVerified) refuseWebAuthn('authentication', 'user_verification_required', 'User verification is required.', 403);
       if (result.verified) state.assertion = { credentialId: args.credential.id, newCounter: result.authenticationInfo.newCounter };
       return result;

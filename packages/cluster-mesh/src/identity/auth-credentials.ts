@@ -3,7 +3,7 @@ import type { IdentityAuthBindingInput } from '../identity-contracts/custody-aut
 import type { WebAuthnCredentialV1 } from '../identity-contracts/custody.js';
 import { IdentityCustodyErrorV1 } from '../identity-contracts/custody-errors.js';
 import type { WebAuthnAttempt } from './auth-webauthn.js';
-import { refuseWebAuthn } from './auth-abort.js';
+import { finishAuthCompletion, refuseWebAuthn } from './auth-abort.js';
 
 export const authCredentialPort = <H>(input: IdentityAuthBindingInput<H>, check: () => void, state: WebAuthnAttempt): AuthHonoCredentialPort => {
   const { tx } = input;
@@ -58,14 +58,14 @@ export const authCredentialPort = <H>(input: IdentityAuthBindingInput<H>, check:
     rename: async (id, userId, name) => {
       check(); await tx.lockSubject(userId);
       const existing = await tx.custody.credentials.findById(id);
-      if (!existing || existing.userId !== userId || existing.revokedAt) return null;
+      if (!existing || existing.userId !== userId || existing.revokedAt) return finishAuthCompletion('credential_rename', null);
       await tx.custody.credentials.rename(id, userId, name);
-      return project(await tx.custody.credentials.findById(id));
+      return finishAuthCompletion('credential_rename', project(await tx.custody.credentials.findById(id)));
     },
     revoke: async (id, userId) => {
       check(); await tx.lockSubject(userId);
       const existing = await tx.custody.credentials.findById(id);
-      if (!existing || existing.userId !== userId) return false;
+      if (!existing || existing.userId !== userId) return finishAuthCompletion('credential_revoke', false);
       if (existing.revokedAt) return true;
       await tx.custody.credentials.revoke(id, userId, input.hostPorts.clock.now().toISOString());
       return true;
