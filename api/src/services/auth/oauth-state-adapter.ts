@@ -9,6 +9,7 @@ import { and, eq, gt, isNull, lt } from 'drizzle-orm';
 
 import { db } from '../../db/client';
 import { purgeExpiredRefreshFamilies } from './oauth-refresh-adapter';
+import { findCmServiceClientTenant } from '../identity/cm-service-clients';
 import {
   authorizationCodes,
   oauthClients,
@@ -71,7 +72,7 @@ export const createOauthStateStoreAdapter = (
         .where(and(eq(serviceClients.clientId, clientId), isNull(serviceClients.revokedAt)))
         .limit(1);
 
-      return row ? toServiceClientRecord(row) : null;
+      return row ? toServiceClientRecord(row, await findCmServiceClientTenant(clientId)) : null;
     },
 
     async findTokenMeta(jti) {
@@ -211,7 +212,7 @@ const toOauthClientRecord = (row: typeof oauthClients.$inferSelect): OauthClient
   updatedAt: row.updatedAt ?? row.createdAt,
 });
 
-const toServiceClientRecord = (row: typeof serviceClients.$inferSelect): ServiceClientRecord => ({
+const toServiceClientRecord = (row: typeof serviceClients.$inferSelect, tenantId: string | null): ServiceClientRecord => ({
   allowedScopes: row.allowedScopes,
   clientId: row.clientId,
   clientSecretHash: row.clientSecretHash,
@@ -223,7 +224,7 @@ const toServiceClientRecord = (row: typeof serviceClients.$inferSelect): Service
   resourceIndicators: row.resourceIndicators,
   revokedAt: row.revokedAt,
   secretRotatedAt: row.secretRotatedAt,
-  tenantId: row.tenantId,
+  tenantId,
 });
 
 // 2-IdP: the exchange policy is stored as nullable jsonb (default-deny). A NULL
