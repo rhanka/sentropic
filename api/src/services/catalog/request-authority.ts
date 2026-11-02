@@ -2,7 +2,6 @@ import { createHash } from 'node:crypto';
 import type { AuthUser } from '../../middleware/auth';
 import { createFreshDecisionProducer } from '@sentropic/cluster-mesh';
 import { runCmIdentityRead } from '../identity/cm-transaction';
-import { findCmApprovedMembership } from '../identity/cm-tenancy';
 import { compositeCatalogRegistry, prepareHostRegistryCatalog } from '../skills/catalog';
 import { createCatalogContextResolver, type CatalogContextInput } from './request-context';
 
@@ -54,17 +53,18 @@ const resolve = createCatalogContextResolver(async input => {
   if (!fresh.decision.allow) throw new Error('catalog_access_denied');
   const { decision } = fresh;
 
-  const membership = await findCmApprovedMembership(input.userId, decision.tenantId);
+  const membership = await tx.stores.memberships.findApprovedMembership(input.userId, decision.tenantId);
+  if (!membership) throw new Error('catalog_access_denied');
   const { rows: [wsRow] } = await tx.hostTransaction.query<{ type: string }>(
     'SELECT type FROM public.workspaces WHERE id = $1 AND hidden_at IS NULL', [input.workspaceId]);
   if (!wsRow) throw new Error('catalog_access_denied');
 
   const policyVersion = createHash('sha256').update(
-    [decision.tid, decision.tenantRole, decision.workspaceRole, membership?.updatedAt.toISOString() ?? '', decision.scopes.join(',')].join('|'),
+    [decision.tid, decision.tenantRole, decision.workspaceRole, membership.updatedAt, decision.scopes.join(',')].join('|'),
   ).digest('hex');
 
   return { tenantId: decision.tenantId, membershipRef: `${input.workspaceId}:${input.userId}:${decision.workspaceRole}`,
-    consentRef: `first-party:${input.kind}:${input.sessionId}`,
+    consentRef: `first-party:${input.kind}:${conversationSessionId ?? input.sessionId}`,
     policyVersion,
     roles: [decision.workspaceRole], workspaceType: wsRow?.type, readOnly: !['editor', 'admin'].includes(decision.workspaceRole),
     allowedTools: [...new Set(fresh.allowedTools)] };
