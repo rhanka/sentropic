@@ -6,6 +6,7 @@ import type {
   AuthHonoLinkIdentityInput,
 } from '@sentropic/auth-hono';
 import { AuthHonoIdentityConflictError } from '@sentropic/auth-hono';
+import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
 import { randomBytes } from 'node:crypto';
 import { and, eq, gt } from 'drizzle-orm';
 
@@ -89,62 +90,22 @@ interface CreateFederationAdapterOptions {
   database?: typeof db;
 }
 
+const boundIdentityRequired = async (): Promise<never> => {
+  throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+};
+
 export const createFederationAdapter = (
   options: CreateFederationAdapterOptions = {},
 ): AuthHonoFederationPort => {
   const database = options.database ?? db;
 
   return {
-    async findIdentityBySubject(provider, providerSubject) {
-      const row = await findCmSocialBySubject(provider, providerSubject);
-      return row && !row.revokedAt ? toIdentityRecord(row) : null;
-    },
-
-    async findIdentitiesForUser(userId) {
-      const rows = await listCmSocialForUser(userId);
-      return rows.filter(row => !row.revokedAt).map(toIdentityRecord);
-    },
-
-    async linkIdentity(input: AuthHonoLinkIdentityInput) {
-      try {
-        const row = await createCmSocialLink({
-          userId: input.userId,
-          provider: input.provider,
-          providerSubject: input.providerSubject,
-          providerTenant: input.providerTenant ?? null,
-          emailAtLink: input.emailAtLink ?? null,
-          emailVerifiedByProvider: input.emailVerifiedByProvider ?? false,
-          now: input.now,
-        });
-        return toIdentityRecord(row);
-      } catch (error) {
-        // The UNIQUE(provider, provider_subject) index rejected a concurrent duplicate link.
-        if (isSocialSubjectConflict(error)) {
-          throw new AuthHonoIdentityConflictError(input.provider, input.providerSubject);
-        }
-        throw error;
-      }
-    },
-
-    async unlinkIdentity(userId, provider, providerSubject) {
-      return unlinkCmSocial(userId, provider, providerSubject);
-    },
-
-    async touchLogin(identityId, now) {
-      await touchCmSocialLogin(identityId, now);
-    },
-
-    async isUserCredentialed(userId) {
-      // A completed sign-in factor = a webauthn credential, an existing federated identity, or a
-      // used magic link. Any one marks the account as NOT a non-credentialed shell (D7).
-      const credentials = await listCmCredentialsForUser(userId);
-      if (credentials.length > 0) return true;
-
-      const identities = await listCmSocialForUser(userId);
-      if (identities.some(row => !row.revokedAt)) return true;
-
-      return hasConsumedCmMagicLinkForUser(userId);
-    },
+    findIdentityBySubject: boundIdentityRequired,
+    findIdentitiesForUser: boundIdentityRequired,
+    linkIdentity: boundIdentityRequired,
+    unlinkIdentity: boundIdentityRequired,
+    touchLogin: boundIdentityRequired,
+    isUserCredentialed: boundIdentityRequired,
 
     async createFlowState(input: AuthHonoCreateFederationFlowStateInput) {
       // The opaque `id` is a high-entropy token: it is the pointer carried in the bound cookie and

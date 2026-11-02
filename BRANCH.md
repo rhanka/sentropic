@@ -130,6 +130,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Mount CM social completion with current session/eligibility checks and atomic email-ticket consumption; remove root-pool social user/workspace/session writes.
   - [x] Preserve the upstream evidence deadline through email challenge and test expired retries and ticket-consume failure before login publication.
   - [x] Retain only verified OIDC expiry evidence for retry and reject missing/malformed expiry; remove raw upstream error text from federation audit events.
+  - [x] Remove the standalone federation identity writer and unsafe conflict translation; root federation ports retain only transient protocol flow storage.
   - [x] Add real JWT custodian tests for token use, signed MFA lineage, ticket import and key disposal.
   - [x] Implement the host token/digest adapter against the approved r6 signer/verifier contracts.
   - [x] Add the r6 per-attempt auth binding/runner with callback-owned audit drain and post-commit mail publication.
