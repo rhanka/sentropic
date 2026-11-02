@@ -1,21 +1,14 @@
 import type { Context, Next } from 'hono';
 import { logger } from '../logger';
-import {
-  authHonoCookiePort,
-  authHonoSessionService,
-} from '../services/auth/session-adapter';
+import { authenticateCmHttpRequest, publishCmAuthenticationRefusal } from '../services/identity/cm-http-principal';
 import { ensureWorkspaceForUser } from '../services/workspace-service';
 import { getWorkspaceRole, isWorkspaceDeleted } from '../services/workspace-access';
 
 /**
- * Session token reading and validation are delegated to the `@sentropic/auth-hono`
- * Sentropic adapter (`authHonoCookiePort` + `authHonoSessionService`). Workspace
+ * Authentication uses the shipped `@sentropic/auth-hono` middleware with a
+ * transaction-bound CM ports bag. Workspace
  * selection, stale-workspace recovery, and hidden-workspace rules remain app-owned.
  */
-const readSessionToken = (c: Context): string | undefined =>
-  authHonoCookiePort.readSessionToken(c.req.raw) ??
-  c.req.header('authorization')?.replace('Bearer ', '');
-
 /**
  * Authentication Middleware
  * 
@@ -49,28 +42,10 @@ declare module 'hono' {
  */
 export async function requireAuth(c: Context, next: Next) {
   try {
-    // Debug logs disabled to reduce noise in API logs
-    // const cookieHeader = c.req.header('cookie');
-    // logger.debug({ 
-    //   path: c.req.path,
-    //   cookieHeader: cookieHeader || 'no cookies'
-    // }, 'Auth middleware debug');
-    
-    // Extract session token from cookie or Authorization header
-    const sessionToken = readSessionToken(c);
-
-    if (!sessionToken) {
-      logger.debug({ path: c.req.path }, 'No session token provided');
-      return c.json({ error: 'Authentication required' }, 401);
-    }
-
-    // Validate session via the @sentropic/auth-hono Sentropic adapter
-    const validated = await authHonoSessionService.validateSessionToken(sessionToken);
-
-    if (!validated) {
-      logger.debug({ path: c.req.path }, 'Invalid or expired session');
-      return c.json({ error: 'Invalid or expired session' }, 401);
-    }
+    const result = await authenticateCmHttpRequest(c.req.raw, true);
+    if (!result.accepted) return publishCmAuthenticationRefusal(result);
+    const validated = result.principal;
+    if (!validated) return c.json({ error: 'Authentication required' }, 401);
 
     const session = { ...validated.session, role: validated.role };
     const path = c.req.path || '';
@@ -127,34 +102,26 @@ export async function requireAuth(c: Context, next: Next) {
  */
 export async function optionalAuth(c: Context, next: Next) {
   try {
-    // Extract session token
-    const sessionToken = readSessionToken(c);
-
-    if (sessionToken) {
-      // Validate session via the @sentropic/auth-hono Sentropic adapter
-      const validated = await authHonoSessionService.validateSessionToken(sessionToken);
-
-      if (validated) {
-        // Attach user info to context
-        const { workspaceId } = await ensureWorkspaceForUser(validated.session.userId, { createIfMissing: false });
-        if (workspaceId) {
-          c.set('user', {
-            userId: validated.session.userId,
-            sessionId: validated.session.sessionId,
-            authenticatedAt: validated.sessionRecord.createdAt.toISOString(),
-            role: validated.role,
-            workspaceId,
-            email: validated.session.email ?? null,
-            displayName: validated.session.displayName ?? null,
-          });
-        }
+    const result = await authenticateCmHttpRequest(c.req.raw, false);
+    if (!result.accepted) return publishCmAuthenticationRefusal(result);
+    const validated = result.principal;
+    if (validated) {
+      const { workspaceId } = await ensureWorkspaceForUser(validated.session.userId, { createIfMissing: false });
+      if (workspaceId) {
+        c.set('user', {
+          userId: validated.session.userId,
+          sessionId: validated.session.sessionId,
+          authenticatedAt: validated.sessionRecord.createdAt.toISOString(),
+          role: validated.role,
+          workspaceId,
+          email: validated.session.email ?? null,
+          displayName: validated.session.displayName ?? null,
+        });
       }
     }
-
-    await next();
-  } catch (error) {
-    logger.error({ err: error, path: c.req.path }, 'Optional auth middleware error');
-    // Don't block request on error, just continue without user
-    await next();
+  } catch {
+    logger.error({ path: c.req.path }, 'Optional authentication unavailable');
+    return c.json({ error: 'Authentication unavailable' }, 503);
   }
+  await next();
 }
