@@ -115,6 +115,18 @@ test('should strip provider credential headers while preserving local applicatio
   } finally { restore(); }
 });
 
+test('should reject unsupported provider queries without forwarding credentials or silently changing the URL', async () => {
+  let forwarded = 0;
+  const unexpected = [];
+  const restore = installProviderBoundary({ endpoint: 'http://127.0.0.1:7777/',
+    onUnexpected: entry => unexpected.push(entry), fetchImpl: async () => { forwarded++; return new Response('{}'); } });
+  try {
+    await assert.rejects(fetch('https://api.mistral.ai/v1/chat/completions?api_key=inert-test-credential'), /query/);
+    assert.equal(forwarded, 0);
+    assert.deepEqual(unexpected, [{ host: 'api.mistral.ai', reason: 'provider-query' }]);
+  } finally { restore(); }
+});
+
 test('should preserve requested initiative count and structured fields over HTTP', async t => {
   const { post } = await fixture(t);
   const response = await (await post({ messages: [{ role: 'user', content:
