@@ -306,6 +306,7 @@ describe('0-regression — workflow entries absent from resolveFoundationChatToo
     // discovery but must NOT appear in the resolved chat tool array.
     const tools = resolveFoundationChatTools({
       userId: 'u-lot4-test',
+      tenantId: 'tenant-fixture',
       workspaceId: 'ws-lot4-test',
       workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
@@ -328,6 +329,7 @@ describe('0-regression — workflow entries absent from resolveFoundationChatToo
     // 2 meta-tools (search_skills + search_catalog) + all foundation tools.
     const tools = resolveFoundationChatTools({
       userId: 'u-lot4-test',
+      tenantId: 'tenant-fixture',
       workspaceId: 'ws-lot4-test',
       workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
@@ -342,6 +344,7 @@ describe('0-regression — workflow entries absent from resolveFoundationChatToo
   it('search_skills is still the FIRST tool after adding the workflow source', () => {
     const tools = resolveFoundationChatTools({
       userId: 'u-lot4-test',
+      tenantId: 'tenant-fixture',
       workspaceId: 'ws-lot4-test',
       workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
@@ -355,6 +358,7 @@ describe('0-regression — workflow entries absent from resolveFoundationChatToo
     // search_catalog is now at index 1. Workflow entries do NOT appear.
     const tools = resolveFoundationChatTools({
       userId: 'u-lot4-test',
+      tenantId: 'tenant-fixture',
       workspaceId: 'ws-lot4-test',
       workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
