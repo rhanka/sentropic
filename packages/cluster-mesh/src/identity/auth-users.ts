@@ -43,7 +43,7 @@ export const authUserPorts = <H>(input: IdentityAuthBindingInput<H>, evidence: S
       if (value.emailVerified === true && !evidence.has(email)) throw new IdentityCustodyErrorV1('proof_binding_mismatch');
       const status = value.accountStatus ?? 'active';
       if (status !== 'active' && status !== 'pending_admin_approval') throw new IdentityCustodyErrorV1('identity_material_invalid');
-      await tx.custody.subjects.register({ userId, email, accountStatus: status, globalRole: authRole(value.role), createdAt: at, updatedAt: at }, {
+      await tx.custody.subjects.register({ userId, email, accountStatus: status as 'active' | 'pending_admin_approval', globalRole: authRole(value.role), createdAt: at, updatedAt: at }, {
         userId, emailVerified: value.emailVerified ?? false, displayName: value.displayName ?? null, approvalDueAt: value.approvalDueAt ? iso(value.approvalDueAt) : null,
         approvedAt: null, approvedByUserId: null, disabledAt: null, disabledReason: null, legacyAccountStatus: null,
       });
