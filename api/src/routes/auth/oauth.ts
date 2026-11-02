@@ -112,37 +112,10 @@ const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?:
     transactionBound: Boolean(boundPorts),
   }),
   accountPolicy: {
-    canAuthenticate(user, now) {
-      if (!user.emailVerified) {
-        return {
-          allowed: false,
-          code: 'email_verification_required',
-          message: 'User email must be verified.',
-          status: 401,
-        };
-      }
-      if (user.accountStatus === 'disabled_by_user' || user.accountStatus === 'disabled_by_admin') {
-        return {
-          allowed: false,
-          code: 'account_disabled',
-          message: 'User account is disabled.',
-          status: 403,
-        };
-      }
-      if (user.accountStatus === 'pending_admin_approval' && user.approvalDueAt && now > user.approvalDueAt) {
-        return { allowed: true };
-      }
-      return { allowed: true };
-    },
+    canAuthenticate: unsupportedOAuthPort,
     deriveDisplayName: deriveDisplayNameFromEmail,
     normalizeEmail: (email) => email.trim().toLowerCase(),
-    resolveSessionRole(user, now) {
-      if (user.accountStatus === 'approval_expired_readonly') return 'guest';
-      if (user.accountStatus === 'pending_admin_approval' && user.approvalDueAt && now > user.approvalDueAt) {
-        return 'guest';
-      }
-      return user.role;
-    },
+    resolveSessionRole: unsupportedOAuthPort,
     roleForNewUser: async ({ email }) => {
       const normalizedEmail = email.trim().toLowerCase();
       if (env.ADMIN_EMAIL && normalizedEmail === env.ADMIN_EMAIL.toLowerCase()) {

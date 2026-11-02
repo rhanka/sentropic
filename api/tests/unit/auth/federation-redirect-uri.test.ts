@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+vi.mock('../../../src/services/identity/cm-federation-completion', () => ({
+  createCmFederationCompletion: () => vi.fn(),
+}));
 
 /**
  * BR-39e go-live regression — federation default redirect URI must carry the `/api/v1` API mount
