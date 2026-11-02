@@ -58,7 +58,30 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody storage o
     await env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.stores.credentials.revoke('c1', 'u1', LATER));
     await expect(env.unitOfWork.runWrite(WRITE, (tx) =>
       tx.hostTransaction.stores.credentials.compareAndSwapCounter({ proofId: 'c1', userId: 'u1', expectedCounter: 0, expectedRevision: 2, newCounter: 1, at: LATER }),
-    )).rejects.toMatchObject({ code: 'identity_material_missing' });
+    )).rejects.toMatchObject({ code: 'proof_verification_failed', reason: 'revoked' });
+  });
+
+  it('rejects counter regression with the exact CAS refusal precedence', async () => {
+    const env = await openEnv();
+    await write(env, (tx) => tx.hostTransaction.stores.credentials.insert({ ...credential('cas', 'u1'), counter: 5 }));
+    const attempt = (overrides = {}) => env.unitOfWork.runWrite(WRITE, (tx) =>
+      tx.hostTransaction.stores.credentials.compareAndSwapCounter({
+        proofId: 'cas', userId: 'u1', expectedCounter: 5, expectedRevision: 0, newCounter: 0, at: NOW, ...overrides,
+      }));
+    await expect(attempt()).rejects.toMatchObject({ code: 'webauthn_counter_rejected' });
+    await expect(attempt({ newCounter: 5 })).rejects.toMatchObject({ code: 'webauthn_counter_rejected' });
+    await expect(attempt({ expectedRevision: 1 })).rejects.toMatchObject({ code: 'webauthn_credential_stale' });
+    await expect(attempt({ expectedCounter: 6 })).rejects.toMatchObject({ code: 'webauthn_credential_stale' });
+    await expect(attempt({ proofId: 'missing' })).rejects.toMatchObject({ code: 'proof_verification_failed', reason: 'not_found' });
+    for (const overrides of [{ expectedCounter: -1 }, { expectedRevision: -1 }, { newCounter: 4294967296 }]) {
+      await expect(attempt({ proofId: 'missing', ...overrides })).rejects.toMatchObject({ code: 'identity_material_invalid' });
+    }
+    await expect(attempt({ userId: 'other' })).rejects.toMatchObject({ code: 'proof_binding_mismatch' });
+    expect(await env.unitOfWork.runRead(READ, (tx) => tx.hostTransaction.stores.credentials.findById('cas')))
+      .toMatchObject({ counter: 5, revision: 0, lastUsedAt: null });
+    await env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.stores.credentials.revoke('cas', 'u1', LATER));
+    await expect(attempt()).rejects.toMatchObject({ code: 'proof_verification_failed', reason: 'revoked' });
+    await expect(attempt({ userId: 'other' })).rejects.toMatchObject({ code: 'proof_binding_mismatch' });
   });
 
   it('consumes single-use proofs once and purges only terminal rows', async () => {
@@ -110,6 +133,38 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody storage o
     await expect(env.unitOfWork.runWrite(WRITE, (tx) =>
       tx.hostTransaction.emailTickets.consume({ tokenHash: sha256Hex('ticket-9'), email: 'a@example.test', expectedRevision: 1, bindUserId: 'u9', at: NOW }),
     )).rejects.toMatchObject({ code: 'proof_state_conflict' });
+  });
+
+  it('retains completed magic-link factors and live ticket parents during expiry purge', async () => {
+    const env = await openEnv();
+    const tokenHash = sha256Hex('retained-factor');
+    const ticketHash = sha256Hex('live-ticket');
+    await write(env, async (tx) => {
+      await tx.hostTransaction.stores.singleUseProofs.insert({
+        kind: 'magic_link', proofId: 'retained-factor', userId: 'u1', state: 'consumed', revision: 1,
+        createdAt: NOW, expiresAt: NOW, consumedAt: NOW, revokedAt: null, email: 'a@example.test', tokenHash,
+      });
+      await tx.hostTransaction.stores.singleUseProofs.insert({
+        ...emailProof('ticket-parent', 'a@example.test', { algorithm: 'sha256', value: sha256Hex('code') }),
+        state: 'consumed', revision: 1, consumedAt: NOW, expiresAt: NOW,
+      });
+      await tx.hostTransaction.stores.emailTickets.importTicket({
+        codeProofId: 'ticket-parent', email: 'a@example.test', tokenHash: ticketHash, userId: null,
+        state: 'pending', revision: 0, createdAt: NOW, expiresAt: LATER, consumedAt: null, revokedAt: null,
+      });
+    });
+    await env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.singleUseProofs.purgeExpired('2026-11-01T12:15:00.000Z'));
+    await env.unitOfWork.runRead(READ, async (tx) => {
+      expect(await tx.hostTransaction.singleUseProofs.findMagicLink(tokenHash)).toMatchObject({ userId: 'u1', state: 'consumed' });
+      expect(await tx.hostTransaction.singleUseProofs.find({ kind: 'email_code', proofId: 'ticket-parent' })).not.toBeNull();
+      expect(await tx.hostTransaction.emailTickets.findByTokenHash(ticketHash)).toMatchObject({ state: 'pending' });
+    });
+    await env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.singleUseProofs.purgeExpired('2026-11-01T13:00:00.000Z'));
+    await env.unitOfWork.runRead(READ, async (tx) => {
+      expect(await tx.hostTransaction.singleUseProofs.findMagicLink(tokenHash)).not.toBeNull();
+      expect(await tx.hostTransaction.emailTickets.findByTokenHash(ticketHash)).toBeNull();
+      expect(await tx.hostTransaction.singleUseProofs.find({ kind: 'email_code', proofId: 'ticket-parent' })).toBeNull();
+    });
   });
 
   it('rotates bound sessions with single-winner rotation versions', async () => {
