@@ -526,6 +526,7 @@ export type WorkspaceRow = typeof workspaces.$inferSelect;
 // Chatbot Tables (Lot A)
 export const chatSessions = pgTable('chat_sessions', {
   id: text('id').primaryKey(),
+  cmConversationSessionId: text('cm_conversation_session_id'),
   userId: text('user_id')
     .notNull(),
   // Workspace scope for this chat session.

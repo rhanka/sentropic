@@ -155,6 +155,9 @@ END $$;
 --> statement-breakpoint
 -- Legacy identity tables leave the app schema in this same lot (replacement gate).
 --> statement-breakpoint
+ALTER TABLE public.chat_sessions ADD COLUMN cm_conversation_session_id text
+  REFERENCES cm_identity.cm_identity_conversation_sessions(conversation_session_id) ON DELETE SET NULL;
+--> statement-breakpoint
 DROP TABLE IF EXISTS public.workspace_memberships;
 DROP TABLE IF EXISTS public.tenant_memberships;
 DROP TABLE IF EXISTS public.auth_invite_tokens;
