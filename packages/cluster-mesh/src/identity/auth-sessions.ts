@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { AuthHonoSessionService, AuthHonoSessionPort, AuthHonoSessionRecord, AuthHonoUserPort, AuthHonoAccountPolicyPort } from '@sentropic/auth-hono';
 import type { IdentityAuthBindingInput } from '../identity-contracts/custody-auth.js';
-import type { BoundLoginSessionV1, SignedLoginBindingV1 } from '../identity-contracts/custody.js';
+import type { BoundLoginSessionV1, SignedLoginBindingV1, VerifiedLoginClaimsV1 } from '../identity-contracts/custody.js';
 import { IdentityCustodyErrorV1 } from '../identity-contracts/custody-errors.js';
 import { AccountNotActiveError } from '../identity-contracts/errors.js';
 import { identityDeliveryId } from '../storage/identity/custody-import-deliveries.js';
@@ -12,9 +12,15 @@ const projectSession = (record: BoundLoginSessionV1): AuthHonoSessionRecord => (
   deviceName: record.deviceName, ipAddress: record.ipAddress, userAgent: record.userAgent, mfaVerified: record.login.mfaVerified,
   expiresAt: new Date(record.expiresAt), createdAt: new Date(record.createdAt), lastActivityAt: new Date(record.lastActivityAt ?? record.createdAt), revokedAt: record.revokedAt ? new Date(record.revokedAt) : null,
 });
-export const authSessionService = <H>(input: IdentityAuthBindingInput<H>, users: AuthHonoUserPort, policy: AuthHonoAccountPolicyPort, check: () => void) => {
+export const authSessionService = <H>(input: IdentityAuthBindingInput<H>, users: AuthHonoUserPort, policy: AuthHonoAccountPolicyPort, check: () => void, evidence: Map<string, VerifiedLoginClaimsV1>) => {
   const { tx } = input, store = tx.custody.sessions;
   const now = () => input.hostPorts.clock.now();
+  const projectEvidence = (record: BoundLoginSessionV1): AuthHonoSessionRecord => {
+    const claims = evidence.get(record.sessionTokenHash), login = claims?.login;
+    const matches = claims?.userId === record.userId && claims.sessionId === record.sessionId && login?.authTime === record.login.authTime
+      && login.sessionVersion === record.login.sessionVersion && login.mfaVerified === record.login.mfaVerified;
+    return { ...projectSession(record), mfaVerified: matches && login?.mfaVerified === true };
+  };
   const hash = async (token: string) => { const bytes = Buffer.from(token, 'utf8'); try { return await input.digest.sha256(bytes); } finally { bytes.fill(0); } };
   const sign = async (userId: string, sessionId: string, role: string, login: SignedLoginBindingV1, expiresAt: string) => ({
     sessionToken: await input.loginTokens.sign({ userId, sessionId, role: authRole(role), login, expiresAt, tokenUse: 'session' }),
@@ -25,12 +31,13 @@ export const authSessionService = <H>(input: IdentityAuthBindingInput<H>, users:
     try {
       let claims;
       try { claims = await input.loginTokens.verify(bytes, use, now().toISOString()); }
-      catch (error) { if (error instanceof IdentityCustodyErrorV1 && ['login_binding_mismatch', 'identity_material_invalid'].includes(error.code)) return null; throw error; }
+      catch (error) { if (error instanceof IdentityCustodyErrorV1 && error.code === 'login_binding_mismatch') return null; throw error; }
       if (claims.tokenUse !== use || claims.expiresAt <= now().toISOString()) return null;
       const account = await tx.stores.accounts.findAccount(claims.userId);
       if (!account || account.accountStatus === 'deleted') return null;
       await tx.lockSubject(claims.userId);
       const record = await store.findById(claims.sessionId), digest = await hash(token);
+      if (use === 'session') evidence.set(digest, claims);
       if (!record || record.userId !== claims.userId || record.revokedAt || record.expiresAt <= now().toISOString()
         || digest !== (use === 'session' ? record.sessionTokenHash : record.refreshTokenHash)) return null;
       if (use === 'refresh' && (!claims.login || claims.login.authTime !== record.login.authTime || claims.login.sessionVersion !== record.login.sessionVersion || claims.login.mfaVerified !== record.login.mfaVerified)) return null;
@@ -62,7 +69,7 @@ export const authSessionService = <H>(input: IdentityAuthBindingInput<H>, users:
       const found = await readToken(token, 'session');
       if (!found) return null;
       await store.touchActivity(found.record.sessionId, now().toISOString());
-      return { role: found.role, user: found.user, sessionRecord: projectSession(found.record), session: { userId: found.user.id, sessionId: found.record.sessionId, role: found.role } };
+      return { role: found.role, user: found.user, sessionRecord: projectEvidence(found.record), session: { userId: found.user.id, sessionId: found.record.sessionId, role: found.role } };
     },
     refreshSession: async (token) => {
       const found = await readToken(token, 'refresh');
@@ -88,7 +95,7 @@ export const authSessionService = <H>(input: IdentityAuthBindingInput<H>, users:
       await enqueue(operationId, userId, 'subject', userId); return count;
     },
   };
-  const find = async (promise: Promise<BoundLoginSessionV1 | null>) => { check(); const record = await promise; return record ? projectSession(record) : null; };
+  const find = async (promise: Promise<BoundLoginSessionV1 | null>) => { check(); const record = await promise; return record ? projectEvidence(record) : null; };
   const unsupported = async (): Promise<never> => { check(); throw new IdentityCustodyErrorV1('identity_contract_unavailable'); };
   const port: AuthHonoSessionPort = {
     create: unsupported, updateTokens: unsupported, findById: (id) => find(store.findById(id)), findByTokenHash: (hash) => find(store.findBySessionTokenHash(hash)),

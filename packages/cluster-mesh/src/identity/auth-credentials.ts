@@ -45,12 +45,13 @@ export const authCredentialPort = <H>(input: IdentityAuthBindingInput<H>, check:
     updateCounter: async (id, counter, at) => {
       check();
       const snapshot = snapshots.get(id);
-      if (!snapshot) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+      if (!snapshot || state.assertion?.credentialId !== id || state.assertion.newCounter !== counter) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
       await tx.lockSubject(snapshot.userId);
       const record = await tx.custody.credentials.compareAndSwapCounter({ proofId: snapshot.proofId, userId: snapshot.userId, expectedCounter: snapshot.counter,
         expectedRevision: snapshot.revision, newCounter: counter, at: (at ?? input.hostPorts.clock.now()).toISOString() });
       snapshots.set(id, record);
       state.completionOwner = record.userId;
+      state.assertion = undefined;
     },
     rename: async (id, userId, name) => {
       check(); await tx.lockSubject(userId);

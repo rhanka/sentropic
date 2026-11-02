@@ -11,6 +11,7 @@ export type AuthUv = 'required' | 'preferred' | 'discouraged';
 export interface WebAuthnAttempt {
   flow: 'registration' | 'authentication' | null;
   completionOwner: string | null;
+  assertion?: { credentialId: string; newCounter: number };
   owner: string | null;
   registration: AuthHonoVerifiedRegistrationResponse['registrationInfo'] | undefined;
   registrationUv: boolean;
@@ -57,6 +58,7 @@ export const authWebAuthnServices = <H>(input: IdentityAuthBindingInput<H>, port
       try { result = await server.verifyAuthenticationResponse({ ...args, ...policy }); }
       catch { return refuseWebAuthn('authentication', 'authentication_verification_failed', 'Authentication verification failed.', 401); }
       if (result.verified && policy.requireUserVerification && !result.authenticationInfo.userVerified) refuseWebAuthn('authentication', 'user_verification_required', 'User verification is required.', 403);
+      if (result.verified) state.assertion = { credentialId: args.credential.id, newCounter: result.authenticationInfo.newCounter };
       return result;
     },
   });
@@ -84,7 +86,7 @@ export const authWebAuthnServices = <H>(input: IdentityAuthBindingInput<H>, port
         options.userVerification = state.issuanceUv; return options;
       },
       verifyAuthentication: async (value) => {
-        check(); state.flow = 'authentication'; state.owner = null; state.completionOwner = null;
+        check(); state.flow = 'authentication'; state.owner = null; state.completionOwner = null; state.assertion = undefined;
         return finishAuthCompletion('authentication', await guardAuthStep('authentication', 'credential', () => authentication.verifyAuthentication(value)));
       },
     },

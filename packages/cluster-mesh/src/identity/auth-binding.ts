@@ -21,7 +21,7 @@ export const createIdentityAuthHonoTransactionBindingV1 = <H>(input: IdentityAut
   const credentials = authCredentialPort(input, check, state);
   const boundary = authBoundaryPorts(input, users, policy, check);
   const email = authEmailService(input, evidence, check, (address, code, expiresAt) => { deferredMail.push({ kind: 'code', email: address, code, expiresAt }); });
-  const sessions = authSessionService(input, users, policy, check);
+  const sessions = authSessionService(input, users, policy, check, boundary.tokenEvidence);
   const federation = authFederationPort(input, check);
   const ports: AuthHonoPorts = {
     ...input.hostPorts, users, accountPolicy: policy, credentials, ...proofs, sessions: sessions.port, emailVerification: email.port,
