@@ -183,6 +183,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Bind detach/end/get and their authority reads to one CM transaction; lock write subjects/workspaces and require current active account/tenant plus profile.
   - [x] Remove bootstrap and per-request admin membership upserts; workspace selection requires an existing CM admin membership (Mistral M3).
   - [x] Resolve workspace selection on one CM snapshot and delegate explicit personal-workspace provisioning to the bound CM hook without role elevation (Mistral M4).
+  - [x] Join VS Code workspace enrollment, creator membership, business metadata and mapping state in the CM transaction (Mistral M2).
   - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
   - [x] Evaluate F15 and business workspace visibility on one serializable read transaction.
   - [x] Add explicit verified-HTTP conversation admission and an opaque CM reference on business chats; no identity authority is inferred from a chat id.
