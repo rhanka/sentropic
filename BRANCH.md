@@ -119,6 +119,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - No UI changes in this lot; no UAT.
 
 ## Plan / Todo (lot-based)
+- [x] Review r1: SQLite outbox retains custody, lease and receipt fields with immutable enqueue replay.
 - [x] Review r1: PostgreSQL outbox retains custody, lease and receipt fields with immutable enqueue replay.
 - [x] Review r1: SQLite run serializes readers and writers with expiring transaction handles.
 - [x] Review r1: PostgreSQL run composition with one retry budget and expiring handles.
