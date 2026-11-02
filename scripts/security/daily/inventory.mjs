@@ -2,6 +2,7 @@
 // Pure helpers plus filesystem inventory over the checked-out repository root.
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
+import { loadSastContract } from './sast.mjs';
 import { joinRegister, loadContract, validDate } from './schema.mjs';
 
 export const REQUIRED_LOCKS = ['package-lock.json', 'api/package-lock.json', 'ui/package-lock.json',
@@ -101,13 +102,20 @@ export function inventorySastRoots(contract, root) {
     trees.some((tree) => path.startsWith(`${tree}/`))) : [];
   const discovered = sourceFiles.map((path) => path.includes('/src/') ? path.split('/src/')[0] + '/src' : path.slice(0, path.lastIndexOf('/')));
   const roots = [...new Set([...(contract?.inventory?.sastRoots || []), ...discovered])].sort();
-  return { roots, sourceFiles, blockedUntil: contract?.inventory?.sastBlockedUntil || 'S2c', qualified: false };
+  // ACT-L04: the frozen rule contract is qualified here; live execution stays fenced on L02.
+  let sastContract = null;
+  let contractError = null;
+  try { sastContract = loadSastContract(root || '.'); } catch (error) { contractError = error.message; }
+  return { roots, sourceFiles, blockedUntil: contract?.inventory?.sastBlockedUntil || 'S2c',
+    qualified: Boolean(sastContract), contractError,
+    executionBlocked: 'coverage-blocked: sast',
+    executionNote: 'sast execution admission pending L02 scanner/toolbox' };
 }
 
 const SKIP = new Set(['.git', '.track', '.tmp', '.remote', '.claude', '.codex', '.agents', '.cursor', 'tmp',
   'node_modules', 'dist', 'build', 'coverage', '.svelte-kit', 'history', 'lock-snapshots', 'fixtures']);
 
-function repositoryFiles(root, limit = 100000) {
+export function repositoryFiles(root, limit = 100000) {
   const files = [];
   const visit = (rel = '') => {
     for (const entry of readdirSync(join(root, rel), { withFileTypes: true })) {
@@ -137,11 +145,14 @@ export function inventoryRepository(root = '.', contract = loadContract(join(roo
   const images = inventoryImages(contract, root);
   const sast = inventorySastRoots(contract, root);
   const consumers = findDerivedPinConsumers(root);
+  const expected = expectedInventories(root, contract);
   const missingLocks = locks.filter((lock) => !lock.present).map((lock) => lock.path);
   const undeclaredConsumers = consumers.filter((path) => !contract?.inventory?.derivedPinConsumers?.includes(path));
-  const blockers = ['coverage-blocked: sast', ...missingLocks.map((path) => `missing lock: ${path}`),
+  const blockers = [sast.executionBlocked, ...(sast.contractError ? [`coverage-blocked: sast contract: ${sast.contractError}`] : []),
+    ...missingLocks.map((path) => `missing lock: ${path}`),
     ...images.filter((image) => !image.present).map((image) => `missing image definition: ${image.key}`),
-    ...undeclaredConsumers.map((path) => `undeclared lock-hash consumer: ${path}`)];
+    ...undeclaredConsumers.map((path) => `undeclared lock-hash consumer: ${path}`),
+    ...expected.blockers];
   const files = repositoryFiles(root);
   const rootPackage = files.includes('package.json') ? JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')) : {};
   const workspaces = Array.isArray(rootPackage.workspaces) ? rootPackage.workspaces : rootPackage.workspaces?.packages || [];
@@ -159,6 +170,7 @@ export function inventoryRepository(root = '.', contract = loadContract(join(roo
     manifests,
     images,
     sast,
+    expected,
     derivedPinConsumers: consumers,
     coverage: {
       complete: blockers.length === 0,
@@ -169,4 +181,102 @@ export function inventoryRepository(root = '.', contract = loadContract(join(roo
       undeclaredConsumerIsBlocker: Boolean(contract?.derivedPins?.undeclaredConsumerIsBlocker),
     },
   };
+}
+
+// L4-D/L4-E (ACT-L04): independently expected component inventories, derived from the
+// repository itself (locks, tool catalog, toolbox Dockerfile pins, consumers) and never
+// from scanner output, plus the completeness proof that scanner outputs must cover them.
+
+export function expectedLockComponents(root = '.') {
+  const components = [];
+  const blockers = [];
+  for (const lock of inventoryLocks(root)) {
+    if (!lock.present) { blockers.push(`missing lock: ${lock.path}`); continue; }
+    let parsed;
+    try { parsed = JSON.parse(readFileSync(join(root, lock.path), 'utf8')); } catch { blockers.push(`unsupported lock layout: ${lock.path}`); continue; }
+    if (![2, 3].includes(parsed.lockfileVersion) || !parsed.packages || typeof parsed.packages !== 'object') {
+      blockers.push(`unsupported lock layout: ${lock.path}`);
+      continue;
+    }
+    for (const [path, entry] of Object.entries(parsed.packages)) {
+      if (!path) continue;
+      components.push({ identity: `lock:${lock.path}#${path}`, name: path.split('node_modules/').pop(),
+        version: entry?.version || null, dev: Boolean(entry?.dev), optional: Boolean(entry?.optional), peer: Boolean(entry?.peer) });
+    }
+  }
+  return { components, blockers };
+}
+
+export function expectedToolCatalog(root = '.') {
+  const path = 'scripts/ci/tool-locks.json';
+  if (!existsSync(join(root, path))) return { tools: [], blockers: [`missing tool catalog: ${path}`] };
+  let catalog;
+  try { catalog = JSON.parse(readFileSync(join(root, path), 'utf8')); } catch { return { tools: [], blockers: [`unsupported tool catalog: ${path}`] }; }
+  const specs = catalog?.specs || catalog;
+  // Catalog keys are space-separated name@version groups; each entry is one locked tool.
+  const keys = (Array.isArray(specs) ? specs.map((spec) => spec?.name || spec) : Object.keys(specs || {}))
+    .flatMap((key) => String(key).split(/\s+/)).filter(Boolean).sort();
+  return { tools: keys.map((key) => ({ identity: `tool:${key}`, key })), blockers: [] };
+}
+
+export function expectedEmbeddedBinaries(root = '.', contract) {
+  const binaries = [];
+  const blockers = [];
+  const toolbox = contract?.inventory?.toolbox?.path;
+  if (!toolbox || !existsSync(join(root, toolbox))) {
+    blockers.push(`missing toolbox Dockerfile: ${toolbox || '(unset)'}`);
+  } else {
+    const text = readFileSync(join(root, toolbox), 'utf8');
+    for (const match of text.matchAll(/go install (\S+)@v(\d+\.\d+\.\d+)/g)) {
+      binaries.push({ identity: `binary:${toolbox}#${match[1]}@${match[2]}`, name: match[1], version: match[2] });
+    }
+    const manifestPath = join(root, '.security/ast-grep/rules-manifest.json');
+    if (existsSync(manifestPath)) {
+      try {
+        const pin = JSON.parse(readFileSync(manifestPath, 'utf8'))?.toolbox?.pin;
+        if (pin?.version) binaries.push({ identity: `binary:${toolbox}#ast-grep@${pin.version}`, name: 'ast-grep', version: pin.version, sha256: pin.sha256 });
+      } catch { blockers.push('unsupported ast-grep rules manifest'); }
+    }
+  }
+  return { binaries, blockers };
+}
+
+export function expectedInventories(root = '.', contract = loadContract(join(root, '.security/security-fix.json'))) {
+  const locks = expectedLockComponents(root);
+  const catalog = expectedToolCatalog(root);
+  const binaries = expectedEmbeddedBinaries(root, contract);
+  const consumers = findDerivedPinConsumers(root);
+  const blockers = [...locks.blockers, ...catalog.blockers, ...binaries.blockers,
+    ...consumers.filter((path) => !contract?.inventory?.derivedPinConsumers?.includes(path)).map((path) => `undeclared lock-hash consumer: ${path}`)];
+  const identities = [...locks.components.map((component) => component.identity),
+    ...catalog.tools.map((tool) => tool.identity),
+    ...binaries.binaries.map((binary) => binary.identity),
+    ...inventoryLocks(root).map((lock) => `lockfile:${lock.path}`),
+    ...consumers.map((path) => `consumer:${path}`)].sort();
+  return { identities, lockComponents: locks.components, toolCatalog: catalog.tools,
+    embeddedBinaries: binaries.binaries, standaloneLocks: inventoryLocks(root).map((lock) => lock.path),
+    installedConsumers: consumers, blockers };
+}
+
+// Completeness proof: every independently expected identity must be covered by at least one
+// scanner output. Two outputs agreeing while both omitting the same item still fail.
+export function validateCompleteness(scannerOutputs, expected) {
+  if (!Array.isArray(scannerOutputs) || scannerOutputs.length === 0) throw new Error('coverage-blocked: no scanner output');
+  if (!expected || !Array.isArray(expected.identities)) throw new Error('coverage-blocked: expected inventory required');
+  const covered = new Set(scannerOutputs.flat());
+  const missing = expected.identities.filter((identity) => !covered.has(identity));
+  if (missing.length) {
+    throw new Error(`incomplete inventory, omitted components: ${missing.slice(0, 20).join(', ')}${missing.length > 20 ? ` (+${missing.length - 20} more)` : ''}`);
+  }
+  return { covered: covered.size, expected: expected.identities.length };
+}
+
+// Applicability N/A is only declarable with a positive inventory proof (an enumeration that
+// ran, even to zero items), never with a missing scanner output.
+export function declareApplicability(surface, enumeration) {
+  if (typeof surface !== 'string' || !surface) throw new Error('coverage-blocked: applicability surface required');
+  if (!enumeration || enumeration.enumerated !== true || !Number.isInteger(enumeration.count) || enumeration.count < 0) {
+    throw new Error(`coverage-blocked: applicability N/A without positive inventory proof: ${surface}`);
+  }
+  return { surface, na: true, proof: { enumerated: true, count: enumeration.count } };
 }
