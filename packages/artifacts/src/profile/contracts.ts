@@ -29,6 +29,8 @@ export interface ArtifactProfileRules {
   readonly mimeTypes: readonly string[];
 }
 export interface ArtifactProviderProfile {
+  /** Require caller-supplied CAS preconditions on every publication writer. */
+  readonly requireExpectedCurrentReleaseId?: boolean;
   readonly version: typeof PROFILE_CONTRACT_VERSION;
   readonly selectedCapabilities: readonly string[];
   readonly operations: readonly OperationProfile[];
@@ -64,21 +66,21 @@ export class ArtifactProfileInputError extends Error {
   readonly kind: 'operational' | 'ordinary';
   readonly status: number;
   readonly httpStatus: number;
-  readonly variant: 'unselected_operation' | 'invalid_request';
+  readonly variant: 'unselected_operation' | 'invalid_request' | 'precondition_required';
   readonly publicCode: string;
-  readonly category: 'invalid_request' | 'capability_unselected';
+  readonly category: 'invalid_request' | 'capability_unselected' | 'precondition_required';
   readonly retriable = false;
   readonly phase: 'selection' | 'entry';
   readonly commitState = 'not_committed';
-  constructor(unselected = false) {
-    super(unselected ? 'capability_unavailable' : 'invalid_request');
+  constructor(unselected = false, preconditionRequired = false) {
+    super(unselected ? 'capability_unavailable' : preconditionRequired ? 'precondition_required' : 'invalid_request');
     this.name = 'ArtifactProfileInputError';
     this.kind = unselected ? 'operational' : 'ordinary';
-    this.status = unselected ? 503 : 400;
+    this.status = unselected ? 503 : preconditionRequired ? 428 : 400;
     this.httpStatus = this.status;
-    this.variant = unselected ? 'unselected_operation' : 'invalid_request';
+    this.variant = unselected ? 'unselected_operation' : preconditionRequired ? 'precondition_required' : 'invalid_request';
     this.publicCode = this.message;
-    this.category = unselected ? 'capability_unselected' : 'invalid_request';
+    this.category = unselected ? 'capability_unselected' : preconditionRequired ? 'precondition_required' : 'invalid_request';
     this.phase = unselected ? 'selection' : 'entry';
   }
 }
