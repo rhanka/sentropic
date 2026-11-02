@@ -28,15 +28,15 @@ Implement lot ACT-L04 of r6 §7.2 (W2): qualify native Rust ast-grep with frozen
   - `scripts/security/daily/trivy.mjs`
   - `scripts/security/daily/trivy.test.mjs`
   - `scripts/security/daily/acceptance-disposition.mjs`
+  - `api/Dockerfile` (BR04-EX2 granted subtree under the forbidden `api/**`; see Conditional Paths and Feedback Loop)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
-  - `Makefile` (except BR04-EX1 below)
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `.github/workflows/**`
   - `.tmp/**`
   - `.track/**`
-  - `api/**` (except `api/Dockerfile` under BR04-EX2 below)
+  - `api/**`
   - `packages/**`
   - `apps/**`
   - `ui/**`
@@ -80,27 +80,27 @@ Implement lot ACT-L04 of r6 §7.2 (W2): qualify native Rust ast-grep with frozen
   - [x] Confirm command style: `make ... <vars> ENV=test-cyber-L04` with `ENV` last; Docker under the packet flock.
   - [x] Confirm scope boundaries and declare BR04-EX1/BR04-EX2 above.
   - [x] Validate ast-grep 0.51.0 pin (sha256 a7eead55...69fa639) and rule syntax against fixtures with the pinned native binary.
-- [ ] **Lot 1 — Frozen ast-grep rules and manifest (L4-A/L4-B inputs)**
-  - [ ] `.security/ast-grep/sgconfig.yml` (local ruleDirs only, languageGlobs covering all inventoried source extensions).
-  - [ ] `.security/ast-grep/rules/*.yml` (11 baseline rules, each with positive/negative fixtures).
-  - [ ] `.security/ast-grep/rules-manifest.json` (per-rule sha256, severity mapping, toolbox pin, zero-Python statement, validation receipt).
-  - [ ] `scripts/security/daily/fixtures/sast/**` positive/negative fixtures.
-- [ ] **Lot 2 — SAST contract module and tests (L4-A/L4-B)**
-  - [ ] `scripts/security/daily/sast.mjs` (loadSastContract, planSastTasks, validateSastReport, runner contract).
-  - [ ] `scripts/security/daily/sast-contract.test.mjs` (rule/root coverage, hashes, runtime-download block, zero-Python toolbox proof).
-  - [ ] Wire SAST tasks into `scan.mjs` / `inventory.mjs` (contract qualified, execution still fenced on L02).
-- [ ] **Lot 3 — IaC adaptation and tests (L4-C)**
-  - [ ] `scripts/security/daily/iac.mjs` (expected document identities, planIacScan, validateIacReport).
-  - [ ] `scripts/security/daily/fixtures/iac/**` (multi-doc compose, k8s, Makefile with positive controls).
-  - [ ] `scripts/security/daily/iac-contract.test.mjs` (positive control per surface, drop-one-doc, zero-config, malformed).
-  - [ ] Rewire `trivy.mjs` `requireIacQualification` to the qualified contract.
-- [ ] **Lot 4 — Independent expected inventories and completeness (L4-D/L4-E)**
-  - [ ] Extend `inventory.mjs` (expected lock components, embedded binaries, tool catalog, consumers; validateCompleteness; exact blockers).
-  - [ ] Evolve `inventory.test.mjs` (two agreeing outputs both omitting an item still fail; N/A needs positive proof).
-- [ ] **Lot 5 — Wiring and toolbox pin**
-  - [ ] `acceptance-disposition.mjs` L4-A..E rows (owner ACT-L04, suite test-security-daily).
-  - [ ] `Makefile` SCOPE += 2 test files (BR04-EX1); evolve `scan.test.mjs`/`trivy.test.mjs` assertions.
-  - [ ] `api/Dockerfile` ast-grep pin (BR04-EX2).
+- [x] **Lot 1 — Frozen ast-grep rules and manifest (L4-A/L4-B inputs)**
+  - [x] `.security/ast-grep/sgconfig.yml` (local ruleDirs only, languageGlobs covering all inventoried source extensions).
+  - [x] `.security/ast-grep/rules/*.yml` (11 baseline rules, each with positive/negative fixtures).
+  - [x] `.security/ast-grep/rules-manifest.json` (per-rule sha256, severity mapping, toolbox pin, zero-Python statement, validation receipt).
+  - [x] `scripts/security/daily/fixtures/sast/**` positive/negative fixtures.
+- [x] **Lot 2 — SAST contract module and tests (L4-A/L4-B)**
+  - [x] `scripts/security/daily/sast.mjs` (loadSastContract, planSastTasks, validateSastReport, runner contract).
+  - [x] `scripts/security/daily/sast-contract.test.mjs` (rule/root coverage, hashes, runtime-download block, zero-Python toolbox proof).
+  - [x] Wire SAST tasks into `scan.mjs` / `inventory.mjs` (contract qualified, execution still fenced on L02).
+- [x] **Lot 3 — IaC adaptation and tests (L4-C)**
+  - [x] `scripts/security/daily/iac.mjs` (expected document identities, planIacScan, validateIacReport).
+  - [x] `scripts/security/daily/fixtures/iac/**` (multi-doc compose, k8s, Makefile with positive controls).
+  - [x] `scripts/security/daily/iac-contract.test.mjs` (positive control per surface, drop-one-doc, zero-config, malformed).
+  - [x] Rewire `trivy.mjs` `requireIacQualification` to the qualified contract.
+- [x] **Lot 4 — Independent expected inventories and completeness (L4-D/L4-E)**
+  - [x] Extend `inventory.mjs` (expected lock components, embedded binaries, tool catalog, consumers; validateCompleteness; exact blockers).
+  - [x] Evolve `inventory.test.mjs` (two agreeing outputs both omitting an item still fail; N/A needs positive proof).
+- [x] **Lot 5 — Wiring and toolbox pin**
+  - [x] `acceptance-disposition.mjs` L4-A..E rows (owner ACT-L04, suite test-security-daily).
+  - [x] `Makefile` SCOPE += 2 test files (BR04-EX1); evolve `scan.test.mjs`/`trivy.test.mjs` assertions.
+  - [x] `api/Dockerfile` ast-grep pin (BR04-EX2).
   - [ ] `make scope-check` + `harness check scope` clean.
 - [ ] **Lot 6 — Validation, commits, PR, CI, report**
   - [ ] `flock .tmp/packets/DOCKER-LOCK.md make test-security-daily ENV=test-cyber-L04`, then `make down ENV=test-cyber-L04`.
