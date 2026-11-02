@@ -1,8 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 import { db } from '../../../src/db/client';
-import { oauthClients, oauthConsents } from '../../../src/db/schema';
+import { oauthClients, oauthConsents, oauthDpopProofs } from '../../../src/db/schema';
 import { createConsentStoreAdapter } from '../../../src/services/auth/consent-store-adapter';
+import { createOauthStateStoreAdapter } from '../../../src/services/auth/oauth-state-adapter';
 import { createCmUser } from '../../../src/services/identity/cm-users';
 import { createCmTenant, setCmMembershipState, setCmTenantStatus } from '../../../src/services/identity/cm-tenancy';
 import { runCmIdentityWrite } from '../../../src/services/identity/cm-transaction';
@@ -19,6 +20,7 @@ const protocol = () => db.select().from(oauthConsents).where(eq(oauthConsents.us
 
 describe('CM OAuth consent authority and protocol participant', () => {
   const cleanup = async () => {
+    await db.delete(oauthDpopProofs).where(inArray(oauthDpopProofs.jti, ['a4-unbound', 'a4-escaped']));
     await db.delete(oauthClients).where(eq(oauthClients.clientId, clientId));
     await cmQuery(`DELETE FROM ${cmTable('cm_oauth_consents')} WHERE consent_id = $1`, [consentId]);
     await cmDeleteForUsers([userId]);
@@ -43,6 +45,19 @@ describe('CM OAuth consent authority and protocol participant', () => {
     })).rejects.toThrow('injected_after_consent');
     expect(await protocol()).toEqual([]);
     expect(await authority()).toEqual([]);
+  });
+
+  it('refuses an unbound or escaped OAuth state participant before protocol mutation', async () => {
+    await expect(createOauthStateStoreAdapter().recordDpopJti('a4-unbound', new Date(Date.now() + 60_000)))
+      .rejects.toMatchObject({ code: 'identity_transaction_unbound' });
+    const escaped = await runCmIdentityWrite(async transaction => createOauthStateStoreAdapter({ transaction }));
+    await expect(escaped.recordDpopJti('a4-escaped', new Date(Date.now() + 60_000)))
+      .rejects.toMatchObject({ code: 'identity_transaction_unbound' });
+    await runCmIdentityWrite(async transaction => {
+      const port = createOauthStateStoreAdapter({ transaction });
+      expect(await port.recordDpopJti('a4-unbound', new Date(Date.now() + 60_000))).toBe(true);
+      expect(await port.recordDpopJti('a4-escaped', new Date(Date.now() + 60_000))).toBe(true);
+    });
   });
 
   it('commits exact-tenant consent and refuses a revoked CM grant on the next read', async () => {
