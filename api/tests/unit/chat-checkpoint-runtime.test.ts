@@ -1,17 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { and, asc, eq } from 'drizzle-orm';
+import { asc, eq } from 'drizzle-orm';
 
 import { db } from '../../src/db/client';
 import {
   chatContexts,
   chatMessages,
   chatSessions,
-  users,
-  workspaceMemberships,
   workspaces,
 } from '../../src/db/schema';
 import { createId } from '../../src/utils/id';
-import { ensureWorkspaceForUser } from '../../src/services/workspace-service';
+import { createTestUser } from '../utils/auth-helper';
+import { cmDeleteForUsers, cmDeleteWorkspaceMembers, cmQuery, cmTable } from '../utils/cm-identity-test-store';
 import { chatService } from '../../src/services/chat-service';
 
 describe('chat checkpoint runtime', () => {
@@ -22,17 +21,9 @@ describe('chat checkpoint runtime', () => {
 
   beforeEach(async () => {
     userId = createId();
-    await db.insert(users).values({
-      id: userId,
-      email: `checkpoint-runtime-${userId}@example.com`,
-      displayName: 'Checkpoint Runtime User',
-      role: 'editor',
-      emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    });
-
-    ({ workspaceId } = await ensureWorkspaceForUser(userId));
+    const actor = await createTestUser({ email: `checkpoint-runtime-${userId}@example.com`, displayName: 'Checkpoint Runtime User', role: 'editor' });
+    userId = actor.id;
+    workspaceId = actor.workspaceId!;
 
     sessionId = createId();
     await db.insert(chatSessions).values({
@@ -85,16 +76,10 @@ describe('chat checkpoint runtime', () => {
     await db.delete(chatContexts).where(eq(chatContexts.sessionId, sessionId));
     await db.delete(chatMessages).where(eq(chatMessages.sessionId, sessionId));
     await db.delete(chatSessions).where(eq(chatSessions.id, sessionId));
-    await db
-      .delete(workspaceMemberships)
-      .where(
-        and(
-          eq(workspaceMemberships.workspaceId, workspaceId),
-          eq(workspaceMemberships.userId, userId),
-        ),
-      );
+    await cmDeleteWorkspaceMembers(workspaceId);
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
-    await db.delete(users).where(eq(users.id, userId));
+    await cmDeleteForUsers([userId]);
+    await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = $1`, [workspaceId]);
   });
 
   it('creates and lists checkpoints for a session', async () => {
