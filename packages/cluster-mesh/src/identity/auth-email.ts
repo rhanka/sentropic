@@ -3,6 +3,7 @@ import type { IdentityAuthBindingInput } from '../identity-contracts/custody-aut
 import type { IdentityDigestV1, EmailRegistrationTicketV1 } from '../identity-contracts/custody.js';
 import { IdentityCustodyErrorV1 } from '../identity-contracts/custody-errors.js';
 import { emailCodePreimageV1 } from './custody-crypto.js';
+import { refuseWebAuthn, guardAuthStep } from './auth-abort.js';
 
 export const authEmailService = <H>(input: IdentityAuthBindingInput<H>, evidence: Set<string>, check: () => void,
   mail: (email: string, code: string, expiresAt: string) => void) => {
@@ -47,23 +48,35 @@ export const authEmailService = <H>(input: IdentityAuthBindingInput<H>, evidence
       return { valid: true, verificationToken };
     },
   };
-  const unsupported = async (): Promise<never> => { throw new IdentityCustodyErrorV1('identity_contract_unavailable'); };
+  const unsupported = async (): Promise<never> => { check(); throw new IdentityCustodyErrorV1('identity_contract_unavailable'); };
   const port: AuthHonoEmailVerificationPort = {
     countRecent: (email, since) => { check(); return tx.custody.singleUseProofs.countEmailCodes(email.trim().toLowerCase(), since.toISOString()); },
     createCode: unsupported, findLatestValidCode: unsupported, markUsedWithVerificationToken: unsupported,
     verifyToken: async (email, token, now) => {
       check(); const bytes = Buffer.from(token, 'utf8');
       try {
-        const claims = await input.ticketTokens.verify(bytes, now.toISOString()), ticket = await tx.custody.emailTickets.findByTokenHash(await hash(token));
+        let claims;
+        try { claims = await guardAuthStep('registration', 'ticket', () => input.ticketTokens.verify(bytes, now.toISOString())); }
+        catch (error) {
+          if (error instanceof IdentityCustodyErrorV1 && ['identity_material_invalid', 'proof_binding_mismatch'].includes(error.code)) {
+            refuseWebAuthn('registration', 'registration_verification_failed', 'Registration verification failed.', 400);
+          }
+          throw error;
+        }
+        const ticket = await tx.custody.emailTickets.findByTokenHash(await hash(token));
         if (!ticket || ticket.state !== 'pending' || ticket.expiresAt <= now.toISOString() || claims.codeProofId !== ticket.codeProofId
-          || claims.email !== email.trim().toLowerCase() || ticket.email !== claims.email) return false;
+          || claims.email !== email.trim().toLowerCase() || ticket.email !== claims.email) refuseWebAuthn('registration', 'registration_verification_failed', 'Registration verification failed.', 400);
         tickets.set(ticket.email, ticket); evidence.add(ticket.email); return true;
       } finally { bytes.fill(0); }
     },
   };
   return { service, port, consumeRegistration: async (userId: string) => {
+    check(); await tx.lockSubject(userId);
     const user = await tx.stores.accounts.findAccount(userId);
     const ticket = user ? tickets.get(user.email) : undefined;
-    if (ticket) await tx.custody.emailTickets.consume({ tokenHash: ticket.tokenHash, email: ticket.email, expectedRevision: ticket.revision, bindUserId: userId, at: input.hostPorts.clock.now().toISOString() });
+    if (ticket) {
+      await tx.lockEmail(ticket.email);
+      await tx.custody.emailTickets.consume({ tokenHash: ticket.tokenHash, email: ticket.email, expectedRevision: ticket.revision, bindUserId: userId, at: input.hostPorts.clock.now().toISOString() });
+    }
   } };
 };
