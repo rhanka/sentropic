@@ -2,9 +2,7 @@ import type { IdentityAuthCompletionFlowV1, IdentityAuthCompletionOutcomeV1, Ide
 import type { IdentityUnitOfWorkV1, IdentityTransactionV1, IdentityRunOptionsV1 } from '../identity-contracts/custody.js';
 import { IdentityCustodyErrorV1 } from '../identity-contracts/custody-errors.js';
 
-class CompletionRefusal extends Error {
-  constructor(readonly refusal: IdentityAuthRefusalV1) { super('Authentication refused'); }
-}
+import { finishAuthCompletion, IdentityAuthCompletionAbort } from './auth-abort.js';
 
 export const runIdentityAuthCompletionV1 = async <H, T>(input: {
   readonly flow: IdentityAuthCompletionFlowV1; readonly unitOfWork: IdentityUnitOfWorkV1<H>;
@@ -14,18 +12,14 @@ export const runIdentityAuthCompletionV1 = async <H, T>(input: {
   try {
     const value = await input.unitOfWork.run(input.options, async (tx) => {
       const result = await input.operation(tx);
-      const record = result as { verified?: boolean; valid?: boolean; success?: boolean } | null;
-      const refused = ['registration', 'authentication'].includes(input.flow) ? record?.verified === false
-        : ['magic_link', 'email_code'].includes(input.flow) ? record?.valid === false
-          : ['magic_link_issue', 'email_code_issue'].includes(input.flow) ? record?.success === false
-            : ['session_validate', 'session_refresh', 'credential_rename'].includes(input.flow) ? result === null
-              : ['credential_revoke', 'social_unlink'].includes(input.flow) ? result === false : false;
-      if (refused) throw new CompletionRefusal({ flow: input.flow, result } as IdentityAuthRefusalV1);
-      return result;
+      return finishAuthCompletion(input.flow, result);
     });
     return { committed: true, value };
   } catch (error) {
-    if (error instanceof CompletionRefusal) return { committed: false, refusal: error.refusal };
+    if (error instanceof IdentityAuthCompletionAbort) {
+      if (error.refusal.flow !== input.flow) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+      return { committed: false, refusal: error.refusal };
+    }
     throw error;
   }
 };
