@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { IdentityImportBatchV1, IdentityUnitOfWorkV1 } from '../../src/index.js';
-import { createIdentityCustodyImporterV1 } from '../../src/index.js';
+import { createIdentityCustodyImporterV1, IdentityCustodyErrorV1 } from '../../src/index.js';
 import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, randomBase64Url, sha256Hex, syntheticCoseKey } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 
@@ -18,7 +18,7 @@ interface ProfileEnv {
 const fullBatch = (migrationId: string): IdentityImportBatchV1 => {
   const account = { userId: 'u-import', email: 'imported@example.test', accountStatus: 'active' as const, globalRole: 'editor' as const, createdAt: NOW, updatedAt: NOW };
   return {
-    contractVersion: '1.1.0', migrationId, sourceSnapshotRef: `snap-${migrationId}`, sourceSnapshotDigest: sha256Hex(`snap-${migrationId}`), manifestDigest: sha256Hex(`manifest-${migrationId}`), importedAt: NOW,
+    contractVersion: '1.1.0', legacyConnectorSourceEventIds: [], migrationId, sourceSnapshotRef: `snap-${migrationId}`, sourceSnapshotDigest: sha256Hex(`snap-${migrationId}`), manifestDigest: sha256Hex(`manifest-${migrationId}`), importedAt: NOW,
     rows: [
       { entity: 'account', record: account, profile: { userId: 'u-import', emailVerified: true, displayName: 'Imported', approvalDueAt: null, approvedAt: NOW, approvedByUserId: 'admin', disabledAt: null, disabledReason: null, legacyAccountStatus: 'enabled' } },
       {
@@ -84,7 +84,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody import on
 
   it('preserves ids, bytes, counters, digests, hashes and subjects', async () => {
     const env = await openEnv();
-    const importer = createIdentityCustodyImporterV1({ unitOfWork: env.unitOfWork, fence: { assertExclusiveWriter: async () => undefined }, importOptions: IMPORT, validationOptions: READ });
+    const importer = createIdentityCustodyImporterV1({ unitOfWork: env.unitOfWork, fence: { assertExclusiveWriter: async () => undefined }, importOptions: IMPORT, validationOptions: { ...READ, purpose: 'import' }, connectorCustody: null });
     const batch = fullBatch('mig-full');
     const validation = await importer.validate(batch);
     expect(validation).toEqual({ valid: true, issues: [] });
@@ -112,7 +112,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody import on
 
   it('replays identical migrations and refuses conflicting ones', async () => {
     const env = await openEnv();
-    const importer = createIdentityCustodyImporterV1({ unitOfWork: env.unitOfWork, fence: { assertExclusiveWriter: async () => undefined }, importOptions: IMPORT, validationOptions: READ });
+    const importer = createIdentityCustodyImporterV1({ unitOfWork: env.unitOfWork, fence: { assertExclusiveWriter: async () => undefined }, importOptions: IMPORT, validationOptions: { ...READ, purpose: 'import' }, connectorCustody: null });
     const batch = fullBatch('mig-replay');
     const first = await importer.importBatch(batch);
     const second = await importer.importBatch(batch);
@@ -127,7 +127,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody import on
 
   it('rolls back the whole batch on a conflicting row', async () => {
     const env = await openEnv();
-    const importer = createIdentityCustodyImporterV1({ unitOfWork: env.unitOfWork, fence: { assertExclusiveWriter: async () => undefined }, importOptions: IMPORT, validationOptions: READ });
+    const importer = createIdentityCustodyImporterV1({ unitOfWork: env.unitOfWork, fence: { assertExclusiveWriter: async () => undefined }, importOptions: IMPORT, validationOptions: { ...READ, purpose: 'import' }, connectorCustody: null });
     await importer.importBatch(fullBatch('mig-base'));
     // Second batch: valid account row plus an invitation token already owned by another invitation.
     const batch = fullBatch('mig-rollback');
@@ -148,7 +148,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody import on
 
   it('rejects invalid rows before touching the database', async () => {
     const env = await openEnv();
-    const importer = createIdentityCustodyImporterV1({ unitOfWork: env.unitOfWork, fence: { assertExclusiveWriter: async () => undefined }, importOptions: IMPORT, validationOptions: READ });
+    const importer = createIdentityCustodyImporterV1({ unitOfWork: env.unitOfWork, fence: { assertExclusiveWriter: async () => undefined }, importOptions: IMPORT, validationOptions: { ...READ, purpose: 'import' }, connectorCustody: null });
     const batch = fullBatch('mig-invalid');
     const tampered: IdentityImportBatchV1 = {
       ...batch,
@@ -175,7 +175,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody import on
         },
       },
       importOptions: IMPORT,
-      validationOptions: READ,
+      validationOptions: { ...READ, purpose: 'import' }, connectorCustody: null,
     });
     await expect(importer.importBatch(fullBatch('mig-fence'))).rejects.toThrow('fence refuses');
     expect(calls).toBeGreaterThan(0);
@@ -183,4 +183,57 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody import on
       expect(await tx.hostTransaction.journal.findAccountCore('u-import')).toBeNull();
     });
   });
+  it('accounts for the exact legacy event inventory and persists its partition', async () => {
+    const env = await openEnv();
+    const importer = createIdentityCustodyImporterV1({ unitOfWork: env.unitOfWork, fence: { assertExclusiveWriter: async () => undefined }, connectorCustody: null, importOptions: IMPORT, validationOptions: { ...READ, purpose: 'import' } });
+    const unresolved = { sourceEventId: 'event-a', connectorAccountId: 'c-a', provider: 'github', subjectId: null, disposition: 'unresolved' as const, deliveryId: null, evidenceRef: null, importedAt: NOW };
+    const acknowledged = { ...unresolved, sourceEventId: 'event-b', disposition: 'acknowledged' as const, evidenceRef: 'protected:ack-b' };
+    const batch: IdentityImportBatchV1 = { ...fullBatch('legacy-partition'), legacyConnectorSourceEventIds: ['event-a', 'event-b'], rows: [
+      { entity: 'legacy_connector_tombstone', record: unresolved }, { entity: 'legacy_connector_tombstone', record: acknowledged },
+    ] };
+    expect((await importer.importBatch(batch)).legacyConnectorTombstones).toEqual({ queued: 0, unresolved: 1, acknowledged: 1 });
+    await env.unitOfWork.run(READ, async (tx) => {
+      expect(await tx.hostTransaction.journal.findLegacyConnectorTombstone('event-a')).toEqual(unresolved);
+      expect(await tx.hostTransaction.journal.findLegacyConnectorTombstone('event-b')).toEqual(acknowledged);
+    });
+    for (const invalid of [
+      { ...batch, legacyConnectorSourceEventIds: ['event-a', 'event-b', 'omitted'] },
+      { ...batch, legacyConnectorSourceEventIds: ['event-b', 'event-a'] },
+      { ...batch, rows: [...batch.rows, batch.rows[0]] },
+    ]) {
+      expect((await importer.validate(invalid)).issues).toContainEqual(expect.objectContaining({ code: 'identity_import_invalid' }));
+      await expect(importer.importBatch(invalid)).rejects.toMatchObject({ code: 'identity_import_invalid' });
+    }
+  });
+
+  it('verifies pending connector custody inside import before recording the receipt', async () => {
+    const env = await openEnv();
+    const operationId = sha256Hex(JSON.stringify(['legacy-connector-revoke', 'source-event']));
+    const deliveryId = sha256Hex(JSON.stringify(['A2.0b-revocation', operationId, 'connector_grants', 'connector_grant', 'connector']));
+    const delivery = { deliveryId, operationId, step: 'connector_grants' as const, subjectId: 'owner', targetKind: 'connector_grant' as const, targetRef: 'connector', custodyRef: 'custody-ref', state: 'pending' as const, createdAt: NOW, nextAttemptAt: NOW, deliveredAt: null, claimOwner: null, leaseUntil: null, claimVersion: 0, attemptCount: 0 };
+    const tombstone = { sourceEventId: 'source-event', connectorAccountId: 'connector', provider: 'github', subjectId: 'owner', disposition: 'queued' as const, deliveryId, evidenceRef: null, importedAt: NOW };
+    const batch: IdentityImportBatchV1 = { ...fullBatch('legacy-queued'), legacyConnectorSourceEventIds: ['source-event'], rows: [{ entity: 'revocation_delivery', record: delivery }, { entity: 'legacy_connector_tombstone', record: tombstone }] };
+    const base = { unitOfWork: env.unitOfWork, fence: { assertExclusiveWriter: async () => undefined }, importOptions: IMPORT, validationOptions: { ...READ, purpose: 'import' as const } };
+    await expect(createIdentityCustodyImporterV1({ ...base, connectorCustody: null }).importBatch(batch)).rejects.toMatchObject({ code: 'identity_contract_unavailable' });
+    let calls = 0;
+    const importer = createIdentityCustodyImporterV1({ ...base, connectorCustody: {
+      capture: async () => { throw new Error('import must not capture'); },
+      eraseAcknowledged: async () => { throw new Error('import must not erase'); },
+      assertCaptured: async (record, tx) => {
+        calls += 1;
+        expect(await tx.revocationOutbox.find(deliveryId)).toEqual(record);
+        expect(await tx.hostTransaction.journal.findImportReceipt(batch.migrationId)).toBeNull();
+        if (calls === 1) throw new IdentityCustodyErrorV1('identity_revocation_custody_missing');
+      },
+    } });
+    await expect(importer.importBatch(batch)).rejects.toMatchObject({ code: 'identity_revocation_custody_missing' });
+    await env.unitOfWork.run(READ, async (tx) => { expect(await tx.revocationOutbox.find(deliveryId)).toBeNull(); });
+    const receipt = await importer.importBatch(batch);
+    expect(receipt.legacyConnectorTombstones).toEqual({ queued: 1, unresolved: 0, acknowledged: 0 });
+    expect(await importer.importBatch(batch)).toEqual(receipt);
+    expect(calls).toBe(2);
+    const wrongOwner = { ...batch, migrationId: 'wrong-owner', rows: [{ entity: 'revocation_delivery' as const, record: { ...delivery, subjectId: 'other' } }, batch.rows[1]] };
+    await expect(importer.importBatch(wrongOwner)).rejects.toMatchObject({ code: 'identity_import_invalid' });
+  });
+
 });
