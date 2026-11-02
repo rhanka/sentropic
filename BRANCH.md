@@ -252,6 +252,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Correct PostgreSQL index qualification and the OAuth consent account lock column.
   - [ ] All residual readers of legacy identity tables switched to CM stores (46-file inventory).
   - [x] Replace omitted artifact authorization and login-credential SQL readers with CM identity sources.
+  - [x] Require the current CM consent and exact active CM conversation in artifact effect guards, locking their authority rows and rechecking conversation expiry after waits.
 - [ ] **Lot 3 — Deletions**
   - [ ] Drop legacy identity tables in migration; delete identity part of api/src/db/schema.ts and the named files; no dual writer, no legacy fallback.
 - [ ] **Lot 4 — F11 screens + e2e**
