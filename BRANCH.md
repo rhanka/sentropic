@@ -86,9 +86,9 @@ Owner decision (relayed by immo): the `<id>.pinned.<base>` host form disappears.
   - [x] `flock <lock> make lock-root ENV=test-artifacts-host`, `flock <lock> make lock-api ENV=test-artifacts-host` (workspace pins).
   - [x] Recompute APP-P1 manifest digest; update `api/src/services/mcp/cluster-registry.ts`, `app-mcp-registry.test.ts`, `app-mcp-installed.test.ts`.
   - [x] Re-verify version > `npm view @sentropic/artifacts version` (Post-Rebase Gate).
-- [ ] **Lot 4 — Final validation & PR**
+- [x] **Lot 4 — Final validation & PR**
   - [x] `make scope-check`; `make commit` per lot; push branch (crash safety).
   - [x] READY PR #893 (body from BRANCH.md, base main, not draft).
   - [x] CI run 1 = 41532326921 on head `155f6ca5c`: FAILURE, but all change-relevant lanes green (`validate-artifacts`, `typecheck-lint-api`, all `test-api-unit-integration`, all `test-e2e`, `smoke-idp-screens`, `enforce-package-bump`). Four root causes, all outside the artifacts code and fixed in the follow-up commit: (a) `validate-publishable-manifests` — lockfile-lane guard needs the BRLOCK-EX1 `review_by=2026-11-30T00:00:00Z` acknowledgment in BRANCH.md (added in Scope / Guardrails); (b) `validate-cluster-mesh` (source installed major, lazy stateful install) — `prepare-artifacts.spec.ts` requires the `selected` fixture to pin the 0.2.7 candidate (BR01-EX3 re-pin with the packed-candidate integrity); (c) `memory-l5-qualification` — the root-lock refresh had also synced main's pre-existing mcp-platform staleness, changing the P1 lock fingerprint (BR01-EX2: reverted, fingerprint re-verified equal to the committed manifest `2e050e2f…`); (d) `ci-gate` aggregate of the above.
-  - [ ] CI run 2 on the fix head (single run, result recorded here and in the report): pending.
+  - [x] CI run 2 = 41537081159 on fix head `9a07ee7ce`: **SUCCESS** (105 jobs, 71 success, 0 failures; all run-1 failure lanes green: `validate-publishable-manifests`, `validate-cluster-mesh` x3, `memory-l5-qualification`, plus `ci-gate`, `validate-artifacts`, `typecheck-lint-api`, `package-candidates`). PR #893 head = `9a07ee7ce`, READY, not merged.
   - [x] Report to `.tmp/rv/artifacts-content-host.md`. Do not merge.
