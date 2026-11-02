@@ -2796,7 +2796,7 @@ export class ChatService {
       toolSet.clear();
       console.warn('[chat] catalog: unavailable');
     }
-    addResolvedTools(localTools);
+    if (catalogAvailable) addResolvedTools(localTools);
     tools = toolSet.size > 0 ? Array.from(toolSet.values()) : undefined;
 
     const localToolNames = new Set(
