@@ -22,6 +22,7 @@ describe('A4 D11 protected checkpoint', () => {
     const input = { format: 'app-cm-identity-cutover/1', purpose: 'rehearsal', candidateCommit: 'a'.repeat(40),
       sourceSnapshotPath: snapshot, sourceSnapshotRef: 'snapshot-ref',
       sourceSnapshotDigest: createHash('sha256').update('synthetic backup').digest('hex'), remoteSnapshotRef: 'remote-snapshot-ref',
+      remoteSnapshotPath: snapshot, remoteSnapshotDigest: createHash('sha256').update('synthetic backup').digest('hex'),
       ...expected, writerFenceRef: 'fence-ref', legacyWritersStopped: true, remoteFileWriterStopped: true,
       rollbackCheckpointRef: 'rollback-ref', rollbackLimitsRef: 'limits-ref', sourceMetadataDispositionRef: 'metadata-ref',
       rehearsalReceiptRef: null };
