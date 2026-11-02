@@ -1,19 +1,17 @@
 # feat(identity): add durable verification custody and atomic deletion
 
 ## Objective
-Add durable verification custody, material-preserving import and atomic person deletion to packages/cluster-mesh. Imported credential bytes, digests, session hashes and social subjects survive storage; required deletion failures roll back identity and business rows together. The approved A2.0b r6 amendment defines the intended contract; the remaining composition and proof gaps below block full acceptance.
+Add durable verification custody, material-preserving import and atomic person deletion to cluster-mesh. The R1 corrections enforce the approved counter/CAS rules, source continuation tokens, proof retention, SQL constraints, combined transaction surface, import accounting and transactional revocation delivery.
 
-## Validation evidence and remaining acceptance gaps
-- Full SQLite profile: 185/185 tests pass in 20 files; zero skipped or todo cases.
-- Full PostgreSQL profile: 185/185 tests pass in 20 files; zero skipped or todo cases.
-- Both campaigns ran once under the shared Docker flock with `ENV=test-cm-a2-0b`. P1–P5, custody security cases and the unchanged frozen identity suite executed.
-- New schema regression: three expected rollback assertion failures before the fix; all six cases pass afterward. No timeout was increased and no existing assertion was weakened.
-- Source/test TypeScript checks and package ESLint pass. The only post-campaign source edit removes a redundant literal type annotation; runtime behavior is unchanged.
-- PostgreSQL initialization exceeded the original 30-attempt startup bound under local disk pressure. Its logs then confirmed initialization complete; the TCP database probe passed before the first test campaign.
-- Full acceptance remains blocked: the inherited UOW uses `runRead/runWrite` instead of the r6 combined bound composition consumed by A4; the P1 fixture does not verify a real WebAuthn assertion, and PostgreSQL reopening reuses handles.
-- Review is incomplete: Argon's qualification-wiring finding is fixed; Mistral failed before producing a review. Final-head consensus is not claimed.
-- CI budget: first run 41389276220 failed train lock-sync; the owner authorized one second ready-PR-triggered run for the scoped dev.4 lock repair. Do not merge.
-- Rebased onto `c8e9fa652` to resolve the sole `BRANCH.md` conflict blocking PR #882 CI. Identity source, test and runner files are byte-identical to the qualified tree. Post-rebase registry gate: `0.26.0-dev.4` is greater than published `0.25.0` and is still free.
+## Validation evidence and acceptance boundary
+- [x] Latest complete identity qualification: SQLite 227/227 and PostgreSQL 227/227, 24 files per campaign, zero skipped or todo cases; both under the sole Docker flock with ENV=test-cm-a2-0b.
+- [x] Reproduce the reviewed failures before fixes, including exact counter refusal codes, missing tombstone foreign key and unbound credential writes. No assertion weakening or timeout increase.
+- [x] Execute real P-256 registration and signed authentication through the shipped auth-hono factories and actual WebAuthn verifier; verify counter-regression rollback.
+- [x] Typecheck and lint pass; source-owner capture, AEAD custody, outbox, acknowledgement replay and rollback pass on both databases.
+- [x] Rebase onto origin/main e1c0ef97d after merge-tree found only BRANCH.md conflicted. Identity source/tests remain byte-identical to the qualified tree.
+- [x] Bump the candidate and all lock/fixture pins to 0.26.0-dev.5, greater than published 0.25.0 and not yet published. Exact train lock-sync passes.
+- [ ] Complete independent review reconciliation and the owner-requested ready-PR CI; record final head/results in .tmp/rv/lot-A2.0b.md. Do not merge.
+- [ ] Full r6/A4 author-switch acceptance is separate from this requested findings 1–10 closeout. Original finding 11 (versioned schema admission) and the prior PostgreSQL reopen-fixture limitation remain outside this repair's acceptance claim.
 
 ## Scope / Guardrails
 - Scope limited to packages/cluster-mesh identity custody, storage, import, deletion, tests, version manifest.
@@ -83,26 +81,26 @@ Add durable verification custody, material-preserving import and atomic person d
 - [x] Fix review r1 finding 6: add registration/email lifecycle and active/deadline/read-only SQL guards for combined transaction handles.
 - [x] Fix review r1 finding 6: bind journal, outbox, cleanup and subject/workspace/email locks to the active host SQL executor.
 - [x] Fix review r1 finding 6: bound core/enforcement variants bypass constructor DDL and nested transactions; standalone frozen behavior remains available to its existing callers.
-- [x] Fix review r1 finding 6: migrate remote-delivery.spec.ts to combined run/options without weakening assertions (runtime qualification pending).
-- [x] Fix review r1 finding 6: migrate connector-custody.spec.ts to combined run/options without weakening assertions (runtime qualification pending).
-- [x] Fix review r1 finding 6: migrate atomic-person-deletion.spec.ts to combined run/options without weakening assertions (runtime qualification pending).
-- [x] Fix review r1 finding 6: migrate custody-storage.spec.ts to combined run/options without weakening assertions (runtime qualification pending).
-- [x] Fix review r1 finding 6: migrate custody-security.spec.ts to combined run/options without weakening assertions (runtime qualification pending).
-- [x] Fix review r1 finding 6: migrate custody-import.spec.ts to combined run/options without weakening assertions (runtime qualification pending).
-- [x] Fix review r1 finding 6: migrate custody-concurrency.spec.ts to combined run/options without weakening assertions (runtime qualification pending).
-- [x] Fix review r1 finding 6: migrate auth-binding.spec.ts to combined run/options without weakening assertions (runtime qualification pending).
-- [x] Fix review r1 finding 6: migrate a20b-prerequisites.spec.ts to combined run/options without weakening assertions (runtime qualification pending).
-- [x] Fix review r1 finding 6: migrate a20b-helpers.ts to combined run/options without weakening assertions (runtime qualification pending).
-- [ ] Fix review r1 findings 1/8: tests preceded fixes for counter regression and exact refusal precedence on both profiles; durable execution pending the shared Docker lock.
+- [x] Fix review r1 finding 6: migrate remote-delivery.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate connector-custody.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate atomic-person-deletion.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate custody-storage.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate custody-security.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate custody-import.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate custody-concurrency.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate auth-binding.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate a20b-prerequisites.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 finding 6: migrate a20b-helpers.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
+- [x] Fix review r1 findings 1/8: tests preceded counter-regression and exact refusal-precedence fixes; both profiles pass.
 - [ ] Fix review r1 findings 2–7/9/10: tests first, amendment-exact fixes, both durable profiles, final PR CI and per-finding report; do not merge.
-- [ ] Fix review r1 findings 3/9: source HS256 claims and missing HMAC key code corrected after regression tests; execution pending.
-- [ ] Fix review r1 finding 4: purge retains bound completed magic links and live ticket parents, deleting expired tickets first; regression execution pending.
-- [ ] Fix review r1 finding 2: delivered replay is a no-op; pending custody is checked and the delivered row re-read before erasure; regression execution pending.
-- [ ] Fix review r1 findings 5/10: mandatory RESTRICT/SET NULL foreign keys and native PostgreSQL booleans implemented after real-engine schema regressions; parent fixture/cleanup qualification pending.
-- [ ] Fix review r1 finding 5 follow-through: fixtures create real parents, deletion removes tickets before proofs and detaches invitations before workspaces; qualification pending.
-- [ ] Fix review r1 finding 6: tests pin eleven descriptors and the combined run/mode/purpose/attempt-budget transaction surface, rollback, read-only and handle lifetime before implementation.
-- [ ] Fix review r1 findings 6/7: add the exact lifecycle, cleanup, journal, delivery and plane contracts; bind the implementations in subsequent atomic commits.
-- [ ] Fix review r1 finding 6: replace split UOW calls with the combined public interface; add the exact import inventory and required nullable custody dependency.
+- [x] Fix review r1 findings 3/9: source HS256 claims and missing HMAC key code corrected after regression tests; both profiles pass.
+- [x] Fix review r1 finding 4: purge retains bound completed magic links and live ticket parents, deleting expired tickets first; both profiles pass.
+- [x] Fix review r1 finding 2: delivered replay preserves the original timestamp; pending custody is checked and the delivered row re-read before erasure; both profiles pass.
+- [x] Fix review r1 findings 5/10: mandatory RESTRICT/SET NULL foreign keys and native PostgreSQL booleans pass real-engine schema, parent and cleanup qualification.
+- [x] Fix review r1 finding 5 follow-through: fixtures create real parents; dependency-safe cleanup passes on both profiles.
+- [x] Fix review r1 finding 6: test-first eleven descriptors, combined run/options, rollback, read-only and handle-lifetime qualification pass.
+- [x] Fix review r1 findings 6/7: bind lifecycle, cleanup, journal, delivery and plane contracts; both-profile atomicity and delivery tests pass.
+- [x] Fix review r1 finding 6: combined public UOW, exact import inventory and required nullable custody dependency are implemented and qualified.
 - [x] BR-A20B-EX3 (owner-authorized Fix CI 1): synchronize only cluster-mesh dev.4 in root/API workspace locks and selected packaging fixture pins; preserve unrelated dependency selections and integrity records. Impact: version metadata only. Rollback: revert these four files together with the version bump.
 - [x] BR-A20B-EX1: repair PostgreSQL qualification readiness in `packages/cluster-mesh/tests/storage/postgres.mk`; the current Unix-socket probe can accept initdb's temporary server before `storage_test` exists. Impact: test startup only, unchanged retry budget. Rollback: revert the readiness hunk.
 - [x] BR-A20B-EX2: wire the existing identity profile configs into the package runner and PostgreSQL CI lane; otherwise frozen tests use the default in-memory factory. Impact: required identity qualification only, unchanged assertions and timeouts. Rollback: revert the runner/target additions.
@@ -112,7 +110,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - [x] Require a successful TCP query against the actual PostgreSQL test database; preserve the 30-attempt startup budget and print startup diagnostics on failure.
 - [x] Replace autocommitted SQLite schema statements with one savepoint-protected batch and initialize the core bundle once per factory; both runtime profiles pass.
 - [x] Refuse missing PostgreSQL configuration in the dedicated profile instead of substituting the in-memory oracle.
-- [ ] Resolve inherited r6 composition gaps before claiming amendment completion: the shipped UOW exposes `runRead/runWrite`, while r6 requires the combined bound composition consumed by A4.
+- [x] Replace inherited runRead/runWrite with the combined r6 UOW, transaction ports and real authentication completion binding.
 - [x] Verify schema regression red, implement transactional schema installation, and verify green.
 - [x] Run each final identity database campaign once under the shared Docker flock, then clean up; both receipts contain 185 passes and zero skips, owned containers removed, `make down` completed.
 - [x] Push the final head, open a ready PR, wait for one CI, and write `.tmp/rv/lot-A2.0b.md`; run 41389276220 failed deterministic train lock-sync.
