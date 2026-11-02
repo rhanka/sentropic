@@ -16,6 +16,9 @@
   - `BRANCH.md`
   - `package-lock.json`
   - `api/package-lock.json`
+  - `api/src/services/mcp/cluster-registry.ts`
+  - `api/tests/api/app-mcp-registry.test.ts`
+  - `api/tests/api/app-mcp-installed.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -27,6 +30,8 @@
   - [x] Record rationale, impact and rollback in Feedback Loop before exceptions.
 
 ## Feedback Loop
+- [x] BRP0B-EX2 (owner-urgent CI repair): qualify the artifacts 0.2.5 APP-P1 manifest in api/src/services/mcp/cluster-registry.ts and the two registry/installation test fixtures. Rationale: provider version is part of the manifest digest; replaying 0.2.4 reproduces the old pin exactly. Impact: refresh only the manifest receipt; preserve the profile digest, four selected tool specifications and both strict guards. Rollback: revert these API changes together with the artifacts provider version bump.
+- [x] Fix CI 2 local qualification: API test stack healthy; registry 22/22, physical installation 2/2 and transport 8/8 pass through the CI toolbox. All containers and the isolated network removed by make down under the single Docker lock.
 - [x] BRP0B-EX1 (owner CI repair): synchronize only the artifacts workspace version in root/API locks; no dependency graph change; rollback with the version fix.
 - [x] BRLOCK-EX1: existing CI maintainers policy, review_by=2026-11-30T00:00:00Z; no renewal or scope expansion of the exemption.
 - [x] CI 41361090041 budget step passed; its oversized baseline deliberately reimports the governance corpus. The actual artifacts failure is the ensure HTTP/MCP integration fixture missing lifecycle.stateOf.
@@ -81,3 +86,8 @@
   - [x] Restore compatible artifacts 0.2.5 manifest/provider/CHANGELOG and root/API workspace lock pins.
   - [x] Qualify the actual ensure transport integration regression (7/7), full artifact budget, production API image (strict prune/audit) and lock-install guard (11/11) under the single Docker lock; make down completed.
   - [ ] Commit through make, push the final head, run one workflow_dispatch CI, record its completed result and make down.
+- [ ] **Lot 6 — Fix CI 2 (owner-urgent request, PR 878)**
+  - [x] Rebase onto origin/main and retain this branch's BRANCH.md; artifacts 0.2.5 remains above published 0.2.4 after rebase.
+  - [x] Re-pin the version-only APP-P1 manifest change; retain the frozen profile and reject the superseded 0.2.4 receipt.
+  - [x] Qualify registry/installed/transport tests and API test-stack boot under the single Docker lock; make down.
+  - [ ] Scope-check, make commit, force-with-lease push, dispatch CI once, and record the head/run in the conductor dossier; no merge or CI monitoring in this lane.
