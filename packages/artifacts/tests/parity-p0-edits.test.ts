@@ -79,9 +79,10 @@ describe('artifacts_get_source', () => {
     expect(files).toHaveLength(2);
     // Manifest files are canonicalized (sorted), so assert by path, not position.
     expect(files.find((f) => f.path === 'index.html'))
-      .toMatchObject({ mimeType: 'text/html', bytes: [...Buffer.from('<h1>Hi</h1>')] });
+      .toMatchObject({ mimeType: 'text/html', text: '<h1>Hi</h1>', encoding: 'utf8' });
     expect(files.find((f) => f.path === 'data.json'))
-      .toMatchObject({ mimeType: 'application/json', bytes: [...Buffer.from('{"a":1}')] });
+      .toMatchObject({ mimeType: 'application/json', text: '{"a":1}', encoding: 'utf8' });
+    for (const file of files) expect(file).not.toHaveProperty('bytes');
   });
 
   it('should reflect the latest publish after edits', async () => {

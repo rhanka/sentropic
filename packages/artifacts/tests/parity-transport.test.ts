@@ -85,7 +85,8 @@ describe('P0 source, control and summary transports', () => {
       bindingName: 'page', currentReleaseId: releaseId, title: 'My page', digest: expect.any(String) })] } } });
     const source = await call('artifacts_get_source', { releaseId, paths: ['index.html'] });
     expect(source).toMatchObject({ status: 200, body: { releaseId, sourceRef: { kind: 'inline-original' },
-      files: [{ path: 'index.html', bytes: [...Buffer.from('<h1>Author</h1>')] }] } });
+      guideRef: { tool: 'artifacts_get_api_guide', version: expect.any(String) },
+      files: [{ path: 'index.html', text: '<h1>Author</h1>', encoding: 'utf8' }] } });
   });
   it('should refuse expired and stale proofs without effects or receipts', async () => {
     const { world, releaseId, call } = await published();
