@@ -113,10 +113,7 @@ CM_COMMENTS_SIBLING_FLAGS = $(if $(SIBLING_ARCHIVES_FILE),$(if $(and $(filter 1,
 define CM_COMMENTS_SIBLING_SETUP
 if [ -n "$${CM_COMMENTS_SIBLINGS:-}" ]; then \
   node /workspace/scripts/ci/locked-tools.mjs --prefix /tmp/comments-guard --ignore-scripts --no-audit --no-fund semver@7.7.2 >/dev/null; \
-  MANIFEST_GUARD_TOOL_DIR=/tmp/comments-guard node /workspace/packages/cluster-mesh/tests/storage/installed-siblings.mjs > /tmp/comments-registry-url & \
-  registry_pid=$$!; trap "kill $$registry_pid 2>/dev/null || true" EXIT; \
-  while [ ! -s /tmp/comments-registry-url ]; do kill -0 "$$registry_pid"; sleep 0.1; done; \
-  export npm_config_registry="$$(cat /tmp/comments-registry-url)"; \
+  MANIFEST_GUARD_TOOL_DIR=/tmp/comments-guard node /workspace/packages/cluster-mesh/tests/storage/installed-siblings.mjs; \
 fi;
 endef
 .PHONY: cluster-mesh-comments-installed
@@ -129,11 +126,11 @@ cluster-mesh-comments-installed: $(if $(CI_PACKAGE_CANDIDATES),ci-package-verify
 		-e CM_PG_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME):5432/storage_test" \
 		-e CM_PACK_ONLY_PIN="$(CM_PACK_ONLY_PIN)" \
 		-v "$(abspath $(CM_COMMENTS_TARBALL)):/candidate.tgz:ro" -v "$(abspath $(CM_COMMENTS_REPORT)):/reports" \
-		-v "$(CURDIR)/packages/cluster-mesh/tests/storage:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(CM_COMMENTS_SIBLING_SETUP) \
-		mkdir -p /tmp/comments-bare /tmp/comments-consumer; cp /probe/installed-bare.mjs /probe/pack-only-dev-gate.mjs /tmp/comments-bare/; cd /tmp/comments-bare; \
+		-v "$(CURDIR)/packages/cluster-mesh/tests/storage:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
+		mkdir -p /tmp/comments-bare /tmp/comments-consumer; cp /probe/installed-bare.mjs /probe/pack-only-dev-gate.mjs /tmp/comments-bare/; cd /tmp/comments-bare; $(CM_COMMENTS_SIBLING_SETUP) \
 		node /workspace/scripts/ci/locked-consumer.mjs --omit=optional --ignore-scripts --no-audit --no-fund /candidate.tgz >/dev/null; node installed-bare.mjs > /reports/bare.json; \
 		cd /tmp/comments-consumer; cp /probe/installed-*.mjs .; \
-		npm init -y >/dev/null; npm pkg set "overrides.zod=^4.6.6"; \
+		npm init -y >/dev/null; npm pkg set "overrides.zod=^4.6.6"; $(CM_COMMENTS_SIBLING_SETUP) \
 		node /workspace/scripts/ci/locked-consumer.mjs --omit=optional --ignore-scripts --no-audit --no-fund --save-exact $(CM_CONSUMER_MESH) @sentropic/comments@0.3.0 >/dev/null; \
 		node /workspace/scripts/ci/locked-consumer.mjs --save-dev --ignore-scripts --no-audit --no-fund --save-exact pg@8.16.3 >/dev/null; \
 		cp node_modules/@sentropic/cluster-mesh/assets/storage/comments/oracle/conformance.mjs installed-oracle.mjs; \
@@ -163,8 +160,8 @@ cluster-mesh-pg-major-phase:
 		-e CM_PG_UPGRADE_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME)-next:5432/storage_test" \
 		-e CM_PG_REFERENCE_URL="postgresql://postgres:qualification-only@$(CM_PG_NAME)-next:5432/reference_test" \
 		-v "$(abspath $(CM_COMMENTS_TARBALL)):/candidate.tgz:ro" -v "$(abspath $(CM_COMMENTS_REPORT)):/reports" \
-		-v "$(CURDIR)/packages/cluster-mesh/tests/storage:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; $(CM_COMMENTS_SIBLING_SETUP) \
-		mkdir /tmp/cm-major; cd /tmp/cm-major; cp /probe/installed-major-upgrade.mjs .; \
+		-v "$(CURDIR)/packages/cluster-mesh/tests/storage:/probe:ro" $(LLM_MESH_NODE_IMAGE) sh -lc 'set -eu; \
+		mkdir /tmp/cm-major; cd /tmp/cm-major; cp /probe/installed-major-upgrade.mjs .; $(CM_COMMENTS_SIBLING_SETUP) \
 		npm_config_cache=/tmp/npm-cache node /workspace/scripts/ci/locked-consumer.mjs --omit=optional --ignore-scripts --no-audit --no-fund /candidate.tgz pg@8.16.3 >/dev/null; \
 		node installed-major-upgrade.mjs'
 

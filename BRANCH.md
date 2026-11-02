@@ -30,10 +30,11 @@ Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, r
   - `packages/mcp-broker/package.json` (align the private P1 consumer floor with platform 0.4.1)
   - `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts` (explicit 17-tool inventory)
   - `packages/cluster-mesh/tests/packaging/**` (candidate dependency closure and selected fixture refresh)
+  - `packages/cluster-mesh/tests/storage/installed-siblings.mjs`, `packages/cluster-mesh/tests/storage/postgres.mk` (verified platform candidate for isolated installed consumers)
   - `api/src/services/artifacts/reader-activation.ts` (publication-independent reader authority)
   - `api/tests/api/artifacts-host-activation-store.test.ts`, `api/tests/api/artifacts-reader-activation.test.ts` (historical migration and concurrent activation fixtures)
   - `.github/workflows/ci.yml` (BRAP-EX2: publish platform before its artifacts consumer)
-  - `scripts/ci/publishable-ci-wiring.test.mjs` (artifacts publisher dependency gate)
+  - `scripts/ci/publishable-ci-wiring.test.mjs`, `scripts/ci/ci-expected-results.test.mjs` (artifacts publisher dependency gate and exact publication DAG)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -63,6 +64,7 @@ Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, r
   - [x] Align the selected fixture, frozen candidate installs and package publication ordering (129 lazy tests, 16 installed stateful tests, clean install qualification and 33 CI wiring tests pass).
   - [x] Repair the W1.a upgrade fixture and reader activation causes; retain rejection and concurrency assertions (102 targeted API tests pass).
   - [x] Run targeted make checks under the single Docker lock; API unit 102/102 and endpoints 86/86 pass with unchanged timeout and security assertions.
+  - [x] Complete installed storage-consumer setup and exact publication-DAG checks; installed qualification, PostgreSQL 17 to 18 upgrade, 35 metrics tests and 28 expected-results tests pass.
   - [ ] Make down, commit, push and observe pull_request CI; the lane report records the final head and result.
   - [ ] Append evidence under Fix CI integrate in the lane report; stop without merging.
 - [ ] **Integrate on main — owner-priority part 1**
