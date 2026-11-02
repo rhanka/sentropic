@@ -155,7 +155,7 @@ export const sha256Hex = (value: string): string => createHash('sha256').update(
 
 /** Store tests create real parents before inserting constrained custody rows. */
 export const seedCustodyParents = async (unitOfWork: IdentityUnitOfWorkV1<CustodyOpHost>, users: readonly string[], tenants: readonly string[] = []): Promise<void> => {
-  await unitOfWork.runWrite({ mode: 'write', deadlineMs: 5000 }, async (tx) => {
+  await unitOfWork.run({ mode: 'write', purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 }, async (tx) => {
     for (const userId of users) {
       await tx.hostTransaction.journal.insertAccountCore({ userId, email: `${userId}@example.test`, accountStatus: 'active', globalRole: 'user', createdAt: NOW, updatedAt: NOW });
       await tx.hostTransaction.journal.ensureLiveFence(userId, NOW);
