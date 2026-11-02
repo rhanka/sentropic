@@ -9,170 +9,22 @@ import { ARTIFACT_CAPABILITY_NAMES, ArtifactProfileInputError,
 import type { ArtifactInvocationContext } from './server/commit/types.js';
 import { ArtifactOperationError, classifyArtifactFailure, type ArtifactOutcome, type ArtifactHostFailureMapper } from './server/failures.js';
 import { projectArtifactHttpOutcome, projectArtifactMcpOutcome } from './server/outcome-projection.js';
+import { ARTIFACT_RESULT_SCHEMA } from './server/result-schema.js';
 export * from './profile/index.js';
 export { createRadarKeyDerivation } from './server/command-identity.js';
 export type { ArtifactKeyDerivationBinding } from './server/command-identity.js';
 
 export const ARTIFACTS_PROVIDER_ID = 'sentropic.artifacts';
 export const ARTIFACTS_APP_ID = 'sentropic-artifacts';
-export const ARTIFACTS_PROVIDER_VERSION = '0.2.13';
+export const ARTIFACTS_PROVIDER_VERSION = '0.3.0';
 export const ARTIFACTS_TOOL_NAMES = ARTIFACT_CAPABILITY_NAMES;
 export type ArtifactsToolName = (typeof ARTIFACTS_TOOL_NAMES)[number];
 
-// ---------------------------------------------------------------------------
-// Byte-stable tool definitions (MCP tool-definition stability rule).
-//
-// MCP hosts such as claude.ai reset per-tool "Always allow" permissions
-// whenever a tool definition (description, inputSchema, outputSchema,
-// annotations, _meta) changes between sessions. Every value below is a
-// compile-time constant: no profile revision, provider version, digest,
-// limit, default or date may appear in a definition. The active profile
-// still constrains invocations server-side (profile.validate) and stays
-// visible in manifest audit metadata and typed result details — never in a
-// tool definition. The APP-P1 manifest pin keeps covering these
-// definitions, so the pin is stable across profile switches as well.
-// ---------------------------------------------------------------------------
-
-const str = { type: 'string', minLength: 1 } as const;
-const integer = (minimum: number, maximum?: number) => ({ type: 'integer', minimum,
-  ...(maximum === undefined ? {} : { maximum }) });
-const obj = (properties: Record<string, unknown>, required: string[] = []) =>
-  ({ type: 'object', properties, required, additionalProperties: false });
-const id = { type: 'string',
-  pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' } as const;
-const idempotencyKey = { type: 'string', minLength: 1, description:
-  'Nonblank by JavaScript trim(); the active profile bounds its length in UTF-16 units; original bytes retained.' } as const;
-const expectedCurrentReleaseId = { ...id, type: ['string', 'null'], description:
-  'Compare the current release atomically; null requires an unpublished artifact.' } as const;
-const primitiveRecord = { type: 'object',
-  additionalProperties: { type: ['string', 'number', 'boolean', 'null'] } } as const;
-const metadata = {
-  title: { type: 'string', minLength: 1, maxLength: 160, description: 'Artifact display title.' },
-  description: { type: 'string', maxLength: 2000, description: 'Short artifact description.' },
-  icon: { type: ['string', 'null'], pattern: '^[a-z][a-z0-9-]{0,31}$',
-    description: 'One short lowercase word.' },
-} as const;
-const path = { type: 'string', minLength: 1, description:
-  'Manifest path; the active profile bounds its byte length and forbids reserved or dot segments, enforced server-side with typed errors.' } as const;
-const file = { ...obj({ path, mimeType: str, text: { type: 'string' },
-  bytes: { type: 'array', items: integer(0, 255) } }, ['path', 'mimeType']),
-  oneOf: [{ required: ['text'], not: { required: ['bytes'] } },
-    { required: ['bytes'], not: { required: ['text'] } }] };
-const edit = obj({ path, oldStr: str, newStr: { type: 'string' } }, ['path', 'oldStr', 'newStr']);
-const idOnly = obj({ artifactId: id }, ['artifactId']);
-
-const ARTIFACTS_OUTPUT_SCHEMA = { type: 'object', additionalProperties: true } as const;
-
-const READ_ONLY_TOOLS: readonly ArtifactsToolName[] = ['artifacts_list', 'artifacts_get',
-  'artifacts_get_template', 'artifacts_get_api_guide', 'artifacts_get_source', 'artifacts_list_versions',
-  'artifacts_lookup_people', 'artifacts_list_access'];
-const IDEMPOTENT_WRITERS: readonly ArtifactsToolName[] = ['artifacts_ensure', 'artifacts_publish',
-  'artifacts_commit_upload', 'artifacts_publish_bundle', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert',
-  'artifacts_revoke_reader_consent'];
-
-export interface ArtifactsToolDefinition {
-  readonly description: string;
-  readonly inputSchema: Record<string, unknown>;
-  readonly outputSchema: Record<string, unknown>;
-  readonly mutability: CapabilityTool['mutability'];
-  readonly idempotency: CapabilityTool['idempotency'];
-  readonly gates: CapabilityTool['gates'];
-}
-
-function staticTool(name: ArtifactsToolName, inputSchema: Record<string, unknown>,
-  description?: string): ArtifactsToolDefinition {
-  return {
-    description: description ?? `Artifacts ${name.slice('artifacts_'.length).replaceAll('_', ' ')}.`,
-    inputSchema,
-    outputSchema: ARTIFACTS_OUTPUT_SCHEMA,
-    mutability: READ_ONLY_TOOLS.includes(name) ? 'read-only'
-      : name === 'artifacts_publish' || name === 'artifacts_publish_bundle' ? 'append' : 'state-transition',
-    idempotency: IDEMPOTENT_WRITERS.includes(name) ? { required: true, scope: 'principal' } : { required: false },
-    gates: { requiresElicitation: false, requiresHumanConfirmation: name === 'artifacts_delete',
-      requiresPrincipalGate: false },
-  };
-}
-
-/** Static wire definitions for every artifacts tool; identical across deployments and profiles. */
-export const ARTIFACTS_TOOL_DEFINITIONS: Readonly<Record<ArtifactsToolName, ArtifactsToolDefinition>> = {
-  artifacts_get_template: staticTool('artifacts_get_template', obj({ templateId: str }, ['templateId'])),
-  artifacts_get_api_guide: staticTool('artifacts_get_api_guide', obj({ version: str })),
-  artifacts_ensure: staticTool('artifacts_ensure', obj({ bindingName: str, parameters: obj({}),
-    idempotencyKey, ...metadata }, ['bindingName', 'idempotencyKey'])),
-  artifacts_publish: staticTool('artifacts_publish', { ...obj({ artifactId: id, idempotencyKey,
-    files: { type: 'array', items: file, minItems: 1,
-      description: 'Full file set; required unless edits is supplied.' },
-    edits: { type: 'array', items: edit, minItems: 1, maxItems: 100,
-      description: 'Small old/new edits applied to the current release text files; required unless files is supplied.' },
-    expectedCurrentReleaseId, profile: primitiveRecord, ...metadata }, ['artifactId', 'idempotencyKey']),
-    oneOf: [{ required: ['files'], not: { required: ['edits'] } },
-      { required: ['edits'], not: { required: ['files'] } }] }),
-  artifacts_create_upload: staticTool('artifacts_create_upload', obj({ artifactId: id, mimeType: str,
-    maxSize: integer(1) }, ['artifactId', 'mimeType'])),
-  artifacts_commit_upload: staticTool('artifacts_commit_upload', obj({ artifactId: id, uploadId: str,
-    path, mimeType: str, digest: str, size: integer(0), profile: primitiveRecord, idempotencyKey },
-    ['artifactId', 'uploadId', 'path', 'mimeType', 'digest', 'size', 'idempotencyKey'])),
-  artifacts_list: staticTool('artifacts_list', obj({ limit: integer(1), offset: integer(0) })),
-  artifacts_get: staticTool('artifacts_get', idOnly),
-  artifacts_get_source: staticTool('artifacts_get_source', obj({ artifactId: id, releaseId: id,
-    // Frozen ceiling (review finding 5): maxItems 32 is part of this frozen
-    // definition and must NOT change. Server-side caps only move BELOW the
-    // frozen schema; larger listings belong to the new listing tools.
-    paths: { type: 'array', minItems: 1, maxItems: 32, items: str } }, ['artifactId']),
-    'Artifacts get source: verified files of the current or a selected release as `text` (encoding "utf8") '
-      + 'or `base64` (encoding "base64"), never an integer array, plus a guideRef instead of the guide body.'),
-  artifacts_fork: staticTool('artifacts_fork', idOnly),
-  artifacts_set_access: staticTool('artifacts_set_access', { ...obj({ artifactId: id,
-    action: { type: 'string', enum: ['grant', 'revoke'] }, principalId: { ...str, maxLength: 256 },
-    grant: { type: 'string', enum: ['read'] }, idempotencyKey },
-    ['artifactId', 'action', 'principalId', 'idempotencyKey']), oneOf: [
-      { properties: { action: { enum: ['grant'] } }, required: ['grant'] },
-      { properties: { action: { enum: ['revoke'] } }, not: { required: ['grant'] } },
-    ] }),
-  artifacts_promote: staticTool('artifacts_promote', obj({ artifactId: id, releaseId: id, expectedCurrent: id },
-    ['artifactId', 'releaseId', 'expectedCurrent'])),
-  artifacts_renew: staticTool('artifacts_renew', idOnly),
-  artifacts_delete: staticTool('artifacts_delete', obj({ artifactId: id, expectedCurrentReleaseId,
-    idempotencyKey, confirmationRef: { ...str, maxLength: 4096 } }, ['artifactId', 'idempotencyKey'])),
-  artifacts_restore: staticTool('artifacts_restore', idOnly),
-  artifacts_list_versions: staticTool('artifacts_list_versions', obj({ artifactId: id,
-    limit: integer(1, 100), cursor: { ...str, maxLength: 4096 } }, ['artifactId'])),
-  artifacts_revert: staticTool('artifacts_revert', obj({ artifactId: id, releaseId: id, targetReleaseId: id,
-    expectedCurrentReleaseId, idempotencyKey }, ['artifactId', 'idempotencyKey'])),
-  artifacts_lookup_people: staticTool('artifacts_lookup_people', obj({ query: str, limit: integer(1) }, ['query']),
-    'Artifacts lookup people: search the host directory by name or email and return opaque userRefs with '
-      + 'masked email hints (approved callers only; homonyms are returned, never silently resolved). '
-      + 'Use the returned userRef as principalId of artifacts_set_access.'),
-  artifacts_list_access: staticTool('artifacts_list_access', idOnly,
-    'Artifacts list access: sharing mode, owner and grant list of one artifact, projected to userRefs. '
-      + 'The owner and platform admins see every entry; a simple reader sees the mode and its own entry only.'),
-  // Files parity LOT 1 — appended last; frozen at birth like every definition above.
-  artifacts_publish_bundle: staticTool('artifacts_publish_bundle', { ...obj({
-    artifactId: id, idempotencyKey,
-    files: { type: 'array', items: file, minItems: 1,
-      description: 'Inline files (bytes travel through the model, inline budget); at least one of files/assets is required.' },
-    assets: { type: 'array', minItems: 1,
-      items: { oneOf: [
-        obj({ path, uploadId: id }, ['path', 'uploadId']),
-        obj({ path, digest: { type: 'string', pattern: '^sha256:[0-9a-f]{64}$' }, size: integer(1), mimeType: str },
-          ['path', 'digest', 'size', 'mimeType']),
-      ] },
-      description: 'Assets whose bytes already left the model: an uploadId staged via artifacts_create_upload/artifacts_commit_upload, or a sha256 digest of an already-pinned blob in the same scope. The release budget applies to the union of files and assets; duplicate paths are refused.' },
-    expectedCurrentReleaseId, profile: primitiveRecord, ...metadata },
-    ['artifactId', 'idempotencyKey', 'expectedCurrentReleaseId']),
-    anyOf: [{ required: ['files'] }, { required: ['assets'] }] },
-    'Artifacts publish bundle: one atomic release combining inline files with assets whose bytes already left the model '
-      + '(an uploadId staged via artifacts_create_upload + signed PUT + artifacts_commit_upload, or a sha256:<hex> digest '
-      + 'of an already-pinned blob). expectedCurrentReleaseId is always required (CAS); null requires an unpublished artifact.'),
-  artifacts_revoke_reader_consent: staticTool('artifacts_revoke_reader_consent', obj({ artifactId: id,
-    scope: { type: 'string', minLength: 1, maxLength: 128 }, idempotencyKey }, ['artifactId', 'idempotencyKey']),
-    'Artifacts revoke reader consent: withdraw persistent consent of the caller for one scope of one artifact, '
-      + 'or for every scope when scope is omitted. Self-revocation only; the next call asks again.'),
-};
-
 export const ARTIFACTS_TOOL_SPECS = ARTIFACTS_TOOL_NAMES.map((name) => ({ name,
-  description: ARTIFACTS_TOOL_DEFINITIONS[name].description,
-  mutability: ARTIFACTS_TOOL_DEFINITIONS[name].mutability }));
+  description: `Artifacts ${name.slice('artifacts_'.length).replaceAll('_', ' ')}.`,
+  mutability: (['artifacts_list', 'artifacts_get', 'artifacts_get_template', 'artifacts_get_api_guide',
+    'artifacts_get_source', 'artifacts_list_versions'].includes(name) ? 'read-only' : name === 'artifacts_publish' ? 'append' : 'state-transition') as CapabilityTool['mutability'],
+}));
 export const ARTIFACTS_PARAMETER_SCHEMA: ProviderParameterSchema = { properties: {}, required: [] };
 export interface ArtifactsManifestOptions {
   profile: CompiledArtifactsProfile;
@@ -191,20 +43,17 @@ export function createArtifactsManifest(options: ArtifactsManifestOptions): Arti
     appId: ARTIFACTS_APP_ID, providerId: ARTIFACTS_PROVIDER_ID, version: ARTIFACTS_PROVIDER_VERSION,
     displayName: options.displayName ?? 'Sentropic Artifacts',
     resources: [], prompts: [],
-    // Tool definitions come only from ARTIFACTS_TOOL_DEFINITIONS: the profile selects
-    // which tools exist, but never what a definition says.
-    tools: ARTIFACTS_TOOL_NAMES.filter((name) => profile.selectedCapabilities.includes(name)).map((name) => {
-      const definition = ARTIFACTS_TOOL_DEFINITIONS[name];
-      return {
-        kind: 'tool', name,
-        description: definition.description,
-        inputSchema: definition.inputSchema, outputSchema: definition.outputSchema,
-        requiredScopes: [...scopes], requiredClaims: [], redactionClass: 'low',
-        mutability: definition.mutability, mutatesExternalSystem: definition.mutability !== 'read-only',
-        idempotency: definition.idempotency,
-        gates: definition.gates,
-      };
-    }),
+    tools: ARTIFACTS_TOOL_SPECS.filter((spec) => profile.selectedCapabilities.includes(spec.name)).map((spec) => ({
+      kind: 'tool', name: spec.name,
+      description: spec.description + (profile.profileRevisionId
+        ? ` Active profile: ${profile.profileRevisionId}; resultEnvelopeVersion: ${profile.resultEnvelopeVersion}.` : ''),
+      inputSchema: profile.schemas[spec.name]!, outputSchema: profile.resultEnvelopeVersion === 2
+        ? ARTIFACT_RESULT_SCHEMA : { type: 'object', additionalProperties: true },
+      requiredScopes: [...scopes], requiredClaims: [], redactionClass: 'low',
+      mutability: spec.mutability, mutatesExternalSystem: spec.mutability !== 'read-only',
+      idempotency: profile.idempotency[spec.name] ?? { required: false },
+      gates: { requiresElicitation: false, requiresHumanConfirmation: spec.name === 'artifacts_delete', requiresPrincipalGate: false },
+    })),
     authz: { requiredClaims: [], scopes, tenantResolution: 'custom-resolver' },
     // The existing manifest codec includes audit metadata, including for an empty tool set.
     audit: { eventKinds: ['invoke'], artifactsProfileDigest: profile.profileDigest }, durability: {},
@@ -241,19 +90,13 @@ export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: 
       switch (input.tool) {
         case 'artifacts_ensure': request = { method: 'POST', path: '/ensure', body: args }; break;
         case 'artifacts_publish': request = { method: 'POST', path: '/publish', body: args }; break;
-        case 'artifacts_publish_bundle': request = { method: 'POST', path: '/publish_bundle', body: args }; break;
-        case 'artifacts_create_upload': request = { method: 'POST', path: '/uploads/create', body: args }; break;
-        case 'artifacts_commit_upload': request = { method: 'POST', path: '/uploads/commit', body: args }; break;
         case 'artifacts_list': request = { method: 'POST', path: '/list', body: args }; break;
         case 'artifacts_get': request = { method: 'GET', path: `/meta/${args.artifactId}`, body: undefined }; break;
         case 'artifacts_get_source': request = { method: 'POST', path: '/get_source', body: args }; break;
         case 'artifacts_set_access': request = { method: 'POST', path: '/set_access', body: args }; break;
-        case 'artifacts_lookup_people': request = { method: 'POST', path: '/lookup_people', body: args }; break;
-        case 'artifacts_list_access': request = { method: 'POST', path: '/list_access', body: args }; break;
         case 'artifacts_delete': request = { method: 'POST', path: '/delete', body: args }; break;
         case 'artifacts_list_versions': request = { method: 'POST', path: '/list_versions', body: args }; break;
         case 'artifacts_revert': request = { method: 'POST', path: '/revert', body: args }; break;
-        case 'artifacts_revoke_reader_consent': request = { method: 'POST', path: '/revoke_reader_consent', body: args }; break;
         default: throw new ArtifactProfileInputError(true);
       }
       return await deps.app.execute({ ...request, actorId: input.invocation.actorId,
