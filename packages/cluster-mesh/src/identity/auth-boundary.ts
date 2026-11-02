@@ -39,7 +39,7 @@ export const authBoundaryPorts = <H>(input: IdentityAuthBindingInput<H>, users: 
     for (const key of ['sessionId', 'clientId', 'tenantId', 'operationId']) if (safeId(fields?.[key])) detail[key] = fields![key] as string;
     for (const key of ['success', 'allowed', 'revoked']) if (typeof fields?.[key] === 'boolean') detail[key] = fields[key] as boolean;
     events.push({ at: input.hostPorts.clock.now().toISOString(), kind: allowedEvents.has(event) ? event : 'authentication.event',
-      ...(safeId(fields?.actorId) ? { actorId: fields.actorId } : {}), ...(safeId(fields?.subjectId) ? { subjectId: fields.subjectId } : {}), detail });
+      ...(safeId(fields?.actorId) ? { actorId: fields.actorId } : {}), ...(safeId(fields?.subjectId) ? { subjectId: fields.subjectId } : {}), detail: JSON.stringify(detail) });
   } };
   return { tokens, tokenEvidence, auditLog, flushAudit: async (): Promise<void> => {
     check();
