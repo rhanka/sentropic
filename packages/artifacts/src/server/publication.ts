@@ -560,12 +560,14 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
             current = await deps.createUnitWriter(client).lockCurrent(input.artifactId); },
           ...(deps.locks?.['artifact-lifecycle'] ?? []),
         ] },
-        provisional: async (client) => {
-          const unit = deps.createUnitWriter(client);
+        assertPrecondition: () => {
           if (input.expectedCurrentReleaseId !== undefined && current.currentReleaseId !== input.expectedCurrentReleaseId) {
             throw new ArtifactOperationError('pointer_conflict', { conflict: { ...current,
               artifactId: input.artifactId, expectedCurrentReleaseId: input.expectedCurrentReleaseId } });
           }
+        },
+        provisional: async (client) => {
+          const unit = deps.createUnitWriter(client);
           await unit.putRelease({
             releaseId,
             artifactId: input.artifactId,

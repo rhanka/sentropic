@@ -544,7 +544,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
           ok: false,
           failure: failure('conflict', request, phase, 'not_committed', {
             key: request.internalKey,
-          }, { variant: 'key_contention' }),
+          }, { variant: 'command_conflict' }),
         };
       }
       return coordinator.replayPrepared(request);
@@ -728,6 +728,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
         if (recheckRevision !== request.policyRevision) {
           return abortWith(request, phase, settle, revokedOutcome(request));
         }
+        request.assertPrecondition?.();
         phase = 'commit';
         const commitFailure = await commitUnit(request, active, settle);
         if (commitFailure !== undefined) return commitFailure;
