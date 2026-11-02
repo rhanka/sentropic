@@ -2,6 +2,7 @@
 // on the PostgreSQL profile. Shares the caller's PgSession — and therefore
 // the host transaction — with the custody stores; never begins or commits.
 
+import { decodeRevocationDelivery, sameRevocationTarget } from './custody-delivery-record.js';
 import { createHash } from 'node:crypto';
 import type {
   AtomicRevocationStepReceiptV2,
@@ -88,6 +89,7 @@ export class PostgresCustodyJournal {
         state: row['state'] as IdentityDeletionOperationV2['state'],
         createdAt: String(row['created_at']),
         committedAt: (row['committed_at'] as string | null) ?? null,
+        committedReceipt: row['committed_receipt_json'] ? JSON.parse(String(row['committed_receipt_json'])) as PersonDeletionReceiptV2 : null,
       }),
       `SELECT * FROM ${this.t('identity_deletion_operations')} WHERE "operation_id" = $1`,
       [operationId],
@@ -127,34 +129,17 @@ export class PostgresCustodyJournal {
   // -- Revocation outbox ----------------------------------------------------
 
   async enqueueDelivery(delivery: IdentityExternalRevocationV1): Promise<void> {
-    try {
-      await this.session.execute({
-        text: `INSERT INTO ${this.t('identity_revocation_outbox')} ("delivery_id","operation_id","step","subject_id","target_kind","target_ref","state","created_at","next_attempt_at","custody_ref","delivered_at","claim_owner","lease_until","claim_version","attempt_count") VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9,NULL,NULL,NULL,0,0)`,
-        values: [delivery.deliveryId, delivery.operationId, delivery.step, delivery.subjectId, delivery.targetKind, delivery.targetRef, delivery.createdAt, delivery.nextAttemptAt, null],
-      });
-    } catch (error) {
-      if (String((error as { code?: unknown }).code ?? '') !== '23505') throw error;
-      const existing = await this.findDelivery(delivery.deliveryId);
-      if (!existing) throw new IdentityCustodyErrorV1('identity_transaction_indeterminate');
-      if (existing.subjectId !== delivery.subjectId || existing.targetKind !== delivery.targetKind || existing.targetRef !== delivery.targetRef || existing.step !== delivery.step) {
-        throw new IdentityCustodyErrorV1('identity_operation_conflict');
-      }
-    }
+    await this.session.execute({
+      text: `INSERT INTO ${this.t('identity_revocation_outbox')} ("delivery_id","operation_id","step","subject_id","target_kind","target_ref","state","created_at","next_attempt_at","custody_ref","delivered_at","claim_owner","lease_until","claim_version","attempt_count") VALUES ($1,$2,$3,$4,$5,$6,'pending',$7,$8,$9,NULL,NULL,NULL,0,0) ON CONFLICT ("delivery_id") DO NOTHING`,
+      values: [delivery.deliveryId, delivery.operationId, delivery.step, delivery.subjectId, delivery.targetKind, delivery.targetRef, delivery.createdAt, delivery.nextAttemptAt, delivery.custodyRef],
+    });
+    const existing = await this.findDelivery(delivery.deliveryId);
+    if (!existing || !sameRevocationTarget(existing, delivery)) throw new IdentityCustodyErrorV1('identity_operation_conflict');
   }
 
   findDelivery = (deliveryId: string): Promise<IdentityExternalRevocationV1 | null> =>
     this.one(
-      (row) => ({
-        deliveryId: String(row['delivery_id']),
-        operationId: String(row['operation_id']),
-        step: String(row['step']),
-        subjectId: String(row['subject_id']),
-        targetKind: String(row['target_kind']),
-        targetRef: String(row['target_ref']),
-        state: row['state'] as IdentityExternalRevocationV1['state'],
-        createdAt: String(row['created_at']),
-        nextAttemptAt: String(row['next_attempt_at']),
-      }),
+      decodeRevocationDelivery,
       `SELECT * FROM ${this.t('identity_revocation_outbox')} WHERE "delivery_id" = $1`,
       [deliveryId],
     );
@@ -170,18 +155,7 @@ export class PostgresCustodyJournal {
         values: [now, owner, leaseUntil, limit],
       })
     ).rows;
-    return rows.map((row) => ({
-      deliveryId: String(row['delivery_id']),
-      operationId: String(row['operation_id']),
-      step: String(row['step']),
-      subjectId: String(row['subject_id']),
-      targetKind: String(row['target_kind']),
-      targetRef: String(row['target_ref']),
-      state: row['state'] as IdentityExternalRevocationV1['state'],
-      createdAt: String(row['created_at']),
-      nextAttemptAt: String(row['next_attempt_at']),
-      claimVersion: Number(row['claim_version']),
-    }));
+    return rows.map(decodeRevocationDelivery);
   }
 
   async acknowledgeDelivery(deliveryId: string, owner: string, version: number, at: string): Promise<void> {
@@ -190,7 +164,7 @@ export class PostgresCustodyJournal {
              WHERE "delivery_id" = $1 AND "state" = 'pending' AND "claim_owner" = $2 AND "claim_version" = $3 AND "lease_until" > $4`,
       values: [deliveryId, owner, version, at],
     });
-    if ((result.rowCount ?? 0) === 0) throw new IdentityCustodyErrorV1('identity_delivery_claim_conflict');
+    if ((result.rowCount ?? 0) === 0 && (await this.findDelivery(deliveryId))?.state !== 'delivered') throw new IdentityCustodyErrorV1('identity_delivery_claim_conflict');
   }
 
   async releaseClaim(deliveryId: string, owner: string, version: number, nextAttemptAt: string): Promise<void> {
@@ -209,17 +183,7 @@ export class PostgresCustodyJournal {
         values: [operationId],
       })
     ).rows;
-    return rows.map((row) => ({
-      deliveryId: String(row['delivery_id']),
-      operationId: String(row['operation_id']),
-      step: String(row['step']),
-      subjectId: String(row['subject_id']),
-      targetKind: String(row['target_kind']),
-      targetRef: String(row['target_ref']),
-      state: row['state'] as IdentityExternalRevocationV1['state'],
-      createdAt: String(row['created_at']),
-      nextAttemptAt: String(row['next_attempt_at']),
-    }));
+    return rows.map(decodeRevocationDelivery);
   };
 
   // -- Import receipts ------------------------------------------------------
