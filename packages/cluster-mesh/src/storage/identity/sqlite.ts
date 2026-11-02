@@ -28,6 +28,7 @@ export const applySqliteIdentityCoreSchema = (connection: SqliteConnection): voi
 };
 
 export interface SqliteIdentityStoresOptions {
+  readonly transactionBound?: boolean;
   readonly connection: SqliteConnection;
 }
 
@@ -301,7 +302,7 @@ class SqliteIdentityAudit extends SqliteSlice implements IdentityAuditPort {
 /** Durable A2.1 stores over an existing SQLite connection (local profile). */
 export const createSqliteIdentityCoreStores = (options: SqliteIdentityStoresOptions): IdentityAccountStores => {
   const { connection } = options;
-  applySqliteIdentityCoreSchema(connection);
+  if (!options.transactionBound) applySqliteIdentityCoreSchema(connection);
   return {
     accounts: new SqliteUserAccountStore(connection),
     proofs: new SqliteIdentityProofStore(connection),
