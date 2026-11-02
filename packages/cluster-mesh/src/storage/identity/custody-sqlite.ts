@@ -26,6 +26,7 @@ import type {
   WebAuthnCredentialV1,
 } from '../../identity-contracts/custody.js';
 import { IdentityCustodyErrorV1 } from '../../identity-contracts/custody-errors.js';
+import { subjectLifecycle } from './custody-lifecycle.js';
 import type { SqliteConnection } from '../sqlite/connection.js';
 import { decodeSession } from './records.js';
 import { InvitationError, ProofVerificationError } from '../../identity-contracts/errors.js';
@@ -72,6 +73,7 @@ const toBool = (value: boolean): number => (value ? 1 : 0);
 
 /** Transaction-scoped custody bundle over one SQLite connection. */
 export class SqliteCustodyTx implements IdentityCustodyStoresV1 {
+  readonly subjects: IdentityCustodyStoresV1['subjects'];
   readonly profiles: IdentityAccountProfileStoreV1;
   readonly credentials: WebAuthnCredentialStoreV1;
   readonly singleUseProofs: SingleUseProofStoreV1;
@@ -81,6 +83,7 @@ export class SqliteCustodyTx implements IdentityCustodyStoresV1 {
   readonly social: SocialIdentityStoreV1;
 
   constructor(readonly connection: SqliteConnection) {
+    this.subjects = subjectLifecycle({ profile: 'sqlite', raw: connection, stores: this, journal: new SqliteCustodyJournal(connection) });
     this.profiles = {
       find: (userId) =>
         this.one(decodeAccountProfile, `SELECT * FROM "identity_account_profiles" WHERE "user_id" = ?`, [userId]),

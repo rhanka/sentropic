@@ -28,6 +28,7 @@ import type {
   WebAuthnCredentialV1,
 } from '../../identity-contracts/custody.js';
 import { IdentityCustodyErrorV1 } from '../../identity-contracts/custody-errors.js';
+import { subjectLifecycle } from './custody-lifecycle.js';
 import type { InjectedPgDriver, PgSession, SqlValue } from '../postgres/protocol.js';
 import { decodeSession } from './records.js';
 import { InvitationError, ProofVerificationError } from '../../identity-contracts/errors.js';
@@ -85,6 +86,7 @@ const toBool = (value: boolean): boolean => value;
 
 /** Transaction-scoped custody bundle: all SQL runs on the bound session. */
 export class PostgresCustodyTx implements IdentityCustodyStoresV1 {
+  readonly subjects: IdentityCustodyStoresV1['subjects'];
   readonly profiles: IdentityAccountProfileStoreV1;
   readonly credentials: WebAuthnCredentialStoreV1;
   readonly singleUseProofs: SingleUseProofStoreV1;
@@ -97,6 +99,7 @@ export class PostgresCustodyTx implements IdentityCustodyStoresV1 {
     readonly schema: string,
     readonly session: PgSession,
   ) {
+    this.subjects = subjectLifecycle({ profile: 'postgres', schema, raw: session, stores: this, journal: new PostgresCustodyJournal(schema, session) });
     this.profiles = {
       find: (userId) =>
         this.one(decodeAccountProfile, `SELECT * FROM ${this.t('identity_account_profiles')} WHERE "user_id" = $1`, [userId]),
@@ -789,6 +792,10 @@ export const createPostgresCustodyStores = (options: PostgresCustodyOptions): Id
     return readOnly ? unitOfWork.runRead(runOptions, (tx) => op(tx.hostTransaction)) : unitOfWork.runWrite(runOptions, (tx) => op(tx.hostTransaction));
   };
   return {
+    subjects: {
+      register: (account, profile) => runTx(false, (tx) => tx.subjects.register(account, profile)),
+      updateEmail: (userId, email, at) => runTx(false, (tx) => tx.subjects.updateEmail(userId, email, at)),
+    },
     profiles: {
       find: (userId) => runTx(true, (tx) => tx.profiles.find(userId)),
       put: (record) => runTx(false, (tx) => tx.profiles.put(record)).then(() => undefined),
