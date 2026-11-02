@@ -10,6 +10,7 @@ import { requireAuth } from '../../middleware/auth';
 import { createProductChatServerDeps } from '../../services/chat-server-provider';
 import { requireWorkspaceAccess, requireWorkspaceEditor } from '../../services/workspace-access';
 import { applyChatAuthorFence } from './chat-cutover';
+import { withCmConversationCaller } from '../../services/identity/cm-conversation-authority';
 
 export const DEFAULT_ALL_WS_LIMIT = 200;
 
@@ -41,6 +42,7 @@ export const createChatNamespaceModule = (
   createRouter() {
     const router = new Hono();
     router.use('*', options.authenticate ?? requireAuth);
+    router.use('*', (context, next) => withCmConversationCaller(context.get('user'), next));
     applyChatAuthorFence(router);
     router.route('/', createChatServer(
       options.deps ?? createProductChatServerDeps(),
