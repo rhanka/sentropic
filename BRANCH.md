@@ -249,6 +249,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] gap-§1 scenario end to end; registration → approval → login; invitation consumed once; revoke-all; mid-session suspension empties tool set; account deletion with injected failure leaves no orphan and preserves rows; migration tests; F11 e2e.
   - [ ] Rehearse migration on a fresh prod dump (existing rehearsal make target); record receipt.
 - [ ] **Lot 6 — Final validation**
+  - [x] Replace malformed credential fixture bytes with real public P-256 COSE keys and add a signed-assertion fixture checked by the actual WebAuthn verifier.
   - [x] Delete the replaced magic-link service, including the separate issuer and mail-failure fallback; CM completion and deferred delivery are the only paths.
   - [x] Delete the obsolete standalone magic-link verifier and its split account/proof mutations; all completion consumers use CM.
   - [x] Delete the replaced app magic-link route; only the CM completion projection remains mounted.
