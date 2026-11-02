@@ -142,6 +142,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Evaluate F15 and business workspace visibility on one serializable read transaction.
   - [x] Add explicit verified-HTTP conversation admission and an opaque CM reference on business chats; no identity authority is inferred from a chat id.
   - [x] Admit conversations before chat job publication and resolve turn authority through the CM reference; F15 refusal leaves the complete tool set empty.
+  - [x] Load artifact assets outside CM callbacks and pass every tool identifier through the F15 catalog mapping.
   - [ ] Account deletion through the A2.3/A2.0b atomic cascade (V2), self + admin handlers.
   - [ ] Rollback checkpoint recorded BEFORE any legacy table deletion; one author per namespace via cutover records.
   - [x] Preserve the pre-deletion checkpoint row and retain account-driven OAuth invalidation after cutover.
