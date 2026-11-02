@@ -406,7 +406,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
         if (input.operation !== request.operation || ('storageScopeId' in input &&
           (input.storageScopeId !== request.scopeId || input.bytes !== bytes)) ||
           ('actorId' in input && input.actorId !== request.actorId)) return Promise.resolve({ reserved: false });
-        if (purpose === 'replay') return Promise.resolve({ reserved: true });
+        if (purpose === 'replay' || ['set_access', 'delete'].includes(request.operation)) return Promise.resolve({ reserved: true });
         return reservation ??= raw.reserveQuota({ actorId: request.actorId, operation: request.operation,
           storageScopeId: request.scopeId, bytes });
       },

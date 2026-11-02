@@ -1,83 +1,93 @@
-# Feature: ACT-L03b — #681 CI/API/restore/current-model integration + complete test-disposition manifest (daily cyber activation, amendment r6, wave W2)
+# Feature: Artifact source, access and terminal deletion parity
 
 ## Objective
-Implement lot ACT-L03b of r6 §7.2 (W2) on the preserved #681 lineage now merged via #872: complete the #681 CI integration (bot-PR trigger/check bridge, exact-H/B/T gate, late-receipt gate), the OperationModelMapV1 current product/CI operation map, and the complete 63-path/case/destination/required-Make-suite manifest with collection proof — remaining L3-A/C/D/E/G/H/J/K/L/M items and §7.3 tests T5-C5, T6-R1 (exact-head PR-trigger side) and T6-M1 at the exact §6.4 destinations.
+- [ ] Implement only converged R1 D1, D2 and get/list D4 in the common artifacts package.
 
 ## Scope / Guardrails
-- Scope limited to the Allowed Paths below. Binding design: `.tmp/daily-cyber/activation-amendment-r6.md` (sha256 4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f, verified at session start). No design decision outside r6; anything else is reported, not decided.
-- Make-only workflow, Docker under the flock `/home/antoinefa/.cache-tmp/sentropic-docker.lock`, `ENV=test-cyber-L03b` always LAST, `make down ENV=test-cyber-L03b` after. Never `ENV=dev`, never `make clean-all`. No new Docker image build (reuse pinned node:24 image).
-- Zero Python. Zero payment on quota exhaustion. No secrets read, printed, logged or committed. Synthetic fixtures only; no live call, no custody repository, no App.
-- Preserve refs stay untouched (`preserve/cyber-lot3-*`, `refs/preserve/cyber-lot3-broker`); the unadmitted broker blob stays out of the tree. #681 stays open; this branch continues the lineage as r6 §6/§7.2 say. No merge of this PR by this lane.
-- Retain the BRLOCK-EX1 policy reference verbatim in this BRANCH.md (required by `scripts/ci/ci-lockfile-installs.test.mjs`, run by required CI job `validate-publishable-manifests`): owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
-- Branch development happens in worktree `tmp/worktrees/cyber-act-L03b` on branch `feat/cyber-act-L03b` from `origin/main` (9899cf336, L03a merged).
-- All new text in English.
+- [x] Binding design: converged-r1.md SHA256 9c2cd0051cb28d21a4f2584175bc74c92c392d25a4c3a449057d162ec8f1bdcd.
+- [x] Worktree tmp/worktrees/artifacts-parity-p0b; branch feat/artifacts-parity-p0b from origin/main.
+- [x] Make only; Docker serialized on .tmp/packets/DOCKER-LOCK.md; ENV=test-artifacts-p0b last.
+- [x] Ports API 9685, UI 5885, Maildev 1785; package tests do not bind ports.
+- [x] No versions, revert, publication CAS, metadata writes or edits; no merge.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `scripts/ci/seat-custody/**`
-  - `scripts/security/daily/ci-trigger-bridge.mjs`
-  - `scripts/security/daily/ci-trigger-bridge.test.mjs`
-  - `scripts/security/daily/review.mjs`
-  - `scripts/security/daily/review.test.mjs`
-  - `scripts/security/daily/post-merge-effects.mjs`
-  - `scripts/security/daily/post-merge-effects.test.mjs`
-  - `spec/evidence/ci-seats/activation-lot3-preservation.json`
+  - `packages/artifacts/**`
   - `BRANCH.md`
+  - `package-lock.json`
+  - `api/package-lock.json`
+  - `api/src/services/mcp/cluster-registry.ts`
+  - `api/tests/api/app-mcp-registry.test.ts`
+  - `api/tests/api/app-mcp-installed.test.ts`
 - **Forbidden Paths (must not change in this branch)**:
-  - `.github/workflows/**`
+  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.track/**`
-  - `.tmp/**`
-  - `api/**`
-  - `packages/**`
-  - `e2e/**`
-  - `ui/**`
-  - `plan/**`
-  - `docs/**` (except none)
+  - `packages/mcp-platform/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `Makefile` (BR03b-EX1: only the `test-security-daily` SCOPE list gains the three new D/ test files so the r6 §7.3 cases run in the required suite that CI job `validate-ci-capacity-metrics` already executes)
+  - `.github/workflows/**`
 - **Exception process**:
-  - BR03b-EX1 declared here before touching `Makefile`: reason = r6 §6.4/§7.3 requires every §6.4 destination wired into its owning required Make suite (`test-security-daily`, already run by required CI job `validate-ci-capacity-metrics`); impact = additive SCOPE entries only, no existing entry removed; rollback = revert the single SCOPE line. C/ destinations need no Makefile change: `test-ci-seat-contract` collects `tests/*.test.ts tests/e2e/*.test.ts` by glob.
+  - [x] Record rationale, impact and rollback in Feedback Loop before exceptions.
 
 ## Feedback Loop
-- BR03b-EX1: `acknowledge` — Makefile SCOPE addition for `test-security-daily` (see Conditional Paths).
-- No open blockers: r6 supplies every design decision for this lot; anything not covered by r6 is reported in the final report, not decided here.
+- [x] BRP0B-EX2 (owner-urgent CI repair): qualify the artifacts 0.2.5 APP-P1 manifest in api/src/services/mcp/cluster-registry.ts and the two registry/installation test fixtures. Rationale: provider version is part of the manifest digest; replaying 0.2.4 reproduces the old pin exactly. Impact: refresh only the manifest receipt; preserve the profile digest, four selected tool specifications and both strict guards. Rollback: revert these API changes together with the artifacts provider version bump.
+- [x] Fix CI 2 local qualification: API test stack healthy; registry 22/22, physical installation 2/2 and transport 8/8 pass through the CI toolbox. All containers and the isolated network removed by make down under the single Docker lock.
+- [x] BRP0B-EX1 (owner CI repair): synchronize only the artifacts workspace version in root/API locks; no dependency graph change; rollback with the version fix.
+- [x] BRLOCK-EX1: existing CI maintainers policy, review_by=2026-11-30T00:00:00Z; no renewal or scope expansion of the exemption.
+- [x] CI 41361090041 budget step passed; its oversized baseline deliberately reimports the governance corpus. The actual artifacts failure is the ensure HTTP/MCP integration fixture missing lifecycle.stateOf.
+- [x] Review r1 RED: ungranted mutation probes returned 403 instead of 404; real publication readers accepted purged releases and mismatched record digests.
+- [x] Review r1 visibility GREEN: all 6 parity transport tests pass, including ungranted/missing/withdrawn 404, visible non-owner 403 and terminal delete replay.
+- [x] Review r1 source GREEN: all 6 parity source tests pass; real publication readers reject purged/mismatched selected and current releases with zero blob reads.
+- [x] Review r1 package gate: typecheck, lint and all 466 unit tests pass (40 files).
+- [x] Review r1 SQL RED: standalone integration rejected to_jsonb(artifacts.artifacts); use an explicit row alias in both binding lookup queries.
+- [x] D4 metadata reads preserve optional fields; metadata writes belong to feat/artifacts-parity-p0.
+- [x] Source RED found a foreign release-record acceptance; added record/manifest identity checks and regression coverage.
+- [x] Targeted source/control/transport run: 11 tests pass; broad SCOPE also selected the integration file, correctly refusing absent DATABASE_URL. The dedicated integration target is queued.
+- [x] Full unit gate exposed an outdated list fixture: enrichment now reads current releases. Updated its stub and asserted that foreign scopes are filtered before release reads.
+- [x] PostgreSQL initialization exceeded compose's health window; logs show initialization and checkpoint completion, and make ps now reports healthy. Retrying the targeted suite against the same stack.
+- [x] Draft PR https://github.com/rhanka/sentropic/pull/878; intermediate commits skip CI; final head remains to qualify.
+- [ ] Integration dependency: the D3 lane must preserve confirmation error details through the shared mcp-platform wire codec; this branch preserves them through the artifacts adapter.
 
 ## AI Flaky tests
-- Acceptance rule:
-  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
-  - Non-systematic means at least one success on the same commit and same command.
-  - Never amend tests with additive timeouts.
-  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
-  - Capture explicit user sign-off before merge.
-- This lot runs only synthetic, network-free suites; no AI flaky lane applies.
+- [x] No AI-dependent tests or timeout changes.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single branch `feat/cyber-act-L03b`; one final CI on the review-ready head)
-- Rationale: one lot, one branch; the preserved #681 lineage is already on main via #872; no orthogonal sub-workstreams.
+- [x] **Multi-branch**: this branch owns D1/D2/D4; the existing parity lane owns all other deltas.
+
+## UAT Management (in orchestration context)
+- [x] No UI changes; IMMO activation and management UI belong to the IMMO lane.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
-  - [x] Read `rules/MASTER.md`, `rules/workflow.md`, COMMON-RULES, r6 amendment, Lot 3 STOP report, r4 §5/§10.3.
-  - [x] Create worktree `tmp/worktrees/cyber-act-L03b` on branch `feat/cyber-act-L03b` from `origin/main` (9899cf336); `harness check branch` PASS C1.
-  - [x] Confirm command style: `flock /home/antoinefa/.cache-tmp/sentropic-docker.lock make ... ENV=test-cyber-L03b` (ENV last), then `make down ENV=test-cyber-L03b`.
-- [x] **Lot 1 — Tests first (r6 §6.4 destinations, RED)**
-  - [x] C/ `tests/operation-model-map.test.ts` (L3-E/L3-J): OperationModelMapV1 load, I/D/N classification, retired IDs, exact 2027-04-01T00:00:00Z cutoff instant, no substring ban, unmapped live op refuses, source-gap deployment evidence leaves case required/incomplete, no CI-only alias.
-  - [x] C/ `tests/acceptance-disposition.test.ts` (extend, T6-M1): 63 paths resolved (41 present incl. the 5 re-landed by L03a, 22 with exact replacement destinations), all §6.4 + L03a/L03b destinations exist AND are wired into required Make suites (collection proof), no bare N/A.
-  - [x] D/ `ci-trigger-bridge.test.mjs` (T5-C5, L3-G, L3-M): actual main-push effect enumeration, one dispatched exact-H/B/T required CI per bot PR, stale/ref-swapped/partial/missing/replayed/spoofed refusal, zero release effects, late-receipt gate, hostile same-repo PR production-credential acquisition refusal (A13 stays source-gap).
-  - [x] D/ `review.test.mjs` (T5-C5): native-review classification, automated-translation event contract, attestor != author, bot self-approval refusal, person-owned token vs human-intent refusal.
-  - [x] D/ `post-merge-effects.test.mjs` (T6-R1 PR-trigger side): exact-head PR CI with no release passes; post-merge exact-M dispatch contract (one per effect, idempotent intent, wrong-head/main-move/push-only refusals, pause+debt on failure).
-  - [x] RED run: `flock … make test-ci-seat-contract ENV=test-cyber-L03b` and `flock … make test-security-daily ENV=test-cyber-L03b`.
-- [x] **Lot 2 — Implementation (GREEN)**
-  - [x] C/ `config/operation-model-map.v1.json` + `src/operation-model-map.ts` (L3-E/L3-J OperationModelMapV1).
-  - [x] C/ `src/acceptance-disposition.ts`: replacement mappings, L03B_TEST_IDS, `validateCollection` (destination existence + Make-suite wiring).
-  - [x] D/ `ci-trigger-bridge.mjs`, `review.mjs`, `post-merge-effects.mjs`.
-  - [x] `spec/evidence/ci-seats/activation-lot3-preservation.json` re-landed and extended with the #872 rebase record (L3-H).
-  - [x] Wire D/ tests into `test-security-daily` SCOPE (BR03b-EX1).
-  - [x] GREEN run of both suites; `make down ENV=test-cyber-L03b`.
-- [ ] **Lot 3 — Gates, PR, CI, report**
-  - [x] `make scope-check` before every commit; `git diff --check`; atomic `make commit` ≤150 lines, push after every few commits (crash safety).
-  - [ ] Push review-ready head; open draft PR with this BRANCH.md as body.
-  - [ ] Run ONE CI on the final head; wait for completion; record result.
-  - [ ] Report to `.tmp/rv/cyber-act-L03b.md`; do not merge.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read master, workflow, testing, common rules and binding design.
+  - [x] Verify branch mechanically using harness (PASS C1).
+- [ ] **Lot 1 — Tests before implementation**
+  - [x] packages/artifacts/tests/parity-source.test.ts: release selection, source rights, corruption and revocation.
+  - [x] packages/artifacts/tests/parity-control.test.ts: targeted grants, confirmation, replay and terminal guards.
+  - [x] packages/artifacts/tests/parity-transport.test.ts: selected HTTP/MCP operations and enriched summaries.
+  - [x] packages/artifacts/tests/parity-store.integration.test.ts: real parent locks, targeted grants and terminal SQL guards.
+- [ ] **Lot 2 — Common implementation**
+  - [x] D1 verified manifest and author file reads with separate provenance (transport qualification pending).
+  - [ ] D2 coordinator-bound named read grants and confirmed terminal deletion.
+  - [x] Identical named grants preserve the stored modification date without replacing grants.
+  - [x] D4 get/list binding, dates, digest, URLs and optional metadata.
+- [ ] **Lot 3 — Final validation**
+  - [ ] Scoped tests, artifacts unit suite, typecheck and lint through make.
+  - [x] Ship package version 0.2.5 above published 0.2.4 and within existing artifacts peer ranges (registry checked).
+  - [ ] Scope check before each atomic commit; push after each commit as explicitly requested.
+  - [ ] Draft PR using this file; one final-head CI run; record exact head and result.
+  - [ ] make down ENV=test-artifacts-p0b; write .tmp/rv/artifacts-parity-p0b.md and stop.
+- [ ] **Lot 4 — Fix review r1 (owner request, PR 878)**
+  - [x] Mask invisible set_access/delete targets through visible(); qualify HTTP/MCP ungranted and visible non-owner outcomes while preserving delete replay.
+  - [x] Ship p0b as artifacts 0.2.5 per owner CI repair; retain the D1/D2/D4 CHANGELOG without touching the sibling branch.
+  - [x] Rename terminal controls migration to 0004; update README and integration fixture.
+  - [x] Preserve release state and manifestDigest through publication readers; reject purged/mismatched selected and current source releases before blob reads.
+- [ ] **Lot 5 — Fix CI (owner request, PR 878)**
+  - [x] Restore compatible artifacts 0.2.5 manifest/provider/CHANGELOG and root/API workspace lock pins.
+  - [x] Qualify the actual ensure transport integration regression (7/7), full artifact budget, production API image (strict prune/audit) and lock-install guard (11/11) under the single Docker lock; make down completed.
+  - [ ] Commit through make, push the final head, run one workflow_dispatch CI, record its completed result and make down.
+- [ ] **Lot 6 — Fix CI 2 (owner-urgent request, PR 878)**
+  - [x] Rebase onto origin/main and retain this branch's BRANCH.md; artifacts 0.2.5 remains above published 0.2.4 after rebase.
+  - [x] Re-pin the version-only APP-P1 manifest change; retain the frozen profile and reject the superseded 0.2.4 receipt.
+  - [x] Qualify registry/installed/transport tests and API test-stack boot under the single Docker lock; make down.
+  - [ ] Scope-check, make commit, force-with-lease push, dispatch CI once, and record the head/run in the conductor dossier; no merge or CI monitoring in this lane.

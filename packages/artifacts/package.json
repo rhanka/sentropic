@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/artifacts",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "description": "Generic configurable artifacts MCP and artifact service: StorageScope/Artifact/Binding/Release model, canonical manifests, object authorization, idempotent intents (spec-v8 §9).",
   "type": "module",
   "license": "MIT",
@@ -103,6 +103,18 @@
       "types": "./dist/server/sources.d.ts",
       "import": "./dist/server/sources.js"
     },
+    "./server/source-read": {
+      "types": "./dist/server/source-read.d.ts",
+      "import": "./dist/server/source-read.js"
+    },
+    "./server/management": {
+      "types": "./dist/server/management.d.ts",
+      "import": "./dist/server/management.js"
+    },
+    "./adapters/postgres-management": {
+      "types": "./dist/adapters/postgres-management.d.ts",
+      "import": "./dist/adapters/postgres-management.js"
+    },
     "./server/fork": {
       "types": "./dist/server/fork.d.ts",
       "import": "./dist/server/fork.js"
@@ -181,6 +193,7 @@
     "docs/migration-l6.md",
     "examples/radar-commit-setup.ts",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "publishConfig": {

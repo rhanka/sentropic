@@ -5,10 +5,11 @@ export type ArtifactInternalKey = string & { readonly __brand: 'internal-key' };
 export type ArtifactErrorKind =
   | 'provider_unavailable' | 'command_conflict' | 'pointer_conflict'
   | 'unauthorized_at_commit' | 'capability_unselected' | 'admission_unavailable'
-  | 'invalid_request' | 'anonymous' | 'access_denied' | 'not_found' | 'gone' | 'unprocessable' | 'verification_failed';
+  | 'invalid_request' | 'anonymous' | 'access_denied' | 'not_found' | 'gone' | 'release_unavailable' | 'limit_exceeded' | 'unprocessable' | 'verification_failed';
 export type ArtifactFailureCategory = ArtifactFailure['category'];
 
 interface ArtifactFailureFields {
+  readonly details?: Readonly<Record<string, unknown>>;
   readonly variant?: string;
   readonly httpStatus: number;
   readonly publicCode: string;
@@ -28,7 +29,7 @@ export interface ArtifactOperationalFailure extends ArtifactFailureFields {
 
 export interface ArtifactOrdinaryFailure extends Omit<ArtifactFailureFields, 'variant' | 'retriable'> {
   readonly kind: 'ordinary';
-  readonly category: 'invalid_request' | 'not_found' | 'gone' | 'unprocessable' | 'verification_failed';
+  readonly category: 'invalid_request' | 'not_found' | 'gone' | 'release_unavailable' | 'limit_exceeded' | 'unprocessable' | 'verification_failed';
   readonly retriable: false;
 }
 
@@ -67,7 +68,8 @@ export interface ArtifactPublicRefusal {
 export class ArtifactOperationError extends Error {
   constructor(
     readonly kind: ArtifactErrorKind,
-    readonly details: { readonly cause?: unknown; readonly refusal?: ArtifactPublicRefusal } = {},
+    readonly details: { readonly cause?: unknown; readonly refusal?: ArtifactPublicRefusal;
+      readonly publicDetails?: Readonly<Record<string, unknown>> } = {},
   ) {
     super(kind, { cause: details.cause });
     this.name = 'ArtifactOperationError';
@@ -94,7 +96,7 @@ const UNAVAILABLE_CODES = new Set([
 const TIMEOUT_NAMES = new Set(['TimeoutError', 'RequestTimeout', 'RequestTimeoutError']);
 const DOMAIN_STATUS = {
   invalid_request: 400, anonymous: 401, access_denied: 403,
-  not_found: 404, gone: 410, unprocessable: 422, verification_failed: 422,
+  not_found: 404, gone: 410, release_unavailable: 410, limit_exceeded: 413, unprocessable: 422, verification_failed: 422,
 } as const;
 
 function field(value: unknown, name: string): unknown {
@@ -186,6 +188,9 @@ export function classifyArtifactFailure(
   if (context.commitState === 'committed' && projection.category === 'unauthorized_at_commit') projection = unavailable();
   const failure: ArtifactFailure = {
     ...projection, invocationId: context.invocationId, operation: context.operation,
+    ...(cause instanceof ArtifactOperationError && cause.details.publicDetails &&
+      ['confirmation_required', 'confirmation_invalid', 'confirmation_expired', 'confirmation_stale', 'release_unavailable'].includes(projection.publicCode)
+      ? { details: cause.details.publicDetails } : {}),
     phase: context.phase, commitState: context.commitState, cause,
   };
   Object.defineProperty(failure, 'cause', { value: cause, enumerable: false });
