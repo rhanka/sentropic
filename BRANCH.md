@@ -41,6 +41,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
 - [ ] A4-STACK — A2.0b owner: supply the approved r6 combined UOW (`run`, `tx.stores`, `tx.custody`, subject lifecycle), auth-hono binding/runner, importer verifier and V2 planes before app qualification; A4 does not implement these CM APIs.
 - [ ] A4-QK — Deployment custodian: record the explicit email-code protection choice before the author switch; no secret or default choice is inferred.
 - [x] A4-OWNERSHIP — r6 §5.3 requires business-authorized ownership. Preserve `public.workspaces.owner_user_id` solely for destruction policy; CM owns membership/tenant access. Membership never substitutes for ownership. Rollback uses the recorded source checkpoint.
+- [x] A4-CONVERSATION — Business chats retain an opaque CM authority reference. Verified HTTP admission opens a separate seven-day conversation lifetime; login expiry/logout never renews or revokes it. Revoked/expired records cannot be reopened. Workspace adoption must revoke/clear the prior binding.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -132,6 +133,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] /workspaces (absorbs /tenants) over A2.2 stores; delete tenant-membership.ts, membership seam in cluster-mesh-adapter.ts, product tenant/workspace identity routes.
   - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
   - [x] Evaluate F15 and business workspace visibility on one serializable read transaction.
+  - [x] Add explicit verified-HTTP conversation admission and an opaque CM reference on business chats; no identity authority is inferred from a chat id.
   - [ ] Account deletion through the A2.3/A2.0b atomic cascade (V2), self + admin handlers.
   - [ ] Rollback checkpoint recorded BEFORE any legacy table deletion; one author per namespace via cutover records.
   - [x] Preserve the pre-deletion checkpoint row and retain account-driven OAuth invalidation after cutover.
