@@ -6,12 +6,11 @@ import { folders, organizations, initiatives, workspaces } from '../../db/schema
 import { sql } from 'drizzle-orm';
 import { getTenantResolutionMetrics } from '../../services/tenancy/tenant-resolution-metrics';
 import { revokeAllSessions } from '../../services/session-manager';
-import { tombstoneRemoteSessions } from '../../services/auth/remote-revocation';
 import { remoteRevocationError } from '../../services/auth/remote-revocation-error';
 import { findCmUserById, listCmUsers, updateCmUser } from '../../services/identity/cm-users';
-import { listCmSessionsForUser } from '../../services/identity/cm-sessions';
 import { cmStoreClient } from '../../services/identity/cm-identity';
-import { deleteAccountAtomically } from '../../services/auth/account-deletion';
+import { deleteCmAccountAsAdmin } from '../../services/identity/cm-account-deletion';
+import { runCmAccountDeletionHttp } from './auth/cm-deletion-http';
 
 // Lot A4: the identity parts of this router run over the CM stores — user
 // listing/approval/disable read and write cm_identity via the cm-users facade,
@@ -223,33 +222,8 @@ adminRouter.delete('/users/:id', async (c) => {
   const admin = c.get('user');
   const userId = c.req.param('id');
 
-  if (userId === admin.userId) {
-    return c.json({ error: 'Cannot delete self' }, 400);
-  }
-
-  const target = await findCmUserById(userId);
-  if (!target) return c.json({ error: 'User not found' }, 404);
-  if (target.role === 'admin_app' || target.role === 'admin_org') {
-    return c.json({ error: 'Cannot delete admin users' }, 400);
-  }
-  if (target.accountStatus !== 'disabled_by_admin' && target.accountStatus !== 'disabled_by_user') {
-    return c.json({ error: 'User must be disabled before deletion' }, 400);
-  }
-
-  const sessionIds = (await listCmSessionsForUser(userId)).map((row) => row.id);
-  const { receipt, remoteRevocationKey } = await deleteAccountAtomically({
+  return runCmAccountDeletionHttp(c, operationId => deleteCmAccountAsAdmin({
     userId,
     actorId: admin.userId,
-    handlerId: 'admin_account',
-  });
-
-  if (receipt.transaction !== 'committed') {
-    return c.json({ error: 'Account deletion rolled back', resultCode: receipt.resultCode }, 409);
-  }
-
-  // Only after a successful commit — a rolled-back transaction must not leave
-  // a tombstoned remote session behind for an account that still exists.
-  await tombstoneRemoteSessions({ sessionIds, userId }, remoteRevocationKey ?? undefined);
-
-  return c.json({ success: true });
+  }, operationId));
 });
