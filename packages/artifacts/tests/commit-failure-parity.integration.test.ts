@@ -233,8 +233,10 @@ describe('L8c E3 failures across isolated HTTP/MCP processes', () => {
       expect(result.mcp).toMatchObject({ ok: false, auditId: result.id,
         error: { code, message: code, retriable: status === 503 } });
       expect(result.wire).toMatchObject({ isError: true,
-        _meta: { auditId: result.id, errorCode: code, retriable: status === 503 } });
-      expect(JSON.parse(result.wire.content[0].text)).toEqual({ code, message: code });
+        _meta: { auditId: result.id, errorCode: code, retriable: status === 503, commitOutcomeVersion: 'v1' } });
+      expect(JSON.parse(result.wire.content[0].text)).toEqual({ ok: false, invocationId: result.id,
+        commitState: fault.state ?? 'not_committed', error: result.mcp.error });
+      if (fault.point === 'command') expect(result.mcp.error.details).toEqual({ variant: 'command_conflict' });
       expect(JSON.stringify(result)).not.toMatch(/private|postgres:\/\/|password|SELECT secret/);
       const read = fault.point === 'read';
       expect(result.dispatches).toBe(read || fault.point.startsWith('s3-') ? 0 : 1);
