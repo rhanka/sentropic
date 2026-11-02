@@ -80,6 +80,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] Migration tests (both directions of the copy, id preservation, counts).
   - [x] Add isolated PostgreSQL cutover tests for checkpoint retention, rollback and OAuth invalidation.
   - [x] Add import mapping regressions for expired approval, null email, terminal proofs, credential counters and login lineage.
+  - [x] Map account/profile, credential, single-use proof and login source fields to the r6 import records without invented history.
 - [ ] **Lot 2 — Author switch (r13 D11) + reader/writer cutover**
   - [ ] /auth + /session over CM custody stores (auth-hono ports backed by CM); delete registration.ts, account.ts, session-manager identity paths.
   - [x] Add real JWT custodian tests for token use, signed MFA lineage, ticket import and key disposal.
