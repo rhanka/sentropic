@@ -93,4 +93,32 @@ describe('CM WebAuthn services with actual attestation and assertion verificatio
     expect(await cmQuery(`SELECT state FROM ${cmTable('identity_single_use_proofs')} WHERE challenge = $1`, [options.challenge]))
       .toEqual([{ state: 'pending' }]);
   });
+
+  it.each([{ origin: 'https://untrusted.invalid' }, { type: 'webauthn.get' }])('refuses registration client data %j before persistence', async client => {
+    const options = await registrationOptions();
+    const result = await withAppCmAuth(runner => runner.complete('registration', binding => binding.registration.verifyRegistration({
+      userId, credential: passkey.registration(options.challenge, true, client), expectedChallenge: options.challenge,
+    })));
+    expect(result).toMatchObject({ committed: false, refusal: { flow: 'registration', result: { verified: false } } });
+    expect(await findCmCredentialByCredentialId(passkey.credentialId)).toBeNull();
+    expect(await cmQuery(`SELECT state FROM ${cmTable('identity_single_use_proofs')} WHERE challenge = $1`, [options.challenge]))
+      .toEqual([{ state: 'pending' }]);
+  });
+
+  it.each(['origin', 'type', 'signature', 'unknown_credential'] as const)('rejects authentication %s evidence without consuming the challenge', async kind => {
+    await enroll();
+    const options = await authenticationOptions(userId);
+    const credential = passkey.assertion(options.challenge, true, 1,
+      kind === 'origin' ? { origin: 'https://untrusted.invalid' } : kind === 'type' ? { type: 'webauthn.create' } : {});
+    if (kind === 'signature') credential.response.signature = Buffer.alloc(64, 1).toString('base64url');
+    if (kind === 'unknown_credential') credential.id = credential.rawId = Buffer.from(randomUUID()).toString('base64url');
+    const result = await withAppCmAuth(runner => runner.complete('authentication', binding => binding.authentication.verifyAuthentication({
+      credential, expectedChallenge: options.challenge,
+    })));
+    expect(result).toMatchObject({ committed: false, refusal: { flow: 'authentication', result: { verified: false } } });
+    expect(await findCmCredentialByCredentialId(passkey.credentialId)).toMatchObject({ counter: 0 });
+    expect(await cmQuery(`SELECT state FROM ${cmTable('identity_single_use_proofs')} WHERE challenge = $1`, [options.challenge]))
+      .toEqual([{ state: 'pending' }]);
+    expect(await authenticate(options.challenge)).toMatchObject({ committed: true, value: { verified: true } });
+  });
 });
