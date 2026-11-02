@@ -12,7 +12,7 @@ export { POLICY_FORMAT };
 export type PolicyStoreErrorCode =
   | 'invalid_request' | 'policy_digest_mismatch' | 'r15_unaccepted' | 'authority_unavailable'
   | 'storage_unavailable' | 'revision_conflict' | 'denial_active'
-  | 'source_reauthorization_required' | 'object_expired' | 'purge_pending' | 'expired';
+  | 'source_reauthorization_required' | 'object_expired' | 'purge_pending' | 'purged' | 'expired';
 
 export class PolicyStoreError extends Error {
   constructor(readonly code: PolicyStoreErrorCode, message: string) {
@@ -105,7 +105,7 @@ export interface AuditProjection {
   readonly policyId: string;
   readonly policyDigest: string;
   readonly retainedPayload: null;
-  readonly purge: PurgeState;
+  readonly purge: PurgeState | null;
   readonly backup: { readonly status: 'active' | 'expired'; readonly expiresAt: number | null };
   /** Audit retention outlives backup expiry (90-day-or-longer metadata obligation). */
   readonly auditRetainUntil: number;
@@ -158,21 +158,22 @@ export const createPolicyStore = (gates: PolicyStoreGates) => {
       throw new PolicyStoreError('invalid_request', 'policy sourceBinding is required');
     }
     const channels = policy['channels'];
-    if (channels !== undefined && typeof channels === 'object' && channels !== null) {
-      try {
-        const retentionMap: Record<string, unknown> = {};
-        for (const [name, entry] of Object.entries(channels as Record<string, unknown>)) {
-          if (entry !== null && typeof entry === 'object' && 'retention' in entry) {
-            retentionMap[name] = (entry as Record<string, unknown>)['retention'];
-          }
+    if (typeof channels !== 'object' || channels === null || Array.isArray(channels)) {
+      throw new PolicyStoreError('invalid_request', 'policy channels must be an object');
+    }
+    try {
+      const retentionMap: Record<string, unknown> = {};
+      for (const [name, entry] of Object.entries(channels)) {
+        if (entry !== null && typeof entry === 'object' && 'retention' in entry) {
+          retentionMap[name] = (entry as Record<string, unknown>)['retention'];
         }
-        validateChannelRetention(retentionMap);
-      } catch (error) {
-        if (error instanceof ContentPolicyError) {
-          throw new PolicyStoreError('invalid_request', `retention: ${error.message}`);
-        }
-        throw error;
       }
+      validateChannelRetention(retentionMap);
+    } catch (error) {
+      if (error instanceof ContentPolicyError) {
+        throw new PolicyStoreError('invalid_request', `retention: ${error.message}`);
+      }
+      throw error;
     }
     // r2 annex E (W-P3-3): the immutable deadline is null (kind "none") or a
     // safe integer; overflow refuses instead of wrapping.
@@ -273,7 +274,10 @@ export const createPolicyStore = (gates: PolicyStoreGates) => {
 
   const readRetained = (input: { readonly policyId: string }): { readonly expiresAt: number | null } => {
     const stored = get(input.policyId);
-    if (stored.purge) throw new PolicyStoreError('purge_pending', 'retained copy is being purged');
+    if (stored.purge) {
+      throw new PolicyStoreError(stored.purge.status, stored.purge.status === 'purged'
+        ? 'retained copy has been purged' : 'retained copy is being purged');
+    }
     if (stored.firstAdmissionExpiresAt !== null && gates.now() >= stored.firstAdmissionExpiresAt) {
       throw new PolicyStoreError('object_expired', 'retained copy passed its immutable deadline');
     }
@@ -333,9 +337,7 @@ export const createPolicyStore = (gates: PolicyStoreGates) => {
       policyId: stored.policyId,
       policyDigest: stored.policyDigest,
       retainedPayload: null,
-      purge: stored.purge ? { ...stored.purge } : {
-        status: 'purge_pending', initiatedWhileDisconnected: false, settledBy: null,
-      },
+      purge: stored.purge ? { ...stored.purge } : null,
       backup: stored.backupExpired
         ? { status: 'expired', expiresAt: stored.firstAdmissionExpiresAt }
         : { status: 'active', expiresAt: stored.firstAdmissionExpiresAt },

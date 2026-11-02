@@ -10,7 +10,7 @@
  * - NO published-contract mutation (@sentropic/contracts / @sentropic/comments untouched).
  */
 
-import { bigint, boolean, check, index, integer, jsonb, pgSchema, primaryKey, text, timestamp, uniqueIndex } from 'drizzle-orm/pg-core';
+import { bigint, boolean, check, index, integer, jsonb, pgSchema, primaryKey, text, timestamp, unique, uniqueIndex } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
 
 // Declare the `control` schema namespace.
@@ -1040,6 +1040,8 @@ export const sessionContentPolicyAdmissions = controlSchema.table(
     updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().default(sql`now()`),
   },
   (table) => ({
+    policyRevisionUnique: unique('session_content_policy_admissions_policy_id_policy_revision_key')
+      .on(table.policyId, table.policyRevision),
     revisionCheck: check(
       'session_content_policy_admissions_revision_check',
       sql`${table.policyRevision} >= 1`,
