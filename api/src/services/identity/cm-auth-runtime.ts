@@ -1,6 +1,6 @@
 import { createSentropicOAuthHostPorts, createSentropicOAuthStateCodec, getSentropicOAuthPorts, resolveSessionTokenSecret } from '../../routes/auth/oauth';
 import { env } from '../../config/env';
-import { resolveEmailVerificationTokenSecret } from '../email-verification';
+import { resolveEmailVerificationTokenSecret } from './cm-token-secrets';
 import { getWebAuthnConfig } from '../webauthn-config';
 import { sendTransactionalEmail } from '../scw-tem-client';
 import { createCmAuthRequestRunner } from './cm-auth-binding';
