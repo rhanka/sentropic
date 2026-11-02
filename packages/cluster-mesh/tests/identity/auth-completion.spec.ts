@@ -1,7 +1,7 @@
 import { randomBytes, randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { AuthHonoPorts } from '@sentropic/auth-hono';
-import { createIdentityAuthHonoTransactionBindingV1, runIdentityAuthCompletionV1, createNodeIdentityDigestPort, createNodeIdentityEmailTicketTokenPort } from '../../src/index.js';
+import { createIdentityAuthHonoTransactionBindingV1, runIdentityAuthCompletionV1, createNodeIdentityDigestPort, createHs256EmailTicketPort } from '../../src/index.js';
 import { asOpHost, NOW, openPostgresEnv, openSqliteEnv, pgEnabled } from './a20b-helpers.js';
 
 const WRITE = { mode: 'write', purpose: 'request', deadlineMs: 5000, maxAttempts: 1 } as const;
@@ -15,7 +15,7 @@ const hostPorts = {
 } as unknown as AuthHonoPorts;
 const shared = {
   hostPorts, digest: createNodeIdentityDigestPort(),
-  ticketTokens: createNodeIdentityEmailTicketTokenPort({ key: new Uint8Array(32).fill(9) }),
+  ticketTokens: createHs256EmailTicketPort(new Uint8Array(32).fill(9)),
   emailCodeKeys: { issuance: 'sha256' as const, activeKeyRef: null, previousKeyRefs: [] },
   rp: { id: 'example.test', name: 'Example', expectedOrigins: ['https://example.test'] },
   accountPolicy: { normalizeEmail: (email: string) => email.trim().toLowerCase(), deriveDisplayName: () => 'Person', roleForNewUser: () => 'editor', statusForNewUser: () => ({ accountStatus: 'active', approvalDueAt: null }) },
