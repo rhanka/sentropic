@@ -11,7 +11,7 @@ export function createSyntheticPasskey(rpId: string, origin: string, userId: str
     Buffer.from(jwk.x, 'base64url'), Buffer.from('225820', 'hex'), Buffer.from(jwk.y, 'base64url')]);
   const credentialId = randomBytes(32).toString('base64url');
   return { credentialId, publicKey,
-    registration(challenge: string, userVerified = true): RegistrationResponseJSON {
+    registration(challenge: string, userVerified = true, client: { origin?: string; type?: string } = {}): RegistrationResponseJSON {
       const credentialBytes = Buffer.from(credentialId, 'base64url'), prefix = Buffer.alloc(55);
       createHash('sha256').update(rpId).digest().copy(prefix);
       prefix[32] = userVerified ? 0x45 : 0x41; // UP, AT and the actual UV bit; zero counter/AAGUID.
@@ -23,10 +23,10 @@ export function createSyntheticPasskey(rpId: string, origin: string, userId: str
         Buffer.from([0x58, authData.length]), authData]);
       return { id: credentialId, rawId: credentialId, type: 'public-key', clientExtensionResults: {},
         response: { attestationObject: attestation.toString('base64url'), transports: ['internal'],
-          clientDataJSON: Buffer.from(JSON.stringify({ type: 'webauthn.create', challenge, origin, crossOrigin: false })).toString('base64url') } };
+          clientDataJSON: Buffer.from(JSON.stringify({ type: 'webauthn.create', challenge, origin, crossOrigin: false, ...client })).toString('base64url') } };
     },
-    assertion(challenge: string, userVerified: boolean, counter = 1): AuthenticationResponseJSON {
-      const clientData = Buffer.from(JSON.stringify({ type: 'webauthn.get', challenge, origin, crossOrigin: false }));
+    assertion(challenge: string, userVerified: boolean, counter = 1, client: { origin?: string; type?: string } = {}): AuthenticationResponseJSON {
+      const clientData = Buffer.from(JSON.stringify({ type: 'webauthn.get', challenge, origin, crossOrigin: false, ...client }));
       const authenticatorData = Buffer.alloc(37);
       createHash('sha256').update(rpId).digest().copy(authenticatorData);
       authenticatorData[32] = userVerified ? 0x05 : 0x01;
