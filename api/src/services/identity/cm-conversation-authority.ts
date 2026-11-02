@@ -53,3 +53,30 @@ export async function admitCmBusinessConversation(chatSessionId: string): Promis
     throw new Error('conversation_authority_unavailable');
   }
 }
+
+/** Removing the business handle also retires its CM authority in the same commit. */
+export const deleteCmBusinessConversation = (chatSessionId: string, userId: string): Promise<void> =>
+  runCmIdentityWrite(async tx => {
+    const discovered = await tx.hostTransaction.query<{ workspace_id: string | null }>(
+      'SELECT workspace_id FROM public.chat_sessions WHERE id = $1 AND user_id = $2', [chatSessionId, userId]);
+    if (!discovered.rows[0]) return;
+    await tx.lockSubject(userId);
+    const workspaceId = discovered.rows[0].workspace_id;
+    if (workspaceId) await tx.lockWorkspace(workspaceId);
+    const locked = await tx.hostTransaction.query<{
+      workspace_id: string | null; cm_conversation_session_id: string | null;
+    }>('SELECT workspace_id, cm_conversation_session_id FROM public.chat_sessions WHERE id = $1 AND user_id = $2 FOR UPDATE',
+      [chatSessionId, userId]);
+    const chat = locked.rows[0];
+    if (!chat) return;
+    if (chat.workspace_id !== workspaceId) throw new IdentityCustodyErrorV1('identity_record_conflict');
+    if (chat.cm_conversation_session_id) {
+      const record = await tx.conversations.findSession(chat.cm_conversation_session_id);
+      if (!record || record.userId !== userId || record.workspaceId !== workspaceId) {
+        throw new IdentityCustodyErrorV1('identity_material_invalid');
+      }
+      await createConversationAuthority({ sessions: tx.conversations, audit: tx.stores.audit })
+        .revokeSession(record.conversationSessionId, userId);
+    }
+    await tx.hostTransaction.query('DELETE FROM public.chat_sessions WHERE id = $1 AND user_id = $2', [chatSessionId, userId]);
+  });

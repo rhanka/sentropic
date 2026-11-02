@@ -30,11 +30,11 @@ export const createProductChatServerDeps = (): ChatServerDeps => ({
     ),
     createSession: async (input) => {
       const created = await chatService.createSession({
-      userId: input.userId,
-      workspaceId: input.workspaceId ?? null,
-      primaryContextType: input.primaryContextType as ChatContextType | null | undefined,
-      primaryContextId: input.primaryContextId ?? null,
-      title: input.title ?? null,
+        userId: input.userId,
+        workspaceId: input.workspaceId ?? null,
+        primaryContextType: input.primaryContextType as ChatContextType | null | undefined,
+        primaryContextId: input.primaryContextId ?? null,
+        title: input.title ?? null,
       });
       await admitCmBusinessConversation(created.sessionId);
       return created;
@@ -71,9 +71,9 @@ export const createProductChatServerDeps = (): ChatServerDeps => ({
     },
     retryUserMessage: async (input) => {
       const retried = await chatService.retryUserMessage({
-      ...input,
-      providerId: providerIdOrNull(input.providerId),
-      model: input.model ?? null,
+        ...input,
+        providerId: providerIdOrNull(input.providerId),
+        model: input.model ?? null,
       });
       await admitCmBusinessConversation(retried.sessionId);
       return retried;
