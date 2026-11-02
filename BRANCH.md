@@ -123,6 +123,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Drain the CM ledger on periodic sweeps and delete the replaced settings queue/pending/ack module.
 - [ ] **Lot 2 — Author switch (r13 D11) + reader/writer cutover**
   - [ ] /auth + /session over CM custody stores (auth-hono ports backed by CM); delete registration.ts, account.ts, session-manager identity paths.
+  - [x] Add social-completion regression cases for whole-attempt retry, fresh linking-session checks and no SQL after an insert conflict.
   - [x] Add real JWT custodian tests for token use, signed MFA lineage, ticket import and key disposal.
   - [x] Implement the host token/digest adapter against the approved r6 signer/verifier contracts.
   - [x] Add the r6 per-attempt auth binding/runner with callback-owned audit drain and post-commit mail publication.
