@@ -1,0 +1,75 @@
+{
+  "schemaVersion": 1,
+  "status": "candidate-inventory",
+  "trustOrigins": ["https://tuf-repo-cdn.sigstore.dev"],
+  "roles": [
+    {
+      "role": "verifier",
+      "name": "cosign",
+      "repository": "sigstore/cosign",
+      "version": "3.1.4",
+      "releaseTag": "v3.1.4",
+      "asset": "cosign-linux-amd64",
+      "url": "https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign-linux-amd64",
+      "digest": "sha256:424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa",
+      "size": 145688404,
+      "releaseAssetDigest": "sha256:424e2c97d0b45fd7a6b608a87f090f35633f4c23ece5f092d48bba11aaf4bbfa",
+      "goVersion": "go1.27.3",
+      "buildInfoHash": "sha256:0ddf229c9ab97901e9827d6640b2301aef010780aaa2663b321eafd498d233d8",
+      "dependencyCount": 253,
+      "releaseImmutable": true,
+      "selfScaEvidence": "sha256:1041c9c61e9a6dedf627a8b21296e80084624e57e5062e7b41a1b0bf83c4f76c"
+    },
+    {
+      "role": "root-bootstrap",
+      "name": "sigstore-tuf-trusted-root",
+      "url": "https://tuf-repo-cdn.sigstore.dev/trusted_root.json",
+      "digest": "sha256:6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66",
+      "size": 6787,
+      "mirror": "https://tuf-repo-cdn.sigstore.dev",
+      "trustedRootDigest": "sha256:6494e21ea73fa7ee769f85f57d5a3e6a08725eae1e38c755fc3517c9e6bc0b66",
+      "tufRoles": {
+        "root": "sha256:27aea7e372aa7864065174f0661784fcf8b0e28b1dbfebeada31a0f1fb19167f",
+        "timestamp": "sha256:a8c999cf4f4c639c178a453eafd8751d795515ec28468cd8de8a36d802caeba2",
+        "snapshot": "sha256:6d61405faa993ba3d07556b79d1e319627cdc06ff879a7b5700967dc25d1d224",
+        "targets": "sha256:6a697f7f8908c8ab26c11786ecb490b54acec97fa8c802e399f065f8a0cc1acd"
+      },
+      "observedAt": "2026-10-30T04:13:07Z",
+      "refreshBy": "2026-11-06T01:22:45Z"
+    },
+    {
+      "role": "acquisition",
+      "name": "cacert-pem",
+      "url": "https://curl.se/ca/cacert.pem",
+      "digest": "sha256:796f1389bfea13c0ed78f663b765baaff54a508e5483786bd6ece73c5e3e3cbe",
+      "size": 200116,
+      "materialPath": "tools/acquisition/cacert.pem"
+    },
+    {
+      "role": "sbom",
+      "name": "syft",
+      "version": "1.55.0",
+      "releaseTag": "v1.55.0",
+      "asset": "syft_1.55.0_linux_amd64.tar.gz",
+      "url": "https://github.com/anchore/syft/releases/download/v1.55.0/syft_1.55.0_linux_amd64.tar.gz",
+      "digest": "sha256:bb65249542db5fedeeb4d3f9b018b75e7264dbfbbb10486f044581a92f90490d",
+      "size": 31198534,
+      "releaseAssetDigest": "sha256:bb65249542db5fedeeb4d3f9b018b75e7264dbfbbb10486f044581a92f90490d",
+      "materialPath": "tools/sbom/syft.tar.gz"
+    },
+    {
+      "role": "uploader",
+      "name": "oras",
+      "url": null,
+      "digest": null,
+      "size": null,
+      "pendingReason": "Exact ORAS digest is an A08 reviewed protected-main workflow input per r4; never a floating download. Admission refuses while pending.",
+      "destinationAllowlist": ["ghcr.io/rhanka/sentropic-trivy"]
+    }
+  ],
+  "evidence": {
+    "verifierCandidate": "sha256:eaeb5ed649962a12f064d85fb3fd8a847d8ad6cc5ec0710a31268598b3d6e6c1",
+    "trustCustody": "sha256:b9e6e97f31f8dccce4e2377778f58c34fef10a1cdd529dbe3e32dec8183649bc",
+    "selfScans": "sha256:fa839a8d83dcdee94c56fd438441492ae57476c532fea45b0f478a5d21bef139"
+  }
+}
