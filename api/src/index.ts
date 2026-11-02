@@ -123,12 +123,6 @@ try {
   // Non-critical: don't block startup if purge fails
 }
 
-// Ensure Admin Workspace exists (idempotent) and is claimed by admin_app if present
-try {
-} catch (error) {
-  logger.error({ err: error }, 'Failed to ensure admin workspace at startup, continuing anyway');
-}
-
 // Purge all locks at startup (safety: locks are session-scoped)
 try {
   await purgeAllLocksAtStartup();
