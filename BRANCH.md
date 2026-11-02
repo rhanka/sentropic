@@ -63,7 +63,7 @@ Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, r
   - [x] Initialize ensure metadata in the coordinator transaction, preserve resolved bindings and restrict explicit p0b schemas to their compatible inputs.
   - [x] Preserve strict delete refusals outside the operational finalizer codec and replay historical terminal receipts before new-command validation.
   - [x] Preserve the compatible ensure receipt shape; emit the full ensure summary only in result version 2.
-  - [ ] Regenerate Memory L5 inventory using make, with no manual digest edits.
+  - [x] Regenerate Memory L5 inventory using make, with no manual digest edits; retain the previous manifest and complete source lock snapshot.
   - [ ] Run artifacts and mcp-platform typecheck/test/lint plus API boot under the single Docker lock; make down.
   - [ ] Commit using make, force-with-lease push, mark PR ready, wait for pull_request CI and append the lane report; do not merge.
 - [ ] **Delta D3 — Binding R1 concurrency and transport contract only**
