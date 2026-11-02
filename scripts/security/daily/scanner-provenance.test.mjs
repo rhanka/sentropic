@@ -7,10 +7,16 @@ import { validateMaterialContract, validateMaterialInventory } from '../scanner/
 import '../scanner/material-acquisition.test.mjs';
 import '../scanner/retained-materials.test.mjs';
 import '../scanner/offline-dependencies.test.mjs';
+import '../scanner/build-isolation.test.mjs';
+import '../scanner/build-layout.test.mjs';
+import '../scanner/build-executor.test.mjs';
 
-// Mandatory native offline replay, collected only when the retained material directory
-// is supplied; the gate itself never skips.
-if (process.env.SCANNER_MATERIALS) await import('../scanner/native-replay.test.mjs');
+// Mandatory native offline replay and two-build fixture gates, collected only when the
+// retained material directory is supplied; the gates themselves never skip.
+if (process.env.SCANNER_MATERIALS) {
+  await import('../scanner/native-replay.test.mjs');
+  await import('../scanner/native-build.test.mjs');
+}
 
 const SENTROPIC_REPOSITORY = 'ghcr.io/rhanka/sentropic-trivy';
 const SENTROPIC_IDENTITY =
