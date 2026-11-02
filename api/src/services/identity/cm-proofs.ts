@@ -9,6 +9,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { IdentityDigestV1 } from '@sentropic/cluster-mesh';
 
 import { CM_IDENTITY_SCHEMA, cmStoreClient, getCmIdentity } from './cm-identity';
+import { runCmIdentityWrite } from './cm-transaction';
 
 export const sha256Hex = (secret: string): string =>
   createHash('sha256').update(secret).digest('hex');
@@ -530,12 +531,9 @@ export const revokeCmCredential = async (credentialRecordId: string, userId: str
   return true;
 };
 
-// Purges consumed/revoked proofs past their expiry (the custody store only
-// deletes non-pending rows; pending rows simply stop matching find*).
-export const purgeCmExpiredProofs = async (now = new Date()): Promise<number> => {
-  const { custody } = getCmIdentity();
-  return custody.singleUseProofs.purgeExpired(now.toISOString());
-};
+// CM owns retention, including consumed magic-link evidence used by factor policy.
+export const purgeCmExpiredProofs = (now = new Date()): Promise<number> =>
+  runCmIdentityWrite(tx => tx.custody.singleUseProofs.purgeExpired(now.toISOString()));
 
 export interface CmSocialRecord {
   readonly id: string;
