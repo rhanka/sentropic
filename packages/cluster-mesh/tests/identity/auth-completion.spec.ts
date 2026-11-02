@@ -31,6 +31,13 @@ const shared = {
 describe.each(pgEnabled ? ['sqlite', 'postgres'] as const : ['sqlite'] as const)('real auth completion on %s', (profile) => {
   const open = async () => asOpHost((profile === 'postgres' ? await openPostgresEnv() : openSqliteEnv()).unitOfWork);
 
+  it('rejects a noncanonical normalizer at binding construction', async () => {
+    const unitOfWork = await open();
+    await expect(unitOfWork.run(WRITE, async (tx) => createIdentityAuthHonoTransactionBindingV1({ ...shared, tx,
+      accountPolicy: { ...shared.accountPolicy, normalizeEmail: (email) => email },
+    }))).rejects.toMatchObject({ code: 'identity_material_invalid' });
+  });
+
   it.each(['create', 'update'] as const)('rejects explicit null emailVerified during %s', async (operation) => {
     const unitOfWork = await open();
     await expect(unitOfWork.run(WRITE, async (tx) => {

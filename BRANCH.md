@@ -59,6 +59,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] R1 Argon r3 tests first: reject a noncanonical host normalizer when constructing the binding, before any auth method runs.
 - [x] R1 final refusal regressions: both profiles reproduced ignored credential-refusal commits and required-UV 401; abort at the port boundary and map the actual verifier's UV refusal to 403.
 - [x] R1 Argon r3 tests first: mismatched ticket subjects, explicit null email flags and pure read-mode session binding with write refusal.
 - [x] Review r1 tests first: a signed assertion missing required UV must return user_verification_required/403 and roll back challenge, counter and audit writes.
