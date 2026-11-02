@@ -50,7 +50,7 @@
   - [x] Create isolated worktree from origin/main and pass mechanical harness branch check.
   - [x] Locate existing pinned Node test lane and shared Docker lock; preserve production admission off.
 - [ ] **Lot 1 — Strict material contracts**
-  - [ ] Write negative controls first in `scripts/security/daily/scanner-provenance.test.mjs`.
+  - [x] Write negative controls first in `scripts/security/daily/scanner-provenance.test.mjs`.
   - [ ] Validate exact source/tool/base/module/package/patch pins and retained material bytes under `scripts/security/scanner/`.
   - [ ] Reject current pending recipe and material pins; accept a complete synthetic contract only.
 - [ ] **Lot 2 — Receipt and artifact contracts**
