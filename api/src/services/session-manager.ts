@@ -1,9 +1,6 @@
 import { cmAuthSessionService, createCmLoginForSubject } from './identity/cm-session-facade';
 import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
 import { logger } from '../logger';
-import { tombstoneRemoteSessions } from './auth/remote-revocation';
-import { deleteAndQueueRemoteSessions } from './auth/remote-revocation-outbox';
-import { listCmSessionsForUser } from './identity/cm-sessions';
 
 /**
  * Session Manager Service
@@ -85,8 +82,7 @@ export async function refreshSession(refreshToken: string): Promise<SessionToken
  * @param sessionId - Session ID to revoke
  */
 export async function revokeSession(sessionId: string): Promise<void> {
-  const { input, key } = await deleteAndQueueRemoteSessions({ sessionId });
-  await tombstoneRemoteSessions(input, key);
+  await cmAuthSessionService.revokeSession(sessionId);
 
   logger.info({ sessionId }, 'Session revoked');
 }
@@ -100,7 +96,7 @@ export async function revokeSession(sessionId: string): Promise<void> {
 export async function listUserSessions(userId: string) {
   const now = new Date();
 
-  const sessions = await listCmSessionsForUser(userId);
+  const sessions = await cmAuthSessionService.listUserSessions(userId);
   return sessions
     .filter(session => !session.revokedAt && session.expiresAt > now)
     .map(session => ({
@@ -120,8 +116,7 @@ export async function listUserSessions(userId: string) {
  * @param userId - User ID
  */
 export async function revokeAllSessions(userId: string): Promise<void> {
-  const { rows: deleted, input, key } = await deleteAndQueueRemoteSessions({ userId });
-  await tombstoneRemoteSessions(input, key);
+  const count = await cmAuthSessionService.revokeAllSessions(userId);
 
-  logger.info({ userId, count: deleted.length }, 'All user sessions revoked');
+  logger.info({ userId, count }, 'All user sessions revoked');
 }
