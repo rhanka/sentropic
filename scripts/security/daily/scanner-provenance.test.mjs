@@ -10,6 +10,8 @@ import '../scanner/offline-dependencies.test.mjs';
 import '../scanner/build-isolation.test.mjs';
 import '../scanner/build-layout.test.mjs';
 import '../scanner/build-executor.test.mjs';
+import '../scanner/tool-inventory.test.mjs';
+import '../scanner/tool-admission.test.mjs';
 
 // Mandatory native offline replay and two-build fixture gates, collected only when the
 // retained material directory is supplied; the gates themselves never skip.
