@@ -3,16 +3,21 @@
 import { createHash } from 'node:crypto';
 import type { IdentityStorageProfileV1 } from '../../identity-contracts/custody.js';
 import { identitySchemaStatements } from './schema.js';
+import { IdentityCustodyErrorV1 } from '../../identity-contracts/custody-errors.js';
+
+export class IdentityEmailCreateCollision extends IdentityCustodyErrorV1 {
+  constructor() { super('identity_record_conflict'); }
+}
 
 /** Private whole-callback social-race retry signal (never a public error). */
 export class IdentitySocialRaceRetrySignal extends Error {
-  constructor() {
+  constructor(readonly finalCode: 'social_subject_conflict' | 'identity_record_conflict' = 'social_subject_conflict') {
     super('identity social race: retry whole callback');
     this.name = 'IdentitySocialRaceRetrySignal';
   }
 }
 
-export const isSocialRaceRetry = (error: unknown): boolean => error instanceof IdentitySocialRaceRetrySignal;
+export const isSocialRaceRetry = (error: unknown): error is IdentitySocialRaceRetrySignal => error instanceof IdentitySocialRaceRetrySignal;
 
 export interface IdentityCustodySchemaAssetV1 {
   readonly migrationId: 'A2.0b/1';

@@ -59,6 +59,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] R1 Argon D3: classify the email natural-key collision privately and sanitize exhausted whole-callback social retries without exposing the private signal.
 - [x] R1 Argon D5/D6: validate stored projection fields, preserve proven email verification, key token evidence by the complete tuple and keep administrative MFA reads unchanged.
 - [x] R1 Argon D1/D4: preserve one verified completion owner, bind snapshots by purpose/challenge and enforce deduplicated origins with the registration UV floor.
 - [x] R1 Argon D2: translate invalid presented tickets and invitation CAS failures at their own stage, preserving rollback and configuration errors.

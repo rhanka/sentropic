@@ -16,6 +16,7 @@ import type {
 } from '../../identity-contracts/custody.js';
 import type { OAuthConsentRecord, RevocationStepKind, UserAccount, WorkspaceRecord } from '../../identity-contracts/types.js';
 import { IdentityCustodyErrorV1 } from '../../identity-contracts/custody-errors.js';
+import { IdentityEmailCreateCollision } from './custody-shared.js';
 import type { SqliteConnection } from '../sqlite/connection.js';
 import type { SqliteValue } from './custody-sqlite.js';
 
@@ -181,6 +182,7 @@ export class SqliteCustodyJournal {
     try {
       this.connection.prepare(`INSERT INTO "identity_user_accounts" ("user_id","email","account_status","global_role","created_at","updated_at") VALUES (?,?,?,?,?,?)`).run(record.userId, record.email, record.accountStatus, record.globalRole, record.createdAt, record.updatedAt);
     } catch (error) {
+      if (error instanceof Error && error.message.includes('UNIQUE constraint failed: identity_user_accounts.email')) throw new IdentityEmailCreateCollision();
       if (error instanceof Error && error.message.includes('UNIQUE constraint failed')) throw new IdentityCustodyErrorV1('identity_record_conflict');
       throw error;
     }
