@@ -18,7 +18,7 @@ function fixture() {
   };
   return { artifacts, execute, createInvocation, selection: ['sentropic.artifacts'],
     configurations: { 'sentropic.artifacts': {} }, bindings: {}, compatibility: {
-      'sentropic.artifacts': { manifestDigest: 'de3a94abcbad65806635c9cbcbe0712557676485c6905b5dccf3f9c0b4e19f25' },
+      'sentropic.artifacts': { manifestDigest: '17daebce5bc0e85244c321b6229a3ee71f58676e8dcf964b52e006ffba843ab7' },
     } };
 }
 
@@ -37,7 +37,7 @@ describe('app MCP registry compilation', () => {
   it('should expose the exact APP-P1 names and schemas without invoking a host port', async () => {
     const input = fixture();
     expect(input.artifacts.profile.profileDigest)
-      .toBe('0de19f966eacb5b63142b525611a6210a0d4aaeefbdaad92dfb3b6227575b6ef');
+      .toBe('89819bcbb74e826b853e73a7edd9a6e6fc7256827238256fc33ec65b22b3e1a1');
     const { manifest } = createArtifactsRegistryDefinition({ ...input.artifacts, invocationScope: 'mcp:tools:invoke' });
     expect(computeManifestDigest({ ...manifest, version: '0.2.4' }))
       .toBe('020aacfec500d754b76c90d3ad4a05097e0f996b8b9282145ca458917ea6fb27');
