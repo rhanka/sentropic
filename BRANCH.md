@@ -283,6 +283,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] gap-§1 scenario end to end; registration → approval → login; invitation consumed once; revoke-all; mid-session suspension empties tool set; account deletion with injected failure leaves no orphan and preserves rows; migration tests; F11 e2e.
   - [ ] Rehearse migration on a fresh prod dump (existing rehearsal make target); record receipt.
 - [ ] **Lot 6 — Final validation**
+  - [x] Delete the unused legacy connector tombstone/revocation writers; production deletion uses the CM custody/outbox worker exclusively, and the historical admin route is archival only.
   - [x] Port the remaining standalone workspace connector regression to CM memberships and shared encrypted fixtures; preserve its 204 success expectation as an unmet stack acceptance item.
   - [x] Retire the superseded account connector tests after adding CM V2 custody/rollback/delivery regressions; standalone workspace success and disabled self-deletion re-entry remain explicitly unmet.
   - [x] Remove the obsolete connector deletion-site source census; the new CM route/custody tests check effects and preserved rows instead of requiring deleted legacy handlers.
