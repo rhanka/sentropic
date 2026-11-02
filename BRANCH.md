@@ -249,6 +249,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] gap-§1 scenario end to end; registration → approval → login; invitation consumed once; revoke-all; mid-session suspension empties tool set; account deletion with injected failure leaves no orphan and preserves rows; migration tests; F11 e2e.
   - [ ] Rehearse migration on a fresh prod dump (existing rehearsal make target); record receipt.
 - [ ] **Lot 6 — Final validation**
+  - [x] Restore social start/refusal protocol audit outside the CM completion while keeping transactional success audit in the CM ledger; cover the real route and broker.
   - [x] Recheck verified social assertion expiry with the live attempt clock after blocking mutations; reject malformed deadlines before CM work.
   - [x] Bound replayed HTTP request bodies and publish only error DTOs without provisional cookies or candidate tokens after a confirmed rollback; add publication-boundary tests.
   - [ ] typecheck/lint api+ui; targeted make tests; push often; draft PR base feat/cm-identity-a2-0b.
