@@ -37,7 +37,10 @@
 ## Feedback Loop
 - [x] BR07-EX1: required collection of integration/recovery/performance tests; impact limited to daily suite; rollback reverts added SCOPE entries.
 - [x] BRLOCK-EX1 acknowledgement: review_by=2026-11-30T00:00:00Z.
-- [ ] L02/L05 live admission prerequisites remain missing on main: downstream image digest, admitted builder and actual remote/rebuild receipts. Do not replace them with mocks.
+- [ ] STOP / ACT-L07-DEP1: main has no admitted downstream scanner: `.security/trivy-toolchain.json` remains unqualified with null downstream digests; `scripts/security/scanner/recipe.json` contains a pending base digest and status `unadmitted-candidate-contract-only`. Owner: ACT-L02 lane.
+- [ ] STOP / ACT-L07-DEP2: `scripts/security/daily/rebuild-isolation.mjs` has no admitted builder; L05 reports fixture-only acquisition/rebuild proof. Owner: ACT-L05 lane after ACT-L02 admission.
+- [ ] L7-D/L7-E/T5-S6 require real successful scans and an admitted baseline. Completing these upstream lots or treating their fixture results as live admission is outside this assignment. Preserve every unchecked acceptance.
+- [x] No implementation, activation, PR or CI run: preflight cannot establish the prerequisites for the requested integrated delivery. Final report supplies bounded handoffs to the conductor.
 - [x] Conductor remains sole Track writer; this branch and final report provide the importable evidence.
 
 ## AI Flaky tests
