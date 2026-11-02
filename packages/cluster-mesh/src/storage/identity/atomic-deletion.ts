@@ -4,9 +4,11 @@
 // attempt and resolves a persisted rolled_back receipt. The frozen 1.0
 // best-effort cascade is untouched; A4 explicitly selects this contract.
 
+import { validateDeletionComposition, applyDeletionPlane, currentDeletionReceipt } from './deletion-planes.js';
 import { randomUUID } from 'node:crypto';
 import type {
   AtomicPersonDeletionV2,
+  AtomicPersonDeletionInput,
   AtomicRevocationStepReceiptV2,
   BusinessDeletionPlanV1,
   BusinessDeletionPortV1,
@@ -31,18 +33,6 @@ import { SqliteCustodyJournal } from './custody-journal-sqlite.js';
 import type { CustodyOpHost } from './custody-host.js';
 
 const DELETE = 'delete';
-
-const notApplicable = (step: RevocationStepKind, detail: string): AtomicRevocationStepReceiptV2 => ({ step, outcome: 'not_applicable', detail });
-
-export interface DeletionPlanResolver {
-  resolvePlan(userId: string, tx: CustodyOpHost): Promise<BusinessDeletionPlanV1>;
-}
-
-export type DeletionBusiness = BusinessDeletionPortV1<CustodyOpHost> & Partial<DeletionPlanResolver>;
-
-const DEFAULT_OPTIONS: IdentityRunOptionsV1 = { mode: 'delete', deadlineMs: 5000 };
-const DEFAULT_DIAGNOSTIC: IdentityRunOptionsV1 = { mode: 'delete', deadlineMs: 5000 };
-const DEFAULT_READ: IdentityRunOptionsV1 = { mode: 'read', deadlineMs: 5000 };
 
 const requestDigest = (command: PersonDeletionCommandV2): string =>
   (command.handlerId === 'self_account' ? PostgresCustodyJournal : SqliteCustodyJournal).requestDigestV1(
@@ -95,35 +85,10 @@ const validatePlan = async (
   return { subjectWorkspaces };
 };
 
-const committedSteps = (loginSessions: number, memberships: number): readonly AtomicRevocationStepReceiptV2[] => [
-  { step: 'login_sessions', outcome: 'applied', detail: `${loginSessions} sessions revoked` },
-  notApplicable('remote_reader_sessions', 'remote/reader session plane not bound'),
-  notApplicable('connector_grants', 'connector grant plane not bound'),
-  { step: 'tenant_memberships', outcome: 'applied', detail: `${memberships} memberships deleted` },
-  notApplicable('agent_plane', 'agent-plane hook not bound'),
-  notApplicable('purpose_grants', 'purpose grants are agent-plane records'),
-  notApplicable('catalogue', 'tool catalogue surface not bound'),
-  { step: 'account', outcome: 'applied', detail: 'account deleted' },
-];
-
-export const createAtomicPersonDeletionV2 = (input: {
-  readonly unitOfWork: IdentityUnitOfWorkV1<CustodyOpHost>;
-  readonly business: DeletionBusiness;
-  readonly clock?: IdentityClock;
-  readonly deletionOptions?: IdentityRunOptionsV1;
-  readonly diagnosticOptions?: IdentityRunOptionsV1;
-  readonly readOptions?: IdentityRunOptionsV1;
-}): AtomicPersonDeletionV2 => {
-  const now = (): string => (input.clock ? input.clock() : new Date().toISOString());
-  const deletionOptions = input.deletionOptions ?? DEFAULT_OPTIONS;
-  const diagnosticOptions = input.diagnosticOptions ?? DEFAULT_DIAGNOSTIC;
-  const readOptions = input.readOptions ?? DEFAULT_READ;
-
-  const defaultPlan = async (userId: string, host: CustodyOpHost): Promise<BusinessDeletionPlanV1> => {
-    if (input.business.resolvePlan) return input.business.resolvePlan(userId, host);
-    const retained = await host.journal.listWorkspaceIdsForUser(userId);
-    return { userId, workspaceIdsToDelete: [], retainedWorkspaceIds: [...retained] };
-  };
+export const createAtomicPersonDeletionV2 = (input: AtomicPersonDeletionInput<CustodyOpHost>): AtomicPersonDeletionV2 => {
+  validateDeletionComposition(input);
+  const now = input.clock;
+  const { reservation: reservationOptions, deletion: deletionOptions, diagnostic: diagnosticOptions, read: readOptions } = input.transactionOptions;
 
   const deletePerson = async (command: PersonDeletionCommandV2): Promise<PersonDeletionReceiptV2> => {
     if (command.userId.length === 0 || command.actorId.length === 0 || command.operationId.length === 0) {
@@ -142,28 +107,34 @@ export const createAtomicPersonDeletionV2 = (input: {
       state: 'queued',
       createdAt: at,
       committedAt: null,
+      committedReceipt: null,
     };
     // Reservation shares a transaction with authorization: refusal persists nothing.
     // A recorded operation is digest-checked first: identical repeats resolve
     // the committed receipt, divergent repeats refuse.
-    const preResolved = await input.unitOfWork.runWrite(deletionOptions, async (tx: IdentityTransactionV1<CustodyOpHost>) => {
+    const preResolved = await input.unitOfWork.run(reservationOptions, async (tx: IdentityTransactionV1<CustodyOpHost>) => {
       const journal = tx.hostTransaction.journal;
-      const recorded = await journal.findOperation(command.operationId);
+      const recorded = await tx.deletionJournal.lock(command.operationId);
       if (recorded) {
         if (recorded.requestDigest !== operation.requestDigest || recorded.userId !== operation.userId || recorded.actorId !== operation.actorId || recorded.handlerId !== operation.handlerId) {
           throw new IdentityCustodyErrorV1('identity_operation_conflict');
         }
-        if (recorded.state === 'committed') return journal.latestReceipt(command.operationId);
-        const account = await journal.findAccountCore(command.userId);
+        if (recorded.state === 'committed') return currentDeletionReceipt(recorded.committedReceipt, tx);
+        await tx.lockSubject(command.userId);
+        await tx.lockSubject(command.userId);
+      const account = await journal.findAccountCore(command.userId);
         if (!account) throw new IdentityNotFoundError('user', command.userId);
         const actor = command.actorId === command.userId ? account : await journal.findAccountCore(command.actorId);
         await authorize(command, account, actor?.accountStatus ?? null);
+        await input.authorization.assertAllowed(command, tx);
         return null;
       }
       const account = await journal.findAccountCore(command.userId);
       if (!account) throw new IdentityNotFoundError('user', command.userId);
       const actor = command.actorId === command.userId ? account : await journal.findAccountCore(command.actorId);
       await authorize(command, account, actor?.accountStatus ?? null);
+      if (command.handlerId !== input.business.handlerId) throw new IdentityCustodyErrorV1('identity_operation_conflict');
+      await input.authorization.assertAllowed(command, tx);
       await journal.reserveOperation(operation);
       return null;
     });
@@ -172,17 +143,22 @@ export const createAtomicPersonDeletionV2 = (input: {
     let failedStep: RevocationStepKind = 'login_sessions';
     const completed = new Set<RevocationStepKind>();
     try {
-      const receipt = await input.unitOfWork.runWrite(deletionOptions, async (tx: IdentityTransactionV1<CustodyOpHost>) => {
+      const receipt = await input.unitOfWork.run(deletionOptions, async (tx: IdentityTransactionV1<CustodyOpHost>) => {
         const host = tx.hostTransaction;
         const journal = host.journal;
         const stores = host.stores;
-        const committed = await journal.latestReceipt(command.operationId);
-        if (committed && committed.transaction === 'committed') return committed;
+        const reserved = await tx.deletionJournal.lock(command.operationId);
+        if (!reserved || reserved.requestDigest !== operation.requestDigest || reserved.actorId !== command.actorId || reserved.handlerId !== command.handlerId) throw new IdentityCustodyErrorV1('identity_operation_conflict');
+        if (reserved.state === 'committed') return (await currentDeletionReceipt(reserved.committedReceipt, tx))!;
+        await tx.lockSubject(command.userId);
         const account = await journal.findAccountCore(command.userId);
         if (!account) throw new IdentityNotFoundError('user', command.userId);
         const actor = command.actorId === command.userId ? account : await journal.findAccountCore(command.actorId);
         await authorize(command, account, actor?.accountStatus ?? null);
-        const plan = await defaultPlan(command.userId, host);
+        await input.authorization.assertAllowed(command, tx);
+        await tx.lockEmail(account.email);
+        const plan = await input.business.prepare(command, tx);
+        for (const id of [...plan.workspaceIdsToDelete, ...plan.retainedWorkspaceIds].sort()) await tx.lockWorkspace(id);
         await validatePlan(plan, command.userId, journal);
 
         failedStep = 'login_sessions';
@@ -194,7 +170,7 @@ export const createAtomicPersonDeletionV2 = (input: {
         completed.add('tenant_memberships');
 
         failedStep = 'account';
-        const businessReceipt = await input.business.deleteRows(plan, host);
+        const businessReceipt = await input.business.deleteRows(plan, tx);
         await journal.deleteWorkspaceMembersIn(plan.workspaceIdsToDelete);
         await journal.deleteWorkspaceMembersForUser(command.userId);
         for (const workspaceId of plan.workspaceIdsToDelete) {
@@ -209,7 +185,7 @@ export const createAtomicPersonDeletionV2 = (input: {
         const cleanup = await journal.cleanupCustodyForUser(command.userId, account.email);
         const revokedInvitations = await journal.revokePendingInvitationsForEmail(account.email);
         const detachedConsumers = await journal.detachInvitationConsumer(command.userId);
-        await input.business.assertNoOrphans(plan, host);
+        await input.business.assertNoOrphans(plan, tx);
         await journal.assertNoLiveReferences({ userId: command.userId, accountEmail: account.email, deletedWorkspaceIds: [...plan.workspaceIdsToDelete] });
         await journal.deleteAccountCore(command.userId);
         if (await journal.findAccountCore(command.userId)) {
@@ -241,7 +217,7 @@ export const createAtomicPersonDeletionV2 = (input: {
       const receipt = PostgresCustodyJournal.rollbackReceipt({ userId: command.userId, failedStep, completedBeforeFailure: completed, at });
       const attemptId = `${command.operationId}:${randomUUID()}`;
       try {
-        await input.unitOfWork.runWrite(diagnosticOptions, async (tx: IdentityTransactionV1<CustodyOpHost>) => {
+        await input.unitOfWork.run(diagnosticOptions, async (tx: IdentityTransactionV1<CustodyOpHost>) => {
           await tx.hostTransaction.journal.appendAttempt({ attemptId, operationId: command.operationId, at, receipt });
         });
       } catch {
@@ -254,8 +230,8 @@ export const createAtomicPersonDeletionV2 = (input: {
   return {
     deletePerson,
     getOperation: (operationId) =>
-      input.unitOfWork.runRead(readOptions, (tx) => tx.hostTransaction.journal.findOperation(operationId)),
+      input.unitOfWork.run(readOptions, (tx) => tx.hostTransaction.journal.findOperation(operationId)),
     getReceipt: (operationId) =>
-      input.unitOfWork.runRead(readOptions, (tx) => tx.hostTransaction.journal.latestReceipt(operationId)),
+      input.unitOfWork.run(readOptions, async (tx) => currentDeletionReceipt(await tx.hostTransaction.journal.latestReceipt(operationId), tx)),
   };
 };
