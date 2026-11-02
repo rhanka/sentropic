@@ -5,7 +5,8 @@ import { db } from '../../../src/db/client';
 import { connectorTenantEnrollments } from '../../../src/db/control-schema';
 import { serviceClients } from '../../../src/db/schema';
 import { createCmTenant } from '../../../src/services/identity/cm-tenancy';
-import { cmDeleteTenants } from '../../utils/cm-identity-test-store';
+import { runCmIdentityWrite } from '../../../src/services/identity/cm-transaction';
+import { cmDeleteTenants, cmQuery, cmTable } from '../../utils/cm-identity-test-store';
 import {
   activeEnrollmentTenantsForPrincipal,
   authorizedTenants,
@@ -39,9 +40,11 @@ async function seedServiceClient(clientId: string, tenantId: string | null): Pro
       clientId,
       clientSecretHash: 'hash',
       allowedScopes: ['mcp:read'],
-      tenantId,
     })
     .onConflictDoNothing();
+  if (tenantId) await runCmIdentityWrite(transaction => transaction.stores.oauth.bindServiceClient({
+    clientId, tenantId, boundAt: new Date().toISOString(),
+  }));
 }
 
 async function seedEnrollment(
@@ -66,6 +69,7 @@ describe('ARCH-11 G1c — enrollment-store authorizedTenants resolver', () => {
       .delete(connectorTenantEnrollments)
       .where(inArray(connectorTenantEnrollments.principalSub, TEST_CLIENTS));
     await db.delete(serviceClients).where(inArray(serviceClients.clientId, TEST_CLIENTS));
+    await cmQuery(`DELETE FROM ${cmTable('cm_service_clients')} WHERE client_id = ANY($1)`, [TEST_CLIENTS]);
     await cmDeleteTenants(TEST_ORGS);
   });
 
