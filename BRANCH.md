@@ -77,6 +77,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Resume C1 PASS; review inherited account, challenge and invitation fixtures; restore original email data.
   - [x] Review inherited session, magic-link and WebAuthn fixtures without weakening assertions.
   - [x] Correct CM fixture cleanup for indirect session, operation, invitation and outbox references.
+  - [x] Correct control-schema custody cleanup, conversation/escalation fixture references and the synthetic test-only email policy; remove a false null-email migration claim from registration coverage.
   - [x] Review session-adoption setup and tenant-bound authorization fixtures against CM stores.
   - [x] Review remaining adoption race/role fixtures and LLM identity directory fixtures against CM stores.
   - [x] Preserve OAuth refresh revocation assertions during CM fixture conversion.

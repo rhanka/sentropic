@@ -5,7 +5,7 @@
 import { CM_IDENTITY_SCHEMA, cmStoreClient } from '../../src/services/identity/cm-identity';
 import type { CmSessionRecord } from '../../src/services/identity/cm-sessions';
 
-const q = (table: string) => `"${CM_IDENTITY_SCHEMA}"."${table}"`;
+const q = (table: string) => `"${table === 'connector_revocation_custody' ? 'control' : CM_IDENTITY_SCHEMA}"."${table}"`;
 
 // Direct user references only; session bindings and attempts join their parents.
 const USER_SCOPED_TABLES: readonly string[] = [
@@ -17,11 +17,12 @@ const USER_SCOPED_TABLES: readonly string[] = [
   'identity_social_links',
   'identity_deletion_operations',
   'cm_oauth_consents',
+  'cm_identity_conversation_sessions',
+  'cm_workspace_members',
+  'cm_tenant_memberships',
   'identity_account_profiles',
   'identity_user_accounts',
   'identity_subject_fences',
-  'cm_workspace_members',
-  'cm_tenant_memberships',
 ];
 
 // Tables carrying an email column (proofs/tickets are email-scoped, not user-scoped).
@@ -45,6 +46,7 @@ export async function cmDeleteForUsers(userIds: readonly string[]): Promise<void
   await cmStoreClient.query(`DELETE FROM ${q('connector_revocation_custody')}
     WHERE delivery_id IN (SELECT delivery_id FROM ${q('identity_revocation_outbox')} WHERE subject_id = ANY($1))`, [userIds]);
   await cmStoreClient.query(`DELETE FROM ${q('identity_revocation_outbox')} WHERE subject_id = ANY($1)`, [userIds]);
+  await cmStoreClient.query(`DELETE FROM ${q('cm_identity_escalation_entries')} WHERE owner_user_id = ANY($1)`, [userIds]);
   for (const table of USER_SCOPED_TABLES) {
     await cmStoreClient.query(`DELETE FROM ${q(table)} WHERE "user_id" = ANY($1)`, [userIds]);
   }

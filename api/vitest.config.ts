@@ -52,6 +52,11 @@ export default defineConfig({
   },
   test: {
     pool: 'forks',
+    // Synthetic test policy only; this is not a production Q-K approval or rehearsal receipt.
+    env: {
+      CM_IDENTITY_EMAIL_CODE_POLICY: 'sha256',
+      CM_IDENTITY_EMAIL_CODE_POLICY_APPROVAL_REF: 'synthetic-api-test-only',
+    },
     // Increase timeout for database operations and AI API calls
     testTimeout: 60000,
     hookTimeout: 60000,
