@@ -15,7 +15,7 @@ export interface ArtifactHostIdentity {
  * Lock its current authority rows on this transaction; never cache an admission.
  * The transport owner supplies its session/token adapter, not a caller callback.
  */
-export type CurrentArtifactIdentity = (client: FinalizeTxClient, identity: ArtifactHostIdentity) =>
+export type CurrentArtifactIdentity = (client: FinalizeTxClient, identity: ArtifactHostIdentity, workspaceId: string) =>
   Promise<{ readonly readable: boolean; readonly writable: boolean }>;
 
 export function artifactReadClient(pool: Pool | PoolClient): FinalizeTxClient {
@@ -47,7 +47,7 @@ export function createArtifactAuthorization(options: {
     );
     const row = rows[0];
     // Credential locks precede quota waits; this is also re-read after every wait.
-    const credential = await options.currentIdentity(client, identity);
+    const credential = await options.currentIdentity(client, identity, workspaceId);
     return { revision: createHash('sha256').update(row?.revision ?? 'missing').digest('hex'),
       readable: !!row?.approved && credential.readable === true && ['viewer', 'commenter', 'editor', 'admin'].includes(row.role),
       writable: !!row?.approved && credential.readable === true && credential.writable === true
