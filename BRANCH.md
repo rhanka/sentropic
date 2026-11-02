@@ -119,6 +119,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - No UI changes in this lot; no UAT.
 
 ## Plan / Todo (lot-based)
+- [x] Review r1: connector capture rereads the exact source owner; acknowledgement validates immutable tuple on the combined transaction.
 - [x] Review r1: exact rollback receipts, canonical operation digest and FK-safe subject/workspace cleanup.
 - [x] Review r1: run all planes in order, enqueue before cleanup, assert custody/absence and persist pending receipts plus audit.
 - [x] Review r1: require explicit deletion composition and lock/re-authorize reservation and replay.
