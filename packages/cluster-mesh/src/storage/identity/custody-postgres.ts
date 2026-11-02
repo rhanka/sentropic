@@ -724,12 +724,19 @@ export const createPostgresIdentityUnitOfWorkV1 = <H>(input: {
 }
 
 
-export const createPostgresIdentityHostV1 = (options: PostgresCustodyOptions): PostgresIdentityHostV1<H> => ({
+export const createPostgresIdentityHostV1 = (options: PostgresCustodyOptions): PostgresIdentityHostV1<PostgresCustodyHandle> => ({
   runSerializable: async (runOptions, operation) => {
     await applyPostgresIdentityCoreSchemaIfNeeded(options);
     return options.driver.transaction(
       { isolation: 'serializable', readOnly: runOptions.readOnly, deadlineMs: runOptions.deadlineMs },
-      async (session) => operation({ transactionId: nextCustodyTxId(), hostTransaction: new PostgresCustodyHandle(options.schema, session), session, readOnly: runOptions.readOnly }),
+      async (rawSession) => {
+        const guard = identityTransactionGuard(runOptions.readOnly, Date.now() + runOptions.deadlineMs);
+        const session = guard.postgres(rawSession);
+        try {
+          const result = await operation({ transactionId: nextCustodyTxId(), hostTransaction: new PostgresCustodyHandle(options.schema, session), session, readOnly: runOptions.readOnly });
+          guard.check(); return result;
+        } finally { guard.close(); }
+      },
     );
   },
 });
