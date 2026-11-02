@@ -8,6 +8,7 @@ import { enrolCmWorkspace, putCmWorkspaceMember } from '../../src/services/ident
 import { PLATFORM_TENANT_ID } from '../../src/services/workspace-service';
 import { getWebAuthnConfig } from '../../src/services/webauthn-config';
 import { cmDeleteForEmails, cmDeleteForUsers } from './cm-identity-test-store';
+import { createSyntheticPasskey } from './synthetic-passkey';
 
 /**
  * Test helpers for authentication integration tests.
@@ -203,13 +204,13 @@ export async function createTestUsersWithRoles(): Promise<{
  * Create a mock WebAuthn credential for testing
  */
 export async function createMockCredential(userId: string, deviceName: string = 'Test Device') {
-  const credentialId = crypto.randomUUID();
-  const uniqueCredentialId = `mock-credential-${credentialId}-base64`;
+  const config = getWebAuthnConfig();
+  const passkey = createSyntheticPasskey(config.rpID, typeof config.origin === 'string' ? config.origin : config.origin[0], userId);
 
   const created = await createCmCredential({
     userId,
-    credentialId: uniqueCredentialId,
-    publicKey: Buffer.from('mock-public-key-data').toString('base64'),
+    credentialId: passkey.credentialId,
+    publicKey: passkey.publicKey.toString('base64url'),
     counter: 0,
     name: deviceName,
     rpId: getWebAuthnConfig().rpID,
