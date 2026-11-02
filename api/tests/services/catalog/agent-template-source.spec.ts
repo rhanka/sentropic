@@ -320,6 +320,7 @@ describe('0-regression — agent entries absent from resolveFoundationChatTools'
     // foundation tool name — its presence in the tool set is correct).
     const tools = resolveFoundationChatTools({
       userId: 'u-lot3-test',
+      tenantId: 'tenant-fixture',
       workspaceId: 'ws-lot3-test',
       workspaceType: 'ai-ideas',
       currentUserRole: 'editor',
@@ -340,6 +341,7 @@ describe('0-regression — agent entries absent from resolveFoundationChatTools'
   it('keeps the workspace-filtered tool count byte-identical after the /agents extraction', () => {
     const tools = resolveFoundationChatTools({
       userId: 'u-lot3-test',
+      tenantId: 'tenant-fixture',
       workspaceId: 'ws-lot3-test',
       workspaceType: 'ai-ideas',
       currentUserRole: 'editor',
@@ -353,6 +355,7 @@ describe('0-regression — agent entries absent from resolveFoundationChatTools'
   it('search_skills is still the FIRST tool after adding the agent source', () => {
     const tools = resolveFoundationChatTools({
       userId: 'u-lot3-test',
+      tenantId: 'tenant-fixture',
       workspaceId: 'ws-lot3-test',
       workspaceType: 'ai-ideas',
       currentUserRole: 'editor',
@@ -364,6 +367,7 @@ describe('0-regression — agent entries absent from resolveFoundationChatTools'
   it('keeps the exact ai-ideas tool order without exposing agent entries', () => {
     const tools = resolveFoundationChatTools({
       userId: 'u-lot3-test',
+      tenantId: 'tenant-fixture',
       workspaceId: 'ws-lot3-test',
       workspaceType: 'ai-ideas',
       currentUserRole: 'editor',
