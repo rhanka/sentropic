@@ -2,6 +2,7 @@ import { desc, eq, isNull, or, and, sql } from 'drizzle-orm';
 import { db } from '../db/client';
 import { workspaces } from '../db/schema';
 import { findCmWorkspaceMember, listCmWorkspaceMembershipsForUser } from './identity/cm-tenancy';
+import { bindCmAppDatabase, runCmIdentityRead } from './identity/cm-transaction';
 
 // Lot A4: workspace membership lives in the CM store
 // (cm_identity.cm_workspace_members); the legacy `workspace_memberships` table
@@ -79,6 +80,8 @@ export async function isWorkspaceDeleted(workspaceId: string): Promise<boolean> 
  * user's CM workspace memberships.
  */
 export async function resolveDefaultWorkspaceId(userId: string): Promise<string | null> {
+  return runCmIdentityRead(async tx => {
+  const db = bindCmAppDatabase(tx);
   const memberships = await listCmWorkspaceMembershipsForUser(userId);
   if (memberships.length === 0) return null;
   const ids = memberships.map((m) => m.workspaceId);
@@ -90,6 +93,7 @@ export async function resolveDefaultWorkspaceId(userId: string): Promise<string 
     .limit(1);
 
   return rows[0]?.id ?? null;
+  });
 }
 
 export async function getUserWorkspaces(userId: string): Promise<
@@ -103,6 +107,8 @@ export async function getUserWorkspaces(userId: string): Promise<
     createdAt: Date;
   }>
 > {
+  return runCmIdentityRead(async tx => {
+  const db = bindCmAppDatabase(tx);
   const vscodeWorkspaceStateRow = (await db.get(
     sql`SELECT value FROM settings WHERE key = 'vscode_project_workspace_state_v1' AND user_id = ${userId}`,
   )) as { value?: string | null } | undefined;
@@ -148,6 +154,7 @@ export async function getUserWorkspaces(userId: string): Promise<
     createdAt: r.createdAt,
     role: (byId.get(r.id) ?? 'viewer') as WorkspaceRole,
   }));
+  });
 }
 
 /**
