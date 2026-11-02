@@ -12,7 +12,7 @@ import { offlineGoEnvironment, proxyPathFromRetained, verifyResolvedModules } fr
 const execFileAsync = promisify(execFile);
 const GO_JOSE = 'github.com/go-jose/go-jose/v4';
 
-async function extractTar(archive, destination, stripComponents = 0) {
+export async function extractTar(archive, destination, stripComponents = 0) {
   await mkdir(destination, { recursive: true });
   const args = ['-xzf', archive, '-C', destination];
   if (stripComponents > 0) args.push(`--strip-components=${stripComponents}`);
@@ -21,7 +21,7 @@ async function extractTar(archive, destination, stripComponents = 0) {
 
 // Hardlink tree with copy fallback; patched files are replaced (never written through
 // a shared inode) so the pristine extraction stays intact for the second run.
-async function linkTree(source, destination) {
+export async function linkTree(source, destination) {
   await mkdir(destination, { recursive: true });
   for (const entry of await readdir(source, { withFileTypes: true })) {
     const from = join(source, entry.name);
