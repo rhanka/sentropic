@@ -13,6 +13,11 @@ const iso = (date: Date): string => {
 };
 export const authUserPorts = <H>(input: IdentityAuthBindingInput<H>, evidence: Set<string>, check: () => void): { users: AuthHonoUserPort; policy: AuthHonoAccountPolicyPort } => {
   const { tx } = input;
+  const notified = new Set<string>();
+  const afterUserCreated = async (user: AuthHonoUserRecord): Promise<void> => {
+    check();
+    if (!notified.has(user.id)) { await input.business.afterUserCreated(user, tx); notified.add(user.id); }
+  };
   const normalizeEmail = (email: string): string => {
     const canonical = email.trim().toLowerCase();
     if (!canonical.includes('@') || input.accountPolicy.normalizeEmail(email) !== canonical) throw new IdentityCustodyErrorV1('identity_material_invalid');
@@ -40,14 +45,20 @@ export const authUserPorts = <H>(input: IdentityAuthBindingInput<H>, evidence: S
       check();
       if (Object.keys(value).some((key) => !['email', 'displayName', 'role', 'emailVerified', 'accountStatus', 'approvalDueAt'].includes(key))) throw new IdentityCustodyErrorV1('identity_material_invalid');
       const email = normalizeEmail(value.email), at = iso(input.hostPorts.clock.now()), userId = input.hostPorts.random.uuid();
+      authRole(value.role);
       if (value.emailVerified === true && !evidence.has(email)) throw new IdentityCustodyErrorV1('proof_binding_mismatch');
-      const status = value.accountStatus ?? 'active';
+      const isFirstUser = (await users.count()) === 0;
+      const role = authRole(await input.accountPolicy.roleForNewUser({ email, isFirstUser }));
+      const statusPolicy = await input.accountPolicy.statusForNewUser({ email, isFirstUser, now: new Date(at) });
+      const status = statusPolicy.accountStatus;
       if (status !== 'active' && status !== 'pending_admin_approval') throw new IdentityCustodyErrorV1('identity_material_invalid');
-      await tx.custody.subjects.register({ userId, email, accountStatus: status as 'active' | 'pending_admin_approval', globalRole: authRole(value.role), createdAt: at, updatedAt: at }, {
-        userId, emailVerified: value.emailVerified ?? false, displayName: value.displayName ?? null, approvalDueAt: value.approvalDueAt ? iso(value.approvalDueAt) : null,
+      await tx.custody.subjects.register({ userId, email, accountStatus: status as 'active' | 'pending_admin_approval', globalRole: role, createdAt: at, updatedAt: at }, {
+        userId, emailVerified: value.emailVerified ?? false, displayName: value.displayName ?? null, approvalDueAt: statusPolicy.approvalDueAt === null ? null : iso(statusPolicy.approvalDueAt),
         approvedAt: null, approvedByUserId: null, disabledAt: null, disabledReason: null, legacyAccountStatus: null,
       });
-      return (await users.findById(userId))!;
+      const created = (await users.findById(userId))!;
+      await afterUserCreated(created);
+      return created;
     },
     update: async (id, value) => {
       check(); await tx.lockSubject(id);
@@ -72,6 +83,6 @@ export const authUserPorts = <H>(input: IdentityAuthBindingInput<H>, evidence: S
     canAuthenticate: (user) => ({ allowed: allowed(user) }),
     resolveSessionRole: (user, now) => user.accountStatus === 'approval_expired_readonly'
       || (user.accountStatus === 'pending_admin_approval' && user.approvalDueAt !== null && now > user.approvalDueAt) ? 'guest' : user.role,
-    afterUserCreated: (user) => input.business.afterUserCreated(user, tx),
+    afterUserCreated,
   } };
 };
