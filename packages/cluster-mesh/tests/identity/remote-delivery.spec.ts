@@ -89,6 +89,11 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b remote revocation
     const claimed = await env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.journal.claimPending(NOW, 'worker-a', LATER, 10));
     const claim = claimed.find((entry) => entry.deliveryId === 'd-grant');
     expect(claim).toBeDefined();
+    const erase = custody.eraseAcknowledged.bind(custody);
+    custody.eraseAcknowledged = async (record, raw) => {
+      expect(record.state).toBe('delivered');
+      await erase(record, raw);
+    };
     await env.unitOfWork.runWrite(WRITE, (tx) =>
       acknowledgeIdentityRevocationV1({
         host: tx.hostTransaction,
@@ -96,6 +101,11 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b remote revocation
         at: NOW,
         connectorCustody: custody,
       }));
+    await env.unitOfWork.runWrite(WRITE, (tx) => acknowledgeIdentityRevocationV1({
+      host: tx.hostTransaction,
+      claim: { deliveryId: 'd-grant', claimOwner: 'worker-a', claimVersion: claim!.claimVersion },
+      at: LATER, connectorCustody: custody,
+    }));
     await env.unitOfWork.runRead(READ, async (tx) => {
       expect(await tx.hostTransaction.journal.findDelivery('d-grant')).toMatchObject({ state: 'delivered' });
       const raw = {
@@ -118,6 +128,15 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b remote revocation
     const claimed = await env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.journal.claimPending(NOW, 'worker-a', LATER, 10));
     const grant = claimed.find((entry) => entry.deliveryId === 'd-grant-2');
     const plain = claimed.find((entry) => entry.deliveryId === 'd-plain');
+    const emptyCustody = createNodeConnectorCustody({ masterKey: new Uint8Array(32).fill(5) });
+    await expect(env.unitOfWork.runWrite(WRITE, (tx) => acknowledgeIdentityRevocationV1({
+      host: tx.hostTransaction,
+      claim: { deliveryId: 'd-grant-2', claimOwner: 'worker-a', claimVersion: grant!.claimVersion },
+      at: NOW, connectorCustody: emptyCustody,
+    }))).rejects.toMatchObject({ code: 'identity_revocation_custody_missing' });
+    emptyCustody.dispose();
+    expect(await env.unitOfWork.runRead(READ, (tx) => tx.hostTransaction.journal.findDelivery('d-grant-2')))
+      .toMatchObject({ state: 'pending' });
     await expect(env.unitOfWork.runWrite(WRITE, (tx) =>
       acknowledgeIdentityRevocationV1({
         host: tx.hostTransaction,
