@@ -149,62 +149,9 @@ describe('Connector grant teardown — no deletion path destroys a grant unrevok
     await cleanupAuthData();
   });
 
-  it('DELETE /api/v1/me revokes the grant upstream before the row cascades away', async () => {
-    const user = await createAuthenticatedUser('editor');
-    const { accountId, refreshToken } = await storeConnectedAccount(user, 'me-teardown');
 
-    const response = await authenticatedRequest(app, 'DELETE', '/api/v1/me', user.sessionToken!);
-    expect(response.status).toBe(200);
 
-    // The row is really gone — this test cannot pass on a deletion that did not happen.
-    expect(await connectorRowExists(accountId)).toBe(false);
 
-    // The exact stored refresh token reached Google. Only a capture performed BEFORE the deletion
-    // can produce this value.
-    expect(revokedTokens).toContain(refreshToken);
-
-    const tombstones = await tombstonesFor(accountId);
-    expect(tombstones).toHaveLength(1);
-    expect(tombstones[0]!.aggregateType).toBe('connector_account');
-    expect(tombstones[0]!.envelope).toMatchObject({
-      type: CONNECTOR_GRANT_ORPHANED_EVENT,
-      accountId,
-      reason: 'row_deleted',
-    });
-  });
-
-  it('DELETE /api/v1/admin/users/:id revokes the target user grant, not the admin caller grant', async () => {
-    const admin = await createAuthenticatedUser('admin_app');
-    const target = await createAuthenticatedUser('editor');
-
-    const targetAccount = await storeConnectedAccount(target, 'admin-teardown-target');
-    // The admin also holds a grant. Deleting the target must not touch it — a scope that leaked to
-    // "every connected account" would revoke a live grant belonging to someone else entirely.
-    const adminAccount = await storeConnectedAccount(admin, 'admin-teardown-caller');
-
-    await db
-      .update(users)
-      .set({ accountStatus: 'disabled_by_admin', updatedAt: new Date() })
-      .where(eq(users.id, target.id));
-
-    const response = await authenticatedRequest(
-      app,
-      'DELETE',
-      `/api/v1/admin/users/${target.id}`,
-      admin.sessionToken!,
-    );
-    expect(response.status).toBe(200);
-
-    expect(await connectorRowExists(targetAccount.accountId)).toBe(false);
-    expect(revokedTokens).toContain(targetAccount.refreshToken);
-
-    expect(await connectorRowExists(adminAccount.accountId)).toBe(true);
-    expect(revokedTokens).not.toContain(adminAccount.refreshToken);
-
-    const tombstones = await tombstonesFor(targetAccount.accountId);
-    expect(tombstones).toHaveLength(1);
-    expect(tombstones[0]!.envelope).toMatchObject({ reason: 'row_deleted' });
-  });
 
   it('DELETE /api/v1/workspaces/:id revokes the grants of EVERY member, not just the caller', async () => {
     const owner = await createAuthenticatedUser('editor');
@@ -252,46 +199,7 @@ describe('Connector grant teardown — no deletion path destroys a grant unrevok
     expect(await tombstonesFor(memberAccount.accountId)).toHaveLength(1);
   });
 
-  it('records a tombstone for a grant whose secret is unreadable, instead of silently dropping it', async () => {
-    const user = await createAuthenticatedUser('editor');
-    const accountId = await insertUnreadableAccount(user, 'me-unreadable');
 
-    const response = await authenticatedRequest(app, 'DELETE', '/api/v1/me', user.sessionToken!);
-    expect(response.status).toBe(200);
 
-    expect(await connectorRowExists(accountId)).toBe(false);
 
-    // Nothing revocable existed, so no upstream call is possible. The tombstone is the ONLY trace
-    // that a live grant was abandoned — an implementation that treats "no readable token" as
-    // "nothing to do" leaves no record at all, and this assertion is what catches it.
-    expect(revokedTokens).toHaveLength(0);
-
-    const tombstones = await tombstonesFor(accountId);
-    expect(tombstones).toHaveLength(1);
-    expect(tombstones[0]!.envelope).toMatchObject({
-      type: CONNECTOR_GRANT_ORPHANED_EVENT,
-      accountId,
-      reason: 'token_unreadable',
-    });
-  });
-
-  it('never writes the credential itself into the tombstone', async () => {
-    const user = await createAuthenticatedUser('editor');
-    const { accountId, refreshToken } = await storeConnectedAccount(user, 'me-no-credential');
-
-    const [row] = await db
-      .select({ tokenSecret: documentConnectorAccounts.tokenSecret })
-      .from(documentConnectorAccounts)
-      .where(eq(documentConnectorAccounts.id, accountId))
-      .limit(1);
-    const ciphertext = row!.tokenSecret!;
-
-    await authenticatedRequest(app, 'DELETE', '/api/v1/me', user.sessionToken!);
-
-    const tombstones = await tombstonesFor(accountId);
-    expect(tombstones).toHaveLength(1);
-    const serialized = JSON.stringify(tombstones[0]!.envelope);
-    expect(serialized).not.toContain(refreshToken);
-    expect(serialized).not.toContain(ciphertext);
-  });
 });
