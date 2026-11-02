@@ -1,4 +1,4 @@
-import { TERMINAL_KINDS, relayError } from './registry-types.js';
+import { LIFECYCLE_EVENT_KINDS, TERMINAL_KINDS, relayError } from './registry-types.js';
 import type {
   CapabilitiesRecord,
   CommitResult,
@@ -24,6 +24,7 @@ function validBinding(binding: ProcessBindingRef): boolean {
 function validFact(fact: LifecycleFact): boolean {
   const source = fact.sourceRef;
   return (
+    LIFECYCLE_EVENT_KINDS.includes(fact.kind) &&
     typeof source.sourceSessionId === 'string' && source.sourceSessionId.length > 0 &&
     typeof source.sourceGeneration === 'number' && Number.isSafeInteger(source.sourceGeneration) &&
     typeof source.streamIncarnation === 'string' && source.streamIncarnation.length > 0 &&
@@ -102,6 +103,9 @@ export function ingestCapabilities(
   const resolveSession = state.input.resolveSession;
   if (resolveSession === undefined) {
     return { status: 'refused', error: relayError('relay_grant_unavailable') };
+  }
+  if (!validBinding(binding)) {
+    return { status: 'refused', error: relayError('relay_auth_required') };
   }
   const ref = resolveSession(binding);
   if (ref === null || ref.originInstanceId !== state.input.originInstanceId) {
