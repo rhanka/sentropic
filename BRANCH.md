@@ -42,6 +42,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - `api/package-lock.json` (BR-A20B-EX3)
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR-A20B-EX3)
   - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR-A20B-EX3)
+  - `packages/cluster-mesh/tests/packaging/identity-auth-types.spec.ts` (BR-A20B-EX4)
   - `packages/cluster-mesh/tests/storage/postgres.mk` (BR-A20B-EX1)
   - `packages/cluster-mesh/tests/storage/cold-workspace.sh` (BR-A20B-EX2)
 - **Forbidden Paths (must not change in this branch)**:
@@ -61,6 +62,9 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] BR-A20B-EX4: add the packed identity auth-hono consumer regression only; CI 4229 exposed the optional peer in root declarations. Preserve all existing root-isolation assertions and the amendment's exact auth-hono types. Rollback removes this test and its dedicated export together.
+- [x] CI 4229 tests first: preserve typed authentication factories at a dedicated optional-peer entrypoint and verify peer-free import, alongside the existing root-only consumer failures.
+- [x] Fix CI 3 (run 41416194722): move the peer-dependent identity auth surface (custody-auth contracts, auth-binding, auth-completion) out of the root barrels into the new `./identity/auth-hono` subpath export; the root index and its emitted declarations no longer reference optional peers. Existing isolation/packaging assertions unchanged; `tests/packaging/identity-auth-types.spec.ts` kept from the prior lane. The `api/tests/ai/initiative-generation-async.test.ts` failure is on the AI-flaky allowlist (`api/tests/ai/**`, 180s live-provider timeout) and is noted, not changed.
 - [x] Fix review r1: all ten requested findings have tests and corrections; final local evidence is PostgreSQL 261/261 and SQLite 254/261 with seven fixed-bound timeouts under measured shared disk I/O pressure. Report failures explicitly and require the PR CI result.
 - [x] R1 Argon r3: reject incompatible normalizers at composition using trim/case/tag/Unicode probes, retaining byte-exact validation for every actual email input.
 - [x] R1 Argon r3: refuse mismatched ticket subjects and null email flags; admit pure read-mode binding while guarding mutations and preserving session activity.
