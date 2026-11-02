@@ -100,7 +100,7 @@ export function createProviderServer({ respond = journeyResponse } = {}) {
       if (outcome.malformed) { ended = true; return res.end('data: {invalid}\n\n'); }
       if (message.tool_calls) event({ tool_calls: message.tool_calls.map((tool, index) => ({ index, ...tool })) });
       else {
-        const parts = String(message.content ?? '').match(/.{1,80}/gs) ?? [''];
+        const parts = String(message.content ?? '').match(/.{1,80}/gsu) ?? [''];
         for (const content of parts) {
           if (res.destroyed) return;
           event({ content });
@@ -124,10 +124,10 @@ export function journeyResponse(body) {
   const messageText = content => Array.isArray(content) ? content.map(part => part.text ?? '').join('\n') : String(content ?? '');
   const text = messages.map(m => messageText(m.content)).join('\n');
   const user = messageText(messages.findLast(m => m.role === 'user')?.content);
-  // Schema-driven prompts are not always the last user message: web-search follow-ups append
-  // tool results as a trailing user message. Match schema keys on every non-tool message so
-  // those flows still resolve, while tool-result payloads stay excluded.
-  const promptText = messages.filter(m => m.role !== 'tool').map(m => messageText(m.content)).join('\n');
+  // Web-search follow-ups append results after the schema prompt. Preserve instruction/user
+  // schemas without letting generated assistant or tool replies choose the response shape.
+  const promptText = messages.filter(m => ['system', 'developer', 'user'].includes(m.role))
+    .map(m => messageText(m.content)).join('\n');
   const json = value => ({ content: JSON.stringify(value) });
   const references = [{ title: 'Provider protocol reference', url: 'https://example.com/reference', excerpt: 'Local qualification evidence.' }];
   if (user.includes('Produire une contraction (résumé détaillé)')) {
