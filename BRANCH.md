@@ -59,7 +59,8 @@
   - [x] Write rehashed receipt substitution, missing/empty output and strict-field negative controls before implementation.
   - [x] Define strict schemaVersion 1 build, validation and publication receipt fields from r6 sections 1.3 and 3.3.1.
   - [x] Enforce strict receipt schemas, matching identities, nonempty measured artifact outputs and ordered material binding.
-  - [ ] Demonstrate that receipt-name echoes and missing outputs cannot establish eligibility.
+  - [x] Add isolated execution of the actual key-free echo steps and assert no receipt files are produced.
+  - [x] Add rehashed malformed-OCI and impossible-calendar-date negative controls.
 - [ ] **Lot 3 — Final validation and handoff**
   - [ ] Run `make test-security-daily ENV=test-cyber-adm` under the single lock.
   - [ ] Run `make down ENV=test-cyber-adm`; verify scope before each commit.
