@@ -76,6 +76,8 @@ memory_mcp_launcher() {
   node tests/engram-memory/mcp-launcher-roundtrip.mjs
 }
 case "$CM_ACTION" in
+  identity)
+    sh tests/identity/run-profiles.sh ;;
   mesh-check|gateway-check)
     if [ "$CM_ACTION" = mesh-check ]; then cd ../llm-mesh; else cd ../llm-gateway; fi
     ln -s /tmp/cm-tools/node_modules node_modules
@@ -150,8 +152,17 @@ case "$CM_ACTION" in
     if [ -z "$CM_PG_URL" ] && [ -z "${CM_SCOPE:-}" ]; then
       set -- --exclude 'tests/engram-memory/mcp-memory-*.spec.ts'
     fi
+    case "${CM_SCOPE:-}" in
+      tests/identity*)
+        profile=sqlite
+        if [ -n "$CM_PG_URL" ]; then profile=postgres; fi
+        set -- --config "tests/identity/vitest.$profile.config.ts" ;;
+    esac
     /tmp/cm-tools/node_modules/.bin/vitest run "${CM_SCOPE:-tests}" "$@" \
       --exclude tests/engram-memory/durable-memory.spec.ts --environment node --maxWorkers=1
+    if [ -n "$CM_PG_URL" ] && [ "${CM_SCOPE:-}" = tests/storage/postgres- ] && [ -z "$CM_PG_CRASH_PHASE" ]; then
+      sh tests/identity/run-profiles.sh
+    fi
     if [ "$CM_PG_CRASH_PHASE" = seed ]; then
       mkdir -p /source/.h2a
       cp ../../.h2a/pg-crash-witness.json /source/.h2a/
