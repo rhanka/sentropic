@@ -23,7 +23,7 @@ import {
 import { createAtomicPersonDeletionV2 } from '../../src/index.js';
 import { createIdentityCustodyImporterV1 } from '../../src/index.js';
 import { hashPresentedTokenV1 } from '../../src/index.js';
-import { asOpHost, createFixtureBusiness, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, randomBase64Url, sha256Hex, syntheticCoseKey, type FixtureBusinessState } from './a20b-helpers.js';
+import { fixtureDeletionDependencies, asOpHost, createFixtureBusiness, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, randomBase64Url, sha256Hex, syntheticCoseKey, type FixtureBusinessState } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 
 const WRITE = { mode: 'write' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 };
@@ -159,10 +159,10 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b prerequisites on 
     const first = await openEnv();
     const { invitation } = invitationBatchRow('sit_original-token-value');
     const batch: IdentityImportBatchV1 = {
-      contractVersion: '1.1.0', migrationId: 'mig-p3', sourceSnapshotRef: 'snap-p3', sourceSnapshotDigest: sha256Hex('snap-p3'), manifestDigest: sha256Hex('manifest-p3'), importedAt: NOW,
+      contractVersion: '1.1.0', legacyConnectorSourceEventIds: [], migrationId: 'mig-p3', sourceSnapshotRef: 'snap-p3', sourceSnapshotDigest: sha256Hex('snap-p3'), manifestDigest: sha256Hex('manifest-p3'), importedAt: NOW,
       rows: [{ entity: 'invitation', record: invitation }],
     };
-    const importer = createIdentityCustodyImporterV1({ unitOfWork: first.unitOfWork, fence: { assertExclusiveWriter: async () => undefined }, importOptions: IMPORT_OPTS, validationOptions: { mode: 'read', purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 } });
+    const importer = createIdentityCustodyImporterV1({ unitOfWork: first.unitOfWork, fence: { assertExclusiveWriter: async () => undefined }, importOptions: IMPORT_OPTS, connectorCustody: null, validationOptions: { mode: 'read', purpose: 'import' as const, maxAttempts: 3 as const, deadlineMs: 5000 } });
     const receipt = await importer.importBatch(batch);
     expect(receipt.counts.invitation).toBe(1);
     expect(receipt.verificationMaterialPreserved).toBe(true);
@@ -192,14 +192,14 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b prerequisites on 
       await tx.hostTransaction.stores.sessions.insert(sessionRow('session-1', 'marie', sha256Hex('session-token-1'), sha256Hex('refresh-token-1')));
       await fixture.setup(tx.hostTransaction, [{ ownerId: 'marie', workspaceId: 'workspace', payload: 'doc' }]);
     });
-    const deletion = createAtomicPersonDeletionV2({ unitOfWork: first.unitOfWork, business: fixture.business, deletionOptions: DELETE_OPTS });
+    const deletion = createAtomicPersonDeletionV2({ ...fixtureDeletionDependencies, unitOfWork: first.unitOfWork, business: fixture.business });
     const command: PersonDeletionCommandV2 = { userId: 'marie', actorId: 'admin', handlerId: 'admin_account', operationId: 'op-p4' };
     const receipt = await deletion.deletePerson(command);
     expect(state.reachedDelete).toBe(true);
     expect(receipt.transaction).toBe('rolled_back');
     expect(receipt.resultCode).toBe('identity_cascade_rolled_back');
     expect(receipt.complete).toBe(false);
-    expect(receipt.steps).toContainEqual({ step: 'account', outcome: 'queued', detail: 'required_local_step_failed' });
+    expect(receipt.steps).toContainEqual({ step: 'account', outcome: 'queued', detailCode: 'required_local_step_failed' });
     expect(receipt.steps).toContainEqual({ step: 'tenant_memberships', outcome: 'rolled_back', detail: 'transaction_rolled_back' });
     const check = async (tx: IdentityTransactionV1<CustodyOpHost>): Promise<void> => {
       expect(await tx.hostTransaction.journal.findAccountCore('marie')).not.toBeNull();
@@ -252,7 +252,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b prerequisites on 
     await first.oldStores.proofs.addProof({ proofId: 'old-proof', userId: 'marie', kind: 'social', provider: 'github', createdAt: NOW });
     await first.oldStores.deviceCodes.saveDeviceCode({ deviceCode: 'dev-1', userCode: 'user-1', deviceName: null, status: 'pending', issuedAt: NOW, expiresAt: LATER });
     expect(await first.oldStores.deviceCodes.approveDeviceCode('user-1', 'marie', NOW)).toBe(true);
-    const deletion = createAtomicPersonDeletionV2({ unitOfWork: first.unitOfWork, business: fixture.business, deletionOptions: DELETE_OPTS });
+    const deletion = createAtomicPersonDeletionV2({ ...fixtureDeletionDependencies, unitOfWork: first.unitOfWork, business: fixture.business });
     const receipt = await deletion.deletePerson({ userId: 'marie', actorId: 'admin', handlerId: 'admin_account', operationId: 'op-p5' });
     expect(state.reachedDelete).toBe(true);
     expect(state.reachedAssert).toBe(true);
@@ -293,7 +293,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b prerequisites on 
     const state: FixtureBusinessState = { failAt: null, reachedDelete: false, reachedAssert: false };
     const plan: BusinessDeletionPlanV1 = { userId: 'marie', workspaceIdsToDelete: [], retainedWorkspaceIds: [] };
     const fixture = createFixtureBusiness({ handlerId: 'admin_account', plan, state });
-    const deletion = createAtomicPersonDeletionV2({ unitOfWork: first.unitOfWork, business: fixture.business, deletionOptions: DELETE_OPTS });
+    const deletion = createAtomicPersonDeletionV2({ ...fixtureDeletionDependencies, unitOfWork: first.unitOfWork, business: fixture.business });
     // Active account refuses before any reservation mutation.
     await expect(deletion.deletePerson({ userId: 'marie', actorId: 'admin', handlerId: 'admin_account', operationId: 'op-g1' })).rejects.toMatchObject({ name: 'AccountTransitionError' });
     expect(await deletion.getOperation('op-g1')).toBeNull();
