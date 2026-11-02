@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte';
+  import WorkspaceMembersScreen from '@sentropic/cluster-mesh/ui/WorkspaceMembersScreen.svelte';
+  import { createSentropicIdentityManagementPorts } from '$lib/services/cm-identity-screens';
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
   import { addToast } from '$lib/stores/toast';
@@ -33,7 +35,7 @@
 
   const HUB_KEY = 'workspace-settings-sse';
   let workspaceReloadTimer: ReturnType<typeof setTimeout> | null = null;
-  let membersReloadTimer: ReturnType<typeof setTimeout> | null = null;
+  let membersRefreshVersion = 0;
 
   const t = (key: string, vars?: Record<string, any>) => get(_)(key, vars);
 
@@ -46,11 +48,7 @@
   }
 
   function scheduleMembersReload() {
-    if (membersReloadTimer) return;
-    membersReloadTimer = setTimeout(async () => {
-      membersReloadTimer = null;
-      await loadMembers();
-    }, 150);
+    membersRefreshVersion++;
   }
 
   async function handleImportComplete() {
@@ -64,6 +62,7 @@
     return Boolean(el.closest('button, a, input, select, textarea, [contenteditable="true"], [data-ignore-row-click]'));
   }
 
+  $: memberPorts = createSentropicIdentityManagementPorts($session.user, (key, options) => $_(key, options), message => confirm(message));
   $: workspaceItems = $workspaceScope.items || [];
   $: workspaceSelectedId = $workspaceScope.selectedId;
   $: selectedWorkspace = (workspaceItems || []).find((w) => w.id === workspaceSelectedId) ?? null;
@@ -97,7 +96,6 @@
     return () => {
       streamHub.delete(HUB_KEY);
       if (workspaceReloadTimer) clearTimeout(workspaceReloadTimer);
-      if (membersReloadTimer) clearTimeout(membersReloadTimer);
     };
   });
 
@@ -231,6 +229,8 @@
     </div>
   {/if}
 
+  <a class="text-primary underline focus-visible:ring-2 focus-visible:ring-primary/30" href="/settings/memberships">{$_('identity.membershipTitle')}</a>
+
   {#if noWorkspaces}
     <div class="rounded border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
       {$_('workspaceSettings.banners.noWorkspaces')}
@@ -356,78 +356,8 @@
     </div>
   {/if}
 
-{#if selectedWorkspace && isWorkspaceAdmin}
-    <div class="rounded border border-slate-200 p-4">
-      <h4 class="font-medium">{$_('workspaceSettings.members.title')}</h4>
-      <div class="mt-3 space-y-3">
-        <div class="flex flex-wrap items-end gap-2">
-          <label class="block text-sm">
-            <div class="text-slate-600">{$_('common.email')}</div>
-            <input class="mt-1 w-72 rounded border border-slate-200 px-3 py-2" bind:value={addMemberEmail} />
-          </label>
-          <label class="block text-sm">
-            <div class="text-slate-600">{$_('common.role')}</div>
-            <select class="mt-1 rounded border border-slate-200 px-3 py-2" bind:value={addMemberRole}>
-              <option value="viewer">{$_('roles.viewer')}</option>
-              <option value="commenter">{$_('roles.commenter')}</option>
-              <option value="editor">{$_('roles.editor')}</option>
-              <option value="admin">{$_('roles.admin')}</option>
-            </select>
-          </label>
-          <button class="rounded bg-primary px-3 py-2 text-sm text-white disabled:opacity-50" on:click={addMember} disabled={!addMemberEmail.trim()}>
-            {$_('common.add')}
-          </button>
-        </div>
-
-        {#if membersError}
-          <div class="text-sm text-rose-700">{membersError}</div>
-        {/if}
-        <div class="overflow-x-auto">
-          <table class="min-w-full text-sm">
-            <thead class="border-b border-slate-200 text-left text-slate-600">
-              <tr>
-                <th class="py-2 pr-3">{$_('common.email')}</th>
-                <th class="py-2 pr-3">{$_('common.name')}</th>
-                <th class="py-2 pr-3">{$_('common.role')}</th>
-                <th class="py-2 pr-3 text-right"></th>
-              </tr>
-            </thead>
-            <tbody>
-              {#each members as m (m.userId)}
-                <tr class="border-b border-slate-100">
-                  <td class="py-2 pr-3">{m.email ?? '—'}</td>
-                  <td class="py-2 pr-3">{m.displayName ?? '—'}</td>
-                  <td class="py-2 pr-3">
-                    <select
-                      class="rounded border border-slate-200 px-2 py-1"
-                      value={m.role}
-                      on:change={(e) => handleMemberRoleChange(e, m.userId)}
-                      disabled={m.userId === $session.user?.id}
-                    >
-                      <option value="viewer">{$_('roles.viewer')}</option>
-                      <option value="commenter">{$_('roles.commenter')}</option>
-                      <option value="editor">{$_('roles.editor')}</option>
-                      <option value="admin">{$_('roles.admin')}</option>
-                    </select>
-                  </td>
-                  <td class="py-2 pr-3 text-right">
-                    {#if m.userId !== $session.user?.id}
-                      <button
-                        class="rounded p-1 text-rose-600 hover:bg-rose-200 hover:text-rose-700"
-                        title={$_('workspaceSettings.members.remove')}
-                        on:click={() => removeMember(m.userId)}
-                      >
-                        <Trash2 class="h-4 w-4" />
-                      </button>
-                    {/if}
-                  </td>
-                </tr>
-              {/each}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+{#if selectedWorkspace}
+    <WorkspaceMembersScreen ports={memberPorts} workspaceId={selectedWorkspace.id} refreshVersion={membersRefreshVersion} />
   {/if}
 
   <ImportExportDialog
