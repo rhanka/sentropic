@@ -3,6 +3,10 @@ import * as core from './cm-import-mapping';
 import * as continuations from './cm-import-continuations';
 import * as tenancy from './cm-import-tenancy';
 import * as values from './cm-import-values';
+import * as remote from './cm-import-remote';
+import * as remoteSnapshot from './cm-import-remote-snapshot';
+import * as invitations from './cm-import-invitations';
+import * as connectors from './cm-import-connectors';
 
 /** Exhaustive columns of the source tables removed by this single cutover. */
 export const a4SourceFieldManifest: Readonly<Record<string, readonly string[]>> = {
@@ -41,7 +45,8 @@ export function assertA4SourceInventory(inventory: Readonly<Record<string, { rea
 
 /** Hash the shipped mapping implementation and pinned verifier policy; never key bytes or row material. */
 export const a4MappingAssetSha256 = (verifier: { readonly rpId: string; readonly origins: readonly string[] }): string => {
-  const functions = Object.entries({ ...core, ...continuations, ...tenancy, ...values })
+  const functions = Object.entries({ ...core, ...continuations, ...tenancy, ...values,
+    ...remote, ...remoteSnapshot, ...invitations, ...connectors })
     .filter(([, implementation]) => typeof implementation === 'function')
     .sort(([left], [right]) => left < right ? -1 : left > right ? 1 : 0)
     .map(([name, implementation]) => [name, Function.prototype.toString.call(implementation)]);
