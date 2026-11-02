@@ -26,9 +26,9 @@ import { hashPresentedTokenV1 } from '../../src/index.js';
 import { asOpHost, createFixtureBusiness, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, randomBase64Url, sha256Hex, syntheticCoseKey, type FixtureBusinessState } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 
-const WRITE = { mode: 'write' as const, deadlineMs: 5000 };
-const DELETE_OPTS = { mode: 'delete' as const, deadlineMs: 8000 };
-const IMPORT_OPTS = { mode: 'import' as const, deadlineMs: 8000 };
+const WRITE = { mode: 'write' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 };
+const DELETE_OPTS = { mode: 'write' as const, purpose: 'delete' as const, maxAttempts: 3 as const, deadlineMs: 8000 };
+const IMPORT_OPTS = { mode: 'write' as const, purpose: 'import' as const, maxAttempts: 3 as const, deadlineMs: 8000 };
 
 const accountRow = (userId: string, email: string, status: 'active' | 'disabled' = 'active') => ({
   userId, email, accountStatus: status, globalRole: 'editor' as const, createdAt: NOW, updatedAt: NOW,
@@ -107,20 +107,20 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b prerequisites on 
   it('P1 preserves WebAuthn verification material through close/reopen and advances the counter', async () => {
     const first = await openEnv();
     const credential = credentialRow('credential-1', 'marie', 7);
-    await first.unitOfWork.runWrite(WRITE, async (tx) => {
+    await first.unitOfWork.run(WRITE, async (tx) => {
       await tx.hostTransaction.journal.insertAccountCore(accountRow('marie', 'marie@example.test'));
       await tx.hostTransaction.journal.ensureLiveFence('marie', NOW);
       await tx.hostTransaction.stores.credentials.insert(credential);
     });
     const second = first.reopen();
-    const stored = await second.unitOfWork.runRead({ mode: 'read', deadlineMs: 5000 }, (tx) => tx.hostTransaction.stores.credentials.findById('credential-1'));
+    const stored = await second.unitOfWork.run({ mode: 'read', purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 }, (tx) => tx.hostTransaction.stores.credentials.findById('credential-1'));
     expect(stored).toMatchObject({ proofId: 'credential-1', userId: 'marie', credentialId: credential.credentialId, publicKeyCose: credential.publicKeyCose, counter: 7, revision: 0 });
-    const byCredential = await second.unitOfWork.runRead({ mode: 'read', deadlineMs: 5000 }, (tx) => tx.hostTransaction.stores.credentials.findByCredentialId(credential.credentialId));
+    const byCredential = await second.unitOfWork.run({ mode: 'read', purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 }, (tx) => tx.hostTransaction.stores.credentials.findByCredentialId(credential.credentialId));
     expect(byCredential?.proofId).toBe('credential-1');
-    const advanced = await second.unitOfWork.runWrite(WRITE, (tx) =>
+    const advanced = await second.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.credentials.compareAndSwapCounter({ proofId: 'credential-1', userId: 'marie', expectedCounter: 7, expectedRevision: 0, newCounter: 8, at: LATER }));
     expect(advanced).toMatchObject({ counter: 8, revision: 1, lastUsedAt: LATER });
-    await expect(second.unitOfWork.runWrite(WRITE, (tx) =>
+    await expect(second.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.credentials.compareAndSwapCounter({ proofId: 'credential-1', userId: 'marie', expectedCounter: 8, expectedRevision: 0, newCounter: 9, at: LATER }),
     )).rejects.toMatchObject({ code: 'webauthn_credential_stale' });
   });
@@ -128,12 +128,12 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b prerequisites on 
   it('P2 preserves unbound registration challenges without inventing an account', async () => {
     const first = await openEnv();
     const challenge = challengeRow('registration-challenge');
-    await first.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.stores.singleUseProofs.insert(challenge));
-    const found = await first.unitOfWork.runRead({ mode: 'read', deadlineMs: 5000 }, (tx) =>
+    await first.unitOfWork.run(WRITE, (tx) => tx.hostTransaction.stores.singleUseProofs.insert(challenge));
+    const found = await first.unitOfWork.run({ mode: 'read', purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 }, (tx) =>
       tx.hostTransaction.stores.singleUseProofs.findChallenge(challenge.kind === 'webauthn_challenge' ? challenge.challenge : '', 'registration'));
     expect(found?.proofId).toBe('registration-challenge');
     expect(found?.userId).toBeNull();
-    const consumed = await first.unitOfWork.runWrite(WRITE, (tx) =>
+    const consumed = await first.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.singleUseProofs.consume({
         key: { kind: 'webauthn_challenge', proofId: 'registration-challenge' },
         expectedRevision: 0, expectedUserId: null, bindUserId: 'marie',
@@ -144,7 +144,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b prerequisites on 
       }));
     expect(consumed.userId).toBe('marie');
     expect(consumed.state).toBe('consumed');
-    await expect(first.unitOfWork.runWrite(WRITE, (tx) =>
+    await expect(first.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.singleUseProofs.consume({
         key: { kind: 'webauthn_challenge', proofId: 'registration-challenge' },
         expectedRevision: 1, expectedUserId: 'marie', bindUserId: null,
@@ -162,19 +162,19 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b prerequisites on 
       contractVersion: '1.1.0', migrationId: 'mig-p3', sourceSnapshotRef: 'snap-p3', sourceSnapshotDigest: sha256Hex('snap-p3'), manifestDigest: sha256Hex('manifest-p3'), importedAt: NOW,
       rows: [{ entity: 'invitation', record: invitation }],
     };
-    const importer = createIdentityCustodyImporterV1({ unitOfWork: first.unitOfWork, fence: { assertExclusiveWriter: async () => undefined }, importOptions: IMPORT_OPTS, validationOptions: { mode: 'read', deadlineMs: 5000 } });
+    const importer = createIdentityCustodyImporterV1({ unitOfWork: first.unitOfWork, fence: { assertExclusiveWriter: async () => undefined }, importOptions: IMPORT_OPTS, validationOptions: { mode: 'read', purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 } });
     const receipt = await importer.importBatch(batch);
     expect(receipt.counts.invitation).toBe(1);
     expect(receipt.verificationMaterialPreserved).toBe(true);
-    const stored = await first.unitOfWork.runRead({ mode: 'read', deadlineMs: 5000 }, (tx) => tx.hostTransaction.stores.invitations.findByDigest(invitation.tokenHash));
+    const stored = await first.unitOfWork.run({ mode: 'read', purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 }, (tx) => tx.hostTransaction.stores.invitations.findByDigest(invitation.tokenHash));
     expect(stored?.status).toBe('pending');
     expect(JSON.stringify(stored)).not.toContain('sit_original-token-value');
     const digest = hashPresentedTokenV1('sit_original-token-value');
     expect(digest).toBe(invitation.tokenHash);
-    const consumed = await first.unitOfWork.runWrite(WRITE, (tx) =>
+    const consumed = await first.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.invitations.consumeByDigest({ tokenHash: digest, email: 'marie@example.test', clientId: null, userId: 'marie', expectedRevision: 0, at: NOW }));
     expect(consumed).toMatchObject({ status: 'consumed', consumedByUserId: 'marie', revision: 1 });
-    await expect(first.unitOfWork.runWrite(WRITE, (tx) =>
+    await expect(first.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.invitations.consumeByDigest({ tokenHash: digest, email: 'marie@example.test', clientId: null, userId: 'marie', expectedRevision: 1, at: NOW }),
     )).rejects.toBeInstanceOf(InvitationError);
   });
@@ -184,7 +184,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b prerequisites on 
     const state: FixtureBusinessState = { failAt: 'delete', reachedDelete: false, reachedAssert: false };
     const plan: BusinessDeletionPlanV1 = { userId: 'marie', workspaceIdsToDelete: [], retainedWorkspaceIds: ['workspace'] };
     const fixture = createFixtureBusiness({ handlerId: 'admin_account', plan, state });
-    await first.unitOfWork.runWrite(WRITE, async (tx) => {
+    await first.unitOfWork.run(WRITE, async (tx) => {
       await setupBaseline(tx.hostTransaction, 'marie', 'marie@example.test');
       await tx.hostTransaction.journal.insertAccountCore(accountRow('admin', 'admin@example.test'));
       await tx.hostTransaction.journal.ensureLiveFence('admin', NOW);
@@ -210,7 +210,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b prerequisites on 
       expect(sessions).toHaveLength(1);
       expect(await fixture.rows(tx.hostTransaction)).toHaveLength(1);
     };
-    await first.unitOfWork.runRead({ mode: 'read', deadlineMs: 5000 }, check);
+    await first.unitOfWork.run({ mode: 'read', purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 }, check);
     const persisted = await deletion.getReceipt('op-p4');
     expect(persisted).toEqual(receipt);
     const operation = await deletion.getOperation('op-p4');
@@ -222,7 +222,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b prerequisites on 
     const state: FixtureBusinessState = { failAt: null, reachedDelete: false, reachedAssert: false };
     const plan: BusinessDeletionPlanV1 = { userId: 'marie', workspaceIdsToDelete: ['ws-del'], retainedWorkspaceIds: ['ws-keep'] };
     const fixture = createFixtureBusiness({ handlerId: 'admin_account', plan, state });
-    await first.unitOfWork.runWrite(WRITE, async (tx) => {
+    await first.unitOfWork.run(WRITE, async (tx) => {
       const host = tx.hostTransaction;
       await host.journal.insertAccountCore(accountRow('marie', 'marie@example.test', 'disabled'));
       await host.journal.ensureLiveFence('marie', NOW);
@@ -259,7 +259,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b prerequisites on 
     expect(receipt.transaction).toBe('committed');
     expect(receipt.resultCode).toBe('identity_deleted');
     expect(receipt.complete).toBe(true);
-    await first.unitOfWork.runRead({ mode: 'read', deadlineMs: 5000 }, async (tx) => {
+    await first.unitOfWork.run({ mode: 'read', purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 }, async (tx) => {
       const host = tx.hostTransaction;
       expect(await host.journal.findAccountCore('marie')).toBeNull();
       expect(await host.journal.listMembershipsForUser('marie')).toHaveLength(0);
@@ -284,7 +284,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b prerequisites on 
 
   it('rejects unauthorized and guarded deletion callers identically', async () => {
     const first = await openEnv();
-    await first.unitOfWork.runWrite(WRITE, async (tx) => {
+    await first.unitOfWork.run(WRITE, async (tx) => {
       await tx.hostTransaction.journal.insertAccountCore(accountRow('marie', 'marie@example.test', 'active'));
       await tx.hostTransaction.journal.ensureLiveFence('marie', NOW);
       await tx.hostTransaction.journal.insertAccountCore(accountRow('admin', 'admin@example.test'));
