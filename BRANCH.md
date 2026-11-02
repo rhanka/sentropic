@@ -11,11 +11,12 @@ Implement the approved A2.0b additive amendment (Astra MAX author, Muse Wonder m
 - Automated test campaigns on dedicated environments (ENV=test-cm-a2-0b), never root dev.
 - In every make command, ENV=<env> passed as the last argument.
 - All new text in English.
-- Pins: amendment A2.0b-r6 sha256 5bde078cd12a35fb752eadb48496f0373dc8940883c701b920878a165; review a2-0b_wonder_r6 APPROVE sha256 0734a46e930b8fc456a431005d392203a347c1e19262305ac3c2a7e109206433; lot-A4 sha256 3826e88cad5f6fd368ce12c392d72634f78b411946e0354776e14cd984d6f8ed; lot-A4-prerequisites.patch sha256 11476ebd89c6aec73dcf7b20984323926310a331bff9d421a73c1fa6ec475ff5; baseline origin/main 455813bf923e9a58f701b17d2adbef01b2df0e71.
+- Pins: amendment A2.0b-r6 sha256 5bde078cd12a35fb752eadb48496f0373dc8940883c701b920878a31bb836165; review a2-0b_wonder_r6 APPROVE sha256 0734a46e930b8fc456a431005d392203a347c1e19262305ac3c2a7e109206433; lot-A4 sha256 3826e88cad5f6fd368ce12c392d72634f78b411946e0354776e14cd984d6f8ed; lot-A4-prerequisites.patch sha256 11476ebd89c6aec73dcf7b20984323926310a331bff9d421a73c1fa6ec475ff5; baseline origin/main 455813bf923e9a58f701b17d2adbef01b2df0e71.
 - Version: 0.26.0-dev.4 (next free cluster-mesh dev version after main 0.26.0-dev.3).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
+  - `BRANCH.md`
   - `packages/cluster-mesh/src/identity-contracts/**`
   - `packages/cluster-mesh/src/storage/identity/**`
   - `packages/cluster-mesh/src/identity-stores/**`
@@ -34,13 +35,20 @@ Implement the approved A2.0b additive amendment (Astra MAX author, Muse Wonder m
   - `e2e/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
   - `.github/workflows/**`
+  - `packages/cluster-mesh/tests/storage/postgres.mk` (BR-A20B-EX1)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
-- None.
+- [x] BR-A20B-EX1: repair PostgreSQL qualification readiness in `packages/cluster-mesh/tests/storage/postgres.mk`; the current Unix-socket probe can accept initdb's temporary server before `storage_test` exists. Impact: test startup only, unchanged retry budget. Rollback: revert the readiness hunk.
+- [x] Resume baseline: `e2bba5cc9`; six final SQLite failures in `run-full11.log` are 5000ms expirations; PostgreSQL fails before Vitest. No timeout increases or assertion removals authorized.
+- [x] Correct the truncated amendment SHA-256 against the approved r6 file.
+- [x] Add SQLite schema atomicity regression tests before implementation.
+- [ ] Verify schema regression red, implement transactional schema installation, and verify green.
+- [ ] Run each final identity database campaign once under the shared Docker flock, then clean up.
+- [ ] Push the final head, open a ready PR, wait for one CI, and write `.tmp/rv/lot-A2.0b.md`.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -89,6 +97,6 @@ Implement the approved A2.0b additive amendment (Astra MAX author, Muse Wonder m
   - [ ] Typecheck & Lint
   - [ ] Retest cluster-mesh identity suites (both profiles, no skips)
   - [ ] Bumped packages/cluster-mesh/package.json version 0.26.0-dev.4
-  - [ ] Final gate step 1: create draft PR using BRANCH.md text as PR body (source of truth).
+  - [ ] Final gate step 1: create a ready PR using BRANCH.md text as PR body after local qualification (owner continuation).
   - [ ] Final gate step 2: run/verify branch CI once and resolve remaining blockers.
   - [ ] Do NOT merge; report to .tmp/rv/lot-A2.0b.md and stop.
