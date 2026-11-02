@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import { eq } from 'drizzle-orm';
 import { db } from '../../../db/client';
 import { workspaces } from '../../../db/schema';
-import { revokeAllSessions } from '../../../services/session-manager';
-import { findCmUserById, updateCmUser } from '../../../services/identity/cm-users';
+import { findCmUserById } from '../../../services/identity/cm-users';
+import { deactivateOwnCmAccount } from '../../../services/identity/cm-account-administration';
 import { remoteRevocationError } from '../../../services/auth/remote-revocation-error';
 import { deleteOwnCmAccount } from '../../../services/identity/cm-account-deletion';
 import { runCmAccountDeletionHttp } from './cm-deletion-http';
@@ -41,17 +41,7 @@ accountRouter.get('/', async (c) => {
 
 accountRouter.post('/deactivate', async (c) => {
   const { userId } = c.get('user');
-  const now = new Date();
-
-  await updateCmUser(userId, {
-    accountStatus: 'disabled_by_user',
-    disabledAt: now,
-    disabledReason: 'user_deactivated',
-    updatedAt: now,
-  });
-
-  // Revoke sessions immediately
-  await revokeAllSessions(userId);
+  await deactivateOwnCmAccount(userId);
 
   return c.json({ success: true });
 });
