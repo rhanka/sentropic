@@ -6,7 +6,7 @@
 ## Scope / Guardrails
 - [x] Binding r6 SHA-256: `4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f`.
 - [x] Binding plan SHA-256: `528dd39308a6e2cf8bdf31307c82da373cf3ceb666cb865a0417abfa7ece49d2`.
-- [x] Worktree: `tmp/worktrees/cyber-admission-a02`; branch: `feat/cyber-admission-a02`; base: A01 `87a70d18f213433cf514b0e82ae247fa744770f9`, ready PR #883.
+- [x] Worktree: `tmp/worktrees/cyber-admission-a02`; branch: `feat/cyber-admission-a02`; base: A01 `eb3ed49f7f013645b63c3117d3a488127433e791`, ready PR #883.
 - [x] Make-only Docker-first; single shared Docker lock per command; reuse the pinned Node image; no image build planned.
 - [x] `ENV=test-cyber-adm` last; no listening services or ports; no registry login, OIDC, secrets, live promotion or merge.
 - [x] Keep production admission, A03+ execution, policy changes and Track writes out of scope; the conductor remains the sole Track writer.
@@ -41,7 +41,7 @@
 ## Feedback Loop
 - [x] Retain inherited BRLOCK-EX1 under `.security/ci-lockfile-policy.json`: owner=CI maintainers, review_by=2026-11-30T00:00:00Z; bounded scope and removal trigger remain unchanged, and catalog SCA debt stays open.
 - [x] BRCADM02-EX1: add the literal A01 base branch to CI pull_request triggers so the required stacked PR receives ordinary CI; no publication permission change; rollback removes that one base after unstacking.
-- [x] A01 local gate passed 298 tests with zero failures/skips and cleanup exit 0; ready PR #883 CI is running.
+- [x] A01 local gate passed 298 tests with zero failures/skips and cleanup exit 0; ready PR #883 CI run 41414318957 passed on eb3ed49f7.
 - [x] Preserve upstream authentication gaps and tool-qualification boundaries; a fetched hash or candidate-only fixture grants no admission.
 - [x] Public source investigation confirms Trivy v0.76.1 at e713f67f7d54decdcd9b3132c9751833dcced698 and the inherited embedded go-jose v4.1.5 defect.
 
@@ -61,8 +61,9 @@
   - [x] Write the collected ordered-patch, source/patch/checksum mutation and OS-only source negative controls before their implementation.
   - [ ] Add `material-acquisition.test.mjs`, collected by `scanner-provenance.test.mjs`, for source/checksum mutation, ordered patches and bounded retained acquisition.
   - [ ] Add offline dependency replay and OS-only negative controls, with the native replay repeated on the actual resolved sources.
-  - [ ] Record the failing pre-implementation gate before adding implementation.
+  - [x] Record the failing pre-implementation gate: collected suite refuses missing `material-patches.mjs` (exit 2); log retained in `.tmp/rv/cyber-admission-a02-patches-red.log`.
 - [ ] **Lot 2 — Exact source, patch and material implementation**
+  - [x] Implement ordered data-only patches with exact input/output checksums, unique edit contexts and atomic source preservation.
   - [ ] Implement source/archive identity checks, strict ordered patches and retained-file acquisition under `scripts/security/scanner/`.
   - [ ] Resolve exact upstream commit/archive/authentication/license, Go compiler/module checksums, base/package snapshots and tool/Action pins; preserve every actual gap.
   - [ ] Retain resolved bytes and implement dependency resolution from those bytes with network disabled; refuse mutation, undeclared fetches and an OS-only repair.
