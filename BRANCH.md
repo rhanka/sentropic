@@ -78,6 +78,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] ENV mapping: test-app-a4 / e2e-app-a4; ports API_PORT=9640 UI_PORT=5840 MAILDEV_UI_PORT=1740.
   - [x] Resume C1 PASS; review inherited account, challenge and invitation fixtures; restore original email data.
   - [x] Review inherited session, magic-link and WebAuthn fixtures without weakening assertions.
+  - [x] Add real CM WebAuthn coverage for persisted COSE, options policy, counter/challenge atomicity, replay, expiry, purpose/owner binding and stale signed counters; replacement execution awaits A2.0b.
   - [x] Correct CM fixture cleanup for indirect session, operation, invitation and outbox references.
   - [x] Correct control-schema custody cleanup, conversation/escalation fixture references and the synthetic test-only email policy; remove a false null-email migration claim from registration coverage.
   - [x] Review session-adoption setup and tenant-bound authorization fixtures against CM stores.
