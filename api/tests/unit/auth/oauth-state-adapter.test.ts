@@ -9,9 +9,11 @@ import {
   oauthTokens,
   revokedTokens,
   serviceClients,
-  users,
 } from '../../../src/db/schema';
 import { createOauthStateStoreAdapter } from '../../../src/services/auth/oauth-state-adapter';
+import { createCmUser } from '../../../src/services/identity/cm-users';
+import { runCmIdentityWrite } from '../../../src/services/identity/cm-transaction';
+import { cmDeleteForUsers } from '../../utils/cm-identity-test-store';
 
 const now = new Date('2026-01-01T00:00:00.000Z');
 const future = new Date('2026-01-01T01:00:00.000Z');
@@ -19,7 +21,22 @@ const past = new Date('2025-12-31T23:00:00.000Z');
 const userId = 'oauth-state-user-1';
 const clientId = 'example-mock-rp';
 
-const createAdapter = () => createOauthStateStoreAdapter({ now: () => now });
+type StatePort = ReturnType<typeof createOauthStateStoreAdapter>;
+// Each protocol operation gets a real independent request transaction, including races.
+const run = <T>(work: (port: StatePort) => Promise<T>) => runCmIdentityWrite(transaction =>
+  work(createOauthStateStoreAdapter({ transaction, now: () => now })));
+const createAdapter = () => ({
+  findClient: (...args: Parameters<StatePort['findClient']>) => run(port => port.findClient(...args)),
+  findServiceClient: (id: string) => run(port => port.findServiceClient!(id)),
+  saveAuthCode: (...args: Parameters<StatePort['saveAuthCode']>) => run(port => port.saveAuthCode(...args)),
+  consumeAuthCode: (...args: Parameters<StatePort['consumeAuthCode']>) => run(port => port.consumeAuthCode(...args)),
+  saveTokenMeta: (...args: Parameters<StatePort['saveTokenMeta']>) => run(port => port.saveTokenMeta(...args)),
+  findTokenMeta: (...args: Parameters<StatePort['findTokenMeta']>) => run(port => port.findTokenMeta(...args)),
+  isTokenRevoked: (...args: Parameters<StatePort['isTokenRevoked']>) => run(port => port.isTokenRevoked(...args)),
+  revokeToken: (...args: Parameters<StatePort['revokeToken']>) => run(port => port.revokeToken(...args)),
+  recordDpopJti: (...args: Parameters<StatePort['recordDpopJti']>) => run(port => port.recordDpopJti(...args)),
+  purgeExpired: () => run(port => port.purgeExpired()),
+});
 
 const createPayload = (expiresAt = future) => ({
   acr: 'urn:sentropic:loa:passkey-fresh',
@@ -58,15 +75,14 @@ describe('createOauthStateStoreAdapter', () => {
     await db.delete(oauthTokens);
     await db.delete(authorizationCodes);
     await db.delete(oauthClients);
-    await db.delete(users).where(eq(users.id, userId));
-    await db.insert(users).values({
-      createdAt: now,
+    await cmDeleteForUsers([userId]);
+    await createCmUser({
       displayName: 'OAuth State User',
       email: 'oauth-state-user@example.com',
       emailVerified: true,
-      id: userId,
+      userId,
       role: 'editor',
-      updatedAt: now,
+      accountStatus: 'active',
     });
     await db.insert(oauthClients).values({
       allowedScopes: ['openid', 'profile', 'email'],
@@ -87,7 +103,7 @@ describe('createOauthStateStoreAdapter', () => {
     await db.delete(oauthTokens);
     await db.delete(authorizationCodes);
     await db.delete(oauthClients);
-    await db.delete(users).where(eq(users.id, userId));
+    await cmDeleteForUsers([userId]);
   });
 
   it('finds clients and consumes authorization codes atomically once', async () => {
