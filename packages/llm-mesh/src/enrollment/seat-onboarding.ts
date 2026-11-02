@@ -244,3 +244,176 @@ function validateLineageTuple(value: unknown): value is SeatLineageTuple {
   return validInt(value['epoch'], 1) && validInt(value['generation'], 0) && nonEmpty(value['operationId']);
 }
 
+
+// ── agy jetski pbtxt subset ──────────────────────────────────────────────
+// Narrow grammar: blocks, keys, enum scalars, quoted strings and numbers.
+// No new dependency. The canonical grammar admits enum tokens only inside
+// the transported block, so an identifier cannot be represented in a valid
+// block at all — a structural property, not a denylist.
+
+export type PbtxtScalar =
+  | { kind: 'enum'; token: string }
+  | { kind: 'string'; value: string }
+  | { kind: 'number'; value: string };
+
+export interface PbtxtField {
+  name: string;
+  scalar?: PbtxtScalar;
+  children?: PbtxtField[];
+}
+
+class PbtxtParser {
+  private pos = 0;
+  constructor(private readonly text: string) {}
+
+  parseFields(untilBrace: boolean): PbtxtField[] {
+    const fields: PbtxtField[] = [];
+    for (;;) {
+      this.skipTrivia();
+      if (this.pos >= this.text.length) {
+        if (untilBrace) throw new SeatOnboardingError('onboarding-shape-unverified', 'unterminated pbtxt block');
+        return fields;
+      }
+      if (this.text[this.pos] === '}') {
+        if (!untilBrace) throw new SeatOnboardingError('onboarding-shape-unverified', 'unexpected }');
+        this.pos += 1;
+        return fields;
+      }
+      fields.push(this.parseField());
+    }
+  }
+
+  private parseField(): PbtxtField {
+    const name = this.parseIdent();
+    this.skipTrivia();
+    if (this.pos >= this.text.length) throw new SeatOnboardingError('onboarding-shape-unverified', 'truncated pbtxt field');
+    const ch = this.text[this.pos];
+    if (ch === '{') {
+      this.pos += 1;
+      return { name, children: this.parseFields(true) };
+    }
+    if (ch === ':') {
+      this.pos += 1;
+      return { name, scalar: this.parseScalar() };
+    }
+    throw new SeatOnboardingError('onboarding-shape-unverified', `unexpected '${ch}' after field ${name}`);
+  }
+
+  private parseScalar(): PbtxtScalar {
+    this.skipTrivia();
+    if (this.pos >= this.text.length) throw new SeatOnboardingError('onboarding-shape-unverified', 'truncated pbtxt scalar');
+    const ch = this.text[this.pos];
+    if (ch === '"') return { kind: 'string', value: this.parseString() };
+    if (ch === '-' || (ch >= '0' && ch <= '9')) return { kind: 'number', value: this.parseNumber() };
+    return { kind: 'enum', token: this.parseIdent() };
+  }
+
+  private parseIdent(): string {
+    this.skipTrivia();
+    const start = this.pos;
+    while (this.pos < this.text.length && /[A-Za-z0-9_.]/.test(this.text[this.pos])) this.pos += 1;
+    if (this.pos === start) throw new SeatOnboardingError('onboarding-shape-unverified', 'expected identifier');
+    return this.text.slice(start, this.pos);
+  }
+
+  private parseString(): string {
+    this.pos += 1;
+    let out = '';
+    while (this.pos < this.text.length && this.text[this.pos] !== '"') {
+      out += this.text[this.pos];
+      this.pos += 1;
+    }
+    if (this.pos >= this.text.length) throw new SeatOnboardingError('onboarding-shape-unverified', 'unterminated string');
+    this.pos += 1;
+    return out;
+  }
+
+  private parseNumber(): string {
+    const start = this.pos;
+    while (this.pos < this.text.length && /[-+0-9.eE]/.test(this.text[this.pos])) this.pos += 1;
+    return this.text.slice(start, this.pos);
+  }
+
+  private skipTrivia(): void {
+    for (;;) {
+      while (this.pos < this.text.length && /\s/.test(this.text[this.pos])) this.pos += 1;
+      if (this.text[this.pos] === '#') {
+        while (this.pos < this.text.length && this.text[this.pos] !== '\n') this.pos += 1;
+        continue;
+      }
+      return;
+    }
+  }
+}
+
+/** Parse the pbtxt subset; throws SeatOnboardingError on shape drift. */
+export function parseAgyJetskiPbtxt(text: string): PbtxtField[] {
+  return new PbtxtParser(text).parseFields(false);
+}
+
+/** Canonical serialization: fixed key order, reviewed enum order, one trailing newline. */
+export function canonicalAgyJetskiBytes(nativeCliVersion: string, steps: readonly string[]): string {
+  const required = AGY_REQUIRED_COMPLETED_STEPS[nativeCliVersion];
+  if (!required) throw new SeatOnboardingError('onboarding-shape-unverified', `no required step set for agy ${nativeCliVersion}`);
+  const ordered = required.filter((step) => steps.includes(step));
+  return `post_onboarding {\n${ordered.map((s) => `  completed_steps: ${s}\n`).join('')}}\n`;
+}
+
+/** True when any scalar anywhere in the tree is a quoted string or a number. */
+function hasIdentifierScalar(fields: readonly PbtxtField[]): boolean {
+  for (const field of fields) {
+    if (field.scalar && field.scalar.kind !== 'enum') return true;
+    if (field.children && hasIdentifierScalar(field.children)) return true;
+  }
+  return false;
+}
+
+/** Extract the completed_steps set of the single post_onboarding block. */
+function extractAgySteps(fields: readonly PbtxtField[]): { steps: string[] } | SeatOnboardingCode {
+  const blocks = fields.filter((f) => f.name === 'post_onboarding');
+  if (fields.length !== 1 || blocks.length !== 1 || !blocks[0].children) {
+    return 'onboarding-shape-unverified';
+  }
+  const children = blocks[0].children;
+  if (children.length === 0) return 'onboarding-incomplete';
+  const steps: string[] = [];
+  for (const child of children) {
+    if (child.name !== 'completed_steps' || !child.scalar || child.scalar.kind !== 'enum') {
+      return 'onboarding-shape-unverified';
+    }
+    steps.push(child.scalar.token);
+  }
+  return { steps };
+}
+
+/**
+ * Validate transported agy bytes: canonical form only. The step set must be
+ * exactly the full reviewed set for the pinned version; any extra key,
+ * value kind or step refuses.
+ */
+export function validateAgyJetskiContent(text: string, nativeCliVersion: string): SeatOnboardingCode | null {
+  let fields: PbtxtField[];
+  try {
+    fields = parseAgyJetskiPbtxt(text);
+  } catch (error) {
+    if (error instanceof SeatOnboardingError) return error.code;
+    return 'onboarding-shape-unverified';
+  }
+  if (hasIdentifierScalar(fields)) return 'onboarding-identifier-present';
+  const extracted = extractAgySteps(fields);
+  if (typeof extracted === 'string') return extracted;
+  const required = AGY_REQUIRED_COMPLETED_STEPS[nativeCliVersion];
+  if (!required) return 'onboarding-shape-unverified';
+  const set = new Set(extracted.steps);
+  if (set.size !== extracted.steps.length) return 'onboarding-shape-unverified';
+  for (const step of extracted.steps) {
+    if (!required.includes(step)) return 'onboarding-shape-unverified';
+  }
+  for (const step of required) {
+    if (!set.has(step)) return 'onboarding-incomplete';
+  }
+  if (text !== canonicalAgyJetskiBytes(nativeCliVersion, extracted.steps)) {
+    return 'onboarding-shape-unverified';
+  }
+  return null;
+}
