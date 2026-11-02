@@ -1,4 +1,5 @@
 import { IdentityCustodyErrorV1, type EmailRegistrationTicketV1 } from '@sentropic/cluster-mesh';
+import { resolveOAuthSession } from '@sentropic/auth-hono';
 import { FederationCompletionRefusal, type FederationBrokerDeps } from '../auth/federation/types';
 import { withAppCmAuth } from './cm-auth-runtime';
 
@@ -29,7 +30,11 @@ export const createCmFederationCompletion = (sessionToken: string | null): Feder
             async requireLinkActor(expectedUserId) {
               if (!sessionToken) throw linkRefusal();
               await tx.lockSubject(expectedUserId);
-              const session = await binding.sessions.validateSessionToken(sessionToken);
+              // Reuse the native consumer over bound ports; nesting a session_validate
+              // completion refusal inside the social flow would violate the runner contract.
+              const session = await resolveOAuthSession(new Request('http://identity.invalid', {
+                headers: { cookie: `session=${sessionToken}` },
+              }), ports);
               if (!session || session.user.id !== expectedUserId) throw linkRefusal();
             },
             async verifyEmailProof(email, token) {
