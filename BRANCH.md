@@ -81,6 +81,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Correct CM fixture cleanup for indirect session, operation, invitation and outbox references.
   - [x] Correct control-schema custody cleanup, conversation/escalation fixture references and the synthetic test-only email policy; remove a false null-email migration claim from registration coverage.
   - [x] Review session-adoption setup and tenant-bound authorization fixtures against CM stores.
+  - [x] Make authenticated fixtures explicitly seed their tenant approval, business ownership and admin workspace membership; production registration still grants no tenant approval.
   - [x] Review remaining adoption race/role fixtures and LLM identity directory fixtures against CM stores.
   - [x] Preserve OAuth refresh revocation assertions during CM fixture conversion.
   - [x] Review document, history, stream and lock fixture conversions; preserve original email values.
