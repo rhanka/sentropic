@@ -181,6 +181,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Join workspace provisioning and session adoption to CM's combined transaction; preallocate workspace ids and recheck current account/tenant authority before enrollment.
   - [x] Add binding regressions for account/tenant suspension across adopt, detach, end and get, preserving the prior binding on refusal.
   - [x] Bind detach/end/get and their authority reads to one CM transaction; lock write subjects/workspaces and require current active account/tenant plus profile.
+  - [x] Remove bootstrap and per-request admin membership upserts; workspace selection requires an existing CM admin membership (Mistral M3).
   - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
   - [x] Evaluate F15 and business workspace visibility on one serializable read transaction.
   - [x] Add explicit verified-HTTP conversation admission and an opaque CM reference on business chats; no identity authority is inferred from a chat id.
