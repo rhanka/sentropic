@@ -61,6 +61,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] R1: replace legacy token methods, retain verified token evidence locally, and drain synchronous sanitized audit exactly once.
 - [x] R1: construct actual WebAuthn factories and verifiers with the intersection of stored and current RP/origin/UV policy.
 - [x] R1: translate expected auth refusals through a private whole-transaction abort and verify the runner flow after rollback.
 - [x] Fix review r1 finding 6: compose core, tenancy, enforcement, custody and operation ports over one guarded executor and the A2.3 audit sink.
