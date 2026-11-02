@@ -67,6 +67,7 @@
 - [ ] **Lot 2 — Exact source, patch and material implementation**
   - [x] Implement ordered data-only patches with exact input/output checksums, unique edit contexts and atomic source preservation.
   - [x] Implement streamed hash/size-bound HTTPS acquisition, private staging and offline retained inventory verification after the missing-module RED gate.
+  - [x] Implement clean file-proxy Go environment and resolution-to-source/checksum binding after the missing-module RED gate; native replay remains required.
   - [ ] Implement source/archive identity checks, strict ordered patches and retained-file acquisition under `scripts/security/scanner/`.
   - [ ] Resolve exact upstream commit/archive/authentication/license, Go compiler/module checksums, base/package snapshots and tool/Action pins; preserve every actual gap.
   - [ ] Retain resolved bytes and implement dependency resolution from those bytes with network disabled; refuse mutation, undeclared fetches and an OS-only repair.
