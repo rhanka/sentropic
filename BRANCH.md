@@ -93,6 +93,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Invoke the typed import from the real control migration runner on its SERIALIZABLE connection; dispose keys after success or rollback and skip completed journals.
   - [x] Delete the manually copied CM core/custody DDL from control migration 0014; the canonical package asset is its schema source.
   - [x] Delete copied tenancy/enforcement DDL; bootstrap the merged CM schemas through their shipped statement exports.
+  - [x] Delete the raw identity copy SQL and guessed lifecycle/expiry/revision mappings; the typed importer is the only migration writer.
   - [x] Refuse SQL-only cutover without the real importer/checkpoint; remove fabricated schema and import attestations.
   - [x] Require protected D11 checkpoint evidence, verify snapshot/asset digests and keep backup paths out of durable receipts.
   - [x] Add production custody-envelope regressions for absent/empty v1 configuration, AAD corruption, fresh nonce and buffer disposal.
