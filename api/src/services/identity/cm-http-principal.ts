@@ -11,7 +11,7 @@ type PrincipalResult =
 
 /** Only the authentication stage is replayable; application next runs after commit. */
 export const authenticateCmHttpRequest = (request: Request, required: boolean): Promise<PrincipalResult> =>
-  withAppCmAuth(runner => runner.request(async (binding, tx) => {
+  withAppCmAuth(runner => runner.request(async (binding, tx): Promise<PrincipalResult> => {
     let principal: CmHttpPrincipal | null = null;
     let accepted = false;
     const router = new Hono<AuthHonoMiddlewareEnv>();
