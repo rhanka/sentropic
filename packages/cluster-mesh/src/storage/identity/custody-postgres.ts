@@ -14,6 +14,7 @@ import type {
   IdentityAccountProfileStoreV1,
   IdentityCustodyStoresV1,
   IdentityRunOptionsV1,
+  IdentityHostRunOptionsV1,
   IdentityTransactionV1,
   IdentityUnitOfWorkV1,
   MagicLinkProofV1,
@@ -29,7 +30,7 @@ import type {
 } from '../../identity-contracts/custody.js';
 import { IdentityCustodyErrorV1 } from '../../identity-contracts/custody-errors.js';
 import { composeIdentityTransaction } from './custody-composition.js';
-import { identityTransactionGuard, requireIdentityRunOptions } from './custody-transaction-guards.js';
+import { identityTransactionGuard, requireIdentityRunOptions, rebindIdentityTransactionHost } from './custody-transaction-guards.js';
 import { subjectLifecycle } from './custody-lifecycle.js';
 import type { InjectedPgDriver, PgSession, SqlValue } from '../postgres/protocol.js';
 import { decodeSession } from './records.js';
@@ -639,16 +640,18 @@ export class PostgresCustodyTx implements IdentityCustodyStoresV1 {
   };
 }
 
-export interface PostgresCustodyBindingV1<H> {
+export interface PostgresIdentityBindingV1<H> {
   readonly transactionId: string;
   readonly hostTransaction: H;
   readonly session: PgSession;
   readonly readOnly: boolean;
 }
 
+export type PostgresCustodyBindingV1<H> = PostgresIdentityBindingV1<H>;
+
 export interface PostgresIdentityHostV1<H> {
   runSerializable<T>(
-    options: { readonly readOnly: boolean; readonly deadlineMs: number },
+    options: IdentityHostRunOptionsV1,
     operation: (binding: PostgresCustodyBindingV1<H>) => Promise<T>,
   ): Promise<T>;
 }
@@ -682,14 +685,14 @@ export class PostgresCustodyHandle extends PostgresCustodyTx {
 }
 
 /** Host-owned serializable unit of work over one control schema. */
-export const createPostgresIdentityUnitOfWorkV1 = (input: {
+export const createPostgresIdentityUnitOfWorkV1 = <H>(input: {
   readonly schema: string;
-  readonly host: PostgresIdentityHostV1<PostgresCustodyHandle>;
+  readonly host: PostgresIdentityHostV1<H>;
   readonly maxAttempts?: number;
-}): IdentityUnitOfWorkV1<PostgresCustodyHandle> => {
+}): IdentityUnitOfWorkV1<H> => {
   const run = async <T>(
     options: IdentityRunOptionsV1,
-    operation: (tx: IdentityTransactionV1<PostgresCustodyHandle>) => Promise<T>,
+    operation: (tx: IdentityTransactionV1<H>) => Promise<T>,
   ): Promise<T> => {
     requireIdentityRunOptions(options);
     const readOnly = options.mode === 'read';
@@ -703,7 +706,7 @@ export const createPostgresIdentityUnitOfWorkV1 = (input: {
           const guard = identityTransactionGuard(readOnly, deadline);
           const handle = new PostgresCustodyHandle(input.schema, guard.postgres(binding.session));
           try {
-            const result = await operation(composeIdentityTransaction({ host: handle, transactionId: binding.transactionId, readOnly, check: guard.check }));
+            const result = await operation(rebindIdentityTransactionHost(composeIdentityTransaction({ host: handle, transactionId: binding.transactionId, readOnly, check: guard.check }), binding.hostTransaction));
             guard.check();
             return result;
           } finally { guard.close(); }
@@ -721,7 +724,7 @@ export const createPostgresIdentityUnitOfWorkV1 = (input: {
 }
 
 
-export const createPostgresIdentityHostV1 = (options: PostgresCustodyOptions): PostgresIdentityHostV1<PostgresCustodyHandle> => ({
+export const createPostgresIdentityHostV1 = (options: PostgresCustodyOptions): PostgresIdentityHostV1<H> => ({
   runSerializable: async (runOptions, operation) => {
     await applyPostgresIdentityCoreSchemaIfNeeded(options);
     return options.driver.transaction(
@@ -875,16 +878,12 @@ export const applyPostgresIdentityCustodySchemaV1 = async (input: {
 
 export const bindPostgresIdentityTransactionV1 = <H>(input: {
   readonly schema: string;
-  readonly binding: PostgresCustodyBindingV1<H>;
-  readonly hostTransaction: H;
-}): IdentityTransactionV1<H> => ({
-  ...composeIdentityTransaction({
-    host: new PostgresCustodyHandle(input.schema, input.binding.session),
-    transactionId: input.binding.transactionId, readOnly: input.binding.readOnly,
-    check: (write) => { if (write && input.binding.readOnly) throw new IdentityCustodyErrorV1('identity_transaction_unbound'); },
-  }),
-  hostTransaction: input.hostTransaction,
-});
+  readonly binding: PostgresIdentityBindingV1<H>;
+}): IdentityTransactionV1<H> => rebindIdentityTransactionHost(composeIdentityTransaction({
+  host: new PostgresCustodyHandle(input.schema, input.binding.session),
+  transactionId: input.binding.transactionId, readOnly: input.binding.readOnly,
+  check: (write) => { if (write && input.binding.readOnly) throw new IdentityCustodyErrorV1('identity_transaction_unbound'); },
+}), input.binding.hostTransaction);
 
 /** V1 factory name for the standalone PostgreSQL custody stores. */
 export const createPostgresIdentityCustodyStoresV1 = createPostgresCustodyStores;
