@@ -657,6 +657,11 @@ export function validateSeatEnvelope(
   let onboarding: SeatOnboardingV1 | null = null;
   let onboardingStatus: SeatOnboardingStatus = 'absent';
   if (envelope['onboarding'] !== undefined) {
+    // A present block for a CLI with no allowlist entry (vibe in v1) is an
+    // envelope defect, never a silent drop.
+    if (!CLI_DEST[cli]) {
+      return { ok: false, code: 'onboarding-shape-unverified', detail: 'no v1 onboarding allowlist entry for this CLI' };
+    }
     const blockResult = validateSeatOnboarding(envelope['onboarding']);
     if (!blockResult.ok) return { ok: false, code: blockResult.code, detail: blockResult.detail };
     const block = blockResult.block;
