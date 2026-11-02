@@ -1,4 +1,4 @@
-import type { IdentityAuthCompletionFlowV1, IdentityAuthCompletionOutcomeV1, IdentityAuthRefusalV1 } from '../identity-contracts/custody-auth.js';
+import type { IdentityAuthCompletionFlowV1, IdentityAuthCompletionOutcomeV1 } from '../identity-contracts/custody-auth.js';
 import type { IdentityUnitOfWorkV1, IdentityTransactionV1, IdentityRunOptionsV1 } from '../identity-contracts/custody.js';
 import { IdentityCustodyErrorV1 } from '../identity-contracts/custody-errors.js';
 
