@@ -1,7 +1,18 @@
-# Feature: cm-identity-a2-0b
+# feat(identity): add durable verification custody and atomic deletion
 
 ## Objective
-Implement the approved A2.0b additive amendment (Astra MAX author, Muse Wonder max APPROVE) for the identity core in packages/cluster-mesh: verification custody, lossless import, atomic person deletion.
+Add durable verification custody, material-preserving import and atomic person deletion to packages/cluster-mesh. Imported credential bytes, digests, session hashes and social subjects survive storage; required deletion failures roll back identity and business rows together. The approved A2.0b r6 amendment defines the intended contract; the remaining composition and proof gaps below block full acceptance.
+
+## Validation evidence and remaining acceptance gaps
+- Full SQLite profile: 185/185 tests pass in 20 files; zero skipped or todo cases.
+- Full PostgreSQL profile: 185/185 tests pass in 20 files; zero skipped or todo cases.
+- Both campaigns ran once under the shared Docker flock with `ENV=test-cm-a2-0b`. P1–P5, custody security cases and the unchanged frozen identity suite executed.
+- New schema regression: three expected rollback assertion failures before the fix; all six cases pass afterward. No timeout was increased and no existing assertion was weakened.
+- Source/test TypeScript checks and package ESLint pass. The only post-campaign source edit removes a redundant literal type annotation; runtime behavior is unchanged.
+- PostgreSQL initialization exceeded the original 30-attempt startup bound under local disk pressure. Its logs then confirmed initialization complete; the TCP database probe passed before the first test campaign.
+- Full acceptance remains blocked: the inherited UOW uses `runRead/runWrite` instead of the r6 combined bound composition consumed by A4; the P1 fixture does not verify a real WebAuthn assertion, and PostgreSQL reopening reuses handles.
+- Review is incomplete: Argon's qualification-wiring finding is fixed; Mistral failed before producing a review. Final-head consensus is not claimed.
+- CI budget: one ready-PR-triggered run, followed to completion in the owner report. Do not merge.
 
 ## Scope / Guardrails
 - Scope limited to packages/cluster-mesh identity custody, storage, import, deletion, tests, version manifest.
@@ -49,11 +60,11 @@ Implement the approved A2.0b additive amendment (Astra MAX author, Muse Wonder m
 - [x] Correct the truncated amendment SHA-256 against the approved r6 file.
 - [x] Add SQLite schema atomicity regression tests before implementation.
 - [x] Require a successful TCP query against the actual PostgreSQL test database; preserve the 30-attempt startup budget and print startup diagnostics on failure.
-- [x] Replace autocommitted SQLite schema statements with one savepoint-protected batch and initialize the core bundle once per factory; runtime qualification pending.
+- [x] Replace autocommitted SQLite schema statements with one savepoint-protected batch and initialize the core bundle once per factory; both runtime profiles pass.
 - [x] Refuse missing PostgreSQL configuration in the dedicated profile instead of substituting the in-memory oracle.
 - [ ] Resolve inherited r6 composition gaps before claiming amendment completion: the shipped UOW exposes `runRead/runWrite`, while r6 requires the combined bound composition consumed by A4.
-- [ ] Verify schema regression red, implement transactional schema installation, and verify green.
-- [ ] Run each final identity database campaign once under the shared Docker flock, then clean up.
+- [x] Verify schema regression red, implement transactional schema installation, and verify green.
+- [x] Run each final identity database campaign once under the shared Docker flock, then clean up; both receipts contain 185 passes and zero skips, owned containers removed, `make down` completed.
 - [ ] Push the final head, open a ready PR, wait for one CI, and write `.tmp/rv/lot-A2.0b.md`.
 
 ## AI Flaky tests
@@ -95,9 +106,9 @@ Implement the approved A2.0b additive amendment (Astra MAX author, Muse Wonder m
   - [ ] Secret at rest, SHA-256 exact preimages, zeroization of owned buffers, log redaction canaries.
   - [ ] Lot gate: security tests on both profiles.
 - [ ] **Lot N — Final validation**
-  - [ ] Typecheck & Lint
-  - [ ] Retest cluster-mesh identity suites (both profiles, no skips)
-  - [ ] Bumped packages/cluster-mesh/package.json version 0.26.0-dev.4
+  - [x] Typecheck & Lint
+  - [x] Retest cluster-mesh identity suites (both profiles, no skips)
+  - [x] Bumped packages/cluster-mesh/package.json version 0.26.0-dev.4
   - [ ] Final gate step 1: create a ready PR using BRANCH.md text as PR body after local qualification (owner continuation).
   - [ ] Final gate step 2: run/verify branch CI once and resolve remaining blockers.
   - [ ] Do NOT merge; report to .tmp/rv/lot-A2.0b.md and stop.
