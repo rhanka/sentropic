@@ -7,16 +7,15 @@ import {
   oauthClients,
   oauthConsents,
   serviceClients,
-  tenantMemberships,
-  tenants,
   workspaces,
 } from '../../../src/db/schema';
 import { cleanupAuthData, createTestUser } from '../../utils/auth-helper';
+import { createCmTenant, findCmTenant, enrolCmWorkspace, findCmWorkspace, listCmWorkspacesForTenant,
+  listCmMembershipsForTenant, setCmMembershipState } from '../../../src/services/identity/cm-tenancy';
+import { cmDeleteTenants, cmDeleteTenantMembershipsForTenant, cmQuery, cmTable } from '../../utils/cm-identity-test-store';
+import { findCmServiceClientBinding } from '../../../src/services/identity/cm-service-clients';
 
-// ARCH-11 G1a — Tenant DATA reconciliation (spec §4.1). These tests assert the DEFAULT-safe,
-// no-behavior-change DATA migration: the durable workspace→tenant edge, the tenantized consent key
-// (§1.5), the service-client default, grandfather-column reconciliation, and — non-vacuously —
-// row-level isolation across ≥2 real orgs on the NEW columns.
+// Preserve ARCH-11's tenant isolation and protocol evidence after A4 moves identity authority to CM.
 
 const ORG_A = 'arch11-org-a';
 const ORG_B = 'arch11-org-b';
@@ -26,14 +25,15 @@ const SERVICE_CLIENT_ID = 'arch11-service-client';
 const seededWorkspaceIds: string[] = [];
 
 async function seedOrg(id: string): Promise<void> {
-  await db.insert(tenants).values({ id, name: id, status: 'active' }).onConflictDoNothing();
+  if (!await findCmTenant(id)) await createCmTenant({ tenantId: id });
 }
 
 async function seedWorkspace(id: string, tenantId: string, ownerUserId?: string): Promise<void> {
   await db
     .insert(workspaces)
-    .values({ id, name: `ws-${id}`, tenantId, ...(ownerUserId ? { ownerUserId } : {}) })
+    .values({ id, name: `ws-${id}`, ...(ownerUserId ? { ownerUserId } : {}) })
     .onConflictDoNothing();
+  await enrolCmWorkspace({ workspaceId: id, tenantId });
   seededWorkspaceIds.push(id);
 }
 
@@ -51,7 +51,7 @@ async function seedConsentClient(): Promise<void> {
     .onConflictDoNothing();
 }
 
-describe('ARCH-11 G1a — tenant DATA reconciliation (DEFAULT-safe, no behavior change)', () => {
+describe('ARCH-11 tenant data after the CM identity cutover', () => {
   beforeEach(async () => {
     await seedOrg(ORG_A);
     await seedOrg(ORG_B);
@@ -64,39 +64,34 @@ describe('ARCH-11 G1a — tenant DATA reconciliation (DEFAULT-safe, no behavior 
     await db.delete(serviceClients).where(eq(serviceClients.clientId, SERVICE_CLIENT_ID));
     if (seededWorkspaceIds.length > 0) {
       await db.delete(workspaces).where(inArray(workspaces.id, seededWorkspaceIds));
+      await cmQuery(`DELETE FROM ${cmTable('cm_workspace_members')} WHERE workspace_id = ANY($1)`, [seededWorkspaceIds]);
+      await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = ANY($1)`, [seededWorkspaceIds]);
       seededWorkspaceIds.length = 0;
     }
-    await db.delete(tenantMemberships).where(inArray(tenantMemberships.tenantId, TEST_ORGS));
-    await db.delete(tenants).where(inArray(tenants.id, TEST_ORGS));
+    for (const tenantId of TEST_ORGS) await cmDeleteTenantMembershipsForTenant(tenantId);
+    await cmDeleteTenants(TEST_ORGS);
     await cleanupAuthData();
   });
 
-  it('migration applied: workspaces.tenant_id is NOT NULL, FK-enforced, defaulted to sentropic; bootstrap tenant exists', async () => {
+  it('keeps workspace tenant authority exclusively in the CM directory', async () => {
     const meta = await db.execute(sql`
       SELECT is_nullable, column_default
       FROM information_schema.columns
-      WHERE table_name = 'workspaces' AND column_name = 'tenant_id'
+      WHERE table_schema = 'public' AND table_name = 'workspaces' AND column_name = 'tenant_id'
     `);
-    const col = meta.rows[0] as { is_nullable: string; column_default: string | null };
-    expect(col.is_nullable).toBe('NO');
-    expect(col.column_default ?? '').toContain('sentropic');
-
-    const [bootstrap] = await db.select().from(tenants).where(eq(tenants.id, 'sentropic'));
-    expect(bootstrap?.id).toBe('sentropic');
-
-    // FK is enforced: a workspace pointing at a non-existent org is rejected.
-    await expect(
-      db.insert(workspaces).values({ id: `ws-fk-${crypto.randomUUID()}`, name: 'fk', tenantId: 'no-such-org' }),
-    ).rejects.toThrow();
+    expect(meta.rows).toEqual([]);
+    const id = `ws-cm-${crypto.randomUUID()}`;
+    await seedWorkspace(id, ORG_A);
+    expect(await findCmWorkspace(id)).toMatchObject({ workspaceId: id, tenantId: ORG_A });
+    expect(await findCmTenant(ORG_A)).toMatchObject({ status: 'active' });
   });
 
-  it('DEFAULT-safe: an old-semantic workspace insert (no tenant_id) persists with tenant_id=sentropic', async () => {
-    // Simulates a not-yet-rolled pod inserting a workspace without the new column.
+  it('does not infer a default identity binding from a business-only workspace row', async () => {
     const id = `ws-default-${crypto.randomUUID()}`;
     await db.insert(workspaces).values({ id, name: 'old-pod-workspace' });
     seededWorkspaceIds.push(id);
-    const [row] = await db.select({ tenantId: workspaces.tenantId }).from(workspaces).where(eq(workspaces.id, id));
-    expect(row?.tenantId).toBe('sentropic');
+    expect(await findCmWorkspace(id)).toBeNull();
+    expect((await listCmWorkspacesForTenant(ORG_A)).some(row => row.workspaceId === id)).toBe(false);
   });
 
   it('DEFAULT-safe: an old-semantic consent insert (no tenant_id) persists with tenant_id=sentropic', async () => {
@@ -109,13 +104,13 @@ describe('ARCH-11 G1a — tenant DATA reconciliation (DEFAULT-safe, no behavior 
     expect(row?.tenantId).toBe('sentropic');
   });
 
-  it('service_clients.tenant_id gains a DEFAULT (sentropic) so new single-org clients inherit a tenant', async () => {
+  it('removes the service protocol tenant column and requires an explicit CM binding', async () => {
     const meta = await db.execute(sql`
       SELECT column_default
       FROM information_schema.columns
-      WHERE table_name = 'service_clients' AND column_name = 'tenant_id'
+      WHERE table_schema = 'public' AND table_name = 'service_clients' AND column_name = 'tenant_id'
     `);
-    expect(((meta.rows[0] as { column_default: string | null }).column_default ?? '')).toContain('sentropic');
+    expect(meta.rows).toEqual([]);
 
     await db.insert(serviceClients).values({
       id: `svc-${crypto.randomUUID()}`,
@@ -123,11 +118,7 @@ describe('ARCH-11 G1a — tenant DATA reconciliation (DEFAULT-safe, no behavior 
       clientSecretHash: 'hash',
       allowedScopes: ['mcp:read'],
     });
-    const [row] = await db
-      .select({ tenantId: serviceClients.tenantId })
-      .from(serviceClients)
-      .where(eq(serviceClients.clientId, SERVICE_CLIENT_ID));
-    expect(row?.tenantId).toBe('sentropic');
+    expect(await findCmServiceClientBinding(SERVICE_CLIENT_ID)).toBeNull();
   });
 
   it('backfill: migration grandfathers every existing user into sentropic membership', async () => {
@@ -199,24 +190,18 @@ describe('ARCH-11 G1a — tenant DATA reconciliation (DEFAULT-safe, no behavior 
     await seedWorkspace(wsA, ORG_A, userA.id);
     await seedWorkspace(wsB, ORG_B, userB.id);
 
-    await db.insert(tenantMemberships).values({ tenantId: ORG_A, userId: userA.id, status: 'approved', role: 'member' });
-    await db.insert(tenantMemberships).values({ tenantId: ORG_B, userId: userB.id, status: 'approved', role: 'member' });
+    await setCmMembershipState(userA.id, ORG_A, { status: 'approved', decidedBy: userA.id });
+    await setCmMembershipState(userB.id, ORG_B, { status: 'approved', decidedBy: userB.id });
 
     // The shared user consented to the client in org-A ONLY.
     await db.insert(oauthConsents).values({ userId: shared.id, clientId: CLIENT_ID, tenantId: ORG_A, scopes: ['openid', 'profile'] });
 
-    // (1) Workspace isolation on the new tenant_id column: an org-B-scoped query returns ONLY wsB.
-    const bWorkspaces = await db
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(and(eq(workspaces.tenantId, ORG_B), inArray(workspaces.id, [wsA, wsB])));
-    expect(bWorkspaces.map((r) => r.id)).toEqual([wsB]);
+    // (1) CM's tenant-scoped directory returns only org-B workspaces.
+    const bWorkspaces = await listCmWorkspacesForTenant(ORG_B);
+    expect(bWorkspaces.map((r) => r.workspaceId)).toEqual([wsB]);
 
     // (2) Membership isolation: userA belongs to org-A only, never leaks into an org-B-scoped query.
-    const aOnlyInB = await db
-      .select({ userId: tenantMemberships.userId })
-      .from(tenantMemberships)
-      .where(and(eq(tenantMemberships.tenantId, ORG_B), eq(tenantMemberships.userId, userA.id)));
+    const aOnlyInB = (await listCmMembershipsForTenant(ORG_B)).filter(row => row.userId === userA.id);
     expect(aOnlyInB).toHaveLength(0);
 
     // (3) Consent isolation (§1.5 core): the shared user's org-A grant does NOT satisfy the org-B key.
