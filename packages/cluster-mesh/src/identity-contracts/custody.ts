@@ -349,6 +349,11 @@ export interface IdentityLoginTokenPortV1 extends IdentityLoginVerifierPortV1 {
   }): Promise<string>;
 }
 
+export interface IdentityHostRunOptionsV1 {
+  readonly readOnly: boolean;
+  readonly deadlineMs: number;
+}
+
 export interface IdentityRunOptionsV1 {
   readonly mode: 'read' | 'write';
   readonly purpose: 'request' | 'import' | 'delete' | 'delivery';

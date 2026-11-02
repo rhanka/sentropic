@@ -12,6 +12,7 @@ import type {
   IdentityAccountProfileStoreV1,
   IdentityCustodyStoresV1,
   IdentityRunOptionsV1,
+  IdentityHostRunOptionsV1,
   IdentityTransactionV1,
   IdentityUnitOfWorkV1,
   MagicLinkProofV1,
@@ -27,7 +28,7 @@ import type {
 } from '../../identity-contracts/custody.js';
 import { IdentityCustodyErrorV1 } from '../../identity-contracts/custody-errors.js';
 import { composeIdentityTransaction } from './custody-composition.js';
-import { identityTransactionGuard, requireIdentityRunOptions } from './custody-transaction-guards.js';
+import { identityTransactionGuard, requireIdentityRunOptions, rebindIdentityTransactionHost } from './custody-transaction-guards.js';
 import { subjectLifecycle } from './custody-lifecycle.js';
 import type { SqliteConnection } from '../sqlite/connection.js';
 import { decodeSession } from './records.js';
@@ -559,16 +560,18 @@ export class SqliteCustodyTx implements IdentityCustodyStoresV1 {
   };
 }
 
-export interface SqliteCustodyBindingV1<H> {
+export interface SqliteIdentityBindingV1<H> {
   readonly transactionId: string;
   readonly hostTransaction: H;
   readonly connection: SqliteConnection;
   readonly readOnly: boolean;
 }
 
+export type SqliteCustodyBindingV1<H> = SqliteIdentityBindingV1<H>;
+
 export interface SqliteIdentityHostV1<H> {
   runExclusiveTransaction<T>(
-    options: { readonly readOnly: boolean; readonly deadlineMs: number },
+    options: IdentityHostRunOptionsV1,
     operation: (binding: SqliteCustodyBindingV1<H>) => Promise<T>,
   ): Promise<T>;
 }
@@ -602,13 +605,13 @@ export class SqliteCustodyHandle extends SqliteCustodyTx {
 }
 
 /** Host-owned exclusive unit of work over one SQLite connection. */
-export const createSqliteIdentityUnitOfWorkV1 = (input: {
-  readonly host: SqliteIdentityHostV1<SqliteCustodyHandle>;
+export const createSqliteIdentityUnitOfWorkV1 = <H>(input: {
+  readonly host: SqliteIdentityHostV1<H>;
   readonly maxAttempts?: number;
-}): IdentityUnitOfWorkV1<SqliteCustodyHandle> => {
+}): IdentityUnitOfWorkV1<H> => {
   const run = async <T>(
     options: IdentityRunOptionsV1,
-    operation: (tx: IdentityTransactionV1<SqliteCustodyHandle>) => Promise<T>,
+    operation: (tx: IdentityTransactionV1<H>) => Promise<T>,
   ): Promise<T> => {
     requireIdentityRunOptions(options);
     const readOnly = options.mode === 'read';
@@ -622,7 +625,7 @@ export const createSqliteIdentityUnitOfWorkV1 = (input: {
           const guard = identityTransactionGuard(readOnly, deadline);
           const handle = new SqliteCustodyHandle(guard.sqlite(binding.connection));
           try {
-            const result = await operation(composeIdentityTransaction({ host: handle, transactionId: binding.transactionId, readOnly, check: guard.check }));
+            const result = await operation(rebindIdentityTransactionHost(composeIdentityTransaction({ host: handle, transactionId: binding.transactionId, readOnly, check: guard.check }), binding.hostTransaction));
             guard.check();
             return result;
           } finally { guard.close(); }
@@ -644,7 +647,7 @@ const sqliteTransactionQueues = new WeakMap<SqliteConnection, Promise<void>>();
 export const createSqliteIdentityHostV1 = (options: {
   readonly connection: SqliteConnection;
   readonly applySchema?: boolean;
-}): SqliteIdentityHostV1<SqliteCustodyHandle> => {
+}): SqliteIdentityHostV1<H> => {
   if (options.applySchema !== false) {
     applySqliteIdentityCoreSchema(options.connection);
   }
@@ -702,16 +705,12 @@ export const applySqliteIdentityCustodySchemaV1 = async (input: {
 };
 
 export const bindSqliteIdentityTransactionV1 = <H>(input: {
-  readonly binding: SqliteCustodyBindingV1<H>;
-  readonly hostTransaction: H;
-}): IdentityTransactionV1<H> => ({
-  ...composeIdentityTransaction({
-    host: new SqliteCustodyHandle(input.binding.connection),
-    transactionId: input.binding.transactionId, readOnly: input.binding.readOnly,
-    check: (write) => { if (write && input.binding.readOnly) throw new IdentityCustodyErrorV1('identity_transaction_unbound'); },
-  }),
-  hostTransaction: input.hostTransaction,
-});
+  readonly binding: SqliteIdentityBindingV1<H>;
+}): IdentityTransactionV1<H> => rebindIdentityTransactionHost(composeIdentityTransaction({
+  host: new SqliteCustodyHandle(input.binding.connection),
+  transactionId: input.binding.transactionId, readOnly: input.binding.readOnly,
+  check: (write) => { if (write && input.binding.readOnly) throw new IdentityCustodyErrorV1('identity_transaction_unbound'); },
+}), input.binding.hostTransaction);
 
 /** V1 factory name for the standalone SQLite custody stores. */
 export const createSqliteIdentityCustodyStoresV1 = createSqliteCustodyStores;
