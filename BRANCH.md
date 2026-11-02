@@ -249,6 +249,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] gap-§1 scenario end to end; registration → approval → login; invitation consumed once; revoke-all; mid-session suspension empties tool set; account deletion with injected failure leaves no orphan and preserves rows; migration tests; F11 e2e.
   - [ ] Rehearse migration on a fresh prod dump (existing rehearsal make target); record receipt.
 - [ ] **Lot 6 — Final validation**
+  - [x] Preserve the shipped validation-error DTO, including field details, while discarding rolled-back success fields and cookies.
   - [x] Delete the replaced app WebAuthn service adapter after migrating its remaining MFA test consumer to real CM completion.
   - [x] Replace the obsolete MFA adapter mock with signed assertions through the mounted CM login route; verify UV success and no session for required-UV refusal.
   - [x] Replace malformed credential fixture bytes with real public P-256 COSE keys and add a signed-assertion fixture checked by the actual WebAuthn verifier.
