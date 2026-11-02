@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { IdentityExternalRevocationV1, IdentityUnitOfWorkV1 } from '../../src/index.js';
-import { acknowledgeIdentityRevocationV1, createNodeConnectorCustody } from '../../src/index.js';
+import { acknowledgeIdentityRevocationV1, createNodeConnectorCustody, createConnectorRevocationCustodyPortV1 } from '../../src/index.js';
 import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 
@@ -16,9 +16,9 @@ interface ProfileEnv {
   readonly schema: string | null;
 }
 
-const delivery = (id: string, targetKind = 'remote_session', targetRef = 'reader-1'): IdentityExternalRevocationV1 => ({
+const delivery = (id: string, targetKind: IdentityExternalRevocationV1['targetKind'] = 'login_session', targetRef = 'reader-1'): IdentityExternalRevocationV1 => ({
   deliveryId: id, operationId: 'op-1', step: 'remote_reader_sessions', subjectId: 'marie', targetKind, targetRef,
-  state: 'pending', createdAt: NOW, nextAttemptAt: NOW,
+  state: 'pending', createdAt: NOW, nextAttemptAt: NOW, custodyRef: null, deliveredAt: null, claimOwner: null, claimVersion: 0, leaseUntil: null, attemptCount: 0,
 });
 
 const PROFILES = (pgEnabled ? ['postgres', 'sqlite'] : ['sqlite']) as const;
@@ -38,7 +38,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b remote revocation
       await tx.hostTransaction.journal.enqueueDelivery(delivery('d1'));
       // The outbox tuple (operation_id, step, target_kind, target_ref) is UNIQUE
       // per the amendment, so the second delivery needs its own target.
-      await tx.hostTransaction.journal.enqueueDelivery(delivery('d2', 'remote_session', 'reader-2'));
+      await tx.hostTransaction.journal.enqueueDelivery(delivery('d2', 'login_session', 'reader-2'));
     });
     const first = await env.unitOfWork.run(WRITE, (tx) => tx.hostTransaction.journal.claimPending(NOW, 'worker-a', LATER, 10));
     expect(first.map((entry) => entry.deliveryId)).toEqual(['d1', 'd2']);
@@ -74,16 +74,19 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b remote revocation
     const masterKey = new Uint8Array(32).fill(3);
     const custody = createNodeConnectorCustody({ masterKey, disposeMasterCopy: true });
     expect(masterKey.every((byte) => byte === 0)).toBe(true);
-    const grant: IdentityExternalRevocationV1 = { ...delivery('d-grant', 'connector_grant', 'conn-77'), subjectId: 'marie' };
+    const port = createConnectorRevocationCustodyPortV1({ custody, readSource: async () => { throw new Error('not used by ack'); } });
+    let grant: IdentityExternalRevocationV1 = { ...delivery('d-grant', 'connector_grant', 'conn-77'), subjectId: 'marie' };
     await env.unitOfWork.run(WRITE, async (tx) => {
-      await tx.hostTransaction.journal.enqueueDelivery(grant);
       const raw = {
         profile, schema: env.schema ?? '',
         session: profile === 'postgres' ? (tx.hostTransaction.raw as never) : null,
         connection: profile === 'sqlite' ? (tx.hostTransaction.raw as never) : null,
       } as never;
-      const captured = await custody.capture({ deliveryId: 'd-grant', connectorAccountId: 'conn-77', provider: 'drive', at: NOW }, raw, { tokenKind: 'refresh', token: 'refresh-secret' });
+      const captured = await custody.captureCapability({ deliveryId: 'd-grant', connectorAccountId: 'conn-77', provider: 'drive', at: NOW }, raw, { tokenKind: 'refresh', token: 'refresh-secret' });
       expect(captured.kind).toBe('captured');
+      if (captured.kind !== 'captured') throw new Error('missing capability');
+      grant = { ...grant, custodyRef: captured.reference.custodyRef };
+      await tx.revocationOutbox.enqueue(grant);
       await custody.assertCaptured(grant, raw);
     });
     const claimed = await env.unitOfWork.run(WRITE, (tx) => tx.hostTransaction.journal.claimPending(NOW, 'worker-a', LATER, 10));
@@ -96,18 +99,18 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b remote revocation
     };
     await env.unitOfWork.run(WRITE, (tx) =>
       acknowledgeIdentityRevocationV1({
-        host: tx.hostTransaction,
-        claim: { deliveryId: 'd-grant', claimOwner: 'worker-a', claimVersion: claim!.claimVersion },
+        tx,
+        claim: { record: claim!, workerId: 'worker-a', claimVersion: claim!.claimVersion },
         at: NOW,
-        connectorCustody: custody,
+        connectorCustody: port,
       }));
     await env.unitOfWork.run(WRITE, (tx) => acknowledgeIdentityRevocationV1({
-      host: tx.hostTransaction,
-      claim: { deliveryId: 'd-grant', claimOwner: 'worker-a', claimVersion: claim!.claimVersion },
-      at: LATER, connectorCustody: custody,
+      tx,
+      claim: { record: claim!, workerId: 'worker-a', claimVersion: claim!.claimVersion },
+      at: LATER, connectorCustody: port,
     }));
     await env.unitOfWork.run(READ, async (tx) => {
-      expect(await tx.hostTransaction.journal.findDelivery('d-grant')).toMatchObject({ state: 'delivered' });
+      expect(await tx.hostTransaction.journal.findDelivery('d-grant')).toMatchObject({ state: 'delivered', deliveredAt: NOW });
       const raw = {
         profile, schema: env.schema ?? '',
         session: profile === 'postgres' ? (tx.hostTransaction.raw as never) : null,
@@ -129,26 +132,27 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b remote revocation
     const grant = claimed.find((entry) => entry.deliveryId === 'd-grant-2');
     const plain = claimed.find((entry) => entry.deliveryId === 'd-plain');
     const emptyCustody = createNodeConnectorCustody({ masterKey: new Uint8Array(32).fill(5) });
+    const emptyPort = createConnectorRevocationCustodyPortV1({ custody: emptyCustody, readSource: async () => null });
     await expect(env.unitOfWork.run(WRITE, (tx) => acknowledgeIdentityRevocationV1({
-      host: tx.hostTransaction,
-      claim: { deliveryId: 'd-grant-2', claimOwner: 'worker-a', claimVersion: grant!.claimVersion },
-      at: NOW, connectorCustody: emptyCustody,
+      tx,
+      claim: { record: grant!, workerId: 'worker-a', claimVersion: grant!.claimVersion },
+      at: NOW, connectorCustody: emptyPort,
     }))).rejects.toMatchObject({ code: 'identity_revocation_custody_missing' });
     emptyCustody.dispose();
     expect(await env.unitOfWork.run(READ, (tx) => tx.hostTransaction.journal.findDelivery('d-grant-2')))
       .toMatchObject({ state: 'pending' });
     await expect(env.unitOfWork.run(WRITE, (tx) =>
       acknowledgeIdentityRevocationV1({
-        host: tx.hostTransaction,
-        claim: { deliveryId: 'd-grant-2', claimOwner: 'worker-a', claimVersion: grant!.claimVersion },
+        tx,
+        claim: { record: grant!, workerId: 'worker-a', claimVersion: grant!.claimVersion },
         at: NOW,
         connectorCustody: null,
       }),
     )).rejects.toMatchObject({ code: 'identity_revocation_custody_missing' });
     await env.unitOfWork.run(WRITE, (tx) =>
       acknowledgeIdentityRevocationV1({
-        host: tx.hostTransaction,
-        claim: { deliveryId: 'd-plain', claimOwner: 'worker-a', claimVersion: plain!.claimVersion },
+        tx,
+        claim: { record: plain!, workerId: 'worker-a', claimVersion: plain!.claimVersion },
         at: NOW,
         connectorCustody: null,
       }));
