@@ -119,6 +119,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - No UI changes in this lot; no UAT.
 
 ## Plan / Todo (lot-based)
+- [x] Review r1: PostgreSQL run composition with one retry budget and expiring handles.
 - [x] **Lot 0 — Baseline and constraints**
   - [x] Read COMMON-RULES, MASTER.md, amendment r6, review r6 APPROVE, lot-A4, patch.
   - [x] Create isolated worktree tmp/worktrees/cm-identity-a2-0b on feat/cm-identity-a2-0b from origin/main.
