@@ -4,11 +4,11 @@
 Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, revert, strict CAS, metadata, edits and D3 transport. IMMO alone activates part 1 after its two qualified switchovers. Publish artifacts 0.2.6 and retain the required mcp-platform 0.4.1 codec extension. Stop after pull_request CI, without merging.
 
 ## Scope / Guardrails
-- Scope limited to `packages/artifacts/**` plus the artifacts-host wiring in `api/src/services/artifacts/composition.ts` (only if the dep shape forces it).
+- Scope is the semantic union with p0b, the D3 platform codec, host migration/APP-P1 pins and generated Memory L5 inventory, within the allowed paths below.
 - Reuse the existing commit/release/current-pointer model; no redesign.
 - Make-only workflow, Docker under the single flock `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`, `ENV=test-artifacts-parity` always LAST, `make down ENV=test-artifacts-parity` after; never `ENV=dev`; never `make clean-all`.
-- Tests first: new unit suite `packages/artifacts/tests/parity-p0.test.ts`; run via `make test-artifacts SCOPE=packages/artifacts/tests/parity-p0.test.ts ENV=test-artifacts-parity` plus the full package unit suite, `make typecheck-artifacts`, `make build-artifacts`.
-- Commits: `make commit MSG="..."` only, <=150 lines each, selective `git add`, push after each commit.
+- Tests first: retain the p0b and D3 suites; add `parity-r2-profile.test.ts` for independent switches, retained receipts, strict refusals and version/revert lineage.
+- Commits: `make commit MSG="..."` only, authored changes <=150 lines each, selective `git add`; retain whole generated data under BRAP-EX1 and push the locally qualified final head.
 - All new text in English.
 - API boot slot: API_PORT=9686 UI_PORT=5886 MAILDEV_UI_PORT=1786; ENV=test-artifacts-parity.
 - Retain the BRLOCK-EX1 policy reference verbatim in this BRANCH.md (required by `scripts/ci/ci-lockfile-installs.test.mjs`, run by required CI job `validate-publishable-manifests`): owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
@@ -53,9 +53,9 @@ Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, r
 ## Plan / Todo (lot-based)
 - [ ] **Integrate on main — owner-priority part 1**
   - [x] Verify branch mechanically, read the full lane report and binding R2 design, rebase with semantic union.
-  - [ ] Retain p0b source authorization, masking, management confirmation, terminal controls and all tests.
+  - [x] Retain p0b source authorization, masking, management confirmation, terminal controls and all tests.
   - [x] Renumber part 1 metadata migration to 0005; journal both migrations without gaps.
-  - [ ] Qualify strict v2 and compatible p0b projections; align artifacts 0.2.6, consumer ranges and APP-P1 pins.
+  - [x] Qualify strict v2 and compatible p0b projections; align artifacts 0.2.6, consumer ranges and APP-P1 pins.
   - [x] Add R2 switchover regression tests before implementation; retain both source/control and editing suites with exact-byte assertions.
   - [x] Implement independent trusted profile/result descriptors, exact typed precondition refusals and replay before strict admission.
   - [x] Add retained-receipt switchover and strict v2 history/revert lineage acceptance tests.
@@ -64,54 +64,20 @@ Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, r
   - [x] Preserve strict delete refusals outside the operational finalizer codec and replay historical terminal receipts before new-command validation.
   - [x] Preserve the compatible ensure receipt shape; emit the full ensure summary only in result version 2.
   - [x] Regenerate Memory L5 inventory using make, with no manual digest edits; retain the previous manifest and complete source lock snapshot.
-  - [ ] Run artifacts and mcp-platform typecheck/test/lint plus API boot under the single Docker lock; make down.
+  - [x] Run artifacts and mcp-platform typecheck/test/lint plus API boot under the single Docker lock; make down.
   - [ ] Commit using make, force-with-lease push, mark PR ready, wait for pull_request CI and append the lane report; do not merge.
-- [ ] **Delta D3 — Binding R1 concurrency and transport contract only**
-  - [x] Tests authored first: `packages/artifacts/tests/parity-d3.test.ts`; strict null preconditions, concurrent CAS, replay before edits, command identity, complete MCP errors.
-  - [x] Require explicit expectedCurrentReleaseId in strict profiles; forbid bypass writers and defaults.
-  - [x] Move pointer comparison and metadata into the coordinator transaction; replay before preparation.
-  - [x] Add coordinator receipt lookup and transaction-scoped pointer/metadata writers; serialize memory transaction tests.
-  - [x] Preserve typed conflict/edit/release details, commitState and replayed through MCP codec.
-  - [x] Classify edit index/reasons and release availability; preserve explicit command-conflict variants.
-  - [x] Publish the v2 outcome schema; include authorized edited paths in pointer conflicts and complete strict HTTP outcomes.
-  - [x] Add recovery tests: lost COMMIT acknowledgement, one quota charge, authorized conflict paths, unavailable-target replay.
-  - [x] Add real PostgreSQL CAS/metadata/quota acceptance in `commit-publication-boundary.integration.test.ts`; load the metadata migration in publication fixtures.
-  - [x] D3 targeted unit checks: 10/10; update existing outcome assertions to the v2 contract, retaining cause-redaction assertions.
-  - [x] Reauthorize before evaluating the locked CAS, so revoked writers receive no current-pointer details.
-  - [x] Package unit suite 482/482, typecheck/build/lint, codec 5/5 and transport/wire parity 8/8; API reports regenerated.
-  - [x] Realign host APP-P1 profile/manifest pins with the compiled v2 outcome and nullable-CAS schemas.
-  - [x] Packed Radar example and isolated consumer probes pass with artifacts 0.2.5 and mcp-platform 0.4.1.
-  - [x] All 13 integration/e2e files qualified (222 tests across sequential checks), including PostgreSQL CAS 29/29 and publication authorization 10/10.
-  - [x] Full mcp-platform suite 350/350; installed version and golden configuration digests aligned to 0.4.1; strict API extraction passes.
-  - [x] Local package gates and packed probes complete; atomic commits stay below 150 lines and are pushed individually.
-  - [ ] One CI on the final head; record the result in `.tmp/rv/artifacts-parity-p0.md` and stop without merging.
-- [x] **Lot 0 — Baseline & constraints**
-  - [x] Read rules/MASTER.md, rules/workflow.md, COMMON-RULES packet, conductor brief.
-  - [x] Worktree `tmp/worktrees/artifacts-parity-p0` on `feat/artifacts-parity-p0` from origin/main; `harness check branch` PASS.
-  - [x] Make targets: `make test-artifacts SCOPE=... ENV=test-artifacts-parity`, `make typecheck-artifacts`, `make build-artifacts`, `make commit`, `make scope-check`, `make down`.
-  - [x] Docker under flock `.tmp/packets/DOCKER-LOCK.md`, ENV last.
-- [x] **Lot 1 — Tests first (tests/parity-p0-*.test.ts + fixtures/parity-world.ts)**
-  - [x]  `artifacts_list_versions`: history of one artifact (id, createdAt, author, state, isCurrent, digest); read scope; foreign scope/not found hidden.
-  - [ ] `artifacts_revert`: new release copying earlier content (stable URL, history grows); purged release refused with typed error; write scope + idempotency.
-  - [x]  conflict: `expectedCurrentReleaseId` on publish and revert; mismatch returns typed `conflict` carrying current release id + digest; absent field keeps today's behaviour.
-  - [x]  metadata: title/description/icon accepted on ensure and publish, returned by get and list.
-  - [x]  edits: `edits:[{path,oldStr,newStr}]` on publish applied to current release text files; oldStr != exactly once -> typed `edit_mismatch`, nothing changed; result goes through the same commit path.
-  - [x]  get_source: returns current content files (text decoded) for editing.
-  - [x]  MCP executor routes the three new tools; manifest exposes them when selected.
-- [x] **Lot 2 — Implementation**
-  - [ ] profile/contracts.ts: add `artifacts_list_versions`, `artifacts_revert` to capability names.
-  - [ ] profile/schemas.ts + validation.ts + index.ts: schemas for new ops; publish gains optional `expectedCurrentReleaseId`, `edits`, metadata; ensure gains metadata; files becomes conditionally required (files XOR edits); revert schema; routes in capabilityForRoute; idempotency for revert.
-  - [ ] server/failures.ts: typed `edit_mismatch` (422) and conflict details carrier on `pointer_conflict`.
-  - [ ] server/edits.ts: pure edit application with exactly-once rule.
-  - [ ] server/publication.ts: `listReleases` on state store + service; memory double.
-  - [ ] server/access.ts: optional `metadata` on ArtifactAcl; postgres adapter + migration 0004 for the metadata column.
-  - [ ] server/command-identity.ts: allow `revert` operation in command/derivation.
-  - [ ] http.ts: routes + handlers for /versions/:id, /source/:id, /revert; conflict pre-check; edits application; metadata read/write on ensure/publish; metadata in get/list; get_source content.
-  - [ ] mcp-core.ts: route new tools; read-only mutability for list_versions; provider version bump.
-  - [ ] server/outcome-projection.ts: carry conflict details in HTTP body and MCP error.
-  - [ ] api host composition.ts: supply getRelease/listReleases if the dep shape requires.
-  - [ ] templates.ts API guide text; CHANGELOG.md; package.json version bump (minor 0.3.0, must be > published 0.2.4).
-- [~] **Lot 3 — Verify & ship**
-  - [x] `make test-artifacts ENV=test-artifacts-parity` (full unit suite 472/472) green under flock; typecheck + build green; `make typecheck-artifacts`, `make build-artifacts` green; `make down ENV=test-artifacts-parity`.
-  - [ ] `make scope-check` before each commit; commits <=150 lines; push after each commit.
-  - [ ] Draft PR from BRANCH.md; ONE CI run on the final head; report to `.tmp/rv/artifacts-parity-p0.md`; do not merge.
+- [x] **Retained implementation — part 1 and D3**
+  - [x] Preserve the original versions/revert, conflict, edits and metadata tests, adapting source assertions to p0b's verified byte payload.
+  - [x] Preserve transactional CAS, reauthorization, atomic metadata/quota/receipt writes, lost-COMMIT recovery and complete typed D3 HTTP/MCP outcomes.
+  - [x] Preserve p0b get_source, set_access, delete, masking, management confirmation and summary fields.
+  - [x] Supersede the failed D3 0.2.5 candidate and stale L5 inventory; retain that CI evidence in the lane report.
+
+## Verification
+- [x] Artifacts typecheck/build/lint and 505 unit tests; 225 integration/e2e tests across 14 files.
+- [x] MCP Platform typecheck/build/lint and 350 tests; strict extraction of both public API reports.
+- [x] Memory L5 lot 1 gate against the regenerated manifest, using the repository make targets.
+- [x] Packed Radar/consumer probes; API boot, 65 tests across five host/transport files, and health status/readiness both successful.
+- [x] `make down` and empty `make ps`; temporary qualification helpers stay outside the committed scope.
+- [x] Mechanical branch check and scope check of the complete PR diff; no deleted tests or branch commit CI-skip markers.
+- [ ] Release the Docker reservation, resume its paused waiters, push with a lease, mark PR ready and wait for one pull_request CI on the final head.
+- [ ] IMMO activation remains a separate owner-controlled gate after both qualified switchovers; this lane does not merge.
