@@ -14,7 +14,7 @@ import { createPostgresClaimGuardedRefs, createPostgresGcService, createPostgres
 import { createArtifactCommand, createRadarKeyDerivation } from '../src/server/command-identity.js';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
 import { createArtifactCommitBarrier, type CommitBarrierObserver, type CommitBarrierPoint } from '../src/testing.js';
-import type { PublicationBlobStore } from '../src/server/publication.js';
+import type { PublicationBlobStore, GuardedPublishInput } from '../src/server/publication.js';
 import type { AuthorizeCommit } from '../src/server/commit/types.js';
 
 if (!process.env['DATABASE_URL'] || !process.env['ARTIFACTS_S3_ENDPOINT']) {
@@ -36,7 +36,7 @@ const inputFor = (artifactId: string, key = randomUUID()) => ({
 });
 
 function world(db: Pool, store: PublicationBlobStore, observer?: CommitBarrierObserver,
-  authority = { expired: false }) {
+  authority = { expired: false }, cleanupWindowMs?: number) {
   const executor = createPostgresCommitExecutor(db);
   const pg = createPostgresArtifactStore(db);
   const coordinator = createArtifactCommitCoordinator({ executor, testObserver: observer,
@@ -59,7 +59,7 @@ function world(db: Pool, store: PublicationBlobStore, observer?: CommitBarrierOb
   });
   const refs = createPostgresClaimGuardedRefs(pg, executor);
   const service = createGuardedPublicationService({ coordinator, blobs: store, intents: pg, refs,
-    cleanupWindowMs: 1000, createUnitWriter: createPostgresPublicationUnitWriter,
+    cleanupWindowMs, createUnitWriter: createPostgresPublicationUnitWriter,
     locks: { 'artifact-lifecycle': [async (client) => {
       await client.query('SELECT id FROM artifacts.artifacts ORDER BY id FOR UPDATE', []);
     }], acl: [async (client) => {
@@ -68,10 +68,13 @@ function world(db: Pool, store: PublicationBlobStore, observer?: CommitBarrierOb
   });
   return { service, refs, coordinator };
 }
-const publish = (w: ReturnType<typeof world>, input: ReturnType<typeof inputFor> & { authorizeCommit?: AuthorizeCommit }) => {
+const publish = (w: ReturnType<typeof world>, input: ReturnType<typeof inputFor> &
+  Pick<GuardedPublishInput, 'authorizeCommit' | 'expectedCurrentReleaseId' | 'metadata'>) => {
   const command = createArtifactCommand(profile, 'artifacts_publish', {
     artifactId: input.artifactId, idempotencyKey: input.callerKey, profile: input.profile,
     files: input.files.map((file) => ({ ...file, bytes: [...file.bytes] })),
+    ...(input.expectedCurrentReleaseId === undefined ? {} : { expectedCurrentReleaseId: input.expectedCurrentReleaseId }),
+    ...input.metadata,
   }, input, createRadarKeyDerivation({ storageScopeId: input.storageScopeId, actorIds: [input.actorId] }));
   return w.service.publishFinalized({ ...input, identity: command.identity });
 };
@@ -85,8 +88,9 @@ async function artifact() {
 }
 
 beforeAll(async () => {
+  await pool.query('DROP SCHEMA IF EXISTS artifacts CASCADE; DROP TABLE IF EXISTS l8a_policy, l8a_quota');
   await s3.send(new CreateBucketCommand({ Bucket: bucket }));
-  for (const name of ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql']) {
+  for (const name of ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql', '0004_terminal_controls.sql', '0005_metadata.sql']) {
     await pool.query(readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'));
   }
   await pool.query(`INSERT INTO artifacts.storage_scopes (id,org_id) VALUES ('scope-l8a','org-l8a')`);
@@ -100,8 +104,32 @@ beforeEach(async () => {
 afterAll(async () => {
   for (const key of await blobs.listKeys('artifacts/')) await blobs.deleteBlob(key);
   await s3.send(new DeleteBucketCommand({ Bucket: bucket }));
+  await pool.query('DROP SCHEMA IF EXISTS artifacts CASCADE; DROP TABLE IF EXISTS l8a_policy, l8a_quota');
   s3.destroy();
   await pool.end();
+});
+
+it('should atomically CAS one winner with metadata and one quota charge on PostgreSQL', async () => {
+  const id = await artifact();
+  const w = world(pool, blobs);
+  const first = await publish(w, { ...inputFor(id), expectedCurrentReleaseId: null });
+  expect(first.ok).toBe(true);
+  if (!first.ok) return;
+  const base = (first.result.receipt as { releaseId: string }).releaseId;
+  const results = await Promise.all(['alpha', 'beta'].map(title => publish(w, {
+    ...inputFor(id), expectedCurrentReleaseId: base, metadata: { title },
+  })));
+  expect(results.filter(result => result.ok)).toHaveLength(1);
+  expect(results.find(result => !result.ok)).toMatchObject({ ok: false,
+    failure: { variant: 'pointer_conflict', commitState: 'not_committed' } });
+  const winner = results.find(result => result.ok)!;
+  if (!winner.ok) return;
+  const receipt = winner.result.receipt as { releaseId: string; metadata: { title: string } };
+  expect((await pool.query('SELECT release_id FROM artifacts.artifact_current WHERE artifact_id=$1', [id])).rows[0].release_id)
+    .toBe(receipt.releaseId);
+  expect((await pool.query('SELECT metadata FROM artifacts.artifacts WHERE id=$1', [id])).rows[0].metadata).toEqual(receipt.metadata);
+  expect((await pool.query('SELECT id FROM artifacts.releases WHERE artifact_id=$1', [id])).rows).toHaveLength(2);
+  expect((await pool.query('SELECT used FROM l8a_quota')).rows[0].used).toBe(2);
 });
 
 // Separate pooled connections observe committed truth, never the writer's provisional rows.
@@ -144,7 +172,7 @@ describe('publication authorization after every applicable wait', () => {
     const before = await snapshot();
     const authority = { expired: false };
     const barrier = createArtifactCommitBarrier({ points: [point] });
-    const w = world(pool, blobs, barrier.observer, authority);
+    const w = world(pool, blobs, barrier.observer, authority, 1000);
     const pending = publish(w, input);
     await barrier.waitUntilReached(point, input.invocationId);
     authority.expired = true;
@@ -298,8 +326,7 @@ describe('same-key S3 preparation across two processes', () => {
     }, other, createRadarKeyDerivation({ storageScopeId: other.storageScopeId, actorIds: [other.actorId] }));
     const beforeCount = Number((await pool.query('SELECT count(*) FROM artifacts.releases')).rows[0].count);
     const barrier = createArtifactCommitBarrier({ points: ['before_key_lock'] });
-    const pending = publish(world(pool, blobs, barrier.observer), input);
-    await barrier.waitUntilReached('before_key_lock', input.invocationId);
+    let pending: ReturnType<typeof publish> | undefined;
     const child = spawn(process.execPath, ['--input-type=module', '-e', workerSource], {
       cwd: new URL('..', import.meta.url), stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
@@ -319,6 +346,9 @@ describe('same-key S3 preparation across two processes', () => {
         files: other.files.map((file) => ({ ...file, bytes: [...file.bytes] })) } });
       expect((await prepared)[0]).toMatchObject({ prepared: true, pid: child.pid });
       expect(child.pid).not.toBe(process.pid);
+      // Start the bounded parent preparation after the separate process has loaded and prepared S3.
+      pending = publish(world(pool, blobs, barrier.observer), input);
+      await barrier.waitUntilReached('before_key_lock', input.invocationId);
       barrier.release('before_key_lock', input.invocationId);
       const winner = await pending;
       expect(winner).toMatchObject({ ok: true, replayed: false });
@@ -347,7 +377,7 @@ describe('bounded cleanup and purge exclusion', () => {
     const refused = inputFor(await artifact());
     refused.files = [shared.files[0], { ...refused.files[0], path: 'exclusive.html' }];
     const before = await snapshot();
-    expect(await publish(world(pool, blobs, undefined, { expired: true }), refused))
+    expect(await publish(world(pool, blobs, undefined, { expired: true }, 1000), refused))
       .toMatchObject({ ok: false, failure: { category: 'unauthorized_at_commit' } });
     expect(await snapshot()).toEqual(before);
     const pg = createPostgresArtifactStore(pool);

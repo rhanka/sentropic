@@ -23,10 +23,27 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
   const profile: EffectiveArtifactProfile = { ...snapshot,
     rules: snapshot.rules === undefined ? copyJson(RADAR_ARTIFACTS_PROFILE.rules) as unknown as
       EffectiveArtifactProfile['rules'] : snapshot.rules };
-  const allowed = ['version', 'selectedCapabilities', 'operations', 'contractRevisions', 'rules'];
+  const allowed = ['version', 'selectedCapabilities', 'operations', 'contractRevisions', 'rules',
+    'requireExpectedCurrentReleaseId', 'profileRevisionId', 'resultEnvelopeVersion'];
   if (Object.keys(profile).some((key) => !allowed.includes(key)) || profile.version !== PROFILE_CONTRACT_VERSION ||
     !Array.isArray(profile.selectedCapabilities) || !Array.isArray(profile.operations)) throw new Error('invalid artifacts profile');
   const requested = profile.selectedCapabilities;
+  if (profile.profileRevisionId && profile.resultEnvelopeVersion !== 2 && requested.some(name =>
+    ['artifacts_list_versions', 'artifacts_revert'].includes(name))) throw new Error('part 1 requires the v2 profile');
+  if ((profile.profileRevisionId !== undefined && (typeof profile.profileRevisionId !== 'string' ||
+    !profile.profileRevisionId.trim() || profile.profileRevisionId.length > 160 || profile.resultEnvelopeVersion === undefined)) ||
+    (profile.resultEnvelopeVersion !== undefined && (!profile.profileRevisionId ||
+      ![1, 2].includes(profile.resultEnvelopeVersion))) ||
+    (profile.resultEnvelopeVersion === 2 && (profile.requireExpectedCurrentReleaseId !== true ||
+      profile.contractRevisions?.outcome !== 'artifacts-outcome/v2'))) {
+    throw new Error('inconsistent artifact profile descriptor');
+  }
+  if (profile.requireExpectedCurrentReleaseId !== undefined && typeof profile.requireExpectedCurrentReleaseId !== 'boolean') {
+    throw new Error('invalid publication precondition policy');
+  }
+  if (profile.requireExpectedCurrentReleaseId && requested.some(name => [
+    'artifacts_promote', 'artifacts_restore', 'artifacts_create_upload', 'artifacts_commit_upload', 'artifacts_fork',
+  ].includes(name))) throw new Error('strict profile contains a writer without CAS');
   if (new Set(requested).size !== requested.length ||
     requested.some((name) => !(ARTIFACT_CAPABILITY_NAMES as readonly string[]).includes(name))) {
     throw new Error('unknown or duplicate artifacts capability');
@@ -74,12 +91,15 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
       throw new Error('profile/derivation key length mismatch');
     }
     const defaults = op.defaults;
+    if (profile.requireExpectedCurrentReleaseId && Object.hasOwn(defaults, 'expectedCurrentReleaseId')) {
+      throw new Error('publication preconditions cannot be defaulted');
+    }
     const schema = schemas[name]!;
     const props = schema.properties as Record<string, ArtifactSchema>;
     for (const [key, value] of Object.entries(defaults)) {
       if (!Object.hasOwn(props, key) || !matchesSchema(value, props[key])) throw new Error('profile/schema default mismatch');
     }
-    if (['artifacts_ensure', 'artifacts_publish', 'artifacts_commit_upload', 'artifacts_set_access', 'artifacts_delete'].includes(name)) {
+    if (['artifacts_ensure', 'artifacts_publish', 'artifacts_commit_upload', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert'].includes(name)) {
       (idempotency as Record<string, unknown>)[name] = { required: true, scope: 'principal' };
     }
   }
@@ -92,9 +112,9 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
     profileDigest: orderedDigest({ selection: selectedCapabilities, profile, schemas,
       providerContractRevisions: profile.contractRevisions }),
     assertSelected,
-    validate(name, args, envelopeKey) {
+    validate(name, args, envelopeKey, options) {
       if (!(selectedCapabilities as readonly string[]).includes(name)) throw new ArtifactProfileInputError(true);
-      return normalizeArguments(profile, name, args, schemas[name as ArtifactCapabilityName]!, envelopeKey);
+      return normalizeArguments(profile, name, args, schemas[name as ArtifactCapabilityName]!, envelopeKey, options);
     },
     capabilityForRoute(method, path) {
       let name: ArtifactCapabilityName | undefined;
@@ -104,7 +124,11 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
       if (method === 'POST' && path === '/get_source') name = 'artifacts_get_source';
       if (method === 'POST' && path === '/set_access') name = 'artifacts_set_access';
       if (method === 'POST' && path === '/delete') name = 'artifacts_delete';
+      if (method === 'POST' && path === '/revert') name = 'artifacts_revert';
+      if (method === 'POST' && path === '/list_versions') name = 'artifacts_list_versions';
       if (method === 'GET' && path.startsWith('/meta/') && isArtifactId(path.slice(6))) name = 'artifacts_get';
+      if (method === 'GET' && path.startsWith('/versions/') && isArtifactId(path.slice(10))) name = 'artifacts_list_versions';
+      if (method === 'GET' && path.startsWith('/source/') && isArtifactId(path.slice(8))) name = 'artifacts_get_source';
       return name && selectedCapabilities.includes(name) ? name : undefined;
     },
   };

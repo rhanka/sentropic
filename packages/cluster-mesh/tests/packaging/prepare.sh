@@ -143,11 +143,14 @@ mesh_spec="$(train_spec @sentropic/llm-mesh llm-mesh "$MESH")"
 gateway_spec="$(train_spec @sentropic/llm-gateway llm-gateway "$GATEWAY")"
 comments_spec="$(train_spec @sentropic/comments comments "$COMMENTS")"
 echo "[train] mesh=$mesh_spec gateway=$gateway_spec comments=$comments_spec"
-node "$here/candidate-platform-registry.mjs" ../mcp-platform/package.json "$platform_tgz" > "$work/registry-url" &
-registry_pid=$!
-trap 'kill "$registry_pid" 2>/dev/null || true' EXIT
-while [ ! -s "$work/registry-url" ]; do kill -0 "$registry_pid"; sleep 0.1; done
-export npm_config_registry="$(cat "$work/registry-url")"
+# Archive manifests authorize the transitive platform candidate for every frozen install.
+node --input-type=module -e '
+  import fs from "node:fs";
+  for (const dir of [process.argv[1], process.argv[1] + "/src"]) {
+    fs.writeFileSync(dir + "/package.json", JSON.stringify({ private: true,
+      overrides: { "@sentropic/mcp-platform": "file:" + process.argv[2] } }));
+  }
+' "$work" "$platform_tgz"
 
 # src NAME VERSION: a verified sibling archive (`file:`) for exactly NAME@VERSION, else the registry version.
 src() {
@@ -160,17 +163,20 @@ consumer() {
   dir="$1"
   shift
   mkdir -p "$dir"
-  node -e 'const fs = require("fs"); const [dir, ...pairs] = process.argv.slice(1);
+  node -e 'const fs = require("fs"); const [dir, platformArchive, ...pairs] = process.argv.slice(1);
     const path = dir + "/package.json";
     const pkg = fs.existsSync(path) ? JSON.parse(fs.readFileSync(path, "utf8")) : { private: true, type: "module" };
     pkg.name = pkg.name ?? "fixture-" + dir.split("/").pop();
     pkg.dependencies = { ...pkg.dependencies };
     for (const pair of pairs) { const at = pair.indexOf("="); pkg.dependencies[pair.slice(0, at)] = pair.slice(at + 1); }
     if (process.env.CM_ARTIFACTS_COMPAT !== "1") delete pkg.dependencies["@sentropic/artifacts"];
+    const platform = "@sentropic/mcp-platform", platformSpec = "file:" + platformArchive;
+    if (pkg.dependencies[platform]) pkg.dependencies[platform] = platformSpec;
     const overrides = { ...pkg.overrides, ...Object.fromEntries(Object.entries(pkg.dependencies)
-      .filter(([name, spec]) => name !== "@sentropic/cluster-mesh" && spec.startsWith("file:/"))) };
+      .filter(([name, spec]) => name !== "@sentropic/cluster-mesh" && spec.startsWith("file:/"))),
+      [platform]: platformSpec };
     if (Object.keys(overrides).length) pkg.overrides = overrides; else delete pkg.overrides;
-    fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n");' "$dir" "$@"
+    fs.writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n");' "$dir" "$platform_tgz" "$@"
 }
 
 # sources DIR: record where each train package of DIR/package.json comes from.

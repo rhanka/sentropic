@@ -1,5 +1,5 @@
 import type { ArtifactAcl } from './access.js';
-import type { ArtifactInvocationContext, ArtifactCommitCoordinator, FinalizeTxClient } from './commit/types.js';
+import type { ArtifactInvocationContext, ArtifactCommitCoordinator, FinalizeTxClient, FinalizeRequest } from './commit/types.js';
 import type { EffectiveArtifactCommand } from './command-identity.js';
 import { ArtifactOperationError, type ArtifactOutcome } from './failures.js';
 
@@ -47,6 +47,7 @@ export async function manageArtifact(deps: {
   readPolicyRevision(): Promise<string>;
   isApprovedPrincipal(principalId: string): boolean | Promise<boolean>;
   confirmation?: ArtifactConfirmationPort;
+  validateNewCommand?(): void;
 }, invocation: ArtifactInvocationContext, command: EffectiveArtifactCommand, proof?: string): Promise<ArtifactOutcome<unknown>> {
   const artifactId = command.payload.artifactId as string;
   const deleting = command.operation === 'delete';
@@ -61,7 +62,7 @@ export async function manageArtifact(deps: {
     if (target.acl.ownerId !== invocation.actorId) throw refused('access_denied');
     return target;
   };
-  const result = await deps.coordinator.finalizePrepared({
+  const request: FinalizeRequest = {
     ...command.identity, scopeId: invocation.storageScopeId, actorId: invocation.actorId,
     invocationId: invocation.invocationId, operation: command.operation, artifactId,
     policyRevision: await deps.readPolicyRevision(), receiptData: receipt,
@@ -75,6 +76,8 @@ export async function manageArtifact(deps: {
       if (target.terminal || target.state === 'deleted' || target.state === 'purged') throw refused('gone');
       const now = new Date().toISOString();
       if (deleting) {
+        // Bind omitted v1 input to the locked confirmation context, without rewriting the command.
+        if (!Object.hasOwn(command.payload, 'expectedCurrentReleaseId')) context.expectedCurrentReleaseId = target.currentReleaseId;
         if (target.currentReleaseId !== context.expectedCurrentReleaseId) {
           if (proof) throw confirmationFailure('confirmation_stale');
           throw new ArtifactOperationError('pointer_conflict');
@@ -99,7 +102,10 @@ export async function manageArtifact(deps: {
       return invocation.authorizeCommit(ctx, tx);
     },
     validateReplayReceipt: (stored) => (stored.receipt as Record<string, unknown>)?.artifactId === artifactId,
-  });
+  };
+  const replay = await deps.coordinator.findReplayPrepared(request);
+  if (replay === undefined) deps.validateNewCommand?.();
+  const result = replay ?? await deps.coordinator.finalizePrepared(request);
   return result.ok ? { ...result, result: result.result.receipt }
     : { ok: false, failure: { ...result.failure, kind: 'operational' } };
 }
