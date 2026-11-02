@@ -1,7 +1,10 @@
-import type { AuthHonoServiceTenantPort } from '@sentropic/auth-hono';
+import type { AuthHonoAuditLogPort, AuthHonoServiceTenantPort } from '@sentropic/auth-hono';
 
-import { logger } from '../../logger';
 import { activeEnrollmentTenantsForPrincipal } from '../tenancy/enrollment-store';
+import { findCmServiceClientTenant } from '../identity/cm-service-clients';
+import { requireCmOAuthTransaction } from '../identity/cm-oauth-tenancy';
+import type { CmIdentityTransaction } from '../identity/cm-transaction';
+import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
 
 /**
  * ARCH-11 G1c — the Sentropic host policy for the S2S on-behalf-of (OBO) tenant mint (spec §2.2).
@@ -18,23 +21,23 @@ import { activeEnrollmentTenantsForPrincipal } from '../tenancy/enrollment-store
  * Every mint decision is audited `{ client_id, requested_tenant, resolved_tid, outcome }` — the
  * stateless token leaves the audit log as the only forensic record (rollback quarantine, §4.4).
  */
-export const createServiceTenantAdapter = (): AuthHonoServiceTenantPort => ({
-  async resolveOboTenant({ clientId, fixedTenantId, requestedTenant }) {
+export const createServiceTenantAdapter = (transaction?: CmIdentityTransaction,
+  auditLog?: () => AuthHonoAuditLogPort): AuthHonoServiceTenantPort => ({
+  async resolveOboTenant({ clientId, requestedTenant }) {
+    requireCmOAuthTransaction(transaction);
+    if (!auditLog) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+    const fixedTenantId = await findCmServiceClientTenant(clientId);
     const enrolled = await activeEnrollmentTenantsForPrincipal(clientId);
     const authorized = new Set(enrolled);
     if (fixedTenantId) authorized.add(fixedTenantId);
 
     const audit = (outcome: string, resolvedTid: string | null): void => {
-      logger.info(
-        {
-          audit: 's2s_obo_mint',
+      auditLog().record('info', 's2s_obo_mint', {
           clientId,
           requestedTenant: requestedTenant ?? null,
           resolvedTid,
           outcome,
-        },
-        's2s_obo_mint',
-      );
+        });
     };
 
     const reject = (description: string): { error: 'invalid_target'; description: string } => {

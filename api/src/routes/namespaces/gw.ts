@@ -89,7 +89,7 @@ const productPartitionSource: RoutePartitionSource = { load: environmentPartitio
 
 // The product accepts session identities only: no service binding, so any service identity is refused.
 const productIdentity = (): LlmCallerIdentity => createLlmCallerIdentity({
-  directory: createLlmIdentityDirectory(db),
+  directory: createLlmIdentityDirectory(),
   config: {
     issuer: 'https://sentropic.invalid/product-session', resource: 'https://sentropic.invalid/api/v1/gw',
     source: 'product-api', serviceBindings: [], ownerMapping: [],
