@@ -14,7 +14,7 @@ import { createPostgresClaimGuardedRefs, createPostgresGcService, createPostgres
 import { createArtifactCommand, createRadarKeyDerivation } from '../src/server/command-identity.js';
 import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../src/profile/index.js';
 import { createArtifactCommitBarrier, type CommitBarrierObserver, type CommitBarrierPoint } from '../src/testing.js';
-import type { PublicationBlobStore } from '../src/server/publication.js';
+import type { PublicationBlobStore, GuardedPublishInput } from '../src/server/publication.js';
 import type { AuthorizeCommit } from '../src/server/commit/types.js';
 
 if (!process.env['DATABASE_URL'] || !process.env['ARTIFACTS_S3_ENDPOINT']) {
@@ -68,10 +68,13 @@ function world(db: Pool, store: PublicationBlobStore, observer?: CommitBarrierOb
   });
   return { service, refs, coordinator };
 }
-const publish = (w: ReturnType<typeof world>, input: ReturnType<typeof inputFor> & { authorizeCommit?: AuthorizeCommit }) => {
+const publish = (w: ReturnType<typeof world>, input: ReturnType<typeof inputFor> &
+  Pick<GuardedPublishInput, 'authorizeCommit' | 'expectedCurrentReleaseId' | 'metadata'>) => {
   const command = createArtifactCommand(profile, 'artifacts_publish', {
     artifactId: input.artifactId, idempotencyKey: input.callerKey, profile: input.profile,
     files: input.files.map((file) => ({ ...file, bytes: [...file.bytes] })),
+    ...(input.expectedCurrentReleaseId === undefined ? {} : { expectedCurrentReleaseId: input.expectedCurrentReleaseId }),
+    ...input.metadata,
   }, input, createRadarKeyDerivation({ storageScopeId: input.storageScopeId, actorIds: [input.actorId] }));
   return w.service.publishFinalized({ ...input, identity: command.identity });
 };
@@ -86,7 +89,7 @@ async function artifact() {
 
 beforeAll(async () => {
   await s3.send(new CreateBucketCommand({ Bucket: bucket }));
-  for (const name of ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql']) {
+  for (const name of ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql', '0004_metadata.sql']) {
     await pool.query(readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'));
   }
   await pool.query(`INSERT INTO artifacts.storage_scopes (id,org_id) VALUES ('scope-l8a','org-l8a')`);
@@ -102,6 +105,29 @@ afterAll(async () => {
   await s3.send(new DeleteBucketCommand({ Bucket: bucket }));
   s3.destroy();
   await pool.end();
+});
+
+it('should atomically CAS one winner with metadata and one quota charge on PostgreSQL', async () => {
+  const id = await artifact();
+  const w = world(pool, blobs);
+  const first = await publish(w, { ...inputFor(id), expectedCurrentReleaseId: null });
+  expect(first.ok).toBe(true);
+  if (!first.ok) return;
+  const base = (first.result.receipt as { releaseId: string }).releaseId;
+  const results = await Promise.all(['alpha', 'beta'].map(title => publish(w, {
+    ...inputFor(id), expectedCurrentReleaseId: base, metadata: { title },
+  })));
+  expect(results.filter(result => result.ok)).toHaveLength(1);
+  expect(results.find(result => !result.ok)).toMatchObject({ ok: false,
+    failure: { variant: 'pointer_conflict', commitState: 'not_committed' } });
+  const winner = results.find(result => result.ok)!;
+  if (!winner.ok) return;
+  const receipt = winner.result.receipt as { releaseId: string; metadata: { title: string } };
+  expect((await pool.query('SELECT release_id FROM artifacts.artifact_current WHERE artifact_id=$1', [id])).rows[0].release_id)
+    .toBe(receipt.releaseId);
+  expect((await pool.query('SELECT metadata FROM artifacts.artifacts WHERE id=$1', [id])).rows[0].metadata).toEqual(receipt.metadata);
+  expect((await pool.query('SELECT id FROM artifacts.releases WHERE artifact_id=$1', [id])).rows).toHaveLength(2);
+  expect((await pool.query('SELECT used FROM l8a_quota')).rows[0].used).toBe(2);
 });
 
 // Separate pooled connections observe committed truth, never the writer's provisional rows.

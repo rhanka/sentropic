@@ -16,6 +16,7 @@ const pointer = object({ variant: { enum: ['pointer_conflict'] }, artifactId: st
 const common = { invocationId: string,
   commitState: { enum: ['not_committed', 'committed', 'unknown'] } };
 export const ARTIFACT_RESULT_SCHEMA = {
+  type: 'object',
   oneOf: [
     object({ ok: { enum: [true] }, ...common, replayed: { type: 'boolean' }, output: { type: 'object' } }),
     object({ ok: { enum: [false] }, ...common, error: { oneOf: [
