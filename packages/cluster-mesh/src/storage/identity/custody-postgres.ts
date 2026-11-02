@@ -169,8 +169,15 @@ export class PostgresCustodyTx implements IdentityCustodyStoresV1 {
         if ((result.rowCount ?? 0) === 0) throw new IdentityCustodyErrorV1('proof_state_conflict');
       },
       purgeExpired: async (now) => {
+        await session.execute({
+          text: `DELETE FROM ${this.t('identity_email_registration_tickets')} WHERE "expires_at" < $1`,
+          values: [now],
+        });
         const result = await session.execute({
-          text: `DELETE FROM ${this.t('identity_single_use_proofs')} WHERE "expires_at" < $1 AND "state" != 'pending'`,
+          text: `DELETE FROM ${this.t('identity_single_use_proofs')} AS proof WHERE "expires_at" < $1 AND "state" != 'pending'
+            AND NOT ("kind" = 'magic_link' AND "state" = 'consumed' AND "user_id" IS NOT NULL)
+            AND NOT EXISTS (SELECT 1 FROM ${this.t('identity_email_registration_tickets')} AS ticket
+              WHERE ticket."code_kind" = proof."kind" AND ticket."code_proof_id" = proof."proof_id")`,
           values: [now],
         });
         return result.rowCount ?? 0;

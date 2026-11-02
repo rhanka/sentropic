@@ -141,8 +141,13 @@ export class SqliteCustodyTx implements IdentityCustodyStoresV1 {
         const changed = this.changes(`UPDATE "identity_single_use_proofs" SET "state" = 'revoked', "revoked_at" = ?, "revision" = "revision" + 1 WHERE "kind" = ? AND "proof_id" = ? AND "state" = 'pending' AND "revision" = ?`, [at, key.kind, key.proofId, expectedRevision]);
         if (changed === 0) throw new IdentityCustodyErrorV1('proof_state_conflict');
       },
-      purgeExpired: async (now) =>
-        this.changes(`DELETE FROM "identity_single_use_proofs" WHERE "expires_at" < ? AND "state" != 'pending'`, [now]),
+      purgeExpired: async (now) => {
+        this.changes(`DELETE FROM "identity_email_registration_tickets" WHERE "expires_at" < ?`, [now]);
+        return this.changes(`DELETE FROM "identity_single_use_proofs" AS proof WHERE "expires_at" < ? AND "state" != 'pending'
+          AND NOT ("kind" = 'magic_link' AND "state" = 'consumed' AND "user_id" IS NOT NULL)
+          AND NOT EXISTS (SELECT 1 FROM "identity_email_registration_tickets" AS ticket
+            WHERE ticket."code_kind" = proof."kind" AND ticket."code_proof_id" = proof."proof_id")`, [now]);
+      },
     };
 
     this.emailTickets = {
