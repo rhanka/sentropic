@@ -21,8 +21,8 @@ describe('A2.0b custody contract surface', () => {
     expect(identityDomainDescriptor('accounts')?.version).toBe('1.0.0');
   });
 
-  it('ships exact amendment descriptors for all nine domains', () => {
-    expect(IDENTITY_A20B_DESCRIPTORS).toHaveLength(9);
+  it('ships exact amendment descriptors for all eleven domains', () => {
+    expect(IDENTITY_A20B_DESCRIPTORS).toHaveLength(11);
     const domains = IDENTITY_A20B_DESCRIPTORS.map((entry) => entry.domain);
     expect(domains).toEqual([
       'account_authentication_profile',
@@ -31,8 +31,10 @@ describe('A2.0b custody contract surface', () => {
       'digest_invitations',
       'bound_login_sessions',
       'social_subjects',
+      'authentication_completion',
       'identity_import',
       'transaction_binding',
+      'revocation_delivery',
       'atomic_person_deletion',
     ]);
     for (const entry of IDENTITY_A20B_DESCRIPTORS) {
