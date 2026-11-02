@@ -1,5 +1,10 @@
 import type { IdentityAuthScreenPorts } from '@sentropic/cluster-mesh/ui/auth-flow';
-import { setUser } from '$lib/stores/session';
+import type { IdentityManagementScreenPorts, IdentityScreenText } from '@sentropic/cluster-mesh/ui/management-ports';
+import { createIdentityManagementTransport } from '@sentropic/cluster-mesh/ui/management';
+import { setUser, type User } from '$lib/stores/session';
+import { addToast } from '$lib/stores/toast';
+import { loadUserWorkspaces } from '$lib/stores/workspaceScope';
+import { apiFetch } from '$lib/utils/api';
 import { createSentropicAuthTransport, resolveAuthUiLabels, toSentropicUser } from './auth-transport';
 
 /** Root projection: host storage/navigation only; the shared module owns flow decisions. */
@@ -18,3 +23,10 @@ export function createSentropicIdentityScreenPorts(locale: string | null | undef
     },
   };
 }
+
+const managementTransport = createIdentityManagementTransport(apiFetch);
+export const createSentropicIdentityManagementPorts = (user: User | null | undefined, text: IdentityScreenText,
+  confirm: IdentityManagementScreenPorts['confirm']): IdentityManagementScreenPorts => ({
+  userId: user?.id ?? null, role: user?.role ?? null, text, confirm, transport: managementTransport,
+  notify: addToast, operationId: () => crypto.randomUUID(), refreshWorkspaceScope: loadUserWorkspaces,
+});
