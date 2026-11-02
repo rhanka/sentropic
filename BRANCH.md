@@ -249,6 +249,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] gap-§1 scenario end to end; registration → approval → login; invitation consumed once; revoke-all; mid-session suspension empties tool set; account deletion with injected failure leaves no orphan and preserves rows; migration tests; F11 e2e.
   - [ ] Rehearse migration on a fresh prod dump (existing rehearsal make target); record receipt.
 - [ ] **Lot 6 — Final validation**
+  - [x] Reject unbound and escaped OAuth state participants before any protocol query; join protocol expiry cleanup to a CM write transaction.
   - [x] Resolve client-bound invitation context from the verified OAuth continuation using the existing state key and a fresh per-attempt expiry check.
   - [x] Specify invitation client binding tests with real sealed OAuth continuation signatures, exact expiry, retry expiry, tampering and email mismatch.
   - [x] Restore social start/refusal protocol audit outside the CM completion while keeping transactional success audit in the CM ledger; cover the real route and broker.

@@ -100,11 +100,11 @@ describe('PostgreSQL refresh storage', () => {
 
   it('should retain spent digests until the complete family retention deadline', async () => {
     await adapter().withLock(lock, async (tx) => { await tx.consume('family', 'child', now); });
-    const atDeadline = createOauthStateStoreAdapter({ now: () => row().familyExpiresAt });
-    await atDeadline.purgeExpired();
+    await runCmIdentityWrite(transaction => createOauthStateStoreAdapter({ transaction,
+      now: () => row().familyExpiresAt }).purgeExpired());
     expect((await adapter().findAnchor('family'))?.consumedAt).not.toBeNull();
-    const afterDeadline = createOauthStateStoreAdapter({ now: () => new Date(+row().familyExpiresAt + 1000) });
-    await afterDeadline.purgeExpired();
+    await runCmIdentityWrite(transaction => createOauthStateStoreAdapter({ transaction,
+      now: () => new Date(+row().familyExpiresAt + 1000) }).purgeExpired());
     expect(await adapter().findAnchor('family')).toBeNull();
   });
 

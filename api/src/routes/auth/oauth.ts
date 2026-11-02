@@ -180,7 +180,7 @@ const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?:
     findValidByTokenHash: unsupportedOAuthPort,
     markUsed: unsupportedOAuthPort,
   },
-  oauthStateStore: createOauthStateStoreAdapter({ database: db, transactionBound: Boolean(boundPorts) }),
+  oauthStateStore: createOauthStateStoreAdapter({ transaction }),
   // ARCH-11 G1c: S2S on-behalf-of (OBO) tenant policy for the client_credentials mint.
   // Lot A4: always strict — validates the `tenant` selector against the client's authorized
   // set (fixed cm_service_clients binding ∪ enrollments).
