@@ -167,6 +167,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Mount admin deletion on its fixed V2 authorizer; remove outside-transaction prerequisite reads and direct remote delivery.
   - [x] Bind account approve/disable/reactivate and self-deactivate to the frozen CM lifecycle, current actor guards, profile metadata and one-ledger revocation in one callback.
   - [x] Add the CM-backed admin identity router and one-snapshot authorized user directory projection, leaving business administration separate.
+  - [x] Mount CM-backed administration and delete the replaced user-list/lifecycle/delete handlers from admin-product-authority.
   - [x] Delete the replaced app cascade coordinator and its membership-as-ownership business participant.
   - [x] Delete the obsolete raw settings/tombstone writers and single-workspace deletion helpers with the old account-deletion module.
   - [ ] Rollback checkpoint recorded BEFORE any legacy table deletion; one author per namespace via cutover records.
