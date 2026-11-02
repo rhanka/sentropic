@@ -586,3 +586,170 @@ export function validateSeatOnboarding(block: unknown): SeatOnboardingValidation
   if (contentCode) return fail(contentCode, 'transported content is not canonical for the pinned version');
   return { ok: true, block: block as unknown as SeatOnboardingV1 };
 }
+
+// ── envelope validation ──────────────────────────────────────────────────
+
+const ENVELOPE_KEYS = ['bundle', 'files', 'agy', 'onboarding'] as const;
+
+/**
+ * Validate the whole serialized seat envelope as one unit: bundle, agy
+ * tuple translation where applicable, auth-file allowlist, onboarding
+ * validation and binding. An absent block is a valid envelope (D1); what
+ * absence denies is launch, through seatLaunchGate — never envelope
+ * validity. `onboarding-required` is never returned here.
+ */
+export function validateSeatEnvelope(
+  envelope: unknown,
+  ctx?: SeatValidationContext,
+): SeatEnvelopeValidationResult {
+  let serialized = '';
+  try {
+    serialized = JSON.stringify(envelope) ?? '';
+  } catch {
+    return { ok: false, code: 'schema-mismatch', detail: 'envelope is not JSON-serializable' };
+  }
+  if (utf8Bytes(serialized).length > SEAT_BUNDLE_MAX_BYTES) {
+    return { ok: false, code: 'size-exceeded', detail: 'serialized envelope exceeds 48 KiB' };
+  }
+  if (!isRecord(envelope)) return { ok: false, code: 'schema-mismatch', detail: 'envelope must be an object' };
+  const badKey = unknownKey(envelope, ENVELOPE_KEYS);
+  if (badKey) return { ok: false, code: 'unknown-field', detail: `unknown envelope field: ${badKey}` };
+  const bundleResult = validateSeatBundle(envelope['bundle'], {
+    ...ctx,
+    trustedAuthority: ctx?.trustedAuthority ?? 'consumer',
+  });
+  if (!bundleResult.ok) return { ok: false, code: bundleResult.code, detail: bundleResult.detail };
+  const bundle = bundleResult.bundle;
+  const cli = bundle.identity.cli;
+  const filesRaw = envelope['files'] ?? {};
+  if (!isRecord(filesRaw)) return { ok: false, code: 'schema-mismatch', detail: 'files must be an object' };
+  const allowlist = SEAT_ENVELOPE_AUTH_FILES[cli];
+  for (const [name, value] of Object.entries(filesRaw)) {
+    if (!allowlist.includes(name)) {
+      return { ok: false, code: 'unknown-field', detail: `auth file not allowlisted for ${cli}: ${name}` };
+    }
+    if (typeof value !== 'string' || decodeBase64Strict(value) === null) {
+      return { ok: false, code: 'schema-mismatch', detail: `auth file ${name} must be base64` };
+    }
+  }
+  let agy: Record<string, unknown> | null = null;
+  if (cli === 'agy') {
+    if (!isRecord(envelope['agy'])) {
+      return { ok: false, code: 'schema-mismatch', detail: 'agy envelope member is required for agy' };
+    }
+    agy = envelope['agy'];
+    try {
+      translateAgySeatToApplication({
+        ownerScope: bundle.identity.ownerScope,
+        seatRef: bundle.identity.seatRef,
+        accountBinding: bundle.provenance.accountBinding,
+        ...agy,
+      });
+    } catch (error) {
+      if (error instanceof AgyMappingError) {
+        return { ok: false, code: 'client-mismatch', detail: `agy tuple refused: ${error.code}` };
+      }
+      throw error;
+    }
+  } else if (envelope['agy'] !== undefined) {
+    return { ok: false, code: 'unknown-field', detail: 'agy member is only valid for agy seats' };
+  }
+  let onboarding: SeatOnboardingV1 | null = null;
+  let onboardingStatus: SeatOnboardingStatus = 'absent';
+  if (envelope['onboarding'] !== undefined) {
+    const blockResult = validateSeatOnboarding(envelope['onboarding']);
+    if (!blockResult.ok) return { ok: false, code: blockResult.code, detail: blockResult.detail };
+    const block = blockResult.block;
+    if (block.cli !== cli) return { ok: false, code: 'onboarding-lineage-mismatch', detail: 'block cli does not match the bundle' };
+    if (block.seatRef !== bundle.identity.seatRef) {
+      return { ok: false, code: 'onboarding-lineage-mismatch', detail: 'block seatRef does not match the bundle' };
+    }
+    if (block.accountBinding !== bundle.provenance.accountBinding) {
+      return { ok: false, code: 'onboarding-lineage-mismatch', detail: 'block accountBinding does not match the bundle' };
+    }
+    if (block.consent.ownerScope !== bundle.identity.ownerScope) {
+      return { ok: false, code: 'onboarding-lineage-mismatch', detail: 'block consent ownerScope does not match the bundle' };
+    }
+    const lifecycle = bundle.lifecycle;
+    if (
+      block.lineage.epoch !== lifecycle.epoch ||
+      block.lineage.generation !== lifecycle.generation ||
+      block.lineage.operationId !== lifecycle.operationId
+    ) {
+      return { ok: false, code: 'onboarding-lineage-mismatch', detail: 'block lineage does not match the bundle lifecycle' };
+    }
+    if (bundle.identity.nativeCliVersion !== block.nativeCliVersion) {
+      return { ok: false, code: 'onboarding-version-mismatch', detail: 'bundle nativeCliVersion must equal the block version' };
+    }
+    onboarding = block;
+    onboardingStatus = 'present';
+  }
+  return {
+    ok: true,
+    bundle,
+    files: filesRaw as Record<string, string>,
+    agy,
+    onboarding,
+    onboardingStatus,
+    launchGate: seatLaunchGate(cli, onboardingStatus),
+  };
+}
+
+/**
+ * D11 rebind: move only the lineage pointer on a same-epoch forward
+ * transition. Never recaptures and never edits content; an epoch change or
+ * a CLI version change requires a fresh interactive capture.
+ */
+export function rebindSeatOnboarding(
+  block: SeatOnboardingV1,
+  nextBundle: SeatBundleV1,
+  options: { reboundAt: string; files?: readonly SeatOnboardingFile[] },
+): SeatOnboardingValidationResult {
+  if (!validDate(options.reboundAt)) {
+    return fail('onboarding-schema-mismatch', 'reboundAt must be a valid custodian-observed date');
+  }
+  const incoming: SeatLineageTuple = {
+    epoch: nextBundle.lifecycle.epoch,
+    generation: nextBundle.lifecycle.generation,
+    operationId: nextBundle.lifecycle.operationId,
+  };
+  if (classifyTransition(block.lineage, incoming) !== 'forward') {
+    return fail('onboarding-lineage-mismatch', 'rebind requires a same-epoch forward transition');
+  }
+  if (nextBundle.identity.seatRef !== block.seatRef) {
+    return fail('onboarding-lineage-mismatch', 'rebind requires the same seatRef');
+  }
+  if (nextBundle.provenance.accountBinding !== block.accountBinding) {
+    return fail('onboarding-lineage-mismatch', 'rebind requires the same asserted account');
+  }
+  if (nextBundle.identity.nativeCliVersion !== block.nativeCliVersion) {
+    return fail('onboarding-version-mismatch', 'rebind requires an unchanged nativeCliVersion');
+  }
+  if (options.files !== undefined) {
+    if (options.files.length !== block.files.length) {
+      return fail('onboarding-shape-unverified', 'rebind requires identical file digests');
+    }
+    for (let i = 0; i < options.files.length; i += 1) {
+      const next = options.files[i];
+      const prev = block.files[i];
+      if (
+        next.destKey !== prev.destKey ||
+        next.format !== prev.format ||
+        next.sha256 !== prev.sha256 ||
+        next.byteLength !== prev.byteLength ||
+        next.contentBase64 !== prev.contentBase64
+      ) {
+        return fail('onboarding-shape-unverified', 'rebind requires identical file digests');
+      }
+    }
+  }
+  return {
+    ok: true,
+    block: {
+      ...block,
+      lineage: incoming,
+      reboundFrom: { ...block.lineage },
+      reboundAt: options.reboundAt,
+    },
+  };
+}
