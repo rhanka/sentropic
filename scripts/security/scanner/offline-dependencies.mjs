@@ -1,6 +1,26 @@
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { requireContract as check, CONTRACT_ONLY } from './contract-schema.mjs';
+import { requireContract as check, path, CONTRACT_ONLY } from './contract-schema.mjs';
+
+// The retained layout must satisfy the contract path charset, so a proxy path is
+// encoded reversibly: '!x' escapes become uppercase letters, '/@v/' collapses to
+// '/' and '+' (only legal inside a version segment) becomes '-plus-'. A retained
+// proxy path must not natively contain '-plus-'; round-trips are asserted per material.
+export function retainedProxyPath(proxyPath) {
+  check(typeof proxyPath === 'string' && proxyPath.length > 0, 'proxy path');
+  const encoded = proxyPath.replace(/!([a-z])/g, (_, c) => c.toUpperCase())
+    .replace('/@v/', '/').replace(/\+/g, '-plus-');
+  check(path(encoded), 'retained proxy path charset');
+  return encoded;
+}
+export function proxyPathFromRetained(retained) {
+  check(path(retained), 'retained proxy path');
+  const decoded = retained.replace(/-plus-/g, '+')
+    .replace(/(.*)\/([^/]+)$/, '$1/@v/$2')
+    .replace(/([A-Z])/g, (_, c) => `!${c.toLowerCase()}`);
+  check(retainedProxyPath(decoded) === retained, 'retained proxy path round-trip');
+  return decoded;
+}
 
 export function offlineGoEnvironment(work, proxy, compiler) {
   return { PATH: `${compiler}/bin:/usr/bin:/bin`, HOME: join(work, 'home'),
