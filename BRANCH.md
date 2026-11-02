@@ -25,6 +25,7 @@ Implement the approved A2.0b additive amendment (Astra MAX author, Muse Wonder m
   - `packages/cluster-mesh/tests/identity-*.spec.ts`
   - `packages/cluster-mesh/package.json`
   - `packages/cluster-mesh/CHANGELOG.md`
+  - `packages/cluster-mesh/tests/storage/postgres.mk` (BR-A20B-EX1)
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
@@ -46,6 +47,7 @@ Implement the approved A2.0b additive amendment (Astra MAX author, Muse Wonder m
 - [x] Resume baseline: `e2bba5cc9`; six final SQLite failures in `run-full11.log` are 5000ms expirations; PostgreSQL fails before Vitest. No timeout increases or assertion removals authorized.
 - [x] Correct the truncated amendment SHA-256 against the approved r6 file.
 - [x] Add SQLite schema atomicity regression tests before implementation.
+- [x] Require a successful TCP query against the actual PostgreSQL test database; preserve the 30-attempt startup budget and print startup diagnostics on failure.
 - [ ] Verify schema regression red, implement transactional schema installation, and verify green.
 - [ ] Run each final identity database campaign once under the shared Docker flock, then clean up.
 - [ ] Push the final head, open a ready PR, wait for one CI, and write `.tmp/rv/lot-A2.0b.md`.
