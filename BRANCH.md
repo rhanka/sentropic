@@ -9,6 +9,7 @@ Make `EncryptedFileKeyring` reads side-effect free (no `mkdir`/`chmod` on the re
 - Branch development in isolated worktree `tmp/worktrees/llm-mesh-keyring-ro` (branch `fix/llm-mesh-keyring-readonly` from `origin/main`).
 - `ENV=test-keyring-ro` always last argument of every `make` command; never `ENV=dev`.
 - All new text in English. No secrets anywhere.
+- Retain inherited BRLOCK-EX1 under `.security/ci-lockfile-policy.json`: owner=CI maintainers, review_by=2026-11-30T00:00:00Z; bounded scope and removal trigger remain unchanged (required by `validate-publishable-manifests`).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -20,6 +21,9 @@ Make `EncryptedFileKeyring` reads side-effect free (no `mkdir`/`chmod` on the re
   - `packages/llm-mesh/package.json`
   - `packages/llm-mesh/CHANGELOG.md`
   - `package-lock.json`
+  - `packages/cluster-mesh/tests/fixtures/train.ts` (train pin rebind, required by the cluster-mesh validate lanes)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (selected tuple pin rebind)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (regenerated via `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock`)
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
@@ -71,6 +75,8 @@ Make `EncryptedFileKeyring` reads side-effect free (no `mkdir`/`chmod` on the re
   - [x] update fixture `packages/llm-mesh/tests/decision-public-surface.test.ts` to 0.32.4
   - [x] `packages/llm-mesh/CHANGELOG.md` 0.32.4 entry
   - [x] `make lock-root ENV=test-keyring-ro` run; kept only the in-scope `packages/llm-mesh` lock entry (other workspace entries on main are stale from other lanes, out of scope)
+  - [x] rebind cluster-mesh train/selected fixture pins to 0.32.4 (`tests/fixtures/train.ts`, `tests/packaging/fixtures/selected/package.json`) and regenerate `tests/packaging/fixtures/selected/package-lock.json` via `make -f packages/cluster-mesh/packaging.mk refresh-lazy-package-lock ENV=test-keyring-ro` (first CI run 41477264507 failed the cluster-mesh lanes on the stale 0.32.3 pin)
+  - [x] BRANCH.md retains the inherited BRLOCK-EX1 `review_by=2026-11-30T00:00:00Z` line (first CI run failed `validate-publishable-manifests` without it)
 - [ ] **Lot 5 — Commit, push, PR, CI**
   - [ ] `make scope-check ENV=test-keyring-ro`
   - [ ] `git add` specific files + `make commit MSG="fix(llm-mesh): ..."` (atomic, ≤150 lines)
