@@ -61,6 +61,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] Fix review r1 finding 6: compose core, tenancy, enforcement, custody and operation ports over one guarded executor and the A2.3 audit sink.
 - [x] Fix review r1 finding 6: add registration/email lifecycle and active/deadline/read-only SQL guards for combined transaction handles.
 - [x] Fix review r1 finding 6: bind journal, outbox, cleanup and subject/workspace/email locks to the active host SQL executor.
 - [x] Fix review r1 finding 6: bound core/enforcement variants bypass constructor DDL and nested transactions; standalone frozen behavior remains available to its existing callers.

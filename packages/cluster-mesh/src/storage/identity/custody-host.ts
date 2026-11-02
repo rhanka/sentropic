@@ -12,6 +12,7 @@ export type AnyCustodyJournal = PostgresCustodyJournal | SqliteCustodyJournal;
 export type AnyCustodyHandle = PostgresCustodyHandle | SqliteCustodyHandle;
 
 export interface CustodyOpHost {
+  readonly schema?: string;
   readonly profile: 'postgres' | 'sqlite';
   readonly stores: IdentityCustodyStoresV1;
   readonly journal: AnyCustodyJournal;
