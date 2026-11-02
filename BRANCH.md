@@ -1,99 +1,74 @@
-# Feature: artifact parity part 1 integrated on main (R2)
+# Feature: Reject incomplete scanner candidate contracts (A01)
 
 ## Objective
-Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, revert, strict CAS, metadata, edits and D3 transport. IMMO alone activates part 1 after its two qualified switchovers. Publish artifacts 0.2.6 and retain the required mcp-platform 0.4.1 codec extension. Stop after pull_request CI, without merging.
+- [x] Implement admission-plan-r1 section 5 A01 under approved amendment r6 section 3; no live admission or promotion.
 
 ## Scope / Guardrails
-- Scope is the semantic union with p0b, the D3 platform codec, host migration/APP-P1 pins and generated Memory L5 inventory, within the allowed paths below.
-- Reuse the existing commit/release/current-pointer model; no redesign.
-- Make-only workflow, Docker under the single flock `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`, `ENV=test-artifacts-parity` always LAST, `make down ENV=test-artifacts-parity` after; never `ENV=dev`; never `make clean-all`.
-- Tests first: retain the p0b and D3 suites; add `parity-r2-profile.test.ts` for independent switches, retained receipts, strict refusals and version/revert lineage.
-- Commits: `make commit MSG="..."` only, authored changes <=150 lines each, selective `git add`; retain whole generated data under BRAP-EX1 and push the locally qualified final head.
-- All new text in English.
-- API boot slot: API_PORT=9686 UI_PORT=5886 MAILDEV_UI_PORT=1786; ENV=test-artifacts-parity.
-- Retain the BRLOCK-EX1 policy reference verbatim in this BRANCH.md (required by `scripts/ci/ci-lockfile-installs.test.mjs`, run by required CI job `validate-publishable-manifests`): owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
+- [x] Binding r6 SHA-256: `4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f`.
+- [x] Binding plan SHA-256: `528dd39308a6e2cf8bdf31307c82da373cf3ceb666cb865a0417abfa7ece49d2`.
+- [x] Worktree: `tmp/worktrees/cyber-admission-a01`; branch: `feat/cyber-admission-a01`; base: `78c746f538f1381dfc7bf06834dc7ea9d654d5a9`.
+- [x] Make-only Docker-first; shared `.tmp/packets/DOCKER-LOCK.md` flock; reuse pinned Node image; no image build.
+- [x] `ENV=test-cyber-adm` last; no services or listening ports needed; no credentials, registry login or OIDC.
+- [x] No policy admission changes, A03+ work, new dependencies, Track writes or merge.
+- [x] Tests first; selective staging; make commit under 150 lines; push every commit; never suppress CI.
+- [x] Stop on an undecided design question; implementation follows the approved contract.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/artifacts/**`
-  - `packages/mcp-platform/src/runtime.ts`, `packages/mcp-platform/src/transport/result-codec.ts` (D3 outcome codec only)
-  - `packages/mcp-platform/src/tool-configuration.ts` (installed platform version constant only, aligned with the D3 codec release)
-  - `packages/mcp-platform/tests/tool-configuration.test.ts` (golden digests containing the installed platform version)
-  - `packages/mcp-platform/tests/artifact-result-codec.test.ts`, `packages/mcp-platform/package.json`, `packages/mcp-platform/CHANGELOG.md` (D3 codec tests and release metadata)
-  - `packages/mcp-platform/etc/mcp-platform.api.md`, `packages/mcp-platform/etc/mcp-platform-memory.api.md` (generated D3 public result fields and declaration line references)
-  - `api/src/services/artifacts/composition.ts` (host store wiring only)
-  - `api/src/services/artifacts/host-storage.ts` (journal p0b 0004 and part 1 0005 assets)
-  - `api/src/services/mcp/cluster-registry.ts` (APP-P1 pin realignment for artifacts 0.2.6, following PR 878)
-  - `api/tests/api/app-mcp-registry.test.ts`, `api/tests/api/app-mcp-installed.test.ts`, `api/tests/api/artifacts-host-publication.test.ts`, `api/tests/api/artifacts-host-migrations.test.ts` (digest/version/journal-count pins only)
   - `BRANCH.md`
-  - `tools/memory-mcp-l5/artifacts/**` (generated consumed-contract inventory and retained archives only)
-  - `packages/mcp-broker/package.json` (align the private P1 consumer floor with platform 0.4.1)
-  - `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts` (explicit 17-tool inventory)
-  - `packages/cluster-mesh/tests/packaging/**` (candidate dependency closure and selected fixture refresh)
-  - `packages/cluster-mesh/tests/storage/installed-siblings.mjs`, `packages/cluster-mesh/tests/storage/postgres.mk` (verified platform candidate for isolated installed consumers)
-  - `api/src/services/artifacts/reader-activation.ts` (publication-independent reader authority)
-  - `api/tests/api/artifacts-host-activation-store.test.ts`, `api/tests/api/artifacts-reader-activation.test.ts` (historical migration and concurrent activation fixtures)
-  - `.github/workflows/ci.yml` (BRAP-EX2: publish platform before its artifacts consumer)
-  - `scripts/ci/publishable-ci-wiring.test.mjs`, `scripts/ci/ci-expected-results.test.mjs` (artifacts publisher dependency gate and exact publication DAG)
+  - `scripts/security/scanner/**`
+  - `scripts/security/daily/scanner-provenance.test.mjs`
+  - `scripts/security/daily/scanner-image-publish.test.mjs`
 - **Forbidden Paths (must not change in this branch)**:
+  - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `packages/artifacts/l0-freeze/**` (frozen L0 contract vectors)
+  - `.security/**`
+  - `.track/**`
+  - `packages/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - `api/drizzle/*.sql` (max 1 file) — not needed; the artifacts schema migration lives in `packages/artifacts/migrations/`
   - `.github/workflows/**`
 - **Exception process**:
-  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
+  - [x] Declare BRADM-EXn with reason, impact and rollback before a conditional change.
 
 ## Feedback Loop
-- BRAP-EX1: owner step 3 requires a regenerated immutable L5 inventory. Retain the exact prior manifest/sidecar in history; generate the new manifest, packed closure and whole lock snapshot using make. Generated lock snapshots are retained as complete data artifacts; authored code commits remain below 150 lines.
-- BRAP-EX2: owner CI repair option (b) retains platform 0.4.1 because the shared MCP codec must preserve typed D3 errors and commit outcomes. Order artifacts publication after platform; refresh the selected fixture with the existing make target and supply candidate archives to frozen consumers. Impact is bounded to packaging/CI; rollback reverts these changes together, never loosens the codec requirement.
+- [x] Retain inherited BRLOCK-EX1 under `.security/ci-lockfile-policy.json`: owner=CI maintainers, review_by=2026-11-30T00:00:00Z; bounded scope and removal trigger remain unchanged, and catalog SCA debt stays open.
+- [x] Rebased from the initial `e1c0ef97d` base to resolve the sole BRANCH.md conflict; the code patch and scanner material context remain byte-identical, retaining both passing code reviews under r6 section 1.3.
+- [x] Mistral F1: constrain executed no-op test blocks to literal echo statements; reject commands, expressions, redirection and substitutions before execution.
+- [x] Mistral F2: restore parsed checkout-ref assertions for all three jobs; F4: add workflow/control mutation negatives.
+- [x] Design authority and Track writer remain the conductor; this branch supplies source artifacts and test evidence.
+- [x] Current workflow and recipe are incomplete; A01 must demonstrate refusal without implementing later workflow stages.
 
 ## AI Flaky tests
-- Acceptance rule: only non-systematic provider/network/model nondeterminism as `flaky accepted`; never additive timeouts. None expected here (pure unit tests, no AI calls).
+- [x] Deterministic Node tests only; no AI acceptance exception.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch + cherry-pick** (single branch `feat/artifacts-parity-p0`, one final test cycle)
-- [ ] **Multi-branch**
-- Rationale: one package, one concern; no orthogonal sub-workstreams.
+- [x] **Multi-branch**: A01 then A02 stacked on A01, with separate ready PRs; no merge.
+
+## UAT Management (in orchestration context)
+- [x] No UI surface; automated contract checks provide the applicable gate.
 
 ## Plan / Todo (lot-based)
-- [ ] **Fix CI integrate — run 41388209369**
-  - [x] Update and verify the exact 17-name Cluster Mesh artifacts inventory (21 surface tests pass).
-  - [x] Align the selected fixture, frozen candidate installs and package publication ordering (129 lazy tests, 16 installed stateful tests, clean install qualification and 33 CI wiring tests pass).
-  - [x] Repair the W1.a upgrade fixture and reader activation causes; retain rejection and concurrency assertions (102 targeted API tests pass).
-  - [x] Run targeted make checks under the single Docker lock; API unit 102/102 and endpoints 86/86 pass with unchanged timeout and security assertions.
-  - [x] Complete installed storage-consumer setup and exact publication-DAG checks; installed qualification, PostgreSQL 17 to 18 upgrade, 35 metrics tests and 28 expected-results tests pass.
-  - [ ] Make down, commit, push and observe pull_request CI; the lane report records the final head and result.
-  - [ ] Append evidence under Fix CI integrate in the lane report; stop without merging.
-- [ ] **Integrate on main — owner-priority part 1**
-  - [x] Verify branch mechanically, read the full lane report and binding R2 design, rebase with semantic union.
-  - [x] Retain p0b source authorization, masking, management confirmation, terminal controls and all tests.
-  - [x] Renumber part 1 metadata migration to 0005; journal both migrations without gaps.
-  - [x] Qualify strict v2 and compatible p0b projections; align artifacts 0.2.6, consumer ranges and APP-P1 pins.
-  - [x] Add R2 switchover regression tests before implementation; retain both source/control and editing suites with exact-byte assertions.
-  - [x] Implement independent trusted profile/result descriptors, exact typed precondition refusals and replay before strict admission.
-  - [x] Add retained-receipt switchover and strict v2 history/revert lineage acceptance tests.
-  - [x] Record new release authors and lineage without inventing historical data; expose bounded v2 history and targetReleaseId revert.
-  - [x] Initialize ensure metadata in the coordinator transaction, preserve resolved bindings and restrict explicit p0b schemas to their compatible inputs.
-  - [x] Preserve strict delete refusals outside the operational finalizer codec and replay historical terminal receipts before new-command validation.
-  - [x] Preserve the compatible ensure receipt shape; emit the full ensure summary only in result version 2.
-  - [x] Regenerate Memory L5 inventory using make, with no manual digest edits; retain the previous manifest and complete source lock snapshot.
-  - [x] Run artifacts and mcp-platform typecheck/test/lint plus API boot under the single Docker lock; make down.
-  - [ ] Commit using make, force-with-lease push, mark PR ready, wait for pull_request CI and append the lane report; do not merge.
-- [x] **Retained implementation — part 1 and D3**
-  - [x] Preserve the original versions/revert, conflict, edits and metadata tests, adapting source assertions to p0b's verified byte payload.
-  - [x] Preserve transactional CAS, reauthorization, atomic metadata/quota/receipt writes, lost-COMMIT recovery and complete typed D3 HTTP/MCP outcomes.
-  - [x] Preserve p0b get_source, set_access, delete, masking, management confirmation and summary fields.
-  - [x] Supersede the failed D3 0.2.5 candidate and stale L5 inventory; retain that CI evidence in the lane report.
-
-## Verification
-- [x] Artifacts typecheck/build/lint and 505 unit tests; 225 integration/e2e tests across 14 files.
-- [x] MCP Platform typecheck/build/lint and 350 tests; strict extraction of both public API reports.
-- [x] Memory L5 lot 1 gate against the regenerated manifest, using the repository make targets.
-- [x] Packed Radar/consumer probes; API boot, 65 tests across five host/transport files, and health status/readiness both successful.
-- [x] `make down` and empty `make ps`; temporary qualification helpers stay outside the committed scope.
-- [x] Mechanical branch check and scope check of the complete PR diff; no deleted tests or branch commit CI-skip markers.
-- [ ] Release the Docker reservation, resume its paused waiters, push with a lease, mark PR ready and wait for one pull_request CI on the final head.
-- [ ] IMMO activation remains a separate owner-controlled gate after both qualified switchovers; this lane does not merge.
+- [x] **Lot 0 — Baseline & constraints**
+  - [x] Read rules, approved plan and r6 scanner contract; verify both document hashes.
+  - [x] Create isolated worktree from origin/main and pass mechanical harness branch check.
+  - [x] Locate existing pinned Node test lane and shared Docker lock; preserve production admission off.
+- [x] **Lot 1 — Strict material contracts**
+  - [x] Write negative controls first in `scripts/security/daily/scanner-provenance.test.mjs`.
+  - [x] Validate exact source/tool/base/module/package/patch pins and retained material bytes under `scripts/security/scanner/`.
+  - [x] Reject current pending recipe and material pins; accept a complete synthetic contract only.
+- [x] **Lot 2 — Receipt and artifact contracts**
+  - [x] Define a synthetic three-receipt tuple with measured fixture outputs; it supplies no platform authority.
+  - [x] Replace weak text assertions in `scripts/security/daily/scanner-image-publish.test.mjs`.
+  - [x] Write rehashed receipt substitution, missing/empty output and strict-field negative controls before implementation.
+  - [x] Define strict schemaVersion 1 build, validation and publication receipt fields from r6 sections 1.3 and 3.3.1.
+  - [x] Enforce strict receipt schemas, matching identities, nonempty measured artifact outputs and ordered material binding.
+  - [x] Add isolated execution of the actual key-free echo steps and assert no receipt files are produced.
+  - [x] Add rehashed malformed-OCI and impossible-calendar-date negative controls.
+  - [x] Fail closed on malformed OCI structures and normalized impossible dates.
+- [ ] **Lot 3 — Final validation and handoff**
+  - [x] Run `make test-security-daily ENV=test-cyber-adm` under the single lock: 298 passed, zero failures/skips at `bfdbb1eb1`; this final update changes documentation only.
+  - [x] Run `make down ENV=test-cyber-adm` (exit 0); verify scope before each commit.
+  - [ ] Open a ready PR against main after the local gate; use this file as the PR body.
+  - [ ] Record exact head, PR, CI and gate evidence in `.tmp/rv/cyber-admission-a01.md` for conductor Track import.
+  - [ ] Continue only A02 on its stacked branch; retain A03+ and runtime admission gates.
