@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "files": [
+    {
+      "path": "Dockerfile",
+      "beforeDigest": "sha256:8a2658b80da36a3b4720bcbee36fd294bfcae75a17d5d320236cb9458d2664ce",
+      "afterDigest": "sha256:668bc356ef8a03e0cd4e50e6e33be2652a471c3613c56cfac434c6f152c5861d",
+      "edits": [
+        {
+          "before": "brotli-libs=1.2.1-r0 &&",
+          "after": "brotli-libs=1.2.1-r0 libcurl=8.23.0-r0 &&"
+        }
+      ]
+    }
+  ]
+}
