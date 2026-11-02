@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { readFile } from 'node:fs/promises';
+import { readFile, mkdtemp, readdir, rm } from 'node:fs/promises';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createRequire } from 'node:module';
 import { receiptFixture } from '../scanner/receipt-fixture.mjs';
 import { validateReceiptContract } from '../scanner/receipt-contract.mjs';
@@ -58,10 +61,19 @@ test('should validate the complete synthetic chain only as a contract', () => {
 
 test('should refuse receipt-name echoes as a substitute for produced receipts and artifacts', async () => {
   const { jobs } = parse(await loadWorkflow());
-  const emittedNames = Object.values(jobs).flatMap(job => job.steps.map(step => step.run ?? '')).join('\n');
-  assert.match(emittedNames, /echo "ScannerImageBuildReceiptV1/);
-  assert.throws(() => validateReceiptContract({ ...receiptFixture(), receipts: emittedNames,
-    artifactBytes: Buffer.alloc(0), outputs: {} }), /scanner-contract/);
+  const directory = await mkdtemp(join(tmpdir(), 'scanner-noop-'));
+  try {
+    // Only the two key-free receipt emitters; never execute the publisher/login.
+    for (const name of ['build-scanner-image', 'verify-scanner-image-publication']) {
+      const step = jobs[name].steps.at(-1);
+      assert.match(step.run, /^\s*echo "ScannerImage/m);
+      const stdout = execFileSync('/bin/sh', ['-eu', '-c', step.run], { cwd: directory, env: {}, encoding: 'utf8' });
+      assert.match(stdout, /ScannerImage(?:Build|Validation)ReceiptV1/);
+    }
+    assert.deepEqual(await readdir(directory), []);
+    assert.throws(() => validateReceiptContract({ ...receiptFixture(), receipts: {},
+      artifactBytes: Buffer.alloc(0), outputs: {} }), /scanner-contract/);
+  } finally { await rm(directory, { recursive: true, force: true }); }
 });
 
 function relink(f) {
@@ -95,8 +107,22 @@ test('should refuse missing, empty or altered artifacts and mismatched receipt b
     f => { f.receipts.build.failures = ['failed']; },
     f => { f.receipts.validation.skips = ['skipped']; },
     f => { f.receipts.publication.tokenInvalidated = false; },
+    f => { f.receipts.build.startedAt = '2026-02-30T10:00:00Z'; },
   ]) {
     const fixture = receiptFixture(); mutate(fixture); relink(fixture);
+    assert.throws(() => validateReceiptContract(fixture), /scanner-contract/);
+  }
+});
+
+test('should refuse malformed measured OCI JSON even with recomputed receipt links', () => {
+  for (const content of ['null', '[]', '{"manifests":{}}', '{']) {
+    const fixture = receiptFixture(); const bytes = Buffer.from(content);
+    fixture.outputs['index.json'] = bytes;
+    for (const receipt of Object.values(fixture.receipts)) {
+      const descriptor = { path: 'index.json', size: bytes.length, digest: digest(bytes) };
+      receipt.chain.index = descriptor; receipt.artifact.files[0] = descriptor;
+    }
+    relink(fixture);
     assert.throws(() => validateReceiptContract(fixture), /scanner-contract/);
   }
 });
