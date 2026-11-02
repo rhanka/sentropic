@@ -12,6 +12,9 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./ui/WorkspaceMembersScreen.svelte": {
+      "types": "./ui/WorkspaceMembersScreen.svelte.d.ts", "svelte": "./ui/WorkspaceMembersScreen.svelte", "import": "./ui/WorkspaceMembersScreen.svelte"
+    },
     "./ui/MembershipDecisionsScreen.svelte": {
       "types": "./ui/MembershipDecisionsScreen.svelte.d.ts", "svelte": "./ui/MembershipDecisionsScreen.svelte", "import": "./ui/MembershipDecisionsScreen.svelte"
     },

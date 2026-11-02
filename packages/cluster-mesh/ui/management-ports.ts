@@ -32,4 +32,5 @@ export interface IdentityManagementScreenPorts {
   notify(input: { type: 'success' | 'error' | 'info'; message: string }): void;
   confirm(message: string): boolean | Promise<boolean>;
   operationId(): string;
+  refreshWorkspaceScope?(): Promise<void>;
 }
