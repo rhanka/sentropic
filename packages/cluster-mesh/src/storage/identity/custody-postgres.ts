@@ -28,6 +28,8 @@ import type {
   WebAuthnCredentialV1,
 } from '../../identity-contracts/custody.js';
 import { IdentityCustodyErrorV1 } from '../../identity-contracts/custody-errors.js';
+import { composeIdentityTransaction } from './custody-composition.js';
+import { identityTransactionGuard, requireIdentityRunOptions } from './custody-transaction-guards.js';
 import { subjectLifecycle } from './custody-lifecycle.js';
 import type { InjectedPgDriver, PgSession, SqlValue } from '../postgres/protocol.js';
 import { decodeSession } from './records.js';
@@ -74,7 +76,7 @@ const isUniqueViolation = (error: unknown): boolean => {
 };
 
 export const requireWriteOptions = (options: IdentityRunOptionsV1): void => {
-  if (options.mode !== 'write' && options.mode !== 'import' && options.mode !== 'delete') {
+  if (options.mode !== 'write') {
     throw new IdentityCustodyErrorV1('identity_transaction_unbound');
   }
   if (!Number.isInteger(options.deadlineMs) || options.deadlineMs <= 0) {
@@ -685,64 +687,47 @@ export const createPostgresIdentityUnitOfWorkV1 = (input: {
   readonly host: PostgresIdentityHostV1<PostgresCustodyHandle>;
   readonly maxAttempts?: number;
 }): IdentityUnitOfWorkV1<PostgresCustodyHandle> => {
-  const maxAttempts = input.maxAttempts ?? 3;
   const run = async <T>(
     options: IdentityRunOptionsV1,
     operation: (tx: IdentityTransactionV1<PostgresCustodyHandle>) => Promise<T>,
-    readOnly: boolean,
   ): Promise<T> => {
-    requireWriteOptionsIfWrite(options, readOnly);
+    requireIdentityRunOptions(options);
+    const readOnly = options.mode === 'read';
+    const deadline = Date.now() + options.deadlineMs;
     let attempt = 0;
     for (;;) {
       attempt += 1;
       try {
-        return await input.host.runSerializable({ readOnly, deadlineMs: options.deadlineMs }, async (binding) => {
+        return await input.host.runSerializable({ readOnly, deadlineMs: Math.max(1, deadline - Date.now()) }, async (binding) => {
           if (binding.readOnly !== readOnly) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
-          const handle = new PostgresCustodyHandle(input.schema, binding.session);
-          return operation({ profile: 'postgres', transactionId: binding.transactionId, readOnly, hostTransaction: handle, stores: handle });
+          const guard = identityTransactionGuard(readOnly, deadline);
+          const handle = new PostgresCustodyHandle(input.schema, guard.postgres(binding.session));
+          try {
+            const result = await operation(composeIdentityTransaction({ host: handle, transactionId: binding.transactionId, readOnly, check: guard.check }));
+            guard.check();
+            return result;
+          } finally { guard.close(); }
         });
       } catch (error) {
-        if (attempt < maxAttempts && (isSerializationFailure(error) || isSocialRaceRetry(error))) continue;
+        if (attempt < options.maxAttempts && Date.now() < deadline && (isSerializationFailure(error) || isSocialRaceRetry(error))) continue;
         throw error;
       }
     }
   };
   return {
     profile: 'postgres',
-    runRead: (options, operation) => run(options, operation, true),
-    runWrite: (options, operation) => run(options, operation, false),
+    run,
   };
 }
 
 
-
-const requireWriteOptionsIfWrite = (options: IdentityRunOptionsV1, readOnly: boolean): void => {
-  if (readOnly) {
-    if (options.mode !== 'read') throw new IdentityCustodyErrorV1('identity_transaction_unbound');
-  } else {
-    requireWriteOptions(options);
-  }
-  if (!Number.isInteger(options.deadlineMs) || options.deadlineMs <= 0) {
-    throw new IdentityCustodyErrorV1('identity_material_invalid');
-  }
-};
-
 export const createPostgresIdentityHostV1 = (options: PostgresCustodyOptions): PostgresIdentityHostV1<PostgresCustodyHandle> => ({
   runSerializable: async (runOptions, operation) => {
-    const attempt = async (remaining: number): Promise<ReturnType<typeof operation>> => {
-      try {
-        return await options.driver.transaction(
-          { isolation: 'serializable', readOnly: runOptions.readOnly, deadlineMs: runOptions.deadlineMs },
-          async (session) =>
-            operation({ transactionId: nextCustodyTxId(), hostTransaction: new PostgresCustodyHandle(options.schema, session), session, readOnly: runOptions.readOnly }),
-        );
-      } catch (error) {
-        if (remaining > 0 && isSerializationFailure(error)) return attempt(remaining - 1);
-        throw error;
-      }
-    };
     await applyPostgresIdentityCoreSchemaIfNeeded(options);
-    return attempt(2);
+    return options.driver.transaction(
+      { isolation: 'serializable', readOnly: runOptions.readOnly, deadlineMs: runOptions.deadlineMs },
+      async (session) => operation({ transactionId: nextCustodyTxId(), hostTransaction: new PostgresCustodyHandle(options.schema, session), session, readOnly: runOptions.readOnly }),
+    );
   },
 });
 
@@ -788,8 +773,8 @@ export const createPostgresCustodyStores = (options: PostgresCustodyOptions): Id
   const runTx = async <T>(readOnly: boolean, op: (tx: PostgresCustodyTx) => Promise<T>): Promise<T> => {
     const host = createPostgresIdentityHostV1(options);
     const unitOfWork = createPostgresIdentityUnitOfWorkV1({ schema: options.schema, host });
-    const runOptions: IdentityRunOptionsV1 = { mode: readOnly ? 'read' : 'write', deadlineMs: options.deadlineMs ?? CUSTODY_TX_DEADLINE_MS };
-    return readOnly ? unitOfWork.runRead(runOptions, (tx) => op(tx.hostTransaction)) : unitOfWork.runWrite(runOptions, (tx) => op(tx.hostTransaction));
+    const runOptions: IdentityRunOptionsV1 = { mode: readOnly ? 'read' : 'write', purpose: 'request', maxAttempts: 3, deadlineMs: options.deadlineMs ?? CUSTODY_TX_DEADLINE_MS };
+    return unitOfWork.run(runOptions, (tx) => op(tx.hostTransaction));
   };
   return {
     subjects: {
@@ -893,11 +878,12 @@ export const bindPostgresIdentityTransactionV1 = <H>(input: {
   readonly binding: PostgresCustodyBindingV1<H>;
   readonly hostTransaction: H;
 }): IdentityTransactionV1<H> => ({
-  profile: 'postgres',
-  transactionId: input.binding.transactionId,
-  readOnly: input.binding.readOnly,
+  ...composeIdentityTransaction({
+    host: new PostgresCustodyHandle(input.schema, input.binding.session),
+    transactionId: input.binding.transactionId, readOnly: input.binding.readOnly,
+    check: (write) => { if (write && input.binding.readOnly) throw new IdentityCustodyErrorV1('identity_transaction_unbound'); },
+  }),
   hostTransaction: input.hostTransaction,
-  stores: new PostgresCustodyTx(input.schema, input.binding.session),
 });
 
 /** V1 factory name for the standalone PostgreSQL custody stores. */
