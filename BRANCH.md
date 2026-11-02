@@ -72,10 +72,10 @@
   - [x] `tool-qualification.mjs`: `validateToolInventory`, `validateToolSelfSca`, `validateToolDependencies`, `validateZeroPython`; `tool-admission.mjs`: `admitToolCandidate`, `validateAdmissionReceipt`.
   - [x] `tool-fixture.mjs`: synthetic complete tuple for contract tests.
   - [x] Wired `import '../scanner/tool-inventory.test.mjs'` and `import '../scanner/tool-admission.test.mjs'` into `scripts/security/daily/scanner-provenance.test.mjs`.
-- [ ] **Lot 3 — Gates, ready PR and report**
+- [x] **Lot 3 — Gates, ready PR and report**
   - [x] `flock .tmp/packets/DOCKER-LOCK.md make test-security-daily ENV=test-cyber-adm`: GREEN, 333 tests / 333 pass / 0 fail, EXIT=0; log `.tmp/rv/cyber-admission-a04-green.log`.
-  - [x] `flock ... make down ENV=test-cyber-adm` after the gate (DOWN_EXIT=0, log `.tmp/rv/cyber-admission-a04-down.log`); no new image built; `make scope-check` PASS C2 (log `.tmp/rv/cyber-admission-a04-scope-check.log`); `harness check branch` PASS C1.
-  - [ ] Atomic `make commit` under 150 lines each; pushed after every commit; no `[skip ci]`.
-  - [ ] Open ready (non-draft) PR against main; pull_request CI fires on the final head.
-  - [ ] Record exact heads, PR, CI and every test gate in `.tmp/rv/cyber-admission-a04.md` for conductor Track import.
-  - [ ] Stop after A04; leave A05+ and all live admission/activation work fenced. Do not merge.
+  - [x] `flock ... make down ENV=test-cyber-adm` after the gate (DOWN_EXIT=0, log `.tmp/rv/cyber-admission-a04-down.log`); no new image built; `make scope-check` PASS C2 (logs `.tmp/rv/cyber-admission-a04-scope-check.log`, `-final.log`); `harness check branch` PASS C1.
+  - [x] Atomic `make commit` under 150 lines each (7 commits `b44c43bdd`..`99aecb19b`); pushed after every commit; no `[skip ci]`.
+  - [x] Ready (non-draft) PR **#889** opened against main; origin/main merged back (`ee1d3d819`, BRANCH.md conflict resolved keeping the A04 lane copy) so the PR is mergeable; pull_request CI run **41494863686** on head `ee1d3d8194` = **success** (74 jobs, 0 failures).
+  - [x] Recorded exact heads, PR, CI and every test gate in `.tmp/rv/cyber-admission-a04.md` for conductor Track import.
+  - [x] Stop after A04; leave A05+ and all live admission/activation work fenced. Do not merge.
