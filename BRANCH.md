@@ -61,6 +61,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] Fix review r1 finding 6: migrate a20b-helpers.ts to combined run/options without weakening assertions (runtime qualification pending).
 - [ ] Fix review r1 findings 1/8: tests preceded fixes for counter regression and exact refusal precedence on both profiles; durable execution pending the shared Docker lock.
 - [ ] Fix review r1 findings 2–7/9/10: tests first, amendment-exact fixes, both durable profiles, final PR CI and per-finding report; do not merge.
 - [ ] Fix review r1 findings 3/9: source HS256 claims and missing HMAC key code corrected after regression tests; execution pending.
