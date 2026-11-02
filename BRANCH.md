@@ -65,6 +65,7 @@
   - [x] Record the failing pre-implementation gate: collected suite refuses missing `material-patches.mjs` (exit 2); log retained in `.tmp/rv/cyber-admission-a02-patches-red.log`.
 - [ ] **Lot 2 — Exact source, patch and material implementation**
   - [x] Implement ordered data-only patches with exact input/output checksums, unique edit contexts and atomic source preservation.
+  - [x] Implement streamed hash/size-bound HTTPS acquisition, private staging and offline retained inventory verification after the missing-module RED gate.
   - [ ] Implement source/archive identity checks, strict ordered patches and retained-file acquisition under `scripts/security/scanner/`.
   - [ ] Resolve exact upstream commit/archive/authentication/license, Go compiler/module checksums, base/package snapshots and tool/Action pins; preserve every actual gap.
   - [ ] Retain resolved bytes and implement dependency resolution from those bytes with network disabled; refuse mutation, undeclared fetches and an OS-only repair.
