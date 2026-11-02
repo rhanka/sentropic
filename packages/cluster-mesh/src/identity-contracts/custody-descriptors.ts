@@ -12,6 +12,8 @@ export type IdentityAmendmentDomainV1 =
   | 'digest_invitations'
   | 'bound_login_sessions'
   | 'social_subjects'
+  | 'authentication_completion'
+  | 'revocation_delivery'
   | 'identity_import'
   | 'transaction_binding'
   | 'atomic_person_deletion';
@@ -53,7 +55,7 @@ export const IDENTITY_A20B_DESCRIPTORS: readonly IdentityAmendmentDescriptorV1[]
     'account_authentication_profile',
     '1.1.0',
     ['IdentityAccountProfileV1'],
-    ['IdentityAccountProfileStoreV1'],
+    ['IdentityAccountProfileStoreV1', 'IdentitySubjectLifecyclePortV1'],
   ),
   descriptor(
     'webauthn_custody',
@@ -93,14 +95,20 @@ export const IDENTITY_A20B_DESCRIPTORS: readonly IdentityAmendmentDescriptorV1[]
   descriptor(
     'bound_login_sessions',
     '1.1.0',
-    ['BoundLoginSessionV1', 'SignedLoginBindingV1'],
-    ['BoundLoginSessionStoreV1', 'IdentityLoginTokenPortV1'],
+    ['BoundLoginSessionV1', 'SignedLoginBindingV1', 'VerifiedLoginClaimsV1'],
+    ['BoundLoginSessionStoreV1', 'IdentityLoginVerifierPortV1', 'IdentityLoginTokenPortV1'],
   ),
   descriptor(
     'social_subjects',
     '1.1.0',
     ['SocialIdentityV1'],
     ['SocialIdentityStoreV1'],
+  ),
+  descriptor(
+    'authentication_completion', '1.1.0',
+    ['IdentityEmailTicketClaimsV1', 'IdentityDeferredMailV1', 'IdentityAuthHonoTransactionBindingV1', 'IdentityAuthCompletionFlowV1', 'IdentityAuthRefusalV1', 'IdentityAuthCompletionOutcomeV1'],
+    ['IdentityEmailTicketTokenPortV1', 'IdentityAuthAccountPolicyV1', 'IdentityAuthBusinessHooksV1'],
+    ['createIdentityAuthHonoTransactionBindingV1', 'runIdentityAuthCompletionV1'],
   ),
   descriptor(
     'identity_import',
@@ -111,6 +119,7 @@ export const IDENTITY_A20B_DESCRIPTORS: readonly IdentityAmendmentDescriptorV1[]
       'IdentityImportIssueReferenceV1',
       'IdentityImportValidationV1',
       'IdentityImportReceiptV1',
+      'IdentityLegacyConnectorTombstoneV1',
     ],
     ['IdentityCustodyImportPortV1', 'IdentityImportFencePortV1'],
     ['createIdentityCustodyImporterV1'],
@@ -126,11 +135,22 @@ export const IDENTITY_A20B_DESCRIPTORS: readonly IdentityAmendmentDescriptorV1[]
       'IdentityStorageProfileV1',
       'IdentityTransactionV1',
       'IdentityRunOptionsV1',
+      'IdentityHostRunOptionsV1',
+      'PostgresIdentityBindingV1',
+      'SqliteIdentityBindingV1',
       'IdentityCustodyStoresV1',
+      'IdentityCustodySchemaAssetV1',
+      'IdentityCustodySchemaReceiptV1',
       'IdentityCustodyErrorCodeV1',
     ],
-    ['IdentityUnitOfWorkV1'],
-    ['createPostgresIdentityUnitOfWorkV1', 'createSqliteIdentityUnitOfWorkV1'],
+    ['IdentityUnitOfWorkV1', 'PostgresIdentityHostV1', 'SqliteIdentityHostV1'],
+    ['createPostgresIdentityUnitOfWorkV1', 'createSqliteIdentityUnitOfWorkV1', 'bindPostgresIdentityTransactionV1', 'bindSqliteIdentityTransactionV1', 'createPostgresIdentityCustodyStoresV1', 'createSqliteIdentityCustodyStoresV1', 'identityCustodySchemaAssetV1', 'applyPostgresIdentityCustodySchemaV1', 'applySqliteIdentityCustodySchemaV1'],
+  ),
+  descriptor(
+    'revocation_delivery', '1.1.0',
+    ['IdentityRevocationTargetKindV1', 'IdentityExternalRevocationDraftV1', 'IdentityExternalRevocationV1', 'IdentityRevocationClaimV1', 'ConnectorRevocationCustodyReferenceV1', 'ConnectorRevocationCaptureV1'],
+    ['IdentityRevocationOutboxPortV1', 'IdentityRevocationDeliveryPortV1', 'ConnectorRevocationCustodyPortV1'],
+    ['acknowledgeIdentityRevocationV1'],
   ),
   descriptor(
     'atomic_person_deletion',
@@ -140,13 +160,15 @@ export const IDENTITY_A20B_DESCRIPTORS: readonly IdentityAmendmentDescriptorV1[]
       'PersonDeletionCommandV2',
       'BusinessDeletionPlanV1',
       'BusinessDeletionReceiptV1',
+      'IdentityCleanupReceiptV1',
       'AtomicRevocationStepOutcomeV2',
+      'AtomicRevocationDetailV2',
       'AtomicRevocationStepReceiptV2',
       'PersonDeletionReceiptV2',
       'IdentityDeletionOperationV2',
       'IdentityDeletionAttemptV2',
     ],
-    ['AtomicPersonDeletionV2', 'BusinessDeletionPortV1'],
+    ['AtomicPersonDeletionV2', 'BusinessDeletionPortV1', 'PersonDeletionAuthorizationPortV1', 'PersonDeletionPlanePortV2', 'PersonOrphanCleanupPortV1', 'IdentityDeletionJournalPortV2'],
     ['createAtomicPersonDeletionV2'],
   ),
 ];
