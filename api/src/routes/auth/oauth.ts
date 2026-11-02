@@ -88,8 +88,10 @@ export const createSentropicOAuthOptions = (request?: Request) => ({
   registerUrl: `${resolveOAuthUiBaseUrl(request)}/auth/register`,
   ports: getSentropicOAuthPorts(),
   serviceAccessTokenTtlSeconds: env.OAUTH_SERVICE_ACCESS_TOKEN_TTL_SEC,
-  stateCodec: createOAuthHmacStateCodec({ secret: resolveOAuthStateSecret() }),
+  stateCodec: createSentropicOAuthStateCodec(),
 });
+
+export const createSentropicOAuthStateCodec = () => createOAuthHmacStateCodec({ secret: resolveOAuthStateSecret() });
 
 export const resolveOAuthServiceResource = (request?: Request): string =>
   env.OAUTH_SERVICE_RESOURCE_URI

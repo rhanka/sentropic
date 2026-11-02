@@ -1,4 +1,4 @@
-import type { AuthHonoPorts, AuthHonoRelyingPartyConfig } from '@sentropic/auth-hono';
+import type { AuthHonoPorts, AuthHonoRelyingPartyConfig, OAuthContinuationCodec } from '@sentropic/auth-hono';
 import { createIdentityAuthHonoTransactionBindingV1, runIdentityAuthCompletionV1,
   IdentityCustodyErrorV1,
   type IdentityAuthAccountPolicyV1, type IdentityAuthBusinessHooksV1,
@@ -11,6 +11,8 @@ import { cmIdentityUnitOfWork, cmRequestWriteOptions, withCmIdentityTransaction,
 import type { createCmTokenCustodian } from './cm-token-custodian';
 import { createCmAuthEntityPlan, withCmAuthEntityPlan } from './cm-auth-entity-plan';
 import { assertCmHostHealthy } from './cm-host-scope';
+import { resolveCmRegistrationContext, type CmRegistrationPresentation } from './cm-registration-context';
+export type { CmRegistrationPresentation } from './cm-registration-context';
 
 export interface CmAuthBindingConfig {
   readonly hostPortsForTransaction: (tx: CmIdentityTransaction, boundPorts: () => AuthHonoPorts) => AuthHonoPorts;
@@ -20,12 +22,12 @@ export interface CmAuthBindingConfig {
   readonly business: IdentityAuthBusinessHooksV1<PoolClient>;
   readonly emailCodeKeys: IdentityEmailCodeKeyRingV1;
   readonly magicLinkBaseUrl: string;
+  readonly registrationContinuation: OAuthContinuationCodec;
   readonly sendDeferredMail: (mail: IdentityDeferredMailV1) => Promise<void>;
 }
 type Work<T> = (binding: IdentityAuthHonoTransactionBindingV1, tx: CmIdentityTransaction) => Promise<T>;
 type Registration = { readonly email: string; readonly clientId: string | null } | null;
 type RegistrationContext = Registration | ((tx: CmIdentityTransaction) => Promise<Registration>);
-export interface CmRegistrationPresentation { readonly email: string; readonly verificationToken?: string }
 
 /** r6 §4.7: configuration is pinned before entry; handles and buffers stay in an attempt. */
 export function createCmAuthRequestRunner(config: CmAuthBindingConfig) {
@@ -80,24 +82,10 @@ export function createCmAuthRequestRunner(config: CmAuthBindingConfig) {
       return publish(result);
     },
     async registrationContext(presentation: CmRegistrationPresentation, tx: CmIdentityTransaction): Promise<Registration> {
-      const token = presentation.verificationToken;
-      if (!token) return null;
-      const email = config.accountPolicy.normalizeEmail(presentation.email);
-      const bytes = new TextEncoder().encode(token);
-      try {
-        if (token.startsWith('sit_')) {
-          const invitation = await tx.custody.invitations.findByDigest(await config.tokens.digest.sha256(bytes));
-          // A client-bound invitation additionally needs its verified OAuth continuation.
-          // Request JSON never chooses that trusted client; absence refuses the binding.
-          return invitation && invitation.email === email && invitation.clientId === null
-            ? { email: invitation.email, clientId: null } : null;
-        }
-        const claims = await config.tokens.ticketTokens.verify(bytes, new Date().toISOString());
-        return claims.email === email ? { email: claims.email, clientId: null } : null;
-      } catch (error) {
-        if (error instanceof IdentityCustodyErrorV1 && error.code === 'proof_binding_mismatch') return null;
-        throw error;
-      } finally { bytes.fill(0); }
+      return resolveCmRegistrationContext({ presentation, now: new Date(),
+        email: config.accountPolicy.normalizeEmail(presentation.email), invitations: tx.custody.invitations,
+        digest: config.tokens.digest, ticketTokens: config.tokens.ticketTokens,
+        continuationCodec: config.registrationContinuation });
     },
   };
 }
