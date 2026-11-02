@@ -7,7 +7,9 @@ import { app } from '../../../src/app';
 import { db } from '../../../src/db/client';
 import { serviceClients, workspaces } from '../../../src/db/schema';
 import { createCmTenant, enrolCmWorkspace } from '../../../src/services/identity/cm-tenancy';
-import { cmDeleteTenants } from '../../utils/cm-identity-test-store';
+import { cmDeleteTenants, cmQuery, cmTable } from '../../utils/cm-identity-test-store';
+import { bindCmServiceClientTenant } from '../../../src/services/identity/cm-service-clients';
+import { runCmIdentityWrite } from '../../../src/services/identity/cm-transaction';
 import { getSentropicOAuthPorts } from '../../../src/routes/auth/oauth';
 import { createJwksAdapter } from '../../../src/services/auth/jwks-adapter';
 import { createLlmCallerIdentity } from '../../../src/services/llm-identity/caller-auth';
@@ -112,16 +114,17 @@ describe('S2S token through the LLM gateway caller identity (Lot D B2)', () => {
     await createCmTenant({ tenantId: TENANT, slug: TENANT, status: 'active' }).catch(() => {});
     await db.insert(workspaces).values({ id: WORKSPACE, name: WORKSPACE }).onConflictDoNothing();
     await enrolCmWorkspace({ workspaceId: WORKSPACE, tenantId: TENANT }).catch(() => {});
-    await db.update(serviceClients).set({ tenantId: TENANT }).where(eq(serviceClients.clientId, CLIENT_ID));
+    await runCmIdentityWrite(tx => bindCmServiceClientTenant(tx, CLIENT_ID, TENANT));
   });
 
   afterEach(async () => {
     await db.delete(serviceClients).where(eq(serviceClients.clientId, CLIENT_ID));
     await db.delete(workspaces).where(eq(workspaces.id, WORKSPACE));
+    await cmQuery(`DELETE FROM ${cmTable('cm_service_clients')} WHERE client_id = $1`, [CLIENT_ID]);
     await cmDeleteTenants([TENANT]);
   });
 
-  it('attributes a real IdP service token to the service principal of service_clients.tenant_id', async () => {
+  it('attributes a real IdP service token to its CM service-client tenant binding', async () => {
     const token = await mintToken('service:ping');
     const result = await callerAuth().verify({
       authorization: `Bearer ${token}`,
@@ -143,7 +146,8 @@ describe('S2S token through the LLM gateway caller identity (Lot D B2)', () => {
     const auth = callerAuth();
     await db.update(serviceClients).set({ revokedAt: new Date() }).where(eq(serviceClients.clientId, CLIENT_ID));
     expect(await auth.verify({ authorization: `Bearer ${token}` }, context)).toMatchObject({ ok: false });
-    await db.update(serviceClients).set({ revokedAt: null, tenantId: null }).where(eq(serviceClients.clientId, CLIENT_ID));
+    await db.update(serviceClients).set({ revokedAt: null }).where(eq(serviceClients.clientId, CLIENT_ID));
+    await cmQuery(`DELETE FROM ${cmTable('cm_service_clients')} WHERE client_id = $1`, [CLIENT_ID]);
     expect(await auth.verify({ authorization: `Bearer ${token}` }, context)).toMatchObject({ ok: false });
   });
 
@@ -163,7 +167,7 @@ describe('S2S token through the LLM gateway caller identity (Lot D B2)', () => {
 
   it('fails closed as unavailable (never allowed) when the directory database is down', async () => {
     const token = await mintToken('service:ping');
-    const down = createLlmIdentityDirectory({ select: () => { throw new Error('connection refused'); } } as never);
+    const down = createLlmIdentityDirectory(() => ({ select: () => { throw new Error('connection refused'); } } as never));
     await expect(callerAuth(down).verify({ authorization: `Bearer ${token}` }, context))
       .rejects.toMatchObject({ kind: 'caller-auth-unavailable' });
   });

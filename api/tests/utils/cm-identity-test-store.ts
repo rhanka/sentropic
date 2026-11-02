@@ -16,8 +16,10 @@ const USER_SCOPED_TABLES: readonly string[] = [
   'identity_login_sessions',
   'identity_social_links',
   'identity_deletion_operations',
+  'cm_oauth_consents',
   'identity_account_profiles',
   'identity_user_accounts',
+  'identity_subject_fences',
   'cm_workspace_members',
   'cm_tenant_memberships',
 ];
