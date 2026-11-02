@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { eq } from 'drizzle-orm';
+import { eq, inArray } from 'drizzle-orm';
 
 import { app } from '../../src/app';
 import { db } from '../../src/db/client';
@@ -7,74 +7,37 @@ import {
   documentConnectorAccounts,
   workspaces,
 } from '../../src/db/schema';
-import { createCmConnectorFixture as storeConnectedAccount } from '../utils/cm-connector-fixture';
+import { createCmConnectorFixture as storeConnectedAccount, captureConnectorRevocations, findConnectorFixture } from '../utils/cm-connector-fixture';
+import { cmQuery, cmTable } from '../utils/cm-identity-test-store';
 import { putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
 import {
   authenticatedRequest,
   cleanupAuthData,
   createAuthenticatedUser,
+  type TestUser,
 } from '../utils/auth-helper';
 
-const GOOGLE_REVOKE_ENDPOINT = 'https://oauth2.googleapis.com/revoke';
-
-/** Tokens posted to Google's revoke endpoint during one test. */
 let revokedTokens: string[] = [];
-
-const realFetch = globalThis.fetch;
-
-const installRevokeSpy = () => {
-  revokedTokens = [];
-  vi.stubGlobal(
-    'fetch',
-    vi.fn(async (input: unknown, init?: RequestInit) => {
-      const url =
-        typeof input === 'string'
-          ? input
-          : input instanceof URL
-            ? input.toString()
-            : String((input as Request)?.url ?? input);
-
-      if (url.startsWith(GOOGLE_REVOKE_ENDPOINT)) {
-        const body = init?.body;
-        const token =
-          body instanceof URLSearchParams
-            ? (body.get('token') ?? '')
-            : new URLSearchParams(String(body ?? '')).get('token') || '';
-        revokedTokens.push(token);
-        return new Response(null, { status: 200 });
-      }
-
-      return realFetch(input as RequestInfo, init);
-    }),
-  );
-};
-
-const connectorRowExists = async (accountId: string): Promise<boolean> => {
-  const [row] = await db
-    .select({ id: documentConnectorAccounts.id })
-    .from(documentConnectorAccounts)
-    .where(eq(documentConnectorAccounts.id, accountId))
-    .limit(1);
-  return Boolean(row);
-};
+let actors: TestUser[] = [];
 
 describe('Connector grant teardown — no deletion path destroys a grant unrevoked', () => {
   beforeEach(() => {
-    installRevokeSpy();
+    actors = [];
+    revokedTokens = captureConnectorRevocations();
   });
 
   afterEach(async () => {
     vi.unstubAllGlobals();
+    await db.delete(documentConnectorAccounts).where(inArray(documentConnectorAccounts.userId, actors.map(actor => actor.id)));
+    await db.delete(workspaces).where(inArray(workspaces.ownerUserId, actors.map(actor => actor.id)));
     await cleanupAuthData();
+    await cmQuery(`DELETE FROM ${cmTable('cm_workspaces')} WHERE workspace_id = ANY($1)`, [actors.map(actor => actor.workspaceId)]);
   });
-
-
-
-
 
   it('DELETE /api/v1/workspaces/:id revokes the grants of EVERY member, not just the caller', async () => {
     const owner = await createAuthenticatedUser('editor');
     const member = await createAuthenticatedUser('editor');
+    actors.push(owner, member);
     const workspaceId = String(owner.workspaceId);
 
     // The member holds a connector row in the OWNER's workspace. Connector rows cascade from
@@ -99,15 +62,12 @@ describe('Connector grant teardown — no deletion path destroys a grant unrevok
     );
     expect(response.status).toBe(204);
 
-    expect(await connectorRowExists(ownerAccount.accountId)).toBe(false);
-    expect(await connectorRowExists(memberAccount.accountId)).toBe(false);
+    expect(await findConnectorFixture(ownerAccount.accountId)).toEqual([]);
+    expect(await findConnectorFixture(memberAccount.accountId)).toEqual([]);
 
     expect(revokedTokens).toContain(ownerAccount.refreshToken);
     expect(revokedTokens).toContain(memberAccount.refreshToken);
 
   });
-
-
-
 
 });
