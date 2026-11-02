@@ -2,7 +2,8 @@ import { randomBytes, randomUUID } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import type { AuthHonoPorts } from '@sentropic/auth-hono';
 import { webauthnFixture } from './webauthn-fixture.js';
-import { createIdentityAuthHonoTransactionBindingV1, runIdentityAuthCompletionV1, createNodeIdentityDigestPort, createHs256EmailTicketPort } from '../../src/index.js';
+import { createNodeIdentityDigestPort, createHs256EmailTicketPort } from '../../src/index.js';
+import { createIdentityAuthHonoTransactionBindingV1, runIdentityAuthCompletionV1 } from '../../src/identity/auth-hono.js';
 import { asOpHost, NOW, openPostgresEnv, openSqliteEnv, pgEnabled } from './a20b-helpers.js';
 
 const WRITE = { mode: 'write', purpose: 'request', deadlineMs: 5000, maxAttempts: 1 } as const;

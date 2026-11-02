@@ -20,6 +20,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./identity/auth-hono": {
+      "types": "./dist/identity/auth-hono.d.ts",
+      "import": "./dist/identity/auth-hono.js"
+    },
     "./live-storage/registration": {
       "types": "./dist/live-storage/registration.d.ts",
       "import": "./dist/live-storage/registration.js"
