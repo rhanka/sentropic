@@ -14,6 +14,9 @@ import {
   type SeatOnboardingFile,
   type SeatOnboardingFormat,
   type SeatOnboardingV1,
+  rebindSeatOnboarding,
+  seatLaunchGate,
+  validateSeatEnvelope,
   validateSeatOnboarding,
 } from '../../src/enrollment/seat-onboarding.js';
 
