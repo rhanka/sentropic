@@ -5,6 +5,33 @@ interface Scope { active: boolean; acceptingQueries: boolean; failure: unknown; 
 const scopes = new WeakMap<PoolClient, Scope>();
 const unbound = (): never => { throw new IdentityCustodyErrorV1('identity_transaction_unbound'); };
 
+/** Read command keywords while honoring PostgreSQL's nested block comments. */
+function commandPrefix(text: string): string {
+  let at = 0;
+  const words: string[] = [];
+  while (at < text.length && words.length < 3) {
+    if (/\s/.test(text[at]) || (words.length === 0 && text[at] === ';')) { at++; continue; }
+    if (text.startsWith('--', at)) {
+      const end = text.slice(at + 2).search(/[\r\n]/);
+      at = end < 0 ? text.length : at + end + 3;
+      continue;
+    }
+    if (text.startsWith('/*', at)) {
+      let depth = 1; at += 2;
+      while (at < text.length && depth) {
+        if (text.startsWith('/*', at)) { depth++; at += 2; }
+        else if (text.startsWith('*/', at)) { depth--; at += 2; }
+        else at++;
+      }
+      continue;
+    }
+    const word = /^[A-Za-z_]+/.exec(text.slice(at))?.[0];
+    if (!word) break;
+    words.push(word); at += word.length;
+  }
+  return words.join(' ');
+}
+
 /** A fresh capability over the same real driver connection; no independent transaction. */
 export function createCmScopedHostClient(client: PoolClient) {
   const scope: Scope = { active: true, acceptingQueries: true, failure: undefined, inFlight: 0 };
@@ -25,7 +52,9 @@ export function createCmScopedHostClient(client: PoolClient) {
         check();
         const args = [...supplied], first = args[0];
         const text = typeof first === 'string' ? first : first && typeof first === 'object' && 'text' in first ? first.text : '';
-        if (typeof text !== 'string' || /^\s*(?:BEGIN\b|START\s+TRANSACTION\b|COMMIT\b|ROLLBACK\b|SAVEPOINT\b|RELEASE\b|SET\s+TRANSACTION\b)/i.test(text)) return reject();
+        if (typeof text !== 'string' || /^(?:BEGIN|START|COMMIT|END|ROLLBACK|ABORT|SAVEPOINT|RELEASE)\b|^PREPARE TRANSACTION\b|^SET (?:(?:LOCAL|SESSION) )?TRANSACTION\b/i.test(commandPrefix(text))) return reject();
+        // Parse exactly one statement before execution; a hidden second COMMIT must never run.
+        args[0] = { ...(typeof first === 'string' ? { text: first } : first as object), queryMode: 'extended' };
         scope.inFlight += 1;
         let finished = false;
         const finish = (error?: unknown) => {
