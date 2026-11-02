@@ -151,6 +151,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] Account deletion through the A2.3/A2.0b atomic cascade (V2), self + admin handlers.
   - [x] Add fixed V2 self/admin authorizers with current CM prerequisites and a complete business ownership/reference plan; membership alone never authorizes destruction.
   - [x] Declare personal-data deletion and nullable shared-attribution dispositions, with a database inventory guard for unclassified person references.
+  - [x] Extract the unchanged persisted job-to-stream mapping for deletion inventory without initializing the queue manager in CM callbacks.
   - [ ] Rollback checkpoint recorded BEFORE any legacy table deletion; one author per namespace via cutover records.
   - [x] Preserve the pre-deletion checkpoint row and retain account-driven OAuth invalidation after cutover.
   - [x] Rebind client, consent, membership, credential and restore invalidation to CM identity records.
