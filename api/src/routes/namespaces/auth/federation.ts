@@ -4,6 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { Hono, type Context } from 'hono';
 import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import { z } from 'zod';
+import { logger } from '../../../logger';
 
 import { createFederationBroker } from '../../../services/auth/federation/broker';
 import { pendingFederationStore } from '../../../services/auth/federation/pending-store';
@@ -145,7 +146,10 @@ const brokerFor = (
 
   return createFederationBroker({
     complete: createCmFederationCompletion(getCookie(c, 'session') || c.req.header('authorization')?.replace('Bearer ', '') || null),
-    audit: ports.auditLog,
+    // Protocol start/refusal events occur outside replayable identity callbacks.
+    // Completion success events use only the attempt's CM ledger buffer.
+    audit: { record: (level, event, fields) => logger[level]({ event,
+      provider: fields?.provider, expected: fields?.expected }, 'Federation protocol event') },
     clock: ports.clock,
     config: {
       // D11: resume the sealed continuation via the authorize endpoint, else a FIXED internal page.
