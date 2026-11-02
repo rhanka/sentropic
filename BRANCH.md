@@ -14,6 +14,7 @@ Move the RC2.store and RC2.registry pins from RC2.contract r2 (MANIFEST 133e23f5
 - r3 delta scope (CHANGES-r3.md / changes-r3.json, verified entry by entry): N1 `tool_call_delta` remote field args→delta in schemas/SessionChatPayloadV1.schema.json plus the 4 chat vectors (store re-verifies only; `retainedPayload` stays null so no code change is expected); N2 policy-confirm/bodyless-route http metadata (receiver scope, not this lot); N3 provenance labels only; N4 the four registry-adjacent schema `$comment` fixes, verified `/$comment`-only in changes-r3.json. `changes-r3.json.methods` is empty (no port change).
 - Sentropic-pinned vectors verified unchanged r2→r3: listing digest 226ad2fed8143a5c9f5549fb3ae2cbd5e42ae13af67ca6c1957bb9233233fe98 present identically in r2-baseline.json and r3 vectors/registry-revision-digests.json; vectors/r2-semantics.json `retentionDeadline` byte-equal between r2 baseline and r3.
 - Source-gaps stay fail-closed (refuse), never invented: DEP-FED (H2-I/F1/F2/F15), DEP-AUTH-B/M0, DEP-AUTH-A/A2.0b, SG-R15, N1/N4/N5 packed exports, DEP-RESIDENCE/RCP.
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 - Re-verify the contract manifest hash before each push.
 
 ## Branch Scope Boundaries (MANDATORY)
