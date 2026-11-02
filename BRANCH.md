@@ -1,7 +1,7 @@
 # Feature: Reject incomplete scanner candidate contracts (A01)
 
 ## Objective
-- [ ] Implement admission-plan-r1 section 5 A01 under approved amendment r6 section 3; no live admission or promotion.
+- [x] Implement admission-plan-r1 section 5 A01 under approved amendment r6 section 3; no live admission or promotion.
 
 ## Scope / Guardrails
 - [x] Binding r6 SHA-256: `4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f`.
@@ -52,11 +52,11 @@
   - [x] Read rules, approved plan and r6 scanner contract; verify both document hashes.
   - [x] Create isolated worktree from origin/main and pass mechanical harness branch check.
   - [x] Locate existing pinned Node test lane and shared Docker lock; preserve production admission off.
-- [ ] **Lot 1 — Strict material contracts**
+- [x] **Lot 1 — Strict material contracts**
   - [x] Write negative controls first in `scripts/security/daily/scanner-provenance.test.mjs`.
   - [x] Validate exact source/tool/base/module/package/patch pins and retained material bytes under `scripts/security/scanner/`.
-  - [ ] Reject current pending recipe and material pins; accept a complete synthetic contract only.
-- [ ] **Lot 2 — Receipt and artifact contracts**
+  - [x] Reject current pending recipe and material pins; accept a complete synthetic contract only.
+- [x] **Lot 2 — Receipt and artifact contracts**
   - [x] Define a synthetic three-receipt tuple with measured fixture outputs; it supplies no platform authority.
   - [x] Replace weak text assertions in `scripts/security/daily/scanner-image-publish.test.mjs`.
   - [x] Write rehashed receipt substitution, missing/empty output and strict-field negative controls before implementation.
@@ -66,8 +66,8 @@
   - [x] Add rehashed malformed-OCI and impossible-calendar-date negative controls.
   - [x] Fail closed on malformed OCI structures and normalized impossible dates.
 - [ ] **Lot 3 — Final validation and handoff**
-  - [ ] Run `make test-security-daily ENV=test-cyber-adm` under the single lock.
-  - [ ] Run `make down ENV=test-cyber-adm`; verify scope before each commit.
+  - [x] Run `make test-security-daily ENV=test-cyber-adm` under the single lock: 298 passed, zero failures/skips at `bfdbb1eb1`; this final update changes documentation only.
+  - [x] Run `make down ENV=test-cyber-adm` (exit 0); verify scope before each commit.
   - [ ] Open a ready PR against main after the local gate; use this file as the PR body.
   - [ ] Record exact head, PR, CI and gate evidence in `.tmp/rv/cyber-admission-a01.md` for conductor Track import.
   - [ ] Continue only A02 on its stacked branch; retain A03+ and runtime admission gates.
