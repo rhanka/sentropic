@@ -17,6 +17,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
 - **Allowed Paths (implementation scope)**:
   - `api/src/**`
   - `api/tests/**`
+  - `api/vitest.config.ts`
   - `api/drizzle/control/0014_app_cm_identity_cutover.sql` + `api/drizzle/control/meta/**`
   - `ui/src/**`
   - `ui/tests/**`
@@ -44,6 +45,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] A4-TEST-POLICY — Declare the API Vitest configuration for synthetic fixture policy only; production Q-K remains required. The first C2 check flagged this previously undeclared path but exited zero, and commit 3f587bf61 proceeded. The declaration is corrected here; subsequent gates must inspect PASS text as well as the exit status. Rollback: revert the test env entry; no production configuration changes.
 - [x] BRxx-EX1 — Approved r2 F11 requires CM-owned screens. Allow only `packages/cluster-mesh/ui/**`, `tests/ui/**`, its browser exports/optional peer metadata, and root/UI lock/dependency entries needed to mount them. Backend CM source/tests stay excluded. Impact: one shared screen behavior across root projections; publication/version validation is required after rebase. Rollback: revert the UI projection/package commits together before activation; no data or A2.0b branch changes.
 - [ ] A4-STACK — A2.0b owner: supply the approved r6 combined UOW (`run`, `tx.stores`, `tx.custody`, subject lifecycle), auth-hono binding/runner, importer verifier and V2 planes before app qualification; A4 does not implement these CM APIs.
 - [ ] A4-WORKSPACE-DELETE — CM has no standalone workspace deletion contract. The app endpoint now refuses after its existing authorization/hidden guards, with zero writes; restore its 204 contract only through an approved atomic CM cleanup API. Existing success acceptance remains unmet (Mistral M1).
