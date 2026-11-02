@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { openPostgresEnv, openSqliteEnv, pgEnabled } from './a20b-helpers.js';
 
 const foreignKeys = [
+  ['identity_legacy_connector_tombstones', 'delivery_id', 'identity_revocation_outbox', 'delivery_id', 'RESTRICT'],
   ['identity_account_profiles', 'user_id', 'identity_user_accounts', 'user_id', 'RESTRICT'],
   ['identity_webauthn_credentials', 'user_id', 'identity_user_accounts', 'user_id', 'RESTRICT'],
   ['identity_social_links', 'user_id', 'identity_user_accounts', 'user_id', 'RESTRICT'],

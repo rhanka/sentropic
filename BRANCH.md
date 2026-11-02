@@ -61,6 +61,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] R1 follow-up G1: extend the foreign-key test to the nullable tombstone delivery reference required by section 6.3.
 - [x] R1: export the auth-hono transaction binding with CM data ports, real factories, deferred mail and completion services.
 - [x] R1: replace legacy token methods, retain verified token evidence locally, and drain synchronous sanitized audit exactly once.
 - [x] R1: construct actual WebAuthn factories and verifiers with the intersection of stored and current RP/origin/UV policy.
