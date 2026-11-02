@@ -21,7 +21,7 @@ export interface GrantRecord {
 export interface ArtifactMetadata {
   title?: string;
   description?: string;
-  icon?: string;
+  icon?: string | null;
 }
 
 export interface ArtifactAcl {

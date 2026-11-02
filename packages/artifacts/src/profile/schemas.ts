@@ -10,9 +10,9 @@ const primitiveRecord = { type: 'object',
   additionalProperties: { type: ['string', 'number', 'boolean', 'null'] }, default: {} };
 /** Artifact display metadata: one short word for the icon. */
 const metadata = {
-  title: { type: 'string', maxLength: 200, description: 'Artifact display title.' },
+  title: { type: 'string', minLength: 1, maxLength: 160, description: 'Artifact display title.' },
   description: { type: 'string', maxLength: 2000, description: 'Short artifact description.' },
-  icon: { type: 'string', pattern: '^[a-z0-9][a-z0-9_-]{0,31}$',
+  icon: { type: ['string', 'null'], pattern: '^[a-z][a-z0-9-]{0,31}$',
     description: 'One short lowercase word.' },
 } as const;
 
