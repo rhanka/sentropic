@@ -59,17 +59,25 @@ export const checkQualificationReadiness = async (db: QualificationDb, token: st
     && proof.reaperHeartbeatAtMs >= proof.listenerStartedAtMs && proof.reaperHeartbeatAtMs <= now
     && now - proof.reaperHeartbeatAtMs <= 90_000 && proof.secondModelsProbeAtMs >= proof.listenerStartedAtMs && proof.secondModelsProbeAtMs <= now
     && proof.sessionIds.length === 2 && new Set(proof.sessionIds).size === 2);
-  const sessions = (await db.query(`SELECT id, user_id FROM user_sessions WHERE id = ANY($1::text[]) AND expires_at > now()`, [proof.sessionIds])).rows;
+  const sessions = (await db.query(`SELECT s.session_id AS id, s.user_id FROM cm_identity.identity_login_sessions s
+    JOIN cm_identity.identity_login_token_bindings b ON b.session_id = s.session_id
+    JOIN cm_identity.identity_user_accounts a ON a.user_id = s.user_id
+    JOIN cm_identity.identity_account_profiles p ON p.user_id = a.user_id
+    WHERE s.session_id = ANY($1::text[]) AND s.expires_at::timestamptz > now()
+      AND s.status = 'active' AND s.revoked_at IS NULL AND a.account_status = 'active' AND p.disabled_at IS NULL`, [proof.sessionIds])).rows;
   requireQualification(sessions.length === 2 && new Set(sessions.map(row => row.user_id)).size === 2);
-  const own = (await db.query(`SELECT id FROM user_sessions WHERE session_token_hash = $1 AND expires_at > now()`,
+  const own = (await db.query(`SELECT s.session_id AS id FROM cm_identity.identity_login_sessions s
+    JOIN cm_identity.identity_login_token_bindings b ON b.session_id = s.session_id
+    WHERE b.session_token_hash = $1 AND s.expires_at::timestamptz > now() AND s.status = 'active' AND s.revoked_at IS NULL`,
     [createHash('sha256').update(token).digest('hex')])).rows;
   requireQualification(own.length === 1 && own[0].id === proof.sessionIds[0]);
-  const memberships = (await db.query(`SELECT user_id, count(*) AS n FROM workspace_memberships WHERE user_id = ANY($1::text[]) GROUP BY user_id`,
+  const memberships = (await db.query(`SELECT user_id, count(*) AS n FROM cm_identity.cm_workspace_members WHERE user_id = ANY($1::text[]) GROUP BY user_id`,
     [sessions.map(row => row.user_id)])).rows;
   requireQualification(memberships.length === 2 && memberships.every(row => Number(row.n) === 1));
-  const grants = (await db.query(`SELECT wm.user_id, w.id AS workspace_id, w.tenant_id FROM workspace_memberships wm
-    JOIN workspaces w ON w.id = wm.workspace_id JOIN tenants t ON t.id = w.tenant_id
-    JOIN tenant_memberships tm ON tm.tenant_id = t.id AND tm.user_id = wm.user_id
+  const grants = (await db.query(`SELECT wm.user_id, w.id AS workspace_id, cw.tenant_id FROM cm_identity.cm_workspace_members wm
+    JOIN workspaces w ON w.id = wm.workspace_id JOIN cm_identity.cm_workspaces cw ON cw.workspace_id = w.id
+    JOIN cm_identity.cm_tenants t ON t.tenant_id = cw.tenant_id
+    JOIN cm_identity.cm_tenant_memberships tm ON tm.tenant_id = t.tenant_id AND tm.user_id = wm.user_id
     WHERE wm.user_id = ANY($1::text[]) AND w.hidden_at IS NULL AND t.status = 'active' AND tm.status = 'approved'`,
     [sessions.map(row => row.user_id)])).rows;
   requireQualification(grants.length === 2 && sessions.every(s => grants.filter(g => g.user_id === s.user_id).length === 1)
