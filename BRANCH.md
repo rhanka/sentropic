@@ -24,7 +24,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - In every make command, ENV=<env> passed as the last argument.
 - All new text in English.
 - Pins: amendment A2.0b-r6 sha256 5bde078cd12a35fb752eadb48496f0373dc8940883c701b920878a31bb836165; review a2-0b_wonder_r6 APPROVE sha256 0734a46e930b8fc456a431005d392203a347c1e19262305ac3c2a7e109206433; lot-A4 sha256 3826e88cad5f6fd368ce12c392d72634f78b411946e0354776e14cd984d6f8ed; lot-A4-prerequisites.patch sha256 11476ebd89c6aec73dcf7b20984323926310a331bff9d421a73c1fa6ec475ff5; baseline origin/main 455813bf923e9a58f701b17d2adbef01b2df0e71.
-- Version: 0.26.0-dev.4 (next free cluster-mesh dev version after main 0.26.0-dev.3).
+- Version: 0.26.0-dev.5 (next free version after main 0.26.0-dev.4; published stable 0.25.0).
 - Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required by `scripts/ci/ci-lockfile-installs.test.mjs`).
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -61,6 +61,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] R1 rebase: merge-tree found only BRANCH.md conflicted with origin/main e1c0ef97d; rebase preserved identity source/tests byte-for-byte. Bump to free dev.5 through Make in Docker and synchronize all lock/fixture pins without unrelated changes.
 - [x] R1: scope built-in host executors to the same deadline, read mode and callback lifetime as their CM transaction.
 - [x] R1: extend lifetime and read-mode refusal checks to the host business executor, not only the combined CM ports.
 - [x] R1: export exact host-binding names, preserve generic business executors and retain active-transaction registration when binding a host facade.

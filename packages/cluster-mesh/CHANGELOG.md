@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.26.0-dev.4
+## 0.26.0-dev.5
 
 - Add the A2.0b identity custody extension bundle (contract 1.1.0, atomic
   deletion 2.0.0): WebAuthn custody, unbound single-use proofs, digest-only
