@@ -6,6 +6,8 @@
 // ISO-8601 text in both dialects because the frozen record types define them
 // as strings; ids are opaque cluster-mesh-owned values, never auto-generated.
 
+import { identityA22PostgresDdl, IDENTITY_A22_SQLITE_DDL } from '../../identity-stores/tenancy-schema.js';
+
 export type IdentitySchemaDialect = 'postgres' | 'sqlite';
 
 /** Every table this slice owns; writes live only in this module. */
@@ -138,7 +140,7 @@ const TABLES: readonly TableDefinition[] = [
     table: 'identity_account_profiles',
     columns: [
       { name: 'user_id', type: 'text', nullable: false, primaryKey: true },
-      { name: 'email_verified', type: 'integer', nullable: false, check: '"email_verified" IN (0,1)' },
+      { name: 'email_verified', type: 'boolean', nullable: false },
       { name: 'display_name', type: 'text', nullable: true },
       { name: 'approval_due_at', type: 'text', nullable: true },
       { name: 'approved_at', type: 'text', nullable: true },
@@ -160,9 +162,9 @@ const TABLES: readonly TableDefinition[] = [
       { name: 'rp_id', type: 'text', nullable: false },
       { name: 'device_name', type: 'text', nullable: true },
       { name: 'transports_json', type: 'text', nullable: true },
-      { name: 'uv', type: 'integer', nullable: false, check: '"uv" IN (0,1)' },
+      { name: 'uv', type: 'boolean', nullable: false },
       { name: 'device_type', type: 'text', nullable: true },
-      { name: 'backed_up', type: 'integer', nullable: true, check: '"backed_up" IN (0,1)' },
+      { name: 'backed_up', type: 'boolean', nullable: true },
       { name: 'created_at', type: 'text', nullable: false },
       { name: 'last_used_at', type: 'text', nullable: true },
       { name: 'revoked_at', type: 'text', nullable: true },
@@ -231,7 +233,7 @@ const TABLES: readonly TableDefinition[] = [
       { name: 'session_id', type: 'text', nullable: false, primaryKey: true },
       { name: 'session_token_hash', type: 'text', nullable: false, unique: true },
       { name: 'refresh_token_hash', type: 'text', nullable: true, unique: true },
-      { name: 'mfa_verified', type: 'integer', nullable: false, check: '"mfa_verified" IN (0,1)' },
+      { name: 'mfa_verified', type: 'boolean', nullable: false },
       { name: 'auth_time', type: 'bigint', nullable: false, check: '"auth_time" BETWEEN 0 AND 9007199254740991' },
       { name: 'session_version', type: 'bigint', nullable: false, check: '"session_version" BETWEEN 0 AND 9007199254740991' },
       { name: 'rotation_version', type: 'bigint', nullable: false, check: '"rotation_version" BETWEEN 0 AND 9007199254740991' },
@@ -250,7 +252,7 @@ const TABLES: readonly TableDefinition[] = [
       { name: 'provider_subject', type: 'text', nullable: false },
       { name: 'provider_tenant', type: 'text', nullable: true },
       { name: 'email_at_link', type: 'text', nullable: true },
-      { name: 'email_verified_by_provider', type: 'integer', nullable: false, check: '"email_verified_by_provider" IN (0,1)' },
+      { name: 'email_verified_by_provider', type: 'boolean', nullable: false },
       { name: 'linked_at', type: 'text', nullable: false },
       { name: 'last_login_at', type: 'text', nullable: true },
       { name: 'revoked_at', type: 'text', nullable: true },
@@ -365,11 +367,12 @@ const columnSql = (definition: ColumnDefinition, dialect: IdentitySchemaDialect,
   if (definition.primaryKey && autoIncrement) {
     parts.push(dialect === 'postgres' ? 'bigint GENERATED ALWAYS AS IDENTITY' : 'integer');
   } else {
-    parts.push(dialect === 'postgres' && definition.type === 'bigint' ? 'bigint' : definition.type === 'bigint' ? 'INTEGER' : definition.type);
+    parts.push(dialect === 'sqlite' && ['bigint', 'boolean'].includes(definition.type) ? 'INTEGER' : definition.type);
   }
   if (definition.primaryKey) parts.push('PRIMARY KEY');
   if (definition.unique) parts.push('UNIQUE');
-  if (!definition.nullable && !definition.primaryKey) parts.push('NOT NULL');
+  if (!definition.nullable) parts.push('NOT NULL');
+  if (dialect === 'sqlite' && definition.type === 'boolean') parts.push(`CHECK ("${definition.name}" IN (0,1))`);
   if (definition.references) parts.push(`REFERENCES ${definition.references}`);
   if (definition.check) parts.push(`CHECK (${definition.check})`);
   return parts.join(' ');
@@ -390,7 +393,9 @@ export const identitySchemaStatements = (dialect: IdentitySchemaDialect, schema:
     const composite = definition.compositePrimaryKey
       ? `, PRIMARY KEY (${definition.compositePrimaryKey.map((name) => `"${name}"`).join(', ')})`
       : '';
-    return `CREATE TABLE IF NOT EXISTS ${qualified(definition.table)} (${columns}${composite})`;
+    const references = custodyForeignKeys.filter(([table]) => table === definition.table).map(([, from, target, to, action]) =>
+      `FOREIGN KEY (${from.map((column) => `"${column}"`).join(', ')}) REFERENCES ${dialect === 'postgres' ? `"${schema}".` : ''}"${target}" (${to.map((column) => `"${column}"`).join(', ')}) ON DELETE ${action}`);
+    return `CREATE TABLE IF NOT EXISTS ${qualified(definition.table)} (${columns}${composite}${references.length ? `, ${references.join(', ')}` : ''})`;
   });
   const index = (name: string, table: IdentityTableName, columns: string, unique: boolean, where?: string): string => {
     // PostgreSQL never schema-qualifies the index name in CREATE INDEX; the
@@ -413,5 +418,23 @@ export const identitySchemaStatements = (dialect: IdentitySchemaDialect, schema:
     index('identity_revocation_outbox_pending', 'identity_revocation_outbox', '"state", "next_attempt_at", "created_at", "delivery_id"', false),
     index('identity_revocation_outbox_tuple', 'identity_revocation_outbox', '"operation_id", "step", "target_kind", "target_ref"', true),
   ];
-  return [...tables, ...indexes];
+  // The custody invitation FKs require the accepted tenancy parents first.
+  const tenancy = (dialect === 'postgres' ? identityA22PostgresDdl(schema) : IDENTITY_A22_SQLITE_DDL)
+    .split('\n').filter((line) => !/^(BEGIN|COMMIT|SET LOCAL)/.test(line.trim())).join('\n')
+    .split(';').map((statement) => statement.trim()).filter(Boolean);
+  return [...tenancy, ...tables, ...indexes];
 };
+
+const custodyForeignKeys: readonly (readonly [IdentityTableName, readonly string[], string, readonly string[], 'RESTRICT' | 'SET NULL'])[] = [
+  ['identity_account_profiles', ['user_id'], 'identity_user_accounts', ['user_id'], 'RESTRICT'],
+  ['identity_webauthn_credentials', ['user_id'], 'identity_user_accounts', ['user_id'], 'RESTRICT'],
+  ['identity_social_links', ['user_id'], 'identity_user_accounts', ['user_id'], 'RESTRICT'],
+  ['identity_single_use_proofs', ['user_id'], 'identity_user_accounts', ['user_id'], 'RESTRICT'],
+  ['identity_email_registration_tickets', ['user_id'], 'identity_user_accounts', ['user_id'], 'RESTRICT'],
+  ['identity_email_registration_tickets', ['code_kind', 'code_proof_id'], 'identity_single_use_proofs', ['kind', 'proof_id'], 'RESTRICT'],
+  ['identity_login_token_bindings', ['session_id'], 'identity_login_sessions', ['session_id'], 'RESTRICT'],
+  ['identity_invitation_digests', ['consumed_by_user_id'], 'identity_user_accounts', ['user_id'], 'SET NULL'],
+  ['identity_invitation_digests', ['tenant_id'], 'cm_tenants', ['tenant_id'], 'RESTRICT'],
+  ['identity_invitation_digests', ['workspace_id'], 'cm_workspaces', ['workspace_id'], 'RESTRICT'],
+  ['identity_deletion_attempts', ['operation_id'], 'identity_deletion_operations', ['operation_id'], 'RESTRICT'],
+];
