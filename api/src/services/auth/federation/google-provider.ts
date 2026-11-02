@@ -2,6 +2,7 @@ import { Google } from 'arctic';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 import type { FederationProvider, FederationProviderIdentity } from './types';
+import { federationAssertionExpiry } from './assertion-expiry';
 
 /**
  * BR-39e Lot 1 — Google OIDC provider (the reference case, D8 auto-link-allowlisted).
@@ -69,7 +70,7 @@ export const createGoogleProvider = (config: GoogleProviderConfig): FederationPr
       const emailVerified = payload.email_verified === true;
 
       // The external tokens are intentionally NOT returned — they are dropped here (D1 broker model).
-      return { email, emailVerified, subject };
+      return { email, emailVerified, subject, assertionExpiresAt: federationAssertionExpiry(payload) };
     },
   };
 };

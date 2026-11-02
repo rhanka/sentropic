@@ -160,7 +160,6 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
 
     if (request.error) {
       await audit.record('warn', 'federation.provider_error', {
-        error: request.error,
         provider: provider.id,
       });
       return {
@@ -195,9 +194,8 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
         nonce: flowState.nonce,
         profile: request.profile,
       });
-    } catch (error) {
+    } catch {
       await audit.record('warn', 'federation.verify_failed', {
-        err: error instanceof Error ? error.message : String(error),
         provider: provider.id,
       });
       return {
