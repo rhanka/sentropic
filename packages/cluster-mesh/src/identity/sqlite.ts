@@ -7,6 +7,7 @@
 // and the PostgreSQL profile, so chain tamper detection is one behavior.
 
 import type { SqliteConnection } from '../storage/sqlite/connection.js';
+import { applyAtomicSqliteDdl } from '../storage/identity/sqlite-schema.js';
 import { ConversationSessionError, type ConversationAuthorityStore, type ConversationSessionRecord } from './conversation.js';
 import {
   escalationEntryDigest,
@@ -52,7 +53,7 @@ export const IDENTITY_SQLITE_SCHEMA: readonly string[] = [
 ];
 
 export function applyIdentitySqliteSchema(db: SqliteConnection): void {
-  for (const statement of IDENTITY_SQLITE_SCHEMA) db.exec(statement);
+  applyAtomicSqliteDdl(db, IDENTITY_SQLITE_SCHEMA);
 }
 
 const rowToConversationSession = (row: Record<string, unknown>): ConversationSessionRecord => ({
