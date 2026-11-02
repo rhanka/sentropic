@@ -183,6 +183,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Relocate the existing account-administration screen into the CM package and project it from settings; portable host-port conversion follows.
   - [x] Replace the moved screen's duplicate row/status/role declarations with its shared CM management view contract.
   - [x] Make the CM admin screen portable through host ports and remove root behavior duplication; pending-delivery presentation follows.
+  - [x] Retain deletion operation ids across retries and distinguish completed deletion from pending external revocations in localized admin feedback.
   - [ ] Login, registration, admin, membership decision, members screens; e2e on ENV=e2e-app-a4.
 - [ ] **Lot 5 — Tests**
   - [ ] gap-§1 scenario end to end; registration → approval → login; invitation consumed once; revoke-all; mid-session suspension empties tool set; account deletion with injected failure leaves no orphan and preserves rows; migration tests; F11 e2e.
