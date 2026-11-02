@@ -67,7 +67,7 @@ describe.each(pgEnabled ? ['sqlite', 'postgres'] as const : ['sqlite'] as const)
     expect(receipt).toMatchObject({ transaction: 'rolled_back', complete: false, deliveryIds: [], cleanup: null });
     expect(receipt.steps[2]).toEqual({ step: 'connector_grants', outcome: 'queued', detailCode: 'required_local_step_failed' });
     await base.unitOfWork.run(READ, async (tx) => {
-      expect(await tx.stores.accounts.findById('person')).not.toBeNull();
+      expect(await tx.stores.accounts.findAccount('person')).not.toBeNull();
       expect(await tx.revocationOutbox.listPending(command.operationId)).toEqual([]);
     });
   });

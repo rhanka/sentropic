@@ -76,7 +76,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b auth binding on $
     const original = Uint8Array.from(bytes);
     await expect(createNodeIdentityDigestPort().hmacSha256('retained-key', bytes))
       .rejects.toMatchObject({ code: 'identity_material_missing' });
-    expect(bytes).toEqual(original);
+    expect(new Uint8Array(bytes)).toEqual(original);
   });
 
   it('matches email codes across the SHA-256/HMAC-SHA256 union in one recency-ordered query', async () => {
