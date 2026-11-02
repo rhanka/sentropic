@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { digest, policy, validateScanner } from './toolchain-contract.mjs';
+import { materialFixture } from '../scanner/contract-fixture.mjs';
+import { validateMaterialContract } from '../scanner/material-contract.mjs';
 
 const SENTROPIC_REPOSITORY = 'ghcr.io/rhanka/sentropic-trivy';
 const SENTROPIC_IDENTITY =
@@ -85,23 +87,47 @@ test('should refuse upstream signatures on downstream bytes and any profile over
   }
 });
 
-test('should pin a reviewed downstream recipe with fixed stages and no floating inputs', async () => {
-  const recipe = JSON.parse(await readFile(
-    new URL('../../../scripts/security/scanner/recipe.json', import.meta.url)));
-  assert.deepEqual(recipe.stages,
-    ['acquire-upstream', 'apply-patches', 'rebuild', 'layout-sbom', 'validate']);
-  assert.equal(recipe.upstream.version, '0.76.1');
-  assert.ok(!JSON.stringify(recipe).includes('latest'));
-  assert.ok(!JSON.stringify(recipe).toLowerCase().includes('python'));
-  const origins = JSON.stringify(recipe.allowedOrigins);
-  assert.ok(origins.includes('github.com/aquasecurity/trivy'));
-  assert.ok(origins.includes('ghcr.io'));
-  assert.equal(typeof recipe.toolchain.go, 'string');
-  assert.ok(recipe.toolchain.go.length > 0);
-  assert.equal(typeof recipe.base.image, 'string');
-  assert.ok(recipe.base.image.includes('@sha256:'));
-  const cves = recipe.patches.map((entry) => entry.cve).sort();
-  assert.deepEqual(cves, ['CVE-2026-111497', 'CVE-2026-116587', 'CVE-2026-92392']);
+test('should refuse the current unresolved material recipe before build eligibility', async () => {
+  const recipeBytes = await readFile(new URL('../scanner/recipe.json', import.meta.url));
+  const manifest = JSON.parse(await readFile(new URL('../scanner/material-manifest.json', import.meta.url)));
+  assert.throws(() => validateMaterialContract({ recipeBytes, manifest, files: {} }), /scanner-contract/);
+});
+
+test('should validate a complete synthetic material tuple without granting admission', () => {
+  assert.deepEqual(validateMaterialContract(materialFixture()), { contractValid: true, productionAdmitted: false });
+});
+
+test('should refuse prose, non-hex pins, missing materials and changed bytes', () => {
+  for (const mutate of [
+    (f) => { f.manifest.recipeDigest = 'sha256:pending-live-build'; },
+    (f) => { f.manifest.materials[0].digest = `sha256:${'g'.repeat(64)}`; },
+    (f) => { f.manifest.materials[0].digest = 'sha256:' + '0'.repeat(64); },
+    (f) => { f.manifest.materials.pop(); },
+    (f) => { f.files['source.tar'] = Buffer.from('changed'); },
+    (f) => { f.files['source.tar'] = Buffer.alloc(0); },
+    (f) => { f.manifest.materials[0].size = 0; },
+    (f) => { f.manifest.materials[0].extra = 'unknown'; },
+    (f) => { f.manifest.materials.push(f.manifest.materials[0]); },
+  ]) {
+    const fixture = materialFixture(); mutate(fixture);
+    assert.throws(() => validateMaterialContract(fixture), /scanner-contract/);
+  }
+});
+
+test('should refuse unresolved source/compiler pins even after rehashing the recipe', () => {
+  for (const mutate of [
+    (r) => { r.upstream.commit = 'pinned at build time'; },
+    (r) => { r.go.version = 'pinned-by-upstream-go-dot-mod'; },
+    (r) => { r.actions[0].commit = 'v6'; },
+    (r) => { r.patches.reverse(); },
+    (r) => { r.base.index = 'alpine@sha256:pending'; },
+    (r) => { r.go.modules = []; },
+  ]) {
+    const fixture = materialFixture(); const recipe = JSON.parse(fixture.recipeBytes);
+    mutate(recipe); fixture.recipeBytes = Buffer.from(JSON.stringify(recipe));
+    fixture.manifest.recipeDigest = digest(fixture.recipeBytes);
+    assert.throws(() => validateMaterialContract(fixture), /scanner-contract/);
+  }
 });
 
 test('should block vulnerable fixtures and keep admission off without live receipts', async () => {
