@@ -20,13 +20,18 @@ export const artifactMigrationAssets = Object.freeze([
     ['0001_artifacts.sql', '7b12713b949a956ad0b4c370a16e80fb4625a99a5097769ed0653df5973dc533'],
     ['0002_lifecycle.sql', 'fdfbe97f84774b47a207e66915f7426926650e85b6dbb9a4d80272591df624fd'],
     ['0003_coordinator.sql', '852f8d388ac3bd8bfc0b484ca55bba9ff2e3bf34b3339384732ffeda5f8f1420'],
-    ['0004_metadata.sql', 'fae2a8cbb7bb7787c75ae1b66ede10695ce07bf70b3bebc528b2886200ce3fdd'],
   ].map(([name, sha256]) => {
     const id = `@sentropic/artifacts/migrations/${name}`;
     return Object.freeze({ id, sha256, read: () => readFileSync(require.resolve(id), 'utf8') });
   }),
   Object.freeze({ id: ACTIVATION_SQL_ASSET, sha256: ACTIVATION_SQL_ASSET_SHA256,
     read: () => readFileSync(require.resolve(ACTIVATION_SQL_ASSET), 'utf8') }),
+  Object.freeze({ id: '@sentropic/artifacts/migrations/0004_terminal_controls.sql',
+    sha256: '209d0a13fe83fab97d0407bc84a17d6b220dcc2ecdf3cef5d6b80a9885ec3555',
+    read: () => readFileSync(require.resolve('@sentropic/artifacts/migrations/0004_terminal_controls.sql'), 'utf8') }),
+  Object.freeze({ id: '@sentropic/artifacts/migrations/0005_metadata.sql',
+    sha256: 'cadeb8acd100d991a37d770b91692ae1609e8ce3c8c44a71b8fc35c9326fe0e9',
+    read: () => readFileSync(require.resolve('@sentropic/artifacts/migrations/0005_metadata.sql'), 'utf8') }),
 ]);
 
 /** Called only by the API migration runner, after the control stream. */

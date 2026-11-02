@@ -7,13 +7,12 @@ import { assertWellFormed, copyJson, freezeDeep, orderedDigest } from '../profil
 export const COMMAND_CODEC_VERSION = 'artifacts-command/v1' as const;
 export type CallerIdempotencyKey = string & { readonly __brand: 'caller-key' };
 export type InternalIdempotencyKey = string & { readonly __brand: 'internal-key' };
-export type ArtifactCommandOperation = 'ensure' | 'publish' | 'set_access' | 'delete';
+export type ArtifactCommandOperation = 'ensure' | 'publish' | 'set_access' | 'delete' | 'revert';
 export interface CommandIdentity {
   readonly internalKey: InternalIdempotencyKey;
   readonly commandHash: string;
   readonly codecVersion: typeof COMMAND_CODEC_VERSION;
 }
-export type ArtifactCommandOperation = 'ensure' | 'publish' | 'revert';
 export interface EffectiveArtifactCommand {
   readonly operation: ArtifactCommandOperation;
   readonly scopeBinding: string;

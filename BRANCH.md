@@ -1,7 +1,7 @@
-# Feature: artifact editing and strict publication concurrency (R1 D3)
+# Feature: artifact parity part 1 integrated on main (R2)
 
 ## Objective
-Continue the versioned-editing baseline with R1 D3: strict nullable release preconditions, transactional CAS and metadata, replay before edits, and complete typed MCP outcomes. D1, D2 and D4 are assigned to `feat/artifacts-parity-p0b`; this branch does not claim the complete parity P0.
+Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, revert, strict CAS, metadata, edits and D3 transport. IMMO alone activates part 1 after its two qualified switchovers. Publish artifacts 0.2.6 and retain the required mcp-platform 0.4.1 codec extension. Stop after pull_request CI, without merging.
 
 ## Scope / Guardrails
 - Scope limited to `packages/artifacts/**` plus the artifacts-host wiring in `api/src/services/artifacts/composition.ts` (only if the dep shape forces it).
@@ -21,10 +21,11 @@ Continue the versioned-editing baseline with R1 D3: strict nullable release prec
   - `packages/mcp-platform/tests/artifact-result-codec.test.ts`, `packages/mcp-platform/package.json`, `packages/mcp-platform/CHANGELOG.md` (D3 codec tests and release metadata)
   - `packages/mcp-platform/etc/mcp-platform.api.md`, `packages/mcp-platform/etc/mcp-platform-memory.api.md` (generated D3 public result fields and declaration line references)
   - `api/src/services/artifacts/composition.ts` (host store wiring only)
-  - `api/src/services/artifacts/host-storage.ts` (artifacts-host migration journal: add the 0004_metadata asset)
-  - `api/src/services/mcp/cluster-registry.ts` (APP-P1 pin realignment for artifacts 0.2.5, per the 0.2.4 precedent)
+  - `api/src/services/artifacts/host-storage.ts` (journal p0b 0004 and part 1 0005 assets)
+  - `api/src/services/mcp/cluster-registry.ts` (APP-P1 pin realignment for artifacts 0.2.6, following PR 878)
   - `api/tests/api/app-mcp-registry.test.ts`, `api/tests/api/app-mcp-installed.test.ts`, `api/tests/api/artifacts-host-publication.test.ts`, `api/tests/api/artifacts-host-migrations.test.ts` (digest/version/journal-count pins only)
   - `BRANCH.md`
+  - `tools/memory-mcp-l5/artifacts/**` (generated consumed-contract inventory and retained archives only)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -48,6 +49,14 @@ Continue the versioned-editing baseline with R1 D3: strict nullable release prec
 - Rationale: one package, one concern; no orthogonal sub-workstreams.
 
 ## Plan / Todo (lot-based)
+- [ ] **Integrate on main — owner-priority part 1**
+  - [x] Verify branch mechanically, read the full lane report and binding R2 design, rebase with semantic union.
+  - [ ] Retain p0b source authorization, masking, management confirmation, terminal controls and all tests.
+  - [ ] Renumber part 1 metadata migration to 0005; journal both migrations without gaps.
+  - [ ] Qualify strict v2 and compatible p0b projections; align artifacts 0.2.6, consumer ranges and APP-P1 pins.
+  - [ ] Regenerate Memory L5 inventory using make, with no manual digest edits.
+  - [ ] Run artifacts and mcp-platform typecheck/test/lint plus API boot under the single Docker lock; make down.
+  - [ ] Commit using make, force-with-lease push, mark PR ready, wait for pull_request CI and append the lane report; do not merge.
 - [ ] **Delta D3 — Binding R1 concurrency and transport contract only**
   - [x] Tests authored first: `packages/artifacts/tests/parity-d3.test.ts`; strict null preconditions, concurrent CAS, replay before edits, command identity, complete MCP errors.
   - [x] Require explicit expectedCurrentReleaseId in strict profiles; forbid bypass writers and defaults.
