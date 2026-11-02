@@ -12,7 +12,7 @@ import {
 } from '../../src/index.js';
 import { asOpHost, NOW, openPostgresEnv, openSqliteEnv, pgEnabled } from './a20b-helpers.js';
 
-const WRITE = { mode: 'write' as const, deadlineMs: 5000 };
+const WRITE = { mode: 'write' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 };
 
 /** Fixed custody messages never embed the code; assert the typed code. */
 const expectCustodyInvalid = (fn: () => unknown): void => {
@@ -84,7 +84,7 @@ describe('A2.0b connector revocation custody', () => {
     const schema = pg?.schema ?? '';
     const custody = createNodeConnectorCustody({ masterKey: new Uint8Array(32).fill(5) });
     const record = { deliveryId: 'd-row', operationId: 'op-row', step: 'connector_grants', subjectId: 'marie', targetKind: 'connector_grant', targetRef: 'conn-row', state: 'pending' as const, createdAt: NOW, nextAttemptAt: NOW };
-      await unitOfWork.runWrite(WRITE, async (tx) => {
+      await unitOfWork.run(WRITE, async (tx) => {
         const raw = {
           profile: current, schema,
           session: current === 'postgres' ? (tx.hostTransaction as unknown as { session: unknown }).session : null,

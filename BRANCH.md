@@ -61,6 +61,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] Fix review r1 finding 6: migrate connector-custody.spec.ts to combined run/options without weakening assertions (runtime qualification pending).
 - [x] Fix review r1 finding 6: migrate atomic-person-deletion.spec.ts to combined run/options without weakening assertions (runtime qualification pending).
 - [x] Fix review r1 finding 6: migrate custody-storage.spec.ts to combined run/options without weakening assertions (runtime qualification pending).
 - [x] Fix review r1 finding 6: migrate custody-security.spec.ts to combined run/options without weakening assertions (runtime qualification pending).
