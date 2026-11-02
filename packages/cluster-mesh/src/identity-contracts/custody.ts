@@ -331,15 +331,22 @@ export interface IdentityEmailTicketTokenPortV1 {
   verifyForImport(token: Uint8Array): Promise<IdentityEmailTicketClaimsV1>;
 }
 
-export interface IdentityLoginTokenPortV1 {
+export type VerifiedLoginClaimsV1 = { readonly userId: string; readonly sessionId: string; readonly expiresAt: string } & (
+  | { readonly tokenUse: 'session'; readonly login: SignedLoginBindingV1 | null }
+  | { readonly tokenUse: 'refresh'; readonly login: SignedLoginBindingV1 }
+);
+export interface IdentityLoginVerifierPortV1 {
+  verify(token: Uint8Array, expectedUse: 'session' | 'refresh', now: string): Promise<VerifiedLoginClaimsV1>;
+}
+export interface IdentityLoginTokenPortV1 extends IdentityLoginVerifierPortV1 {
   sign(input: {
     readonly userId: string;
     readonly sessionId: string;
     readonly tokenUse: 'session' | 'refresh';
+    readonly role: import('./types.js').GlobalRole;
     readonly login: SignedLoginBindingV1;
     readonly expiresAt: string;
   }): Promise<string>;
-  verify(token: Uint8Array, expectedUse: 'session' | 'refresh', now: string): Promise<BoundLoginSessionV1>;
 }
 
 export interface IdentityRunOptionsV1 {
