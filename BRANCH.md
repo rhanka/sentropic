@@ -42,6 +42,7 @@ Ship a durable LOCAL SQLite adapter set in @sentropic/artifacts equivalent to th
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json`.
 - BR-U1-EX1: `packages/cluster-mesh/tests/packaging/fixtures/selected/{package.json,package-lock.json}` added to Allowed Paths; they mirror the cluster-mesh version/peer bump exactly as 4ed0b4009 did on main (BR01-EX1/EX2). First scope-check run flagged them as unknown before the declaration; re-run after declaring.
 
 ## AI Flaky tests
@@ -76,20 +77,20 @@ Ship a durable LOCAL SQLite adapter set in @sentropic/artifacts equivalent to th
   - [x] Activation conformance vectors GREEN on both backends.
 - [x] **Lot 5 — Local blob store**
   - [x] `packages/artifacts/src/adapters/local-blob.ts` — `createLocalBlobStore({ root })` implementing PublicationBlobStore on the filesystem with sha256 digest verification on put and get, same key validation, strict delete, sorted prefix listing, restart durability.
-- [ ] **Lot 6 — Packaging**
+- [x] **Lot 6 — Packaging**
   - [x] package.json: `./sqlite` subpath export, files, version 0.3.0 (minor over published 0.2.6), peerDependenciesMeta unchanged (node:sqlite is builtin).
-  - [ ] Root/portable entries stay free of node:sqlite: test asserting the root barrel module graph contains no `node:sqlite`/`better-sqlite3` and that `@sentropic/artifacts/sqlite` resolves (portable size/entry budget).
+  - [x] Root/portable entries stay free of node:sqlite: `tests/sqlite-export.test.ts` asserts the root barrel module graph loads no sqlite module and no better-sqlite3, and that `@sentropic/artifacts/sqlite` resolves with all factories (2/2 GREEN); pack guard bounds package.json at MAX_MANIFEST_BYTES=1MiB.
   - [x] `ARTIFACTS_PROVIDER_VERSION` = '0.3.0' in mcp-core.ts; artifacts CHANGELOG 0.3.0 entry.
   - [x] cluster-mesh: ARTIFACTS_RANGE `>=0.2.0 <0.4.0` (catalog.ts + package.json peerDependencies), artifacts-tuple.spec.ts assertion, cluster-mesh 0.26.0-dev.6 bump.
   - [x] Lock pins: root + api package-lock.json workspace version entries + selected tuple fixture.
-  - [ ] APP-P1 refresh: recompute APP_P1_MANIFEST_DIGEST, update api cluster-registry.ts + app-mcp-registry.test.ts + app-mcp-installed.test.ts.
-- [ ] **Lot 7 — Full verification**
-  - [ ] `make build-artifacts typecheck-artifacts lint-artifacts ENV=test-artifacts-u1` (flock per command).
-  - [ ] `make test-artifacts ENV=test-artifacts-u1` GREEN (unit incl. sqlite conformance).
-  - [ ] `make test-artifacts-integration SCOPE=tests/adapter-conformance.integration.test.ts ENV=test-artifacts-u1` GREEN on BOTH backends; then `make down ENV=test-artifacts-u1`.
-  - [ ] `make pack-artifacts ENV=test-artifacts-u1` guarded pack GREEN.
-  - [ ] api scoped tests for the APP-P1 refresh: app-mcp-registry + app-mcp-installed GREEN.
-  - [ ] cluster-mesh artifacts-tuple source coherence GREEN.
+  - [x] APP-P1 refresh: APP_P1_MANIFEST_DIGEST recomputed as cb03aeae35dfcaad215b5a3d9f685587677a5bdde9bdc81950ba6d9d7f35ca82 (probe reproduces the pinned c69c8ce... digest at version 0.2.6, proving faithfulness); updated api cluster-registry.ts + app-mcp-registry.test.ts + app-mcp-installed.test.ts.
+- [x] **Lot 7 — Full verification**
+  - [x] `make build-artifacts typecheck-artifacts lint-artifacts ENV=test-artifacts-u1` GREEN (flock per command).
+  - [x] `make test-artifacts ENV=test-artifacts-u1` GREEN: 527/527 tests, 49 files (incl. sqlite conformance 20/20 and sqlite-export 2/2).
+  - [x] `make test-artifacts-integration SCOPE=tests/adapter-conformance.integration.test.ts ENV=test-artifacts-u1` GREEN on BOTH backends: 36/36; then `make down ENV=test-artifacts-u1`.
+  - [x] `make pack-artifacts ENV=test-artifacts-u1` guarded pack GREEN: `PASS @sentropic/artifacts@0.3.0 mode=block (standalone-default) sha256=d43ce28738cb77aa0daf74ebbef092711e25bbb1f47fb1a715db5d520ef67a70`.
+  - [x] api scoped tests for the APP-P1 refresh: app-mcp-registry + app-mcp-installed GREEN (24/24) after `up-api-test REGISTRY=local ENV=test-artifacts-u1` booted with the new digest; `make down` after.
+  - [x] cluster-mesh artifacts-tuple source coherence GREEN (4 passed, 3 pre-existing skips).
 - [ ] **Lot 8 — Ship**
   - [ ] Commits <=150 lines via make commit, `make scope-check` before each, push after each commit.
   - [ ] READY PR from BRANCH.md text; one CI run; report to .tmp/rv/artifacts-sqlite-u1.md. Do not merge.
