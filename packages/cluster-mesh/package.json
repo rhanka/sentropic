@@ -12,6 +12,12 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./ui/management": {
+      "types": "./ui/management-transport.ts", "import": "./ui/management-transport.ts"
+    },
+    "./ui/management-ports": {
+      "types": "./ui/management-ports.ts", "import": "./ui/management-ports.ts"
+    },
     "./ui/auth-flow": {
       "types": "./ui/auth-flow.ts", "import": "./ui/auth-flow.ts"
     },
