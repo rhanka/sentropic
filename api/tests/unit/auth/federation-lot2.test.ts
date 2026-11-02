@@ -10,9 +10,8 @@ import {
 } from '@sentropic/auth-hono';
 import { describe, expect, it, vi } from 'vitest';
 
-import { createFederationBroker } from '../../../src/services/auth/federation/broker';
+import { createFederationBroker, type FederationBrokerDeps } from '../../utils/federation-broker';
 import type {
-  FederationBrokerDeps,
   FederationProvider,
   FederationProviderIdentity,
 } from '../../../src/services/auth/federation/types';
