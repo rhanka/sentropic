@@ -2,6 +2,7 @@ import { Apple } from 'arctic';
 import { createRemoteJWKSet, importPKCS8, jwtVerify, SignJWT, type CryptoKey } from 'jose';
 
 import type { FederationProvider, FederationProviderIdentity } from './types';
+import { federationAssertionExpiry } from './assertion-expiry';
 
 const APPLE_ISSUER = 'https://appleid.apple.com';
 const APPLE_JWKS_URL = new URL(`${APPLE_ISSUER}/auth/keys`);
@@ -100,6 +101,7 @@ export const createAppleProvider = (config: AppleProviderConfig): FederationProv
         (payload.email_verified === true || payload.email_verified === 'true');
 
       return {
+        assertionExpiresAt: federationAssertionExpiry(payload),
         displayName: profile?.displayName ?? null,
         email,
         emailScope: email && isApplePrivateRelayEmail(email) ? 'provider' : 'global',

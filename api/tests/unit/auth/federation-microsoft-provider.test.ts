@@ -43,6 +43,7 @@ const payload = (overrides: Record<string, unknown> = {}) => ({
   email: 'user@example.com',
   iss: issuer(TENANT_A),
   nonce: 'bound-nonce',
+  exp: 1_800_000_000,
   oid: 'oid-a',
   sub: 'per-app-sub',
   tid: TENANT_A,
@@ -101,6 +102,7 @@ describe('createMicrosoftProvider (BR-39e Lot 3)', () => {
       { audience: 'client-id' }
     );
     expect(identity).toEqual({
+      assertionExpiresAt: new Date(1_800_000_000_000).toISOString(),
       email: 'user@example.com',
       emailVerified: false,
       providerTenant: TENANT_A,
