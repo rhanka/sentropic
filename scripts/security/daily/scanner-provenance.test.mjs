@@ -6,6 +6,7 @@ import { materialFixture } from '../scanner/contract-fixture.mjs';
 import { validateMaterialContract } from '../scanner/material-contract.mjs';
 import '../scanner/material-acquisition.test.mjs';
 import '../scanner/retained-materials.test.mjs';
+import '../scanner/offline-dependencies.test.mjs';
 
 const SENTROPIC_REPOSITORY = 'ghcr.io/rhanka/sentropic-trivy';
 const SENTROPIC_IDENTITY =
