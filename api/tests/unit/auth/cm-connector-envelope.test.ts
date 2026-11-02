@@ -50,4 +50,12 @@ describe('A4 production connector custody envelope', () => {
       expect(derived?.every(byte => byte === 0)).toBe(true);
     } finally { plaintext.fill(0); }
   });
+
+  it('should accept a bounded provider capability larger than the non-secret tuple fields', () => {
+    const plaintext = Buffer.from(JSON.stringify({ tokenKind: 'refresh', token: 'synthetic'.repeat(400) }));
+    try {
+      const envelope = sealConnectorCapability(tuple, plaintext, '2026-11-01T00:00:00.000Z');
+      expect(readConnectorCapability(envelope, bytes => bytes.equals(plaintext))).toBe(true);
+    } finally { plaintext.fill(0); }
+  });
 });
