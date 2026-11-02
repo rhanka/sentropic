@@ -205,8 +205,9 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
     }
 
     const expiresAt = Math.min(flowState.expiresAt.getTime(),
-      identity.assertionExpiresAt ? Date.parse(identity.assertionExpiresAt) : Infinity);
-    if (!Number.isFinite(expiresAt)) throw new Error('Invalid federation assertion expiry');
+      identity.assertionExpiresAt === undefined ? Infinity : Date.parse(identity.assertionExpiresAt));
+    if (!Number.isFinite(expiresAt)) return { ok: false,
+      result: errorResult(401, 'federation_verification_failed', 'Federation verification failed.') };
     // Provider verification pins issuer/audience/tenant/subject once. Retry uses only this
     // immutable copy; neither the one-time exchange nor transient flow consumption is repeated.
     return { continuation: flowState.continuationToken, identity: Object.freeze({ ...identity }),
@@ -299,9 +300,11 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
   const callback = async (request: FederationCallbackRequest): Promise<FederationCallbackResult> => {
     const verified = await runFlowAndVerify(request);
     if (!verified.ok) return verified.result;
-    return completed(attempt => {
+    return completed(async attempt => {
       requireFreshAssertion(verified.expiresAt, attempt.now);
-      return resolveAndFinish(attempt, verified.identity, verified.continuation, request.deviceInfo, verified.expiresAt);
+      const result = await resolveAndFinish(attempt, verified.identity, verified.continuation, request.deviceInfo, verified.expiresAt);
+      requireFreshAssertion(verified.expiresAt, attempt.now);
+      return result;
     });
   };
 
@@ -328,6 +331,7 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
           throw new IdentityCustodyErrorV1('social_subject_conflict');
         }
         await attempt.federation.touchLogin(existing.id, attempt.now);
+        requireFreshAssertion(verified.expiresAt, attempt.now);
         await attempt.audit.record('info', 'federation.link_idempotent', {
           provider: provider.id,
           userId: linkUserId,
@@ -345,6 +349,7 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
         providerTenant: identity.providerTenant ?? null,
         userId: linkUserId,
       });
+      requireFreshAssertion(verified.expiresAt, attempt.now);
       await attempt.audit.record('info', 'federation.linked', { provider: provider.id, userId: linkUserId });
       return { identity: linked, kind: 'linked' as const, userId: linkUserId };
     });
@@ -369,7 +374,9 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
     return completed(async attempt => {
       requireFreshAssertion(input.expiresAt, attempt.now);
       await attempt.verifyEmailProof(input.verifiedEmail, input.verificationToken);
-      return resolveAndFinish(attempt, identity, input.continuation, input.deviceInfo, input.expiresAt);
+      const result = await resolveAndFinish(attempt, identity, input.continuation, input.deviceInfo, input.expiresAt);
+      requireFreshAssertion(input.expiresAt, attempt.now);
+      return result;
     });
   };
 
