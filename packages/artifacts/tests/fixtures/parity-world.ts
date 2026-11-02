@@ -24,8 +24,12 @@ export function parityProfile() {
 export interface Body { [key: string]: unknown }
 
 export function sourceText(response: { body: unknown }, index = 0): string {
-  const file = (response.body as { files: { bytes: number[] }[] }).files[index];
-  return new TextDecoder('utf-8', { fatal: true }).decode(Uint8Array.from(file.bytes));
+  const file = (response.body as { files: { text?: string; base64?: string; encoding: string }[] }).files[index];
+  if (file.encoding === 'utf8' && typeof file.text === 'string') return file.text;
+  if (file.encoding === 'base64' && typeof file.base64 === 'string') {
+    return new TextDecoder('utf-8', { fatal: true }).decode(Buffer.from(file.base64, 'base64'));
+  }
+  throw new Error(`unexpected source file encoding: ${file.encoding}`);
 }
 
 export async function ensureSite(w: ReturnType<typeof parityWorld>, key: string,
