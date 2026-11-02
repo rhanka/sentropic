@@ -22,8 +22,8 @@ export interface ProvisionWorkspaceInput {
  * Canonical workspace rows: the business row in the caller's transaction, plus
  * the CM directory enrolment and creator-as-admin membership in the CM store
  * (cm_identity.cm_workspaces / cm_workspace_members — the legacy
- * `workspace_memberships` table and `workspaces.owner_user_id` are dropped by
- * control migration 0014).
+ * `workspace_memberships` table is dropped by control migration 0014).
+ * The existing owner reference is business data used for destruction policy.
  */
 export const provisionWorkspace = async (
   client: ProvisionWorkspaceClient,
@@ -34,6 +34,7 @@ export const provisionWorkspace = async (
   const gateConfig = getDefaultGateConfig(input.type);
   await client.insert(workspaces).values({
     id,
+    ownerUserId: input.ownerUserId,
     name: input.name,
     type: input.type,
     gateConfig: gateConfig ?? undefined,

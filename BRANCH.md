@@ -40,6 +40,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
 ## Feedback Loop
 - [ ] A4-STACK — A2.0b owner: supply the approved r6 combined UOW (`run`, `tx.stores`, `tx.custody`, subject lifecycle), auth-hono binding/runner, importer verifier and V2 planes before app qualification; A4 does not implement these CM APIs.
 - [ ] A4-QK — Deployment custodian: record the explicit email-code protection choice before the author switch; no secret or default choice is inferred.
+- [x] A4-OWNERSHIP — r6 §5.3 requires business-authorized ownership. Preserve `public.workspaces.owner_user_id` solely for destruction policy; CM owns membership/tenant access. Membership never substitutes for ownership. Rollback uses the recorded source checkpoint.
 
 ## AI Flaky tests
 - Acceptance rule:
@@ -96,6 +97,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Delete the raw identity copy SQL and guessed lifecycle/expiry/revision mappings; the typed importer is the only migration writer.
   - [x] Delete the SQL count-only checkpoint; keep the protected-source D11 checkpoint and real import receipt from the bound runner.
   - [x] Rebind actual business foreign keys to CM while preserving delete/update/deferral actions; refuse unrepresentable references and record the inventory.
+  - [x] Preserve the existing business workspace owner reference and set it on new personal/business workspace rows.
   - [x] Refuse SQL-only cutover without the real importer/checkpoint; remove fabricated schema and import attestations.
   - [x] Require protected D11 checkpoint evidence, verify snapshot/asset digests and keep backup paths out of durable receipts.
   - [x] Add production custody-envelope regressions for absent/empty v1 configuration, AAD corruption, fresh nonce and buffer disposal.
