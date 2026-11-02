@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, hkdfSync, randomBytes } from 'node:crypto';
 
 import { env } from '../config/env';
 import { logger } from '../logger';
@@ -44,6 +44,21 @@ const resolveV1Key = (): Buffer => {
 const KEYRING: Record<string, () => Buffer> = {
   v1: resolveV1Key,
 };
+
+/** Protected synchronous borrowing; v1 retains its existing source-key semantics. */
+export function withConnectorRevocationKey<T>(keyRef: string, operation: (key: Buffer) => T): T {
+  const version = /^secret-crypto:(v\d+)$/.exec(keyRef)?.[1];
+  const resolveKey = version ? KEYRING[version] : undefined;
+  if (!resolveKey) throw new SecretEnvelopeError('Unsupported custody key version.', {
+    reason: 'unsupported_version', version: null,
+  });
+  const source = resolveKey();
+  let dedicated: Buffer | undefined;
+  try {
+    dedicated = Buffer.from(hkdfSync('sha256', source, 'sentropic-secret-custody-v1', 'A2.0b/connector-revocation/v1', 32));
+    return operation(dedicated);
+  } finally { dedicated?.fill(0); source.fill(0); }
+}
 
 /**
  * A refusal to read a stored envelope, raised with a RECOGNISABLE type.
