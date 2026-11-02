@@ -1,7 +1,7 @@
-# Feature: artifacts parity P0 (list_versions, revert, conflict detection, metadata, edits, get_source)
+# Feature: artifact editing and strict publication concurrency (R1 D3)
 
 ## Objective
-Close the generic P0 gaps of @sentropic/artifacts so the artifact MCP reaches Claude-artifacts parity for the modification lifecycle: version history, revert, optimistic-concurrency conflict detection, title/description/icon metadata, small old/new edits on publish, and source read-back for editing.
+Continue the versioned-editing baseline with R1 D3: strict nullable release preconditions, transactional CAS and metadata, replay before edits, and complete typed MCP outcomes. D1, D2 and D4 are assigned to `feat/artifacts-parity-p0b`; this branch does not claim the complete parity P0.
 
 ## Scope / Guardrails
 - Scope limited to `packages/artifacts/**` plus the artifacts-host wiring in `api/src/services/artifacts/composition.ts` (only if the dep shape forces it).
@@ -16,6 +16,8 @@ Close the generic P0 gaps of @sentropic/artifacts so the artifact MCP reaches Cl
 - **Allowed Paths (implementation scope)**:
   - `packages/artifacts/**`
   - `packages/mcp-platform/src/runtime.ts`, `packages/mcp-platform/src/transport/result-codec.ts` (D3 outcome codec only)
+  - `packages/mcp-platform/src/tool-configuration.ts` (installed platform version constant only, aligned with the D3 codec release)
+  - `packages/mcp-platform/tests/tool-configuration.test.ts` (golden digests containing the installed platform version)
   - `packages/mcp-platform/tests/artifact-result-codec.test.ts`, `packages/mcp-platform/package.json`, `packages/mcp-platform/CHANGELOG.md` (D3 codec tests and release metadata)
   - `packages/mcp-platform/etc/mcp-platform.api.md`, `packages/mcp-platform/etc/mcp-platform-memory.api.md` (generated D3 public result fields and declaration line references)
   - `api/src/services/artifacts/composition.ts` (host store wiring only)
@@ -48,7 +50,7 @@ Close the generic P0 gaps of @sentropic/artifacts so the artifact MCP reaches Cl
 
 ## Plan / Todo (lot-based)
 - [ ] **Delta D3 — Binding R1 concurrency and transport contract only**
-  - [ ] Tests first: `packages/artifacts/tests/parity-d3.test.ts`; strict null preconditions, concurrent CAS, replay before edits, command identity, complete MCP errors.
+  - [x] Tests authored first: `packages/artifacts/tests/parity-d3.test.ts`; strict null preconditions, concurrent CAS, replay before edits, command identity, complete MCP errors.
   - [x] Require explicit expectedCurrentReleaseId in strict profiles; forbid bypass writers and defaults.
   - [x] Move pointer comparison and metadata into the coordinator transaction; replay before preparation.
   - [x] Add coordinator receipt lookup and transaction-scoped pointer/metadata writers; serialize memory transaction tests.
@@ -57,11 +59,15 @@ Close the generic P0 gaps of @sentropic/artifacts so the artifact MCP reaches Cl
   - [x] Publish the v2 outcome schema; include authorized edited paths in pointer conflicts and complete strict HTTP outcomes.
   - [x] Add recovery tests: lost COMMIT acknowledgement, one quota charge, authorized conflict paths, unavailable-target replay.
   - [x] Add real PostgreSQL CAS/metadata/quota acceptance in `commit-publication-boundary.integration.test.ts`; load the metadata migration in publication fixtures.
-  - [x] D3 targeted unit checks: 9/9; update existing outcome assertions to the v2 contract, retaining cause-redaction assertions.
+  - [x] D3 targeted unit checks: 10/10; update existing outcome assertions to the v2 contract, retaining cause-redaction assertions.
   - [x] Reauthorize before evaluating the locked CAS, so revoked writers receive no current-pointer details.
   - [x] Package unit suite 482/482, typecheck/build/lint, codec 5/5 and transport/wire parity 8/8; API reports regenerated.
   - [x] Realign host APP-P1 profile/manifest pins with the compiled v2 outcome and nullable-CAS schemas.
-  - [ ] Targeted tests, package gates, atomic commits with pushes, one final CI; append report and stop without merging.
+  - [x] Packed Radar example and isolated consumer probes pass with artifacts 0.2.5 and mcp-platform 0.4.1.
+  - [x] All 13 integration/e2e files qualified (222 tests across sequential checks), including PostgreSQL CAS 29/29 and publication authorization 10/10.
+  - [x] Full mcp-platform suite 350/350; installed version and golden configuration digests aligned to 0.4.1; strict API extraction passes.
+  - [x] Local package gates and packed probes complete; atomic commits stay below 150 lines and are pushed individually.
+  - [ ] One CI on the final head; record the result in `.tmp/rv/artifacts-parity-p0.md` and stop without merging.
 - [x] **Lot 0 — Baseline & constraints**
   - [x] Read rules/MASTER.md, rules/workflow.md, COMMON-RULES packet, conductor brief.
   - [x] Worktree `tmp/worktrees/artifacts-parity-p0` on `feat/artifacts-parity-p0` from origin/main; `harness check branch` PASS.
