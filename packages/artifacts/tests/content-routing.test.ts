@@ -1,7 +1,9 @@
 /**
- * L-5d — content routing (spec-v8 §9 5d): stable artifact origin and
- * pinned release origin, each with a single UUID label (two concatenated
- * UUIDs refused); path normalization without traversal or hidden fallback.
+ * L-5d — content routing (owner decision relayed by immo): one wildcard
+ * per base with a single UUID label `<id>.<base>`, resolved server-side as
+ * an artifact or a release. The old `<id>.pinned.<base>` form, two labels,
+ * foreign bases and non-UUID labels never route; path normalization has no
+ * traversal or hidden fallback.
  */
 import { describe, expect, it } from 'vitest';
 import {
@@ -15,29 +17,23 @@ const RELEASE = '22222222-2222-4222-8222-222222222222';
 const BASE = 'pages.example.test';
 
 describe('content routing', () => {
-  it('parses stable and pinned single-UUID origins', () => {
-    expect(parseContentHost(`${ARTIFACT}.${BASE}`, BASE)).toEqual({
-      kind: 'stable', artifactId: ARTIFACT,
-    });
-    expect(parseContentHost(`${RELEASE}.pinned.${BASE}`, BASE)).toEqual({
-      kind: 'pinned', releaseId: RELEASE,
-    });
-    expect(parseContentHost(`${ARTIFACT}.${BASE}:8443`, BASE)).toEqual({
-      kind: 'stable', artifactId: ARTIFACT,
-    });
-    expect(parseContentHost(`${ARTIFACT.toUpperCase()}.${BASE}`, BASE)).toEqual({
-      kind: 'stable', artifactId: ARTIFACT,
-    });
+  it('parses exactly one UUID label as a converged id origin', () => {
+    expect(parseContentHost(`${ARTIFACT}.${BASE}`, BASE)).toEqual({ kind: 'id', id: ARTIFACT });
+    expect(parseContentHost(`${RELEASE}.${BASE}`, BASE)).toEqual({ kind: 'id', id: RELEASE });
+    expect(parseContentHost(`${ARTIFACT}.${BASE}:8443`, BASE)).toEqual({ kind: 'id', id: ARTIFACT });
+    expect(parseContentHost(`${ARTIFACT.toUpperCase()}.${BASE}`, BASE)).toEqual({ kind: 'id', id: ARTIFACT });
   });
 
-  it('refuses concatenated UUIDs, foreign bases and non-UUID labels', () => {
+  it('refuses the removed pinned form, two labels, foreign bases and non-UUID labels', () => {
+    expect(parseContentHost(`${RELEASE}.pinned.${BASE}`, BASE)).toBeUndefined();
+    expect(parseContentHost(`${ARTIFACT}.pinned.${BASE}`, BASE)).toBeUndefined();
     expect(parseContentHost(`${ARTIFACT}-${RELEASE}.${BASE}`, BASE)).toBeUndefined();
     expect(parseContentHost(`${ARTIFACT}.${RELEASE}.${BASE}`, BASE)).toBeUndefined();
+    expect(parseContentHost(`${ARTIFACT}.pinned.extra.${BASE}`, BASE)).toBeUndefined();
     expect(parseContentHost(`${ARTIFACT}.evil.test`, BASE)).toBeUndefined();
     expect(parseContentHost(BASE, BASE)).toBeUndefined();
     expect(parseContentHost(`www.${BASE}`, BASE)).toBeUndefined();
     expect(parseContentHost(`not-a-uuid.${BASE}`, BASE)).toBeUndefined();
-    expect(parseContentHost(`${ARTIFACT}.pinned.extra.${BASE}`, BASE)).toBeUndefined();
     expect(parseContentHost('', BASE)).toBeUndefined();
   });
 

@@ -127,7 +127,7 @@ ensureHost: {
 }, lifecycle: { async stateOf() { return 'active'; }, canRead: () => true },
 publication: { blobs, intents: createMemoryIntentStore(), refs: createMemoryRefcountStore(),
   async getCurrent() { return undefined; }, createUnitWriter() { throw new Error('S3 fault must precede finalization'); },
-}, publicationUrls: () => ({ stableUrl: 'https://pages.example.test/a', pinnedUrl: 'https://pages.example.test/r' }),
+}, publicationUrls: () => ({ stableUrl: 'https://a.pages.example.test/', versionUrl: 'https://r.pages.example.test/' }),
 });
 const invocation = { invocationId: input.id, actorId: 'alice', storageScopeId: input.scope,
   async authorizeCommit(context, tx) {
