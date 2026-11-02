@@ -188,6 +188,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Delete the unsafe standalone workspace business-first/member-after deletion path; record the missing CM cleanup contract instead of duplicating identity SQL.
   - [x] Use atomic CM enrollment for imported workspaces and translate current-authority refusals on product/import creation without a 500.
   - [x] Add real CM consent/protocol rollback, revocation, explicit-tenant and suspended-tenant regression tests before removing the old consent authority path.
+  - [x] Bind OAuth tenant selection and token-time checks to the CM TidIssuer; use its immutable slug and reject suspended tenants in the current transaction.
   - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
   - [x] Evaluate F15 and business workspace visibility on one serializable read transaction.
   - [x] Add explicit verified-HTTP conversation admission and an opaque CM reference on business chats; no identity authority is inferred from a chat id.
