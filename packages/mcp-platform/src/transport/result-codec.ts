@@ -42,6 +42,7 @@ export function encodeToolResult(result: AppToolResult): CallToolResult {
     : canonicalJsonText({
         code: result.error?.code ?? 'unknown_error',
         message: result.error?.message ?? 'tool call failed',
+        ...(result.error?.details === undefined ? {} : { details: result.error.details }),
       });
   const meta: Record<string, unknown> = {
     auditId: result.auditId,
@@ -136,6 +137,8 @@ export function decodeToolResult(wire: unknown): AppToolResult {
         code,
         message,
         retriable: meta['retriable'] === true,
+        ...(typeof body['details'] === 'object' && body['details'] !== null && !Array.isArray(body['details'])
+          ? { details: body['details'] as Record<string, unknown> } : {}),
       },
     };
   }

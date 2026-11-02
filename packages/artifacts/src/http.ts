@@ -270,9 +270,10 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             delete args.storageScopeId;
           }
         }
-        const normalized = profile.validate(capability, args, request.idempotencyKey);
+        const normalized = profile.validate(capability, args, request.idempotencyKey, { deferPrecondition: true });
         const command = ['artifacts_ensure', 'artifacts_publish', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert'].includes(capability)
-          ? createArtifactCommand(profile, capability, args, invocation, deps.derivation, request.idempotencyKey) : undefined;
+          ? createArtifactCommand(profile, capability, args, invocation, deps.derivation, request.idempotencyKey,
+            { deferPrecondition: true }) : undefined;
         if (command && ['ensure', 'publish'].includes(command.operation)) {
           phase = 'migration';
           await assertArtifactReplayMigration(deps.legacyRecords, command, invocation, normalized.idempotencyKey as string);
@@ -313,6 +314,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             createUnit: deps.management?.createUnit ?? createPostgresManagementUnit,
             confirmation: deps.management?.confirmation, readPolicyRevision: () => deps.ensureHost.readPolicyRevision(),
             isApprovedPrincipal: deps.isApprovedAccount ?? (() => false),
+            validateNewCommand: () => { profile.validate(capability, args, request.idempotencyKey); },
           }, invocation, command!, normalized.confirmationRef as string | undefined);
           return outcome.ok ? { ...outcome, result: { status: 200, body: outcome.result } } : outcome;
         }
@@ -333,6 +335,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             expectedCurrentReleaseId: normalized.expectedCurrentReleaseId as string | null | undefined };
           const replay = await publication.replayFinalized(input);
           if (replay !== undefined) return commitOutcome(replay, artifactId, meta, state => { commitState = state; });
+          profile.validate(capability, args, request.idempotencyKey);
           let files: { path: string; mimeType: string; bytes: Uint8Array }[];
           let source: { kind: 'inline-original' } | { kind: 'base-commit'; commit: string };
           let releaseProfile: Record<string, JsonValue>;
@@ -413,7 +416,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
       } catch (cause) {
         const failure = classifyArtifactFailure(cause, { invocationId: invocation?.invocationId ?? '',
           operation, phase, commitState }, (error) => error instanceof ArtifactProfileInputError
-            ? new ArtifactOperationError(error.category) : deps.mapHostError?.(error));
+            ? new ArtifactOperationError(error.category, { publicDetails: error.details }) : deps.mapHostError?.(error));
         if (cause instanceof CommitQuarantineError) {
           const migration = { ...failure, kind: 'operational' as const, category: 'provider_unavailable' as const,
             variant: 'legacy_quarantine', httpStatus: 503, publicCode: 'capability_unavailable', retriable: false };
@@ -424,7 +427,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
       }
     },
     async handle(request, invocation) {
-      return projectArtifactHttpOutcome(await app.execute(request, invocation), profile.requireExpectedCurrentReleaseId === true);
+      return projectArtifactHttpOutcome(await app.execute(request, invocation), profile.resultEnvelopeVersion === 2);
     },
   };
   return Object.freeze(app);

@@ -49,10 +49,17 @@ export function matchesSchema(value: unknown, schema: ArtifactSchema): boolean {
 }
 
 export function normalizeArguments(profile: EffectiveArtifactProfile, name: string, input: unknown,
-  schema: ArtifactSchema, envelopeKey?: string): Readonly<Record<string, JsonValue>> {
+  schema: ArtifactSchema, envelopeKey?: string,
+  options?: { deferPrecondition: true }): Readonly<Record<string, JsonValue>> {
   const args = copyJson(input);
-  if (profile.requireExpectedCurrentReleaseId && (name === 'artifacts_publish' || name === 'artifacts_revert') &&
-    isRecord(args) && !Object.hasOwn(args, 'expectedCurrentReleaseId')) throw new ArtifactProfileInputError(false, true);
+  if (profile.requireExpectedCurrentReleaseId && ['artifacts_publish', 'artifacts_revert', 'artifacts_delete'].includes(name) &&
+    isRecord(args) && !Object.hasOwn(args, 'expectedCurrentReleaseId')) {
+    if (!options?.deferPrecondition) throw new ArtifactProfileInputError(false, true, {
+      profileRevisionId: profile.profileRevisionId ?? profile.version, resultEnvelopeVersion: profile.resultEnvelopeVersion ?? 1,
+      requiredField: 'expectedCurrentReleaseId', readTools: ['artifacts_get', 'artifacts_list'],
+    });
+    schema = { ...schema, required: (schema.required as string[]).filter(key => key !== 'expectedCurrentReleaseId') };
+  }
   requireInput(isRecord(args) && matchesSchema(args, schema));
   const operation = name.slice('artifacts_'.length);
   const { defaults, limits } = operationProfile(profile, operation);

@@ -29,6 +29,10 @@ export interface ArtifactProfileRules {
   readonly mimeTypes: readonly string[];
 }
 export interface ArtifactProviderProfile {
+  /** Trusted public contract revision; independent from the host policy revision. */
+  readonly profileRevisionId?: string;
+  /** Explicit projection switchover; omitted profiles retain the v1 wire shape. */
+  readonly resultEnvelopeVersion?: 1 | 2;
   /** Require caller-supplied CAS preconditions on every publication writer. */
   readonly requireExpectedCurrentReleaseId?: boolean;
   readonly version: typeof PROFILE_CONTRACT_VERSION;
@@ -49,7 +53,8 @@ export interface CompiledArtifactsProfile extends EffectiveArtifactProfile {
   readonly schemas: Readonly<Partial<Record<ArtifactCapabilityName, ArtifactSchema>>>;
   readonly idempotency: Readonly<Partial<Record<ArtifactCapabilityName,
     { readonly required: true; readonly scope: 'principal' }>>>;
-  validate(name: string, args: unknown, envelopeKey?: string): Readonly<Record<string, JsonValue>>;
+  validate(name: string, args: unknown, envelopeKey?: string,
+    options?: { deferPrecondition: true }): Readonly<Record<string, JsonValue>>;
   assertSelected(name: string): asserts name is ArtifactCapabilityName;
   capabilityForRoute(method: string, path: string): ArtifactCapabilityName | undefined;
 }
@@ -62,6 +67,8 @@ export interface CompiledValidators {
 }
 
 /** Projection fields are data-only; invocation correlation is added by L6. */
+export const PRECONDITION_REQUIRED_MESSAGE = 'expectedCurrentReleaseId is required by the active artifact profile. Re-read this artifact with artifacts_get or artifacts_list, then send expectedCurrentReleaseId using the currentReleaseId returned by that read. Send null only if the read confirms that there is no current release. Before editing an existing release, read it with artifacts_get_source and use that releaseId. The server will not infer this value.';
+
 export class ArtifactProfileInputError extends Error {
   readonly kind: 'operational' | 'ordinary';
   readonly status: number;
@@ -72,7 +79,7 @@ export class ArtifactProfileInputError extends Error {
   readonly retriable = false;
   readonly phase: 'selection' | 'entry';
   readonly commitState = 'not_committed';
-  constructor(unselected = false, preconditionRequired = false) {
+  constructor(unselected = false, preconditionRequired = false, readonly details?: Record<string, unknown>) {
     super(unselected ? 'capability_unavailable' : preconditionRequired ? 'precondition_required' : 'invalid_request');
     this.name = 'ArtifactProfileInputError';
     this.kind = unselected ? 'operational' : 'ordinary';

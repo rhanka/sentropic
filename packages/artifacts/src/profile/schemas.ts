@@ -86,7 +86,8 @@ export function capabilitySchema(name: ArtifactCapabilityName, profile: Effectiv
     case 'get_source': return obj({ artifactId: id, releaseId: id,
       paths: { type: 'array', minItems: 1, maxItems: 32, items: { ...str, maxLength: profile.rules.pathMaxBytes } } }, ['artifactId']);
     case 'delete': return obj({ artifactId: id, expectedCurrentReleaseId: { ...id, type: ['string', 'null'] },
-      idempotencyKey: key, confirmationRef: { ...str, maxLength: 4096 } }, ['artifactId', 'expectedCurrentReleaseId', 'idempotencyKey']);
+      idempotencyKey: key, confirmationRef: { ...str, maxLength: 4096 } },
+      ['artifactId', 'idempotencyKey', ...(profile.requireExpectedCurrentReleaseId ? ['expectedCurrentReleaseId'] : [])]);
     case 'revert': return obj({ artifactId: id, releaseId: id, expectedCurrentReleaseId: { ...id, type: ['string', 'null'] }, idempotencyKey: key },
       ['artifactId', 'releaseId', 'idempotencyKey', ...(profile.requireExpectedCurrentReleaseId ? ['expectedCurrentReleaseId'] : [])]);
     case 'get_template': return obj({ templateId: str }, ['templateId']);
