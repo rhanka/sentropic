@@ -2,11 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { Hono } from 'hono';
 import { runCmAuthHttp } from '../../../src/routes/namespaces/auth/cm-http';
 
-const harness = vi.hoisted(() => ({ run: vi.fn(), events: [] as string[] }));
+const harness = vi.hoisted(() => ({ run: vi.fn(), complete: vi.fn(), events: [] as string[] }));
 vi.mock('../../../src/services/identity/cm-auth-runtime', () => ({
   withAppCmAuth: (operation: (runner: unknown) => Promise<unknown>) => operation({
     request: harness.run,
-    complete: async (_flow: string, work: unknown) => ({ committed: true, value: await harness.run(work) }),
+    complete: harness.complete,
   }),
 }));
 vi.mock('../../../src/services/identity/cm-host-scope', () => ({ assertCmHostHealthy: vi.fn() }));
@@ -18,6 +18,8 @@ const request = (handler: Hono, body = '', completion = false) => new Hono().pos
 describe('CM HTTP publication boundary', () => {
   beforeEach(() => {
     harness.events.length = 0;
+    harness.complete.mockImplementation(async (_flow: string, work: unknown) =>
+      ({ committed: true, value: await harness.run(work) }));
     harness.run.mockImplementation(async work => {
       try {
         const value = await work({}, { hostTransaction: {} });
@@ -25,6 +27,24 @@ describe('CM HTTP publication boundary', () => {
         return value;
       } catch (error) { harness.events.push('rollback'); throw error; }
     });
+  });
+
+  it.each(['credential_rename', 'credential_revoke'] as const)('preserves the %s route refusal after rollback', async flow => {
+    harness.complete.mockResolvedValue({ committed: false,
+      refusal: { flow, result: flow === 'credential_rename' ? null : false } });
+    const response = await new Hono().post('/test', c => runCmAuthHttp(c, flow, () => new Hono()))
+      .request('/test', { method: 'POST' });
+    expect(response.status).toBe(404);
+    expect(await response.json()).toEqual({ error: { code: 'credential_not_found', message: 'Credential not found.' } });
+    expect(response.headers.get('set-cookie')).toBeNull();
+  });
+
+  it('never publishes a malformed completion refusal as an HTTP success', async () => {
+    harness.complete.mockResolvedValue({ committed: false,
+      refusal: { flow: 'authentication', result: { verified: false, error: { code: 'invalid', message: 'Invalid.' } } } });
+    const response = await request(new Hono(), '', true);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toEqual({ error: { code: 'identity_unavailable', message: 'Identity service unavailable.' } });
   });
 
   it.each([false, true])('strips provisional cookies after a handler failure (completion=%s)', async completion => {
