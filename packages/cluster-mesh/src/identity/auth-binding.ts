@@ -18,6 +18,9 @@ export const createIdentityAuthHonoTransactionBindingV1 = <H>(supplied: Identity
   if (!input.rp.id || input.rp.expectedOrigins.length === 0 || input.rp.expectedOrigins.some((origin) => typeof origin !== 'string' || !origin)) throw new IdentityCustodyErrorV1('identity_material_invalid');
   const check = () => assertIdentityTransactionActive(input.tx, false);
   check();
+  for (const email of [' Identity.Probe+tag@EXAMPLE.test ', '\u0130@EXAMPLE.test\u00a0']) {
+    if (input.accountPolicy.normalizeEmail(email) !== email.trim().toLowerCase()) throw new IdentityCustodyErrorV1('identity_material_invalid');
+  }
   const evidence = new Set<string>(), deferredMail: IdentityDeferredMailV1[] = [];
   const state: WebAuthnAttempt = { flow: null, completionOwner: null, owner: null, registration: undefined, registrationUv: false, issuanceUv: 'required' };
   const { users, policy } = authUserPorts(input, evidence, check);
