@@ -2,7 +2,7 @@ import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vites
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import { createMemoryBlobStore } from '@sentropic/artifacts/server/publication';
-import { runMigrations } from '../../src/db/run-migrations';
+import { migrateCmFixtureDatabase as runMigrations } from '../utils/cm-fresh-database';
 import { createArtifactHost } from '../../src/services/artifacts/composition';
 
 const admin = new Pool({ connectionString: process.env.DATABASE_URL });
