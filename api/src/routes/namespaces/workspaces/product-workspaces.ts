@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { TenantNotActiveError } from '@sentropic/cluster-mesh';
 import { z } from 'zod';
 import { zValidator } from '../../../utils/zod-validator';
 import { db } from '../../../db/client';
@@ -7,6 +8,7 @@ import { eq } from 'drizzle-orm';
 import { requireEditor } from '../../../middleware/rbac';
 import { createId } from '../../../utils/id';
 import { runCmIdentityWrite } from '../../../services/identity/cm-transaction';
+import { CmIdentityForbiddenError } from '../../../services/identity/cm-deletion-authorization';
 import { getUserWorkspaces, requireWorkspaceAdmin } from '../../../services/workspace-access';
 import {
   notifyWorkspaceCreated, notifyWorkspaceEvent,
@@ -43,7 +45,9 @@ workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSche
   // Canonical rows via the shared provisioning service (same gate config,
   // same creator-as-admin membership, same transaction atomicity).
   const prospectiveId = createId();
-  const id = await runCmIdentityWrite((tx) =>
+  let id: string;
+  try {
+  id = await runCmIdentityWrite((tx) =>
     provisionWorkspace(tx, {
       workspaceId: prospectiveId,
       ownerUserId: user.userId,
@@ -51,6 +55,11 @@ workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSche
       type: type as import('../../../services/workspace-access').WorkspaceType,
     }),
   );
+  } catch (error) {
+    if (error instanceof CmIdentityForbiddenError) return c.json({ error: 'Insufficient permissions' }, 403);
+    if (error instanceof TenantNotActiveError) return c.json({ error: 'Tenant not active' }, 409);
+    return c.json({ error: 'Identity service unavailable' }, 503);
+  }
 
   // Seed default workflows/agents (§7.6, §8.1) and view templates (§12.6)
   // via the shared provisioning path (same steps as session adoption).

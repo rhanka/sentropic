@@ -11,12 +11,11 @@ import {
   initiatives,
   workspaces,
 } from '../../db/schema';
-import {
-  enrolCmWorkspace,
-  listCmWorkspaceMembers,
-  putCmWorkspaceMember,
-} from '../../services/identity/cm-tenancy';
-import { PLATFORM_TENANT_ID } from '../../services/workspace-service';
+import { listCmWorkspaceMembers } from '../../services/identity/cm-tenancy';
+import { runCmIdentityWrite } from '../../services/identity/cm-transaction';
+import { CmIdentityForbiddenError } from '../../services/identity/cm-deletion-authorization';
+import { provisionWorkspace } from '../../services/workspace-provisioning';
+import { TenantNotActiveError } from '@sentropic/cluster-mesh';
 import { db } from '../../db/client';
 import { createId } from '../../utils/id';
 import {
@@ -1345,15 +1344,16 @@ const createImportsRouter = (ports: TransferDomainRuntimePorts): Hono => {
         : "Workspace d'import";
     const newWorkspaceId = createId();
     idMap.workspace.set((sourceWs?.id as string) || 'source', newWorkspaceId);
-    // Lot A4: business row only; enrolment + creator membership live in the CM store.
-    await db.insert(workspaces).values({
-      id: newWorkspaceId,
-      name: wsName,
-      createdAt: now,
-      updatedAt: now,
-    });
-    await enrolCmWorkspace({ workspaceId: newWorkspaceId, tenantId: PLATFORM_TENANT_ID });
-    await putCmWorkspaceMember(newWorkspaceId, user.userId, 'admin');
+    const type = sourceWs?.type === 'code' || sourceWs?.type === 'opportunity' ? sourceWs.type : 'ai-priorities';
+    try {
+      await runCmIdentityWrite(tx => provisionWorkspace(tx, {
+        workspaceId: newWorkspaceId, ownerUserId: user.userId, name: wsName, type,
+      }));
+    } catch (error) {
+      if (error instanceof CmIdentityForbiddenError) return c.json({ message: 'Insufficient permissions' }, 403);
+      if (error instanceof TenantNotActiveError) return c.json({ message: 'Tenant not active' }, 409);
+      return c.json({ message: 'Identity service unavailable' }, 503);
+    }
     resolvedWorkspaceId = newWorkspaceId;
   }
 
