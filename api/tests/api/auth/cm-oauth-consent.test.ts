@@ -7,6 +7,7 @@ import { createCmUser } from '../../../src/services/identity/cm-users';
 import { createCmTenant, setCmMembershipState, setCmTenantStatus } from '../../../src/services/identity/cm-tenancy';
 import { runCmIdentityWrite } from '../../../src/services/identity/cm-transaction';
 import { cmOAuthConsentId } from '../../../src/services/identity/cm-import-tenancy';
+import { createCmOAuthTenantPort } from '../../../src/services/identity/cm-oauth-tenancy';
 import { cmDeleteForUsers, cmDeleteTenants, cmQuery, cmTable } from '../../utils/cm-identity-test-store';
 
 const userId = 'a4-consent-user';
@@ -74,5 +75,15 @@ describe('CM OAuth consent authority and protocol participant', () => {
     await setCmTenantStatus(tenantId, 'suspended');
     expect(await runCmIdentityWrite(transaction => createConsentStoreAdapter({ transaction })
       .getGrant(userId, clientId, tenantId))).toBeNull();
+  });
+
+  it('derives the token claim from CM and revalidates tenant activity', async () => {
+    const list = () => runCmIdentityWrite(transaction => createCmOAuthTenantPort(transaction)
+      .listApprovedTenantIds(userId));
+    expect(await list()).toContain(tenantId);
+    await setCmTenantStatus(tenantId, 'suspended');
+    expect(await list()).not.toContain(tenantId);
+    expect(await runCmIdentityWrite(transaction => createCmOAuthTenantPort(transaction)
+      .isApprovedMember(userId, tenantId))).toBe(false);
   });
 });
