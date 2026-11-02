@@ -1,14 +1,10 @@
 import { createHash } from 'crypto';
 import { logger } from '../logger';
-import { SignJWT } from 'jose';
 import { env } from '../config/env';
 import { sendTransactionalEmail } from './scw-tem-client';
-import { resolveEmailVerificationTokenSecret } from './identity/cm-token-secrets';
 import {
-  consumeCmEmailCodeWithTicket,
   countCmRecentEmailCodes,
   createCmEmailCode,
-  findCmLatestValidEmailCode,
 } from './identity/cm-proofs';
 
 /**
@@ -24,13 +20,7 @@ interface GenerateCodeParams {
   email: string;
 }
 
-interface VerifyCodeParams {
-  email: string;
-  code: string;
-}
-
 const CODE_TTL = 10 * 60; // 10 minutes in seconds
-const VERIFICATION_TOKEN_TTL = 15 * 60; // 15 minutes in seconds
 
 /**
  * Hash a code for storage (SHA-256)
@@ -120,65 +110,5 @@ export async function generateEmailVerificationCode(
   }
 
   return { success: true, expiresAt };
-}
-
-/**
- * Verify email verification code and generate validation token
- * 
- * @param params - Email and code to verify
- * @returns Validation token if code is valid
- */
-export async function verifyEmailCode(
-  params: VerifyCodeParams
-): Promise<{ valid: boolean; verificationToken?: string }> {
-  const { email, code } = params;
-  const normalizedEmail = email.trim().toLowerCase();
-  const codeHash = hashCode(code);
-  const now = new Date();
-  
-  // Find latest pending, unexpired code matching the hash
-  const codeRecord = await findCmLatestValidEmailCode(normalizedEmail, codeHash, now);
-
-  if (!codeRecord || codeRecord.used) {
-    logger.warn({ email: normalizedEmail }, 'Email verification code not found or already used');
-    return { valid: false };
-  }
-
-  // Check if expired
-  if (codeRecord.expiresAt < now) {
-    logger.warn({
-      codeId: codeRecord.id,
-      expiresAt: codeRecord.expiresAt
-    }, 'Email verification code expired');
-    return { valid: false };
-  }
-
-  // Generate verification token (JWT)
-  const JWT_SECRET = new TextEncoder().encode(resolveEmailVerificationTokenSecret());
-  const token = await new SignJWT({
-    email: normalizedEmail,
-    codeId: codeRecord.id,
-  })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setIssuedAt()
-    .setExpirationTime(`${VERIFICATION_TOKEN_TTL}s`)
-    .sign(JWT_SECRET);
-
-  // Atomically consume the code and issue the registration ticket (hashed token)
-  const consumed = await consumeCmEmailCodeWithTicket(codeRecord.id, normalizedEmail, codeHash, token, now);
-  if (!consumed) {
-    logger.warn({ email: normalizedEmail, codeId: codeRecord.id }, 'Email code consume lost the race');
-    return { valid: false };
-  }
-
-  logger.info({
-    email: normalizedEmail,
-    codeId: codeRecord.id,
-  }, 'Email verification code verified');
-
-  return {
-    valid: true,
-    verificationToken: token,
-  };
 }
 
