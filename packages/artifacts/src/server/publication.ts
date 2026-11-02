@@ -19,7 +19,8 @@ import type { IntentStore } from './object-intents.js';
 import type { IdempotencyStore } from './idempotency.js';
 import { parseSourceRef, type SourceRef, type SourceStore } from './sources.js';
 import { publicationLimits, validatePublicationFiles, type PublicationLimits } from './publication-limits.js';
-import type { ArtifactAcl } from './access.js';
+import type { ArtifactAcl, ArtifactMetadata } from './access.js';
+import { ArtifactOperationError } from './failures.js';
 import type { ArtifactState } from './lifecycle.js';
 import { createPostgresDeletionClaimStore, type RefcountStore } from './gc.js';
 import type { CommandIdentity } from './command-identity.js';
@@ -326,6 +327,9 @@ export function decidePublishAuthorization(
 
 /** Transaction-scoped provisional writers for the finalized unit. */
 export interface PublicationUnitWriter {
+  /** Lock the artifact row, including when no pointer exists, then read the current release. */
+  lockCurrent(artifactId: string): Promise<{ currentReleaseId: string | null; currentDigest: string | null }>;
+  updateMetadata(artifactId: string, metadata: ArtifactMetadata): Promise<ArtifactMetadata>;
   readAuthorization(artifactId: string): Promise<{ state: ArtifactState; acl: ArtifactAcl | undefined }>;
   putSource(artifactId: string, source: SourceRef): Promise<void>;
   putRelease(release: ReleaseRecord): Promise<void>;
@@ -338,6 +342,19 @@ export interface PublicationUnitWriter {
 /** PostgreSQL unit writer over the coordinator's leased client. */
 export function createPostgresPublicationUnitWriter(client: FinalizeTxClient): PublicationUnitWriter {
   return {
+    async lockCurrent(artifactId) {
+      await client.query('SELECT id FROM artifacts.artifacts WHERE id = $1 FOR UPDATE', [artifactId]);
+      const { rows } = await client.query<{ release_id: string; manifest_digest: string }>(
+        `SELECT c.release_id, r.manifest_digest FROM artifacts.artifact_current c
+         JOIN artifacts.releases r ON r.id = c.release_id WHERE c.artifact_id = $1`, [artifactId]);
+      return { currentReleaseId: rows[0]?.release_id ?? null, currentDigest: rows[0]?.manifest_digest ?? null };
+    },
+    async updateMetadata(artifactId, metadata) {
+      const { rows } = await client.query<{ metadata: ArtifactMetadata }>(
+        `UPDATE artifacts.artifacts SET metadata = COALESCE(metadata, '{}'::jsonb) || $2::jsonb
+         WHERE id = $1 RETURNING metadata`, [artifactId, JSON.stringify(metadata)]);
+      return rows[0]?.metadata ?? {};
+    },
     async readAuthorization(artifactId: string) {
       const { rows } = await client.query<{ lifecycle_state: ArtifactState; owner_id: string }>(
         'SELECT lifecycle_state, owner_id FROM artifacts.artifacts WHERE id = $1', [artifactId],
@@ -401,6 +418,9 @@ export function createPostgresPublicationUnitWriter(client: FinalizeTxClient): P
 }
 
 export interface GuardedPublishInput extends PublishInput {
+  readonly expectedCurrentReleaseId?: string | null;
+  readonly metadata?: ArtifactMetadata;
+  readonly operation?: 'publish' | 'revert';
   /** Frozen trusted identity supplied by the host's L1 command normalizer. */
   readonly identity: CommandIdentity;
   readonly actorId: string;
@@ -427,6 +447,7 @@ export interface GuardedPublicationDeps {
 }
 
 export interface GuardedPublicationService {
+  replayFinalized(input: Omit<GuardedPublishInput, 'files' | 'source' | 'profile'>): Promise<FinalizeResult | undefined>;
   publishFinalized(input: GuardedPublishInput): Promise<FinalizeResult>;
 }
 
@@ -468,6 +489,17 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
   };
 
   return {
+    async replayFinalized(input) {
+      let client: FinalizeTxClient;
+      return deps.coordinator.findReplayPrepared({ ...input.identity,
+        scopeId: input.storageScopeId, invocationId: input.invocationId!, actorId: input.actorId,
+        artifactId: input.artifactId, operation: input.operation ?? 'publish', policyRevision: input.policyRevision,
+        receiptData: null, locks: { ...deps.locks, 'artifact-lifecycle': [
+          async tx => { client = tx; await deps.createUnitWriter(tx).lockCurrent(input.artifactId); },
+          ...(deps.locks?.['artifact-lifecycle'] ?? []),
+        ] }, guard: guard(() => client, input.authorizeCommit),
+      });
+    },
     async publishFinalized(input: GuardedPublishInput): Promise<FinalizeResult> {
       validatePublicationFiles(input.files, limits);
       const prepared = preparePublication(input);
@@ -509,6 +541,8 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
       const addedRefs: string[] = [];
       const source = input.source === undefined ? undefined : parseSourceRef(input.source);
       let finalizationClient: FinalizeTxClient | undefined;
+      let current: { currentReleaseId: string | null; currentDigest: string | null };
+      const receiptData = { releaseId, manifest: prepared.manifest, metadata: {} as ArtifactMetadata };
       const request: FinalizeRequest = {
         scopeId: input.storageScopeId,
         internalKey,
@@ -516,17 +550,21 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
         codecVersion,
         invocationId,
         actorId: input.actorId,
-        operation: 'publish',
+        operation: input.operation ?? 'publish',
         artifactId: input.artifactId,
         bindingName: null,
         policyRevision: input.policyRevision,
         quotaBytes: prepared.entries.reduce((total, entry) => total + entry.bytes.byteLength, 0),
         locks: { ...deps.locks, 'artifact-lifecycle': [
-          async (client) => { finalizationClient = client; },
+          async (client) => { finalizationClient = client;
+            current = await deps.createUnitWriter(client).lockCurrent(input.artifactId); },
           ...(deps.locks?.['artifact-lifecycle'] ?? []),
         ] },
         provisional: async (client) => {
           const unit = deps.createUnitWriter(client);
+          if (input.expectedCurrentReleaseId !== undefined && current.currentReleaseId !== input.expectedCurrentReleaseId) {
+            throw new ArtifactOperationError('pointer_conflict', { conflict: current });
+          }
           await unit.putRelease({
             releaseId,
             artifactId: input.artifactId,
@@ -541,6 +579,7 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
             addedRefs.push(staged.entry.digest);
           }
           await unit.promoteCurrentLatestWins(input.artifactId, releaseId);
+          receiptData.metadata = await unit.updateMetadata(input.artifactId, input.metadata ?? {});
           if (source !== undefined) await unit.putSource(input.artifactId, source);
         },
         guard: guard(() => {
@@ -557,7 +596,7 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
                 await deps.noteAbandoned?.(attemptId);
               },
         attemptId,
-        receiptData: { releaseId, manifest: prepared.manifest },
+        receiptData,
       };
       preservePins = true;
       const outcome = await deps.coordinator.finalizePrepared(request);

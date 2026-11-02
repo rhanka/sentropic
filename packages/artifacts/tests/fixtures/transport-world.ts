@@ -25,6 +25,15 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   const bindings = new Map<string, string>();
   const releases = new Map<string, ReleaseRecord>();
   const writes = new Map<FinalizeTxClient, (() => Promise<void>)[]>();
+  const lockTails = new Map<string, Promise<void>>();
+  const unlocks = new Map<FinalizeTxClient, (() => void)[]>();
+  async function lock(client: FinalizeTxClient, key: string) {
+    const previous = lockTails.get(key) ?? Promise.resolve();
+    let unlock!: () => void;
+    lockTails.set(key, new Promise<void>(resolve => { unlock = resolve; }));
+    await previous;
+    unlocks.get(client)!.push(unlock);
+  }
   const acls = createMemoryAclStore();
   const state = createMemoryStateStore();
   const blobs = createMemoryBlobStore();
@@ -42,20 +51,24 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
       const pending: (() => Promise<void>)[] = [];
       const connection: FinalizeConnection = {
         async query() { return { rows: [], rowCount: 0 }; },
-        async beginReadCommitted() {}, async lockOperationKey() {},
+        async beginReadCommitted() {}, async lockOperationKey(scope, key) { await lock(connection, `${scope}/${key}`); },
         async readReceipt(scope, key) { return receipts.get(`${scope}/${key}`); },
         async insertReceipt(receipt) { pending.push(async () => { receipts.set(`${receipt.scopeId}/${receipt.internalKey}`, receipt); }); },
         async commit() { for (const write of pending) await write(); },
-        async rollback() { pending.length = 0; }, release() { writes.delete(connection); },
+        async rollback() { pending.length = 0; }, release() {
+          for (const unlock of unlocks.get(connection) ?? []) unlock();
+          unlocks.delete(connection); writes.delete(connection);
+        },
       };
       writes.set(connection, pending);
+      unlocks.set(connection, []);
       return connection;
     },
   };
   const coordinator = createArtifactCommitCoordinator({ ...options, executor, policy: {
-    createParticipant: (_client, transactionId) => ({
+    createParticipant: (client, transactionId) => ({
       async readRevision() { return 'rev-1'; }, async checkApproval() { return { approved }; },
-      async reserveQuota({ bytes }) { quotaReservations.push(bytes); return { reserved: true }; },
+      async reserveQuota({ bytes }) { writes.get(client)!.push(async () => { quotaReservations.push(bytes); }); return { reserved: true }; },
       mintFence: (policyRevision, invocationId) => ({ fenceId: randomUUID(), transactionId, invocationId, policyRevision }),
     }),
   } });
@@ -101,6 +114,17 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
       blobs, intents, refs: createMemoryRefcountStore(), getCurrent: publication.getCurrent,
       getRelease: publication.getRelease, listReleases: publication.listReleases,
       createUnitWriter: (client) => ({
+        async lockCurrent(artifactId) {
+          await lock(client, `artifact/${artifactId}`);
+          const current = await publication.getCurrent(artifactId);
+          return { currentReleaseId: current?.releaseId ?? null, currentDigest: current?.manifestDigest ?? null };
+        },
+        async updateMetadata(artifactId, metadata) {
+          const acl = (await acls.getArtifactAcl(artifactId))!;
+          const merged = { ...acl.metadata, ...metadata };
+          writes.get(client)!.push(() => acls.putArtifactAcl(artifactId, { ...acl, metadata: merged }));
+          return merged;
+        },
         async readAuthorization(artifactId) { return { state: await lifecycle.stateOf(artifactId), acl: await acls.getArtifactAcl(artifactId) }; },
         async putRelease(release) { writes.get(client)!.push(async () => {
           releases.set(release.artifactId, release); await state.putRelease(release);
