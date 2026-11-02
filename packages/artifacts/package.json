@@ -1,6 +1,6 @@
 {
   "name": "@sentropic/artifacts",
-  "version": "0.2.13",
+  "version": "0.3.0",
   "description": "Generic configurable artifacts MCP and artifact service: StorageScope/Artifact/Binding/Release model, canonical manifests, object authorization, idempotent intents (spec-v8 §9).",
   "type": "module",
   "license": "MIT",
@@ -33,10 +33,6 @@
       "types": "./dist/adapters/s3.d.ts",
       "import": "./dist/adapters/s3.js"
     },
-    "./adapters/s3-uploads": {
-      "types": "./dist/adapters/s3-uploads.d.ts",
-      "import": "./dist/adapters/s3-uploads.js"
-    },
     "./adapters/postgres": {
       "types": "./dist/adapters/postgres.d.ts",
       "import": "./dist/adapters/postgres.js"
@@ -44,10 +40,6 @@
     "./adapters/postgres-commit": {
       "types": "./dist/adapters/postgres-commit.d.ts",
       "import": "./dist/adapters/postgres-commit.js"
-    },
-    "./adapters/postgres-reader-consent": {
-      "types": "./dist/adapters/postgres-reader-consent.d.ts",
-      "import": "./dist/adapters/postgres-reader-consent.js"
     },
     "./adapters/postgres-activation": {
       "types": "./dist/adapters/postgres-activation.d.ts",
@@ -57,19 +49,15 @@
       "types": "./dist/adapters/postgres-activation-vectors.d.ts",
       "import": "./dist/adapters/postgres-activation-vectors.js"
     },
+    "./sqlite": {
+      "types": "./dist/adapters/sqlite.d.ts",
+      "import": "./dist/adapters/sqlite.js"
+    },
     "./sql/*": "./sql/*",
     "./migrations/*": "./migrations/*",
     "./server/ports": {
       "types": "./dist/server/ports.d.ts",
       "import": "./dist/server/ports.js"
-    },
-    "./server/consent": {
-      "types": "./dist/server/consent.d.ts",
-      "import": "./dist/server/consent.js"
-    },
-    "./server/reader-store": {
-      "types": "./dist/server/reader-store.d.ts",
-      "import": "./dist/server/reader-store.js"
     },
     "./server/service": {
       "types": "./dist/server/service.d.ts",
@@ -224,15 +212,11 @@
   },
   "peerDependencies": {
     "@aws-sdk/client-s3": "^3.980.0",
-    "@aws-sdk/s3-request-presigner": "^3.980.0",
     "@sentropic/mcp-platform": ">=0.4.1 <0.5.0",
     "pg": "^8.12.0"
   },
   "peerDependenciesMeta": {
     "@aws-sdk/client-s3": {
-      "optional": true
-    },
-    "@aws-sdk/s3-request-presigner": {
       "optional": true
     },
     "@sentropic/mcp-platform": {
@@ -244,7 +228,6 @@
   },
   "devDependencies": {
     "@aws-sdk/client-s3": "^3.980.0",
-    "@aws-sdk/s3-request-presigner": "^3.980.0",
     "@types/node": "^22.10.10",
     "@types/pg": "^8.15.5",
     "pg": "^8.12.0",
