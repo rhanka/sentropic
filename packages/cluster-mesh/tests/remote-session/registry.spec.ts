@@ -376,8 +376,8 @@ describe('RC2.registry REGISTRY-SPLIT-BRAIN', () => {
   });
 });
 
-describe('RC2.registry r2 re-pin (manifest 133e23f5)', () => {
-  it('should match the r2 listing digest vector over the exact coarse domain', async () => {
+describe('RC2.registry r3 re-pin (manifest 6245d3ae)', () => {
+  it('should match the listing digest vector (unchanged r2→r3) over the exact coarse domain', async () => {
     const fixtureRef: SessionRef = {
       originInstanceId: 'fixture-B',
       sessionId: 'fixture-session',
