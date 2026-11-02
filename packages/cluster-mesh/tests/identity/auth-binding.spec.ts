@@ -17,8 +17,8 @@ import {
 import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, seedCustodyParents, sha256Hex } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 
-const WRITE = { mode: 'write' as const, deadlineMs: 5000 };
-const READ = { mode: 'read' as const, deadlineMs: 5000 };
+const WRITE = { mode: 'write' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 };
+const READ = { mode: 'read' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 };
 
 interface ProfileEnv {
   readonly unitOfWork: IdentityUnitOfWorkV1<CustodyOpHost>;
@@ -92,12 +92,12 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b auth binding on $
     const preimage2 = emailCodePreimageV1(email, '123456');
     const sha = await digest.sha256(preimage2);
     preimage2.fill(0);
-    await env.unitOfWork.runWrite(WRITE, (tx) =>
+    await env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.singleUseProofs.insert({
         kind: 'email_code', proofId: 'union-hmac', userId: null, state: 'pending', revision: 0, createdAt: NOW, expiresAt: LATER,
         consumedAt: null, revokedAt: null, email, codeDigest: { algorithm: 'hmac-sha256', value: hmacActive, keyRef: 'active' },
       }));
-    await env.unitOfWork.runWrite(WRITE, (tx) =>
+    await env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.singleUseProofs.insert({
         kind: 'email_code', proofId: 'union-sha', userId: null, state: 'pending', revision: 0, createdAt: NOW, expiresAt: LATER,
         consumedAt: null, revokedAt: null, email, codeDigest: { algorithm: 'sha256', value: sha },
@@ -106,17 +106,17 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b auth binding on $
     // then legacy SHA-256), but the union is queried once and rows are ordered
     // by recency: equal createdAt ties break on bytewise descending proofId.
     const hmacPrevious = await digest.hmacSha256('previous', emailCodePreimageV1(email, '123456'));
-    const found = await env.unitOfWork.runRead(READ, (tx) =>
+    const found = await env.unitOfWork.run(READ, (tx) =>
       tx.hostTransaction.singleUseProofs.findLatestEmailCode(email, [
         { algorithm: 'hmac-sha256', value: hmacActive, keyRef: 'active' },
         { algorithm: 'sha256', value: sha },
         { algorithm: 'hmac-sha256', value: hmacPrevious, keyRef: 'previous' },
       ], NOW));
     expect(found?.proofId).toBe('union-sha');
-    const foundHmac = await env.unitOfWork.runRead(READ, (tx) =>
+    const foundHmac = await env.unitOfWork.run(READ, (tx) =>
       tx.hostTransaction.singleUseProofs.findLatestEmailCode(email, [{ algorithm: 'hmac-sha256', value: hmacActive, keyRef: 'active' }], NOW));
     expect(foundHmac?.proofId).toBe('union-hmac');
-    const foundSha = await env.unitOfWork.runRead(READ, (tx) =>
+    const foundSha = await env.unitOfWork.run(READ, (tx) =>
       tx.hostTransaction.singleUseProofs.findLatestEmailCode(email, [{ algorithm: 'sha256', value: sha }], NOW));
     expect(foundSha?.proofId).toBe('union-sha');
     zeroizeV1(activeKey);
@@ -126,20 +126,20 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b auth binding on $
   it('consumes digest invitations under the client-partition rule', async () => {
     const env = await openEnv();
     const digest = sha256Hex('invite-client');
-    await env.unitOfWork.runWrite(WRITE, (tx) =>
+    await env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.invitations.insert({
         invitationId: 'invite-client', email: 'marie@example.test', tenantId: 'org', workspaceId: null, clientId: 'app',
         tokenHash: digest, status: 'pending', expiresAt: LATER, createdAt: NOW, consumedAt: null, consumedByUserId: null, revision: 0,
       }));
     // A null presentation never crosses into a client-partitioned row.
-    await expect(env.unitOfWork.runWrite(WRITE, (tx) =>
+    await expect(env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.invitations.consumeByDigest({ tokenHash: digest, email: 'marie@example.test', clientId: null, userId: 'marie', expectedRevision: 0, at: NOW }),
     )).rejects.toBeInstanceOf(InvitationError);
     // A wrong client never crosses either.
-    await expect(env.unitOfWork.runWrite(WRITE, (tx) =>
+    await expect(env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.invitations.consumeByDigest({ tokenHash: digest, email: 'marie@example.test', clientId: 'other', userId: 'marie', expectedRevision: 0, at: NOW }),
     )).rejects.toBeInstanceOf(InvitationError);
-    const consumed = await env.unitOfWork.runWrite(WRITE, (tx) =>
+    const consumed = await env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.invitations.consumeByDigest({ tokenHash: digest, email: 'marie@example.test', clientId: 'app', userId: 'marie', expectedRevision: 0, at: NOW }));
     expect(consumed.status).toBe('consumed');
   });
@@ -147,19 +147,19 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b auth binding on $
   it('consumes magic links once for the exact email', async () => {
     const env = await openEnv();
     const tokenHash = sha256Hex('magic-1');
-    await env.unitOfWork.runWrite(WRITE, (tx) =>
+    await env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.singleUseProofs.insert({
         kind: 'magic_link', proofId: 'magic-1', userId: null, state: 'pending', revision: 0, createdAt: NOW, expiresAt: LATER,
         consumedAt: null, revokedAt: null, email: 'marie@example.test', tokenHash,
       }));
-    expect(await env.unitOfWork.runRead(READ, (tx) => tx.hostTransaction.stores.singleUseProofs.findMagicLink(tokenHash))).toMatchObject({ proofId: 'magic-1' });
-    await expect(env.unitOfWork.runWrite(WRITE, (tx) =>
+    expect(await env.unitOfWork.run(READ, (tx) => tx.hostTransaction.stores.singleUseProofs.findMagicLink(tokenHash))).toMatchObject({ proofId: 'magic-1' });
+    await expect(env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.singleUseProofs.consume({
         key: { kind: 'magic_link', proofId: 'magic-1' }, expectedRevision: 0, expectedUserId: null, bindUserId: 'marie',
         match: { kind: 'magic_link', email: 'wrong@example.test', tokenHash }, at: NOW,
       }),
     )).rejects.toMatchObject({ code: 'proof_binding_mismatch' });
-    const consumed = await env.unitOfWork.runWrite(WRITE, (tx) =>
+    const consumed = await env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.singleUseProofs.consume({
         key: { kind: 'magic_link', proofId: 'magic-1' }, expectedRevision: 0, expectedUserId: null, bindUserId: 'marie',
         match: { kind: 'magic_link', email: 'marie@example.test', tokenHash }, at: NOW,
@@ -169,28 +169,28 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b auth binding on $
 
   it('refuses refreshes with stale rotations or rebound logins', async () => {
     const env = await openEnv();
-    await env.unitOfWork.runWrite(WRITE, (tx) =>
+    await env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.sessions.insert({
         sessionId: 'sess-auth', userId: 'u1', sessionTokenHash: sha256Hex('sess-auth'), refreshTokenHash: sha256Hex('refr-auth'),
         login: { mfaVerified: false, authTime: 1000, sessionVersion: 1000 },
         rotationVersion: 0, createdAt: NOW, expiresAt: LATER, revokedAt: null, deviceName: null, ipAddress: null, userAgent: null, lastActivityAt: null,
       }));
     const attempt = (login: { mfaVerified: boolean; authTime: number; sessionVersion: number }, next: string) =>
-      env.unitOfWork.runWrite(WRITE, (tx) =>
+      env.unitOfWork.run(WRITE, (tx) =>
         tx.hostTransaction.sessions.rotate({
           sessionId: 'sess-auth', userId: 'evil-u', expectedRefreshTokenHash: sha256Hex('refr-auth'), expectedRotationVersion: 0,
           verifiedLogin: login, nextSessionTokenHash: sha256Hex(next), nextRefreshTokenHash: sha256Hex(`${next}-r`), nextExpiresAt: LATER, at: NOW,
         }));
     await expect(attempt({ mfaVerified: false, authTime: 1000, sessionVersion: 1000 }, 'x')).rejects.toMatchObject({ code: 'login_binding_mismatch' });
-    await expect(env.unitOfWork.runWrite(WRITE, (tx) =>
+    await expect(env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.sessions.rotate({
         sessionId: 'sess-auth', userId: 'u1', expectedRefreshTokenHash: sha256Hex('refr-auth'), expectedRotationVersion: 0,
         verifiedLogin: { mfaVerified: true, authTime: 1000, sessionVersion: 1000 },
         nextSessionTokenHash: sha256Hex('y'), nextRefreshTokenHash: sha256Hex('y-r'), nextExpiresAt: LATER, at: NOW,
       }),
     )).rejects.toMatchObject({ code: 'login_binding_mismatch' });
-    await env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.stores.sessions.revoke('sess-auth', NOW));
-    await expect(env.unitOfWork.runWrite(WRITE, (tx) =>
+    await env.unitOfWork.run(WRITE, (tx) => tx.hostTransaction.stores.sessions.revoke('sess-auth', NOW));
+    await expect(env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.sessions.rotate({
         sessionId: 'sess-auth', userId: 'u1', expectedRefreshTokenHash: sha256Hex('refr-auth'), expectedRotationVersion: 0,
         verifiedLogin: { mfaVerified: false, authTime: 1000, sessionVersion: 1000 },
