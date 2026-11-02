@@ -25,14 +25,47 @@ const refusalResponse = (refusal: IdentityAuthRefusalV1): Response => {
   }
   return Response.json({ error: { code: 'authentication_required', message: 'Authentication required.' } }, { status: 401 });
 };
+const captureBody = async (request: Request): Promise<ArrayBuffer | undefined> => {
+  if (request.method === 'GET' || request.method === 'HEAD' || !request.body) return undefined;
+  const reader = request.body.getReader(), chunks: Uint8Array[] = [];
+  let size = 0;
+  try {
+    for (;;) {
+      const part = await reader.read();
+      if (part.done) break;
+      size += part.value.byteLength;
+      if (size > 65_536) {
+        await reader.cancel();
+        throw new HttpRefusal({ status: 413, headers: [['content-type', 'application/json']],
+          body: JSON.stringify({ error: 'request_too_large' }) });
+      }
+      chunks.push(part.value);
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+    return bytes.buffer;
+  } finally { reader.releaseLock(); }
+};
+const rollbackResponse = (response: StagedResponse): StagedResponse => {
+  // Only the unchanged consumer's error DTO may leave a confirmed rollback.
+  const failure = JSON.parse(response.body);
+  const error = typeof failure.error === 'string' ? failure.error
+    : { code: failure.error.code, message: failure.error.message };
+  return { status: response.status,
+    headers: response.headers.filter(([key]) => ['content-type', 'cache-control', 'pragma', 'retry-after', 'www-authenticate'].includes(key)),
+    body: JSON.stringify({ error, ...(typeof failure.error_description === 'string'
+      ? { error_description: failure.error_description } : {}),
+    ...(typeof failure.error_uri === 'string' ? { error_uri: failure.error_uri } : {}) }) };
+};
 
 /** Execute an unchanged handler on a private context; publish only a committed copy. */
 export async function runCmAuthHttp(c: Context, flow: IdentityAuthCompletionFlowV1 | null,
   router: (binding: IdentityAuthHonoTransactionBindingV1, tx: CmIdentityTransaction) => Hono,
   presentation?: CmRegistrationPresentation): Promise<Response> {
   const request = c.req.raw;
-  const body = request.method === 'GET' || request.method === 'HEAD' ? undefined : await request.arrayBuffer();
   try {
+    const body = await captureBody(request);
     return await withAppCmAuth(async runner => {
       const work = async (binding: IdentityAuthHonoTransactionBindingV1, tx: CmIdentityTransaction): Promise<StagedResponse> => {
         // Each retry gets fresh headers/context/body. No failed-attempt cookie survives.
@@ -45,7 +78,7 @@ export async function runCmAuthHttp(c: Context, flow: IdentityAuthCompletionFlow
         for (const cookie of response.headers.getSetCookie()) headers.push(['set-cookie', cookie]);
         const copy = { status: response.status, headers, body: await response.text() };
         assertCmHostHealthy(tx.hostTransaction);
-        if (copy.status >= 500 || (flow !== null && copy.status >= 400)) throw new HttpRefusal(copy);
+        if (copy.status >= 500 || (flow !== null && copy.status >= 400)) throw new HttpRefusal(rollbackResponse(copy));
         return copy;
       };
       const trusted = presentation ? (tx: CmIdentityTransaction) => runner.registrationContext(presentation, tx) : null;
