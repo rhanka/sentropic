@@ -8,7 +8,7 @@
 - [x] Make-only Docker-first; the single Docker lock `.tmp/packets/DOCKER-LOCK.md` is taken per command (`flock <lock> make ...`); `ENV=test-artifacts-gst` always last; `make down ENV=test-artifacts-gst` after test runs; never `ENV=dev`; never `make clean-all`; never `[skip ci]`.
 - [x] Tests first; selective staging (`git add <files>` only); commits via `make commit MSG="..."` only, <=150 lines per commit; `make scope-check` before every commit; push the branch after commits (crash safety).
 - [x] Generic upstream fix in `@sentropic/artifacts`, consistent with the converged-r2 get_source contract; no IMMO-side changes in this repo.
-- [x] Package publication rules: bump `packages/artifacts/package.json` to 0.2.7 (> published 0.2.6), refresh root/API lock pins through `make lock-root` / `make lock-api`, and re-pin the APP-P1 manifest digest in `api/src/services/mcp/cluster-registry.ts` plus its two test fixtures (as #878/#90eda did for 0.2.5/0.2.6).
+- [x] Package publication rules: bump `packages/artifacts/package.json` to 0.2.7 (> published 0.2.6) and re-pin the APP-P1 manifest digest in `api/src/services/mcp/cluster-registry.ts` plus its two test fixtures (as #878/#90eda did for 0.2.5/0.2.6). Lockfiles stay untouched: the memory-l5 P1 lock fingerprint covers the root `package-lock.json` (CI `memory-l5-qualification` fails on any lock edit), and #878/#90eda left both locks alone; `make lock-root` / `make lock-api` were run to confirm they only drift the stale workspace version entries, then reverted.
 - [x] One CI run on the final pushed head; READY PR; no merge; report to `.tmp/rv/artifacts-get-source-text.md`.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -21,12 +21,12 @@
   - `api/src/services/mcp/cluster-registry.ts`
   - `api/tests/api/app-mcp-registry.test.ts`
   - `api/tests/api/app-mcp-installed.test.ts`
-  - `package-lock.json`
-  - `api/package-lock.json`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
+  - `package-lock.json`
+  - `api/package-lock.json`
   - `.cursor/rules/**`
   - `plan/**`
   - `.github/workflows/**`
@@ -70,7 +70,7 @@
   - [x] Lot gate: `make typecheck-artifacts` + `make lint-artifacts` + `make test-artifacts` with `ENV=test-artifacts-gst`, then `make down ENV=test-artifacts-gst`.
 - [x] **Lot 3 — Version, changelog, pins**
   - [x] `packages/artifacts/CHANGELOG.md` 0.2.7 entry; `packages/artifacts/package.json` version 0.2.7; `ARTIFACTS_PROVIDER_VERSION` in `mcp-core.ts`.
-  - [x] Refresh lock pins through make: `make lock-root ENV=test-artifacts-gst`, `make lock-api ENV=test-artifacts-gst` (single Docker lock per command), then `make down ENV=test-artifacts-gst`.
+  - [x] Lockfiles deliberately untouched: `make lock-root` / `make lock-api` were run under the single Docker lock per command (they only drift the stale workspace version entries 0.2.5→0.2.7 / mcp-platform 0.4.0→0.4.1), then reverted because the memory-l5 P1 lock fingerprint covers the root lock (CI `memory-l5-qualification` fails on any lock edit) and #878/#90eda left both locks alone.
   - [x] Recompute and re-pin the APP-P1 manifest digest in `api/src/services/mcp/cluster-registry.ts` + `api/tests/api/app-mcp-registry.test.ts` + `api/tests/api/app-mcp-installed.test.ts` (0.2.7, superseded 0.2.6 receipt refused).
   - [x] `make scope-check` before every commit; atomic `make commit` per logical change; push after commits.
 - [ ] **Lot 4 — PR & CI**
