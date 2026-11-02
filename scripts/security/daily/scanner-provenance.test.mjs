@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { digest, policy, validateScanner } from './toolchain-contract.mjs';
 import { materialFixture } from '../scanner/contract-fixture.mjs';
 import { validateMaterialContract } from '../scanner/material-contract.mjs';
+import '../scanner/material-acquisition.test.mjs';
 
 const SENTROPIC_REPOSITORY = 'ghcr.io/rhanka/sentropic-trivy';
 const SENTROPIC_IDENTITY =
