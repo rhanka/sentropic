@@ -300,7 +300,8 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           const summary = artifactSummary({ artifactId, acl, actorId: invocation.actorId,
             state: await deps.lifecycle.stateOf(artifactId), current: await deps.publication.getCurrent(artifactId),
             urls: deps.publicationUrls, approved: deps.isApprovedAccount });
-          return { ...outcome, result: { status: 201, body: { ...summary, ...outcome.result } } };
+          return { ...outcome, result: { status: 201, body: profile.resultEnvelopeVersion === 2
+            ? { ...summary, ...outcome.result } : { ...outcome.result, ...acl.metadata } } };
         }
         if (capability === 'artifacts_get_source') {
           const artifactId = normalized.artifactId as string;
