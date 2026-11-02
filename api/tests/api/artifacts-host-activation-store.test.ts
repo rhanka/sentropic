@@ -86,12 +86,18 @@ describe('artifact host activation storage', () => {
   });
 
   it('should append activation to the W1.a three-asset installation without changing earlier receipts', async () => {
-    await pool.query('DROP SCHEMA artifact_host CASCADE');
-    await pool.query('DELETE FROM public.__drizzle_control_migrations WHERE asset_id=$1', [ACTIVATION_SQL_ASSET]);
+    // Recreate the historical schema and prefix, not an interior hole in today's journal.
+    const prefix = artifactMigrationAssets.slice(0, 3);
+    const additions = artifactMigrationAssets.slice(3).map(asset => asset.id);
+    await pool.query('DROP SCHEMA artifacts CASCADE; DROP SCHEMA artifact_host CASCADE');
+    for (const asset of prefix) await pool.query(asset.read());
+    await pool.query('DELETE FROM public.__drizzle_control_migrations WHERE asset_id=ANY($1)', [additions]);
     const earlier = await pool.query('SELECT * FROM public.__drizzle_control_migrations ORDER BY id');
     await runMigrations(pool);
-    expect((await pool.query('SELECT * FROM public.__drizzle_control_migrations WHERE asset_id IS DISTINCT FROM $1 ORDER BY id',
-      [ACTIVATION_SQL_ASSET])).rows).toEqual(earlier.rows);
+    expect((await pool.query('SELECT * FROM public.__drizzle_control_migrations WHERE id=ANY($1) ORDER BY id',
+      [earlier.rows.map(row => row.id)])).rows).toEqual(earlier.rows);
+    expect((await pool.query('SELECT asset_id FROM public.__drizzle_control_migrations WHERE asset_id=ANY($1) ORDER BY id',
+      [additions])).rows).toEqual(additions.map(asset_id => ({ asset_id })));
     await expect(createArtifactHostActivationStorage(options())).resolves.toBeDefined();
   });
 

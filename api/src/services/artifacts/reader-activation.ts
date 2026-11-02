@@ -50,8 +50,10 @@ async function namespaceFor(client: Pool | PoolClient, session: ArtifactReaderSe
 async function currentPolicy(client: PoolClient, pool: Pool, namespace: string,
   session: ArtifactReaderSession, target: Omit<ArtifactReaderTarget, 'nonce'>, baseDomain: string) {
   if (!approvedOrigin(baseDomain, target) || await namespaceFor(client, session, true) !== namespace) return undefined;
+  // Publication changes updated_at/metadata, not reader authority over retained releases.
   const artifact = await client.query<{ revision: string }>(
-    'SELECT xmin::text AS revision FROM artifacts.artifacts WHERE id=$1 AND storage_scope_id=$2 FOR SHARE',
+    `SELECT ROW(owner_id, lifecycle_state, renewed_at, is_public, terminal_deleted_at)::text AS revision
+     FROM artifacts.artifacts WHERE id=$1 AND storage_scope_id=$2 FOR SHARE`,
     [target.artifactId, namespace]);
   if (artifact.rowCount !== 1) return undefined;
   const release = await client.query(

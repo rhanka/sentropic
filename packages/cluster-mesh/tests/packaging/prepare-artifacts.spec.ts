@@ -77,7 +77,7 @@ it('should keep the selected fixture aligned with the candidate release tuple', 
   const fixture = JSON.parse(readFileSync(new URL('./fixtures/selected/package.json', import.meta.url), 'utf8'));
   const lock = JSON.parse(readFileSync(new URL('./fixtures/selected/package-lock.json', import.meta.url), 'utf8'));
   expect(lock.packages[''].dependencies).toEqual(fixture.dependencies);
-  for (const slug of ['cluster-mesh', 'llm-mesh', 'llm-gateway']) {
+  for (const slug of ['cluster-mesh', 'llm-mesh', 'llm-gateway', 'mcp-platform', 'artifacts']) {
     const candidate = JSON.parse(readFileSync(new URL(`../../../${slug}/package.json`, import.meta.url), 'utf8'));
     checkCandidateAlignment(candidate, fixture.dependencies, lock.packages);
   }

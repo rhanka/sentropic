@@ -7,7 +7,7 @@ import { assertWellFormed, copyJson, freezeDeep, orderedDigest } from '../profil
 export const COMMAND_CODEC_VERSION = 'artifacts-command/v1' as const;
 export type CallerIdempotencyKey = string & { readonly __brand: 'caller-key' };
 export type InternalIdempotencyKey = string & { readonly __brand: 'internal-key' };
-export type ArtifactCommandOperation = 'ensure' | 'publish' | 'set_access' | 'delete';
+export type ArtifactCommandOperation = 'ensure' | 'publish' | 'set_access' | 'delete' | 'revert';
 export interface CommandIdentity {
   readonly internalKey: InternalIdempotencyKey;
   readonly commandHash: string;
@@ -51,7 +51,7 @@ export function createRadarKeyDerivation(config: { readonly storageScopeId: stri
     for (const other of actors) {
       if (other === actor || !other.startsWith(`${actor}|`)) continue;
       const [operation, objectId] = other.slice(actor.length + 1).split('|');
-      if ((operation === 'ensure' && objectId === '') || (['publish', 'set_access', 'delete'].includes(operation) && isArtifactId(objectId))) {
+      if ((operation === 'ensure' && objectId === '') || (['publish', 'set_access', 'delete', 'revert'].includes(operation) && isArtifactId(objectId))) {
         throw new Error('ambiguous Radar actor domain');
       }
     }
@@ -61,7 +61,7 @@ export function createRadarKeyDerivation(config: { readonly storageScopeId: stri
     derive(input) {
       const { storageScopeId, actorId, operation, objectId, callerKey } = input;
       if (storageScopeId !== scope || !actors.has(actorId) ||
-        !['ensure', 'publish', 'set_access', 'delete'].includes(operation) ||
+        !['ensure', 'publish', 'set_access', 'delete', 'revert'].includes(operation) ||
         (operation === 'ensure' ? objectId !== '' : !isArtifactId(objectId))) throw new ArtifactProfileInputError();
       assertWellFormed(callerKey);
       if (!callerKey.trim() || callerKey.length > 256) throw new ArtifactProfileInputError();
@@ -76,11 +76,11 @@ export const commandDigest = orderedDigest;
 /** No caller hash, actor, scope, transport or audit identifier enters this API through arguments. */
 export function createArtifactCommand(profile: CompiledArtifactsProfile, name: string, args: unknown,
   authority: ArtifactCommandAuthority, derivation: ArtifactKeyDerivationBinding,
-  envelopeKey?: string): EffectiveArtifactCommand {
+  envelopeKey?: string, options?: { deferPrecondition: true }): EffectiveArtifactCommand {
   assertCompiledArtifactsProfile(profile);
   if (derivation.algorithm !== profile.profile.rules.keyDerivationAlgorithm) throw new Error('profile/derivation mismatch');
-  const normalized = profile.validate(name, args, envelopeKey);
-  if (!['artifacts_ensure', 'artifacts_publish', 'artifacts_set_access', 'artifacts_delete'].includes(name)) throw new ArtifactProfileInputError(true);
+  const normalized = profile.validate(name, args, envelopeKey, options);
+  if (!['artifacts_ensure', 'artifacts_publish', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert'].includes(name)) throw new ArtifactProfileInputError(true);
   const operation = name.slice('artifacts_'.length) as ArtifactCommandOperation;
   const { idempotencyKey, confirmationRef: _proof, ...payload } = normalized;
   const scopeBinding = authority.storageScopeId;

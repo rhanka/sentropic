@@ -17,6 +17,13 @@ export interface GrantRecord {
   grant: AccessGrant;
 }
 
+/** Display metadata of one artifact (title/description/icon); cosmetic, owner-set. */
+export interface ArtifactMetadata {
+  title?: string;
+  description?: string;
+  icon?: string | null;
+}
+
 export interface ArtifactAcl {
   bindingName?: string;
   createdAt?: string;
@@ -30,6 +37,8 @@ export interface ArtifactAcl {
   isPublic: boolean;
   withdrawn: boolean;
   grants: GrantRecord[];
+  /** Display metadata returned by get/list; persisted by the host store. */
+  metadata?: ArtifactMetadata;
 }
 
 export interface AclStore {

@@ -108,7 +108,8 @@ test('should allow unrelated npm releases when another package fails', () => {
   for (const [name, job] of Object.entries(workflow.jobs)) {
     if (!name.startsWith('publish-') || name.endsWith('-image') || train.has(name)) continue;
     const own = name.replace('publish-', 'validate-');
-    const required = name === 'publish-mcp-auth' ? ['changes', own, 'publish-oauth-verify'] : ['changes', own];
+    const upstream = { 'publish-mcp-auth': 'publish-oauth-verify', 'publish-artifacts': 'publish-mcp-platform' }[name];
+    const required = ['changes', own, ...(upstream ? [upstream] : [])];
     assert.deepEqual(job.needs, required, name);
     assert.ok(!job.if.includes('failure()'), name);
     const lookup = key => key === 'github.ref' ? 'refs/heads/main'
@@ -116,6 +117,16 @@ test('should allow unrelated npm releases when another package fails', () => {
       : key === 'needs.publish-oauth-verify.result' ? 'skipped' : 'success';
     assert.equal(evaluateSelection(job.if, lookup), true, name);
     assert.equal(evaluateSelection(job.if, key => key === `needs.${own}.result` ? 'failure' : lookup(key)), false, name);
+    if (name === 'publish-artifacts') {
+      for (const [result, changed, expected] of [
+        ['success', 'true', true], ['failure', 'true', false], ['cancelled', 'true', false],
+        ['skipped', 'true', false], ['skipped', 'false', true],
+      ]) {
+        assert.equal(evaluateSelection(job.if, key => key === 'needs.publish-mcp-platform.result' ? result
+          : key === 'needs.changes.outputs.mcp_platform_publish' ? changed : lookup(key)), expected,
+        `${name}: platform ${result}, publish selected ${changed}`);
+      }
+    }
   }
 });
 

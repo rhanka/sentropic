@@ -335,6 +335,10 @@ describe('trusted app reader activation', () => {
   });
 
   it.each(['acl', 'pointer', 'session-expiry'])('should recheck %s after a stable-pointer lock wait', async change => {
+    // Insert before locking the pointer: publication updates the parent artifact first.
+    const b = randomUUID();
+    if (change === 'pointer') await pool.query(`INSERT INTO artifacts.releases(id,artifact_id,manifest_digest,manifest)
+      VALUES ($1,$2,'b','{}')`, [b, artifactId]);
     const issued = await reader().issue(session, target);
     const blocker = await pool.connect();
     await blocker.query('BEGIN');
@@ -348,8 +352,6 @@ describe('trusted app reader activation', () => {
       if (change === 'acl') await pool.query(`DELETE FROM artifacts.artifact_access WHERE principal_id='reader'`);
       if (change === 'session-expiry') await pool.query(`UPDATE user_sessions SET expires_at=clock_timestamp() WHERE id='session'`);
       if (change === 'pointer') {
-        const b = randomUUID();
-        await blocker.query(`INSERT INTO artifacts.releases(id,artifact_id,manifest_digest,manifest) VALUES ($1,$2,'b','{}')`, [b, artifactId]);
         await blocker.query('UPDATE artifacts.artifact_current SET release_id=$1', [b]);
       }
     } finally {

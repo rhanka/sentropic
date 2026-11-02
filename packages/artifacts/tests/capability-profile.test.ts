@@ -142,7 +142,7 @@ describe('compiled capability profile', () => {
     expect(profile.schemas.artifacts_ensure).toMatchObject({ additionalProperties: false,
       required: ['bindingName', 'idempotencyKey'] });
     expect(profile.schemas.artifacts_publish).toMatchObject({ additionalProperties: false,
-      required: ['artifactId', 'files', 'idempotencyKey'] });
+      required: ['artifactId', 'idempotencyKey'] });
     expect(profile.idempotency.artifacts_publish).toEqual({ required: true, scope: 'principal' });
     expect(JSON.stringify(profile.schemas)).not.toMatch(/paramsHash|storageScopeId|ownerId/);
     expect(profile.profile.rules.pathMaxBytes).toBe(1024);

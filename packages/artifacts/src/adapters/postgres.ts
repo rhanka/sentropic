@@ -8,7 +8,7 @@
  */
 import type { Pool } from 'pg';
 import type { JsonValue } from '../contracts.js';
-import type { AccessGrant, AclStore, ArtifactAcl } from '../server/access.js';
+import type { AccessGrant, AclStore, ArtifactAcl, ArtifactMetadata } from '../server/access.js';
 import type { RefcountStore } from '../server/gc.js';
 import type { ArtifactState, LifecycleStore, ReleaseState } from '../server/lifecycle.js';
 import type { SourceRef, SourceStore } from '../server/sources.js';
@@ -80,6 +80,9 @@ function toIntent(row: IntentRow): ObjectIntent {
 }
 
 interface ReleaseRow {
+  author_principal_id?: string | null;
+  parent_release_id?: string | null;
+  reverted_from_release_id?: string | null;
   id: string;
   artifact_id: string;
   manifest_digest: string;
@@ -90,6 +93,9 @@ interface ReleaseRow {
 
 function toRelease(row: ReleaseRow): ReleaseRecord {
   return {
+    authorPrincipalId: row.author_principal_id ?? null,
+    parentReleaseId: row.parent_release_id ?? null,
+    revertedFromReleaseId: row.reverted_from_release_id ?? null,
     releaseId: row.id,
     artifactId: row.artifact_id,
     manifestDigest: row.manifest_digest,
@@ -244,12 +250,18 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
     },
     async getRelease(releaseId: string): Promise<ReleaseRecord | undefined> {
       const { rows } = await pool.query<ReleaseRow>(
-        `SELECT id, artifact_id, manifest_digest, manifest, state, created_at
-         FROM artifacts.releases WHERE id = $1`,
+        `SELECT * FROM artifacts.releases WHERE id = $1`,
         [releaseId],
       );
       const row = rows[0];
       return row === undefined ? undefined : toRelease(row);
+    },
+    async listReleases(artifactId: string): Promise<ReleaseRecord[]> {
+      const { rows } = await pool.query<ReleaseRow>(
+        `SELECT * FROM artifacts.releases WHERE artifact_id = $1 ORDER BY created_at, id`,
+        [artifactId],
+      );
+      return rows.map(toRelease);
     },
     async getCurrentReleaseId(artifactId: string): Promise<string | undefined> {
       const { rows } = await pool.query<{ release_id: string }>(
@@ -328,7 +340,7 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
         binding_name: string;
         created_at: Date;
         updated_at: string | null;
-        metadata: { title?: string; description?: string; icon?: string | null } | null;
+        metadata: ArtifactMetadata | null;
       }>(
         `SELECT owner_id, storage_scope_id, is_public, lifecycle_state, binding_name, created_at,
           to_jsonb(a)->>'updated_at' AS updated_at, to_jsonb(a)->'metadata' AS metadata
@@ -353,16 +365,17 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
           principalId: grant.principal_id,
           grant: grant.permission,
         })),
+        ...(row.metadata === null || Object.keys(row.metadata).length === 0 ? {} : { metadata: row.metadata }),
       };
     },
     async putArtifactAcl(artifactId: string, acl: ArtifactAcl): Promise<void> {
       await pool.query(
-        `UPDATE artifacts.artifacts SET is_public = $2,
+        `UPDATE artifacts.artifacts SET is_public = $2, metadata = $4,
          lifecycle_state = CASE WHEN $3 THEN 'withdrawn'
            WHEN lifecycle_state = 'withdrawn' THEN 'active'
            ELSE lifecycle_state END
          WHERE id = $1`,
-        [artifactId, acl.isPublic, acl.withdrawn],
+        [artifactId, acl.isPublic, acl.withdrawn, JSON.stringify(acl.metadata ?? {})],
       );
       await pool.query(`DELETE FROM artifacts.artifact_access WHERE artifact_id = $1`, [
         artifactId,

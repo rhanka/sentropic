@@ -24,6 +24,14 @@ const SQL_COORDINATOR = readFileSync(
   join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '0003_coordinator.sql'),
   'utf8',
 );
+const SQL_TERMINAL = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '0004_terminal_controls.sql'),
+  'utf8',
+);
+const SQL_METADATA = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '..', 'migrations', '0005_metadata.sql'),
+  'utf8',
+);
 
 const pool = new Pool({ connectionString: DATABASE_URL });
 const store = createPostgresArtifactStore(pool);
@@ -34,6 +42,8 @@ beforeAll(async () => {
   await setup.query(SQL);
   await setup.query(SQL_LIFECYCLE);
   await setup.query(SQL_COORDINATOR);
+  await setup.query(SQL_TERMINAL);
+  await setup.query(SQL_METADATA);
   await setup.query(`INSERT INTO artifacts.storage_scopes (id, org_id) VALUES ('scope-1', 'org-1')`);
   await setup.end();
 });
@@ -146,6 +156,9 @@ describe('postgres artifact store', () => {
     const lost = await store.compareAndSwapCurrent(ensured.artifactId, null, 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb');
     expect(lost).toBe(false);
     expect(await store.getCurrentReleaseId(ensured.artifactId)).toBe(release.releaseId);
+    const history = await store.listReleases(ensured.artifactId);
+    expect(history).toHaveLength(1);
+    expect(history[0]).toMatchObject({ releaseId: release.releaseId, manifestDigest: release.manifestDigest });
   });
 
   it('stores and reads access grants with the owner', async () => {
@@ -162,6 +175,9 @@ describe('postgres artifact store', () => {
       withdrawn: false,
       grants: [{ principalId: 'reader-1', grant: 'read' }],
     });
+    await store.putArtifactAcl(ensured.artifactId, { ...(await store.getArtifactAcl(ensured.artifactId))!,
+      metadata: { title: 'Pg page', icon: 'doc' } });
+    expect((await store.getArtifactAcl(ensured.artifactId))?.metadata).toEqual({ title: 'Pg page', icon: 'doc' });
     const acl = await store.getArtifactAcl(ensured.artifactId);
     expect(acl).toMatchObject({
       ownerId: 'owner-acl',

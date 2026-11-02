@@ -12,6 +12,9 @@ export const RADAR_ARTIFACTS_PROFILE: EffectiveArtifactProfile = freezeDeep<Effe
       maxDecodedFileBytes: 262144, maxDecodedTotalBytes: 262144 }, defaults: { profile: {} } },
     { operation: 'list', limits: { listLimitMin: 1, listLimitMax: 100 }, defaults: { limit: 20, offset: 0 } },
     { operation: 'get', limits: {}, defaults: {} },
+    { operation: 'list_versions', limits: {}, defaults: {} },
+    { operation: 'get_source', limits: {}, defaults: {} },
+    { operation: 'revert', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} },
   ],
   rules: { lengthUnit: 'utf16', textEncoding: 'utf8', callerKeyNormalization: 'none',
     rejectLoneSurrogates: true, provenance: 'inline-original', keyDerivationAlgorithm: 'radar-derive-idempotency-v1', pathMaxBytes: 1024,
@@ -19,5 +22,5 @@ export const RADAR_ARTIFACTS_PROFILE: EffectiveArtifactProfile = freezeDeep<Effe
     reservedFirstSegments: ['api', '__artifacts', 'livez', 'health'],
     mimeTypes: ['text/html', 'text/css', 'text/javascript', 'application/json'] },
   contractRevisions: { profile: 'artifacts-profile/v1', command: 'artifacts-command/v1',
-    authorization: 'artifacts-authorization/v1', outcome: 'artifacts-outcome/v1' },
+    authorization: 'artifacts-authorization/v1', outcome: 'artifacts-outcome/v2' },
 });

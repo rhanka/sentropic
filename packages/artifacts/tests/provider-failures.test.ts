@@ -35,7 +35,9 @@ async function expectProjection(cause: unknown, expected: Record<string, unknown
   const result = projectArtifactMcpOutcome(outcome, 'audit-1');
   expect(result).toEqual({
     ok: false, auditId: 'audit-1', redactionClass: 'low',
-    error: { code: failure.publicCode, message: failure.publicCode, retriable: failure.retriable },
+    invocationId: ctx.invocationId, commitState: ctx.commitState,
+    error: { code: failure.publicCode, message: failure.publicCode, retriable: failure.retriable,
+      ...('variant' in failure && failure.variant !== undefined ? { details: { variant: failure.variant } } : {}) },
   });
   expect(JSON.stringify(result)).not.toMatch(/private|credential|bucket|endpoint|stack|cause/);
   return failure;
@@ -321,9 +323,11 @@ describe('outcome correlation, commit state and privacy', () => {
     expect(wire.isError).toBe(true);
     expect(wire._meta).toMatchObject({ errorCode: 'capability_unavailable', retriable: true });
     expect(JSON.parse((wire.content[0] as { text: string }).text)).toEqual({
-      code: 'capability_unavailable', message: 'capability_unavailable',
+      ok: false, invocationId: 'inv-1', commitState: 'not_committed',
+      error: { code: 'capability_unavailable', message: 'capability_unavailable', retriable: true,
+        details: { variant: 'dispatch_failure' } },
     });
-    expect(JSON.stringify(wire)).not.toMatch(/private|credential|bucket|endpoint|stack|cause|inv-1/);
+    expect(JSON.stringify(wire)).not.toMatch(/private|credential|bucket|endpoint|stack|cause/);
     expect(decodeToolResult(wire)).toEqual(result);
   });
 
@@ -334,6 +338,7 @@ describe('outcome correlation, commit state and privacy', () => {
     expect(projectArtifactHttpOutcome(outcome)).toBe(result);
     expect(projectArtifactMcpOutcome(outcome, 'audit-1')).toEqual({
       ok: true, output: result.body, auditId: 'audit-1', redactionClass: 'low',
+      invocationId: 'inv-1', commitState: 'committed', replayed: true,
     });
     expect(result.body).not.toHaveProperty('replayed');
   });

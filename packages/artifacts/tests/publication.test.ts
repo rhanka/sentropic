@@ -35,6 +35,8 @@ function guardedFixture(finalize: (request: FinalizeRequest) => Promise<Finalize
     coordinator: { finalizePrepared: finalize, replayPrepared: finalize }, refs, blobs,
     intents: createMemoryIntentStore(),
     createUnitWriter: () => ({
+      lockCurrent: async () => ({ currentReleaseId: null, currentDigest: null }),
+      updateMetadata: async (_id, metadata) => metadata,
       readAuthorization: async () => ({ state: 'active', acl: { ownerId: 'owner-1', grants: [], isPublic: false, withdrawn: false } }),
       putSource: async () => {},
       putRelease: async () => {}, registerBlob: async () => {},
@@ -78,7 +80,9 @@ describe('finalized publication regressions', () => {
 
   it('should retain committed refs when COMMIT acknowledgement is lost', async () => {
     const f = guardedFixture(async (request) => {
-      await request.provisional!({ query: async () => ({ rows: [], rowCount: 0 }) });
+      const client = { query: async () => ({ rows: [], rowCount: 0 }) };
+      for (const lock of request.locks?.['artifact-lifecycle'] ?? []) await lock(client);
+      await request.provisional!(client);
       return { ok: false, failure: { commitState: 'unknown' } } as FinalizeResult;
     });
     await createGuardedPublicationService(f.deps).publishFinalized(f.input);

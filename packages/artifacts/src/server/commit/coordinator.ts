@@ -544,7 +544,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
           ok: false,
           failure: failure('conflict', request, phase, 'not_committed', {
             key: request.internalKey,
-          }, { variant: 'key_contention' }),
+          }, { variant: 'command_conflict' }),
         };
       }
       return coordinator.replayPrepared(request);
@@ -651,7 +651,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
             ok: false,
             failure: failure('conflict', request, 'lock', 'not_committed', {
               key: request.internalKey,
-            }, { variant: 'key_contention' }),
+            }, { variant: 'command_conflict' }),
           };
         }
         phase = 'guard';
@@ -728,6 +728,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
         if (recheckRevision !== request.policyRevision) {
           return abortWith(request, phase, settle, revokedOutcome(request));
         }
+        request.assertPrecondition?.();
         phase = 'commit';
         const commitFailure = await commitUnit(request, active, settle);
         if (commitFailure !== undefined) return commitFailure;
@@ -762,6 +763,13 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
     },
 
     async replayPrepared(request: FinalizeRequest): Promise<FinalizeResult> {
+      return await coordinator.findReplayPrepared(request) ?? { ok: false,
+        failure: failure('provider_error', request, 'lock', 'not_committed', {
+          lost: 'replay without a success row',
+        }, { variant: 'unclassified' }) };
+    },
+
+    async findReplayPrepared(request: FinalizeRequest): Promise<FinalizeResult | undefined> {
       validateRequest(request, 'replay');
       await observeAt('before_connection_acquire', request.invocationId);
       let phase: UnitPhase = 'acquire';
@@ -788,17 +796,8 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
         // the barrier denies on the looked-up row instead of vanishing it.
         await observeAt('after_replay_lookup_before_guard', request.invocationId);
         if (existing === undefined) {
-          return abortWith(
-            request,
-            phase,
-            settle,
-            {
-              ok: false,
-              failure: failure('provider_error', request, phase, 'not_committed', {
-                lost: 'replay without a success row',
-              }, { variant: 'unclassified' }),
-            },
-          );
+          const error = await settle.abort();
+          return error === undefined ? undefined : unknownOutcome(request, phase, error);
         }
         if (existing.codecVersion !== COMMAND_CODEC_VERSION) {
           const settleError = await settle.abort();
@@ -822,7 +821,7 @@ export function createArtifactCommitCoordinator(options: CommitCoordinatorOption
               ok: false,
               failure: failure('conflict', request, phase, 'not_committed', {
                 key: request.internalKey,
-              }, { variant: 'key_contention' }),
+              }, { variant: 'command_conflict' }),
             },
           );
         }

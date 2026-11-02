@@ -23,6 +23,7 @@ const SPEC_TOOLS = [
   'artifacts_list', 'artifacts_get', 'artifacts_get_source', 'artifacts_fork',
   'artifacts_set_access', 'artifacts_promote', 'artifacts_renew',
   'artifacts_delete', 'artifacts_restore',
+  'artifacts_list_versions', 'artifacts_revert',
 ];
 
 interface ModuleOptions { failArtifacts?: boolean; loads?: string[] }

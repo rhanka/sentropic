@@ -8,7 +8,7 @@ export function parityProfile() {
   return compileArtifactsProfile({ ...RADAR_ARTIFACTS_PROFILE,
     selectedCapabilities: [...RADAR_ARTIFACTS_PROFILE.selectedCapabilities,
       'artifacts_get_source', 'artifacts_set_access', 'artifacts_delete'],
-    operations: [...RADAR_ARTIFACTS_PROFILE.operations,
+    operations: [...RADAR_ARTIFACTS_PROFILE.operations.filter(op => op.operation !== 'get_source'),
       { operation: 'get_source', limits: {}, defaults: {} },
       { operation: 'set_access', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} },
       { operation: 'delete', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} }],
@@ -22,7 +22,10 @@ describe('P0 control contracts', () => {
     for (const changes of [{ grant: 'source' }, { action: 'set-public' }, { idempotencyKey: ' ' }]) {
       expect(() => profile.validate('artifacts_set_access', { ...input, ...changes })).toThrow();
     }
-    expect(() => profile.validate('artifacts_delete', { artifactId, idempotencyKey: 'k' })).toThrow();
+    const strict = compileArtifactsProfile({ ...profile.profile, requireExpectedCurrentReleaseId: true });
+    expect(() => strict.validate('artifacts_delete', { artifactId, idempotencyKey: 'k' })).toThrow();
+    expect(profile.validate('artifacts_delete', { artifactId, idempotencyKey: 'k' }))
+      .not.toHaveProperty('expectedCurrentReleaseId');
     expect(() => profile.validate('artifacts_get_source', { artifactId, paths: ['a', 'a'] })).toThrow();
   });
   it('should exclude confirmation proof from the command identity', () => {

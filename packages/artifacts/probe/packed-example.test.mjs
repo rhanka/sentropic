@@ -12,6 +12,9 @@ test('packed Radar example compiles using only installed public entrypoints', ()
   const [pack] = JSON.parse(execFileSync('npm', ['pack', './packages/artifacts', '--json',
     '--ignore-scripts', '--pack-destination', out], { encoding: 'utf8' }));
   const archive = resolve(out, pack.filename);
+  const [platformPack] = JSON.parse(execFileSync('npm', ['pack', './packages/mcp-platform', '--json',
+    '--ignore-scripts', '--pack-destination', out], { encoding: 'utf8' }));
+  const platformArchive = resolve(out, platformPack.filename);
   const bytes = readFileSync(archive);
   const receipt = { name: pack.name, version: pack.version, archive,
     sha256: createHash('sha256').update(bytes).digest('hex'),
@@ -25,7 +28,7 @@ test('packed Radar example compiles using only installed public entrypoints', ()
   if (offline) {
     execFileSync(process.execPath, ['/workspace/scripts/ci/locked-consumer.mjs', '--prefix', consumer, '--ignore-scripts', '--strict-peer-deps',
       '--offline', '--no-audit', '--no-fund', archive,
-      resolve('tools/memory-mcp-l5/artifacts/archives/sentropic-mcp-platform-0.4.0-2ad8a40fa38f4289fe177f58d75bc3317a50dd1b7a3ca693cf55cff2ff72cc9d.tgz')], { stdio: 'inherit' });
+      platformArchive], { stdio: 'inherit' });
     for (const name of readdirSync(offline).filter((name) => name !== '@sentropic' && name !== '.bin')) {
       cpSync(`${offline}/${name}`, `${consumer}/node_modules/${name}`, { recursive: true });
     }
@@ -33,7 +36,7 @@ test('packed Radar example compiles using only installed public entrypoints', ()
     copyFileSync(`${offline}/typescript/bin/tsc`, `${consumer}/node_modules/typescript/bin/tsc`);
   } else execFileSync(process.execPath, ['/workspace/scripts/ci/locked-consumer.mjs', '--prefix', consumer, '--ignore-scripts', '--strict-peer-deps',
     '--no-audit', '--no-fund', archive, 'typescript@5.4.5', '@types/node@22',
-    'pg@8.22.0', '@types/pg@8.20.0', '@sentropic/mcp-platform@0.4.0'], { stdio: 'pipe' });
+    'pg@8.22.0', '@types/pg@8.20.0', platformArchive], { stdio: 'pipe' });
   const installed = `${consumer}/node_modules/@sentropic/artifacts`;
   copyFileSync(`${installed}/examples/radar-commit-setup.ts`, `${consumer}/example.ts`);
   writeFileSync(`${consumer}/public-types.ts`, `

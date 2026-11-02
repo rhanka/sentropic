@@ -1,8 +1,8 @@
 /** Atomic memory composition shared by transport and content journeys. */
 import { randomUUID } from 'node:crypto';
-import { createHttpArtifactApp } from '../../src/http.js';
+import { createHttpArtifactApp, type HttpAppDeps } from '../../src/http.js';
 import { createArtifactsToolExecutor } from '../../src/mcp-core.js';
-import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE } from '../../src/profile/index.js';
+import { compileArtifactsProfile, RADAR_ARTIFACTS_PROFILE, type ArtifactProviderProfile } from '../../src/profile/index.js';
 import { createRadarKeyDerivation } from '../../src/server/command-identity.js';
 import { createArtifactCommitCoordinator } from '../../src/server/commit/coordinator.js';
 import type { ArtifactHostFailureMapper } from '../../src/server/failures.js';
@@ -20,18 +20,28 @@ import { createMemoryBlobStore, createMemoryStateStore, type ReleaseRecord,
   type PublicationService } from '../../src/server/publication.js';
 
 export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], scope = 'scope-l6',
-  options: { mapHostError?: ArtifactHostFailureMapper; testObserver?: CommitBarrierObserver; parity?: boolean } = {}) {
-  const profile = compileArtifactsProfile(options.parity ? { ...RADAR_ARTIFACTS_PROFILE,
+  options: { mapHostError?: ArtifactHostFailureMapper; testObserver?: CommitBarrierObserver;
+    parity?: boolean; profile?: ArtifactProviderProfile } = {}) {
+  const profile = compileArtifactsProfile(options.profile ?? (options.parity ? { ...RADAR_ARTIFACTS_PROFILE,
     selectedCapabilities: [...RADAR_ARTIFACTS_PROFILE.selectedCapabilities, 'artifacts_get_source', 'artifacts_set_access', 'artifacts_delete'],
-    operations: [...RADAR_ARTIFACTS_PROFILE.operations,
+    operations: [...RADAR_ARTIFACTS_PROFILE.operations.filter(op => op.operation !== 'get_source'),
       { operation: 'get_source', limits: {}, defaults: {} },
       { operation: 'set_access', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} },
       { operation: 'delete', limits: { idempotencyKeyMaxUnits: 256 }, defaults: {} }],
-  } : RADAR_ARTIFACTS_PROFILE);
+  } : RADAR_ARTIFACTS_PROFILE));
   const receipts = new Map<string, StoredCommitReceipt>();
   const bindings = new Map<string, string>();
   const releases = new Map<string, ReleaseRecord>();
   const writes = new Map<FinalizeTxClient, (() => Promise<void>)[]>();
+  const lockTails = new Map<string, Promise<void>>();
+  const unlocks = new Map<FinalizeTxClient, (() => void)[]>();
+  async function lock(client: FinalizeTxClient, key: string) {
+    const previous = lockTails.get(key) ?? Promise.resolve();
+    let unlock!: () => void;
+    lockTails.set(key, new Promise<void>(resolve => { unlock = resolve; }));
+    await previous;
+    unlocks.get(client)!.push(unlock);
+  }
   const acls = createMemoryAclStore();
   const state = createMemoryStateStore();
   const blobs = createMemoryBlobStore();
@@ -51,20 +61,24 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
       const pending: (() => Promise<void>)[] = [];
       const connection: FinalizeConnection = {
         async query() { return { rows: [], rowCount: 0 }; },
-        async beginReadCommitted() {}, async lockOperationKey() {},
+        async beginReadCommitted() {}, async lockOperationKey(scope, key) { await lock(connection, `${scope}/${key}`); },
         async readReceipt(scope, key) { return receipts.get(`${scope}/${key}`); },
         async insertReceipt(receipt) { pending.push(async () => { receipts.set(`${receipt.scopeId}/${receipt.internalKey}`, receipt); }); },
         async commit() { for (const write of pending) await write(); },
-        async rollback() { pending.length = 0; }, release() { writes.delete(connection); },
+        async rollback() { pending.length = 0; }, release() {
+          for (const unlock of unlocks.get(connection) ?? []) unlock();
+          unlocks.delete(connection); writes.delete(connection);
+        },
       };
       writes.set(connection, pending);
+      unlocks.set(connection, []);
       return connection;
     },
   };
   const coordinator = createArtifactCommitCoordinator({ ...options, executor, policy: {
-    createParticipant: (_client, transactionId) => ({
+    createParticipant: (client, transactionId) => ({
       async readRevision() { return 'rev-1'; }, async checkApproval() { return { approved }; },
-      async reserveQuota({ bytes }) { quotaReservations.push(bytes); return { reserved: true }; },
+      async reserveQuota({ bytes }) { writes.get(client)!.push(async () => { quotaReservations.push(bytes); }); return { reserved: true }; },
       mintFence: (policyRevision, invocationId) => ({ fenceId: randomUUID(), transactionId, invocationId, policyRevision }),
     }),
   } });
@@ -79,12 +93,13 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
   const publication: PublicationService = {
     publish: async () => { throw new Error('use the guarded control app'); },
     getRelease: (releaseId) => state.getRelease(releaseId),
+    listReleases: (artifactId) => state.listReleases(artifactId),
     async getCurrent(artifactId) {
       const releaseId = await state.getCurrentReleaseId(artifactId);
       return releaseId === undefined ? undefined : state.getRelease(releaseId);
     },
   };
-  const app = createHttpArtifactApp({ ...options, profile, coordinator,
+  const appDeps: HttpAppDeps = { ...options, profile, coordinator,
     publicationUrls: (artifactId, releaseId) => ({ stableUrl: `https://artifacts.test/a/${artifactId}`,
       pinnedUrl: `https://artifacts.test/a/${artifactId}/r/${releaseId}` }),
     derivation: createRadarKeyDerivation({ storageScopeId: scope, actorIds: actors }),
@@ -140,8 +155,23 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
       },
     },
     publication: {
-      blobs, intents, refs: createMemoryRefcountStore(), getCurrent: publication.getCurrent, getRelease: publication.getRelease,
+      blobs, intents, refs: createMemoryRefcountStore(), getCurrent: publication.getCurrent,
+      getRelease: publication.getRelease, listReleases: publication.listReleases,
       createUnitWriter: (client) => ({
+        async lockCurrent(artifactId) {
+          await lock(client, `artifact/${artifactId}`);
+          const current = await publication.getCurrent(artifactId);
+          return { currentReleaseId: current?.releaseId ?? null, currentDigest: current?.manifestDigest ?? null };
+        },
+        async updateMetadata(artifactId, metadata) {
+          const acl = (await acls.getArtifactAcl(artifactId))!;
+          const merged = { ...acl?.metadata, ...metadata };
+          writes.get(client)!.push(async () => {
+            const current = (await acls.getArtifactAcl(artifactId))!;
+            await acls.putArtifactAcl(artifactId, { ...current, metadata: { ...current.metadata, ...metadata } });
+          });
+          return merged;
+        },
         async readAuthorization(artifactId) { return { state: await lifecycle.stateOf(artifactId), acl: await acls.getArtifactAcl(artifactId) }; },
         async putRelease(release) { writes.get(client)!.push(async () => {
           releases.set(release.artifactId, release); await state.putRelease(release);
@@ -153,12 +183,14 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
         async putSource(id, source) { writes.get(client)!.push(() => sources.putSource(id, source)); }, async registerBlob() {}, async addReleaseRef() {},
       }),
     },
-  });
+  };
+  const app = createHttpArtifactApp(appDeps);
   const mcp = createArtifactsToolExecutor({ ...options, app, profile });
   const http = (path: string, body: unknown, context = invocation()) => app.execute({
     method: 'POST', path, body, actorId: context.actorId, storageScopeId: context.storageScopeId,
   }, context);
-  return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, blobs, legacyRecords, quotaReservations,
+  return { app, mcp, http, invocation, receipts, releases, bindings, profile, publication, acls, lifecycle, lifecycleStore, state, blobs, legacyRecords, quotaReservations,
+    withProfile: (input: ArtifactProviderProfile) => createHttpArtifactApp({ ...appDeps, profile: compileArtifactsProfile(input) }),
     approveConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.approved = true; },
     expireConfirmation: (ref: string) => { const proof = confirmations.get(ref); if (proof) proof.expired = true; },
     executor, suspend: () => { approved = false; },
