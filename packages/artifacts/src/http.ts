@@ -257,7 +257,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
           throw new ArtifactProfileInputError();
         }
         let args: Record<string, unknown>;
-        const getPrefix = capability === 'artifacts_get' ? '/meta/'
+        const getPrefix = request.method !== 'GET' ? undefined : capability === 'artifacts_get' ? '/meta/'
           : capability === 'artifacts_list_versions' ? '/versions/'
           : capability === 'artifacts_get_source' ? '/source/' : undefined;
         if (getPrefix !== undefined) {

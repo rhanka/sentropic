@@ -15,9 +15,10 @@ export function artifactSummary(input: {
     createdAt: acl.createdAt ?? null, updatedAt: acl.updatedAt ?? null,
     currentReleaseId: current?.releaseId ?? null, digest: current ? parseManifest(current.manifest).digest ?? null : null,
     stableUrl: urls?.stableUrl ?? null, pinnedUrl: current ? urls?.pinnedUrl ?? null : null,
-    ...(acl.title === undefined ? {} : { title: acl.title }),
-    ...(acl.description === undefined ? {} : { description: acl.description }),
-    ...(acl.icon === undefined ? {} : { icon: acl.icon }),
+    title: acl.metadata?.title ?? acl.title ?? acl.bindingName ?? artifactId,
+    description: acl.metadata?.description ?? acl.description ?? '',
+    icon: acl.metadata?.icon !== undefined ? acl.metadata.icon : acl.icon ?? null,
+    ...(acl.metadata === undefined ? {} : { metadata: acl.metadata }),
     permissions: { read: evaluateAccess(acl, actorId, 'read', input.approved),
       source: evaluateAccess(acl, actorId, 'source', input.approved), write: owner, manage: owner } };
 }

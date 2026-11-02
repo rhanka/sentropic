@@ -109,7 +109,7 @@ claim completion. Do not pass a raw pool to transaction-scoped deletion claims.
 
 Stop old writers before enabling the new composition. Apply migrations
 `0001_artifacts.sql`, `0002_lifecycle.sql`, additive `0003_coordinator.sql` and
-additive `0004_metadata.sql` (artifact display metadata column).
+additive `0005_metadata.sql` (artifact display metadata column).
 Preserve historical rows and objects. Supply `legacyRecords`, using
 `createPostgresLegacyArtifactRecords(pool)` for PostgreSQL. An empty inventory
 reader is appropriate only for a verified fresh store.
