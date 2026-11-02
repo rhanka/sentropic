@@ -115,6 +115,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Implement the host token/digest adapter against the approved r6 signer/verifier contracts.
   - [x] Add the r6 per-attempt auth binding/runner with callback-owned audit drain and post-commit mail publication.
   - [x] Construct OAuth refresh/state/consent/JWKS participants on the active app executor; no nested transaction in bound refresh/consent.
+  - [x] Stage every OAuth identity handler on the CM bound ports; publish ordinary protocol denials after commit and roll back infrastructure failures.
   - [x] Add transaction-bound auth workspace provisioning and an explicit Q-K configuration parser with key-reader disposal tests.
   - [x] Add the production auth runner configuration and private HTTP response staging with sanitized failures.
   - [x] Mount real CM WebAuthn options/authentication and login creation in one completion callback.
