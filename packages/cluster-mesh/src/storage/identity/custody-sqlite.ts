@@ -647,7 +647,7 @@ const sqliteTransactionQueues = new WeakMap<SqliteConnection, Promise<void>>();
 export const createSqliteIdentityHostV1 = (options: {
   readonly connection: SqliteConnection;
   readonly applySchema?: boolean;
-}): SqliteIdentityHostV1<H> => {
+}): SqliteIdentityHostV1<SqliteCustodyHandle> => {
   if (options.applySchema !== false) {
     applySqliteIdentityCoreSchema(options.connection);
   }
@@ -658,12 +658,13 @@ export const createSqliteIdentityHostV1 = (options: {
     sqliteTransactionQueues.set(options.connection, new Promise<void>((resolve) => { release = resolve; }));
     await prior;
     const deadline = Date.now() + runOptions.deadlineMs;
+    const guard = identityTransactionGuard(runOptions.readOnly, deadline);
     try {
       options.connection.exec(runOptions.readOnly ? 'BEGIN' : 'BEGIN IMMEDIATE');
       const result = await operation({
         transactionId: nextSqliteCustodyTxId(),
-        hostTransaction: new SqliteCustodyHandle(options.connection),
-        connection: options.connection,
+        hostTransaction: new SqliteCustodyHandle(guard.sqlite(options.connection)),
+        connection: guard.sqlite(options.connection),
         readOnly: runOptions.readOnly,
       });
       if (Date.now() >= deadline) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
@@ -672,7 +673,7 @@ export const createSqliteIdentityHostV1 = (options: {
     } catch (error) {
       try { options.connection.exec('ROLLBACK'); } catch { /* Preserve the original failure. */ }
       throw error;
-    } finally { release(); }
+    } finally { guard.close(); release(); }
   },
   };
 };
