@@ -161,6 +161,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Mount the CM member handlers in the shared router; publish workspace membership notifications only after the identity commit.
   - [x] Delete the old product member-list, mention-list and add-member handlers.
   - [x] Delete the old product role-change and member-removal handlers and their identity-only imports.
+  - [x] Join workspace provisioning and session adoption to CM's combined transaction; preallocate workspace ids and recheck current account/tenant authority before enrollment.
   - [ ] resolution + tid + admin + F15: delete resolve-tenant.ts, TENANT_RESOLUTION_MODE, OAuth tid legs, identity parts of admin-product-authority.ts; replace request-authority.ts with F15.
   - [x] Evaluate F15 and business workspace visibility on one serializable read transaction.
   - [x] Add explicit verified-HTTP conversation admission and an opaque CM reference on business chats; no identity authority is inferred from a chat id.
