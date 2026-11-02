@@ -121,11 +121,13 @@ test('L4-B: toolbox Dockerfile carries the pinned native binary with zero Python
   assert.match(dockerfile, /sha256sum -c -/);
   assert.match(dockerfile, /unzip -q -o \/tmp\/ast-grep\.zip -d \/opt\/ast-grep/);
   assert.ok(dockerfile.includes('COPY --from=ci-tool-base /opt/ast-grep /opt/ast-grep'));
-  assert.ok(dockerfile.includes('COPY .security/ast-grep /workspace/.security/ast-grep'));
+  // The frozen rules stay in the repo checkout (SAST_CONFIG is repo-relative); the image
+  // must not COPY them from an unhashed build-context path into the canonical tag.
+  assert.ok(!/^COPY \.security\/ast-grep\b/m.test(dockerfile), 'no unhashed COPY of .security/ast-grep');
   for (const forbidden of contract.manifest.toolbox.zeroPython.toolboxDockerfileForbids) {
     assert.ok(!dockerfile.toLowerCase().includes(forbidden), `forbidden token: ${forbidden}`);
   }
-  assert.ok(!/ast-grep[^\n]*(npm (install|ci))|(npm (install|ci))[^\n]*ast-grep/i.test(dockerfile), 'no npm install of ast-grep');
+  assert.ok(!/ast-grep[^\n]*(npm (install|ci))|(npm (install|ci))[^\n]*ast-grep/i.test(dockerfile), 'no package-manager install of ast-grep');
   assert.ok(!/postinstall/i.test(dockerfile), 'no install hooks');
 });
 
