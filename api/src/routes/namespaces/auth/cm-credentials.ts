@@ -1,4 +1,4 @@
-import { createAuthCredentialRouteHandlers, type AuthHonoAuthUiMethod, type AuthHonoRouteHandlers } from '@sentropic/auth-hono';
+import { createAuthCredentialRouteHandlers, resolveOAuthSession, type AuthHonoAuthUiMethod, type AuthHonoRouteHandlers } from '@sentropic/auth-hono';
 import type { IdentityAuthCompletionFlowV1 } from '@sentropic/cluster-mesh';
 import { Hono, type Context } from 'hono';
 import { runCmAuthHttp } from './cm-http';
@@ -11,7 +11,11 @@ const handle = (c: Context, method: AuthHonoAuthUiMethod, flow: IdentityAuthComp
         const token = binding.ports.cookies.readSessionToken(context.req.raw)
           ?? context.req.header('authorization')?.replace(/^Bearer /, '');
         if (!token) return null;
-        const session = await binding.sessions.validateSessionToken(token);
+        // The native consumer returns null without nesting a session_validate abort
+        // inside credential_rename/revoke's completion flow. Preserve bearer support.
+        const session = await resolveOAuthSession(new Request(context.req.url, {
+          headers: { cookie: `session=${token}` },
+        }), binding.ports);
         return session ? { userId: session.user.id } : null;
       },
     });
