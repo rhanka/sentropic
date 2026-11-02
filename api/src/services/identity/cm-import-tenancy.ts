@@ -26,11 +26,16 @@ export const mapA4WorkspaceMembership = (row: A4SourceRow): WorkspaceMembershipR
 });
 
 export function mapA4OAuthConsent(row: A4SourceRow): OAuthConsentRecord {
-  const revokedAt = nullableTime(row.revoked_at);
-  return { consentId: text(row.id), tenantId: text(row.tenant_id), userId: text(row.user_id),
-    clientId: text(row.client_id), grantedAt: time(row.created_at), ...(revokedAt === null ? {} : { revokedAt }) };
+  const userId = text(row.user_id), clientId = text(row.client_id), tenantId = text(row.tenant_id);
+  // The source key is (user, client, tenant); a deleted consent has no live source row.
+  return { consentId: cmOAuthConsentId(userId, clientId, tenantId), tenantId, userId,
+    clientId, grantedAt: time(row.created_at) };
 }
+
+export const cmOAuthConsentId = (userId: string, clientId: string, tenantId: string): string =>
+  createHash('sha256').update(JSON.stringify(['app-oauth-consent', userId, clientId, tenantId])).digest('hex');
 
 export const mapA4ServiceClient = (row: A4SourceRow): ServiceClientBinding => ({
   clientId: text(row.client_id), tenantId: text(row.tenant_id), boundAt: time(row.created_at),
 });
+import { createHash } from 'node:crypto';
