@@ -176,6 +176,30 @@ describe.each(pgEnabled ? ['sqlite', 'postgres'] as const : ['sqlite'] as const)
     expect(called).toBe(false);
   });
 
+  it('refuses a signed assertion without required UV with the exact factory code', async () => {
+    const unitOfWork = await open(), fixture = webauthnFixture();
+    const challenge = await unitOfWork.run(WRITE, async (tx) => {
+      const binding = createIdentityAuthHonoTransactionBindingV1({ ...shared, tx });
+      const user = await binding.ports.users.create({ email: 'required-uv@example.test', role: 'editor' });
+      const options = await binding.registration.generateRegistrationOptions({ userName: user.email!, userDisplayName: 'Required UV' });
+      await binding.registration.verifyRegistration({ userId: user.id, expectedChallenge: options.challenge, credential: fixture.registration(options.challenge) });
+      return binding.authentication.generateAuthenticationOptions({});
+    });
+    const outcome = await runIdentityAuthCompletionV1({ flow: 'authentication', unitOfWork, options: WRITE, operation: async (tx) => {
+      await tx.ledger.append({ at: NOW, kind: 'uv.must.rollback' });
+      return createIdentityAuthHonoTransactionBindingV1({ ...shared, tx }).authentication.verifyAuthentication({
+        expectedChallenge: challenge.challenge, credential: fixture.assertion(challenge.challenge, 1, false),
+      });
+    } });
+    expect(outcome).toMatchObject({ committed: false, refusal: { flow: 'authentication', result: { verified: false,
+      error: { code: 'user_verification_required', status: 403 } } } });
+    await unitOfWork.run(READ, async (tx) => {
+      expect(await tx.custody.credentials.findByCredentialId(fixture.credentialId)).toMatchObject({ counter: 0 });
+      expect(await tx.custody.singleUseProofs.findChallenge(challenge.challenge, 'authentication')).toMatchObject({ state: 'pending' });
+      expect(await tx.ledger.listAuditEvents()).toEqual([]);
+    });
+  });
+
   it('rolls back an actual signed assertion when its counter regresses to zero', async () => {
     const unitOfWork = await open(), fixture = webauthnFixture();
     await unitOfWork.run(WRITE, async (tx) => {
