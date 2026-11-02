@@ -283,6 +283,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] gap-§1 scenario end to end; registration → approval → login; invitation consumed once; revoke-all; mid-session suspension empties tool set; account deletion with injected failure leaves no orphan and preserves rows; migration tests; F11 e2e.
   - [ ] Rehearse migration on a fresh prod dump (existing rehearsal make target); record receipt.
 - [ ] **Lot 6 — Final validation**
+  - [x] Remove trailing blank lines found by full A4 diff validation; runtime and stack qualification gates remain open.
   - [x] Add runnable source-custodian unit cases for legacy capability classification while proving the new-deletion reader still rejects malformed material.
   - [x] Account for unreadable/missing historical connector capabilities as unresolved per r6 §5.6; add real migration cases preserving every event and separating recoverable deliveries without weakening new-deletion capture refusal.
   - [x] Scope pending workspace-deletion fixture cleanup to its own accounts/workspaces and reuse the real connector capture helper; retain its success assertions without skips.
