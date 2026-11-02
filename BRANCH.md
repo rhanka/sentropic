@@ -283,6 +283,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] gap-§1 scenario end to end; registration → approval → login; invitation consumed once; revoke-all; mid-session suspension empties tool set; account deletion with injected failure leaves no orphan and preserves rows; migration tests; F11 e2e.
   - [ ] Rehearse migration on a fresh prod dump (existing rehearsal make target); record receipt.
 - [ ] **Lot 6 — Final validation**
+  - [x] Bind artifact turn credentials to the target workspace and add a same-tenant regression with valid editor memberships in both workspaces; execution pending the Docker queue.
   - [x] Add a real none-attestation registration fixture over the same valid public COSE key and verify it with the actual WebAuthn library.
   - [x] Preserve the shipped validation-error DTO, including field details, while discarding rolled-back success fields and cookies.
   - [x] Delete the replaced app WebAuthn service adapter after migrating its remaining MFA test consumer to real CM completion.

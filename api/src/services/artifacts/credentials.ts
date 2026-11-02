@@ -62,12 +62,13 @@ export function artifactTurnCredential(sessionId: string, workspaceId: string): 
 }
 
 export function createCurrentArtifactIdentity(resource: string): CurrentArtifactIdentity {
-  return async (client, identity) => {
+  return async (client, identity, workspaceId) => {
     let parts: unknown;
     try { parts = JSON.parse(identity.credentialId); } catch { return denied; }
     if (Array.isArray(parts) && parts.length === 4 && parts[0] === 'turn') {
       if (identity.clientId !== 'sentropic-turn' || typeof parts[1] !== 'string' || !parts[1] ||
-        typeof parts[2] !== 'string' || !parts[2] || !Array.isArray(parts[3]) || parts[3].length) return denied;
+        typeof parts[2] !== 'string' || !parts[2] || parts[2] !== workspaceId ||
+        !Array.isArray(parts[3]) || parts[3].length) return denied;
       const params = [parts[1], identity.subject, parts[2]];
       const query = `SELECT c.id FROM public.chat_sessions c
         JOIN cm_identity.cm_identity_conversation_sessions s
@@ -85,6 +86,6 @@ export function createCurrentArtifactIdentity(resource: string): CurrentArtifact
       typeof parts[1] !== 'string' || !parts[1] || (parts[2] !== null && typeof parts[2] !== 'string') ||
       !Array.isArray(parts[3]) || parts[3].some(scope => typeof scope !== 'string' || !scope)) return denied;
     return createArtifactCredentialReader({ kind: parts[0], resource, jkt: parts[2], requiredScopes: parts[3] })(client,
-      { ...identity, credentialId: parts[1] });
+      { ...identity, credentialId: parts[1] }, workspaceId);
   };
 }
