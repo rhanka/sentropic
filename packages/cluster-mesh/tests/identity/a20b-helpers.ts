@@ -68,13 +68,14 @@ export const openPostgresEnv = async (): Promise<PostgresEnv> => {
     .filter((line) => !/^(BEGIN|COMMIT|SET LOCAL)/.test(line.trim()))
     .join('\n');
   await driver.transaction({ isolation: 'serializable', readOnly: false, deadlineMs: 15000 }, async (session) => {
-    await session.execute({ text: `CREATE SCHEMA "${schema}"`, values: [] });
-    for (const ddl of tenancyBody.split(';\n').map((part) => part.trim()).filter(Boolean)) {
-      await session.execute({ text: ddl, values: [] });
-    }
-    for (const ddl of identityEnforcementPgSchema(schema)) {
-      await session.execute({ text: ddl, values: [] });
-    }
+    const ddlStatements = [
+      `CREATE SCHEMA "${schema}"`,
+      ...tenancyBody.split(';\n').map((part) => part.trim()).filter(Boolean),
+      ...identityEnforcementPgSchema(schema),
+    ];
+    // One simple-protocol round trip: node-pg rejects multi-statement text
+    // when a values array is passed, so values is intentionally undefined.
+    await session.execute({ text: ddlStatements.join(';\n'), values: undefined as never });
   });
   const host = createPostgresIdentityHostV1({ driver, schema });
   const unitOfWork = createPostgresIdentityUnitOfWorkV1({ schema, host });
