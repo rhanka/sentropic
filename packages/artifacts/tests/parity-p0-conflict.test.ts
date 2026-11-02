@@ -50,15 +50,17 @@ describe('conflict detection via expectedCurrentReleaseId', () => {
     const w = parityWorld();
     const artifactId = await ensureSite(w, 'cf-mcp');
     const v1 = await publishText(w, artifactId, 'one', 'cm-p1');
+    const expectedCurrentReleaseId = randomUUID();
     const outcome = await w.mcp.execute({ tool: 'artifacts_publish', invocation: w.invocation(),
       args: { artifactId, idempotencyKey: 'cm-stale',
         files: [{ path: 'index.html', mimeType: 'text/html', text: 'x' }],
-        expectedCurrentReleaseId: randomUUID() } });
+        expectedCurrentReleaseId } });
     expect(outcome.ok).toBe(false);
     if (!outcome.ok) {
       expect(outcome.failure.publicCode).toBe('conflict');
       expect(outcome.failure.httpStatus).toBe(409);
       expect((outcome.failure as unknown as Body).conflict).toEqual({
+        artifactId, expectedCurrentReleaseId,
         currentReleaseId: (v1.body as Body).releaseId, currentDigest: (v1.body as Body).digest });
     }
     // History untouched by the refused call.
