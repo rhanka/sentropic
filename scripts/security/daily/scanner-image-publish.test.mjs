@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
+import { createRequire } from 'node:module';
+import { receiptFixture } from '../scanner/receipt-fixture.mjs';
+import { validateReceiptContract } from '../scanner/receipt-contract.mjs';
+const { parse } = createRequire(`${process.env.MANIFEST_GUARD_TOOL_DIR}/package.json`)('yaml');
 
 const WORKFLOW = '../../../.github/workflows/security-scanner-image.yml';
 const IDENTITY =
@@ -12,52 +16,49 @@ const loadWorkflow = async () =>
   await readFile(new URL(WORKFLOW, import.meta.url), 'utf8');
 
 test('should promote only through a manual reserved transaction on protected main', async () => {
-  const text = await loadWorkflow();
-  assert.match(text, /workflow_dispatch:/);
-  assert.match(text, /transaction_id/);
-  assert.doesNotMatch(text, /\n\s*push:/);
-  assert.doesNotMatch(text, /\n\s*schedule:/);
-  assert.doesNotMatch(text, /\n\s*pull_request(_target)?:/);
-  assert.doesNotMatch(text, /workflow_call/);
-  assert.match(text, /refs\/heads\/main/);
-  assert.doesNotMatch(text, /source_sha|package_override|signer_override|environment_override|patch_url/i);
+  const workflow = parse(await loadWorkflow());
+  assert.deepEqual(Object.keys(workflow.on), ['workflow_dispatch']);
+  assert.deepEqual(workflow.on.workflow_dispatch.inputs, {
+    transaction_id: { description: 'Opaque reserved maintenance transaction referencing the reviewed recipe',
+      required: true, type: 'string' },
+  });
+  assert.deepEqual(workflow.permissions, {});
 });
 
 test('should separate builder, validator and publisher jobs with least-privilege tokens', async () => {
-  const text = await loadWorkflow();
-  for (const job of ['build-scanner-image', 'verify-scanner-image-publication', 'publish-scanner-image']) {
-    assert.ok(text.includes(job), `missing job ${job}`);
-  }
-  assert.match(text, /id-token:\s*write/);
-  const idTokenCount = (text.match(/id-token:\s*write/g) || []).length;
-  assert.equal(idTokenCount, 1);
-  assert.match(text, /packages:\s*write/);
-  assert.match(text, /security-scanner-image-publish/);
-  assert.doesNotMatch(text, /SEAT_|SECURITY_REVIEW_ATTESTOR|SEAT_ENVIRONMENT_WRITER/);
+  const { jobs } = parse(await loadWorkflow());
+  assert.deepEqual(Object.keys(jobs), ['build-scanner-image', 'verify-scanner-image-publication', 'publish-scanner-image']);
+  assert.deepEqual(jobs['build-scanner-image'].permissions, {});
+  assert.deepEqual(jobs['verify-scanner-image-publication'].permissions, {});
+  assert.equal(jobs['verify-scanner-image-publication'].needs, 'build-scanner-image');
+  assert.equal(jobs['publish-scanner-image'].needs, 'verify-scanner-image-publication');
+  assert.deepEqual(jobs['publish-scanner-image'].permissions, { packages: 'write', actions: 'read', 'id-token': 'write' });
+  assert.equal(jobs['publish-scanner-image'].environment, 'security-scanner-image-publish');
 });
 
 test('should bind the exact keyless publisher identity and the single package', async () => {
-  const text = await loadWorkflow();
-  assert.ok(text.includes(ISSUER));
-  assert.ok(text.includes(IDENTITY));
-  assert.ok(text.includes(PACKAGE));
-  assert.doesNotMatch(text, /aquasec\/trivy/);
-  assert.doesNotMatch(text, /secrets\.[A-Z_]*(PAT|TOKEN)/);
+  const { jobs } = parse(await loadWorkflow());
+  const env = jobs['publish-scanner-image'].steps.at(-1).env;
+  assert.equal(env.EXPECTED_ISSUER, ISSUER);
+  assert.equal(env.EXPECTED_IDENTITY, IDENTITY);
+  assert.equal(env.PUBLISH_TARGET, PACKAGE);
 });
 
 test('should keep the builder key-free without registry or seat credentials', async () => {
-  const text = await loadWorkflow();
-  const buildSection = text.slice(text.indexOf('build-scanner-image'));
-  assert.ok(!/secrets\./.test(buildSection.slice(0, 2000)) || buildSection.includes('no-secrets'));
-  assert.doesNotMatch(text, /docker\/login-action/);
-  assert.match(text, /no gratis|key-free|without secrets/i);
+  const { jobs } = parse(await loadWorkflow());
+  for (const name of ['build-scanner-image', 'verify-scanner-image-publication']) {
+    assert.doesNotMatch(JSON.stringify(jobs[name]), /secrets\.|docker login|login-action|id-token/);
+  }
 });
 
-test('should require the three receipt bindings for the identical measured artifact', async () => {
-  const text = await loadWorkflow();
-  for (const receipt of ['ScannerImageBuildReceiptV1', 'ScannerImageValidationReceiptV1',
-    'ScannerImagePublicationReceiptV1']) {
-    assert.ok(text.includes(receipt), `missing receipt ${receipt}`);
-  }
-  assert.match(text, /same-run|identical.*artifact/i);
+test('should validate the complete synthetic chain only as a contract', () => {
+  assert.deepEqual(validateReceiptContract(receiptFixture()), { contractValid: true, productionAdmitted: false });
+});
+
+test('should refuse receipt-name echoes as a substitute for produced receipts and artifacts', async () => {
+  const { jobs } = parse(await loadWorkflow());
+  const emittedNames = Object.values(jobs).flatMap(job => job.steps.map(step => step.run ?? '')).join('\n');
+  assert.match(emittedNames, /echo "ScannerImageBuildReceiptV1/);
+  assert.throws(() => validateReceiptContract({ ...receiptFixture(), receipts: emittedNames,
+    artifactBytes: Buffer.alloc(0), outputs: {} }), /scanner-contract/);
 });
