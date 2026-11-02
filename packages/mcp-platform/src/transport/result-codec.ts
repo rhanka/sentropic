@@ -31,7 +31,13 @@ export function validateMcpWireResult(
 
 /** Encode an internal tool result to the MCP wire form. */
 export function encodeToolResult(result: AppToolResult): CallToolResult {
-  const text = result.ok
+  const complete = result.commitState !== undefined;
+  if (complete && (typeof result.invocationId !== 'string' || (result.ok && typeof result.replayed !== 'boolean'))) {
+    throw new TypeError('Incomplete domain outcome');
+  }
+  const text = complete ? canonicalJsonText({ ok: result.ok, invocationId: result.invocationId,
+    commitState: result.commitState, ...(result.ok ? { replayed: result.replayed, output: result.output ?? null }
+      : { error: result.error }) }) : result.ok
     ? canonicalJsonText(result.output ?? null)
     : canonicalJsonText({
         code: result.error?.code ?? 'unknown_error',
@@ -41,6 +47,7 @@ export function encodeToolResult(result: AppToolResult): CallToolResult {
     auditId: result.auditId,
     redactionClass: result.redactionClass,
   };
+  if (complete) meta['commitOutcomeVersion'] = 'v1';
   if (result.durableCallRef !== undefined) meta['durableCallRef'] = result.durableCallRef;
   if (!result.ok) {
     meta['errorCode'] = result.error?.code ?? 'unknown_error';
@@ -87,6 +94,27 @@ export function decodeToolResult(wire: unknown): AppToolResult {
     parsed = parseStrictJson(item['text'] as string);
   } catch {
     fail('content text does not parse as strict JSON');
+  }
+  if (meta['commitOutcomeVersion'] === 'v1') {
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) fail('domain outcome must be an object');
+    const body = parsed as Record<string, unknown>;
+    if (typeof body['ok'] !== 'boolean' || body['ok'] !== (record['isError'] !== true) ||
+      typeof body['invocationId'] !== 'string' ||
+      !['not_committed', 'committed', 'unknown'].includes(body['commitState'] as string)) fail('invalid domain outcome');
+    const common = { auditId, redactionClass, invocationId: body['invocationId'] as string,
+      commitState: body['commitState'] as AppToolResult['commitState'] };
+    if (body['ok']) {
+      if (typeof body['replayed'] !== 'boolean') fail('domain success needs replayed');
+      return { ...common, ok: true, output: body['output'] ?? null, replayed: body['replayed'] };
+    }
+    const error = body['error'];
+    if (typeof error !== 'object' || error === null || Array.isArray(error)) fail('invalid domain error');
+    const fields = error as Record<string, unknown>;
+    if (typeof fields['code'] !== 'string' || typeof fields['message'] !== 'string' ||
+      typeof fields['retriable'] !== 'boolean' || (fields['details'] !== undefined &&
+      (typeof fields['details'] !== 'object' || fields['details'] === null || Array.isArray(fields['details'])))) fail('invalid domain error fields');
+    return { ...common, ok: false, error: { code: fields['code'] as string, message: fields['message'] as string,
+      retriable: fields['retriable'] as boolean, ...(fields['details'] === undefined ? {} : { details: fields['details'] as Record<string, unknown> }) } };
   }
   if (record['isError'] === true) {
     const body = (typeof parsed === 'object' && parsed !== null ? parsed : {}) as Record<
