@@ -7,32 +7,31 @@
  * resolver into `mcp-platform` is the MCP lane's BR-42l territory (see BRANCH.md `BR-G1c-EX1`) —
  * G1c ships the table + this api-side resolver + the S2S OBO mint that consumes it.
  *
- * §1.6 fix (Codex-found): a SINGLE-ORG client resolves its fixed `service_clients.tenant_id`
- * WITHOUT an enrollment row — `authorizedTenants` UNIONs that fixed tenant. Enrollment rows exist
- * ONLY for multi-org sets. An empty result stays fail-closed at the caller (never a wildcard).
+ * A single-org client's fixed binding comes from CM. Enrollment rows extend that set;
+ * inactive CM tenants never confer authority. All reads share one snapshot.
  */
 import { and, eq } from 'drizzle-orm';
 
-import { db } from '../../db/client';
 import { connectorTenantEnrollments } from '../../db/control-schema';
-import { serviceClients } from '../../db/schema';
+import { bindCmAppDatabase, runCmIdentityRead } from '../identity/cm-transaction';
+import { findCmServiceClientTenant } from '../identity/cm-service-clients';
 
 /** Active enrollment tenant_ids for a principal on ONE connector instance (no fixed-tenant union). */
 async function activeEnrollmentTenantsForConnector(
   principalSub: string,
   connectorInstanceId: string,
 ): Promise<string[]> {
-  const rows = await db
-    .select({ tenantId: connectorTenantEnrollments.tenantId })
-    .from(connectorTenantEnrollments)
-    .where(
-      and(
+  return runCmIdentityRead(async tx => {
+    const rows = await bindCmAppDatabase(tx)
+      .select({ tenantId: connectorTenantEnrollments.tenantId })
+      .from(connectorTenantEnrollments)
+      .where(and(
         eq(connectorTenantEnrollments.principalSub, principalSub),
         eq(connectorTenantEnrollments.connectorInstanceId, connectorInstanceId),
         eq(connectorTenantEnrollments.status, 'active'),
-      ),
-    );
-  return rows.map((row) => row.tenantId);
+      ));
+    return activeTenantSlugs(rows.map(row => row.tenantId));
+  });
 }
 
 /**
@@ -41,31 +40,30 @@ async function activeEnrollmentTenantsForConnector(
  * is no single connector instance in scope (the finer per-connector check is `mcp-platform`'s job).
  */
 export async function activeEnrollmentTenantsForPrincipal(principalSub: string): Promise<string[]> {
-  const rows = await db
-    .select({ tenantId: connectorTenantEnrollments.tenantId })
-    .from(connectorTenantEnrollments)
-    .where(
-      and(
+  return runCmIdentityRead(async tx => {
+    const rows = await bindCmAppDatabase(tx)
+      .select({ tenantId: connectorTenantEnrollments.tenantId })
+      .from(connectorTenantEnrollments)
+      .where(and(
         eq(connectorTenantEnrollments.principalSub, principalSub),
         eq(connectorTenantEnrollments.status, 'active'),
-      ),
-    );
-  return rows.map((row) => row.tenantId);
+      ));
+    return activeTenantSlugs(rows.map(row => row.tenantId));
+  });
 }
 
-/** The fixed S2S tenant of a service client (`service_clients.tenant_id`), or null when absent/unknown. */
-async function fixedServiceClientTenant(clientId: string): Promise<string | null> {
-  const [row] = await db
-    .select({ tenantId: serviceClients.tenantId })
-    .from(serviceClients)
-    .where(eq(serviceClients.clientId, clientId))
-    .limit(1);
-  return row?.tenantId ?? null;
-}
+const activeTenantSlugs = (ids: string[]) => runCmIdentityRead(async tx => {
+  const slugs: string[] = [];
+  for (const id of new Set(ids)) {
+    const tenant = await tx.stores.tenants.findTenant(id);
+    if (tenant?.status === 'active') slugs.push(tenant.slug);
+  }
+  return slugs;
+});
 
 /**
  * The authorized tenant set for a principal on a connector instance (spec §2.1). Returns the
- * active enrollment rows for that connector UNION the principal's fixed `service_clients.tenant_id`
+ * active enrollment rows for that connector UNION the principal's CM service-client binding
  * (as a singleton) so a single-org client resolves WITHOUT an enrollment row (§1.6 fix). Deduped.
  * An empty result is the fail-closed `no_enrollment` signal for the caller.
  */
@@ -73,11 +71,11 @@ export async function authorizedTenants(
   principalSub: string,
   connectorInstanceId: string,
 ): Promise<string[]> {
-  const [enrolled, fixed] = await Promise.all([
-    activeEnrollmentTenantsForConnector(principalSub, connectorInstanceId),
-    fixedServiceClientTenant(principalSub),
-  ]);
-  const set = new Set(enrolled);
-  if (fixed) set.add(fixed);
-  return [...set];
+  return runCmIdentityRead(async () => {
+    const enrolled = await activeEnrollmentTenantsForConnector(principalSub, connectorInstanceId);
+    const fixed = await findCmServiceClientTenant(principalSub);
+    const set = new Set(enrolled);
+    if (fixed) set.add(fixed);
+    return [...set];
+  });
 }
