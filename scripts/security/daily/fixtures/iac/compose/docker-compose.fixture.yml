@@ -1,0 +1,10 @@
+services:
+  web:
+    image: nginx:1.27
+    privileged: true
+  db:
+    image: postgres:17
+---
+services:
+  cache:
+    image: redis:7

@@ -1,0 +1,6 @@
+id: no-dangerously-set-html
+message: Do not use dangerouslySetInnerHTML; it enables XSS.
+severity: error
+language: TypeScript
+rule:
+  pattern: '{ dangerouslySetInnerHTML: { __html: $V } }'

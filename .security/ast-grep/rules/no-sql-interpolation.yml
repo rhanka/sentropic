@@ -1,0 +1,11 @@
+id: no-sql-interpolation
+message: Do not interpolate values into SQL strings; use parameterized queries.
+severity: error
+language: TypeScript
+rule:
+  any:
+    - pattern: '$DB.$Q($A)'
+    - pattern: '$DB.$Q($A, $$$REST)'
+constraints:
+  Q: { regex: '^(query|execute|raw|all|get|run)$' }
+  A: { regex: '\$\{' }

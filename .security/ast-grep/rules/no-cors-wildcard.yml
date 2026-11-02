@@ -1,0 +1,8 @@
+id: no-cors-wildcard
+message: Do not configure CORS with a wildcard origin.
+severity: warning
+language: TypeScript
+rule:
+  pattern: '{ origin: $O }'
+constraints:
+  O: { regex: "^['\"]\\*['\"]$" }
