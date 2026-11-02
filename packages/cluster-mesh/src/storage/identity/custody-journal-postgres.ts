@@ -3,6 +3,7 @@
 // the host transaction — with the custody stores; never begins or commits.
 
 import { decodeRevocationDelivery, sameRevocationTarget } from './custody-delivery-record.js';
+import { decodeLegacyConnectorTombstone } from './custody-tombstone-record.js';
 import { createHash } from 'node:crypto';
 import type {
   AtomicRevocationStepReceiptV2,
@@ -10,6 +11,7 @@ import type {
   IdentityDeletionOperationV2,
   IdentityExternalRevocationV1,
   IdentityImportReceiptV1,
+  IdentityLegacyConnectorTombstoneV1,
   PersonDeletionReceiptV2,
 } from '../../identity-contracts/custody.js';
 import type { OAuthConsentRecord, RevocationStepKind, UserAccount, WorkspaceRecord } from '../../identity-contracts/types.js';
@@ -185,6 +187,13 @@ export class PostgresCustodyJournal {
     ).rows;
     return rows.map(decodeRevocationDelivery);
   };
+
+  findLegacyConnectorTombstone = (sourceEventId: string): Promise<IdentityLegacyConnectorTombstoneV1 | null> =>
+    this.one(decodeLegacyConnectorTombstone, `SELECT * FROM ${this.t('identity_legacy_connector_tombstones')} WHERE "source_event_id" = $1`, [sourceEventId]);
+
+  async insertLegacyConnectorTombstone(record: IdentityLegacyConnectorTombstoneV1): Promise<void> {
+    await this.session.execute({ text: `INSERT INTO ${this.t('identity_legacy_connector_tombstones')} ("source_event_id","connector_account_id","provider","subject_id","disposition","delivery_id","evidence_ref","imported_at") VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`, values: [record.sourceEventId, record.connectorAccountId, record.provider, record.subjectId, record.disposition, record.deliveryId, record.evidenceRef, record.importedAt] });
+  }
 
   // -- Import receipts ------------------------------------------------------
 
