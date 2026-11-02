@@ -1,9 +1,10 @@
+import { findCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
+import { cmDeleteWorkspaceMembers } from '../utils/cm-identity-test-store';
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
 import { db } from '../../src/db/client';
 import {
   workspaces,
-  workspaceMemberships,
   workspaceTypeWorkflows,
   workflowDefinitionTasks,
   workflowDefinitions,
@@ -47,7 +48,7 @@ describe('Workspace type system', () => {
       await db.delete(workflowDefinitions).where(eq(workflowDefinitions.workspaceId, id));
       await db.delete(agentDefinitions).where(eq(agentDefinitions.workspaceId, id));
       await db.delete(viewTemplates).where(eq(viewTemplates.workspaceId, id));
-      await db.delete(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, id));
+      await cmDeleteWorkspaceMembers(id);
       await db.delete(workspaces).where(eq(workspaces.id, id));
     }
     createdWorkspaceIds.length = 0;
@@ -132,12 +133,8 @@ describe('Workspace type system', () => {
     expect(ws.ownerUserId).toBe(editor.id);
 
     // Verify membership exists
-    const [membership] = await db
-      .select({ role: workspaceMemberships.role })
-      .from(workspaceMemberships)
-      .where(and(eq(workspaceMemberships.workspaceId, neutralId), eq(workspaceMemberships.userId, editor.id)))
-      .limit(1);
-    expect(membership.role).toBe('admin');
+    const membership = await findCmWorkspaceMember(neutralId, editor.id);
+    expect(membership?.role).toBe('admin');
   });
 
   it('ensureNeutralWorkspace is idempotent', async () => {
