@@ -88,6 +88,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] Control migration 0014: CM identity schema + id-preserving copy of users/proofs/invitations/login sessions/tenants/memberships/workspaces + rollback checkpoint row; journal integrity test passes.
   - [ ] Migration tests (both directions of the copy, id preservation, counts).
   - [x] Add isolated PostgreSQL cutover tests for checkpoint retention, rollback and OAuth invalidation.
+  - [x] Add a protected synthetic snapshot fixture for actual bound-import tests; its evidence is explicitly excluded from operational rehearsal receipts.
   - [x] Add import mapping regressions for expired approval, null email, terminal proofs, credential counters and login lineage.
   - [x] Map account/profile, credential, single-use proof and login source fields to the r6 import records without invented history.
   - [x] Map invitations, signature-verified email continuations and social links; refuse prohibited provider secrets.
