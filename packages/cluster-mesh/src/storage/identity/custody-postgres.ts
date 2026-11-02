@@ -81,7 +81,7 @@ export const requireWriteOptions = (options: IdentityRunOptionsV1): void => {
   }
 };
 
-const toBool = (value: boolean): number => (value ? 1 : 0);
+const toBool = (value: boolean): boolean => value;
 
 /** Transaction-scoped custody bundle: all SQL runs on the bound session. */
 export class PostgresCustodyTx implements IdentityCustodyStoresV1 {
