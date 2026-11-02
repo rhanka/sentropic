@@ -24,6 +24,8 @@ import { manageArtifact, type ManagementUnit, type ArtifactConfirmationPort } fr
 import { createPostgresManagementUnit } from './adapters/postgres-management.js';
 import type { FinalizeTxClient } from './server/commit/types.js';
 import type { SourceStore } from './server/sources.js';
+import { TEXT_MIME_RE } from './server/mime.js';
+import { API_GUIDE_REF } from './server/templates.js';
 export { projectArtifactHttpOutcome } from './server/outcome-projection.js';
 
 export interface HttpRequest {
@@ -73,8 +75,7 @@ export interface ArtifactApp {
 }
 
 /** Retained for consumers describing canonical textual publication inputs. */
-export const TEXT_MIME_PATTERN = '^(?:text/[a-z0-9!#$&^_.+-]+|application/(?:javascript|ecmascript|json|xml|[a-z0-9!#$&^_.+-]+\\+(?:json|xml))|image/svg\\+xml)(?![\\s\\S])';
-const TEXT_MIME_RE = new RegExp(TEXT_MIME_PATTERN);
+export { TEXT_MIME_PATTERN } from './server/mime.js';
 
 function object(value: unknown): Record<string, unknown> {
   if (typeof value !== 'object' || value === null || Array.isArray(value)) throw new ArtifactProfileInputError();
@@ -206,11 +207,13 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     const files = (await readManifestFiles(release.manifest, invocation.storageScopeId)).filter(file => paths.has(file.path))
       .map(file => ({ path: file.path, mimeType: file.mimeType, size: file.bytes.byteLength,
         digest: entries.find(entry => entry.path === file.path)!.digest,
-        ...(file.text === undefined ? { bytes: Array.from(file.bytes) } : { text: file.text }) }));
+        ...(file.text === undefined
+          ? { base64: Buffer.from(file.bytes).toString('base64'), encoding: 'base64' as const }
+          : { text: file.text, encoding: 'utf8' as const }) }));
     await visible(artifactId, invocation, 'source');
     const failure = { ...outcome.failure, conflict: { ...conflict, currentSource: {
       artifactId, releaseId: release.releaseId, digest: conflict.currentDigest, manifest: release.manifest,
-      files, sourceRef: null, ...deps.publicationUrls?.(artifactId, release.releaseId),
+      files, sourceRef: null, guideRef: API_GUIDE_REF, ...deps.publicationUrls?.(artifactId, release.releaseId),
     } } };
     Object.defineProperty(failure, 'cause', { value: outcome.failure.cause, enumerable: false });
     return { ok: false, failure: Object.freeze(failure) };
