@@ -6,9 +6,9 @@ import { createArtifactsManifest } from '@sentropic/artifacts/mcp-core';
 import { MCP_SCOPES } from '@sentropic/mcp-auth';
 
 // W0-close.d #702, published-tuple-2026-10-26.json profile.compiledDigest.
-const APP_P1_PROFILE_DIGEST = '0de19f966eacb5b63142b525611a6210a0d4aaeefbdaad92dfb3b6227575b6ef';
-// Qualified artifacts 0.2.4 APP-P1 manifest; published-tuple.json binds payload equivalence.
-export const APP_P1_MANIFEST_DIGEST = '020aacfec500d754b76c90d3ad4a05097e0f996b8b9282145ca458917ea6fb27';
+const APP_P1_PROFILE_DIGEST = '89819bcbb74e826b853e73a7edd9a6e6fc7256827238256fc33ec65b22b3e1a1';
+// Qualified artifacts 0.2.5 APP-P1 manifest; published-tuple.json binds payload equivalence.
+export const APP_P1_MANIFEST_DIGEST = '17daebce5bc0e85244c321b6229a3ee71f58676e8dcf964b52e006ffba843ab7';
 
 export interface AppMcpRegistryOptions extends CompileRegistryInput {
   /** W1.b's profile and application; invocation binding is trusted host code. */
