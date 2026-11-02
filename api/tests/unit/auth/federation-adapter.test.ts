@@ -1,20 +1,18 @@
-import { AuthHonoIdentityConflictError } from '@sentropic/auth-hono';
+import { AuthHonoIdentityConflictError, type AuthHonoFederationPort } from '@sentropic/auth-hono';
 import { randomUUID } from 'node:crypto';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { eq, inArray } from 'drizzle-orm';
 
 import { db } from '../../../src/db/client';
-import {
-  federationFlowStates,
-  identities,
-  magicLinks,
-  users,
-  webauthnCredentials,
-} from '../../../src/db/schema';
+import { federationFlowStates } from '../../../src/db/schema';
 import { createFederationAdapter } from '../../../src/services/auth/federation-adapter';
+import { withAppCmAuth } from '../../../src/services/identity/cm-auth-runtime';
+import { createCmUser } from '../../../src/services/identity/cm-users';
+import { createCmMagicLink, consumeCmMagicLink, sha256Hex } from '../../../src/services/identity/cm-proofs';
+import { createMockCredential } from '../../utils/auth-helper';
+import { cmDeleteForUsers, cmDeleteForEmails } from '../../utils/cm-identity-test-store';
 
 /**
- * BR-39e Lot 0 — Drizzle federation adapter (identities link table + one-time flow-state store).
+ * CM-bound federation identity ports plus the app's one-time protocol flow-state store.
  * Keystones exercised against real Postgres:
  *  - K-UNIQUE: a duplicate (provider, provider_subject) insert is rejected as AuthHonoIdentityConflictError.
  *  - K-FLOW:   consumeFlowState is single-use — the second consume of the same id returns null.
@@ -23,7 +21,17 @@ import { createFederationAdapter } from '../../../src/services/auth/federation-a
  *  - isUserCredentialed: false for a bare shell, true once any sign-in factor exists.
  */
 
-const adapter = createFederationAdapter();
+const bound = <T>(work: (port: AuthHonoFederationPort) => Promise<T>) =>
+  withAppCmAuth(runner => runner.request(binding => work(binding.ports.federation)));
+const adapter: AuthHonoFederationPort = {
+  ...createFederationAdapter(),
+  findIdentityBySubject: (...args) => bound(port => port.findIdentityBySubject(...args)),
+  findIdentitiesForUser: (...args) => bound(port => port.findIdentitiesForUser(...args)),
+  linkIdentity: (...args) => bound(port => port.linkIdentity(...args)),
+  unlinkIdentity: (...args) => bound(port => port.unlinkIdentity(...args)),
+  touchLogin: (...args) => bound(port => port.touchLogin(...args)),
+  isUserCredentialed: (...args) => bound(port => port.isUserCredentialed(...args)),
+};
 const suffix = randomUUID().slice(0, 8);
 const userA = `fed-user-a-${suffix}`;
 const userB = `fed-user-b-${suffix}`;
@@ -34,27 +42,23 @@ const future = (ms = 60 * 60 * 1000): Date => new Date(Date.now() + ms);
 const past = (ms = 60 * 60 * 1000): Date => new Date(Date.now() - ms);
 
 const seedUser = async (id: string): Promise<void> => {
-  await db.insert(users).values({
+  await createCmUser({
     accountStatus: 'pending_admin_approval',
-    createdAt: new Date(),
     displayName: id,
     email: `${id}@example.com`,
     emailVerified: true,
-    id,
+    userId: id,
     role: 'editor',
-    updatedAt: new Date(),
   });
 };
 
 const cleanup = async (): Promise<void> => {
   await db.delete(federationFlowStates);
-  await db.delete(identities).where(inArray(identities.userId, allUserIds));
-  await db.delete(webauthnCredentials).where(inArray(webauthnCredentials.userId, allUserIds));
-  await db.delete(magicLinks).where(inArray(magicLinks.userId, allUserIds));
-  await db.delete(users).where(inArray(users.id, allUserIds));
+  await cmDeleteForEmails(allUserIds.map(id => `${id}@example.com`));
+  await cmDeleteForUsers(allUserIds);
 };
 
-describe('createFederationAdapter (BR-39e Lot 0 identities + flow-state)', () => {
+describe('CM federation identity binding and app protocol flow state', () => {
   beforeEach(async () => {
     await cleanup();
     await seedUser(userA);
@@ -63,6 +67,11 @@ describe('createFederationAdapter (BR-39e Lot 0 identities + flow-state)', () =>
   });
 
   afterEach(cleanup);
+
+  it('refuses identity access through an unbound root adapter', async () => {
+    await expect(createFederationAdapter().isUserCredentialed(userA))
+      .rejects.toMatchObject({ code: 'identity_transaction_unbound' });
+  });
 
   it('linkIdentity + findIdentityBySubject round-trip; findIdentitiesForUser lists a user links', async () => {
     const linked = await adapter.linkIdentity({
@@ -113,8 +122,8 @@ describe('createFederationAdapter (BR-39e Lot 0 identities + flow-state)', () =>
 
     const stamp = new Date();
     await adapter.touchLogin(linked.id, stamp);
-    const [row] = await db.select().from(identities).where(eq(identities.id, linked.id));
-    expect(row.lastLoginAt?.getTime()).toBe(stamp.getTime());
+    const row = await adapter.findIdentityBySubject('google', `unlink-${suffix}`);
+    expect(row?.lastLoginAt?.getTime()).toBe(stamp.getTime());
 
     expect(await adapter.unlinkIdentity(userA, 'google', `unlink-${suffix}`)).toBe(true);
     expect(await adapter.findIdentityBySubject('google', `unlink-${suffix}`)).toBeNull();
@@ -124,29 +133,21 @@ describe('createFederationAdapter (BR-39e Lot 0 identities + flow-state)', () =>
   it('isUserCredentialed: false for a bare shell, true once a webauthn credential exists', async () => {
     expect(await adapter.isUserCredentialed(shellUser)).toBe(false);
 
-    await db.insert(webauthnCredentials).values({
-      counter: 0,
-      createdAt: new Date(),
-      credentialId: `cred-${suffix}`,
-      deviceName: 'Test Device',
-      id: `wac-${suffix}`,
-      publicKeyCose: 'cG9zZQ',
-      userId: shellUser,
-    });
+    await createMockCredential(shellUser);
     expect(await adapter.isUserCredentialed(shellUser)).toBe(true);
   });
 
   it('isUserCredentialed: true when the user has a used magic link (a completed sign-in factor)', async () => {
     expect(await adapter.isUserCredentialed(userB)).toBe(false);
-    await db.insert(magicLinks).values({
-      createdAt: new Date(),
+    const tokenHash = sha256Hex(`ml-${suffix}`);
+    await createCmMagicLink({
+      now: new Date(),
       email: `${userB}@example.com`,
       expiresAt: future(),
-      id: `ml-${suffix}`,
-      tokenHash: `mlhash-${suffix}`,
-      used: true,
+      tokenHash,
       userId: userB,
     });
+    expect(await consumeCmMagicLink(tokenHash, userB)).toBe(true);
     expect(await adapter.isUserCredentialed(userB)).toBe(true);
   });
 
