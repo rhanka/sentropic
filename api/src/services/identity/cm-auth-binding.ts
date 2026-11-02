@@ -10,7 +10,7 @@ import { cmIdentityUnitOfWork, cmRequestWriteOptions, withCmIdentityTransaction,
   type CmIdentityTransaction } from './cm-transaction';
 import type { createCmTokenCustodian } from './cm-token-custodian';
 import { createCmAuthEntityPlan, withCmAuthEntityPlan } from './cm-auth-entity-plan';
-import { assertCmHostHealthy } from './cm-host-scope';
+import { assertCmHostHealthy, createCmPortFailureFence } from './cm-host-scope';
 import { resolveCmRegistrationContext, type CmRegistrationPresentation } from './cm-registration-context';
 export type { CmRegistrationPresentation } from './cm-registration-context';
 
@@ -35,20 +35,21 @@ export function createCmAuthRequestRunner(config: CmAuthBindingConfig) {
     entityPlan: ReturnType<typeof createCmAuthEntityPlan>) =>
     withCmAuthEntityPlan(entityPlan, () => withCmIdentityTransaction(tx, async () => {
       const trustedRegistration = typeof registration === 'function' ? await registration(tx) : registration;
+      const capture = createCmPortFailureFence(tx.hostTransaction);
       let currentBinding: IdentityAuthHonoTransactionBindingV1 | undefined;
       const host = config.hostPortsForTransaction(tx, () => {
         if (!currentBinding) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
         return currentBinding.ports;
       });
-      const hostPorts = { ...host, random: { ...host.random, uuid: entityPlan.attemptUuid() } };
-      const binding = createIdentityAuthHonoTransactionBindingV1({
+      const hostPorts = capture({ ...host, random: { ...host.random, uuid: entityPlan.attemptUuid() } });
+      const binding = capture(createIdentityAuthHonoTransactionBindingV1({
         tx, hostPorts, digest: config.tokens.digest,
         loginTokens: config.tokens.loginTokens, ticketTokens: config.tokens.ticketTokens,
         rp: config.rp, accountPolicy: config.accountPolicy, emailCodeKeys: config.emailCodeKeys,
         webAuthnPolicy: { registrationUserVerification: 'preferred', authenticationUserVerification: 'required' },
         magicLink: { baseUrl: config.magicLinkBaseUrl, tokenBytes: 32, ttlSeconds: 900 },
         social: { autoLinkProviders: ['google'] }, business: config.business, trustedRegistration,
-      });
+      }));
       currentBinding = binding;
       try {
         const value = await work(binding, tx);

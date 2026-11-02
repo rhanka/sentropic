@@ -1,6 +1,6 @@
 import { Pool, type PoolClient } from 'pg';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { assertCmHostHealthy, createCmScopedHostClient } from '../../../src/services/identity/cm-host-scope';
+import { assertCmHostHealthy, createCmPortFailureFence, createCmScopedHostClient } from '../../../src/services/identity/cm-host-scope';
 
 let pool: Pool, client: PoolClient;
 let scope: ReturnType<typeof createCmScopedHostClient>;
@@ -39,6 +39,21 @@ describe('A4 host capability over the real PostgreSQL driver', () => {
   it('should reject nested transaction control and poison the callback even when caught', () => {
     expect(() => scope.client.query('BEGIN')).toThrow('identity_transaction_unbound');
     expect(() => scope.seal()).toThrow('identity_transaction_unbound');
+  });
+
+  it('retains a caught private adapter signal and refuses every subsequent query before the driver', async () => {
+    const failure = Object.freeze(new Error('private-restart-signal'));
+    const capture = createCmPortFailureFence(scope.client);
+    const participant = Object.freeze({ async consume() { throw failure; } });
+    const host = capture({ oauthStateStore: participant });
+    const binding = capture({ ports: host });
+    expect(binding.ports.oauthStateStore).toBe(host.oauthStateStore);
+    await binding.ports.oauthStateStore.consume().catch(() => undefined);
+    expect(() => scope.client.query('SELECT 1')).toThrow(failure);
+    expect(() => assertCmHostHealthy(scope.client)).toThrow(failure);
+    expect(() => scope.seal()).toThrow(failure);
+    // The driver itself is healthy: the private signal, not a PostgreSQL abort, fences the callback.
+    expect((await client.query('SELECT 42 AS answer')).rows[0].answer).toBe(42);
   });
 
   it('should refuse to commit while a submitted query has not been awaited', async () => {
