@@ -253,6 +253,7 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
     identity: FederationProviderIdentity,
     continuation: string | null,
     deviceInfo: FederationCallbackRequest['deviceInfo'],
+    expiresAt: string,
   ): Promise<FederationCallbackResult> => {
     const outcome = await attempt.resolveFederatedUser(
       {
@@ -285,6 +286,7 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
         return {
           continuation,
           kind: 'email-challenge',
+          expiresAt,
           provider: provider.id,
           providerSubject: outcome.providerSubject,
           providerTenant: identity.providerTenant ?? null,
@@ -301,7 +303,7 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
     if (!verified.ok) return verified.result;
     return completed(attempt => {
       requireFreshAssertion(verified.expiresAt, attempt.now);
-      return resolveAndFinish(attempt, verified.identity, verified.continuation, request.deviceInfo);
+      return resolveAndFinish(attempt, verified.identity, verified.continuation, request.deviceInfo, verified.expiresAt);
     });
   };
 
@@ -319,23 +321,23 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
     if (!verified.ok) return verified.result;
     const { identity } = verified;
     return completed(async attempt => {
-    // The session and subject lock are revalidated after upstream I/O, on EVERY attempt.
-    await attempt.requireLinkActor(linkUserId);
-    requireFreshAssertion(verified.expiresAt, attempt.now);
-    const existing = await attempt.federation.findIdentityBySubject(provider.id, identity.subject);
-    if (existing) {
-      if (existing.userId !== linkUserId) {
-        throw new IdentityCustodyErrorV1('social_subject_conflict');
+      // The session and subject lock are revalidated after upstream I/O, on EVERY attempt.
+      await attempt.requireLinkActor(linkUserId);
+      requireFreshAssertion(verified.expiresAt, attempt.now);
+      const existing = await attempt.federation.findIdentityBySubject(provider.id, identity.subject);
+      if (existing) {
+        if (existing.userId !== linkUserId) {
+          throw new IdentityCustodyErrorV1('social_subject_conflict');
+        }
+        await attempt.federation.touchLogin(existing.id, attempt.now);
+        await attempt.audit.record('info', 'federation.link_idempotent', {
+          provider: provider.id,
+          userId: linkUserId,
+        });
+        return { identity: existing, kind: 'linked' as const, userId: linkUserId };
       }
-      await attempt.federation.touchLogin(existing.id, attempt.now);
-      await attempt.audit.record('info', 'federation.link_idempotent', {
-        provider: provider.id,
-        userId: linkUserId,
-      });
-      return { identity: existing, kind: 'linked' as const, userId: linkUserId };
-    }
 
-    // r6 §4.10: an insertion/touch race escapes the callback. Only CM may retry after rollback.
+      // r6 §4.10: an insertion/touch race escapes the callback. Only CM may retry after rollback.
       const linked = await attempt.federation.linkIdentity({
         emailAtLink: identity.email,
         emailVerifiedByProvider: identity.emailVerified,
@@ -369,7 +371,7 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
     return completed(async attempt => {
       requireFreshAssertion(input.expiresAt, attempt.now);
       await attempt.verifyEmailProof(input.verifiedEmail, input.verificationToken);
-      return resolveAndFinish(attempt, identity, input.continuation, input.deviceInfo);
+      return resolveAndFinish(attempt, identity, input.continuation, input.deviceInfo, input.expiresAt);
     });
   };
 

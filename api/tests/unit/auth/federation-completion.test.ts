@@ -60,4 +60,24 @@ describe('federation whole-completion boundary', () => {
     expect(await h.broker.linkCallback(request)).toMatchObject({ kind: 'error', status: 409,
       body: { error: { code: 'identity_linked_other_account' } } });
   });
+
+  it('refuses expired upstream evidence on a fresh completion attempt', async () => {
+    const h = setup();
+    h.complete.mockImplementationOnce(work => work({ ...h.attempt, now: new Date(now.getTime() + 60_000) }));
+    expect(await h.broker.callback(request)).toMatchObject({ kind: 'error', status: 401 });
+    expect(h.attempt.resolveFederatedUser).not.toHaveBeenCalled();
+    expect(h.attempt.authenticate).not.toHaveBeenCalled();
+  });
+
+  it('does not expose login success if the email ticket loses its consume race', async () => {
+    const h = setup();
+    vi.mocked(h.attempt.resolveFederatedUser).mockResolvedValue({ kind: 'created', userId: 'created', identity: {} as never });
+    vi.mocked(h.attempt.consumeEmailProof).mockRejectedValue(new Error('consume conflict'));
+    await expect(h.broker.completeEmailChallenge({ provider: 'google', providerSubject: 'subject',
+      verifiedEmail: 'actor@example.com', verificationToken: 'ticket', continuation: null,
+      expiresAt: new Date(now.getTime() + 60_000).toISOString() })).rejects.toThrow('consume conflict');
+    expect(h.attempt.verifyEmailProof).toHaveBeenCalledWith('actor@example.com', 'ticket');
+    expect(h.attempt.consumeEmailProof).toHaveBeenCalledWith('created');
+    expect(h.attempt.authenticate).not.toHaveBeenCalled();
+  });
 });
