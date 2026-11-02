@@ -498,20 +498,17 @@ describe('guarded publication authorization', () => {
       executor: createPostgresCommitExecutor(pool),
       policy: participantFactory(),
       testObserver: barrier.observer,
-      testPoints: ['after_finalization_locks_before_guard'],
+      testPoints: ['before_finalization_row_lock'],
     });
-    // No lifecycle row lock here: the racing writer must update the state
-    // row while the unit waits, which a held FOR UPDATE lock would deadlock.
-    // The guard re-read still denies on the revoked state.
-    const allLocks = lockCallbacks(artifactId);
-    const racingLocks = { acl: allLocks.acl, 'current-pointer': allLocks['current-pointer'] };
+    // The service now owns the artifact row lock for CAS. Revoke before that
+    // lock is acquired, then verify the final guard reads the withdrawn state.
     const service = createGuardedPublicationService({
       coordinator,
       createUnitWriter: (client) => createPostgresPublicationUnitWriter(client),
       blobs: new MapBlobs(),
       intents: pgIntents(),
       refs: createPostgresClaimGuardedRefs(pgStore, createPostgresCommitExecutor(singlePool)),
-      locks: racingLocks,
+      locks: lockCallbacks(artifactId),
     });
     const invocationId = 'inv-revoke-race';
     const pending = publish(service, {
@@ -526,11 +523,12 @@ describe('guarded publication authorization', () => {
       attemptId: 'attempt-revoke',
       invocationId,
     });
-    await barrier.waitUntilReached('after_finalization_locks_before_guard', invocationId);
-    await pool.query(`UPDATE artifacts.artifacts SET lifecycle_state = 'withdrawn' WHERE id = $1`, [
-      artifactId,
-    ]);
-    barrier.release('after_finalization_locks_before_guard', invocationId);
+    await barrier.waitUntilReached('before_finalization_row_lock', invocationId);
+    try {
+      await pool.query(`UPDATE artifacts.artifacts SET lifecycle_state = 'withdrawn' WHERE id = $1`, [artifactId]);
+    } finally {
+      barrier.release('before_finalization_row_lock', invocationId);
+    }
     const outcome = await pending;
     try {
       expect(outcome.ok).toBe(false);

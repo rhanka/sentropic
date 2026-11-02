@@ -36,7 +36,7 @@ const inputFor = (artifactId: string, key = randomUUID()) => ({
 });
 
 function world(db: Pool, store: PublicationBlobStore, observer?: CommitBarrierObserver,
-  authority = { expired: false }) {
+  authority = { expired: false }, cleanupWindowMs?: number) {
   const executor = createPostgresCommitExecutor(db);
   const pg = createPostgresArtifactStore(db);
   const coordinator = createArtifactCommitCoordinator({ executor, testObserver: observer,
@@ -59,7 +59,7 @@ function world(db: Pool, store: PublicationBlobStore, observer?: CommitBarrierOb
   });
   const refs = createPostgresClaimGuardedRefs(pg, executor);
   const service = createGuardedPublicationService({ coordinator, blobs: store, intents: pg, refs,
-    cleanupWindowMs: 1000, createUnitWriter: createPostgresPublicationUnitWriter,
+    cleanupWindowMs, createUnitWriter: createPostgresPublicationUnitWriter,
     locks: { 'artifact-lifecycle': [async (client) => {
       await client.query('SELECT id FROM artifacts.artifacts ORDER BY id FOR UPDATE', []);
     }], acl: [async (client) => {
@@ -170,7 +170,7 @@ describe('publication authorization after every applicable wait', () => {
     const before = await snapshot();
     const authority = { expired: false };
     const barrier = createArtifactCommitBarrier({ points: [point] });
-    const w = world(pool, blobs, barrier.observer, authority);
+    const w = world(pool, blobs, barrier.observer, authority, 1000);
     const pending = publish(w, input);
     await barrier.waitUntilReached(point, input.invocationId);
     authority.expired = true;
@@ -324,8 +324,7 @@ describe('same-key S3 preparation across two processes', () => {
     }, other, createRadarKeyDerivation({ storageScopeId: other.storageScopeId, actorIds: [other.actorId] }));
     const beforeCount = Number((await pool.query('SELECT count(*) FROM artifacts.releases')).rows[0].count);
     const barrier = createArtifactCommitBarrier({ points: ['before_key_lock'] });
-    const pending = publish(world(pool, blobs, barrier.observer), input);
-    await barrier.waitUntilReached('before_key_lock', input.invocationId);
+    let pending: ReturnType<typeof publish> | undefined;
     const child = spawn(process.execPath, ['--input-type=module', '-e', workerSource], {
       cwd: new URL('..', import.meta.url), stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     });
@@ -345,6 +344,9 @@ describe('same-key S3 preparation across two processes', () => {
         files: other.files.map((file) => ({ ...file, bytes: [...file.bytes] })) } });
       expect((await prepared)[0]).toMatchObject({ prepared: true, pid: child.pid });
       expect(child.pid).not.toBe(process.pid);
+      // Start the bounded parent preparation after the separate process has loaded and prepared S3.
+      pending = publish(world(pool, blobs, barrier.observer), input);
+      await barrier.waitUntilReached('before_key_lock', input.invocationId);
       barrier.release('before_key_lock', input.invocationId);
       const winner = await pending;
       expect(winner).toMatchObject({ ok: true, replayed: false });
@@ -373,7 +375,7 @@ describe('bounded cleanup and purge exclusion', () => {
     const refused = inputFor(await artifact());
     refused.files = [shared.files[0], { ...refused.files[0], path: 'exclusive.html' }];
     const before = await snapshot();
-    expect(await publish(world(pool, blobs, undefined, { expired: true }), refused))
+    expect(await publish(world(pool, blobs, undefined, { expired: true }, 1000), refused))
       .toMatchObject({ ok: false, failure: { category: 'unauthorized_at_commit' } });
     expect(await snapshot()).toEqual(before);
     const pg = createPostgresArtifactStore(pool);
