@@ -291,8 +291,12 @@ export const createNodeConnectorCustody = (input: {
       openConnectorCapabilityV1({ key: activeKey(), keyRef: row.keyRef, custodyRef: row.custodyRef, deliveryId: row.deliveryId, connectorAccountId: row.connectorAccountId, provider: row.provider, nonce: row.nonce, ciphertext: row.ciphertext, authTag: row.authTag });
     },
     eraseAcknowledged: async (record, raw) => {
+      if (record.state !== 'delivered' || record.targetKind !== 'connector_grant') {
+        throw new IdentityCustodyErrorV1('identity_revocation_custody_invalid');
+      }
       const row = await findByDelivery(record.deliveryId, raw);
       if (!row) return;
+      if (row.connectorAccountId !== record.targetRef) throw new IdentityCustodyErrorV1('identity_revocation_custody_invalid');
       const table = custodyTableOf(raw);
       if (raw.profile === 'postgres') {
         await pgExec(raw, `DELETE FROM ${table} WHERE "custody_ref" = $1`, [row.custodyRef]);
@@ -317,15 +321,21 @@ export const acknowledgeIdentityRevocationV1 = async (input: {
 }): Promise<void> => {
   const journal = input.host.journal;
   const delivery = await journal.findDelivery(input.claim.deliveryId);
-  if (!delivery || delivery.state !== 'pending') throw new IdentityCustodyErrorV1('identity_delivery_claim_conflict');
-  await journal.acknowledgeDelivery(input.claim.deliveryId, input.claim.claimOwner, input.claim.claimVersion, input.at);
+  if (!delivery) throw new IdentityCustodyErrorV1('identity_delivery_claim_conflict');
+  if (delivery.state === 'delivered') return;
+  const schema = input.host.profile === 'postgres' ? (input.host as unknown as { readonly schema: string }).schema : '';
+  const raw: ConnectorCustodyRaw = input.host.profile === 'postgres'
+    ? { profile: 'postgres', schema, session: input.host.raw as PgSession, connection: null }
+    : { profile: 'sqlite', schema: '', session: null, connection: input.host.raw as SqliteConnection };
   if (delivery.targetKind === 'connector_grant') {
     if (!input.connectorCustody) throw new IdentityCustodyErrorV1('identity_revocation_custody_missing');
-    const schema = input.host.profile === 'postgres' ? (input.host as unknown as { readonly schema: string }).schema : '';
-    const raw: ConnectorCustodyRaw = input.host.profile === 'postgres'
-      ? { profile: 'postgres', schema, session: input.host.raw as PgSession, connection: null }
-      : { profile: 'sqlite', schema: '', session: null, connection: input.host.raw as SqliteConnection };
-    await input.connectorCustody.eraseAcknowledged(delivery, raw);
+    await input.connectorCustody.assertCaptured(delivery, raw);
+  }
+  await journal.acknowledgeDelivery(input.claim.deliveryId, input.claim.claimOwner, input.claim.claimVersion, input.at);
+  const acknowledged = await journal.findDelivery(input.claim.deliveryId);
+  if (!acknowledged || acknowledged.state !== 'delivered') throw new IdentityCustodyErrorV1('identity_delivery_claim_conflict');
+  if (acknowledged.targetKind === 'connector_grant') {
+    await input.connectorCustody!.eraseAcknowledged(acknowledged, raw);
   }
 };
 
