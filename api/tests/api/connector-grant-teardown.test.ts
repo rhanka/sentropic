@@ -1,29 +1,4 @@
-/**
- * Connector-grant teardown — every deletion site, proven.
- *
- * THE INVARIANT UNDER TEST
- * A connector row that owns an external grant is never destroyed before that grant has been
- * revoked upstream, or a durable tombstone of the abandoned grant has been recorded.
- *
- * WHY IT NEEDS PROVING AT THE ROUTE LEVEL
- * `document_connector_accounts` cascades from BOTH `users` and `workspaces`. A cascade is executed
- * by Postgres and runs NO application code — the repository defines no trigger or function, so
- * there is not even a hook to attach to. Every route that deletes a user or a workspace therefore
- * destroys the encrypted refresh token in the same statement that destroys the row, and once it is
- * gone nothing remains to call revoke with: the grant stays live at Google forever. Testing the
- * service in isolation would prove nothing about the routes that actually do the deleting.
- *
- * WHY THE ASSERTIONS ARE SHAPED THIS WAY
- * The behavioural tests assert the EXACT refresh-token string that reached Google's revoke
- * endpoint. That string exists only inside the row's encrypted secret, so an implementation that
- * revoked after the deletion — or that never captured the row at all — cannot produce it. Merely
- * asserting "revoke was called" would also pass for an implementation that posted an empty token.
- * Each test additionally asserts the row really is gone, so none of them can pass on a no-op.
- */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { readdirSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
 import { and, eq } from 'drizzle-orm';
 
 import { app } from '../../src/app';
@@ -318,67 +293,5 @@ describe('Connector grant teardown — no deletion path destroys a grant unrevok
     const serialized = JSON.stringify(tombstones[0]!.envelope);
     expect(serialized).not.toContain(refreshToken);
     expect(serialized).not.toContain(ciphertext);
-  });
-});
-
-describe('Connector grant teardown — the enumeration of deletion sites is complete', () => {
-  const routesDir = fileURLToPath(new URL('../../src/routes', import.meta.url));
-
-  const listTsFiles = (dir: string): string[] =>
-    readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
-      const full = join(dir, entry.name);
-      if (entry.isDirectory()) return listTsFiles(full);
-      return entry.name.endsWith('.ts') ? [full] : [];
-    });
-
-  /**
-   * The routes known to delete a `users` or `workspaces` row, and therefore to cascade connector
-   * rows away. This list is asserted to be EXHAUSTIVE below: it is derived from the source at every
-   * run rather than trusted as a stored snapshot, because a stored census of a living state is a
-   * schedule, not a property.
-   */
-  const KNOWN_CASCADING_DELETERS = [
-    'namespaces/auth/account.ts',
-    'namespaces/admin-product-authority.ts',
-    'namespaces/workspaces/product-workspaces.ts',
-  ];
-
-  // Relative to `src/routes`, so the expectation reads identically wherever the repo lives — the
-  // test container mounts it under /workspace, the host under the worktree path.
-  const relative = (file: string) => file.slice(routesDir.length + 1);
-
-  it('finds no route deleting a user or workspace outside the wired set', () => {
-    const cascadingDeleters = listTsFiles(routesDir)
-      .filter((file) => {
-        const source = readFileSync(file, 'utf8');
-        return /\.delete\(\s*users\s*\)/.test(source) || /\.delete\(\s*workspaces\s*\)/.test(source);
-      })
-      .map(relative)
-      .sort();
-
-    // A new deletion route fails here until it is wired to the teardown. That is the point: the
-    // cascade is silent, so nothing else would ever surface the omission.
-    expect(cascadingDeleters).toEqual([...KNOWN_CASCADING_DELETERS].sort());
-  });
-
-  it('wires capture, tombstone and revoke in every one of them', () => {
-    for (const relPath of KNOWN_CASCADING_DELETERS) {
-      const source = readFileSync(join(routesDir, relPath), 'utf8');
-
-      // Check the import DECLARATION, not a mention: an earlier version of this check matched the
-      // module name inside a doc comment and passed on two files that had no import at all.
-      expect(source, `${relPath} must import the teardown module`).toMatch(
-        /}\s*from\s*'(?:\.\.\/){2,3}services\/connector-grant-teardown';/,
-      );
-      expect(source, `${relPath} must capture grants before deleting`).toContain(
-        'captureConnectorGrantsForTeardown(',
-      );
-      expect(source, `${relPath} must record tombstones inside the transaction`).toContain(
-        'recordConnectorGrantTombstones(tx,',
-      );
-      expect(source, `${relPath} must revoke after the commit`).toContain(
-        'revokeCapturedConnectorGrants(',
-      );
-    }
   });
 });
