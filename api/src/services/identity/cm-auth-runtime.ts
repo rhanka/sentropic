@@ -2,7 +2,7 @@ import { createSentropicOAuthHostPorts, createSentropicOAuthStateCodec, getSentr
 import { env } from '../../config/env';
 import { resolveEmailVerificationTokenSecret } from './cm-token-secrets';
 import { getWebAuthnConfig } from '../webauthn-config';
-import { sendTransactionalEmail } from '../scw-tem-client';
+import { sendCmDeferredMail } from './cm-auth-mail';
 import { createCmAuthRequestRunner } from './cm-auth-binding';
 import { createCmTokenCustodian } from './cm-token-custodian';
 import { loadCmEmailCodePolicy } from './cm-email-policy';
@@ -35,13 +35,7 @@ export async function withAppCmAuth<T>(operation: (runner: ReturnType<typeof cre
         afterUserCreated: (user, tx) => provisionCmAuthWorkspace(user.id, tx),
         provisionWorkspace: provisionCmAuthWorkspace,
       },
-      async sendDeferredMail(intent) {
-        try {
-          await sendTransactionalEmail({ to: intent.email,
-            subject: intent.kind === 'code' ? 'Your Sentropic verification code' : 'Your Sentropic sign-in link',
-            text: intent.kind === 'code' ? `Your verification code is ${intent.code}.` : `Sign in: ${intent.url}` });
-        } catch { throw new Error('identity_mail_delivery_failed'); }
-      },
+      sendDeferredMail: sendCmDeferredMail,
     }));
   } finally { tokens.dispose(); }
 }

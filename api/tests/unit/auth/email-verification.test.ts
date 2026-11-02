@@ -1,6 +1,5 @@
-import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
-import { generateEmailVerificationCode } from '../../../src/services/email-verification';
-import { cmQuery, cmTable } from '../../utils/cm-identity-test-store';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { sendCmDeferredMail } from '../../../src/services/identity/cm-auth-mail';
 
 const sendTransactionalEmailMock = vi.hoisted(() => vi.fn());
 
@@ -8,19 +7,16 @@ vi.mock('../../../src/services/scw-tem-client', () => ({
   sendTransactionalEmail: sendTransactionalEmailMock,
 }));
 
-describe('Email Verification Service', () => {
+describe('Committed CM verification mail delivery', () => {
   beforeEach(() => {
     sendTransactionalEmailMock.mockReset();
     sendTransactionalEmailMock.mockResolvedValue(undefined);
   });
 
-  afterEach(async () => {
-    await cmQuery(`DELETE FROM ${cmTable('identity_single_use_proofs')} WHERE kind = 'email_code'`);
-  });
-
-  describe('generateEmailVerificationCode', () => {
+  describe('sendCmDeferredMail', () => {
     it('should brand the verification email as Sentropic', async () => {
-      await generateEmailVerificationCode({ email: 'new-user@example.com' });
+      await sendCmDeferredMail({ kind: 'code', email: 'new-user@example.com', code: '123456',
+        expiresAt: new Date(Date.now() + 600_000).toISOString() });
 
       expect(sendTransactionalEmailMock).toHaveBeenCalledWith(expect.objectContaining({
         to: 'new-user@example.com',
@@ -29,6 +25,12 @@ describe('Email Verification Service', () => {
         html: expect.stringContaining("L'équipe Sentropic"),
       }));
       expect(JSON.stringify(sendTransactionalEmailMock.mock.calls[0]?.[0])).not.toContain('Top AI Ideas');
+    });
+    it('reports delivery failure without leaking transport errors or silently succeeding', async () => {
+      sendTransactionalEmailMock.mockRejectedValue(new Error('transport-canary-123456'));
+      await expect(sendCmDeferredMail({ kind: 'code', email: 'new-user@example.com', code: '123456',
+        expiresAt: new Date(Date.now() + 600_000).toISOString() }))
+        .rejects.toThrow(/^identity_mail_delivery_failed$/);
     });
   });
 });
