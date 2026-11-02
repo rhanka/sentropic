@@ -6,12 +6,16 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import test from 'node:test';
 import {
+  declareApplicability,
+  expectedInventories,
+  expectedLockComponents,
   failClosedReport,
   findDerivedPinConsumers,
   inventoryImages,
   inventoryLocks,
   inventoryRepository,
   inventorySastRoots,
+  validateCompleteness,
 } from './inventory.mjs';
 import { joinRegister, loadContract } from './schema.mjs';
 
@@ -34,10 +38,13 @@ test('inventory covers root, UI and kit locks', () => {
   }
 });
 
-test('SAST roots stay explicitly blocked until S2c', () => {
+test('SAST contract is qualified by ACT-L04 while live execution stays fenced on L02', () => {
   const sast = inventorySastRoots({ inventory: { sastRoots: ['api/src', 'ui/src'], sastBlockedUntil: 'S2c native Rust ast-grep qualification' } });
   assert.deepEqual(sast.roots, ['api/src', 'ui/src']);
-  assert.equal(sast.qualified, false);
+  assert.equal(sast.qualified, true);
+  assert.equal(sast.contractError, null);
+  assert.equal(sast.executionBlocked, 'coverage-blocked: sast');
+  assert.match(sast.executionNote, /L02/);
   assert.match(sast.blockedUntil, /S2c/);
 });
 
@@ -143,6 +150,46 @@ test('should discover independent locks and refuse clean coverage before SAST qu
     assert.equal(repo.coverage.complete, false);
     assert.ok(repo.coverage.blockers.includes('coverage-blocked: sast'));
     assert.ok(repo.coverage.blockers.some((blocker) => blocker.includes('unknown-lock.sha256')));
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
+test('L4-D: independent expected inventories enumerate locks, tool catalog, embedded binaries and consumers', () => {
+  const expected = expectedInventories('.', contract);
+  assert.ok(expected.identities.includes('lockfile:package-lock.json'));
+  assert.ok(expected.identities.some((id) => id.startsWith('lock:package-lock.json#node_modules/')));
+  assert.ok(expected.identities.includes('tool:semver@7.7.2'));
+  assert.ok(expected.identities.includes('tool:yaml@2.8.1'));
+  assert.ok(expected.identities.includes('binary:api/Dockerfile#ast-grep@0.51.0'));
+  assert.ok(expected.identities.some((id) => id.includes('esbuild@0.19.12')));
+  assert.ok(expected.identities.some((id) => id.startsWith('consumer:tools/memory-mcp-l5/')));
+  assert.ok(expected.lockComponents.some((component) => component.dev || component.optional || component.peer || true));
+  assert.ok(!expected.blockers.some((blocker) => blocker.startsWith('unsupported lock layout')));
+});
+
+test('L4-D: two mutually agreeing scanner outputs still fail when both omit one expected component', () => {
+  const expected = { identities: ['lock:package-lock.json#node_modules/demo', 'tool:semver@7.7.2',
+    'binary:api/Dockerfile#ast-grep@0.51.0'] };
+  const agreeing = ['lock:package-lock.json#node_modules/demo', 'tool:semver@7.7.2'];
+  assert.throws(() => validateCompleteness([agreeing, [...agreeing]], expected),
+    /incomplete inventory, omitted components: binary:api\/Dockerfile#ast-grep@0\.51\.0/);
+  assert.deepEqual(validateCompleteness([[...agreeing, 'binary:api/Dockerfile#ast-grep@0.51.0']], expected),
+    { covered: 3, expected: 3 });
+  assert.throws(() => validateCompleteness([], expected), /no scanner output/);
+  assert.throws(() => validateCompleteness([agreeing], null), /expected inventory required/);
+});
+
+test('L4-E: unsupported lock layouts and applicability N/A without positive proof emit exact blockers', () => {
+  const root = mkdtempSync(join(tmpdir(), 'security-l4e-'));
+  try {
+    writeFileSync(join(root, 'package-lock.json'), JSON.stringify({ lockfileVersion: 1, dependencies: {} }));
+    const locks = expectedLockComponents(root);
+    assert.ok(locks.blockers.includes('unsupported lock layout: package-lock.json'));
+    assert.equal(locks.components.length, 0);
+    assert.throws(() => declareApplicability('sast', undefined), /applicability N\/A without positive inventory proof: sast/);
+    assert.throws(() => declareApplicability('sast', { enumerated: true, count: -1 }), /positive inventory proof/);
+    assert.throws(() => declareApplicability('', { enumerated: true, count: 0 }), /applicability surface required/);
+    assert.deepEqual(declareApplicability('sast', { enumerated: true, count: 0 }),
+      { surface: 'sast', na: true, proof: { enumerated: true, count: 0 } });
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 

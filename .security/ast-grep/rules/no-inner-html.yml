@@ -1,0 +1,6 @@
+id: no-inner-html
+message: Do not assign to innerHTML; it enables XSS.
+severity: error
+language: TypeScript
+rule:
+  pattern: '$$$OBJ.innerHTML = $$$VALUE'
