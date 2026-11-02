@@ -48,6 +48,9 @@ Implement the approved A2.0b additive amendment (Astra MAX author, Muse Wonder m
 - [x] Correct the truncated amendment SHA-256 against the approved r6 file.
 - [x] Add SQLite schema atomicity regression tests before implementation.
 - [x] Require a successful TCP query against the actual PostgreSQL test database; preserve the 30-attempt startup budget and print startup diagnostics on failure.
+- [x] Replace autocommitted SQLite schema statements with one savepoint-protected batch and initialize the core bundle once per factory; runtime qualification pending.
+- [x] Refuse missing PostgreSQL configuration in the dedicated profile instead of substituting the in-memory oracle.
+- [ ] Resolve inherited r6 composition gaps before claiming amendment completion: the shipped UOW exposes `runRead/runWrite`, while r6 requires the combined bound composition consumed by A4.
 - [ ] Verify schema regression red, implement transactional schema installation, and verify green.
 - [ ] Run each final identity database campaign once under the shared Docker flock, then clean up.
 - [ ] Push the final head, open a ready PR, wait for one CI, and write `.tmp/rv/lot-A2.0b.md`.
