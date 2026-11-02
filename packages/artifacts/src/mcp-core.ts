@@ -15,7 +15,7 @@ export type { ArtifactKeyDerivationBinding } from './server/command-identity.js'
 
 export const ARTIFACTS_PROVIDER_ID = 'sentropic.artifacts';
 export const ARTIFACTS_APP_ID = 'sentropic-artifacts';
-export const ARTIFACTS_PROVIDER_VERSION = '0.2.4';
+export const ARTIFACTS_PROVIDER_VERSION = '0.2.5';
 export const ARTIFACTS_TOOL_NAMES = ARTIFACT_CAPABILITY_NAMES;
 export type ArtifactsToolName = (typeof ARTIFACTS_TOOL_NAMES)[number];
 
@@ -49,7 +49,7 @@ export function createArtifactsManifest(options: ArtifactsManifestOptions): Arti
       requiredScopes: [...scopes], requiredClaims: [], redactionClass: 'low',
       mutability: spec.mutability, mutatesExternalSystem: spec.mutability !== 'read-only',
       idempotency: profile.idempotency[spec.name] ?? { required: false },
-      gates: { requiresElicitation: false, requiresHumanConfirmation: false, requiresPrincipalGate: false },
+      gates: { requiresElicitation: false, requiresHumanConfirmation: spec.name === 'artifacts_delete', requiresPrincipalGate: false },
     })),
     authz: { requiredClaims: [], scopes, tenantResolution: 'custom-resolver' },
     // The existing manifest codec includes audit metadata, including for an empty tool set.
@@ -88,6 +88,9 @@ export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: 
         case 'artifacts_publish': request = { method: 'POST', path: '/publish', body: args }; break;
         case 'artifacts_list': request = { method: 'POST', path: '/list', body: args }; break;
         case 'artifacts_get': request = { method: 'GET', path: `/meta/${args.artifactId}`, body: undefined }; break;
+        case 'artifacts_get_source': request = { method: 'POST', path: '/get_source', body: args }; break;
+        case 'artifacts_set_access': request = { method: 'POST', path: '/set_access', body: args }; break;
+        case 'artifacts_delete': request = { method: 'POST', path: '/delete', body: args }; break;
         default: throw new ArtifactProfileInputError(true);
       }
       return await deps.app.execute({ ...request, actorId: input.invocation.actorId,

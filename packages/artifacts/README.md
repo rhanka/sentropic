@@ -417,3 +417,41 @@ publication, use the current package version and this bootstrap sequence
 3. After that, merges to `main` touching the artifacts package publish
    through the `publish-artifacts` job (`make publish-artifacts`, OIDC +
    provenance), gated by `validate-artifacts`.
+
+## Source and management capabilities
+
+Version 0.3.0 introduces D1, D2 and D4; see [CHANGELOG.md](./CHANGELOG.md).
+
+Hosts may explicitly select `artifacts_get_source`, `artifacts_set_access`, and
+`artifacts_delete` in their compiled profile. Configure `get_source` with empty
+limits/defaults, and `set_access`/`delete` with `idempotencyKeyMaxUnits: 256` and
+empty defaults. Existing profile selections remain explicit.
+
+`POST /get_source` accepts `artifactId`, optional `releaseId`, and optional unique
+`paths` (1–32 entries). Bind `publication.getRelease` and `sources.getSource` on
+the HTTP app. It returns the canonical manifest, verified author file bytes,
+and separate nullable `sourceRef`; readers need the distinct source permission.
+The snapshot is limited to 32 files and 262144 decoded bytes. Hosts must qualify
+a 2 MiB serialized MCP result budget before selecting this capability.
+
+`POST /set_access` grants or revokes a named principal's read access, requires a
+caller `idempotencyKey`, and keeps the artifact private. Bind
+`isApprovedAccount` to the host's principal policy. `POST /delete` also requires
+`expectedCurrentReleaseId` (nullable) and a trusted `management.confirmation`
+port. Its `request` method issues a challenge for the host management UI;
+`consume` verifies the human-approved proof, expiration and full command context
+on the supplied transaction. A caller boolean is never confirmation. Repeated
+successful deletes return the stored receipt without consuming proof again.
+
+Apply `migrations/0004_terminal_controls.sql` after `0001_artifacts.sql`,
+`0002_lifecycle.sql` and `0003_coordinator.sql` before activation.
+The default management writer uses the coordinator's PostgreSQL
+transaction; alternative stores implement `management.createUnit` with the same
+parent/ACL/current lock order and transactional effects. Terminal markers and
+SQL guards prevent restoration and later publication. Deletion reports
+`purgeState: "pending"`; physical purge belongs to host retention policy.
+
+Get/list include binding, creation/modification dates, current release, digest,
+host URLs and available metadata. Historical modification dates stay nullable.
+The PostgreSQL projection reads the optional metadata column added by the
+publication parity lane without requiring that column for older stores.

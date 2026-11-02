@@ -16,6 +16,7 @@ import type { IntentKind, PreparationIntentStore, ObjectIntent } from '../server
 import type { IdempotencyStore, IdempotentResult } from '../server/idempotency.js';
 import type { PublicationStateStore, ReleaseRecord } from '../server/publication.js';
 import type { KvPort } from '../server/ports.js';
+import { ArtifactOperationError } from '../server/failures.js';
 
 /** Read-only migration inventory. Never promotes a legacy success into an authorized receipt. */
 export function createPostgresLegacyArtifactRecords(pool: Pool): Pick<KvPort, 'get'> {
@@ -83,7 +84,7 @@ interface ReleaseRow {
   artifact_id: string;
   manifest_digest: string;
   manifest: string;
-  state: 'ready';
+  state: ReleaseState;
   created_at: Date;
 }
 
@@ -104,11 +105,12 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
     async ensureArtifact(input: ArtifactBindingInput): Promise<ArtifactBinding> {
       const where = `WHERE storage_scope_id = $1 AND owner_id = $2 AND binding_name = $3`;
       const args = [input.storageScopeId, input.ownerId, input.bindingName];
-      const found = await pool.query<{ id: string }>(
-        `SELECT id FROM artifacts.artifacts ${where}`,
+      const found = await pool.query<{ id: string; terminal: boolean }>(
+        `SELECT id, (to_jsonb(a)->>'terminal_deleted_at') IS NOT NULL AS terminal FROM artifacts.artifacts a ${where}`,
         args,
       );
       if (found.rowCount !== 0 && found.rows[0] !== undefined) {
+        if (found.rows[0].terminal) throw new ArtifactOperationError('gone');
         return { artifactId: found.rows[0].id, created: false };
       }
       const inserted = await pool.query<{ id: string }>(
@@ -120,12 +122,13 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
       if (inserted.rowCount !== 0 && inserted.rows[0] !== undefined) {
         return { artifactId: inserted.rows[0].id, created: true };
       }
-      const raced = await pool.query<{ id: string }>(
-        `SELECT id FROM artifacts.artifacts ${where}`,
+      const raced = await pool.query<{ id: string; terminal: boolean }>(
+        `SELECT id, (to_jsonb(a)->>'terminal_deleted_at') IS NOT NULL AS terminal FROM artifacts.artifacts a ${where}`,
         args,
       );
       const row = raced.rows[0];
       if (row === undefined) throw new Error(`artifact binding lost for ${input.bindingName}`);
+      if (row.terminal) throw new ArtifactOperationError('gone');
       return { artifactId: row.id, created: false };
     },
     async record(
@@ -322,9 +325,14 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
         storage_scope_id: string;
         is_public: boolean;
         lifecycle_state: ArtifactState;
+        binding_name: string;
+        created_at: Date;
+        updated_at: string | null;
+        metadata: { title?: string; description?: string; icon?: string | null } | null;
       }>(
-        `SELECT owner_id, storage_scope_id, is_public, lifecycle_state
-         FROM artifacts.artifacts WHERE id = $1`,
+        `SELECT owner_id, storage_scope_id, is_public, lifecycle_state, binding_name, created_at,
+          to_jsonb(a)->>'updated_at' AS updated_at, to_jsonb(a)->'metadata' AS metadata
+         FROM artifacts.artifacts a WHERE id = $1`,
         [artifactId],
       );
       const row = rows[0];
@@ -335,6 +343,8 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
         [artifactId],
       );
       return {
+        bindingName: row.binding_name, createdAt: row.created_at.toISOString(), updatedAt: row.updated_at,
+        ...(row.metadata ?? {}),
         ownerId: row.owner_id,
         storageScopeId: row.storage_scope_id,
         isPublic: row.is_public,
@@ -427,6 +437,14 @@ export function createPostgresArtifactStore(pool: Pool): PostgresArtifactStore {
         [artifactId],
       );
       return rows[0]?.lifecycle_state ?? 'active';
+    },
+    async isTerminal(artifactId: string): Promise<boolean> {
+      const { rows } = await pool.query<{ terminal: boolean }>(
+        "SELECT (to_jsonb(a)->>'terminal_deleted_at') IS NOT NULL AS terminal FROM artifacts.artifacts a WHERE id = $1", [artifactId]);
+      return rows[0]?.terminal === true;
+    },
+    async markTerminal(artifactId: string): Promise<void> {
+      await pool.query("UPDATE artifacts.artifacts SET terminal_deleted_at = coalesce(terminal_deleted_at, now()), lifecycle_state = 'deleted' WHERE id = $1", [artifactId]);
     },
     async setArtifactState(artifactId: string, state: ArtifactState): Promise<void> {
       const updated = await pool.query(
