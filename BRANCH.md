@@ -59,6 +59,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] R1 review follow-up: reproduce social touch/email-create races and pin the amendment's owned unlink of revoked imported subjects.
 - [x] R1 review follow-up: test continuation rollback, registration UV/origin policy, read-mode validation and separate administrative/request MFA projections.
 - [x] R1: evaluate current root creation policy, deduplicate transaction-bound creation hooks and validate the completion flow before entry.
 - [x] R1: pin root-owned creation role/status/deadline evaluation and reject unknown completion flows before the callback.
