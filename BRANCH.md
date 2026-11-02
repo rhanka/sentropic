@@ -64,7 +64,12 @@ Implement lot ACT-L04 of r6 §7.2 (W2): qualify native Rust ast-grep with frozen
   - Never amend tests with additive timeouts.
   - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
   - Capture explicit user sign-off before merge.
-- This lot runs only synthetic, network-free suites; no AI flaky lane applies.
+- This lot's own suites are synthetic and network-free; no AI flaky lane applies to them.
+- Observed in CI (run 41379815044, head `aa170c0ab`), job `test-e2e (group-a, 00 02 06 10)`:
+  - command: `make test-e2e` (CI job `test-e2e`, group-a specs `00 02 06 10`, ENV=e2e lane)
+  - failing file: `e2e/tests/00-ai-generation.spec.ts:102` — "Génération IA › devrait générer une organisation via IA (enrichissement) et l'enregistrer"
+  - failure signature: `TimeoutError: page.waitForResponse: Timeout 60000ms exceeded` waiting for `POST /api/v1/organizations/[^/]+/enrich`, with console error `Failed to create and enrich organization: Error: Impossible de créer l'organisation brouillon` — provider/model nondeterminism on the AI enrich route.
+  - The file is on the AI flaky allowlist (`rules/testing.md`); the lot diff touches only `scripts/security/daily/**`, `.security/ast-grep/**`, `api/Dockerfile` (pin) and `BRANCH.md`, so this is unrelated to the lot and non-blocking. User sign-off still required before any merge (this lot does not merge).
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (single branch `feat/cyber-act-L04`; one final CI on the review-ready head)
