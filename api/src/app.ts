@@ -89,6 +89,12 @@ import { APP_PATHS, productAppsModule } from './routes/namespaces/apps-module';
 import { CATALOG_PATHS, productCatalogModule } from './routes/namespaces/catalog-module';
 import { productResourcesModule, RESOURCE_PATHS } from './routes/namespaces/resources-module';
 import { clusterMeshLiveQualificationRouter } from './routes/cluster-mesh-live-qualification';
+import {
+  ReceiverRefusal,
+  createProductSessionContentReceiver,
+  refusalBody,
+  refusalStatus,
+} from './routes/session-content/receiver';
 
 const authPlugin = productAuthPlugin();
 
@@ -327,7 +333,12 @@ export const ROOT_MOUNT_REMAPS = Object.fromEntries(
 );
 
 export const app = new Hono();
-app.onError(remoteRevocationError);
+app.onError((error, c) => {
+  if (error instanceof ReceiverRefusal) {
+    return c.json(refusalBody(error), refusalStatus(error.family, error.code) as never);
+  }
+  return remoteRevocationError(error, c);
+});
 const httpLogEnabled = env.HTTP_LOG !== 'false' && env.HTTP_LOG !== '0';
 
 // Parse allowed origins from environment variable
@@ -433,6 +444,9 @@ export const PRODUCT_CLUSTER_MESH_MOUNTS = {
   ...ROOT_MOUNT_REMAPS,
 } as const;
 app.route('/api/v1/cluster-mesh/qualification', clusterMeshLiveQualificationRouter);
+// RC2.receiver: frozen source routes + source/browser/relay middleware separation.
+// Source-gaps stay fail-closed in product (no public direct access to the inner mount).
+app.route('/', createProductSessionContentReceiver().app);
 app.route('/api/v1', createClusterMeshPlugin({
   runtime: clusterMeshAdapter.sessionControl!.runtime,
   namespaces: MOUNTED_NAMESPACE_REGISTRY.map(({ module }) => module),
