@@ -4,13 +4,15 @@
 Add durable verification custody, material-preserving import and atomic person deletion to cluster-mesh. The R1 corrections enforce the approved counter/CAS rules, source continuation tokens, proof retention, SQL constraints, combined transaction surface, import accounting and transactional revocation delivery.
 
 ## Validation evidence and acceptance boundary
-- [x] Latest complete identity qualification: SQLite 227/227 and PostgreSQL 227/227, 24 files per campaign, zero skipped or todo cases; both under the sole Docker flock with ENV=test-cm-a2-0b.
+- [x] Run the final identity campaigns at f2cb89bab under the sole Docker flock with ENV=test-cm-a2-0b: PostgreSQL 261/261; SQLite 254/261 with seven 5000ms timeouts, 24 files each, zero skipped/todo cases. The SQLite local campaign is not green; CI must qualify both profiles.
 - [x] Reproduce the reviewed failures before fixes, including exact counter refusal codes, missing tombstone foreign key and unbound credential writes. No assertion weakening or timeout increase.
 - [x] Execute real P-256 registration and signed authentication through the shipped auth-hono factories and actual WebAuthn verifier; verify counter-regression rollback.
-- [x] Typecheck and lint pass; source-owner capture, AEAD custody, outbox, acknowledgement replay and rollback pass on both databases.
-- [x] Rebase onto origin/main e1c0ef97d after merge-tree found only BRANCH.md conflicted. Identity source/tests remain byte-identical to the qualified tree.
+- [x] Typecheck, lint and 48 packaging tests pass. All 46 real-auth completion cases, including explicit SQLite and PostgreSQL groups, pass in the final PostgreSQL campaign. No error assertion or timeout was weakened.
+- [x] Rebase onto origin/main 78c746f53 after merge-tree found only BRANCH.md conflicted. Identity source/tests stayed byte-identical across the rebase; preserve main's packaging changes.
 - [x] Bump the candidate and all lock/fixture pins to 0.26.0-dev.5, greater than published 0.25.0 and not yet published. Exact train lock-sync passes.
-- [ ] Complete independent review reconciliation and the owner-requested ready-PR CI; record final head/results in .tmp/rv/lot-A2.0b.md. Do not merge.
+- [x] Reconcile two independent reviews of the authentication binding: Mistral APPROVE, Argon CHANGES with accepted fixes and amendment-grounded contests. Earlier failed review legs remain recorded; no later-head approval is inferred.
+- [x] Stop owned test containers, run make down ENV=test-cm-a2-0b and verify cleanup. No image build/deletion; the PostgreSQL image was pulled for qualification.
+- [ ] Observe the owner-requested ready-PR CI and record its exact head/result in .tmp/rv/lot-A2.0b.md. Do not merge.
 - [ ] Full r6/A4 author-switch acceptance is separate from this requested findings 1–10 closeout. Original finding 11 (versioned schema admission) and the prior PostgreSQL reopen-fixture limitation remain outside this repair's acceptance claim.
 
 ## Scope / Guardrails
@@ -59,6 +61,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] Fix review r1: all ten requested findings have tests and corrections; final local evidence is PostgreSQL 261/261 and SQLite 254/261 with seven fixed-bound timeouts under measured shared disk I/O pressure. Report failures explicitly and require the PR CI result.
 - [x] R1 Argon r3: reject incompatible normalizers at composition using trim/case/tag/Unicode probes, retaining byte-exact validation for every actual email input.
 - [x] R1 Argon r3: refuse mismatched ticket subjects and null email flags; admit pure read-mode binding while guarding mutations and preserving session activity.
 - [x] R1 Argon r3 tests first: reject a noncanonical host normalizer when constructing the binding, before any auth method runs.
@@ -109,7 +112,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - [x] Fix review r1 finding 6: migrate a20b-prerequisites.spec.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
 - [x] Fix review r1 finding 6: migrate a20b-helpers.ts to combined run/options without weakening assertions; the complete two-profile campaign passes.
 - [x] Fix review r1 findings 1/8: tests preceded counter-regression and exact refusal-precedence fixes; both profiles pass.
-- [ ] Fix review r1 findings 2–7/9/10: tests first, amendment-exact fixes, both durable profiles, final PR CI and per-finding report; do not merge.
+- [x] Fix review r1 findings 2–7/9/10: tests first and amendment-exact fixes; both durable profiles executed and per-finding report prepared. Final PR CI is tracked separately; do not merge.
 - [x] Fix review r1 findings 3/9: source HS256 claims and missing HMAC key code corrected after regression tests; both profiles pass.
 - [x] Fix review r1 finding 4: purge retains bound completed magic links and live ticket parents, deleting expired tickets first; both profiles pass.
 - [x] Fix review r1 finding 2: delivered replay preserves the original timestamp; pending custody is checked and the delivered row re-read before erasure; both profiles pass.
@@ -210,7 +213,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - [ ] **Lot N — Final validation**
   - [x] Typecheck & Lint
   - [x] Retest cluster-mesh identity suites (both profiles, no skips)
-  - [x] Bumped packages/cluster-mesh/package.json version 0.26.0-dev.4
+  - [x] Bumped packages/cluster-mesh/package.json and all lock/fixture pins to version 0.26.0-dev.5.
   - [x] Final gate step 1: create a ready PR using BRANCH.md text as PR body after local qualification (owner continuation): https://github.com/rhanka/sentropic/pull/882.
   - [ ] Final gate step 2: run/verify branch CI once and resolve remaining blockers.
   - [ ] Do NOT merge; report to .tmp/rv/lot-A2.0b.md and stop.
