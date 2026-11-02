@@ -69,10 +69,12 @@ describe.each(process.env.CM_PG_URL ? ['postgres', 'sqlite'] : ['sqlite'])('A2.0
       throw new Error('rollback-probe');
     })).rejects.toThrow('rollback-probe');
     await expect(escaped!.custody.profiles.find(account.userId)).rejects.toMatchObject({ code: 'identity_transaction_unbound' });
+    await expect(escaped!.hostTransaction.stores.profiles.find(account.userId)).rejects.toMatchObject({ code: 'identity_transaction_unbound' });
     await uow.run(READ, async (tx) => {
       expect(await tx.stores.accounts.findAccount(account.userId)).toBeNull();
       expect(await tx.custody.profiles.find(account.userId)).toBeNull();
       await expect(tx.lockSubject(account.userId)).rejects.toMatchObject({ code: 'identity_transaction_unbound' });
+      await expect(tx.hostTransaction.journal.insertAccountCore(account)).rejects.toMatchObject({ code: 'identity_transaction_unbound' });
       await expect(tx.custody.subjects.register(account, profile)).rejects.toMatchObject({ code: 'identity_transaction_unbound' });
     });
   });
