@@ -51,6 +51,8 @@ export function matchesSchema(value: unknown, schema: ArtifactSchema): boolean {
 export function normalizeArguments(profile: EffectiveArtifactProfile, name: string, input: unknown,
   schema: ArtifactSchema, envelopeKey?: string): Readonly<Record<string, JsonValue>> {
   const args = copyJson(input);
+  if (profile.requireExpectedCurrentReleaseId && (name === 'artifacts_publish' || name === 'artifacts_revert') &&
+    isRecord(args) && !Object.hasOwn(args, 'expectedCurrentReleaseId')) throw new ArtifactProfileInputError(false, true);
   requireInput(isRecord(args) && matchesSchema(args, schema));
   const operation = name.slice('artifacts_'.length);
   const { defaults, limits } = operationProfile(profile, operation);
