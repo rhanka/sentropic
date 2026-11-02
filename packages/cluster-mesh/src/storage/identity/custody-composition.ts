@@ -34,5 +34,5 @@ export const composeIdentityTransaction = <H extends CustodyOpHost>(input: {
     profile: host.profile, transactionId: input.transactionId, mode: input.readOnly ? 'read' : 'write',
     hostTransaction: host, stores: { ...core, ...tenancy, audit: enforcement.ledger },
     custody: host.stores, ...enforcement, ...sqlPorts,
-  }, check);
+  }, check, host);
 };
