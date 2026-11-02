@@ -318,62 +318,41 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
     const verified = await runFlowAndVerify(request);
     if (!verified.ok) return verified.result;
     const { identity } = verified;
-    const now = clock.now();
-
-    // Subject-first (D6/D13): if this identity is already linked, it must belong to THIS user (else it
-    // is another account's identity and linking would hijack it). Same-user ⇒ idempotent success.
-    const existing = await federation.findIdentityBySubject(provider.id, identity.subject);
+    return completed(async attempt => {
+    // The session and subject lock are revalidated after upstream I/O, on EVERY attempt.
+    await attempt.requireLinkActor(linkUserId);
+    requireFreshAssertion(verified.expiresAt, attempt.now);
+    const existing = await attempt.federation.findIdentityBySubject(provider.id, identity.subject);
     if (existing) {
       if (existing.userId !== linkUserId) {
-        await audit.record('warn', 'federation.link_conflict', {
-          provider: provider.id,
-          userId: linkUserId,
-        });
-        return errorResult(
-          409,
-          'identity_linked_other_account',
-          'This provider account is already linked to a different Sentropic account.',
-        );
+        throw new IdentityCustodyErrorV1('social_subject_conflict');
       }
-      await federation.touchLogin(existing.id, now);
-      await audit.record('info', 'federation.link_idempotent', {
+      await attempt.federation.touchLogin(existing.id, attempt.now);
+      await attempt.audit.record('info', 'federation.link_idempotent', {
         provider: provider.id,
         userId: linkUserId,
       });
-      return { identity: existing, kind: 'linked', userId: linkUserId };
+      return { identity: existing, kind: 'linked' as const, userId: linkUserId };
     }
 
-    // Attach the freshly re-proven identity to the authenticated user. A concurrent link loses the
-    // UNIQUE(provider,subject) race; re-read and, if it now belongs to this user, succeed idempotently.
-    try {
-      const linked = await federation.linkIdentity({
+    // r6 §4.10: an insertion/touch race escapes the callback. Only CM may retry after rollback.
+      const linked = await attempt.federation.linkIdentity({
         emailAtLink: identity.email,
         emailVerifiedByProvider: identity.emailVerified,
-        now,
+        now: attempt.now,
         provider: provider.id,
         providerSubject: identity.subject,
         providerTenant: identity.providerTenant ?? null,
         userId: linkUserId,
       });
-      await audit.record('info', 'federation.linked', { provider: provider.id, userId: linkUserId });
-      return { identity: linked, kind: 'linked', userId: linkUserId };
-    } catch {
-      const reread = await federation.findIdentityBySubject(provider.id, identity.subject);
-      if (reread && reread.userId === linkUserId) {
-        return { identity: reread, kind: 'linked', userId: linkUserId };
-      }
-      return errorResult(
-        409,
-        'identity_linked_other_account',
-        'This provider account is already linked to a different Sentropic account.',
-      );
-    }
+      await attempt.audit.record('info', 'federation.linked', { provider: provider.id, userId: linkUserId });
+      return { identity: linked, kind: 'linked' as const, userId: linkUserId };
+    });
   };
 
   const completeEmailChallenge = async (
     input: FederationEmailChallengeCompletion,
   ): Promise<FederationCallbackResult> => {
-    const now = clock.now();
     // Defensive: the route builds a provider-specific broker; the pending `provider` must match it.
     if (input.provider !== provider.id) {
       return errorResult(400, 'federation_provider_mismatch', 'Federation provider mismatch.', false);
@@ -387,7 +366,11 @@ export const createFederationBroker = (deps: FederationBrokerDeps): FederationBr
       providerTenant: input.providerTenant ?? null,
       subject: input.providerSubject,
     };
-    return resolveAndFinish(identity, input.continuation, input.deviceInfo, now);
+    return completed(async attempt => {
+      requireFreshAssertion(input.expiresAt, attempt.now);
+      await attempt.verifyEmailProof(input.verifiedEmail, input.verificationToken);
+      return resolveAndFinish(attempt, identity, input.continuation, input.deviceInfo);
+    });
   };
 
   return { callback, completeEmailChallenge, linkCallback, start };
