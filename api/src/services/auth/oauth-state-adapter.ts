@@ -7,7 +7,8 @@ import type {
 } from '@sentropic/auth-hono';
 import { and, eq, gt, isNull, lt } from 'drizzle-orm';
 
-import { db } from '../../db/client';
+import { bindCmAppDatabase, type CmIdentityTransaction } from '../identity/cm-transaction';
+import { requireCmOAuthTransaction } from '../identity/cm-oauth-tenancy';
 import { purgeExpiredRefreshFamilies } from './oauth-refresh-adapter';
 import { findCmServiceClientTenant } from '../identity/cm-service-clients';
 import {
@@ -20,27 +21,26 @@ import {
 } from '../../db/schema';
 
 interface CreateOauthStateStoreAdapterOptions {
-  database?: typeof db;
+  transaction?: CmIdentityTransaction;
   now?: () => Date;
-  transactionBound?: boolean;
 }
 
 export const createOauthStateStoreAdapter = (
   options: CreateOauthStateStoreAdapterOptions = {}
 ): OauthStateStorePort => {
-  const database = options.database ?? db;
+  const database = () => bindCmAppDatabase(requireCmOAuthTransaction(options.transaction));
   const now = options.now ?? (() => new Date());
   const expiresFromTtl = (ttlSec: number): Date => new Date(now().getTime() + ttlSec * 1000);
 
   return {
     async findAuthCode(code) {
-      const [row] = await database.select().from(authorizationCodes)
+      const [row] = await database().select().from(authorizationCodes)
         .where(and(eq(authorizationCodes.code, code), isNull(authorizationCodes.usedAt),
           gt(authorizationCodes.expiresAt, now()))).limit(1);
       return row ? toAuthCodePayload(row) : null;
     },
     async consumeAuthCode(code) {
-      const [row] = await database
+      const [row] = await database()
         .update(authorizationCodes)
         .set({ usedAt: now() })
         .where(
@@ -56,7 +56,7 @@ export const createOauthStateStoreAdapter = (
     },
 
     async findClient(clientId) {
-      const [row] = await database
+      const [row] = await database()
         .select()
         .from(oauthClients)
         .where(eq(oauthClients.clientId, clientId))
@@ -66,7 +66,7 @@ export const createOauthStateStoreAdapter = (
     },
 
     async findServiceClient(clientId) {
-      const [row] = await database
+      const [row] = await database()
         .select()
         .from(serviceClients)
         .where(and(eq(serviceClients.clientId, clientId), isNull(serviceClients.revokedAt)))
@@ -76,7 +76,7 @@ export const createOauthStateStoreAdapter = (
     },
 
     async findTokenMeta(jti) {
-      const [row] = await database
+      const [row] = await database()
         .select()
         .from(oauthTokens)
         .where(and(eq(oauthTokens.jti, jti), gt(oauthTokens.expiresAt, now())))
@@ -86,7 +86,7 @@ export const createOauthStateStoreAdapter = (
     },
 
     async isTokenRevoked(jti) {
-      const [row] = await database
+      const [row] = await database()
         .select({ jti: revokedTokens.jti })
         .from(revokedTokens)
         .where(and(eq(revokedTokens.jti, jti), gt(revokedTokens.expiresAt, now())))
@@ -98,18 +98,18 @@ export const createOauthStateStoreAdapter = (
     async purgeExpired() {
       const expiredAt = now();
       const [codes, tokens, proofs, revoked] = await Promise.all([
-        database.delete(authorizationCodes).where(lt(authorizationCodes.expiresAt, expiredAt)).returning(),
-        database.delete(oauthTokens).where(lt(oauthTokens.expiresAt, expiredAt)).returning(),
-        database.delete(oauthDpopProofs).where(lt(oauthDpopProofs.expiresAt, expiredAt)).returning(),
-        database.delete(revokedTokens).where(lt(revokedTokens.expiresAt, expiredAt)).returning(),
+        database().delete(authorizationCodes).where(lt(authorizationCodes.expiresAt, expiredAt)).returning(),
+        database().delete(oauthTokens).where(lt(oauthTokens.expiresAt, expiredAt)).returning(),
+        database().delete(oauthDpopProofs).where(lt(oauthDpopProofs.expiresAt, expiredAt)).returning(),
+        database().delete(revokedTokens).where(lt(revokedTokens.expiresAt, expiredAt)).returning(),
       ]);
 
-      const refresh = await purgeExpiredRefreshFamilies(database, expiredAt, options.transactionBound);
+      const refresh = await purgeExpiredRefreshFamilies(database(), expiredAt, true);
       return codes.length + tokens.length + proofs.length + revoked.length + refresh;
     },
 
     async recordDpopJti(jti, expiresAt) {
-      const inserted = await database
+      const inserted = await database()
         .insert(oauthDpopProofs)
         .values({ createdAt: now(), expiresAt, jti })
         .onConflictDoNothing()
@@ -119,14 +119,14 @@ export const createOauthStateStoreAdapter = (
     },
 
     async revokeToken(jti) {
-      const [tokenRow] = await database
+      const [tokenRow] = await database()
         .select()
         .from(oauthTokens)
         .where(eq(oauthTokens.jti, jti))
         .limit(1);
       const expiresAt = tokenRow?.expiresAt ?? now();
 
-      await database
+      await database()
         .insert(revokedTokens)
         .values({
           clientId: tokenRow?.clientId ?? null,
@@ -145,7 +145,7 @@ export const createOauthStateStoreAdapter = (
     },
 
     async saveAuthCode(code, payload, ttlSec) {
-      await database.insert(authorizationCodes).values({
+      await database().insert(authorizationCodes).values({
         clientId: payload.clientId,
         code,
         codeChallenge: payload.codeChallenge,
@@ -163,7 +163,7 @@ export const createOauthStateStoreAdapter = (
     },
 
     async saveTokenMeta(jti, meta, ttlSec) {
-      await database
+      await database()
         .insert(oauthTokens)
         .values({
           audience: meta.audience,
