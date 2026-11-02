@@ -196,3 +196,146 @@ describe('validateSeatOnboarding', () => {
   });
 
 });
+
+describe('validateSeatOnboarding formats', () => {
+  it('refuses malformed per-format content', () => {
+    const claudeExtra = validateSeatOnboarding(synthBlock('claude', { files: [onboardingFile('claude-json', 'claude-json-projection-v1', JSON.stringify({ hasCompletedOnboarding: true, lastOnboardingVersion: '2.1.0', oauthAccount: 'x' }))] }));
+    expect(claudeExtra).toMatchObject({ ok: false, code: 'onboarding-shape-unverified' });
+    const claudeVersion = validateSeatOnboarding(synthBlock('claude', { files: [onboardingFile('claude-json', 'claude-json-projection-v1', JSON.stringify({ hasCompletedOnboarding: true, lastOnboardingVersion: '2.1' }))] }));
+    expect(claudeVersion).toMatchObject({ ok: false, code: 'onboarding-shape-unverified' });
+    const museSchema = validateSeatOnboarding(synthBlock('muse', { files: [onboardingFile('muse-trust', 'muse-trust-json-v1', JSON.stringify({ schema_version: 999 }))] }));
+    expect(museSchema).toMatchObject({ ok: false, code: 'onboarding-shape-unverified' });
+    const codexPolicy = validateSeatOnboarding(synthBlock('codex', { files: [onboardingFile('codex-config', 'codex-config-projection-v1', JSON.stringify({ approvalPolicy: 'always', mcpServerNames: ['h2a'] }))] }));
+    expect(codexPolicy).toMatchObject({ ok: false, code: 'onboarding-shape-unverified' });
+  });
+
+  it('refuses a wrong destKey or format for the CLI', () => {
+    const result = validateSeatOnboarding(synthBlock('agy', { files: [onboardingFile('muse-trust', 'muse-trust-json-v1', CONTENT.muse)] }));
+    expect(result).toMatchObject({ ok: false, code: 'onboarding-shape-unverified' });
+  });
+});
+
+export function synthEnvelope(cli: SeatCli, onboarding?: unknown): Record<string, unknown> {
+  const bundle = consumerBundle(cli);
+  const files: Record<string, string> = {};
+  for (const name of SEAT_ENVELOPE_AUTH_FILES[cli]) {
+    files[name] = Buffer.from(`synthetic-${cli}-${name}`, 'utf8').toString('base64');
+  }
+  const envelope: Record<string, unknown> = { bundle, files };
+  if (cli === 'agy') {
+    envelope.agy = {
+      packageProviderId: 'cloud-code',
+      packageAccountTransport: 'cloud-code',
+      issuingClientRef: 'agy-cli',
+      endpointFamily: 'antigravity',
+      requestedTargetProviderId: 'cloudcode-pa',
+      requestedTransportProviderId: 'antigravity',
+    };
+  }
+  if (onboarding !== undefined) envelope.onboarding = onboarding;
+  return envelope;
+}
+
+describe('validateSeatEnvelope', () => {
+  it.each(['agy', 'claude', 'muse', 'codex'] as const)('accepts a valid %s envelope with a block', (cli) => {
+    const result = validateSeatEnvelope(synthEnvelope(cli, synthBlock(cli)));
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.onboardingStatus).toBe('present');
+      expect(result.launchGate).toEqual({ eligible: true });
+    }
+  });
+
+  it.each(CLIS)('accepts an absent block for %s and derives onboardingStatus absent', (cli) => {
+    const result = validateSeatEnvelope(synthEnvelope(cli));
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.onboardingStatus).toBe('absent');
+  });
+
+  it('refuses a lineage mismatch between block and bundle', () => {
+    const result = validateSeatEnvelope(synthEnvelope('agy', synthBlock('agy', { lineage: { epoch: 1, generation: 2, operationId: 'op-other' } })));
+    expect(result).toMatchObject({ ok: false, code: 'onboarding-lineage-mismatch' });
+  });
+
+  it('refuses when the bundle lacks nativeCliVersion but a block is present', () => {
+    const bundle = consumerBundle('agy');
+    delete (bundle.identity as Record<string, unknown>).nativeCliVersion;
+    const env = { ...synthEnvelope('agy', synthBlock('agy')), bundle };
+    const result = validateSeatEnvelope(env);
+    expect(result).toMatchObject({ ok: false, code: 'onboarding-version-mismatch' });
+  });
+
+  it('refuses an envelope over the 48 KiB bound', () => {
+    const env = synthEnvelope('codex', synthBlock('codex'));
+    (env.files as Record<string, string>)['.codex/auth.json'] = 'x'.repeat(60 * 1024);
+    const result = validateSeatEnvelope(env);
+    expect(result.ok).toBe(false);
+    if (!result.ok) expect(result.code).toBe('size-exceeded');
+  });
+
+  it('refuses a present block on a vibe bundle as shape-unverified', () => {
+    const result = validateSeatEnvelope(synthEnvelope('vibe', synthBlock('agy')));
+    expect(result).toMatchObject({ ok: false, code: 'onboarding-shape-unverified' });
+  });
+
+  it('never returns onboarding-required itself', () => {
+    for (const cli of CLIS) {
+      const absent = validateSeatEnvelope(synthEnvelope(cli));
+      if (!absent.ok) throw new Error('absent block must validate');
+      expect(absent.onboardingStatus).toBe('absent');
+    }
+  });
+
+  it('refuses an auth file outside the allowlist', () => {
+    const env = synthEnvelope('agy');
+    (env.files as Record<string, string>)['.gemini/settings.json'] = Buffer.from('x').toString('base64');
+    const result = validateSeatEnvelope(env);
+    expect(result.ok).toBe(false);
+  });
+});
+
+describe('seatLaunchGate', () => {
+  it.each(GATED)('closes the gate for absent %s with onboarding-required', (cli) => {
+    expect(seatLaunchGate(cli, 'absent')).toEqual({ eligible: false, code: 'onboarding-required' });
+  });
+  it('keeps vibe absent eligible and every present block eligible', () => {
+    expect(seatLaunchGate('vibe', 'absent')).toEqual({ eligible: true });
+    for (const cli of CLIS) expect(seatLaunchGate(cli, 'present')).toEqual({ eligible: true });
+  });
+});
+
+describe('rebindSeatOnboarding', () => {
+  const next = (over: Partial<SeatBundleV1> = {}) => ({
+    ...consumerBundle('agy'),
+    lifecycle: { ...consumerBundle('agy').lifecycle, generation: 2, operationId: 'op-synth-agy-02' },
+    ...over,
+  });
+
+  it('accepts a same-epoch forward transition and moves only the lineage pointer', () => {
+    const block = synthBlock('agy');
+    const result = rebindSeatOnboarding(block, next(), { reboundAt: '2026-11-02T01:00:00Z' });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.block.lineage).toEqual({ epoch: 1, generation: 2, operationId: 'op-synth-agy-02' });
+      expect(result.block.reboundFrom).toEqual(block.lineage);
+      expect(result.block.reboundAt).toBe('2026-11-02T01:00:00Z');
+      expect(result.block.files).toEqual(block.files);
+      expect(result.block.capturedAt).toBe(block.capturedAt);
+    }
+  });
+
+  it('refuses epoch change, version change, digest change and account change', () => {
+    const block = synthBlock('agy');
+    const epoch = rebindSeatOnboarding(block, next({ lifecycle: { ...next().lifecycle, epoch: 2 } }), { reboundAt: '2026-11-02T01:00:00Z' });
+    expect(epoch).toMatchObject({ ok: false, code: 'onboarding-lineage-mismatch' });
+    const version = rebindSeatOnboarding(block, next({ identity: { ...next().identity, nativeCliVersion: '1.4.13' } }), { reboundAt: '2026-11-02T01:00:00Z' });
+    expect(version).toMatchObject({ ok: false, code: 'onboarding-version-mismatch' });
+    const account = rebindSeatOnboarding(block, next({ provenance: { ...next().provenance, accountBinding: 'other-account' } }), { reboundAt: '2026-11-02T01:00:00Z' });
+    expect(account).toMatchObject({ ok: false, code: 'onboarding-lineage-mismatch' });
+    const digest = rebindSeatOnboarding(block, next(), {
+      reboundAt: '2026-11-02T01:00:00Z',
+      files: [{ ...block.files[0], sha256: '1'.repeat(64) }],
+    });
+    expect(digest).toMatchObject({ ok: false, code: 'onboarding-shape-unverified' });
+  });
+});
