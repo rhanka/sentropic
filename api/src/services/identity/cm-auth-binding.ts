@@ -47,7 +47,7 @@ export function createCmAuthRequestRunner(config: CmAuthBindingConfig) {
         loginTokens: config.tokens.loginTokens, ticketTokens: config.tokens.ticketTokens,
         rp: config.rp, accountPolicy: config.accountPolicy, emailCodeKeys: config.emailCodeKeys,
         webAuthnPolicy: { registrationUserVerification: 'preferred', authenticationUserVerification: 'required' },
-        magicLink: { baseUrl: config.magicLinkBaseUrl, tokenBytes: 32, ttlSeconds: 900 },
+        magicLink: { baseUrl: config.magicLinkBaseUrl, tokenBytes: 32, ttlSeconds: 600 },
         social: { autoLinkProviders: ['google'] }, business: config.business, trustedRegistration,
       }));
       currentBinding = binding;
