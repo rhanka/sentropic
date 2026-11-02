@@ -154,6 +154,7 @@ describe('Facebook federation broker keystones (BR-39e Lot 5)', () => {
       providerSubject: 'fb-collision',
       providerTenant: null,
       verifiedEmail: 'taken@example.com',
+      verificationToken: 'test-ticket', expiresAt: new Date(NOW.getTime() + 60_000).toISOString(),
     });
 
     expect(result).toMatchObject({ kind: 'error', status: 409 });
