@@ -152,6 +152,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Add fixed V2 self/admin authorizers with current CM prerequisites and a complete business ownership/reference plan; membership alone never authorizes destruction.
   - [x] Declare personal-data deletion and nullable shared-attribution dispositions, with a database inventory guard for unclassified person references.
   - [x] Extract the unchanged persisted job-to-stream mapping for deletion inventory without initializing the queue manager in CM callbacks.
+  - [x] Process every authorized workspace's persisted history/stream/job scope and business dependency graph; detach retained chats/traces and refuse restrictive cross-scope references.
   - [ ] Rollback checkpoint recorded BEFORE any legacy table deletion; one author per namespace via cutover records.
   - [x] Preserve the pre-deletion checkpoint row and retain account-driven OAuth invalidation after cutover.
   - [x] Rebind client, consent, membership, credential and restore invalidation to CM identity records.

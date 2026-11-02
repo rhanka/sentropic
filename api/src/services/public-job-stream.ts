@@ -1,7 +1,7 @@
-import type { Job, OrganizationEnrichJobData, InitiativeListJobData, MatrixGenerateJobData,
+import type { OrganizationEnrichJobData, InitiativeListJobData, MatrixGenerateJobData,
   InitiativeDetailJobData, ExecutiveSummaryJobData, DocumentSummaryJobData } from './queue-manager';
 
-export function getPublicJobStreamId(job: Pick<Job, 'id' | 'type' | 'data'>): string {
+export function getPublicJobStreamId(job: { readonly id: string; readonly type: string; readonly data: unknown }): string {
   const rawData = (job.data ?? {}) as unknown as Record<string, unknown>;
   if (job?.type === 'organization_enrich' && (job.data as OrganizationEnrichJobData | undefined)?.organizationId) {
     return `organization_${(job.data as OrganizationEnrichJobData).organizationId}`;

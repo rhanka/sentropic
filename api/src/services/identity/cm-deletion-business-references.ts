@@ -40,8 +40,12 @@ export async function deleteCmBusinessSubjectReferences(userId: string, tx: CmId
     const result = await tx.hostTransaction.query(`DELETE FROM public."${table}" WHERE "${column}" = $1${personalScope}`, [userId]);
     deletedByTable[table] = (deletedByTable[table] ?? 0) + (result.rowCount ?? 0);
   }
-  for (const [table, column] of detached) {
-    const result = await tx.hostTransaction.query(`UPDATE public."${table}" SET "${column}" = NULL WHERE "${column}" = $1`, [userId]);
+  const grouped = new Map<string, string[]>();
+  for (const [table, column] of detached) grouped.set(table, [...(grouped.get(table) ?? []), column]);
+  for (const [table, columns] of grouped) {
+    const assignments = columns.map(column => `"${column}" = CASE WHEN "${column}" = $1 THEN NULL ELSE "${column}" END`).join(', ');
+    const predicate = columns.map(column => `"${column}" = $1`).join(' OR ');
+    const result = await tx.hostTransaction.query(`UPDATE public."${table}" SET ${assignments} WHERE ${predicate}`, [userId]);
     detachedByTable[table] = (detachedByTable[table] ?? 0) + (result.rowCount ?? 0);
   }
   return { deletedByTable, detachedByTable };
