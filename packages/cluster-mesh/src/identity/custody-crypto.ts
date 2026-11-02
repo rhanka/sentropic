@@ -71,7 +71,7 @@ export const createNodeIdentityDigestPort = (keys: Readonly<Record<string, Uint8
   sha256: async (value) => hashUtf8Borrowed(value),
   hmacSha256: async (keyRef, value) => {
     const key = keys[keyRef];
-    if (!key) throw new IdentityCustodyErrorV1('identity_revocation_custody_missing');
+    if (!key) throw new IdentityCustodyErrorV1('identity_material_missing');
     return hmacHexOfOwned(copyBorrowed(key), copyBorrowed(value));
   },
   equal: (left, right) => {
@@ -146,10 +146,13 @@ const verifyHs256 = (secret: Uint8Array, token: Uint8Array): { readonly header: 
     if (presented.byteLength !== expected.byteLength || !timingSafeEqual(presented, expected)) {
       throw new IdentityCustodyErrorV1('identity_material_invalid');
     }
-    return {
-      header: JSON.parse(Buffer.from(parts.split('.')[0], 'base64url').toString('utf8')),
-      payload: JSON.parse(Buffer.from(parts.split('.')[1], 'base64url').toString('utf8')),
-    };
+    const segments = parts.split('.');
+    if (segments.length !== 2) throw new IdentityCustodyErrorV1('identity_material_invalid');
+    const header = JSON.parse(Buffer.from(segments[0], 'base64url').toString('utf8'));
+    if (header?.alg !== 'HS256') throw new IdentityCustodyErrorV1('identity_material_invalid');
+    return { header, payload: JSON.parse(Buffer.from(segments[1], 'base64url').toString('utf8')) };
+  } catch {
+    throw new IdentityCustodyErrorV1('identity_material_invalid');
   } finally {
     zeroizeV1(owned);
   }
@@ -162,22 +165,27 @@ export const createHs256EmailTicketPort = (secret: Uint8Array): IdentityEmailTic
     if (typeof payload !== 'object' || payload === null) throw new IdentityCustodyErrorV1('identity_material_invalid');
     const claims = payload as Record<string, unknown>;
     if (
-      typeof claims.codeProofId !== 'string' ||
+      typeof claims.codeId !== 'string' || claims.codeId.length === 0 ||
       typeof claims.email !== 'string' ||
-      typeof claims.issuedAt !== 'string' ||
-      typeof claims.expiresAt !== 'string'
+      typeof claims.iat !== 'number' || !Number.isSafeInteger(claims.iat) || claims.iat < 0 ||
+      typeof claims.exp !== 'number' || !Number.isSafeInteger(claims.exp) || claims.exp <= claims.iat ||
+      claims.exp > 8640000000000
     ) {
       throw new IdentityCustodyErrorV1('identity_material_invalid');
     }
     return {
-      codeProofId: claims.codeProofId,
-      email: claims.email,
-      issuedAt: claims.issuedAt,
-      expiresAt: claims.expiresAt,
+      codeProofId: claims.codeId,
+      email: assertCanonicalEmailV1(claims.email),
+      issuedAt: new Date(claims.iat * 1000).toISOString(),
+      expiresAt: new Date(claims.exp * 1000).toISOString(),
     };
   };
   return {
-    sign: async (claims) => signHs256(secret, `${base64UrlJson({ alg: 'HS256', typ: 'JWT' })}.${base64UrlJson(claims)}`),
+    sign: async (claims) => {
+      const payload = { email: claims.email, codeId: claims.codeProofId, iat: Date.parse(claims.issuedAt) / 1000, exp: Date.parse(claims.expiresAt) / 1000 };
+      checkClaims(payload);
+      return signHs256(secret, `${base64UrlJson({ alg: 'HS256', typ: 'JWT' })}.${base64UrlJson(payload)}`);
+    },
     verify: async (token, now) => {
       const { payload } = verifyHs256(secret, token);
       const claims = checkClaims(payload);
