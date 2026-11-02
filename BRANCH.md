@@ -118,6 +118,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Add the r6 per-attempt auth binding/runner with callback-owned audit drain and post-commit mail publication.
   - [x] Construct OAuth refresh/state/consent/JWKS participants on the active app executor; no nested transaction in bound refresh/consent.
   - [x] Stage every OAuth identity handler on the CM bound ports; publish ordinary protocol denials after commit and roll back infrastructure failures.
+  - [x] Delete root OAuth session authority and its settings-outbox writer; only the per-attempt CM binding supplies these methods.
   - [x] Add private-context execution of the shipped required/optional authentication middleware, returning copied principals only after commit.
   - [x] Mount the staged middleware before business workspace selection; optional authentication never invokes downstream effects twice or ignores infrastructure failure.
   - [x] Add transaction-bound auth workspace provisioning and an explicit Q-K configuration parser with key-reader disposal tests.

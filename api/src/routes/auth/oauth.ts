@@ -4,7 +4,6 @@ import {
   createOAuthHmacStateCodec,
   type AuthHonoAccountStatus,
   type AuthHonoPorts,
-  type AuthHonoSessionRecord,
   type AuthHonoUserRecord,
 } from '@sentropic/auth-hono';
 import { jwtVerify, SignJWT } from 'jose';
@@ -21,23 +20,11 @@ import { createOauthStateStoreAdapter } from '../../services/auth/oauth-state-ad
 import { createOAuthRefreshAdapter } from '../../services/auth/oauth-refresh-adapter';
 import { createServiceTenantAdapter } from '../../services/auth/service-tenant-adapter';
 import { authHonoCookiePort } from '../../services/auth/session-adapter';
-import { tombstoneRemoteSessions } from '../../services/auth/remote-revocation';
-import { deleteAndQueueRemoteSessions } from '../../services/auth/remote-revocation-outbox';
 import { deriveDisplayNameFromEmail } from '../../utils/display-name';
 import {
   countCmRecentEmailCodes,
   findCmMagicLinkByTokenHash,
 } from '../../services/identity/cm-proofs';
-import {
-  createCmSession,
-  findCmSessionById,
-  findCmSessionByRefreshTokenHash,
-  findCmSessionByTokenHash,
-  listCmSessionsForUser,
-  touchCmSession,
-  updateCmSessionTokens,
-  type CmSessionRecord,
-} from '../../services/identity/cm-sessions';
 import {
   countCmUsers,
   countCmUsersWithRole,
@@ -274,59 +261,11 @@ const createSentropicOAuthPorts = (source: NodePgDatabase = rootDb, boundPorts?:
     uuid: randomUUID,
   },
   sessions: {
-    // Lot A4: sessions live in the CM custody store (identity_login_token_bindings
-    // + identity_login_sessions); public.user_sessions is dropped by 0014.
-    async create(input) {
-      const created = await createCmSession({
-        id: input.id,
-        userId: input.userId,
-        sessionTokenHash: input.sessionTokenHash,
-        refreshTokenHash: input.refreshTokenHash ?? null,
-        deviceInfo: input.deviceInfo,
-        mfaVerified: input.mfaVerified ?? false,
-        expiresAt: input.expiresAt,
-        now: input.now,
-      });
-      return toAuthHonoSessionRecord(created);
-    },
-    async findById(sessionId) {
-      const row = await findCmSessionById(sessionId);
-      return row ? toAuthHonoSessionRecord(row) : null;
-    },
-    async findByRefreshTokenHash(refreshTokenHash) {
-      const row = await findCmSessionByRefreshTokenHash(refreshTokenHash);
-      return row ? toAuthHonoSessionRecord(row) : null;
-    },
-    async findByTokenHash(sessionTokenHash) {
-      const row = await findCmSessionByTokenHash(sessionTokenHash);
-      return row ? toAuthHonoSessionRecord(row) : null;
-    },
-    async listForUser(userId) {
-      const rows = await listCmSessionsForUser(userId);
-      return rows.map(toAuthHonoSessionRecord);
-    },
-    async revoke(sessionId) {
-      const { rows: deleted, input, key } = await deleteAndQueueRemoteSessions({ sessionId });
-      await tombstoneRemoteSessions(input, key);
-      return deleted.length > 0;
-    },
-    async revokeAllForUser(userId) {
-      const { rows: deleted, input, key } = await deleteAndQueueRemoteSessions({ userId });
-      await tombstoneRemoteSessions(input, key);
-      return deleted.length;
-    },
-    async touch(sessionId, now) {
-      await touchCmSession(sessionId, now);
-    },
-    async updateTokens(input) {
-      const row = await updateCmSessionTokens({
-        sessionId: input.sessionId,
-        sessionTokenHash: input.sessionTokenHash,
-        refreshTokenHash: input.refreshTokenHash,
-        expiresAt: input.expiresAt,
-      });
-      return row ? toAuthHonoSessionRecord(row) : null;
-    },
+    // Only the CM binding supplies session authority; this host bag is protocol configuration.
+    create: unsupportedOAuthPort, findById: unsupportedOAuthPort,
+    findByRefreshTokenHash: unsupportedOAuthPort, findByTokenHash: unsupportedOAuthPort,
+    listForUser: unsupportedOAuthPort, revoke: unsupportedOAuthPort,
+    revokeAllForUser: unsupportedOAuthPort, touch: unsupportedOAuthPort, updateTokens: unsupportedOAuthPort,
   },
   tokens: {
     hashSecret: (secret) => createHash('sha256').update(secret).digest('hex'),
@@ -419,21 +358,6 @@ const toAuthHonoUserRecord = (row: CmUserRecord): AuthHonoUserRecord => ({
   id: row.id,
   role: row.role,
   updatedAt: row.updatedAt,
-});
-
-const toAuthHonoSessionRecord = (row: CmSessionRecord): AuthHonoSessionRecord => ({
-  createdAt: row.createdAt,
-  deviceName: row.deviceName,
-  expiresAt: row.expiresAt,
-  id: row.id,
-  ipAddress: row.ipAddress,
-  lastActivityAt: row.lastActivityAt,
-  mfaVerified: row.mfaVerified,
-  refreshTokenHash: row.refreshTokenHash,
-  revokedAt: row.revokedAt,
-  sessionTokenHash: row.sessionTokenHash,
-  userAgent: row.userAgent,
-  userId: row.userId,
 });
 
 /**
