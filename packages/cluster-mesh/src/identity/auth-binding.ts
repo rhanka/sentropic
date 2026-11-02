@@ -15,10 +15,10 @@ export const createIdentityAuthHonoTransactionBindingV1 = <H>(input: IdentityAut
   const check = () => assertIdentityTransactionActive(input.tx, true);
   check();
   const evidence = new Set<string>(), deferredMail: IdentityDeferredMailV1[] = [];
-  const state: WebAuthnAttempt = { owner: null, registration: undefined, registrationUv: false, issuanceUv: 'required' };
+  const state: WebAuthnAttempt = { flow: null, completionOwner: null, owner: null, registration: undefined, registrationUv: false, issuanceUv: 'required' };
   const { users, policy } = authUserPorts(input, evidence, check);
-  const proofs = authProofPorts(input, evidence, check);
-  const credentials = authCredentialPort(input, check, () => state.registrationUv);
+  const proofs = authProofPorts(input, evidence, check, state);
+  const credentials = authCredentialPort(input, check, state);
   const boundary = authBoundaryPorts(input, users, policy, check);
   const email = authEmailService(input, evidence, check, (address, code, expiresAt) => { deferredMail.push({ kind: 'code', email: address, code, expiresAt }); });
   const sessions = authSessionService(input, users, policy, check);

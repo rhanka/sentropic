@@ -89,7 +89,7 @@ export const authSessionService = <H>(input: IdentityAuthBindingInput<H>, users:
     },
   };
   const find = async (promise: Promise<BoundLoginSessionV1 | null>) => { check(); const record = await promise; return record ? projectSession(record) : null; };
-  const unsupported = async (): Promise<never> => { throw new IdentityCustodyErrorV1('identity_transaction_unbound'); };
+  const unsupported = async (): Promise<never> => { check(); throw new IdentityCustodyErrorV1('identity_contract_unavailable'); };
   const port: AuthHonoSessionPort = {
     create: unsupported, updateTokens: unsupported, findById: (id) => find(store.findById(id)), findByTokenHash: (hash) => find(store.findBySessionTokenHash(hash)),
     findByRefreshTokenHash: (hash) => find(store.findByRefreshTokenHash(hash)), listForUser: service.listUserSessions,
