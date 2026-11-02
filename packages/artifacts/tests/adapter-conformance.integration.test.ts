@@ -83,26 +83,41 @@ afterAll(async () => {
 });
 
 /** Postgres backend: a fresh pool per handle (reopen = new connections on the same database). */
-const postgresBackend: ConformanceBackend = {
+const postgresBackend: ConformanceBackend & { open(reuseBucket?: string): Promise<ConformanceHandle> } = {
   name: 'postgres',
-  async open(): Promise<ConformanceHandle> {
+  async open(reuseBucket?: string): Promise<ConformanceHandle> {
     const pool = new Pool({ connectionString: DATABASE_URL });
-    let bucket: string | undefined;
+    let bucket = reuseBucket;
+    let ended = false;
+    const closePool = async (): Promise<void> => {
+      if (ended) return;
+      ended = true;
+      await pool.end();
+    };
     return {
       store: createPostgresArtifactStore(pool),
       executor: createPostgresCommitExecutor(pool),
       makeUnit: (conn) => createPostgresManagementUnit(conn),
       async makeBlobStore() {
-        bucket = `conf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        await s3.send(new CreateBucketCommand({ Bucket: bucket }));
+        // One bucket per handle lineage so reopen() can assert blob durability.
+        bucket ??= `conf-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+        try {
+          await s3.send(new CreateBucketCommand({ Bucket: bucket }));
+        } catch (error) {
+          if (!/BucketAlreadyOwnedByYou|BucketAlreadyExists/i.test(String(error))) throw error;
+        }
         return {
           blobs: createS3BlobStore({ client: s3, bucket }),
           verifiesDigest: false,
           cleanup: async () => {
-            const listed = await s3.send(new ListObjectsV2Command({ Bucket: bucket }));
-            const objects = (listed.Contents ?? []).map((o) => ({ Key: o.Key as string }));
-            if (objects.length > 0) await s3.send(new DeleteObjectsCommand({ Bucket: bucket, Delete: { Objects: objects } }));
-            await s3.send(new DeleteBucketCommand({ Bucket: bucket }));
+            try {
+              const listed = await s3.send(new ListObjectsV2Command({ Bucket: bucket as string }));
+              const objects = (listed.Contents ?? []).map((o) => ({ Key: o.Key as string }));
+              if (objects.length > 0) await s3.send(new DeleteObjectsCommand({ Bucket: bucket as string, Delete: { Objects: objects } }));
+              await s3.send(new DeleteBucketCommand({ Bucket: bucket as string }));
+            } catch (error) {
+              if (!/NoSuchBucket/i.test(String(error))) throw error;
+            }
           },
         };
       },
@@ -130,11 +145,12 @@ const postgresBackend: ConformanceBackend = {
         return Number(rows[0]?.n ?? 0);
       },
       async reopen() {
-        await pool.end();
-        return postgresBackend.open();
+        const keepBucket = bucket;
+        await closePool();
+        return postgresBackend.open(keepBucket);
       },
       async close() {
-        await pool.end();
+        await closePool();
       },
     };
   },
