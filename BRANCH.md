@@ -61,6 +61,8 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [ ] Fix review r1 findings 1/8: exact counter regression and refusal-precedence regressions written before the implementation.
+- [ ] Fix review r1 findings 2–7/9/10: tests first, amendment-exact fixes, both durable profiles, final PR CI and per-finding report; do not merge.
 - [x] BR-A20B-EX3 (owner-authorized Fix CI 1): synchronize only cluster-mesh dev.4 in root/API workspace locks and selected packaging fixture pins; preserve unrelated dependency selections and integrity records. Impact: version metadata only. Rollback: revert these four files together with the version bump.
 - [x] BR-A20B-EX1: repair PostgreSQL qualification readiness in `packages/cluster-mesh/tests/storage/postgres.mk`; the current Unix-socket probe can accept initdb's temporary server before `storage_test` exists. Impact: test startup only, unchanged retry budget. Rollback: revert the readiness hunk.
 - [x] BR-A20B-EX2: wire the existing identity profile configs into the package runner and PostgreSQL CI lane; otherwise frozen tests use the default in-memory factory. Impact: required identity qualification only, unchanged assertions and timeouts. Rollback: revert the runner/target additions.

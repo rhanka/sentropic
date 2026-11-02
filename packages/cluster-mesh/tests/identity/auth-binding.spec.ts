@@ -4,6 +4,7 @@
 // rules and one-shot magic links.
 
 import { describe, expect, it } from 'vitest';
+import { createHmac } from 'node:crypto';
 import type { IdentityUnitOfWorkV1 } from '../../src/index.js';
 import { InvitationError } from '../../src/index.js';
 import {
@@ -39,7 +40,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b auth binding on $
     expect(token.split('.')).toHaveLength(3);
     const payload = JSON.parse(Buffer.from(token.split('.')[1], 'base64url').toString('utf8'));
     expect(payload).not.toHaveProperty('iss');
-    expect(payload).toMatchObject({ codeProofId: 'code-1', email: 'marie@example.test' });
+    expect(payload).toEqual({ codeId: 'code-1', email: 'marie@example.test', iat: Date.parse(NOW) / 1000, exp: Date.parse(LATER) / 1000 });
     const verified = await port.verify(new Uint8Array(Buffer.from(token, 'utf8')), '2026-11-01T12:15:00.000Z');
     expect(verified).toEqual(claims);
     const forImport = await port.verifyForImport(new Uint8Array(Buffer.from(token, 'utf8')));
@@ -48,6 +49,33 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b auth binding on $
     const tampered = `${token.slice(0, -2)}ab`;
     await expect(port.verify(new Uint8Array(Buffer.from(tampered, 'utf8')), NOW)).rejects.toMatchObject({ code: 'identity_material_invalid' });
     secret.fill(0);
+  });
+
+  it('imports source-format HS256 continuations and rejects malformed claims', async () => {
+    const secret = new Uint8Array(32).fill(9);
+    const port = createHs256EmailTicketPort(secret);
+    const payload = { email: 'marie@example.test', codeId: 'legacy-code', iat: Date.parse(NOW) / 1000, exp: Date.parse(LATER) / 1000 };
+    const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+    const sourceToken = (claims: unknown, alg = 'HS256') => {
+      const parts = `${encode({ alg, typ: 'JWT' })}.${encode(claims)}`;
+      return Buffer.from(`${parts}.${createHmac('sha256', secret).update(parts).digest('base64url')}`);
+    };
+    const expected = { email: payload.email, codeProofId: payload.codeId, issuedAt: NOW, expiresAt: LATER };
+    expect(await port.verifyForImport(sourceToken(payload))).toEqual(expected);
+    expect(await port.verify(sourceToken(payload), NOW)).toEqual(expected);
+    await expect(port.verify(sourceToken(payload), LATER)).rejects.toMatchObject({ code: 'identity_material_invalid' });
+    for (const claims of [{ ...payload, codeId: '' }, { ...payload, iat: '1' }, { ...payload, exp: -1 }, { ...payload, email: ' Marie@example.test ' }]) {
+      await expect(port.verifyForImport(sourceToken(claims))).rejects.toMatchObject({ code: 'identity_material_invalid' });
+    }
+    await expect(port.verifyForImport(sourceToken(payload, 'HS512'))).rejects.toMatchObject({ code: 'identity_material_invalid' });
+  });
+
+  it('refuses a missing required HMAC key with identity_material_missing', async () => {
+    const bytes = emailCodePreimageV1('marie@example.test', '123456');
+    const original = Uint8Array.from(bytes);
+    await expect(createNodeIdentityDigestPort().hmacSha256('retained-key', bytes))
+      .rejects.toMatchObject({ code: 'identity_material_missing' });
+    expect(bytes).toEqual(original);
   });
 
   it('matches email codes across the SHA-256/HMAC-SHA256 union in one recency-ordered query', async () => {
