@@ -28,6 +28,12 @@ Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, r
   - `BRANCH.md`
   - `tools/memory-mcp-l5/artifacts/**` (generated consumed-contract inventory and retained archives only)
   - `packages/mcp-broker/package.json` (align the private P1 consumer floor with platform 0.4.1)
+  - `packages/cluster-mesh/tests/integrations/artifacts-surface.spec.ts` (explicit 17-tool inventory)
+  - `packages/cluster-mesh/tests/packaging/**` (candidate dependency closure and selected fixture refresh)
+  - `api/src/services/artifacts/reader-activation.ts` (publication-independent reader authority)
+  - `api/tests/api/artifacts-host-activation-store.test.ts`, `api/tests/api/artifacts-reader-activation.test.ts` (historical migration and concurrent activation fixtures)
+  - `.github/workflows/ci.yml` (BRAP-EX2: publish platform before its artifacts consumer)
+  - `scripts/ci/publishable-ci-wiring.test.mjs` (artifacts publisher dependency gate)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -41,6 +47,7 @@ Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, r
 
 ## Feedback Loop
 - BRAP-EX1: owner step 3 requires a regenerated immutable L5 inventory. Retain the exact prior manifest/sidecar in history; generate the new manifest, packed closure and whole lock snapshot using make. Generated lock snapshots are retained as complete data artifacts; authored code commits remain below 150 lines.
+- BRAP-EX2: owner CI repair option (b) retains platform 0.4.1 because the shared MCP codec must preserve typed D3 errors and commit outcomes. Order artifacts publication after platform; refresh the selected fixture with the existing make target and supply candidate archives to frozen consumers. Impact is bounded to packaging/CI; rollback reverts these changes together, never loosens the codec requirement.
 
 ## AI Flaky tests
 - Acceptance rule: only non-systematic provider/network/model nondeterminism as `flaky accepted`; never additive timeouts. None expected here (pure unit tests, no AI calls).
@@ -51,6 +58,12 @@ Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, r
 - Rationale: one package, one concern; no orthogonal sub-workstreams.
 
 ## Plan / Todo (lot-based)
+- [ ] **Fix CI integrate — run 41388209369**
+  - [ ] Update and verify the exact 17-name Cluster Mesh artifacts inventory.
+  - [ ] Align the selected fixture, frozen candidate installs and package publication ordering.
+  - [x] Repair the W1.a upgrade fixture and reader activation causes; retain rejection and concurrency assertions (102 targeted API tests pass).
+  - [ ] Run targeted make checks under the single Docker lock, make down, commit, push and observe pull_request CI.
+  - [ ] Append evidence under Fix CI integrate in the lane report; stop without merging.
 - [ ] **Integrate on main — owner-priority part 1**
   - [x] Verify branch mechanically, read the full lane report and binding R2 design, rebase with semantic union.
   - [x] Retain p0b source authorization, masking, management confirmation, terminal controls and all tests.
