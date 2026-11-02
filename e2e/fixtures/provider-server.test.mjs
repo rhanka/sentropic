@@ -30,6 +30,33 @@ test('should preserve streaming chunks, usage and model routing over HTTP', asyn
   assert.equal(receipt.calls, 1);
 });
 
+test('should stream the real OpenAI Responses reasoning-evaluator protocol', async t => {
+  const { url, receipt } = await fixture(t);
+  const body = { model: 'gpt-5.4-nano', stream: true, max_output_tokens: 64,
+    input: [{ type: 'message', role: 'user', content: [{ type: 'input_text',
+      text: 'Tu es un classificateur. Répondre avec EXACTEMENT UN SEUL TOKEN: none|low|medium|high|xhigh' }] }] };
+  const post = payload => fetch(`${url}/v1/responses`, { method: 'POST',
+    headers: { authorization: `Bearer ${fixtureKey}` }, body: JSON.stringify(payload) });
+  const response = await post(body);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type'), /event-stream/);
+  const events = (await response.text()).split('\n\n').filter(Boolean)
+    .map(packet => JSON.parse(packet.split('\n').find(line => line.startsWith('data: ')).slice(6)));
+  assert.equal(events.find(event => event.type === 'response.created').response.model, body.model);
+  assert.equal(events.filter(event => event.type === 'response.output_text.delta').map(event => event.delta).join(''), 'medium');
+  assert.equal(events.at(-1).type, 'response.completed');
+  assert.equal(events.at(-1).response.output[0].content[0].text, 'medium');
+  assert.equal(events.at(-1).response.usage.total_tokens, 30);
+  assert.deepEqual(receipt.requests[0], { protocol: 'responses', model: body.model, stream: true, roles: ['user'] });
+  for (const invalid of [{ ...body, input: [] }, { ...body, model: 'unexpected' },
+    { ...body, stream: false }, { ...body, tools: [{ type: 'function', name: 'unsupported' }] },
+    { ...body, input: [{ role: 'user', content: 'Unrelated journey' }] }]) {
+    assert.equal((await post(invalid)).status, 400);
+  }
+  assert.equal(receipt.calls, 1);
+  assert.equal(receipt.failedRequests, 5);
+});
+
 test('should preserve complete Unicode code points in each streamed event', async t => {
   const content = `${'a'.repeat(79)}🧪suffix`;
   const { post } = await fixture(t, () => ({ content }));
