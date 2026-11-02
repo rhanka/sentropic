@@ -110,6 +110,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Verify custody against the actual pending/delivered CM outbox tuple and erase only the acknowledged envelope on its transaction.
   - [x] Capture source connectors on the active host connection with independent owner/scope checks and exact replay comparison.
   - [x] Bind the V2 connector plane to the full owner-or-deleted-workspace union, retaining actual owners and verifying every enqueued custody reference before commit.
+  - [x] Add the CM leased delivery drain with short claim/ack/release transactions and atomic custody erasure; network delivery stays outside callbacks.
 - [ ] **Lot 2 — Author switch (r13 D11) + reader/writer cutover**
   - [ ] /auth + /session over CM custody stores (auth-hono ports backed by CM); delete registration.ts, account.ts, session-manager identity paths.
   - [x] Add real JWT custodian tests for token use, signed MFA lineage, ticket import and key disposal.
