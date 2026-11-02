@@ -18,6 +18,17 @@ const world = (strict: boolean, envelope: 1 | 2) => createTransportWorld(['alice
   { profile: profile(strict, envelope) });
 
 describe('R2 explicit profile and result switchovers', () => {
+  it('should reject a new strict delete before confirmation without losing its typed refusal', async () => {
+    const w = world(true, 2);
+    const ensured = await w.http('/ensure', { bindingName: 'page', idempotencyKey: 'ensure' });
+    if (!ensured.ok) throw new Error('ensure failed');
+    const args = { artifactId: (ensured.result.body as { artifactId: string }).artifactId, idempotencyKey: 'delete' };
+    expect(await w.mcp.invoke({ tool: 'artifacts_delete', args, invocation: w.invocation() }))
+      .toMatchObject({ status: 428, body: { error: { code: 'precondition_required' }, commitState: 'not_committed' } });
+    expect(await w.mcp.invoke({ tool: 'artifacts_delete', args, invocation: w.invocation('bob') })).toMatchObject({ status: 404 });
+    expect(w.quotaReservations).toHaveLength(1);
+  });
+
   it('should replay a v1 receipt across both switchovers before requiring a precondition', async () => {
     const w = world(false, 1);
     const ensured = await w.mcp.invoke({ tool: 'artifacts_ensure', invocation: w.invocation(),
@@ -105,6 +116,8 @@ describe('R2 explicit profile and result switchovers', () => {
       args: { ...args, confirmationRef: ref } })).toMatchObject({ status: 200, body: { terminal: true } });
     expect(await w.mcp.invoke({ tool: 'artifacts_delete', invocation: w.invocation(), args }))
       .toMatchObject({ status: 200, body: { terminal: true } });
+    expect(await w.withProfile(profile(true, 2)).handle({ method: 'POST', path: '/delete', actorId: 'alice', body: args }, w.invocation()))
+      .toMatchObject({ status: 200, body: { replayed: true, output: { terminal: true } } });
   });
 
   it('should preserve the strict refusal message and typed details over HTTP and MCP', async () => {
