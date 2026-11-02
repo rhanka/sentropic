@@ -83,6 +83,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Map account/profile, credential, single-use proof and login source fields to the r6 import records without invented history.
   - [x] Map invitations, signature-verified email continuations and social links; refuse prohibited provider secrets.
   - [x] Map tenant/workspace directories, independent memberships and OAuth tenant bindings through their frozen records.
+  - [x] Extract the locked source inventory and assemble one typed batch; refuse live federation flows and non-null social secrets.
   - [x] Require protected D11 checkpoint evidence, verify snapshot/asset digests and keep backup paths out of durable receipts.
   - [x] Add production custody-envelope regressions for absent/empty v1 configuration, AAD corruption, fresh nonce and buffer disposal.
   - [x] Borrow the unchanged v1 derived key for HKDF-separated connector custody; add authenticated envelopes with owned-buffer disposal.
