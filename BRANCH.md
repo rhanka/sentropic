@@ -249,6 +249,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] gap-§1 scenario end to end; registration → approval → login; invitation consumed once; revoke-all; mid-session suspension empties tool set; account deletion with injected failure leaves no orphan and preserves rows; migration tests; F11 e2e.
   - [ ] Rehearse migration on a fresh prod dump (existing rehearsal make target); record receipt.
 - [ ] **Lot 6 — Final validation**
+  - [x] Delete the old email verification service, including its Math.random code issuer and development proof-logging fallback; CM owns issuance and exchange.
   - [x] Preserve verification-mail branding in post-commit CM delivery and test sanitized observable delivery failure without a code-logging fallback.
   - [x] Delete the standalone email-code exchange writer and exercise the CM completion service from registration test fixtures.
   - [x] Isolate the inherited ticket signing seed for CM import/runtime and delete the unused legacy validation-token verifier.
