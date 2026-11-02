@@ -874,8 +874,8 @@ The test-only overlay redirects provider HTTP/SSE at the transport boundary,
 keeps the application image, auth, database, queue, tools and persistence,
 and requires an internal test network plus an unexpected-egress journal.
 Environment configuration alone cannot enable the production fixture guard.
-Selected chat-completion, vision and Tavily protocols have deterministic
-responses; other remote hosts fail closed. Real credentials are confined to
+Selected chat-completion, vision, Tavily and OpenAI Responses reasoning-evaluator
+protocols have deterministic responses; other remote hosts fail closed. Real credentials are confined to
 the daily workflow. Existing application assertions and E2E timeouts are
 unchanged; browser retries cannot conceal failures.
 
@@ -899,7 +899,7 @@ It checks the latest completed scheduled qualification while the next one is
 queued or running. Daily browsers execute the same six manifest shards on clean
 state, preserving every failed shard and teardown status; VSCode starts clean.
 
-Offline checks pass: 23 protocol tests, six browser-manifest tests and
+Offline checks pass: 24 protocol tests, six browser-manifest tests and
 11 live-receipt tests, plus the existing 69 CI wiring/verdict tests and two
 development-image pin guards. Provider credential headers are scrubbed, unsupported
 queries fail visibly, and SSE chunks preserve Unicode code points.
