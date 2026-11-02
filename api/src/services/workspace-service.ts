@@ -2,7 +2,7 @@ import { db } from '../db/client';
 import { workspaces, ADMIN_WORKSPACE_ID } from '../db/schema';
 import { and, desc, eq, isNull, sql } from 'drizzle-orm';
 import { logger } from '../logger';
-import { findCmUserById, listCmUsers } from './identity/cm-users';
+import { findCmUserById } from './identity/cm-users';
 import {
   enrolCmWorkspace,
   listCmWorkspaceMembershipsForUser,
@@ -19,63 +19,20 @@ export const ADMIN_WORKSPACE_NAME = 'Admin Workspace';
 /** Tenant that hosts platform-level workspaces (migrated from public.tenants). */
 export const PLATFORM_TENANT_ID = 'sentropic';
 
-export async function ensureAdminWorkspaceExists(): Promise<void> {
-  try {
-    const [ws] = await db
-      .select({ id: workspaces.id })
-      .from(workspaces)
-      .where(eq(workspaces.id, ADMIN_WORKSPACE_ID))
-      .limit(1);
-
-    if (!ws) {
-      await db.insert(workspaces).values({
-        id: ADMIN_WORKSPACE_ID,
-        name: ADMIN_WORKSPACE_NAME,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-    }
-    await enrolCmWorkspace({ workspaceId: ADMIN_WORKSPACE_ID, tenantId: PLATFORM_TENANT_ID });
-  } catch (error) {
-    logger.error({ err: error }, 'Failed to ensure admin workspace exists');
-    throw error;
-  }
-}
-
-/**
- * Try to assign the Admin Workspace to the current admin_app user (if any).
- * Ownership is now a CM workspace membership (role 'admin'); idempotent.
- */
-export async function claimAdminWorkspaceOwner(): Promise<void> {
-  try {
-    const admins = (await listCmUsers()).filter((u) => u.role === 'admin_app');
-    const admin = admins[0];
-    if (!admin) return;
-
-    await putCmWorkspaceMember(ADMIN_WORKSPACE_ID, admin.id, 'admin');
-  } catch (error) {
-    logger.error({ err: error }, 'Failed to claim admin workspace owner');
-    // non-critical
-  }
-}
-
 export async function ensureWorkspaceForUser(
   userId: string,
   options?: { createIfMissing?: boolean }
 ): Promise<{ workspaceId: string | null }> {
   const createIfMissing = options?.createIfMissing !== false;
-  await ensureAdminWorkspaceExists();
 
   const user = await findCmUserById(userId);
 
-  if (user?.role === 'admin_app') {
-    await claimAdminWorkspaceOwner();
-    await putCmWorkspaceMember(ADMIN_WORKSPACE_ID, userId, 'admin');
+  const memberships = await listCmWorkspaceMembershipsForUser(userId);
+  if (user?.role === 'admin_app' && memberships.some(row => row.workspaceId === ADMIN_WORKSPACE_ID && row.role === 'admin')) {
     return { workspaceId: ADMIN_WORKSPACE_ID };
   }
 
   // Prefer the most recently created non-hidden workspace the user is a member of.
-  const memberships = await listCmWorkspaceMembershipsForUser(userId);
   if (memberships.length > 0) {
     const ids = memberships.map((m) => m.workspaceId);
     const [active] = await db
