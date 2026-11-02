@@ -79,6 +79,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] Control migration 0014: CM identity schema + id-preserving copy of users/proofs/invitations/login sessions/tenants/memberships/workspaces + rollback checkpoint row; journal integrity test passes.
   - [ ] Migration tests (both directions of the copy, id preservation, counts).
   - [x] Add isolated PostgreSQL cutover tests for checkpoint retention, rollback and OAuth invalidation.
+  - [x] Add import mapping regressions for expired approval, null email, terminal proofs, credential counters and login lineage.
 - [ ] **Lot 2 — Author switch (r13 D11) + reader/writer cutover**
   - [ ] /auth + /session over CM custody stores (auth-hono ports backed by CM); delete registration.ts, account.ts, session-manager identity paths.
   - [x] Add real JWT custodian tests for token use, signed MFA lineage, ticket import and key disposal.
