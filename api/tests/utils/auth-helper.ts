@@ -4,10 +4,10 @@ import { createSession } from '../../src/services/session-manager';
 import { withAppCmAuth } from '../../src/services/identity/cm-auth-runtime';
 import { createCmUser } from '../../src/services/identity/cm-users';
 import { createCmCredential, createCmEmailCode, sha256Hex } from '../../src/services/identity/cm-proofs';
-import { enrolCmWorkspace, putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
+import { enrolCmWorkspace, putCmWorkspaceMember, setCmMembershipState } from '../../src/services/identity/cm-tenancy';
 import { PLATFORM_TENANT_ID } from '../../src/services/workspace-service';
 import { getWebAuthnConfig } from '../../src/services/webauthn-config';
-import { cmDeleteForEmails, cmDeleteForUsers } from './cm-identity-test-store';
+import { cmDeleteForEmails, cmDeleteForUsers, cmQuery, cmTable } from './cm-identity-test-store';
 import { createSyntheticPasskey } from './synthetic-passkey';
 
 /**
@@ -137,10 +137,19 @@ export async function createTestUser(options: {
   let sessionToken: string | undefined;
   let workspaceId: string | null = null;
 
+  if (withWorkspace) {
+    // Explicit synthetic fixture approval; production registration grants no tenant membership.
+    await cmQuery(`INSERT INTO ${cmTable('cm_tenants')} (tenant_id, slug, status, created_at)
+      VALUES ($1, $1, 'active', $2) ON CONFLICT (tenant_id) DO NOTHING`, [PLATFORM_TENANT_ID, new Date().toISOString()]);
+    await setCmMembershipState(userId, PLATFORM_TENANT_ID, {
+      status: 'approved', role: role === 'admin_app' ? 'admin' : 'member', decidedBy: userId,
+    });
+  }
   if (withWorkspace && role !== 'admin_app') {
     workspaceId = crypto.randomUUID();
     await db.insert(workspaces).values({
       id: workspaceId,
+      ownerUserId: userId,
       name: `Test Workspace ${workspaceId.slice(0, 6)}`,
       createdAt: new Date(),
       updatedAt: new Date(),
@@ -151,8 +160,13 @@ export async function createTestUser(options: {
       userId,
       role === 'guest' ? 'viewer' : role === 'editor' ? 'editor' : 'admin',
     );
-  } else if (role === 'admin_app') {
+  } else if (withWorkspace && role === 'admin_app') {
     workspaceId = ADMIN_WORKSPACE_ID;
+    await db.insert(workspaces).values({ id: workspaceId, name: 'Admin Workspace', type: 'neutral' }).onConflictDoNothing();
+    await cmQuery(`INSERT INTO ${cmTable('cm_workspaces')} (workspace_id, tenant_id, repo_identity, aliases, enrolled_at)
+      VALUES ($1, $2, NULL, '[]', $3) ON CONFLICT (workspace_id) DO NOTHING`,
+    [workspaceId, PLATFORM_TENANT_ID, new Date().toISOString()]);
+    await putCmWorkspaceMember(workspaceId, userId, 'admin');
   }
 
   // Create session if requested
