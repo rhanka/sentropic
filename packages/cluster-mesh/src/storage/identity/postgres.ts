@@ -29,6 +29,8 @@ const isSerializationFailure = (error: unknown): boolean => {
 };
 
 export interface PostgresIdentityOptions {
+  /** Active transaction composition: bypass standalone DDL and transactions. */
+  readonly boundSession?: PgSession;
   readonly driver: InjectedPgDriver;
   /** PostgreSQL schema the identity tables live in (hosted control schema). */
   readonly schema: string;
@@ -63,6 +65,7 @@ class PostgresSlice {
   protected readonly table = (name: IdentityTableName): string => identityTable('postgres', this.options.schema, name);
 
   protected readonly run = async <T>(readOnly: boolean, operation: (session: PgSession) => Promise<T>): Promise<T> => {
+    if (this.options.boundSession) return operation(this.options.boundSession);
     const { driver, deadlineMs = IDENTITY_TX_DEADLINE_MS } = this.options;
     const attempt = async (remaining: number): Promise<T> => {
       try {
