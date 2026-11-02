@@ -2,10 +2,13 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { sql } from 'drizzle-orm';
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { pool } from './client';
 import { installArtifactPackageAssets } from '../services/artifacts/host-storage';
 import { env } from '../config/env';
+import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
+import { A4_CONTROL_MIGRATION_TIMESTAMP, loadAppCmCutoverConfiguration } from '../services/identity/cm-cutover-config';
+import { importAppCmIdentityInTransaction } from '../services/identity/cm-cutover-import';
 
 /**
  * Heal drifted databases where migration metadata is ahead of the actual settings schema.
@@ -60,10 +63,20 @@ async function reconcileSettingsUserScopeSchema(db: NodePgDatabase): Promise<voi
  * Applied AFTER the public migration stream to respect boot ordering.
  * The `CREATE SCHEMA IF NOT EXISTS control` is the very first control migration.
  */
-export async function runControlMigrations(db: NodePgDatabase, migrationsFolder = './drizzle/control'): Promise<void> {
+export async function runControlMigrations(db: NodePgDatabase, migrationsFolder = './drizzle/control', migrationClient?: PoolClient): Promise<void> {
   const migrations = readMigrationFiles({ migrationsFolder });
+  const journalBefore = await db.execute(sql`SELECT to_regclass('public.__drizzle_control_migrations') AS relation`);
+  const appliedBefore = journalBefore.rows[0].relation === null ? [] : (await db.execute(
+    sql`SELECT created_at FROM public.__drizzle_control_migrations WHERE created_at = ${A4_CONTROL_MIGRATION_TIMESTAMP}`)).rows;
+  const needsIdentityImport = migrations.some(migration => migration.folderMillis === A4_CONTROL_MIGRATION_TIMESTAMP)
+    && appliedBefore.length === 0;
+  if (needsIdentityImport && !migrationClient) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+  // Files, keys and immutable policy are loaded before a transaction/store handle exists.
+  const identityConfig = needsIdentityImport ? await loadAppCmCutoverConfiguration() : undefined;
+  try {
   // Reserved branches can arrive in either order. A timestamp frontier alone loses earlier slots.
   await db.transaction(async (tx) => {
+    await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext('sentropic:control-migrations'))`);
     const journal = await tx.execute(sql`SELECT to_regclass('public.__drizzle_control_migrations') AS relation`);
     if (journal.rows[0].relation === null) {
       await tx.execute(sql`CREATE TABLE public.__drizzle_control_migrations (
@@ -77,11 +90,22 @@ export async function runControlMigrations(db: NodePgDatabase, migrationsFolder 
         if (hash !== migration.hash) throw new Error(`Control migration journal hash mismatch: ${migration.folderMillis}`);
         continue;
       }
+      if (migration.folderMillis === A4_CONTROL_MIGRATION_TIMESTAMP) {
+        if (!migrationClient || !identityConfig) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+        const bound = await tx.execute(sql`SELECT pg_backend_pid() AS pid, txid_current()::text AS xid`);
+        const host = await migrationClient.query('SELECT pg_backend_pid() AS pid, txid_current()::text AS xid');
+        if (bound.rows[0].pid !== host.rows[0].pid || bound.rows[0].xid !== host.rows[0].xid) {
+          throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+        }
+        // Drizzle's transaction and the CM binding use this same connection and rollback boundary.
+        await importAppCmIdentityInTransaction(migrationClient, identityConfig);
+      }
       for (const statement of migration.sql) await tx.execute(sql.raw(statement));
       await tx.execute(sql`INSERT INTO public.__drizzle_control_migrations (hash, created_at)
         VALUES (${migration.hash}, ${migration.folderMillis})`);
     }
-  });
+  }, { isolationLevel: 'serializable', accessMode: 'read write' });
+  } finally { identityConfig?.dispose(); }
 }
 
 /**
@@ -104,7 +128,7 @@ export async function runMigrations(migrationPool: Pool = pool): Promise<void> {
     // Lot A4: control migration 0014 reads the WebAuthn RP ID from this GUC when
     // copying legacy webauthn_credentials/challenges into cm_identity.
     await client.query(`SELECT set_config('app.webauthn_rp_id', $1, false)`, [env.WEBAUTHN_RP_ID || 'localhost']);
-    await runControlMigrations(db);
+    await runControlMigrations(db, './drizzle/control', client);
     await installArtifactPackageAssets(client);
   } catch (error) {
     migrationFailure = error instanceof Error ? error : new Error(String(error));
