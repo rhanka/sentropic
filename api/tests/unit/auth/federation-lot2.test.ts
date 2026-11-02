@@ -361,6 +361,7 @@ describe('BR-39e Lot 2 — GitHub federation keystones', () => {
       providerSubject: 'gh-new',
       providerTenant: null,
       verifiedEmail: 'proven@example.com',
+      verificationToken: 'test-ticket', expiresAt: new Date(NOW.getTime() + 60_000).toISOString(),
     });
 
     expect(res.kind).toBe('authenticated');
@@ -383,6 +384,7 @@ describe('BR-39e Lot 2 — GitHub federation keystones', () => {
       providerSubject: 'gh-collide',
       providerTenant: null,
       verifiedEmail: 'taken@example.com',
+      verificationToken: 'test-ticket', expiresAt: new Date(NOW.getTime() + 60_000).toISOString(),
     });
 
     expect(res).toMatchObject({ kind: 'error', status: 409 });
