@@ -1,4 +1,4 @@
-import { createSentropicOAuthHostPorts, getSentropicOAuthPorts, resolveSessionTokenSecret } from '../../routes/auth/oauth';
+import { createSentropicOAuthHostPorts, createSentropicOAuthStateCodec, getSentropicOAuthPorts, resolveSessionTokenSecret } from '../../routes/auth/oauth';
 import { env } from '../../config/env';
 import { resolveEmailVerificationTokenSecret } from '../email-verification';
 import { getWebAuthnConfig } from '../webauthn-config';
@@ -30,6 +30,7 @@ export async function withAppCmAuth<T>(operation: (runner: ReturnType<typeof cre
       },
       emailCodeKeys: codePolicy.policy,
       magicLinkBaseUrl: env.AUTH_CALLBACK_BASE_URL || 'http://localhost:5173',
+      registrationContinuation: createSentropicOAuthStateCodec(),
       business: {
         afterUserCreated: (user, tx) => provisionCmAuthWorkspace(user.id, tx),
         provisionWorkspace: provisionCmAuthWorkspace,

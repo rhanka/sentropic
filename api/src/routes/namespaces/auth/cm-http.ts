@@ -62,10 +62,11 @@ const rollbackResponse = (response: StagedResponse): StagedResponse => {
 /** Execute an unchanged handler on a private context; publish only a committed copy. */
 export async function runCmAuthHttp(c: Context, flow: IdentityAuthCompletionFlowV1 | null,
   router: (binding: IdentityAuthHonoTransactionBindingV1, tx: CmIdentityTransaction) => Hono,
-  presentation?: CmRegistrationPresentation): Promise<Response> {
+  presentation?: CmRegistrationPresentation | ((body: ArrayBuffer | undefined) => CmRegistrationPresentation | undefined)): Promise<Response> {
   const request = c.req.raw;
   try {
     const body = await captureBody(request);
+    const registration = typeof presentation === 'function' ? presentation(body) : presentation;
     return await withAppCmAuth(async runner => {
       const work = async (binding: IdentityAuthHonoTransactionBindingV1, tx: CmIdentityTransaction): Promise<StagedResponse> => {
         // Each retry gets fresh headers/context/body. No failed-attempt cookie survives.
@@ -81,7 +82,7 @@ export async function runCmAuthHttp(c: Context, flow: IdentityAuthCompletionFlow
         if (copy.status >= 500 || (flow !== null && copy.status >= 400)) throw new HttpRefusal(rollbackResponse(copy));
         return copy;
       };
-      const trusted = presentation ? (tx: CmIdentityTransaction) => runner.registrationContext(presentation, tx) : null;
+      const trusted = registration ? (tx: CmIdentityTransaction) => runner.registrationContext(registration, tx) : null;
       if (flow === null) return publish(await runner.request(work, trusted));
       const outcome = await runner.complete(flow, work, trusted);
       return outcome.committed ? publish(outcome.value) : refusalResponse(outcome.refusal);

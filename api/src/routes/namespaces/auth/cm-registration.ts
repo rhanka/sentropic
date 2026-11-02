@@ -94,14 +94,19 @@ function handlersFor(binding: IdentityAuthHonoTransactionBindingV1, tx: CmIdenti
 }
 
 async function dispatch(c: Context, optionsOnly: boolean): Promise<Response> {
-  const input = await c.req.raw.clone().json().catch(() => null);
-  const presentation = input && typeof input.email === 'string' &&
-    (input.verificationToken === undefined || typeof input.verificationToken === 'string')
-    ? { email: input.email, verificationToken: input.verificationToken } : undefined;
   return runCmAuthHttp(c, optionsOnly ? null : 'registration', (binding, tx) => {
     const handlers = handlersFor(binding, tx);
     return new Hono().all('*', optionsOnly ? handlers.createPasskeyRegistrationOptions! : handlers.verifyPasskeyRegistration!);
-  }, presentation);
+  }, bytes => {
+    let input: unknown;
+    try { input = JSON.parse(new TextDecoder().decode(bytes)); } catch { return undefined; }
+    if (!input || typeof input !== 'object' || !('email' in input) || typeof input.email !== 'string') return undefined;
+    const verificationToken = 'verificationToken' in input ? input.verificationToken : undefined;
+    const oauthContinuation = 'oauthContinuation' in input ? input.oauthContinuation : undefined;
+    if ((verificationToken !== undefined && typeof verificationToken !== 'string') ||
+      (oauthContinuation !== undefined && typeof oauthContinuation !== 'string')) return undefined;
+    return { email: input.email, verificationToken, oauthContinuation };
+  });
 }
 export const cmRegisterHandlers: AuthHonoRouteHandlers = {
   createPasskeyRegistrationOptions: c => dispatch(c, true), verifyPasskeyRegistration: c => dispatch(c, false),
