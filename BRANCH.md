@@ -119,6 +119,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - No UI changes in this lot; no UAT.
 
 ## Plan / Todo (lot-based)
+- [x] Review r1: reuse the real parent seeder for proof/invitation consumption prerequisites.
 - [x] Review r1: resolve compiler and fixture failures without weakening exact error assertions or FK enforcement.
 - [x] Review r1: descriptors match the eleven normative domains, record/port order and factory lists.
 - [x] Review r1: migrate low-level encrypted custody fixtures and narrow imported discriminated records.

@@ -23,7 +23,7 @@ import {
 import { createAtomicPersonDeletionV2 } from '../../src/index.js';
 import { createIdentityCustodyImporterV1 } from '../../src/index.js';
 import { hashPresentedTokenV1 } from '../../src/index.js';
-import { fixtureDeletionDependencies, asOpHost, createFixtureBusiness, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, randomBase64Url, sha256Hex, syntheticCoseKey, type FixtureBusinessState } from './a20b-helpers.js';
+import { fixtureDeletionDependencies, seedCustodyParents, asOpHost, createFixtureBusiness, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, randomBase64Url, sha256Hex, syntheticCoseKey, type FixtureBusinessState } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 
 const WRITE = { mode: 'write' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 };
@@ -133,7 +133,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b prerequisites on 
       tx.hostTransaction.stores.singleUseProofs.findChallenge(challenge.kind === 'webauthn_challenge' ? challenge.challenge : '', 'registration'));
     expect(found?.proofId).toBe('registration-challenge');
     expect(found?.userId).toBeNull();
-    await first.unitOfWork.run(WRITE, (tx) => seedAccount(tx.hostTransaction, 'marie', 'active'));
+    await seedCustodyParents(first.unitOfWork, ['marie']);
     const consumed = await first.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.singleUseProofs.consume({
         key: { kind: 'webauthn_challenge', proofId: 'registration-challenge' },
@@ -170,7 +170,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b prerequisites on 
     const stored = await first.unitOfWork.run({ mode: 'read', purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 }, (tx) => tx.hostTransaction.stores.invitations.findByDigest(invitation.tokenHash));
     expect(stored?.status).toBe('pending');
     expect(JSON.stringify(stored)).not.toContain('sit_original-token-value');
-    await first.unitOfWork.run(WRITE, (tx) => seedAccount(tx.hostTransaction, 'marie', 'active'));
+    await seedCustodyParents(first.unitOfWork, ['marie']);
     const digest = hashPresentedTokenV1('sit_original-token-value');
     expect(digest).toBe(invitation.tokenHash);
     const consumed = await first.unitOfWork.run(WRITE, (tx) =>
