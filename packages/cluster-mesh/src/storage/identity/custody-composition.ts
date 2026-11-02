@@ -9,6 +9,7 @@ import { createSqliteIdentityStores } from '../../identity-stores/tenancy-sqlite
 import { createIdentityEnforcementPostgresStores } from '../../identity/postgres.js';
 import { createIdentityEnforcementSqliteStores } from '../../identity/sqlite.js';
 import { transactionOperationPorts } from './custody-transaction-ports.js';
+import { registerIdentityTransaction } from './custody-transaction-guards.js';
 
 export const composeIdentityTransaction = <H extends CustodyOpHost>(input: {
   readonly host: H; readonly transactionId: string; readonly readOnly: boolean;
@@ -29,9 +30,9 @@ export const composeIdentityTransaction = <H extends CustodyOpHost>(input: {
   const enforcement = host.profile === 'postgres'
     ? createIdentityEnforcementPostgresStores({ driver, schema })
     : createIdentityEnforcementSqliteStores({ db: connection, transactionBound: true });
-  return {
+  return registerIdentityTransaction({
     profile: host.profile, transactionId: input.transactionId, mode: input.readOnly ? 'read' : 'write',
     hostTransaction: host, stores: { ...core, ...tenancy, audit: enforcement.ledger },
     custody: host.stores, ...enforcement, ...sqlPorts,
-  };
+  }, check);
 };

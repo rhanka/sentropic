@@ -11,3 +11,4 @@ export * from './postgres.js';
 export * from './sqlite.js';
 export * from './custody-crypto.js';
 export * from './connector-custody.js';
+export * from './auth-completion.js';

@@ -3,6 +3,17 @@ import type { IdentityRunOptionsV1 } from '../../identity-contracts/custody.js';
 import type { PgSession } from '../postgres/protocol.js';
 import type { SqliteConnection } from '../sqlite/connection.js';
 
+const activeTransactions = new WeakMap<object, (write?: boolean) => void>();
+export const registerIdentityTransaction = <T extends object>(tx: T, check: (write?: boolean) => void): T => {
+  activeTransactions.set(tx, check);
+  return tx;
+};
+export const assertIdentityTransactionActive = (tx: object, write = false): void => {
+  const check = activeTransactions.get(tx);
+  if (!check) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+  check(write);
+};
+
 export const requireIdentityRunOptions = (options: IdentityRunOptionsV1): void => {
   if (!['read', 'write'].includes(options.mode) || !['request', 'import', 'delete', 'delivery'].includes(options.purpose)) {
     throw new IdentityCustodyErrorV1('identity_transaction_unbound');
