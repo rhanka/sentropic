@@ -21,13 +21,19 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - `ui/src/**`
   - `ui/tests/**`
   - `e2e/tests/**`
+  - `packages/cluster-mesh/ui/**`
+  - `packages/cluster-mesh/tests/ui/**`
+  - `packages/cluster-mesh/package.json`
+  - `ui/package.json` + `ui/package-lock.json`
+  - `package-lock.json`
   - `BRANCH.md`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
   - `plan/NN-BRANCH_*.md` (except this branch file)
-  - `packages/**` (A2.0b owns cluster-mesh; contract gaps are stack dependencies)
+  - `packages/cluster-mesh/src/**` (A2.0b owns backend contracts/implementation; gaps remain stack dependencies)
+  - `packages/cluster-mesh/tests/identity/**`
   - `.github/workflows/**`
   - `spec/**`
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
@@ -38,6 +44,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] BRxx-EX1 — Approved r2 F11 requires CM-owned screens. Allow only `packages/cluster-mesh/ui/**`, `tests/ui/**`, its browser exports/optional peer metadata, and root/UI lock/dependency entries needed to mount them. Backend CM source/tests stay excluded. Impact: one shared screen behavior across root projections; publication/version validation is required after rebase. Rollback: revert the UI projection/package commits together before activation; no data or A2.0b branch changes.
 - [ ] A4-STACK — A2.0b owner: supply the approved r6 combined UOW (`run`, `tx.stores`, `tx.custody`, subject lifecycle), auth-hono binding/runner, importer verifier and V2 planes before app qualification; A4 does not implement these CM APIs.
 - [ ] A4-QK — Deployment custodian: record the explicit email-code protection choice before the author switch; no secret or default choice is inferred.
 - [x] A4-OWNERSHIP — r6 §5.3 requires business-authorized ownership. Preserve `public.workspaces.owner_user_id` solely for destruction policy; CM owns membership/tenant access. Membership never substitutes for ownership. Rollback uses the recorded source checkpoint.
