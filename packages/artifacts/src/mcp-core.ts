@@ -45,8 +45,10 @@ export function createArtifactsManifest(options: ArtifactsManifestOptions): Arti
     resources: [], prompts: [],
     tools: ARTIFACTS_TOOL_SPECS.filter((spec) => profile.selectedCapabilities.includes(spec.name)).map((spec) => ({
       kind: 'tool', name: spec.name,
-      description: spec.description,
-      inputSchema: profile.schemas[spec.name]!, outputSchema: ARTIFACT_RESULT_SCHEMA,
+      description: spec.description + (profile.profileRevisionId
+        ? ` Active profile: ${profile.profileRevisionId}; resultEnvelopeVersion: ${profile.resultEnvelopeVersion}.` : ''),
+      inputSchema: profile.schemas[spec.name]!, outputSchema: profile.resultEnvelopeVersion === 2
+        ? ARTIFACT_RESULT_SCHEMA : { type: 'object', additionalProperties: true },
       requiredScopes: [...scopes], requiredClaims: [], redactionClass: 'low',
       mutability: spec.mutability, mutatesExternalSystem: spec.mutability !== 'read-only',
       idempotency: profile.idempotency[spec.name] ?? { required: false },
@@ -69,7 +71,8 @@ function rejected(cause: unknown, invocationId: string, operation: string,
   mapHostError?: ArtifactHostFailureMapper): ArtifactOutcome<HttpResponse> {
   return { ok: false, failure: classifyArtifactFailure(cause, { invocationId, operation,
     phase: cause instanceof ArtifactProfileInputError ? cause.phase : 'entry', commitState: 'not_committed' },
-  (error) => error instanceof ArtifactProfileInputError ? new ArtifactOperationError(error.category) : mapHostError?.(error)) };
+  (error) => error instanceof ArtifactProfileInputError
+    ? new ArtifactOperationError(error.category, { publicDetails: error.details }) : mapHostError?.(error)) };
 }
 
 export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: CompiledArtifactsProfile;
@@ -82,7 +85,7 @@ export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: 
   }
   async function execute(input: ArtifactsInvokeInput): Promise<ArtifactOutcome<HttpResponse>> {
     try {
-      const args = profile.validate(input.tool, input.args, input.idempotencyKey);
+      const args = profile.validate(input.tool, input.args, input.idempotencyKey, { deferPrecondition: true });
       let request: Pick<HttpRequest, 'method' | 'path' | 'body'>;
       switch (input.tool) {
         case 'artifacts_ensure': request = { method: 'POST', path: '/ensure', body: args }; break;
@@ -101,7 +104,7 @@ export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: 
     } catch (cause) { return rejected(cause, input.invocation?.invocationId ?? '', input.tool, deps.mapHostError); }
   }
   return { execute, async invoke(input: ArtifactsInvokeInput): Promise<HttpResponse> {
-    return projectArtifactHttpOutcome(await execute(input));
+    return projectArtifactHttpOutcome(await execute(input), profile.resultEnvelopeVersion === 2);
   } };
 }
 
@@ -126,13 +129,13 @@ export function createArtifactsAdapter(options: ArtifactsAdapterOptions): AppCon
       let outcome: ArtifactOutcome<HttpResponse>;
       try {
         // Selection and closed input checks precede even the host invocation binding.
-        options.profile.validate(request.capabilityRef, request.input, request.idempotencyKey);
+        options.profile.validate(request.capabilityRef, request.input, request.idempotencyKey, { deferPrecondition: true });
         const invocation = await options.createInvocation(request);
         if (invocation.actorId !== request.ctx.principal.sub) throw new ArtifactProfileInputError();
         outcome = await executor.execute({ tool: request.capabilityRef, args: request.input,
           invocation, idempotencyKey: request.idempotencyKey });
       } catch (cause) { outcome = rejected(cause, request.ctx.requestId, request.capabilityRef, options.mapHostError); }
-      return projectArtifactMcpOutcome(outcome, request.ctx.auditId);
+      return projectArtifactMcpOutcome(outcome, request.ctx.auditId, options.profile.resultEnvelopeVersion ?? 1);
     },
     readResource: async (request) => ({ ok: false, auditId: request.ctx.auditId, redactionClass: 'low',
       error: { code: 'not_found', message: 'not_found', retriable: false } }),

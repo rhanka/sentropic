@@ -47,6 +47,7 @@ export async function manageArtifact(deps: {
   readPolicyRevision(): Promise<string>;
   isApprovedPrincipal(principalId: string): boolean | Promise<boolean>;
   confirmation?: ArtifactConfirmationPort;
+  validateNewCommand?(): void;
 }, invocation: ArtifactInvocationContext, command: EffectiveArtifactCommand, proof?: string): Promise<ArtifactOutcome<unknown>> {
   const artifactId = command.payload.artifactId as string;
   const deleting = command.operation === 'delete';
@@ -73,8 +74,11 @@ export async function manageArtifact(deps: {
     provisional: async (client) => {
       const target = await owned();
       if (target.terminal || target.state === 'deleted' || target.state === 'purged') throw refused('gone');
+      deps.validateNewCommand?.();
       const now = new Date().toISOString();
       if (deleting) {
+        // Bind omitted v1 input to the locked confirmation context, without rewriting the command.
+        if (!Object.hasOwn(command.payload, 'expectedCurrentReleaseId')) context.expectedCurrentReleaseId = target.currentReleaseId;
         if (target.currentReleaseId !== context.expectedCurrentReleaseId) {
           if (proof) throw confirmationFailure('confirmation_stale');
           throw new ArtifactOperationError('pointer_conflict');
