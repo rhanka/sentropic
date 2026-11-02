@@ -258,6 +258,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Delete the replaced app member list/add/role/remove behavior and selection watcher; only the CM screen owns those interactions.
   - [ ] Login, registration, admin, membership decision, members screens; e2e on ENV=e2e-app-a4.
 - [ ] **Lot 5 — Tests**
+  - [x] Add real CM mid-conversation membership/account suspension coverage requiring an empty full tool set, including local tools; preserve the separate conversation lifetime after revoke-all.
   - [x] Add a real Chromium virtual-authenticator and Maildev registration fixture for F11 qualification, without logging proof material or stubbing identity services.
   - [x] Add F11/gap browser acceptance for independent approvals, members, live-session suspension, revoke-all and a fresh passkey login; execution remains pending the qualified stack.
   - [ ] gap-§1 scenario end to end; registration → approval → login; invitation consumed once; revoke-all; mid-session suspension empties tool set; account deletion with injected failure leaves no orphan and preserves rows; migration tests; F11 e2e.
