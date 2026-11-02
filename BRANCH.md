@@ -51,7 +51,7 @@
   - [x] Locate existing pinned Node test lane and shared Docker lock; preserve production admission off.
 - [ ] **Lot 1 — Strict material contracts**
   - [x] Write negative controls first in `scripts/security/daily/scanner-provenance.test.mjs`.
-  - [ ] Validate exact source/tool/base/module/package/patch pins and retained material bytes under `scripts/security/scanner/`.
+  - [x] Validate exact source/tool/base/module/package/patch pins and retained material bytes under `scripts/security/scanner/`.
   - [ ] Reject current pending recipe and material pins; accept a complete synthetic contract only.
 - [ ] **Lot 2 — Receipt and artifact contracts**
   - [x] Define a synthetic three-receipt tuple with measured fixture outputs; it supplies no platform authority.
