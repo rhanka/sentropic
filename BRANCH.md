@@ -119,6 +119,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - No UI changes in this lot; no UAT.
 
 ## Plan / Todo (lot-based)
+- [x] Review r1: bind signed-session eligibility/rotation and ordinary revocation enqueue to the current transaction.
 - [x] Review r1: bind tagged email-code issue/exchange and ticket registration consumption to one transaction.
 - [x] Review r1: real service proof ports preserve challenge policy, binding and one-use snapshots.
 - [x] Review r1: credential adapter keeps attempt-local snapshots and applies exact counter CAS under the subject lock.
