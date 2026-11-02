@@ -35,6 +35,8 @@ function guardedFixture(finalize: (request: FinalizeRequest) => Promise<Finalize
     coordinator: { finalizePrepared: finalize, replayPrepared: finalize }, refs, blobs,
     intents: createMemoryIntentStore(),
     createUnitWriter: () => ({
+      lockCurrent: async () => ({ currentReleaseId: null, currentDigest: null }),
+      updateMetadata: async (_id, metadata) => metadata,
       readAuthorization: async () => ({ state: 'active', acl: { ownerId: 'owner-1', grants: [], isPublic: false, withdrawn: false } }),
       putSource: async () => {},
       putRelease: async () => {}, registerBlob: async () => {},
