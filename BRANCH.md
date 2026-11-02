@@ -58,6 +58,7 @@
 - [x] **Lot 0 — Scope and baseline**
   - [x] Read the approved A02/R1 contract, template, rules and available source evidence; create the stacked worktree and pass the mechanical branch check.
 - [ ] **Lot 1 — Tests before implementation**
+  - [x] Write a mandatory native replay test before its executor: actual retained sources, fresh caches, no network, patched positive and OS-only negative; it cannot skip without materials.
   - [x] Write dependency-resolution checksum, OS-only, replacement and clean offline-environment tests before implementing the replay helper.
   - [x] Write retained-acquisition tests before implementation: exact inventory, hash/size limits, no partial publication, offline recheck, mutation/missing/extra/symlink refusal.
   - [x] Write the collected ordered-patch, source/patch/checksum mutation and OS-only source negative controls before their implementation.
