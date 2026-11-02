@@ -70,7 +70,7 @@
 - [ ] **Lot 2 — Exact source, patch and material implementation**
   - [x] Ordered data-only patches with exact input/output checksums exist under `scripts/security/scanner/patches/`.
   - [x] Resolved and measured the actual pins (upstream archive/authentication/license, Go compiler/go.mod/go.sum/module proxy, base index/manifest/config/layer, APK index/packages, tools, Actions); `recipe.json` and `material-manifest.json` carry no prose pin or pending digest (recipeDigest `sha256:c857dc4b...`, 3138 materials, 10 origins).
-  - [ ] Assemble the retained material directory and implement `native-replay.mjs`: offline replay of the patched source resolves go-jose v4.1.6; the OS-only source still exposes v4.1.5 and is rejected.
+  - [x] Assembled the retained material directory (3138 files, 1,071,738,643 bytes, outside the repo) and implemented `native-replay.mjs`: offline replay of the patched source resolves go-jose v4.1.6; the OS-only source still exposes v4.1.5 and is rejected. Native gate passed under `--network=none` (1 test, 0 fail, 431s).
 - [ ] **Lot 3 — Gates, ready PR and report**
   - [ ] Run `make test-security-daily ENV=test-cyber-adm` under the single lock, then the native offline replay with `SCANNER_MATERIALS`, then `make down ENV=test-cyber-adm`.
   - [ ] `make scope-check` before every commit; atomic `make commit` under 150 lines; push after every commit.
