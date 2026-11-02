@@ -133,6 +133,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Remove the standalone federation identity writer and unsafe conflict translation; root federation ports retain only transient protocol flow storage.
   - [x] Delete obsolete federation conflict helpers and root OAuth session/ticket signing and verification; only the CM binding supplies those capabilities.
   - [x] Delete root OAuth user/profile/proof adapters; request-bound CM adapters are the sole authentication readers and writers.
+  - [x] Remove the duplicated root login eligibility/role algorithm; preserve protocol-only federation transport tests with an explicit completion mock.
   - [x] Add real JWT custodian tests for token use, signed MFA lineage, ticket import and key disposal.
   - [x] Implement the host token/digest adapter against the approved r6 signer/verifier contracts.
   - [x] Add the r6 per-attempt auth binding/runner with callback-owned audit drain and post-commit mail publication.
