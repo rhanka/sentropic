@@ -43,7 +43,7 @@ export const authFederationPort = <H>(input: IdentityAuthBindingInput<H>, check:
       if (!row) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
       await tx.lockSubject(row.userId);
       try { await tx.custody.social.touchLogin(id, row.revision, at.toISOString()); }
-      catch (error) { if (error instanceof IdentityCustodyErrorV1 && error.code === 'identity_record_conflict') throw new IdentitySocialRaceRetrySignal('identity_record_conflict'); throw error; }
+      catch (error) { if (error instanceof IdentityCustodyErrorV1 && error.code === 'proof_state_conflict') throw new IdentitySocialRaceRetrySignal('identity_record_conflict'); throw error; }
       snapshots.set(id, { ...row, revision: row.revision + 1, lastLoginAt: at.toISOString() });
       subjects.set(JSON.stringify([row.provider, row.providerSubject]), snapshots.get(id)!);
     },

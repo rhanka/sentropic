@@ -65,7 +65,7 @@ export const authEmailService = <H>(input: IdentityAuthBindingInput<H>, evidence
         }
         const ticket = await tx.custody.emailTickets.findByTokenHash(await hash(token));
         if (!ticket || ticket.state !== 'pending' || ticket.expiresAt <= now.toISOString() || claims.codeProofId !== ticket.codeProofId
-          || claims.email !== email.trim().toLowerCase() || ticket.email !== claims.email) refuseWebAuthn('registration', 'registration_verification_failed', 'Registration verification failed.', 400);
+          || claims.email !== email.trim().toLowerCase() || ticket.email !== claims.email) return refuseWebAuthn('registration', 'registration_verification_failed', 'Registration verification failed.', 400);
         tickets.set(ticket.email, ticket); evidence.add(ticket.email); return true;
       } finally { bytes.fill(0); }
     },
