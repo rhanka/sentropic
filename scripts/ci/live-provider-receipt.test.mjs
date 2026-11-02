@@ -1,7 +1,8 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { liveReceipt, scheduleHealth, qualifiedMain, receiptFromDirectory, readAllPages, readPages, fixtureReceipt } from './live-provider-receipt.mjs';
-import { mkdtempSync, rmSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, rmSync, mkdirSync, writeFileSync, readFileSync, realpathSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 
 const sourceSha = 'a'.repeat(40);
 const tuple = { sourceSha, api: { id: `sha256:${'b'.repeat(64)}` }, ui: { id: `sha256:${'c'.repeat(64)}` },
@@ -115,4 +116,43 @@ test('should search later workflow pages and stop fetching after the selected ru
   }, 'workflow_runs')) if (row.id === 150) { selected = row.id; break; }
   assert.equal(selected, 150);
   assert.deepEqual(pages, [1, 2]);
+});
+
+test('should qualify all six browser shards on fresh state and retain any failed shard', () => {
+  mkdirSync('.tmp', { recursive: true });
+  const dir = realpathSync(mkdtempSync('.tmp/br81-live-run-'));
+  try {
+    writeFileSync(`${dir}/package.json`, '{"type":"commonjs"}');
+    writeFileSync(`${dir}/make`, `#!${process.execPath}\nconst fs = require('node:fs');
+const args = process.argv.slice(2);
+fs.appendFileSync(process.env.BR81_MAKE_LOG, JSON.stringify(args) + '\\n');
+process.exit(args.includes('test-e2e') && args.includes('E2E_SHARD=' + process.env.BR81_FAIL_SHARD) ? 2 : 0);
+`, { mode: 0o755 });
+    for (const failedShard of ['', '3']) {
+      const receiptDir = `${dir}/receipt-${failedShard || 'success'}`;
+      const log = `${dir}/commands-${failedShard || 'success'}.jsonl`;
+      const run = spawnSync(process.execPath, ['scripts/ci/live-provider-receipt.mjs', 'run', receiptDir], {
+        encoding: 'utf8', env: { ...process.env, PATH: `${dir}:${process.env.PATH}`,
+          COMPOSE_PROJECT_NAME: 'test-live-shards', BR81_MAKE_LOG: log, BR81_FAIL_SHARD: failedShard },
+      });
+      assert.equal(run.status, failedShard ? 1 : 0, run.stderr);
+      const commands = readFileSync(log, 'utf8').trim().split('\n').map(JSON.parse);
+      const browsers = commands.filter(args => args.includes('test-e2e'));
+      assert.equal(browsers.length, 6);
+      assert.deepEqual(browsers.map(args => args.find(arg => arg.startsWith('E2E_SHARD='))),
+        [1, 2, 3, 4, 5, 6].map(id => `E2E_SHARD=${id}`));
+      assert.ok(browsers.every(args => args[0] === 'clean' && args[1] === 'test-e2e'));
+      assert.equal(commands.filter(args => args[0] === 'test-api-ai').length, 10);
+      assert.ok(commands.some(args => args.includes('SCOPE=tests/ai/gw-native-qualification.test.ts')));
+      const vscode = commands.find(args => args.includes('test-e2e-vscode'));
+      assert.deepEqual(vscode.slice(0, 2), ['clean', 'test-e2e-vscode']);
+      assert.ok(commands.every(args => args.at(-1) === 'ENV=test-live-shards'
+        && ['API_PORT=9405', 'UI_PORT=5605', 'MAILDEV_UI_PORT=1505'].every(port => args.includes(port))));
+      const results = JSON.parse(readFileSync(`${receiptDir}/results.json`, 'utf8'));
+      assert.equal(results.browser, failedShard ? 2 : 0);
+      assert.equal(results.vscode, 0);
+      assert.equal(results.spans.filter(span => span.lane === 'browser').length, 6);
+      assert.equal(results.spans.filter(span => span.lane === 'browser' && span.status !== 0).length, failedShard ? 1 : 0);
+    }
+  } finally { rmSync(dir, { recursive: true, force: true }); }
 });
