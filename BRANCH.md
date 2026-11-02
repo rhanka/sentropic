@@ -157,6 +157,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Bind remote/catalogue effects and verify absent agent/purpose capability inventory plus scoped r13 bindings/runtimes; any deployed unbound authority blocks deletion.
   - [x] Construct fixed self/admin V2 coordinators over the combined UOW; require explicitly qualified reservation/deletion/diagnostic/read budgets before entry.
   - [x] Mount self deletion without pre-disabling outside V2; preserve operation ids and distinguish rollback, pending delivery and complete HTTP outcomes.
+  - [x] Mount admin deletion on its fixed V2 authorizer; remove outside-transaction prerequisite reads and direct remote delivery.
   - [ ] Rollback checkpoint recorded BEFORE any legacy table deletion; one author per namespace via cutover records.
   - [x] Preserve the pre-deletion checkpoint row and retain account-driven OAuth invalidation after cutover.
   - [x] Rebind client, consent, membership, credential and restore invalidation to CM identity records.
