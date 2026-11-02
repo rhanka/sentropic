@@ -27,6 +27,7 @@ Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, r
   - `api/tests/api/app-mcp-registry.test.ts`, `api/tests/api/app-mcp-installed.test.ts`, `api/tests/api/artifacts-host-publication.test.ts`, `api/tests/api/artifacts-host-migrations.test.ts` (digest/version/journal-count pins only)
   - `BRANCH.md`
   - `tools/memory-mcp-l5/artifacts/**` (generated consumed-contract inventory and retained archives only)
+  - `packages/mcp-broker/package.json` (align the private P1 consumer floor with platform 0.4.1)
 - **Forbidden Paths (must not change in this branch)**:
   - `docker-compose*.yml`
   - `.cursor/rules/**`
@@ -39,7 +40,7 @@ Integrate part 1 with published p0b on main: retain D1/D2/D4 and add versions, r
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- (none open)
+- BRAP-EX1: owner step 3 requires a regenerated immutable L5 inventory. Retain the exact prior manifest/sidecar in history; generate the new manifest, packed closure and whole lock snapshot using make. Generated lock snapshots are retained as complete data artifacts; authored code commits remain below 150 lines.
 
 ## AI Flaky tests
 - Acceptance rule: only non-systematic provider/network/model nondeterminism as `flaky accepted`; never additive timeouts. None expected here (pure unit tests, no AI calls).

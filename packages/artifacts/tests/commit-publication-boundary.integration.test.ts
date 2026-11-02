@@ -88,6 +88,7 @@ async function artifact() {
 }
 
 beforeAll(async () => {
+  await pool.query('DROP SCHEMA IF EXISTS artifacts CASCADE; DROP TABLE IF EXISTS l8a_policy, l8a_quota');
   await s3.send(new CreateBucketCommand({ Bucket: bucket }));
   for (const name of ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql', '0004_terminal_controls.sql', '0005_metadata.sql']) {
     await pool.query(readFileSync(new URL(`../migrations/${name}`, import.meta.url), 'utf8'));
@@ -103,6 +104,7 @@ beforeEach(async () => {
 afterAll(async () => {
   for (const key of await blobs.listKeys('artifacts/')) await blobs.deleteBlob(key);
   await s3.send(new DeleteBucketCommand({ Bucket: bucket }));
+  await pool.query('DROP SCHEMA IF EXISTS artifacts CASCADE; DROP TABLE IF EXISTS l8a_policy, l8a_quota');
   s3.destroy();
   await pool.end();
 });
