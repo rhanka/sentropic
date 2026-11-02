@@ -396,6 +396,15 @@ RUN mkdir -p /tmp/tool-npm-patches && \
       tar -xzf "/tmp/tool-npm-patches/$package-$version.tgz" --strip-components=1 \
         -C "/usr/local/lib/node_modules/npm/node_modules/$package" || exit 1; \
     done && rm -rf /tmp/tool-npm-patches /root/.npm
+# SECDAILY-EX6 (ACT-L04): pin the native ast-grep release asset by sha256. Prebuilt ELF
+# bytes only; no package-manager install and no install hooks. The gnu binary is executed
+# on the glibc-pinned Node lane, never at build time on this musl stage.
+RUN wget -q https://github.com/ast-grep/ast-grep/releases/download/0.51.0/app-x86_64-unknown-linux-gnu.zip -O /tmp/ast-grep.zip && \
+    echo 'a7eead5552d3a8daad70f5d50d935da44bd0c138e946b5b0a96b1d38169fa639  /tmp/ast-grep.zip' | sha256sum -c - && \
+    mkdir -p /opt/ast-grep && \
+    unzip -q -o /tmp/ast-grep.zip -d /opt/ast-grep && \
+    rm -f /tmp/ast-grep.zip && \
+    test -x /opt/ast-grep/sg && test -x /opt/ast-grep/ast-grep
 
 # Non-browser API checks need no Chromium or duplicate Playwright installation.
 # The screen smoke uses the separately qualified E2E image's browser instead.
@@ -407,6 +416,8 @@ COPY --from=ci-tool-base /usr/local/lib/node_modules/npm /usr/local/lib/node_mod
 COPY --from=ci-tool-base /workspace/node_modules /workspace/node_modules
 COPY --from=ci-tool-base /workspace/package.json /workspace/package-lock.json /workspace/
 COPY --from=ci-tool-base /workspace/.security /workspace/.security
+COPY --from=ci-tool-base /opt/ast-grep /opt/ast-grep
+COPY .security/ast-grep /workspace/.security/ast-grep
 COPY --from=base /workspace/api /workspace/api
 COPY --from=base /workspace/packages /workspace/packages
 COPY --from=base /workspace/apps /workspace/apps
