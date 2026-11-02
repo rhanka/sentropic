@@ -16,7 +16,7 @@ export interface RemoteEvidenceIssuerPorts {
   session(credential: string): Promise<RemoteLogin | null>;
   approvedTarget(digest: string, actor: RemoteLogin): Promise<RemoteApprovedTarget | null>;
   reserve(sid: string, actionId: string, expiresAt: Date): Promise<boolean>;
-  commit(login: RemoteLogin, request: RemoteEvidenceRequest, operation: () => string): string;
+  commit(login: RemoteLogin, request: RemoteEvidenceRequest, operation: () => string): string | Promise<string>;
 }
 export function createRemoteEvidenceIssuer(ports: RemoteEvidenceIssuerPorts) {
   let lastNow = -1;
@@ -55,7 +55,7 @@ export function createRemoteEvidenceIssuer(ports: RemoteEvidenceIssuerPorts) {
     const refreshed = remoteLoginSchema.safeParse(await ports.session(request.sessionCredential));
     if (!refreshed.success || remoteCanonicalJson(refreshed.data) !== remoteCanonicalJson(login))
       throw new RemoteAuthorityError('authentication_required');
-    return ports.commit(login, request, () => {
+    return await ports.commit(login, request, () => {
       requireRemoteDeadline(iat * 1000, exp * 1000, readNow());
       const claims = {
       iss: ports.issuer, sub: login.sub, sid: login.sid, sessionVersion: login.sessionVersion,
