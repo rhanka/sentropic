@@ -2,6 +2,21 @@
 
 ## Unreleased
 
+## 0.32.4
+
+- `EncryptedFileKeyring` reads are now side-effect free: `getSecret` (the
+  `listAccounts` → `restorePersistedAccounts` → keyring read chain) no longer
+  runs `mkdir`/`chmod`, so reads work on read-only mounts (seat export) without
+  EROFS and no longer bump the keyring directory ctime on every read.
+- A read requires the keyring directory to be `0700` and the master key
+  `0600`. Wrong modes refuse with the typed `keyring_insecure_permissions`
+  error (`KeyringInsecurePermissionsError`, exported from
+  `@sentropic/llm-mesh/node`) and are never repaired silently. A missing
+  directory or master key on a read keeps the existing not-found behaviour and
+  creates nothing.
+- The write path still creates the keyring and master key, and now sets modes
+  only when they differ.
+
 ## 0.28.0
 
 - Add `@sentropic/llm-mesh/speech` and root exports for the provider-neutral

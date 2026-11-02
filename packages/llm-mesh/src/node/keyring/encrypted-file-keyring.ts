@@ -10,6 +10,7 @@ import {
   mkdir,
   readFile,
   rename,
+  stat,
   unlink,
   writeFile,
 } from 'node:fs/promises';
@@ -29,6 +30,18 @@ const isErrorCode = (error: unknown, code: string): boolean =>
   error !== null &&
   'code' in error &&
   (error as { code?: unknown }).code === code;
+
+export class KeyringInsecurePermissionsError extends Error {
+  readonly code = 'keyring_insecure_permissions';
+
+  constructor(target: string, expectedMode: number, actualMode: number) {
+    super(
+      `Encrypted keyring ${target} has insecure permissions: ` +
+        `expected 0o${expectedMode.toString(8)}, got 0o${(actualMode & 0o777).toString(8)}`,
+    );
+    this.name = 'KeyringInsecurePermissionsError';
+  }
+}
 
 export class EncryptedFileKeyring implements KeyringAdapter {
   private readonly directory: string;
@@ -143,18 +156,17 @@ export class EncryptedFileKeyring implements KeyringAdapter {
   }
 
   private async readMasterKey(create: boolean): Promise<Buffer> {
-    await mkdir(this.directory, { recursive: true, mode: 0o700 });
-    await chmod(this.directory, 0o700);
     const path = join(this.directory, '.key');
+    if (!create) {
+      return this.readExistingMasterKey(path);
+    }
+
+    await mkdir(this.directory, { recursive: true, mode: 0o700 });
+    await this.setModeIfDifferent(this.directory, 0o700);
     try {
       return await this.loadAndValidateMasterKey(path);
     } catch (error) {
-      if (!isErrorCode(error, 'ENOENT') || !create) {
-        if (isErrorCode(error, 'ENOENT')) {
-          throw new Error('Encrypted keyring master key is missing');
-        }
-        throw error;
-      }
+      if (!isErrorCode(error, 'ENOENT')) throw error;
     }
 
     const candidate = randomBytes(32);
@@ -170,8 +182,43 @@ export class EncryptedFileKeyring implements KeyringAdapter {
     } finally {
       await this.unlinkIfPresent(temporary);
     }
-    await chmod(path, 0o600);
+    await this.setModeIfDifferent(path, 0o600);
     return this.loadAndValidateMasterKey(path);
+  }
+
+  private async readExistingMasterKey(path: string): Promise<Buffer> {
+    let directoryStat;
+    try {
+      directoryStat = await stat(this.directory);
+    } catch (error) {
+      if (isErrorCode(error, 'ENOENT')) {
+        throw new Error('Encrypted keyring master key is missing');
+      }
+      throw error;
+    }
+    if ((directoryStat.mode & 0o777) !== 0o700) {
+      throw new KeyringInsecurePermissionsError('directory', 0o700, directoryStat.mode);
+    }
+    let keyStat;
+    try {
+      keyStat = await stat(path);
+    } catch (error) {
+      if (isErrorCode(error, 'ENOENT')) {
+        throw new Error('Encrypted keyring master key is missing');
+      }
+      throw error;
+    }
+    if ((keyStat.mode & 0o777) !== 0o600) {
+      throw new KeyringInsecurePermissionsError('master key', 0o600, keyStat.mode);
+    }
+    return this.loadAndValidateMasterKey(path);
+  }
+
+  private async setModeIfDifferent(path: string, mode: number): Promise<void> {
+    const current = await stat(path);
+    if ((current.mode & 0o777) !== mode) {
+      await chmod(path, mode);
+    }
   }
 
   private async loadAndValidateMasterKey(path: string): Promise<Buffer> {

@@ -1,8 +1,16 @@
-import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
+import { chmod, mkdtemp, readFile, readdir, rm, stat, unlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
-import { EncryptedFileKeyring } from '../../src/node/keyring/encrypted-file-keyring.js';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import {
+  EncryptedFileKeyring,
+  KeyringInsecurePermissionsError,
+} from '../../src/node/keyring/encrypted-file-keyring.js';
+
+const sleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+const keyringModulePath = '../../src/node/keyring/encrypted-file-keyring.js';
 
 describe('EncryptedFileKeyring', () => {
   const directories: string[] = [];
@@ -50,5 +58,158 @@ describe('EncryptedFileKeyring', () => {
 
     expect(created.sort()).toEqual([false, true]);
     await expect(first.getSecret(key)).resolves.toMatch(/^owner-[ab]$/);
+  });
+
+  it('reads secrets from a read-only mount without EROFS', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'llm-mesh-keyring-'));
+    directories.push(directory);
+    const key = 'sentropic-llm-mesh:acct_ro:envelope';
+    const secret = 'seat-export-secret';
+    const writer = new EncryptedFileKeyring(directory);
+    await writer.setSecret(key, secret);
+
+    vi.resetModules();
+    vi.doMock('node:fs/promises', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('node:fs/promises')>();
+      const readOnly = (operation: string) => async (): Promise<never> => {
+        throw Object.assign(new Error(`EROFS: read-only file system, ${operation}`), {
+          code: 'EROFS',
+        });
+      };
+      return {
+        ...actual,
+        mkdir: readOnly('mkdir'),
+        chmod: readOnly('chmod'),
+        writeFile: readOnly('writeFile'),
+        rename: readOnly('rename'),
+        unlink: readOnly('unlink'),
+        link: readOnly('link'),
+      };
+    });
+    try {
+      const { EncryptedFileKeyring: ReadOnlyKeyring } = await import(keyringModulePath);
+      const reader = new ReadOnlyKeyring(directory);
+      await expect(reader.getSecret(key)).resolves.toBe(secret);
+      await expect(reader.getSecret('sentropic-llm-mesh:acct_missing:envelope')).resolves.toBeNull();
+    } finally {
+      vi.doUnmock('node:fs/promises');
+      vi.resetModules();
+    }
+  });
+
+  it('never changes directory or master-key ctime/mtime on a read', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'llm-mesh-keyring-'));
+    directories.push(directory);
+    const key = 'sentropic-llm-mesh:acct_ctime:envelope';
+    const writer = new EncryptedFileKeyring(directory);
+    await writer.setSecret(key, 'ctime-secret');
+    const keyPath = join(directory, '.key');
+    const beforeDir = await stat(directory);
+    const beforeKey = await stat(keyPath);
+
+    await sleep(25);
+    const reader = new EncryptedFileKeyring(directory);
+    await expect(reader.getSecret(key)).resolves.toBe('ctime-secret');
+
+    const afterDir = await stat(directory);
+    const afterKey = await stat(keyPath);
+    expect(afterDir.ctimeMs).toBe(beforeDir.ctimeMs);
+    expect(afterDir.mtimeMs).toBe(beforeDir.mtimeMs);
+    expect(afterKey.ctimeMs).toBe(beforeKey.ctimeMs);
+    expect(afterKey.mtimeMs).toBe(beforeKey.mtimeMs);
+  });
+
+  it('refuses a read when modes are wrong, without repairing them', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'llm-mesh-keyring-'));
+    directories.push(directory);
+    const key = 'sentropic-llm-mesh:acct_perms:envelope';
+    const writer = new EncryptedFileKeyring(directory);
+    await writer.setSecret(key, 'perms-secret');
+    const keyPath = join(directory, '.key');
+    const reader = new EncryptedFileKeyring(directory);
+
+    await chmod(directory, 0o755);
+    const dirError = await reader.getSecret(key).catch((error: unknown) => error);
+    expect(dirError).toBeInstanceOf(KeyringInsecurePermissionsError);
+    expect((dirError as { code?: string }).code).toBe('keyring_insecure_permissions');
+    expect((await stat(directory)).mode & 0o777).toBe(0o755);
+
+    await chmod(directory, 0o700);
+    await chmod(keyPath, 0o644);
+    const keyError = await reader.getSecret(key).catch((error: unknown) => error);
+    expect(keyError).toBeInstanceOf(KeyringInsecurePermissionsError);
+    expect((keyError as { code?: string }).code).toBe('keyring_insecure_permissions');
+    expect((await stat(keyPath)).mode & 0o777).toBe(0o644);
+  });
+
+  it('returns null on a read when the keyring directory is missing, creating nothing', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'llm-mesh-keyring-'));
+    directories.push(base);
+    const directory = join(base, 'keyring');
+    const reader = new EncryptedFileKeyring(directory);
+
+    await expect(reader.getSecret('sentropic-llm-mesh:acct_none:envelope')).resolves.toBeNull();
+    await expect(stat(directory)).rejects.toMatchObject({ code: 'ENOENT' });
+  });
+
+  it('keeps the missing-master-key error on a read without touching the directory', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'llm-mesh-keyring-'));
+    directories.push(directory);
+    const key = 'sentropic-llm-mesh:acct_nokey:envelope';
+    const writer = new EncryptedFileKeyring(directory);
+    await writer.setSecret(key, 'nokey-secret');
+    await unlink(join(directory, '.key'));
+    const before = await stat(directory);
+
+    await sleep(25);
+    const reader = new EncryptedFileKeyring(directory);
+    await expect(reader.getSecret(key)).rejects.toThrow('master key is missing');
+    expect((await stat(directory)).ctimeMs).toBe(before.ctimeMs);
+  });
+
+  it('creates the keyring directory and master key with 0700/0600 on write', async () => {
+    const base = await mkdtemp(join(tmpdir(), 'llm-mesh-keyring-'));
+    directories.push(base);
+    const directory = join(base, 'nested', 'keyring');
+    const writer = new EncryptedFileKeyring(directory);
+
+    await writer.setSecret('sentropic-llm-mesh:acct_new:envelope', 'new-secret');
+
+    expect((await stat(directory)).mode & 0o777).toBe(0o700);
+    expect((await stat(join(directory, '.key'))).mode & 0o777).toBe(0o600);
+    const files = await readdir(directory);
+    const recordFile = files.find((file) => file.endsWith('.json'));
+    expect(recordFile).toBeDefined();
+    expect((await stat(join(directory, recordFile!))).mode & 0o777).toBe(0o600);
+  });
+
+  it('sets modes on the write path only when they differ', async () => {
+    const directory = await mkdtemp(join(tmpdir(), 'llm-mesh-keyring-'));
+    directories.push(directory);
+    const writer = new EncryptedFileKeyring(directory);
+    await writer.setSecret('sentropic-llm-mesh:acct_first:envelope', 'first-secret');
+
+    const chmodCalls: string[] = [];
+    vi.resetModules();
+    vi.doMock('node:fs/promises', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('node:fs/promises')>();
+      return {
+        ...actual,
+        chmod: async (path: unknown, mode: unknown) => {
+          chmodCalls.push(String(path));
+          return actual.chmod(path as never, mode as never);
+        },
+      };
+    });
+    try {
+      const { EncryptedFileKeyring: SpiedKeyring } = await import(keyringModulePath);
+      await new SpiedKeyring(directory).setSecret('sentropic-llm-mesh:acct_second:envelope', 'second-secret');
+    } finally {
+      vi.doUnmock('node:fs/promises');
+      vi.resetModules();
+    }
+
+    expect(chmodCalls).not.toContain(directory);
+    expect(chmodCalls).not.toContain(join(directory, '.key'));
   });
 });
