@@ -5,7 +5,7 @@
   import { get } from 'svelte/store';
   import { _ } from 'svelte-i18n';
   import { addToast } from '$lib/stores/toast';
-  import { apiDelete, apiGet, apiPost, apiPatch } from '$lib/utils/api';
+  import { apiDelete, apiPost, apiPatch } from '$lib/utils/api';
   import { session } from '$lib/stores/session';
   import { hiddenWorkspaceLock, loadUserWorkspaces, setWorkspaceScope, workspaceScope, type UserWorkspace } from '$lib/stores/workspaceScope';
   import { streamHub } from '$lib/stores/streamHub';
@@ -27,11 +27,6 @@
   let originalSelectedWorkspaceName = '';
   let lastWorkspaceIdForName: string | null = null;
 
-  let membersError: string | null = null;
-  let members: Array<{ userId: string; email: string | null; displayName: string | null; role: 'viewer' | 'commenter' | 'editor' | 'admin' }> = [];
-  let addMemberEmail = '';
-  let addMemberRole: 'viewer' | 'commenter' | 'editor' | 'admin' = 'viewer';
-  let lastMembersWorkspaceId: string | null = null;
 
   const HUB_KEY = 'workspace-settings-sse';
   let workspaceReloadTimer: ReturnType<typeof setTimeout> | null = null;
@@ -130,74 +125,6 @@
     }
   }
 
-  async function loadMembers() {
-    if (!selectedWorkspace?.id) return;
-    if (!isWorkspaceAdmin) return;
-    membersError = null;
-    try {
-      const data = await apiGet<{
-        items: Array<{ userId: string; email: string | null; displayName: string | null; role: 'viewer' | 'commenter' | 'editor' | 'admin' }>;
-      }>(`/workspaces/${selectedWorkspace.id}/members`);
-      members = data.items || [];
-    } catch (e: any) {
-      membersError = e?.message ?? t('workspaceSettings.errors.loadMembers');
-    }
-  }
-
-  $: if (selectedWorkspace?.id && isWorkspaceAdmin) {
-    if (selectedWorkspace.id !== lastMembersWorkspaceId) {
-      lastMembersWorkspaceId = selectedWorkspace.id;
-      void loadMembers();
-    }
-  } else {
-    lastMembersWorkspaceId = null;
-  }
-
-  async function addMember() {
-    if (!selectedWorkspace?.id) return;
-    const email = addMemberEmail.trim();
-    if (!email) return;
-    try {
-      await apiPost(`/workspaces/${selectedWorkspace.id}/members`, { email, role: addMemberRole });
-      addToast({ type: 'success', message: t('workspaceSettings.toasts.memberAdded') });
-      addMemberEmail = '';
-      addMemberRole = 'viewer';
-      await loadMembers();
-      await loadUserWorkspaces();
-    } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? t('workspaceSettings.errors.addMember') });
-    }
-  }
-
-  async function updateMember(userId: string, role: 'viewer' | 'commenter' | 'editor' | 'admin') {
-    if (!selectedWorkspace?.id) return;
-    try {
-      await apiPatch(`/workspaces/${selectedWorkspace.id}/members/${userId}`, { role });
-      addToast({ type: 'success', message: t('workspaceSettings.toasts.roleUpdated') });
-      await loadMembers();
-      await loadUserWorkspaces();
-    } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? t('workspaceSettings.errors.updateRole') });
-    }
-  }
-
-  function handleMemberRoleChange(event: Event, userId: string) {
-    const role = (event.currentTarget as HTMLSelectElement).value as 'viewer' | 'commenter' | 'editor' | 'admin';
-    void updateMember(userId, role);
-  }
-
-  async function removeMember(userId: string) {
-    if (!selectedWorkspace?.id) return;
-    if (!confirm(t('workspaceSettings.confirm.removeMember'))) return;
-    try {
-      await apiDelete(`/workspaces/${selectedWorkspace.id}/members/${userId}`);
-      addToast({ type: 'success', message: t('workspaceSettings.toasts.memberRemoved') });
-      await loadMembers();
-      await loadUserWorkspaces();
-    } catch (e: any) {
-      addToast({ type: 'error', message: e?.message ?? t('workspaceSettings.errors.removeMember') });
-    }
-  }
 
   async function handleWorkspaceNameSaved() {
     originalSelectedWorkspaceName = editedSelectedWorkspaceName;
