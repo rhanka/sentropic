@@ -61,6 +61,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] R1: extend lifetime and read-mode refusal checks to the host business executor, not only the combined CM ports.
 - [x] R1: export exact host-binding names, preserve generic business executors and retain active-transaction registration when binding a host facade.
 - [x] R1: test the amendment's generic host facade and directly bound factory surface without a second physical transaction.
 - [x] R1: exercise the R6 source-owner check with real transactional source, AEAD custody, outbox and rollback on both profiles.
