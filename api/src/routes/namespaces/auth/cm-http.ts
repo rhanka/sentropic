@@ -4,6 +4,7 @@ import type { IdentityAuthCompletionFlowV1, IdentityAuthHonoTransactionBindingV1
 import { withAppCmAuth } from '../../../services/identity/cm-auth-runtime';
 import type { CmIdentityTransaction } from '../../../services/identity/cm-transaction';
 import type { CmRegistrationPresentation } from '../../../services/identity/cm-auth-binding';
+import { assertCmHostHealthy } from '../../../services/identity/cm-host-scope';
 
 interface StagedResponse {
   readonly status: number;
@@ -43,6 +44,7 @@ export async function runCmAuthHttp(c: Context, flow: IdentityAuthCompletionFlow
         const headers: [string, string][] = [...response.headers.entries()].filter(([key]) => key !== 'set-cookie');
         for (const cookie of response.headers.getSetCookie()) headers.push(['set-cookie', cookie]);
         const copy = { status: response.status, headers, body: await response.text() };
+        assertCmHostHealthy(tx.hostTransaction);
         if (copy.status >= 500 || (flow !== null && copy.status >= 400)) throw new HttpRefusal(copy);
         return copy;
       };
