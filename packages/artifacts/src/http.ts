@@ -133,9 +133,13 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     const files: EditableFile[] = [];
     for (const entry of entries) {
       const bytes = await deps.publication.blobs.getBlob(blobKey(storageScopeId, entry.digest));
-      if (bytes === undefined) throw new ArtifactOperationError('not_found');
+      if (bytes === undefined) throw new ArtifactOperationError('release_unavailable', { release: { reason: 'not_retained' } });
+      let text: string | undefined;
+      if (TEXT_MIME_RE.test(entry.mimeType)) {
+        try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch { /* Non-UTF-8 is not editable. */ }
+      }
       files.push({ path: entry.path, mimeType: entry.mimeType, bytes: new Uint8Array(bytes),
-        ...(TEXT_MIME_RE.test(entry.mimeType) ? { text: new TextDecoder().decode(bytes) } : {}) });
+        ...(text === undefined ? {} : { text }) });
     }
     return files;
   }
@@ -145,8 +149,14 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     edits: readonly EditOperation[], expected: string | null | undefined) {
     const current = expected === undefined ? await deps.publication.getCurrent(artifactId)
       : expected === null ? undefined : await deps.publication.getRelease(expected);
-    if (current === undefined) throw new ArtifactOperationError(expected === null ? 'release_unavailable' : 'not_found');
+    if (current === undefined) {
+      if (expected === null || expected === undefined) throw new ArtifactOperationError('release_unavailable', { release: { reason: 'unpublished' } });
+      throw new ArtifactOperationError('not_found');
+    }
     if (parseManifest(current.manifest).artifactId !== artifactId) throw new ArtifactOperationError('not_found');
+    if (await deps.lifecycle.getReleaseState(current.releaseId) === 'purged') {
+      throw new ArtifactOperationError('release_unavailable', { release: { reason: 'purged' } });
+    }
     const files = await readManifestFiles(current.manifest, invocation.storageScopeId);
     return applyEdits(files, edits).map((file) => ({
       path: file.path, mimeType: file.mimeType,
@@ -270,7 +280,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
               throw new ArtifactOperationError('not_found');
             }
             if (await deps.lifecycle.getReleaseState(releaseId) === 'purged') {
-              throw new ArtifactOperationError('release_unavailable');
+              throw new ArtifactOperationError('release_unavailable', { release: { reason: 'purged' } });
             }
             files = (await readManifestFiles(target.manifest, invocation.storageScopeId))
               .map((file) => ({ path: file.path, mimeType: file.mimeType, bytes: file.bytes }));

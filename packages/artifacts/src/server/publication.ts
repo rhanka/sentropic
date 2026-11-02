@@ -563,7 +563,8 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
         provisional: async (client) => {
           const unit = deps.createUnitWriter(client);
           if (input.expectedCurrentReleaseId !== undefined && current.currentReleaseId !== input.expectedCurrentReleaseId) {
-            throw new ArtifactOperationError('pointer_conflict', { conflict: current });
+            throw new ArtifactOperationError('pointer_conflict', { conflict: { ...current,
+              artifactId: input.artifactId, expectedCurrentReleaseId: input.expectedCurrentReleaseId } });
           }
           await unit.putRelease({
             releaseId,

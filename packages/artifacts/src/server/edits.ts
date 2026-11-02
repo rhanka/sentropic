@@ -28,7 +28,7 @@ function countOccurrences(haystack: string, needle: string): number {
   let index = haystack.indexOf(needle);
   while (index !== -1) {
     count += 1;
-    index = haystack.indexOf(needle, index + needle.length);
+    index = haystack.indexOf(needle, index + Math.max(1, needle.length));
   }
   return count;
 }
@@ -39,14 +39,16 @@ function countOccurrences(haystack: string, needle: string): number {
  */
 export function applyEdits(files: readonly EditableFile[], edits: readonly EditOperation[]): EditableFile[] {
   const result = files.map((file) => ({ ...file }));
-  for (const edit of edits) {
+  for (const [editIndex, edit] of edits.entries()) {
     const file = result.find((entry) => entry.path === edit.path);
     if (file === undefined || file.text === undefined) {
-      throw new ArtifactOperationError('edit_mismatch', { edit: { path: edit.path, occurrences: -1 } });
+      throw new ArtifactOperationError('edit_mismatch', { edit: { path: edit.path, occurrences: -1,
+        editIndex, reason: file === undefined ? 'file_missing' : 'not_text' } });
     }
     const occurrences = countOccurrences(file.text, edit.oldStr);
     if (occurrences !== 1) {
-      throw new ArtifactOperationError('edit_mismatch', { edit: { path: edit.path, occurrences } });
+      throw new ArtifactOperationError('edit_mismatch', { edit: { path: edit.path, occurrences,
+        editIndex, reason: occurrences === 0 ? 'missing' : 'ambiguous' } });
     }
     file.text = file.text.slice(0, file.text.indexOf(edit.oldStr)) + edit.newStr +
       file.text.slice(file.text.indexOf(edit.oldStr) + edit.oldStr.length);

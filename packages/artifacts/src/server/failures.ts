@@ -10,14 +10,22 @@ export type ArtifactErrorKind =
 
 /** Optimistic-concurrency payload: the caller re-reads and merges against this. */
 export interface ArtifactConflictDetails {
+  readonly artifactId?: string;
+  readonly expectedCurrentReleaseId?: string | null;
   readonly currentReleaseId: string | null;
   readonly currentDigest: string | null;
+  readonly currentSource?: Readonly<Record<string, unknown>>;
 }
 
 /** Edit-application payload: which path failed the exactly-once rule and how often oldStr occurred. */
 export interface ArtifactEditDetails {
   readonly path: string;
   readonly occurrences: number;
+  readonly editIndex?: number;
+  readonly reason?: 'missing' | 'ambiguous' | 'not_text' | 'file_missing';
+}
+export interface ArtifactReleaseUnavailableDetails {
+  readonly reason: 'purged' | 'not_retained' | 'unpublished';
 }
 export type ArtifactFailureCategory = ArtifactFailure['category'];
 
@@ -34,6 +42,7 @@ interface ArtifactFailureFields {
   readonly conflict?: ArtifactConflictDetails;
   /** Present on edit_mismatch so the caller sees the failing path and occurrence count. */
   readonly edit?: ArtifactEditDetails;
+  readonly release?: ArtifactReleaseUnavailableDetails;
   /** Original thrown value, retained by identity and deliberately non-enumerable. */
   readonly cause: unknown;
 }
@@ -85,7 +94,8 @@ export class ArtifactOperationError extends Error {
   constructor(
     readonly kind: ArtifactErrorKind,
     readonly details: { readonly cause?: unknown; readonly refusal?: ArtifactPublicRefusal;
-      readonly conflict?: ArtifactConflictDetails; readonly edit?: ArtifactEditDetails } = {},
+      readonly conflict?: ArtifactConflictDetails; readonly edit?: ArtifactEditDetails;
+      readonly release?: ArtifactReleaseUnavailableDetails } = {},
   ) {
     super(kind, { cause: details.cause });
     this.name = 'ArtifactOperationError';
@@ -173,6 +183,7 @@ function operationProjection(error: ArtifactOperationError): Projection {
       return { kind: 'admission', category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind, retriable: false };
     default: {
       const base = { kind: 'ordinary', category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind, retriable: false } as const;
+      if (kind === 'release_unavailable' && error.details.release !== undefined) return { ...base, release: error.details.release };
       return kind === 'edit_mismatch' && error.details.edit !== undefined ? { ...base, edit: error.details.edit } : base;
     }
   }
