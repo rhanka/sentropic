@@ -12,7 +12,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - PostgreSQL initialization exceeded the original 30-attempt startup bound under local disk pressure. Its logs then confirmed initialization complete; the TCP database probe passed before the first test campaign.
 - Full acceptance remains blocked: the inherited UOW uses `runRead/runWrite` instead of the r6 combined bound composition consumed by A4; the P1 fixture does not verify a real WebAuthn assertion, and PostgreSQL reopening reuses handles.
 - Review is incomplete: Argon's qualification-wiring finding is fixed; Mistral failed before producing a review. Final-head consensus is not claimed.
-- CI budget: one ready-PR-triggered run, followed to completion in the owner report. Do not merge.
+- CI budget: first run 41389276220 failed train lock-sync; the owner authorized one second ready-PR-triggered run for the scoped dev.4 lock repair. Do not merge.
 - Rebased onto `c8e9fa652` to resolve the sole `BRANCH.md` conflict blocking PR #882 CI. Identity source, test and runner files are byte-identical to the qualified tree. Post-rebase registry gate: `0.26.0-dev.4` is greater than published `0.25.0` and is still free.
 
 ## Scope / Guardrails
@@ -38,6 +38,10 @@ Add durable verification custody, material-preserving import and atomic person d
   - `packages/cluster-mesh/tests/identity-*.spec.ts`
   - `packages/cluster-mesh/package.json`
   - `packages/cluster-mesh/CHANGELOG.md`
+  - `package-lock.json` (BR-A20B-EX3)
+  - `api/package-lock.json` (BR-A20B-EX3)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR-A20B-EX3)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR-A20B-EX3)
   - `packages/cluster-mesh/tests/storage/postgres.mk` (BR-A20B-EX1)
   - `packages/cluster-mesh/tests/storage/cold-workspace.sh` (BR-A20B-EX2)
 - **Forbidden Paths (must not change in this branch)**:
@@ -57,6 +61,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] BR-A20B-EX3 (owner-authorized Fix CI 1): synchronize only cluster-mesh dev.4 in root/API workspace locks and selected packaging fixture pins; preserve unrelated dependency selections and integrity records. Impact: version metadata only. Rollback: revert these four files together with the version bump.
 - [x] BR-A20B-EX1: repair PostgreSQL qualification readiness in `packages/cluster-mesh/tests/storage/postgres.mk`; the current Unix-socket probe can accept initdb's temporary server before `storage_test` exists. Impact: test startup only, unchanged retry budget. Rollback: revert the readiness hunk.
 - [x] BR-A20B-EX2: wire the existing identity profile configs into the package runner and PostgreSQL CI lane; otherwise frozen tests use the default in-memory factory. Impact: required identity qualification only, unchanged assertions and timeouts. Rollback: revert the runner/target additions.
 - [x] Resume baseline: `e2bba5cc9`; six final SQLite failures in `run-full11.log` are 5000ms expirations; PostgreSQL fails before Vitest. No timeout increases or assertion removals authorized.
@@ -68,7 +73,9 @@ Add durable verification custody, material-preserving import and atomic person d
 - [ ] Resolve inherited r6 composition gaps before claiming amendment completion: the shipped UOW exposes `runRead/runWrite`, while r6 requires the combined bound composition consumed by A4.
 - [x] Verify schema regression red, implement transactional schema installation, and verify green.
 - [x] Run each final identity database campaign once under the shared Docker flock, then clean up; both receipts contain 185 passes and zero skips, owned containers removed, `make down` completed.
-- [ ] Push the final head, open a ready PR, wait for one CI, and write `.tmp/rv/lot-A2.0b.md`.
+- [x] Push the final head, open a ready PR, wait for one CI, and write `.tmp/rv/lot-A2.0b.md`; run 41389276220 failed deterministic train lock-sync.
+- [x] Fix CI 1: scoped `make lock-root` and API/selected fixture pins agree on dev.4; train lock-sync, 48 packaging/dev-gate tests, 16 lock-install/publish-decision tests and registry train integrity pass. Unrelated lock bytes are unchanged. All Docker work and `make down ENV=test-cm-a2-0b` completed under the shared lock using the existing Node image; no image build or deletion.
+- [ ] Fix CI 1: commit through Make, push once, wait for the authorized second PR CI, append its head/run/result to the report, and stop without merging.
 
 ## AI Flaky tests
 - Acceptance rule:
