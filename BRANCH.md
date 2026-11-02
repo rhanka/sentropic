@@ -9,6 +9,7 @@ Add `make down-volumes ENV=<env>` which runs the same compose project as `make d
 - Make-only workflow, no direct Docker commands; the guard test never starts a stack (refusal happens before any compose call; allowed cases are asserted via `make -n` dry-run only).
 - Branch development in isolated worktree `tmp/worktrees/make-down-volumes` on branch `chore/make-down-volumes` from `origin/main`.
 - `ENV=<test-env>` always last in every `make` command; never `ENV=dev` for real runs (the guard test passes `ENV=dev` only to assert the refusal, which exits before any Docker call).
+- CI lockfile-lane policy acknowledged (review_by=2026-11-30T00:00:00Z); installs resolve committed tool profiles or frozen consumer closures.
 - All new text in English.
 
 ## Branch Scope Boundaries (MANDATORY)
