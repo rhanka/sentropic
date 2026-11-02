@@ -9,15 +9,12 @@
 import {
   applyPostgresIdentityCoreSchema,
   applyPostgresIdentitySchema,
-  createAtomicPersonDeletionV2,
   createFreshDecisionProducer,
   createIdentityEnforcementPostgresStores,
   createInMemoryDivergenceMetrics,
   createPostgresCustodyStores,
   createPostgresIdentityCoreStores,
-  createPostgresIdentityHostV1,
   createPostgresIdentityStores,
-  createPostgresIdentityUnitOfWorkV1,
   createTenantMemberships,
   createTenantOAuth,
   createTenantRegistry,
@@ -25,11 +22,7 @@ import {
   createTidIssuer,
   createWorkspaceDirectory,
   identityEnforcementPgSchema,
-  type BusinessDeletionPortV1,
-  type CustodyOpHost,
   type DecisionToolCatalog,
-  type IdentityUnitOfWorkV1,
-  type PostgresCustodyHandle,
   type PostgresStoreClient,
 } from '@sentropic/cluster-mesh';
 import type { InjectedPgDriver, PgSession, PgTransactionOptions } from '@sentropic/cluster-mesh/storage/postgres';
@@ -85,11 +78,6 @@ const divergenceMetrics = createInMemoryDivergenceMetrics();
 
 const core = createPostgresIdentityCoreStores({ driver: pgDriver, schema: CM_IDENTITY_SCHEMA });
 const custody = createPostgresCustodyStores({ driver: pgDriver, schema: CM_IDENTITY_SCHEMA });
-const host = createPostgresIdentityHostV1({ driver: pgDriver, schema: CM_IDENTITY_SCHEMA });
-const unitOfWork: IdentityUnitOfWorkV1<PostgresCustodyHandle> = createPostgresIdentityUnitOfWorkV1({
-  schema: CM_IDENTITY_SCHEMA,
-  host,
-});
 const tenancy = createPostgresIdentityStores(storeClient, { schema: CM_IDENTITY_SCHEMA });
 const enforcement = createIdentityEnforcementPostgresStores({ driver: pgDriver, schema: CM_IDENTITY_SCHEMA });
 
@@ -98,7 +86,6 @@ export interface CmIdentityComposition {
   readonly driver: InjectedPgDriver;
   readonly core: ReturnType<typeof createPostgresIdentityCoreStores>;
   readonly custody: ReturnType<typeof createPostgresCustodyStores>;
-  readonly unitOfWork: IdentityUnitOfWorkV1<PostgresCustodyHandle>;
   readonly tenancy: ReturnType<typeof createPostgresIdentityStores>;
   readonly enforcement: ReturnType<typeof createIdentityEnforcementPostgresStores>;
   readonly tenants: ReturnType<typeof createTenantRegistry>;
@@ -108,7 +95,6 @@ export interface CmIdentityComposition {
   readonly tid: ReturnType<typeof createTidIssuer>;
   readonly oauth: ReturnType<typeof createTenantOAuth>;
   readonly decision: ReturnType<typeof createFreshDecisionProducer>;
-  createDeletion(business: BusinessDeletionPortV1<CustodyOpHost>): ReturnType<typeof createAtomicPersonDeletionV2>;
 }
 
 /** Idempotent DDL guard for environments where the control migration has not
@@ -162,14 +148,11 @@ export const createCmIdentityComposition = (catalog: DecisionToolCatalog): CmIde
     conversations: enforcement.conversations,
     catalog,
   });
-  const deletion = (business: BusinessDeletionPortV1<CustodyOpHost>) =>
-    createAtomicPersonDeletionV2({ unitOfWork, business });
   return {
     schema: CM_IDENTITY_SCHEMA,
     driver: pgDriver,
     core,
     custody,
-    unitOfWork,
     tenancy,
     enforcement,
     tenants,
@@ -179,7 +162,6 @@ export const createCmIdentityComposition = (catalog: DecisionToolCatalog): CmIde
     tid,
     oauth,
     decision,
-    createDeletion: deletion,
   };
 };
 
