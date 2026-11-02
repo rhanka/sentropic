@@ -18,7 +18,7 @@ function fixture() {
   };
   return { artifacts, execute, createInvocation, selection: ['sentropic.artifacts'],
     configurations: { 'sentropic.artifacts': {} }, bindings: {}, compatibility: {
-      'sentropic.artifacts': { manifestDigest: 'c69c8ce188907fa3db602caa290e07ebcaffa9e63010aa47b73e1599b36149ed' },
+      'sentropic.artifacts': { manifestDigest: '1140dcb492f0d126b55ffc5dfb46accf43fc863145a42990a140e06c5bd02f20' },
     } };
 }
 
@@ -41,6 +41,8 @@ describe('app MCP registry compilation', () => {
     const { manifest } = createArtifactsRegistryDefinition({ ...input.artifacts, invocationScope: 'mcp:tools:invoke' });
     expect(computeManifestDigest({ ...manifest, version: '0.2.5' }))
       .toBe('56bd986f5e43dcad5e69ced780115b5046b9382a830a4b57507c133324992452');
+    expect(computeManifestDigest({ ...manifest, version: '0.2.6' }))
+      .toBe('c69c8ce188907fa3db602caa290e07ebcaffa9e63010aa47b73e1599b36149ed');
     const result = await compileAppMcpRegistry(input);
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error(JSON.stringify(result.diagnostics));
@@ -57,6 +59,16 @@ describe('app MCP registry compilation', () => {
     expect(result.registry.resolveTool('artifacts-ensure')).toBeUndefined();
     expect(input.execute).not.toHaveBeenCalled();
     expect(input.createInvocation).not.toHaveBeenCalled();
+  });
+
+  it('should refuse the superseded artifacts 0.2.6 compatibility receipt', async () => {
+    const input = fixture();
+    input.compatibility['sentropic.artifacts'].manifestDigest =
+      'c69c8ce188907fa3db602caa290e07ebcaffa9e63010aa47b73e1599b36149ed';
+    const result = await compileAppMcpRegistry(input);
+    expect(result.ok).toBe(false);
+    expect(result).not.toHaveProperty('registry');
+    expect(input.execute).not.toHaveBeenCalled();
   });
 
   it('should refuse the superseded artifacts 0.2.4 compatibility receipt', async () => {
