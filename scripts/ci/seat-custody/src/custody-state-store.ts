@@ -21,14 +21,30 @@ export const sha256hex = (b: Buffer | string): string => createHash('sha256').up
 export type Reservation = {
   ref: string; family: string; credentialGeneration: number;
   capacity: number; held: number; status: 'active' | 'fenced';
+  // ACT-L06a additive fields: day/cli/accountRef bind the reservation to its
+  // admission cycle for cap accounting; settled marks a once-only settlement.
+  day?: string; cli?: string; accountRef?: string; settled?: boolean;
 };
+
+export type RosterEntryV1 = {
+  account: string; cli: string; slot: string;
+  // ACT-L06a additive fields (r4 §3.1 roster records): provider, display name,
+  // alias references, quota/refresh family refs and the removal tombstone flag.
+  provider?: string; displayName?: string; aliases?: string[];
+  quotaFamilyRef?: string; refreshFamilyRef?: string; tombstoned?: boolean;
+};
+
+export type AdmissionV1 = { reviewInputKey: string; accountRef: string; reservationRef: string; outcome: string };
+export type SkipV1 = { code: string; accountRef: string; provider: string; at: string };
 
 export type CustodyStateV1 = {
   schemaVersion: 1; storeEpoch: number; generation: number; transactionSeq: number; allocationSeq: number;
   priorCommittedGeneration: number; rosterRevision: number;
-  roster: { account: string; cli: string; slot: string }[];
+  roster: RosterEntryV1[];
   tombstones: string[]; routeQualifications: unknown[]; cursors: Record<string, number>;
   refreshIntents: string[]; reservations: Reservation[];
+  // ACT-L06a additive durable fields (r4 §3.1: admissions and refusal skips persist).
+  admissions: AdmissionV1[]; skips: SkipV1[];
   accounting: { authorized: number; held: number; spent: number; released: number };
   counters: { day: Record<string, number>; fleet: number };
   journals: { transactionId: string; outcome: string }[]; uncertainty: string[];
@@ -50,7 +66,8 @@ export function makeGenesisState(overrides: Partial<CustodyStateV1> = {}): Custo
     schemaVersion: STATE_SCHEMA_VERSION, storeEpoch: 1, generation: 1, transactionSeq: 1, allocationSeq: 0,
     priorCommittedGeneration: 0, rosterRevision: 0,
     roster: [], tombstones: [], routeQualifications: [], cursors: {}, refreshIntents: [],
-    reservations: [], accounting: { authorized: 0, held: 0, spent: 0, released: 0 },
+    reservations: [], admissions: [], skips: [],
+    accounting: { authorized: 0, held: 0, spent: 0, released: 0 },
     counters: { day: {}, fleet: 0 }, journals: [], uncertainty: [],
     ...overrides,
   };
@@ -83,6 +100,13 @@ export function validateState(s: unknown): CustodyStateV1 {
   if (!(a.authorized === a.held + a.spent + a.released)) throw new Error('conservation');
   const heldSum = state.reservations.reduce((n, r) => n + r.held, 0);
   if (heldSum > a.held) throw new Error('conservation-held');
+  // ACT-L06a: durable admissions/refusal skips (r4 §3.1) validate additively.
+  const admissions = state.admissions ?? [];
+  const skips = state.skips ?? [];
+  if (!Array.isArray(admissions) || !Array.isArray(skips)) throw new Error('admissions-skips');
+  if (new Set(admissions.map(x => x?.reviewInputKey)).size !== admissions.length) throw new Error('admission-duplicate');
+  for (const s of skips) if (!s || typeof s.code !== 'string' || s.code.length === 0) throw new Error('skip-shape');
+  for (const e of state.roster) if (e.provider !== undefined && typeof e.provider !== 'string') throw new Error('roster-provider');
   if (serializeState(state).length > DECODED_LIMIT_BYTES) throw new Error('decoded-limit');
   return state;
 }
