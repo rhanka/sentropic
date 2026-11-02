@@ -5,6 +5,8 @@ import { eq } from 'drizzle-orm';
 import { env } from '../../config/env';
 import { db } from '../../db/client';
 import { oauthClients, serviceClients } from '../../db/schema';
+import { bindCmAppDatabase, runCmIdentityWrite } from '../identity/cm-transaction';
+import { bindCmServiceClientTenant, findCmServiceClientBinding } from '../identity/cm-service-clients';
 
 const REDIRECT_URIS = [
   'http://localhost:5397/auth/oauth/callback',
@@ -201,32 +203,40 @@ export const seedServiceClients = async (): Promise<SeededServiceClient[]> => {
       revokedAt: null,
     };
 
-    await db
-      .insert(serviceClients)
-      .values(values)
-      .onConflictDoUpdate({
-        set: {
-          allowedScopes: values.allowedScopes,
-          clientSecretHash: values.clientSecretHash,
-          displayName: values.displayName,
-          dpopBoundAccessTokens: values.dpopBoundAccessTokens,
-          exchangePolicy: values.exchangePolicy,
-          resourceIndicators: values.resourceIndicators,
-          revokedAt: null,
-        },
-        target: serviceClients.clientId,
-      });
+    const seededRow = await runCmIdentityWrite(async tx => {
+      const database = bindCmAppDatabase(tx);
+      await database
+        .insert(serviceClients)
+        .values(values)
+        .onConflictDoUpdate({
+          set: {
+            allowedScopes: values.allowedScopes,
+            clientSecretHash: values.clientSecretHash,
+            displayName: values.displayName,
+            dpopBoundAccessTokens: values.dpopBoundAccessTokens,
+            exchangePolicy: values.exchangePolicy,
+            resourceIndicators: values.resourceIndicators,
+            revokedAt: null,
+          },
+          target: serviceClients.clientId,
+        });
 
-    const [row] = await db
-      .select({
-        clientId: serviceClients.clientId,
-        displayName: serviceClients.displayName,
-        dpopBoundAccessTokens: serviceClients.dpopBoundAccessTokens,
-      })
-      .from(serviceClients)
-      .where(eq(serviceClients.clientId, client.clientId))
-      .limit(1);
-    if (row) seeded.push(row);
+      // Explicit bootstrap policy; preserve any existing CM binding, including suspension.
+      if (!await findCmServiceClientBinding(client.clientId)) {
+        await bindCmServiceClientTenant(tx, client.clientId, 'sentropic');
+      }
+      const [row] = await database
+        .select({
+          clientId: serviceClients.clientId,
+          displayName: serviceClients.displayName,
+          dpopBoundAccessTokens: serviceClients.dpopBoundAccessTokens,
+        })
+        .from(serviceClients)
+        .where(eq(serviceClients.clientId, client.clientId))
+        .limit(1);
+      return row;
+    });
+    if (seededRow) seeded.push(seededRow);
   }
 
   return seeded;
