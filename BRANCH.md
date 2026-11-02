@@ -1,17 +1,17 @@
 # Feature: Resolve exact scanner sources and retained materials (A02)
 
 ## Objective
-- [ ] Implement admission-plan-r1 section 5 A02 and R1 under approved r6 section 3.2; retain candidate-only status.
+- [ ] Implement admission-plan-r1 section 5 row A02 (R1) under approved amendment r6 section 3.2: resolve/authenticate public sources and exact compiler/base/module/package snapshots, implement ordered patches and retained-material acquisition. Candidate-only; no build eligibility, admission or promotion claim.
 
 ## Scope / Guardrails
 - [x] Binding r6 SHA-256: `4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f`.
 - [x] Binding plan SHA-256: `528dd39308a6e2cf8bdf31307c82da373cf3ceb666cb865a0417abfa7ece49d2`.
-- [x] Worktree: `tmp/worktrees/cyber-admission-a02`; branch: `feat/cyber-admission-a02`; base: A01 `eb3ed49f7f013645b63c3117d3a488127433e791`, ready PR #883.
-- [x] Make-only Docker-first; single shared Docker lock per command; reuse the pinned Node image; no image build planned.
+- [x] Worktree: `tmp/worktrees/cyber-admission-a02`; branch: `feat/cyber-admission-a02`; base: origin/main `e3fa8fab7f6a9ea802550f2a4e1b269fbb212375` (A01 merged as PR #883).
+- [x] Make-only Docker-first; single shared Docker lock `.tmp/packets/DOCKER-LOCK.md` taken per command; reuse the pinned Node image; no new image build.
 - [x] `ENV=test-cyber-adm` last; no listening services or ports; no registry login, OIDC, secrets, live promotion or merge.
 - [x] Keep production admission, A03+ execution, policy changes and Track writes out of scope; the conductor remains the sole Track writer.
-- [x] Tests first; selective staging; make commit under 150 changed lines; push after every commit; never suppress CI.
-- [x] Stop on an unresolved design decision; pin selection and implementation follow the approved R1 contract.
+- [x] Tests first; selective staging; `make commit` under 150 changed lines; push after every commit; never suppress CI; never `[skip ci]`.
+- [x] Stop on an unresolved design decision; pin selection and implementation follow the approved R1/r6 section 3.2 contract.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -26,57 +26,54 @@
   - `BRANCH.md`
   - `scripts/security/scanner/**`
   - `scripts/security/daily/scanner-provenance.test.mjs`
-  - `scripts/ci/publishable-ci-wiring.test.mjs`
-  - `.github/workflows/ci.yml`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `packages/mcp-platform/**`
-- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - `.security/**`
+  - `.track/**`
+  - `packages/**`
   - `.github/workflows/**`
+  - `scripts/ci/**`
+- **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
+  - none
 - **Exception process**:
-  - [x] Declare BRCADM02-EXn with reason, impact and rollback before a conditional change.
+  - [x] No exception declared; no conditional or forbidden path is touched.
 
 ## Feedback Loop
 - [x] Retain inherited BRLOCK-EX1 under `.security/ci-lockfile-policy.json`: owner=CI maintainers, review_by=2026-11-30T00:00:00Z; bounded scope and removal trigger remain unchanged, and catalog SCA debt stays open.
-- [x] BRCADM02-EX1: add the literal A01 base branch to CI pull_request triggers so the required stacked PR receives ordinary CI; no publication permission change; rollback removes that one base after unstacking.
-- [x] A01 local gate passed 298 tests with zero failures/skips and cleanup exit 0; ready PR #883 CI run 41414318957 passed on eb3ed49f7.
+- [x] A01 local gate passed 298 tests with zero failures/skips; ready PR #883 CI run 41414318957 passed and merged as `e3fa8fab7`; this branch is rebased on origin/main.
+- [x] Prior A02 lane commits (patch/acquisition/offline machinery plus tests) are retained and rebased; the native replay executor and the resolved recipe/material pins are the remaining work.
+- [x] Public source investigation confirms Trivy v0.76.1 at commit `e713f67f7d54decdcd9b3132c9751833dcced698` (tag ref, commit API and tree API retained), Go 1.27.3 toolchain, alpine 3.24.2 base at index `sha256:294b683c...`, and the inherited embedded go-jose v4.1.5 defect.
 - [x] Preserve upstream authentication gaps and tool-qualification boundaries; a fetched hash or candidate-only fixture grants no admission.
-- [x] Public source investigation confirms Trivy v0.76.1 at e713f67f7d54decdcd9b3132c9751833dcced698 and the inherited embedded go-jose v4.1.5 defect.
+- [x] Retained materials stay outside the repository (`.tmp/daily-cyber/a02-materials`); only the reviewed recipe, material manifest and patch data are committed.
 
 ## AI Flaky tests
 - [x] Deterministic source/material tests and offline replay; no AI flaky exception.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Multi-branch**: A02 stacked on A01, separate ready PR, no merge.
+- [x] **Mono-branch**: single A02 lane with one ready PR against main; no merge.
 
 ## UAT Management (in orchestration context)
 - [x] No UI surface; executable material and offline dependency checks provide the applicable gate.
 
 ## Plan / Todo (lot-based)
-- [x] **Lot 0 — Scope and baseline**
-  - [x] Read the approved A02/R1 contract, template, rules and available source evidence; create the stacked worktree and pass the mechanical branch check.
+- [ ] **Lot 0 — Baseline & constraints**
+  - [x] Read rules, approved r6/plan and the A01 contract; verify both document hashes.
+  - [x] Create/confirm isolated worktree `tmp/worktrees/cyber-admission-a02` from origin/main and pass the mechanical harness branch check (PASS C1).
+  - [x] Locate the existing pinned Node test lane and the shared Docker lock; preserve production admission off.
 - [ ] **Lot 1 — Tests before implementation**
-  - [x] Write a mandatory native replay test before its executor: actual retained sources, fresh caches, no network, patched positive and OS-only negative; it cannot skip without materials.
-  - [x] Write dependency-resolution checksum, OS-only, replacement and clean offline-environment tests before implementing the replay helper.
-  - [x] Write retained-acquisition tests before implementation: exact inventory, hash/size limits, no partial publication, offline recheck, mutation/missing/extra/symlink refusal.
-  - [x] Write the collected ordered-patch, source/patch/checksum mutation and OS-only source negative controls before their implementation.
-  - [ ] Add `material-acquisition.test.mjs`, collected by `scanner-provenance.test.mjs`, for source/checksum mutation, ordered patches and bounded retained acquisition.
-  - [ ] Add offline dependency replay and OS-only negative controls, with the native replay repeated on the actual resolved sources.
-  - [x] Record the failing pre-implementation gate: collected suite refuses missing `material-patches.mjs` (exit 2); log retained in `.tmp/rv/cyber-admission-a02-patches-red.log`.
+  - [x] Ordered-patch, retained-acquisition and offline-resolution unit tests are collected by `scanner-provenance.test.mjs`.
+- [x] Retained proxy paths encode reversibly inside the contract charset (`!x`→uppercase, `/@v/`→`/`, `+`→`-plus-`) with asserted round-trips.
+  - [x] Native offline replay test (`native-replay.test.mjs`) requires `SCANNER_MATERIALS` and never skips.
+  - [ ] Update `scanner-provenance.test.mjs`: resolved real recipe passes inventory validation, refuses empty retained bytes, and every patch/source/checksum mutation of the real recipe/manifest refuses; wire the native replay test when `SCANNER_MATERIALS` is set.
 - [ ] **Lot 2 — Exact source, patch and material implementation**
-  - [x] Implement ordered data-only patches with exact input/output checksums, unique edit contexts and atomic source preservation.
-  - [x] Implement streamed hash/size-bound HTTPS acquisition, private staging and offline retained inventory verification after the missing-module RED gate.
-  - [x] Implement clean file-proxy Go environment and resolution-to-source/checksum binding after the missing-module RED gate; native replay remains required.
-  - [ ] Implement source/archive identity checks, strict ordered patches and retained-file acquisition under `scripts/security/scanner/`.
-  - [ ] Resolve exact upstream commit/archive/authentication/license, Go compiler/module checksums, base/package snapshots and tool/Action pins; preserve every actual gap.
-  - [ ] Retain resolved bytes and implement dependency resolution from those bytes with network disabled; refuse mutation, undeclared fetches and an OS-only repair.
-  - [ ] Replace descriptive recipe/material placeholders with the measured candidate tuple; keep runtime admission off.
-- [ ] **Lot 3 — Gates, review and ready PR**
-  - [ ] Run the collected suites through `make test-security-daily ENV=test-cyber-adm` under the single lock, then `make down ENV=test-cyber-adm`.
-  - [ ] Execute real offline dependency replay plus the source/patch/checksum mutation and OS-only negatives; retain the exact heads, inputs and outcomes.
-  - [ ] Obtain two independent code reviews of the actual implementation and pins before build eligibility; reconcile findings.
-  - [ ] Validate the stacked CI trigger with its parser test, scope-check every commit and push every atomic commit.
-  - [ ] Open a ready PR against A01; record its exact head, CI and every gate in `.tmp/rv/cyber-admission-a01.md`.
+  - [x] Ordered data-only patches with exact input/output checksums exist under `scripts/security/scanner/patches/`.
+  - [ ] Resolve and measure the actual pins: upstream archive/authentication/license, Go compiler/go.mod/go.sum/module proxy, base index/manifest/config/layer, APK index/packages, tools and Actions; write `recipe.json` and `material-manifest.json` with no prose pin or pending digest.
+  - [ ] Assemble the retained material directory and implement `native-replay.mjs`: offline replay of the patched source resolves go-jose v4.1.6; the OS-only source still exposes v4.1.5 and is rejected.
+- [ ] **Lot 3 — Gates, ready PR and report**
+  - [ ] Run `make test-security-daily ENV=test-cyber-adm` under the single lock, then the native offline replay with `SCANNER_MATERIALS`, then `make down ENV=test-cyber-adm`.
+  - [ ] `make scope-check` before every commit; atomic `make commit` under 150 lines; push after every commit.
+  - [ ] Open a ready (non-draft) PR against main once the A02 test gate passes; record its head and CI.
+  - [ ] Record exact heads, PR, CI and every test gate in `.tmp/rv/cyber-admission-a02.md` for conductor Track import.
   - [ ] Stop after A02; leave A03+ and all live admission/activation work fenced.

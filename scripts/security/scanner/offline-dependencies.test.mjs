@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { offlineGoEnvironment, verifyResolvedModules } from './offline-dependencies.mjs';
+import { offlineGoEnvironment, proxyPathFromRetained, retainedProxyPath, verifyResolvedModules } from './offline-dependencies.mjs';
 
 const module = { Path: 'github.com/go-jose/go-jose/v4', Version: 'v4.1.6',
   Sum: 'h1:sNRkftxFJxwsILiQukqp5z83QBSmntVwmgRY7AqBDO4=',
@@ -27,6 +27,22 @@ test('should refuse the OS-only source, missing embedded module, checksum substi
     const f = { goMod, goSum: sums, modules: [structuredClone(module)] }; mutate(f);
     assert.throws(() => verifyResolvedModules(f), /scanner-contract/);
   }
+});
+
+test('should reversibly encode retained proxy paths within the contract charset', () => {
+  for (const proxyPath of [
+    'github.com/go-jose/go-jose/v4/@v/v4.1.6.zip',
+    'github.com/!ada!logics/go-fuzz-headers/@v/v0.0.0-20240806141605-e8a1dd7889d6.mod',
+    'github.com/coreos/go-oidc/@v/v2.5.0+incompatible.info',
+    'gopkg.in/yaml.v3/@v/v3.0.1.mod',
+  ]) {
+    const retained = retainedProxyPath(proxyPath);
+    assert.match(retained, /^[a-zA-Z0-9][a-zA-Z0-9._/-]*$/);
+    assert.equal(proxyPathFromRetained(retained), proxyPath);
+  }
+  assert.throws(() => retainedProxyPath('github.com/a b/@v/v1.0.0.zip'), /scanner-contract/);
+  assert.throws(() => proxyPathFromRetained('github.com/x/@v/v1.0.0.zip'), /scanner-contract/);
+  assert.throws(() => proxyPathFromRetained('../escape'), /scanner-contract/);
 });
 
 test('should use only a retained file proxy with fresh caches and no inherited credentials or toolchain fetch', () => {
