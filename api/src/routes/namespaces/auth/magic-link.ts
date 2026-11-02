@@ -103,63 +103,6 @@ export const magicLinkHandlers: AuthHonoRouteHandlers = {
     // Now we need to check if there's a new device waiting to be activated
     // Get the most recently created device for this user
     const allDevices = await listCmCredentialsForUser(result.userId);
-    const newestDevice = [...allDevices].sort(
-      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
-    )[0];
-
-    const hasDevices = allDevices.length > 0;
-    
-    // If there's a device (new or existing), create session and activate
-    // The device(s) are now usable because emailVerified is true
-    if (hasDevices) {
-      logger.info({ 
-        userId: result.userId, 
-        email: result.email,
-        devicesCount: allDevices.length,
-        newestDeviceId: newestDevice?.id,
-      }, 'Magic link verified - device(s) activated, creating session');
-      
-      // Create session
-      const { sessionToken, refreshToken, expiresAt } = await createSession(
-        user.id,
-        effectiveRole,
-        {
-          name: 'Magic Link - Device Activation',
-          ipAddress: c.req.header('x-forwarded-for') || c.req.header('x-real-ip'),
-          userAgent: c.req.header('user-agent'),
-        }
-      );
-      
-      const isProduction = process.env.NODE_ENV === 'production';
-      const origin = c.req.header('origin');
-      const cookieOptions = [
-        `session=${sessionToken}`,
-        'HttpOnly',
-        isProduction ? 'Secure' : '',
-        'SameSite=Lax',
-        'Path=/',
-        `Max-Age=${7 * 24 * 60 * 60}`,
-      ];
-
-      if (!isProduction && origin && origin.includes('localhost')) {
-        cookieOptions.push('Domain=localhost');
-      }
-
-      c.header('Set-Cookie', cookieOptions.filter(Boolean).join('; '));
-      
-      return c.json({
-        success: true,
-        user: {
-          id: user.id,
-          email: user.email,
-          displayName: user.displayName,
-          role: user.role,
-        },
-        sessionToken,
-        refreshToken,
-        expiresAt: expiresAt.toISOString(),
-      });
-    }
     
     // No devices: edge case - redirect to register
     logger.info({ 
