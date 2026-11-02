@@ -201,4 +201,3 @@ workspacesRouter.delete('/:id', requireEditor, async (c) => {
   // Do not recreate CM cleanup with host SQL or commit partial business destruction.
   return c.json({ error: 'identity_contract_unavailable', message: 'Workspace deletion unavailable.' }, 503);
 });
-
