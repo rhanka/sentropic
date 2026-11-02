@@ -10,8 +10,9 @@ import {
 } from '../../src/db/schema';
 import {
   createCmTenant, enrolCmWorkspace, findCmTenant, findCmWorkspace, listCmWorkspaceMembers, listCmWorkspacesForTenant,
-  putCmWorkspaceMember, setCmMembershipState,
+  putCmWorkspaceMember, setCmMembershipState, setCmTenantStatus,
 } from '../../src/services/identity/cm-tenancy';
+import { updateCmUser } from '../../src/services/identity/cm-users';
 import {
   cmDeleteTenantMembershipsForUser, cmDeleteTenants, cmDeleteWorkspaceMembers,
 } from '../utils/cm-identity-test-store';
@@ -115,6 +116,23 @@ describe('session adoption workspace binding', () => {
     });
     expect(binding).toMatchObject({ sessionId: 'sess-adopt-1', workspaceId, status: 'attached' });
     await expect(service.get('sess-adopt-1', TENANT_A, user.id)).resolves.toMatchObject({ workspaceId });
+  });
+
+  it.each(['account', 'tenant'] as const)('rejects current %s suspension across every binding operation', async target => {
+    const service = new SessionWorkspaceService();
+    const input = { sessionId: 'sess-adopt-1', tenantId: TENANT_A, principalId: user.id, workspaceId };
+    const original = await service.adopt(input);
+    if (target === 'tenant') await setCmTenantStatus(TENANT_A, 'suspended');
+    else await updateCmUser(user.id, { accountStatus: 'disabled_by_admin', disabledAt: new Date(), disabledReason: 'test' });
+    for (const operation of [
+      () => service.adopt(input),
+      () => service.detach(input.sessionId, TENANT_A, user.id),
+      () => service.end(input.sessionId, TENANT_A, user.id),
+      () => service.get(input.sessionId, TENANT_A, user.id),
+    ]) await expect(operation()).rejects.toMatchObject({ code: 'workspace_rights_refused' });
+    const [persisted] = await db.select().from(sessionWorkspaceBindings)
+      .where(eq(sessionWorkspaceBindings.sessionId, input.sessionId));
+    expect(persisted).toMatchObject({ status: 'attached', version: original.version, workspaceId });
   });
 
   it('should create and attach a new code workspace', async () => {
