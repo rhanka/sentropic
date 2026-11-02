@@ -119,6 +119,7 @@ describe('FOUNDATION_SKILLS bundle', () => {
 function makeAllowlistInput(toolNames: string[]) {
   return {
     userId: 'user-char-001',
+    tenantId: 'tenant-fixture',
     workspaceId: 'ws-char-001',
     workspaceType: 'ai-priorities' as string | null,
     currentUserRole: 'editor' as string | null,
@@ -203,6 +204,7 @@ describe('resolveFoundationChatTools — live-chat oracle', () => {
     // With workspaceType='ai-priorities', organizations tools should be visible.
     const toolsAiIdeas = resolveFoundationChatTools({
       userId: 'u1',
+      tenantId: 'tenant-fixture',
       workspaceId: 'ws1',
       workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
@@ -214,6 +216,7 @@ describe('resolveFoundationChatTools — live-chat oracle', () => {
     // With workspaceType='code' (not in organizations contextFilter), organizations tools absent.
     const toolsCode = resolveFoundationChatTools({
       userId: 'u1',
+      tenantId: 'tenant-fixture',
       workspaceId: 'ws1',
       workspaceType: 'code',
       currentUserRole: 'editor',
@@ -529,9 +532,17 @@ describe('executeFoundationSearchSkills — search_skills semantics', () => {
 // ---------------------------------------------------------------------------
 
 describe('buildFoundationSkillsAuthz', () => {
+  it('preserves an explicit tenant and refuses a missing tenant instead of using the workspace ID', () => {
+    const input = makeAllowlistInput(['workspace_list']);
+    expect(buildFoundationSkillsAuthz(input).tenant).toMatchObject({
+      tenantId: 'tenant-fixture', workspaceId: 'ws-char-001' });
+    expect(() => buildFoundationSkillsAuthz({ ...input, tenantId: '' })).toThrow('catalog_access_denied');
+  });
+
   it('produces an AuthzContext with permissionMode=allowlist and the provided allowedTools', () => {
     const authz = buildFoundationSkillsAuthz({
       userId: 'u1',
+      tenantId: 'tenant-fixture',
       workspaceId: 'ws1',
       workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
@@ -548,6 +559,7 @@ describe('buildFoundationSkillsAuthz', () => {
   it('produces empty roles array when currentUserRole is null', () => {
     const authz = buildFoundationSkillsAuthz({
       userId: 'u1',
+      tenantId: 'tenant-fixture',
       workspaceId: 'ws1',
       workspaceType: null,
       currentUserRole: null,
@@ -560,6 +572,7 @@ describe('buildFoundationSkillsAuthz', () => {
   it('deduplicates allowedTools', () => {
     const authz = buildFoundationSkillsAuthz({
       userId: 'u1',
+      tenantId: 'tenant-fixture',
       workspaceId: 'ws1',
       workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
