@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.3.0
+
+- Add a durable local SQLite adapter set behind the new `./sqlite` subpath export:
+  `sqlite.ts`, `sqlite-store.ts`, `sqlite-commit.ts`, `sqlite-management.ts`,
+  `sqlite-activation.ts` and `local-blob.ts` implement the same port interfaces as
+  the Postgres adapters and the S3 blob store, backed by the builtin `node:sqlite`
+  driver (no new dependency) and the local filesystem with sha256 digest
+  verification on put, get and strict delete.
+- Cover bindings, intents, idempotency, ACL, lifecycle, publication state, refcounts,
+  the commit coordinator with the same transactional semantics and release CAS, and
+  the activation store. Multi-statement units run in one serialized writer
+  transaction (`BEGIN IMMEDIATE`); that isolation is stronger than the Postgres
+  READ COMMITTED baseline while the observable port behaviour is unchanged.
+- Prove parity with one parameterized conformance suite executed against both the
+  Postgres and the SQLite backends, including restart durability, concurrent
+  writers, CAS conflicts and the refcount/GC edges.
+- The root and portable entries stay free of `node:sqlite` and `better-sqlite3`;
+  import the local adapters only through `@sentropic/artifacts/sqlite`.
+- Artifacts 0.3.0 widens the cluster-mesh peer range to `>=0.2.0 <0.4.0`
+  (cluster-mesh 0.26.0-dev.6); the API keeps its pinned APP-P1 profile digest and
+  requalifies the APP-P1 manifest digest for this version.
+
 ## 0.2.6
 
 - Integrate part 1 with the source reads, sharing, terminal deletion, masking and
