@@ -41,6 +41,30 @@ describe('A4 host capability over the real PostgreSQL driver', () => {
     expect(() => scope.seal()).toThrow('identity_transaction_unbound');
   });
 
+  it.each(['/* prefix */ COMMIT', '-- prefix\nROLLBACK', '-- prefix\rCOMMIT', '; END',
+    '/* outer /* nested */ comment */ ABORT', 'SET /* gap */ LOCAL TRANSACTION READ ONLY',
+    'PREPARE /* gap */ TRANSACTION \'nested\''])('rejects disguised transaction control: %s', async sql => {
+    const original = await client.query('SELECT txid_current()::text AS xid');
+    expect(() => scope.client.query(sql)).toThrow('identity_transaction_unbound');
+    expect((await client.query('SELECT txid_current()::text AS xid')).rows).toEqual(original.rows);
+    expect(() => scope.seal()).toThrow('identity_transaction_unbound');
+  });
+
+  it('uses the PostgreSQL extended protocol to refuse multiple statements before any execution', async () => {
+    await client.query('CREATE TEMP TABLE a4_scope_probe (value integer) ON COMMIT DROP');
+    await expect(scope.client.query('INSERT INTO a4_scope_probe VALUES (1); COMMIT'))
+      .rejects.toMatchObject({ code: '42601' });
+    expect(() => scope.seal()).toThrow();
+    // A committed insertion would survive in this connection; parse refusal aborts the transaction.
+    await client.query('ROLLBACK');
+    expect((await client.query("SELECT to_regclass('pg_temp.a4_scope_probe') AS name")).rows[0].name).toBeNull();
+  });
+
+  it('allows comments, quoted semicolons and a single terminating semicolon', async () => {
+    expect((await scope.client.query("/* ordinary read */ SELECT '; COMMIT' AS value;")).rows[0].value).toBe('; COMMIT');
+    expect(() => scope.seal()).not.toThrow();
+  });
+
   it('retains a caught private adapter signal and refuses every subsequent query before the driver', async () => {
     const failure = Object.freeze(new Error('private-restart-signal'));
     const capture = createCmPortFailureFence(scope.client);
