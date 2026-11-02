@@ -10,7 +10,8 @@ export interface ConnectorCustodyEnvelope extends ConnectorCustodyTuple {
 }
 const invalid = (): never => { throw new IdentityCustodyErrorV1('identity_revocation_custody_invalid'); };
 const aad = (tuple: ConnectorCustodyTuple): Buffer => {
-  if (Object.values(tuple).some(value => typeof value !== 'string' || !value.length || value.length > 256)
+  if ([tuple.custodyRef, tuple.deliveryId, tuple.connectorAccountId, tuple.provider, tuple.keyRef]
+    .some(value => typeof value !== 'string' || !value.length || value.length > 256)
     || !/^secret-crypto:v\d+$/.test(tuple.keyRef)) return invalid();
   return Buffer.from(JSON.stringify(['A2.0b-connector-custody', '1', tuple.custodyRef, tuple.deliveryId,
     tuple.connectorAccountId, tuple.provider, tuple.keyRef]));
