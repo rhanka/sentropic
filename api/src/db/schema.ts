@@ -11,12 +11,11 @@ const bytea = customType<{ data: Buffer; driverData: Buffer }>({
   },
 });
 
-// Lot A4: `workspaces` keeps business columns only. Ownership and the tenant
-// edge moved to the CM stores (cm_identity.cm_workspace_members /
-// cm_workspaces); control migration 0014 drops `owner_user_id` and
-// `tenant_id` from the public table.
+// CM owns workspace membership and tenant resolution. This existing owner
+// reference remains business data for authorized destruction of owned rows.
 export const workspaces = pgTable('workspaces', {
   id: text('id').primaryKey(),
+  ownerUserId: text('owner_user_id'),
   name: text('name').notNull(),
   type: text('type').notNull().default('ai-priorities'), // 'neutral' | 'ai-priorities' | 'opportunity' | 'code'
   gateConfig: jsonb('gate_config'), // nullable; gate sequence config per workspace. null = free gates (backward-compatible)
@@ -25,6 +24,7 @@ export const workspaces = pgTable('workspaces', {
   updatedAt: timestamp('updated_at', { withTimezone: false }).defaultNow(),
 }, (table) => ({
   typeIdx: index('workspaces_type_idx').on(table.type),
+  ownerUserIdIdx: index('workspaces_owner_user_id_idx').on(table.ownerUserId),
 }));
 
 export const organizations = pgTable('organizations', {
