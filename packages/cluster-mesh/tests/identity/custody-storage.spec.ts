@@ -7,8 +7,8 @@ import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, random
 import type { CustodyOpHost } from '../../src/index.js';
 import type { IdentityTransactionV1, IdentityUnitOfWorkV1 } from '../../src/index.js';
 
-const WRITE = { mode: 'write' as const, deadlineMs: 5000 };
-const READ = { mode: 'read' as const, deadlineMs: 5000 };
+const WRITE = { mode: 'write' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 };
+const READ = { mode: 'read' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 };
 
 interface ProfileEnv {
   readonly unitOfWork: IdentityUnitOfWorkV1<CustodyOpHost>;
@@ -40,7 +40,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody storage o
     return { unitOfWork, schema: null };
   };
   const write = async (env: ProfileEnv, fn: (tx: IdentityTransactionV1<CustodyOpHost>) => Promise<void>): Promise<void> => {
-    await env.unitOfWork.runWrite(WRITE, async (tx) => {
+    await env.unitOfWork.run(WRITE, async (tx) => {
       await fn(tx);
     });
   };
@@ -48,18 +48,18 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody storage o
   it('advances credential counters exactly once per revision', async () => {
     const env = await openEnv();
     await write(env, (tx) => tx.hostTransaction.stores.credentials.insert(credential('c1', 'u1')).then(() => undefined));
-    const advanced = await env.unitOfWork.runWrite(WRITE, (tx) =>
+    const advanced = await env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.credentials.compareAndSwapCounter({ proofId: 'c1', userId: 'u1', expectedCounter: 0, expectedRevision: 0, newCounter: 0, at: NOW }));
     expect(advanced.counter).toBe(0);
     expect(advanced.revision).toBe(1);
-    await expect(env.unitOfWork.runWrite(WRITE, (tx) =>
+    await expect(env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.credentials.compareAndSwapCounter({ proofId: 'c1', userId: 'other', expectedCounter: 0, expectedRevision: 1, newCounter: 1, at: NOW }),
     )).rejects.toMatchObject({ code: 'proof_binding_mismatch' });
-    await expect(env.unitOfWork.runWrite(WRITE, (tx) =>
+    await expect(env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.credentials.compareAndSwapCounter({ proofId: 'c1', userId: 'u1', expectedCounter: 5, expectedRevision: 1, newCounter: 6, at: NOW }),
     )).rejects.toMatchObject({ code: 'webauthn_credential_stale' });
-    await env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.stores.credentials.revoke('c1', 'u1', LATER));
-    await expect(env.unitOfWork.runWrite(WRITE, (tx) =>
+    await env.unitOfWork.run(WRITE, (tx) => tx.hostTransaction.stores.credentials.revoke('c1', 'u1', LATER));
+    await expect(env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.credentials.compareAndSwapCounter({ proofId: 'c1', userId: 'u1', expectedCounter: 0, expectedRevision: 2, newCounter: 1, at: LATER }),
     )).rejects.toMatchObject({ code: 'proof_verification_failed', reason: 'revoked' });
   });
@@ -67,7 +67,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody storage o
   it('rejects counter regression with the exact CAS refusal precedence', async () => {
     const env = await openEnv();
     await write(env, (tx) => tx.hostTransaction.stores.credentials.insert({ ...credential('cas', 'u1'), counter: 5 }));
-    const attempt = (overrides = {}) => env.unitOfWork.runWrite(WRITE, (tx) =>
+    const attempt = (overrides = {}) => env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.stores.credentials.compareAndSwapCounter({
         proofId: 'cas', userId: 'u1', expectedCounter: 5, expectedRevision: 0, newCounter: 0, at: NOW, ...overrides,
       }));
@@ -80,9 +80,9 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody storage o
       await expect(attempt({ proofId: 'missing', ...overrides })).rejects.toMatchObject({ code: 'identity_material_invalid' });
     }
     await expect(attempt({ userId: 'other' })).rejects.toMatchObject({ code: 'proof_binding_mismatch' });
-    expect(await env.unitOfWork.runRead(READ, (tx) => tx.hostTransaction.stores.credentials.findById('cas')))
+    expect(await env.unitOfWork.run(READ, (tx) => tx.hostTransaction.stores.credentials.findById('cas')))
       .toMatchObject({ counter: 5, revision: 0, lastUsedAt: null });
-    await env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.stores.credentials.revoke('cas', 'u1', LATER));
+    await env.unitOfWork.run(WRITE, (tx) => tx.hostTransaction.stores.credentials.revoke('cas', 'u1', LATER));
     await expect(attempt()).rejects.toMatchObject({ code: 'proof_verification_failed', reason: 'revoked' });
     await expect(attempt({ userId: 'other' })).rejects.toMatchObject({ code: 'proof_binding_mismatch' });
   });
@@ -94,21 +94,21 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody storage o
       await tx.hostTransaction.stores.singleUseProofs.insert(emailProof('e1', 'a@example.test', digest));
       await tx.hostTransaction.stores.singleUseProofs.insert(emailProof('e2', 'a@example.test', digest));
     });
-    const latest = await env.unitOfWork.runRead(READ, (tx) =>
+    const latest = await env.unitOfWork.run(READ, (tx) =>
       tx.hostTransaction.singleUseProofs.findLatestEmailCode('a@example.test', [digest], NOW));
     expect(latest?.proofId).toBe('e2');
-    await expect(env.unitOfWork.runWrite(WRITE, (tx) =>
+    await expect(env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.singleUseProofs.revoke({ kind: 'email_code', proofId: 'e1' }, 7, NOW),
     )).rejects.toMatchObject({ code: 'proof_state_conflict' });
-    await env.unitOfWork.runWrite(WRITE, (tx) =>
+    await env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.singleUseProofs.revoke({ kind: 'email_code', proofId: 'e1' }, 0, NOW));
-    const purged = await env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.singleUseProofs.purgeExpired(LATER));
+    const purged = await env.unitOfWork.run(WRITE, (tx) => tx.hostTransaction.singleUseProofs.purgeExpired(LATER));
     expect(purged).toBe(0);
     await write(env, (tx) => tx.hostTransaction.stores.singleUseProofs.insert({
       kind: 'magic_link', proofId: 'm1', userId: null, state: 'consumed', revision: 1, createdAt: NOW, expiresAt: NOW,
       consumedAt: NOW, revokedAt: null, email: 'a@example.test', tokenHash: sha256Hex('m1'),
     }));
-    const purgedTerminal = await env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.singleUseProofs.purgeExpired(LATER));
+    const purgedTerminal = await env.unitOfWork.run(WRITE, (tx) => tx.hostTransaction.singleUseProofs.purgeExpired(LATER));
     expect(purgedTerminal).toBe(1);
   });
 
@@ -116,24 +116,24 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody storage o
     const env = await openEnv();
     const digest = { algorithm: 'sha256' as const, value: sha256Hex('code-9') };
     await write(env, (tx) => tx.hostTransaction.stores.singleUseProofs.insert(emailProof('code-9', 'a@example.test', digest)));
-    const ticket = await env.unitOfWork.runWrite(WRITE, (tx) =>
+    const ticket = await env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.emailTickets.exchangeCode({
         codeProofId: 'code-9', expectedRevision: 0, email: 'a@example.test', digest,
         ticket: { codeProofId: 'code-9', email: 'a@example.test', tokenHash: sha256Hex('ticket-9'), userId: null, state: 'pending', revision: 0, createdAt: NOW, expiresAt: LATER, consumedAt: null, revokedAt: null },
         at: NOW,
       }));
     expect(ticket.tokenHash).toBe(sha256Hex('ticket-9'));
-    await expect(env.unitOfWork.runWrite(WRITE, (tx) =>
+    await expect(env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.emailTickets.exchangeCode({
         codeProofId: 'code-9', expectedRevision: 1, email: 'a@example.test', digest,
         ticket: { codeProofId: 'code-9', email: 'a@example.test', tokenHash: sha256Hex('ticket-9b'), userId: null, state: 'pending', revision: 0, createdAt: NOW, expiresAt: LATER, consumedAt: null, revokedAt: null },
         at: NOW,
       }),
     )).rejects.toMatchObject({ code: 'proof_state_conflict' });
-    const consumed = await env.unitOfWork.runWrite(WRITE, (tx) =>
+    const consumed = await env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.emailTickets.consume({ tokenHash: sha256Hex('ticket-9'), email: 'a@example.test', expectedRevision: 0, bindUserId: 'u9', at: NOW }));
     expect(consumed).toMatchObject({ userId: 'u9', state: 'consumed' });
-    await expect(env.unitOfWork.runWrite(WRITE, (tx) =>
+    await expect(env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.emailTickets.consume({ tokenHash: sha256Hex('ticket-9'), email: 'a@example.test', expectedRevision: 1, bindUserId: 'u9', at: NOW }),
     )).rejects.toMatchObject({ code: 'proof_state_conflict' });
   });
@@ -156,14 +156,14 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody storage o
         state: 'pending', revision: 0, createdAt: NOW, expiresAt: LATER, consumedAt: null, revokedAt: null,
       });
     });
-    await env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.singleUseProofs.purgeExpired('2026-11-01T12:15:00.000Z'));
-    await env.unitOfWork.runRead(READ, async (tx) => {
+    await env.unitOfWork.run(WRITE, (tx) => tx.hostTransaction.singleUseProofs.purgeExpired('2026-11-01T12:15:00.000Z'));
+    await env.unitOfWork.run(READ, async (tx) => {
       expect(await tx.hostTransaction.singleUseProofs.findMagicLink(tokenHash)).toMatchObject({ userId: 'u1', state: 'consumed' });
       expect(await tx.hostTransaction.singleUseProofs.find({ kind: 'email_code', proofId: 'ticket-parent' })).not.toBeNull();
       expect(await tx.hostTransaction.emailTickets.findByTokenHash(ticketHash)).toMatchObject({ state: 'pending' });
     });
-    await env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.singleUseProofs.purgeExpired('2026-11-01T13:00:00.000Z'));
-    await env.unitOfWork.runRead(READ, async (tx) => {
+    await env.unitOfWork.run(WRITE, (tx) => tx.hostTransaction.singleUseProofs.purgeExpired('2026-11-01T13:00:00.000Z'));
+    await env.unitOfWork.run(READ, async (tx) => {
       expect(await tx.hostTransaction.singleUseProofs.findMagicLink(tokenHash)).not.toBeNull();
       expect(await tx.hostTransaction.emailTickets.findByTokenHash(ticketHash)).toBeNull();
       expect(await tx.hostTransaction.singleUseProofs.find({ kind: 'email_code', proofId: 'ticket-parent' })).toBeNull();
@@ -178,11 +178,11 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody storage o
       rotationVersion: 0, createdAt: NOW, expiresAt: LATER, revokedAt: null, deviceName: 'd', ipAddress: 'ip', userAgent: 'ua', lastActivityAt: null,
     };
     await write(env, (tx) => tx.hostTransaction.stores.sessions.insert(session));
-    const bySession = await env.unitOfWork.runRead(READ, (tx) => tx.hostTransaction.stores.sessions.findBySessionTokenHash(sha256Hex('sess-1')));
+    const bySession = await env.unitOfWork.run(READ, (tx) => tx.hostTransaction.stores.sessions.findBySessionTokenHash(sha256Hex('sess-1')));
     expect(bySession?.userId).toBe('u1');
-    const byRefresh = await env.unitOfWork.runRead(READ, (tx) => tx.hostTransaction.stores.sessions.findByRefreshTokenHash(sha256Hex('refr-1')));
+    const byRefresh = await env.unitOfWork.run(READ, (tx) => tx.hostTransaction.stores.sessions.findByRefreshTokenHash(sha256Hex('refr-1')));
     expect(byRefresh?.sessionId).toBe('s1');
-    const rotated = await env.unitOfWork.runWrite(WRITE, (tx) =>
+    const rotated = await env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.sessions.rotate({
         sessionId: 's1', userId: 'u1', expectedRefreshTokenHash: sha256Hex('refr-1'), expectedRotationVersion: 0,
         verifiedLogin: { mfaVerified: true, authTime: 1000, sessionVersion: 1000 },
@@ -190,15 +190,15 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody storage o
       }));
     expect(rotated.rotationVersion).toBe(1);
     expect(rotated.expiresAt).toBe('2026-11-01T13:00:00.000Z');
-    await expect(env.unitOfWork.runWrite(WRITE, (tx) =>
+    await expect(env.unitOfWork.run(WRITE, (tx) =>
       tx.hostTransaction.sessions.rotate({
         sessionId: 's1', userId: 'u1', expectedRefreshTokenHash: sha256Hex('refr-1'), expectedRotationVersion: 0,
         verifiedLogin: { mfaVerified: true, authTime: 1000, sessionVersion: 1000 },
         nextSessionTokenHash: sha256Hex('sess-3'), nextRefreshTokenHash: sha256Hex('refr-3'), nextExpiresAt: '2026-11-01T13:00:00.000Z', at: NOW,
       }),
     )).rejects.toMatchObject({ code: 'login_refresh_conflict' });
-    await env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.stores.sessions.touchActivity('s1', LATER));
-    const touched = await env.unitOfWork.runRead(READ, (tx) => tx.hostTransaction.stores.sessions.findById('s1'));
+    await env.unitOfWork.run(WRITE, (tx) => tx.hostTransaction.stores.sessions.touchActivity('s1', LATER));
+    const touched = await env.unitOfWork.run(READ, (tx) => tx.hostTransaction.stores.sessions.findById('s1'));
     expect(touched?.lastActivityAt).toBe(LATER);
   });
 
@@ -210,14 +210,14 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody storage o
     });
     await write(env, (tx) => tx.hostTransaction.stores.social.insert(link('p1', 'u1')));
     await expect(write(env, (tx) => tx.hostTransaction.stores.social.insert(link('p2', 'u2')))).rejects.toMatchObject({ code: 'social_subject_conflict' });
-    const found = await env.unitOfWork.runRead(READ, (tx) => tx.hostTransaction.stores.social.findBySubject('github', 'subject-1'));
+    const found = await env.unitOfWork.run(READ, (tx) => tx.hostTransaction.stores.social.findBySubject('github', 'subject-1'));
     expect(found?.proofId).toBe('p1');
-    await env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.stores.social.touchLogin('p1', 0, NOW));
-    await expect(env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.stores.social.touchLogin('p1', 0, NOW))).rejects.toMatchObject({ code: 'proof_state_conflict' });
-    await env.unitOfWork.runWrite(WRITE, (tx) => tx.hostTransaction.stores.social.unlink('p1', 'u1', 1, NOW));
-    expect(await env.unitOfWork.runRead(READ, (tx) => tx.hostTransaction.stores.social.findBySubject('github', 'subject-1'))).toBeNull();
+    await env.unitOfWork.run(WRITE, (tx) => tx.hostTransaction.stores.social.touchLogin('p1', 0, NOW));
+    await expect(env.unitOfWork.run(WRITE, (tx) => tx.hostTransaction.stores.social.touchLogin('p1', 0, NOW))).rejects.toMatchObject({ code: 'proof_state_conflict' });
+    await env.unitOfWork.run(WRITE, (tx) => tx.hostTransaction.stores.social.unlink('p1', 'u1', 1, NOW));
+    expect(await env.unitOfWork.run(READ, (tx) => tx.hostTransaction.stores.social.findBySubject('github', 'subject-1'))).toBeNull();
     await write(env, (tx) => tx.hostTransaction.stores.social.insert(link('p3', 'u2')));
-    expect(await env.unitOfWork.runRead(READ, (tx) => tx.hostTransaction.stores.social.findBySubject('github', 'subject-1'))).toMatchObject({ proofId: 'p3', userId: 'u2' });
+    expect(await env.unitOfWork.run(READ, (tx) => tx.hostTransaction.stores.social.findBySubject('github', 'subject-1'))).toMatchObject({ proofId: 'p3', userId: 'u2' });
   });
 
   it('applies custody schema assets idempotently with digest validation', async () => {
@@ -229,7 +229,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody storage o
     if (profile === 'sqlite') {
       const { applySqliteIdentityCustodySchemaV1, SqliteCustodyHandle } = await import('../../src/index.js');
       const apply = (appliedAt: string, digest: string) =>
-        env.unitOfWork.runWrite(WRITE, (tx) =>
+        env.unitOfWork.run(WRITE, (tx) =>
           applySqliteIdentityCustodySchemaV1({
             binding: { transactionId: tx.transactionId, hostTransaction: null, connection: (tx.hostTransaction as SqliteCustodyHandle).connection, readOnly: false },
             expectedAssetSha256: digest,
@@ -243,7 +243,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody storage o
     } else {
       const { applyPostgresIdentityCustodySchemaV1, PostgresCustodyHandle } = await import('../../src/index.js');
       const apply = (appliedAt: string, digest: string) =>
-        env.unitOfWork.runWrite(WRITE, (tx) =>
+        env.unitOfWork.run(WRITE, (tx) =>
           applyPostgresIdentityCustodySchemaV1({
             schema: env.schema ?? '',
             binding: { transactionId: tx.transactionId, hostTransaction: null, session: (tx.hostTransaction as PostgresCustodyHandle).session, readOnly: false },
