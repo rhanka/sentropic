@@ -2510,9 +2510,11 @@ jobs:
 
   publish-artifacts:
     runs-on: ubuntu-latest
-    needs: [changes, validate-artifacts]
+    needs: [changes, validate-artifacts, publish-mcp-platform]
     if: >-
-      !cancelled() && needs.changes.result == 'success' && needs.validate-artifacts.result == 'success' && (needs.changes.outputs.artifacts_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
+      !cancelled() && needs.changes.result == 'success' && needs.validate-artifacts.result == 'success' &&
+      (needs.publish-mcp-platform.result == 'success' || (needs.publish-mcp-platform.result == 'skipped' && needs.changes.outputs.mcp_platform_publish != 'true')) &&
+      (needs.changes.outputs.artifacts_publish == 'true' && (github.ref == 'refs/heads/main' || inputs.capacity_publish_dry_run == true))
     permissions:
       contents: read
       id-token: write
