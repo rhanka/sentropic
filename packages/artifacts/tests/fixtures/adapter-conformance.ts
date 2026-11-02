@@ -115,7 +115,7 @@ export function runStoreConformance(backend: ConformanceBackend): void {
         await h.store.markFailed(second.intentId, 'boom');
         expect(await h.store.listPending()).toEqual([]);
         expect((await h.store.get(second.intentId))?.error).toBe('boom');
-        await expect(h.store.complete('missing')).rejects.toThrow(/unknown intent/);
+        await expect(h.store.complete('00000000-0000-4000-8000-000000000000')).rejects.toThrow(/unknown intent/);
       } finally { await h.close(); }
     });
 
