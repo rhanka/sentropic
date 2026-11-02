@@ -1545,7 +1545,8 @@
       "approved": "User approved.",
       "disabled": "User disabled.",
       "reactivated": "User reactivated.",
-      "deleted": "User deleted permanently."
+      "deleted": "User deleted permanently.",
+      "deletionPending": "Account removed. External revocations are still pending."
     },
     "errors": {
       "load": "Error while loading admin users.",
