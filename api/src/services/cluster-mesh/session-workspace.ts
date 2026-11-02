@@ -8,6 +8,8 @@ import {
 import { db } from '../../db/client';
 import { sessionWorkspaceBindings } from '../../db/control-schema';
 import { workspaces } from '../../db/schema';
+import { createId } from '../../utils/id';
+import { bindCmAppDatabase, runCmIdentityWrite } from '../identity/cm-transaction';
 import { findCmUserById } from '../identity/cm-users';
 import { findCmMembership, findCmWorkspace } from '../identity/cm-tenancy';
 import { hasRole } from '../../middleware/rbac';
@@ -180,13 +182,16 @@ export class SessionWorkspaceService {
     const sessionId = requireId(input.sessionId, 'sessionId');
     const tenantId = requireId(input.tenantId, 'tenantId');
     const principalId = requireId(input.principalId, 'principalId');
-    await this.checkTenantMember(tenantId, principalId);
-
     // One transaction covers workspace creation and the conditional binding
     // write: concurrent adopts conflict instead of overwriting each other, an
     // ended session cannot be resurrected, and a failed attach leaves no
     // orphan workspace behind.
-    const { binding, seed: pendingSeed } = await db.transaction(async (tx) => {
+    const prospectiveWorkspaceId = input.workspaceId ?? createId();
+    const { binding, seed: pendingSeed } = await runCmIdentityWrite(async (identityTx) => {
+      await identityTx.lockSubject(principalId);
+      if (input.workspaceId) await identityTx.lockWorkspace(input.workspaceId);
+      await this.checkTenantMember(tenantId, principalId);
+      const tx = bindCmAppDatabase(identityTx);
       const store = this.storeFactory(tx);
       const mesh = createSessionWorkspaceBindingService(store);
       let seed: {
@@ -217,7 +222,9 @@ export class SessionWorkspaceService {
         }
         const type = rawType as WorkspaceType;
         const globalRole = await this.requireGlobalEditor(principalId);
-        workspaceId = await provisionWorkspace(tx, { ownerUserId: principalId, name, type, tenantId });
+        workspaceId = await provisionWorkspace(identityTx, {
+          workspaceId: prospectiveWorkspaceId, ownerUserId: principalId, name, type, tenantId,
+        });
         seed = { workspaceId, type, globalRole };
       }
       let binding;

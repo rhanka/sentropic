@@ -23,6 +23,8 @@ import {
 } from '../../../db/schema';
 import { eq, inArray } from 'drizzle-orm';
 import { requireEditor } from '../../../middleware/rbac';
+import { createId } from '../../../utils/id';
+import { runCmIdentityWrite } from '../../../services/identity/cm-transaction';
 import { getUserWorkspaces, requireWorkspaceAdmin } from '../../../services/workspace-access';
 import {
   notifyWorkspaceCreated, notifyWorkspaceEvent,
@@ -67,8 +69,10 @@ workspacesRouter.post('/', requireEditor, zValidator('json', createWorkspaceSche
 
   // Canonical rows via the shared provisioning service (same gate config,
   // same creator-as-admin membership, same transaction atomicity).
-  const id = await db.transaction((tx) =>
+  const prospectiveId = createId();
+  const id = await runCmIdentityWrite((tx) =>
     provisionWorkspace(tx, {
+      workspaceId: prospectiveId,
       ownerUserId: user.userId,
       name,
       type: type as import('../../../services/workspace-access').WorkspaceType,
