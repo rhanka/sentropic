@@ -50,6 +50,7 @@
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
+- [x] Resume review A2: a local probe confirmed four credential headers reached the fixture. Strip all supported provider credential headers while preserving local application cookies; regression passes. Cancellation during the final SSE delay did not reproduce A1 (fixture stays healthy, no response error, one cancellation).
 - [ ] Track import belongs to the designated conductor; `.track/**` remains forbidden here. Import this branch plan, deliverables and final receipt during the next single-writer sync.
 - [x] Local harness is absent from PATH; mechanical checks use the existing repository harness dist through an external Make entry point, without a Docker build.
 - [x] The current owner rule supersedes historical multi-lock notes: acquire only `/home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md`, wait without expiration, and keep the lock through service validation and cleanup.
