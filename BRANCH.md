@@ -20,6 +20,8 @@ Ship a durable LOCAL SQLite adapter set in @sentropic/artifacts equivalent to th
   - `packages/cluster-mesh/package.json`
   - `packages/cluster-mesh/CHANGELOG.md`
   - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
   - `api/src/services/mcp/cluster-registry.ts`
   - `api/tests/api/app-mcp-registry.test.ts`
   - `api/tests/api/app-mcp-installed.test.ts`
@@ -40,7 +42,7 @@ Ship a durable LOCAL SQLite adapter set in @sentropic/artifacts equivalent to th
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- (empty at branch start)
+- BR-U1-EX1: `packages/cluster-mesh/tests/packaging/fixtures/selected/{package.json,package-lock.json}` added to Allowed Paths; they mirror the cluster-mesh version/peer bump exactly as 4ed0b4009 did on main (BR01-EX1/EX2). First scope-check run flagged them as unknown before the declaration; re-run after declaring.
 
 ## AI Flaky tests
 - Acceptance rule: non-systematic provider/network/model nondeterminism only, with one success on the same commit and command; never additive timeouts; record command + file + signature here if accepted.
@@ -50,36 +52,37 @@ Ship a durable LOCAL SQLite adapter set in @sentropic/artifacts equivalent to th
 - Rationale: one deliverable (U1) on one branch; no orthogonal sub-workstreams.
 
 ## Plan / Todo (lot-based)
-- [ ] **Lot 0 — Baseline & constraints**
+- [x] **Lot 0 — Baseline & constraints**
   - [x] Read rules/MASTER.md, rules/workflow.md, COMMON-RULES packet, h2a plan §1.3 U1 wording.
   - [x] Create worktree tmp/worktrees/artifacts-sqlite-u1 on feat/artifacts-sqlite-u1 from origin/main; `harness check branch` PASS.
   - [x] Write BRANCH.md from plan/BRANCH_TEMPLATE.md.
   - [x] Confirm command style: `flock <docker-lock> make ... ENV=test-artifacts-u1` with ENV last.
-- [ ] **Lot 1 — Tests first: parameterized conformance suite (RED)**
-  - [ ] `packages/artifacts/tests/fixtures/adapter-conformance.ts` — one parameterized suite over a backend factory: store conformance (ensure/bindings incl. concurrent + terminal gone, intents, preparation-intent cleanup reads, idempotency replay/conflict, ACL, sources, lifecycle, publication state + CAS, refcounts/pins, registered blobs), commit-executor conformance (coordination-row convergence, serialized finalization, receipt exactly-once + replay, rollback residue, CAS), activation conformance (vector list incl. concurrent-consume, single-use, expiry, cleanup bounds, invalidation, ttl cap, commit-unknown), blob-store conformance (round-trip, digest verification, hostile keys, prefix listing, strict delete), restart durability (reopen), concurrent writers.
-  - [ ] `packages/artifacts/tests/sqlite-conformance.test.ts` — runs the suite against SQLite only (unit run, no services).
-  - [ ] `packages/artifacts/tests/adapter-conformance.integration.test.ts` — runs the SAME suite against Postgres (DATABASE_URL) and SQLite in one file (parity proof).
-  - [ ] RED: suite fails because `../src/adapters/sqlite.js` does not exist yet.
-- [ ] **Lot 2 — SQLite store adapter (GREEN)**
-  - [ ] `packages/artifacts/sql/sqlite/0001_artifacts.sql` (+ activation schema asset) — SQLite DDL mirroring migrations 0001-0005 + sql/0001_activation.sql semantics.
-  - [ ] `packages/artifacts/src/adapters/sqlite.ts` — `createSqliteArtifactStore` implementing the same interfaces as `PostgresArtifactStore` over node:sqlite, BEGIN IMMEDIATE serialized writer, documented atomicity note.
-  - [ ] Targeted run: `make test-artifacts SCOPE=tests/sqlite-conformance.test.ts ENV=test-artifacts-u1` GREEN; `make down ENV=test-artifacts-u1`.
-- [ ] **Lot 3 — Commit coordinator + management unit**
-  - [ ] `packages/artifacts/src/adapters/sqlite-commit.ts` — `createSqliteCommitExecutor` (CommitExecutor: ensureCoordinationRow, beginFinalization returning a FinalizeConnection with BEGIN IMMEDIATE, lockOperationKey as in-transaction serialization, receipts, commit/rollback/release).
-  - [ ] `packages/artifacts/src/adapters/sqlite-management.ts` — `createSqliteManagementUnit` (ManagementUnit port).
-  - [ ] Coordinator conformance vectors GREEN on both backends.
-- [ ] **Lot 4 — Activation store**
-  - [ ] `packages/artifacts/src/adapters/sqlite-activation.ts` — tickets/flows/consume/cleanup/invalidate with the same semantics (generation invalidation, single-use consume, bounded cleanup, ActivationCommitUnknownError on commit-ack loss).
-  - [ ] Activation conformance vectors GREEN on both backends.
-- [ ] **Lot 5 — Local blob store**
-  - [ ] `packages/artifacts/src/adapters/local-blob.ts` — `createLocalBlobStore({ root })` implementing PublicationBlobStore on the filesystem with sha256 digest verification on put and get, same key validation, strict delete, sorted prefix listing, restart durability.
+- [x] **Lot 1 — Tests first: parameterized conformance suite (RED)**
+  - [x] `packages/artifacts/tests/fixtures/adapter-conformance.ts` — one parameterized suite over a backend factory: store conformance (ensure/bindings incl. concurrent + terminal gone, intents, preparation-intent cleanup reads, idempotency replay/conflict, ACL, sources, lifecycle, publication state + CAS, refcounts/pins, registered blobs), commit-executor conformance (coordination-row convergence, serialized finalization, receipt exactly-once + replay, rollback residue, CAS), activation conformance (vector list incl. concurrent-consume, single-use, expiry, cleanup bounds, invalidation, ttl cap, commit-unknown), blob-store conformance (round-trip, digest verification, hostile keys, prefix listing, strict delete), restart durability (reopen), concurrent writers.
+  - [x] `packages/artifacts/tests/fixtures/activation-conformance.ts` + `tests/fixtures/sqlite-backend.ts` — driver-neutral vector runner and sqlite backend.
+  - [x] `packages/artifacts/tests/sqlite-conformance.test.ts` — runs the suite against SQLite only (unit run, no services): 20/20 GREEN.
+  - [x] `packages/artifacts/tests/adapter-conformance.integration.test.ts` — runs the SAME suite against Postgres (DATABASE_URL) and SQLite in one file (parity proof): 36/36 GREEN.
+  - [x] RED first: suite failed while `../src/adapters/sqlite.js` did not exist.
+- [x] **Lot 2 — SQLite store adapter (GREEN)**
+  - [x] `packages/artifacts/sql/sqlite/0001_artifacts.sql` + `0002_activation.sql` — SQLite DDL mirroring migrations 0001-0005 + sql/0001_activation.sql semantics.
+  - [x] `packages/artifacts/src/adapters/sqlite.ts` + `sqlite-sql.ts` + `sqlite-store.ts` — `createSqliteArtifactStore` over node:sqlite, BEGIN IMMEDIATE serialized writer, documented atomicity note.
+  - [x] Targeted run: `make test-artifacts SCOPE=tests/sqlite-conformance.test.ts ENV=test-artifacts-u1` GREEN; `make down ENV=test-artifacts-u1`.
+- [x] **Lot 3 — Commit coordinator + management unit**
+  - [x] `packages/artifacts/src/adapters/sqlite-commit.ts` — `createSqliteCommitExecutor` (ensureCoordinationRow, beginFinalization with BEGIN IMMEDIATE, lockOperationKey as in-transaction serialization, receipts with 23505 mapping, commit/rollback/release).
+  - [x] `packages/artifacts/src/adapters/sqlite-management.ts` — `createSqliteManagementUnit` (ManagementUnit port).
+  - [x] Coordinator conformance vectors GREEN on both backends.
+- [x] **Lot 4 — Activation store**
+  - [x] `packages/artifacts/src/adapters/sqlite-activation.ts` — tickets/flows/consume/cleanup/invalidate with the same semantics (generation invalidation, single-use consume, bounded cleanup, ActivationCommitUnknownError on commit-ack loss).
+  - [x] Activation conformance vectors GREEN on both backends.
+- [x] **Lot 5 — Local blob store**
+  - [x] `packages/artifacts/src/adapters/local-blob.ts` — `createLocalBlobStore({ root })` implementing PublicationBlobStore on the filesystem with sha256 digest verification on put and get, same key validation, strict delete, sorted prefix listing, restart durability.
 - [ ] **Lot 6 — Packaging**
-  - [ ] package.json: `./sqlite` subpath export(s), files, version 0.3.0 (minor over published 0.2.6), peerDependenciesMeta unchanged (node:sqlite is builtin).
+  - [x] package.json: `./sqlite` subpath export, files, version 0.3.0 (minor over published 0.2.6), peerDependenciesMeta unchanged (node:sqlite is builtin).
   - [ ] Root/portable entries stay free of node:sqlite: test asserting the root barrel module graph contains no `node:sqlite`/`better-sqlite3` and that `@sentropic/artifacts/sqlite` resolves (portable size/entry budget).
-  - [ ] `ARTIFACTS_PROVIDER_VERSION` = '0.3.0' in mcp-core.ts; CHANGELOG entries (artifacts 0.3.0, cluster-mesh range widening).
-  - [ ] cluster-mesh: ARTIFACTS_RANGE `>=0.2.0 <0.4.0` (catalog.ts + package.json peerDependencies), artifacts-tuple.spec.ts assertion, cluster-mesh version bump.
-  - [ ] Lock refresh through make: root + api package-lock.json workspace version entries.
-  - [ ] APP-P1 refresh through make: recompute APP_P1_MANIFEST_DIGEST, update api cluster-registry.ts + app-mcp-registry.test.ts + app-mcp-installed.test.ts.
+  - [x] `ARTIFACTS_PROVIDER_VERSION` = '0.3.0' in mcp-core.ts; artifacts CHANGELOG 0.3.0 entry.
+  - [x] cluster-mesh: ARTIFACTS_RANGE `>=0.2.0 <0.4.0` (catalog.ts + package.json peerDependencies), artifacts-tuple.spec.ts assertion, cluster-mesh 0.26.0-dev.6 bump.
+  - [x] Lock pins: root + api package-lock.json workspace version entries + selected tuple fixture.
+  - [ ] APP-P1 refresh: recompute APP_P1_MANIFEST_DIGEST, update api cluster-registry.ts + app-mcp-registry.test.ts + app-mcp-installed.test.ts.
 - [ ] **Lot 7 — Full verification**
   - [ ] `make build-artifacts typecheck-artifacts lint-artifacts ENV=test-artifacts-u1` (flock per command).
   - [ ] `make test-artifacts ENV=test-artifacts-u1` GREEN (unit incl. sqlite conformance).
