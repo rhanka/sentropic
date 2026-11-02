@@ -27,6 +27,9 @@ export const authUserPorts = <H>(input: IdentityAuthBindingInput<H>, evidence: S
     if (!account || account.accountStatus === 'deleted') return null;
     const profile = await tx.custody.profiles.find(account.userId);
     if (!profile) throw new IdentityCustodyErrorV1('identity_material_missing');
+    if (profile.legacyAccountStatus !== null && !['active', 'pending_admin_approval', 'approval_expired_readonly', 'disabled_by_user', 'disabled_by_admin'].includes(profile.legacyAccountStatus)) throw new IdentityCustodyErrorV1('identity_material_invalid');
+    iso(new Date(account.createdAt)); iso(new Date(account.updatedAt));
+    if (profile.approvalDueAt !== null) iso(new Date(profile.approvalDueAt));
     let status: string = account.accountStatus;
     if (status === 'disabled') {
       if (!profile.legacyAccountStatus) throw new IdentityCustodyErrorV1('identity_material_missing');
@@ -73,7 +76,7 @@ export const authUserPorts = <H>(input: IdentityAuthBindingInput<H>, evidence: S
       const profile = (await tx.custody.profiles.find(id))!;
       await tx.custody.subjects.updateEmail(id, email, iso(value.updatedAt === undefined ? input.hostPorts.clock.now() : value.updatedAt));
       await tx.custody.profiles.put({ ...profile, displayName: value.displayName === undefined ? profile.displayName : value.displayName,
-        emailVerified: value.emailVerified ?? (email === user.email ? profile.emailVerified : false) });
+        emailVerified: value.emailVerified ?? (email === user.email || evidence.has(email) ? profile.emailVerified : false) });
       return users.findById(id);
     },
   };

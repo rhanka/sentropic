@@ -8,7 +8,7 @@ export const runIdentityAuthCompletionV1 = async <H, T>(input: {
   readonly flow: IdentityAuthCompletionFlowV1; readonly unitOfWork: IdentityUnitOfWorkV1<H>;
   readonly options: IdentityRunOptionsV1; readonly operation: (tx: IdentityTransactionV1<H>) => Promise<T>;
 }): Promise<IdentityAuthCompletionOutcomeV1<T>> => {
-  if (input.options.mode !== 'write' || input.options.purpose !== 'request'
+  if ((input.options.mode !== 'write' && !(input.options.mode === 'read' && input.flow === 'session_validate')) || input.options.purpose !== 'request'
     || !['registration', 'authentication', 'magic_link', 'email_code', 'magic_link_issue', 'email_code_issue', 'session_validate', 'session_refresh', 'social', 'credential_rename', 'credential_revoke', 'social_unlink'].includes(input.flow)) {
     throw new IdentityCustodyErrorV1('identity_transaction_unbound');
   }

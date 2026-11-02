@@ -6,6 +6,7 @@ import { IdentityCustodyErrorV1 } from '../identity-contracts/custody-errors.js'
 import { AccountNotActiveError } from '../identity-contracts/errors.js';
 import { identityDeliveryId } from '../storage/identity/custody-import-deliveries.js';
 import { authRole } from './auth-users.js';
+import { authTokenEvidenceKey } from './auth-boundary.js';
 
 const projectSession = (record: BoundLoginSessionV1): AuthHonoSessionRecord => ({
   id: record.sessionId, userId: record.userId, sessionTokenHash: record.sessionTokenHash, refreshTokenHash: record.refreshTokenHash,
@@ -16,7 +17,7 @@ export const authSessionService = <H>(input: IdentityAuthBindingInput<H>, users:
   const { tx } = input, store = tx.custody.sessions;
   const now = () => input.hostPorts.clock.now();
   const projectEvidence = (record: BoundLoginSessionV1): AuthHonoSessionRecord => {
-    const claims = evidence.get(record.sessionTokenHash), login = claims?.login;
+    const claims = evidence.get(authTokenEvidenceKey(record.sessionTokenHash, record.userId, record.sessionId)), login = claims?.login;
     const matches = claims?.userId === record.userId && claims.sessionId === record.sessionId && login?.authTime === record.login.authTime
       && login.sessionVersion === record.login.sessionVersion && login.mfaVerified === record.login.mfaVerified;
     return { ...projectSession(record), mfaVerified: matches && login?.mfaVerified === true };
@@ -37,9 +38,9 @@ export const authSessionService = <H>(input: IdentityAuthBindingInput<H>, users:
       if (!account || account.accountStatus === 'deleted') return null;
       await tx.lockSubject(claims.userId);
       const record = await store.findById(claims.sessionId), digest = await hash(token);
-      if (use === 'session') evidence.set(digest, claims);
       if (!record || record.userId !== claims.userId || record.revokedAt || record.expiresAt <= now().toISOString()
         || digest !== (use === 'session' ? record.sessionTokenHash : record.refreshTokenHash)) return null;
+      if (use === 'session') evidence.set(authTokenEvidenceKey(digest, claims.userId, claims.sessionId), claims);
       if (use === 'refresh' && (!claims.login || claims.login.authTime !== record.login.authTime || claims.login.sessionVersion !== record.login.sessionVersion || claims.login.mfaVerified !== record.login.mfaVerified)) return null;
       const user = await users.findById(record.userId);
       if (!user || !['active', 'pending_admin_approval', 'approval_expired_readonly'].includes(user.accountStatus) || (use === 'session' && !user.emailVerified)) return null;
@@ -95,10 +96,10 @@ export const authSessionService = <H>(input: IdentityAuthBindingInput<H>, users:
       await enqueue(operationId, userId, 'subject', userId); return count;
     },
   };
-  const find = async (promise: Promise<BoundLoginSessionV1 | null>) => { check(); const record = await promise; return record ? projectEvidence(record) : null; };
+  const find = async (promise: Promise<BoundLoginSessionV1 | null>, requestEvidence = false) => { check(); const record = await promise; return record ? (requestEvidence ? projectEvidence(record) : projectSession(record)) : null; };
   const unsupported = async (): Promise<never> => { check(); throw new IdentityCustodyErrorV1('identity_contract_unavailable'); };
   const port: AuthHonoSessionPort = {
-    create: unsupported, updateTokens: unsupported, findById: (id) => find(store.findById(id)), findByTokenHash: (hash) => find(store.findBySessionTokenHash(hash)),
+    create: unsupported, updateTokens: unsupported, findById: (id) => find(store.findById(id)), findByTokenHash: (hash) => find(store.findBySessionTokenHash(hash), true),
     findByRefreshTokenHash: (hash) => find(store.findByRefreshTokenHash(hash)), listForUser: service.listUserSessions,
     revoke: service.revokeSession, revokeAllForUser: service.revokeAllSessions,
     touch: async (id, at) => { check(); const record = await store.findById(id); if (!record) return; await tx.lockSubject(record.userId); await store.touchActivity(id, at.toISOString()); },
