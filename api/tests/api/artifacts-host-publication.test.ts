@@ -1,3 +1,4 @@
+import { seedCmArtifactIdentity } from '../utils/cm-artifact-fixture';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
@@ -23,18 +24,13 @@ beforeEach(async () => {
     connectionEnds.push(new Promise<void>((resolve) => client.once('end', resolve)));
   });
   await runMigrations(pool);
-  await pool.query(`INSERT INTO users (id, role, account_status) VALUES ('alice', 'editor', 'active'), ('bob', 'editor', 'active');
-    INSERT INTO tenants (id, name) VALUES ('tenant-a', 'A'), ('tenant-b', 'B');
-    INSERT INTO workspaces (id, name, tenant_id) VALUES ('workspace-a', 'A', 'tenant-a'), ('workspace-b', 'B', 'tenant-b');
-    INSERT INTO tenant_memberships (tenant_id, user_id, status) VALUES ('tenant-a', 'alice', 'approved'), ('tenant-b', 'alice', 'approved');
-    INSERT INTO workspace_memberships (workspace_id, user_id, role) VALUES ('workspace-a', 'alice', 'editor'), ('workspace-b', 'alice', 'editor');
-    INSERT INTO user_sessions (id, user_id, session_token_hash, expires_at)
-      VALUES ('session-a', 'alice', 'hash-a', clock_timestamp() + interval '1 hour');`);
+  await seedCmArtifactIdentity(pool, { otherUsers: ['bob'],
+    additionalScopes: [{ workspaceId: 'workspace-b', tenantId: 'tenant-b' }] });
   host = createArtifactHost({ pool, blobs: createMemoryBlobStore(), quotaBytes: 262144,
     async currentIdentity(client, claims) {
       if (claims.clientId !== 'app') return { readable: false, writable: false };
-      const result = await client.query(`SELECT id FROM user_sessions WHERE id = $1 AND user_id = $2
-        AND expires_at > clock_timestamp() FOR SHARE`, [claims.credentialId, claims.subject]);
+      const result = await client.query(`SELECT session_id FROM cm_identity.identity_login_sessions WHERE session_id = $1 AND user_id = $2
+        AND expires_at::timestamptz > clock_timestamp() FOR SHARE`, [claims.credentialId, claims.subject]);
       return { readable: result.rowCount === 1, writable: result.rowCount === 1 };
     } });
 });
@@ -104,7 +100,7 @@ describe('app artifact host publication', () => {
   it('should recheck current membership on a previously bound request and guarded replay', async () => {
     const artifactId = await ensured();
     const bound = await request();
-    await pool.query(`DELETE FROM workspace_memberships WHERE workspace_id = 'workspace-a' AND user_id = 'alice'`);
+    await pool.query(`DELETE FROM cm_identity.cm_workspace_members WHERE workspace_id = 'workspace-a' AND user_id = 'alice'`);
     const before = await durable();
     expect((await bound.mcp({ tool: 'artifacts_ensure', args: ensureArgs() })).status).toBe(403);
     expect((await bound.http({ method: 'POST', path: '/publish', body: publishArgs(artifactId) })).status).toBe(403);
@@ -125,7 +121,7 @@ describe('app artifact host publication', () => {
         expect((await pool.query(`SELECT 1 FROM pg_stat_activity WHERE datname = current_database()
           AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()`)).rowCount).toBeGreaterThan(0);
       });
-      await pool.query(`UPDATE tenant_memberships SET status = 'suspended' WHERE tenant_id = 'tenant-a' AND user_id = 'alice'`);
+      await pool.query(`UPDATE cm_identity.cm_tenant_memberships SET status = 'suspended' WHERE tenant_id = 'tenant-a' AND user_id = 'alice'`);
     } finally {
       await blocker.query('ROLLBACK');
       blocker.release();
@@ -137,7 +133,7 @@ describe('app artifact host publication', () => {
   it('should roll back a provisional quota charge when the credential expires during a quota wait', async () => {
     const artifactId = await ensured();
     const bound = await request();
-    await pool.query(`UPDATE user_sessions SET expires_at = clock_timestamp() + interval '2 seconds' WHERE id = 'session-a'`);
+    await pool.query(`UPDATE cm_identity.identity_login_sessions SET expires_at = clock_timestamp() + interval '2 seconds' WHERE session_id = 'session-a'`);
     const blocker = await pool.connect();
     await blocker.query('BEGIN');
     await blocker.query(`SELECT key FROM control.artifact_host_kv WHERE storage_scope_id = $1 AND key = 'quota/v1' FOR UPDATE`,
@@ -149,8 +145,8 @@ describe('app artifact host publication', () => {
         expect((await pool.query(`SELECT 1 FROM pg_stat_activity WHERE datname = current_database()
           AND wait_event_type = 'Lock' AND query LIKE '%quota/v1%'`)).rowCount).toBeGreaterThan(0);
       });
-      await pool.query(`SELECT pg_sleep(GREATEST(0, EXTRACT(EPOCH FROM expires_at - clock_timestamp())))
-        FROM user_sessions WHERE id = 'session-a'`);
+      await pool.query(`SELECT pg_sleep(GREATEST(0, EXTRACT(EPOCH FROM expires_at::timestamptz - clock_timestamp())))
+        FROM cm_identity.identity_login_sessions WHERE session_id = 'session-a'`);
     } finally {
       await blocker.query('ROLLBACK');
       blocker.release();
@@ -208,7 +204,7 @@ describe('app artifact host publication', () => {
         expect((await pool.query(`SELECT 1 FROM pg_stat_activity WHERE datname = current_database()
           AND wait_event_type = 'Lock' AND pid <> pg_backend_pid()`)).rowCount).toBeGreaterThan(0);
       });
-      await pool.query(`DELETE FROM workspace_memberships WHERE workspace_id = 'workspace-a' AND user_id = 'alice'`);
+      await pool.query(`DELETE FROM cm_identity.cm_workspace_members WHERE workspace_id = 'workspace-a' AND user_id = 'alice'`);
     } finally {
       await blocker.query('ROLLBACK');
       blocker.release();
@@ -224,7 +220,7 @@ describe('app artifact host publication', () => {
       CREATE FUNCTION wait_receipt() RETURNS trigger LANGUAGE plpgsql AS $$
         BEGIN PERFORM id FROM receipt_gate WHERE id = 1 FOR UPDATE; RETURN NEW; END $$;
       CREATE TRIGGER wait_receipt BEFORE INSERT ON artifacts.operation_receipts FOR EACH ROW EXECUTE FUNCTION wait_receipt();
-      UPDATE user_sessions SET expires_at = clock_timestamp() + interval '2 seconds' WHERE id = 'session-a'`);
+      UPDATE cm_identity.identity_login_sessions SET expires_at = clock_timestamp() + interval '2 seconds' WHERE session_id = 'session-a'`);
     const blocker = await pool.connect();
     await blocker.query('BEGIN');
     await blocker.query('SELECT id FROM receipt_gate FOR UPDATE');
@@ -235,8 +231,8 @@ describe('app artifact host publication', () => {
         expect((await pool.query(`SELECT 1 FROM pg_stat_activity WHERE datname = current_database()
           AND wait_event_type = 'Lock' AND query LIKE '%INSERT INTO artifacts.operation_receipts%'`)).rowCount).toBeGreaterThan(0);
       });
-      await pool.query(`SELECT pg_sleep(GREATEST(0, EXTRACT(EPOCH FROM expires_at - clock_timestamp())))
-        FROM user_sessions WHERE id = 'session-a'`);
+      await pool.query(`SELECT pg_sleep(GREATEST(0, EXTRACT(EPOCH FROM expires_at::timestamptz - clock_timestamp())))
+        FROM cm_identity.identity_login_sessions WHERE session_id = 'session-a'`);
     } finally {
       await blocker.query('ROLLBACK');
       blocker.release();
@@ -250,7 +246,7 @@ describe('app artifact host publication', () => {
   it('should preserve read access after a role downgrade while denying writes and successful write replays', async () => {
     const artifactId = await ensured();
     const bound = await request();
-    await pool.query(`UPDATE workspace_memberships SET role = 'viewer' WHERE workspace_id = 'workspace-a' AND user_id = 'alice'`);
+    await pool.query(`UPDATE cm_identity.cm_workspace_members SET role = 'viewer' WHERE workspace_id = 'workspace-a' AND user_id = 'alice'`);
     const before = await durable();
     expect((await bound.mcp({ tool: 'artifacts_list', args: {} })).status).toBe(200);
     expect((await bound.http({ method: 'GET', path: `/meta/${artifactId}`, body: undefined })).status).toBe(200);
@@ -265,7 +261,7 @@ describe('app artifact host publication', () => {
     expect((await bound.app.handle({ method: 'POST', path: '/ensure', body: ensureArgs(), actorId: 'bob' },
       { ...bound.invocation, actorId: 'bob' })).status).toBe(403);
     await expect(host.bind({ ...identity, clientId: 'forged-client' }, 'workspace-a')).rejects.toThrow();
-    await pool.query(`UPDATE users SET disabled_at = clock_timestamp() WHERE id = 'alice'`);
+    await pool.query(`UPDATE cm_identity.identity_account_profiles SET disabled_at = clock_timestamp() WHERE user_id = 'alice'`);
     expect((await bound.mcp({ tool: 'artifacts_ensure', args: ensureArgs() })).status).toBe(403);
     expect(await durable()).toEqual(before);
   });
@@ -291,8 +287,8 @@ describe('app artifact host publication', () => {
     const artifactId = await ensured();
     const readOnly = createArtifactHost({ pool, blobs: host.blobs, quotaBytes: 262144,
       async currentIdentity(client, claims) {
-        const result = await client.query(`SELECT id FROM user_sessions WHERE id = $1 AND user_id = $2
-          AND expires_at > clock_timestamp() FOR SHARE`, [claims.credentialId, claims.subject]);
+        const result = await client.query(`SELECT session_id FROM cm_identity.identity_login_sessions WHERE session_id = $1 AND user_id = $2
+          AND expires_at::timestamptz > clock_timestamp() FOR SHARE`, [claims.credentialId, claims.subject]);
         return { readable: result.rowCount === 1, writable: false };
       } });
     const bound = await readOnly.bind(identity, 'workspace-a');
