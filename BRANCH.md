@@ -119,6 +119,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - No UI changes in this lot; no UAT.
 
 ## Plan / Todo (lot-based)
+- [x] Review r1: credential adapter keeps attempt-local snapshots and applies exact counter CAS under the subject lock.
 - [x] Review r1: bind user/profile projection and restricted authentication policy to the combined transaction.
 - [x] Review r1: authentication refusal rolls back before returning; bindings use active transaction lifetime checks.
 - [x] Review r1: declare the exact authentication completion and signed-login verifier surface.
