@@ -13,6 +13,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - Full acceptance remains blocked: the inherited UOW uses `runRead/runWrite` instead of the r6 combined bound composition consumed by A4; the P1 fixture does not verify a real WebAuthn assertion, and PostgreSQL reopening reuses handles.
 - Review is incomplete: Argon's qualification-wiring finding is fixed; Mistral failed before producing a review. Final-head consensus is not claimed.
 - CI budget: one ready-PR-triggered run, followed to completion in the owner report. Do not merge.
+- Rebased onto `c8e9fa652` to resolve the sole `BRANCH.md` conflict blocking PR #882 CI. Identity source, test and runner files are byte-identical to the qualified tree. Post-rebase registry gate: `0.26.0-dev.4` is greater than published `0.25.0` and is still free.
 
 ## Scope / Guardrails
 - Scope limited to packages/cluster-mesh identity custody, storage, import, deletion, tests, version manifest.
@@ -24,6 +25,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - All new text in English.
 - Pins: amendment A2.0b-r6 sha256 5bde078cd12a35fb752eadb48496f0373dc8940883c701b920878a31bb836165; review a2-0b_wonder_r6 APPROVE sha256 0734a46e930b8fc456a431005d392203a347c1e19262305ac3c2a7e109206433; lot-A4 sha256 3826e88cad5f6fd368ce12c392d72634f78b411946e0354776e14cd984d6f8ed; lot-A4-prerequisites.patch sha256 11476ebd89c6aec73dcf7b20984323926310a331bff9d421a73c1fa6ec475ff5; baseline origin/main 455813bf923e9a58f701b17d2adbef01b2df0e71.
 - Version: 0.26.0-dev.4 (next free cluster-mesh dev version after main 0.26.0-dev.3).
+- Retain the existing BRLOCK-EX1 policy reference: owner=CI maintainers; review_by=2026-11-30T00:00:00Z; bounded tooling exceptions and removal trigger remain in `.security/ci-lockfile-policy.json` (required by `scripts/ci/ci-lockfile-installs.test.mjs`).
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -52,6 +54,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
+  - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
 - [x] BR-A20B-EX1: repair PostgreSQL qualification readiness in `packages/cluster-mesh/tests/storage/postgres.mk`; the current Unix-socket probe can accept initdb's temporary server before `storage_test` exists. Impact: test startup only, unchanged retry budget. Rollback: revert the readiness hunk.
@@ -68,7 +71,12 @@ Add durable verification custody, material-preserving import and atomic person d
 - [ ] Push the final head, open a ready PR, wait for one CI, and write `.tmp/rv/lot-A2.0b.md`.
 
 ## AI Flaky tests
-- [x] Deterministic contract tests; no AI flaky exception.
+- Acceptance rule:
+  - Accept only non-systematic provider/network/model nondeterminism as `flaky accepted`.
+  - Non-systematic means at least one success on the same commit and same command.
+  - Never amend tests with additive timeouts.
+  - If flaky, analyze impact vs `main`: if unrelated, accept and record command + failing test file + signature in `BRANCH.md`; if related, treat as blocking.
+  - Capture explicit user sign-off before merge.
 
 ## Orchestration Mode (AI-selected)
 - [x] **Mono-branch + cherry-pick** (default for orthogonal tasks; single final test cycle)
@@ -109,6 +117,6 @@ Add durable verification custody, material-preserving import and atomic person d
   - [x] Typecheck & Lint
   - [x] Retest cluster-mesh identity suites (both profiles, no skips)
   - [x] Bumped packages/cluster-mesh/package.json version 0.26.0-dev.4
-  - [ ] Final gate step 1: create a ready PR using BRANCH.md text as PR body after local qualification (owner continuation).
+  - [x] Final gate step 1: create a ready PR using BRANCH.md text as PR body after local qualification (owner continuation): https://github.com/rhanka/sentropic/pull/882.
   - [ ] Final gate step 2: run/verify branch CI once and resolve remaining blockers.
   - [ ] Do NOT merge; report to .tmp/rv/lot-A2.0b.md and stop.
