@@ -1,8 +1,22 @@
 import type { IdentityImportRowV1, IdentityLegacyConnectorTombstoneV1 } from '@sentropic/cluster-mesh';
+import { IdentityCustodyErrorV1 } from '@sentropic/cluster-mesh';
 import { createAppConnectorCustody, type ConnectorSourceScope } from './cm-connector-custody';
 import { identityDeliveryId, identityOperationId, pendingIdentityDelivery } from './cm-delivery-record';
 import { invalidA4Import, sourceText } from './cm-import-values';
 import type { CmIdentityTransaction } from './cm-transaction';
+import { readSourceConnectorCapability } from './cm-connector-custody-values';
+
+/** Historical debt only: new deletion never converts a capture failure into unresolved. */
+export function isRecoverableLegacyConnectorCapability(secret: string | null): boolean {
+  try {
+    const capability = readSourceConnectorCapability(secret);
+    try { return capability !== null; } finally { capability?.fill(0); }
+  } catch (error) {
+    if (error instanceof IdentityCustodyErrorV1 && ['identity_revocation_custody_invalid',
+      'identity_revocation_custody_missing'].includes(error.code)) return false;
+    throw error;
+  }
+}
 
 /** Every historical source event is accounted for, regardless of event-bus dispatch. */
 export async function prepareA4ConnectorImport(tx: CmIdentityTransaction, at: string) {
@@ -20,13 +34,15 @@ export async function prepareA4ConnectorImport(tx: CmIdentityTransaction, at: st
   const counts = { queued: 0, unresolved: 0, acknowledged: 0 };
   for (const event of events.rows) {
     const connectorAccountId = sourceText(event.envelope.accountId), provider = sourceText(event.envelope.provider);
-    const result = await tx.hostTransaction.query<{ id: string; user_id: string; workspace_id: string; provider: string }>(
-      'SELECT id, user_id, workspace_id, provider FROM public.document_connector_accounts WHERE id = $1 FOR UPDATE', [connectorAccountId]);
+    const result = await tx.hostTransaction.query<{
+      id: string; user_id: string; workspace_id: string; provider: string; token_secret: string | null;
+    }>('SELECT id, user_id, workspace_id, provider, token_secret FROM public.document_connector_accounts WHERE id = $1 FOR UPDATE',
+    [connectorAccountId]);
     const source = result.rows[0];
     let accounting: IdentityLegacyConnectorTombstoneV1 = { sourceEventId: event.id, connectorAccountId, provider,
       subjectId: source?.user_id ?? null, disposition: 'unresolved', deliveryId: null, evidenceRef: null, importedAt: at };
-    if (source) {
-      if (source.provider !== provider) return invalidA4Import();
+    if (source && source.provider !== provider) return invalidA4Import();
+    if (source && isRecoverableLegacyConnectorCapability(source.token_secret)) {
       const operationId = identityOperationId(['legacy-connector-revoke', event.id]);
       const deliveryId = identityDeliveryId(operationId, 'connector_grants', 'connector_grant', connectorAccountId);
       inventory.set(deliveryId, { id: source.id, userId: source.user_id, workspaceId: source.workspace_id, provider });

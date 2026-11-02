@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { Client, Pool, type PoolClient } from 'pg';
 import { readMigrationFiles } from 'drizzle-orm/migrator';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { encryptSecret } from '../../../src/services/secret-crypto';
 
 const publicFolder = new URL('../../../drizzle/', import.meta.url).pathname;
 const controlFolder = `${publicFolder}control`;
@@ -68,6 +69,34 @@ async function migrate(failBeforeCommit = false, boundImport = true) {
 }
 
 describe('A4 single control identity migration', () => {
+  it.each(['recoverable', 'missing', 'unreadable'] as const)(
+    'accounts for every historical connector event with %s source capability', async kind => {
+      const secret = kind === 'recoverable' ? encryptSecret(JSON.stringify({ refreshToken: 'synthetic-legacy-token' }))
+        : kind === 'missing' ? null : 'unreadable-source-fixture';
+      await database.query(`INSERT INTO document_connector_accounts
+        (id, workspace_id, user_id, provider, status, token_secret)
+        VALUES ('connector-a', 'a4-owned', 'a4-owner', 'google_drive', 'connected', $1)`, [secret]);
+      for (const [seq, id] of ['legacy-a', 'legacy-b'].entries()) {
+        await database.query(`INSERT INTO control.event_outbox
+          (id, aggregate_type, aggregate_id, seq, envelope, channel, status)
+          VALUES ($1, 'connector_account', 'connector-a', $2, $3, 'connector_grant_events', 'dispatched')`,
+        [id, seq + 1, JSON.stringify({ type: 'connector.grant.orphaned', accountId: 'connector-a', provider: 'google_drive' })]);
+      }
+      await migrate();
+      const accounting = (await database.query(`SELECT source_event_id, subject_id, disposition, delivery_id
+        FROM cm_identity.identity_legacy_connector_tombstones ORDER BY source_event_id`)).rows;
+      expect(accounting.map(row => row.source_event_id)).toEqual(['legacy-a', 'legacy-b']);
+      expect(accounting.every(row => row.subject_id === 'a4-owner'
+        && row.disposition === (kind === 'recoverable' ? 'queued' : 'unresolved'))).toBe(true);
+      if (kind === 'recoverable') expect(new Set(accounting.map(row => row.delivery_id)).size).toBe(2);
+      else expect(accounting.every(row => row.delivery_id === null)).toBe(true);
+      expect((await database.query('SELECT delivery_id FROM cm_identity.identity_revocation_outbox')).rowCount)
+        .toBe(kind === 'recoverable' ? 2 : 0);
+      expect((await database.query('SELECT custody_ref FROM control.connector_revocation_custody')).rowCount)
+        .toBe(kind === 'recoverable' ? 2 : 0);
+      expect((await database.query(`SELECT id FROM control.event_outbox WHERE id IN ('legacy-a', 'legacy-b')`)).rowCount).toBe(2);
+    });
+
   it('should refuse SQL-only deletion without the bound CM importer and protected checkpoint', async () => {
     await expect(migrate(false, false)).rejects.toThrow('A4 bound import checkpoint required');
     expect((await database.query("SELECT id FROM users WHERE id = 'a4-owner'")).rowCount).toBe(1);
