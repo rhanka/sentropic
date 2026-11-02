@@ -50,6 +50,7 @@
 - [ ] **Exception process**: apply only the declared purpose; record reason, impact, and rollback before changing a conditional path; any additional path needs its own bounded exception.
 
 ## Feedback Loop
+- [x] Resume review dispatch 3–4: daily execution now runs every manifest browser shard with clean state and per-shard spans/status, then a clean VSCode journey. CLI regression preserves a failed middle shard and all ten API files. Delete old expected/actual browser receipts before each Playwright process so setup failures cannot expose stale membership evidence.
 - [x] Resume review dispatch 2: reproduced a false schedule alarm while the next daily run is queued/running. Health now checks the newest completed scheduled result; stale, failed, cancelled and missing completed results still fail, including a failure newer than the prior success.
 - [x] Resume review A2 query repro confirmed silent URL rewriting. Unsupported provider query parameters now fail visibly before forwarding, with only hostname/reason in the journal; query-less application protocols remain unchanged.
 - [x] Resume review A2: a local probe confirmed four credential headers reached the fixture. Strip all supported provider credential headers while preserving local application cookies; regression passes. Cancellation during the final SSE delay did not reproduce A1 (fixture stays healthy, no response error, one cancellation).
