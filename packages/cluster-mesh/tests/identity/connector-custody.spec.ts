@@ -1,6 +1,7 @@
 // A2.0b connector revocation custody: HKDF derivation, canonical AAD,
 // envelope validation, keyring reader ordering, disposal and table round-trip.
 
+import type { IdentityExternalRevocationV1 } from '../../src/index.js';
 import { describe, expect, it } from 'vitest';
 import { IdentityCustodyErrorV1 } from '../../src/identity-contracts/custody-errors.js';
 import {
@@ -83,26 +84,28 @@ describe('A2.0b connector revocation custody', () => {
     const unitOfWork = pg ? asOpHost(pg.unitOfWork) : asOpHost(openSqliteEnv().unitOfWork);
     const schema = pg?.schema ?? '';
     const custody = createNodeConnectorCustody({ masterKey: new Uint8Array(32).fill(5) });
-    const record = { deliveryId: 'd-row', operationId: 'op-row', step: 'connector_grants', subjectId: 'marie', targetKind: 'connector_grant', targetRef: 'conn-row', state: 'pending' as const, createdAt: NOW, nextAttemptAt: NOW };
+    let record: IdentityExternalRevocationV1 = { custodyRef: null, deliveredAt: null, claimOwner: null, claimVersion: 0, leaseUntil: null, attemptCount: 0, deliveryId: 'd-row', operationId: 'op-row', step: 'connector_grants', subjectId: 'marie', targetKind: 'connector_grant', targetRef: 'conn-row', state: 'pending' as const, createdAt: NOW, nextAttemptAt: NOW };
       await unitOfWork.run(WRITE, async (tx) => {
         const raw = {
           profile: current, schema,
           session: current === 'postgres' ? (tx.hostTransaction as unknown as { session: unknown }).session : null,
           connection: current === 'sqlite' ? (tx.hostTransaction as unknown as { connection: unknown }).connection : null,
         } as never;
-        const first = await custody.capture({ deliveryId: 'd-row', connectorAccountId: 'conn-row', provider: 'drive', at: NOW }, raw, { tokenKind: 'access', token: 'row-secret' });
+        const first = await custody.captureCapability({ deliveryId: 'd-row', connectorAccountId: 'conn-row', provider: 'drive', at: NOW }, raw, { tokenKind: 'access', token: 'row-secret' });
         expect(first.kind).toBe('captured');
+        if (first.kind !== 'captured') throw new Error('missing capability');
+        record = { ...record, custodyRef: first.reference.custodyRef };
         // Identical replay returns the same reference without duplicating.
-        const replay = await custody.capture({ deliveryId: 'd-row', connectorAccountId: 'conn-row', provider: 'drive', at: NOW }, raw, { tokenKind: 'access', token: 'row-secret' });
+        const replay = await custody.captureCapability({ deliveryId: 'd-row', connectorAccountId: 'conn-row', provider: 'drive', at: NOW }, raw, { tokenKind: 'access', token: 'row-secret' });
         expect(replay).toEqual(first);
         // Conflicting capability under an identical delivery refuses.
-        await expect(custody.capture({ deliveryId: 'd-row', connectorAccountId: 'conn-row', provider: 'drive', at: NOW }, raw, { tokenKind: 'access', token: 'other-secret' })).rejects.toMatchObject({ code: 'identity_operation_conflict' });
+        await expect(custody.captureCapability({ deliveryId: 'd-row', connectorAccountId: 'conn-row', provider: 'drive', at: NOW }, raw, { tokenKind: 'access', token: 'other-secret' })).rejects.toMatchObject({ code: 'identity_operation_conflict' });
         await custody.assertCaptured(record, raw);
-        await custody.eraseAcknowledged(record, raw);
+        await custody.eraseAcknowledged({ ...record, state: 'delivered', deliveredAt: NOW }, raw);
         await expect(custody.assertCaptured(record, raw)).rejects.toMatchObject({ code: 'identity_revocation_custody_missing' });
         // Erase is idempotent.
-        await custody.eraseAcknowledged(record, raw);
-        const none = await custody.capture({ deliveryId: 'd-absent', connectorAccountId: 'conn-x', provider: 'drive', at: NOW }, raw, null);
+        await custody.eraseAcknowledged({ ...record, state: 'delivered', deliveredAt: NOW }, raw);
+        const none = await custody.captureCapability({ deliveryId: 'd-absent', connectorAccountId: 'conn-x', provider: 'drive', at: NOW }, raw, null);
         expect(none).toEqual({ kind: 'no_capability' });
       });
       custody.dispose();
