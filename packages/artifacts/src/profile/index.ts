@@ -23,10 +23,18 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
   const profile: EffectiveArtifactProfile = { ...snapshot,
     rules: snapshot.rules === undefined ? copyJson(RADAR_ARTIFACTS_PROFILE.rules) as unknown as
       EffectiveArtifactProfile['rules'] : snapshot.rules };
-  const allowed = ['version', 'selectedCapabilities', 'operations', 'contractRevisions', 'rules', 'requireExpectedCurrentReleaseId'];
+  const allowed = ['version', 'selectedCapabilities', 'operations', 'contractRevisions', 'rules',
+    'requireExpectedCurrentReleaseId', 'profileRevisionId', 'resultEnvelopeVersion'];
   if (Object.keys(profile).some((key) => !allowed.includes(key)) || profile.version !== PROFILE_CONTRACT_VERSION ||
     !Array.isArray(profile.selectedCapabilities) || !Array.isArray(profile.operations)) throw new Error('invalid artifacts profile');
   const requested = profile.selectedCapabilities;
+  if ((profile.profileRevisionId !== undefined && (typeof profile.profileRevisionId !== 'string' ||
+    !profile.profileRevisionId.trim() || profile.profileRevisionId.length > 160 || profile.resultEnvelopeVersion === undefined)) ||
+    (profile.resultEnvelopeVersion !== undefined && (!profile.profileRevisionId ||
+      ![1, 2].includes(profile.resultEnvelopeVersion))) ||
+    (profile.resultEnvelopeVersion === 2 && profile.requireExpectedCurrentReleaseId !== true)) {
+    throw new Error('inconsistent artifact profile descriptor');
+  }
   if (profile.requireExpectedCurrentReleaseId !== undefined && typeof profile.requireExpectedCurrentReleaseId !== 'boolean') {
     throw new Error('invalid publication precondition policy');
   }
@@ -101,9 +109,9 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
     profileDigest: orderedDigest({ selection: selectedCapabilities, profile, schemas,
       providerContractRevisions: profile.contractRevisions }),
     assertSelected,
-    validate(name, args, envelopeKey) {
+    validate(name, args, envelopeKey, options) {
       if (!(selectedCapabilities as readonly string[]).includes(name)) throw new ArtifactProfileInputError(true);
-      return normalizeArguments(profile, name, args, schemas[name as ArtifactCapabilityName]!, envelopeKey);
+      return normalizeArguments(profile, name, args, schemas[name as ArtifactCapabilityName]!, envelopeKey, options);
     },
     capabilityForRoute(method, path) {
       let name: ArtifactCapabilityName | undefined;

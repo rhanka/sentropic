@@ -76,10 +76,10 @@ export const commandDigest = orderedDigest;
 /** No caller hash, actor, scope, transport or audit identifier enters this API through arguments. */
 export function createArtifactCommand(profile: CompiledArtifactsProfile, name: string, args: unknown,
   authority: ArtifactCommandAuthority, derivation: ArtifactKeyDerivationBinding,
-  envelopeKey?: string): EffectiveArtifactCommand {
+  envelopeKey?: string, options?: { deferPrecondition: true }): EffectiveArtifactCommand {
   assertCompiledArtifactsProfile(profile);
   if (derivation.algorithm !== profile.profile.rules.keyDerivationAlgorithm) throw new Error('profile/derivation mismatch');
-  const normalized = profile.validate(name, args, envelopeKey);
+  const normalized = profile.validate(name, args, envelopeKey, options);
   if (!['artifacts_ensure', 'artifacts_publish', 'artifacts_set_access', 'artifacts_delete', 'artifacts_revert'].includes(name)) throw new ArtifactProfileInputError(true);
   const operation = name.slice('artifacts_'.length) as ArtifactCommandOperation;
   const { idempotencyKey, confirmationRef: _proof, ...payload } = normalized;

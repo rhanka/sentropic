@@ -185,6 +185,7 @@ function operationProjection(error: ArtifactOperationError): Projection {
       return { kind: 'admission', category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind, retriable: false };
     default: {
       const base = { kind: 'ordinary', category: kind, httpStatus: DOMAIN_STATUS[kind], publicCode: kind, retriable: false } as const;
+      if (kind === 'precondition_required') return { ...base, details: error.details.publicDetails };
       if (kind === 'release_unavailable' && error.details.release !== undefined) return { ...base, release: error.details.release };
       return kind === 'edit_mismatch' && error.details.edit !== undefined ? { ...base, edit: error.details.edit } : base;
     }
