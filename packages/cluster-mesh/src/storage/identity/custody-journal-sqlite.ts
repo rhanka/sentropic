@@ -3,6 +3,7 @@
 // the exclusive transaction — with the custody stores.
 
 import { decodeRevocationDelivery, sameRevocationTarget } from './custody-delivery-record.js';
+import { decodeLegacyConnectorTombstone } from './custody-tombstone-record.js';
 import { createHash } from 'node:crypto';
 import type {
   AtomicRevocationStepReceiptV2,
@@ -10,6 +11,7 @@ import type {
   IdentityDeletionOperationV2,
   IdentityExternalRevocationV1,
   IdentityImportReceiptV1,
+  IdentityLegacyConnectorTombstoneV1,
   PersonDeletionReceiptV2,
 } from '../../identity-contracts/custody.js';
 import type { OAuthConsentRecord, RevocationStepKind, UserAccount, WorkspaceRecord } from '../../identity-contracts/types.js';
@@ -152,6 +154,13 @@ export class SqliteCustodyJournal {
     const rows = this.connection.prepare(`SELECT * FROM "identity_revocation_outbox" WHERE "operation_id" = ? ORDER BY "next_attempt_at", "created_at", "delivery_id"`).all(operationId) as readonly Record<string, unknown>[];
     return rows.map(decodeRevocationDelivery);
   };
+
+  findLegacyConnectorTombstone = (sourceEventId: string): Promise<IdentityLegacyConnectorTombstoneV1 | null> =>
+    this.one(decodeLegacyConnectorTombstone, `SELECT * FROM "identity_legacy_connector_tombstones" WHERE "source_event_id" = ?`, [sourceEventId]);
+
+  async insertLegacyConnectorTombstone(record: IdentityLegacyConnectorTombstoneV1): Promise<void> {
+    this.connection.prepare(`INSERT INTO "identity_legacy_connector_tombstones" ("source_event_id","connector_account_id","provider","subject_id","disposition","delivery_id","evidence_ref","imported_at") VALUES (?,?,?,?,?,?,?,?)`).run(record.sourceEventId, record.connectorAccountId, record.provider, record.subjectId, record.disposition, record.deliveryId, record.evidenceRef, record.importedAt);
+  }
 
   // -- Import receipts ------------------------------------------------------
 
