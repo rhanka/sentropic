@@ -50,8 +50,8 @@ const captureBody = async (request: Request): Promise<ArrayBuffer | undefined> =
 const rollbackResponse = (response: StagedResponse): StagedResponse => {
   // Only the unchanged consumer's error DTO may leave a confirmed rollback.
   const failure = JSON.parse(response.body);
-  const error = typeof failure.error === 'string' ? failure.error
-    : { code: failure.error.code, message: failure.error.message };
+  const error = failure.error;
+  if (!error || (typeof error !== 'string' && typeof error !== 'object')) throw new Error('identity_invalid_error_response');
   return { status: response.status,
     headers: response.headers.filter(([key]) => ['content-type', 'cache-control', 'pragma', 'retry-after', 'www-authenticate'].includes(key)),
     body: JSON.stringify({ error, ...(typeof failure.error_description === 'string'
