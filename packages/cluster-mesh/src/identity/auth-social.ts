@@ -42,7 +42,7 @@ export const authFederationPort = <H>(input: IdentityAuthBindingInput<H>, check:
     },
     isUserCredentialed: async (id) => {
       check(); await tx.lockSubject(id);
-      if ((await tx.custody.credentials.listForUser(id)).some((row) => !row.revokedAt) || (await tx.custody.social.listForUser(id)).some((row) => !row.revokedAt)) return true;
+      if ((await tx.custody.credentials.listForUser(id)).length || (await tx.custody.social.listForUser(id)).length) return true;
       const sql = boundIdentitySql(identityTransactionHost(tx));
       return (await sql.query(`SELECT proof_id FROM ${sql.table('identity_single_use_proofs')} WHERE user_id = ? AND kind = 'magic_link' AND state = 'consumed' LIMIT 1`, [id])).length > 0;
     },

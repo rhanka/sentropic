@@ -2,11 +2,13 @@ import type { AuthHonoChallengePort, AuthHonoMagicLinkPort, AuthHonoInvitesPort 
 import type { IdentityAuthBindingInput } from '../identity-contracts/custody-auth.js';
 import type { WebAuthnChallengeV1, MagicLinkProofV1, DigestInvitationV1 } from '../identity-contracts/custody.js';
 import { IdentityCustodyErrorV1 } from '../identity-contracts/custody-errors.js';
+import type { WebAuthnAttempt } from './auth-webauthn.js';
+import { guardAuthStep } from './auth-abort.js';
 
-export const authProofPorts = <H>(input: IdentityAuthBindingInput<H>, evidence: Set<string>, check: () => void) => {
+export const authProofPorts = <H>(input: IdentityAuthBindingInput<H>, evidence: Set<string>, check: () => void, state: WebAuthnAttempt) => {
   const { tx } = input;
   const challenges = new Map<string, WebAuthnChallengeV1>(), links = new Map<string, MagicLinkProofV1>(), invites = new Map<string, DigestInvitationV1>();
-  let verifying: WebAuthnChallengeV1 | undefined, registrationUserId: string | null = null;
+  let verifying: WebAuthnChallengeV1 | undefined;
   const now = () => input.hostPorts.clock.now().toISOString();
   const pending = (expiresAt: string, state: string) => state === 'pending' && expiresAt > now();
   const challengePort: AuthHonoChallengePort = {
@@ -15,7 +17,7 @@ export const authProofPorts = <H>(input: IdentityAuthBindingInput<H>, evidence: 
       const record: WebAuthnChallengeV1 = { kind: 'webauthn_challenge', proofId: input.hostPorts.random.uuid(), userId: value.userId ?? null,
         state: 'pending', revision: 0, createdAt: now(), expiresAt: value.expiresAt.toISOString(), consumedAt: null, revokedAt: null,
         challenge: value.challenge, purpose: value.type, rpId: input.rp.id, allowedOrigins: [...input.rp.expectedOrigins],
-        userVerification: value.type === 'registration' ? input.webAuthnPolicy.registrationUserVerification : input.webAuthnPolicy.authenticationUserVerification };
+        userVerification: state.issuanceUv };
       await tx.custody.singleUseProofs.insert(record);
       return { id: record.proofId, userId: record.userId, challenge: record.challenge, type: record.purpose, expiresAt: value.expiresAt, used: false, createdAt: new Date(record.createdAt) };
     },
@@ -23,17 +25,17 @@ export const authProofPorts = <H>(input: IdentityAuthBindingInput<H>, evidence: 
       check();
       const record = await tx.custody.singleUseProofs.findChallenge(challenge, type);
       if (!record || !pending(record.expiresAt, record.state)) return null;
-      if (record.rpId !== input.rp.id || !record.allowedOrigins.some((origin) => input.rp.expectedOrigins.includes(origin))) throw new IdentityCustodyErrorV1('proof_binding_mismatch');
       challenges.set(challenge, record); verifying = record;
       return { id: record.proofId, userId: record.userId, challenge, type, expiresAt: new Date(record.expiresAt), used: false, createdAt: new Date(record.createdAt) };
     },
     markUsed: async (challenge) => {
       check(); const record = challenges.get(challenge);
       if (!record) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
-      const boundUser = record.purpose === 'registration' ? registrationUserId : record.userId;
+      const boundUser = state.completionOwner;
+      if (!boundUser) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
       if (boundUser) await tx.lockSubject(boundUser);
-      await tx.custody.singleUseProofs.consume({ key: { kind: record.kind, proofId: record.proofId }, expectedRevision: record.revision,
-        expectedUserId: record.userId, bindUserId: boundUser, match: { kind: record.kind, challenge, purpose: record.purpose, rpId: record.rpId }, at: now() });
+      await guardAuthStep(record.purpose, 'challenge', () => tx.custody.singleUseProofs.consume({ key: { kind: record.kind, proofId: record.proofId }, expectedRevision: record.revision,
+        expectedUserId: record.userId, bindUserId: boundUser, match: { kind: record.kind, challenge, purpose: record.purpose, rpId: record.rpId }, at: now() }));
     },
     purgeExpired: (at) => { check(); return tx.custody.singleUseProofs.purgeExpired(at.toISOString()); },
   };
@@ -81,6 +83,5 @@ export const authProofPorts = <H>(input: IdentityAuthBindingInput<H>, evidence: 
   };
   return { challenges: challengePort, magicLinks, invites: invitations,
     verificationPolicy: () => verifying,
-    bindRegistrationUser: (id: string) => { registrationUserId = id; },
   };
 };

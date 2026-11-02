@@ -9,6 +9,8 @@ import { finishAuthCompletion, guardAuthStep, refuseWebAuthn } from './auth-abor
 export const authHonoRuntime = () => createRequire(import.meta.url)(fileURLToPath(import.meta.resolve('@sentropic/auth-hono'))) as typeof import('@sentropic/auth-hono');
 export type AuthUv = 'required' | 'preferred' | 'discouraged';
 export interface WebAuthnAttempt {
+  flow: 'registration' | 'authentication' | null;
+  completionOwner: string | null;
   owner: string | null;
   registration: AuthHonoVerifiedRegistrationResponse['registrationInfo'] | undefined;
   registrationUv: boolean;
@@ -67,7 +69,7 @@ export const authWebAuthnServices = <H>(input: IdentityAuthBindingInput<H>, port
         return options;
       },
       verifyRegistration: async (value) => {
-        check(); state.owner = value.userId; state.registration = undefined;
+        check(); state.flow = 'registration'; state.owner = value.userId; state.registration = undefined; state.completionOwner = null;
         return finishAuthCompletion('registration', await guardAuthStep('registration', 'credential', () => registration.verifyRegistration({ ...value,
           beforePersist: async (context) => guardAuthStep('registration', 'ticket', async () => {
             await consumeTicket(context.userId); await value.beforePersist?.(context);
@@ -82,7 +84,7 @@ export const authWebAuthnServices = <H>(input: IdentityAuthBindingInput<H>, port
         options.userVerification = state.issuanceUv; return options;
       },
       verifyAuthentication: async (value) => {
-        check(); state.owner = null;
+        check(); state.flow = 'authentication'; state.owner = null; state.completionOwner = null;
         return finishAuthCompletion('authentication', await guardAuthStep('authentication', 'credential', () => authentication.verifyAuthentication(value)));
       },
     },
