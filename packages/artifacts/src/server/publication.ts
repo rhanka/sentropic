@@ -35,6 +35,9 @@ import type {
 export { DEFAULT_PUBLICATION_LIMITS, type PublicationLimits } from './publication-limits.js';
 
 export interface ReleaseRecord {
+  authorPrincipalId?: string | null;
+  parentReleaseId?: string | null;
+  revertedFromReleaseId?: string | null;
   releaseId: string;
   artifactId: string;
   manifestDigest: string;
@@ -375,9 +378,11 @@ export function createPostgresPublicationUnitWriter(client: FinalizeTxClient): P
     },
     async putRelease(release: ReleaseRecord): Promise<void> {
       await client.query(
-        `INSERT INTO artifacts.releases (id, artifact_id, manifest_digest, manifest, state, created_at)
-         VALUES ($1, $2, $3, $4, 'ready', $5)`,
-        [release.releaseId, release.artifactId, release.manifestDigest, release.manifest, release.createdAt],
+        `INSERT INTO artifacts.releases (id, artifact_id, manifest_digest, manifest, state, created_at,
+          author_principal_id, parent_release_id, reverted_from_release_id)
+         VALUES ($1, $2, $3, $4, 'ready', $5, $6, $7, $8)`,
+        [release.releaseId, release.artifactId, release.manifestDigest, release.manifest, release.createdAt,
+          release.authorPrincipalId ?? null, release.parentReleaseId ?? null, release.revertedFromReleaseId ?? null],
       );
     },
     async registerBlob(storageScopeId: string, digest: string, size: number): Promise<void> {
@@ -542,7 +547,9 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
       const source = input.source === undefined ? undefined : parseSourceRef(input.source);
       let finalizationClient: FinalizeTxClient | undefined;
       let current: { currentReleaseId: string | null; currentDigest: string | null };
-      const receiptData = { releaseId, manifest: prepared.manifest, metadata: {} as ArtifactMetadata };
+      const revertedFromReleaseId = input.operation === 'revert' && source?.kind === 'base-commit' ? source.commit : null;
+      const receiptData = { releaseId, manifest: prepared.manifest, metadata: {} as ArtifactMetadata,
+        previousReleaseId: null as string | null, updatedAt: new Date(nowMs).toISOString(), revertedFromReleaseId };
       const request: FinalizeRequest = {
         scopeId: input.storageScopeId,
         internalKey,
@@ -568,7 +575,9 @@ export function createGuardedPublicationService(deps: GuardedPublicationDeps): G
         },
         provisional: async (client) => {
           const unit = deps.createUnitWriter(client);
+          receiptData.previousReleaseId = current.currentReleaseId;
           await unit.putRelease({
+            authorPrincipalId: input.actorId, parentReleaseId: current.currentReleaseId, revertedFromReleaseId,
             releaseId,
             artifactId: input.artifactId,
             manifestDigest: prepared.digest,
