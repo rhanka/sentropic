@@ -30,7 +30,7 @@ import { PostgresCustodyJournal } from './custody-journal-postgres.js';
 import { SqliteCustodyJournal } from './custody-journal-sqlite.js';
 import type { CustodyOpHost } from './custody-host.js';
 
-const DELETE: 'delete' = 'delete';
+const DELETE = 'delete';
 
 const notApplicable = (step: RevocationStepKind, detail: string): AtomicRevocationStepReceiptV2 => ({ step, outcome: 'not_applicable', detail });
 
