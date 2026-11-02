@@ -108,8 +108,14 @@ claim completion. Do not pass a raw pool to transaction-scoped deletion claims.
 ## Durable state and failures
 
 Stop old writers before enabling the new composition. Apply migrations
-`0001_artifacts.sql`, `0002_lifecycle.sql`, additive `0003_coordinator.sql` and
-additive `0005_metadata.sql` (artifact display metadata column).
+`0001_artifacts.sql`, `0002_lifecycle.sql`, additive `0003_coordinator.sql`,
+`0004_terminal_controls.sql`, and `0005_metadata.sql` (metadata and release lineage).
+Preserve the existing host journal prefix, including activation assets, on upgrades.
+
+R2 bindings explicitly select `profileRevisionId`, `requireExpectedCurrentReleaseId`
+and `resultEnvelopeVersion`. The compatible p0b profile keeps full-bundle publication
+and root results. The CAS switchover can keep result version 1; activate part 1 only
+after qualification of result version 2. IMMO owns both switchovers and activation.
 Preserve historical rows and objects. Supply `legacyRecords`, using
 `createPostgresLegacyArtifactRecords(pool)` for PostgreSQL. An empty inventory
 reader is appropriate only for a verified fresh store.

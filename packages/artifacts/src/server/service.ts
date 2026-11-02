@@ -32,6 +32,7 @@ import type {
   ArtifactFailure as CommitFailure,
 } from './commit/types.js';
 import type { ArtifactFailure, ArtifactOutcome } from './failures.js';
+import type { ArtifactMetadata } from './access.js';
 
 export interface EnsurePrivateViewInput {
   actorUserId: string;
@@ -111,6 +112,7 @@ export interface GuardedEnsureResult {
 
 /** Binding identity resolved inside the finalization unit. */
 export interface EnsureBindingInput {
+  readonly metadata?: ArtifactMetadata;
   readonly ownerId: string;
   readonly storageScopeId: string;
   readonly bindingName: string;
@@ -215,7 +217,10 @@ export function createGuardedEnsureService(deps: GuardedEnsureDeps): GuardedEnsu
   const finalizeRequest = (
     invocation: ArtifactInvocationContext, command: EffectiveArtifactCommand, policyRevision: string,
   ): { request: FinalizeRequest; captured: { artifactId?: string; created?: boolean } } => {
+    const metadata = Object.fromEntries(['title', 'description', 'icon'].filter(key =>
+      Object.hasOwn(command.payload, key)).map(key => [key, command.payload[key]])) as ArtifactMetadata;
     const binding: EnsureBindingInput = {
+      ...(Object.keys(metadata).length ? { metadata } : {}),
       ownerId: invocation.actorId,
       storageScopeId: invocation.storageScopeId,
       bindingName: command.payload.bindingName as string,

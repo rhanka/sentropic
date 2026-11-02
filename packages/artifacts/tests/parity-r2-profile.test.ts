@@ -67,6 +67,11 @@ describe('R2 explicit profile and result switchovers', () => {
 
   it('should reject inconsistent trusted descriptors and expose the selected revision', () => {
     expect(() => compileArtifactsProfile(profile(false, 2))).toThrow();
+    expect(() => compileArtifactsProfile({ ...profile(false, 1),
+      selectedCapabilities: [...profile(false, 1).selectedCapabilities, 'artifacts_list_versions'] })).toThrow();
+    const compatible = compileArtifactsProfile(profile(false, 1));
+    expect(() => compatible.validate('artifacts_publish', { artifactId: '00000000-0000-4000-8000-000000000001',
+      idempotencyKey: 'edit', edits: [{ path: 'index.html', oldStr: 'one', newStr: 'two' }] })).toThrow();
     expect(() => compileArtifactsProfile({ ...profile(true, 2), resultEnvelopeVersion: 3 as 2 })).toThrow();
     const manifest = createArtifactsManifest({ profile: compileArtifactsProfile(profile(true, 2)) });
     expect(manifest.tools.find(tool => tool.name === 'artifacts_publish')?.description)

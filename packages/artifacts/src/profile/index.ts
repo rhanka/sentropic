@@ -28,11 +28,14 @@ export function compileArtifactsProfile(input: ArtifactProviderProfile): Compile
   if (Object.keys(profile).some((key) => !allowed.includes(key)) || profile.version !== PROFILE_CONTRACT_VERSION ||
     !Array.isArray(profile.selectedCapabilities) || !Array.isArray(profile.operations)) throw new Error('invalid artifacts profile');
   const requested = profile.selectedCapabilities;
+  if (profile.profileRevisionId && profile.resultEnvelopeVersion !== 2 && requested.some(name =>
+    ['artifacts_list_versions', 'artifacts_revert'].includes(name))) throw new Error('part 1 requires the v2 profile');
   if ((profile.profileRevisionId !== undefined && (typeof profile.profileRevisionId !== 'string' ||
     !profile.profileRevisionId.trim() || profile.profileRevisionId.length > 160 || profile.resultEnvelopeVersion === undefined)) ||
     (profile.resultEnvelopeVersion !== undefined && (!profile.profileRevisionId ||
       ![1, 2].includes(profile.resultEnvelopeVersion))) ||
-    (profile.resultEnvelopeVersion === 2 && profile.requireExpectedCurrentReleaseId !== true)) {
+    (profile.resultEnvelopeVersion === 2 && (profile.requireExpectedCurrentReleaseId !== true ||
+      profile.contractRevisions?.outcome !== 'artifacts-outcome/v2'))) {
     throw new Error('inconsistent artifact profile descriptor');
   }
   if (profile.requireExpectedCurrentReleaseId !== undefined && typeof profile.requireExpectedCurrentReleaseId !== 'boolean') {
