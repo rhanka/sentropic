@@ -42,6 +42,9 @@ declare module 'node:crypto' {
 }
 
 declare module 'node:fs/promises' {
+  export interface Stats {
+    mode: number;
+  }
   export function chmod(path: string, mode: number): Promise<void>;
   export function link(existingPath: string, newPath: string): Promise<void>;
   export function mkdir(
@@ -51,6 +54,7 @@ declare module 'node:fs/promises' {
   export function readFile(path: string): Promise<Buffer>;
   export function readFile(path: string, encoding: 'utf8'): Promise<string>;
   export function rename(oldPath: string, newPath: string): Promise<void>;
+  export function stat(path: string): Promise<Stats>;
   export function unlink(path: string): Promise<void>;
   export function writeFile(
     path: string,
