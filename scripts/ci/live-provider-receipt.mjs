@@ -5,9 +5,10 @@ import { pathToFileURL } from 'node:url';
 
 export function scheduleHealth(runs, { now = Date.now(), currentRun } = {}) {
   const latest = runs.filter(run => run.event === 'schedule' && String(run.id) !== String(currentRun)
+    && run.status === 'completed'
     && (!run.display_title || run.display_title === 'Live provider qualification'))
     .sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at))[0];
-  if (!latest) return { healthy: false, reason: 'missing scheduled live run', lastRun: null, ageSeconds: null };
+  if (!latest) return { healthy: false, reason: 'missing completed scheduled live run', lastRun: null, ageSeconds: null };
   const ageSeconds = (now - Date.parse(latest.created_at)) / 1000;
   return { healthy: Number.isFinite(ageSeconds) && ageSeconds >= 0 && ageSeconds <= 26 * 3600
     && latest.status === 'completed' && latest.conclusion === 'success',
