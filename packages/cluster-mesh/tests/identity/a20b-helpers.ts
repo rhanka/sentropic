@@ -153,6 +153,19 @@ export const asOpHost = (unitOfWork: IdentityUnitOfWorkV1<PostgresCustodyHandle>
 
 export const sha256Hex = (value: string): string => createHash('sha256').update(value, 'utf8').digest('hex');
 
+/** Store tests create real parents before inserting constrained custody rows. */
+export const seedCustodyParents = async (unitOfWork: IdentityUnitOfWorkV1<CustodyOpHost>, users: readonly string[], tenants: readonly string[] = []): Promise<void> => {
+  await unitOfWork.runWrite({ mode: 'write', deadlineMs: 5000 }, async (tx) => {
+    for (const userId of users) {
+      await tx.hostTransaction.journal.insertAccountCore({ userId, email: `${userId}@example.test`, accountStatus: 'active', globalRole: 'user', createdAt: NOW, updatedAt: NOW });
+      await tx.hostTransaction.journal.ensureLiveFence(userId, NOW);
+    }
+    for (const tenantId of tenants) {
+      await tx.hostTransaction.journal.insertTenantCore({ tenantId, slug: tenantId, status: 'active', createdAt: NOW });
+    }
+  });
+};
+
 export const randomBase64Url = (bytes = 32): string => randomBytes(bytes).toString('base64url');
 
 /** Deterministic 96-byte RFC 7515 Appendix-style COSE key (OKP, synthetic). */
