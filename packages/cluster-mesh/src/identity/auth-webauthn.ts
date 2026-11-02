@@ -28,19 +28,19 @@ export const authWebAuthnServices = <H>(input: IdentityAuthBindingInput<H>, port
   };
   const uv = async (flow: 'registration' | 'authentication', id?: string | null): Promise<AuthUv> => {
     const user = id ? await ports.users.findById(id) : null;
-    return strongest(flow === 'registration' ? input.webAuthnPolicy.registrationUserVerification : input.webAuthnPolicy.authenticationUserVerification,
+    return strongest(flow === 'registration' ? 'preferred' : 'discouraged', flow === 'registration' ? input.webAuthnPolicy.registrationUserVerification : input.webAuthnPolicy.authenticationUserVerification,
       user ? input.accountPolicy.resolveUserVerification?.(user) ?? (flow === 'registration' ? 'preferred' : 'required') : flow === 'registration' ? 'preferred' : 'required');
   };
-  const verificationPolicy = async (flow: 'registration' | 'authentication') => {
+  const verificationPolicy = async (flow: 'registration' | 'authentication', expectedChallenge: unknown) => {
     const stored = challenge();
-    if (!stored) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+    if (!stored || stored.purpose !== flow || stored.challenge !== expectedChallenge) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
     const origins = stored.allowedOrigins.filter((origin) => input.rp.expectedOrigins.includes(origin));
     if (stored.rpId !== input.rp.id || origins.length === 0) refuseWebAuthn(flow, flow + '_verification_failed', flow === 'registration' ? 'Registration verification failed.' : 'Authentication verification failed.', flow === 'registration' ? 400 : 401);
     return { expectedRPID: stored.rpId, expectedOrigin: origins, requireUserVerification: strongest(stored.userVerification, await uv(flow, state.owner)) === 'required' };
   };
   const registration = runtime.createAuthWebAuthnRegistrationService({ ports, rp: input.rp,
     verifyRegistrationResponse: async (args) => {
-      const policy = await verificationPolicy('registration');
+      const policy = await verificationPolicy('registration', args.expectedChallenge);
       let result;
       try { result = await server.verifyRegistrationResponse({ ...args, ...policy }); }
       catch { return refuseWebAuthn('registration', 'registration_verification_failed', 'Registration verification failed.', 400); }
@@ -53,7 +53,7 @@ export const authWebAuthnServices = <H>(input: IdentityAuthBindingInput<H>, port
   });
   const authentication = runtime.createAuthWebAuthnAuthenticationService({ ports, rp: input.rp,
     verifyAuthenticationResponse: async (args) => {
-      const policy = await verificationPolicy('authentication');
+      const policy = await verificationPolicy('authentication', args.expectedChallenge);
       let result;
       try { result = await server.verifyAuthenticationResponse({ ...args, ...policy }); }
       catch { return refuseWebAuthn('authentication', 'authentication_verification_failed', 'Authentication verification failed.', 401); }
@@ -71,7 +71,7 @@ export const authWebAuthnServices = <H>(input: IdentityAuthBindingInput<H>, port
         return options;
       },
       verifyRegistration: async (value) => {
-        check(); state.flow = 'registration'; state.owner = value.userId; state.registration = undefined; state.completionOwner = null;
+        check(); state.flow = 'registration'; state.owner = value.userId; state.registration = undefined;
         return finishAuthCompletion('registration', await guardAuthStep('registration', 'credential', () => registration.verifyRegistration({ ...value,
           beforePersist: async (context) => guardAuthStep('registration', 'ticket', async () => {
             await consumeTicket(context.userId); await value.beforePersist?.(context);
@@ -86,7 +86,7 @@ export const authWebAuthnServices = <H>(input: IdentityAuthBindingInput<H>, port
         options.userVerification = state.issuanceUv; return options;
       },
       verifyAuthentication: async (value) => {
-        check(); state.flow = 'authentication'; state.owner = null; state.completionOwner = null; state.assertion = undefined;
+        check(); state.flow = 'authentication'; state.owner = null; state.assertion = undefined;
         return finishAuthCompletion('authentication', await guardAuthStep('authentication', 'credential', () => authentication.verifyAuthentication(value)));
       },
     },

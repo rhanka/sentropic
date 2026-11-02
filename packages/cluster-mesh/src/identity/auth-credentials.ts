@@ -19,7 +19,7 @@ export const authCredentialPort = <H>(input: IdentityAuthBindingInput<H>, check:
     findById: async (id) => { check(); return project(await tx.custody.credentials.findById(id)); },
     findByCredentialId: async (id) => {
       check(); const row = await tx.custody.credentials.findByCredentialId(id);
-      if (row && state.flow === 'authentication') {
+      if (row && !row.revokedAt && state.flow === 'authentication') {
         if (row.rpId !== input.rp.id) refuseWebAuthn('authentication', 'authentication_verification_failed', 'Authentication verification failed.', 401);
         state.owner = row.userId;
       }
@@ -32,6 +32,7 @@ export const authCredentialPort = <H>(input: IdentityAuthBindingInput<H>, check:
         : value.publicKey instanceof ArrayBuffer ? new Uint8Array(value.publicKey) : new Uint8Array(value.publicKey);
       const verified = state.registration;
       if (!verified || state.owner !== value.userId || verified.credential.id !== value.credentialId || verified.credential.counter !== value.counter
+        || (state.completionOwner !== null && state.completionOwner !== value.userId)
         || !Buffer.from(verified.credential.publicKey).equals(Buffer.from(bytes))) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
       await tx.lockSubject(value.userId);
       const record: WebAuthnCredentialV1 = { proofId: input.hostPorts.random.uuid(), userId: value.userId, credentialId: value.credentialId,
@@ -46,6 +47,7 @@ export const authCredentialPort = <H>(input: IdentityAuthBindingInput<H>, check:
       check();
       const snapshot = snapshots.get(id);
       if (!snapshot || state.assertion?.credentialId !== id || state.assertion.newCounter !== counter) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+      if (state.completionOwner !== null && state.completionOwner !== snapshot.userId) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
       await tx.lockSubject(snapshot.userId);
       const record = await tx.custody.credentials.compareAndSwapCounter({ proofId: snapshot.proofId, userId: snapshot.userId, expectedCounter: snapshot.counter,
         expectedRevision: snapshot.revision, newCounter: counter, at: (at ?? input.hostPorts.clock.now()).toISOString() });

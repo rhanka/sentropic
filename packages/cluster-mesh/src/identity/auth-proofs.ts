@@ -22,14 +22,14 @@ export const authProofPorts = <H>(input: IdentityAuthBindingInput<H>, evidence: 
       return { id: record.proofId, userId: record.userId, challenge: record.challenge, type: record.purpose, expiresAt: value.expiresAt, used: false, createdAt: new Date(record.createdAt) };
     },
     findValid: async (challenge, type) => {
-      check();
+      check(); verifying = undefined;
       const record = await tx.custody.singleUseProofs.findChallenge(challenge, type);
       if (!record || !pending(record.expiresAt, record.state)) return null;
-      challenges.set(challenge, record); verifying = record;
+      challenges.set(JSON.stringify([type, challenge]), record); verifying = record;
       return { id: record.proofId, userId: record.userId, challenge, type, expiresAt: new Date(record.expiresAt), used: false, createdAt: new Date(record.createdAt) };
     },
     markUsed: async (challenge) => {
-      check(); const record = challenges.get(challenge);
+      check(); const record = challenges.get(JSON.stringify([state.flow, challenge]));
       if (!record) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
       const boundUser = state.completionOwner;
       if (!boundUser) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
