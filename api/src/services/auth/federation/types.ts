@@ -8,6 +8,8 @@ import type {
   AuthHonoSessionTokens,
   AuthHonoUserPort,
   AuthHonoUserRecord,
+  FederationResolveInput,
+  FederationResolveOutcome,
 } from '@sentropic/auth-hono';
 
 /**
@@ -22,6 +24,8 @@ import type {
 
 /** The verified identity a provider extracts from the upstream callback. NEVER carries tokens (D1). */
 export interface FederationProviderIdentity {
+  /** Verified assertion expiry when the provider uses an expiring signed assertion. */
+  assertionExpiresAt?: string;
   /** Stable upstream subject (Google `sub`) — the single linking key (D6), NOT the email. */
   subject: string;
   /** Provider-asserted email (may be null for providers that omit it). */
@@ -34,6 +38,27 @@ export interface FederationProviderIdentity {
   emailScope?: 'global' | 'provider';
   /** MS `tid` (null for Google); audit + future subject policy. */
   providerTenant?: string | null;
+}
+
+/** Fresh capabilities supplied by the CM completion callback, never retained by the broker. */
+export interface FederationIdentityAttempt {
+  readonly now: Date;
+  readonly audit: AuthHonoAuditLogPort;
+  readonly federation: Pick<AuthHonoFederationPort,
+    'findIdentityBySubject' | 'linkIdentity' | 'touchLogin'>;
+  resolveFederatedUser(input: FederationResolveInput): Promise<FederationResolveOutcome>;
+  authenticate(userId: string, deviceInfo?: AuthHonoDeviceInfo): Promise<AuthHonoSessionTokens>;
+  requireLinkActor(expectedUserId: string): Promise<void>;
+  verifyEmailProof(email: string, token: string): Promise<void>;
+  consumeEmailProof(userId: string): Promise<void>;
+}
+
+/** A public refusal may be rendered only after the enclosing completion rolled back. */
+export class FederationCompletionRefusal extends Error {
+  constructor(readonly status: number, readonly code: string, message: string) {
+    super(message);
+    this.name = 'FederationCompletionRefusal';
+  }
 }
 
 export interface FederationProvider {
