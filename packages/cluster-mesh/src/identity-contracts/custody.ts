@@ -3,6 +3,11 @@
 // explicit `T | null` encoding for nullable columns (SQL NULL); inherited
 // optional 1.0 fields are untouched.
 
+import type { IdentityStores } from './ports.js';
+import type { ConversationAuthorityStore } from '../identity/conversation.js';
+import type { IdentityLedgerStore } from '../identity/ledger.js';
+import type { IdentitySubjectLifecyclePortV1, PersonOrphanCleanupPortV1, IdentityDeletionJournalPortV2, IdentityRevocationOutboxPortV1, IdentityExternalRevocationDraftV1 } from './custody-operations.js';
+
 export type IdentityIsoTimeV1 = string;
 export type IdentitySha256HexV1 = string;
 export type IdentityBase64UrlV1 = string;
@@ -286,6 +291,7 @@ export interface SocialIdentityStoreV1 {
 }
 
 export interface IdentityCustodyStoresV1 {
+  readonly subjects: IdentitySubjectLifecyclePortV1;
   readonly profiles: IdentityAccountProfileStoreV1;
   readonly credentials: WebAuthnCredentialStoreV1;
   readonly singleUseProofs: SingleUseProofStoreV1;
@@ -337,22 +343,33 @@ export interface IdentityLoginTokenPortV1 {
 }
 
 export interface IdentityRunOptionsV1 {
-  readonly mode: 'read' | 'write' | 'import' | 'delete';
+  readonly mode: 'read' | 'write';
+  readonly purpose: 'request' | 'import' | 'delete' | 'delivery';
   readonly deadlineMs: number;
+  readonly maxAttempts: 1 | 2 | 3;
 }
 
 export interface IdentityTransactionV1<H> {
   readonly profile: IdentityStorageProfileV1;
   readonly transactionId: string;
-  readonly readOnly: boolean;
+  readonly mode: 'read' | 'write';
   readonly hostTransaction: H;
-  readonly stores: IdentityCustodyStoresV1;
+  readonly stores: IdentityStores;
+  readonly custody: IdentityCustodyStoresV1;
+  readonly conversations: ConversationAuthorityStore;
+  readonly ledger: IdentityLedgerStore;
+  readonly cleanup: PersonOrphanCleanupPortV1;
+  readonly deletionJournal: IdentityDeletionJournalPortV2;
+  readonly revocationOutbox: IdentityRevocationOutboxPortV1;
+  lockSubject(userId: string): Promise<void>;
+  lockWorkspace(workspaceId: string): Promise<void>;
+  lockEmail(email: string): Promise<void>;
+  advanceSubjectRevision(userId: string, at: string, retire: boolean): Promise<void>;
 }
 
 export interface IdentityUnitOfWorkV1<H> {
   readonly profile: IdentityStorageProfileV1;
-  runRead<T>(options: IdentityRunOptionsV1, operation: (tx: IdentityTransactionV1<H>) => Promise<T>): Promise<T>;
-  runWrite<T>(options: IdentityRunOptionsV1, operation: (tx: IdentityTransactionV1<H>) => Promise<T>): Promise<T>;
+  run<T>(options: IdentityRunOptionsV1, operation: (tx: IdentityTransactionV1<H>) => Promise<T>): Promise<T>;
 }
 
 export type IdentityImportRowV1 =
@@ -367,9 +384,12 @@ export type IdentityImportRowV1 =
   | { readonly entity: 'tenant'; readonly record: import('./types.js').TenantRecord }
   | { readonly entity: 'tenant_membership'; readonly record: import('./types.js').TenantMembershipRecord }
   | { readonly entity: 'workspace'; readonly record: import('./types.js').WorkspaceRecord }
-  | { readonly entity: 'workspace_membership'; readonly record: import('./types.js').WorkspaceMembershipRecord };
+  | { readonly entity: 'workspace_membership'; readonly record: import('./types.js').WorkspaceMembershipRecord }
+  | { readonly entity: 'revocation_delivery'; readonly record: IdentityExternalRevocationV1 }
+  | { readonly entity: 'legacy_connector_tombstone'; readonly record: IdentityLegacyConnectorTombstoneV1 };
 
 export interface IdentityImportBatchV1 {
+  readonly legacyConnectorSourceEventIds: readonly string[];
   readonly contractVersion: '1.1.0';
   readonly migrationId: string;
   readonly sourceSnapshotRef: string;
@@ -402,6 +422,7 @@ export interface IdentityImportReceiptV1 {
   readonly manifestDigest: string;
   readonly importedAt: string;
   readonly counts: Readonly<Record<IdentityImportRowV1['entity'], number>>;
+  readonly legacyConnectorTombstones: { readonly queued: number; readonly unresolved: number; readonly acknowledged: number };
   readonly identitiesPreserved: true;
   readonly verificationMaterialPreserved: true;
   readonly lifecyclePreserved: true;
@@ -418,6 +439,7 @@ export interface IdentityCustodyImportPortV1<H> {
 }
 
 export interface IdentityCustodyImporterInput<H> {
+  readonly connectorCustody: ConnectorRevocationCustodyPortV1<H> | null;
   readonly unitOfWork: IdentityUnitOfWorkV1<H>;
   readonly fence: IdentityImportFencePortV1;
   readonly importOptions: IdentityRunOptionsV1;
@@ -460,6 +482,9 @@ export interface PersonDeletionCommandV2 {
 }
 
 export interface PersonDeletionReceiptV2 {
+  readonly contractVersion: '2.0.0';
+  readonly operationId: string;
+  readonly deliveryIds: readonly string[];
   readonly userId: string;
   readonly mode: 'delete';
   readonly transaction: 'committed' | 'rolled_back';
@@ -472,6 +497,7 @@ export interface PersonDeletionReceiptV2 {
 }
 
 export interface IdentityDeletionOperationV2 {
+  readonly committedReceipt: PersonDeletionReceiptV2 | null;
   readonly operationId: string;
   readonly userId: string;
   readonly actorId: string;
@@ -504,21 +530,22 @@ export interface AtomicPersonDeletionInput<H> {
   readonly readOptions?: IdentityRunOptionsV1;
 }
 
-export interface IdentityExternalRevocationV1 {
+export interface IdentityExternalRevocationV1 extends IdentityExternalRevocationDraftV1 {
   readonly deliveryId: string;
   readonly operationId: string;
-  readonly step: string;
-  readonly subjectId: string;
-  readonly targetKind: string;
-  readonly targetRef: string;
   readonly state: 'pending' | 'delivered';
   readonly createdAt: string;
   readonly nextAttemptAt: string;
+  readonly deliveredAt: string | null;
+  readonly claimOwner: string | null;
+  readonly claimVersion: number;
+  readonly leaseUntil: string | null;
+  readonly attemptCount: number;
 }
 
 export interface IdentityRevocationClaimV1 {
-  readonly deliveryId: string;
-  readonly claimOwner: string;
+  readonly record: IdentityExternalRevocationV1;
+  readonly workerId: string;
   readonly claimVersion: number;
 }
 
@@ -541,13 +568,13 @@ export interface ConnectorRevocationCustodyPortV1<H> {
     readonly subjectId: string;
     readonly workspaceIdsToDelete: readonly string[];
     readonly at: string;
-  }, tx: H): Promise<ConnectorRevocationCaptureV1>;
-  assertCaptured(record: IdentityExternalRevocationV1, tx: H): Promise<void>;
-  eraseAcknowledged(record: IdentityExternalRevocationV1, tx: H): Promise<void>;
+  }, tx: IdentityTransactionV1<H>): Promise<ConnectorRevocationCaptureV1>;
+  assertCaptured(record: IdentityExternalRevocationV1, tx: IdentityTransactionV1<H>): Promise<void>;
+  eraseAcknowledged(record: IdentityExternalRevocationV1, tx: IdentityTransactionV1<H>): Promise<void>;
 }
 
 export interface AcknowledgeRevocationInput<H> {
-  readonly tx: H;
+  readonly tx: IdentityTransactionV1<H>;
   readonly claim: IdentityRevocationClaimV1;
   readonly at: string;
   readonly connectorCustody: ConnectorRevocationCustodyPortV1<H> | null;
