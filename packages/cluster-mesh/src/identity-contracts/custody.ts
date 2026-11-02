@@ -373,6 +373,7 @@ export interface IdentityUnitOfWorkV1<H> {
 }
 
 export type IdentityImportRowV1 =
+  | { readonly entity: 'service_client'; readonly record: import('./types.js').ServiceClientBinding }
   | { readonly entity: 'account'; readonly record: import('./types.js').UserAccount; readonly profile: IdentityAccountProfileV1 }
   | { readonly entity: 'oauth_consent'; readonly record: import('./types.js').OAuthConsentRecord }
   | { readonly entity: 'credential'; readonly record: WebAuthnCredentialV1 }

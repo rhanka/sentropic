@@ -4,6 +4,9 @@
 // completed (migrationId, snapshot, manifest) triple replays the recorded
 // receipt without touching live rows.
 
+import { validLegacyConnectorInventory, importRevocationDelivery } from './custody-import-deliveries.js';
+import { boundIdentitySql } from './custody-transaction-ports.js';
+import { requireIdentityRunOptions } from './custody-transaction-guards.js';
 import type {
   BoundLoginSessionV1,
   DigestInvitationV1,
@@ -31,7 +34,7 @@ type Entity = IdentityImportRowV1['entity'];
 const ALL_ENTITIES: readonly Entity[] = [
   'account', 'credential', 'single_use_proof', 'email_ticket', 'invitation',
   'login_session', 'social_link', 'tenant', 'tenant_membership', 'workspace',
-  'workspace_membership', 'oauth_consent',
+  'workspace_membership', 'oauth_consent', 'service_client', 'revocation_delivery', 'legacy_connector_tombstone',
 ];
 
 const zeroCounts = (): Record<Entity, number> =>
@@ -105,6 +108,9 @@ const naturalKey = (row: IdentityImportRowV1): string => {
     case 'workspace': return `workspace:${row.record.workspaceId}`;
     case 'workspace_membership': return `wsmember:${row.record.workspaceId}:${row.record.userId}`;
     case 'oauth_consent': return `consent:${row.record.consentId}`;
+    case 'service_client': return `client:${row.record.clientId}`;
+    case 'revocation_delivery': return `delivery:${row.record.deliveryId}`;
+    case 'legacy_connector_tombstone': return `tombstone:${row.record.sourceEventId}`;
   }
 };
 
@@ -130,6 +136,7 @@ const structuralIssues = (batch: IdentityImportBatchV1): Issue[] => {
     fail('account', 'identity_import_invalid', -1);
     return issues;
   }
+  if (!validLegacyConnectorInventory(batch)) fail('legacy_connector_tombstone', 'identity_import_invalid', -1);
   batch.rows.forEach((row, rowIndex) => {
     const key = naturalKey(row);
     const prior = seen.get(key);
@@ -227,6 +234,13 @@ const readExisting = async (
       return host.journal.roleInWorkspace(row.record.workspaceId, row.record.userId);
     case 'oauth_consent':
       return host.journal.findConsentCore(row.record.consentId);
+    case 'revocation_delivery': return host.journal.findDelivery(row.record.deliveryId);
+    case 'legacy_connector_tombstone': return host.journal.findLegacyConnectorTombstone(row.record.sourceEventId);
+    case 'service_client': {
+      const sql = boundIdentitySql(host);
+      const [stored] = await sql.query(`SELECT * FROM ${sql.table('cm_service_clients')} WHERE client_id = ?`, [row.record.clientId]);
+      return stored ? { clientId: stored.client_id, tenantId: stored.tenant_id, boundAt: stored.bound_at } : null;
+    }
   }
 };
 
@@ -279,20 +293,27 @@ const insertRow = async (host: CustodyOpHost, row: IdentityImportRowV1, imported
     case 'workspace': return host.journal.insertWorkspaceCore({ ...row.record, aliases: [...row.record.aliases] });
     case 'workspace_membership': return host.journal.insertWorkspaceMemberCore(row.record);
     case 'oauth_consent': return host.journal.insertConsentCore(row.record);
+    case 'revocation_delivery': return importRevocationDelivery(host, row.record);
+    case 'legacy_connector_tombstone': return host.journal.insertLegacyConnectorTombstone(row.record);
+    case 'service_client': {
+      const sql = boundIdentitySql(host);
+      await sql.query(`INSERT INTO ${sql.table('cm_service_clients')} (client_id,tenant_id,bound_at) VALUES (?,?,?)`, [row.record.clientId, row.record.tenantId, row.record.boundAt]);
+      return;
+    }
   }
 };
 
 const requireWriteTx = (tx: IdentityTransactionV1<CustodyOpHost>): CustodyOpHost => {
-  if (tx.readOnly) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+  if (tx.mode !== 'write') throw new IdentityCustodyErrorV1('identity_transaction_unbound');
   return tx.hostTransaction;
 };
 
-export const createIdentityCustodyImporterV1 = (input: {
-  readonly unitOfWork: IdentityUnitOfWorkV1<CustodyOpHost>;
-  readonly fence: { assertExclusiveWriter(sourceSnapshotRef: string): Promise<void> };
-  readonly importOptions: IdentityRunOptionsV1;
-  readonly validationOptions: IdentityRunOptionsV1;
-}): IdentityCustodyImportPortV1<CustodyOpHost> => {
+export const createIdentityCustodyImporterV1 = (input: IdentityCustodyImporterInput<CustodyOpHost>): IdentityCustodyImportPortV1<CustodyOpHost> => {
+  requireIdentityRunOptions(input.importOptions);
+  requireIdentityRunOptions(input.validationOptions);
+  if (input.importOptions.mode !== 'write' || input.importOptions.purpose !== 'import'
+    || input.validationOptions.mode !== 'read' || input.validationOptions.purpose !== 'import'
+    || input.connectorCustody === undefined) throw new IdentityCustodyErrorV1('identity_contract_unavailable');
   const validateStructure = (batch: IdentityImportBatchV1): IdentityImportValidationV1 => {
     const issues = structuralIssues(batch);
     return { valid: issues.length === 0, issues };
@@ -311,7 +332,8 @@ export const createIdentityCustodyImporterV1 = (input: {
       throw new IdentityCustodyErrorV1('identity_import_conflict');
     }
     const counts = zeroCounts();
-    for (const row of batch.rows) {
+    const rank = (entity: Entity): number => ({ tenant: 0, account: 1, workspace: 2, single_use_proof: 3, revocation_delivery: 4 } as Partial<Record<Entity, number>>)[entity] ?? 5;
+    for (const row of [...batch.rows].sort((a, b) => rank(a.entity) - rank(b.entity))) {
       const existing = await readExisting(host, row);
       if (existing !== null) {
         if (!coversStaged(normalizedForCompare(row), existing)) throw new IdentityCustodyErrorV1('identity_import_conflict');
@@ -325,6 +347,15 @@ export const createIdentityCustodyImporterV1 = (input: {
       }
       counts[row.entity] += 1;
     }
+    for (const row of batch.rows) {
+      if (row.entity !== 'revocation_delivery' || row.record.state !== 'pending' || row.record.targetKind !== 'connector_grant') continue;
+      if (!input.connectorCustody) throw new IdentityCustodyErrorV1('identity_contract_unavailable');
+      const stored = await tx.revocationOutbox.find(row.record.deliveryId);
+      if (!stored || stored.state !== 'pending') throw new IdentityCustodyErrorV1('identity_import_conflict');
+      await input.connectorCustody.assertCaptured(stored, tx);
+    }
+    const legacyConnectorTombstones = { queued: 0, unresolved: 0, acknowledged: 0 };
+    for (const row of batch.rows) if (row.entity === 'legacy_connector_tombstone') legacyConnectorTombstones[row.record.disposition] += 1;
     const receipt: IdentityImportReceiptV1 = {
       contractVersion: '1.1.0',
       migrationId: batch.migrationId,
@@ -332,7 +363,7 @@ export const createIdentityCustodyImporterV1 = (input: {
       sourceSnapshotDigest: batch.sourceSnapshotDigest,
       manifestDigest: batch.manifestDigest,
       importedAt: batch.importedAt,
-      counts,
+      counts, legacyConnectorTombstones,
       identitiesPreserved: true,
       verificationMaterialPreserved: true,
       lifecyclePreserved: true,
@@ -342,10 +373,10 @@ export const createIdentityCustodyImporterV1 = (input: {
   };
 
   return {
-    validate: async (batch) => input.unitOfWork.runRead(input.validationOptions, async () => validateStructure(batch)),
+    validate: async (batch) => input.unitOfWork.run(input.validationOptions, async () => validateStructure(batch)),
     importBatch: async (batch) => {
       await input.fence.assertExclusiveWriter(batch.sourceSnapshotRef);
-      return input.unitOfWork.runWrite(input.importOptions, (tx) => importInTx(batch, tx));
+      return input.unitOfWork.run(input.importOptions, (tx) => importInTx(batch, tx));
     },
     importBatchInTransaction: (batch, tx) => importInTx(batch, tx),
   };

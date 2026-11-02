@@ -119,6 +119,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - No UI changes in this lot; no UAT.
 
 ## Plan / Todo (lot-based)
+- [x] Review r1: import all normative entities in dependency order; verify captured deliveries before the receipt.
 - [x] Review r1: validate the complete legacy source inventory and deterministic delivery correspondence.
 - [x] Review r1: durable legacy connector tombstone reads and writes on both profiles.
 - [x] Review r1 tests first: exact legacy event partition, durable tombstones and same-transaction custody verification.
