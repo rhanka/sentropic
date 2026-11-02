@@ -1,4 +1,25 @@
 -- Lot A4: app identity cutover to the cluster-mesh cm_identity stores (r13 D11 replacement gate).
+-- The migration runner must apply the qualified CM asset/import and record D11 first.
+DO $$
+DECLARE checkpoint jsonb; imported jsonb;
+BEGIN
+  IF current_setting('app.a4_import_manifest_digest', true) IS NULL THEN
+    RAISE EXCEPTION 'A4 bound import checkpoint required';
+  END IF;
+  SELECT detail INTO checkpoint FROM control.app_cm_identity_cutover
+    WHERE cutover_id = 'a4-identity-cutover' AND phase = 'pre-deletion-checkpoint';
+  SELECT receipt_json::jsonb INTO imported FROM cm_identity.identity_import_receipts
+    WHERE migration_id = '0014_app_cm_identity_cutover';
+  IF checkpoint IS NULL OR imported IS NULL
+    OR checkpoint->>'sourceSnapshotDigest' IS DISTINCT FROM imported->>'sourceSnapshotDigest'
+    OR current_setting('app.a4_import_manifest_digest', true) IS DISTINCT FROM imported->>'manifestDigest'
+    OR imported->>'verificationMaterialPreserved' IS DISTINCT FROM 'true'
+    OR imported->>'identitiesPreserved' IS DISTINCT FROM 'true'
+    OR imported->>'lifecyclePreserved' IS DISTINCT FROM 'true' THEN
+    RAISE EXCEPTION 'A4 bound import checkpoint required';
+  END IF;
+END $$;
+--> statement-breakpoint
 -- ONE control migration, ONE transaction: CM schema + id-preserving data copy + rollback checkpoint
 -- (recorded BEFORE any legacy table is deleted) + legacy identity table deletion.
 -- Timestamps are ISO-8601 text in cm_identity; legacy timestamp columns are read as UTC.
@@ -75,11 +96,6 @@ CREATE INDEX IF NOT EXISTS "identity_revocation_outbox_operation" ON "cm_identit
 CREATE INDEX IF NOT EXISTS "identity_revocation_outbox_pending" ON "cm_identity"."identity_revocation_outbox" ("state", "next_attempt_at", "created_at", "delivery_id")
 --> statement-breakpoint
 CREATE UNIQUE INDEX IF NOT EXISTS "identity_revocation_outbox_tuple" ON "cm_identity"."identity_revocation_outbox" ("operation_id", "step", "target_kind", "target_ref")
---> statement-breakpoint
--- Custody schema attestation (must match applyPostgresIdentityCustodySchemaV1: migration_id 'A2.0b/1', contract 1.1.0).
-INSERT INTO "cm_identity"."identity_custody_schema_versions" ("migration_id","contract_version","asset_sha256","applied_at")
-VALUES ('A2.0b/1','1.1.0','8f653f0e016d6a45178896d89d7fc4054b3e8161a081f2cc6720773f3ab42da1', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'))
-ON CONFLICT ("migration_id") DO NOTHING;
 --> statement-breakpoint
 CREATE TABLE IF NOT EXISTS "cm_identity".cm_tenants (
   tenant_id TEXT PRIMARY KEY,
@@ -287,18 +303,6 @@ SELECT 'a4-identity-cutover', 'pre-deletion-checkpoint', jsonb_build_object(
   ),
   'recorded_at', to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"')
 ) ON CONFLICT ("cutover_id") DO NOTHING;
---> statement-breakpoint
--- Custody import receipt (A2.0b 1.1.0) keyed to the checkpoint manifest.
---> statement-breakpoint
-INSERT INTO "cm_identity"."identity_import_receipts" ("migration_id","source_snapshot_ref","source_snapshot_digest","manifest_digest","contract_version","imported_at","receipt_json")
-SELECT '0014_app_cm_identity_cutover', 'legacy-public-identity-tables@pre-deletion',
-  encode(sha256(convert_to("detail"::text,'UTF8')),'hex'),
-  encode(sha256(convert_to('0014_app_cm_identity_cutover' || "detail"::text,'UTF8')),'hex'),
-  '1.1.0',
-  to_char(now() AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"'),
-  jsonb_build_object('contractVersion','1.1.0','migrationId','0014_app_cm_identity_cutover','identitiesPreserved',true,'verificationMaterialPreserved',true,'lifecyclePreserved',true,'counts', "detail"->'cm_counts')::text
-FROM "control"."app_cm_identity_cutover" WHERE "cutover_id" = 'a4-identity-cutover'
-ON CONFLICT ("migration_id") DO NOTHING;
 --> statement-breakpoint
 -- Drop every FK that references a legacy identity table (business tables keep their rows; the A2.3 cascade owns deletion now).
 --> statement-breakpoint
