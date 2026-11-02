@@ -72,6 +72,7 @@ export const openPostgresEnv = async (): Promise<PostgresEnv> => {
       `CREATE SCHEMA "${schema}"`,
       ...tenancyBody.split(';\n').map((part) => part.trim()).filter(Boolean),
       ...identityEnforcementPgSchema(schema),
+      ...identitySchemaStatements('postgres', schema),
     ];
     // One simple-protocol round trip: node-pg rejects multi-statement text
     // when a values array is passed, so values is intentionally undefined.

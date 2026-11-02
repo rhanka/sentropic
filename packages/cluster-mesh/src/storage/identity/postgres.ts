@@ -16,7 +16,7 @@ import type { DeviceCodeRecord, IdentityAuditEvent, IdentityProof, InvitationRec
 import type { InjectedPgDriver, PgSession, SqlValue } from '../postgres/protocol.js';
 import { PostgresStorageError } from '../postgres/errors.js';
 import { decodeDeviceCode, decodeInvitation, decodeProof, decodeSession, decodeUserAccount } from './records.js';
-import { identitySchemaStatements, identityTable, type IdentityTableName } from './schema.js';
+import { IDENTITY_TABLES, identitySchemaStatements, identityTable, type IdentityTableName } from './schema.js';
 import type { IdentityAccountStores } from './stores.js';
 
 export const IDENTITY_TX_DEADLINE_MS = 5000;
@@ -40,8 +40,17 @@ export const applyPostgresIdentityCoreSchema = async (options: PostgresIdentityO
   const { driver, schema, deadlineMs = IDENTITY_TX_DEADLINE_MS } = options;
   await driver.transaction({ isolation: 'serializable', readOnly: false, deadlineMs }, async (session) => {
     await session.execute({ text: `CREATE SCHEMA IF NOT EXISTS "${schema}"`, values: [] });
-    for (const ddl of identitySchemaStatements('postgres', schema)) {
-      await session.execute({ text: ddl, values: [] });
+    // One probe instead of 34 round trips when the schema was provisioned
+    // atomically beforehand (the DDL below is all IF NOT EXISTS, so a
+    // complete table set means the whole batch already committed).
+    const present = await session.execute({
+      text: 'SELECT count(*)::int AS n FROM information_schema.tables WHERE table_schema = $1 AND table_name = ANY($2)',
+      values: [schema, [...IDENTITY_TABLES]],
+    });
+    if (Number(present.rows[0]?.['n']) !== IDENTITY_TABLES.length) {
+      for (const ddl of identitySchemaStatements('postgres', schema)) {
+        await session.execute({ text: ddl, values: [] });
+      }
     }
   });
 };
