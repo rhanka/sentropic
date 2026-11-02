@@ -9,6 +9,7 @@ Owner decision (relayed by immo): the `<id>.pinned.<base>` host form disappears.
 - Tests on `ENV=test-artifacts-host` only, never `ENV=dev`.
 - No `[skip ci]` in any commit; no legacy fallback — the old pinned form is removed, not kept alongside.
 - English for code, comments, commits, docs.
+- BRLOCK-EX1 acknowledgment (the lockfile-lane guard requires it on branches whose scope touches locks/container installs): the inherited CI-maintainers exemption under `.security/ci-lockfile-policy.json` stays owned and unexpired, review_by=2026-11-30T00:00:00Z; no renewal or scope expansion.
 - Commits via `make commit MSG="..."` only, ≤150 lines, selective staging, `make scope-check` before every commit.
 
 ## Branch Scope Boundaries (MANDATORY)
@@ -38,13 +39,17 @@ Owner decision (relayed by immo): the `<id>.pinned.<base>` host form disappears.
   - `deploy/k8s/overlays/prod/artifact-content-ingress.yaml` (BR01-EX1)
   - `deploy/ci/artifact-content/routing.selftest.mjs` (BR01-EX1)
   - `deploy/ci/artifact-content/bundle.selftest.mjs` (BR01-EX1)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json` (BR01-EX3)
+  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json` (BR01-EX3)
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts` (BR01-EX3)
 - **Exception process**:
   - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
   - Include reason, impact, and rollback strategy.
 
 ## Feedback Loop
 - BR01-EX1 (scope exception, `deploy/**`): paths `deploy/k8s/overlays/{preprod,prod}/artifact-content-ingress.yaml`, `deploy/ci/artifact-content/routing.selftest.mjs`, `deploy/ci/artifact-content/bundle.selftest.mjs`. Justification: the owner decision mandates ONE wildcard per base and no routing for `<id>.pinned.<base>`; the ingress currently installs a second `*.pinned.<base>` wildcard (TLS host + rule) in both tiers, and the CI selftests assert that two-wildcard shape plus the old `{kind:'stable'|'pinned'}` parse contract, so they would fail against the new parser. Impact: pinned-form hosts stop being routed at the edge (the content app already 404s them server-side); immo handles 301 redirects for its old hosts on its side. Rollback: revert the four files; no data, schema or API change.
-- BR01-EX2 (lock pin): `make lock-root` refreshed the root lock (artifacts 0.2.5→0.2.7 plus the pre-existing mcp-platform 0.4.0→0.4.1 staleness on main, mechanical workspace sync). `make lock-api` ran clean on the test stack but npm `--package-lock-only` does not refresh `file:` link versions, so the single `"../packages/artifacts"` version line in `api/package-lock.json` was synced 0.2.5→0.2.7 directly — the same targeted one-line sync #878 did as BRP0B-EX1. No dependency graph change; rollback with the version fix.
+- BR01-EX2 (lock pin): `make lock-root` refreshed the root lock's artifacts entry only (version 0.2.5→0.2.7 and the artifacts peer range `>=0.3.0 <0.5.0`→`>=0.4.1 <0.5.0`); the unrelated pre-existing staleness on main (mcp-platform 0.4.0→0.4.1, mcp-broker's `^0.4.0`→`^0.4.1`) was deliberately reverted so the root-lock diff carries only this branch's change — that also keeps the L5 P1 lock fingerprint (`tools/memory-mcp-l5`) byte-identical to main, so `memory-l5-verify` stays green without regenerating the P1 manifest. `make lock-api` ran clean on the test stack but npm `--package-lock-only` does not refresh `file:` link versions, so the single `"../packages/artifacts"` version line in `api/package-lock.json` was synced 0.2.5→0.2.7 directly — the same targeted one-line sync #878 did as BRP0B-EX1. No dependency graph change; rollback with the version fix.
+- BR01-EX3 (cluster-mesh packaging fixture re-pin): the `validate-cluster-mesh` lanes run `tests/packaging/prepare-artifacts.spec.ts`, which requires the `selected` fixture to pin the workspace candidate version exactly (artifacts 0.2.7, not 0.2.6). Re-pinned `fixtures/selected/package.json` + `package-lock.json` (root dep, entry version/resolved/integrity) and the hardcoded archive integrity in `artifacts-tuple.spec.ts`. The integrity is the sha512 of the candidate tarball packed from this head via `make ci-package-candidate` (`sentropic-artifacts-0.2.7.tgz`, sha256 a523b9f687a1a191e1226585f6e716d99dd9c9649032d7c9d8e4fd822be29f8f), the same bytes CI's `package-candidates` job packs for the sibling receipts. All other fixture pins already match the workspace tuple, so only the artifacts entry changes. Rollback: revert the three files to the 0.2.6 pin.
 - pinnedUrl rename decision: renamed to `versionUrl` in the publicationUrls hook, summary, versions, source-read outputs and the result schema. The converged contract allows it: no consumer outside `packages/artifacts` references `pinnedUrl`/`stableUrl` (verified by grep over ui/contracts/e2e/api/cluster-mesh), and every in-package consumer is updated atomically in this branch. Recorded in CHANGELOG 0.2.7.
 - Version: 0.2.7 (main 0.2.6, npm published 0.2.6). PR #890 (0.2.7) was still open at branch time; if it lands first, rebase on origin/main and bump to 0.2.8 (Post-Rebase Gate: package.json version > npm published version).
 
@@ -83,5 +88,7 @@ Owner decision (relayed by immo): the `<id>.pinned.<base>` host form disappears.
   - [x] Re-verify version > `npm view @sentropic/artifacts version` (Post-Rebase Gate).
 - [ ] **Lot 4 — Final validation & PR**
   - [x] `make scope-check`; `make commit` per lot; push branch (crash safety).
-  - [x] Open READY PR (body from BRANCH.md), run one CI, record result.
+  - [x] READY PR #893 (body from BRANCH.md, base main, not draft).
+  - [x] CI run 1 = 41532326921 on head `155f6ca5c`: FAILURE, but all change-relevant lanes green (`validate-artifacts`, `typecheck-lint-api`, all `test-api-unit-integration`, all `test-e2e`, `smoke-idp-screens`, `enforce-package-bump`). Four root causes, all outside the artifacts code and fixed in the follow-up commit: (a) `validate-publishable-manifests` — lockfile-lane guard needs the BRLOCK-EX1 `review_by=2026-11-30T00:00:00Z` acknowledgment in BRANCH.md (added in Scope / Guardrails); (b) `validate-cluster-mesh` (source installed major, lazy stateful install) — `prepare-artifacts.spec.ts` requires the `selected` fixture to pin the 0.2.7 candidate (BR01-EX3 re-pin with the packed-candidate integrity); (c) `memory-l5-qualification` — the root-lock refresh had also synced main's pre-existing mcp-platform staleness, changing the P1 lock fingerprint (BR01-EX2: reverted, fingerprint re-verified equal to the committed manifest `2e050e2f…`); (d) `ci-gate` aggregate of the above.
+  - [ ] CI run 2 on the fix head (single run, result recorded here and in the report): pending.
   - [x] Report to `.tmp/rv/artifacts-content-host.md`. Do not merge.
