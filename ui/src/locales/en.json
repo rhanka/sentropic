@@ -1505,6 +1505,26 @@
       "collapseDetails": "Collapse details"
     }
   },
+  "identity": {
+    "membershipTitle": "Tenant memberships",
+    "approvalsIndependent": "Account approval and tenant membership approval are separate decisions.",
+    "tenant": "Tenant identifier",
+    "loadDecisions": "Load decisions",
+    "requestMembership": "Request membership",
+    "requestReceived": "Your membership request has been received.",
+    "membershipLoadFailed": "Unable to load memberships. Tenant administrator access is required.",
+    "actionFailed": "The action could not be confirmed. Refresh to check its current status.",
+    "person": "User",
+    "decidedBy": "Decision author and time",
+    "reject": "Reject",
+    "suspend": "Suspend",
+    "noMemberships": "No memberships in this tenant.",
+    "membershipStatus": {
+      "invited": "Invited", "requested": "Requested", "approved": "Approved",
+      "rejected": "Rejected", "suspended": "Suspended"
+    },
+    "tenantRole": { "member": "Member", "admin": "Administrator" }
+  },
   "adminUsers": {
     "title": "Admin · Users",
     "embeddedTitle": {
