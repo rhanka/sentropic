@@ -18,6 +18,9 @@ import { and, eq } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
 import { createTestUser } from '../utils/auth-helper';
 import { cmDeleteForUsers, cmDeleteWorkspaceMembers, cmQuery, cmTable } from '../utils/cm-identity-test-store';
+import { setCmMembershipState } from '../../src/services/identity/cm-tenancy';
+import { updateCmUser } from '../../src/services/identity/cm-users';
+import { revokeAllSessions } from '../../src/services/session-manager';
 import { todoOrchestrationService } from '../../src/services/todo-orchestration';
 
 // Mock OpenAI streaming to keep unit tests deterministic and fast.
@@ -103,6 +106,45 @@ describe('ChatService - tools wiring (unit, mocked OpenAI)', () => {
       savedReasoningEffortEvalTemplate = undefined;
     }
     vi.clearAllMocks();
+  });
+
+  it.each(['membership', 'account'] as const)('empties every tool after mid-conversation %s suspension', async kind => {
+    const seen: string[][] = [];
+    const mock = callLLMStream as unknown as ReturnType<typeof vi.fn>;
+    mock.mockImplementation((opts: any) => {
+      seen.push(toolNames(opts.tools));
+      return stream([{ type: 'content_delta', data: { delta: 'OK' } }, { type: 'done', data: {} }]);
+    });
+    const localToolDefinitions = [{ name: 'tab_info', description: 'Read tab metadata',
+      parameters: { type: 'object', properties: {}, required: [] } }];
+    const first = await createAdmittedChatMessage({ userId, workspaceId, content: 'First turn',
+      primaryContextType: 'folder', primaryContextId: folderId, model: 'gpt-4.1-nano' });
+    const run = (message: typeof first) => chatService.runAssistantGeneration({ userId,
+      sessionId: message.sessionId, assistantMessageId: message.assistantMessageId,
+      model: message.model, localToolDefinitions });
+    await run(first);
+    expect(seen.at(-1)).toContain('search_skills');
+    expect(seen.at(-1)).toContain('tab_info');
+
+    // W4.a: login revocation alone does not revoke an admitted conversation.
+    await revokeAllSessions(userId);
+    const second = await chatService.createUserMessageWithAssistantPlaceholder({ userId, workspaceId,
+      sessionId: first.sessionId, content: 'Continue after logout', model: first.model });
+    await run(second);
+    expect(seen.at(-1)).toContain('search_skills');
+    expect(seen.at(-1)).toContain('tab_info');
+
+    const third = await chatService.createUserMessageWithAssistantPlaceholder({ userId, workspaceId,
+      sessionId: first.sessionId, content: 'Turn admitted before suspension', model: first.model });
+    if (kind === 'membership') {
+      await setCmMembershipState(userId, 'sentropic', { status: 'suspended', decidedBy: userId });
+    } else {
+      await updateCmUser(userId, { accountStatus: 'disabled_by_admin', disabledAt: new Date(), disabledReason: 'test' });
+    }
+    const callsBeforeSuspension = seen.length;
+    await run(third);
+    expect(seen.length).toBeGreaterThan(callsBeforeSuspension);
+    expect(seen.slice(callsBeforeSuspension).every(names => names.length === 0)).toBe(true);
   });
 
   it('should hydrate image document attachments into vision message parts before streaming', async () => {
