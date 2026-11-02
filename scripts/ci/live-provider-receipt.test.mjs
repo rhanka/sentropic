@@ -72,6 +72,22 @@ test('should report a missing, stale, cancelled or failed schedule independently
   assert.equal(scheduleHealth([scheduled], { now, currentRun: 1 }).healthy, false);
 });
 
+test('should retain fresh completed qualification while the next daily run is active without hiding failures', () => {
+  const now = Date.parse('2026-11-01T06:00:00Z');
+  const previous = { id: 1, event: 'schedule', status: 'completed', conclusion: 'success', created_at: '2026-10-31T06:00:00Z' };
+  for (const status of ['queued', 'in_progress']) {
+    const active = { id: 2, event: 'schedule', status, conclusion: null, created_at: '2026-11-01T05:00:00Z' };
+    const health = scheduleHealth([previous, active], { now });
+    assert.equal(health.healthy, true);
+    assert.equal(health.lastRun, 1);
+    assert.equal(scheduleHealth([active], { now }).healthy, false);
+    assert.equal(scheduleHealth([previous, active], { now: now + 3 * 3600_000 }).healthy, false);
+    const failed = { ...previous, id: 3, conclusion: 'failure', created_at: '2026-11-01T04:00:00Z' };
+    assert.equal(scheduleHealth([previous, failed, active], { now }).healthy, false);
+    assert.equal(scheduleHealth([previous, failed, active], { now }).lastRun, 3);
+  }
+});
+
 test('should select completed main application qualification rather than a partial or PR run', () => {
   const run = { id: 1, head_branch: 'main', event: 'push', status: 'completed', conclusion: 'success', head_sha: sourceSha,
     jobs: [...Array.from({ length: 3 }, (_, i) => `test-api-unit-integration (ai, ${i})`),
