@@ -203,6 +203,8 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Read fixed S2S bindings exclusively from CM, and validate connector enrollment tenants in the same CM snapshot.
   - [x] Use CM service bindings in the LLM directory's shared snapshot and drain S2S mint audits through the current CM binding instead of a root logger.
   - [x] Provision service protocol credentials and CM tenant bindings atomically; seed replay preserves existing bindings, including suspended tenants.
+  - [x] Delete the residual service-client tenant column in the single cutover migration after import/checkpoint; update tenant-data regressions to require explicit CM bindings.
+  - [x] Delete the obsolete app WebAuthn registration/authentication/challenge services and their superseded tests after adding real CM ceremony coverage.
   - [x] Replace the obsolete sweep-expiry expectation with r6's current-read guest role while preserving pending status and its deadline.
   - [x] Delete the app approval-expiry writer; schedule only the CM revocation worker, and run proof retention through the CM UOW.
   - [x] Preserve committed membership success when post-commit realtime hints fail, with HTTP regression coverage for both notification and mutation failures.
