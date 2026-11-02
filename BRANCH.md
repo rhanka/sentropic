@@ -32,6 +32,8 @@
   - [x] Declare BRADM-EXn with reason, impact and rollback before a conditional change.
 
 ## Feedback Loop
+- [x] Mistral F1: constrain executed no-op test blocks to literal echo statements; reject commands, expressions, redirection and substitutions before execution.
+- [x] Mistral F2: restore parsed checkout-ref assertions for all three jobs; F4: add workflow/control mutation negatives.
 - [x] Design authority and Track writer remain the conductor; this branch supplies source artifacts and test evidence.
 - [x] Current workflow and recipe are incomplete; A01 must demonstrate refusal without implementing later workflow stages.
 
