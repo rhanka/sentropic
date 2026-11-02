@@ -24,6 +24,10 @@ export function installProviderBoundary({ endpoint, fetchImpl = globalThis.fetch
       onUnexpected({ host: url.hostname });
       throw new Error(`Unexpected CI egress: ${url.hostname}`);
     }
+    if (url.search) {
+      onUnexpected({ host: url.hostname, reason: 'provider-query' });
+      throw new Error('Unexpected CI provider query parameters');
+    }
     const headers = new Headers(request.headers);
     for (const name of ['authorization', 'x-api-key', 'x-goog-api-key', 'api-key', 'cookie', 'proxy-authorization']) {
       headers.delete(name);
