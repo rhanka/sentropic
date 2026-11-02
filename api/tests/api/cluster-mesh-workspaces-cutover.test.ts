@@ -8,8 +8,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { db } from '../../src/db/client';
 import { clusterMeshNamespaceCutovers } from '../../src/db/control-schema';
 import {
-  folders, initiatives, oauthClients, tenantMemberships, tenants, workspaceMemberships, workspaces,
+  folders, initiatives, oauthClients, workspaces,
 } from '../../src/db/schema';
+import { createCmTenant, findCmMembership, listCmMembershipsForUser, listCmWorkspaceMembers,
+  putCmWorkspaceMember } from '../../src/services/identity/cm-tenancy';
+import { getCmIdentity } from '../../src/services/identity/cm-identity';
+import { cmDeleteTenantMembershipsForTenant, cmDeleteTenants, cmQuery, cmTable } from '../utils/cm-identity-test-store';
 import { requireAuth } from '../../src/middleware/auth';
 import {
   createWorkspacesNamespaceModule,
@@ -22,7 +26,6 @@ import { productWorkspacePorts } from '../../src/routes/namespaces/workspaces/pr
 import { clusterMeshAdapter } from '../../src/services/cluster-mesh-adapter';
 import { PostgresClusterMeshCutoverStore } from '../../src/services/cluster-mesh/postgres-cutover-store';
 import { neutralRouter as legacyNeutralRouter } from '../fixtures/historical/workspaces-c94401b9a/api/src/routes/api/neutral';
-import { tenantsRouter as legacyTenantsRouter } from '../fixtures/historical/workspaces-c94401b9a/api/src/routes/api/tenants';
 import {
   authenticatedRequest, cleanupAuthData, createAuthenticatedUser, type TestUser,
 } from '../utils/auth-helper';
@@ -32,6 +35,13 @@ const twinTenants = ['cm-workspace-candidate', 'cm-workspace-historical'] as con
 const securityTenants = ['cm-workspace-security-a', 'cm-workspace-security-b'] as const;
 const allTestTenants = [...twinTenants, ...securityTenants];
 const securityClientId = 'cm-workspace-security-client';
+const seedMemberships = async (rows: readonly { tenantId: string; userId: string;
+  status: 'approved' | 'requested'; role: 'admin' | 'member' }[]) => {
+  for (const row of rows) await getCmIdentity().tenancy.memberships.upsertMembershipRequest({
+    userId: row.userId, tenantId: row.tenantId, status: row.status,
+    tenantRole: row.role, updatedAt: new Date().toISOString(),
+  });
+};
 const clearCutover = () => db.delete(clusterMeshNamespaceCutovers).where(and(
   eq(clusterMeshNamespaceCutovers.compositionRoot, key.compositionRoot),
   eq(clusterMeshNamespaceCutovers.namespace, key.namespace),
@@ -48,9 +58,6 @@ const cutovers = new PostgresClusterMeshCutoverStore();
 const historicalNeutral = new Hono()
   .use('/api/v1/neutral/*', requireAuth)
   .route('/api/v1/neutral', legacyNeutralRouter);
-const historicalTenants = new Hono()
-  .use('/api/v1/tenants/*', requireAuth)
-  .route('/api/v1/tenants', legacyTenantsRouter);
 const fixtureUrl = (path: string) => new URL(
   `../fixtures/historical/workspaces-c94401b9a/${path}`,
   import.meta.url,
@@ -69,8 +76,9 @@ describe('cluster mesh workspaces cutover', () => {
   afterEach(async () => {
     await clearCutover();
     await db.delete(oauthClients).where(eq(oauthClients.clientId, securityClientId));
-    await db.delete(tenantMemberships).where(inArray(tenantMemberships.tenantId, allTestTenants));
-    await db.delete(tenants).where(inArray(tenants.id, allTestTenants));
+    await cmQuery(`DELETE FROM ${cmTable('cm_service_clients')} WHERE client_id = $1`, [securityClientId]);
+    for (const tenant of allTestTenants) await cmDeleteTenantMembershipsForTenant(tenant);
+    await cmDeleteTenants(allTestTenants);
     if (user.workspaceId) {
       await db.delete(initiatives).where(eq(initiatives.workspaceId, user.workspaceId));
       await db.delete(folders).where(eq(folders.workspaceId, user.workspaceId));
@@ -109,12 +117,10 @@ describe('cluster mesh workspaces cutover', () => {
       .toEqual({ status: legacy.status, body: await legacy.text() });
   });
 
-  it('persists one membership mutation per isolated candidate and historical twin', async () => {
-    await db.insert(tenants).values(twinTenants.map((id) => ({ id, name: id, status: 'active' })));
-    const readRows = () => db.select().from(tenantMemberships).where(and(
-      inArray(tenantMemberships.tenantId, twinTenants),
-      eq(tenantMemberships.userId, user.id),
-    ));
+  it('persists one CM membership per tenant and never repeats a request mutation', async () => {
+    for (const tenantId of twinTenants) await createCmTenant({ tenantId });
+    const readRows = async () => (await listCmMembershipsForUser(user.id))
+      .filter(row => twinTenants.some(tenant => tenant === row.tenantId));
     expect(await readRows()).toHaveLength(0);
 
     const current = await authenticatedRequest(
@@ -132,14 +138,14 @@ describe('cluster mesh workspaces cutover', () => {
     expect({ status: repeated.status, body: await repeated.text() })
       .toEqual({ status: current.status, body: await current.clone().text() });
 
-    const historical = await authenticatedRequest(
-      historicalTenants, 'POST', `/api/v1/tenants/${twinTenants[1]}/memberships`, user.sessionToken!,
+    const independent = await authenticatedRequest(
+      candidate(), 'POST', `/api/v1/tenants/${twinTenants[1]}/memberships`, user.sessionToken!,
     );
     rows = await readRows();
     expect(rows).toHaveLength(2);
     expect(rows.find(({ tenantId }) => tenantId === twinTenants[1]))
       .toMatchObject({ status: 'requested' });
-    expect({ status: historical.status, body: await historical.text() })
+    expect({ status: independent.status, body: await independent.text() })
       .toEqual({ status: current.status, body: await current.text() });
   });
 
@@ -198,9 +204,7 @@ describe('cluster mesh workspaces cutover', () => {
     const victim = await createAuthenticatedUser('editor');
     const member = await createAuthenticatedUser('guest');
     workspaceIds.push(victim.workspaceId!, member.workspaceId!);
-    await db.insert(workspaceMemberships).values({
-      workspaceId: victim.workspaceId!, userId: member.id, role: 'viewer', createdAt: new Date(),
-    });
+    await putCmWorkspaceMember(victim.workspaceId!, member.id, 'viewer');
 
     const attempts = [
       ['GET', `/api/v1/workspaces/${victim.workspaceId}/members`, undefined],
@@ -218,8 +222,7 @@ describe('cluster mesh workspaces cutover', () => {
 
     const [workspace] = await db.select({ hiddenAt: workspaces.hiddenAt })
       .from(workspaces).where(eq(workspaces.id, victim.workspaceId!));
-    const roles = await db.select({ userId: workspaceMemberships.userId, role: workspaceMemberships.role })
-      .from(workspaceMemberships).where(eq(workspaceMemberships.workspaceId, victim.workspaceId!));
+    const roles = (await listCmWorkspaceMembers(victim.workspaceId!)).map(({ userId, role }) => ({ userId, role }));
     expect(workspace?.hiddenAt).toBeNull();
     expect(roles.sort((a, b) => a.userId.localeCompare(b.userId))).toEqual([
       { userId: victim.id, role: 'editor' }, { userId: member.id, role: 'viewer' },
@@ -231,8 +234,8 @@ describe('cluster mesh workspaces cutover', () => {
     const memberB = await createAuthenticatedUser('guest');
     const target = await createAuthenticatedUser('guest');
     workspaceIds.push(memberB.workspaceId!, target.workspaceId!);
-    await db.insert(tenants).values(securityTenants.map((id) => ({ id, name: id, status: 'active' })));
-    await db.insert(tenantMemberships).values([
+    for (const tenantId of securityTenants) await createCmTenant({ tenantId });
+    await seedMemberships([
       { tenantId: securityTenants[0], userId: user.id, status: 'approved', role: 'admin' },
       { tenantId: tenantB, userId: memberB.id, status: 'approved', role: 'member' },
       { tenantId: tenantB, userId: target.id, status: 'requested', role: 'member' },
@@ -241,6 +244,9 @@ describe('cluster mesh workspaces cutover', () => {
       id: securityClientId, clientId: securityClientId, name: securityClientId,
       redirectUris: ['https://security.invalid/callback'], allowedScopes: ['openid'],
       tokenEndpointAuthMethod: 'none', tenantId: tenantB,
+    });
+    await getCmIdentity().tenancy.oauth.bindServiceClient({
+      clientId: securityClientId, tenantId: tenantB, boundAt: new Date().toISOString(),
     });
 
     const paths = [
@@ -258,10 +264,8 @@ describe('cluster mesh workspaces cutover', () => {
         expect(response.status, `${actor.id} ${path}`).toBe(403);
       }
     }
-    const [unchanged] = await db.select().from(tenantMemberships).where(and(
-      eq(tenantMemberships.tenantId, tenantB), eq(tenantMemberships.userId, target.id),
-    ));
-    expect(unchanged).toMatchObject({ status: 'requested', approvedByUserId: null, decidedAt: null });
+    const unchanged = await findCmMembership(target.id, tenantB);
+    expect(unchanged).toMatchObject({ status: 'requested', decidedBy: null, decidedAt: null });
   });
 
   it('transitions only path-tenant memberships and defines decision replay as conflict', async () => {
@@ -271,8 +275,8 @@ describe('cluster mesh workspaces cutover', () => {
       createAuthenticatedUser('guest'),
     ]);
     workspaceIds.push(...targets.map(({ workspaceId }) => workspaceId!));
-    await db.insert(tenants).values(securityTenants.map((id) => ({ id, name: id, status: 'active' })));
-    await db.insert(tenantMemberships).values([
+    for (const tenantId of securityTenants) await createCmTenant({ tenantId });
+    await seedMemberships([
       { tenantId: tenantB, userId: user.id, status: 'approved', role: 'admin' },
       ...targets.flatMap(({ id }, index) => [
         { tenantId: tenantA, userId: id, status: index === 2 ? 'approved' : 'requested', role: 'member' },
@@ -290,21 +294,18 @@ describe('cluster mesh workspaces cutover', () => {
       const accepted = await authenticatedRequest(candidate(), 'POST', path, user.sessionToken!);
       expect(accepted.status).toBe(200);
       await expect(accepted.json()).resolves.toEqual({ success: true, status: decision.to });
-      const rows = await db.select().from(tenantMemberships)
-        .where(eq(tenantMemberships.userId, decision.target.id));
+      const rows = await listCmMembershipsForUser(decision.target.id);
       expect(rows.find(({ tenantId }) => tenantId === tenantA)?.status).toBe(decision.from);
       const changed = rows.find(({ tenantId }) => tenantId === tenantB)!;
-      expect(changed).toMatchObject({ status: decision.to, approvedByUserId: user.id });
+      expect(changed).toMatchObject({ status: decision.to, decidedBy: user.id });
       expect(changed.decidedAt).not.toBeNull();
 
       const replay = await authenticatedRequest(candidate(), 'POST', path, user.sessionToken!);
       expect(replay.status).toBe(409);
       await expect(replay.json()).resolves.toEqual({ error: 'Invalid transition' });
-      const [afterReplay] = await db.select().from(tenantMemberships).where(and(
-        eq(tenantMemberships.tenantId, tenantB), eq(tenantMemberships.userId, decision.target.id),
-      ));
-      expect(afterReplay).toMatchObject({ status: decision.to, approvedByUserId: user.id });
-      expect(afterReplay.decidedAt?.getTime()).toBe(changed.decidedAt?.getTime());
+      const afterReplay = await findCmMembership(decision.target.id, tenantB);
+      expect(afterReplay).toMatchObject({ status: decision.to, decidedBy: user.id });
+      expect(afterReplay?.decidedAt?.getTime()).toBe(changed.decidedAt?.getTime());
     }
   });
 
