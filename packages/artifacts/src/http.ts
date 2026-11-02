@@ -1,4 +1,5 @@
 /** Selected HTTP control surface over the authorized atomic services. */
+import { createHash } from 'node:crypto';
 import type { JsonValue } from './contracts.js';
 import { parseManifest } from './codecs.js';
 import { assertCompiledArtifactsProfile, ArtifactProfileInputError,
@@ -134,6 +135,9 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
     for (const entry of entries) {
       const bytes = await deps.publication.blobs.getBlob(blobKey(storageScopeId, entry.digest));
       if (bytes === undefined) throw new ArtifactOperationError('release_unavailable', { release: { reason: 'not_retained' } });
+      if (bytes.byteLength !== entry.size || `sha256:${createHash('sha256').update(bytes).digest('hex')}` !== entry.digest) {
+        throw new ArtifactOperationError('verification_failed');
+      }
       let text: string | undefined;
       if (TEXT_MIME_RE.test(entry.mimeType)) {
         try { text = new TextDecoder('utf-8', { fatal: true }).decode(bytes); } catch { /* Non-UTF-8 is not editable. */ }
@@ -162,6 +166,31 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
       path: file.path, mimeType: file.mimeType,
       bytes: file.text === undefined ? file.bytes : new Uint8Array(Buffer.from(file.text, 'utf8')),
     }));
+  }
+
+  async function conflictSource(outcome: ArtifactOutcome<HttpResponse>, normalized: Readonly<Record<string, JsonValue>>,
+    invocation: ArtifactInvocationContext): Promise<ArtifactOutcome<HttpResponse>> {
+    if (outcome.ok || outcome.failure.kind !== 'operational' || outcome.failure.variant !== 'pointer_conflict') return outcome;
+    const artifactId = normalized.artifactId as string;
+    await visible(artifactId, invocation, 'source');
+    const conflict = outcome.failure.conflict;
+    if (!conflict?.currentReleaseId || normalized.edits === undefined) return outcome;
+    const release = await deps.publication.getRelease(conflict.currentReleaseId);
+    if (!release || await deps.lifecycle.getReleaseState(release.releaseId) === 'purged') return outcome;
+    const manifest = parseManifest(release.manifest);
+    const paths = new Set((normalized.edits as unknown as EditOperation[]).map(edit => edit.path));
+    const entries = manifest.files as unknown as ManifestFileEntry[];
+    const files = (await readManifestFiles(release.manifest, invocation.storageScopeId)).filter(file => paths.has(file.path))
+      .map(file => ({ path: file.path, mimeType: file.mimeType, size: file.bytes.byteLength,
+        digest: entries.find(entry => entry.path === file.path)!.digest,
+        ...(file.text === undefined ? { bytes: Array.from(file.bytes) } : { text: file.text }) }));
+    await visible(artifactId, invocation, 'source');
+    const failure = { ...outcome.failure, conflict: { ...conflict, currentSource: {
+      artifactId, releaseId: release.releaseId, digest: conflict.currentDigest, manifest: release.manifest,
+      files, sourceRef: null, ...deps.publicationUrls?.(artifactId, release.releaseId),
+    } } };
+    Object.defineProperty(failure, 'cause', { value: outcome.failure.cause, enumerable: false });
+    return { ok: false, failure: Object.freeze(failure) };
   }
 
   /** Shared guarded-commit response for publish and revert (same commit path, same receipt shape). */
@@ -291,7 +320,7 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
             ...input, source, profile: releaseProfile, files,
           });
           const committed = commitOutcome(outcome, artifactId, meta, (state) => { commitState = state; });
-          return committed;
+          return await conflictSource(committed, normalized, invocation);
         }
         if (capability === 'artifacts_get') {
           const artifactId = normalized.artifactId as string;
@@ -363,7 +392,9 @@ export function createHttpArtifactApp(deps: HttpAppDeps): ArtifactApp {
         return { ok: false, failure };
       }
     },
-    async handle(request, invocation) { return projectArtifactHttpOutcome(await app.execute(request, invocation)); },
+    async handle(request, invocation) {
+      return projectArtifactHttpOutcome(await app.execute(request, invocation), profile.requireExpectedCurrentReleaseId === true);
+    },
   };
   return Object.freeze(app);
 }

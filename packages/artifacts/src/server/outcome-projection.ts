@@ -3,11 +3,16 @@ import type { AppToolResult } from '@sentropic/mcp-platform';
 import type { HttpResponse } from '../http.js';
 import type { ArtifactFailure, ArtifactOutcome } from './failures.js';
 
-export function projectArtifactHttpOutcome(outcome: ArtifactOutcome<HttpResponse>): HttpResponse {
+export function projectArtifactHttpOutcome(outcome: ArtifactOutcome<HttpResponse>, complete = false): HttpResponse {
+  if (complete) {
+    const { auditId: _audit, redactionClass: _redaction, ...body } = projectArtifactMcpOutcome(outcome, '');
+    return { status: outcome.ok ? outcome.result.status : outcome.failure.httpStatus, body };
+  }
   if (outcome.ok) return outcome.result;
   const { failure } = outcome;
   return { status: failure.httpStatus, body: { error: failure.publicCode,
     ...(failure.conflict !== undefined ? { conflict: failure.conflict } : {}),
+    ...(failure.release !== undefined ? { details: failure.release } : {}),
     ...(failure.edit !== undefined ? { edit: failure.edit } : {}) } };
 }
 

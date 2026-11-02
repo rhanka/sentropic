@@ -22,5 +22,5 @@ export const RADAR_ARTIFACTS_PROFILE: EffectiveArtifactProfile = freezeDeep<Effe
     reservedFirstSegments: ['api', '__artifacts', 'livez', 'health'],
     mimeTypes: ['text/html', 'text/css', 'text/javascript', 'application/json'] },
   contractRevisions: { profile: 'artifacts-profile/v1', command: 'artifacts-command/v1',
-    authorization: 'artifacts-authorization/v1', outcome: 'artifacts-outcome/v1' },
+    authorization: 'artifacts-authorization/v1', outcome: 'artifacts-outcome/v2' },
 });
