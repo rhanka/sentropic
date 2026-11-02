@@ -7,13 +7,14 @@ import {
   contextModificationHistory,
   chatSessions,
   chatMessages,
-  users,
   folders,
   organizations,
   workspaces
 } from '../../src/db/schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { createId } from '../../src/utils/id';
+import { createCmUser } from '../../src/services/identity/cm-users';
+import { cmDeleteForUsers } from '../utils/cm-identity-test-store';
 
 describe('Tool Service', () => {
   let testInitiativeId: string;
@@ -24,14 +25,12 @@ describe('Tool Service', () => {
   beforeEach(async () => {
     // Créer un user et une session pour les tests avec sessionId
     testUserId = createId();
-    await db.insert(users).values({
-      id: testUserId,
+    await createCmUser({
+      userId: testUserId,
       email: `test-${testUserId}@example.com`,
       displayName: 'Test User',
       role: 'editor',
       emailVerified: true,
-      createdAt: new Date(),
-      updatedAt: new Date()
     });
 
     testSessionId = createId();
@@ -83,7 +82,7 @@ describe('Tool Service', () => {
     await db.delete(initiatives).where(eq(initiatives.id, testInitiativeId));
     await db.delete(folders).where(eq(folders.id, testFolderId));
     await db.delete(chatSessions).where(eq(chatSessions.id, testSessionId));
-    await db.delete(users).where(eq(users.id, testUserId));
+    await cmDeleteForUsers([testUserId]);
   });
 
   describe('readInitiative', () => {
@@ -332,14 +331,12 @@ describe('Tool Service', () => {
 
       // Create a user + session in that workspace
       testUserId = createId();
-      await db.insert(users).values({
-        id: testUserId,
+      await createCmUser({
+        userId: testUserId,
         email: `test-${testUserId}@example.com`,
         displayName: 'Test User',
         role: 'editor',
         emailVerified: true,
-        createdAt: new Date(),
-        updatedAt: new Date()
       });
 
       testSessionId = createId();
@@ -427,7 +424,7 @@ describe('Tool Service', () => {
       await db.delete(organizations).where(eq(organizations.id, organizationId));
       await db.delete(chatMessages).where(eq(chatMessages.sessionId, testSessionId));
       await db.delete(chatSessions).where(eq(chatSessions.id, testSessionId));
-      await db.delete(users).where(eq(users.id, testUserId));
+      await cmDeleteForUsers([testUserId]);
       await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
     });
 
