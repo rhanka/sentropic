@@ -60,6 +60,11 @@ async function migrate(failBeforeCommit = false) {
 }
 
 describe('A4 single control identity migration', () => {
+  it('should refuse SQL-only deletion without the bound CM importer and protected checkpoint', async () => {
+    await expect(migrate()).rejects.toThrow('A4 bound import checkpoint required');
+    expect((await database.query("SELECT id FROM users WHERE id = 'a4-owner'")).rowCount).toBe(1);
+  });
+
   it('should preserve the D11 checkpoint after deleting legacy identity tables', async () => {
     await migrate();
     const { rows } = await database.query(`SELECT phase, detail FROM control.app_cm_identity_cutover
