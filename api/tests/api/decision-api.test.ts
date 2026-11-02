@@ -7,6 +7,7 @@ import { db } from '../../src/db/client';
 import { jevDescriptor } from '@sentropic/llm-mesh/decision/host';
 import { decisionRequest } from '../../../packages/llm-mesh/tests/decision-fixtures';
 import { authenticatedRequest, cleanupAuthData, createAuthenticatedUser } from '../utils/auth-helper';
+import { findCmWorkspace, putCmWorkspaceMember, setCmMembershipState } from '../../src/services/identity/cm-tenancy';
 
 const path = '/api/v1/llm-mesh/decision';
 const clearCutover = () => db.execute(sql`DELETE FROM control.cluster_mesh_namespace_cutovers
@@ -14,12 +15,11 @@ const clearCutover = () => db.execute(sql`DELETE FROM control.cluster_mesh_names
 
 describe('Decision route through the actual product cluster-mesh composition', () => {
   let user: Awaited<ReturnType<typeof createAuthenticatedUser>>;
+  let tenantId: string;
   beforeEach(async () => {
     await clearCutover();
     user = await createAuthenticatedUser('editor');
-    await db.execute(sql`INSERT INTO tenant_memberships (tenant_id, user_id, status)
-      SELECT tenant_id, ${user.id}, 'approved' FROM workspaces WHERE id = ${user.workspaceId}
-      ON CONFLICT (tenant_id, user_id) DO UPDATE SET status = 'approved'`);
+    tenantId = (await findCmWorkspace(user.workspaceId!))!.tenantId;
     vi.spyOn(globalThis, 'fetch').mockRejectedValue(new Error('Fixture forbids external requests'));
   });
   afterEach(async () => {
@@ -38,8 +38,8 @@ describe('Decision route through the actual product cluster-mesh composition', (
     expect((await db.execute(sql`SELECT hash FROM public.__drizzle_control_migrations WHERE hash = ${hash}`)).rows).toHaveLength(1);
   });
   it.each(['tenant', 'workspace'])('should refuse revoked %s authority before service admission', async (authority) => {
-    if (authority === 'tenant') await db.execute(sql`UPDATE tenant_memberships SET status = 'suspended' WHERE user_id = ${user.id}`);
-    else await db.execute(sql`UPDATE workspace_memberships SET role = 'viewer' WHERE user_id = ${user.id}`);
+    if (authority === 'tenant') await setCmMembershipState(user.id, tenantId, { status: 'suspended', decidedBy: user.id });
+    else await putCmWorkspaceMember(user.workspaceId!, user.id, 'viewer');
     const response = await authenticatedRequest(app, 'POST', path, user.sessionToken!, decisionRequest({ evaluator: jevDescriptor.evaluator }));
     expect(response.status).toBe(403);
     expect((await db.execute(sql`SELECT id FROM control.budget_holds WHERE principal_key = ${user.id}`)).rows).toHaveLength(0);
