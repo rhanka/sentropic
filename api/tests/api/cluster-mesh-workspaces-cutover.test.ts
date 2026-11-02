@@ -229,6 +229,46 @@ describe('cluster mesh workspaces cutover', () => {
     ].sort((a, b) => a.userId.localeCompare(b.userId)));
   });
 
+  it('preserves mounted member response contracts and idempotent removal', async () => {
+    const target = await createAuthenticatedUser('guest');
+    workspaceIds.push(target.workspaceId!);
+    const workspaceId = user.workspaceId!;
+    await putCmWorkspaceMember(workspaceId, user.id, 'admin');
+    await db.update(workspaces).set({ type: 'code' }).where(eq(workspaces.id, workspaceId));
+    const base = `/api/v1/workspaces/${workspaceId}/members`;
+    const request = (method: string, path: string, body?: unknown) =>
+      authenticatedRequest(candidate(), method, path, user.sessionToken!, body);
+    const missing = await request('POST', base, { email: 'unknown-member@example.com', role: 'viewer' });
+    expect(missing.status).toBe(404);
+    expect(await missing.json()).toEqual({ message: 'User not found' });
+    expect((await request('POST', base, { email: target.email, role: 'viewer' })).status).toBe(200);
+    for (const path of [base, `${base}/mentions`]) {
+      const response = await request('GET', path);
+      expect(response.status).toBe(200);
+      expect((await response.json()).items).toEqual(expect.arrayContaining([
+        expect.objectContaining({ userId: target.id, email: target.email, role: 'viewer' }),
+      ]));
+    }
+    for (const method of ['PATCH', 'PUT']) {
+      const response = await request(method, `${base}/${target.id}`, { role: 'commenter' });
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ success: true });
+    }
+    expect((await request('DELETE', `${base}/${target.id}`)).status).toBe(204);
+    expect((await request('DELETE', `${base}/${target.id}`)).status).toBe(204);
+    expect((await request('DELETE', `${base}/absent-account`)).status).toBe(204);
+    await db.update(workspaces).set({ type: 'neutral' }).where(eq(workspaces.id, workspaceId));
+    const selfRole = await request('PATCH', `${base}/${user.id}`, { role: 'viewer' });
+    expect(selfRole.status).toBe(400);
+    expect(await selfRole.json()).toEqual({ message: 'Cannot change your own role' });
+    const selfRemove = await request('DELETE', `${base}/${user.id}`);
+    expect(selfRemove.status).toBe(400);
+    expect(await selfRemove.json()).toEqual({ message: 'Cannot remove yourself' });
+    const neutral = await request('POST', base, { email: target.email, role: 'viewer' });
+    expect(neutral.status).toBe(400);
+    expect(await neutral.json()).toEqual({ error: 'Neutral workspaces do not support memberships' });
+  });
+
   it('denies cross-tenant and non-admin membership governance without DB mutation', async () => {
     const [, tenantB] = securityTenants;
     const memberB = await createAuthenticatedUser('guest');
