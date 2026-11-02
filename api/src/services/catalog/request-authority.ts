@@ -32,10 +32,18 @@ setCmDecisionToolCatalog({ toolsForDecision: () => baseToolNames() });
 const resolve = createCatalogContextResolver(input => runCmIdentityRead(async tx => {
   const { decision: producer } = getCmIdentity();
   const now = new Date().toISOString();
+  let conversationSessionId: string | undefined;
+  if (input.kind === 'turn') {
+    const result = await tx.hostTransaction.query<{ cm_conversation_session_id: string | null }>(
+      `SELECT cm_conversation_session_id FROM public.chat_sessions WHERE id = $1 AND user_id = $2 AND workspace_id = $3`,
+      [input.sessionId, input.userId, input.workspaceId]);
+    conversationSessionId = result.rows[0]?.cm_conversation_session_id ?? undefined;
+    if (!conversationSessionId) throw new Error('catalog_access_denied');
+  }
   const fresh = await producer.decide(
     input.kind === 'http'
       ? { inputKind: 'first_party_http', userId: input.userId, workspaceId: input.workspaceId, sessionId: input.sessionId }
-      : { inputKind: 'conversation_turn', userId: input.userId, workspaceId: input.workspaceId, conversationSessionId: input.sessionId },
+      : { inputKind: 'conversation_turn', userId: input.userId, workspaceId: input.workspaceId, conversationSessionId: conversationSessionId! },
     now,
   );
   if (!fresh.decision.allow) throw new Error('catalog_access_denied');

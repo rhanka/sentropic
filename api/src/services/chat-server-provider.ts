@@ -6,6 +6,7 @@ import { chatControls } from './chat-controls';
 import { chatExtensionPermissionService } from './chat-extension-permissions';
 import type { ProviderId } from './provider-runtime';
 import { queueManager, type ChatMessageJobData } from './queue-manager';
+import { admitCmBusinessConversation } from './identity/cm-conversation-authority';
 
 const providerId = (value: string | null | undefined): ProviderId | undefined =>
   value ? value as ProviderId : undefined;
@@ -27,19 +28,23 @@ export const createProductChatServerDeps = (): ChatServerDeps => ({
       input.workspaceId,
       input.limit,
     ),
-    createSession: (input) => chatService.createSession({
+    createSession: async (input) => {
+      const created = await chatService.createSession({
       userId: input.userId,
       workspaceId: input.workspaceId ?? null,
       primaryContextType: input.primaryContextType as ChatContextType | null | undefined,
       primaryContextId: input.primaryContextId ?? null,
       title: input.title ?? null,
-    }),
+      });
+      await admitCmBusinessConversation(created.sessionId);
+      return created;
+    },
     getSessionHistory: (input) => chatService.getSessionHistory(input),
     deleteSession: (input) => chatService.deleteSession(input.sessionId, input.userId),
   },
   messages: {
-    createUserMessageWithAssistantPlaceholder: (input) =>
-      chatService.createUserMessageWithAssistantPlaceholder({
+    createUserMessageWithAssistantPlaceholder: async (input) => {
+      const created = await chatService.createUserMessageWithAssistantPlaceholder({
         ...input,
         providerId: providerIdOrNull(input.providerId),
         providerApiKey: input.providerApiKey ?? null,
@@ -49,7 +54,10 @@ export const createProductChatServerDeps = (): ChatServerDeps => ({
         contexts: contexts(input.contexts),
         attachments: input.attachments ?? null,
         sessionTitle: input.sessionTitle ?? null,
-      }),
+      });
+      await admitCmBusinessConversation(created.sessionId);
+      return created;
+    },
     listMessages: (input) => chatService.listMessages(input.sessionId, input.userId),
     getSessionBootstrap: (input) => chatService.getSessionBootstrap(input),
     getMessageRuntimeDetails: (input) => chatService.getMessageRuntimeDetails(input),
@@ -61,11 +69,15 @@ export const createProductChatServerDeps = (): ChatServerDeps => ({
       const result = await chatService.setMessageFeedback(input);
       return { messageId: input.messageId, vote: result.vote };
     },
-    retryUserMessage: (input) => chatService.retryUserMessage({
+    retryUserMessage: async (input) => {
+      const retried = await chatService.retryUserMessage({
       ...input,
       providerId: providerIdOrNull(input.providerId),
       model: input.model ?? null,
-    }),
+      });
+      await admitCmBusinessConversation(retried.sessionId);
+      return retried;
+    },
     acceptLocalToolResult: (input) => chatService.acceptLocalToolResult(input),
     createCheckpoint: (input) => chatService.createCheckpoint({
       ...input,
