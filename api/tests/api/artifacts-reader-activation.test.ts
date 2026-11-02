@@ -1,3 +1,4 @@
+import { seedCmArtifactIdentity } from '../utils/cm-artifact-fixture';
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
@@ -141,15 +142,11 @@ afterAll(async () => {
 beforeEach(async () => {
   vi.restoreAllMocks();
   await pool.query(`TRUNCATE artifact_host.activation_namespaces, artifacts.storage_scopes,
-    control.artifact_host_kv, users, tenants CASCADE;
-    INSERT INTO users(id, role, account_status) VALUES ('reader','editor','active'), ('other','editor','active');
-    INSERT INTO tenants(id, name) VALUES ('tenant','Tenant');
-    INSERT INTO workspaces(id, name, tenant_id) VALUES ('workspace','Workspace','tenant');
-    INSERT INTO tenant_memberships(tenant_id,user_id,status) VALUES ('tenant','reader','approved');
-    INSERT INTO workspace_memberships(workspace_id,user_id,role) VALUES ('workspace','reader','viewer');
-    INSERT INTO user_sessions(id,user_id,session_token_hash,expires_at) VALUES
-      ('session','reader','session-hash',clock_timestamp() + interval '1 hour'),
-      ('new-session','reader','new-session-hash',clock_timestamp() + interval '1 hour');`);
+    control.artifact_host_kv, workspaces, cm_identity.identity_user_accounts, cm_identity.identity_account_profiles,
+    cm_identity.identity_login_sessions, cm_identity.identity_login_token_bindings, cm_identity.cm_tenants,
+    cm_identity.cm_tenant_memberships, cm_identity.cm_workspace_members, cm_identity.cm_workspaces CASCADE;`);
+  await seedCmArtifactIdentity(pool, { userId: 'reader', otherUsers: ['other'], tenantId: 'tenant',
+    workspaceId: 'workspace', role: 'viewer', sessionIds: ['session', 'new-session'] });
   await pool.query(`INSERT INTO control.artifact_host_kv(storage_scope_id,key,value) VALUES ($1,$2,$3);
     `, ['app-artifact-scopes/v1', JSON.stringify(['tenant', 'workspace']), scope]);
   await pool.query(`INSERT INTO artifacts.storage_scopes(id,org_id) VALUES ($1,'tenant');
@@ -177,7 +174,7 @@ describe('trusted app reader activation', () => {
     const issued = await reader({ flowTtlSeconds: reason === 'expiry' ? 1 : 30 }).issue(session, target);
     if (reason === 'expiry') await pool.query('SELECT pg_sleep(1.05)');
     if (reason === 'generation') await pool.query(`UPDATE artifact_host.activation_namespaces SET generation=generation+1`);
-    if (reason === 'session') await pool.query(`DELETE FROM user_sessions WHERE id='session'`);
+    if (reason === 'session') await pool.query(`DELETE FROM cm_identity.identity_login_sessions WHERE session_id='session'`);
     expect(await reader().consumeForContentOrigin(input(issued))).toBeUndefined();
     expect((await pool.query('SELECT count(*)::int AS n FROM artifact_host.activation_tickets')).rows[0].n).toBe(1);
   });
@@ -226,12 +223,12 @@ describe('trusted app reader activation', () => {
 
   describe.each(['COMMIT', 'ROLLBACK'])('authority fence through %s', outcome => {
     it.each([
-      `DELETE FROM user_sessions WHERE id = 'session'`,
+      `DELETE FROM cm_identity.identity_login_sessions WHERE session_id = 'session'`,
       `DELETE FROM artifacts.artifact_access WHERE principal_id = 'reader'`,
       `UPDATE artifacts.artifact_current SET release_id = (SELECT id FROM artifacts.releases WHERE manifest_digest = 'b')`,
       `UPDATE artifacts.releases SET state = 'purged' WHERE manifest_digest = 'digest'`,
       `UPDATE artifacts.artifacts SET lifecycle_state = 'withdrawn'`,
-      `DELETE FROM workspace_memberships WHERE user_id = 'reader'`,
+      `DELETE FROM cm_identity.cm_workspace_members WHERE user_id = 'reader'`,
       `DELETE FROM control.artifact_host_kv WHERE storage_scope_id = 'app-artifact-scopes/v1'`,
     ])('should block revocation after authorization until transaction end: %s', async sql => {
       await pool.query(`INSERT INTO artifacts.releases(id,artifact_id,manifest_digest,manifest)
@@ -273,11 +270,11 @@ describe('trusted app reader activation', () => {
   });
 
   it.each([
-    `DELETE FROM user_sessions WHERE id = 'session'`,
-    `UPDATE user_sessions SET expires_at = clock_timestamp() WHERE id = 'session'`,
-    `UPDATE users SET disabled_at = clock_timestamp() WHERE id = 'reader'`,
-    `DELETE FROM workspace_memberships WHERE user_id = 'reader'`,
-    `UPDATE tenant_memberships SET status = 'pending' WHERE user_id = 'reader'`,
+    `DELETE FROM cm_identity.identity_login_sessions WHERE session_id = 'session'`,
+    `UPDATE cm_identity.identity_login_sessions SET expires_at = clock_timestamp() WHERE session_id = 'session'`,
+    `UPDATE cm_identity.identity_account_profiles SET disabled_at = clock_timestamp() WHERE user_id = 'reader'`,
+    `DELETE FROM cm_identity.cm_workspace_members WHERE user_id = 'reader'`,
+    `UPDATE cm_identity.cm_tenant_memberships SET status = 'requested' WHERE user_id = 'reader'`,
     `DELETE FROM artifacts.artifact_access WHERE principal_id = 'reader'`,
     `UPDATE artifacts.artifacts SET lifecycle_state = 'withdrawn'`,
     `UPDATE artifacts.artifacts SET lifecycle_state = 'deleted'`,
@@ -294,7 +291,7 @@ describe('trusted app reader activation', () => {
   it('should reject a changed compiled profile or policy revision without consuming', async () => {
     const issued = await reader().issue(session, target);
     expect(await reader({ profileDigest: 'c'.repeat(64) }).consume(session, input(issued))).toBeUndefined();
-    await pool.query(`UPDATE workspace_memberships SET role = 'editor' WHERE user_id = 'reader'`);
+    await pool.query(`UPDATE cm_identity.cm_workspace_members SET role = 'editor' WHERE user_id = 'reader'`);
     expect(await reader().consume(session, input(issued))).toBeUndefined();
     const fresh = await reader().issue(session, target);
     expect(await reader().consume(session, input(fresh))).toEqual(fresh.ticket);
@@ -350,7 +347,7 @@ describe('trusted app reader activation', () => {
           AND wait_event_type='Lock' AND query LIKE '%artifact_current%' AND pid<>pg_backend_pid()`)).rowCount).toBeGreaterThan(0);
       });
       if (change === 'acl') await pool.query(`DELETE FROM artifacts.artifact_access WHERE principal_id='reader'`);
-      if (change === 'session-expiry') await pool.query(`UPDATE user_sessions SET expires_at=clock_timestamp() WHERE id='session'`);
+      if (change === 'session-expiry') await pool.query(`UPDATE cm_identity.identity_login_sessions SET expires_at=clock_timestamp() WHERE session_id='session'`);
       if (change === 'pointer') {
         await blocker.query('UPDATE artifacts.artifact_current SET release_id=$1', [b]);
       }
