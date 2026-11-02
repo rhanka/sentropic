@@ -59,6 +59,7 @@ Add durable verification custody, material-preserving import and atomic person d
   - Mirror the same exception in this file under `## Feedback Loop` (or `## Questions / Notes` if not yet migrated).
 
 ## Feedback Loop
+- [x] R1: pin root-owned creation role/status/deadline evaluation and reject unknown completion flows before the callback.
 - [x] R1 rebase: merge-tree found only BRANCH.md conflicted with origin/main e1c0ef97d; rebase preserved identity source/tests byte-for-byte. Bump to free dev.5 through Make in Docker and synchronize all lock/fixture pins without unrelated changes.
 - [x] R1: scope built-in host executors to the same deadline, read mode and callback lifetime as their CM transaction.
 - [x] R1: extend lifetime and read-mode refusal checks to the host business executor, not only the combined CM ports.
