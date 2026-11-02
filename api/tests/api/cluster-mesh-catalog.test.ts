@@ -160,7 +160,7 @@ describe('cluster mesh catalog product authority', () => {
     expect(executeFoundationSearchCatalog({ payload: { query: 'artifacts', limit: 10 }, context }).hits
       .map(hit => hit.name)).toEqual(expect.arrayContaining(names));
     const tools = resolveFoundationChatTools({ userId: user.id, workspaceId: user.workspaceId!,
-      allowedTools: [], context });
+      tenantId: context.tenantId, allowedTools: [], context });
     expect(tools.filter(tool => tool.type === 'function').map(tool => tool.function.name)).toEqual(expect.arrayContaining(names));
     const other = await createAuthenticatedUser('guest');
     await setCmMembershipState(other.id, PLATFORM_TENANT_ID, { status: 'approved', role: 'member', decidedBy: 'test' });

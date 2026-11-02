@@ -61,6 +61,7 @@ const executeFoundationSearchCatalog = (payload: SearchCatalogInput) => searchCa
 function makeAllowlistInput(toolNames: string[]) {
   return {
     userId: 'user-sc-001',
+    tenantId: 'tenant-fixture',
     workspaceId: 'ws-sc-001',
     workspaceType: 'ai-priorities' as string | null,
     currentUserRole: 'editor' as string | null,

@@ -162,12 +162,8 @@ export interface ResolveFoundationChatToolsInput {
   readonly context?: CatalogRequestContext;
   readonly userId: string;
   readonly workspaceId: string;
-  // ARCH-11 G1b (spec §4.2.2): the tenant is resolved UPSTREAM (via reconcileTenantId) and
-  // threaded in, keeping this builder SYNC. When absent it falls back to the legacy alias
-  // (`tenantId := workspaceId`), so untouched callers are behavior-identical. Under alias/shadow
-  // the upstream reconcile returns the legacy workspaceId anyway (zero behavior change); only
-  // under strict does it carry the resolved real tenant.
-  readonly tenantId?: string;
+  /** Actual tenant resolved by CM before this synchronous projection. */
+  readonly tenantId: string;
   readonly workspaceType?: string | null;
   readonly currentUserRole?: string | null;
   readonly allowedTools: Iterable<string>;
@@ -176,9 +172,10 @@ export interface ResolveFoundationChatToolsInput {
 export function buildFoundationSkillsAuthz(
   input: ResolveFoundationChatToolsInput,
 ): AuthzContext {
+  if (!input.tenantId) throw new Error('catalog_access_denied');
   return {
     tenant: {
-      tenantId: input.tenantId ?? input.workspaceId,
+      tenantId: input.tenantId,
       workspaceId: input.workspaceId,
       userId: input.userId,
       workspaceType: input.workspaceType ?? undefined,

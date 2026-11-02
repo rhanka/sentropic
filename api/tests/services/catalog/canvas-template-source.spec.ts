@@ -350,6 +350,7 @@ describe('0-regression — canvas entries absent from resolveFoundationChatTools
     // discovery but must NOT appear in the resolved chat tool array.
     const tools = resolveFoundationChatTools({
       userId: 'u-lot6-test',
+      tenantId: 'tenant-fixture',
       workspaceId: 'ws-lot6-test',
       workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
@@ -372,6 +373,7 @@ describe('0-regression — canvas entries absent from resolveFoundationChatTools
     // 2 meta-tools (search_skills + search_catalog) + all foundation tools.
     const tools = resolveFoundationChatTools({
       userId: 'u-lot6-test',
+      tenantId: 'tenant-fixture',
       workspaceId: 'ws-lot6-test',
       workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
@@ -386,6 +388,7 @@ describe('0-regression — canvas entries absent from resolveFoundationChatTools
   it('search_skills is still the FIRST tool after adding the canvas source', () => {
     const tools = resolveFoundationChatTools({
       userId: 'u-lot6-test',
+      tenantId: 'tenant-fixture',
       workspaceId: 'ws-lot6-test',
       workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
@@ -399,6 +402,7 @@ describe('0-regression — canvas entries absent from resolveFoundationChatTools
     // search_catalog is now at index 1. Canvas entries do NOT appear.
     const tools = resolveFoundationChatTools({
       userId: 'u-lot6-test',
+      tenantId: 'tenant-fixture',
       workspaceId: 'ws-lot6-test',
       workspaceType: 'ai-priorities',
       currentUserRole: 'editor',
