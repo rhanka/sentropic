@@ -65,6 +65,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - [ ] Fix review r1 findings 2–7/9/10: tests first, amendment-exact fixes, both durable profiles, final PR CI and per-finding report; do not merge.
 - [ ] Fix review r1 findings 3/9: source HS256 claims and missing HMAC key code corrected after regression tests; execution pending.
 - [ ] Fix review r1 finding 4: purge retains bound completed magic links and live ticket parents, deleting expired tickets first; regression execution pending.
+- [ ] Fix review r1 finding 2: regressions require delivered replay, re-read before erasure and pending-with-missing-custody rollback.
 - [x] BR-A20B-EX3 (owner-authorized Fix CI 1): synchronize only cluster-mesh dev.4 in root/API workspace locks and selected packaging fixture pins; preserve unrelated dependency selections and integrity records. Impact: version metadata only. Rollback: revert these four files together with the version bump.
 - [x] BR-A20B-EX1: repair PostgreSQL qualification readiness in `packages/cluster-mesh/tests/storage/postgres.mk`; the current Unix-socket probe can accept initdb's temporary server before `storage_test` exists. Impact: test startup only, unchanged retry budget. Rollback: revert the readiness hunk.
 - [x] BR-A20B-EX2: wire the existing identity profile configs into the package runner and PostgreSQL CI lane; otherwise frozen tests use the default in-memory factory. Impact: required identity qualification only, unchanged assertions and timeouts. Rollback: revert the runner/target additions.
