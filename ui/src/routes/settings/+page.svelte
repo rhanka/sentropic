@@ -54,7 +54,7 @@
     themePreference,
     type ThemePreference,
   } from '$lib/stores/themePreference';
-  import AdminUsersPanel from '@sentropic/cluster-mesh/ui/AdminUsersScreen.svelte';
+  import AdminUsersPanel from '$lib/components/AdminUsersPanel.svelte';
   import GmailConnectorCard from '$lib/components/GmailConnectorCard.svelte';
   import GoogleDriveConnectorCard from '$lib/components/GoogleDriveConnectorCard.svelte';
   import WorkspaceSettingsPanel from '$lib/components/WorkspaceSettingsPanel.svelte';
