@@ -4,6 +4,8 @@ import type { VerifiedLoginClaimsV1 } from '../identity-contracts/custody.js';
 import type { IdentityAuditEvent } from '../identity-contracts/types.js';
 import { IdentityCustodyErrorV1 } from '../identity-contracts/custody-errors.js';
 
+export const authTokenEvidenceKey = (digest: string, userId: string, sessionId: string): string => JSON.stringify([digest, userId, sessionId]);
+
 export const authBoundaryPorts = <H>(input: IdentityAuthBindingInput<H>, users: AuthHonoUserPort, policy: AuthHonoAccountPolicyPort, check: () => void) => {
   const tokenEvidence = new Map<string, VerifiedLoginClaimsV1>();
   const unsupported = async (): Promise<never> => { check(); throw new IdentityCustodyErrorV1('identity_contract_unavailable'); };
@@ -23,7 +25,7 @@ export const authBoundaryPorts = <H>(input: IdentityAuthBindingInput<H>, users: 
         const user = await users.findById(claims.userId);
         const role = user && ['active', 'pending_admin_approval', 'approval_expired_readonly'].includes(user.accountStatus)
           ? await policy.resolveSessionRole(user, now) : 'guest';
-        tokenEvidence.set(await input.digest.sha256(bytes), claims);
+        tokenEvidence.set(authTokenEvidenceKey(await input.digest.sha256(bytes), claims.userId, claims.sessionId), claims);
         return { userId: claims.userId, sessionId: claims.sessionId, role };
       } finally { bytes.fill(0); }
     },
