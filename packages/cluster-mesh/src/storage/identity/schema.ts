@@ -426,6 +426,7 @@ export const identitySchemaStatements = (dialect: IdentitySchemaDialect, schema:
 };
 
 const custodyForeignKeys: readonly (readonly [IdentityTableName, readonly string[], string, readonly string[], 'RESTRICT' | 'SET NULL'])[] = [
+  ['identity_legacy_connector_tombstones', ['delivery_id'], 'identity_revocation_outbox', ['delivery_id'], 'RESTRICT'],
   ['identity_account_profiles', ['user_id'], 'identity_user_accounts', ['user_id'], 'RESTRICT'],
   ['identity_webauthn_credentials', ['user_id'], 'identity_user_accounts', ['user_id'], 'RESTRICT'],
   ['identity_social_links', ['user_id'], 'identity_user_accounts', ['user_id'], 'RESTRICT'],
