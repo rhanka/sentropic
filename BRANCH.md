@@ -1,79 +1,92 @@
-# Feature: Resolve exact scanner sources and retained materials (A02)
+# Feature: SQLite local durable artifacts adapter set (upstream request U1)
 
 ## Objective
-- [ ] Implement admission-plan-r1 section 5 row A02 (R1) under approved amendment r6 section 3.2: resolve/authenticate public sources and exact compiler/base/module/package snapshots, implement ordered patches and retained-material acquisition. Candidate-only; no build eligibility, admission or promotion claim.
+Ship a durable LOCAL SQLite adapter set in @sentropic/artifacts equivalent to the Postgres adapters (bindings, intents, idempotency, ACL, lifecycle, publication state, refcounts, commit coordinator with the 0.2.6 CAS, activation store, local PublicationBlobStore with digest verification), proven by one parameterized conformance suite run against BOTH Postgres and SQLite, exported as the new `@sentropic/artifacts/sqlite` subpath so the root/portable entries stay free of node:sqlite.
 
 ## Scope / Guardrails
-- [x] Binding r6 SHA-256: `4438d481e5021b06299d7c61bc95354dcd45d42664e59fdbecf02a2b0cfd451f`.
-- [x] Binding plan SHA-256: `528dd39308a6e2cf8bdf31307c82da373cf3ceb666cb865a0417abfa7ece49d2`.
-- [x] Worktree: `tmp/worktrees/cyber-admission-a02`; branch: `feat/cyber-admission-a02`; base: origin/main `e3fa8fab7f6a9ea802550f2a4e1b269fbb212375` (A01 merged as PR #883).
-- [x] Make-only Docker-first; single shared Docker lock `.tmp/packets/DOCKER-LOCK.md` taken per command; reuse the pinned Node image; no new image build.
-- [x] `ENV=test-cyber-adm` last; no listening services or ports; no registry login, OIDC, secrets, live promotion or merge.
-- [x] Keep production admission, A03+ execution, policy changes and Track writes out of scope; the conductor remains the sole Track writer.
-- [x] Tests first; selective staging; `make commit` under 150 changed lines; push after every commit; never suppress CI; never `[skip ci]`.
-- [x] Stop on an unresolved design decision; pin selection and implementation follow the approved R1/r6 section 3.2 contract.
+- Scope limited to packages/artifacts (new sqlite adapters + tests + packaging), the cluster-mesh artifacts peer-range widening, api APP-P1 digest refresh, and the two workspace lock version entries.
+- Make-only workflow, no direct Docker commands; the single Docker lock is /home/antoinefa/src/sentropic/.tmp/packets/DOCKER-LOCK.md taken PER COMMAND via flock.
+- Branch development happens in isolated worktree tmp/worktrees/artifacts-sqlite-u1 on branch feat/artifacts-sqlite-u1 from origin/main.
+- Tests run on ENV=test-artifacts-u1 (passed LAST), never ENV=dev; `make down ENV=test-artifacts-u1` after.
+- In every `make` command, `ENV=<env>` must be passed as the last argument.
+- All new text in English. No secrets anywhere. No [skip ci]. Commits via `make commit MSG="..."` only, <=150 lines, selective staging, push after each commit.
+- Driver: node:sqlite (DatabaseSync), the same driver cluster-mesh identity/storage uses; no new native dependency, no better-sqlite3.
+- Where SQLite cannot give the same atomicity as Postgres, one serialized writer transaction (BEGIN IMMEDIATE) is used and documented in the adapter header. There is no second behaviour.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
-  - `packages/cluster-mesh/src/sessions/registry*.ts`
-  - `packages/cluster-mesh/src/index.ts`
+  - `packages/artifacts/**` (new `src/adapters/sqlite*.ts`, `src/adapters/local-blob.ts`, `sql/sqlite/*`, tests, package.json, CHANGELOG.md, README.md)
+  - `packages/cluster-mesh/src/modules/catalog.ts`
   - `packages/cluster-mesh/package.json`
-  - `packages/cluster-mesh/tests/remote-session/registry.spec.ts`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package.json`
-  - `packages/cluster-mesh/tests/packaging/fixtures/selected/package-lock.json`
-  - `api/tests/api/session-remote-view.test.ts`
-  - `ui/tests/session-content/navigation.test.ts`
+  - `packages/cluster-mesh/CHANGELOG.md`
+  - `packages/cluster-mesh/tests/packaging/artifacts-tuple.spec.ts`
+  - `api/src/services/mcp/cluster-registry.ts`
+  - `api/tests/api/app-mcp-registry.test.ts`
+  - `api/tests/api/app-mcp-installed.test.ts`
+  - `package-lock.json` (workspace version entries only)
+  - `api/package-lock.json` (workspace version entries only)
   - `BRANCH.md`
-  - `scripts/security/scanner/**`
-  - `scripts/security/daily/scanner-provenance.test.mjs`
 - **Forbidden Paths (must not change in this branch)**:
   - `Makefile`
   - `docker-compose*.yml`
   - `.cursor/rules/**`
-  - `.security/**`
-  - `.track/**`
-  - `packages/**`
-  - `.github/workflows/**`
-  - `scripts/ci/**`
+  - `plan/NN-BRANCH_*.md` (except this branch file)
+  - `packages/artifacts/src/server/**` (ports and domain stay untouched)
+  - `packages/artifacts/src/adapters/postgres*.ts`, `packages/artifacts/src/adapters/s3.ts` (reference adapters stay untouched)
+  - `packages/artifacts/src/index.ts` (root barrel must stay free of node:sqlite)
 - **Conditional Paths (allowed only with explicit exception when not already listed in Allowed Paths)**:
-  - none
+  - `.github/workflows/**`
 - **Exception process**:
-  - [x] No exception declared; no conditional or forbidden path is touched.
+  - Declare exception ID `BRxx-EXn` in `## Feedback Loop` before touching any conditional/forbidden path.
 
 ## Feedback Loop
-- [x] Retain inherited BRLOCK-EX1 under `.security/ci-lockfile-policy.json`: owner=CI maintainers, review_by=2026-11-30T00:00:00Z; bounded scope and removal trigger remain unchanged, and catalog SCA debt stays open.
-- [x] A01 local gate passed 298 tests with zero failures/skips; ready PR #883 CI run 41414318957 passed and merged as `e3fa8fab7`; this branch is rebased on origin/main.
-- [x] Prior A02 lane commits (patch/acquisition/offline machinery plus tests) are retained and rebased; the native replay executor and the resolved recipe/material pins are the remaining work.
-- [x] Public source investigation confirms Trivy v0.76.1 at commit `e713f67f7d54decdcd9b3132c9751833dcced698` (tag ref, commit API and tree API retained), Go 1.27.3 toolchain, alpine 3.24.2 base at index `sha256:294b683c...`, and the inherited embedded go-jose v4.1.5 defect.
-- [x] Preserve upstream authentication gaps and tool-qualification boundaries; a fetched hash or candidate-only fixture grants no admission.
-- [x] Retained materials stay outside the repository (`.tmp/daily-cyber/a02-materials`); only the reviewed recipe, material manifest and patch data are committed.
+- (empty at branch start)
 
 ## AI Flaky tests
-- [x] Deterministic source/material tests and offline replay; no AI flaky exception.
+- Acceptance rule: non-systematic provider/network/model nondeterminism only, with one success on the same commit and command; never additive timeouts; record command + file + signature here if accepted.
 
 ## Orchestration Mode (AI-selected)
-- [x] **Mono-branch**: single A02 lane with one ready PR against main; no merge.
-
-## UAT Management (in orchestration context)
-- [x] No UI surface; executable material and offline dependency checks provide the applicable gate.
+- [x] **Mono-branch + cherry-pick** (single branch, single final test cycle)
+- Rationale: one deliverable (U1) on one branch; no orthogonal sub-workstreams.
 
 ## Plan / Todo (lot-based)
 - [ ] **Lot 0 — Baseline & constraints**
-  - [x] Read rules, approved r6/plan and the A01 contract; verify both document hashes.
-  - [x] Create/confirm isolated worktree `tmp/worktrees/cyber-admission-a02` from origin/main and pass the mechanical harness branch check (PASS C1).
-  - [x] Locate the existing pinned Node test lane and the shared Docker lock; preserve production admission off.
-- [ ] **Lot 1 — Tests before implementation**
-  - [x] Ordered-patch, retained-acquisition and offline-resolution unit tests are collected by `scanner-provenance.test.mjs`.
-- [x] Retained proxy paths encode reversibly inside the contract charset (`!x`→uppercase, `/@v/`→`/`, `+`→`-plus-`) with asserted round-trips.
-  - [x] Native offline replay test (`native-replay.test.mjs`) requires `SCANNER_MATERIALS` and never skips.
-  - [x] Update `scanner-provenance.test.mjs`: resolved real recipe passes inventory validation, refuses empty retained bytes, and every patch/source/checksum mutation of the real recipe/manifest refuses; wire the native replay test when `SCANNER_MATERIALS` is set.
-- [ ] **Lot 2 — Exact source, patch and material implementation**
-  - [x] Ordered data-only patches with exact input/output checksums exist under `scripts/security/scanner/patches/`.
-  - [x] Resolved and measured the actual pins (upstream archive/authentication/license, Go compiler/go.mod/go.sum/module proxy, base index/manifest/config/layer, APK index/packages, tools, Actions); `recipe.json` and `material-manifest.json` carry no prose pin or pending digest (recipeDigest `sha256:c857dc4b...`, 3138 materials, 10 origins).
-  - [x] Assembled the retained material directory (3138 files, 1,071,738,643 bytes, outside the repo) and implemented `native-replay.mjs`: offline replay of the patched source resolves go-jose v4.1.6; the OS-only source still exposes v4.1.5 and is rejected. Native gate passed under `--network=none` (1 test, 0 fail, 431s).
-- [ ] **Lot 3 — Gates, ready PR and report**
-  - [x] Ran `make test-security-daily ENV=test-cyber-adm` under the single lock at `32c95098c`: 311 passed, 0 fail, 0 skip; native offline replay with `SCANNER_MATERIALS` under `--network=none` passed (1 test, 0 fail, 68s; patched source resolves go-jose v4.1.6, OS-only source still exposes v4.1.5 and is rejected); `make down ENV=test-cyber-adm` exit 0.
-  - [x] `harness check scope` PASS C2 and `harness check branch` PASS C1 before every commit; atomic `make commit` under 150 lines; pushed after every commit; rebased onto `origin/main` `5e8a08b96` with `-X theirs` (BRANCH.md sole conflict) and force-with-lease pushed.
-  - [x] Opened ready (non-draft) PR #884 against main at head `32c95098c`; pull_request CI fires on the final head.
-  - [ ] Record exact heads, PR, CI and every test gate in `.tmp/rv/cyber-admission-a02.md` for conductor Track import.
-  - [ ] Stop after A02; leave A03+ and all live admission/activation work fenced.
+  - [x] Read rules/MASTER.md, rules/workflow.md, COMMON-RULES packet, h2a plan §1.3 U1 wording.
+  - [x] Create worktree tmp/worktrees/artifacts-sqlite-u1 on feat/artifacts-sqlite-u1 from origin/main; `harness check branch` PASS.
+  - [x] Write BRANCH.md from plan/BRANCH_TEMPLATE.md.
+  - [x] Confirm command style: `flock <docker-lock> make ... ENV=test-artifacts-u1` with ENV last.
+- [ ] **Lot 1 — Tests first: parameterized conformance suite (RED)**
+  - [ ] `packages/artifacts/tests/fixtures/adapter-conformance.ts` — one parameterized suite over a backend factory: store conformance (ensure/bindings incl. concurrent + terminal gone, intents, preparation-intent cleanup reads, idempotency replay/conflict, ACL, sources, lifecycle, publication state + CAS, refcounts/pins, registered blobs), commit-executor conformance (coordination-row convergence, serialized finalization, receipt exactly-once + replay, rollback residue, CAS), activation conformance (vector list incl. concurrent-consume, single-use, expiry, cleanup bounds, invalidation, ttl cap, commit-unknown), blob-store conformance (round-trip, digest verification, hostile keys, prefix listing, strict delete), restart durability (reopen), concurrent writers.
+  - [ ] `packages/artifacts/tests/sqlite-conformance.test.ts` — runs the suite against SQLite only (unit run, no services).
+  - [ ] `packages/artifacts/tests/adapter-conformance.integration.test.ts` — runs the SAME suite against Postgres (DATABASE_URL) and SQLite in one file (parity proof).
+  - [ ] RED: suite fails because `../src/adapters/sqlite.js` does not exist yet.
+- [ ] **Lot 2 — SQLite store adapter (GREEN)**
+  - [ ] `packages/artifacts/sql/sqlite/0001_artifacts.sql` (+ activation schema asset) — SQLite DDL mirroring migrations 0001-0005 + sql/0001_activation.sql semantics.
+  - [ ] `packages/artifacts/src/adapters/sqlite.ts` — `createSqliteArtifactStore` implementing the same interfaces as `PostgresArtifactStore` over node:sqlite, BEGIN IMMEDIATE serialized writer, documented atomicity note.
+  - [ ] Targeted run: `make test-artifacts SCOPE=tests/sqlite-conformance.test.ts ENV=test-artifacts-u1` GREEN; `make down ENV=test-artifacts-u1`.
+- [ ] **Lot 3 — Commit coordinator + management unit**
+  - [ ] `packages/artifacts/src/adapters/sqlite-commit.ts` — `createSqliteCommitExecutor` (CommitExecutor: ensureCoordinationRow, beginFinalization returning a FinalizeConnection with BEGIN IMMEDIATE, lockOperationKey as in-transaction serialization, receipts, commit/rollback/release).
+  - [ ] `packages/artifacts/src/adapters/sqlite-management.ts` — `createSqliteManagementUnit` (ManagementUnit port).
+  - [ ] Coordinator conformance vectors GREEN on both backends.
+- [ ] **Lot 4 — Activation store**
+  - [ ] `packages/artifacts/src/adapters/sqlite-activation.ts` — tickets/flows/consume/cleanup/invalidate with the same semantics (generation invalidation, single-use consume, bounded cleanup, ActivationCommitUnknownError on commit-ack loss).
+  - [ ] Activation conformance vectors GREEN on both backends.
+- [ ] **Lot 5 — Local blob store**
+  - [ ] `packages/artifacts/src/adapters/local-blob.ts` — `createLocalBlobStore({ root })` implementing PublicationBlobStore on the filesystem with sha256 digest verification on put and get, same key validation, strict delete, sorted prefix listing, restart durability.
+- [ ] **Lot 6 — Packaging**
+  - [ ] package.json: `./sqlite` subpath export(s), files, version 0.3.0 (minor over published 0.2.6), peerDependenciesMeta unchanged (node:sqlite is builtin).
+  - [ ] Root/portable entries stay free of node:sqlite: test asserting the root barrel module graph contains no `node:sqlite`/`better-sqlite3` and that `@sentropic/artifacts/sqlite` resolves (portable size/entry budget).
+  - [ ] `ARTIFACTS_PROVIDER_VERSION` = '0.3.0' in mcp-core.ts; CHANGELOG entries (artifacts 0.3.0, cluster-mesh range widening).
+  - [ ] cluster-mesh: ARTIFACTS_RANGE `>=0.2.0 <0.4.0` (catalog.ts + package.json peerDependencies), artifacts-tuple.spec.ts assertion, cluster-mesh version bump.
+  - [ ] Lock refresh through make: root + api package-lock.json workspace version entries.
+  - [ ] APP-P1 refresh through make: recompute APP_P1_MANIFEST_DIGEST, update api cluster-registry.ts + app-mcp-registry.test.ts + app-mcp-installed.test.ts.
+- [ ] **Lot 7 — Full verification**
+  - [ ] `make build-artifacts typecheck-artifacts lint-artifacts ENV=test-artifacts-u1` (flock per command).
+  - [ ] `make test-artifacts ENV=test-artifacts-u1` GREEN (unit incl. sqlite conformance).
+  - [ ] `make test-artifacts-integration SCOPE=tests/adapter-conformance.integration.test.ts ENV=test-artifacts-u1` GREEN on BOTH backends; then `make down ENV=test-artifacts-u1`.
+  - [ ] `make pack-artifacts ENV=test-artifacts-u1` guarded pack GREEN.
+  - [ ] api scoped tests for the APP-P1 refresh: app-mcp-registry + app-mcp-installed GREEN.
+  - [ ] cluster-mesh artifacts-tuple source coherence GREEN.
+- [ ] **Lot 8 — Ship**
+  - [ ] Commits <=150 lines via make commit, `make scope-check` before each, push after each commit.
+  - [ ] READY PR from BRANCH.md text; one CI run; report to .tmp/rv/artifacts-sqlite-u1.md. Do not merge.
