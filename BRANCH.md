@@ -119,6 +119,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - No UI changes in this lot; no UAT.
 
 ## Plan / Todo (lot-based)
+- [x] Review r1: run all planes in order, enqueue before cleanup, assert custody/absence and persist pending receipts plus audit.
 - [x] Review r1: require explicit deletion composition and lock/re-authorize reservation and replay.
 - [x] Review r1: validate all plane bindings and enqueue deterministic deliveries only after the scope assertion.
 - [x] Review r1: exact deletion business, authorization, plane, option and receipt contracts.
