@@ -63,7 +63,7 @@ const isUniqueViolation = (error: unknown): boolean => {
 };
 
 export const requireSqliteWriteOptions = (options: IdentityRunOptionsV1): void => {
-  if (options.mode !== 'write' && options.mode !== 'import' && options.mode !== 'delete') {
+  if (options.mode !== 'write') {
     throw new IdentityCustodyErrorV1('identity_transaction_unbound');
   }
   if (!Number.isInteger(options.deadlineMs) || options.deadlineMs <= 0) {

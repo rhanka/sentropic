@@ -4,7 +4,7 @@ import { asOpHost, NOW, openPostgresEnv, openSqliteEnv } from './a20b-helpers.js
 
 const WRITE = { mode: 'write', purpose: 'request', deadlineMs: 5000, maxAttempts: 1 } as const;
 const READ = { ...WRITE, mode: 'read' } as const;
-const account = { userId: 'combined', email: 'combined@example.test', accountStatus: 'active', globalRole: 'user', createdAt: NOW, updatedAt: NOW } as const;
+const account = { userId: 'combined', email: 'combined@example.test', accountStatus: 'active', globalRole: 'editor', createdAt: NOW, updatedAt: NOW } as const;
 const profile = { userId: 'combined', emailVerified: true, displayName: null, approvalDueAt: null, approvedAt: null, approvedByUserId: null, disabledAt: null, disabledReason: null, legacyAccountStatus: null };
 
 describe.each(process.env.CM_PG_URL ? ['postgres', 'sqlite'] : ['sqlite'])('A2.0b combined UOW on %s', (dialect) => {

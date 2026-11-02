@@ -28,9 +28,9 @@ export const identityTransactionGuard = (readOnly: boolean, deadline: number) =>
         check();
         const statement = connection.prepare(text);
         return {
-          all: (...values) => { sql(text); return statement.all(...values); },
-          get: (...values) => { sql(text); return statement.get(...values); },
-          run: (...values) => { check(true); return statement.run(...values); },
+          all: (...values) => { sql(text); return Reflect.apply(statement.all, statement, values); },
+          get: (...values) => { sql(text); return Reflect.apply(statement.get, statement, values); },
+          run: (...values) => { check(true); return Reflect.apply(statement.run, statement, values); },
         };
       },
       close: () => { throw new IdentityCustodyErrorV1('identity_transaction_unbound'); },
