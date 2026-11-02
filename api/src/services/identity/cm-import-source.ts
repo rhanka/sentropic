@@ -5,6 +5,7 @@ import { mapA4EmailTicket, mapA4Invitation, mapA4Social } from './cm-import-cont
 import { mapA4OAuthConsent, mapA4ServiceClient, mapA4Tenant, mapA4TenantMembership,
   mapA4Workspace, mapA4WorkspaceMembership } from './cm-import-tenancy';
 import { invalidA4Import, type A4SourceRow } from './cm-import-values';
+import { assertA4SourceInventory } from './cm-import-manifest';
 
 export const a4IdentitySourceTables = ['users', 'webauthn_credentials', 'webauthn_challenges',
   'email_verification_codes', 'magic_links', 'auth_invite_tokens', 'user_sessions', 'identities',
@@ -34,6 +35,7 @@ export async function readA4IdentitySource(client: PoolClient): Promise<A4Source
     rows.set(table, result.rows.map(row => row.source));
     inventory[table] = { count: result.rows.length, fields: fields.rows.map(row => row.column_name) };
   }
+  assertA4SourceInventory(inventory);
   return { rows, inventory };
 }
 
