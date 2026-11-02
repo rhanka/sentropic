@@ -10,6 +10,7 @@
 - [x] Generic upstream fix in `@sentropic/artifacts`, consistent with the converged-r2 get_source contract; no IMMO-side changes in this repo.
 - [x] Package publication rules: bump `packages/artifacts/package.json` to 0.2.7 (> published 0.2.6) and re-pin the APP-P1 manifest digest in `api/src/services/mcp/cluster-registry.ts` plus its two test fixtures (as #878/#90eda did for 0.2.5/0.2.6). Lockfiles stay untouched: the memory-l5 P1 lock fingerprint covers the root `package-lock.json` (CI `memory-l5-qualification` fails on any lock edit), and #878/#90eda left both locks alone; `make lock-root` / `make lock-api` were run to confirm they only drift the stale workspace version entries, then reverted.
 - [x] One CI run on the final pushed head; READY PR; no merge; report to `.tmp/rv/artifacts-get-source-text.md`.
+- [x] Retain inherited BRLOCK-EX1 under `.security/ci-lockfile-policy.json`: owner=CI maintainers, review_by=2026-11-30T00:00:00Z; bounded scope and removal trigger remain unchanged, and catalog SCA debt stays open.
 
 ## Branch Scope Boundaries (MANDATORY)
 - **Allowed Paths (implementation scope)**:
@@ -73,7 +74,7 @@
   - [x] Lockfiles deliberately untouched: `make lock-root` / `make lock-api` were run under the single Docker lock per command (they only drift the stale workspace version entries 0.2.5→0.2.7 / mcp-platform 0.4.0→0.4.1), then reverted because the memory-l5 P1 lock fingerprint covers the root lock (CI `memory-l5-qualification` fails on any lock edit) and #878/#90eda left both locks alone.
   - [x] Recompute and re-pin the APP-P1 manifest digest in `api/src/services/mcp/cluster-registry.ts` + `api/tests/api/app-mcp-registry.test.ts` + `api/tests/api/app-mcp-installed.test.ts` (0.2.7, superseded 0.2.6 receipt refused).
   - [x] `make scope-check` before every commit; atomic `make commit` per logical change; push after commits.
-- [ ] **Lot 4 — PR & CI**
-  - [ ] Push `fix/artifacts-get-source-text`; open READY PR with this BRANCH.md as body.
-  - [ ] Run exactly one CI on the final head; record the run; do not merge.
-  - [ ] Report to `.tmp/rv/artifacts-get-source-text.md`.
+- [x] **Lot 4 — PR & CI**
+  - [x] Push `fix/artifacts-get-source-text`; open READY PR #890 with this BRANCH.md as body.
+  - [x] Run exactly one CI on the final head (workflow_dispatch, run recorded in the report); do not merge.
+  - [x] Report to `.tmp/rv/artifacts-get-source-text.md`.
