@@ -95,7 +95,7 @@ export function createArtifactsToolExecutor(deps: { app: ArtifactsApp; profile: 
         case 'artifacts_get_source': request = { method: 'POST', path: '/get_source', body: args }; break;
         case 'artifacts_set_access': request = { method: 'POST', path: '/set_access', body: args }; break;
         case 'artifacts_delete': request = { method: 'POST', path: '/delete', body: args }; break;
-        case 'artifacts_list_versions': request = { method: 'GET', path: `/versions/${args.artifactId}`, body: undefined }; break;
+        case 'artifacts_list_versions': request = { method: 'POST', path: '/list_versions', body: args }; break;
         case 'artifacts_revert': request = { method: 'POST', path: '/revert', body: args }; break;
         default: throw new ArtifactProfileInputError(true);
       }
