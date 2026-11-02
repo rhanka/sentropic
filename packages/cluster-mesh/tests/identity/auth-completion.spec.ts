@@ -31,6 +31,23 @@ const shared = {
 describe.each(pgEnabled ? ['sqlite', 'postgres'] as const : ['sqlite'] as const)('real auth completion on %s', (profile) => {
   const open = async () => asOpHost((profile === 'postgres' ? await openPostgresEnv() : openSqliteEnv()).unitOfWork);
 
+  it.each(['credential_rename', 'credential_revoke'] as const)('aborts %s even when its refused result is ignored', async (flow) => {
+    const unitOfWork = await open();
+    const outcome = await runIdentityAuthCompletionV1({ flow, unitOfWork, options: WRITE, operation: async (tx) => {
+      const binding = createIdentityAuthHonoTransactionBindingV1({ ...shared, tx });
+      const user = await binding.ports.users.create({ email: 'management@example.test', role: 'editor' });
+      await tx.ledger.append({ at: NOW, kind: 'management.must.rollback' });
+      if (flow === 'credential_rename') await binding.ports.credentials.rename('missing', user.id, 'Renamed');
+      else await binding.ports.credentials.revoke('missing', user.id);
+      return { ignored: true };
+    } });
+    expect(outcome).toEqual({ committed: false, refusal: { flow, result: flow === 'credential_rename' ? null : false } });
+    await unitOfWork.run(READ, async (tx) => {
+      expect(await tx.stores.accounts.findAccountByEmail('management@example.test')).toBeNull();
+      expect(await tx.ledger.listAuditEvents()).toEqual([]);
+    });
+  });
+
   it('retries a social revision race only after rolling back the whole callback', async () => {
     const unitOfWork = await open();
     await unitOfWork.run(WRITE, async (tx) => {
