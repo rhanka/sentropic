@@ -253,7 +253,7 @@ const callbackHandler = async (c: Context) => {
     // reference it by a bound cookie, and hand the browser to the local email-verification challenge
     // (which POSTs to the federation challenge endpoint once an email is proven).
     deleteCookie(c, FLOW_COOKIE, { path: FEDERATION_CALLBACK_PREFIX });
-    const expiresAt = new Date(Date.now() + CHALLENGE_TTL_SECONDS * 1000);
+    const expiresAt = new Date(Math.min(Date.now() + CHALLENGE_TTL_SECONDS * 1000, Date.parse(result.expiresAt)));
     const challengeId = pendingFederationStore.put(
       {
         continuation: result.continuation,
