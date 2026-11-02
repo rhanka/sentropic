@@ -7,6 +7,7 @@
 // re-serializes an allowlisted subset; transport accepts canonical bytes
 // only. Every refusal is fail-closed at the stage that raises it.
 
+import { createHash } from 'node:crypto';
 import {
   SEAT_BUNDLE_MAX_BYTES,
   classifyTransition,
@@ -416,4 +417,172 @@ export function validateAgyJetskiContent(text: string, nativeCliVersion: string)
     return 'onboarding-shape-unverified';
   }
   return null;
+}
+
+// ── per-format content validation ────────────────────────────────────────
+// Structural, per format. Nothing is accepted on the basis of a file name
+// or a digest alone.
+
+const CLAUDE_VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+const MCP_SERVER_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const SHA256_PATTERN = /^[0-9a-f]{64}$/;
+
+function decodeBase64Strict(value: string): Uint8Array | null {
+  if (typeof value !== 'string' || value.length === 0) return null;
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(value) || value.length % 4 !== 0) return null;
+  try {
+    return new Uint8Array(Buffer.from(value, 'base64'));
+  } catch {
+    return null;
+  }
+}
+
+function parseJsonObject(bytes: Uint8Array): Record<string, unknown> | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(new TextDecoder().decode(bytes));
+  } catch {
+    return null;
+  }
+  return isRecord(parsed) ? parsed : null;
+}
+
+/** Validate one transported file's decoded content against its format. */
+export function validateOnboardingFileContent(
+  format: SeatOnboardingFormat,
+  bytes: Uint8Array,
+  nativeCliVersion: string,
+): SeatOnboardingCode | null {
+  if (format === 'agy-jetski-pbtxt-v1') {
+    let text: string;
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(bytes);
+    } catch {
+      return 'onboarding-shape-unverified';
+    }
+    return validateAgyJetskiContent(text, nativeCliVersion);
+  }
+  const obj = parseJsonObject(bytes);
+  if (!obj) return 'onboarding-shape-unverified';
+  if (format === 'claude-json-projection-v1') {
+    if (unknownKey(obj, ['hasCompletedOnboarding', 'lastOnboardingVersion'])) return 'onboarding-shape-unverified';
+    if (obj['hasCompletedOnboarding'] !== true) return 'onboarding-shape-unverified';
+    if (typeof obj['lastOnboardingVersion'] !== 'string' || !CLAUDE_VERSION_PATTERN.test(obj['lastOnboardingVersion'])) {
+      return 'onboarding-shape-unverified';
+    }
+    return null;
+  }
+  if (format === 'muse-trust-json-v1') {
+    if (unknownKey(obj, ['schema_version'])) return 'onboarding-shape-unverified';
+    const schemaVersion = obj['schema_version'];
+    if (!validInt(schemaVersion, 1) || !MUSE_TRUST_KNOWN_SCHEMA_VERSIONS.includes(schemaVersion)) {
+      return 'onboarding-shape-unverified';
+    }
+    return null;
+  }
+  if (format === 'codex-config-projection-v1') {
+    if (unknownKey(obj, ['approvalPolicy', 'mcpServerNames'])) return 'onboarding-shape-unverified';
+    if (typeof obj['approvalPolicy'] !== 'string' || !CODEX_APPROVAL_POLICY_VALUES.includes(obj['approvalPolicy'])) {
+      return 'onboarding-shape-unverified';
+    }
+    const names = obj['mcpServerNames'];
+    if (!Array.isArray(names) || names.length === 0) return 'onboarding-shape-unverified';
+    const seen = new Set<string>();
+    for (const name of names) {
+      if (typeof name !== 'string' || !MCP_SERVER_NAME_PATTERN.test(name) || seen.has(name)) {
+        return 'onboarding-shape-unverified';
+      }
+      seen.add(name);
+    }
+    return null;
+  }
+  return 'onboarding-shape-unverified';
+}
+
+/** Structural validation of one onboarding block; binding checks live in validateSeatEnvelope. */
+export function validateSeatOnboarding(block: unknown): SeatOnboardingValidationResult {
+  let serialized = '';
+  try {
+    serialized = JSON.stringify(block) ?? '';
+  } catch {
+    return fail('onboarding-schema-mismatch', 'block is not JSON-serializable');
+  }
+  if (utf8Bytes(serialized).length > SEAT_ONBOARDING_MAX_BYTES) {
+    return fail('onboarding-size-exceeded', 'onboarding block exceeds 4 KiB');
+  }
+  if (!isRecord(block)) return fail('onboarding-schema-mismatch', 'block must be an object');
+  const badTop = unknownKey(block, SEAT_ONBOARDING_TOP_KEYS);
+  if (badTop) return fail('onboarding-unknown-field', `unknown onboarding field: ${badTop}`);
+  if (block['schemaVersion'] !== SEAT_ONBOARDING_SCHEMA_VERSION) {
+    return fail('onboarding-schema-mismatch', 'schemaVersion must be 1');
+  }
+  const cli = block['cli'];
+  if (!CLIS.includes(cli as SeatCli)) return fail('onboarding-schema-mismatch', 'cli must be one of the five seat CLIs');
+  const destKey = CLI_DEST[cli as SeatCli];
+  if (!destKey) return fail('onboarding-shape-unverified', 'no v1 onboarding allowlist entry for this CLI');
+  if (!nonEmpty(block['seatRef'])) return fail('onboarding-schema-mismatch', 'seatRef must be non-empty');
+  if (!nonEmpty(block['accountBinding'])) return fail('onboarding-schema-mismatch', 'accountBinding must be non-empty');
+  if (block['accountBindingBasis'] !== 'custodian-stable-ref') {
+    return fail('onboarding-schema-mismatch', 'accountBindingBasis must be custodian-stable-ref');
+  }
+  if (!validateLineageTuple(block['lineage'])) return fail('onboarding-schema-mismatch', 'lineage must be a valid tuple');
+  const hasReboundFrom = block['reboundFrom'] !== undefined;
+  const hasReboundAt = block['reboundAt'] !== undefined;
+  if (hasReboundFrom !== hasReboundAt) return fail('onboarding-schema-mismatch', 'reboundFrom and reboundAt come together');
+  if (hasReboundFrom && !validateLineageTuple(block['reboundFrom'])) {
+    return fail('onboarding-schema-mismatch', 'reboundFrom must be a valid tuple');
+  }
+  if (hasReboundAt && !validDate(block['reboundAt'])) return fail('onboarding-schema-mismatch', 'reboundAt must be a valid date');
+  if (!nonEmpty(block['nativeCliVersion'])) return fail('onboarding-schema-mismatch', 'nativeCliVersion must be non-empty');
+  if (block['os'] !== 'linux' && block['os'] !== 'macos' && block['os'] !== 'windows') {
+    return fail('onboarding-schema-mismatch', 'os must be linux, macos or windows');
+  }
+  if (!validDate(block['capturedAt'])) return fail('onboarding-schema-mismatch', 'capturedAt must be a valid custodian-observed date');
+  const consent = block['consent'];
+  if (!isRecord(consent)) return fail('onboarding-schema-mismatch', 'consent must be an object');
+  const badConsent = unknownKey(consent, CONSENT_KEYS);
+  if (badConsent) return fail('onboarding-unknown-field', `unknown consent field: ${badConsent}`);
+  if (consent['source'] !== 'owner-interactive-cli') return fail('onboarding-schema-mismatch', 'consent.source must be owner-interactive-cli');
+  if (!nonEmpty(consent['ownerScope'])) return fail('onboarding-schema-mismatch', 'consent.ownerScope must be non-empty');
+  const synthesis = block['cellSynthesis'];
+  if (!Array.isArray(synthesis)) return fail('onboarding-schema-mismatch', 'cellSynthesis must be an array');
+  const seenSynth = new Set<string>();
+  for (const entry of synthesis) {
+    if (typeof entry !== 'string' || !(entry in SYNTHESIS_CLIS) || seenSynth.has(entry)) {
+      return fail('onboarding-shape-unverified', 'cellSynthesis entries must be unique known synthesis keys');
+    }
+    if (SYNTHESIS_CLIS[entry as SeatCellSynthesis] !== cli) {
+      return fail('onboarding-shape-unverified', 'cellSynthesis entry does not belong to this CLI');
+    }
+    seenSynth.add(entry);
+  }
+  if (cli === 'agy' && synthesis.length > 0) {
+    return fail('onboarding-shape-unverified', 'agy carries no cellSynthesis entry');
+  }
+  const files = block['files'];
+  if (!Array.isArray(files) || files.length !== 1) {
+    return fail('onboarding-shape-unverified', 'v1 carries exactly one onboarding file per CLI');
+  }
+  const file = files[0];
+  if (!isRecord(file)) return fail('onboarding-schema-mismatch', 'file must be an object');
+  const badFile = unknownKey(file, SEAT_ONBOARDING_FILE_KEYS);
+  if (badFile) return fail('onboarding-unknown-field', `unknown file field: ${badFile}`);
+  if (file['destKey'] !== destKey) return fail('onboarding-shape-unverified', 'destKey does not match the CLI allowlist');
+  if (file['format'] !== DEST_FORMAT[destKey]) return fail('onboarding-shape-unverified', 'format does not match the destination');
+  const bytes = decodeBase64Strict(file['contentBase64'] as string);
+  if (!bytes) return fail('onboarding-schema-mismatch', 'contentBase64 must be strict base64');
+  if (!validInt(file['byteLength'], 1) || file['byteLength'] !== bytes.length) {
+    return fail('onboarding-shape-unverified', 'byteLength does not match the decoded content');
+  }
+  if (bytes.length > SEAT_ONBOARDING_FILE_CAPS[destKey]) {
+    return fail('onboarding-size-exceeded', 'onboarding file exceeds its decoded-byte cap');
+  }
+  if (typeof file['sha256'] !== 'string' || !SHA256_PATTERN.test(file['sha256'])) {
+    return fail('onboarding-shape-unverified', 'sha256 must be a hex digest');
+  }
+  const digest = createHash('sha256').update(bytes).digest('hex');
+  if (digest !== file['sha256']) return fail('onboarding-shape-unverified', 'sha256 does not match the decoded content');
+  const contentCode = validateOnboardingFileContent(DEST_FORMAT[destKey], bytes, block['nativeCliVersion'] as string);
+  if (contentCode) return fail(contentCode, 'transported content is not canonical for the pinned version');
+  return { ok: true, block: block as unknown as SeatOnboardingV1 };
 }
