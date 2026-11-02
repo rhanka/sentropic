@@ -165,8 +165,11 @@ export function createTransportWorld(actors = ['alice', 'bob', 'issuer|alice'], 
         },
         async updateMetadata(artifactId, metadata) {
           const acl = (await acls.getArtifactAcl(artifactId))!;
-          const merged = { ...acl.metadata, ...metadata };
-          writes.get(client)!.push(() => acls.putArtifactAcl(artifactId, { ...acl, metadata: merged }));
+          const merged = { ...acl?.metadata, ...metadata };
+          writes.get(client)!.push(async () => {
+            const current = (await acls.getArtifactAcl(artifactId))!;
+            await acls.putArtifactAcl(artifactId, { ...current, metadata: { ...current.metadata, ...metadata } });
+          });
           return merged;
         },
         async readAuthorization(artifactId) { return { state: await lifecycle.stateOf(artifactId), acl: await acls.getArtifactAcl(artifactId) }; },

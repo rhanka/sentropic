@@ -321,7 +321,8 @@ The installed package includes SQL resources exported under
 ```js
 import { readFile } from 'node:fs/promises';
 
-const migrations = ['0001_artifacts.sql', '0002_lifecycle.sql'];
+const migrations = ['0001_artifacts.sql', '0002_lifecycle.sql', '0003_coordinator.sql',
+  '0004_terminal_controls.sql', '0005_metadata.sql'];
 for (const name of migrations) {
   const sql = await readFile(new URL(import.meta.resolve(
     `@sentropic/artifacts/migrations/${name}`,
@@ -332,7 +333,8 @@ for (const name of migrations) {
 
 Apply `0001_artifacts.sql` first to create the domain schema, then
 `0002_lifecycle.sql` to add lifecycle, sharing, sources and GC support, then
-`0003_coordinator.sql` and `0005_metadata.sql` (artifact display metadata),
+`0003_coordinator.sql`, `0004_terminal_controls.sql`, and `0005_metadata.sql`
+(artifact display metadata and nullable release lineage),
 before using the Postgres store. The host owns migration credentials, serialization,
 transactions and the migration journal; execute each version through that
 runner rather than running this read loop at application startup.

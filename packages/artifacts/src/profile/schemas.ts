@@ -45,6 +45,7 @@ export function operationProfile(profile: ArtifactProviderProfile, operation: st
 /** Schemas are generated from the same limits/defaults read by normalization. */
 export function capabilitySchema(name: ArtifactCapabilityName, profile: EffectiveArtifactProfile): ArtifactSchema {
   const operation = name.slice('artifacts_'.length);
+  const part1 = profile.profileRevisionId === undefined || profile.resultEnvelopeVersion === 2;
   const config = operationProfile(profile, operation);
   const limits = config.limits;
   const key = { type: 'string', minLength: 1, maxLength: limits.idempotencyKeyMaxUnits,
@@ -53,7 +54,7 @@ export function capabilitySchema(name: ArtifactCapabilityName, profile: Effectiv
   switch (operation) {
     case 'ensure': return obj({ bindingName: { type: 'string', minLength: limits.bindingNameMinUnits,
       maxLength: limits.bindingNameMaxUnits }, parameters: { ...obj({}), default: config.defaults.parameters },
-      idempotencyKey: key, ...metadata }, ['bindingName', 'idempotencyKey']);
+      idempotencyKey: key, ...(part1 ? metadata : {}) }, ['bindingName', 'idempotencyKey']);
     case 'publish': {
       const reserved = profile.rules.reservedFirstSegments.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
       const path = { type: 'string', minLength: 1, maxLength: profile.rules.pathMaxBytes,
@@ -72,11 +73,12 @@ export function capabilitySchema(name: ArtifactCapabilityName, profile: Effectiv
       return { ...obj({ artifactId: id, idempotencyKey: key,
         files: { type: 'array', items: file, minItems: limits.publishFilesMin, maxItems: limits.publishFilesMax,
           description: 'Full file set; required unless edits is supplied.' },
-        edits: { type: 'array', items: edit, minItems: 1, maxItems: 100,
-          description: 'Small old/new edits applied to the current release text files; required unless files is supplied.' },
+        ...(part1 ? { edits: { type: 'array', items: edit, minItems: 1, maxItems: 100,
+          description: 'Small old/new edits applied to the current release text files; required unless files is supplied.' } } : {}),
         expectedCurrentReleaseId: { ...id, type: ['string', 'null'], description: 'Compare the current release atomically; null requires an unpublished artifact.' },
         profile: { ...primitiveRecord, default: config.defaults.profile },
-        ...metadata }, ['artifactId', 'idempotencyKey', ...(profile.requireExpectedCurrentReleaseId ? ['expectedCurrentReleaseId'] : [])]),
+        ...(part1 ? metadata : {}) }, ['artifactId', 'idempotencyKey', ...(!part1 ? ['files'] : []),
+        ...(profile.requireExpectedCurrentReleaseId ? ['expectedCurrentReleaseId'] : [])]),
         oneOf: [{ required: ['files'], not: { required: ['edits'] } },
           { required: ['edits'], not: { required: ['files'] } }] };
     }
