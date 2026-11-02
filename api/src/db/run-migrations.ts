@@ -19,15 +19,17 @@ async function reconcileSettingsUserScopeSchema(db: NodePgDatabase): Promise<voi
   await db.execute(sql.raw('ALTER TABLE "settings" DROP CONSTRAINT IF EXISTS "settings_pkey";'));
   await db.execute(sql.raw('ALTER TABLE "settings" ADD COLUMN IF NOT EXISTS "user_id" text;'));
   await db.execute(sql.raw(`
-    DO $$ DECLARE fk_target text; BEGIN
+    DO $$ DECLARE fk_target text; fk_column text; BEGIN
       IF to_regclass('public.users') IS NOT NULL THEN
         fk_target := '"public"."users"';
+        fk_column := 'id';
       ELSE
         fk_target := '"cm_identity"."identity_user_accounts"';
+        fk_column := 'user_id';
       END IF;
       EXECUTE format(
-        'ALTER TABLE "settings" ADD CONSTRAINT "settings_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES %s("id") ON DELETE cascade ON UPDATE no action',
-        fk_target);
+        'ALTER TABLE "settings" ADD CONSTRAINT "settings_user_id_users_id_fk" FOREIGN KEY ("user_id") REFERENCES %s(%I) ON DELETE cascade ON UPDATE no action',
+        fk_target, fk_column);
     EXCEPTION
       WHEN duplicate_object THEN null;
     END $$;
