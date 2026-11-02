@@ -87,6 +87,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Check the exhaustive removed-column inventory and hash the shipped mapping with pinned RP/origin policy; trace historical metadata to the protected checkpoint.
   - [x] Map pending settings revocations to one deterministic CM delivery group per legacy intent, preserving every target and refusing unknown ownership.
   - [x] Verify the protected remote snapshot digest, reconcile SQL/file tuples and refuse live orphan or divergent file authority.
+  - [x] Account for every legacy connector event through captured or unresolved records; move metadata invitations to the digest representation.
   - [x] Refuse SQL-only cutover without the real importer/checkpoint; remove fabricated schema and import attestations.
   - [x] Require protected D11 checkpoint evidence, verify snapshot/asset digests and keep backup paths out of durable receipts.
   - [x] Add production custody-envelope regressions for absent/empty v1 configuration, AAD corruption, fresh nonce and buffer disposal.
