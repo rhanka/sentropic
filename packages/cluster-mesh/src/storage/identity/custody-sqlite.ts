@@ -26,6 +26,8 @@ import type {
   WebAuthnCredentialV1,
 } from '../../identity-contracts/custody.js';
 import { IdentityCustodyErrorV1 } from '../../identity-contracts/custody-errors.js';
+import { composeIdentityTransaction } from './custody-composition.js';
+import { identityTransactionGuard, requireIdentityRunOptions } from './custody-transaction-guards.js';
 import { subjectLifecycle } from './custody-lifecycle.js';
 import type { SqliteConnection } from '../sqlite/connection.js';
 import { decodeSession } from './records.js';
@@ -578,17 +580,6 @@ const nextSqliteCustodyTxId = (): string => {
   return `custody-sqlite-${Date.now().toString(36)}-${sqliteCustodyTxCounter}`;
 };
 
-const requireSqliteRunOptions = (options: IdentityRunOptionsV1, readOnly: boolean): void => {
-  if (readOnly) {
-    if (options.mode !== 'read') throw new IdentityCustodyErrorV1('identity_transaction_unbound');
-  } else if (options.mode !== 'write' && options.mode !== 'import' && options.mode !== 'delete') {
-    throw new IdentityCustodyErrorV1('identity_transaction_unbound');
-  }
-  if (!Number.isInteger(options.deadlineMs) || options.deadlineMs <= 0) {
-    throw new IdentityCustodyErrorV1('identity_material_invalid');
-  }
-};
-
 /**
  * Combined custody handle: the transaction-scoped stores plus the deletion
  * journal/outbox over the same connection. One object joins every callback.
@@ -615,34 +606,40 @@ export const createSqliteIdentityUnitOfWorkV1 = (input: {
   readonly host: SqliteIdentityHostV1<SqliteCustodyHandle>;
   readonly maxAttempts?: number;
 }): IdentityUnitOfWorkV1<SqliteCustodyHandle> => {
-  const maxAttempts = input.maxAttempts ?? 3;
   const run = async <T>(
     options: IdentityRunOptionsV1,
     operation: (tx: IdentityTransactionV1<SqliteCustodyHandle>) => Promise<T>,
-    readOnly: boolean,
   ): Promise<T> => {
-    requireSqliteRunOptions(options, readOnly);
+    requireIdentityRunOptions(options);
+    const readOnly = options.mode === 'read';
+    const deadline = Date.now() + options.deadlineMs;
     let attempt = 0;
     for (;;) {
       attempt += 1;
       try {
-        return await input.host.runExclusiveTransaction({ readOnly, deadlineMs: options.deadlineMs }, async (binding) => {
+        return await input.host.runExclusiveTransaction({ readOnly, deadlineMs: Math.max(1, deadline - Date.now()) }, async (binding) => {
           if (binding.readOnly !== readOnly) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
-          const handle = new SqliteCustodyHandle(binding.connection);
-          return operation({ profile: 'sqlite', transactionId: binding.transactionId, readOnly, hostTransaction: handle, stores: handle });
+          const guard = identityTransactionGuard(readOnly, deadline);
+          const handle = new SqliteCustodyHandle(guard.sqlite(binding.connection));
+          try {
+            const result = await operation(composeIdentityTransaction({ host: handle, transactionId: binding.transactionId, readOnly, check: guard.check }));
+            guard.check();
+            return result;
+          } finally { guard.close(); }
         });
       } catch (error) {
-        if (attempt < maxAttempts && isSocialRaceRetry(error)) continue;
+        if (attempt < options.maxAttempts && Date.now() < deadline && isSocialRaceRetry(error)) continue;
         throw error;
       }
     }
   };
   return {
     profile: 'sqlite',
-    runRead: (options, operation) => run(options, operation, true),
-    runWrite: (options, operation) => run(options, operation, false),
+    run,
   };
 };
+
+const sqliteTransactionQueues = new WeakMap<SqliteConnection, Promise<void>>();
 
 export const createSqliteIdentityHostV1 = (options: {
   readonly connection: SqliteConnection;
@@ -653,26 +650,26 @@ export const createSqliteIdentityHostV1 = (options: {
   }
   return {
   runExclusiveTransaction: async (runOptions, operation) => {
-    if (!runOptions.readOnly) options.connection.exec('BEGIN IMMEDIATE');
+    const prior = sqliteTransactionQueues.get(options.connection) ?? Promise.resolve();
+    let release!: () => void;
+    sqliteTransactionQueues.set(options.connection, new Promise<void>((resolve) => { release = resolve; }));
+    await prior;
+    const deadline = Date.now() + runOptions.deadlineMs;
     try {
+      options.connection.exec(runOptions.readOnly ? 'BEGIN' : 'BEGIN IMMEDIATE');
       const result = await operation({
         transactionId: nextSqliteCustodyTxId(),
         hostTransaction: new SqliteCustodyHandle(options.connection),
         connection: options.connection,
         readOnly: runOptions.readOnly,
       });
-      if (!runOptions.readOnly) options.connection.exec('COMMIT');
+      if (Date.now() >= deadline) throw new IdentityCustodyErrorV1('identity_transaction_unbound');
+      options.connection.exec('COMMIT');
       return result;
     } catch (error) {
-      if (!runOptions.readOnly) {
-        try {
-          options.connection.exec('ROLLBACK');
-        } catch {
-          // Already rolled back by the engine; surface the original failure.
-        }
-      }
+      try { options.connection.exec('ROLLBACK'); } catch { /* Preserve the original failure. */ }
       throw error;
-    }
+    } finally { release(); }
   },
   };
 };
@@ -708,11 +705,12 @@ export const bindSqliteIdentityTransactionV1 = <H>(input: {
   readonly binding: SqliteCustodyBindingV1<H>;
   readonly hostTransaction: H;
 }): IdentityTransactionV1<H> => ({
-  profile: 'sqlite',
-  transactionId: input.binding.transactionId,
-  readOnly: input.binding.readOnly,
+  ...composeIdentityTransaction({
+    host: new SqliteCustodyHandle(input.binding.connection),
+    transactionId: input.binding.transactionId, readOnly: input.binding.readOnly,
+    check: (write) => { if (write && input.binding.readOnly) throw new IdentityCustodyErrorV1('identity_transaction_unbound'); },
+  }),
   hostTransaction: input.hostTransaction,
-  stores: new SqliteCustodyTx(input.binding.connection),
 });
 
 /** V1 factory name for the standalone SQLite custody stores. */
