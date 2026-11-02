@@ -283,6 +283,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [ ] gap-§1 scenario end to end; registration → approval → login; invitation consumed once; revoke-all; mid-session suspension empties tool set; account deletion with injected failure leaves no orphan and preserves rows; migration tests; F11 e2e.
   - [ ] Rehearse migration on a fresh prod dump (existing rehearsal make target); record receipt.
 - [ ] **Lot 6 — Final validation**
+  - [x] Replace connector-deletion assumptions with real CM V2 HTTP/worker coverage: capture the owner/member union, preserve unrelated grants, erase acknowledged custody, and roll back unreadable capabilities without orphaning rows.
   - [x] Add isolated real encrypted connector fixtures and capture the exact external revocation capability for CM deletion regression tests.
   - [x] Delete the synchronous catalog tenant-to-workspace alias fallback; require the explicit CM tenant in callers and characterization fixtures.
   - [x] Revalidate the opaque CM conversation authority reference at catalog dispatch, read membership directly from the same transaction, and test reference replacement between selection and invocation.
