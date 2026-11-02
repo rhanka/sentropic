@@ -2,6 +2,7 @@ import { and, eq } from 'drizzle-orm';
 import {
   createSessionWorkspaceBindingService,
   SessionWorkspaceBindingError,
+  IdentityCustodyErrorV1,
   type SessionWorkspaceBinding,
   type SessionWorkspaceBindingStore,
 } from '@sentropic/cluster-mesh';
@@ -9,7 +10,7 @@ import { db } from '../../db/client';
 import { sessionWorkspaceBindings } from '../../db/control-schema';
 import { workspaces } from '../../db/schema';
 import { createId } from '../../utils/id';
-import { bindCmAppDatabase, runCmIdentityWrite } from '../identity/cm-transaction';
+import { bindCmAppDatabase, runCmIdentityRead, runCmIdentityWrite } from '../identity/cm-transaction';
 import { findCmUserById } from '../identity/cm-users';
 import { findCmMembership, findCmWorkspace } from '../identity/cm-tenancy';
 import { hasRole } from '../../middleware/rbac';
@@ -121,21 +122,23 @@ export const createDrizzleBindingStore = (
 
 export class SessionWorkspaceService {
   private readonly storeFactory: (client: BindingDbClient) => SessionWorkspaceBindingStore;
-  private readonly mesh: ReturnType<typeof createSessionWorkspaceBindingService>;
 
   constructor(
     storeFactory: (client: BindingDbClient) => SessionWorkspaceBindingStore = createDrizzleBindingStore,
   ) {
     this.storeFactory = storeFactory;
-    this.mesh = createSessionWorkspaceBindingService(storeFactory(db));
   }
 
   private async checkTenantMember(tenantId: string, principalId: string): Promise<void> {
-    // Lot A4: tenant membership lives in the CM store.
-    const membership = await findCmMembership(principalId, tenantId);
-    if (membership?.status !== 'approved') {
-      throw new SessionWorkspaceError('workspace_rights_refused', 'principal is not an approved member of the tenant');
-    }
+    await runCmIdentityRead(async tx => {
+      const account = await tx.stores.accounts.findAccount(principalId);
+      const tenant = await tx.stores.tenants.findTenant(tenantId);
+      const membership = await tx.stores.memberships.findApprovedMembership(principalId, tenantId);
+      if (!account || account.accountStatus !== 'active' || tenant?.status !== 'active' || !membership) {
+        throw new SessionWorkspaceError('workspace_rights_refused', 'current account and tenant membership required');
+      }
+      if (!await tx.custody.profiles.find(principalId)) throw new IdentityCustodyErrorV1('identity_material_missing');
+    });
   }
 
   private async checkIsAdmin(
@@ -155,7 +158,7 @@ export class SessionWorkspaceService {
   private async requireGlobalEditor(principalId: string): Promise<string> {
     const row = await findCmUserById(principalId);
     const role = row?.role ?? 'guest';
-    if (!hasRole(role, 'editor')) {
+    if (row?.accountStatus !== 'active' || !hasRole(role, 'editor')) {
       throw new SessionWorkspaceError('workspace_rights_refused', 'global editor role required to create a workspace');
     }
     return role;
@@ -251,15 +254,17 @@ export class SessionWorkspaceService {
     requireId(sessionId, 'sessionId');
     requireId(tenantId, 'tenantId');
     requireId(principalId, 'principalId');
-    // Membership first: a non-member learns nothing about binding existence.
-    await this.checkTenantMember(tenantId, principalId);
-    return await db.transaction(async (tx) => {
+    return await runCmIdentityWrite(async identityTx => {
+      await identityTx.lockSubject(principalId);
+      await this.checkTenantMember(tenantId, principalId);
+      const tx = bindCmAppDatabase(identityTx);
       const store = this.storeFactory(tx);
       const mesh = createSessionWorkspaceBindingService(store);
       const existing = await store.findBySession(sessionId);
       if (!existing || existing.tenantId !== tenantId) {
         throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
       }
+      await identityTx.lockWorkspace(existing.workspaceId);
       const isAdmin = await this.checkIsAdmin(tenantId, principalId, existing.workspaceId, tx);
       try {
         const binding = await mesh.detach({
@@ -280,15 +285,17 @@ export class SessionWorkspaceService {
     requireId(sessionId, 'sessionId');
     requireId(tenantId, 'tenantId');
     requireId(principalId, 'principalId');
-    // Membership first: a non-member learns nothing about binding existence.
-    await this.checkTenantMember(tenantId, principalId);
-    return await db.transaction(async (tx) => {
+    return await runCmIdentityWrite(async identityTx => {
+      await identityTx.lockSubject(principalId);
+      await this.checkTenantMember(tenantId, principalId);
+      const tx = bindCmAppDatabase(identityTx);
       const store = this.storeFactory(tx);
       const mesh = createSessionWorkspaceBindingService(store);
       const existing = await store.findBySession(sessionId);
       if (!existing || existing.tenantId !== tenantId) {
         throw new SessionWorkspaceError('binding_not_found', 'no binding for session');
       }
+      await identityTx.lockWorkspace(existing.workspaceId);
       const isAdmin = await this.checkIsAdmin(tenantId, principalId, existing.workspaceId, tx);
       try {
         const binding = await mesh.end({
@@ -313,11 +320,13 @@ export class SessionWorkspaceService {
     requireId(sessionId, 'sessionId');
     requireId(tenantId, 'tenantId');
     requireId(principalId, 'principalId');
+    return runCmIdentityRead(async identityTx => {
     await this.checkTenantMember(tenantId, principalId);
-    const existing = await this.storeFactory(db).findBySession(sessionId);
+    const store = this.storeFactory(bindCmAppDatabase(identityTx));
+    const existing = await store.findBySession(sessionId);
     if (!existing || existing.tenantId !== tenantId) return null;
     const isAdmin = await this.checkIsAdmin(tenantId, principalId, existing.workspaceId);
-    const binding = await this.mesh.get({ sessionId, tenantId, principalId, isAdmin });
+    const binding = await createSessionWorkspaceBindingService(store).get({ sessionId, tenantId, principalId, isAdmin });
     if (!binding) return null;
     // The row may have moved between the two reads (detach + re-attach).
     // Rights decided on the first read must never disclose the second row:
@@ -329,6 +338,7 @@ export class SessionWorkspaceService {
         && !(await this.checkIsAdmin(tenantId, principalId, binding.workspaceId))) return null;
     }
     return toRecord(binding);
+    });
   }
 }
 
