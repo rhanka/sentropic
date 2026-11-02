@@ -279,6 +279,8 @@ export interface FinalizeRequest {
   readonly locks?: Partial<Record<ParticipantLockClass, CommitLockFn[]>>;
   /** Provisional writes before the guard decision. */
   readonly provisional?: (client: FinalizeTxClient) => Promise<void>;
+  /** Domain CAS, evaluated under retained locks after current authorization. Never runs on replay. */
+  readonly assertPrecondition?: () => void;
   /** Intent completion inside the unit, after the success insert. */
   readonly finishIntents?: (client: FinalizeTxClient) => Promise<void>;
   /** Preparation-abandonment hook, invoked on loser/denial paths. */

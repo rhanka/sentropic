@@ -5,6 +5,17 @@ import { ensureSite, parityWorld, publish, publishText, revert } from './fixture
 const releaseId = (response: { body: unknown }) => (response.body as { releaseId: string }).releaseId;
 
 describe('D3 recovery and conflict content', () => {
+  it('should reauthorize before returning a stale-pointer conflict', async () => {
+    const w = parityWorld();
+    const artifactId = await ensureSite(w, 'revoked-stale');
+    await publishText(w, artifactId, 'one', 'first');
+    w.deny();
+    const result = await publishText(w, artifactId, 'two', 'denied', { expectedCurrentReleaseId: null });
+    expect(result.status).toBe(403);
+    expect(result.body).not.toHaveProperty('conflict');
+    expect(await w.state.listReleases(artifactId)).toHaveLength(1);
+  });
+
   it('should report unknown after a lost COMMIT acknowledgement and replay the same key once', async () => {
     const w = parityWorld();
     const artifactId = await ensureSite(w, 'unknown');

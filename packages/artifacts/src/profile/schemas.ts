@@ -67,14 +67,16 @@ export function capabilitySchema(name: ArtifactCapabilityName, profile: Effectiv
       const edit = obj({ path, oldStr: { type: 'string', minLength: 1, maxLength: limits.maxDecodedFileBytes,
         description: 'Must occur exactly once in the current file text.' },
         newStr: { type: 'string', maxLength: limits.maxDecodedFileBytes } }, ['path', 'oldStr', 'newStr']);
-      return obj({ artifactId: id, idempotencyKey: key,
+      return { ...obj({ artifactId: id, idempotencyKey: key,
         files: { type: 'array', items: file, minItems: limits.publishFilesMin, maxItems: limits.publishFilesMax,
           description: 'Full file set; required unless edits is supplied.' },
         edits: { type: 'array', items: edit, minItems: 1, maxItems: 100,
           description: 'Small old/new edits applied to the current release text files; required unless files is supplied.' },
         expectedCurrentReleaseId: { ...id, type: ['string', 'null'], description: 'Compare the current release atomically; null requires an unpublished artifact.' },
         profile: { ...primitiveRecord, default: config.defaults.profile },
-        ...metadata }, ['artifactId', 'idempotencyKey', ...(profile.requireExpectedCurrentReleaseId ? ['expectedCurrentReleaseId'] : [])]);
+        ...metadata }, ['artifactId', 'idempotencyKey', ...(profile.requireExpectedCurrentReleaseId ? ['expectedCurrentReleaseId'] : [])]),
+        oneOf: [{ required: ['files'], not: { required: ['edits'] } },
+          { required: ['edits'], not: { required: ['files'] } }] };
     }
     case 'list': return obj({ limit: { ...integer(limits.listLimitMin, limits.listLimitMax), default: config.defaults.limit },
       offset: { ...integer(0), default: config.defaults.offset } });
