@@ -13,9 +13,9 @@ import { createAtomicPersonDeletionV2 } from '../../src/index.js';
 import { asOpHost, createFixtureBusiness, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, sha256Hex, type FixtureBusinessState } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 
-const WRITE = { mode: 'write' as const, deadlineMs: 5000 };
-const READ = { mode: 'read' as const, deadlineMs: 5000 };
-const DELETE_OPTS = { mode: 'delete' as const, deadlineMs: 8000 };
+const WRITE = { mode: 'write' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 };
+const READ = { mode: 'read' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 };
+const DELETE_OPTS = { mode: 'write' as const, purpose: 'delete' as const, maxAttempts: 3 as const, deadlineMs: 8000 };
 
 interface ProfileEnv {
   readonly unitOfWork: IdentityUnitOfWorkV1<CustodyOpHost>;
@@ -48,7 +48,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b atomic person del
     const state: FixtureBusinessState = { failAt: null, reachedDelete: false, reachedAssert: false };
     const plan: BusinessDeletionPlanV1 = { userId: 'marie', workspaceIdsToDelete: [], retainedWorkspaceIds: ['ws'] };
     const fixture = createFixtureBusiness({ handlerId: 'admin_account', plan, state });
-    await env.unitOfWork.runWrite(WRITE, async (tx) => {
+    await env.unitOfWork.run(WRITE, async (tx) => {
       await seedAccount(tx.hostTransaction, 'marie', 'disabled');
       await seedAccount(tx.hostTransaction, 'admin', 'active');
       await seedWorkspace(tx.hostTransaction, 'ws', [{ userId: 'marie', role: 'member' }]);
@@ -67,7 +67,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b atomic person del
     const state: FixtureBusinessState = { failAt: null, reachedDelete: false, reachedAssert: false };
     const plan: BusinessDeletionPlanV1 = { userId: 'marie', workspaceIdsToDelete: [], retainedWorkspaceIds: [] };
     const fixture = createFixtureBusiness({ handlerId: 'admin_account', plan, state });
-    await env.unitOfWork.runWrite(WRITE, async (tx) => {
+    await env.unitOfWork.run(WRITE, async (tx) => {
       await seedAccount(tx.hostTransaction, 'marie', 'disabled');
       await seedAccount(tx.hostTransaction, 'admin', 'active');
     });
@@ -81,7 +81,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b atomic person del
     const state: FixtureBusinessState = { failAt: null, reachedDelete: false, reachedAssert: false };
     const plan: BusinessDeletionPlanV1 = { userId: 'marie', workspaceIdsToDelete: [], retainedWorkspaceIds: [] };
     const fixture = createFixtureBusiness({ handlerId: 'self_account', plan, state });
-    await env.unitOfWork.runWrite(WRITE, async (tx) => {
+    await env.unitOfWork.run(WRITE, async (tx) => {
       await seedAccount(tx.hostTransaction, 'marie', 'disabled');
       await seedAccount(tx.hostTransaction, 'admin', 'active');
     });
@@ -98,7 +98,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b atomic person del
     const state: FixtureBusinessState = { failAt: null, reachedDelete: false, reachedAssert: false };
     const plan: BusinessDeletionPlanV1 = { userId: 'marie', workspaceIdsToDelete: [], retainedWorkspaceIds: ['ws'] };
     const fixture = createFixtureBusiness({ handlerId: 'admin_account', plan, state });
-    await env.unitOfWork.runWrite(WRITE, async (tx) => {
+    await env.unitOfWork.run(WRITE, async (tx) => {
       await seedAccount(tx.hostTransaction, 'marie', 'disabled');
       await seedAccount(tx.hostTransaction, 'admin2', 'disabled', 'admin_app');
       await seedAccount(tx.hostTransaction, 'admin', 'active');
@@ -110,7 +110,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b atomic person del
     // Sole admin of a retained workspace: a precondition refusal throws the
     // existing typed error, nothing mutates and the operation stays queued.
     await expect(deletion.deletePerson({ userId: 'marie', actorId: 'admin', handlerId: 'admin_account', operationId: 'op-last-admin' })).rejects.toBeInstanceOf(IdentityConflictError);
-    expect(await env.unitOfWork.runRead(READ, (tx) => tx.hostTransaction.journal.findAccountCore('marie'))).not.toBeNull();
+    expect(await env.unitOfWork.run(READ, (tx) => tx.hostTransaction.journal.findAccountCore('marie'))).not.toBeNull();
     expect(await deletion.getOperation('op-last-admin')).toMatchObject({ state: 'queued' });
   });
 
@@ -119,7 +119,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b atomic person del
     const state: FixtureBusinessState = { failAt: 'assert', reachedDelete: false, reachedAssert: false };
     const plan: BusinessDeletionPlanV1 = { userId: 'marie', workspaceIdsToDelete: [], retainedWorkspaceIds: ['ws'] };
     const fixture = createFixtureBusiness({ handlerId: 'admin_account', plan, state });
-    await env.unitOfWork.runWrite(WRITE, async (tx) => {
+    await env.unitOfWork.run(WRITE, async (tx) => {
       await seedAccount(tx.hostTransaction, 'marie', 'disabled');
       await seedAccount(tx.hostTransaction, 'admin', 'active');
       await seedWorkspace(tx.hostTransaction, 'ws', [{ userId: 'marie', role: 'member' }]);
@@ -131,7 +131,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b atomic person del
     expect(state.reachedAssert).toBe(true);
     expect(receipt.transaction).toBe('rolled_back');
     expect(receipt.steps).toContainEqual({ step: 'account', outcome: 'queued', detail: 'required_local_step_failed' });
-    await env.unitOfWork.runRead(READ, async (tx) => {
+    await env.unitOfWork.run(READ, async (tx) => {
       expect(await tx.hostTransaction.journal.findAccountCore('marie')).not.toBeNull();
       expect(await fixture.rows(tx.hostTransaction)).toHaveLength(1);
       expect(await tx.hostTransaction.journal.listWorkspaceIdsForUser('marie')).toEqual(['ws']);
@@ -143,7 +143,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b atomic person del
     const state: FixtureBusinessState = { failAt: null, reachedDelete: false, reachedAssert: false };
     const plan: BusinessDeletionPlanV1 = { userId: 'marie', workspaceIdsToDelete: [], retainedWorkspaceIds: ['ws'] };
     const fixture = createFixtureBusiness({ handlerId: 'admin_account', plan, state });
-    await env.unitOfWork.runWrite(WRITE, async (tx) => {
+    await env.unitOfWork.run(WRITE, async (tx) => {
       await seedAccount(tx.hostTransaction, 'marie', 'disabled');
       await seedAccount(tx.hostTransaction, 'admin', 'active');
       await seedWorkspace(tx.hostTransaction, 'ws', [{ userId: 'marie', role: 'member' }]);
@@ -157,7 +157,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b atomic person del
     const proxied: IdentityUnitOfWorkV1<CustodyOpHost> = {
       ...env.unitOfWork,
       runWrite: (options, operation) =>
-        env.unitOfWork.runWrite(options, (tx: IdentityTransactionV1<CustodyOpHost>) => {
+        env.unitOfWork.run(options, (tx: IdentityTransactionV1<CustodyOpHost>) => {
           const proxiedHost = new Proxy(tx.hostTransaction, {
             get(target, property, receiver) {
               if (property === 'stores') {
@@ -193,7 +193,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b atomic person del
     expect(failureReached).toBe(true);
     expect(receipt.transaction).toBe('rolled_back');
     expect(receipt.steps).toContainEqual({ step: 'login_sessions', outcome: 'queued', detail: 'required_local_step_failed' });
-    await env.unitOfWork.runRead(READ, async (tx) => {
+    await env.unitOfWork.run(READ, async (tx) => {
       expect(await tx.hostTransaction.journal.findAccountCore('marie')).not.toBeNull();
       expect(await tx.hostTransaction.stores.sessions.listForUser('marie')).toHaveLength(1);
     });
