@@ -101,6 +101,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Preserve the existing business workspace owner reference and set it on new personal/business workspace rows.
   - [x] Preallocate auth entity/workspace id hints outside transaction entry and keep them stable across whole-callback retries; remove locking of a nonexistent workspace.
   - [x] Add real PostgreSQL host-scope probes for backend/transaction identity, expired handles, swallowed failures, nested control and unawaited queries.
+  - [x] Bind app SQL to expiring host capabilities, refuse nested transaction control and rethrow caught driver failures before publication/commit.
   - [x] Refuse SQL-only cutover without the real importer/checkpoint; remove fabricated schema and import attestations.
   - [x] Require protected D11 checkpoint evidence, verify snapshot/asset digests and keep backup paths out of durable receipts.
   - [x] Add production custody-envelope regressions for absent/empty v1 configuration, AAD corruption, fresh nonce and buffer disposal.
