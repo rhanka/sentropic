@@ -1,7 +1,7 @@
 import type { AuthHonoPorts, AuthHonoUserPort, AuthHonoAccountPolicyPort } from '@sentropic/auth-hono';
 import type { IdentityAuthBindingInput } from '../identity-contracts/custody-auth.js';
 import type { VerifiedLoginClaimsV1 } from '../identity-contracts/custody.js';
-import type { IdentityAuditEvent } from './ledger.js';
+import type { IdentityAuditEvent } from '../identity-contracts/types.js';
 import { IdentityCustodyErrorV1 } from '../identity-contracts/custody-errors.js';
 
 export const authBoundaryPorts = <H>(input: IdentityAuthBindingInput<H>, users: AuthHonoUserPort, policy: AuthHonoAccountPolicyPort, check: () => void) => {
