@@ -7,9 +7,9 @@ import { createIdentityCustodyImporterV1 } from '../../src/index.js';
 import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, randomBase64Url, sha256Hex, syntheticCoseKey } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 
-const WRITE = { mode: 'write' as const, deadlineMs: 5000 };
-const READ = { mode: 'read' as const, deadlineMs: 5000 };
-const IMPORT = { mode: 'import' as const, deadlineMs: 8000 };
+const WRITE = { mode: 'write' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 };
+const READ = { mode: 'read' as const, purpose: 'request' as const, maxAttempts: 3 as const, deadlineMs: 5000 };
+const IMPORT = { mode: 'write' as const, purpose: 'import' as const, maxAttempts: 3 as const, deadlineMs: 8000 };
 
 interface ProfileEnv {
   readonly unitOfWork: IdentityUnitOfWorkV1<CustodyOpHost>;
@@ -91,7 +91,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody import on
     const receipt = await importer.importBatch(batch);
     expect(receipt).toMatchObject({ migrationId: 'mig-full', identitiesPreserved: true, verificationMaterialPreserved: true, lifecyclePreserved: true });
     expect(receipt.counts).toMatchObject({ account: 1, credential: 1, single_use_proof: 1, email_ticket: 1, invitation: 1, login_session: 1, social_link: 1, tenant: 1, tenant_membership: 1, workspace: 1, workspace_membership: 1, oauth_consent: 1 });
-    await env.unitOfWork.runRead(READ, async (tx) => {
+    await env.unitOfWork.run(READ, async (tx) => {
       const host = tx.hostTransaction;
       const account = await host.journal.findAccountCore('u-import');
       expect(account).toMatchObject({ email: 'imported@example.test', accountStatus: 'active' });
@@ -136,7 +136,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody import on
       rows: batch.rows.map((row) => (row.entity === 'invitation' ? { ...row, record: { ...row.record, invitationId: 'invite-other' } } : row)),
     };
     await expect(importer.importBatch(tampered)).rejects.toMatchObject({ code: 'identity_import_conflict' });
-    await env.unitOfWork.runRead(READ, async (tx) => {
+    await env.unitOfWork.run(READ, async (tx) => {
       expect(await tx.hostTransaction.journal.findAccountCore('u-import')).not.toBeNull();
       // The rolled-back batch inserted nothing under its own rows: the shared base account is intact,
       // and no new invitation row from the tampered batch exists.
@@ -158,7 +158,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody import on
     expect(validation.valid).toBe(false);
     expect(validation.issues).toContainEqual(expect.objectContaining({ entity: 'account', code: 'identity_import_invalid' }));
     await expect(importer.importBatch(tampered)).rejects.toMatchObject({ code: 'identity_import_invalid' });
-    await env.unitOfWork.runRead(READ, async (tx) => {
+    await env.unitOfWork.run(READ, async (tx) => {
       expect(await tx.hostTransaction.journal.findAccountCore('u-import')).toBeNull();
     });
   });
@@ -179,7 +179,7 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody import on
     });
     await expect(importer.importBatch(fullBatch('mig-fence'))).rejects.toThrow('fence refuses');
     expect(calls).toBeGreaterThan(0);
-    await env.unitOfWork.runRead(READ, async (tx) => {
+    await env.unitOfWork.run(READ, async (tx) => {
       expect(await tx.hostTransaction.journal.findAccountCore('u-import')).toBeNull();
     });
   });
