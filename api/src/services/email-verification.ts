@@ -3,12 +3,12 @@ import { logger } from '../logger';
 import { SignJWT } from 'jose';
 import { env } from '../config/env';
 import { sendTransactionalEmail } from './scw-tem-client';
+import { resolveEmailVerificationTokenSecret } from './identity/cm-token-secrets';
 import {
   consumeCmEmailCodeWithTicket,
   countCmRecentEmailCodes,
   createCmEmailCode,
   findCmLatestValidEmailCode,
-  verifyCmRegistrationTicket,
 } from './identity/cm-proofs';
 
 /**
@@ -31,9 +31,6 @@ interface VerifyCodeParams {
 
 const CODE_TTL = 10 * 60; // 10 minutes in seconds
 const VERIFICATION_TOKEN_TTL = 15 * 60; // 15 minutes in seconds
-
-export const resolveEmailVerificationTokenSecret = (): string =>
-  env.JWT_SECRET || 'default-secret-change-in-production';
 
 /**
  * Hash a code for storage (SHA-256)
@@ -185,43 +182,3 @@ export async function verifyEmailCode(
   };
 }
 
-/**
- * Verify validation token (used during registration)
- * 
- * @param token - Validation token to verify
- * @returns Email and validation status
- */
-export async function verifyValidationToken(
-  token: string
-): Promise<{ valid: boolean; email?: string }> {
-  try {
-    // Verify JWT token
-    const JWT_SECRET = new TextEncoder().encode(resolveEmailVerificationTokenSecret());
-    const { jwtVerify } = await import('jose');
-    const { payload } = await jwtVerify(token, JWT_SECRET);
-    const email = typeof payload.email === 'string' ? payload.email : undefined;
-    if (!email) {
-      logger.warn({ token: token.substring(0, 10) + '...' }, 'Validation token has no email');
-      return { valid: false };
-    }
-
-    // Atomically consume the pending registration ticket bound to this email
-    const ticketValid = await verifyCmRegistrationTicket(email, token, new Date());
-    if (!ticketValid) {
-      logger.warn({ token: token.substring(0, 10) + '...' }, 'Validation token not found, consumed, or email mismatch');
-      return { valid: false };
-    }
-
-    logger.debug({
-      email,
-    }, 'Validation token verified');
-
-    return {
-      valid: true,
-      email,
-    };
-  } catch (error) {
-    logger.debug({ err: error }, 'Invalid validation token');
-    return { valid: false };
-  }
-}
