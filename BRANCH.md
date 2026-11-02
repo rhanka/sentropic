@@ -119,6 +119,7 @@ Add durable verification custody, material-preserving import and atomic person d
 - No UI changes in this lot; no UAT.
 
 ## Plan / Todo (lot-based)
+- [x] Review r1: exact deletion business, authorization, plane, option and receipt contracts.
 - [x] Review r1 tests first: complete plane composition, transactional enqueue, scope rollback and acknowledgement-derived completion.
 - [x] Review r1: import all normative entities in dependency order; verify captured deliveries before the receipt.
 - [x] Review r1: validate the complete legacy source inventory and deterministic delivery correspondence.
