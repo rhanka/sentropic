@@ -65,7 +65,7 @@ describe('R2 explicit profile and result switchovers', () => {
     expect(all.versions).toHaveLength(3);
     expect(all.versions.find((version: { releaseId: string }) => version.releaseId === output(reverted).releaseId))
       .toMatchObject({ releaseId: output(reverted).releaseId, authorPrincipalId: 'alice',
-        parentReleaseId: second.releaseId, revertedFromReleaseId: first.releaseId, isCurrent: true, pinnedUrl: expect.any(String) });
+        parentReleaseId: second.releaseId, revertedFromReleaseId: first.releaseId, isCurrent: true, versionUrl: expect.any(String) });
     const history = output(await call('artifacts_list_versions', { artifactId, limit: 1 }));
     expect(history.versions).toHaveLength(1);
     expect(history.versions[0].releaseId).toBe(all.versions[0].releaseId);
