@@ -11,16 +11,16 @@ export const createCmFederationCompletion = (sessionToken: string | null): Feder
     try {
       return await withAppCmAuth(async runner => {
         const result = await runner.complete('social', async (binding, tx) => {
-          const ports = binding.ports, now = ports.clock.now();
+          const ports = binding.ports;
           if (!ports.federation) throw new IdentityCustodyErrorV1('identity_contract_unavailable');
           let ticket: EmailRegistrationTicketV1 | null = null;
           const value = await operation({
-            now, audit: ports.auditLog, federation: ports.federation,
+            get now() { return ports.clock.now(); }, audit: ports.auditLog, federation: ports.federation,
             resolveFederatedUser: input => binding.resolveFederatedUser(input),
             async authenticate(userId, deviceInfo) {
               const user = await ports.users.findById(userId);
               if (!user) throw new IdentityCustodyErrorV1('identity_material_missing');
-              const eligibility = await ports.accountPolicy.canAuthenticate(user, now);
+              const eligibility = await ports.accountPolicy.canAuthenticate(user, ports.clock.now());
               if (!eligibility.allowed) throw new FederationCompletionRefusal(
                 eligibility.status ?? 403, eligibility.code ?? 'account_unavailable',
                 eligibility.message ?? 'Account cannot authenticate.');
@@ -34,14 +34,14 @@ export const createCmFederationCompletion = (sessionToken: string | null): Feder
             },
             async verifyEmailProof(email, token) {
               const normalized = ports.accountPolicy.normalizeEmail(email);
-              if (!await ports.emailVerification.verifyToken(normalized, token, now)) throw emailRefusal();
+              if (!await ports.emailVerification.verifyToken(normalized, token, ports.clock.now())) throw emailRefusal();
               ticket = await tx.custody.emailTickets.findByTokenHash(await ports.tokens.hashSecret(token));
               if (!ticket || ticket.email !== normalized) throw emailRefusal();
             },
             async consumeEmailProof(userId) {
               if (!ticket) return;
               await tx.custody.emailTickets.consume({ tokenHash: ticket.tokenHash, email: ticket.email,
-                expectedRevision: ticket.revision, bindUserId: userId, at: now.toISOString() });
+                expectedRevision: ticket.revision, bindUserId: userId, at: ports.clock.now().toISOString() });
               ticket = null;
             },
           });

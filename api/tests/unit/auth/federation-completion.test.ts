@@ -69,6 +69,25 @@ describe('federation whole-completion boundary', () => {
     expect(h.attempt.authenticate).not.toHaveBeenCalled();
   });
 
+  it.each(['', 'invalid'])('refuses a malformed provider expiry before CM work: %s', async assertionExpiresAt => {
+    const h = setup();
+    h.verify.mockImplementation(async () => ({ email: 'actor@example.com', emailVerified: true, subject: 'subject', assertionExpiresAt }));
+    expect(await h.broker.callback(request)).toMatchObject({ kind: 'error', status: 401 });
+    expect(h.complete).not.toHaveBeenCalled();
+  });
+
+  it('rolls back a manual link if its assertion expired while the insert waited', async () => {
+    const h = setup();
+    let current = now;
+    Object.defineProperty(h.attempt, 'now', { get: () => current });
+    vi.mocked(h.attempt.federation.linkIdentity).mockImplementation(async () => {
+      current = new Date(now.getTime() + 60_000);
+      return {} as never;
+    });
+    expect(await h.broker.linkCallback(request)).toMatchObject({ kind: 'error', status: 401 });
+    expect(h.attempt.audit.record).not.toHaveBeenCalled();
+  });
+
   it('does not expose login success if the email ticket loses its consume race', async () => {
     const h = setup();
     vi.mocked(h.attempt.resolveFederatedUser).mockResolvedValue({ kind: 'created', userId: 'created', identity: {} as never });
