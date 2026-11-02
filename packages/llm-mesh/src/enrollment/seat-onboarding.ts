@@ -423,8 +423,8 @@ export function validateAgyJetskiContent(text: string, nativeCliVersion: string)
 // Structural, per format. Nothing is accepted on the basis of a file name
 // or a digest alone.
 
-const CLAUDE_VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
-const MCP_SERVER_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+export const CLAUDE_VERSION_PATTERN = /^\d+\.\d+\.\d+$/;
+export const MCP_SERVER_NAME_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
 
 function decodeBase64Strict(value: string): Uint8Array | null {
@@ -757,4 +757,58 @@ export function rebindSeatOnboarding(
       reboundAt: options.reboundAt,
     },
   };
+}
+
+// ── capture-side agy canonicalizer ───────────────────────────────────────
+
+/** Capture extraction: the single post_onboarding block among other top-level keys. */
+function extractAgyStepsForCapture(fields: readonly PbtxtField[]): { steps: string[] } | SeatOnboardingCode {
+  const blocks = fields.filter((f) => f.name === 'post_onboarding');
+  if (blocks.length !== 1 || !blocks[0].children) return 'onboarding-shape-unverified';
+  const children = blocks[0].children;
+  if (children.length === 0) return 'onboarding-incomplete';
+  const steps: string[] = [];
+  for (const child of children) {
+    if (child.scalar && child.scalar.kind !== 'enum') return 'onboarding-identifier-present';
+    if (child.name !== 'completed_steps' || !child.scalar || child.scalar.kind !== 'enum') {
+      return 'onboarding-shape-unverified';
+    }
+    steps.push(child.scalar.token);
+  }
+  return { steps };
+}
+
+/**
+ * Capture-side canonicalizer: parse the source file, keep only the
+ * allowlisted step set, check it against the pinned version's required
+ * set, and re-serialize canonically. No code path copies source bytes
+ * through; `installation_uuid` and `migrations` are discarded here.
+ */
+export function canonicaliseAgyJetski(sourceText: string, nativeCliVersion: string): string {
+  let fields: PbtxtField[];
+  try {
+    fields = parseAgyJetskiPbtxt(sourceText);
+  } catch (error) {
+    if (error instanceof SeatOnboardingError) throw error;
+    throw new SeatOnboardingError('onboarding-shape-unverified', 'source pbtxt is not parseable');
+  }
+  const extracted = extractAgyStepsForCapture(fields);
+  if (typeof extracted === 'string') throw new SeatOnboardingError(extracted, 'source step set refused');
+  const required = AGY_REQUIRED_COMPLETED_STEPS[nativeCliVersion];
+  if (!required) {
+    throw new SeatOnboardingError('onboarding-shape-unverified', `no required step set for agy ${nativeCliVersion}`);
+  }
+  const set = new Set(extracted.steps);
+  if (set.size !== extracted.steps.length) {
+    throw new SeatOnboardingError('onboarding-shape-unverified', 'duplicate step entries');
+  }
+  for (const step of extracted.steps) {
+    if (!required.includes(step)) throw new SeatOnboardingError('onboarding-shape-unverified', 'unknown step enum');
+  }
+  for (const step of required) {
+    if (!set.has(step)) {
+      throw new SeatOnboardingError('onboarding-incomplete', 'source step set is a strict subset of the required set');
+    }
+  }
+  return canonicalAgyJetskiBytes(nativeCliVersion, extracted.steps);
 }

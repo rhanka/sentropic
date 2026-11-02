@@ -79,6 +79,7 @@ export {
   SEAT_ONBOARDING_SCHEMA_VERSION,
   SeatOnboardingError,
   canonicalAgyJetskiBytes,
+  canonicaliseAgyJetski,
   parseAgyJetskiPbtxt,
   rebindSeatOnboarding,
   seatLaunchGate,
@@ -87,3 +88,41 @@ export {
   validateSeatEnvelope,
   validateSeatOnboarding,
 } from '../enrollment/seat-onboarding.js';
+
+export type {
+  SeatCaptureInput,
+  SeatCaptureResult,
+  SeatCaptureSelector,
+} from './seat-onboarding-capture.js';
+export { CAPTURE_SOURCES, captureSeatOnboarding } from './seat-onboarding-capture.js';
+
+export type {
+  SeatCellConfigDirs,
+  SeatCellInput,
+  SeatCellReceipt,
+  SeatCellReceiptFile,
+  SeatCellResult,
+  SeatCodexMcpServer,
+  SeatEraseResult,
+  SeatStageInput,
+  SeatStageInputSeat,
+  SeatStageReceipt,
+  SeatStageReceiptEntry,
+  SeatStageReceiptOnboarding,
+  SeatStageResult,
+} from './seat-onboarding-materialize.js';
+export {
+  SEAT_RECORD_REL_PATH,
+  eraseSeatHome,
+  materialiseCellHome,
+  materialiseSeatEnvelopes,
+} from './seat-onboarding-materialize.js';
+
+export type { CodexMcpServerSpec, CodexSeatIntent } from '../enrollment/seat-onboarding-projections.js';
+export {
+  CODEX_TRUST_DIALOG_PROBE,
+  projectClaudeOnboarding,
+  projectCodexIntent,
+  projectMuseTrust,
+  renderCodexSeatConfig,
+} from '../enrollment/seat-onboarding-projections.js';

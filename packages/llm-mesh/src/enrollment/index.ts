@@ -39,6 +39,7 @@ export {
   SEAT_ONBOARDING_SCHEMA_VERSION,
   SeatOnboardingError,
   canonicalAgyJetskiBytes,
+  canonicaliseAgyJetski,
   parseAgyJetskiPbtxt,
   rebindSeatOnboarding,
   seatLaunchGate,
@@ -47,3 +48,12 @@ export {
   validateSeatEnvelope,
   validateSeatOnboarding,
 } from './seat-onboarding.js';
+
+export type { CodexMcpServerSpec, CodexSeatIntent } from './seat-onboarding-projections.js';
+export {
+  CODEX_TRUST_DIALOG_PROBE,
+  projectClaudeOnboarding,
+  projectCodexIntent,
+  projectMuseTrust,
+  renderCodexSeatConfig,
+} from './seat-onboarding-projections.js';
