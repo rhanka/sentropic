@@ -198,8 +198,8 @@ export const createAtomicPersonDeletionV2 = (input: {
         await journal.deleteWorkspaceMembersIn(plan.workspaceIdsToDelete);
         await journal.deleteWorkspaceMembersForUser(command.userId);
         for (const workspaceId of plan.workspaceIdsToDelete) {
-          await journal.deleteWorkspace(workspaceId);
           await journal.detachInvitationWorkspace(workspaceId);
+          await journal.deleteWorkspace(workspaceId);
         }
         await journal.deleteConsentsForUser(command.userId);
         await journal.deleteConversationsForUser(command.userId);

@@ -3,7 +3,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { SingleUseProofV1 } from '../../src/index.js';
-import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, randomBase64Url, sha256Hex, syntheticCoseKey } from './a20b-helpers.js';
+import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, randomBase64Url, seedCustodyParents, sha256Hex, syntheticCoseKey } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 import type { IdentityTransactionV1, IdentityUnitOfWorkV1 } from '../../src/index.js';
 
@@ -32,9 +32,12 @@ describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b custody storage o
   const openEnv = async (): Promise<ProfileEnv> => {
     if (profile === 'postgres') {
       const pg = await openPostgresEnv();
+      await seedCustodyParents(asOpHost(pg.unitOfWork), ['u1', 'u2', 'u9']);
       return { unitOfWork: asOpHost(pg.unitOfWork), schema: pg.schema };
     }
-    return { unitOfWork: asOpHost(openSqliteEnv().unitOfWork), schema: null };
+    const unitOfWork = asOpHost(openSqliteEnv().unitOfWork);
+    await seedCustodyParents(unitOfWork, ['u1', 'u2', 'u9']);
+    return { unitOfWork, schema: null };
   };
   const write = async (env: ProfileEnv, fn: (tx: IdentityTransactionV1<CustodyOpHost>) => Promise<void>): Promise<void> => {
     await env.unitOfWork.runWrite(WRITE, async (tx) => {

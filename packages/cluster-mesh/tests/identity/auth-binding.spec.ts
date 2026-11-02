@@ -14,7 +14,7 @@ import {
   emailCodePreimageV1,
   zeroizeV1,
 } from '../../src/index.js';
-import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, sha256Hex } from './a20b-helpers.js';
+import { asOpHost, LATER, NOW, openPostgresEnv, openSqliteEnv, pgEnabled, seedCustodyParents, sha256Hex } from './a20b-helpers.js';
 import type { CustodyOpHost } from '../../src/index.js';
 
 const WRITE = { mode: 'write' as const, deadlineMs: 5000 };
@@ -28,8 +28,9 @@ const PROFILES = (pgEnabled ? ['postgres', 'sqlite'] : ['sqlite']) as const;
 
 describe.each(PROFILES.map((profile) => ({ profile })))('A2.0b auth binding on $profile', ({ profile }) => {
   const openEnv = async (): Promise<ProfileEnv> => {
-    if (profile === 'postgres') return { unitOfWork: asOpHost((await openPostgresEnv()).unitOfWork) };
-    return { unitOfWork: asOpHost(openSqliteEnv().unitOfWork) };
+    const unitOfWork = asOpHost((profile === 'postgres' ? await openPostgresEnv() : openSqliteEnv()).unitOfWork);
+    await seedCustodyParents(unitOfWork, ['marie', 'u1'], ['org']);
+    return { unitOfWork };
   };
 
   it('signs HS256 email tickets without fabricating an issuer', async () => {
