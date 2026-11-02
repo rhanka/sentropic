@@ -3,6 +3,8 @@ import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../../db/client';
 import { chatSessions } from '../../db/schema';
 import { createId } from '../../utils/id';
+import { bindCmAppDatabase, runCmIdentityWrite } from '../identity/cm-transaction';
+import { deleteCmBusinessConversation } from '../identity/cm-conversation-authority';
 import type {
   ChatSessionRow,
   CreateSessionInput,
@@ -72,23 +74,25 @@ export class PostgresChatSessionStore implements SessionStore {
 
   async create(input: CreateSessionInput): Promise<{ sessionId: string }> {
     const sessionId = createId();
-    await db.insert(chatSessions).values({
-      id: sessionId,
-      userId: input.userId,
-      workspaceId: input.workspaceId ?? null,
-      primaryContextType: input.primaryContextType ?? null,
-      primaryContextId: input.primaryContextId ?? null,
-      title: input.title ?? null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
+    await runCmIdentityWrite(async tx => {
+      await tx.lockSubject(input.userId);
+      if (input.workspaceId) await tx.lockWorkspace(input.workspaceId);
+      await bindCmAppDatabase(tx).insert(chatSessions).values({
+        id: sessionId,
+        userId: input.userId,
+        workspaceId: input.workspaceId ?? null,
+        primaryContextType: input.primaryContextType ?? null,
+        primaryContextId: input.primaryContextId ?? null,
+        title: input.title ?? null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
     });
     return { sessionId };
   }
 
   async deleteForUser(sessionId: string, userId: string): Promise<void> {
-    await db
-      .delete(chatSessions)
-      .where(and(eq(chatSessions.id, sessionId), eq(chatSessions.userId, userId)));
+    await deleteCmBusinessConversation(sessionId, userId);
   }
 
   async touchUpdatedAt(sessionId: string): Promise<void> {
