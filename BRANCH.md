@@ -172,6 +172,7 @@ One lot: migrate app identity data (users, proofs, invitations, login sessions, 
   - [x] Convert the workspace cutover HTTP fixtures to CM stores, retaining cross-tenant/workspace denial and exact decision-replay assertions.
   - [x] Repair the unpinned historical fixture bridges to CM without changing byte-pinned routes or recreating legacy tables (Argon finding 2).
   - [x] Add mounted member response/idempotency regressions and clean both CM/business workspace fixtures (confirmed Argon findings 3/6).
+  - [x] Preserve member error bodies and self-action precedence; absent-member deletion stays a no-op without revision changes or notifications.
   - [x] Add `api/tests/api/auth/cm-workspace-members.test.ts` for current-role authorization, isolated role changes, personal workspace restrictions and joined business rollback.
   - [x] Bind workspace member reads and mutations to CM domains in one transaction, with subject/workspace locks, audit, last-admin protection and current actor checks.
   - [x] Mount the CM member handlers in the shared router; publish workspace membership notifications only after the identity commit.
